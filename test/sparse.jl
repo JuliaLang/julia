@@ -1,5 +1,5 @@
 cd("../extras") do
-require("suitesparse.jl")
+require("suitesparse")
 
 # check matrix operations
 se33 = speye(3)
@@ -41,4 +41,13 @@ for i = 1 : 10
     a = sprand(5, 4, 0.5)
     @assert all([a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5,2:4]]] == a)
 end
+
+# reductions
+@assert sum(se33)[1] == 3.0
+@assert sum(se33, 1) == [1.0 1.0 1.0]
+@assert sum(se33, 2) == [1.0 1.0 1.0]'
+@assert prod(se33)[1] == 0.0
+@assert prod(se33, 1) == [0.0 0.0 0.0]
+@assert prod(se33, 2) == [0.0 0.0 0.0]'
+
 end # cd

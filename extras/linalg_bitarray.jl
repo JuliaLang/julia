@@ -1,6 +1,11 @@
 ## linalg_bitarray.jl: Basic Linear Algebra functions for BitArrays ##
 
-require("bitarray.jl")
+require("bitarray")
+
+import Base.dot, Base.triu, Base.tril, Base./, Base.\, Base.gradient
+import Base.svd, Base.qr, Base.*, Base.diag, Base.diagm, Base.kron
+import Base.issym, Base.ishermitian, Base.istriu, Base.istril, Base.findmax
+import Base.findmin
 
 function dot{T,S}(x::BitVector{T}, y::BitVector{S})
     # simplest way to mimic Array dot behavior

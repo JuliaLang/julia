@@ -232,8 +232,8 @@ function _jl_join_pgroup(myid, locs, sockets)
     ProcessGroup(myid, w, locs)
 end
 
-myid() = (global PGRP; (PGRP::ProcessGroup).myid)
-nprocs() = (global PGRP; (PGRP::ProcessGroup).np)
+myid() = (PGRP::ProcessGroup).myid
+nprocs() = (PGRP::ProcessGroup).np
 
 function worker_from_id(i)
     pg = PGRP::ProcessGroup
@@ -245,7 +245,6 @@ function worker_from_id(i)
 end
 
 function worker_id_from_socket(s)
-    global PGRP
     for i=1:nprocs()
         w = worker_from_id(i)
         if isa(w,Worker)
@@ -263,7 +262,6 @@ end
 
 # establish a Worker connection for processes that connected to us
 function _jl_identify_socket(otherid, fd, sock)
-    global PGRP
     i = otherid
     #locs = PGRP.locs
     @assert i > PGRP.myid
@@ -373,7 +371,6 @@ function isready(rr::RemoteRef)
 end
 
 function del_client(id, client)
-    global PGRP
     wi = lookup_ref(id)
     del(wi.clientset, client)
     if isempty(wi.clientset)
@@ -446,7 +443,6 @@ schedule_call(rid, f_thk, args_thk) =
     schedule_call(rid, ()->apply(f_thk, args_thk))
 
 function schedule_call(rid, thunk)
-    global PGRP
     wi = WorkItem(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
     add(wi.clientset, rid[1])
@@ -650,22 +646,17 @@ type WaitFor
     rr
 end
 
-function enq_work(wi::WorkItem)
-    global Workqueue
-    enqueue(Workqueue, wi)
-end
+enq_work(wi::WorkItem) = enqueue(Workqueue, wi)
 
 enq_work(f::Function) = enq_work(WorkItem(f))
 enq_work(t::Task) = enq_work(WorkItem(t))
 
 function perform_work()
-    global Workqueue
     job = pop(Workqueue)
     perform_work(job)
 end
 
 function perform_work(job::WorkItem)
-    global Waiting, Workqueue
     local result
     try
         if isa(job.task,Task)
@@ -749,7 +740,6 @@ end
 
 const _jl_empty_cell_ = {}
 function deliver_result(sock::(), msg, oid, value)
-    global Waiting
     # restart task that's waiting on oid
     jobs = get(Waiting, oid, _jl_empty_cell_)
     for i = 1:length(jobs)
@@ -822,7 +812,6 @@ type DisconnectException <: Exception end
 
 # activity on message socket
 function message_handler(fd, sockets)
-    global PGRP
     refs = (PGRP::ProcessGroup).refs
     sock = sockets[fd]
     first = true
@@ -1164,8 +1153,6 @@ macro spawn(expr)
 end
 
 function spawnlocal(thunk)
-    global Workqueue
-    global PGRP
     rr = RemoteRef(myid())
     sync_add(rr)
     rid = rr2id(rr)
@@ -1188,7 +1175,7 @@ end
 
 macro spawnat(p, expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawnat($p, $(esc(expr))))
+    :(spawnat($(esc(p)), $(esc(expr))))
 end
 
 function at_each(f, args...)
@@ -1448,8 +1435,7 @@ end
 # force a task to stop waiting, providing with_value as the value of
 # whatever it's waiting for.
 function interrupt_waiting_task(wi::WorkItem, with_value)
-    global Waiting
-    for (oid, jobs) = Waiting
+    for (oid, jobs) in Waiting
         for j in jobs
             if is(j[2], wi)
                 deliver_result((), j[1], oid, with_value)

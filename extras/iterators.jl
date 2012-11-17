@@ -1,6 +1,10 @@
 
 module Iterators
-import Base.*
+using Base
+
+import Base.start, Base.next, Base.done
+
+global count, take, repeat
 
 export
     count,
@@ -15,16 +19,16 @@ export
 # Infinite counting
 
 type Count
-
+    start::Any
     step::Any
 end
 
-count(start, step)           = Count(start, step)
-count{T <: Number}(start::T) = Count(start, convert(T, 1))
-count()                      = Count(0, 1)
+count(start, step) = Count(start, step)
+count(start)       = Count(start, one(start))
+count()            = Count(0, 1)
 
 start(it::Count) = it.start
-next(it::Count, state) = (state, state + 1)
+next(it::Count, state) = (state, state + it.step)
 done(it::Count, state) = false
 
 
@@ -40,13 +44,13 @@ take(xs, n) = Take(xs, n)
 start(it::Take) = (it.n, start(it.xs))
 
 function next(it::Take, state)
-    (n, xs_state) = state
-    (v, xs_state) = next(it.xs, xs_state)
-    (v, (n - 1, xs_state))
+    n, xs_state = state
+    v, xs_state = next(it.xs, xs_state)
+    return v, (n - 1, xs_state)
 end
 
 function done(it::Take, state)
-    (n, xs_state) = state
+    n, xs_state = state
     return n <= 0 || done(it.xs, xs_state)
 end
 
@@ -67,7 +71,7 @@ function start(it::Drop)
             break
         end
 
-        (_, xs_state) = next(it.xs, xs_state)
+        _, xs_state = next(it.xs, xs_state)
     end
     xs_state
 end
@@ -84,19 +88,24 @@ end
 
 cycle(xs) = Cycle(xs)
 
-start(it::Cycle) = start(it.xs)
-
-function next(it::Cycle, state)
-    if done(it.xs, state)
-        state = start(it.xs)
-    end
-    v = next(it.xs, state)
+function start(it::Cycle)
+    s = start(it.xs)
+    return s, done(it.xs, s)
 end
 
-done(it::Cycle, state) = false
+function next(it::Cycle, state)
+    s, d = state
+    if done(it.xs, s)
+        s = start(it.xs)
+    end
+    v, s = next(it.xs, s)
+    return v, (s, false)
+end
+
+done(it::Cycle, state) = state[2]
 
 
-# Repeat an object n (or infinately many) times.
+# Repeat an object n (or infinitely many) times.
 
 type Repeat
     x
@@ -143,12 +152,12 @@ function start(it::Chain)
         end
         i += 1
     end
-    (i, xs_state)
+    return i, xs_state
 end
 
 function next(it::Chain, state)
     i, xs_state = state
-    (v, xs_state) = next(it.xss[i], xs_state)
+    v, xs_state = next(it.xss[i], xs_state)
     while done(it.xss[i], xs_state)
         i += 1
         if i > length(it.xss)
@@ -156,7 +165,7 @@ function next(it::Chain, state)
         end
         xs_state = start(it.xss[i])
     end
-    (v, (i, xs_state))
+    return v, (i, xs_state)
 end
 
 done(it::Chain, state) = state[1] > length(it.xss)
@@ -174,33 +183,31 @@ end
 product(xss...) = Product(xss...)
 
 function start(it::Product)
-    js = [start(xs) for xs in it.xss]
-    if any([done(xs, j) for (xs, j) in zip(it.xss, js)])
-        (js, nothing)
-    else
-        vs = Array(Any, length(js))
-        for ((xs, j), i) in enumerate(zip(it.xss, js))
-            (vs[i], js[i]) = next(xs, j)
-            (v, j) = next(xs, j)
-            vs[i] = v
-            js[i] = j
-            if done(xs, js[i])
-                js[i] = start(xs)
-            end
-        end
-
-        (js, vs)
+    n = length(it.xss)
+    js = {start(xs) for xs in it.xss}
+    if n == 0
+        return js, nothing
     end
+    for i = 1:n
+        if done(it.xss[i], js[i])
+            return js, nothing
+        end
+    end
+    vs = Array(Any, n)
+    for i = 1:n
+        vs[i], js[i] = next(it.xss[i], js[i])
+    end
+    return js, vs
 end
 
 function next(it::Product, state)
-    (js, vs) = state
+    js, vs = state
     ans = tuple(vs...)
 
     n = length(it.xss)
     for i in 1:n
         if !done(it.xss[i], js[i])
-            (vs[i], js[i]) = next(it.xss[i], js[i])
+            vs[i], js[i] = next(it.xss[i], js[i])
             break
         elseif i == n
             vs = nothing
@@ -208,12 +215,12 @@ function next(it::Product, state)
         end
 
         js[i] = start(it.xss[i])
-        (vs[i], js[i]) = next(it.xss[i], js[i])
+        vs[i], js[i] = next(it.xss[i], js[i])
     end
-    (ans, (js, vs))
+    return ans, (js, vs)
 end
 
-done(it::Product, state) = is(state[2], nothing)
+done(it::Product, state) = state[2] === nothing
 
 end # module Iterators
 

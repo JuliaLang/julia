@@ -19,7 +19,7 @@ macro timesofar(str)
 end
 
 cd("../extras") do
-require("linalg_bitarray.jl")
+require("linalg_bitarray")
 
 TT = Uint8
 S = promote_type(TT, Int)

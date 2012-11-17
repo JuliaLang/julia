@@ -1,4 +1,4 @@
-require("../extras/Rmath.jl")
+require("../extras/Rmath")
 
 srand(124)
 

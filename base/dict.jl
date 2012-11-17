@@ -7,11 +7,16 @@ const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
                                _jl_secret_table_token)
 
-function show(io, t::Associative)
+function show{K,V}(io, t::Associative{K,V})
     if isempty(t)
         print(io, typeof(t),"()")
     else
-        print(io, "{")
+        if K === Any && V === Any
+            delims = ['{','}']
+        else
+            delims = ['[',']']
+        end
+        print(io, delims[1])
         first = true
         for (k, v) = t
             first || print(io, ',')
@@ -20,7 +25,7 @@ function show(io, t::Associative)
             print(io, "=>")
             show(io, v)
         end
-        print(io, "}")
+        print(io, delims[2])
     end
 end
 
@@ -154,11 +159,15 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
                                            shl_int(unbox(Uint64,b), 32))))
 
 if WORD_SIZE == 64
-    _jl_hash64(x::Union(Int64,Uint64,Float64)) =
-        ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Uint64,x)))
+    _jl_hash64(x::Float64) =
+        ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Float64,x)))
+    _jl_hash64(x::Union(Int64,Uint64)) =
+        ccall(:int64hash, Uint64, (Uint64,), x)
 else
-    _jl_hash64(x::Union(Int64,Uint64,Float64)) =
-        ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Uint64,x)))
+    _jl_hash64(x::Float64) =
+        ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Float64,x)))
+    _jl_hash64(x::Union(Int64,Uint64)) =
+        ccall(:int64to32hash, Uint32, (Uint64,), x)
 end
 
 hash(x::Integer) = _jl_hash64(uint64(x))
@@ -216,7 +225,8 @@ end
 # dict
 
 type Dict{K,V} <: Associative{K,V}
-    keys::Array{Any,1}
+    slots::Array{Uint8,1}
+    keys::Array{K,1}
     vals::Array{V,1}
     ndel::Int
     count::Int
@@ -225,10 +235,9 @@ type Dict{K,V} <: Associative{K,V}
     Dict() = Dict{K,V}(0)
     function Dict(n::Integer)
         n = _tablesz(n)
-        new(fill!(cell(n), _jl_secret_table_token), Array(V,n),
-            0, 0, identity)
+        new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
-    function Dict(ks::Tuple, vs::Tuple)
+    function Dict(ks, vs)
         n = length(ks)
         h = Dict{K,V}(n)
         for i=1:n
@@ -240,7 +249,15 @@ end
 Dict() = Dict(0)
 Dict(n::Integer) = Dict{Any,Any}(n)
 
-similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
+Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
+Dict(ks, vs) = Dict{Any,Any}(ks, vs)
+
+# syntax entry points
+Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
+Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
+Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
+
+similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
@@ -262,31 +279,34 @@ function deserialize{K,V}(s, T::Type{Dict{K,V}})
     return t
 end
 
-# syntax entry point
-dict{K,V}(ks::(K...), vs::(V...)) = Dict{K,V}    (ks, vs)
-dict{K}  (ks::(K...), vs::Tuple ) = Dict{K,Any}  (ks, vs)
-dict{V}  (ks::Tuple , vs::(V...)) = Dict{Any,V}  (ks, vs)
-dict     (ks::Tuple , vs::Tuple)  = Dict{Any,Any}(ks, vs)
-
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
-const _jl_missing_token = :__c782dbf1cf4d6a2e5e3965d7e95634f2e09b5901__
+isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
+isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
+isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
 function rehash{K,V}(h::Dict{K,V}, newsz)
-    oldk = copy(h.keys)
+    olds = h.slots
+    oldk = h.keys
     oldv = h.vals
-    sz = length(oldk)
+    sz = length(olds)
     newsz = _tablesz(newsz)
-    if newsz > sz
-        grow(h.keys, newsz-sz)
-    end
+    h.slots = zeros(Uint8,newsz)
+    h.keys = Array(K, newsz)
     h.vals = Array(V, newsz)
-    del_all(h)
+    h.ndel = h.count = 0
 
-    for i = 1:length(oldk)
-        k = oldk[i]
-        if !is(k,_jl_secret_table_token) && !is(k,_jl_missing_token)
-            h[k] = oldv[i]
+    for i = 1:sz
+        if olds[i] == 0x1
+            k = oldk[i]
+            index = hashindex(k, newsz)
+            while h.slots[index] != 0
+                index = (index & (newsz-1)) + 1
+            end
+            h.slots[index] = 0x1
+            h.keys[index] = k
+            h.vals[index] = oldv[i]
+            h.count += 1
         end
     end
 
@@ -294,7 +314,10 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
 end
 
 function del_all{K,V}(h::Dict{K,V})
-    fill!(h.keys, _jl_secret_table_token)
+    fill!(h.slots, 0x0)
+    sz = length(h.slots)
+    h.keys = Array(K, sz)
+    h.vals = Array(V, sz)
     h.ndel = 0
     h.count = 0
     return h
@@ -305,38 +328,36 @@ function assign{K,V}(h::Dict{K,V}, v, key)
 
     sz = length(h.keys)
 
-    if h.ndel >= ((3*sz)>>2)
-        rehash(h, sz)
+    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
+        # > 3/4 deleted or > 2/3 full
+        rehash(h, h.count > 64000 ? h.count*2 : h.count*4)
+        sz = length(h.keys)  # rehash may resize the table at this point!
     end
 
     iter = 0
-    maxprobe = sz>>3
+    maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     avail = -1  # an available slot
     keys = h.keys; vals = h.vals
 
     while true
-        hk = keys[index]
-        if is(hk,_jl_secret_table_token)
-            if avail<0
-                keys[index] = key
-                vals[index] = v
-            else
-                keys[avail] = key
-                vals[avail] = v
-            end
+        if isslotempty(h,index)
+            if avail > 0; index = avail; end
+            h.slots[index] = 0x1
+            h.keys[index] = key
+            h.vals[index] = v
             h.count += 1
             return h
         end
 
-        if is(hk,_jl_missing_token)
+        if isslotmissing(h,index)
             if avail<0
                 # found an available slot, but need to keep scanning
                 # in case "key" already exists in a later collided slot.
                 avail = index
             end
-        elseif isequal(key, hk::K)
+        elseif isequal(key, keys[index])
             vals[index] = v
             return h
         end
@@ -349,13 +370,15 @@ function assign{K,V}(h::Dict{K,V}, v, key)
     end
 
     if avail>0
-        keys[avail] = key
-        vals[avail] = v
+        index = avail
+        h.slots[index] = 0x1
+        h.keys[index] = key
+        h.vals[index] = v
         h.count += 1
         return h
     end
 
-    rehash(h, sz*2)
+    rehash(h, h.count > 64000 ? sz*2 : sz*4)
 
     assign(h, v, key)
 end
@@ -366,17 +389,16 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
 
     sz = length(h.keys)
     iter = 0
-    maxprobe = sz>>3
+    maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     keys = h.keys
 
     while true
-        hk = keys[index]
-        if is(hk,_jl_secret_table_token)
+        if isslotempty(h,index)
             break
         end
-        if !is(hk,_jl_missing_token) && isequal(key,hk::K)
+        if !isslotmissing(h,index) && isequal(key,keys[index])
             return index
         end
 
@@ -410,28 +432,44 @@ end
 function del(h::Dict, key)
     index = ht_keyindex(h, key)
     if index > 0
-        h.keys[index] = _jl_missing_token
+        h.slots[index] = 0x2
+        ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
+        ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
         h.ndel += 1
         h.count -= 1
+        return h
     end
-    return h
+    throw(KeyError(key))
 end
 
-function skip_deleted(keys, i)
-    L = length(keys)
-    while i<=L && (is(keys[i],_jl_secret_table_token) ||
-                   is(keys[i],_jl_missing_token))
+function skip_deleted(h::Dict, i)
+    L = length(h.slots)
+    while i<=L && !isslotfilled(h,i)
         i += 1
     end
     return i
 end
 
-start(t::Dict) = skip_deleted(t.keys, 1)
+start(t::Dict) = skip_deleted(t, 1)
 done(t::Dict, i) = done(t.vals, i)
-next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t.keys,i+1))
+next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
+
+# Used as default value arg to get in isequal: something that will
+# never be found in any dictionary.
+const _MISSING = gensym()
+
+function isequal(l::Dict, r::Dict)
+    if ! (length(l) == length(r))  return false end
+    for (key, value) in l
+        if ! isequal(value, get(r, key, _MISSING))
+            return false
+        end
+    end
+    true
+end
 
 # weak key dictionaries
 
@@ -456,7 +494,7 @@ end
 type WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{Any,V}
 
-    WeakKeyDict() = new(Dict{Any,V}())
+    WeakKeyDict() = new((Any=>V)[])
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 
@@ -484,3 +522,4 @@ function next{K}(t::WeakKeyDict{K}, i)
     ((kv[1].value::K,kv[2]), i)
 end
 length(t::WeakKeyDict) = length(t.ht)
+

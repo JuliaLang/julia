@@ -1,7 +1,7 @@
 module DSP
 
-import Base.*
-import Base.FFTW.*
+using Base
+using Base.FFTW
 
 export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        # the rest are defined imported from FFTW:

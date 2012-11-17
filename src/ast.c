@@ -29,12 +29,15 @@ DLLEXPORT void jl_lisp_prompt(void)
 
 value_t fl_defined_julia_global(value_t *args, uint32_t nargs)
 {
+    // tells whether a var is defined in and *by* the current module
     argcount("defined-julia-global", nargs, 1);
     (void)tosymbol(args[0], "defined-julia-global");
     if (jl_current_module == NULL)
         return FL_F;
-    char *name = symbol_name(args[0]);
-    return jl_boundp(jl_current_module, jl_symbol(name)) ? FL_T : FL_F;
+    jl_sym_t *var = jl_symbol(symbol_name(args[0]));
+    jl_binding_t *b =
+        (jl_binding_t*)ptrhash_get(&jl_current_module->bindings, var);
+    return (b != HT_NOTFOUND && b->owner==jl_current_module) ? FL_T : FL_F;
 }
 
 value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
@@ -185,6 +188,8 @@ static jl_value_t *scm_to_julia_(value_t e)
             switch (nt) {
             case T_DOUBLE:
                 return (jl_value_t*)jl_box_float64(*(double*)cp_data((cprim_t*)ptr(e)));
+            case T_FLOAT:
+                return (jl_value_t*)jl_box_float32(*(float*)cp_data((cprim_t*)ptr(e)));
             case T_INT64:
                 return (jl_value_t*)jl_box_int64(*(int64_t*)cp_data((cprim_t*)ptr(e)));
             case T_UINT8:

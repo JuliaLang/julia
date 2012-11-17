@@ -52,6 +52,7 @@
     jl_array_ptr;
     jl_arrayref;
     jl_arrayset;
+    jl_arrayunset;
     jl_array_to_string;
     jl_backtrace_type;
     jl_base_module;
@@ -72,7 +73,9 @@
     jl_current_task;
     jl_defer_signal;
     jl_dlsym;
+    jl_dlsym_e;
     jl_dump_function;
+    jl_function_ptr;
     jl_enable_color;
     jl_enable_inference;
     jl_enq_send_req;

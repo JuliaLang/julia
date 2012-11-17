@@ -54,7 +54,7 @@ include("operators.jl")
 include("pointer.jl")
 
 _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
-_jl_libfdm = dlopen("libfdm")
+libopenlibm = dlopen("libopenlibm")
 
 include("float.jl")
 include("reduce.jl")
@@ -81,7 +81,9 @@ include("string.jl")
 include("regex.jl")
 include("show.jl")
 include("grisu.jl")
+import Grisu.print_shortest
 include("printf.jl")
+using Printf
 
 # concurrency and parallelism
 include("iterator.jl")
@@ -105,15 +107,17 @@ include("client.jl")
 include("intfuncs.jl")
 include("floatfuncs.jl")
 include("math.jl")
-include("math_libm.jl")
-include("sort.jl")
-include("combinatorics.jl")
-include("statistics.jl")
+using Math
 
-# random number generation
+# random number generation and statistics
+include("statistics.jl")
 include("librandom.jl")
 include("rng.jl")
-import Base.RNG.*
+using RNG
+
+# Combinatorics
+include("sort.jl")
+include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
 #include("darray.jl")
@@ -140,7 +144,7 @@ include("linalg_dense.jl")
 # signal processing
 include("fftw.jl")
 include("dsp.jl")
-import Base.DSP.*
+using DSP
 
 # prime method cache with some things we know we'll need right after startup
 compile_hint(cwd, ())
@@ -271,7 +275,7 @@ end
 
 end # module Base
 
-import Base.*
+using Base
 
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),

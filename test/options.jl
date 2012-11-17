@@ -1,5 +1,5 @@
-require("../extras/options.jl")
-import OptionsMod.*
+require("../extras/options")
+using OptionsMod
 
 oo = Options(:a, true, :b, 7)
 @assert length(oo.key2index) == 2

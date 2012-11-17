@@ -1,5 +1,5 @@
 module Distributions
-import Base.*
+using Base
 
 export                                  # types
     Distribution,
@@ -56,6 +56,8 @@ export                                  # types
     skewness,   # skewness of the distribution
     std,        # standard deviation of distribution
     var         # variance of distribution
+
+import Base.mean, Base.median, Base.quantile, Base.rand, Base.std, Base.var
 
 abstract Distribution
 abstract DiscreteDistribution   <: Distribution
@@ -688,6 +690,7 @@ type Poisson <: DiscreteDistribution
     Poisson(l) = l > 0 ? new(float64(l)) : error("lambda must be positive")
 end
 Poisson() = Poisson(1)
+@_jl_dist_1p Poisson pois
 devresid(d::Poisson,  y::Real, mu::Real, wt::Real) = 2wt*((y==0? 0.: log(y/mu)) - (y-mu))
 insupport(d::Poisson, x::Number) = integer_valued(x) && 0 <= x
 logpmf(  d::Poisson, mu::Real, y::Real) = ccall(dlsym(_jl_libRmath,:dpois),Float64,(Float64,Float64,Int32),y,mu,1)

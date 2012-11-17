@@ -1,7 +1,28 @@
 typealias LapackType Union(Float64,Float32,Complex128,Complex64)
 
-module Blas
-import Base.*
+module BLAS
+using Base
+
+export copy!,
+       scal!,
+       scal,
+       dot,
+       nrm2,
+       axpy!,
+       syrk!,
+       syrk,
+       herk!,
+       herk,
+       gbmv!,
+       gbmv,
+       sbmv!,
+       sbmv,
+       gemm!,
+       gemm,
+       symm!,
+       symm,
+       symv!,
+       symv
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
@@ -12,6 +33,26 @@ for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, DX, &incx, DY, &incy)
             DY
+        end
+    end
+end
+
+# SUBROUTINE DSCAL(N,DA,DX,INCX)
+for (fname, elty) in ((:dscal_,:Float64),    (:sscal_,:Float32),
+                      (:zscal_,:Complex128), (:cscal_,:Complex64))
+    @eval begin
+        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                  &n, &DA, DX, &incx)
+            DX
+        end
+        function scal(n::Integer, DA::$elty, DX_orig::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+            DX = copy(DX_orig)
+            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                  &n, &DA, DX, &incx)
+            DX
         end
     end
 end
@@ -306,13 +347,71 @@ for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
    end
 end
 
+# (SY) symmetric matrix-matrix and matrix-vector multiplication
+
+#     SUBROUTINE DSYMM(SIDE,UPLO,M,N,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
+#     .. Scalar Arguments ..
+#     DOUBLE PRECISION ALPHA,BETA
+#     INTEGER LDA,LDB,LDC,M,N
+#     CHARACTER SIDE,UPLO
+#     .. Array Arguments ..
+#     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
+
+#      SUBROUTINE DSYMV(UPLO,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
+#     .. Scalar Arguments ..
+#      DOUBLE PRECISION ALPHA,BETA
+#      INTEGER INCX,INCY,LDA,N
+#      CHARACTER UPLO
+#     .. Array Arguments ..
+#      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
+
+for (vfname, mfname, elty) in
+    ((:dsymv_,:dsymm_,:Float64),
+     (:ssymv_,:ssymm_,:Float32),
+     (:zsymv_,:zsymm_,:Complex128),
+     (:csymv_,:csymm_,:Complex64))
+   @eval begin
+       function symv!(uplo, alpha::($elty), A::StridedMatrix{$elty}, X::StridedVector{$elty},
+                      beta::($elty), Y::StridedVector{$elty})
+           m, n = size(A)
+           if m != n error("symm!: matrix A is $m by $n but must be square") end
+           if m != length(X) || m != length(Y) error("symm!: dimension mismatch") end
+           ccall(dlsym(Base.libblas, $(string(vfname))), Void,
+                 (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                 Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                 &uplo, &n, &alpha, A, &stride(A,2), X, &stride(X,1), &beta, Y, &stride(Y,1))
+           Y
+       end
+       function symv(uplo, alpha::($elty), A::StridedMatrix{$elty}, X::StridedVector{$elty})
+           symv!(uplo, alpha, A, X, zero($elty), similar(X))
+       end
+       function symm!(side, uplo, alpha::($elty), A::StridedMatrix{$elty}, B::StridedMatrix{$elty},
+                      beta::($elty), C::StridedMatrix{$elty})
+           side = uppercase(convert(Char, side))
+           m, n = size(C)
+           k, j = size(A)
+           if k != j error("symm!: matrix A is $k by $j but must be square") end
+           if j != (side == 'L' ? m : n) || size(B,2) != n error("symm!: Dimension mismatch") end
+           ccall(dlsym(Base.libblas, $(string(mfname))), Void,
+                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                 Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                 &side, &uplo, &m, &n, &alpha, A, &stride(A,2), B, &stride(B,2),
+                 &beta, C, &stride(C,2))
+           C
+       end
+       function symm(side, uplo, alpha::($elty), A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+           symm!(side, uplo, alpha, A, B, zero($elty), similar(B))
+       end
+   end
+end
+
 end # module
 
 # Use BLAS copy for small arrays where it is faster than memcpy, and for strided copying
 
 function copy_to{T<:LapackType}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
-        Blas.copy!(n, src, 1, dest, 1)
+        BLAS.copy!(n, src, 1, dest, 1)
     else
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
@@ -334,7 +433,7 @@ function copy_to{T<:LapackType,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{
     if length(rdest) != length(rsrc)
         error("Ranges must be of the same length")
     end
-    Blas.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
+    BLAS.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
               pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
     return dest
 end

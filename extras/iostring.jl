@@ -1,5 +1,8 @@
 ## work with Vector{Uint8} via I/O primitives ##
 
+import Base.read, Base.skip, Base.seek, Base.seek_end, Base.position
+import Base.truncate, Base.eof, Base.close, Base.write
+
 # Stateful string
 type IOString <: IO
     data::Vector{Uint8}
@@ -36,6 +39,13 @@ read{T}(from::IOString, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
 
 skip(io::IOString, n::Integer) = io.ptr += n
 seek(io::IOString, n::Integer) = io.ptr = n+1
+seek_end(io::IOString) = io.ptr = length(io.data)+1
+position(io::IOString) = io.ptr-1
+truncate(io::IOString, n::Integer) = (grow(io.data, n-length(io.data)); io.ptr = min(io.ptr, n+1); uint(0))
+eof(io::IOString) = io.ptr-1 == length(io.data)
+close(io::IOString) = (grow(io.data, 0); io.ptr = 1; nothing)
+
+bytestring(io::IOString) = bytestring(io.data)
 
 function write{T}(to::IOString, a::Array{T})
     if isa(T, BitsKind)

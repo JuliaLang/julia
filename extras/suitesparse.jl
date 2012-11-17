@@ -1,9 +1,50 @@
-require("linalg_sparse.jl")
-require("suitesparse_h.jl")
+require("linalg_sparse")
+
+#module Suitesparse
+#using Base
+#import Base.SparseMatrixCSC
+
+import Base.size, Base.nnz, Base.eltype, Base.show
+
+export                                  # types
+    CholmodPtr,
+    CholmodCommon,
+    CholmodSparse,
+    CholmodFactor,
+    CholmodDense,
+    CholmodSparseOut,
+    UmfpackPtr,
+    UmfpackLU,
+    UmfpackLUTrans,
+                                        # methods
+    chm_aat, # drop prefix?
+    eltype,  #? maybe not
+    indtype, #? maybe not
+    nnz,
+    show,
+    size,
+    solve,
+    \,
+    At_ldiv_B,
+    Ac_ldiv_B
+
+require("suitesparse_h")
 
 const _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
 const _jl_libcholmod = dlopen("libcholmod")
 const _jl_libumfpack = dlopen("libumfpack")
+try
+    global const _jl_libspqr = dlopen("libspqr")
+catch err
+    # XXX:can be removed when suitesparse > 4.0.2
+    println(E"
+Oops, Suitesparse needs to be rebuilt. Try running:
+
+    $ touch deps/SuiteSparse-4.0.2/Makefile
+    $ make
+")
+    throw(err)
+end
 const _chm_aat       = dlsym(_jl_libcholmod, :cholmod_aat)
 const _chm_amd       = dlsym(_jl_libcholmod, :cholmod_amd)
 const _chm_analyze   = dlsym(_jl_libcholmod, :cholmod_analyze)
@@ -19,6 +60,17 @@ const _chm_print_sp  = dlsym(_jl_libcholmod, :cholmod_print_sparse)
 const _chm_solve     = dlsym(_jl_libcholmod, :cholmod_solve)
 const _chm_sort      = dlsym(_jl_libcholmod, :cholmod_sort)
 const _chm_submatrix = dlsym(_jl_libcholmod, :cholmod_submatrix)
+
+const _spqr_C_QR                = dlsym(_jl_libspqr, :SuiteSparseQR_C_QR)
+const _spqr_C_backslash         = dlsym(_jl_libspqr, :SuiteSparseQR_C_backslash)
+const _spqr_C_backslash_default = dlsym(_jl_libspqr, :SuiteSparseQR_C_backslash_default)
+const _spqr_C_backslash_sparse  = dlsym(_jl_libspqr, :SuiteSparseQR_C_backslash_sparse)
+const _spqr_C_factorize         = dlsym(_jl_libspqr, :SuiteSparseQR_C_factorize)
+const _spqr_C_symbolic          = dlsym(_jl_libspqr, :SuiteSparseQR_C_symbolic)
+const _spqr_C_numeric           = dlsym(_jl_libspqr, :SuiteSparseQR_C_numeric)
+const _spqr_C_free              = dlsym(_jl_libspqr, :SuiteSparseQR_C_free)
+const _spqr_C_solve             = dlsym(_jl_libspqr, :SuiteSparseQR_C_solve)
+const _spqr_C_qmult             = dlsym(_jl_libspqr, :SuiteSparseQR_C_qmult)
 
 type MatrixIllConditionedException <: Exception end
 
@@ -39,8 +91,8 @@ _jl_convert_to_1_based_indexing(S) = _jl_convert_to_1_based_indexing!(copy(S))
 
 ## CHOLMOD
 
-CHMVTypes = Union(Complex64, Complex128, Float32, Float64)
-CHMITypes = Union(Int32, Int64)
+typealias CHMVTypes Union(Complex64, Complex128, Float32, Float64)
+typealias CHMITypes Union(Int32, Int64)
 
 function chm_itype{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     if !(Ti<:CHMITypes) error("chm_itype: indtype(S) must be in CHMITypes") end
@@ -48,12 +100,12 @@ function chm_itype{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 end
 
 function chm_xtype{T}(S::SparseMatrixCSC{T})
-    if !(T <: CHMVTypes) error("chm_xtype: eltype(S) must be in CHMVTypes") end
+    if !(T<:CHMVTypes) error("chm_xtype: eltype(S) must be in CHMVTypes") end
     T <: Complex ? _JL_CHOLMOD_COMPLEX : _jl_CHOLMOD_REAL
 end
 
 function chm_dtype{T}(S::SparseMatrixCSC{T})
-    if !(T <: CHMVTypes) error("chm_dtype: eltype(S) must be in CHMVTypes") end
+    if !(T<:CHMVTypes) error("chm_dtype: eltype(S) must be in CHMVTypes") end
     T <: Union(Float32, Complex64) ? _jl_CHOLMOD_SINGLE : _jl_CHOLMOD_DOUBLE
 end
 
@@ -712,3 +764,5 @@ for (f_symfree, f_numfree, elty, inttype) in
         
     end
 end
+
+#end #module

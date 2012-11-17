@@ -971,15 +971,6 @@ function complex{T<:Real}(A::Array{T}, B::Real)
     return F
 end
 
-function complex{T<:Real}(A::Array{T})
-    z = zero(T)
-    F = similar(A, typeof(complex(z,z)))
-    for i=1:numel(A)
-        F[i] = complex(A[i], z)
-    end
-    return F
-end
-
 ## Binary comparison operators ##
 
 for (f,scalarf) in ((:(.==),:(==)), (:.<, :<), (:.!=,:!=), (:.<=,:<=))
@@ -1614,8 +1605,7 @@ function map_to(f, dest::StridedArray, A::StridedArray, B::StridedArray)
     end
     return dest
 end
-function map_to2(f, first, dest::StridedArray,
-                 A::StridedArray, B::StridedArray)
+function map_to2(f, first, dest::StridedArray, A::StridedArray, B::StridedArray)
     dest[1] = first
     for i=2:numel(A)
         dest[i] = f(A[i], B[i])
@@ -1630,48 +1620,6 @@ function map(f, A::StridedArray, B::StridedArray)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
-    return map_to2(f, first, dest, A, B)
-end
-
-function map_to(f, dest::StridedArray, A::StridedArray, B::Number)
-    for i=1:numel(A)
-        dest[i] = f(A[i], B)
-    end
-    return dest
-end
-function map_to2(f, first, dest::StridedArray, A::StridedArray, B::Number)
-    dest[1] = first
-    for i=2:numel(A)
-        dest[i] = f(A[i], B)
-    end
-    return dest
-end
-
-function map(f, A::StridedArray, B::Number)
-    if isempty(A); return A; end
-    first = f(A[1], B)
-    dest = similar(A, typeof(first))
-    return map_to2(f, first, dest, A, B)
-end
-
-function map_to(f, dest::StridedArray, A::Number, B::StridedArray)
-    for i=1:numel(B)
-        dest[i] = f(A, B[i])
-    end
-    return dest
-end
-function map_to2(f, first, dest::StridedArray, A::Number, B::StridedArray)
-    dest[1] = first
-    for i=2:numel(B)
-        dest[i] = f(A, B[i])
-    end
-    return dest
-end
-
-function map(f, A::Number, B::StridedArray)
-    if isempty(A); return A; end
-    first = f(A, B[1])
-    dest = similar(B, typeof(first))
     return map_to2(f, first, dest, A, B)
 end
 

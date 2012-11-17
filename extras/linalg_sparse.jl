@@ -1,6 +1,11 @@
 ## linalg_sparse.jl: Basic Linear Algebra functions for sparse representations ##
 
-require("sparse.jl")
+require("sparse")
+
+import Base.(*), Base.triu, Base.tril, Base.diff, Base.diag, Base.diagm
+import Base.trace, Base.kron, Base.issym, Base.ishermitian, Base.istriu
+import Base.istril, Base.diagmm!, Base.diagmm, Base.norm, Base.rank
+import Base.solve
 
 ## Matrix multiplication
 

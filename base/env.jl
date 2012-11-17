@@ -58,7 +58,7 @@ end
 
 has(::EnvHash, k::String) = hasenv(k)
 del(::EnvHash, k::String) = unsetenv(k)
-assign(::EnvHash, v::String, k::String) = (setenv(k,v); v)
+assign(::EnvHash, v, k::String) = setenv(k,string(v))
 
 start(::EnvHash) = 0
 done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) == nothing)

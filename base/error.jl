@@ -2,7 +2,8 @@
 
 error(e::Exception) = throw(e)
 error{E<:Exception}(::Type{E}) = throw(E())
-error(s...) = throw(ErrorException(string(s...)))
+error(s::String) = throw(ErrorException(s))
+error(s...)      = throw(ErrorException(string(s...)))
 
 macro unexpected()
     :(error("unexpected branch reached"))

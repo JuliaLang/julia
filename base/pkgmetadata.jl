@@ -1,13 +1,18 @@
-load("linprog.jl")
+require("linprog")
 
 module Metadata
-import Base.*
-import Main
+
+using Base
+using LinProgGLPK
+
 import Git
+import GLPK
+import Base.isequal, Base.isless
+
 export parse_requires, Version, VersionSet
 
 function gen_versions(pkg::String)
-    for (ver,sha1) in Git.each_version(pkg)
+    for (ver,sha1) in Git.each_tagged_version(pkg)
         dir = "METADATA/$pkg/versions/$ver"
         run(`mkdir -p $dir`)
         open("$dir/sha1","w") do io
@@ -17,7 +22,7 @@ function gen_versions(pkg::String)
 end
 
 function gen_hashes(pkg::String)
-    for (ver,dir) in each_version(pkg)
+    for (ver,dir) in each_tagged_version(pkg)
         sha1 = readchomp("$dir/sha1")
         run(`mkdir -p METADATA/$pkg/hashes`)
         open("METADATA/$pkg/hashes/$sha1","w") do io
@@ -27,6 +32,7 @@ function gen_hashes(pkg::String)
 end
 gen_hashes() = for pkg in each_package() gen_hashes(pkg) end
 
+pkg_url(pkg::String) = readchomp("METADATA/$pkg/url")
 version(pkg::String, sha1::String) =
     convert(VersionNumber,readchomp("METADATA/$pkg/hashes/$sha1"))
 
@@ -39,7 +45,7 @@ each_package() = @task begin
     end
 end
 
-each_version(pkg::String) = @task begin
+each_tagged_version(pkg::String) = @task begin
     for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD:$pkg/versions`)
         m = match(r"\d{6} tree [0-9a-f]{40}\t(\d\S*)$", line)
         if m != nothing && ismatch(Base.VERSION_REGEX,m.captures[1])
@@ -64,6 +70,7 @@ type Version
     package::ByteString
     version::VersionNumber
 end
+
 isequal(a::Version, b::Version) =
     a.package == b.package && a.version == b.version
 function isless(a::Version, b::Version)
@@ -75,7 +82,7 @@ end
 function versions(pkgs)
     vers = Version[]
     for pkg in pkgs
-        for (ver,dir) in each_version(pkg)
+        for (ver,dir) in each_tagged_version(pkg)
             push(vers,Version(pkg,ver))
         end
     end
@@ -127,7 +134,7 @@ end
 function dependencies(pkgs,vers)
     deps = Array((Version,VersionSet),0)
     for pkg in each_package()
-        for (ver,dir) in each_version(pkg)
+        for (ver,dir) in each_tagged_version(pkg)
             v = Version(pkg,ver)
             file = "$dir/requires"
             if isfile(file)
@@ -156,11 +163,13 @@ function resolve(reqs::Vector{VersionSet})
     G += [ older(a,b)       ? 2 : 0  for a=vers, b=vers ]
     I = find(G)
     W = zeros(Int,length(I),n)
-    for (i,r) in enumerate(I)
+    for (r,i) in enumerate(I)
         W[r,rem(i-1,n)+1] = -1
         W[r,div(i-1,n)+1] = G[i]
     end
-    w = iround(Main.linprog_simplex(u,W,zeros(Int,length(I)),nothing,nothing,u,nothing)[2])
+    lpopts = GLPK.SimplexParam()
+    lpopts["msg_lev"] = GLPK.MSG_ERR
+    w = iround(linprog_simplex(u,W,zeros(Int,length(I)),nothing,nothing,u,nothing,lpopts)[2])
 
     V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
     R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
@@ -169,8 +178,8 @@ function resolve(reqs::Vector{VersionSet})
           -ones(Int,length(reqs))
           zeros(Int,length(deps)) ]
 
-    x = Main.linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u)[2]
-    h = Dict{String,ASCIIString}()
+    x = linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u,lpopts)[2]
+    h = (String=>ASCIIString)[]
     for v in vers[x .> 0.5]
         h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")
     end

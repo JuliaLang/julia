@@ -1,3 +1,8 @@
+import Base.convert, Base.promote_rule, Base.+, Base.-, Base.*, Base.<<
+import Base.^, Base.div, Base.rem, Base.cmp, Base.sqrt
+import Base.gcd, Base.gcdx, Base.factorial, Base.binomial
+import Base.==, Base.<=, Base.>=, Base.<, Base.>, Base.string, Base.show
+
 _jl_libgmp_wrapper = dlopen("libgmp_wrapper")
 
 type BigInt <: Integer
@@ -136,12 +141,12 @@ function sqrt(x::BigInt)
     BigInt(z)
 end
 
-function pow(x::BigInt, y::Uint)
+function ^(x::BigInt, y::Uint)
     z = _jl_bigint_init()
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, y)
     BigInt(z)
 end
-pow(x::BigInt, y::Integer) = y<0 ? throw(DomainError()) : pow(x, uint(y))
+^(x::BigInt, y::Integer) = y<0 ? throw(DomainError()) : ^(x, uint(y))
 
 function gcd(x::BigInt, y::BigInt)
     z = _jl_bigint_init()
@@ -150,7 +155,7 @@ function gcd(x::BigInt, y::BigInt)
     BigInt(z)
 end
 
-function gcdext(a::BigInt, b::BigInt)
+function gcdx(a::BigInt, b::BigInt)
     g = _jl_bigint_init()
     s = _jl_bigint_init()
     t = _jl_bigint_init()

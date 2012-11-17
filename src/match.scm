@@ -85,9 +85,9 @@
    ((> min max) #f)
    ; case 1: only allowed to match 0 subexpressions
    ((= max 0) (match-seq prest expr
-                         (if var (cons (cons var (reverse sofar)) state)
+			 (if var (cons (cons var (reverse sofar)) state)
 			     state)
-                         L))
+			 L))
    ; case 2: must match at least 1
    ((> min 0)
     (let ((subma (match- p (car expr) state)))
@@ -97,7 +97,7 @@
    ; otherwise, must match either 0 or between 1 and max subexpressions
    (else
     (or (match-star- p prest expr state var 0 0   L sofar)
-        (match-star- p prest expr state var 1 max L sofar)))))
+	(match-star- p prest expr state var 1 max L sofar)))))
 (define (match-star p prest expr state var min max L) 
   (match-star- p prest expr state var min max L '()))
 
@@ -112,7 +112,7 @@
 	   (if (and (pair? subp)
 		    (eq? (car subp) '--))
 	       (begin (set! var (cadr subp))
-                      (set! subp (caddr subp)))
+		      (set! subp (caddr subp)))
 	       #f)
 	   (let ((head (if (pair? subp) (car subp) '())))
 	     (cond ((eq? subp '...)
@@ -144,7 +144,7 @@
 		   (apply-patterns (vector-ref plist 2) expr)
 		   enew))
 	     (apply-patterns (vector-ref plist 2) expr)))
-        ((null? plist) expr)
+	((null? plist) expr)
 	(else
 	 (let ((enew ((car plist) expr)))
 	   (if (not enew)
@@ -164,7 +164,7 @@
       expr
       (let ((enew (apply-patterns plist expr)))
 	(if (eq? enew expr)
-            ;; expr didn't change; move to subexpressions
+	    ;; expr didn't change; move to subexpressions
 	    (let ((sub (lambda (subex)
 			 (if (not (pair? subex))
 			     subex
@@ -194,7 +194,7 @@
       expr
       (let ((enew (apply-patterns plist expr)))
 	(if (eq? enew expr)
-            ;; expr didn't change; move to subexpressions
+	    ;; expr didn't change; move to subexpressions
 	    (map (lambda (subex)
 		   (if (not (pair? subex))
 		       subex
@@ -245,6 +245,6 @@
   (define (patargs p)
     (cons '__ (patargs- p)))
   (let* ((args (patargs pat))
-         (expander `(lambda ,args ,body)))
+	 (expander `(lambda ,args ,body)))
     `(lambda (__ex__)
        (plambda-expansion ',pat __ex__ ,expander ',args))))

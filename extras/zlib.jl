@@ -1,5 +1,5 @@
 module Zlib
-import Base.*
+using Base
 
 export
 # Compression routines
@@ -17,9 +17,6 @@ export
    uncompress,
    uncompress_to_buffer,
 
-# gz files interface
-   gzopen,
-
 # ZError, related constants (zlib_h.jl)
    ZError,
    Z_ERRNO,
@@ -29,7 +26,7 @@ export
    Z_BUF_ERROR,
    Z_VERSION_ERROR
 
-load("zlib_h.jl")
+load("zlib_h")
 
 # zlib functions
 
@@ -58,7 +55,7 @@ function compress_to_buffer(source::Array{Uint8}, dest::Array{Uint8}, level::Int
     dest_buf_size = Uint[length(dest)]
 
     # Compress the input
-    ret = ccall(dlsym(_zlib, :compress2), Int32, (Ptr{Uint}, Ptr{Uint}, Ptr{Uint}, Uint, Int32),
+    ret = ccall(dlsym(_zlib, :compress2), Int32, (Ptr{Uint8}, Ptr{Uint}, Ptr{Uint}, Uint, Int32),
                 dest, dest_buf_size, source, length(source), int32(level))
 
     if ret != Z_OK
@@ -122,126 +119,6 @@ function uncompress_to_buffer(source::Array{Uint8}, dest::Array{Uint8})
     end
 
     return dest_buf_size[1]
-end
-
-type GzStream <: IO
-    gzstruct::Ptr{Void}
-    name::String
-    read_buffer::Vector{Uint8}
-    read_buffer_size::Int
-    read_buffer_pos::Int
-    function GzStream(struct, name)
-        new(struct, name, Array(Uint8, Z_DEFAULT_BUFSIZE), 0, 0)
-    end
-end
-
-show(io, s::GzStream) = print(io, "GzStream(", s.name, ")")
-
-function gzopen(path::String, mode::String)
-    if mode != "rb" && mode != "wb"
-        error("unsupported gzopen mode: ", mode)
-    end
-    if mode == "rb"
-        fmode = "r"
-    elseif mode == "wb"
-        fmode = "w"
-    end
-    f = open(path, fmode)
-    fdes = int32(fd(f))
-    fdes_dup = dup(FileDes(fdes))
-    close(f)
-    struct = ccall(dlsym(_zlib, :gzdopen), Ptr{Void}, (Int32, Ptr{Uint8}), fdes_dup.fd, bytestring(mode))
-    if struct == C_NULL
-        error("gzopen: failed to open file: $path")
-    end
-    return GzStream(struct, strcat("<file ", path, ">"))
-end
-
-function gzopen(f::Function, args...)
-    io = gzopen(args...)
-    x = try f(io) catch err
-        close(io)
-        throw(err)
-    end
-    close(io)
-    return x
-end
-
-function close(gzs::GzStream)
-    if gzs.gzstruct == C_NULL
-        return
-    end
-    ret = ccall(dlsym(_zlib, :gzclose), Int32, (Ptr{Void},), gzs.gzstruct)
-    if ret != Z_OK
-        error("error closing GzStream")
-    end
-    gzs.gzstruct = C_NULL
-    gzs.name = strcat("[CLOSED] ", gzs.name)
-    return
-end
-
-function write(gzs::GzStream, x::Uint8)
-    ret = ccall(dlsym(_zlib, :gzputc), Int32, (Ptr{Void,}, Int32), gzs.gzstruct, x)
-    if ret == -1
-        error("gzwrite failed")
-    end
-    return
-end
-
-function _gzread_chunk(s::GzStream)
-    ret = ccall(dlsym(_zlib, :gzread), Int32, (Ptr{Void}, Ptr{Void}, Int32), s.gzstruct, pointer(s.read_buffer), Z_DEFAULT_BUFSIZE)
-    if ret == -1
-        error("gzread failed")
-    end
-    s.read_buffer_size = ret
-    s.read_buffer_pos = 1
-    return
-end
-
-function read(s::GzStream, x::Type{Uint8})
-    if s.read_buffer_pos == 0
-        _gzread_chunk(s)
-    end
-    if s.read_buffer_size == 0
-        error("gzread: end of file") # XXX?
-    end
-    ret = s.read_buffer[s.read_buffer_pos]
-    s.read_buffer_pos += 1
-    if s.read_buffer_pos > s.read_buffer_size
-        s.read_buffer_pos = 0
-    end
-    return ret
-end
-
-function eof(s::GzStream)
-    if s.read_buffer_pos == 0
-        return ccall(dlsym(_zlib, :gzeof), Int32, (Ptr{Void},), s.gzstruct) == 1
-    else
-        return false
-    end
-end
-
-readline(s::GzStream) = readuntil(s, '\n')
-
-function readuntil(s::GzStream, delim::Char)
-    dest = memio()
-    while !eof(s)
-        c = char(read(s, Uint8))
-        print(dest, c)
-        if c == delim
-            break
-        end
-    end
-    takebuf_string(dest)
-end
-
-function readall(s::GzStream)
-    dest = memio()
-    while !eof(s)
-        c = char(read(s, Uint8))
-        print(dest, c)
-    end
-    takebuf_string(dest)
 end
 
 end # module Zlib

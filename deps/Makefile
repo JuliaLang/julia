@@ -12,7 +12,7 @@ include $(JULIAHOME)/Make.inc
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv fdlibm random rmath double-conversion amos glpk
+STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -272,7 +272,7 @@ UV_OBJ_SOURCE = libuv/uv.a
 libuv/Makefile:
 	(cd .. && git submodule init && git submodule update)
 $(UV_OBJ_SOURCE): libuv/Makefile
-	$(MAKE) -C libuv $(UV_CFLAGS)
+	$(MAKE) -C libuv $(UV_CFLAGS) CC="$(CC)"
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USRLIB)/
@@ -349,28 +349,29 @@ clean-double-conversion:
 distclean-double-conversion:
 	rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
 
-## fdlibm ##
+## openlibm ##
 
-FDLIBM_OBJ_TARGET = $(USRLIB)/libfdm.$(SHLIB_EXT)
-FDLIBM_OBJ_SOURCE = fdlibm/libfdm.$(SHLIB_EXT)
+ifeq ($(OS), WINNT) #needs more advanced detection once 64bit build is possible
+OPENLIBM_FLAGS = ARCH=i386
+endif
 
-compile-fdlibm: $(FDLIBM_OBJ_SOURCE)
-install-fdlibm: $(FDLIBM_OBJ_TARGET)
+OPENLIBM_OBJ_TARGET = $(USRLIB)/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
-$(FDLIBM_OBJ_SOURCE): fdlibm/*.c
-	cd fdlibm && \
-	$(MAKE) CC="$(CC)" CFLAGS="$(CFLAGS) -D_IEEE_LIBM -Dx86 $(fPIC) -O2 $(CONFIG)" && \
-	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
-$(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
+openlibm/Makefile:
+	(cd .. && git submodule update --init)
+$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
+	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+$(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USRLIB)
 	cp $< $@
-	$(INSTALL_NAME_CMD)libfdm.dylib $@
+install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
-clean-fdlibm:
-	cd fdlibm && $(MAKE) clean
-	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
-distclean-fdlibm: clean-fdlibm
+clean-openlibm:
+	$(MAKE) -C openlibm distclean
+	rm $(OPENLIBM_OBJ_TARGET)
+distclean-openlibm: clean-openlibm      
 
-## rmath ##
+## Rmath ##
 
 RMATH_OBJ_TARGET = $(USRLIB)/libRmath.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
@@ -389,27 +390,6 @@ clean-rmath:
 	cd Rmath/src && $(MAKE) clean
 	rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
 distclean-rmath: clean-rmath
-
-## amos ##
-
-AMOS_OBJ_TARGET = $(USRLIB)/libamos.$(SHLIB_EXT)
-AMOS_OBJ_SOURCE = amos/libamos.$(SHLIB_EXT)
-
-compile-amos: $(AMOS_OBJ_SOURCE)
-install-amos: $(AMOS_OBJ_TARGET)
-
-$(AMOS_OBJ_SOURCE): amos/*.f
-	cd amos && \
-	$(MAKE) && \
-	$(FC) $(FFLAGS) $(JFFLAGS) -shared *.o -o libamos.$(SHLIB_EXT)
-$(AMOS_OBJ_TARGET): $(AMOS_OBJ_SOURCE)
-	cp $< $@
-	$(INSTALL_NAME_CMD)libamos.dylib $@
-
-clean-amos:
-	cd amos && $(MAKE) clean
-	rm -f $(AMOS_OBJ_SOURCE) $(AMOS_OBJ_TARGET)
-distclean-amos: clean-amos
 
 ## LIBRANDOM ##
 
@@ -458,6 +438,10 @@ OPENBLAS_BUILD_OPTS =
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
 endif
+
+#ifeq ($(ARCH), x86_64)
+#OPENBLAS_BUILD_OPTS += -DINTERFACE64=1
+#endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: $(USRLIB)/libopenblas.$(SHLIB_EXT)
@@ -652,7 +636,7 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
-	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a 2>/dev/null` . && \
+	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a -o -name libspqr.a 2>/dev/null` . && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libamd.$(SHLIB_EXT) $(USRLIB)/libamd.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcolamd.$(SHLIB_EXT) && \
@@ -660,7 +644,9 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcholmod.$(SHLIB_EXT) -L$(USRLIB) -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcholmod.$(SHLIB_EXT) $(USRLIB)/libcholmod.$(SHLIB_EXT) && \
 	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libumfpack.$(SHLIB_EXT) -L$(USRLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
-	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(USRLIB)/libumfpack.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(USRLIB)/libumfpack.$(SHLIB_EXT) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libspqr.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libspqr.$(SHLIB_EXT) -L$(USRLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(INSTALL_NAME_CMD)libspqr.$(SHLIB_EXT) $(USRLIB)/libspqr.$(SHLIB_EXT)
 endif
 
 clean-suitesparse:
@@ -673,10 +659,10 @@ distclean-suitesparse: clean-suitesparse
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 1)
 SUITESPARSE_INC = -I /usr/include/suitesparse
-SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd
+SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd -lspqr
 else
-SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config
-SUITESPARSE_LIB = -L$(USRLIB) -lcholmod $(RPATH_ORIGIN)
+SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config -I SuiteSparse-$(SUITESPARSE_VER)/SPQR/Include
+SUITESPARSE_LIB = -L$(USRLIB) -lcholmod -lumfpack -lspqr $(RPATH_ORIGIN)
 endif
 
 $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
@@ -895,6 +881,7 @@ ifeq ($(USE_SYSTEM_ZLIB), 1)
 ZLIB_OBJ_TARGET =
 else
 ZLIB_OBJ_TARGET = $(USRLIB)/libz.$(SHLIB_EXT)
+ZLIB_CFLAGS = CFLAGS="$(CFLAGS) -D_FILE_OFFSET_BITS=64"
 endif
 
 compile-zlib: install-zlib
@@ -907,7 +894,7 @@ zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
 	touch $@
 zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
 	cd zlib-$(ZLIB_VER) && \
-	./configure --prefix=$(abspath $(USR))
+	$(ZLIB_CFLAGS) ./configure --prefix=$(abspath $(USR))
 	touch $@
 $(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
 	$(MAKE) -C zlib-$(ZLIB_VER) CC="$(CC)"
@@ -937,22 +924,6 @@ install-tk-wrapper: $(USRLIB)/libtk_wrapper.$(SHLIB_EXT) tk_wrapper.c
 clean-tk-wrapper:
 	rm -f $(USRLIB)/libtk_wrapper.$(SHLIB_EXT)
 distclean-tk-wrapper: clean-tk-wrapper
-
-## Cairo wrapper ##
-
-CAIRO_INC = -I $(USRINC) -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
-CAIRO_LIB = -L$(USRLIB)/ -ljulia-release
-
-$(USRLIB)/libcairo_wrapper.$(SHLIB_EXT): cairo_wrapper.c
-	mkdir -p $(USRLIB)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(CAIRO_INC) cairo_wrapper.c $(CAIRO_LIB) -o $(USRLIB)/libcairo_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
-	$(INSTALL_NAME_CMD)libcairo_wrapper.$(SHLIB_EXT) $@
-	touch $@
-install-cairo-wrapper: $(USRLIB)/libcairo_wrapper.$(SHLIB_EXT) cairo_wrapper.c
-
-clean-cairo-wrapper:
-	rm -f $(USRLIB)/libcairo_wrapper.$(SHLIB_EXT)
-distclean-cairo-wrapper: clean-cairo-wrapper
 
 ## phony targets ##
 

@@ -785,7 +785,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         int k;
         for(k=0; k < lilist->length; k++) {
             li = (jl_lambda_info_t*)jl_cellref(lilist, k);
-            if (jl_types_equal(li->specTypes, (jl_value_t*)type))
+            if (jl_types_equal((jl_value_t*)li->specTypes, (jl_value_t*)type))
                 break;
         }
         if (k == lilist->length) lilist=NULL;
@@ -828,7 +828,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     }
 
     if (newmeth->linfo != NULL && newmeth->linfo->ast != NULL) {
-        newmeth->linfo->specTypes = (jl_value_t*)type;
+        newmeth->linfo->specTypes = type;
         jl_array_t *spe = method->linfo->specializations;
         if (spe == NULL) {
             spe = jl_alloc_cell_1d(1);

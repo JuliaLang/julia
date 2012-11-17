@@ -1,10 +1,7 @@
-load("plot.jl")
-load("tk.jl")
+load("plot")
+load("tk")
 
-import Tk.*
-import Cairo.*
-import Winston.*
-import Plot.*
+using Tk, Cairo, Winston, Plot
 
 function TkRenderer(name, w, h)
     win = Window(name, w, h)
@@ -27,6 +24,6 @@ end
 
 function imagesc(I)
     h, w = size(I)
-    pl = imagesc((w,0),(h,0),I)
+    pl = Plot.imagesc((0,w),(0,h),I)
     tk(pl, w, h)
 end

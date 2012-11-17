@@ -1,10 +1,10 @@
 # Text wrapping module
 
-require("options.jl")
+require("options")
 
 module TextWrap
-import Base.*
-import OptionsMod.*
+using Base
+using OptionsMod
 
 export
     wrap,

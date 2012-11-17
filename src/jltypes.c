@@ -2160,7 +2160,9 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     int super = 0;
     while (tta != (jl_tag_type_t*)jl_any_type) {
         if (tta->name == ttb->name) {
-            if (super && morespecific)
+            // note: CompositeKind <: Type, but Type{T} <: CompositeKind
+            // for any specific T.
+            if (super && morespecific && tta->name != jl_type_type->name)
                 return jl_true;
             assert(jl_tuple_len(tta->parameters) == jl_tuple_len(ttb->parameters));
             for(i=0; i < jl_tuple_len(tta->parameters); i++) {
@@ -2605,6 +2607,7 @@ void jl_init_types(void)
     module_sym = jl_symbol("module");
     export_sym = jl_symbol("export");
     import_sym = jl_symbol("import");
+    using_sym = jl_symbol("using");
     importall_sym = jl_symbol("importall");
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");

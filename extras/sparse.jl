@@ -1,3 +1,11 @@
+# overloads
+import Base.size, Base.nnz, Base.eltype, Base.show, Base.reinterpret, Base.copy
+import Base.reshape, Base.similar, Base.convert, Base.find, Base.findn
+import Base.one, Base.transpose, Base.ctranspose, Base.+, Base.-, Base.(.*)
+import Base.(./), Base.(.\), Base.(.^), Base.sum, Base.ref, Base.assign
+import Base.vcat, Base.hcat, Base.cat, Base.hvcat, Base.length, Base.findn_nzs
+import Base.full, Base.\, Base.areduce, Base.min, Base.max, Base.sum, Base.prod
+
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
 type SparseMatrixCSC{Tv,Ti<:Union(Int32,Int64)} <: AbstractMatrix{Tv}
@@ -148,12 +156,12 @@ full{T}(S::SparseMatrixCSC{T}) = convert(Matrix{T}, S)
 function sparse(A::Matrix)
     m, n = size(A)
     (I, J, V) = findn_nzs(A)
-    return _jl_sparse_sorted!(I,J,V,m,n,+)
+    return sparse_IJsorted!(I,J,V,m,n,+)
 end
 
-_jl_sparse_sorted!(I,J,V,m,n) = _jl_sparse_sorted!(I,J,V,m,n,+)
+sparse_IJsorted!(I,J,V,m,n) = sparse_IJsorted!(I,J,V,m,n,+)
 
-function _jl_sparse_sorted!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+function sparse_IJsorted!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                                     V::AbstractVector,
                                                     m::Int, n::Int, combine::Function)
 
@@ -360,21 +368,18 @@ function findn_nzs{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-function sprand_rng(m::Int, n::Int, density::FloatingPoint, rng::Function)
-    # TODO: Need to be able to generate int32 random integer arrays.
-    # That will save extra memory utilization in the int32() calls.
+function sprand(m::Int, n::Int, density::FloatingPoint, rng::Function)
     numnz = int(m*n*density)
-    I = randi(m, numnz)
-    J = randi(n, numnz)
-    S = sparse(int32(I), int32(J), 1.0, m, n)
+    I = randival!(1, m, Array(Int32, numnz))
+    J = randival!(1, n, Array(Int32, numnz))
+    S = sparse(I, J, 1.0, m, n)
     S.nzval = rng(nnz(S))
 
     return S
 end
 
-sprand(m::Int, n::Int, density::FloatingPoint)  = sprand_rng (m,n,density,rand)
-sprandn(m::Int, n::Int, density::FloatingPoint) = sprand_rng (m,n,density,randn)
-#sprandi(m,n,density) = sprand_rng (m,n,density,randi)
+sprand(m::Int, n::Int, density::FloatingPoint)  = sprand(m,n,density,rand)
+sprandn(m::Int, n::Int, density::FloatingPoint) = sprand(m,n,density,randn)
 
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
@@ -465,28 +470,26 @@ function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
 
+
 ## Binary operators
 
-macro _jl_binary_op_sparse(op)
-    quote
-        global $op
-        function ($op){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
+for op in (:+, :-, :.*, :.^)
+    @eval begin
+
+        function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
             if size(A,1) != size(B,1) || size(A,2) != size(B,2)
                 error("Incompatible sizes")
             end
 
             (m, n) = size(A)
 
-            TvS = promote_type(TvA, TvB)
-            TiS = promote_type(TiA, TiB)
-
             # TODO: Need better method to estimate result space
             nnzS = nnz(A) + nnz(B)
-            colptrS = Array(TiS, A.n+1)
-            rowvalS = Array(TiS, nnzS)
-            nzvalS = Array(TvS, nnzS)
+            colptrS = Array(Ti, A.n+1)
+            rowvalS = Array(Ti, nnzS)
+            nzvalS = Array(Tv, nnzS)
 
-            zero = convert(TvS, 0)
+            z = zero(Tv)
 
             colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
             colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
@@ -495,25 +498,25 @@ macro _jl_binary_op_sparse(op)
             colptrS[1] = 1
 
             for col = 1:n
-                ptrA = colptrA[col]
-                stopA = colptrA[col+1]
-                ptrB = colptrB[col]
-                stopB = colptrB[col+1]
+                ptrA::Int  = colptrA[col]
+                stopA::Int = colptrA[col+1]
+                ptrB::Int  = colptrB[col]
+                stopB::Int = colptrB[col+1]
 
                 while ptrA < stopA && ptrB < stopB
                     rowA = rowvalA[ptrA]
                     rowB = rowvalB[ptrB]
                     if rowA < rowB
-                        res = ($op)(nzvalA[ptrA], zero)
-                        if res != zero
+                        res = ($op)(nzvalA[ptrA], z)
+                        if res != z
                             rowvalS[ptrS] = rowA
-                            nzvalS[ptrS] = ($op)(nzvalA[ptrA], zero)
+                            nzvalS[ptrS] = res
                             ptrS += 1
                         end
                         ptrA += 1
                     elseif rowB < rowA
-                        res = ($op)(zero, nzvalB[ptrB])
-                        if res != zero
+                        res = ($op)(z, nzvalB[ptrB])
+                        if res != z
                             rowvalS[ptrS] = rowB
                             nzvalS[ptrS] = res
                             ptrS += 1
@@ -521,7 +524,7 @@ macro _jl_binary_op_sparse(op)
                         ptrB += 1
                     else
                         res = ($op)(nzvalA[ptrA], nzvalB[ptrB])
-                        if res != zero
+                        if res != z
                             rowvalS[ptrS] = rowA
                             nzvalS[ptrS] = res
                             ptrS += 1
@@ -532,8 +535,8 @@ macro _jl_binary_op_sparse(op)
                 end
 
                 while ptrA < stopA
-                    res = ($op)(nzvalA[ptrA], zero)
-                    if res != zero
+                    res = ($op)(nzvalA[ptrA], z)
+                    if res != z
                         rowA = rowvalA[ptrA]
                         rowvalS[ptrS] = rowA
                         nzvalS[ptrS] = res
@@ -543,8 +546,8 @@ macro _jl_binary_op_sparse(op)
                 end
 
                 while ptrB < stopB
-                    res = ($op)(zero, nzvalB[ptrB])
-                    if res != zero
+                    res = ($op)(z, nzvalB[ptrB])
+                    if res != z
                         rowB = rowvalB[ptrB]
                         rowvalS[ptrS] = rowB
                         nzvalS[ptrS] = res
@@ -566,17 +569,14 @@ end # macro
 
 (+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
 (+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
-@_jl_binary_op_sparse (+)
 
 (-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
 (-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
-@_jl_binary_op_sparse (-)
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
 (.*)(A::SparseMatrixCSC, B::Array) = (.*)(A, sparse(B))
 (.*)(A::Array, B::SparseMatrixCSC) = (.*)(sparse(A), B)
-@_jl_binary_op_sparse (.*)
 
 (./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
 (./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
@@ -594,33 +594,73 @@ end # macro
 (.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
-@_jl_binary_op_sparse (.^)
 
-function sum(A::SparseMatrixCSC)
-    if length(A.nzval) == nnz(A)
-        return sum(A.nzval)
-    else
-        return sum(sub(A.nzval,1:nnz(A)))
-    end
-end
+# Reductions
 
-function sum{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, dim::Int)
-    if dim == 1
+# TODO: Should the results of sparse reductions be sparse?
+function areduce{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region::Dimspec, v0)
+    if region == 1
+
         S = Array(Tv, 1, A.n)
         for i = 1 : A.n
-            S[i] = sum(sub(A.nzval,A.colptr[i]:A.colptr[i+1]-1))
+            Si = v0
+            ccount = 0
+            for j = A.colptr[i] : A.colptr[i+1]-1
+                Si = f(Si, A.nzval[j])
+                ccount += 1
+            end
+            if ccount != A.m; Si = f(Si, zero(Tv)); end
+            S[i] = Si
         end
         return S
-    elseif dim == 2
-        S = zeros(Tv, A.m, 1)
+
+    elseif region == 2
+
+        S = fill(v0, A.m, 1)
+        rcounts = zeros(Ti, A.m)
         for i = 1 : A.n, j = A.colptr[i] : A.colptr[i+1]-1
-            S[A.rowval[j]] += A.nzval[j]
+            row = A.rowval[j]
+            S[row] = f(S[row], A.nzval[j])
+            rcounts[row] += 1
+        end
+        for i = 1:A.m
+            if rcounts[i] != A.n; S[i] = f(S[i], zero(Tv)); end
         end
         return S
+
+    elseif region == (1,2)
+
+        S = v0
+        for i = 1 : A.n, j = A.colptr[i] : A.colptr[i+1]-1
+            S = f(S, A.nzval[j])
+        end
+        if nnz(A) != A.m*A.n; S = f(S, zero(Tv)); end
+
+        return [S]
+
     else
-        return full(A)
+
+        error("Invalid value for region")
+
     end
 end
+
+max{T}(A::SparseMatrixCSC{T}) = areduce(max,A,(1,2),typemin(T))
+max{T}(A::SparseMatrixCSC{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T))
+
+min{T}(A::SparseMatrixCSC{T}) = areduce(min,A,(1,2),typemax(T))
+min{T}(A::SparseMatrixCSC{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T))
+
+sum{T}(A::SparseMatrixCSC{T}) = areduce(+,A,(1,2),zero(T))
+sum{T}(A::SparseMatrixCSC{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
+
+prod{T}(A::SparseMatrixCSC{T}) = areduce(*,A,(1,2),one(T))
+prod{T}(A::SparseMatrixCSC{T}, region::Dimspec) = areduce(*,A,region,one(T))
+
+#all(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(all,A,region,true)
+#any(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(any,A,region,false)
+#sum(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(+,A,region,0,Int)
+#sum(A::SparseMatrixCSC{Bool}) = nnz(A)
 
 ## ref
 ref(A::SparseMatrixCSC, i::Integer) = ref(A, ind2sub(size(A),i))
@@ -644,34 +684,81 @@ function ref{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     return zero(T)
 end
 
-ref{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{T}) = _jl_sparse_ref(A,I,J)
-ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector) = _jl_sparse_ref(A,I,J)
 ref{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, j::Integer) = ref(A,I,[j])
 ref{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = ref(A,[i],J)
 
-function _jl_sparse_ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector)
+function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
 
-    (nr, nc) = size(A)
+    (m, n) = size(A)
     nI = length(I)
     nJ = length(J)
 
-    is_I_colon = (isa(I,Range1)||isa(I,Range)) && first(I)==1 && last(I)==nr && step(I)==1
-    is_J_colon = (isa(J,Range1)||isa(J,Range)) && first(J)==1 && last(J)==nc && step(J)==1
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
 
-    if is_I_colon && is_J_colon
-        return A
-    elseif is_J_colon
-        IM = sparse (1:nI, I, 1, nI, nr)
-        B = IM * A
-    elseif is_I_colon
-        JM = sparse (J, 1:nJ, 1, nc, nJ)
-        B = A *JM
+    if ~issorted(I)
+        (I, pI) = sortperm(I)
     else
-        IM = sparse (1:nI, I, 1, nI, nr)
-        JM = sparse (J, 1:nJ, 1, nc, nJ)
-        B = IM * A * JM
+        pI = 1:nI
     end
 
+    # Form the structure of the result and compute space
+    colptrS = Array(Ti, nJ+1)
+    colptrS[1] = 1
+    nnzS = 0
+
+    for j = 1:nJ
+        col = J[j]
+
+        ptrI = 1
+        for ptrA = colptrA[col]:colptrA[col+1]-1
+            rowA = rowvalA[ptrA]
+            
+            while ptrI <= nI
+                rowI = I[ptrI]
+                if rowI > rowA
+                    break
+                elseif rowA == rowI
+                    nnzS += 1
+                    break
+                end
+                ptrI += 1
+            end
+
+        end
+        colptrS[j+1] = nnzS+1
+
+    end
+
+    # Populate the values in the result
+    rowvalS = Array(Ti, nnzS)
+    nzvalS  = Array(Tv, nnzS)
+    ptrS = 0
+
+    for j = 1:nJ
+        col = J[j]
+
+        ptrI = 1
+        for ptrA = colptrA[col]:colptrA[col+1]-1
+            rowA = rowvalA[ptrA]
+            
+            while ptrI <= nI
+                rowI = I[ptrI]
+                if rowI > rowA
+                    break
+                elseif rowA == rowI
+                    ptrS += 1
+                    rowvalS[ptrS] = pI[ptrI]
+                    nzvalS[ptrS]  = nzvalA[ptrA]
+                    break
+                end
+                ptrI += 1
+            end
+
+        end
+
+    end
+
+    return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
 ## assign
@@ -1026,3 +1113,84 @@ function assign(S::SparseAccumulator, v, i::Integer)
     end
     return S
 end
+
+function mmread(filename::ASCIIString, infoonly::Bool)
+#      Reads the contents of the Matrix Market file 'filename'
+#      into a matrix, which will be either sparse or full,
+#      depending on the Matrix Market format indicated by
+#      'coordinate' (coordinate sparse storage), or
+#      'array' (dense array storage).  The data will be duplicated
+#      as appropriate if symmetry is indicated in the header. (Not yet
+#      implemented).
+#
+#      If infoonly is true information on the size and structure is
+#      returned.
+    mmfile = open(filename,"r")
+    tokens = split(chomp(readline(mmfile)))
+    if length(tokens) != 5 error("Not enough words on header line") end
+    if tokens[1] != "%%MatrixMarket" error("Not a valid MatrixMarket header.") end
+    (head1, rep, field, symm) = map(lowercase, tokens[2:5])
+    if head1 != "matrix"
+        error("This seems to be a MatrixMarket $head1 file, not a MatrixMarket matrix file")
+    end
+    if field != "real" error("non-float fields not yet allowed") end
+
+    ll   = readline(mmfile)         # Read through comments, ignoring them
+    while length(ll) > 0 && ll[1] == '%' ll = readline(mmfile) end
+    dd     = int(split(ll))         # Read dimensions
+    rows   = dd[1]
+    cols   = dd[2]
+    entries = rep == "coordinate" ? dd[3] : rows * cols
+    if infoonly return rows, cols, entries, rep, field, symm end
+    if rep == "coordinate"
+        rr = Array(Int32, entries)
+        cc = Array(Int32, entries)
+        xx = Array(Float64, entries)
+        for i in 1:entries
+            flds = split(readline(mmfile))
+            rr[i] = int32(flds[1])
+            cc[i] = int32(flds[2])
+            xx[i] = float64(flds[3])
+        end
+        return sparse(rr, cc, xx, rows, cols)
+    end
+    reshape([float64(readline(mmfile)) for i in 1:entries], (rows,cols))
+end
+
+mmread(filename::ASCIIString) = mmread(filename, false)
+
+## expand a colptr or rowptr into a full index vector
+function expandptr{T<:Integer}(V::Vector{T})
+    if V[1] != 1 error("expandptr: first index must be one") end
+    res = similar(V, (int64(V[end]-1),))
+    for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1) res[j] = i end
+    res
+end
+
+# Based on the function cs_fkeep from the CSparse library
+function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
+    nzorig = nnz(A)
+    nz = 1
+    for j = 1:A.n
+        p = A.colptr[j]                 # record current position
+        A.colptr[j] = nz                # set new position
+        while p < A.colptr[j+1]
+            if f(A.rowval[p], j, A.nzval[p], other)
+                A.nzval[nz] = A.nzval[p]
+                A.rowval[nz] = A.rowval[p]
+                nz += 1
+            end
+            p += 1
+        end
+    end
+    nz -= 1
+    A.colptr[A.n + 1] = nz
+    if nz < nzorig
+        grow(A.nzval, nz - nzorig)
+        grow(A.rowval, nz - nzorig)
+    end
+    A
+end
+
+dropzeros!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = fkeep!(A, (i,j,x,other)->x!=zero(Tv), 0)
+droptol!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, tol::Tv) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)

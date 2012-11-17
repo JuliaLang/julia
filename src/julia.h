@@ -159,10 +159,10 @@ typedef struct _jl_lambda_info_t {
     jl_value_t *tfunc;
     jl_sym_t *name;  // for error reporting
     jl_array_t *roots;  // pointers in generated code
-    jl_value_t *specTypes;  // argument types this is specialized for
+    jl_tuple_t *specTypes;  // argument types this is specialized for
     // a slower-but-works version of this function as a fallback
     struct _jl_function_t *unspecialized;
-    // pairlist of all lambda infos with code generated from this one
+    // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
     int8_t inferred;
     jl_value_t *file;
@@ -170,8 +170,9 @@ typedef struct _jl_lambda_info_t {
     struct _jl_module_t *module;
 
     // hidden fields:
-    jl_fptr_t fptr;
-    void *functionObject;
+    jl_fptr_t fptr;        // jlcall entry point
+    void *functionObject;  // jlcall llvm Function
+    void *cFunctionObject; // c callable llvm Function
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
     uptrint_t inInference : 1;
@@ -278,8 +279,9 @@ typedef struct {
     jl_value_t *value;
     jl_type_t *type;
     struct _jl_module_t *owner;  // for individual imported bindings
-    int constp:1;
-    int exportp:1;
+    unsigned constp:1;
+    unsigned exportp:1;
+    unsigned imported:1;
 } jl_binding_t;
 
 typedef struct _jl_module_t {
@@ -287,7 +289,7 @@ typedef struct _jl_module_t {
     jl_sym_t *name;
     struct _jl_module_t *parent;
     htable_t bindings;
-    arraylist_t imports;  // modules with all bindings imported
+    arraylist_t usings;  // modules with all bindings potentially imported
 } jl_module_t;
 
 typedef struct _jl_methlist_t {
@@ -440,7 +442,7 @@ extern DLLEXPORT jl_sym_t *jl_continue_sym;
 extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
-extern jl_sym_t *importall_sym;
+extern jl_sym_t *importall_sym; extern jl_sym_t *using_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
@@ -741,6 +743,7 @@ DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n);
 DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *v, size_t i);  // 0-indexed
+DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i);  // 0-indexed
 int jl_array_isdefined(jl_value_t **args, int nargs);
 DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
@@ -825,6 +828,7 @@ jl_module_t *jl_new_module(jl_sym_t *name);
 DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var);
+jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
@@ -832,12 +836,13 @@ DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 void jl_declare_constant(jl_binding_t *b);
-void jl_module_importall(jl_module_t *to, jl_module_t *from);
+void jl_module_using(jl_module_t *to, jl_module_t *from);
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 
 // external libraries
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
+DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 
 // compiler

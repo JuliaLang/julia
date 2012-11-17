@@ -3,21 +3,29 @@
 #Original BSD Licence, (c) 2011, François Glineur
 
 
-module Json
+module JSON
 
-import Base.*
+using Base
 
-export parse_json
+export parse
 
 
-function parse_json(strng::String)
+function parse(strng::String)
 
-    pos = 1
-    len = length(strng)
+    pos::Int = 1
+    len::Int = length(strng)
+
+    # String delimiters and escape characters are identified beforehand to improve speed
+    len_esc::Int = 0
+    index_esc::Int = 1
+
+    esc_locations::Array{Int64,1}  = map(x->x.offset, [each_match(r"[\"\\\\]", strng)...])
+    len_esc=length(esc_locations)  
+
 
     function parse_object()
         parse_char('{')
-        object = Dict{String, Any}()
+        object = (String=>Any)[]
         if next_char() != '}'
             while true
                 str = parse_string()
@@ -87,6 +95,17 @@ function parse_json(strng::String)
         end
         str = ""
         while pos <= len
+            while index_esc <= len_esc && esc_locations[index_esc] < pos 
+                 index_esc = index_esc + 1;
+            end
+            if index_esc > len_esc
+                str = strcat(str, strng[pos:end]);
+                pos = len + 1;
+                break;
+            else
+                str = strcat(str, strng[pos:esc_locations[index_esc]-1]);
+                pos = esc_locations[index_esc];
+            end
             nc = strng[pos]
             if nc == '"' 
                     pos = nextind(strng, pos)

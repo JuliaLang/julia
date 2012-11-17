@@ -142,7 +142,6 @@ function abs_path(fname::String)
     return join(comp, os_separator)
 end
 
-
 # Get the full, real path to a file, including dereferencing
 # symlinks.
 function realpath(fname::String)
@@ -152,7 +151,7 @@ function realpath(fname::String)
         error("Cannot find ", fname)
     end
     s = bytestring(sp)
-    ccall(:free, Void, (Ptr{Uint8},), sp)
+    c_free(sp)
     return s
 end
 
@@ -216,32 +215,76 @@ function file_create(filename::String)
 end
 
 function file_remove(filename::String)
-  run(`rm $filename`)
+    ret = ccall(:unlink, Int32, (Ptr{Uint8},), bytestring(filename))
+    system_error(:unlink, ret != 0)
 end
 
 function path_rename(old_pathname::String, new_pathname::String)
-  run(`mv $old_pathname $new_pathname`)
+    ret = ccall(:rename, Int32, (Ptr{Uint8},Ptr{Uint8}), bytestring(old_pathname), bytestring(new_pathname))
+    system_error(:rename, ret != 0)
 end
 
-@linux_only function tempdir()
-  chomp(readall(`mktemp -d`))
+# Obtain a temporary filename.
+const tempnam = (OS_NAME == :Windows) ? :_tempnam : :tempnam
+
+function tempname()
+  d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
+  p = ccall(tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+  s = bytestring(p)
+  c_free(p)
+  s
 end
 
-@osx_only function tempdir()
-  chomp(readall(`mktemp -d -t tmp`))
+# Obtain a temporary directory's path.
+tempdir() = dirname(tempname())
+
+# Create and return the name of a temporary file along with an IOStream
+@unix_only function mktemp()
+  b = file_path(tempdir(), "tmpXXXXXX")
+  p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b)
+  return (b, fdio(p, true))
 end
 
-@linux_only function tempfile()
-  chomp(readall(`mktemp`))
+@windows_only function mktemp()
+  error("not yet implemented")
 end
 
-@osx_only function tempfile()
-  chomp(readall(`mktemp -t tmp`))
+# Create and return the name of a temporary directory
+@unix_only function mktempdir()
+  b = file_path(tempdir(), "tmpXXXXXX")
+  p = ccall(:mkdtemp, Ptr{Uint8}, (Ptr{Uint8}, ), b)
+  return bytestring(p)
+end
+
+@windows_only function mktempdir()
+  error("not yet implemented")
+end
+
+downloadcmd = nothing
+function download_file(url::String, filename::String)
+    global downloadcmd
+    if downloadcmd === nothing
+        for checkcmd in (:curl, :wget, :fetch)
+            if system("which $checkcmd > /dev/null") == 0
+                downloadcmd = checkcmd
+                break
+            end
+        end
+    end
+    if downloadcmd == :wget
+        run(`wget -O $filename $url`)
+    elseif downloadcmd == :curl
+        run(`curl -o $filename $url`)
+    elseif downloadcmd == :fetch
+        run(`fetch -f $filename $url`)
+    else
+        error("No download agent available; install curl, wget, or fetch.")
+    end
+    filename
 end
 function download_file(url::String)
-  filename = tempfile()
-  run(`curl -o $filename $url`)
-  filename
+  filename = tempname()
+  download_file(url, filename)
 end
 
 function readdir(path::String)

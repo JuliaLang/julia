@@ -1,6 +1,11 @@
+import Base.convert, Base.promote_rule, Base.+, Base.-, Base.*, Base./
+import Base.isnan, Base.isinf, Base.^, Base.cmp, Base.sqrt
+import Base.==, Base.<=, Base.>=, Base.<, Base.>, Base.string, Base.show
+import Base.showcompact
+
 _jl_libgmp_wrapper = dlopen("libgmp_wrapper")
 
-require("bigint.jl")
+require("bigint")
 
 type BigFloat <: FloatingPoint
     mpf::Ptr{Void}
@@ -78,6 +83,10 @@ promote_rule(::Type{BigFloat}, ::Type{Uint16}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{Uint32}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{Uint64}) = BigFloat
 
+# mpf doesn't have inf or nan
+isnan(x::BigFloat) = false
+isinf(x::BigFloat) = false
+
 function +(x::BigFloat, y::BigFloat)
     z= _jl_BigFloat_init()
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_add), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
@@ -118,7 +127,7 @@ function sqrt(x::BigFloat)
     BigFloat(z)
 end
 
-function pow(x::BigFloat, y::Uint)
+function ^(x::BigFloat, y::Uint)
     z = _jl_BigFloat_init()
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpf, y)
     BigFloat(z)
@@ -133,11 +142,12 @@ end
 function string(x::BigFloat)
     s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_printf), Ptr{Uint8}, (Ptr{Void},), x.mpf)
     ret = bytestring(s) #This copies s.
-    c_free(s)
+    ccall(dlsym(_jl_libgmp_wrapper,:_jl_gmp_free), Void, (Ptr{Void},), s)
     ret
 end
 
 show(io, b::BigFloat) = print(io, string(b))
+showcompact(io, b::BigFloat) = print(io, string(b))
 
 function _jl_BigFloat_clear(x::BigFloat)
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_clear), Void, (Ptr{Void},), x.mpf)

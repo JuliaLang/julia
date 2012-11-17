@@ -1,6 +1,6 @@
 # Using Julia's built-in serializer as the ZMQ protocol
 
-require("zeromq/zmq.jl")
+require("zeromq/zmq")
 
 function zmq_serialize(socket::ZMQSocket, x, flag::Integer)
     s = memio()

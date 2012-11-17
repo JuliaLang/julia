@@ -1,5 +1,9 @@
 # important core definitions
 
+using Core.Intrinsics
+
+import Core.Array  # to add methods
+
 convert(T, x)               = convert_default(T, x, convert)
 convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 
@@ -116,7 +120,11 @@ const isimmutable = x->(isa(x,Tuple) || isa(x,Symbol) ||
 
 dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
+dlsym_e(hnd, s::Union(Symbol,String)) = ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlopen(s::String) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), s)
+
+cfunction(f::Function, r, a) =
+    ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
 identity(x) = x
 
@@ -124,18 +132,20 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    n = 0
-    for x = xs
-        n += length(x)
-    end
-    out = Array(Any, n)
+    out = Array(Any, 4)
+    l = 4
     i = 1
     for x in xs
         for y in x
+            if i > l
+                ccall(:jl_array_grow_end, Void, (Any, Uint), out, 16)
+                l += 16
+            end
             arrayset(out, y, i)
             i += 1
         end
     end
+    ccall(:jl_array_del_end, Void, (Any, Uint), out, l-i+1)
     out
 end
 

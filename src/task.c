@@ -146,6 +146,8 @@ jl_jmp_buf * volatile jl_jmp_target;
 
 static void save_stack(jl_task_t *t)
 {
+    if (t->done)
+        return;
     volatile int _x;
     size_t nb = (char*)t->stackbase - (char*)&_x;
     char *buf;
@@ -422,6 +424,7 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
     getFunctionInfo(&func_name, &line_num, &file_name, ip);
     if (func_name != NULL) {
         jl_array_grow_end(a, 3);
+        //ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
         jl_arrayset(a, (jl_value_t*)jl_symbol(func_name), i); i++;
         jl_arrayset(a, (jl_value_t*)jl_symbol(file_name), i); i++;
         jl_arrayset(a, jl_box_long(line_num), i);

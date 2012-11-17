@@ -16,9 +16,8 @@ end
 # This first section may not run for non-UNIX people.
 # If so, create the directories and files manually, and comment out this section
 # (Or fix up the code to support such operations on Windows!)
-dir_name = strcat("/tmp/testdir", randstring(6))
-mkdir(dir_name)
-filename = strcat(dir_name, "/afile.txt")
+dir_name = mktempdir()
+filename = file_path(dir_name, "afile.txt")
 file_create(filename)
 
 #######################################################################
@@ -41,17 +40,33 @@ run(`chmod +w $filename`)
 @assert filesize(dir_name) > 0
 @assert mtime(filename) >= mtime(dir_name)
 
+# rename file
+newfilename = file_path(dir_name, "bfile.txt")
+path_rename(filename, newfilename)
+@assert ispath(filename) == false
+@assert isfile(newfilename) == true
+filename = newfilename
+
 #######################################################################
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
-# @assert isdir(tempdir()) == true
-# @assert isfile(tempdir()) == false
-# @assert isdir(tempfile()) == false
-# @assert isfile(tempfile()) == true
+# my_tempdir = tempdir()
+# @assert isdir(my_tempdir) == true
+
+# path = tempname()
+# @assert ispath(path) == false
+
+# (filename, f) = mktemp()
+# print(f, "Here is some text")
+# close(f)
+# @assert isfile(filename) == true
+# @assert readall(filename) == "Here is some text"
 
 ############
 # Clean up #
 ############
 file_remove(filename)
 rmdir(dir_name)
+@assert ispath(filename) == false
+@assert ispath(dir_name) == false

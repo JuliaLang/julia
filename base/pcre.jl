@@ -3,8 +3,7 @@
 libpcre = dlopen("libpcre")
 
 module PCRE
-import Base.*
-global info, compile, study, exec
+using Base
 
 include("pcre_h.jl")
 

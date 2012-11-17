@@ -1,5 +1,5 @@
-load("iostring.jl")
-load("lru.jl")
+load("iostring")
+load("lru")
 
 bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
 
@@ -46,7 +46,7 @@ type DataAlign
     # aggregate::(Vector{Type} -> Integer); used for composite types not in ttable
     aggregate::Function
 end
-DataAlign(def::Function, agg::Function) = DataAlign(Dict{Type,Integer}(), def, agg)
+DataAlign(def::Function, agg::Function) = DataAlign((Type=>Integer)[], def, agg)
 
 canonicalize(s::String) = replace(s, r"\s|#.*$"m, "")
 
@@ -123,7 +123,7 @@ function struct_parse(s::String)
         NativeEndian()
     end
     
-    tmap = {'x' => PadByte,
+    tmap = ['x' => PadByte,
             'c' => Char,
             'b' => Int8,
             'B' => Uint8,
@@ -139,7 +139,7 @@ function struct_parse(s::String)
             'f' => Float32,
             'd' => Float64,
             #'s' => ASCIIString, #TODO
-            }
+            ]
     t = {}
     while i <= length(s)
         m = match(r"^                      # at the beginning of the string, find
@@ -426,11 +426,11 @@ end
 
 # Specific architectures
 align_x86_pc_linux_gnu = align_table(align_default,
-    {
+    [
     Int64 => 4,
     Uint64 => 4,
     Float64 => 4,
-    })
+    ])
 
 # Get alignment for a given type
 function alignment_for(strategy::DataAlign, typ::Type)
@@ -527,7 +527,7 @@ align_native = align_table(align_default, let
 
     ccall(dlsym(libLLVM, :LLVMDisposeTargetData), Void, (Ptr,), tgtdata)
 
-    {
+    [
      Int8 => int8align,
      Uint8 => int8align,
      Int16 => int16align,
@@ -538,5 +538,5 @@ align_native = align_table(align_default, let
      Uint64 => int64align,
      Float32 => float32align,
      Float64 => float64align,
-     }
+     ]
 end)

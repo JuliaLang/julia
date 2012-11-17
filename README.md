@@ -29,9 +29,11 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
 
-- **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
-- **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit).
-- **FreeBSD:** x86/64 (64-bit); x86 (32-bit).
+- **GNU/Linux**
+- **Darwin/OS X**
+- **FreeBSD**
+
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. [Julia has been ported to Windows](https://github.com/loladiro/julia) as well, and Windows support will be merged into the julia mainline once it stabilizes.
 
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
@@ -125,7 +127,8 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.1.
 - **[FemtoLisp]**           — packaged with julia source, and used to implement the compiler front-end.
 - **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
-- **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
+- **[libuv]**               — portable, high-performance event-based I/O library
+- **[OpenLibm]**            — a portable libm library containing elementary math functions.
 - **[DSFMT]**               — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
 - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
@@ -151,9 +154,9 @@ Julia uses the following external libraries, which are automatically downloaded 
 [curl]:         http://curl.haxx.se/
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
-[fdlibm]:       http://www.netlib.org/fdlibm/readme
+[OpenLibm]:     https://github.com/JuliaLang/openlibm
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
-[OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
+[OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       http://www.netlib.org/lapack/
 [MKL]:          http://software.intel.com/en-us/articles/intel-mkl/
 [SuiteSparse]:  http://www.cise.ufl.edu/research/sparse/SuiteSparse/
@@ -169,6 +172,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [double-conversion]: http://double-conversion.googlecode.com/
 [GLPK]:         http://www.gnu.org/software/glpk/
 [Rmath]:        http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
+[libuv]:        https://github.com/JuliaLang/libuv
 
 If you already have one or more of these packages installed on your system, it is possible to pass `USE_SYSTEM_...=1` to `make` to prevent Julia from compiling duplicates of these libraries. The complete list of possible flags can be found in Make.inc (or pass `USE_DEBIAN=1` to make if you have all build dependencies and want the minimal Julia build). Please be aware that this proceedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
@@ -213,12 +217,12 @@ An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
 
-Currently, [julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, and Textmate.
+Currently, [julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, Textmate, Notepad++, and Kate.
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.
-These bindings allow custom readline handlers to trap and correctly deal with these key sequences; other programs will continue behave normally with these bindings.
-The first binding makes backspacing through text in the interactive session behave more intuitively.
+These bindings allow custom readline handlers to trap and correctly deal with these key sequences; other programs will continue to behave normally with these bindings.
+The first binding makes backspacing through text at the prompt behave more intuitively.
 The second binding allows `Shift-Enter` to insert a newline without evaluating the current expression, even when the current expression is complete.
 (Pressing an unmodified `Enter` inserts a newline if the current expression is incomplete, evaluates the expression if it is complete, or shows an error if the syntax is irrecoverably invalid.)
 

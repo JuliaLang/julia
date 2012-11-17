@@ -135,7 +135,7 @@ Processor 1 knew about the function ``rand2``, but processor 2 did not.
 To make your code available to all processors, the ``load`` function will
 automatically load a source file on all currently available processors::
 
-    julia> load("myfile.jl")
+    julia> load("myfile")
 
 In a cluster, the contents of the file (and any files loaded recursively)
 will be sent over the network.
@@ -192,7 +192,8 @@ Parallel Map and Loops
 Fortunately, many useful parallel computations do not require data
 movement. A common example is a monte carlo simulation, where multiple
 processors can handle independent simulation trials simultaneously. We
-can use ``@spawn`` to flip coins on two processors::
+can use ``@spawn`` to flip coins on two processors. First, write the
+following function in ``count_heads.jl``::
 
     function count_heads(n)
         c::Int = 0
@@ -202,14 +203,15 @@ can use ``@spawn`` to flip coins on two processors::
         c
     end
 
+The function ``count_heads`` simply adds together ``n`` random bits.
+Here is how we can perform some trials on two machines, and add together the
+results::
+
+    load("count_heads")
+
     a = @spawn count_heads(100000000)
     b = @spawn count_heads(100000000)
     fetch(a)+fetch(b)
-
-The function ``count_heads`` simply adds together ``n`` random bits.
-Then we perform some trials on two machines, and add together the
-results. (Remeber that count\_heads should be defined in a file and
-loaded to make sure it is available to both processors.)
 
 This example, as simple as it is, demonstrates a powerful and often-used
 parallel programming pattern. Many iterations run independently over

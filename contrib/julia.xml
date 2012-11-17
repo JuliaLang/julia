@@ -29,39 +29,45 @@
 
 <!DOCTYPE language SYSTEM "language.dtd">
 
-<language name="Julia" section="Sources" version="0.1" kateversion="2.2" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
+<language name="Julia" section="Sources" version="0.2" kateversion="2.2" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
 
   <highlighting>
+    <list name="block_begin">
+      <item> begin </item>
+      <item> do </item>
+      <item> for </item>
+      <item> function </item>
+      <item> if </item>
+      <item> let </item>
+      <item> quote </item>
+      <item> try </item>
+      <item> type </item>
+      <item> while </item>
+    </list>
+    <list name="block_eb">
+      <item> catch </item>
+      <item> else </item>
+      <item> elseif </item>
+    </list>
+    <list name="block_end">
+      <item> end </item>
+    </list>
     <list name="keywords">
       <item> abstract </item>
-      <item> begin </item>
       <item> bitstype </item>
       <item> break </item>
-      <item> catch </item>
       <item> ccall </item>
       <item> const </item>
       <item> continue </item>
-      <item> do </item>
-      <item> else </item>
-      <item> elseif </item>
-      <item> end </item>
       <item> export </item>
-      <item> for </item>
-      <item> function </item>
       <item> global </item>
-      <item> if </item>
       <item> import </item>
       <item> in </item>
-      <item> let </item>
       <item> local </item>
       <item> macro </item>
       <item> module </item>
-      <item> quote </item>
       <item> return </item>
-      <item> try </item>
-      <item> type </item>
       <item> typealias </item>
-      <item> while </item>
     </list>
     <list name="types">
       <item> AbstractArray </item>
@@ -92,6 +98,7 @@
       <item> Int16 </item>
       <item> Int32 </item>
       <item> Int64 </item>
+      <item> Int128 </item>
       <item> Integer </item>
       <item> IntSet </item>
       <item> IO </item>
@@ -127,6 +134,7 @@
       <item> Uint16 </item>
       <item> Uint32 </item>
       <item> Uint64 </item>
+      <item> Uint128 </item>
       <item> Union </item>
       <item> Unsigned </item>
       <item> UTF8String </item>
@@ -141,10 +149,25 @@
 
 	<DetectSpaces />
 
-        <!-- Handling of keywords, types, and comments -->
+        <!-- Blocks -->
+        <keyword context="#stay" attribute="Keyword" String="block_begin" 
+beginRegion="block" />
+        <keyword context="#stay" attribute="Keyword" String="block_eb" 
+endRegion="block" beginRegion="block" />
+        <keyword context="#stay" attribute="Keyword" String="block_end" 
+endRegion="block" />
+        <StringDetect String="#BEGIN" context="region_marker" attribute="FoldingComment" beginRegion="user_region" />
+        <StringDetect String="#END" context="region_marker" attribute="FoldingComment" endRegion="user_region" />
+
+        <!-- Keywords, types, and comments -->
         <keyword context="#stay" attribute="Keyword" String="keywords" />
         <keyword context="#stay" attribute="Data Type" String="types" />
         <DetectChar char="#" context="1-comment" attribute="Comment"/>
+
+	<!-- Lists and arrays -->
+        <!-- <DetectChar char="(" context="nested" beginRegion="nested" attribute="Delimiter" />
+        <DetectChar char="[" context="squared" beginRegion="squared" attribute="Delimiter" />
+        <DetectChar char="{" context="curly" beginRegion="curly" attribute="Delimiter" /> -->
 
         <!-- Strings -->
 	<DetectChar attribute="String" context="String" char="&quot;"/>
@@ -178,7 +201,7 @@
 
         <!-- Look-ahead for adjoint ' after variable, number literal, closing braces and .' -->
         <RegExpr context="_adjoint" attribute="Variable" String="[a-zA-Z]\w*(?=')" />
-        <RegExpr context="_adjoint" attribute="Float" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?[ij]?(?=')" />
+        <RegExpr context="_adjoint" attribute="Float" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?(im)?(?=')" />
         <RegExpr context="_adjoint" attribute="Delimiter" String="[\)\]}](?=')" />
         <RegExpr context="_adjoint" attribute="Operator" String="\.'(?=')" />
 
@@ -186,22 +209,32 @@
         <RegExpr context="#stay" attribute="Char" String="'[^']*(''[^']*)*'(?=[^']|$)" />
         <RegExpr context="#stay" attribute="Incomplete Char" String="'[^']*(''[^']*)*" />
 
-        <!-- Handling of identifiers, numbers and braces -->
+        <!-- Identifiers, numbers and braces -->
+        <!-- We can't use HlCHex, Int, and Float because we need to allow the "im" at the end of complex numbers -->
         <DetectIdentifier context="#stay" attribute="Variable" />
-        <HlCHex contex="#stay" attribute="Hex" >
-          <Detect2Chars context="#stay" attribute="Decimal" char="i" char1="m" />
-        </HlCHex>
-	<Int context="#stay" attribute="Decimal">
-          <Detect2Chars context="#stay" attribute="Decimal" char="i" char1="m" />
-        </Int>
-        <CFloat context="#stay" attribute="Float">
-          <Detect2Chars context="#stay" attribute="Float" char="i" char1="m" />
-        </CFloat>
+        <RegExpr context="#stay" attribute="Hex" String="0x[0-9a-fA-F]+(im)?" />
+        <RegExpr context="#stay" attribute="Float" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?(im)?" />
         <AnyChar context="#stay" attribute="Delimiter" String="()[]{}"/>
 
         <!-- Single-character operators -->
         <AnyChar context="#stay" attribute="Operator" String="*+-/\&amp;|&lt;&gt;~$!^=,;:@"/>
 
+      </context>
+
+      <!-- Context for user block (#BEGIN...#END) -->
+      <context name="region_marker" lineEndContext="#pop" attribute="FoldingComment" >
+        <IncludeRules context="1-comment" />
+      </context>
+
+      <!-- Contexts entered after beginning a list or array -->
+      <context name="nested" attribute="Normal text" lineEndContext="#stay">
+        <DetectChar char=")" context="#pop" endRegion="nested" attribute="Delimiter" />
+      </context>
+      <context name="squared" attribute="Normal text" lineEndContext="#stay">
+        <DetectChar char="]" context="#pop" endRegion="squared" attribute="Delimiter" />
+      </context>
+      <context name="curly" attribute="Normal text" lineEndContext="#stay">
+        <DetectChar char="}" context="#pop" endRegion="curly" attribute="Delimiter" />
       </context>
 
       <!-- Context entered after encountering an ' adjoint operator -->
@@ -241,6 +274,8 @@
       <itemData name="Keyword" defStyleNum="dsKeyword"/>
       <itemData name="Data Type" defStyleNum="dsDataType"/>
       <itemData name="Comment" defStyleNum="dsComment"/>
+      <itemData name="Comment" defStyleNum="dsComment"/>
+      <itemData name="FoldingComment" defStyleNum="dsComment" />
     </itemDatas>
 
   </highlighting>

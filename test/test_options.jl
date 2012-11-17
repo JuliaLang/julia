@@ -1,7 +1,7 @@
 test_context("Options for functions")
 
-require("options.jl")
-import OptionsMod.*
+require("options")
+using OptionsMod
 
 test_group("basic functionality")
 oo = Options(:a, true, :b, 7)

@@ -3,7 +3,7 @@
 # 
 # Example:
 #
-#   import ICU.*
+#   using ICU
 #   uppercase("testingß")  # "TESTINGSS"
 #   set_locale("tr")       # set locale to Turkish
 #   uppercase("testingß")  # "TESTİNGSS"
@@ -13,11 +13,16 @@
 # after the locale is set to Turkish.
 #
 
-load("utf16.jl")
+load("openlib")
+load("utf16")
 
 module ICU
-import Base.*
-import UTF16.*
+using Base
+using Openlib
+using UTF16
+
+import Base.lowercase,
+       Base.uppercase
 
 export foldcase,
        lowercase,
@@ -25,12 +30,11 @@ export foldcase,
        titlecase,
        uppercase
 
-load("openlib.jl")
 const iculib = openlib(OS_NAME == :Darwin ? "libicucore" : "libicuuc")
 const iculibi18n = OS_NAME == :Darwin ? iculib : openlib("libicui18n")
 
 for suffix in ["", ["_"*string(i) for i in 42:50]]
-    if dlsym(iculib, "u_strToUpper"*suffix) != C_NULL
+    if dlsym_e(iculib, "u_strToUpper"*suffix) != C_NULL
         for f in (:u_strFoldCase,
                   :u_strToLower,
                   :u_strToTitle,
@@ -178,7 +182,7 @@ export UCAL_ERA,
        UCAL_MILLISECONDS_IN_DAY,
        UCAL_IS_LEAP_MONTH
 
-for (a,i) in enumerate([
+for (i,a) in enumerate([
         :UCAL_ERA,
         :UCAL_YEAR,
         :UCAL_MONTH,

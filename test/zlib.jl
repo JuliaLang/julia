@@ -1,7 +1,7 @@
-require("../extras/zlib.jl")
+require("../extras/zlib")
 
 import Zlib
-import Zlib.*
+using Zlib
 
 ########################
 # Zlib tests
@@ -48,7 +48,7 @@ z_off_t_sz   = 2 << ((zlib_compile_flags >> 6) & uint(3))
 @assert(z_uInt_sz == sizeof(Uint32))
 @assert(z_uLong_sz == sizeof(Uint))
 @assert(z_voidpf_sz == sizeof(Ptr))
-@assert(z_off_t_sz == sizeof(FileOffset))
+@assert(z_off_t_sz == sizeof(Zlib.ZFileOffset) || (dlsym(Zlib._zlib, :crc32_combine64) != C_NULL && sizeof(Zlib.ZFileOffset) == 8))
 
 ########################
 # compress/uncompress tests

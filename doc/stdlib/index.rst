@@ -32,6 +32,7 @@ Extras
    strpack
    sound
    argparse
+   gzip
 
 ****************
 Math & Numerical
@@ -42,7 +43,6 @@ Math & Numerical
 
    blas
    glpk
-   specfun
 
 ************
 File Formats

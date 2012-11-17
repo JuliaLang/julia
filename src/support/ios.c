@@ -497,24 +497,33 @@ off_t ios_pos(ios_t *s)
     return fdpos;
 }
 
-size_t ios_trunc(ios_t *s, size_t size)
+int ios_trunc(ios_t *s, size_t size)
 {
     if (s->bm == bm_mem) {
         if (size == s->size)
-            return s->size;
+            return 0;
         if (size < s->size) {
             if (s->bpos > size)
                 s->bpos = size;
         }
         else {
             if (_buf_realloc(s, size)==NULL)
-                return s->size;
+                return 0;
         }
         s->size = size;
-        return size;
+        return 0;
     }
-    //todo
-    return 0;
+    else {
+        ios_flush(s);
+        if (s->state == bst_rd) {
+            off_t p = ios_pos(s);
+            if (size < p + (s->size - s->bpos))
+                s->size -= (p + (s->size - s->bpos) - size);
+        }
+        if (ftruncate(s->fd, size)==0)
+            return 0;
+    }
+    return 1;
 }
 
 int ios_eof(ios_t *s)

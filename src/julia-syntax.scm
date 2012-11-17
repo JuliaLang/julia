@@ -277,7 +277,7 @@
 (define (rewrite-ctor ctor Tname params field-names)
   (define (ctor-body body)
     `(block ;; make type name global
-            (global ,Tname)
+	    (global ,Tname)
 	    ,(pattern-replace (pattern-set
 			       (pattern-lambda
 				(call (-/ new) . args)
@@ -326,7 +326,7 @@
 	 `(block
 	   (global ,name)
 	   (const ,name)
-	   (composite_type ,name (tuple ,@params) 
+	   (composite_type ,name (tuple ,@params)
 			   (tuple ,@(map (lambda (x) `',x) field-names))
 			   (null) ,super (tuple ,@field-types))
 	   (call
@@ -674,11 +674,31 @@
 
 ;; convert (lhss...) = (tuple ...) to assignments, eliminating the tuple
 (define (tuple-to-assignments lhss x)
-  (let ((temps (map (lambda (x) (gensy)) (cdr x))))
-    `(block
-      ,@(map make-assignment temps (cdr x))
-      ,@(map make-assignment lhss temps)
-      (unnecessary-tuple (tuple ,@temps)))))
+  (let loop ((lhss lhss)
+	     (rhss (cdr x))
+	     (stmts '())
+	     (after '())
+	     (elts  '()))
+    (if (null? lhss)
+	`(block ,@(reverse stmts)
+		,@(reverse after)
+		(unnecessary-tuple (tuple ,@(reverse elts))))
+	(let ((L (car lhss))
+	      (R (car rhss)))
+	  (if (and (symbol? L)
+		   ;; overwrite var immediately if it doesn't occur elsewhere
+		   (not (contains (lambda (e) (eq? e L)) (cdr rhss))))
+	      (loop (cdr lhss)
+		    (cdr rhss)
+		    (cons (make-assignment L R) stmts)
+		    after
+		    (cons L elts))
+	      (let ((temp (gensy)))
+		(loop (cdr lhss)
+		      (cdr rhss)
+		      (cons (make-assignment temp R) stmts)
+		      (cons (make-assignment L temp) after)
+		      (cons temp elts))))))))
 
 ;; convert (lhss...) = x to tuple indexing, handling the general case
 (define (lower-tuple-assignment lhss x)
@@ -736,35 +756,27 @@
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
-   ;; multiple value assignment a,b = x...
-   (pattern-lambda (= (tuple . lhss) (... x))
-		   (let* ((xx  (if (symbol? x) x (gensy)))
-			  (ini (if (eq? x xx) '() `((= ,xx ,x))))
-			  (st  (gensy)))
-		     (if
-		      (and (pair? x) (eq? (car x) 'tuple))
-		      `(= (tuple ,@lhss) ,x)
-		      `(block
-			,@ini
-			(= ,st (call (top start) ,xx))
-			,.(apply append
-				 (map (lambda (lhs)
-					`((if (call (top done) ,xx ,st)
-					      (call (top throw)
-						    (call (top BoundsError))))
-					  (= (tuple ,lhs ,st)
-					     (call (top next) ,xx ,st))))
-				      lhss))
-			,xx))))
-
-   ;; multiple value assignment
-   (pattern-lambda (= (tuple . lhss) x)
-		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
-			    (length= lhss (length (cdr x))))
-		       ;; (a, b, ...) = (x, y, ...)
-		       (tuple-to-assignments lhss x)
-		       ;; (a, b, ...) = other
-		       (lower-tuple-assignment lhss x)))
+   ;; multiple value assignment a,b = x
+   (pattern-lambda
+    (= (tuple . lhss) x)
+    (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
+	     (length= lhss (length (cdr x))))
+	;; (a, b, ...) = (x, y, ...)
+	(tuple-to-assignments lhss x)
+	;; (a, b, ...) = other
+	(let* ((xx  (if (symbol? x) x (gensy)))
+	       (ini (if (eq? x xx) '() `((= ,xx ,x))))
+	       (st  (gensy)))
+	  `(block
+	    ,@ini
+	    (= ,st (call (top start) ,xx))
+	    ,.(map (lambda (i lhs)
+		     (lower-tuple-assignment
+		      (list lhs st)
+		      `(call (|.| (top Base) (quote indexed_next)) ,xx ,(+ i 1) ,st)))
+		   (iota (length lhss))
+		   lhss)
+	    ,xx))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
 		   (let* ((reuse (and (pair? a)
@@ -839,19 +851,24 @@
 
    (pattern-lambda (... a) `(curly ... ,a))
 
+   ;; dict syntax
+   (pattern-lambda (dict . args)
+		   `(call (top Dict)
+			  (tuple ,@(map cadr  args))
+			  (tuple ,@(map caddr args))))
+
+   ;; typed dict syntax
+   (pattern-lambda (typed-dict atypes . args)
+		   (if (and (length= atypes 3)
+			    (eq? (car atypes) '=>))
+		       `(call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))
+			      (tuple ,@(map cadr  args))
+			      (tuple ,@(map caddr args)))
+		       (error (string "invalid typed-dict syntax " atypes))))
+
    ;; cell array syntax
    (pattern-lambda (cell1d . args)
-		   (cond ((any (lambda (e) (and (length= e 3)
-						(eq? (car e) '=>)))
-			       args)
-			  (if (not (every (lambda (e) (and (length= e 3)
-							   (eq? (car e) '=>)))
-					  args))
-			      (error "invalid dict literal")
-			      `(call (top dict)
-				     (tuple ,@(map cadr  args))
-				     (tuple ,@(map caddr args)))))
-			 ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
+		   (cond ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
 			       args)
 			  `(call (top cell_1d) ,@args))
 			 (else
@@ -960,7 +977,8 @@
 	       (= ,state (call (top start) ,coll))
 	       (while (call (top !) (call (top done) ,coll ,state))
 		      (block
-		       (= (tuple ,lhs ,state) (call (top next) ,coll ,state))
+		       ,(lower-tuple-assignment (list lhs state)
+						`(call (top next) ,coll ,state))
 		       ,body))))))
 
    ; update operators
@@ -1055,7 +1073,7 @@
 
 ;; Comprehensions
 
-(define (lower-nd-comprehension expr ranges)
+(define (lower-nd-comprehension atype expr ranges)
   (let ((result    (gensy))
 	(ri        (gensy))
 	(oneresult (gensy)))
@@ -1095,12 +1113,17 @@
 	      `(for ,(car ranges)
 		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
 
+    (define (get-eltype)
+      (if (null? atype)
+	`((call (top eltype) ,oneresult))
+	`(,atype)))
+
     ;; Evaluate the comprehension
     `(scope-block
-      (block 
+      (block
        (= ,oneresult (tuple))
        ,(evaluate-one ranges)
-       (= ,result (call (top Array) (call (top eltype) ,oneresult)
+       (= ,result (call (top Array) ,@(get-eltype)
 			,@(compute-dims ranges 1)))
        (= ,ri 1)
        ,(construct-loops (reverse ranges) (list) 1)
@@ -1118,7 +1141,7 @@
    (pattern-lambda
     (comprehension expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
-	(lower-nd-comprehension expr ranges)
+	(lower-nd-comprehension '() expr ranges)
     (let ((result    (gensy))
 	  (ri        (gensy))
 	  (initlabl  (gensy))
@@ -1132,7 +1155,7 @@
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges)
-        (if (null? ranges)
+	(if (null? ranges)
 	    `(block (= ,oneresult ,expr)
 		    (type_goto ,initlabl)
 		    (call (top assign) ,result ,oneresult ,ri)
@@ -1158,9 +1181,11 @@
 	   ,(construct-loops (reverse loopranges))
 	   ,result)))))))
 
-   ;; cell array comprehensions
+   ;; typed array comprehensions
    (pattern-lambda
-    (cell-comprehension expr . ranges)
+    (typed-comprehension atype expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(lower-nd-comprehension atype expr ranges)
     (let ( (result (gensy))
 	   (ri (gensy))
 	   (rs (map (lambda (x) (gensy)) ranges)) )
@@ -1174,7 +1199,7 @@
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
-        (if (null? ranges)
+	(if (null? ranges)
 	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
@@ -1183,14 +1208,82 @@
       ;; Evaluate the comprehension
       `(block
 	,@(map make-assignment rs (map caddr ranges))
-        (scope-block
-	(block 
+	(scope-block
+	(block
 	 ,@(map (lambda (r) `(local ,r))
 		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	 (= ,result (call (top Array) (top Any) ,@(compute-dims rs)))
+	 (= ,result (call (top Array) ,atype ,@(compute-dims rs)))
 	 (= ,ri 1)
 	 ,(construct-loops (reverse ranges) (reverse rs))
-	 ,result)))))
+	 ,result))))))
+
+   ;; dict comprehensions
+   (pattern-lambda
+    (dict-comprehension expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(error "invalid iteration syntax")
+    (let ((result   (gensy))
+	  (initlabl (gensy))
+	  (onekey   (gensy))
+	  (oneval   (gensy))
+	  (rv         (map (lambda (x) (gensy)) ranges)))
+
+      ;; construct loops to cycle over all dimensions of an n-d comprehension
+      (define (construct-loops ranges)
+	(if (null? ranges)
+	    `(block (= ,onekey ,(cadr expr))
+		    (= ,oneval ,(caddr expr))
+		    (type_goto ,initlabl)
+		    (call (top assign) ,result ,oneval ,onekey))
+	    `(for ,(car ranges)
+		  ,(construct-loops (cdr ranges)))))
+
+      ;; Evaluate the comprehension
+      (let ((loopranges
+	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
+	`(block
+	  ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+	  (scope-block
+	   (block
+	   (local ,onekey)
+	   (local ,oneval)
+	   ,@(map (lambda (r) `(local ,r))
+		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	   (label ,initlabl)
+	   (= ,result (call (curly (top Dict)
+			    (static_typeof ,onekey)
+			    (static_typeof ,oneval))))
+	   ,(construct-loops (reverse loopranges))
+	   ,result)))))))
+
+   ;; typed dict comprehensions
+   (pattern-lambda
+    (typed-dict-comprehension atypes expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(error "invalid iteration syntax")
+    (if (not (and (length= atypes 3)
+		  (eq? (car atypes) '=>)))
+	(error "invalid typed-dict-comprehension syntax")
+    (let ( (result (gensy))
+	   (rs (map (lambda (x) (gensy)) ranges)) )
+
+      ;; construct loops to cycle over all dimensions of an n-d comprehension
+      (define (construct-loops ranges rs)
+	(if (null? ranges)
+	    `(call (top assign) ,result ,(caddr expr) ,(cadr expr))
+	    `(for (= ,(cadr (car ranges)) ,(car rs))
+		  ,(construct-loops (cdr ranges) (cdr rs)))))
+
+      ;; Evaluate the comprehension
+      `(block
+	,@(map make-assignment rs (map caddr ranges))
+	(scope-block
+	(block
+	 ,@(map (lambda (r) `(local ,r))
+		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	 (= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
+	 ,(construct-loops (reverse ranges) (reverse rs))
+	 ,result)))))))
 
 )) ;; lower-comprehensions
 
@@ -1551,7 +1644,7 @@ So far only the second case can actually occur.
 	     (let* ((env (append (lam:vars e) env))
 		    (body (add-local-decls (caddr e) env)))
 	       (list 'lambda (cadr e) body)))
-	    
+
 	    ((eq? (car e) 'scope-block)
 	     (let* ((glob (declared-global-vars (cadr e)))
 		    (vars (find-locals
@@ -1656,7 +1749,7 @@ So far only the second case can actually occur.
 	       bod)))
 	  (else (map (lambda (e) (remove-scope-blocks e context usedv))
 		     e))))
-  
+
   (cond ((not (pair? e))   e)
 	((quoted? e)       e)
 	((eq? (car e)      'lambda)
@@ -1736,7 +1829,7 @@ So far only the second case can actually occur.
 	 ;(let ((vi (var-info-for (cadr e) env)))
 	 ;  (if vi
 	 ;      (begin (vinfo:set-type! vi (caddr e))
-	 ;             (cadr e))
+	 ;	     (cadr e))
 	 `(call (top typeassert) ,(cadr e) ,(caddr e)))
 	((or (eq? (car e) 'decl) (eq? (car e) '|::|))
 	 ; handle var::T declaration by storing the type in the var-info
@@ -1749,7 +1842,7 @@ So far only the second case can actually occur.
 		      (if (assq (cadr e) captvars)
 			  (error (string "type of " (cadr e)
 					 " declared in inner scope")))
-                      (vinfo:set-type! vi (caddr e))
+		      (vinfo:set-type! vi (caddr e))
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
 	((eq? (car e) 'lambda)
@@ -1948,7 +2041,7 @@ So far only the second case can actually occur.
 (define (expand-backquote e)
   (cond ((or (eq? e 'true) (eq? e 'false))  e)
 	((symbol? e)          `(quote ,e))
-        ((not (pair? e))      e)
+	((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
 	 (expand-backquote (expand-backquote (cadr e))))

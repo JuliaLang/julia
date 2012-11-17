@@ -1,15 +1,14 @@
-load("json.jl")
-import Json.*;
+load("json")
 
-load("test/json_samples.jl")
+load("test/json_samples")
 
 
-@assert parse_json(a) != nothing
-@assert parse_json(b) != nothing
-@assert parse_json(c) != nothing
-@assert parse_json(d) != nothing
+@assert JSON.parse(a) != nothing
+@assert JSON.parse(b) != nothing
+@assert JSON.parse(c) != nothing
+@assert JSON.parse(d) != nothing
 
-j=parse_json(e) 
+j=JSON.parse(e) 
 @assert  j!= nothing
 typeof(j) == Dict{String, Any}
 @assert length(j) == 1
@@ -24,27 +23,27 @@ typeof(j["menu"]) == Dict{String, Any}
 
 
 
-@assert parse_json(gmaps) != nothing
-@assert parse_json(colors1) != nothing
-@assert parse_json(colors2) != nothing
-@assert parse_json(colors3) != nothing
-@assert parse_json(twitter) != nothing
-@assert parse_json(facebook) != nothing
+@assert JSON.parse(gmaps) != nothing
+@assert JSON.parse(colors1) != nothing
+@assert JSON.parse(colors2) != nothing
+@assert JSON.parse(colors3) != nothing
+@assert JSON.parse(twitter) != nothing
+@assert JSON.parse(facebook) != nothing
 
-k=parse_json(flickr)
+k=JSON.parse(flickr)
 @assert k!= nothing
 @assert k["totalItems"] == 222
 @assert k["items"][1]["description"][12] == '\"'
-@assert parse_json(youtube) != nothing
-@assert parse_json(iphone) != nothing
-@assert parse_json(customer) != nothing
-@assert parse_json(product) != nothing
-@assert parse_json(interop) != nothing
+@assert JSON.parse(youtube) != nothing
+@assert JSON.parse(iphone) != nothing
+@assert JSON.parse(customer) != nothing
+@assert JSON.parse(product) != nothing
+@assert JSON.parse(interop) != nothing
 
-u=parse_json(unicode) 
+u=JSON.parse(unicode) 
 @assert u!=nothing
 @assert u["অলিম্পিকস"]["রেকর্ড"][2]["Marathon"] == "জনি হেইস"
 
 #Uncomment while doing timing tests
-@time for i=1:100 ; parse_json(d) ; end
+#@time for i=1:100 ; JSON.parse(d) ; end
 

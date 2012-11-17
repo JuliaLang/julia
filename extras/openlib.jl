@@ -1,5 +1,11 @@
 
-load("trie.jl")
+load("trie")
+
+module Openlib
+using Base
+using Tries
+
+export openlib
 
 type DLCache
     libnames::Trie{Bool}
@@ -45,3 +51,4 @@ function openlib(name::String)
     dlopen(libname)
 end
 
+end # module
