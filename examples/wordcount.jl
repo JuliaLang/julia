@@ -19,7 +19,7 @@
 # Takes a string. Returns a Dict with the number of times each word 
 # appears in that string.
 function wordcount(text)
-    words=split(text,(' ','\n','\t','-','.',',',':',';'),false)
+    words=split(text,[' ','\n','\t','-','.',',',':',';'],false)
     counts=Dict()
     for w = words
         counts[w]=get(counts,w,0)+1
