@@ -687,6 +687,43 @@ end
 ref{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, j::Integer) = ref(A,I,[j])
 ref{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = ref(A,[i],J)
 
+function ref_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
+
+    (m, n) = size(A)
+    nJ = length(J)
+
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+
+    colptrS = Array(Ti, nJ+1)
+    colptrS[1] = 1
+    nnzS = 0
+
+    for j = 1:nJ
+        nnzS += colptrA[j+1] - colptrA[j]
+        colptrS[j+1] = nnzS + 1
+    end
+
+    rowvalS = Array(Ti, nnzS)
+    nzvalS  = Array(Tv, nnzS)
+    ptrS = 0
+
+    for j = 1:nJ
+        col = J[j]
+
+        for k = colptrA[col]:colptrA[col+1]-1
+            ptrS += 1
+            rowvalS[ptrS] = rowvalA[k]
+            nzvalS[ptrS] = nzvalA[k]
+        end
+    end
+
+    return SparseMatrixCSC(m, nJ, colptrS, rowvalS, nzvalS)
+
+end
+
+# TODO: See if growing arrays is faster than pre-computing structure
+# and then populating nonzeros
+# TODO: Use binary search in cases where nI >> nnz(A[:,j])
 function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
 
     (m, n) = size(A)
@@ -695,35 +732,41 @@ function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVec
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
 
+    if I == 1:m
+        return ref_cols(A, J)
+    end
+
     if ~issorted(I)
         (I, pI) = sortperm(I)
     else
-        pI = 1:nI
+        pI = [1:nI]
     end
 
-    # Form the structure of the result and compute space
     colptrS = Array(Ti, nJ+1)
     colptrS[1] = 1
     nnzS = 0
 
+    # Form the structure of the result and compute space
     for j = 1:nJ
         col = J[j]
 
-        ptrI = 1
-        for ptrA = colptrA[col]:colptrA[col+1]-1
+        ptrI::Int = 1
+
+        ptrA::Int = colptrA[col]
+        stopA::Int = colptrA[col+1]
+
+        while ptrI <= nI && ptrA < stopA
             rowA = rowvalA[ptrA]
-            
-            while ptrI <= nI
-                rowI = I[ptrI]
-                if rowI > rowA
-                    break
-                elseif rowA == rowI
-                    nnzS += 1
-                    break
-                end
+            rowI = I[ptrI]
+
+            if rowI > rowA
+                ptrA += 1
+            elseif rowI < rowA
+                ptrI += 1
+            else
+                nnzS += 1
                 ptrI += 1
             end
-
         end
         colptrS[j+1] = nnzS+1
 
@@ -737,23 +780,25 @@ function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVec
     for j = 1:nJ
         col = J[j]
 
-        ptrI = 1
-        for ptrA = colptrA[col]:colptrA[col+1]-1
+        ptrI::Int = 1
+
+        ptrA::Int = colptrA[col]
+        stopA::Int = colptrA[col+1]
+
+        while ptrI <= nI && ptrA < stopA
             rowA = rowvalA[ptrA]
-            
-            while ptrI <= nI
-                rowI = I[ptrI]
-                if rowI > rowA
-                    break
-                elseif rowA == rowI
-                    ptrS += 1
-                    rowvalS[ptrS] = pI[ptrI]
-                    nzvalS[ptrS]  = nzvalA[ptrA]
-                    break
-                end
+            rowI = I[ptrI]
+
+            if rowI > rowA
+                ptrA += 1
+            elseif rowI < rowA
+                ptrI += 1
+            else
+                ptrS += 1
+                rowvalS[ptrS] = pI[ptrI]
+                nzvalS[ptrS] = nzvalA[ptrA]
                 ptrI += 1
             end
-
         end
 
     end
