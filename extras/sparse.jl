@@ -154,6 +154,14 @@ end
 dense{T}(S::SparseMatrixCSC{T}) = convert(Matrix{T}, S)
 full(S::SparseMatrixCSC) = dense(S)
 
+function sparse(a::Vector)
+    n = numel(a)
+    I = find(a)
+    J = ones(Int, n)
+    V = nonzeros(a)
+    return sparse_IJ_sorted!(I,J,V,n,1,+)
+end
+
 function sparse(A::Matrix)
     m, n = size(A)
     (I, J, V) = findn_nzs(A)
