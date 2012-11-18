@@ -157,14 +157,14 @@ full(S::SparseMatrixCSC) = dense(S)
 function sparse(A::Matrix)
     m, n = size(A)
     (I, J, V) = findn_nzs(A)
-    return sparse_IJsorted!(I,J,V,m,n,+)
+    return sparse_IJ_sorted!(I,J,V,m,n,+)
 end
 
-sparse_IJsorted!(I,J,V,m,n) = sparse_IJsorted!(I,J,V,m,n,+)
+sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,+)
 
-function sparse_IJsorted!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-                                                    V::AbstractVector,
-                                                    m::Int, n::Int, combine::Function)
+function sparse_IJ_sorted!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+                                                   V::AbstractVector,
+                                                   m::Int, n::Int, combine::Function)
 
     cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes
@@ -700,7 +700,8 @@ function ref_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
     nnzS = 0
 
     for j = 1:nJ
-        nnzS += colptrA[j+1] - colptrA[j]
+        col = J[j]
+        nnzS += colptrA[col+1] - colptrA[col]
         colptrS[j+1] = nnzS + 1
     end
 
@@ -725,23 +726,13 @@ end
 # TODO: See if growing arrays is faster than pre-computing structure
 # and then populating nonzeros
 # TODO: Use binary search in cases where nI >> nnz(A[:,j])
-function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+function ref_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
 
     (m, n) = size(A)
     nI = length(I)
     nJ = length(J)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-
-    if I == 1:m
-        return ref_cols(A, J)
-    end
-
-    if ~issorted(I)
-        (I, pI) = sortperm(I)
-    else
-        pI = [1:nI]
-    end
 
     colptrS = Array(Ti, nJ+1)
     colptrS[1] = 1
@@ -773,6 +764,8 @@ function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVec
 
     end
 
+    fI = find(I)
+
     # Populate the values in the result
     rowvalS = Array(Ti, nnzS)
     nzvalS  = Array(Tv, nnzS)
@@ -796,7 +789,7 @@ function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVec
                 ptrI += 1
             else
                 ptrS += 1
-                rowvalS[ptrS] = pI[ptrI]
+                rowvalS[ptrS] = fI[ptrI]
                 nzvalS[ptrS] = nzvalA[ptrA]
                 ptrI += 1
             end
@@ -805,6 +798,104 @@ function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVec
     end
 
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
+end
+
+function ref_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
+    (m, n) = size(A)
+    nI = length(I)
+    nJ = length(J)
+
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+
+    nnzS = 0
+
+    I, pI = sortperm(I)
+    fI = find(I)
+
+    W = zeros(Int, nI + 1) # Keep row counts
+    W[1] = 1               # For cumsum later
+
+    # Form the structure of the result and compute space
+    for j = 1:nJ
+        col = J[j]
+
+        ptrI::Int = 1
+
+        ptrA::Int = colptrA[col]
+        stopA::Int = colptrA[col+1]
+
+        while ptrI <= nI && ptrA < stopA
+            rowA = rowvalA[ptrA]
+            rowI = I[ptrI]
+
+            if rowI > rowA
+                ptrA += 1
+            elseif rowI < rowA
+                ptrI += 1
+            else
+                W[fI[pI[ptrI]]+1] += 1
+                nnzS += 1
+                ptrI += 1
+            end
+        end
+
+    end
+
+    colptrS_T = cumsum(W)
+
+    # Populate the values in the result, but transposed
+    rowvalS_T = Array(Ti, nnzS)
+    nzvalS_T  = Array(Tv, nnzS)
+    for i=1:nI; W[i] = 0; end     # Zero out W to store row positions
+
+    for j = 1:nJ
+        col = J[j]
+
+        ptrI::Int = 1
+
+        ptrA::Int = colptrA[col]
+        stopA::Int = colptrA[col+1]
+
+        while ptrI <= nI && ptrA < stopA
+            rowA = rowvalA[ptrA]
+            rowI = I[ptrI]
+
+            if rowI > rowA
+                ptrA += 1
+            elseif rowI < rowA
+                ptrI += 1
+            else
+                rowS = fI[pI[ptrI]]
+                k = colptrS_T[rowS] + W[rowS]
+                rowvalS_T[k] = j
+                nzvalS_T[k] = nzvalA[ptrA]
+                W[rowS] += 1
+                ptrI += 1
+            end
+        end
+
+    end
+
+    # Transpose so that rows are in sorted order and return
+    S_T = SparseMatrixCSC(nJ, nI, colptrS_T, rowvalS_T, nzvalS_T)
+    return S_T.'
+
+end
+
+# S = A[I, J]
+function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+    m = size(A, 1)
+
+    if isa(I, Range) || isa(I, Range1); I = [I]; end
+
+    if I == 1:m
+        return ref_cols(A, J)
+    elseif issorted(I)
+        return ref_I_sorted(A, I, J)
+    else
+        return ref_general(A, I, J)
+    end
+
 end
 
 ## assign

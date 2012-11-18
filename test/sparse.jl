@@ -31,7 +31,7 @@ se33_i32 = speye(Int32, 3, 3)
 # check mixed sparse-dense concatenation
 sz33 = spzeros(3)
 de33 = eye(3)
-@assert  all([se33 de33; sz33 se33] == full([se33 se33; sz33 se33 ]))
+@assert  all([se33 de33; sz33 se33] == dense([se33 se33; sz33 se33 ]))
 
 # check splicing + concatenation on
 # random instances, with nested vcat
@@ -41,11 +41,19 @@ for i = 1 : 10
     @assert all([a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5,2:4]]] == a)
 end
 
+# sparse ref
+a116 = reshape([1:16], 4, 4)
+s116 = sparse(a116)
+p = [4, 1, 2, 3, 2]
+@assert dense(s116[p,:]) == a116[p,:]
+@assert dense(s116[:,p]) == a116[:,p]
+@assert dense(s116[p,p]) == a116[p,p]
+
 # check matrix multiplication
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = sprand(5, 10, 0.1)
-    @assert_approx_eq max(abs(a*b - full(a)*full(b))) 0.0
+    @assert_approx_eq max(abs(a*b - dense(a)*dense(b))) 0.0
 end
 
 # reductions
