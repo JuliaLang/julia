@@ -1162,15 +1162,17 @@ function _format_ticklabel( x, range )
         a, b = _magform( range )
         return "%.*f" % (abs(b),x)
     end
-    return sprint(showcompact, x)
+    s = sprint(showcompact, x)
+    ends_with(s, ".0") ? s[1:end-2] : s
 end
 
 range(a::Int, b::Int) = (a <= b) ? (a:b) : (a:-1:b)
 
 _ticklist_linear( lo, hi, sep ) = _ticklist_linear( lo, hi, sep, 0. )
 function _ticklist_linear( lo, hi, sep, origin )
-    a = iceil(float(lo - origin)/float(sep))
-    b = ifloor(float(hi - origin)/float(sep))
+    l = (lo - origin)/sep
+    h = (hi - origin)/sep
+    a, b = (l <= h) ? (iceil(l),ifloor(h)) : (ifloor(l),iceil(h))
     [ origin + i*sep for i in range(a,b) ]
 end
 
