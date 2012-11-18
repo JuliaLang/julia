@@ -1348,7 +1348,7 @@ for (syevr, elty) in
     ((:dsyevr_,:Float64),
      (:ssyevr_,:Float32))
     @eval begin
-        function syevr!(jobz::LapackChar, range::LapackChar, uplo::LapackChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
+        function syevr!(jobz::LapackChar, range::LapackChar, uplo::LapackChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, Z::StridedMatrix{$elty}, abstol::FloatingPoint)
         #       SUBROUTINE DSYEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
         #      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
         #      $                   IWORK, LIWORK, INFO )
@@ -1360,13 +1360,21 @@ for (syevr, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            ISUPPZ( * ), IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )    
-            chkstride1(A)
-            chksquare(A)
+            chkstride1(A, Z)
+            chksquare(A)                    
             n = size(A, 2)
             lda = max(1,stride(A,2))
             m = Array(Int32, 1)
             w = Array($elty, n)
-            z = Array($elty, n, n)
+            if jobz == 'N'
+                ldz = 1
+            elseif jobz == 'V'
+                if stride(Z, 2) < n; error("Z has too few rows"); end
+                if size(Z, 2) < n; error("Z has too few columns"); end
+                ldz = max(1, stride(Z, 2))
+            else
+                error("joz must be 'N' of 'V'")
+            end
             isuppz = Array(Int, 2*n)
             work  = Array($elty, 1)
             lwork = int32(-1)
@@ -1384,7 +1392,7 @@ for (syevr, elty) in
                     &jobz, &range, &uplo, &n, 
                     A, &lda, &vl, &vu, 
                     &il, &iu, &abstol, m,
-                    w, z, &n, isuppz,
+                    w, Z, &ldz, isuppz,
                     work, &lwork, iwork, &liwork, 
                     info)
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -1395,7 +1403,7 @@ for (syevr, elty) in
                     iwork = Array(Int32, liwork)
                 end
             end
-            return jobz == 'V' ? (w[1:m[1]], z[1:m[1],:]) : w[1:m[1]]
+            return w[1:m[1]]
         end
     end
 end
@@ -1403,7 +1411,7 @@ for (syevr, elty, relty) in
     ((:zheevr_,:Complex128,:Float64),
      (:cheevr_,:Complex64,:Float32))
     @eval begin
-        function syevr!(jobz::LapackChar, range::LapackChar, uplo::LapackChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
+        function syevr!(jobz::LapackChar, range::LapackChar, uplo::LapackChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, Z::StridedMatrix{$elty}, abstol::FloatingPoint)
 #       SUBROUTINE ZHEEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
 #      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
 #      $                   RWORK, LRWORK, IWORK, LIWORK, INFO )
@@ -1417,13 +1425,21 @@ for (syevr, elty, relty) in
 #       INTEGER            ISUPPZ( * ), IWORK( * )
 #       DOUBLE PRECISION   RWORK( * ), W( * )
 #       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * ) 
-            chkstride1(A)
+            chkstride1(A, Z)
             chksquare(A)
             n = size(A, 2)
             lda = max(1,stride(A,2))
             m = Array(Int32, 1)
-            w = Array($elty, n)
-            z = Array($elty, n, n)
+            w = Array($relty, n)
+            if jobz == 'N'
+                ldz = 1
+            elseif jobz == 'V'
+                if stride(Z, 2) < n; error("Z has too few rows"); end
+                if size(Z, 2) < n; error("Z has too few columns"); end
+                ldz = max(1, stride(Z, 2))
+            else
+                error("joz must be 'N' of 'V'")
+            end
             isuppz = Array(Int, 2*n)
             work  = Array($elty, 1)
             lwork = int32(-1)
@@ -1443,7 +1459,7 @@ for (syevr, elty, relty) in
                     &jobz, &range, &uplo, &n, 
                     A, &lda, &vl, &vu, 
                     &il, &iu, &abstol, m,
-                    w, z, &n, isuppz,
+                    w, Z, &ldz, isuppz,
                     work, &lwork, rwork, &lrwork,
                     iwork, &liwork, info)
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -1456,9 +1472,10 @@ for (syevr, elty, relty) in
                     iwork = Array(Int32, liwork)
                 end
             end
-            return jobz == 'V' ? (w[1:m[1]], z[1:m[1],:]) : w[1:m[1]]
+            return w[1:m[1]]
         end
     end
 end
-syevr!(jobz::LapackChar, A::StridedMatrix) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
+syevr!(A::StridedMatrix, Z::StridedMatrix) = syevr!('V', 'A', 'U', A, 0.0, 0.0, 0, 0, Z, -1.0)
+syevr!{T}(A::StridedMatrix{T}) = syevr!('N', 'A', 'U', A, 0.0, 0.0, 0, 0, zeros(T,0,0), -1.0)
 end # module

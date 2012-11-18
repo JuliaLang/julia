@@ -323,7 +323,6 @@ begin
     qpyz = qrz' * yyz
     @assert abs(norm(qyz) - norm(yyz)) < Eps # Q is unitary
     @assert abs(norm(qpyz) - norm(yyz)) < Eps # Q is unitary
-    
 end
 
 # Test det(A::Matrix)
@@ -352,6 +351,25 @@ for theta = pi ./ [1:4]
   @assert abs(det(R) - 1.0) < Eps
 end
 
+# LAPACK tests
+srand(111)
+Ainit = randn(5,5)
+for elty in (Float32, Float64, Complex64, Complex128)
+    @eval begin
+        # syevr!
+        A = convert(Array{$elty, 2}, Ainit)
+        Asym = A'A
+        Z = Array($elty, 5, 5)
+        vals = LAPACK.syevr!(copy(Asym), Z)
+        @assert norm(Z*diagmm(vals, Z') - Asym) < sqrt(eps(real(Asym[1])))
+        @assert all(vals .> 0.0)
+        @assert norm(LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,zeros($elty,0,0),-1.0) - vals[vals .< 1.0]) < sqrt(eps(real(Asym[1])))
+        @assert norm(LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,zeros($elty,0,0),-1.0) - vals[4:5]) < sqrt(eps(real(Asym[1])))
+        @assert norm(vals - LAPACK.syev!('N','U',copy(Asym))) < sqrt(eps(real(Asym[1])))
+    end
+end
+
+## Issue related tests
 # issue 1447
 let
     A = [1.+0.im 0; 0 1]
