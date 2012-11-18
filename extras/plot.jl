@@ -135,9 +135,18 @@ function data2rgb{T<:Real}(data::Array{T,2}, limits::Interval, colormap)
     img
 end
 
-RainbowColorMap() = [ Color.rgb2hex(Color.hsv2rgb(i/256,1,1)...)::Uint32 for i = 0:255 ]
+# from http://www.metastine.com/?p=7
+function jetrgb(x)
+    fourValue = 4x
+    r = min(fourValue - 1.5, -fourValue + 4.5)
+    g = min(fourValue - 0.5, -fourValue + 3.5)
+    b = min(fourValue + 0.5, -fourValue + 2.5)
+    clamp(r,0.,1.), clamp(g,0.,1.), clamp(b,0.,1.)
+end
 
-_default_colormap = RainbowColorMap()
+JetColormap() = Uint32[ Color.rgb2hex(jetrgb(i/256)...) for i = 1:256 ]
+
+_default_colormap = JetColormap()
 
 function imagesc{T<:Real}(xrange::Interval, yrange::Interval, data::Array{T,2}, clims::Interval)
     p = FramedPlot()
