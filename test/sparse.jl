@@ -35,11 +35,17 @@ de33 = eye(3)
 
 # check splicing + concatenation on
 # random instances, with nested vcat
-# (also side-checks sparse ref, which uses
-# sparse multiplication)
+# also side-checks sparse ref
 for i = 1 : 10
     a = sprand(5, 4, 0.5)
     @assert all([a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5,2:4]]] == a)
+end
+
+# check matrix multiplication
+for i = 1:5
+    a = sprand(10, 5, 0.5)
+    b = sprand(5, 10, 0.1)
+    @assert_approx_eq max(abs(a*b - full(a)*full(b))) 0.0
 end
 
 # reductions

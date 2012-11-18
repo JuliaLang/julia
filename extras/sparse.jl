@@ -151,7 +151,8 @@ function convert{T}(::Type{Matrix{T}}, S::SparseMatrixCSC{T})
     return A
 end
 
-full{T}(S::SparseMatrixCSC{T}) = convert(Matrix{T}, S)
+dense{T}(S::SparseMatrixCSC{T}) = convert(Matrix{T}, S)
+full(S::SparseMatrixCSC) = dense(S)
 
 function sparse(A::Matrix)
     m, n = size(A)
@@ -567,11 +568,11 @@ for op in (:+, :-, :.*, :.^)
     end # quote
 end # macro
 
-(+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
-(+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
+(+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(dense(A), B)
+(+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, dense(B))
 
-(-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
-(-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
+(-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(dense(A), B)
+(-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, dense(B))
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
@@ -579,21 +580,21 @@ end # macro
 (.*)(A::Array, B::SparseMatrixCSC) = (.*)(sparse(A), B)
 
 (./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
-(./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
-(./)(A::SparseMatrixCSC, B::Array) = (./)(full(A), B)
-(./)(A::Array, B::SparseMatrixCSC) = (./)(A, full(B))
-(./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(full(A), full(B))
+(./)(A::Number, B::SparseMatrixCSC) = (./)(A, dense(B))
+(./)(A::SparseMatrixCSC, B::Array) = (./)(dense(A), B)
+(./)(A::Array, B::SparseMatrixCSC) = (./)(A, dense(B))
+(./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(dense(A), dense(B))
 
-(.\)(A::SparseMatrixCSC, B::Number) = (.\)(full(A), B)
+(.\)(A::SparseMatrixCSC, B::Number) = (.\)(dense(A), B)
 (.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), B.nzval .\ A)
-(.\)(A::SparseMatrixCSC, B::Array) = (.\)(full(A), B)
-(.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, full(B))
-(.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(full(A), full(B))
+(.\)(A::SparseMatrixCSC, B::Array) = (.\)(dense(A), B)
+(.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, dense(B))
+(.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(dense(A), dense(B))
 
 (.^)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .^ B)
-(.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
-(.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
-(.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
+(.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, dense(B))
+(.^)(A::SparseMatrixCSC, B::Array) = (.^)(dense(A), B)
+(.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, dense(B))
 
 # Reductions
 
@@ -1161,7 +1162,7 @@ end
 
 function mmread(filename::ASCIIString, infoonly::Bool)
 #      Reads the contents of the Matrix Market file 'filename'
-#      into a matrix, which will be either sparse or full,
+#      into a matrix, which will be either sparse or dense,
 #      depending on the Matrix Market format indicated by
 #      'coordinate' (coordinate sparse storage), or
 #      'array' (dense array storage).  The data will be duplicated
@@ -1204,7 +1205,7 @@ end
 
 mmread(filename::ASCIIString) = mmread(filename, false)
 
-## expand a colptr or rowptr into a full index vector
+## expand a colptr or rowptr into a dense index vector
 function expandptr{T<:Integer}(V::Vector{T})
     if V[1] != 1 error("expandptr: first index must be one") end
     res = similar(V, (int64(V[end]-1),))
