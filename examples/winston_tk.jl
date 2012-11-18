@@ -25,5 +25,5 @@ end
 function imagesc(I)
     h, w = size(I)
     pl = Plot.imagesc((0,w),(0,h),I)
-    tk(pl, w, h)
+    (w < 1200 && h < 1200) ? tk(pl, w, h) : tk(pl, 700, 500)
 end
