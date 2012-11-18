@@ -230,10 +230,10 @@ function _start()
         global const LOAD_PATH = ByteString[
             ".",
             julia_pkgdir(),
-            abs_path("$JULIA_HOME/../lib/julia"),
-            abs_path("$JULIA_HOME/../lib/julia/base"),
-            abs_path("$JULIA_HOME/../lib/julia/extras"),
-            abs_path("$JULIA_HOME/../lib/julia/ui"),
+            abs_path("$JULIA_HOME/../share/julia"),
+            abs_path("$JULIA_HOME/../share/julia/base"),
+            abs_path("$JULIA_HOME/../share/julia/extras"),
+            abs_path("$JULIA_HOME/../share/julia/ui"),
         ]
 
         (quiet,repl,startup) = process_options(ARGS)

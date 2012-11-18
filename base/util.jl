@@ -300,7 +300,7 @@ function _jl_init_help()
            _jl_help_module_dict, _jl_help_function_dict
     if _jl_help_category_dict == nothing
         println("Loading help data...")
-        helpdb = evalfile("$JULIA_HOME/../lib/julia/helpdb.jl")
+        helpdb = evalfile("$JULIA_HOME/../share/julia/helpdb.jl")
         _jl_help_category_list = {}
         _jl_help_category_dict = Dict()
         _jl_help_module_dict = Dict()
