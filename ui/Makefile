@@ -11,12 +11,12 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 JLDFLAGS +=  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread $(LDFLAGS) $(RPATH)
 
-julia-release julia-debug: %: %-basic %-readline | $(USR)/lib/julia/website
+julia-release julia-debug: %: %-basic %-readline | $(USR)/share/julia/website
 	@$(MAKE) -C webserver $@
 
-$(eval $(call symlink_target,website,$(USR)/lib/julia))
+$(eval $(call symlink_target,website,$(USR)/share/julia))
 
-release debug: | $(USR)/lib/julia/website
+release debug: | $(USR)/share/julia/website
 	$(MAKE) julia-$@
 
 %.o: %.c repl.h
@@ -30,14 +30,14 @@ julia-release-readline: $(USRBIN)/julia-release-readline
 julia-debug-readline: $(USRBIN)/julia-debug-readline
 
 $(USRBIN)/julia-release-basic: repl.o repl-basic.o
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ -L$(USRLIB) $(JLDFLAGS) -ljulia-release
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-release
 $(USRBIN)/julia-debug-basic: repl.do repl-basic.do
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ -L$(USRLIB) $(JLDFLAGS) -ljulia-debug
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-debug
 
 $(USRBIN)/julia-release-readline: repl.o repl-readline.o
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(USRLIB) $(JLDFLAGS) -ljulia-release
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(USR)/$(JL_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-release
 $(USRBIN)/julia-debug-readline: repl.do repl-readline.do
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(USRLIB) $(JLDFLAGS) -ljulia-debug
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(USR)/$(JL_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-debug
 
 clean: | $(CLEAN_TARGETS)
 	$(MAKE) -C webserver $@

@@ -4,7 +4,6 @@ JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
 USR = $(JULIAHOME)/usr
-USRLIB = $(USR)/lib
 USRBIN = $(USR)/bin
 USRINC = $(USR)/include
 LLVMROOT = $(USR)
@@ -79,7 +78,7 @@ endif
 endif
 
 # if not absolute, then relative to JULIA_HOME
-JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../lib/julia/sys.ji"'
+JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../share/julia/sys.ji"'
 
 # OPENBLAS build options
 OPENBLAS_DYNAMIC_ARCH=0
@@ -126,7 +125,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
-LIBUNWIND=$(USRLIB)/libunwind-generic.a $(USRLIB)/libunwind.a
+LIBUNWIND=$(USR)/$(JL_LIBDIR)/libunwind-generic.a $(USR)/$(JL_LIBDIR)/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
@@ -138,19 +137,19 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline 
 else
-READLINE = $(USR)/lib/libreadline.a
+READLINE = $(USR)/$(JL_LIBDIR)/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
 READLINE += -lncurses
 else
-READLINE += $(USR)/lib/libhistory.a
+READLINE += $(USR)/$(JL_LIBDIR)/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG = pcre-config
 else
-PCRE_CONFIG = $(USR)/bin/pcre-config
+PCRE_CONFIG = $(USRBIN)/pcre-config
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)
@@ -163,10 +162,10 @@ LIBBLASNAME = libblas
 endif
 else
 ifeq ($(OS), WINNT)
-LIBBLAS = $(USRLIB)/libopenblas-r0.2.2.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
+LIBBLAS = $(USR)/$(JL_LIBDIR)/libopenblas-r0.2.2.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
 LIBBLASNAME = libopenblas-r0.2.2
 else
-LIBBLAS = -L$(USRLIB) -lopenblas
+LIBBLAS = -L$(USR)/$(JL_LIBDIR) -lopenblas
 LIBBLASNAME = libopenblas
 endif
 endif
@@ -202,7 +201,7 @@ ifeq ($(OS), Linux)
 INSTALL_NAME_CMD = true -ignore
 INSTALL_NAME_CHANGE_CMD = true -ignore
 SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/../lib'
+RPATH = -Wl,-rpath,'$$ORIGIN/../$(JL_LIBDIR)' -Wl,-rpath,'$$ORIGIN/../$(JL_PRIVATE_LIBDIR)'
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
@@ -214,7 +213,7 @@ ifeq ($(OS), FreeBSD)
 INSTALL_NAME_CMD = true -ignore
 INSTALL_NAME_CHANGE_CMD = true -ignore
 SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-z,origin
+RPATH = -Wl,-rpath,'$$ORIGIN/../$(JL_LIBDIR)' -Wl,-rpath,'$$ORIGIN/../$(JL_PRIVATE_LIBDIR)' -Wl,-z,origin
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
@@ -225,7 +224,7 @@ endif
 ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
-RPATH = -Wl,-rpath,@executable_path/../lib
+RPATH = -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)'
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
@@ -265,6 +264,21 @@ LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas
 LIBLAPACK = $(LIBBLAS)
 LIBBLASNAME = libsatlas
 LIBLAPACKNAME = $(LIBBLASNAME)
+endif
+
+# List of "private" libraries, e.g. ones that get installed to lib/julia
+JL_PRIVATE_LIBS = Rmath openlibm julia-release suitesparse_wrapper tk_wrapper gmp_wrapper glpk_wrapper random
+JL_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads fftw3f_threads glpk gmp grisu history $(OPENBLASNAME) pcre readline spqr umfpack z
+
+# Directories where said libraries get installed to
+JL_PRIVATE_LIBDIR = lib/julia
+JL_LIBDIR = lib
+
+# If we're on debian, default to arch-dependent library dirs
+ifeq ($(USE_DEBIAN), 1)
+MULTIARCH = $(shell gcc -print-multiarch)
+JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
+JL_LIBDIR = lib/$(MULTIARCH)/
 endif
 
 # Make tricks
