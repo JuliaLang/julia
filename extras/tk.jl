@@ -36,7 +36,7 @@ tk_display(w) = pointer_to_array(convert(Ptr{Ptr{Void}},w), (1,), false)[1]
 
 function init()
     ccall(dlsym(libtcl,:Tcl_FindExecutable), Void, (Ptr{Uint8},),
-          file_path(JULIA_HOME, "julia"))
+          path(JULIA_HOME, "julia"))
     tcl_interp = ccall(dlsym(libtcl,:Tcl_CreateInterp), Ptr{Void}, ())
     ccall(dlsym(libtcl,:Tcl_Init), Int32, (Ptr{Void},), tcl_interp)
     ccall(dlsym(libtk,:Tk_Init), Int32, (Ptr{Void},), tcl_interp)
