@@ -168,6 +168,8 @@ function sparse(A::Matrix)
     return sparse_IJ_sorted!(I,J,V,m,n,+)
 end
 
+sparse(S::SparseMatrixCSC) = S
+
 sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,+)
 
 function sparse_IJ_sorted!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
@@ -909,9 +911,9 @@ end
 ## assign
 assign(A::SparseMatrixCSC, v, i::Integer) = assign(A, v, ind2sub(size(A),i)...)
 
-function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Integer)
-    i0 = convert(T_int, i0)
-    i1 = convert(T_int, i1)
+function assign{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
+    i0 = convert(Ti, i0)
+    i1 = convert(Ti, i1)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error(BoundsError); end
     v = convert(T, v)
     if v == 0 #either do nothing or delete entry if it exists
@@ -1015,52 +1017,112 @@ function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Intege
 end
 
 assign(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector) = assign(A, v, [i], J)
-assign(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector, J::Integer) = assign(A, v, I, [j])
+assign(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector, j::Integer) = assign(A, v, I, [j])
 
-#TODO: assign where v is sparse
-function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractMatrix, I::AbstractVector, J::AbstractVector)
-    if size(v,1) != length(I) || size(v,2) != length(J)
+assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector, J::AbstractVector) = 
+      assign(A, sparse(S), I, J)
+
+# A[I,J] = B
+function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC, I::AbstractVector, J::AbstractVector)
+    if size(B,1) != length(I) || size(B,2) != length(J)
         return("error in assign: mismatched dimensions")
     end
-    m, n = size(A,1), size(A,2)
-    est = nnz(A) + numel(v)
-    colptr = Array(Ti, n+1)
-    colptr[:] = A.colptr[:]
-    rowval = Array(Ti, est)
-    nzval = Array(Tv, est)
-    Js, Jp = sortperm(J)
-    A_col = 1
-    j = 1
-    spa = SparseAccumulator(Tv, Ti, m)
-    j_max = size(v,2)
-    while A_col <= n
-        if j > j_max
-            temp2 = A.colptr[A_col]:(A.colptr[n+1]-1)
-            offs = colptr[A_col]-A.colptr[A_col]
-            temp1 = temp2 + offs
-            colptr[A_col:(n+1)] = A.colptr[A_col:(n+1)] + offs
-            rowval[temp1] = A.rowval[temp2]
-            nzval[temp1] = A.nzval[temp2]
-            break
-        end
-        if A_col < Js[j]
-            temp2 = A.colptr[A_col]:(A.colptr[Js[j]]-1)
-            offs = colptr[A_col]-A.colptr[A_col]
-            temp1 = temp2 + offs
-            colptr[A_col:Js[j]] = A.colptr[A_col:Js[j]] + offs
-            rowval[temp1] = A.rowval[temp2]
-            nzval[temp1] = A.nzval[temp2]
-        end
-        A_col = Js[j]
-        _jl_spa_set(spa, A, A_col)
-        spa[I] = v[:,Jp[j]]
-        (rowval, nzval) = _jl_spa_store_reset(spa, A_col, colptr, rowval, nzval)
-        A_col += 1
-        j += 1
+
+    if ~issorted(I) || ~issorted(J)
+        error("Only sorted index vectors are supported in sparse assignment currently.");
     end
-    A.colptr = colptr
-    A.rowval = rowval
-    A.nzval = nzval
+
+    m, n = size(A)
+    mB, nB = size(B)
+
+    nI = length(I)
+    nJ = length(J)
+
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+    colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
+
+    nnzS = nnz(A) + nnz(B)
+    colptrS = Array(Ti, n+1)
+    rowvalS = Array(Ti, nnzS)
+    nzvalS = Array(Tv, nnzS)
+    
+    colptrS[1] = 1
+    colB = 1
+    asgn_col = J[colB]
+
+    I_asgn = falses(m)
+    I_asgn[I] = true
+
+    ptrS = 1
+
+    for col = 1:n
+
+        # Copy column of A if it is not being assigned into
+        if colB > nJ || col != J[colB]
+            colptrS[col+1] = colptrS[col] + (colptrA[col+1]-colptrA[col])
+            
+            for k = colptrA[col]:colptrA[col+1]-1
+                rowvalS[ptrS] = rowvalA[k]
+                nzvalS[ptrS] = nzvalA[k]
+                ptrS += 1
+            end
+            continue
+        end
+
+        ptrA::Int  = colptrA[col]
+        stopA::Int = colptrA[col+1]
+        ptrB::Int  = colptrB[colB]
+        stopB::Int = colptrB[colB+1]
+
+        while ptrA < stopA && ptrB < stopB
+            rowA = rowvalA[ptrA]
+            rowB = I[rowvalB[ptrB]]
+            if rowA < rowB
+                if ~I_asgn[rowA]
+                    rowvalS[ptrS] = rowA
+                    nzvalS[ptrS] = nzvalA[ptrA]
+                    ptrS += 1
+                end
+                ptrA += 1
+            elseif rowB < rowA
+                rowvalS[ptrS] = rowB
+                nzvalS[ptrS] = nzvalB[ptrB]
+                ptrS += 1
+                ptrB += 1
+            else
+                rowvalS[ptrS] = rowB
+                nzvalS[ptrS] = nzvalB[ptrB]
+                ptrS += 1
+                ptrB += 1
+                ptrA += 1
+            end
+        end
+
+        while ptrA < stopA
+            rowA = rowvalA[ptrA]
+            if ~I_asgn[rowA]
+                rowvalS[ptrS] = rowA
+                nzvalS[ptrS] = nzvalA[ptrA]
+                ptrS += 1
+            end
+            ptrA += 1
+        end
+
+        while ptrB < stopB
+            rowB = I[rowvalB[ptrB]]
+            rowvalS[ptrS] = rowB
+            nzvalS[ptrS] = nzvalB[ptrB]
+            ptrS += 1
+            ptrB += 1
+        end
+
+        colptrS[col+1] = ptrS
+        colB += 1
+    end
+
+    A.colptr = colptrS
+    A.rowval = del(rowvalS, colptrS[end]:length(rowvalS))
+    A.nzval  = del(nzvalS, colptrS[end]:length(nzvalS))
     return A
 end
 
@@ -1146,117 +1208,6 @@ function hvcat(rows::(Int...), X::SparseMatrixCSC...)
         k += rows[i]
     end
     vcat(tmp_rows...)
-end
-
-
-## SparseAccumulator and related functions
-
-type SparseAccumulator{Tv,Ti} <: AbstractVector{Tv}
-    vals::Vector{Tv}
-    flags::Vector{Bool}
-    indexes::Vector{Ti}
-    nvals::Integer
-end
-
-show{T}(io, S::SparseAccumulator{T}) = invoke(show, (Any,Any), io, S)
-
-function SparseAccumulator{Tv,Ti}(::Type{Tv}, ::Type{Ti}, s::Integer)
-    SparseAccumulator(zeros(Tv,int(s)), falses(int(s)), Array(Ti,int(s)), 0)
-end
-
-SparseAccumulator(s::Integer) = SparseAccumulator(Float64, Int32, s)
-
-length(S::SparseAccumulator) = length(S.vals)
-
-# store spa and reset
-function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nzval)
-    vals = S.vals
-    flags = S.flags
-    indexes = S.indexes
-    nvals = S.nvals
-    z = zero(T)
-
-    start = colptr[col]
-
-    if nvals > length(nzval) - start
-        rowval = grow(rowval, length(rowval))
-        nzval = grow(nzval, length(nzval))
-    end
-    _jl_quicksort(indexes, 1, nvals)
-    offs = 1
-    for i=1:nvals
-        pos = indexes[i]
-        if vals[pos] != z
-            rowval[start + i - offs] = pos
-            nzval[start + i - offs] = vals[pos]
-            vals[pos] = z
-        else
-            offs += 1
-        end
-        flags[pos] = false
-    end
-
-    colptr[col+1] = start + nvals
-    S.nvals = 0
-    return (rowval, nzval)
-end
-
-# Set spa S to be the i'th column of A
-function _jl_spa_set{T}(S::SparseAccumulator{T}, A::SparseMatrixCSC{T}, i::Integer)
-    m = A.m
-    if length(S) != m; error("mismatched dimensions"); end
-
-    z = zero(T)
-    offs = A.colptr[i]-1
-    nvals = A.colptr[i+1] - offs - 1
-    S.indexes[1:nvals] = A.rowval[(offs+1):(offs+nvals)]
-    S.nvals = nvals
-    j = 1
-    for k = 1:m
-        if j <= nvals && k == S.indexes[j]
-            S.vals[k] = A.nzval[offs+j]
-            S.flags[k] = true
-            j += 1
-        else
-            S.vals[k] = z
-            S.flags[k] = false
-        end
-    end
-    return S
-end
-
-ref{T}(S::SparseAccumulator{T}, i::Integer) = S.flags[i] ? S.vals[i] : zero(T)
-
-function assign(S::SparseAccumulator, v, i::Integer)
-    if v == 0
-        if S.flags[i]
-            S.vals[i] = v
-            S.flags[i] = false
-            #find value of i in indexes and swap it out
-            j = 1
-            n = S.nvals
-            while j <= n
-                if S.indexes[j] == i
-                    S.indexes[j] = S.indexes[n]
-                    S.indexes[n] = i
-                    break
-                end
-                j += 1
-            end
-            if j > n; error("unexpected error in SPA assign"); end
-            S.nvals -= 1
-        end
-    else
-        if S.flags[i]
-            S.vals[i] = v
-        else
-            S.flags[i] = true
-            S.vals[i] = v
-            S.nvals += 1
-            S.indexes[S.nvals] = i
-        end
-    end
-    return S
 end
 
 function mmread(filename::ASCIIString, infoonly::Bool)
