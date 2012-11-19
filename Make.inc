@@ -267,8 +267,8 @@ LIBLAPACKNAME = $(LIBBLASNAME)
 endif
 
 # List of "private" libraries, e.g. ones that get installed to lib/julia
-JL_PRIVATE_LIBS = openlibm julia-release suitesparse_wrapper tk_wrapper gmp_wrapper glpk_wrapper random
-JL_LIBS = Rmath amd arpack cholmod colamd fftw3 fftw3f fftw3_threads fftw3f_threads glpk gmp grisu history $(OPENBLASNAME) pcre readline spqr umfpack z
+JL_PRIVATE_LIBS = Rmath openlibm julia-release suitesparse_wrapper tk_wrapper gmp_wrapper glpk_wrapper random
+JL_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads fftw3f_threads glpk gmp grisu history $(OPENBLASNAME) pcre readline spqr umfpack z
 
 # Directories where said libraries get installed to
 JL_PRIVATE_LIBDIR = lib/julia

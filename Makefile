@@ -7,14 +7,14 @@ default: release
 DIRS = $(BUILD)/bin $(BUILD)/etc $(BUILD)/$(JL_LIBDIR) $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,extras base ui test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
+$(foreach link,extras base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
 MAKEs = $(MAKE)
 ifeq ($(USE_QUIET), 1)
 MAKEs += -s
 endif
 
-debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $(BUILD)/share/julia/ui $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
+debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
 	@$(MAKEs) julia-$@
 	@$(MAKEs) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/share/julia/sys.ji
 

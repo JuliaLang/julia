@@ -373,7 +373,7 @@ distclean-openlibm: clean-openlibm
 
 ## Rmath ##
 
-RMATH_OBJ_TARGET = $(USR)/$(JL_LIBDIR)/libRmath.$(SHLIB_EXT)
+RMATH_OBJ_TARGET = $(USR)/$(JL_PRIVATE_LIBDIR)/libRmath.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 
 compile-rmath: $(RMATH_OBJ_SOURCE)
