@@ -1,4 +1,4 @@
-s<a name="banner"/>
+<a name="banner"/>
 
                    _
        _       _ _(_)_     |
