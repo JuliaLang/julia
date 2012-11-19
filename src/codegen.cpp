@@ -278,13 +278,15 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
     JL_TYPECHK(jl_function_ptr, type, rt);
     JL_TYPECHK(jl_function_ptr, tuple, argt);
     JL_TYPECHK(jl_function_ptr, type, argt);
-    if (jl_is_gf(f) && jl_is_leaf_type(rt) && jl_is_leaf_type(argt)) {
+    if (jl_is_gf(f) && (jl_is_leaf_type(rt) || rt == (jl_value_t*)jl_bottom_type) && jl_is_leaf_type(argt)) {
         jl_function_t *ff = jl_get_specialization(f, (jl_tuple_t*)argt);
         if (ff != NULL && ff->env == (jl_value_t*)jl_null && ff->linfo != NULL &&
             ff->linfo->cFunctionObject != NULL) {
             jl_lambda_info_t *li = ff->linfo;
+            jl_value_t *astrt = ast_rettype(li->ast);
             if (jl_types_equal((jl_value_t*)li->specTypes, argt) &&
-                jl_types_equal(ast_rettype(li->ast), rt)) {
+                (jl_types_equal(astrt, rt) ||
+                 (astrt==(jl_value_t*)jl_nothing->type && rt==(jl_value_t*)jl_bottom_type))) {
                 return jl_ExecutionEngine->getPointerToFunction((Function*)ff->linfo->cFunctionObject);
             }
             else {
@@ -1259,7 +1261,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         }
         result = builder.CreateCall(cf, ArrayRef<Value*>(&argvals[0],nargs));
         if (result->getType() == T_void) {
-            result = literal_pointer_val((jl_value_t*)NULL);
+            result = literal_pointer_val((jl_value_t*)jl_nothing);
         }
         else {
             result = mark_julia_type(result, ast_rettype(f->linfo->ast));
@@ -1872,7 +1874,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
         for(size_t i=0; i < lam->specTypes->length; i++) {
             fsig.push_back(julia_type_to_llvm(jl_tupleref(lam->specTypes,i)));
         }
-        f = Function::Create(FunctionType::get(julia_type_to_llvm(ast_rettype((jl_value_t*)ast)), fsig, false), Function::ExternalLinkage, lam->name->name, jl_Module);
+        jl_value_t *jlrettype = ast_rettype((jl_value_t*)ast);
+        Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
+        f = Function::Create(FunctionType::get(rt, fsig, false),
+                             Function::ExternalLinkage, lam->name->name, jl_Module);
         if (lam->functionObject == NULL) {
             lam->cFunctionObject = (void*)f;
             lam->functionObject = (void*)gen_jlcall_wrapper(lam, f);
@@ -2227,7 +2232,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                                     emit_unboxed(jl_exprarg(ex,0), &ctx));
             }
             else {
-                retval = emit_expr(jl_exprarg(ex,0), &ctx, true);
+                retval = emit_expr(jl_exprarg(ex,0), &ctx, false);
             }
 #ifdef JL_GC_MARKSWEEP
             // JL_GC_POP();
