@@ -87,7 +87,7 @@ A_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = 
 
 function At_mul_B{T<:LapackType}(A::StridedMatrix{T},
                                  B::StridedMatrix{T})
-    if is(A, B) && size(A,1)>=500
+    if is(A, B)
         syrk_wrapper('T', A)
     else
         gemm_wrapper('T', 'N', A, B)
@@ -100,7 +100,7 @@ At_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) =
 
 function A_mul_Bt{T<:LapackType}(A::StridedMatrix{T},
                                  B::StridedMatrix{T})
-    if is(A, B) && size(A,2)>=500
+    if is(A, B)
         syrk_wrapper('N', A)
     else
         gemm_wrapper('N', 'T', A, B)
@@ -121,7 +121,7 @@ Ac_mul_B{T<:Union(Float64,Float32)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B:
 
 function Ac_mul_B{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                                   B::StridedMatrix{T})
-    if is(A, B) && size(A,1)>=500
+    if is(A, B)
         herk_wrapper('C', A)
     else
         gemm_wrapper('C', 'N', A, B)
@@ -136,7 +136,7 @@ A_mul_Bc{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = 
 A_mul_Bc{T<:Union(Float64,Float32)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = A_mul_Bt(C, A, B)
 function A_mul_Bc{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                                   B::StridedMatrix{T})
-    if is(A, B) && size(A,2)>=500
+    if is(A, B)
         herk_wrapper('N', A)
     else
         gemm_wrapper('N', 'C', A, B)
