@@ -733,7 +733,10 @@ function ref_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
 
 end
 
-function ref_I_sorted_unique{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
+# TODO: See if growing arrays is faster than pre-computing structure
+# and then populating nonzeros
+# TODO: Use binary search in cases where nI >> nnz(A[:,j]) or nI << nnz(A[:,j])
+function ref_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
 
     (m, n) = size(A)
     nI = length(I)
@@ -743,6 +746,9 @@ function ref_I_sorted_unique{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::Abs
 
     I_ref = falses(m)
     I_ref[I] = true
+
+    I_repeat = zeros(Int, m)
+    for i=1:nI; I_repeat[I[i]] += 1; end
 
     colptrS = Array(Ti, nJ+1)
     colptrS[1] = 1
@@ -756,7 +762,9 @@ function ref_I_sorted_unique{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::Abs
             rowA = rowvalA[k]
             
             if I_ref[rowA]
-                nnzS += 1
+                for r = 1:I_repeat[rowA]
+                    nnzS += 1
+                end
             end
 
         end
@@ -766,10 +774,13 @@ function ref_I_sorted_unique{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::Abs
     # Populate the values in the result
     rowvalS = Array(Ti, nnzS)
     nzvalS  = Array(Tv, nnzS)
-    ptrS = 1
+    ptrS    = 1
 
     fI = zeros(Ti, m)
-    fI[I] = 1:nI
+    for k=1:nI
+        Ik = I[k]
+        if fI[Ik] == 0; fI[Ik] = k; end
+    end
 
     for j = 1:nJ
         col = J[j]
@@ -778,9 +789,11 @@ function ref_I_sorted_unique{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::Abs
             rowA = rowvalA[k]
             
             if I_ref[rowA]
-                rowvalS[ptrS] = fI[rowA]
-                nzvalS[ptrS] = nzvalA[k]
-                ptrS += 1
+                for r = 1:I_repeat[rowA]
+                    rowvalS[ptrS] = fI[rowA] + r - 1
+                    nzvalS[ptrS] = nzvalA[k]
+                    ptrS += 1
+                end
             end
 
         end
@@ -789,10 +802,8 @@ function ref_I_sorted_unique{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::Abs
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-# TODO: See if growing arrays is faster than pre-computing structure
-# and then populating nonzeros
-# TODO: Use binary search in cases where nI >> nnz(A[:,j])
-function ref_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
+# ref_I_sorted based on merging of sorted lists
+function ref_I_sorted_old{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
 
     (m, n) = size(A)
     nI = length(I)
