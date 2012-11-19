@@ -1,4 +1,4 @@
-<a name="banner"/>
+s<a name="banner"/>
 
                    _
        _       _ _(_)_     |
@@ -20,6 +20,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Resources"/>
 
 - **Homepage:** <http://julialang.org>
+- **Binaries:** <https://github.com/JuliaLang/julia/downloads>
 - **Mailing list:** <http://groups.google.com/group/julia-dev/>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Source code:** <https://github.com/JuliaLang/julia>
