@@ -733,6 +733,62 @@ function ref_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
 
 end
 
+function ref_I_sorted_unique{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
+
+    (m, n) = size(A)
+    nI = length(I)
+    nJ = length(J)
+
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+
+    I_ref = falses(m)
+    I_ref[I] = true
+
+    colptrS = Array(Ti, nJ+1)
+    colptrS[1] = 1
+    nnzS = 0
+
+    # Form the structure of the result and compute space
+    for j = 1:nJ
+        col = J[j]
+
+        for k = colptrA[col]:colptrA[col+1]-1
+            rowA = rowvalA[k]
+            
+            if I_ref[rowA]
+                nnzS += 1
+            end
+
+        end
+        colptrS[j+1] = nnzS+1
+    end
+
+    # Populate the values in the result
+    rowvalS = Array(Ti, nnzS)
+    nzvalS  = Array(Tv, nnzS)
+    ptrS = 1
+
+    fI = zeros(Ti, m)
+    fI[I] = 1:nI
+
+    for j = 1:nJ
+        col = J[j]
+
+        for k = colptrA[col]:colptrA[col+1]-1
+            rowA = rowvalA[k]
+            
+            if I_ref[rowA]
+                rowvalS[ptrS] = fI[rowA]
+                nzvalS[ptrS] = nzvalA[k]
+                ptrS += 1
+            end
+
+        end
+    end
+
+    return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
+end
+
 # TODO: See if growing arrays is faster than pre-computing structure
 # and then populating nonzeros
 # TODO: Use binary search in cases where nI >> nnz(A[:,j])
