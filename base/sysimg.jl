@@ -279,4 +279,4 @@ using Base
 
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
-      "$JULIA_HOME/../lib/julia/sys.ji", "start_image.jl")
+      "$JULIA_HOME/../share/julia/sys.ji", "start_image.jl")
