@@ -11,12 +11,9 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 JLDFLAGS +=  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread $(LDFLAGS) $(RPATH)
 
-julia-release julia-debug: %: %-basic %-readline | $(USR)/share/julia/website
-	@$(MAKE) -C webserver $@
+julia-release julia-debug: %: %-basic %-readline
 
-$(eval $(call symlink_target,website,$(USR)/share/julia))
-
-release debug: | $(USR)/share/julia/website
+release debug:
 	$(MAKE) julia-$@
 
 %.o: %.c repl.h
@@ -40,6 +37,5 @@ $(USRBIN)/julia-debug-readline: repl.do repl-readline.do
 	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(USR)/$(JL_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-debug
 
 clean: | $(CLEAN_TARGETS)
-	$(MAKE) -C webserver $@
 	rm -f *.o *.do
 	rm -f $(USRBIN)/julia-*-basic $(USRBIN)/julia-*-readline $(USRBIN)/julia

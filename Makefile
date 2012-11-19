@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/etc $(BUILD)/$(JL_LIBDIR) $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia
+DIRS = $(BUILD)/bin $(BUILD)/$(JL_LIBDIR) $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,extras base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
@@ -53,10 +53,6 @@ install: release
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
 		cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/lib$${suffix}.$(SHLIB_EXT) $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
-	# Web-REPL stuff
-	-cp -R -L $(BUILD)/$(JL_LIBDIR)/lighttpd $(PREFIX)/$(JL_LIBDIR)
-	-cp $(BUILD)/sbin/* $(PREFIX)/sbin
-	-cp $(BUILD)/etc/* $(PREFIX)/etc
 	# Copy in all .jl sources as well
 	-cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
 ifeq ($(OS), WINNT)
@@ -92,10 +88,9 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C extras clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
-	@$(MAKE) -C ui/webserver clean
 	@$(MAKE) -C test/unicode clean
 	@for buildtype in "release" "debug" ; do \
-		for repltype in "basic" "readline" "webserver" ; do \
+		for repltype in "basic" "readline"; do \
 			rm -f julia-$${buildtype}-$${repltype}; \
 		done \
 	done

@@ -33,9 +33,10 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 STAGE1_DEPS += llvm
 endif
 
-ifneq ($(OS),WINNT)
-STAGE1_DEPS += lighttpd
-endif
+# Disable web repl
+#ifneq ($(OS),WINNT)
+#STAGE1_DEPS += lighttpd
+#endif
 
 ifeq ($(OS),WINNT)
 READLINE_VER = 5.0
