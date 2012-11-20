@@ -119,30 +119,25 @@ rm(pkgs::String...) = rm(String[pkgs...])
 # list available, required & installed packages
 
 available() = cd(julia_pkgdir()) do
-    for pkg in Metadata.each_package()
-        println(pkg)
-    end
+    [Metadata.each_package()...]
 end
 
 required() = cd(julia_pkgdir()) do
-    open("REQUIRE") do io
-        for line in each_line(io)
-            print(line)
-        end
-    end
+    parse_requires("REQUIRE")
 end
 
 installed() = cd(julia_pkgdir()) do
+    h = Dict{String,Union(VersionNumber,String)}()
     Git.each_submodule(false) do name, path, sha1
         if name != "METADATA"
             try
-                ver = Metadata.version(name,sha1)
-                println("$name\tv$ver")
+                h[name] = Metadata.version(name,sha1)
             catch
-                println("$name\t$sha1")
+                h[name] = sha1
             end
         end
     end
+    return h
 end
 
 # update packages from requirements
@@ -371,6 +366,18 @@ update() = cd(julia_pkgdir()) do
         run(`git add METADATA`)
         Metadata.gen_hashes()
         _resolve()
+    end
+end
+
+# create a new package repo (unregistered)
+
+create(name::String) = cd(julia_pkgdir()) do
+    run(`mkdir -p $name`)
+    cd(name) do
+        run(`git init`)
+        run(`git commit --allow-empty -m "initial empty commit"`)
+        run(`touch README.md`)
+        run(`mkdir src`)
     end
 end
 
