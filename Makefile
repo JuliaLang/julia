@@ -16,7 +16,8 @@ endif
 
 debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
 	@$(MAKEs) julia-$@
-	@$(MAKEs) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/share/julia/sys.ji
+	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
+	$(MAKEs) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
 
 julia-debug julia-release:
 	@$(MAKEs) -C deps
@@ -30,9 +31,9 @@ $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 	@cp $< $@
 
 # use sys.ji if it exists, otherwise run two stages
-$(BUILD)/share/julia/sys.ji: VERSION base/*.jl $(BUILD)/share/julia/helpdb.jl
+$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl $(BUILD)/share/julia/helpdb.jl
 	$(QUIET_JULIA) cd base && \
-	(test -f $(BUILD)/share/julia/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make clean'."
+	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make clean'."
 
 ifeq ($(OS), WINNT)
 OPENBLASNAME=openblas-r0.1.1
@@ -95,11 +96,11 @@ clean: | $(CLEAN_TARGETS)
 		done \
 	done
 	@rm -f *~ *# *.tar.gz
-	@rm -fr $(BUILD)/$(JL_LIBDIR)
 	@rm -fr $(BUILD)/$(JL_PRIVATE_LIBDIR)
 
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
+	@rm -fr $(BUILD)/$(JL_LIBDIR)
 #	@$(MAKE) -C deps clean-uv
 
 .PHONY: default debug release julia-debug julia-release \
