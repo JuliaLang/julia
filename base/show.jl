@@ -121,9 +121,10 @@ function show_indented(io::IO, ex::Expr, indent::Int)
         default_show_quoted(io, ex, indent)
     end
 end
+const paren_quoted_syms = Set{Symbol}(:(:),:(::),:(:=),:(=),:(==),:(===),:(=>))
 function show_indented(io::IO, sym::Symbol, indent::Int)
-    if is(sym,:(:)) || is(sym,:(==)); print(io, ":($sym)")        
-    else                              print(io, ":$sym")        
+    if has(paren_quoted_syms, sym); print(io, ":($sym)")        
+    else                            print(io, ":$sym")        
     end
 end
 function default_show_quoted(io::IO, ex, indent::Int)
