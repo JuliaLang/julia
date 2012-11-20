@@ -7,7 +7,7 @@ using LinProgGLPK
 
 import Git
 import GLPK
-import Base.isequal, Base.isless
+import Base.isequal, Base.isless, Base.contains
 
 export parse_requires, Version, VersionSet
 
@@ -143,6 +143,9 @@ function dependencies(pkgs,vers)
             file = "$dir/requires"
             if isfile(file)
                 for d in parse_requires("$dir/requires")
+                    if !contains(pkgs,d.package)
+                        error("Unknown dependency for $pkg: $(d.package)")
+                    end
                     push(deps,(v,d))
                 end
             end
