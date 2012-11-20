@@ -4,6 +4,7 @@
 abstract LongSymbol
 abstract LongTuple
 abstract LongExpr
+abstract UndefRefTag
 
 const _jl_ser_version = 1 # do not make changes without bumping the version #!
 const _jl_ser_tag = ObjectIdDict()
@@ -16,11 +17,11 @@ let i = 2
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
-             Module, Undef, :reserved3, :reserved4,
+             Module, UndefRefTag, :reserved3, :reserved4,
              :reserved5, :reserved6, :reserved7, :reserved8,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
-             (), Bool, Any, :Any, None, Top, Type,
+             (), Bool, Any, :Any, None, Top, Undef, Type,
              :Array, :TypeVar, :Box,
              :lambda, :body, :return, :call, symbol("::"),
              :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
@@ -120,7 +121,7 @@ function serialize(s, a::Array)
             if isdefined(a, i)
                 serialize(s, a[i])
             else
-                writetag(s, Undef)
+                writetag(s, UndefRefTag)
             end
         end
     end
@@ -356,7 +357,7 @@ function deserialize(s, ::Type{Array})
     A = Array(elty, dims)
     for i = 1:numel(A)
         tag = int32(read(s, Uint8))
-        if tag==0 || !is(_jl_deser_tag[tag], Undef)
+        if tag==0 || !is(_jl_deser_tag[tag], UndefRefTag)
             A[i] = handle_deserialize(s, tag)
         end
     end
