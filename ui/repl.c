@@ -121,8 +121,8 @@ void parse_opts(int *argcp, char ***argvp) {
                 image_file = strdup(path);
             }
             else if (jl_stat(image_file, (char*)&stbuf) != 0) {
-                // otherwise try julia_home/../lib/julia/%s
-                snprintf(path, sizeof(path), "%s%s..%slib%sjulia%s%s",
+                // otherwise try julia_home/../share/julia/%s
+                snprintf(path, sizeof(path), "%s%s..%sshare%sjulia%s%s",
                          julia_home, PATHSEPSTRING, PATHSEPSTRING,
                          PATHSEPSTRING, PATHSEPSTRING, image_file);
                 image_file = strdup(path);
