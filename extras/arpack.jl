@@ -21,9 +21,10 @@ for (T, saupd, seupd, naupd, neupd) in
            (m, n) = size(A)
            if m  != n error("eigs: matrix A is $m by $n but must be square") end
            sym    = issym(A)
+           if n <= nev nev = n - 1 end
 
            ncv = min(max(nev*2, 20), n)
-           if ncv-nev < 2 || ncv > n error("Compute fewer eigenvalues using eigs(A, k)") end
+#           if ncv-nev < 2 || ncv > n error("Compute fewer eigenvalues using eigs(A, k)") end
 
            bmat   = "I"
            lworkl = sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6)
@@ -122,9 +123,10 @@ for (T, TR, naupd, neupd) in
        function eigs(A::AbstractMatrix{$T}, nev::Integer, evtype::ASCIIString, rvec::Bool)
            (m, n) = size(A)
            if m  != n error("eigs: matrix A is $m by $n but must be square") end
+           if n <= nev nev = n - 1 end
 
            ncv = min(max(nev*2, 20), n)
-           if ncv-nev < 2 || ncv > n error("Compute fewer eigenvalues using eigs(A, k)") end
+#           if ncv-nev < 2 || ncv > n error("Compute fewer eigenvalues using eigs(A, k)") end
 
            bmat   = "I"
            lworkl = ncv * (3*ncv + 5)
@@ -196,6 +198,7 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
        function svds(A::AbstractMatrix{$T}, nev::Integer, which::ASCIIString, rvec::Bool)
            (m, n) = size(A)
            if m < n error("m = $m, n = $n and only the m >= n case is implemented") end
+           if n <= nev nev = n - 1 end
 
            At = isa(A, StridedMatrix) ? BLAS.syrk('U','T',1.,A) : A'
     
@@ -203,7 +206,7 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
            lworkl = ncv*(ncv+8)
 
            v      = Array($T, n, ncv)
-           workd  = Array($T, 3*n)
+           workd  = Array($T, 3n)
            workl  = Array($T, lworkl)
            resid  = Array($T, n)
            select = Array(Int32, ncv)
@@ -220,7 +223,7 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
            bmat   = "I"
            zernm1 = 0:(n-1)
 
-           for i in 0:iparam[3]
+           while true
                ccall(dlsym(_jl_libarpack, $(string(saupd))), Void,
                      (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                       Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32},
