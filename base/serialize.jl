@@ -16,11 +16,11 @@ let i = 2
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
-             Module, :reserved2, :reserved3, :reserved4,
+             Module, Undef, :reserved3, :reserved4,
              :reserved5, :reserved6, :reserved7, :reserved8,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
-             (), Bool, Any, :Any, None, Top, Undef, Type,
+             (), Bool, Any, :Any, None, Top, Type,
              :Array, :TypeVar, :Box,
              :lambda, :body, :return, :call, symbol("::"),
              :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
@@ -116,9 +116,12 @@ function serialize(s, a::Array)
     if isa(elty,BitsKind)
         serialize_array_data(s, a)
     else
-        # TODO: handle uninitialized elements
         for i = 1:numel(a)
-            serialize(s, a[i])
+            if isdefined(a, i)
+                serialize(s, a[i])
+            else
+                writetag(s, Undef)
+            end
         end
     end
 end
@@ -184,7 +187,8 @@ function serialize(s, f::Function)
                 return
             end
         end
-        error(f," is not serializable")
+        write(s, uint8(3))
+        serialize(s, f.env)
     else
         linfo = f.code
         @assert isa(linfo,LambdaStaticData)
@@ -255,7 +259,10 @@ end
 ## deserializing values ##
 
 function deserialize(s)
-    b = int32(read(s, Uint8))
+    handle_deserialize(s, int32(read(s, Uint8)))
+end
+
+function handle_deserialize(s, b)
     if b == 0
         return _jl_deser_tag[int32(read(s, Uint8))]
     end
@@ -297,6 +304,9 @@ function deserialize(s, ::Type{Function})
         mod = deserialize(s)::Module
         name = deserialize(s)::Symbol
         return eval(mod,name)
+    elseif b==3
+        env = deserialize(s)
+        return ccall(:jl_new_gf_internal, Any, (Any,), env)
     end
     env = deserialize(s)
     linfo = deserialize(s)
@@ -345,7 +355,10 @@ function deserialize(s, ::Type{Array})
     end
     A = Array(elty, dims)
     for i = 1:numel(A)
-        A[i] = deserialize(s)
+        tag = int32(read(s, Uint8))
+        if tag==0 || !is(_jl_deser_tag[tag], Undef)
+            A[i] = handle_deserialize(s, tag)
+        end
     end
     return A
 end

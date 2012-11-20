@@ -1491,6 +1491,11 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name)
     return f;
 }
 
+DLLEXPORT jl_function_t *jl_new_gf_internal(jl_value_t *env)
+{
+    return jl_new_closure(jl_apply_generic, env, NULL);
+}
+
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
                    jl_tuple_t *tvars)
 {
