@@ -176,7 +176,7 @@ function resolve(reqs::Vector{VersionSet})
     end
     lpopts = GLPK.SimplexParam()
     lpopts["msg_lev"] = GLPK.MSG_ERR
-    w = iround(linprog_simplex(u,W,zeros(Int,length(I)),nothing,nothing,u,nothing,lpopts)[2])
+    w = iround(linprog_simplex(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,lpopts)[2])
 
     V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
     R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
