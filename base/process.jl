@@ -134,6 +134,7 @@ wait(x) = wait(x,false)
 wait_nohang(x) = wait(x,true)
 
 exit(n) = ccall(:exit, Void, (Int32,), n)
+_exit(n) = ccall(:_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()
 
@@ -156,9 +157,9 @@ function exec(thunk::Function)
         thunk()
     catch e
         show(io, e)
-        exit(0x7f)
+        _exit(0x7f)
     end
-    exit(0)
+    _exit(0)
 end
 
 type FileSink
@@ -554,7 +555,7 @@ function spawn(cmd::Cmd)
                 r = ccall(:dup2, Int32, (Int32, Int32), dup2_fds[i], dup2_fds[i+1])
                 if r == -1
                     println(bk_stderr_stream, "dup2: ", strerror())
-                    exit(0x7f)
+                    _exit(0x7f)
                 end
                 i += 2
             end
@@ -565,7 +566,7 @@ function spawn(cmd::Cmd)
                 r = ccall(:dup2, Int32, (Int32, Int32), dup2_sinks[i], dup2_sinks[i+1])
                 if r == -1
                     println(bk_stderr_stream, "dup2: ", strerror())
-                    exit(0x7f)
+                    _exit(0x7f)
                 end
                 i += 2
             end
@@ -576,14 +577,14 @@ function spawn(cmd::Cmd)
                 r = ccall(:close, Int32, (Int32,), close_fds[i])
                 if r != 0
                     println(bk_stderr_stream, "close: ", strerror())
-                    exit(0x7f)
+                    _exit(0x7f)
                 end
                 i += 1
             end
             if !isequal(ptrs, nothing)
                 ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
                 println(bk_stderr_stream, "exec: ", strerror())
-                exit(0x7f)
+                _exit(0x7f)
             end
             # other ways of execing (e.g. a julia function)
             gc_enable()
@@ -592,7 +593,7 @@ function spawn(cmd::Cmd)
                 exec(c)
             catch err
                 show(bk_stderr_stream, err)
-                exit(0x7f)
+                _exit(0x7f)
             end
             error("exec should not return but has")
         end
