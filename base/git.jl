@@ -32,9 +32,9 @@ end
 each_tagged_version(dir::String) = cd(each_tagged_version,dir)
 
 function each_submodule(f::Function, recursive::Bool, dir::ByteString)
-    cmd = `git submodule foreach --quiet 'echo "$name\t$path\t$sha1"'`
+    cmd = `git submodule foreach --quiet 'echo "$name $path $sha1"'`
     for line in each_line(cmd)
-        name, path, sha1 = match(r"^(.*)\t(.*)\t([0-9a-f]{40})$", line).captures
+        name, path, sha1 = match(r"^(.*) (.*) ([0-9a-f]{40})$", line).captures
         cd(dir) do
             f(name, path, sha1)
         end
