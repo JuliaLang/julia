@@ -1396,7 +1396,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx,
     Value *bp = var_binding_pointer(sym, &jbp, false, ctx);
     if (arg != NULL ||    // arguments are always defined
         (!is_var_closed(sym, ctx) &&
-         !jl_subtype((jl_value_t*)jl_undef_type, ty, 0) &&
+         (isglobal || !jl_subtype((jl_value_t*)jl_undef_type, ty, 0)) &&
          // double-check that a global variable is actually defined. this
          // can be a problem in parallel when a definition is missing on
          // one machine.
