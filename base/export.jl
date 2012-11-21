@@ -548,8 +548,6 @@ export
     cartesian_map,
     cat,
     cell,
-    cell_1d,
-    cell_2d,
     circshift,
     colon,
     conj!,
@@ -646,9 +644,7 @@ export
     ref_shape,
     assign_shape_check,
     indices,
-    append_any,
     make_loop_nest,
-    trailingsize,
     check_bounds, 
 
 # linear algebra
@@ -1260,7 +1256,6 @@ export
     hasenv,
     pointer,
     pointer_to_array,
-    ptr_arg_convert,
     cfunction,
     setenv,
     strerror,

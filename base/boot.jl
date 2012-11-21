@@ -116,7 +116,6 @@
 # end
 
 import Main
-import Intrinsics.ccall
 
 export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     BitsKind, Bool, BoundsError, Box, ByteString, Char, CompositeKind,
@@ -139,8 +138,7 @@ export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     # constants
     JULIA_HOME, nothing,
     # intrinsics module
-    Intrinsics,
-    ccall
+    Intrinsics
     #ccall, abs_float, add_float, add_int, and_int, ashr_int,
     #box, bswap_int, checked_fptosi32,
     #checked_fptosi64, checked_fptoui32, checked_fptoui64, checked_sadd,
