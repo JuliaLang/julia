@@ -116,6 +116,7 @@
 # end
 
 import Main
+import Intrinsics.ccall
 
 export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     BitsKind, Bool, BoundsError, Box, ByteString, Char, CompositeKind,
