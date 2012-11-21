@@ -21,11 +21,15 @@ This is the GitHub repository of Julia source code, including instructions for c
 
 - **Homepage:** <http://julialang.org>
 - **Binaries:** <https://github.com/JuliaLang/julia/downloads>
-- **Mailing list:** <http://groups.google.com/group/julia-dev/>
+- **Mailing list:** <http://groups.google.com/group/julia-users/>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Documentation:** <http://julialang.org/manual/>
+
+The mailing list for developer discussion is
+<http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
+of messages is higher, and the discussions tend to be more esoteric.
 
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
