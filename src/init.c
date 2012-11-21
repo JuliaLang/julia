@@ -207,7 +207,7 @@ void julia_init(char *imageFile)
 
     // the Main module is the one which is always open, and set as the
     // current module for bare (non-module-wrapped) toplevel expressions.
-    // it does import Base.* if Base is available.
+    // it does "using Base" if Base is available.
     if (jl_base_module != NULL)
         jl_module_using(jl_main_module, jl_base_module);
     jl_current_module = jl_main_module;

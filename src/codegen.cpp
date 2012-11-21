@@ -375,7 +375,7 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
         return NULL;
     }
     if (jl_is_topnode(ex)) {
-        jl_binding_t *b = jl_get_binding(ctx->module,
+        jl_binding_t *b = jl_get_binding(topmod(ctx),
                                          (jl_sym_t*)jl_fieldref(ex,0));
         if (b == NULL) return NULL;
         if (b->constp)
@@ -428,8 +428,7 @@ static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
 static bool symbol_eq(jl_value_t *e, jl_sym_t *sym)
 {
     return ((jl_is_symbol(e) && ((jl_sym_t*)e)==sym) ||
-            (jl_is_symbolnode(e) && jl_symbolnode_sym(e)==sym) ||
-            (jl_is_topnode(e) && ((jl_sym_t*)jl_fieldref(e,0))==sym));
+            (jl_is_symbolnode(e) && jl_symbolnode_sym(e)==sym));
 }
 
 // --- find volatile variables ---
@@ -1486,9 +1485,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     else if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
         jl_value_t *etype = expr_type(expr, ctx);
-        jl_binding_t *b = jl_get_binding(ctx->module, var);
+        jl_module_t *mod = topmod(ctx);
+        jl_binding_t *b = jl_get_binding(mod, var);
         if (b == NULL)
-            b = jl_get_binding_wr(ctx->module, var);
+            b = jl_get_binding_wr(mod, var);
         Value *bp = literal_pointer_val(&b->value, jl_ppvalue_llvmt);
         if ((b->constp && b->value!=NULL) ||
             (etype!=(jl_value_t*)jl_any_type &&

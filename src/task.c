@@ -508,7 +508,7 @@ static jl_value_t *build_backtrace(void)
     
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
-    while (unw_step(&cursor) && n < 10000) { 
+    while (unw_step(&cursor) && n < 80000) { 
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
         push_frame_info_from_ip(a, ip);
         n++;

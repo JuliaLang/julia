@@ -73,9 +73,17 @@ _ieval(x) = eval((inference_stack::CallStack).mod, x)
 _iisdefined(x) = isdefined((inference_stack::CallStack).mod, x)
 
 _iisconst(s::SymbolNode) = _iisconst(s.name)
-_iisconst(s::TopNode) = _iisconst(s.name)
+_iisconst(s::TopNode) = isconst(_basemod(), s.name)
 _iisconst(x::Expr) = false
 _iisconst(x) = true
+
+function _basemod()
+    m = (inference_stack::CallStack).mod
+    if m === Core || m === Base
+        return m
+    end
+    return Main.Base
+end
 
 cmp_tfunc = (x,y)->Bool
 
@@ -397,7 +405,8 @@ end
 
 function isconstantfunc(f, sv::StaticVarInfo)
     if isa(f,TopNode)
-        return _iisconst(f.name) && f.name
+        m = _basemod()
+        return isconst(m, f.name) && isdefined(m, f.name) && f
     end
     if isa(f,GetfieldNode) && isa(f.value,Module)
         M = f.value; s = f.name
@@ -710,7 +719,7 @@ function abstract_eval(e::QuoteNode, vtypes, sv::StaticVarInfo)
 end
 
 function abstract_eval(e::TopNode, vtypes, sv::StaticVarInfo)
-    return abstract_eval_global(e.name)
+    return abstract_eval_global(_basemod(), e.name)
 end
 
 const _jl_Type_Array = Type{Array}
@@ -732,11 +741,14 @@ end
 # type Undef, only None.
 # typealias Top Union(Any,Undef)
 
-function abstract_eval_global(s::Symbol)
-    if _iisconst(s)
-        return abstract_eval_constant(_ieval(s))
+abstract_eval_global(s::Symbol) =
+    abstract_eval_global((inference_stack::CallStack).mod, s)
+
+function abstract_eval_global(M, s::Symbol)
+    if isconst(M,s)
+        return abstract_eval_constant(eval(M,s))
     end
-    if !_iisdefined(s)
+    if !isdefined(M,s)
         return Top
     end
     # TODO: change to Undef if there's a way to clear variables
@@ -1359,14 +1371,23 @@ end
 
 sym_replace(x, from1, from2, to1, to2) = x
 
-# see if a symbol resolves the same in two modules
-function resolves_same(sym, from, to)
+# return an expr to evaluate "from.sym" in module "to"
+function resolve_relative(sym, from, to, typ, orig)
     if is(from,to)
-        return true
+        return orig
     end
-    # todo: better
-    return (isconst(from,sym) && isconst(to,sym) && isdefined(from,sym) &&
-            isdefined(to,sym) && is(eval(from,sym),eval(to,sym)))
+    const_from = (isconst(from,sym) && isdefined(from,sym))
+    const_to   = (isconst(to,sym) && isdefined(to,sym))
+    if const_from
+        if const_to && is(eval(from,sym), eval(to,sym))
+            return orig
+        end
+        m = _basemod()
+        if is(from,m) || is(from,Core)
+            return _jl_tn(sym)
+        end
+    end
+    return GetfieldNode(from, sym, typ)
 end
 
 # annotate symbols with their original module for inlining
@@ -1383,14 +1404,15 @@ function resolve_globals(s::Symbol, from, to, env1, env2)
     if contains_is(env1, s) || contains_is(env2, s)
         return s
     end
-    resolves_same(s, from, to) ? s : GetfieldNode(from, s, Any)
+    resolve_relative(s, from, to, Any, s)
 end
 
 function resolve_globals(s::SymbolNode, from, to, env1, env2)
-    if contains_is(env1, s.name) || contains_is(env2, s.name)
+    name = s.name
+    if contains_is(env1, name) || contains_is(env2, name)
         return s
     end
-    resolves_same(s.name, from, to) ? s : GetfieldNode(from, s.name, s.typ)
+    resolve_relative(name, from, to, s.typ, s)
 end
 
 resolve_globals(x, from, to, env1, env2) = x
@@ -1416,7 +1438,7 @@ function exprtype(x::ANY)
     elseif isa(x,SymbolNode)
         return x.typ
     elseif isa(x,TopNode)
-        return abstract_eval_global(x.name)
+        return abstract_eval_global(_basemod(), x.name)
     elseif isa(x,Symbol)
         sv = inference_stack.sv
         if is_local(sv, x)
@@ -1763,7 +1785,7 @@ function is_known_call(e::Expr, func, sv)
         return false
     end
     f = isconstantfunc(e.args[1], sv)
-    return isa(f,Symbol) && is(_ieval(f), func)
+    return !is(f,false) && is(_ieval(f), func)
 end
 
 # compute set of vars assigned once

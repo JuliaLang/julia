@@ -423,6 +423,11 @@ static Value *julia_bool(Value *cond)
 
 static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true);
 
+static inline jl_module_t *topmod(jl_codectx_t *ctx)
+{
+    return jl_base_relative_to(ctx->module);
+}
+
 static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
     if (jl_is_expr(e))
@@ -440,7 +445,20 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         e = v;
         goto type_of_constant;
     }
-    if (jl_is_topnode(e) || jl_is_symbol(e)) {
+    if (jl_is_topnode(e)) {
+        e = jl_fieldref(e,0);
+        jl_binding_t *b = jl_get_binding(topmod(ctx), (jl_sym_t*)e);
+        if (!b || !b->value)
+            return jl_top_type;
+        if (b->constp) {
+            e = b->value;
+            goto type_of_constant;
+        }
+        else {
+            return (jl_value_t*)jl_any_type;
+        }
+    }
+    if (jl_is_symbol(e)) {
         if (jl_is_symbol(e)) {
             if (is_global((jl_sym_t*)e, ctx)) {
                 // look for static parameter
@@ -456,8 +474,6 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
                 return (jl_value_t*)jl_any_type;
             }
         }
-        if (jl_is_topnode(e))
-            e = jl_fieldref(e,0);
         jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)e);
         if (!b || !b->value)
             return jl_top_type;
