@@ -170,8 +170,8 @@ function _resolve()
                 if have[pkg] != want[pkg]
                     oldver = Metadata.version(pkg,have[pkg])
                     newver = Metadata.version(pkg,want[pkg])
-                    up = oldver < newver ? "up" : "down"
-                    println("$(up)grading $pkg v$oldver => v$newver")
+                    up = oldver < newver ? "Up" : "Down"
+                    println("$(up)grading $pkg: v$oldver => v$newver")
                     cd(pkg) do
                         run(`git reset --soft $(want[pkg])`)
                     end
@@ -179,14 +179,14 @@ function _resolve()
                 end
             else
                 ver = Metadata.version(pkg,have[pkg])
-                println("removing $pkg v$ver")
+                println("Removing $pkg v$ver")
                 run(`git rm -qrf --cached -- $pkg`)
                 Git.modules(`--remove-section submodule.$pkg`)
                 run(`git add .gitmodules`)
             end
         else
             ver = Metadata.version(pkg,want[pkg])
-            println("installing $pkg v$ver")
+            println("Installing $pkg: v$ver")
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
