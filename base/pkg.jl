@@ -173,7 +173,7 @@ function _resolve()
                     up = oldver < newver ? "Up" : "Down"
                     println("$(up)grading $pkg: v$oldver => v$newver")
                     cd(pkg) do
-                        run(`git reset --soft $(want[pkg])`)
+                        run(`git checkout -q $(want[pkg])`)
                     end
                     run(`git add -- $pkg`)
                 end
@@ -190,8 +190,7 @@ function _resolve()
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
-                run(`git checkout -q HEAD^0`)
-                run(`git reset --soft $(want[pkg])`)
+                run(`git checkout -q $(want[pkg])`)
             end
             run(`git add -- $pkg`)
         end
