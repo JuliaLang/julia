@@ -5,6 +5,7 @@ import Base.one, Base.transpose, Base.ctranspose, Base.+, Base.-, Base.(.*)
 import Base.(./), Base.(.\), Base.(.^), Base.sum, Base.ref, Base.assign
 import Base.vcat, Base.hcat, Base.cat, Base.hvcat, Base.length, Base.findn_nzs
 import Base.full, Base.\, Base.areduce, Base.min, Base.max, Base.sum, Base.prod
+import Base.tril, Base.triu
 
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
@@ -1346,8 +1347,8 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
             p += 1
         end
     end
-    nz -= 1
     A.colptr[A.n + 1] = nz
+    nz -= 1
     if nz < nzorig
         grow(A.nzval, nz - nzorig)
         grow(A.rowval, nz - nzorig)
@@ -1355,5 +1356,9 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     A
 end
 
-dropzeros!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = fkeep!(A, (i,j,x,other)->x!=zero(Tv), 0)
-droptol!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, tol::Tv) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
+droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
+dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=zero(Tv), None)
+triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), None)
+triu(A::SparseMatrixCSC) = triu!(copy(A))
+tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), None)
+tril(A::SparseMatrixCSC) = tril!(copy(A))
