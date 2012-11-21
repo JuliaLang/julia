@@ -56,12 +56,22 @@ static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
 
 // this is a run-time function
 // warning: cannot allocate memory except using alloc_temp_arg_space
-extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
+extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
+                                     int addressof)
 {
-    if ((jl_value_t*)jl_typeof(v) == jt) {
-        assert(jl_is_bits_type(jt));
-        size_t osz = jl_bitstype_nbits(jt)/8;
-        return alloc_temp_arg_copy(jl_bits_data(v), osz);
+    jl_value_t *jvt = (jl_value_t*)jl_typeof(v);
+    if (addressof) {
+        if (jvt == jt) {
+            assert(jl_is_bits_type(jt));
+            size_t osz = jl_bitstype_nbits(jt)/8;
+            return alloc_temp_arg_copy(jl_bits_data(v), osz);
+        }
+        goto value_to_pointer_error;
+    }
+    else {
+        if (jl_is_cpointer_type(jvt) && jl_tparam0(jvt) == jt) {
+            return (void*)jl_unbox_long(v);
+        }
     }
     if (((jl_value_t*)jl_uint8_type == jt ||
          (jl_value_t*)jl_int8_type == jt) && jl_is_byte_string(v)) {
@@ -76,11 +86,12 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
             size_t i;
             for(i=0; i < jl_array_len(ar); i++) {
                 temp[i] = jl_value_to_pointer(jl_tparam0(jt),
-                                              jl_arrayref(ar, i), argn);
+                                              jl_arrayref(ar, i), argn, 0);
             }
             return temp;
         }
     }
+ value_to_pointer_error:
     std::map<int, std::string>::iterator it = argNumberStrings.find(argn);
     if (it == argNumberStrings.end()) {
         std::stringstream msg;
@@ -132,7 +143,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         // error. box for error handling.
         jv = boxed(jv);
     }
-    else if (jl_is_cpointer_type(jt) && addressOf) {
+    else if (jl_is_cpointer_type(jt)) {
         jl_value_t *aty = expr_type(argex, ctx);
         if (jl_is_array_type(aty) &&
             (jl_tparam0(jt) == jl_tparam0(aty) ||
@@ -140,9 +151,10 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             // array to pointer
             return builder.CreateBitCast(emit_arrayptr(jv), ty);
         }
-        Value *p = builder.CreateCall3(value_to_pointer_func,
+        Value *p = builder.CreateCall4(value_to_pointer_func,
                                        literal_pointer_val(jl_tparam0(jt)), jv,
-                                       ConstantInt::get(T_int32, argn));
+                                       ConstantInt::get(T_int32, argn),
+                                       ConstantInt::get(T_int32, (int)addressOf));
         assert(ty->isPointerTy());
         return builder.CreateBitCast(p, ty);
     }
@@ -319,10 +331,18 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             jargty = jl_tupleref(tt,ai);
         }
         Value *arg;
-        if (largty == jl_pvalue_llvmt)
+        if (largty == jl_pvalue_llvmt) {
             arg = emit_expr(argi, ctx, true);
-        else
+        }
+        else {
             arg = emit_unboxed(argi, ctx);
+            if (jl_is_bits_type(expr_type(argi, ctx))) {
+                if (addressOf)
+                    arg = emit_unbox(largty->getContainedType(0), largty, arg);
+                else
+                    arg = emit_unbox(largty, PointerType::get(largty,0), arg);
+            }
+        }
         /*
 #ifdef JL_GC_MARKSWEEP
         // make sure args are rooted

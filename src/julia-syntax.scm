@@ -409,7 +409,7 @@
 	  ((and (pair? x) (eq? (car x) '&))
 	   `(& (call (top ptr_arg_convert) ,T ,(cadr x))))
 	  (else
-	   `(call (top convert) ,T ,x))))
+	   `(call (top cconvert) ,T ,x))))
   (define (argument-root a)
     ;; something to keep rooted for this argument
     (cond ((and (pair? a) (eq? (car a) '&))

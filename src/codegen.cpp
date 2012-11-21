@@ -2678,6 +2678,7 @@ extern "C" void jl_init_codegen(void)
     toptrargs.push_back(jl_pvalue_llvmt);
     toptrargs.push_back(jl_pvalue_llvmt);
     toptrargs.push_back(T_int32);
+    toptrargs.push_back(T_int32);
     value_to_pointer_func =
         Function::Create(FunctionType::get(T_pint8, toptrargs, false),
                          Function::ExternalLinkage, "jl_value_to_pointer",

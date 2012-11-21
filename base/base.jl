@@ -9,6 +9,11 @@ convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 
 ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
 
+# conversion used by ccall
+cconvert(T, x) = convert(T, x)
+# use the code in ccall.cpp to safely allocate temporary pointer arrays
+cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
+
 type ErrorException <: Exception
     msg::String
 end
