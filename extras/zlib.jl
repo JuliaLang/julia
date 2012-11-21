@@ -24,7 +24,22 @@ export
    Z_DATA_ERROR,
    Z_MEM_ERROR,
    Z_BUF_ERROR,
-   Z_VERSION_ERROR
+   Z_VERSION_ERROR,
+
+# Version
+   ZLIB_VERSION,
+
+# More constants and types (used by GZip)
+   Z_OK,
+   Z_STREAM_END,
+   Z_NEED_DICT,
+   Z_FILTERED,
+   Z_HUFFMAN_ONLY,
+   Z_RLE,
+   Z_FIXED,
+   Z_DEFAULT_BUFSIZE,
+   Z_BIG_BUFSIZE,
+   ZFileOffset
 
 load("zlib_h")
 
