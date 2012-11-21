@@ -447,25 +447,25 @@
 ;          however, this doesn't consume the closing token, just looks at it
 ; allow-empty: if true will ignore runs of the operator, like a@@@@b
 ; ow, my eyes!!
-(define (parse-Nary s down op head closers allow-empty)
+(define (parse-Nary s down ops head closers allow-empty)
   (if (invalid-initial-token? (require-token s))
       (error (string "unexpected " (peek-token s))))
   (if (memv (require-token s) closers)
       (list head)  ; empty block
       (let loop ((ex
 		  ;; in allow-empty mode skip leading runs of operator
-		  (if (and allow-empty (eqv? (require-token s) op))
+		  (if (and allow-empty (memv (require-token s) ops))
 		      '()
-		      (if (eqv? op #\newline)
+		      (if (memv #\newline ops)
 			  (let ((loc (line-number-node s)))
 			    ;; note: line-number must happen before (down s)
 			    (list (down s) loc))
 			  (list (down s)))))
 		 (first? #t))
 	(let ((t (peek-token s)))
-	  (if (not (eqv? t op))
+	  (if (not (memv t ops))
 	      (begin
-		(if (not (or (eof-object? t) (eqv? t #\newline) (eqv? op #\,)
+		(if (not (or (eof-object? t) (eqv? t #\newline) (memv #\, ops)
 			     (memv t closers)))
 		    (error "extra token after end of expression"))
 		(if (or (null? ex) (pair? (cdr ex)) (not first?))
@@ -480,9 +480,9 @@
 		     (if (or (eof-object? (peek-token s))
 			     (memv (peek-token s) closers)
 			     (and allow-empty
-				  (eqv? (peek-token s) op)))
+				  (memv (peek-token s) ops)))
 			 (loop ex #f)
-			 (if (eqv? op #\newline)
+			 (if (memv #\newline ops)
 			     (let ((loc (line-number-node s)))
 			       (loop (list* (down s) loc ex) #f))
 			     (loop (cons (down s) ex) #f)))))))))
@@ -525,14 +525,12 @@
 
 ; the principal non-terminals follow, in increasing precedence order
 
-(define (parse-block s) (parse-Nary s parse-block-stmts #\newline 'block
+(define (parse-block s) (parse-Nary s parse-eq '(#\newline #\;) 'block
 				    '(end else elseif catch) #t))
-(define (parse-block-stmts s) (parse-Nary s parse-eq #\; 'block
-					  '(end else elseif catch #\newline)
-					  #t))
+
 ;; ";" at the top level produces a sequence of top level expressions
 (define (parse-stmts s)
-  (let ((ex (parse-Nary s parse-eq #\; 'toplevel '(#\newline) #t)))
+  (let ((ex (parse-Nary s parse-eq '(#\;) 'toplevel '(#\newline) #t)))
     ;; check for unparsed junk after an expression
     (let ((t (peek-token s)))
       (if (not (or (eof-object? t) (eqv? t #\newline) (eq? t #f)))
@@ -547,7 +545,7 @@
 ; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)   (parse-RtoL s parse-cond  (prec-ops 0)))
 ; parse-comma is needed for commas outside parens, for example a = b,c
-(define (parse-comma s) (parse-Nary s parse-cond  #\, 'tuple '() #f))
+(define (parse-comma s) (parse-Nary s parse-cond  '(#\,) 'tuple '() #f))
 (define (parse-or s)    (parse-LtoR s parse-and   (prec-ops 2)))
 (define (parse-and s)   (parse-LtoR s parse-arrow (prec-ops 3)))
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 4)))
@@ -1200,7 +1198,7 @@
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)
-  (parse-Nary s parse-eq* #\; 'block '(#\, #\) ) #t))
+  (parse-Nary s parse-eq* '(#\;) 'block '(#\, #\) ) #t))
 
 (define (parse-tuple s first)
   (let loop ((lst '())
