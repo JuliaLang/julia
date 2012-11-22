@@ -13,4 +13,6 @@ env:
 script: make $BUILDOPTS dist
 after_script:
     - make $BUILDOPTS testall
+    - make $BUILDOPTS PREFIX=/tmp/julia install
+    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia runtests.jl all
     - echo "Packaging steps here"
