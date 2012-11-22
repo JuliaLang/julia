@@ -1,12 +1,13 @@
 # Testing for gzip
-cd("$JULIA_HOME/../share/julia/extras")
-require("gzip")
+require("../extras/gzip")
 
 using GZip
 
 ##########################
 # test_context("GZip tests")
 ##########################
+
+#for epoch in 1:10
 
 tmp = mktempdir()
 
@@ -241,4 +242,5 @@ str2c = gzopen(readall, unicode_gz_file);
 
 
 run(`rm -Rf $tmp`)
-cd("$JULIA_HOME/../share/julia/test")
+
+#end  # for epoch
