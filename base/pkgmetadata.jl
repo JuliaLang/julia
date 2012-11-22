@@ -174,9 +174,10 @@ function resolve(reqs::Vector{VersionSet})
         W[r,rem(i-1,n)+1] = -1
         W[r,div(i-1,n)+1] = G[i]
     end
-    lpopts = GLPK.SimplexParam()
-    lpopts["msg_lev"] = GLPK.MSG_ERR
-    w = iround(linprog_simplex(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,lpopts)[2])
+    mipopts = GLPK.IntoptParam()
+    mipopts["msg_lev"] = GLPK.MSG_ERR
+    mipopts["presolve"] = GLPK.ON
+    w = iround(mixintprog(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,nothing,mipopts)[2])
 
     V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
     R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
@@ -185,9 +186,9 @@ function resolve(reqs::Vector{VersionSet})
           -ones(Int,length(reqs))
           zeros(Int,length(deps)) ]
 
-    x = linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u,lpopts)[2]
+    x = mixintprog(w,[V;R;D],b,nothing,nothing,z,u,nothing,mipopts)[2] .== 1
     h = (String=>ASCIIString)[]
-    for v in vers[x .> 0.5]
+    for v in vers[x]
         h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")
     end
     return h
