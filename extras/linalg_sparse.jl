@@ -438,10 +438,7 @@ end
 
 # kron
 
-function kron{TvA,TvB,TiA,TiB}(a::SparseMatrixCSC{TvA,TiA}, b::SparseMatrixCSC{TvB,TiB})
-    Tv = promote_type(TvA,TvB)
-    Ti = promote_type(TiA,TiB)
-
+function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
     numnzA = nnz(a)
     numnzB = nnz(b)
 
