@@ -295,6 +295,7 @@ function close(s::GZipStream)
 
     gc_disable()
     if s._closed
+        gc_enable()
         return Z_STREAM_ERROR
     end
     s._closed = true
