@@ -1295,5 +1295,6 @@ export
     @L_str,
     @vectorize_1arg,
     @vectorize_2arg,
+    @show,
     @printf,
     @sprintf
