@@ -7,11 +7,19 @@ import Base.vcat, Base.hcat, Base.cat, Base.hvcat, Base.length, Base.findn_nzs
 import Base.full, Base.\, Base.areduce, Base.min, Base.max, Base.sum, Base.prod
 import Base.tril, Base.triu
 
+abstract AbstractSparseMatrix{Tv,Ti} <: AbstractMatrix{Tv}
+
+issparse(A::AbstractArray) = false
+issparse(S::AbstractSparseMatrix) = true
+
+eltype{Tv}(S::AbstractSparseMatrix{Tv}) = Tv
+indtype{Tv,Ti}(S::AbstractSparseMatrix{Tv,Ti}) = Ti
+
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
 # Assumes that row values in rowval for each colum are sorted 
 #      issorted(rowval[colptr[i]]:rowval[colptr[i+1]]-1) == true
-type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractMatrix{Tv}
+type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
@@ -20,7 +28,16 @@ type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractMatrix{Tv}
 end
 
 function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
-    Ti = Int
+    colptr = Array(Int, n+1)
+    rowval = Array(Int, numnz)
+    nzval = Array(Tv, numnz)
+
+    colptr[1] = 1
+    colptr[end] = numnz+1
+    SparseMatrixCSC{Tv,Int}(m, n, colptr, rowval, nzval)
+end
+
+function SparseMatrixCSC(Tv::Type, Ti::Type, m::Int, n::Int, numnz::Integer)
     colptr = Array(Ti, n+1)
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
@@ -30,18 +47,12 @@ function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
 
-function SparseMatrixCSC(m::Integer, n::Integer, colptr, rowval, nzval)
+function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
     return SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
 end
 
-issparse(A::AbstractArray) = false
-issparse(S::SparseMatrixCSC) = true
-
 size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = S.colptr[end]-1
-
-eltype{T}(S::SparseMatrixCSC{T}) = T
-indtype{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) = Ti
 
 function show(io, S::SparseMatrixCSC)
     println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
@@ -138,10 +149,8 @@ end
 
 ## Constructors
 
-function similar(S::SparseMatrixCSC)
-    T = SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), similar(S.nzval))
-    T.colptr[end] = length(T.nzval)+1 # Used to compute nnz
-end
+similar(S::SparseMatrixCSC) = 
+    SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), similar(S.nzval))
 
 copy(S::SparseMatrixCSC) =
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
@@ -412,7 +421,7 @@ speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 function speye(T::Type, m::Int, n::Int)
     x = min(m,n)
     rowval = [1:x]
-    colptr = [rowval, (x+1)*ones(Int, n+1-x)]
+    colptr = [rowval, fill(int(x+1), n+1-x)]
     nzval  = ones(T, x)
     return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
@@ -484,6 +493,22 @@ function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
 
+## Unary operators
+
+for op in (:-, )
+    @eval begin
+
+        function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
+            B = copy(A)
+            nzvalB = B.nzval
+            for i=1:length(nzvalB)
+                nzvalB[i] = ($op)(nzvalB[i])
+            end
+            return B
+        end
+        
+    end
+end
 
 ## Binary operators
 
