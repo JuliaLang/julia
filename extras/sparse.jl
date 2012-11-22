@@ -9,7 +9,9 @@ import Base.tril, Base.triu
 
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
-type SparseMatrixCSC{Tv,Ti<:Union(Int32,Int64)} <: AbstractMatrix{Tv}
+# Assumes that row values in rowval for each colum are sorted 
+#      issorted(rowval[colptr[i]]:rowval[colptr[i+1]]-1) == true
+type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractMatrix{Tv}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
@@ -18,7 +20,7 @@ type SparseMatrixCSC{Tv,Ti<:Union(Int32,Int64)} <: AbstractMatrix{Tv}
 end
 
 function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
-    Ti = Int32
+    Ti = Int
     colptr = Array(Ti, n+1)
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
@@ -28,7 +30,7 @@ function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
 
-function SparseMatrixCSC(m::Int32, n::Int32, colptr, rowval, nzval)
+function SparseMatrixCSC(m::Integer, n::Integer, colptr, rowval, nzval)
     return SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
 end
 
@@ -173,7 +175,7 @@ sparse(S::SparseMatrixCSC) = S
 
 sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,+)
 
-function sparse_IJ_sorted!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                                    V::AbstractVector,
                                                    m::Int, n::Int, combine::Function)
 
@@ -227,7 +229,7 @@ sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, int(m), int(n), +)
 sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), int(m), int(n), combine)
 
 # Based on http://www.cise.ufl.edu/research/sparse/cholmod/CHOLMOD/Core/cholmod_triplet.c
-function sparse{Tv,Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
+function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
                                            V::AbstractVector{Tv},
                                            nrow::Int, ncol::Int, combine::Function)
 
@@ -382,8 +384,8 @@ end
 
 function sprand(m::Int, n::Int, density::FloatingPoint, rng::Function)
     numnz = int(m*n*density)
-    I = randival!(1, m, Array(Int32, numnz))
-    J = randival!(1, n, Array(Int32, numnz))
+    I = randival!(1, m, Array(Int, numnz))
+    J = randival!(1, n, Array(Int, numnz))
     S = sparse(I, J, 1.0, m, n)
     S.nzval = rng(nnz(S))
 
@@ -400,7 +402,7 @@ spzeros(m::Int) = spzeros(m, m)
 spzeros(m::Int, n::Int) = spzeros(Float64, m, n)
 spzeros(Tv::Type, m::Int) = spzeros(Tv, m, m)
 spzeros(Tv::Type, m::Int, n::Int) =
-    SparseMatrixCSC(m, n, ones(Int32, n+1), Array(Int32, 0), Array(Tv, 0))
+    SparseMatrixCSC(m, n, ones(Int, n+1), Array(Int, 0), Array(Tv, 0))
 
 speye(n::Int) = speye(Float64, n)
 speye(T::Type, n::Int) = speye(T, n, n)
@@ -408,9 +410,9 @@ speye(m::Int, n::Int) = speye(Float64, m, n)
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 
 function speye(T::Type, m::Int, n::Int)
-    x = int32(min(m,n))
-    rowval = [int32(1):x]
-    colptr = [rowval, int32((x+1)*ones(Int32, n+1-x))]
+    x = min(m,n)
+    rowval = [1:x]
+    colptr = [rowval, (x+1)*ones(Int, n+1-x)]
     nzval  = ones(T, x)
     return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
@@ -1307,8 +1309,8 @@ function mmread(filename::ASCIIString, infoonly::Bool)
     entries = rep == "coordinate" ? dd[3] : rows * cols
     if infoonly return rows, cols, entries, rep, field, symm end
     if rep == "coordinate"
-        rr = Array(Int32, entries)
-        cc = Array(Int32, entries)
+        rr = Array(Int, entries)
+        cc = Array(Int, entries)
         xx = Array(Float64, entries)
         for i in 1:entries
             flds = split(readline(mmfile))
