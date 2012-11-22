@@ -54,6 +54,8 @@ install: release
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
 		cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/lib$${suffix}.$(SHLIB_EXT) $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
+	# Copy system image
+	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well
 	-cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
 ifeq ($(OS), WINNT)
