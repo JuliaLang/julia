@@ -13,8 +13,7 @@ import Git
 
 # default locations: local package repo, remote metadata repo
 
-const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl.git"
-const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
+const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 
 # create a new empty packge repository
 
@@ -39,6 +38,7 @@ function init(meta::String)
         run(`git add REQUIRE`)
         run(`git submodule add $meta METADATA`)
         run(`git commit -m "empty package repo"`)
+        cd(Git.autoconfig_pushurl,"METADATA")
         Metadata.gen_hashes()
     end
 end
@@ -190,6 +190,7 @@ function _resolve()
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
+                Git.autoconfig_pushurl()
                 run(`git checkout -q $(want[pkg])`)
             end
             run(`git add -- $pkg`)

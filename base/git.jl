@@ -131,4 +131,19 @@ function merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     return cfg, conflicts, deleted
 end
 
+const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
+
+# setup a repo's push URL intelligently
+
+function autoconfig_pushurl()
+    url = readchomp(`git config remote.origin.url`)
+    m = match(GITHUB_REGEX,url)
+    if m != nothing
+        pushurl = "git@github.com:$(m.captures[1])"
+        if pushurl != url
+            run(`git config remote.origin.pushurl $pushurl`)
+        end
+    end
+end
+
 end # module
