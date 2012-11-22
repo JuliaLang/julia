@@ -1267,6 +1267,7 @@ export
     @v_str,
     @unexpected,
     @assert,
+    @expect,
     @r_str,
     @str,
     @S_str,
