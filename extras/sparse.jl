@@ -1089,17 +1089,31 @@ end
 assign(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector) = assign(A, v, [i], J)
 assign(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector, j::Integer) = assign(A, v, I, [j])
 
-assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector, J::AbstractVector) = 
+assign{Tv}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector, J::AbstractVector) = 
+    assign(A, fill(x::Tv, (length(I), length(J))), I, J)
+
+assign{Tv}(A::SparseMatrixCSC{Tv}, S::Matrix{Tv}, I::AbstractVector, J::AbstractVector) = 
       assign(A, sparse(S), I, J)
 
 # A[I,J] = B
-function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC, I::AbstractVector, J::AbstractVector)
+function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
     if size(B,1) != length(I) || size(B,2) != length(J)
         return("error in assign: mismatched dimensions")
     end
 
-    if ~issorted(I) || ~issorted(J)
-        error("Only sorted index vectors are supported in sparse assignment currently.");
+    issortedI = issorted(I)
+    issortedJ = issorted(J)
+
+    if ~issortedI && ~issortedJ
+        I, pI = sortperm(I)
+        J, pJ = sortperm(J)
+        B = B[pI, pJ]
+    elseif ~issortedI
+        I, pI = sortperm(I)
+        B = B[pI,:]
+    else ~issortedJ
+        J, pJ = sortperm(J)
+        B = B[:, pJ]
     end
 
     m, n = size(A)
