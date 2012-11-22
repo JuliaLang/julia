@@ -69,6 +69,10 @@ type ShowError <: Exception
     err::Exception
 end
 
+type AssertionError <: Exception
+    msg::String
+end
+
 show(io, bt::BackTrace) = show(io,bt.e)
 
 function show(io, se::ShowError)
