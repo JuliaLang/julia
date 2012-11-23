@@ -59,26 +59,24 @@ end
 # add and remove packages by name
 
 add(pkgs::Vector{VersionSet}) = cd(julia_pkgdir()) do
-    commit("add: $(join(sort!(map(x->x.package,pkgs)), ' '))") do
-        for pkg in pkgs
-            if !contains(Metadata.packages(),pkg.package)
-                error("invalid package: $(pkg.package)")
-            end
-            reqs = parse_requires("REQUIRE")
-            if anyp(req->req.package==pkg.package,reqs)
-                error("package already required: $pkg")
-            end
-            open("REQUIRE","a") do io
-                print(io,pkg.package)
-                for ver in pkg.versions
-                    print(io,"\t$ver")
-                end
-                println(io)
-            end
+    for pkg in pkgs
+        if !contains(Metadata.packages(),pkg.package)
+            error("invalid package: $(pkg.package)")
         end
-        run(`git add REQUIRE`)
-        _resolve()
+        reqs = parse_requires("REQUIRE")
+        if anyp(req->req.package==pkg.package,reqs)
+            error("package already required: $pkg")
+        end
+        open("REQUIRE","a") do io
+            print(io,pkg.package)
+            for ver in pkg.versions
+                print(io,"\t$ver")
+            end
+            println(io)
+        end
     end
+    run(`git add REQUIRE`)
+    _resolve()
 end
 function add(pkgs::Union(String,VersionSet)...)
     pkgs_ = VersionSet[]
@@ -89,30 +87,28 @@ function add(pkgs::Union(String,VersionSet)...)
 end
 
 rm(pkgs::Vector{String}) = cd(julia_pkgdir()) do
-    commit("rm: $(join(sort!(pkgs), ' '))") do
-        for pkg in pkgs
-            if !contains(Metadata.packages(),pkg)
-                error("invalid package: $pkg")
-            end
-            reqs = parse_requires("REQUIRE")
-            if !anyp(req->req.package==pkg,reqs)
-                error("package not required: $pkg")
-            end
-            open("REQUIRE") do r
-                open("REQUIRE.new","w") do w
-                    for line in each_line(r)
-                        fields = split(line)
-                        if isempty(fields) || fields[1]!=pkg
-                            print(w,line)
-                        end
+    for pkg in pkgs
+        if !contains(Metadata.packages(),pkg)
+            error("invalid package: $pkg")
+        end
+        reqs = parse_requires("REQUIRE")
+        if !anyp(req->req.package==pkg,reqs)
+            error("package not required: $pkg")
+        end
+        open("REQUIRE") do r
+            open("REQUIRE.new","w") do w
+                for line in each_line(r)
+                    fields = split(line)
+                    if isempty(fields) || fields[1]!=pkg
+                        print(w,line)
                     end
                 end
             end
-            run(`mv REQUIRE.new REQUIRE`)
         end
-        run(`git add REQUIRE`)
-        _resolve()
+        run(`mv REQUIRE.new REQUIRE`)
     end
+    run(`git add REQUIRE`)
+    _resolve()
 end
 rm(pkgs::String...) = rm(String[pkgs...])
 
@@ -183,6 +179,7 @@ function _resolve()
                 run(`git rm -qrf --cached -- $pkg`)
                 Git.modules(`--remove-section submodule.$pkg`)
                 run(`git add .gitmodules`)
+                run(`rm -rf -- $pkg`)
             end
         else
             ver = Metadata.version(pkg,want[pkg])
@@ -350,23 +347,21 @@ end
 # update system to latest and greatest
 
 update() = cd(julia_pkgdir()) do
-    commit("update") do
-        Git.each_submodule(false) do name, path, sha1
-            cd(path) do
-                if Git.attached()
-                    run(`git pull`)
-                else
-                    run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
-                end
+    Git.each_submodule(false) do name, path, sha1
+        cd(path) do
+            if Git.attached()
+                run(`git pull`)
+            else
+                run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
             end
         end
-        cd("METADATA") do
-            run(`git pull`)
-        end
-        run(`git add METADATA`)
-        Metadata.gen_hashes()
-        _resolve()
     end
+    cd("METADATA") do
+        run(`git pull`)
+    end
+    run(`git add METADATA`)
+    Metadata.gen_hashes()
+    _resolve()
 end
 
 # create a new package repo (unregistered)
