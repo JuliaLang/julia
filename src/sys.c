@@ -5,12 +5,6 @@
 #include "julia.h"
 #include "uv.h"
 #include <sys/stat.h>
-//these will be defined in future versions of libuv:
-#if defined(__WIN32__)
-typedef struct _stati64 uv_statbuf_t;
-#else
-typedef struct stat uv_statbuf_t;
-#endif
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>

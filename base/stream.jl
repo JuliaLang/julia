@@ -280,7 +280,7 @@ for (fcn, notify, filter_fcn, types) in
             args
         end
         if isa($types,Tuple)
-            fcn(x,y...) = $fcn((x,y...)) #allow either form
+            $fcn(x,y...) = $fcn((x,y...)) #allow either form
         end
     end
 end

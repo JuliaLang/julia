@@ -115,9 +115,6 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 
 void closeHandle(uv_handle_t* handle)
 {
-#ifndef __WIN32__
-    ev_invoke_pending(handle->loop->ev);
-#endif
     JULIA_CB(close,handle->data,0);
     //TODO: maybe notify Julia handle to close itself
     free(handle);

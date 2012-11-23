@@ -696,8 +696,6 @@ DLLEXPORT void jl_clear_input(void) {
     rl_on_new_line_with_prompt();
 #ifdef __WIN32__
     jl_write(jl_uv_stdout, "\e[4C", 4); //hack: try to fix cursor location
-#else
-    ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
 #endif
 }
 

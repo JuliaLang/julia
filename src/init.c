@@ -181,7 +181,6 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
         jl_signal_pending = sig;
     } else {
         jl_signal_pending = 0;
-        ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
         jl_raise(jl_interrupt_exception);
     }
 }

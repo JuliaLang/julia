@@ -280,19 +280,13 @@ endif
 
 ## LIBUV
 
-ifeq ($(OS), WINNT) 
-UV_CFLAGS=
-else
-UV_CFLAGS = CFLAGS="-g -fPIC"
-endif
-
-UV_OBJ_TARGET = $(USRLIB)/uv.a
-UV_OBJ_SOURCE = libuv/uv.a
+UV_OBJ_TARGET = $(USRLIB)/libuv.a
+UV_OBJ_SOURCE = libuv/libuv.a
 
 libuv/Makefile:
 	(cd .. && git submodule init && git submodule update)
-$(UV_OBJ_SOURCE): libuv/Makefile
-	$(MAKE) -C libuv $(UV_CFLAGS) CC="$(CC)"
+$(UV_OBJ_SOURCE): libuv/Makefile libuv/.git/HEAD
+	$(MAKE) -C libuv CC="$(CC)"
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USRLIB)/
@@ -301,7 +295,7 @@ install-uv: $(UV_OBJ_TARGET)
 
 clean-uv:
 	$(MAKE) -C libuv clean
-	rm -f $(USRLIB)/uv.a $(USR)/include/uv.h
+	rm -f $(USRLIB)/libuv.a $(USR)/include/uv.h
 distclean-uv: clean-uv
 
 ## PCRE ##
@@ -377,7 +371,7 @@ OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
 openlibm/Makefile:
 	(cd .. && git submodule update --init)
-$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
+$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile openlibm/.git/HEAD
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USRLIB)
 	cp $< $@
