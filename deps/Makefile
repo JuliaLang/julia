@@ -528,6 +528,11 @@ $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(USR)/lib
 	cd arpack-ng_$(ARPACK_VER) && \
 	$(MAKE) install F77="$(FC)" MPIF77="$(FC)"
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(USR)/lib/libarpack.$(SHLIB_EXT)
+ifeq ($(OS), Linux)
+	for filename in $(USR)/lib/libarpack.so* ; do \
+		$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+	done
+endif
 	touch $@
 
 clean-arpack:
