@@ -13,6 +13,13 @@ export
    Z_BEST_COMPRESSION,
    Z_DEFAULT_COMPRESSION,
 
+# Compression strategy constants (zlib_h.jl)
+   Z_FILTERED,
+   Z_HUFFMAN_ONLY,
+   Z_RLE,
+   Z_FIXED,
+   Z_DEFAULT_STRATEGY,
+
 # Uncompress routines
    uncompress,
    uncompress_to_buffer,
@@ -29,17 +36,13 @@ export
 # Version
    ZLIB_VERSION,
 
-# More constants and types (used by GZip)
-   Z_OK,
-   Z_STREAM_END,
-   Z_NEED_DICT,
-   Z_FILTERED,
-   Z_HUFFMAN_ONLY,
-   Z_RLE,
-   Z_FIXED,
-   Z_DEFAULT_BUFSIZE,
-   Z_BIG_BUFSIZE,
-   ZFileOffset
+# More constants and types
+   Z_OK #,
+#   Z_STREAM_END,
+#   Z_NEED_DICT,
+#   Z_DEFAULT_BUFSIZE,
+#   Z_BIG_BUFSIZE,
+#   ZFileOffset
 
 load("zlib_h")
 

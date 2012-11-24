@@ -9,6 +9,21 @@ USRINC = $(USR)/include
 LLVMROOT = $(USR)
 BUILD = $(USR)
 
+# List of "private" libraries, e.g. ones that get installed to lib/julia
+JL_PRIVATE_LIBS = Rmath openlibm julia-release suitesparse_wrapper tk_wrapper gmp_wrapper glpk_wrapper random
+JL_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads fftw3f_threads glpk gmp grisu history $(OPENBLASNAME) pcre readline spqr umfpack z
+
+# Directories where said libraries get installed to
+JL_PRIVATE_LIBDIR = lib/julia
+JL_LIBDIR = lib
+
+# If we're on debian, default to arch-dependent library dirs
+ifeq ($(USE_DEBIAN), 1)
+MULTIARCH = $(shell gcc -print-multiarch)
+JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
+JL_LIBDIR = lib/$(MULTIARCH)/
+endif
+
 OS = $(shell uname)
 ARCH = $(shell uname -m)
 
@@ -78,7 +93,7 @@ endif
 endif
 
 # if not absolute, then relative to JULIA_HOME
-JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../share/julia/sys.ji"'
+JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
 
 # OPENBLAS build options
 OPENBLAS_DYNAMIC_ARCH=0
@@ -264,21 +279,6 @@ LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas
 LIBLAPACK = $(LIBBLAS)
 LIBBLASNAME = libsatlas
 LIBLAPACKNAME = $(LIBBLASNAME)
-endif
-
-# List of "private" libraries, e.g. ones that get installed to lib/julia
-JL_PRIVATE_LIBS = Rmath openlibm julia-release suitesparse_wrapper tk_wrapper gmp_wrapper glpk_wrapper random
-JL_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads fftw3f_threads glpk gmp grisu history $(OPENBLASNAME) pcre readline spqr umfpack z
-
-# Directories where said libraries get installed to
-JL_PRIVATE_LIBDIR = lib/julia
-JL_LIBDIR = lib
-
-# If we're on debian, default to arch-dependent library dirs
-ifeq ($(USE_DEBIAN), 1)
-MULTIARCH = $(shell gcc -print-multiarch)
-JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
-JL_LIBDIR = lib/$(MULTIARCH)/
 endif
 
 # Make tricks

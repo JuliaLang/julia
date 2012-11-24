@@ -42,12 +42,23 @@ for i = 1 : 10
 end
 
 # sparse ref
-a116 = reshape([1:16], 4, 4)
+a116 = reshape(1:16, 4, 4)
 s116 = sparse(a116)
 p = [4, 1, 2, 3, 2]
 @assert dense(s116[p,:]) == a116[p,:]
 @assert dense(s116[:,p]) == a116[:,p]
 @assert dense(s116[p,p]) == a116[p,p]
+
+# sparse assign
+p = [4, 1, 3]
+a116[p, p] = -1
+s116[p, p] = -1
+@assert a116 == s116
+
+p = [2, 1, 4]
+a116[p, p] = reshape(1:9, 3, 3)
+s116[p, p] = reshape(1:9, 3, 3)
+@assert a116 == s116
 
 # check matrix multiplication
 for i = 1:5

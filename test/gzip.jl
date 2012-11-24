@@ -1,6 +1,5 @@
 # Testing for gzip
-cd("$JULIA_HOME/../../extras")
-require("gzip")
+require("../extras/gzip")
 
 using GZip
 
@@ -8,9 +7,11 @@ using GZip
 # test_context("GZip tests")
 ##########################
 
+#for epoch in 1:10
+
 tmp = mktempdir()
 
-test_infile = "$JULIA_HOME/../../extras/gzip.jl"
+test_infile = "$JULIA_HOME/../share/julia/extras/gzip.jl"
 test_compressed = "$tmp/gzip.jl.gz"
 
 @windows_only gunzip="gunzip.exe"
@@ -218,8 +219,8 @@ end
 
 unicode_gz_file = "$tmp/unicode_test.gz"
 
-str1 = CharString(reinterpret(Char, read(open("$JULIA_HOME/../../test/unicode/UTF-32LE.unicode"), Uint32, 1112065)[2:]));
-str2 = UTF8String(read(open("$JULIA_HOME/../../test/unicode/UTF-8.unicode"), Uint8, 4382595)[4:]);
+str1 = CharString(reinterpret(Char, read(open("$JULIA_HOME/../share/julia/test/unicode/UTF-32LE.unicode"), Uint32, 1112065)[2:]));
+str2 = UTF8String(read(open("$JULIA_HOME/../share/julia/test/unicode/UTF-8.unicode"), Uint8, 4382595)[4:]);
 
 UTF32LE_gz = gzopen(unicode_gz_file, "w")
 write(UTF32LE_gz, str1)
@@ -241,4 +242,5 @@ str2c = gzopen(readall, unicode_gz_file);
 
 
 run(`rm -Rf $tmp`)
-cd("$JULIA_HOME/../../test")
+
+#end  # for epoch

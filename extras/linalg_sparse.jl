@@ -61,12 +61,12 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://www.cse.iitb.ac.in/graphics/~anand/website/include/papers/matrix/fast_matrix_mul.pdf
 
-function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
+# TODO: Try avoiding the double transpose to get sorted row values at the end.
+
+function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     mA, nA = size(A)
     mB, nB = size(B)
     if nA != mB; error("mismatched dimensions"); end
-    Tv = promote_type(TvA, TvB)
-    Ti = promote_type(TiA, TiB)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
@@ -110,7 +110,9 @@ function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{Tv
 
     rowvalC = del(rowvalC, colptrC[end]:length(rowvalC))
     nzvalC = del(nzvalC, colptrC[end]:length(nzvalC))
-    return SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
+
+    # The Gustavson algorithm does not guarantee the product to have sorted row indices.
+    return ((SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC).').')
 end
 
 ## triu, tril
@@ -383,8 +385,8 @@ function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
 
     n = numel(v)
     numnz = nnz(v)
-    colptr = Array(Int32, n+1)
-    rowval = Array(Int32, numnz)
+    colptr = Array(Int, n+1)
+    rowval = Array(Int, numnz)
     nzval = Array(T, numnz)
 
     colptr[1] = 1
@@ -404,7 +406,7 @@ function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
         end
     end
 
-    return SparseMatrixCSC{T,Int32}(n, n, colptr, rowval, nzval)
+    return SparseMatrixCSC(n, n, colptr, rowval, nzval)
 end
 
 ## norm and rank
@@ -436,10 +438,7 @@ end
 
 # kron
 
-function kron{TvA,TvB,TiA,TiB}(a::SparseMatrixCSC{TvA,TiA}, b::SparseMatrixCSC{TvB,TiB})
-    Tv = promote_type(TvA,TvB)
-    Ti = promote_type(TiA,TiB)
-
+function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
     numnzA = nnz(a)
     numnzB = nnz(b)
 
