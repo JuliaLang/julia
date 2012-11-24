@@ -27,14 +27,14 @@ julia-release-readline: $(USRBIN)/julia-release-readline
 julia-debug-readline: $(USRBIN)/julia-debug-readline
 
 $(USRBIN)/julia-release-basic: repl.o repl-basic.o
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-release
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release
 $(USRBIN)/julia-debug-basic: repl.do repl-basic.do
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-debug
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug
 
 $(USRBIN)/julia-release-readline: repl.o repl-readline.o
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(USR)/$(JL_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-release
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release
 $(USRBIN)/julia-debug-readline: repl.do repl-readline.do
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(USR)/$(JL_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-debug
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug
 
 clean: | $(CLEAN_TARGETS)
 	rm -f *.o *.do

@@ -69,24 +69,30 @@ support/libsupport.a: support/*.h support/*.c
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
-$(USR)/$(JL_PRIVATE_LIBDIR)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
+$(USR)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $@ $(LIBS) $(LDFLAGS)
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
-libjulia-debug: $(USR)/$(JL_PRIVATE_LIBDIR)/libjulia-debug.$(SHLIB_EXT)
+libjulia-debug: $(USR)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT)
 
-$(USR)/$(JL_PRIVATE_LIBDIR)/libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) $(LIBS) -shared -o $@ $(LDFLAGS)
+ifeq ($(OS),Linux)
+  SONAME = -Wl,-soname=libjulia-release.so
+else
+  SONAME =
+endif
+
+$(USR)/$(JL_LIBDIR)/libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) $(LIBS) -shared -o $@ $(LDFLAGS) $(SONAME)
 	$(INSTALL_NAME_CMD)libjulia-release.$(SHLIB_EXT) $@
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(OBJS)
-libjulia-release: $(USR)/$(JL_PRIVATE_LIBDIR)/libjulia-release.$(SHLIB_EXT)
+libjulia-release: $(USR)/$(JL_LIBDIR)/libjulia-release.$(SHLIB_EXT)
 
 clean:
-	rm -f $(USR)/$(JL_PRIVATE_LIBDIR)/libjulia*
+	rm -f $(USR)/$(JL_LIBDIR)/libjulia*
 	rm -f julia_flisp.boot julia_flisp.boot.inc
 	rm -f *.do *.o *~ *# *.$(SHLIB_EXT) *.a
 
