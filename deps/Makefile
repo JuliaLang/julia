@@ -16,8 +16,12 @@ STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
-ifneq ($(filter $(OS), Linux FreeBSD),)
+ifeq ($(OS), Linux)
 STAGE1_DEPS += unwind patchelf
+endif
+
+ifeq ($(OS), FreeBSD)
+STAGE1_DEPS += unwind
 endif
 
 WGET = $(abspath .)/jldownload
@@ -246,9 +250,10 @@ $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libreadline.$(SHLIB_EXT) $(USR)/lib/libreadline.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libhistory.dylib $(USR)/lib/libhistory.dylib
-else
-	$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $(USR)/lib/libhistory.so
-	$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $(USR)/lib/libreadline.so
+else ifeq ($(OS), Linux)
+	for filename in $(USR)/lib/libhistory.so* $(USR)/lib/libreadline.so* ; do \
+		$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+	done
 endif
 	touch $@
 
@@ -573,8 +578,10 @@ ifeq ($(OS), Darwin)
 else ifeq ($(OS),WINNT)
 	-rm $(USR)/lib/libfftw3f.dll
 	mv $(USRBIN)/libfftw3f-3.dll $(USR)/lib/libfftw3f.dll
-else
-	$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $(USR)/lib/libfftw3f_threads.so
+else ifeq ($(OS), Linux)
+	for filename in $(USR)/lib/libfftw3f_threads.so* ; do \
+		$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+	done
 endif
 	touch $@
 
@@ -596,8 +603,10 @@ ifeq ($(OS), Darwin)
 else ifeq ($(OS),WINNT)
 	-rm $(USR)/lib/libfftw3.dll
 	mv $(USRBIN)/libfftw3-3.dll $(USR)/lib/libfftw3.dll
-else
-	$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $(USR)/lib/libfftw3_threads.so
+else ifeq ($(OS), Linux)
+	for filename in $(USR)/lib/libfftw3_threads.so* ; do \
+		$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+	done
 endif
 	touch $@
 
