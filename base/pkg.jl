@@ -376,4 +376,37 @@ create(name::String) = cd(julia_pkgdir()) do
     end
 end
 
+# Create a skeleton package that can be easily filled in
+function skeleton(package_name::String)
+    try
+        mkdir(package_name)
+    catch
+        error("Unable to create directory for new package: $(package_name)")
+    end
+    try
+        cd(package_name) do
+            file_create("LICENSE.md") # Should insert MIT content
+            file_create("README.md")
+            file_create("REQUIRE")
+            mkdir("src")
+            file_create(file_path("src", strcat(package_name, ".jl")))
+            mkdir("test")
+            file_create(file_path("test", strcat("01", ".jl")))
+        end
+    catch
+        error("Unable to initialize contents of new package")
+    end
+end
+
+skeleton() = skeleton("Example")
+
+# If a package contains data, make it easy to find its location
+function package_directory(package_name::String)
+  if has(ENV, "JULIA_PKGDIR")
+    return file_path(ENV["JULIA_PKGDIR"], package_name)
+  else
+    return path_expand(file_path("~/.julia", package_name))
+  end
+end
+
 end # module
