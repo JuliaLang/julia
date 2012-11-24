@@ -120,6 +120,13 @@ function parse_input_line(s::String)
     ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
 end
 
+# try to include() a file, ignoring if not found
+function try_include(f::String)
+    if is_file_readable(f)
+        include(f)
+    end
+end
+
 function process_options(args::Array{Any,1})
     global ARGS
     quiet = false
@@ -172,7 +179,7 @@ function process_options(args::Array{Any,1})
             startup = false
         elseif args[i] == "-F"
             # load juliarc now before processing any more options
-            try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+            try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             startup = false
         elseif args[i][1]!='-'
             # program
@@ -240,7 +247,7 @@ function _start()
 
         if repl
             if startup
-                try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+                try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             end
 
             global _jl_have_color = begins_with(get(ENV,"TERM",""),"xterm") ||

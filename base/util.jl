@@ -189,14 +189,8 @@ const load = require
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
 
 function is_file_readable(path)
-    local f
-    try
-        f = open(bytestring(path))
-    catch
-        return false
-    end
-    close(f)
-    return true
+    s = stat(bytestring(path))
+    return isfile(s) && isreadable(s)
 end
 
 function find_in_path(name::String)
