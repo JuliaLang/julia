@@ -102,7 +102,9 @@ show_unquoted(io::IO, x, indent) = (print(io,"\$("); show(io,x); print(io,')'))
 
 typealias ExprNode Union(SymbolNode, LineNumberNode, LabelNode, GotoNode,
                          TopNode, QuoteNode)
-show(io::IO, ex::ExprNode) = show_indented(io, ex)
+
+show( io::IO, ex::Union(Expr, ExprNode)) = show_indented(io, ex)
+print(io::IO, ex::Union(Expr, ExprNode)) = show_unquoted(io, ex)
 
 function show_indented(io::IO, ex::ExprNode, indent::Int)
     default_show_quoted(io, ex, indent)
@@ -111,7 +113,6 @@ function show_indented(io::IO, ex::QuoteNode, indent::Int)
     show_indented(io, ex.value, indent)
 end
 
-show(io::IO, ex::Expr) = show_indented(io, ex)
 function show_indented(io::IO, ex::Expr, indent::Int)
     if is(ex.head, :block) || is(ex.head, :body)
         show_block(io, "quote", ex, indent); print(io, "end")
