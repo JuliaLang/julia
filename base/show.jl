@@ -8,6 +8,14 @@ show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::IOStream, x)
 showcompact(io, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
 
+macro show(ex)
+    quote
+        print($(sprint(show_unquoted, ex)*"\t= "))
+        show($(esc(ex)))
+        println()
+    end
+end
+
 show(io, s::Symbol) = show_indented(io, s)
 show(io, tn::TypeName) = print(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")
