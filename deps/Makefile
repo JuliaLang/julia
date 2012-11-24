@@ -612,10 +612,9 @@ SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(USR)/lib/libumfpack.$(SHLIB_EXT)
 endif
 
-ifeq ($(OS), Darwin)
-SUITE_SPARSE_LIB = -lm -Wl,-rpath,'$(USR)/lib'
-else
-SUITE_SPARSE_LIB = -lm -lrt -Wl,-rpath,'$(USR)/lib'
+SUITE_SPARSE_LIB = -lm
+ifneq ($(OS), Darwin)
+  SUITE_SPARSE_LIB += -lrt
 endif
 
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
@@ -867,7 +866,7 @@ endif
 
 
 $(USR)/lib/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(USR)/lib/libglpk_wrapper.$(SHLIB_EXT) '-Wl,-rpath,$$ORIGIN/../lib'
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(USR)/lib/libglpk_wrapper.$(SHLIB_EXT) $(RPATH_ORIGIN)
 	$(INSTALL_NAME_CMD)libglpk_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-glpk-wrapper: $(USR)/lib/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
@@ -916,7 +915,7 @@ TKW_INC = -I $(USRINC) -I /usr/include/tcl -I $(JULIAHOME)/src -I $(JULIAHOME)/s
 TKW_LIB = -ltcl8.5 -ltk8.5 -L$(USR)/lib/ -ljulia-release
 
 $(USR)/lib/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(USR)/lib/libtk_wrapper.$(SHLIB_EXT) '-Wl,-rpath,$$ORIGIN/../lib'
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(USR)/lib/libtk_wrapper.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libtk_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-tk-wrapper: $(USR)/lib/libtk_wrapper.$(SHLIB_EXT) tk_wrapper.c
