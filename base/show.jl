@@ -318,6 +318,7 @@ show(io, ::StackOverflowError) = print(io, "error: stack overflow")
 show(io, ::UndefRefError) = print(io, "access to undefined reference")
 show(io, ::EOFError) = print(io, "read: end of file")
 show(io, e::ErrorException) = print(io, e.msg)
+show(io, e::AssertionError) = print(io, "assertion failed: ", e.msg)
 show(io, e::KeyError) = print(io, "key not found: $(e.key)")
 show(io, e::InterruptException) = nothing
 
