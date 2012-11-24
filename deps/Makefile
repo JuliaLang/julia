@@ -16,12 +16,8 @@ STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
-ifeq ($(OS), Linux)
-STAGE1_DEPS += unwind
-endif
-
-ifeq ($(OS), FreeBSD)
-STAGE1_DEPS += unwind
+ifneq ($(filter $(OS), Linux FreeBSD),)
+STAGE1_DEPS += unwind patchelf
 endif
 
 WGET = $(abspath .)/jldownload
@@ -247,8 +243,13 @@ $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	$(MAKE) -C readline-$(READLINE_VER) install
 	chmod +w $(USR)/lib/libreadline.* $(USR)/lib/libhistory.*
+ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libreadline.$(SHLIB_EXT) $(USR)/lib/libreadline.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libhistory.dylib $(USR)/lib/libhistory.dylib
+else
+	$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $(USR)/lib/libhistory.so
+	$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $(USR)/lib/libreadline.so
+endif
 	touch $@
 
 clean-readline:
@@ -567,10 +568,13 @@ $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-single install
 	$(INSTALL_NAME_CMD)libfftw3f.dylib $(USR)/lib/libfftw3f.dylib
 	$(INSTALL_NAME_CMD)libfftw3f_threads.$(SHLIB_EXT) $(USR)/lib/libfftw3f_threads.$(SHLIB_EXT)
+ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CHANGE_CMD) $(USR)/lib/libfftw3f.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3f.dylib $(USR)/lib/libfftw3f_threads.dylib
-ifeq ($(OS),WINNT)
+else ifeq ($(OS),WINNT)
 	-rm $(USR)/lib/libfftw3f.dll
 	mv $(USRBIN)/libfftw3f-3.dll $(USR)/lib/libfftw3f.dll
+else
+	$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $(USR)/lib/libfftw3f_threads.so
 endif
 	touch $@
 
@@ -587,10 +591,13 @@ $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-double install
 	$(INSTALL_NAME_CMD)libfftw3.$(SHLIB_EXT) $(USR)/lib/libfftw3.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libfftw3_threads.$(SHLIB_EXT) $(USR)/lib/libfftw3_threads.$(SHLIB_EXT)
+ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CHANGE_CMD) $(USR)/lib/libfftw3.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3.dylib $(USR)/lib/libfftw3_threads.dylib
-ifeq ($(OS),WINNT)
+else ifeq ($(OS),WINNT)
 	-rm $(USR)/lib/libfftw3.dll
 	mv $(USRBIN)/libfftw3-3.dll $(USR)/lib/libfftw3.dll
+else
+	$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $(USR)/lib/libfftw3_threads.so
 endif
 	touch $@
 
@@ -923,6 +930,31 @@ install-tk-wrapper: $(USR)/lib/libtk_wrapper.$(SHLIB_EXT) tk_wrapper.c
 clean-tk-wrapper:
 	rm -f $(USR)/lib/libtk_wrapper.$(SHLIB_EXT)
 distclean-tk-wrapper: clean-tk-wrapper
+
+## patchelf
+
+PATCHELF_TARGET = $(USR)/bin/patchelf
+
+compile-patchelf: install-patchelf
+install-patchelf: $(PATCHELF_TARGET)
+
+patchelf-$(PATCHELF_VER).tar.bz2:
+	$(WGET) http://hydra.nixos.org/build/1524660/download/2/$@
+patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.bz2
+	tar jxf $<
+	touch $@
+patchelf-$(PATCHELF_VER)/config.status: patchelf-$(PATCHELF_VER)/configure
+	cd patchelf-$(PATCHELF_VER) && \
+	./configure --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
+$(PATCHELF_TARGET): patchelf-$(PATCHELF_VER)/config.status
+	$(MAKE) -C patchelf-$(PATCHELF_VER) install
+	touch $@
+
+clean-patchelf:
+	$(MAKE) -C patchelf-$(PATCHELF_VER) clean
+	rm -f $(PATCHELF_OBJ_TARGET)
+distclean-patchelf:
+	rm -rf patchelf-$(PATCHELF_VER).tar.bz2 patchelf-$(PATCHELF_VER)
 
 ## phony targets ##
 
