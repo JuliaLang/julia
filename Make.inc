@@ -172,13 +172,8 @@ LIBBLAS = -lblas
 LIBBLASNAME = libblas
 endif
 else
-ifeq ($(OS), WINNT)
-LIBBLAS = $(USR)/lib/libopenblas-r0.2.2.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
-LIBBLASNAME = libopenblas-r0.2.2
-else
 LIBBLAS = -L$(USR)/lib -lopenblas
 LIBBLASNAME = libopenblas
-endif
 endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 1)

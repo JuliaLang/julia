@@ -267,19 +267,13 @@ endif
 
 ## LIBUV
 
-ifeq ($(OS), WINNT) 
-UV_CFLAGS=
-else
-UV_CFLAGS = CFLAGS="-g -fPIC"
-endif
-
 UV_OBJ_TARGET = $(USR)/lib/uv.a
 UV_OBJ_SOURCE = libuv/uv.a
 
 libuv/Makefile:
 	(cd .. && git submodule init && git submodule update)
 $(UV_OBJ_SOURCE): libuv/Makefile
-	$(MAKE) -C libuv $(UV_CFLAGS) CC="$(CC)"
+	$(MAKE) -C libuv CC="$(CC)"
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USR)/lib/
@@ -441,7 +435,7 @@ else
 OPENBLAS_OBJ_SOURCE = 
 endif
 
-OPENBLAS_BUILD_OPTS =
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH)
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
 endif
@@ -461,7 +455,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH) $(OPENBLAS_BUILD_OPTS)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS)
 $(USR)/lib/libopenblas.$(SHLIB_EXT): $(OPENBLAS_OBJ_SOURCE) | $(USR)/lib
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(USR)/lib
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(USR)/lib/libopenblas.$(SHLIB_EXT)
