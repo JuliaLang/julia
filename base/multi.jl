@@ -33,7 +33,7 @@
 ##
 ## @spawnat p expr - @spawn specifying where to run
 ##
-## @spawnlocal expr -
+## @async expr -
 ##     run expr as an asynchronous task on the local processor
 ##
 ## @parallel (r) for i=1:n ... end -
@@ -102,14 +102,17 @@ type Worker
     id::Int
     gcflag::Bool
     
-    Worker(host::String,port::Integer)=Worker(bytestring(host),uint16(port))
-    Worker(host::ByteString, port::Uint16)=Worker(host, port, connect_to_host(host,port))
-
-    Worker(host::String,port::Uint16,sock::TcpSocket,id) = new(host, port, sock, IOString(),
-                                       {}, {}, id, false)
-    Worker(host::String,port::Integer,sock::TcpSocket,id)=Worker(host,uint16(port),sock,id)
-    Worker(host,port,sock) = Worker(host,port,sock,0)
+    Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
+        new(bytestring(host), uint16(port), sock, IOString(), {}, {}, id, false)
 end
+Worker(host::String, port::Integer, sock::TcpSocket) = Worker(host, port, sock, 0)
+Worker(host::String, port::Integer) =
+    Worker(host, port,
+        connect_to_host(host,uint16(port)))
+Worker(host::String, port::Integer, tunneluser::String) = 
+    Worker(host, port,
+       connect_to_host("localhost",
+           ssh_tunnel(tunnel_user, host, uint16(port))))
 
 function send_msg_now(w::Worker, kind, args...)
     send_msg_(w, kind, args, true)
@@ -145,7 +148,7 @@ end
 function send_msg_(w::Worker, kind, args, now::Bool)
     #println("Sending msg $kind")
     buf = w.sendbuf
-    #ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios)
+    #ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios) #TODO: JWN: why is this commented out's
     serialize(buf, kind)
     for arg in args
         serialize(buf, arg)
@@ -226,7 +229,6 @@ function worker_from_id(i)
 end
 
 function worker_id_from_socket(s)
-    global PGRP
     for i=1:nprocs()
         w = worker_from_id(i)
         if isa(w,Worker)
@@ -354,7 +356,6 @@ function isready(rr::RemoteRef)
 end
 
 function del_client(id, client)
-    global PGRP
     wi = lookup_ref(id)
     del(wi.clientset, client)
     if isempty(wi.clientset)
@@ -413,88 +414,20 @@ function serialize(s, rr::RemoteRef)
     invoke(serialize, (Any, Any), s, rr)
 end
 
-type GORef
-    whence
-    id
-end
-
-# special type for serializing references to GlobalObjects.
-# Needed because we want to always wait for the G.O. to be computed and
-# return it. in contrast, deserialize() for RemoteRef needs to avoid waiting
-# on uninitialized RemoteRefs since that might cause a deadlock, while G.O.s
-# are a special case where we know waiting on the RR is OK.
-function deserialize(s, t::Type{GORef})
-    gr = force(invoke(deserialize, (Any, CompositeKind), s, t))
-    rid = (gr.whence, gr.id)
-    add_client(rid, myid())
-    function ()
-        wi = lookup_ref(rid)
-        if !wi.done
-            wait(WeakRemoteRef(myid(), rid[1], rid[2]))
-        end
-        v = wi.result
-        if isa(v,WeakRef)
-            v = v.value
-        end
-        assert(isa(v,GlobalObject))
-        return v.local_identity
-    end
-end
-
 function deserialize(s, t::Type{RemoteRef})
-    rr = force(invoke(deserialize, (Any, CompositeKind), s, t))
-    rid = rr2id(rr)
+    rr = invoke(deserialize, (Any, CompositeKind), s, t)
     where = rr.where
     if where == myid()
-        add_client(rid, myid())
+        add_client(rr2id(rr), myid())
     end
-    function ()
-        if where == myid()
-            wi = lookup_ref(rid)
-            if !wi.done
-                if !is(wi.thunk,bottom_func)
-                    #println("$(myid()) waiting for $where,$(rid[1]),$(rid[2])")
-                    wait(WeakRemoteRef(where, rid[1], rid[2]))
-                    #println("...ok")
-                else
-                    return RemoteRef(where, rid[1], rid[2])
-                end
-            end
-            v = wi.result
-            # NOTE: this duplicates work_result()
-            if isa(v,WeakRef)
-                v = v.value
-            end
-            if isa(v,GlobalObject)
-                if !anyp(r->(r.whence==rid[1] && r.id==rid[2]), v.refs)
-                    # ref not part of the GlobalObject, so it needs to
-                    # manage its own lifetime
-                    RemoteRef(where, rid[1], rid[2])
-                else
-                    # here the GlobalObject's finalizer will handle removing
-                    # the client ref we added with add_client above.
-                end
-                v = v.local_identity
-            else
-                # make a RemoteRef so a finalizer is set up to remove us
-                # as a client. the RR has been converted to its value, so
-                # we don't need it any more unless there is another reference
-                # to this RR somewhere on our system.
-                RemoteRef(where, rid[1], rid[2])
-            end
-            return v
-        else
-            # make sure this rr gets added to the _jl_client_refs table
-            RemoteRef(where, rid[1], rid[2])
-        end
-    end
+    # call ctor to make sure this rr gets added to the _jl_client_refs table
+    RemoteRef(where, rr.whence, rr.id)
 end
 
 schedule_call(rid, f_thk, args_thk) =
-    schedule_call(rid, ()->apply(force(f_thk),force(args_thk)))
+    schedule_call(rid, ()->apply(f_thk, args_thk))
 
 function schedule_call(rid, thunk)
-    global PGRP
     wi = WorkItem(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
     add(wi.clientset, rid[1])
@@ -530,7 +463,7 @@ function local_remote_call_thunk(f, args)
     #     buf = memio()
     #     serialize(buf, env)
     #     seek(buf, 0)
-    #     env = force(deserialize(buf))
+    #     env = deserialize(buf)
     #     f = ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
     #               C_NULL, env, linfo)::Function
     # end
@@ -558,7 +491,7 @@ function remote_call_fetch(w::LocalProcess, f, args...)
     oid = rr2id(rr)
     wi = schedule_call(oid, local_remote_call_thunk(f,args))
     wi.notify = ((), :call_fetch, oid, wi.notify)
-    force(yield(WaitFor(:call_fetch, rr)))
+    yield(WaitFor(:call_fetch, rr))
 end
 
 function remote_call_fetch(w::Worker, f, args...)
@@ -567,7 +500,7 @@ function remote_call_fetch(w::Worker, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_fetch, oid, f, args)
-    force(yield(WaitFor(:call_fetch, rr)))
+    yield(WaitFor(:call_fetch, rr))
 end
 
 remote_call_fetch(id::Integer, f, args...) =
@@ -621,7 +554,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     end
     # yield to event loop, return here when answer arrives
     v = yield(WaitFor(verb, r))
-    return is(verb,:fetch) ? force(v) : r
+    return is(verb,:fetch) ? v : r
 end
 
 wait(r::RemoteRef) = sync_msg(:wait, r)
@@ -690,9 +623,6 @@ function work_result(w::WorkItem)
     if isa(v,WeakRef)
         v = v.value
     end
-    if isa(v,GlobalObject)
-        v = v.local_identity
-    end
     v
 end
 
@@ -711,13 +641,11 @@ enq_work(f::Function) = enq_work(WorkItem(f))
 enq_work(t::Task) = enq_work(WorkItem(t))
 
 function perform_work()
-    global Workqueue
     job = pop(Workqueue)
     perform_work(job)
 end
 
 function perform_work(job::WorkItem)
-    global Waiting, Workqueue
     local result
     try
         ccall(:jl_register_toplevel_eh, Void, ())
@@ -800,15 +728,14 @@ function deliver_result(sock::Stream, msg, oid, value)
 end
 
 const _jl_empty_cell_ = {}
-function deliver_result(sock::(), msg, oid, value_thunk)
-    global Waiting
+function deliver_result(sock::(), msg, oid, value)
     # restart task that's waiting on oid
     jobs = get(Waiting, oid, _jl_empty_cell_)
     for i = 1:length(jobs)
         j = jobs[i]
         if j[1]==msg
             job = j[2]
-            job.argument = value_thunk
+            job.argument = value
             enq_work(job)
             del(jobs, i)
             break
@@ -830,11 +757,7 @@ function notify_done(job::WorkItem, take)
         (sock, msg, oid, job.notify) = job.notify
         if take == is(msg,:take)
             let wr = work_result(job)
-                if is(sock,())
-                    deliver_result(sock, msg, oid, ()->wr)
-                else
-                    deliver_result(sock, msg, oid, wr)
-                end
+                deliver_result(sock, msg, oid, wr)
                 if is(msg,:call_fetch)
                     # can delete the ref right away since we know it is
                     # unreferenced by the client
@@ -863,8 +786,8 @@ function accept_handler(server::TcpSocket, status::Int32)
         print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
     else
        create_message_handler_loop(client)
+        end
     end
-end
 
 type DisconnectException <: Exception end
 
@@ -876,8 +799,8 @@ function create_message_handler_loop(this::AsyncStream) #returns immediately
         start_reading(this)
         if PGRP.np == 0
                 # first connection; get process group info from client
-                PGRP.myid = force(deserialize(this))
-                PGRP.locs = locs = force(deserialize(this))
+                PGRP.myid = deserialize(this)
+                PGRP.locs = locs = deserialize(this)
                 #print("\nLocation: ",locs,"\nId:",PGRP.myid,"\n")
                 # joining existing process group
                 PGRP.np = length(PGRP.locs)
@@ -897,52 +820,52 @@ function create_message_handler_loop(this::AsyncStream) #returns immediately
         #println("loop")
         while true
             #try
-                msg = force(deserialize(this))
+                msg = deserialize(this)
                 #println("got msg: ",msg)
-                # handle message
-                if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
-                    id = force(deserialize(this))
+            # handle message
+            if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
+                    id = deserialize(this)
                     f = deserialize(this)
                     args = deserialize(this)
-                    #print("$(myid()) got call $id\n")
-                    wi = schedule_call(id, f, args)
-                    if is(msg, :call_fetch)
+                #print("$(myid()) got call $id\n")
+                wi = schedule_call(id, f, args)
+                if is(msg, :call_fetch)
                         wi.notify = (this, :call_fetch, id, wi.notify)
-                    elseif is(msg, :call_wait)
+                elseif is(msg, :call_wait)
                         wi.notify = (this, :wait, id, wi.notify)
-                    end
-                elseif is(msg, :do)
+                end
+            elseif is(msg, :do)
                     f = deserialize(this)
                     args = deserialize(this)
                     #print("got args: $args\n")
-                    let func=f, ar=args
-                        enq_work(WorkItem(()->apply(force(func),force(ar))))
-                    end
-                elseif is(msg, :result)
-                    # used to deliver result of wait or fetch
-                    mkind = force(deserialize(this))
-                    oid = force(deserialize(this))
-                    val = deserialize(this)
-                    deliver_result((), mkind, oid, val)
-                elseif is(msg, :identify_socket)
-                    otherid = force(deserialize(this))
-                    _jl_identify_socket(otherid, this)
-                else
-                    # the synchronization messages
-                    oid = force(deserialize(this))::(Int,Int)
-                    wi = lookup_ref(oid)
-                    if wi.done
-                        deliver_result(this, msg, oid, work_result(wi))
-                    else
-                        # add to WorkItem's notify list
-                        # TODO: should store the worker here, not the socket,
-                        # so we don't need to look up the worker later
-                        wi.notify = (this, msg, oid, wi.notify)
-                    end
+                let func=f, ar=args
+                    enq_work(WorkItem(()->apply(func, ar)))
                 end
+            elseif is(msg, :result)
+                # used to deliver result of wait or fetch
+                mkind = deserialize(this)
+                oid = deserialize(this)
+                val = deserialize(this)
+                deliver_result((), mkind, oid, val)
+            elseif is(msg, :identify_socket)
+                    otherid = deserialize(this)
+                    _jl_identify_socket(otherid, this)
+            else
+                # the synchronization messages
+                    oid = deserialize(this)::(Int,Int)
+                wi = lookup_ref(oid)
+                if wi.done
+                        deliver_result(this, msg, oid, work_result(wi))
+                else
+                    # add to WorkItem's notify list
+                    # TODO: should store the worker here, not the socket,
+                    # so we don't need to look up the worker later
+                        wi.notify = (this, msg, oid, wi.notify)
+                end
+            end
             #catch e
             #    if isa(e,EOFError)
-            #        print("eof. $(myid()) exiting\n")
+                #print("eof. $(myid()) exiting\n")
             #        stop_reading(this)
             #        # TODO: remove machine from group
             #        throw(DisconnectException())
@@ -951,9 +874,9 @@ function create_message_handler_loop(this::AsyncStream) #returns immediately
             #        #while nb_available(sock) > 0 #|| select(sock)
             #        #    read(sock, Uint8)
             #        #end
-            #    end
+                #end
             #end
-        end
+            end
     end)
 end
 
@@ -976,28 +899,18 @@ function start_worker(out::Stream)
 
     global const Scheduler = current_task()
 
-
-    #try
+    try
         event_loop(false)
-    #catch e
-    #    print("unhandled exception on $(myid()): $e\nexiting.\n")
-    #end
+    catch e
+        print("unhandled exception on $(myid()): $e\nexiting.\n")
+    end
 
     close(sock)
     exit(0)
 end
 
-# establish an SSH tunnel to a remote worker
-# returns P such that localhost:P connects to host:port
-# function worker_tunnel(host, port)
-#     localp = 9201
-#     while !success(`ssh -f -o ExitOnForwardFailure=yes julia@$host -L $localp:$host:$port -N`)
-#         localp += 1
-#     end
-#     localp
-# end
-
-function start_remote_workers(machines, cmds)
+start_remote_workers(m, c) = start_remote_workers(m, c, false)
+function start_remote_workers(machines, cmds, tunnel)
     n = length(cmds)
     outs = cell(n)
     w = cell(n)
@@ -1018,8 +931,18 @@ function start_remote_workers(machines, cmds)
                 break
             end
         end
-        let wrker = Worker(hostname, port)
-            w[i] = wrker
+        if tunnel
+            s = split(machines[i],'@')
+            if length(s) > 1
+                user = s[1]
+            else
+                user = ENV["USER"]
+            end
+            w[i] = Worker(hostname, port, user)
+        else
+            w[i] = Worker(hostname, port)
+        end
+        let wrker = w[i]
             # redirect console output from workers to the client's stdout:
             start_reading(stream,function(stream::AsyncStream,nread::Int)
                 if(nread>0)
@@ -1029,7 +952,7 @@ function start_remote_workers(machines, cmds)
                     catch e
                         println("\tError parsing reply from worker $(wrker.id):\t",e)
                         return false
-                    end
+        end
                 end
                 true
             end)
@@ -1047,28 +970,49 @@ function parse_connection_info(str)
     end
 end
 
+_jl_tunnel_port = 9201
+# establish an SSH tunnel to a remote worker
+# returns P such that localhost:P connects to host:port
+ssh_tunnel(host, port) = ssh_tunnel(ENV["USER"], host, port)
+function ssh_tunnel(user, host, port)
+    global _jl_tunnel_port
+    localp = _jl_tunnel_port::Int
+    while !success(`ssh -f -o ExitOnForwardFailure=yes $(user)@$host -L $localp:$host:$port -N`)
+        localp += 1
+    end
+    _jl_tunnel_port = localp+1
+    localp
+end
+
 function worker_ssh_cmd(host)
     `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
-end #func
+end
 
-function worker_ssh_cmd(host, key)
-    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
-end #func
+#function worker_ssh_cmd(host, key)
+#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+#end
 
-function addprocs_ssh(machines) 
+function addprocs_ssh(machines)
     add_workers(PGRP, start_remote_workers(machines, map(worker_ssh_cmd, machines)))
-end #func
+end
 
-function addprocs_ssh(machines, keys)
-    if !(isa(keys, Array)) && isa(machines,Array)
-        key = keys
-        keys = [ key for x = 1:numel(machines)]
-        cmdargs = { {machines[x],keys[x]} for x = 1:numel(machines)}
-    else
-        cmdargs = {{machines,keys}}
-    end #if/else
-    add_workers(PGRP, start_remote_workers(machines, map(x->worker_ssh_cmd(x[1],x[2]), cmdargs)))
-end #func
+# start processes via SSH, then connect to them through an SSH tunnel.
+# the tunnel is only used from the head (process 1); the nodes are assumed
+# to be mutually reachable without a tunnel, as is often the case in a cluster.
+function addprocs_ssh_tunnel(machines)
+    add_workers(PGRP, start_remote_workers(machines, map(worker_ssh_cmd, machines), true))
+end
+
+#function addprocs_ssh(machines, keys)
+#    if !(isa(keys, Array)) && isa(machines,Array)
+#        key = keys
+#        keys = [ key for x = 1:numel(machines)]
+#        cmdargs = { {machines[x],keys[x]} for x = 1:numel(machines)}
+#    else
+#        cmdargs = {{machines,keys}}
+#    end #if/else
+#    add_workers(PGRP, start_remote_workers(machines, map(x->worker_ssh_cmd(x[1],x[2]), cmdargs)))
+#end
 
 worker_local_cmd() = `$JULIA_HOME/julia-release-basic --worker`
 
@@ -1122,177 +1066,6 @@ function start_sge_workers(n)
 end
 
 addprocs_sge(n) = add_workers(PGRP, start_sge_workers(n))
-
-#include("vcloud.jl")
-
-## global objects and collective operations ##
-
-type GlobalObject
-    local_identity
-    refs::Array{RemoteRef,1}
-
-    global init_GlobalObject
-    function init_GlobalObject(mi, procs, rids, initializer)
-        np = length(procs)
-        refs = Array(RemoteRef, np)
-        local myrid
-
-        for i=1:np
-            refs[i] = WeakRemoteRef(procs[i], rids[i][1], rids[i][2])
-            if procs[i] == mi
-                myrid = rids[i]
-            end
-        end
-        init_GlobalObject(mi, procs, rids, initializer, refs, myrid)
-    end
-    function init_GlobalObject(mi, procs, rids, initializer, refs, myrid)
-        np = length(procs)
-        go = new((), refs)
-
-        # doing this lookup_ref is what adds the creating node to the client
-        # set of all the Refs. so WeakRemoteRef is a bit of a misnomer.
-        wi = lookup_ref(myrid)
-        function del_go_client(go)
-            if has(wi.clientset, mi)
-                #println("$(myid()) trying to delete $(go.refs)")
-                for i=1:np
-                    send_del_client(go.refs[i])
-                end
-            end
-            if !isempty(wi.clientset)
-                # still has some remote clients, restore finalizer & stay alive
-                finalizer(go, del_go_client)
-            end
-        end
-        finalizer(go, del_go_client)
-        go.local_identity = initializer(go)
-        # make our reference to it weak so we can detect when there are
-        # no local users of the object.
-        # NOTE: this is put(go.refs[mi], WeakRef(go))
-        wi.result = WeakRef(go)
-        wi.done = true
-        notify_done(wi)
-        go
-    end
-
-    # initializer is a function that will be called on the new G.O., and its
-    # result will be used to set go.local_identity
-    function GlobalObject(procs, initializer::Function)
-        # makes remote object cycles, but we can take advantage of the known
-        # topology to avoid fully-general cycle collection.
-        # . keep a weak table of all client RemoteRefs, unique them
-        # . send add_client when adding a new client for an object
-        # . send del_client when an RR is collected
-        # . the RemoteRefs inside a GlobalObject are weak
-        #   . initially the creator of the GO is the only client
-        #     everybody has {creator} as the client set
-        #   . when a GO is sent, add a client to everybody
-        #     . sender knows whether recipient is a client already by
-        #       looking at the client set for its own copy, so it can
-        #       avoid the client add message in this case.
-        #   . send del_client when there are no references to the GO
-        #     except the one in PGRP.refs
-        #     . done by adding a finalizer to the GO that revives it by
-        #       reregistering the finalizer until the client set is empty
-        np = length(procs)
-        r = Array(RemoteRef, np)
-        mi = myid()
-        participate = false
-        midx = 0
-        for i=1:np
-            # create a set of refs to be initialized by GlobalObject above
-            # these can be weak since their lifetimes are managed by the
-            # GlobalObject and its finalizer
-            r[i] = WeakRemoteRef(procs[i])
-            if procs[i] == mi
-                participate = true
-                midx = i
-            end
-        end
-        rids = { rr2id(r[i]) for i=1:np }
-        for p in procs
-            if p != mi
-                remote_do(p, init_GlobalObject, p, procs, rids, initializer)
-            end
-        end
-        if !participate
-            go = new((), r)
-            go.local_identity = initializer(go)  # ???
-            go
-        else
-            init_GlobalObject(mi, procs, rids, initializer, r, rr2id(r[midx]))
-        end
-    end
-
-    function GlobalObject(initializer::Function)
-        GlobalObject(1:nprocs(), initializer)
-    end
-    GlobalObject() = GlobalObject(identity)
-end
-
-show(g::GlobalObject) = (r = g.refs[myid()];
-                         print("GlobalObject($(r.whence),$(r.id))"))
-
-function is_go_member(g::GlobalObject, p::Integer)
-    for i=1:length(g.refs)
-        r = g.refs[i]
-        if r.where == p
-            return r
-        end
-    end
-    return false
-end
-
-const _jl_temp_goref = GORef(0,0)
-function serialize(s, g::GlobalObject)
-    global PGRP
-    # a GO is sent to a machine by sending just the RemoteRef for its
-    # copy. much smaller message.
-    i = worker_id_from_socket(s)
-    if i == -1
-        error("global object cannot be sent outside its process group")
-    end
-    ri = is_go_member(g, i)
-    if is(ri, false)
-        li = g.local_identity
-        g.local_identity = nothing
-        invoke(serialize, (Any, Any), s, g)
-        g.local_identity = li
-        return
-    end
-    mi = myid()
-    myref = is_go_member(g, mi)
-    if is(myref, false)
-        # if I don't own a piece of this GO, I can't tell whether an
-        # add_client of the destination node is necessary. therefore I
-        # have to do one to be conservative.
-        addnew = true
-    else
-        wi = PGRP.refs[rr2id(myref)]
-        addnew = !has(wi.clientset, i)
-    end
-    if addnew
-        # adding new client to this GO
-        # node doing the serializing is responsible for notifying others of
-        # new references.
-        for rr = g.refs
-            send_add_client(rr, i)
-        end
-    end
-    _jl_temp_goref.whence = ri.whence
-    _jl_temp_goref.id = ri.id
-    serialize(s, _jl_temp_goref)
-end
-
-localize(g::GlobalObject) = g.local_identity
-fetch(g::GlobalObject) = g.local_identity
-#localize_ref(g::GlobalObject) = g.local_identity
-
-broadcast(x) = GlobalObject(g->x)
-
-function ref(g::GlobalObject, args...)
-    g.local_identity[args...]
-end
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
@@ -1385,9 +1158,6 @@ macro spawn(expr)
 end
 
 function spawnlocal(thunk)
-    global Workqueue
-    global PGRP
-    global multi_cb_handles
     rr = RemoteRef(myid())
     sync_add(rr)
     rid = rr2id(rr)
@@ -1403,6 +1173,10 @@ end
 macro spawnlocal(expr)
     expr = localize_vars(:(()->($expr)))
     :(spawnlocal($(esc(expr))))
+end
+
+macro async(expr)
+    :(@spawnlocal $(esc(expr)))
 end
 
 macro spawnat(p, expr)
@@ -1536,6 +1310,18 @@ macro parallel(args...)
     na = length(args)
     if na==1
         loop = args[1]
+        if isa(loop,Expr) && loop.head === :comprehension
+            ex = loop.args[1]
+            loop.args[1] = esc(ex)
+            nd = length(loop.args)-1
+            ranges = map(e->esc(e.args[2]), loop.args[2:])
+            for i=1:nd
+                var = loop.args[1+i].args[1]
+                loop.args[1+i] = :( $(esc(var)) = ($(ranges[i]))[I[$i]] )
+            end
+            return :( DArray((I::(Range1{Int}...))->($loop),
+                             tuple($(map(r->:(length($r)),ranges)...))) )
+        end
     elseif na==2
         reducer = args[1]
         loop = args[2]
@@ -1615,7 +1401,7 @@ function event_loop(isclient)
     multi_cb_handles.work_cb = SingleAsyncWork(globalEventLoop(),_jl_work_cb)
     multi_cb_handles.fgcm = SingleAsyncWork(globalEventLoop(),(args...)->flush_gc_msgs());
     timer = TimeoutAsyncWork(globalEventLoop(),(args...)->queueAsync(multi_cb_handles.work_cb))
-    startTimer(timer,int64(1),int64(1000)) #do work every 10s
+    startTimer(timer,int64(1),int64(10000)) #do work every 10s
     iserr, lasterr = false, ()
     while true
         try
@@ -1647,11 +1433,10 @@ end
 # force a task to stop waiting, providing with_value as the value of
 # whatever it's waiting for.
 function interrupt_waiting_task(wi::WorkItem, with_value)
-    global Waiting
-    for (oid, jobs) = Waiting
+    for (oid, jobs) in Waiting
         for j in jobs
             if is(j[2], wi)
-                deliver_result((), j[1], oid, ()->with_value)
+                deliver_result((), j[1], oid, with_value)
                 return
             end
         end

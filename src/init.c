@@ -189,7 +189,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
 static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status) {
-    //if (status == 0) uv_close((uv_handle_t*)req->handle,NULL); //doesn't appear to be necessary...
+    if (status == 0) uv_close((uv_handle_t*)req->handle,NULL); //doesn't appear to be necessary...
     free(req);
 }
 static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
@@ -415,7 +415,7 @@ void julia_init(char *imageFile)
 
     // the Main module is the one which is always open, and set as the
     // current module for bare (non-module-wrapped) toplevel expressions.
-    // it does import Base.* if Base is available.
+    // it does "using Base" if Base is available.
     if (jl_base_module != NULL)
         jl_module_using(jl_main_module, jl_base_module);
     jl_current_module = jl_main_module;
@@ -536,6 +536,9 @@ void jl_get_builtin_hooks(void)
 
     jl_float32_type = (jl_bits_type_t*)core("Float32");
     jl_float64_type = (jl_bits_type_t*)core("Float64");
+	jl_voidpointer_type = (jl_bits_type_t*)
+		jl_apply_type((jl_value_t*)jl_pointer_type,
+                      jl_tuple(1,jl_bottom_type));
 
     jl_stackovf_exception =
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);

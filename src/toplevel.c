@@ -24,6 +24,8 @@ DLLEXPORT char *julia_home = NULL;
 // current line number in a file
 int jl_lineno = 0;
 
+jl_module_t *jl_old_base_module = NULL;
+
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
 extern int base_module_conflict;
@@ -44,8 +46,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
-    if (parent_module == jl_main_module && name == jl_symbol("Base") &&
-        jl_base_module == NULL) {
+    if (parent_module == jl_main_module && name == jl_symbol("Base")) {
+        jl_old_base_module = jl_base_module;
         // pick up Base module during bootstrap
         jl_base_module = newm;
     } else {
@@ -92,10 +94,19 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     return jl_nothing;
 }
 
-static int is_intrinsic(jl_sym_t *s)
+static int is_intrinsic(jl_module_t *m, jl_sym_t *s)
 {
-    jl_value_t *v = jl_get_global(jl_current_module, s);
+    jl_value_t *v = jl_get_global(m, s);
     return (v != NULL && jl_typeof(v)==(jl_type_t*)jl_intrinsic_type);
+}
+
+// module referenced by TopNode from within m
+// this is only needed because of the bootstrapping process:
+// - initially Base doesn't exist and top === Core
+// - later, it refers to either old Base or new Base
+jl_module_t *jl_base_relative_to(jl_module_t *m)
+{
+    return (m==jl_core_module||m==jl_old_base_module||jl_base_module==NULL) ? m : jl_base_module;
 }
 
 static int has_intrinsics(jl_expr_t *e)
@@ -105,8 +116,8 @@ static int has_intrinsics(jl_expr_t *e)
     if (e->head == static_typeof_sym) return 1;
     jl_value_t *e0 = jl_exprarg(e,0);
     if (e->head == call_sym &&
-        ((jl_is_symbol(e0) && is_intrinsic((jl_sym_t*)e0)) ||
-         (jl_is_topnode(e0) && is_intrinsic((jl_sym_t*)jl_fieldref(e0,0)))))
+        ((jl_is_symbol(e0) && is_intrinsic(jl_current_module,(jl_sym_t*)e0)) ||
+         (jl_is_topnode(e0) && is_intrinsic(jl_base_relative_to(jl_current_module),(jl_sym_t*)jl_fieldref(e0,0)))))
         return 1;
     int i;
     for(i=0; i < e->args->length; i++) {

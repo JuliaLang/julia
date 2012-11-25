@@ -14,7 +14,7 @@ GLPK_PREFIX = $(JULIAHOME)/deps/glpk-$(GLPK_VER)/src
 endif
 
 glpk_h.jl:
-	$(QUIET_PERL) $(CC) -E -dM $(GLPK_PREFIX)/glpk.h | perl -nle '/^\s*#define\s+(GLP\w*)\s*\(?($(GLPK_CONST))\)?\s*$$/ and print "const $$1 = int32($$2)"' | sort > $@
+	$(QUIET_PERL) $(CC) -E -dM $(GLPK_PREFIX)/glpk.h | perl -nle '/^\s*#define\s+GLP_(\w*)\s*\(?($(GLPK_CONST))\)?\s*$$/ and print "const $$1 = int32($$2)"' | sort > $@
 
 webrepl_msgtypes_h.jl: ../ui/webserver/message_types.h
 	$(QUIET_PERL) $(CC) -E -Dnotdefined $^ > $@

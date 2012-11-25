@@ -1,4 +1,4 @@
-require("zeromq/zmq_serialize_julia.jl")
+require("zeromq/zmq_serialize_julia")
 
 function launch_client(endpoint::ASCIIString)
     zctx = ZMQContext()

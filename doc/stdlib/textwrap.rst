@@ -1,22 +1,24 @@
-:mod:`textwrap.jl` --- Text wrapping module
-===========================================
+:mod:`TextWrap` --- Text wrapping module
+========================================
 
-.. module:: textwrap.jl
+.. module:: TextWrap
    :synopsis: TextWrap module
+
+.. note:: located in ``textwrap.jl``
 
 This module provides the function ``wrap`` which parses an input text and reorganizes its white space so that
 it can be printed with a fixed screen width, optionally indenting it. It also provides the two convenience
-function ``print_wrapped`` and ``println_wrapped``.
+functions ``print_wrapped`` and ``println_wrapped``.
 
 Here is a quick example:
 
 ::
 
-    julia> require("textwrap.jl")
+    julia> require("textwrap")
 
-    julia> import TextWrap.*
+    julia> using TextWrap
 
-    julia> import OptionsMod.*
+    julia> using OptionsMod
 
     julia> text = "This text is going to be wrapped around in lines no longer than 20 characters.";
 
@@ -33,7 +35,7 @@ It's very similar to Python's textwrap module, but the interface is slightly dif
     Returns a string in which newlines are inserted as appropriate in order for each line
     to fit within a specified width.
 
-    The options are passed via an ``Options`` object (see the :ref:`options page <options-module>`).
+    The options are passed via an ``Options`` object (provided by the :mod:`OptionsMod` module).
     The available options, and their default values, are:
 
     * ``width`` (default = ``70``): the maximum width of the wrapped text, including indentation.
@@ -56,6 +58,6 @@ It's very similar to Python's textwrap module, but the interface is slightly dif
               println_wrapped(text... [, options])
               println_wrapped(io, text... [, options])
 
-    These are just like the standard ``print`` and ``println`` functions (they print multiple arguments and
+    These are just like the standard :func:`print` and :func:`println` functions (they print multiple arguments and
     accept an optional ``IO`` first argument), except that they wrap the result, and accept an optional
-    last argument with the options to pass to ``wrap``.
+    last argument with the options to pass to :func:`wrap`.

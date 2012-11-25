@@ -1,5 +1,5 @@
 cd("../extras") do
-require("arpack.jl")
+require("arpack")
 
 # arpack
 begin

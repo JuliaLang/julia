@@ -409,7 +409,7 @@
 	  ((and (pair? x) (eq? (car x) '&))
 	   `(& (call (top ptr_arg_convert) ,T ,(cadr x))))
 	  (else
-	   `(call (top convert) ,T ,x))))
+	   `(call (top cconvert) ,T ,x))))
   (define (argument-root a)
     ;; something to keep rooted for this argument
     (cond ((and (pair? a) (eq? (car a) '&))
@@ -836,7 +836,7 @@
 					    (cadr x)
 					    (tuple-wrap (cdr a) '())))
 				 (tuple-wrap (cdr a) (cons x run))))))
-		     `(call apply ,f ,@(tuple-wrap argl '()))))
+		     `(call (top apply) ,f ,@(tuple-wrap argl '()))))
 
    ; tuple syntax (a, b...)
    ; note, directly inside tuple ... means sequence type
@@ -958,14 +958,14 @@
 	   (= ,cnt ,a)
 	   ,@(if (eq? lim b) '() `((= ,lim ,b)))
 	   (break-block loop-exit
-			(_while (call <= ,cnt ,lim)
+			(_while (call (top <=) ,cnt ,lim)
 				(block
 				 (= ,lhs ,cnt)
 				 (break-block loop-cont
 					      ,body)
 				 (= ,cnt (call (top convert)
 					       (call (top typeof) ,cnt)
-					       (call + 1 ,cnt)))))))))))
+					       (call (top +) 1 ,cnt)))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
@@ -1093,9 +1093,9 @@
       (if (null? ranges)
 	  (list)
 	  (if (eq? (car ranges) `:)
-	      (cons `(call size ,oneresult ,oneresult-dim)
+	      (cons `(call (top size) ,oneresult ,oneresult-dim)
 		    (compute-dims (cdr ranges) (+ oneresult-dim 1)))
-	      (cons `(call length ,(caddr (car ranges)))
+	      (cons `(call (top length) ,(caddr (car ranges)))
 		    (compute-dims (cdr ranges) oneresult-dim)) )))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
@@ -1108,7 +1108,7 @@
 		      (+= ,ri 1)) )
 	  (if (eq? (car ranges) `:)
 	      (let ((i (gensy)))
-		`(for (= ,i (: 1 (call size ,oneresult ,oneresult-dim)))
+		`(for (= ,i (: 1 (call (top size) ,oneresult ,oneresult-dim)))
 		      ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
 	      `(for ,(car ranges)
 		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
@@ -1150,7 +1150,7 @@
 
       ;; compute the dimensions of the result
       (define (compute-dims ranges)
-	(map (lambda (r) `(call length ,(caddr r)))
+	(map (lambda (r) `(call (top length) ,(caddr r)))
 	     ranges))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
@@ -1192,10 +1192,8 @@
 
       ;; compute the dimensions of the result
       (define (compute-dims ranges)
-	(if (null? ranges)
-	    (list)
-	    (cons `(call (top length) ,(car ranges))
-		  (compute-dims (cdr ranges)))))
+	(map (lambda (r) `(call (top length) ,r))
+	     ranges))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
@@ -1208,11 +1206,12 @@
       ;; Evaluate the comprehension
       `(block
 	,@(map make-assignment rs (map caddr ranges))
+	(local ,result)
+	(= ,result (call (top Array) ,atype ,@(compute-dims rs)))
 	(scope-block
 	(block
 	 ,@(map (lambda (r) `(local ,r))
 		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	 (= ,result (call (top Array) ,atype ,@(compute-dims rs)))
 	 (= ,ri 1)
 	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result))))))
@@ -1277,11 +1276,12 @@
       ;; Evaluate the comprehension
       `(block
 	,@(map make-assignment rs (map caddr ranges))
+	(local ,result)
+	(= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
 	(scope-block
 	(block
 	 ,@(map (lambda (r) `(local ,r))
 		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	 (= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
 	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result)))))))
 

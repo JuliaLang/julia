@@ -84,7 +84,9 @@
     jl_cwd;
     jl_defer_signal;
     jl_dlsym;
+    jl_dlsym_e;
     jl_dump_function;
+    jl_function_ptr;
     jl_enable_color;
     jl_enable_inference;
     jl_enq_send_req;
@@ -172,6 +174,7 @@
     jl_new_array;
     jl_new_closure;
     jl_new_event_loop;
+    jl_new_gf_internal;
     jl_new_lambda_info;
     jl_new_struct_uninit;
     jl_new_struct;

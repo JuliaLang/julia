@@ -8,6 +8,14 @@ show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::Stream, x)
 showcompact(io, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::Stream, x)
 
+macro show(ex)
+    quote
+        print($(sprint(show_unquoted, ex)*"\t= "))
+        show($(esc(ex)))
+        println()
+    end
+end
+
 show(io, s::Symbol) = show_indented(io, s)
 show(io, tn::TypeName) = print(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")
@@ -115,15 +123,16 @@ show(io::IO, ex::Expr) = show_indented(io, ex)
 function show_indented(io::IO, ex::Expr, indent::Int)
     if is(ex.head, :block) || is(ex.head, :body)
         show_block(io, "quote", ex, indent); print(io, "end")
-    elseif contains([:tuple, :vcat, :cell1], ex.head)
+    elseif contains((:tuple, :vcat, :cell1), ex.head)
         print(io, ':'); show_unquoted(io, ex, indent + indent_width)        
     else
         default_show_quoted(io, ex, indent)
     end
 end
+const paren_quoted_syms = Set{Symbol}(:(:),:(::),:(:=),:(=),:(==),:(===),:(=>))
 function show_indented(io::IO, sym::Symbol, indent::Int)
-    if is(sym,:(:)) || is(sym,:(==)); print(io, ":($sym)")        
-    else                              print(io, ":$sym")        
+    if has(paren_quoted_syms, sym); print(io, ":($sym)")        
+    else                            print(io, ":$sym")        
     end
 end
 function default_show_quoted(io::IO, ex, indent::Int)
@@ -230,8 +239,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif is(head, :(...)) && nargs == 1
         show_unquoted(io, args[1], indent)
         print(io, "...")
-    elseif (nargs == 1 && contains([:return, :abstract, :const], head)) ||
-                          contains([:local,  :global], head)
+    elseif (nargs == 1 && contains((:return, :abstract, :const), head)) ||
+                          contains((:local,  :global), head)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
     elseif is(head, :macrocall) && nargs >= 1
@@ -255,7 +264,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
     elseif is(head, :block) || is(head, :body)
         show_block(io, "begin", ex, indent); print(io, "end")
-    elseif contains([:for,:while,:function,:if,:type,:module],head) && nargs==2
+    elseif contains((:for,:while,:function,:if,:type,:module),head) && nargs==2
         show_block(io, head, args[1], args[2], indent); print(io, "end")
     elseif is(head, :quote) && nargs == 1
         show_indented(io, args[1], indent)

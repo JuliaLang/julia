@@ -1,4 +1,4 @@
-require("sound.jl")
+require("sound")
 import Sound.*
 
 in_filename = ARGS[1]

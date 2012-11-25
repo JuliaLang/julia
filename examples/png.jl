@@ -1,6 +1,6 @@
 # Sample of strpack.jl: Reading a .png header
 
-load("strpack.jl")
+load("strpack")
 fpng = open(ARGS[1])
 
 # check the signature

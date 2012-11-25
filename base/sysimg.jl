@@ -1,6 +1,6 @@
 module Base
-
-convert(T, x) = convert_default(T,x,convert)
+import Intrinsics.ccall
+cconvert(T, x) = convert_default(T,x,cconvert)
 ccall(:putchar, Void, (Char,), 'B')
 ccall(:putchar, Void, (Char,), 'u')
 ccall(:putchar, Void, (Char,), 'i')
@@ -148,7 +148,8 @@ include("sort.jl")
 include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
-include("darray.jl")
+#include("darray.jl")
+include("darray2.jl")
 include("mmap.jl")
 
 # utilities - version, timing, help, edit
@@ -303,6 +304,7 @@ end # module Base
 
 using Base
 
+JL_PRIVATE_LIBDIR = getenv("JL_PRIVATE_LIBDIR")
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
-      "$JULIA_HOME/../lib/julia/sys.ji", "start_image.jl")
+      "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji", "start_image.jl")

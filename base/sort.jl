@@ -382,12 +382,12 @@ end
 select(a::AbstractArray, k::Int) = _jl_quickselect(copy(a), k, 1, length(a))
 select!(a::AbstractArray, k::Int) = _jl_quickselect(a, k, 1, length(a))
 
-function search_sorted(a, x)
-    hi = length(a)
+search_sorted(a::Vector, x) = search_sorted(a, x, 1, length(a))
+
+function search_sorted(a::Vector, x, lo::Int, hi::Int)
     if isless(a[hi], x)
         return hi+1
     end
-    lo = 1
     while lo < hi-1
         i = (lo+hi)>>>1
         if isless(x,a[i])
@@ -399,13 +399,13 @@ function search_sorted(a, x)
     return isless(a[lo],x) ? hi : lo
 end
 
-function search_sorted_last(a::Vector, x)
+search_sorted_last(a::Vector, x) = search_sorted_last(a, x, 0, length(a)+1)
+
+function search_sorted_last(a::Vector, x, lo::Int, hi::Int)
     ## Index of the last value of vector a that is less than or equal to x.
     ## Returns 0 if x is less than all values of a.
     ## 
     ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
-    lo = 0
-    hi = length(a) + 1
     while lo < hi-1
         i = (lo+hi)>>>1
         if isless(x,a[i])
@@ -417,13 +417,13 @@ function search_sorted_last(a::Vector, x)
     lo
 end
 
-function search_sorted_first(a::Vector, x)
+search_sorted_first(a::Vector, x) = search_sorted_first(a, x, 0, length(a)+1)
+
+function search_sorted_first(a::Vector, x, lo::Int, hi::Int)
     ## Index of the first value of vector a that is greater than or equal to x.
     ## Returns length(a) + 1 if x is greater than all values in a.
     ## 
     ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
-    lo = 0
-    hi = length(a) + 1
     while lo < hi-1
         i = (lo+hi)>>>1
         if isless(a[i],x)

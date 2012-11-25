@@ -26,7 +26,7 @@ learn and experiment with Julia is by starting an interactive session
     julia> ans
     3
 
-    julia> load("file.jl")
+    julia> load("file")
 
 To exit the interactive session, type ``^D`` — the control key together
 with the ``d`` key. When run in interactive mode, ``julia`` displays a
@@ -98,9 +98,8 @@ differences that may trip up Julia users accustomed to MATLAB®:
    ``return (a, b)`` and ``(a, b) = f(x)``.
 -  Values are passed and assigned by reference. If a function modifies
    an array, the changes will be visible in the caller.
--  Use n for nx1: The number of arguments to an array constructor equals
-   the number of dimensions of the result. In particular, ``rand(n)``
-   makes a 1-dimensional array.
+-  Julia has 1-dimensional arrays. Column vectors are of size ``N``, not
+   ``Nx1``. For example, ``rand(N)`` makes a 1-dimensional array.
 -  Concatenating scalars and arrays with the syntax ``[x,y,z]``
    concatenates in the first dimension ("vertically"). For the second
    dimension ("horizontally"), use spaces as in ``[x y z]``. To
@@ -131,4 +130,5 @@ differences that may trip up Julia users accustomed to MATLAB®:
 -  If ``A`` and ``B`` are arrays, ``A == B`` doesn't return an array of
    booleans. Use ``A .== B`` instead. Likewise for the other boolean
    operators, ``<``, ``>``, ``!=``, etc.
-
+-  The elements of a collection can be passed as arguments to a function
+   using ``...``, as in ``xs=[1,2]; f(xs...)``.

@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-LIBS = -lpthread ${USRLIB}/libuv.a  
+LIBS = -lpthread $(USR)/$(JL_LIBDIR)/libuv.a 
 ifeq ($(OS), Linux)
 LIBS += -lrt 
 endif
@@ -45,7 +45,7 @@ $(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS) server.h
 
 $(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS) server.h
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
-
+	
 clean:
 	rm -f *.o *.do
 	rm -f $(USRBIN)/julia-*-webserver

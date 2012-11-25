@@ -352,7 +352,7 @@ function _jl_listen(sock::AsyncStream,backlog::Int32,cb::Callback)
 end
 
 _jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
-_jl_tcp_accept(server::Ptr,client::Ptr) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
+_jl_tcp_accept(server::Ptr{Void},client::Ptr{Void}) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
 accept(server::TcpSocket,client::TcpSocket) = _jl_tcp_accept(server.handle,client.handle)
 connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,addr.host,hton(addr.port))
 
@@ -385,7 +385,7 @@ function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
     (buf,int32(size))
 end
 
-function notify_filled(buffer::IOString, nread::Int, base::Ptr, len::Int32)
+function notify_filled(buffer::IOString, nread::Int, base::Ptr{Void}, len::Int32)
     if buffer.append
         buffer.size += nread
     else
@@ -407,7 +407,7 @@ function notify_filled(stream::AsyncStream, nread::Int)
         end
     end
 end
-function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr, len::Int32)
+function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
     if(nread == -1)
         close(stream)
         if(isa(stream.closecb,Function))
@@ -650,7 +650,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     loop = globalEventLoop()
     close_in,close_out,close_err = false,false,false
     if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
-        in = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        in = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #in = c_malloc(_sizeof_uv_pipe)
         link_pipe(in,false,stdios[1],true)
         close_in = true
@@ -658,7 +658,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
         in = handle(stdios[1])
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
-        out = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        out = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #out = c_malloc(_sizeof_uv_pipe)
         link_pipe(stdios[2],false,out,true)
         close_out = true
@@ -666,7 +666,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
         out = handle(stdios[2])
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
-        err = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        err = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #err = c_malloc(_sizof_uv_pipe)
         link_pipe(stdios[3],false,err,true)
         close_err = true
@@ -698,8 +698,8 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
 end
 
 function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
-    out_pipe = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-    in_pipe = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+    out_pipe = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+    in_pipe = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
     #out_pipe = c_malloc(_sizeof_uv_pipe)
     #in_pipe = c_malloc(_sizeof_uv_pipe)
     link_pipe(in_pipe,false,out_pipe,false,null_handle)
@@ -725,7 +725,7 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     end
     close_in,close_out,close_err = false,false,false
     if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
-        in = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        in = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #in = c_malloc(_sizeof_uv_pipe)
         link_pipe(in,false,stdios[1],true)
         close_in = true
@@ -733,7 +733,7 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
         in = handle(stdios[1])
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
-        out = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        out = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #out = c_malloc(_sizeof_uv_pipe)
         link_pipe(stdios[2],false,out,true)
         close_out = true
@@ -741,7 +741,7 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
         out = handle(stdios[2])
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
-        err = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        err = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #err = c_malloc(_sizof_uv_pipe)
         link_pipe(stdios[3],false,err,true)
         close_err = true
@@ -1034,8 +1034,8 @@ function show(io, cmds::AndCmds)
 end
 
 _jl_connect_raw(sock::TcpSocket,sockaddr::Ptr{Void}) = ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void}),sock.handle,sockaddr)
-_jl_getaddrinfo(loop::Ptr,host::ByteString,service::Ptr,cb::Function) = ccall(:jl_getaddrinfo,Int32,(Ptr{Void},Ptr{Uint8},Ptr{Uint8},Function),loop,host,service,cb)
-_jl_sockaddr_from_addrinfo(addrinfo::Ptr) = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr,),addrinfo)
+_jl_getaddrinfo(loop::Ptr{Void},host::ByteString,service::Ptr{Void},cb::Function) = ccall(:jl_getaddrinfo,Int32,(Ptr{Void},Ptr{Uint8},Ptr{Uint8},Function),loop,host,service,cb)
+_jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
 _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},Uint16),ptr,port)
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
 _uv_lasterror() = _uv_lasterror(globalEventLoop())
@@ -1049,17 +1049,17 @@ function connect_callback(sock::TcpSocket,status::Int32)
 end
 
 
-function getaddrinfo_callback(sock::TcpSocket,status::Int32,port::Uint16,addrinfo_list::Ptr)
+function getaddrinfo_callback(sock::TcpSocket,status::Int32,host::ByteString,port::Uint16,addrinfo_list::Ptr{Void})
     #println("getaddrinfo_callback")
     if(status==-1)
-        error("Name lookup failed")
+        error("Name lookup failed "*host)
     end
     sockaddr = _jl_sockaddr_from_addrinfo(addrinfo_list) #only use first entry of the list for now
     _jl_sockaddr_set_port(sockaddr,hton(port))
     sock.ccb = connect_callback
     err = _jl_connect_raw(sock,sockaddr)
     if(err != 0)
-        error("Failed to connect to host")
+        error("Failed to connect to host "*host*":"*string(port)*" #"*string(_uv_lasterror()))
     end
 end
 
@@ -1069,9 +1069,10 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-function connect_to_host(host::ByteString,port::Uint16)
+function connect_to_host(host::ByteString,port::Uint16) #TODO: handle errors
     sock = TcpSocket()
-    err = _jl_getaddrinfo(globalEventLoop(),host,C_NULL,(addrinfo::Ptr,status::Int32)->getaddrinfo_callback(sock,status,port,addrinfo))
+    err = _jl_getaddrinfo(globalEventLoop(),host,C_NULL,
+        (addrinfo::Ptr{Void},status::Int32) -> getaddrinfo_callback(sock,status,host,port,addrinfo))
     if(err!=0)
         error("Failed to  initilize request to resolve hostname: ",host)
     end
@@ -1115,7 +1116,7 @@ uv_error(err::Int32) = err != 0 ? error(uv_err_to_string(err)) : nothing
 _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 
 function open(f::File,flags::Integer)
-    req = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Int32,Int32,Ptr{Void}),
                          globalEventLoop(),req,bytestring(f.path),flags,0,C_NULL)
     uv_error(err)
@@ -1130,7 +1131,7 @@ function close(f::File)
     if(!f.open)
         error("File is already closed")
     end
-    req = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Void}),
                          globalEventLoop(),req,f.handle,C_NULL)
     uv_error(err)
@@ -1141,7 +1142,7 @@ function close(f::File)
 end
 
 function unlink(p::String)
-    req = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_unlink,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Ptr{Void}),
                          globalEventLoop(),req,bytestring(p),C_NULL)
     uv_error(err)
@@ -1158,7 +1159,7 @@ function write(f::File,buf::Ptr{Uint8},len::Int32,offset::Int64)
     if(!f.open)
         error("File is not open")
     end
-    req = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Int32,Int64,Ptr{Void}),
                          globalEventLoop(),req,f.handle,buf,len,offset,C_NULL)
     uv_error(err)

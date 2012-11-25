@@ -110,7 +110,8 @@ done:
     return handle;
 }
 
-void *jl_dlsym_e(uv_lib_t *handle, char *symbol) {
+void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
+{
     void *ptr;
     int  error=uv_dlsym(handle, symbol, &ptr);
     if(error) ptr=NULL;

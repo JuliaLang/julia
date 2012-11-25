@@ -335,7 +335,8 @@ static int down_callback(int count, int key) {
 }
 
 static int sigint_callback(int count, int key) {
-    jl_write(jl_uv_stdout, "^C\n", 3); jl_clear_input();
+    jl_write(jl_uv_stdout, "^C\n", 3);
+	jl_clear_input();
     return 0;
 }
 

@@ -20,7 +20,7 @@ runtests("random")
 runtests("math")
 runtests("functional")
 runtests("bigint")
-runtests("distributions")
+#runtests("distributions")
 runtests("combinatorics")
 runtests("statistics")
 

@@ -572,21 +572,23 @@ static void gc_mark_all()
         if (ta->start)  gc_push_root(ta->start);
         if (ta->result) gc_push_root(ta->result);
         gc_push_root(ta->state.eh_task);
-        if (ta->stkbuf != NULL)
-            gc_setmark_buf(ta->stkbuf);
+        if (ta->stkbuf != NULL || ta == jl_current_task) {
+            if (ta->stkbuf != NULL)
+                gc_setmark_buf(ta->stkbuf);
 #ifdef COPY_STACKS
-        ptrint_t offset;
-        if (ta == jl_current_task) {
-            offset = 0;
-            gc_mark_stack(jl_pgcstack, offset);
-        }
-        else {
-            offset = ta->stkbuf - (ta->stackbase-ta->ssize);
-            gc_mark_stack(ta->state.gcstack, offset);
-        }
+            ptrint_t offset;
+            if (ta == jl_current_task) {
+                offset = 0;
+                gc_mark_stack(jl_pgcstack, offset);
+            }
+            else {
+                offset = ta->stkbuf - (ta->stackbase-ta->ssize);
+                gc_mark_stack(ta->state.gcstack, offset);
+            }
 #else
-        gc_mark_stack(ta->state.gcstack, 0);
+            gc_mark_stack(ta->state.gcstack, 0);
 #endif
+        }
     }
     else {
         jl_struct_type_t *st = (jl_struct_type_t*)vt;

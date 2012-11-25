@@ -1,8 +1,10 @@
-:mod:`zlib.jl` --- Wrapper for zlib compress/uncompress
-=======================================================
+:mod:`Zlib` --- Wrapper for zlib compress/uncompress
+====================================================
 
-.. module:: zlib.jl
+.. module:: Zlib
    :synopsis: Zlib compress/uncompress wrapper
+
+.. note:: located in ``zlib.jl``
 
 This module provides a wrapper for the compress/uncompress and related
 utility functions of (`zlib <http://zlib.net/>`_), a free,
@@ -32,7 +34,7 @@ Utility Functions
    ``Z_DEFAULT_COMPRESSION``.  It defaults to
    ``Z_DEFAULT_COMPRESSION``.
 
-   If an error occurs, ``compress`` throws a ZLibError with more
+   If an error occurs, ``compress`` throws a :class:`ZError` with more
    information about the error.
 
 
@@ -41,7 +43,7 @@ Utility Functions
    Compresses the source buffer into the destination buffer, and
    returns the number of bytes written into dest.
 
-   If an error occurs, ``uncompress`` throws a ZLibError with more
+   If an error occurs, ``uncompress`` throws a :class:`ZError` with more
    information about the error.
 
 
@@ -55,7 +57,7 @@ Utility Functions
    uncompressed_size, the allocated buffer is grown and the
    uncompression is retried.
 
-   If an error occurs, ``uncompress`` throws a ZLibError with more
+   If an error occurs, ``uncompress`` throws a :class:`ZError` with more
    information about the error.
 
 
@@ -65,6 +67,6 @@ Utility Functions
    Returns the number of bytes written into dest.  An error is thrown
    if the destination buffer does not have enough space.
 
-   If an error occurs, ``uncompress_to_buffer`` throws a ZLibError with
-   more information about the error.
+   If an error occurs, ``uncompress_to_buffer`` throws a :class:`ZError`
+   with more information about the error.
 

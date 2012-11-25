@@ -76,7 +76,7 @@ ref(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
 get(::EnvHash, k::String, deflt) = @accessEnv k (return deflt)
 has(::EnvHash, k::String) = hasenv(k)
 del(::EnvHash, k::String) = unsetenv(k)
-assign(::EnvHash, v::String, k::String) = (setenv(k,v); v)
+assign(::EnvHash, v, k::String) = setenv(k,string(v))
 
 @unix_only begin
 start(::EnvHash) = 0

@@ -1,27 +1,32 @@
-require("linprog.jl")
+require("linprog")
 
 module Metadata
 
 using Base
+using LinProgGLPK
 
-import Main
 import Git
-import Base.isequal, Base.isless
+import GLPK
+import Base.isequal, Base.isless, Base.contains
 
 export parse_requires, Version, VersionSet
 
 function gen_versions(pkg::String)
-    for (ver,sha1) in Git.each_version("$pkg")
+    for (ver,sha1) in Git.each_tagged_version(pkg)
         dir = "METADATA/$pkg/versions/$ver"
         run(`mkdir -p $dir`)
         open("$dir/sha1","w") do io
             println(io,sha1)
         end
+        if isfile("$pkg/REQUIRE")
+            run(`cp $pkg/REQUIRE $dir/requires`)
+        end
     end
 end
+gen_versions() = for pkg in each_package() gen_versions(pkg) end
 
 function gen_hashes(pkg::String)
-    for (ver,dir) in each_version(pkg)
+    for (ver,dir) in each_tagged_version(pkg)
         sha1 = readchomp("$dir/sha1")
         run(`mkdir -p METADATA/$pkg/hashes`)
         open("METADATA/$pkg/hashes/$sha1","w") do io
@@ -44,7 +49,7 @@ each_package() = @task begin
     end
 end
 
-each_version(pkg::String) = @task begin
+each_tagged_version(pkg::String) = @task begin
     for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD:$pkg/versions`)
         m = match(r"\d{6} tree [0-9a-f]{40}\t(\d\S*)$", line)
         if m != nothing && ismatch(Base.VERSION_REGEX,m.captures[1])
@@ -81,7 +86,7 @@ end
 function versions(pkgs)
     vers = Version[]
     for pkg in pkgs
-        for (ver,dir) in each_version(pkg)
+        for (ver,dir) in each_tagged_version(pkg)
             push(vers,Version(pkg,ver))
         end
     end
@@ -133,11 +138,14 @@ end
 function dependencies(pkgs,vers)
     deps = Array((Version,VersionSet),0)
     for pkg in each_package()
-        for (ver,dir) in each_version(pkg)
+        for (ver,dir) in each_tagged_version(pkg)
             v = Version(pkg,ver)
             file = "$dir/requires"
             if isfile(file)
                 for d in parse_requires("$dir/requires")
+                    if !contains(pkgs,d.package)
+                        error("Unknown dependency for $pkg: $(d.package)")
+                    end
                     push(deps,(v,d))
                 end
             end
@@ -166,7 +174,10 @@ function resolve(reqs::Vector{VersionSet})
         W[r,rem(i-1,n)+1] = -1
         W[r,div(i-1,n)+1] = G[i]
     end
-    w = iround(Main.linprog_simplex(u,W,zeros(Int,length(I)),nothing,nothing,u,nothing)[2])
+    mipopts = GLPK.IntoptParam()
+    mipopts["msg_lev"] = GLPK.MSG_ERR
+    mipopts["presolve"] = GLPK.ON
+    w = iround(mixintprog(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,nothing,mipopts)[2])
 
     V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
     R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
@@ -175,9 +186,9 @@ function resolve(reqs::Vector{VersionSet})
           -ones(Int,length(reqs))
           zeros(Int,length(deps)) ]
 
-    x = Main.linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u)[2]
+    x = mixintprog(w,[V;R;D],b,nothing,nothing,z,u,nothing,mipopts)[2] .== 1
     h = (String=>ASCIIString)[]
-    for v in vers[x .> 0.5]
+    for v in vers[x]
         h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")
     end
     return h

@@ -188,6 +188,8 @@ static jl_value_t *scm_to_julia_(value_t e)
             switch (nt) {
             case T_DOUBLE:
                 return (jl_value_t*)jl_box_float64(*(double*)cp_data((cprim_t*)ptr(e)));
+            case T_FLOAT:
+                return (jl_value_t*)jl_box_float32(*(float*)cp_data((cprim_t*)ptr(e)));
             case T_INT64:
                 return (jl_value_t*)jl_box_int64(*(int64_t*)cp_data((cprim_t*)ptr(e)));
             case T_UINT8:

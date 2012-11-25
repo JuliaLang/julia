@@ -50,6 +50,7 @@ jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
 jl_struct_type_t *jl_backtrace_type;
 jl_bits_type_t *jl_pointer_type;
+jl_bits_type_t *jl_voidpointer_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
 jl_value_t *jl_divbyzero_exception;
@@ -324,6 +325,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->fptr = &jl_trampoline;
     li->roots = NULL;
     li->functionObject = NULL;
+    li->cFunctionObject = NULL;
     li->specTypes = NULL;
     li->inferred = 0;
     li->inInference = 0;
@@ -690,7 +692,7 @@ UNBOX_FUNC(uint64, uint64_t)
 UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
-UNBOX_FUNC(pointer, void*)
+UNBOX_FUNC(voidpointer, void*)
 
 #define BOX_FUNC(typ,c_type,pfx,nw)             \
 jl_value_t *pfx##_##typ(c_type x)               \
@@ -701,7 +703,7 @@ jl_value_t *pfx##_##typ(c_type x)               \
     return v;                                   \
 }
 BOX_FUNC(float32, float,  jl_box, 2)
-BOX_FUNC(pointer, void*,  jl_box, 2) //2 pointers == two words on all platforms
+BOX_FUNC(voidpointer, void*,  jl_box, 2) //2 pointers == two words on all platforms
 #ifdef __LP64__
 BOX_FUNC(float64, double, jl_box, 2)
 #else

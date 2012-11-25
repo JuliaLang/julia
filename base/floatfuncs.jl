@@ -31,10 +31,6 @@ maxintfloat() = maxintfloat(Float64)
 
 integer_valued(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
 
-sqrt(x::Real) = sqrt(float(x))
-sin(x::Real) = sin(float(x))
-cos(x::Real) = cos(float(x))
-
 num2hex(x::Float32) = hex(box(Uint32,unbox(Float32,x)),8)
 num2hex(x::Float64) = hex(box(Uint64,unbox(Float64,x)),16)
 

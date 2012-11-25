@@ -94,10 +94,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return jl_fieldref(e,0);
     }
     if (jl_is_topnode(e)) {
-        jl_value_t *v = jl_get_global(jl_current_module,
-                                      (jl_sym_t*)jl_fieldref(e,0));
+        jl_sym_t *s = (jl_sym_t*)jl_fieldref(e,0);
+        jl_value_t *v = jl_get_global(jl_base_relative_to(jl_current_module),s);
         if (v == NULL)
-            jl_errorf("%s not defined", ((jl_sym_t*)jl_fieldref(e,0))->name);
+            jl_errorf("%s not defined", s->name);
         return v;
     }
     if (!jl_is_expr(e)) {

@@ -95,7 +95,7 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
     for(i=((val==0)?0:1); i<count; ++i) {
         switch(va_arg(argp,int)) {
         case CB_PTR:
-            argv[i] = jl_box_pointer(va_arg(argp,void*));
+            argv[i] = jl_box_voidpointer(va_arg(argp,void*));
             break;
         case CB_INT32:
             argv[i] = jl_box_int32(va_arg(argp,int32_t));
@@ -135,7 +135,7 @@ uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size) {
     JULIA_CB(alloc_buf,handle->data,1,CB_INT32,suggested_size);
     if(!jl_is_tuple(ret) || !jl_is_pointer(jl_t0(ret)) || !jl_is_int32(jl_t1(ret)))
         jl_error("jl_alloc_buf: Julia function returned invalid value for buffer allocation callback");
-    buf.base = jl_unbox_pointer(jl_t0(ret));
+    buf.base = jl_unbox_voidpointer(jl_t0(ret));
     buf.len = jl_unbox_int32(jl_t1(ret));
     return buf;
 }
@@ -571,7 +571,7 @@ DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *serv
 
 DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
 {
-    struct sockaddr*addr=malloc(sizeof(struct sockaddr));
+    struct sockaddr *addr = malloc(sizeof(struct sockaddr));
     memcpy(addr,addrinfo->ai_addr,sizeof(struct sockaddr));
     return addr;
 }

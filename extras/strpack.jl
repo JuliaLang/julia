@@ -1,5 +1,5 @@
-load("iostring.jl")
-load("lru.jl")
+load("iostring")
+load("lru")
 
 bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
 

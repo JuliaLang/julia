@@ -194,3 +194,11 @@ function fits_read_pix{T}(f::FITSFile, fpixel::Vector{Int}, nelements::Int, data
 end
 fits_read_pix(f::FITSFile, data::Array) = fits_read_pix(f, ones(Int,length(size(data))), length(data), data)
 
+function fitsread(filename::String)
+    f = fits_open_file(filename)
+    s = fits_get_img_size(f)
+    a = Array(Float64, s...)
+    fits_read_pix(f, a)
+    fits_close_file(f)
+    a'
+end

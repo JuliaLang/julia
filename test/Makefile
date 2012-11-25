@@ -5,11 +5,11 @@ default all extra unicode gzip::
 	@$(MAKE) -sC unicode
 
 TESTS = default all extra \
-core numbers strings unicode corelib hashing \
+core numbers strings unicode corelib hashing remote \
 arrayops linalg fft sparse arpack bitarray \
-random math functional bigint dists combinatorics statistics \
-glpk linprog bigfloat poly file Rmath remote zlib sound image \
-iterators gzip integers spawn iostring
+random math functional bigint combinatorics statistics \
+glpk linprog bigfloat poly file Rmath remote zlib image gzip \
+integers spawn iostring
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@

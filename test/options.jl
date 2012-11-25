@@ -1,4 +1,4 @@
-require("../extras/options.jl")
+require("../extras/options")
 using OptionsMod
 
 oo = Options(:a, true, :b, 7)

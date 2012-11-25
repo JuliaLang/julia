@@ -154,6 +154,13 @@ function parse_input_line(s::String)
     ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
 end
 
+# try to include() a file, ignoring if not found
+function try_include(f::String)
+    if is_file_readable(f)
+        include(f)
+    end
+end
+
 function process_options(args::Array{Any,1})
     global ARGS
     # install Ctrl-C interrupt handler (InterruptException)
@@ -208,14 +215,14 @@ function process_options(args::Array{Any,1})
             startup = false
         elseif args[i] == "-F"
             # load juliarc now before processing any more options
-            try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+            try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             startup = false
         elseif args[i][1]!='-'
             # program
             repl = false
             # remove julia's arguments
             ARGS = args[i+1:end]
-            load(args[i])
+            include(args[i])
             break
         else
             error("unknown option: ", args[i])
@@ -230,6 +237,8 @@ const _jl_roottask_wi = WorkItem(_jl_roottask)
 
 _jl_is_interactive = false
 isinteractive() = (_jl_is_interactive::Bool)
+
+julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
 
 function _start()
     # set up standard streams
@@ -260,19 +269,20 @@ function _start()
             yield()
         end
 
-        global const LOAD_PATH = String[
+        global const LOAD_PATH = ByteString[
             ".",
-            abs_path("$JULIA_HOME/../lib/julia"),
-            abs_path("$JULIA_HOME/../lib/julia/base"),
-            abs_path("$JULIA_HOME/../lib/julia/extras"),
-            abs_path("$JULIA_HOME/../lib/julia/ui"),
+            julia_pkgdir(),
+            abs_path("$JULIA_HOME/../share/julia"),
+            abs_path("$JULIA_HOME/../share/julia/base"),
+            abs_path("$JULIA_HOME/../share/julia/extras"),
+            abs_path("$JULIA_HOME/../share/julia/ui"),
         ]
 
         (quiet,repl,startup) = process_options(ARGS)
 
         if repl
             if startup
-                try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+                try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             end
 
             @unix_only global _jl_have_color = begins_with(get(ENV,"TERM",""),"xterm") ||

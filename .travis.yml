@@ -1,0 +1,18 @@
+language: cpp
+compiler: clang
+notifications:
+    email: false
+before_install:
+    - sudo apt-get update -qq -y
+    - sudo apt-get install zlib1g-dev
+    - sudo add-apt-repository ppa:staticfloat/julia-deps -y
+    - sudo apt-get update -qq -y
+    - sudo apt-get install gfortran clang llvm-3.1-dev libsuitesparse-dev libncurses5-dev libopenblas-dev libarpack2-dev libfftw3-dev libpcre3-dev libglpk-dev lighttpd libgmp-dev libunwind7-dev libreadline-dev -y
+env:
+    - BUILDOPTS="LLVM_CONFIG=llvm-config-3.1 USECLANG=1 USE_SYSTEM_LLVM=1 USE_SYSTEM_ZLIB=1 USE_SYSTEM_SUITESPARSE=1 USE_SYSTEM_ARPACK=1 USE_SYSTEM_BLAS=1 USE_SYSTEM_FFTW=1 USE_SYSTEM_LAPACK=1 USE_SYSTEM_LIGHTTPD=1 USE_SYSTEM_GMP=1 USE_SYSTEM_PCRE=1 USE_SYSTEM_LIBUNWIND=1 USE_SYSTEM_READLINE=1 USE_SYSTEM_GLPK=1"
+script: make $BUILDOPTS dist
+after_script:
+    - make $BUILDOPTS testall
+    - make $BUILDOPTS PREFIX=/tmp/julia install
+    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia runtests.jl all
+    - echo "Packaging steps here"

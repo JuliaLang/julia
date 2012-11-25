@@ -1,6 +1,5 @@
 # Testing for gzip
-require("../extras/gzip.jl")
-#require("../extras/test.jl")
+require("../extras/gzip")
 
 using GZip
 
@@ -8,9 +7,11 @@ using GZip
 # test_context("GZip tests")
 ##########################
 
+#for epoch in 1:10
+
 tmp = mktempdir()
 
-test_infile = "$JULIA_HOME/../../extras/gzip.jl"
+test_infile = "$JULIA_HOME/../share/julia/extras/gzip.jl"
 test_compressed = "$tmp/gzip.jl.gz"
 
 @windows_only gunzip="gunzip.exe"
@@ -91,7 +92,11 @@ pos = position(gzfile)
 ##########################
 
 # rewrite the test file
-for ch in "fhRFT "
+modes = "fhR "
+if GZip.ZLIB_VERSION >= (1,2,5,2)
+    modes = "fhRFT "
+end
+for ch in modes
     if ch == ' '
         ch = ""
     end
@@ -102,15 +107,17 @@ for ch in "fhRFT "
 
         file_size = filesize(test_compressed)
 
-        if ch == 'F' || ch == 'T'
+        #println("wb$level$ch: ", file_size)
+
+        if ch == 'T'
             @assert(file_size == length(data))
+        elseif ch == 'F'
+            @assert(file_size >= length(data))
         elseif level == 0
             @assert(file_size > length(data))
         else
             @assert(file_size < length(data))
         end
-
-        #println("wb$level$ch: ", filesize(test_compressed))
 
         # readline test
         gzf = gzopen(test_compressed)
@@ -138,71 +145,71 @@ end
 # test_group("gzip array/matrix tests (write/read)")
 ##########################
 
-const BUFSIZE = 65536
+let BUFSIZE = 65536
+    for level = 0:3:6
+        for T in [Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,
+                  Float32,Float64,Complex64,Complex128]
 
-for level = 0:2:6
-    for T in [Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,
-              Float32,Float64,Complex64,Complex128]
-
-        minval = 34567
-        try
-            minval = min(typemax(T), 34567)
-        catch
-            # do nothing
-        end
-
-        # Ordered array
-        b = zeros(T, BUFSIZE)
-        if !isa(T, Complex)
-            for i = 1:length(b)
-                b[i] = (i-1)%minval;
+            minval = 34567
+            try
+                minval = min(typemax(T), 34567)
+            catch
+                # do nothing
             end
-        else
-            for i = 1:length(b)
-                b[i] = (i-1)%minval - (minval-(i-1))%minval * im
+
+            # Ordered array
+            b = zeros(T, BUFSIZE)
+            if !isa(T, Complex)
+                for i = 1:length(b)
+                    b[i] = (i-1)%minval;
+                end
+            else
+                for i = 1:length(b)
+                    b[i] = (i-1)%minval - (minval-(i-1))%minval * im
+                end
             end
+
+            # Random array
+            if isa(T, FloatingPoint)
+                r = (T)[rand(BUFSIZE)...];
+            elseif isa(T, Complex64)
+                r = Int32[rand(BUFSIZE)...] + Int32[rand(BUFSIZE)...] * im
+            elseif isa(T, Complex128)
+                r = Int64[rand(BUFSIZE)...] + Int64[rand(BUFSIZE)...] * im
+            else
+                r = b[randi((1,BUFSIZE), BUFSIZE)];
+            end
+
+            # Array file
+            b_array_fn = "$tmp/b_array.raw.gz"
+            r_array_fn = "$tmp/r_array.raw.gz"
+
+            gzaf_b = gzopen(b_array_fn, "w$level")
+            write(gzaf_b, b)
+            close(gzaf_b)
+
+            #println("$T ($level) ordered: $(filesize(b_array_fn))")
+
+            gzaf_r = gzopen(r_array_fn, "w$level")
+            write(gzaf_r, r)
+            close(gzaf_r)
+
+            #println("$T ($level) random: $(filesize(r_array_fn))")
+
+            b2 = zeros(T, BUFSIZE)
+            r2 = zeros(T, BUFSIZE)
+
+            b2_infile = gzopen(b_array_fn)
+            read(b2_infile, b2);
+            close(b2_infile)
+
+            r2_infile = gzopen(r_array_fn)
+            read(r2_infile, r2);
+            close(r2_infile)
+
+            @assert b == b2
+            @assert r == r2
         end
-
-        # Random array
-        if isa(T, FloatingPoint)
-            r = (T)[rand(BUFSIZE)...];
-        elseif isa(T, Complex64)
-            r = Int32[rand(BUFSIZE)...] + Int32[rand(BUFSIZE)...] * im
-        elseif isa(T, Complex128)
-            r = Int64[rand(BUFSIZE)...] + Int64[rand(BUFSIZE)...] * im
-        else
-            r = b[randi((1,BUFSIZE), BUFSIZE)];
-        end
-
-        # Array file
-        b_array_fn = "$tmp/b_array.raw.gz"
-        r_array_fn = "$tmp/r_array.raw.gz"
-
-        gzaf_b = gzopen(b_array_fn, "w$level")
-        write(gzaf_b, b)
-        close(gzaf_b)
-
-        #println("$T ($level) ordered: $(filesize(b_array_fn))")
-
-        gzaf_r = gzopen(r_array_fn, "w$level")
-        write(gzaf_r, r)
-        close(gzaf_r)
-
-        #println("$T ($level) random: $(filesize(r_array_fn))")
-
-        b2 = zeros(T, BUFSIZE)
-        r2 = zeros(T, BUFSIZE)
-
-        b2_infile = gzopen(b_array_fn)
-        read(b2_infile, b2);
-        close(b2_infile)
-
-        r2_infile = gzopen(r_array_fn)
-        read(r2_infile, r2);
-        close(r2_infile)
-
-        @assert b == b2
-        @assert r == r2
     end
 end
 
@@ -212,26 +219,28 @@ end
 
 unicode_gz_file = "$tmp/unicode_test.gz"
 
-str1 = CharString(reinterpret(Char, read(open("unicode/UTF-32LE.unicode"), Uint32, 1112065)[2:]))
-str2 = UTF8String(read(open("unicode/UTF-8.unicode"), Uint8, 4382595)[4:])
+str1 = CharString(reinterpret(Char, read(open("$JULIA_HOME/../share/julia/test/unicode/UTF-32LE.unicode"), Uint32, 1112065)[2:]));
+str2 = UTF8String(read(open("$JULIA_HOME/../share/julia/test/unicode/UTF-8.unicode"), Uint8, 4382595)[4:]);
 
 UTF32LE_gz = gzopen(unicode_gz_file, "w")
 write(UTF32LE_gz, str1)
 close(UTF32LE_gz)
 
-str1b = readall(`gunzip -c $unicode_gz_file`)
-str1c = gzopen(readall, unicode_gz_file)
+str1b = readall(`gunzip -c $unicode_gz_file`);
+str1c = gzopen(readall, unicode_gz_file);
 @assert str1 == str1b
 @assert str1 == str1c
 
-UTF8_gz = gzopen(unicode_gz_file, "w")
+UTF8_gz = gzopen(unicode_gz_file, "w");
 write(UTF8_gz, str2)
 close(UTF8_gz)
 
-str2b = readall(`gunzip -c $unicode_gz_file`)
-str2c = gzopen(readall, unicode_gz_file)
+str2b = readall(`gunzip -c $unicode_gz_file`);
+str2c = gzopen(readall, unicode_gz_file);
 @assert str2 == str2b
 @assert str2 == str2c
 
 
 run(`rm -Rf $tmp`)
+
+#end  # for epoch

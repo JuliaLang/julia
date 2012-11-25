@@ -5,17 +5,14 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
-        -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(USR)/include $(CFLAGS)
+	-I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(USR)/include $(CFLAGS) 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 JLDFLAGS +=  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread $(LDFLAGS) $(RPATH)
 
-julia-release julia-debug: %: %-basic %-readline | $(USR)/lib/julia/website
-	@$(MAKE) -C webserver $@
+julia-release julia-debug: %: %-basic %-readline
 
-$(eval $(call symlink_target,website,$(USR)/lib/julia))
-
-release debug: | $(USR)/lib/julia/website
+release debug:
 	$(MAKE) julia-$@
 
 %.o: %.c repl.h
@@ -29,16 +26,15 @@ julia-release-readline: $(USRBIN)/julia-release-readline
 julia-debug-readline: $(USRBIN)/julia-debug-readline
 
 $(USRBIN)/julia-release-basic: repl.o repl-basic.o
-	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(USRLIB) $(JLDFLAGS) -ljulia-release
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-release
 $(USRBIN)/julia-debug-basic: repl.do repl-basic.do
-	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(USRLIB) $(JLDFLAGS) -ljulia-debug
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ -L$(USR)/$(JL_PRIVATE_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-debug
 
 $(USRBIN)/julia-release-readline: repl.o repl-readline.o
-	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(USRLIB) $(JLDFLAGS) -ljulia-release
+	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(USR)/$(JL_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-release
 $(USRBIN)/julia-debug-readline: repl.do repl-readline.do
-	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(USRLIB) $(JLDFLAGS) -ljulia-debug
+	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(USR)/$(JL_LIBDIR) -L$(USR)/$(JL_PRIVATE_LIBDIR) $(JLDFLAGS) -ljulia-debug
 
 clean: | $(CLEAN_TARGETS)
-	$(MAKE) -C webserver $@
 	rm -f *.o *.do
 	rm -f $(USRBIN)/julia-*-basic $(USRBIN)/julia-*-readline $(USRBIN)/julia

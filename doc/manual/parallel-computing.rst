@@ -135,7 +135,7 @@ Processor 1 knew about the function ``rand2``, but processor 2 did not.
 To make your code available to all processors, the ``load`` function will
 automatically load a source file on all currently available processors::
 
-    julia> load("myfile.jl")
+    julia> load("myfile")
 
 In a cluster, the contents of the file (and any files loaded recursively)
 will be sent over the network.
@@ -207,7 +207,7 @@ The function ``count_heads`` simply adds together ``n`` random bits.
 Here is how we can perform some trials on two machines, and add together the
 results::
 
-    load("count_heads.jl")
+    load("count_heads")
 
     a = @spawn count_heads(100000000)
     b = @spawn count_heads(100000000)
