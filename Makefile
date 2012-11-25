@@ -72,7 +72,7 @@ dist: cleanall
 	-$(MAKE) -C deps clean-openblas
 	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
 ifeq ($(OS), Darwin)
-	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_LIBDIR) /usr/local/lib
+	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_LIBDIR) $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 	rm -fr julia-$(JULIA_COMMIT)
