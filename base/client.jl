@@ -30,7 +30,7 @@ quit() = exit()
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
     global _repl_enough_stdin = true
-    #stop_reading(STDIN) 
+    stop_reading(STDIN) 
     STDIN.readcb = false
     put(_jl_repl_channel, (ast, show_value))
 end

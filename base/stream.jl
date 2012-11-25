@@ -1,6 +1,4 @@
-#TODO: function writeall(Cmd, String)
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
-
 
 ## types ##
 
@@ -11,7 +9,7 @@ type WaitTask
     filter::Callback #runs task only if false
     localdata::Any
     WaitTask(task::Task,test::Callback,localdata) = new(task,test,localdata)
-    WaitTask(task::Task) = new(task, false)
+    WaitTask(task::Task) = new(task, false, nothing)
 end
 
 abstract AsyncStream <: Stream
@@ -124,7 +122,7 @@ type TcpSocket <: Socket
         this = TcpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},TcpSocket),globalEventLoop(),this)
         if(this.handle == C_NULL)
-            error("Failed to start reading: ",_uv_lasterror(globalEventLoop()))
+            error("Failed to start reading: ",_uv_lasterror())
         end
         this
     end
@@ -214,7 +212,8 @@ function tasknotify(waittasks::Vector{WaitTask}, args...)
     newwts = WaitTask[]
     ct = current_task()
     for wt in waittasks
-        if (isa(wt.filter, Function) ? wt.filter(wt.localdata, args...) : wt) === false
+        f = wt.filter
+        if (isa(f, Function) ? f(wt.localdata, args...) : f) === false
             work = WorkItem(wt.task)
             work.argument = args
             enq_work(work)
@@ -236,7 +235,7 @@ wait_readline_filter(w::AsyncStream, args...) = memchr(w.buffer,'\n') <= 0
 #general form of generated calls is: wait_<for_event>(o::NotificationObject, [args::AsRequired...])
 for (fcn, notify, filter_fcn, types) in
     ((:wait_exit,:closenotify,:wait_exit_filter,:Process), #close happens almost immediately after exit, but gives I/O time to finish
-     (:wait_connect,:connectnotify,:wait_connect_filter,:AsyncStream),
+     (:wait_connected,:connectnotify,:wait_connect_filter,:AsyncStream),
      (:wait_close,:closenotify,:wait_close_filter,:(Union(AsyncStream,Process))),
      (:wait_readable,:readnotify,:wait_readable_filter,:AsyncStream),
      (:wait_readline,:readnotify,:wait_readline_filter,:AsyncStream),
@@ -279,9 +278,6 @@ for (fcn, notify, filter_fcn, types) in
             end
             args
         end
-        if isa($types,Tuple)
-            $fcn(x,y...) = $fcn((x,y...)) #allow either form
-        end
     end
 end
 wait_exit(x::ProcessChain) = wait_exit(x.processes)
@@ -297,6 +293,42 @@ function wait_success(x::Union(Process,Vector{Process}))
     wait_exit(x)
     kill(x)
     success(x)
+end
+wait_readnb(a::AsyncStream,b::Int) = wait_readnb((a,b))
+function wait_accept(server::TcpSocket)
+    client = TcpSocket()
+    err = accept(server,client)
+    if err == 0
+        return client
+    else
+        err = _uv_lasterror()
+        if err != 4 #EAGAIN
+            error("accept error: ", err, "\n")
+        end
+    end
+    ct = current_task()
+    tw = WaitTask(ct)
+    while true
+        push(server.connectnotify,tw)
+        ct.runnable = false
+        args = yield()
+        if isa(args,InterruptException)
+            error(args)
+        end
+        status = args[2]::Int32
+        if status == -1
+            error("listen error: ", _uv_lasterror(), "\n")
+        end
+        err = accept(server,client)
+        if err == 0
+            return client
+        else
+            err = _uv_lasterror()
+            if err != 4 #EAGAIN
+                error("accept error: ", err, "\n")
+            end
+        end
+    end
 end
     
 #from `connect`
@@ -314,7 +346,7 @@ function _uv_hook_connectioncb(sock::AsyncStream, status::Int32)
     tasknotify(sock.connectnotify, sock, status)
 end
 
-function _jl_listen(sock::AsyncStream,backlog::Int32,cb::Function)
+function _jl_listen(sock::AsyncStream,backlog::Int32,cb::Callback)
     sock.ccb = cb
     ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog)
 end
@@ -324,7 +356,7 @@ _jl_tcp_accept(server::Ptr,client::Ptr) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{
 accept(server::TcpSocket,client::TcpSocket) = _jl_tcp_accept(server.handle,client.handle)
 connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,addr.host,hton(addr.port))
 
-function open_any_tcp_port(preferred_port::Uint16,cb::Function)
+function open_any_tcp_port(preferred_port::Uint16,cb::Callback)
     socket = TcpSocket();
     addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
     while true
@@ -338,7 +370,7 @@ function open_any_tcp_port(preferred_port::Uint16,cb::Function)
     end
     return (addr.port,socket)
 end
-open_any_tcp_port(preferred_port::Integer,cb::Function)=open_any_tcp_port(uint16(preferred_port),cb)
+open_any_tcp_port(preferred_port::Integer,cb::Callback)=open_any_tcp_port(uint16(preferred_port),cb)
 
 ## BUFFER ##
 ## Allocate a simple buffer
@@ -381,7 +413,7 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr, len::Int32)
         if(isa(stream.closecb,Function))
             stream.closecb()
         end
-        if(_uv_lasterror(globalEventLoop()) != 1) #UV_EOF == 1
+        if(_uv_lasterror() != 1) #UV_EOF == 1
             error("Failed to start reading: ",_uv_lasterror(globalEventLoop()))
         end
         #EOF
@@ -515,19 +547,21 @@ function link_pipe(read_end2::NamedPipe,readable_julia_only::Bool,write_end::Ptr
         read_end2.handle = malloc_pipe()
     end
     link_pipe(read_end2.handle,readable_julia_only,write_end,writeable_julia_only,read_end2)
+    read_end2.open = true
 end
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::NamedPipe,writeable_julia_only::Bool)
     if(write_end.handle == C_NULL)
         write_end.handle = malloc_pipe()
     end
     link_pipe(read_end,readable_julia_only,write_end.handle,writeable_julia_only,write_end)
+    write_end.open = true
 end
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
 function close(stream::AsyncStream)
     if stream.open
-        ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
         stream.open = false
+        ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
     end
 end
 
@@ -550,6 +584,36 @@ function readall(stream::AsyncStream)
     start_reading(stream)
     wait_close(stream)
     return takebuf_string(stream.buffer)
+end
+
+function read{T}(this::AsyncStream, a::Array{T})
+    if isa(T, BitsKind)
+        nb = numel(a)*sizeof(T)
+        buf = this.buffer
+        assert(buf.seekable == false)
+        assert(buf.maxsize >= nb)
+        wait_readnb(this,nb)
+        read(this.buffer, a)
+        return a
+    else
+        #error("Read from Buffer only supports bits types or arrays of bits types; got $T.")
+        error("Read from Buffer only supports bits types or arrays of bits types")
+    end
+end
+
+function read(this::AsyncStream,::Type{Uint8})
+    buf = this.buffer
+    assert(buf.seekable == false)
+    wait_readnb(this,1)
+    read(buf,Uint8)
+end
+
+function readline(this::AsyncStream)
+    buf = this.buffer
+    assert(buf.seekable == false)
+    start_reading(this)
+    wait_readline(this)
+    readline(buf)
 end
 
 show(io, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
@@ -974,11 +1038,12 @@ _jl_getaddrinfo(loop::Ptr,host::ByteString,service::Ptr,cb::Function) = ccall(:j
 _jl_sockaddr_from_addrinfo(addrinfo::Ptr) = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr,),addrinfo)
 _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},Uint16),ptr,port)
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
+_uv_lasterror() = _uv_lasterror(globalEventLoop())
 
 function connect_callback(sock::TcpSocket,status::Int32)
     #println("connect_callback")
     if(status==-1)
-        error("Socket connection failed: ",_uv_lasterror(globalEventLoop()))
+        error("Socket connection failed: ",_uv_lasterror())
     end
     sock.open = true;
 end
@@ -1010,7 +1075,7 @@ function connect_to_host(host::ByteString,port::Uint16)
     if(err!=0)
         error("Failed to  initilize request to resolve hostname: ",host)
     end
-    wait_connect(sock)
+    wait_connected(sock)
     return sock
 end
 

@@ -243,49 +243,6 @@ force(x::Function) = x()
 # we actually make objects. this allows for constructing objects that might
 # interfere with I/O by reading, writing, blocking, etc.
 
-type Deserializer <: Stream #TODO: rename to SyncStream
-    stream::AsyncStream
-    function Deserializer(loop::Function,stream::AsyncStream)
-        this = new(stream)
-        enq_work(() -> loop(this))
-        start_reading(stream)
-        this
-    end
-end
-show(io::IO,d::Deserializer) = print(io,"Deserializer()")
-
-function read{T}(this::Deserializer, a::Array{T})
-    if isa(T, BitsKind)
-        nb = numel(a)*sizeof(T)
-        buf = this.stream.buffer
-        assert(buf.seekable == false)
-        assert(buf.maxsize >= nb)
-        wait_readnb(this.stream,nb)
-        read(this.stream.buffer, a)
-        return a
-    else
-        #error("Read from Buffer only supports bits types or arrays of bits types; got $T.")
-        error("Read from Buffer only supports bits types or arrays of bits types")
-    end
-end
-
-function read(this::Deserializer,::Type{Uint8})
-    buf = this.stream.buffer
-    assert(buf.seekable == false)
-    wait_readnb(this.stream,1)
-    read(buf,Uint8)
-end
-
-function readline(this::Deserializer)
-    buf = this.stream.buffer
-    assert(buf.seekable == false)
-    wait_readline(this.stream)
-    readline(buf)
-end
-
-write(::Deserializer,args...) = error("write not implemented for deserializer")
-position(d::Deserializer) = d.pos
-
 function deserialize(s)
     b = int32(read(s, Uint8))
     if b == 0

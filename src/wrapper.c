@@ -352,8 +352,8 @@ DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
 }
 
 static char chars[] = {
-      0,  1,  2,  3,   4,  5,  6,  7,
-      8,  9, 10, 11, 12, 13, 13, 15,
+      0,  1,  2,  3,  4,  5,  6,  7,
+      8,  9, 10, 11, 12, 13, 14, 15,
      16, 17, 18, 19, 20, 21, 22, 23,
      24, 25, 26, 27, 28, 29, 30, 31,
      32, 33, 34, 35, 36, 37, 38, 39,
@@ -374,7 +374,7 @@ static char chars[] = {
     152,153,154,155,156,157,158,159,
     160,161,162,163,164,165,166,167,
     168,169,170,171,172,173,174,175,
-    167,177,178,179,180,181,182,183,
+    176,177,178,179,180,181,182,183,
     184,185,186,187,188,189,190,191,
     192,193,194,195,196,197,198,199,
     200,201,202,203,204,205,206,207,
@@ -386,29 +386,31 @@ static char chars[] = {
     248,249,250,251,252,253,254,255
 };
 
-void jl_free_buffer() {}
+static void jl_free_buffer(uv_write_t* req, int status) {
+	free(req);
+}
 
-DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
-{
+DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream) {
     if(stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
-        return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+        int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
+		return err ? 0 : 1;
     } else {
         ios_t *handle = (ios_t*)stream;
         return ios_putc(c,handle);
     }
 }
 
-DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
-{
+DLLEXPORT int jl_write(uv_stream_t *stream, char *str, size_t n) {
 //TODO: BAD!! Needed because Julia can't yet detect null stdio
     if(stream == 0)
         return 0;
     if(stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         uv_buf_t buf[]  = {{.base = str,.len=n}};
-        return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+        int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
+		return err ? 0 : n;
     } else {
         ios_t *handle = (ios_t*)stream;
         return ios_write(handle,str,n);
