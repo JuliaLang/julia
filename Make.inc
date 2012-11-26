@@ -48,8 +48,13 @@ USE_COPY_STACKS = 1
 FC = gfortran
 JFFLAGS = -O2 $(fPIC)
 
+ifeq ($(CC), clang)
+USEGCC = 0
+USECLANG = 1
+else
 USEGCC = 1
 USECLANG = 0
+endif
 
 ifeq ($(OS), Darwin)
 OSVER = $(shell uname -r | cut -b 1-2)
