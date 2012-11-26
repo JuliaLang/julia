@@ -312,7 +312,7 @@ function expm!{T<:LapackType}(A::StridedMatrix{T})
     if ihi < n       # apply upper permutations in forward order
         for j in (ihi+1):n    rcswap!(j, int(scale[j]), X) end
     end
-    X
+    convert(Matrix{T}, X)
 end
 
 ## Swap rows j and jp and columns j and jp in X
