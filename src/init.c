@@ -223,12 +223,14 @@ void jl_atexit_hook() {
 #endif
             case UV_TCP:
             case UV_NAMED_PIPE:
+                if(!(uv_is_writable((uv_stream_t*)handle)))
                 {
                     uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
                     int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
                     if (err != 0) { printf("err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
+                    break;
                 }
-                break;
+                //fall through
             case UV_POLL:
             case UV_TIMER:
             case UV_PREPARE:

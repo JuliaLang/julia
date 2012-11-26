@@ -304,7 +304,7 @@ end # module Base
 
 using Base
 
-JL_PRIVATE_LIBDIR = getenv("JL_PRIVATE_LIBDIR")
+JL_PRIVATE_LIBDIR = get(ENV,"JL_PRIVATE_LIBDIR","lib/julia")
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji", "start_image.jl")
