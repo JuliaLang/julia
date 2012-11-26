@@ -1,10 +1,10 @@
-:mod:`profile.jl` --- A simple profiler for Julia
-====================================================
+profile.jl --- A simple profiler for Julia
+==========================================
 
-.. module:: profile.jl
+.. .. module:: profile.jl
    :synopsis: Allows you to determine running times for each line of code.
 
-.. function:: profile
+.. function:: @profile
 
    Profiling is controlled via the ``@profile`` macro. Your first step is to determine which code you want to profile and encapsulate it inside a ``@profile begin ... end`` block, like this::
 

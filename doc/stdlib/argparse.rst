@@ -1,13 +1,15 @@
-:mod:`argparse.jl` --- Module for command-line argument parsing
-===============================================================
+:mod:`ArgParse` --- Module for command-line argument parsing
+============================================================
 
 .. module:: ArgParse
    :synopsis: Command line argument parser
 
+.. note:: located in ``argparse.jl``
+
 This module allows the creation of user-friendly command-line interfaces to Julia programs:
 the program defines which arguments, options and sub-commands it accepts, and the ``ArgParse`` module
-does the actual parsing, issues errors when the input is invalid, and automatically generates help and
-usage messages.
+does the actual parsing, issues errors when the input is invalid, and automatically generates help
+and usage messages.
 
 Users familiar with Python's argparse module will find many similarities, but some important differences
 as well.
@@ -20,7 +22,7 @@ Quick overview and a simple example
 
 First of all, the module needs to be loaded and imported::
 
-    require("argparse.jl")
+    require("argparse")
     using ArgParse
 
 Note that in the second line we imported all names in the current namespace; this should be completely safe in most cases.
@@ -66,7 +68,7 @@ In the above example, it will contain the keys ``"opt1"``, ``"opt2"``, ``"flag1"
 
 Putting all this together in a file, we can see how a basic command-line interface is created::
 
-    require("argparse.jl")
+    require("argparse")
     using ArgParse
 
     function parse_commandline()
@@ -317,7 +319,7 @@ methods to populate it:
                 required = true
             end)
 
-    Note that the ``OptionsMod`` module must be imported in order to use this function.
+    Note that the :mod:`OptionsMod` module must be imported in order to use this function.
 
 .. _argparse-argument-table-entries:
 
@@ -554,7 +556,7 @@ The ``ArgParse`` module allows commands to look both as positional arguments or 
 Commands are introduced by the ``action = :command`` setting in the argument table. Suppose we save the following script in
 a file called ``cmd_example.jl``::
 
-    require("argparse.jl")
+    require("argparse")
     using ArgParse
 
     function parse_commandline()

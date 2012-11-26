@@ -16,6 +16,12 @@
 # collections, the difference in performance is small, and this implmentation
 # is simpler and easier to understand.
 
+import Base.isempty, Base.numel, Base.length, Base.sizeof
+import Base.start, Base.next, Base.done
+import Base.has, Base.get
+import Base.assign, Base.ref, Base.del, Base.del_all
+import Base.show
+
 abstract LRU{K,V} <: Associative{K,V}
 
 # Default cache size

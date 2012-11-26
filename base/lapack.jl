@@ -1,5 +1,5 @@
-## The Lapack module of interfaces to Lapack subroutines
-module Lapack
+## The LAPACK module of interfaces to LAPACK subroutines
+module LAPACK
 using Base
 
 typealias LapackChar Char
@@ -12,14 +12,14 @@ end
 
 function chkstride1(A::StridedVecOrMat...)
     for a in A
-        if stride(a,1) != 1 error("Lapack: Matrix must have contiguous columns") end
+        if stride(a,1) != 1 error("LAPACK: Matrix must have contiguous columns") end
     end
 end
 
 function chksquare(A::Matrix...)
     for a in A
         m, n = size(a)
-        if m != n error("Lapack: Matrix must be square") end
+        if m != n error("LAPACK: Matrix must be square") end
     end
 end
 
@@ -75,11 +75,11 @@ for (gbtrf, gbtrs, elty) in
 end
 
 ## (GE) general matrices: balancing and back-transforming
-for (gebal, gebak, elty) in
-    ((:dgebal_, :dgebak_, :Float64),
-     (:sgebal_, :sgebak_, :Float32),
-     (:zgebal_, :zgebak_, :Complex128),
-     (:cgebal_, :cgebak_, :Complex64))
+for (gebal, gebak, elty, relty) in
+    ((:dgebal_, :dgebak_, :Float64, :Float64),
+     (:sgebal_, :sgebak_, :Float32, :Float32),
+     (:zgebal_, :zgebak_, :Complex128, :Float64),
+     (:cgebal_, :cgebak_, :Complex64, :Float32))
     @eval begin
         #     SUBROUTINE DGEBAL( JOB, N, A, LDA, ILO, IHI, SCALE, INFO )
         #*     .. Scalar Arguments ..
@@ -94,10 +94,10 @@ for (gebal, gebak, elty) in
             info    = Array(Int32, 1)
             ihi     = Array(Int32, 1)
             ilo     = Array(Int32, 1)
-            scale   = Array($elty, n)
+            scale   = Array($relty, n)
             ccall(dlsym(Base.liblapack, $(string(gebal))), Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
-                   Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
+                   Ptr{Int32}, Ptr{Int32}, Ptr{$relty}, Ptr{Int32}),
                   &job, &n, A, &stride(A,2), ilo, ihi, scale, info)
             if info[1] != 0 throw(LapackException(info[1])) end
             ilo[1], ihi[1], scale
@@ -457,9 +457,9 @@ for (gelsd, elty) in ((:dgelsd_, Float64),
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), S( * ), WORK( * )
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
-            Lapack.chkstride1(A, B)
+            LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B,1) != m; throw(Lapack.LapackDimMisMatch("gelsd!")); end
+            if size(B,1) != m; throw(LAPACK.LapackDimMisMatch("gelsd!")); end
             s     = Array($elty, min(m, n))
             rnk   = Array(Int32, 1)
             info  = Array(Int32, 1)
@@ -500,9 +500,9 @@ for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
         #       DOUBLE PRECISION   RWORK( * ), S( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
-            Lapack.chkstride1(A, B)
+            LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B,1) != m; throw(Lapack.LapackDimMisMatch("gelsd!")); end
+            if size(B,1) != m; throw(LAPACK.LapackDimMisMatch("gelsd!")); end
             s     = Array($elty, min(m, n))
             rnk   = Array(Int32, 1)
             info  = Array(Int32, 1)

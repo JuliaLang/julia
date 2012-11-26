@@ -159,10 +159,10 @@ typedef struct _jl_lambda_info_t {
     jl_value_t *tfunc;
     jl_sym_t *name;  // for error reporting
     jl_array_t *roots;  // pointers in generated code
-    jl_value_t *specTypes;  // argument types this is specialized for
+    jl_tuple_t *specTypes;  // argument types this is specialized for
     // a slower-but-works version of this function as a fallback
     struct _jl_function_t *unspecialized;
-    // pairlist of all lambda infos with code generated from this one
+    // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
     int8_t inferred;
     jl_value_t *file;
@@ -170,8 +170,9 @@ typedef struct _jl_lambda_info_t {
     struct _jl_module_t *module;
 
     // hidden fields:
-    jl_fptr_t fptr;
-    void *functionObject;
+    jl_fptr_t fptr;        // jlcall entry point
+    void *functionObject;  // jlcall llvm Function
+    void *cFunctionObject; // c callable llvm Function
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
     uptrint_t inInference : 1;
@@ -841,6 +842,7 @@ DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 
 // external libraries
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
+DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 
 // compiler
@@ -856,6 +858,7 @@ jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
                                             jl_value_t **locals, size_t nl);
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_value_t **locals, size_t nl);
+jl_module_t *jl_base_relative_to(jl_module_t *m);
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def);
 

@@ -1,15 +1,17 @@
 ### Linear programming
 
-cd("../extras") do
-require("linprog.jl")
+cd("../extras") # we can't use do-notation because of "using"
+require("linprog")
+
+using LinProgGLPK
 
 ## Simplex method
 
 # Set options (disable all output
 # excpept for errors, turn on presolver)
-lps_opts = GLPSimplexParam()
-lps_opts["msg_lev"] = GLP_MSG_ERR
-lps_opts["presolve"] = GLP_ON
+lps_opts = GLPK.SimplexParam()
+lps_opts["msg_lev"] = GLPK.MSG_ERR
+lps_opts["presolve"] = GLPK.ON
 lps_opts["it_lim"] = 1000
 
 # A small dense optimization problem
@@ -59,8 +61,8 @@ ub = ones(Float64, 9);
 
 # Same problem and options as above
 
-lpi_opts = GLPInteriorParam()
-lpi_opts["msg_lev"] = GLP_MSG_ERR
+lpi_opts = GLPK.InteriorParam()
+lpi_opts["msg_lev"] = GLPK.MSG_ERR
 
 (z, x, ret) = linprog(f, [], [], Aeq, beq, lb, ub, lpi_opts);
 
@@ -77,12 +79,12 @@ tol = 1e-4
 
 # Same problem and options as above
 
-mip_opts = GLPIntoptParam()
-mip_opts["msg_lev"] = GLP_MSG_ERR
-mip_opts["presolve"] = GLP_ON
+mip_opts = GLPK.IntoptParam()
+mip_opts["msg_lev"] = GLPK.MSG_ERR
+mip_opts["presolve"] = GLPK.ON
 
 # Use binary variables
-colkind = int32([ GLP_BV for i = 1 : 9 ])
+colkind = int32([ GLPK.BV for i = 1 : 9 ])
 
 (z, x, ret, ret_ps) = mixintprog(f, [], [], Aeq, beq, [], [], colkind, mip_opts);
 
@@ -92,4 +94,4 @@ colkind = int32([ GLP_BV for i = 1 : 9 ])
                      0.; 1.; 0. ;
                      1.; 0.; 0. ])
 
-end # cd
+cd("../test")

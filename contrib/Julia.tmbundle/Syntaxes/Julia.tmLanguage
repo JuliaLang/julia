@@ -161,7 +161,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(Range1?|NDRange|Tuple|Real|Vector|Array|AbstractArray|ObjectIdDict|Dict|WeakKeyDict|EnvHash|LineIterator|String|IntSet|FDSet|Set|Task|ASCIIString|UTF8String|Bool|Int(8|16|32|64)?|Uint(8|16|32|64)?|Float(32|64)?|Complex(64|128)?)\b</string>
+					<string>\b(Any|Function|None|Range1?|NDRange|Tuple|Real|Vector|Array|AbstractArray|ObjectIdDict|Dict|WeakKeyDict|EnvHash|LineIterator|String|IntSet|FDSet|Set|Task|ASCIIString|UTF8String|Bool|Int(8|16|32|64)?|Uint(8|16|32|64)?|Float(32|64)?|Complex(64|128)|true|false?)\b</string>
 					<key>name</key>
 					<string>support.type.julia</string>
 				</dict>
@@ -185,13 +185,13 @@
 				</dict>
 				<dict>
 					<key>match</key>
-					<string>\b(?:if|else|elseif|while|for|begin|let|end|do|try|catch|return|break|continue)\b</string>
+					<string>\b(?:if|else|elseif|while|for|in|begin|let|end|do|try|catch|return|break|continue)\b</string>
 					<key>name</key>
 					<string>keyword.control.julia</string>
 				</dict>
 				<dict>
 					<key>match</key>
-					<string>\b(?:global|local|const|export|import)\b</string>
+					<string>\b(?:global|local|const|export|import|using)\b</string>
 					<key>name</key>
 					<string>storage.modifier.variable.julia</string>
 				</dict>

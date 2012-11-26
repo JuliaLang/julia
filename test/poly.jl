@@ -1,6 +1,6 @@
 # assert file to test polynomial
 cd("../extras") do
-require("poly.jl")
+require("poly")
 
 
 pNULL = Polynomial(Float32[])

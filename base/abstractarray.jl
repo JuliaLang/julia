@@ -156,6 +156,7 @@ unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x)))
 float   (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
 complex (x::AbstractArray) = copy_to(similar(x,typeof(complex(one(eltype(x))))), x)
 
+dense(x::AbstractArray) = x
 full(x::AbstractArray) = x
 
 ## Unary operators ##

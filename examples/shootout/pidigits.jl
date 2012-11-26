@@ -1,5 +1,5 @@
-load("timing.jl")
-load("bigint.jl")
+load("timing")
+load("bigint")
 
 function pidigits(N::Int, printOut::Bool)
     """

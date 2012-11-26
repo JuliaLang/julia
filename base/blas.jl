@@ -1,9 +1,11 @@
 typealias LapackType Union(Float64,Float32,Complex128,Complex64)
 
-module Blas
+module BLAS
 using Base
 
 export copy!,
+       scal!,
+       scal,
        dot,
        nrm2,
        axpy!,
@@ -31,6 +33,26 @@ for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, DX, &incx, DY, &incy)
             DY
+        end
+    end
+end
+
+# SUBROUTINE DSCAL(N,DA,DX,INCX)
+for (fname, elty) in ((:dscal_,:Float64),    (:sscal_,:Float32),
+                      (:zscal_,:Complex128), (:cscal_,:Complex64))
+    @eval begin
+        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                  &n, &DA, DX, &incx)
+            DX
+        end
+        function scal(n::Integer, DA::$elty, DX_orig::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+            DX = copy(DX_orig)
+            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                  &n, &DA, DX, &incx)
+            DX
         end
     end
 end
@@ -389,7 +411,7 @@ end # module
 
 function copy_to{T<:LapackType}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
-        Blas.copy!(n, src, 1, dest, 1)
+        BLAS.copy!(n, src, 1, dest, 1)
     else
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
@@ -411,7 +433,7 @@ function copy_to{T<:LapackType,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{
     if length(rdest) != length(rsrc)
         error("Ranges must be of the same length")
     end
-    Blas.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
+    BLAS.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
               pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
     return dest
 end

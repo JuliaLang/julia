@@ -58,7 +58,7 @@ end
 for (fd, f) in ((:asind, :asin), (:acosd, :acos), (:atand, :atan),
                 (:asecd, :asec), (:acscd, :acsc), (:acotd, :acot))
     @eval begin
-        ($fd)(y) = degrees2radians(($f)(z))
+        ($fd)(y) = degrees2radians(($f)(y))
     end
 end
 

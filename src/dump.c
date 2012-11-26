@@ -611,7 +611,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->sparams = (jl_tuple_t*)jl_deserialize_value(s);
         li->tfunc = jl_deserialize_value(s);
         li->name = (jl_sym_t*)jl_deserialize_value(s);
-        li->specTypes = jl_deserialize_value(s);
+        li->specTypes = (jl_tuple_t*)jl_deserialize_value(s);
         li->specializations = (jl_array_t*)jl_deserialize_value(s);
         li->inferred = read_int8(s);
         li->file = jl_deserialize_value(s);
@@ -621,6 +621,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->fptr = &jl_trampoline;
         li->roots = NULL;
         li->functionObject = NULL;
+        li->cFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
         li->unspecialized = NULL;

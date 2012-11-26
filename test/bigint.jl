@@ -1,5 +1,5 @@
 cd("../extras") do
-require("bigint.jl")
+require("bigint")
 
 a=BigInt("123456789012345678901234567890")
 b=BigInt("123456789012345678901234567891")

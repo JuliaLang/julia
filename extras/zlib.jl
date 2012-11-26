@@ -13,6 +13,13 @@ export
    Z_BEST_COMPRESSION,
    Z_DEFAULT_COMPRESSION,
 
+# Compression strategy constants (zlib_h.jl)
+   Z_FILTERED,
+   Z_HUFFMAN_ONLY,
+   Z_RLE,
+   Z_FIXED,
+   Z_DEFAULT_STRATEGY,
+
 # Uncompress routines
    uncompress,
    uncompress_to_buffer,
@@ -24,9 +31,20 @@ export
    Z_DATA_ERROR,
    Z_MEM_ERROR,
    Z_BUF_ERROR,
-   Z_VERSION_ERROR
+   Z_VERSION_ERROR,
 
-load("zlib_h.jl")
+# Version
+   ZLIB_VERSION,
+
+# More constants and types
+   Z_OK #,
+#   Z_STREAM_END,
+#   Z_NEED_DICT,
+#   Z_DEFAULT_BUFSIZE,
+#   Z_BIG_BUFSIZE,
+#   ZFileOffset
+
+load("zlib_h")
 
 # zlib functions
 
@@ -55,7 +73,7 @@ function compress_to_buffer(source::Array{Uint8}, dest::Array{Uint8}, level::Int
     dest_buf_size = Uint[length(dest)]
 
     # Compress the input
-    ret = ccall(dlsym(_zlib, :compress2), Int32, (Ptr{Uint}, Ptr{Uint}, Ptr{Uint}, Uint, Int32),
+    ret = ccall(dlsym(_zlib, :compress2), Int32, (Ptr{Uint8}, Ptr{Uint}, Ptr{Uint}, Uint, Int32),
                 dest, dest_buf_size, source, length(source), int32(level))
 
     if ret != Z_OK

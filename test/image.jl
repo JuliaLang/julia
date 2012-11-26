@@ -1,4 +1,4 @@
-require("../extras/image.jl")
+require("../extras/image")
 
 all_close(ar, v) = all(abs(ar-v) .< sqrt(eps(v)))
 

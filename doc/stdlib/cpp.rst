@@ -1,10 +1,12 @@
-:mod:`cpp.jl` --- Calling C++ from Julia
-=====================================================
+cpp.jl --- Calling C++ from Julia
+=================================
 
-.. module:: cpp.jl
+.. .. module:: cpp.jl
    :synopsis: Provides partial support for calling C++ library functions from Julia.
 
-.. function:: cpp
+Provides partial support for calling C++ library functions from Julia.
+
+.. function:: @cpp(ccall_expression)
 
    Suppose you have a C++ shared library, ``libdemo``, which contains a function ``timestwo``::
 

@@ -211,7 +211,7 @@ end
 ## basic darray ##
 
 d = drand(10,10)
-@assert isequal(d'', d)
+#@assert isequal(d'', d)
 @assert isequal(convert(Array,d), d)
 
 ## cumsum

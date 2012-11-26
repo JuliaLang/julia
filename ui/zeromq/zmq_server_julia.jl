@@ -1,4 +1,4 @@
-require("zeromq/zmq_serialize_julia.jl")
+require("zeromq/zmq_serialize_julia")
 
 global _responder   # since eval works in global scope, can't use a closure for zmqquit
 

@@ -1,5 +1,5 @@
 cd("../extras") do
-require("bigfloat.jl")
+require("bigfloat")
 
 a=BigFloat("12.34567890121")
 b=BigFloat("12.34567890122")

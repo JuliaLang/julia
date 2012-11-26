@@ -194,7 +194,13 @@ function ref(s::SubArray, I::Indices...)
         newindexes[i] = isa(t, Int) ? t : t[I[i]]
     end
 
-    reshape(ref(s.parent, newindexes...), ref_shape(I...))
+    rs = ref_shape(I...)
+    result = ref(s.parent, newindexes...)
+    if isequal(rs, size(result))
+        return result
+    else
+        return reshape(result, rs)
+    end
 end
 
 assign(s::SubArray, v, i::Integer) = assign(s, v, ind2sub(size(s), i)...)

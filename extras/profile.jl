@@ -132,15 +132,16 @@ function insert_profile_cf(ex::Expr, tlast, tnow, timers, counters, tags, indx::
     if length(ex.args) == 2
         # This is a for, while, or 2-argument if or try block
         block1, indx = insert_profile(ex.args[2], tlast, tnow, timers, counters, tags, indx, retsym, rettest)
-        return expr(ex.head, {ex.args[1], block1}), indx
+        exret = expr(ex.head, {ex.args[1], block1})
     elseif length(ex.args) == 3
         # This is for a 3-argument if or try block
         block1, indx = insert_profile(ex.args[2], tlast, tnow, timers, counters, tags, indx, retsym, rettest)
         block2, indx = insert_profile(ex.args[3], tlast, tnow, timers, counters, tags, indx, retsym, rettest)
-        return expr(ex.head, {ex.args[1], block1, block2}), indx
+        exret = expr(ex.head, {ex.args[1], block1, block2})
     else
         error("Wrong number of arguments")
     end
+    return exret, indx
 end
 
 # Insert timing and counters into function body.

@@ -1,7 +1,7 @@
-:mod:`sparse.jl` --- Working with Sparse Matrices
-=================================================
+sparse.jl --- Working with Sparse Matrices
+==========================================
 
-.. module:: sparse.jl
+.. .. module:: sparse.jl
    :synopsis: Functions for working with sparse matrices
 
 This module contains functions that allow one to use sparse matrices in Julia.

@@ -42,7 +42,7 @@ release debug: libRmath.$(SHLIB_EXT)
 
 libRmath.$(SHLIB_EXT): $(XOBJS)
 	rm -rf $@
-	$(QUIET_LINK) $(CC) -shared -o $@ $^ -L$(USRLIB) -lrandom $(RPATH_ORIGIN)
+	$(QUIET_LINK) $(CC) -shared -o $@ $^ -L$(USR)/lib -lrandom $(RPATH_ORIGIN)
 
 clean:
 	rm -f *.o *.do *.a *.$(SHLIB_EXT) core* *~ *#
