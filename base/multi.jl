@@ -786,8 +786,8 @@ function accept_handler(server::TcpSocket, status::Int32)
         print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
     else
        create_message_handler_loop(client)
-        end
     end
+end
 
 type DisconnectException <: Exception end
 
@@ -797,6 +797,7 @@ function create_message_handler_loop(this::AsyncStream) #returns immediately
         #println("message_handler_loop")
         refs = (PGRP::ProcessGroup).refs
         start_reading(this)
+        wait_connected(this)
         if PGRP.np == 0
                 # first connection; get process group info from client
                 PGRP.myid = deserialize(this)

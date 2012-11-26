@@ -312,25 +312,16 @@ void *init_stdio_handle(uv_file fd,int readable)
             uv_tty_set_mode((void*)handle,1); //raw stdio
             break;
         case UV_NAMED_PIPE:
+        case UV_FILE:
+            ios_printf(ios_stdout,"Using pipes/files as STDIO is not yet supported. Proceed with caution!\n");
+            ios_printf(ios_stderr,"Using pipes/files as STDIO is not yet supported. Proceed with caution!\n");
             handle = malloc(sizeof(uv_pipe_t));
-            uv_pipe_init(jl_io_loop,(uv_pipe_t*)handle,(readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE));
+            uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle,(readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE));
             uv_pipe_open((uv_pipe_t*)handle,fd);
             ((uv_pipe_t*)handle)->data=0;
             break;
-        case UV_FILE:
-            if(readable) {
-                jl_printf(JL_STDERR,"Reading from files as STDIN is not yet supported. Proceed with caution!\n");
-                handle = malloc(sizeof(uv_pipe_t));
-                uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle,(readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE));
-                uv_pipe_open((uv_pipe_t*)handle,fd);
-                ((uv_pipe_t*)handle)->data=0;
-            } else if (fd == 1)
-                handle=ios_stdout;
-            else if (fd == 2)
-                handle=ios_stderr;
-            else
-                jl_error("unknown output file stream");
-            break;
+        case UV_TCP:
+        case UV_UDP:
         default:
             handle=NULL;
             jl_errorf("This type of handle for stdio is not yet supported (%d)!\n",type);

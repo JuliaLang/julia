@@ -239,8 +239,8 @@ wait_exit_filter(p::Process, args...) = !process_exited(p)
 wait_connect_filter(w::AsyncStream, args...) = !w.open
 wait_close_filter(w::Union(AsyncStream,Process), args...) = w.open
 wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
-wait_readnb_filter(w::(AsyncStream,Int), args...) = w.open&&(nb_available(w[1].buffer) < w[2])
-wait_readline_filter(w::AsyncStream, args...) = w.open&&(memchr(w.buffer,'\n') <= 0)
+wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
+wait_readline_filter(w::AsyncStream, args...) = w.open && (memchr(w.buffer,'\n') <= 0)
 
 #general form of generated calls is: wait_<for_event>(o::NotificationObject, [args::AsRequired...])
 for (fcn, notify, filter_fcn, types) in
@@ -343,6 +343,9 @@ end
     
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
+    if status != -1
+        sock.open = true
+    end
     if isa(sock.ccb,Function)
         sock.ccb(sock, status)
     end
@@ -363,7 +366,13 @@ end
 
 _jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
 _jl_tcp_accept(server::Ptr{Void},client::Ptr{Void}) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
-accept(server::TcpSocket,client::TcpSocket) = _jl_tcp_accept(server.handle,client.handle)
+function accept(server::TcpSocket,client::TcpSocket)
+    err = _jl_tcp_accept(server.handle,client.handle)
+    if err == 0
+        client.open = true
+    end
+    err
+end
 connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,addr.host,hton(addr.port))
 
 function open_any_tcp_port(preferred_port::Uint16,cb::Callback)
@@ -1067,15 +1076,6 @@ _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = ccall(:jl_sockaddr_set_port
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
 _uv_lasterror() = _uv_lasterror(globalEventLoop())
 
-function connect_callback(sock::TcpSocket,status::Int32)
-    #println("connect_callback")
-    if(status==-1)
-        error("Socket connection failed: ",_uv_lasterror())
-    end
-    sock.open = true;
-end
-
-
 function getaddrinfo_callback(sock::TcpSocket,status::Int32,host::ByteString,port::Uint16,addrinfo_list::Ptr{Void})
     #println("getaddrinfo_callback")
     if(status==-1)
@@ -1083,7 +1083,6 @@ function getaddrinfo_callback(sock::TcpSocket,status::Int32,host::ByteString,por
     end
     sockaddr = _jl_sockaddr_from_addrinfo(addrinfo_list) #only use first entry of the list for now
     _jl_sockaddr_set_port(sockaddr,hton(port))
-    sock.ccb = connect_callback
     err = _jl_connect_raw(sock,sockaddr)
     if(err != 0)
         error("Failed to connect to host "*host*":"*string(port)*" #"*string(_uv_lasterror()))
