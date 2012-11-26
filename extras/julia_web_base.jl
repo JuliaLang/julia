@@ -31,7 +31,6 @@ println(STDOUT,int16(port))
 # wait for the server to connect to the socket
 __io = Base.wait_accept(sock)
 Base.start_reading(__io)
-println("__io connection accepted")
 
 ###########################################
 # protocol implementation

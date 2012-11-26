@@ -375,7 +375,7 @@ OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
 openlibm/Makefile:
 	(cd .. && git submodule update --init)
-$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile openlibm/.git
+$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USR)/$(JL_PRIVATE_LIBDIR)
 	cp $< $@

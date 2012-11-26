@@ -683,11 +683,11 @@ string get_session(string user_name, string session_name) {
 
     //------------------ ARGUMENTS ----------------//
 #if 0
-    char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "../lib/julia/extras/julia_web_base.jl", NULL};
+    char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "../share/julia/extras/julia_web_base.jl", NULL};
 #else
     char arg0[]="./julia-release-readline";
     char arg1[]="--no-history";
-    char arg2[]="../lib/julia/extras/julia_web_base.jl";
+    char arg2[]="../share/julia/extras/julia_web_base.jl";
     char *argv[4]={arg0,arg1,arg2,NULL};
 #endif
     opts.exit_cb=&process_exited2;

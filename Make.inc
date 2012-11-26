@@ -42,7 +42,7 @@ endif
 
 ifeq ($(OS), WINNT)
 fPIC = 
-PATH := ${PATH}:${JULIAHOME}/usr/lib
+PATH := ${PATH}:${JULIAHOME}/usr/lib:${JULIAHOME}/usr/lib/julia
 else
 fPIC = -fPIC
 endif
