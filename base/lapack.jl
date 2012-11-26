@@ -75,11 +75,11 @@ for (gbtrf, gbtrs, elty) in
 end
 
 ## (GE) general matrices: balancing and back-transforming
-for (gebal, gebak, elty) in
-    ((:dgebal_, :dgebak_, :Float64),
-     (:sgebal_, :sgebak_, :Float32),
-     (:zgebal_, :zgebak_, :Complex128),
-     (:cgebal_, :cgebak_, :Complex64))
+for (gebal, gebak, elty, relty) in
+    ((:dgebal_, :dgebak_, :Float64, :Float64),
+     (:sgebal_, :sgebak_, :Float32, :Float32),
+     (:zgebal_, :zgebak_, :Complex128, :Float64),
+     (:cgebal_, :cgebak_, :Complex64, :Float32))
     @eval begin
         #     SUBROUTINE DGEBAL( JOB, N, A, LDA, ILO, IHI, SCALE, INFO )
         #*     .. Scalar Arguments ..
@@ -94,10 +94,10 @@ for (gebal, gebak, elty) in
             info    = Array(Int32, 1)
             ihi     = Array(Int32, 1)
             ilo     = Array(Int32, 1)
-            scale   = Array($elty, n)
+            scale   = Array($relty, n)
             ccall(dlsym(Base.liblapack, $(string(gebal))), Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
-                   Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
+                   Ptr{Int32}, Ptr{Int32}, Ptr{$relty}, Ptr{Int32}),
                   &job, &n, A, &stride(A,2), ilo, ihi, scale, info)
             if info[1] != 0 throw(LapackException(info[1])) end
             ilo[1], ihi[1], scale
