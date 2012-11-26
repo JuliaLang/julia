@@ -193,7 +193,7 @@ static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status) {
     free(req);
 }
 static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
-	struct uv_shutdown_queue *queue = arg;
+    struct uv_shutdown_queue *queue = arg;
     struct uv_shutdown_queue_item *item = malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
@@ -208,26 +208,31 @@ void jl_atexit_hook() {
             jl_apply((jl_function_t*)f, NULL, 0);
         }
     }
-	uv_loop_t* loop = jl_global_event_loop();
+    uv_loop_t* loop = jl_global_event_loop();
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
-		uv_handle_t *handle = item->h;
+        uv_handle_t *handle = item->h;
         switch(handle->type) {
             case UV_TTY:
             case UV_UDP:
-#ifndef __WIN32__ //unix only supports shutdown on TCP and NAMED_PIPE
+//#ifndef __WIN32__ // unix only supports shutdown on TCP and NAMED_PIPE
+// but uv_shutdown doesn't seem to be particularly reliable, so we'll avoid it in general
                 uv_close(handle,NULL);
                 break;
-#endif
+//#endif
             case UV_TCP:
             case UV_NAMED_PIPE:
                 if(!(uv_is_writable((uv_stream_t*)handle)))
                 {
                     uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
-                    int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
-                    if (err != 0) { printf("err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
+                    if (uv_is_writable((uv_stream_t*)handle)) { // uv_shutdown returns an error if not writable
+                        int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
+                        if (err != 0) { printf("err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
+                    } else {
+                        uv_close(handle,NULL);
+                    }
                     break;
                 }
                 //fall through
@@ -237,16 +242,22 @@ void jl_atexit_hook() {
             case UV_CHECK:
             case UV_IDLE:
             case UV_ASYNC:
-            //case UV_SIGNAL:
+            case UV_SIGNAL:
             case UV_PROCESS:
             case UV_FS_EVENT:
-            //case UV_FS_POLL:
+            case UV_FS_POLL:
                 uv_close(handle,NULL); //do we want to use jl_close_uv?
                 break;
+			case UV_HANDLE:
+			case UV_STREAM:
+			case UV_UNKNOWN_HANDLE:
+			case UV_HANDLE_TYPE_MAX:
+			case UV_RAW_FD:
+			case UV_RAW_HANDLE:
             default:
                 assert(0);
         }
-		item = item->next;
+        item = item->next;
     }
     uv_run(loop); //let libuv spin until everything has finished closing
 }
@@ -347,7 +358,7 @@ void julia_init(char *imageFile)
     uv_dlopen("Ws2_32.dll",jl_winsock_handle);
 #endif
     jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
-	init_stdio();
+    init_stdio();
 
 #if defined(__linux__)
     int ncores = jl_cpu_cores();
@@ -538,8 +549,8 @@ void jl_get_builtin_hooks(void)
 
     jl_float32_type = (jl_bits_type_t*)core("Float32");
     jl_float64_type = (jl_bits_type_t*)core("Float64");
-	jl_voidpointer_type = (jl_bits_type_t*)
-		jl_apply_type((jl_value_t*)jl_pointer_type,
+    jl_voidpointer_type = (jl_bits_type_t*)
+        jl_apply_type((jl_value_t*)jl_pointer_type,
                       jl_tuple(1,jl_bottom_type));
 
     jl_stackovf_exception =
