@@ -224,18 +224,14 @@ void jl_atexit_hook() {
 //#endif
             case UV_TCP:
             case UV_NAMED_PIPE:
-                if(!(uv_is_writable((uv_stream_t*)handle)))
-                {
+                if (uv_is_writable((uv_stream_t*)handle)) { // uv_shutdown returns an error if not writable
                     uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
-                    if (uv_is_writable((uv_stream_t*)handle)) { // uv_shutdown returns an error if not writable
-                        int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
-                        if (err != 0) { printf("err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
-                    } else {
-                        uv_close(handle,NULL);
-                    }
-                    break;
+                    int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
+                    if (err != 0) { printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
+                } else {
+                    uv_close(handle,NULL);
                 }
-                //fall through
+                break;
             case UV_POLL:
             case UV_TIMER:
             case UV_PREPARE:
@@ -248,12 +244,12 @@ void jl_atexit_hook() {
             case UV_FS_POLL:
                 uv_close(handle,NULL); //do we want to use jl_close_uv?
                 break;
-			case UV_HANDLE:
-			case UV_STREAM:
-			case UV_UNKNOWN_HANDLE:
-			case UV_HANDLE_TYPE_MAX:
-			case UV_RAW_FD:
-			case UV_RAW_HANDLE:
+            case UV_HANDLE:
+            case UV_STREAM:
+            case UV_UNKNOWN_HANDLE:
+            case UV_HANDLE_TYPE_MAX:
+            case UV_RAW_FD:
+            case UV_RAW_HANDLE:
             default:
                 assert(0);
         }
