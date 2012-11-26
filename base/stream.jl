@@ -376,18 +376,19 @@ end
 connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,addr.host,hton(addr.port))
 
 function open_any_tcp_port(preferred_port::Uint16,cb::Callback)
-    socket = TcpSocket();
-    addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
+	addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
     while true
+		socket = TcpSocket()
         if _jl_tcp_bind(socket,addr)!=0
             error("open_any_tcp_port: could not bind to socket")
         end
         if((_jl_listen(socket,int32(4),cb)) == 0)
-            break
+            return (addr.port,socket)
         end
+		socket.open = true
+		close(socket)
         addr.port+=1;
     end
-    return (addr.port,socket)
 end
 open_any_tcp_port(preferred_port::Integer,cb::Callback)=open_any_tcp_port(uint16(preferred_port),cb)
 
