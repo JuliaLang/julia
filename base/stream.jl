@@ -29,6 +29,16 @@ type Cmd <: AbstractCmd
     Cmd(exec::Executable) = new(exec,false)
 end
 
+const STDIN_NO  = 0
+const STDOUT_NO = 1
+const STDERR_NO = 2
+
+type StreamRedirect <: AbstractCmd
+	cmd::AbstractCmd
+	stream::UVStream
+	stream_no::Int
+end
+
 type OrCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
@@ -229,8 +239,8 @@ wait_exit_filter(p::Process, args...) = !process_exited(p)
 wait_connect_filter(w::AsyncStream, args...) = !w.open
 wait_close_filter(w::Union(AsyncStream,Process), args...) = w.open
 wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
-wait_readnb_filter(w::(AsyncStream,Int), args...) = nb_available(w[1].buffer) < w[2]
-wait_readline_filter(w::AsyncStream, args...) = memchr(w.buffer,'\n') <= 0
+wait_readnb_filter(w::(AsyncStream,Int), args...) = w.open&&(nb_available(w[1].buffer) < w[2])
+wait_readline_filter(w::AsyncStream, args...) = w.open&&(memchr(w.buffer,'\n') <= 0)
 
 #general form of generated calls is: wait_<for_event>(o::NotificationObject, [args::AsRequired...])
 for (fcn, notify, filter_fcn, types) in
@@ -416,6 +426,7 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
         if(_uv_lasterror() != 1) #UV_EOF == 1
             error("Failed to start reading: ",_uv_lasterror(globalEventLoop()))
         end
+		tasknotify(stream.readnotify, stream)
         #EOF
     else
         notify_filled(stream.buffer, nread, base, len)
@@ -695,6 +706,12 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
         #c_free(err)
     end
     pp
+end
+
+function spawn(pc::ProcessChainOrNot,redirect::StreamRedirect,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
+	spawn(pc,redirect.cmd,(redirect.stream_no==STDIN_NO ?redirect.stream:stdios[1],
+						   redirect.stream_no==STDOUT_NO?redirect.stream:stdios[2],
+						   redirect.stream_no==STDERR_NO?redirect.stream:stdios[3]),exitcb,closecb)
 end
 
 function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
@@ -980,6 +997,16 @@ _write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = ccall(:jl_write, Uint,(Ptr{V
 
 (&)(left::AbstractCmd,right::AbstractCmd) = AndCmds(left,right)
 (|)(src::AbstractCmd,dest::AbstractCmd) = OrCmds(src,dest)
+(<)(left::AbstractCmd,right::UVStream) = StreamRedirect(left,right,STDIN_NO)
+(>)(left::AbstractCmd,right::UVStream) = StreamRedirect(left,right,STDOUT_NO)
+
+
+function each_line(cmd::AbstractCmd,stdin)
+    out = NamedPipe()
+    processes = spawn(false, cmd, (stdin,out,STDERR))
+    EachLine(out)
+end
+each_line(cmd::AbstractCmd) = each_line(cmd,SpawnNullStream())
 
 function show(io, cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})

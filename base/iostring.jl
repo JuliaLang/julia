@@ -199,7 +199,7 @@ end
 function readuntil(io::IOString, delim)
     nb = memchr(io, delim)
     if nb == 0
-        nb = available(io)
+        nb = nb_available(io)
     end
     readbytes(io,nb)
 end

@@ -83,7 +83,7 @@ STAGE2_DEPS += suitesparse
 
 ifeq ($(OS), WINNT)
 LIBTOOL_CCLD = CCLD="gcc -no-undefined -avoid-version"
-AUTOTOOLS_PATH_CORRECT = -cp -f $(USRBIN)/$(@F) $(USRLIB)/$(@F)
+AUTOTOOLS_PATH_CORRECT = -cp -f $(USRBIN)/$(@F) $(USR)/$(JL_LIBDIR)/$(@F)
 endif
 
 ## Common build target prefixes
@@ -286,7 +286,7 @@ UV_OBJ_SOURCE = libuv/libuv.a
 
 libuv/Makefile:
 	(cd .. && git submodule init && git submodule update)
-$(UV_OBJ_SOURCE): libuv/Makefile libuv/.git/HEAD
+$(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) -C libuv CC="$(CC)"
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
@@ -319,7 +319,7 @@ $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(INSTALL_NAME_CMD)libpcre.dylib $@
 ifeq ($(OS),WINNT)
 	-rm $(USR)/$(JL_LIBDIR)/libpcre.dll
-	mv $(USRBIN)/libpcre-1.dll $(USR)/$(JL_LIBDIR)/libpcre.dll
+	mv $(USRBIN)/libpcre.dll $(USR)/$(JL_LIBDIR)/libpcre.dll
 endif
 	touch $@
 
@@ -375,7 +375,7 @@ OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
 openlibm/Makefile:
 	(cd .. && git submodule update --init)
-$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile openlibm/.git/HEAD
+$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile openlibm/.git
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USR)/$(JL_PRIVATE_LIBDIR)
 	cp $< $@

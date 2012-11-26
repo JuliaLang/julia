@@ -8,6 +8,6 @@ runtests("zlib")
 # runtests("options")
 runtests("image")
 # runtests("iterators")
-runtests("gzip")
+@unix_only runtests("gzip")
 
 runtests("perf")

@@ -264,8 +264,14 @@ function file_create(filename::String)
 end
 
 function file_remove(filename::String)
-    ret = ccall(:unlink, Int32, (Ptr{Uint8},), bytestring(filename))
-    system_error(:unlink, ret != 0)
+    @unix_only begin 
+		ret = ccall(:unlink, Int32, (Ptr{Uint8},), bytestring(filename))
+	    system_error(:unlink, ret != 0)
+	end
+	@windows_only begin
+		ret = ccall(:DeleteFileA, stdcall, Int32, (Ptr{Uint8},), bytestring(filename))
+		system_error(:unlink, ret == 0)
+	end 
 end
 
 function path_rename(old_pathname::String, new_pathname::String)

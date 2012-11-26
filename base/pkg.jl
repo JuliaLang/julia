@@ -24,7 +24,7 @@ function init(meta::String)
         # create & configure
         run(`git init`)
         run(`git remote add origin .`)
-        if success(`git config --global github.user` > "/dev/null")
+        if success(`git config --global github.user` > SpawnNullStream())
             base = basename(julia_pkgdir())
             user = readchomp(`git config --global github.user`)
             run(`git config remote.origin.url git@github.com:$user/$base`)

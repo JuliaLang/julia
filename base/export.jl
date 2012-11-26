@@ -75,6 +75,7 @@ export
     Reverse,
     RopeString,
     Set,
+	SpawnNullStream,
     StridedArray,
     StridedMatrix,
     StridedVecOrMat,
