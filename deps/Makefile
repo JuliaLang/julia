@@ -909,10 +909,10 @@ zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
 	touch $@
 zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
 	cd zlib-$(ZLIB_VER) && \
-	$(ZLIB_CFLAGS) ./configure --prefix=$(abspath $(USR))
+	CC="$(CC)" $(ZLIB_CFLAGS) ./configure --prefix=$(abspath $(USR))
 	touch $@
 $(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
-	$(MAKE) -C zlib-$(ZLIB_VER) CC="$(CC)"
+	$(MAKE) -C zlib-$(ZLIB_VER)
 	$(MAKE) -C zlib-$(ZLIB_VER) check
 	$(MAKE) -C zlib-$(ZLIB_VER) install
 	$(INSTALL_NAME_CMD)libz.dylib $@
@@ -928,6 +928,9 @@ distclean-zlib:
 
 TKW_INC = -I $(USRINC) -I /usr/include/tcl -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
 TKW_LIB = -ltcl8.5 -ltk8.5 -L$(USR)/lib/ -ljulia-release
+ifeq ($(OS), Darwin)
+  TKW_INC += -I/opt/X11/include -I/usr/X11/include
+endif
 
 $(USR)/lib/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(USR)/lib/libtk_wrapper.$(SHLIB_EXT)
