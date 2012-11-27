@@ -502,6 +502,10 @@ distclean-lapack:
 
 ## ARPACK ##
 
+ifeq ($(ARCH), x86_64)
+ARPACK_FFLAGS = -fdefault-integer-8
+endif
+
 ARPACK_OBJ_TARGET = $(USR)/lib/libarpack.$(SHLIB_EXT)
 ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
@@ -516,7 +520,7 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 	cd arpack-ng_$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)"
+	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)" FFLAGS="$(ARPACK_FFLAGS)"
 	touch $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(USR)/lib
 	cd arpack-ng_$(ARPACK_VER) && \
