@@ -219,9 +219,8 @@ end
 # checkout a particular repo version
 
 checkout(rev::String) = cd(julia_pkgdir()) do
-    dir = cwd()
-    run(`git checkout -fq $rev`)
-    run(`git submodule update --init --reference $dir --recursive`)
+    run(`git checkout -fq $rev -- REQUIRE`)
+    _resolve()
 end
 checkout() = checkout("HEAD")
 
@@ -352,7 +351,7 @@ update() = cd(julia_pkgdir()) do
             if Git.attached()
                 run(`git pull`)
             else
-                run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+                run(`git fetch -q --all --tags --prune --recurse-submodules`)
             end
         end
     end
