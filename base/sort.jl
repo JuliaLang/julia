@@ -382,57 +382,36 @@ end
 select(a::AbstractArray, k::Int) = _jl_quickselect(copy(a), k, 1, length(a))
 select!(a::AbstractArray, k::Int) = _jl_quickselect(a, k, 1, length(a))
 
-search_sorted(a::Vector, x) = search_sorted(a, x, 1, length(a))
-
-function search_sorted(a::Vector, x, lo::Int, hi::Int)
-    if isless(a[hi], x)
-        return hi+1
-    end
-    while lo < hi-1
-        i = (lo+hi)>>>1
-        if isless(x,a[i])
-            hi = i
-        else
-            lo = i
-        end
-    end
-    return isless(a[lo],x) ? hi : lo
-end
-
-search_sorted_last(a::Vector, x) = search_sorted_last(a, x, 0, length(a)+1)
-
-function search_sorted_last(a::Vector, x, lo::Int, hi::Int)
-    ## Index of the last value of vector a that is less than or equal to x.
-    ## Returns 0 if x is less than all values of a.
-    ## 
-    ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
-    while lo < hi-1
-        i = (lo+hi)>>>1
-        if isless(x,a[i])
-            hi = i
-        else
-            lo = i
-        end
-    end
-    lo
-end
-
-search_sorted_first(a::Vector, x) = search_sorted_first(a, x, 0, length(a)+1)
-
-function search_sorted_first(a::Vector, x, lo::Int, hi::Int)
-    ## Index of the first value of vector a that is greater than or equal to x.
-    ## Returns length(a) + 1 if x is greater than all values in a.
-    ## 
-    ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
-    while lo < hi-1
-        i = (lo+hi)>>>1
-        if isless(a[i],x)
-            lo = i
-        else
-            hi = i
-        end
-    end
-    hi
-end
-
 order(a::AbstractVector) = sortperm(a)[2]
+
+# Binary search functions
+# For reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
+
+macro _jl_search_sorted_fn(fname, cmpfn, hilo)
+fname = esc(fname)
+cmpfn = @eval (a,b)->$cmpfn
+quote
+($fname)(a::AbstractVector, x) = ($fname)(a, x, 1, length(a))
+function ($fname)(a::AbstractVector, x, ix_lo::Int, ix_hi::Int)
+    lo = ix_lo-1
+    hi = ix_hi+1
+    while lo < hi-1
+        i = (lo+hi)>>>1
+        if $(cmpfn(:(a[i]), :x))
+            lo = i
+        else
+            hi = i
+        end
+    end
+    $hilo
+end
+end; end
+
+## Index of the first insertion point for value `x` in sorted list `a`
+@_jl_search_sorted_fn search_sorted_first    :(isless($a,$b))  hi
+
+## Index of the last insertion point for value `x` in sorted list `a`
+@_jl_search_sorted_fn search_sorted_last     :(!isless($b,$a)) lo
+
+## Find the first value less than or equal to `x`
+const search_sorted = search_sorted_first

@@ -43,6 +43,7 @@ Math & Numerical
 
    blas
    glpk
+   sparse
 
 ************
 File Formats

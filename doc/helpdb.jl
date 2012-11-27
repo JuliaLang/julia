@@ -548,6 +548,30 @@
 
 "),
 
+(E"Iterable Collections",E"Base",E"indmax",E"indmax(itr)
+
+   Returns the index of the maximum element in a collection
+
+"),
+
+(E"Iterable Collections",E"Base",E"indmin",E"indmin(itr)
+
+   Returns the index of the minimum element in a collection
+
+"),
+
+(E"Iterable Collections",E"Base",E"findmax",E"findmax(iter)
+
+   Returns a tuple of the maximum element and its index
+
+"),
+
+(E"Iterable Collections",E"Base",E"findmin",E"findmin(iter)
+
+   Returns a tuple of the minimum element and its index
+
+"),
+
 (E"Iterable Collections",E"Base",E"sum",E"sum(itr)
 
    Sum elements of a collection
@@ -2829,6 +2853,35 @@ airyaiprime(x)
 (E"Combinatorics",E"Base",E"issorted",E"issorted(v)
 
    Test whether a vector is in ascending sorted order
+
+"),
+
+(E"Combinatorics",E"Base",E"search_sorted",E"search_sorted(a, x[, lo, hi])
+
+   Returns the index of the first value greater than or equal to \"x\"
+   in sorted sequence \"a\".  Assumes \"a\" is sorted low to high.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first()\"
+
+"),
+
+(E"Combinatorics",E"Base",E"search_sorted_first",E"search_sorted_first(a, x[, lo, hi])
+
+   Returns the index of the first value greater than or equal to \"x\"
+   in sorted sequence \"a\".  Assumes \"a\" is sorted low to high.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Combinatorics",E"Base",E"search_sorted_last",E"search_sorted_last(a, x[, lo, hi])
+
+   Returns the index of the last value less than or equal to \"x\" in
+   sorted sequence \"a\".  Assumes \"a\" is sorted low to high.
+
+   \"lo\" and \"hi\" optionally limit the search range.
 
 "),
 
