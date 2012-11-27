@@ -870,7 +870,7 @@ Mathematical Functions
 
    Compute :math:`cos(\pi x) / x`
 
-.. function:: hypot(x)
+.. function:: hypot(x, y)
 
    Compute the :math:`\sqrt{(x^2+y^2)}` without undue overflow or underflow
 
@@ -1784,9 +1784,9 @@ Statistics
 
    Compute the histogram of ``v``, optionally using ``n`` bins
 
-.. function:: histc(v[, e])
+.. function:: histc(v, e)
 
-   Compute the histogram of ``v``, optionally using a vector ``e`` as the edges for the bins
+   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
 
 Signal Processing
 -----------------
