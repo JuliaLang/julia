@@ -340,7 +340,7 @@ abstract Factorization{T}
 
 type BunchKaufman{T<:LapackType} <: Factorization{T}
     LD::Matrix{T}
-    ipiv::Vector{Int32}
+    ipiv::Vector{Int}
     upper::Bool
     function BunchKaufman(A::Matrix{T}, upper::Bool)
         LD, ipiv = LAPACK.sytrf!(upper ? 'U' : 'L' , copy(A))
@@ -408,8 +408,8 @@ chol{T<:Number}(A::Matrix{T}) = factors(chold(A))
 type CholeskyDensePivoted{T<:LapackType} <: Factorization{T}
     LR::Matrix{T}
     upper::Bool
-    piv::Vector{Int32}
-    rank::Int32
+    piv::Vector{Int}
+    rank::Int
     tol::Real
     function CholeskyDensePivoted(A::Matrix{T}, upper::Bool, tol::Real)
         A, piv, rank, info = LAPACK.pstrf!(upper ? 'U' : 'L' , A, tol)
@@ -454,9 +454,9 @@ cholpd{T<:LapackType}(A::Matrix{T}) = cholpd!(copy(A), true, -1.)
 
 type LUDense{T} <: Factorization{T}
     lu::Matrix{T}
-    ipiv::Vector{Int32}
-    info::Int32
-    function LUDense(lu::Matrix{T}, ipiv::Vector{Int32}, info::Int32)
+    ipiv::Vector{Int}
+    info::Int
+    function LUDense(lu::Matrix{T}, ipiv::Vector{Int}, info::Int)
         m, n = size(lu)
         m == n ? new(lu, ipiv, info) : error("LUDense only defined for square matrices")
     end
@@ -558,8 +558,8 @@ end
 type QRPDense{T} <: Factorization{T}
     hh::Matrix{T}
     tau::Vector{T}
-    jpvt::Vector{Int32}
-    function QRPDense(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{Int32})
+    jpvt::Vector{Int}
+    function QRPDense(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{Int})
         m, n = size(hh)
         if length(tau) != min(m,n) || length(jpvt) != n
             error("QRPDense: mismatched dimensions")
@@ -989,9 +989,9 @@ type LUTridiagonal{T} <: Factorization{T}
     d::Vector{T}
     du::Vector{T}
     du2::Vector{T}
-    ipiv::Vector{Int32}
+    ipiv::Vector{Int}
     function LUTridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T},
-                           du2::Vector{T}, ipiv::Vector{Int32})
+                           du2::Vector{T}, ipiv::Vector{Int})
         n = length(d)
         if length(dl) != n - 1 || length(du) != n - 1 || length(ipiv) != n || length(du2) != n-2
             error("LUTridiagonal: dimension mismatch")
