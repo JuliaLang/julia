@@ -870,7 +870,7 @@ Mathematical Functions
 
    Compute :math:`cos(\pi x) / x`
 
-.. function:: hypot(x)
+.. function:: hypot(x, y)
 
    Compute the :math:`\sqrt{(x^2+y^2)}` without undue overflow or underflow
 
