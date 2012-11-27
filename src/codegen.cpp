@@ -23,6 +23,7 @@
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
 #include <setjmp.h>
 #include <string>
@@ -1730,7 +1731,7 @@ extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
 static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
 {
     Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
-                                   lam->name->name, jl_Module);
+                                   f->getName(), jl_Module);
     Function::arg_iterator AI = w->arg_begin();
     AI++; //const Argument &fArg = *AI++;
     Value *argArray = AI++;
@@ -1869,6 +1870,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
             specsig = true;
     }
 
+    std::string funcName = lam->name->name;
+    // try to avoid conflicts in the global symbol table
+    funcName = "julia_" + funcName;
+
     if (specsig) {
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < lam->specTypes->length; i++) {
@@ -1877,7 +1882,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         jl_value_t *jlrettype = ast_rettype((jl_value_t*)ast);
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
-                             Function::ExternalLinkage, lam->name->name, jl_Module);
+                             Function::ExternalLinkage, funcName, jl_Module);
         if (lam->functionObject == NULL) {
             lam->cFunctionObject = (void*)f;
             lam->functionObject = (void*)gen_jlcall_wrapper(lam, f);
@@ -1885,7 +1890,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     }
     else {
         f = Function::Create(jl_func_sig, Function::ExternalLinkage,
-                             lam->name->name, jl_Module);
+                             funcName, jl_Module);
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
         }
