@@ -1784,9 +1784,9 @@ Statistics
 
    Compute the histogram of ``v``, optionally using ``n`` bins
 
-.. function:: histc(v[, e])
+.. function:: histc(v, e)
 
-   Compute the histogram of ``v``, optionally using a vector ``e`` as the edges for the bins
+   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
 
 Signal Processing
 -----------------
