@@ -1,5 +1,5 @@
 require("sound")
-import Sound.*
+using Sound
 
 in_filename = ARGS[1]
 
