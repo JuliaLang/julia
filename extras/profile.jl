@@ -272,6 +272,12 @@ function profile_report()
     return expr(:block,exret)
 end
 
+compensated_time(t, c) = t >= c*PROFILE_CALIB ? t-c*PROFILE_CALIB : 0
+show_unquoted(linex::Expr) = show_linenumber(linex.args...)
+show_unquoted(lnn::LineNumberNode) = show_linenumber(lnn.line)
+show_linenumber(line)       = strcat("\t#  line ",line)
+show_linenumber(line, file) = strcat("\t#  ",file,", line ",line)
+
 function profile_print(tc)
     # Compute total elapsed time
     ttotal = 0.0
@@ -279,8 +285,8 @@ function profile_print(tc)
         timers = tc[i][1]
         counters = tc[i][2]
         for j = 1:length(counters)
-            calib_time = timers[j] - counters[j]*PROFILE_CALIB
-            ttotal += calib_time
+            comp_time = compensated_time(timers[j], counters[j])
+            ttotal += comp_time
         end
     end
     # Display output
@@ -290,11 +296,11 @@ function profile_print(tc)
         println("   count  time(%)  time(s)")
         for j = 1:length(counters)
             if counters[j] != 0
-                calib_time = timers[j] - counters[j]*PROFILE_CALIB
+                comp_time = compensated_time(timers[j], counters[j])
                 @printf("%8d    %5.2f  %f %s\n", counters[j],
-                        100*(calib_time/ttotal),
-                        calib_time*1e-9,
-                        PROFILE_TAGS[i][j])
+                        100*(comp_time/ttotal),
+                        comp_time*1e-9,
+                        show_unquoted(PROFILE_TAGS[i][j]))
             end
         end
     end
