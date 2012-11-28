@@ -942,10 +942,15 @@ distclean-zlib:
 ## Tk wrapper ##
 
 TKW_INC = -I $(USRINC) -I /usr/include/tcl -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
-TKW_LIB = -ltcl8.5 -ltk8.5 -L$(USR)/lib/ -ljulia-release
+TKW_LIB =
 ifeq ($(OS), Darwin)
+  ifneq ($(wildcard /opt/local/bin/port),)
+    TKW_INC += -I/opt/local/include
+    TKW_LIB += -L/opt/local/lib
+  endif
   TKW_INC += -I/opt/X11/include -I/usr/X11/include
 endif
+TKW_LIB += -ltcl8.5 -ltk8.5 -L$(USR)/lib/ -ljulia-release
 
 $(USR)/lib/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(USR)/lib/libtk_wrapper.$(SHLIB_EXT)
