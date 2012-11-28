@@ -65,11 +65,15 @@ static void *add_library_sym(char *name, char *lib)
     void *sval = jl_dlsym_e((uv_lib_t*)hnd, name);
     if (lib != NULL && hnd != jl_dl_handle) {
         void *exist = sys::DynamicLibrary::SearchForAddressOfSymbol(name);
-        if (exist != NULL && exist != sval) {
+        if (exist != NULL && exist != sval &&
+            // openlibm conflicts with libm, and lots of our libraries
+            // (including LLVM) link to libm. fortunately AddSymbol() is
+            // able to resolve these in favor of openlibm, but this could
+            // be an issue in the future (TODO).
+            strcmp(lib,"libopenlibm")) {
             ios_printf(ios_stderr, "Warning: Possible conflict in library symbol %s\n", name);
         }
-        if (exist == NULL)
-            sys::DynamicLibrary::AddSymbol(name, sval);
+        sys::DynamicLibrary::AddSymbol(name, sval);
     }
     return sval;
 }

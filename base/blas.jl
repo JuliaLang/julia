@@ -24,12 +24,14 @@ export copy!,
        symv!,
        symv
 
+libblas = Base.libblas_name
+
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
                       (:zcopy_,:Complex128), (:ccopy_,:Complex64))
     @eval begin
         function copy!(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
-            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+            ccall(($(string(fname)),libblas), Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, DX, &incx, DY, &incy)
             DY
@@ -42,14 +44,14 @@ for (fname, elty) in ((:dscal_,:Float64),    (:sscal_,:Float32),
                       (:zscal_,:Complex128), (:cscal_,:Complex64))
     @eval begin
         function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer)
-            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+            ccall(($(string(fname)),libblas), Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                   &n, &DA, DX, &incx)
             DX
         end
         function scal(n::Integer, DA::$elty, DX_orig::Union(Ptr{$elty},Array{$elty}), incx::Integer)
             DX = copy(DX_orig)
-            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+            ccall(($(string(fname)),libblas), Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                   &n, &DA, DX, &incx)
             DX
@@ -64,7 +66,7 @@ end
 for (fname, elty) in ((:ddot_,:Float64), (:sdot_,:Float32))
     @eval begin
         function dot(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
-            ccall(dlsym(Base.libblas, $(string(fname))), $elty,
+            ccall(($(string(fname)),libblas), $elty,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, DX, &incx, DY, &incy)
         end
@@ -78,7 +80,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:scnrm2_,:Complex64,:Float32))
     @eval begin
         function nrm2(n::Integer, X::Union(Ptr{$elty},Array{$elty}), incx::Integer)
-            ccall(dlsym(Base.libblas, $(string(fname))), $ret_type,
+            ccall(($(string(fname)),libblas), $ret_type,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, X, &incx)
         end
@@ -98,7 +100,7 @@ for (fname, elty) in ((:daxpy_,:Float64), (:saxpy_,:Float32),
         function axpy!(n::Integer, alpha::($elty),
                        dx::Union(Ptr{$elty},Array{$elty}), incx::Integer,
                        dy::Union(Ptr{$elty},Array{$elty}), incy::Integer)
-            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+            ccall(($(string(fname)),libblas), Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, &alpha, dx, &incx, dy, &incy)
             return dy
@@ -145,7 +147,7 @@ for (fname, elty) in ((:dsyrk_,:Float64), (:ssyrk_,:Float32),
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n error("syrk!: dimension mismatch") end
            k  = size(A, trans == 'N' ? 2 : 1)
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                   Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &uplo, &trans, &n, &k, &alpha, A, &stride(A,2), &beta, C, &stride(C,2))
@@ -155,7 +157,7 @@ for (fname, elty) in ((:dsyrk_,:Float64), (:ssyrk_,:Float32),
            n = size(A, trans == 'N' ? 1 : 2)
            k = size(A, trans == 'N' ? 2 : 1)
            C = Array($elty, (n, n)) 
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                   Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &uplo, &trans, &n, &k, &alpha, A, &stride(A,2), &0., C, &stride(C,2))
@@ -181,7 +183,7 @@ for (fname, elty) in ((:zherk_,:Complex128), (:cherk_,:Complex64))
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n error("syrk!: dimension mismatch") end
            k  = size(A, trans == 'N' ? 2 : 1)
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                   Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &uplo, &trans, &n, &k, &alpha, A, &stride(A,2), &beta, C, &stride(C,2))
@@ -191,7 +193,7 @@ for (fname, elty) in ((:zherk_,:Complex128), (:cherk_,:Complex64))
            n = size(A, trans == 'N' ? 1 : 2)
            k = size(A, trans == 'N' ? 2 : 1)
            C = Array($elty, (n, n)) 
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                   Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &uplo, &trans, &n, &k, &alpha, A, &stride(A,2), &0., C, &stride(C,2))
@@ -215,7 +217,7 @@ for (fname, elty) in ((:dgbmv_,:Float64), (:sgbmv_,:Float32),
        function gbmv!(trans, m::Integer, kl::Integer, ku::Integer,
                       alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty},
                       beta::($elty), y::StridedVector{$elty})
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
@@ -227,7 +229,7 @@ for (fname, elty) in ((:dgbmv_,:Float64), (:sgbmv_,:Float32),
                      alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty})
            n = stride(A,2)
            y = Array($elty, n)
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
@@ -254,7 +256,7 @@ for (fname, elty) in ((:dsbmv_,:Float64), (:ssbmv_,:Float32),
        function sbmv!(uplo, k::Integer,
                       alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty}, 
                       beta::($elty), y::StridedVector{$elty})
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                  Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &uplo, &size(A,2), &k, &alpha, A, &stride(A,2), x, &stride(x,1), &beta, y, &stride(y,1))
@@ -264,7 +266,7 @@ for (fname, elty) in ((:dsbmv_,:Float64), (:ssbmv_,:Float32),
                      x::StridedVector{$elty})
            n = size(A,2)
            y = Array($elty, n)
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                  Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &uplo, &size(A,2), &k, &alpha, A, &stride(A,2), x, &stride(x,1), &0., y, &1)
@@ -290,7 +292,7 @@ for (fname, elty) in ((:dgemm_,:Float64), (:sgemm_,:Float32),
            k = size(A, transA == 'N' ? 2 : 1)
            n = size(B, transB == 'N' ? 2 : 1)
            if m != size(C,1) || n != size(C,2) error("gemm!: mismatched dimensions") end
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
@@ -304,7 +306,7 @@ for (fname, elty) in ((:dgemm_,:Float64), (:sgemm_,:Float32),
            if k != size(B, transB == 'N' ? 1 : 2) error("gemm!: mismatched dimensions") end
            n = size(B, transB == 'N' ? 2 : 1)
            C = Array($elty, (m, n))
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
@@ -328,7 +330,7 @@ for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
    @eval begin
        function gemv!(trans, alpha::($elty), A::StridedMatrix{$elty},
                       X::StridedVector{$elty}, beta::($elty), Y::StridedVector{$elty})
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &trans, &size(A,1), &size(A,2), &alpha, A, &stride(A,2),
@@ -337,7 +339,7 @@ for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
        end
        function gemv!(trans, alpha::($elty), A::StridedMatrix{$elty}, X::StridedVector{$elty})
            Y = Array($elty, size(A,1))
-           ccall(dlsym(Base.libblas, $(string(fname))), Void,
+           ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &trans, &size(A,1), &size(A,2), &alpha, A, &stride(A,2),
@@ -376,7 +378,7 @@ for (vfname, mfname, elty) in
            m, n = size(A)
            if m != n error("symm!: matrix A is $m by $n but must be square") end
            if m != length(X) || m != length(Y) error("symm!: dimension mismatch") end
-           ccall(dlsym(Base.libblas, $(string(vfname))), Void,
+           ccall(($(string(vfname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                  Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &uplo, &n, &alpha, A, &stride(A,2), X, &stride(X,1), &beta, Y, &stride(Y,1))
@@ -392,7 +394,7 @@ for (vfname, mfname, elty) in
            k, j = size(A)
            if k != j error("symm!: matrix A is $k by $j but must be square") end
            if j != (side == 'L' ? m : n) || size(B,2) != n error("symm!: Dimension mismatch") end
-           ccall(dlsym(Base.libblas, $(string(mfname))), Void,
+           ccall(($(string(mfname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                  Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  &side, &uplo, &m, &n, &alpha, A, &stride(A,2), B, &stride(B,2),
