@@ -226,7 +226,7 @@ end
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function expm!{T}(A::StridedMatrix{T})
+function expm!{T<:LapackType}(A::StridedMatrix{T})
     m, n = size(A)
     if m != n error("expm!: Matrix A must be square") end
     if m < 2 return exp(A) end
