@@ -248,6 +248,7 @@ function expm!{T<:LapackType}(A::StridedMatrix{T})
         else
             C = [120.,60.,12.,1.]
         end
+        C = convert(Array{T,1}, C)
         A2 = A * A
         P  = copy(I)
 #        U  = C[2] * P
@@ -286,6 +287,7 @@ function expm!{T<:LapackType}(A::StridedMatrix{T})
                    670442572800.,      33522128640.,      1323241920.,
                        40840800.,           960960.,           16380.,
                             182.,                1.]
+        CC = convert(Array{T,1}, CC)
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
@@ -309,8 +311,8 @@ function expm!{T<:LapackType}(A::StridedMatrix{T})
         end
         #U = A * (A6*P1 + P2)
         #V = A6*P3 + P4
-        U = A * (BLAS.gemm!('N', 'N', 1.0, A6, P1, 1.0, P2))
-        V = BLAS.gemm!('N', 'N', 1.0, A6, P3, 1.0, P4)
+        U = A * (BLAS.gemm!('N', 'N', one(T), A6, P1, one(T), P2))
+        V = BLAS.gemm!('N', 'N', one(T), A6, P3, one(T), P4)
 
         #X  = (V-U)\(V+U)
         X = V + U
