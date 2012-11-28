@@ -5,7 +5,8 @@
 #include <string>
 #include <vector>
 #include <sstream>
-//#define DEBUG_TRACE
+//#define JULIA_DEBUG_TRACE
+//#define CPP_DEBUG_TRACE
 
 namespace scgi
 {

@@ -267,13 +267,16 @@ endif
 
 ## LIBUV
 
-UV_OBJ_TARGET = $(USR)/lib/uv.a
-UV_OBJ_SOURCE = libuv/uv.a
+UV_OBJ_TARGET = $(USR)/lib/libuv.a
+UV_OBJ_SOURCE = libuv/libuv.a
 
 libuv/Makefile:
 	(cd .. && git submodule init && git submodule update)
 $(UV_OBJ_SOURCE): libuv/Makefile
-	$(MAKE) -C libuv CC="$(CC)"
+ifneq ($(OS), WINNT)
+	$(MAKE) libuv.${SHLIB_EXT} -C libuv CC="$(CC)"
+endif
+	$(MAKE) libuv.a -C libuv CC="$(CC)"
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USR)/lib/
@@ -282,7 +285,7 @@ install-uv: $(UV_OBJ_TARGET)
 
 clean-uv:
 	$(MAKE) -C libuv clean
-	rm -f $(USR)/lib/uv.a $(USR)/include/uv.h
+	rm -rf $(USR)/lib/libuv.a $(USR)/include/uv.h $(USR)/include/uv-private
 distclean-uv: clean-uv
 
 ## PCRE ##
