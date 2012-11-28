@@ -371,7 +371,7 @@ OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 openlibm/Makefile:
 	(cd .. && git submodule update --init)
 ifeq (exists, $(shell [ -d openlibm/.git ] && echo exists ))
-$(OPENLIBM_OBJ_SOUCE): openlibm/.git/HEAD
+$(OPENLIBM_OBJ_SOURCE): openlibm/.git/HEAD
 endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
 $(OPENLIBM_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
