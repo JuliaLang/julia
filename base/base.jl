@@ -13,7 +13,8 @@ ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
 cconvert(T, x) = convert(T, x)
 # use the code in ccall.cpp to safely allocate temporary pointer arrays
 cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
-cconvert(::Type{Ptr{Uint8}}, s::String) = bytestring(s)
+# TODO: for some reason this causes a strange type inference problem
+#cconvert(::Type{Ptr{Uint8}}, s::String) = bytestring(s)
 
 type ErrorException <: Exception
     msg::String
