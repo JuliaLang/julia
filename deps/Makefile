@@ -369,7 +369,7 @@ OPENLIBM_OBJ_TARGET = $(USR)/lib/libopenlibm.$(SHLIB_EXT)
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
 openlibm/Makefile:
-	(cd .. && git submodule update --init)
+	(cd .. && git submodule init && git submodule update)
 ifeq (exists, $(shell [ -d openlibm/.git ] && echo exists ))
 $(OPENLIBM_OBJ_SOURCE): openlibm/.git/HEAD
 endif
