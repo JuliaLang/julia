@@ -20,11 +20,13 @@ static void read_sonames()
             int i=0;
             while (isspace(line[++i])) ;
             char *name = &line[i];
-            char *dot = strchr(name, '.');
+            char *dot = strstr(name, ".so");
             char *nxt = strchr(name, ' ');
-            std::string pfx(name, dot - name);
-            std::string soname(name, nxt - name);
-            sonameMap[pfx] = soname;
+            if (dot != NULL && nxt != NULL) {
+                std::string pfx(name, dot - name);
+                std::string soname(name, nxt - name);
+                sonameMap[pfx] = soname;
+            }
         }
     }
 
