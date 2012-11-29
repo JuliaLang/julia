@@ -1,5 +1,4 @@
 module Grisu
-using Base
 export print_shortest
 export @grisu_ccall, NEG, DIGITS, BUFLEN, LEN, POINT
 

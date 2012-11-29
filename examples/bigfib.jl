@@ -1,7 +1,6 @@
 require("extras/bigint")
 
 module BigFib
-using Base
 export bigfib
 const BigInt = Main.BigInt
 

@@ -1,7 +1,6 @@
 ## low-level pcre interface ##
 
 module PCRE
-using Base
 
 include("pcre_h.jl")
 

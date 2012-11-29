@@ -1,7 +1,5 @@
 module Math
 
-using Base
-
 export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot, 
        sech, csch, coth, asech, acsch, acoth, sinc, cosc, 

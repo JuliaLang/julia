@@ -1,5 +1,4 @@
 module Profile
-using Base
 
 PROFILE_LINES = 1
 PROFILE_DESCEND = 2

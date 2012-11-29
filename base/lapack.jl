@@ -1,6 +1,5 @@
 ## The LAPACK module of interfaces to LAPACK subroutines
 module LAPACK
-using Base
 
 liblapack = Base.liblapack_name
 

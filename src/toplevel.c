@@ -31,7 +31,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
     assert(ex->head == module_sym);
     jl_module_t *last_module = jl_current_module;
-    jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 0);
+    int std_imports = (jl_exprarg(ex,0)==jl_true);
+    jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
     if (!jl_is_symbol(name)) {
         jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
     }
@@ -52,10 +53,17 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     // export all modules from Main
     if (parent_module == jl_main_module)
         jl_module_export(jl_main_module, name);
+
+    // add standard imports unless baremodule
+    if (std_imports) {
+        if (jl_base_module != NULL)
+            jl_module_using(newm, jl_base_module); // using Base
+    }
+
     JL_GC_PUSH(&last_module);
     jl_current_module = newm;
 
-    jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 1))->args;
+    jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     JL_TRY {
         for(int i=0; i < exprs->length; i++) {
             // process toplevel form

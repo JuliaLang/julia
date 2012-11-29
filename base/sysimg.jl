@@ -1,4 +1,4 @@
-module Base
+baremodule Base
 
 include("export.jl")
 
@@ -270,7 +270,7 @@ begin
     typeinf_ext(minf[1][3], atypes, (), minf[1][3])
 end
 
-end # module Base
+end # baremodule Base
 
 using Base
 

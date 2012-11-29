@@ -1,6 +1,5 @@
 module RNG
 
-using Base
 using Base.LibRandom
 
 export librandom_init, srand,

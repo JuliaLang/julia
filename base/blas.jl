@@ -1,7 +1,6 @@
 typealias LapackType Union(Float64,Float32,Complex128,Complex64)
 
 module BLAS
-using Base
 
 export copy!,
        scal!,

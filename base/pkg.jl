@@ -6,7 +6,6 @@ module Pkg
 # Julia's git-based declarative package manager
 #
 
-using Base
 using Metadata
 
 import Git

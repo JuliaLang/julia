@@ -1,7 +1,6 @@
 ## gzip file io ##
 
 module GZip
-using Base
 
 import Base.show, Base.fd, Base.close, Base.flush, Base.truncate, Base.seek
 import Base.skip, Base.position, Base.eof, Base.read, Base.readall
