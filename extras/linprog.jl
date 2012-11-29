@@ -6,7 +6,6 @@
 require("glpk")
 
 module LinProgGLPK
-using Base
 
 import GLPK
 

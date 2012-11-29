@@ -1,5 +1,87 @@
 // --- the ccall intrinsic ---
 
+// --- library symbol lookup ---
+
+// map from "libX" to full soname "libX.so.ver"
+static std::map<std::string, std::string> sonameMap;
+static bool got_sonames = false;
+
+static void read_sonames()
+{
+    char *line=NULL;
+    size_t sz=0;
+    FILE *ldc = popen("/sbin/ldconfig -p", "r");
+
+    while (!feof(ldc)) {
+        ssize_t n = getline(&line, &sz, ldc);
+        if (n == -1)
+            break;
+        if (n > 2 && isspace(line[0])) {
+            int i=0;
+            while (isspace(line[++i])) ;
+            char *name = &line[i];
+            char *dot = strstr(name, ".so");
+            char *nxt = strchr(name, ' ');
+            if (dot != NULL && nxt != NULL) {
+                std::string pfx(name, dot - name);
+                std::string soname(name, nxt - name);
+                sonameMap[pfx] = soname;
+            }
+        }
+    }
+
+    free(line);
+    pclose(ldc);
+}
+
+extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
+{
+    if (!got_sonames) {
+        read_sonames();
+        got_sonames = true;
+    }
+    std::string str(pfx, n);
+    if (sonameMap.find(str) != sonameMap.end()) {
+        return sonameMap[str].c_str();
+    }
+    return NULL;
+}
+
+// map from user-specified lib names to handles
+static std::map<std::string, void*> libMap;
+
+static void *add_library_sym(char *name, char *lib)
+{
+    void *hnd;
+    if (lib == NULL) {
+        hnd = jl_dl_handle;
+    }
+    else {
+        hnd = libMap[lib];
+        if (hnd == NULL) {
+            hnd = jl_load_dynamic_library(lib);
+            libMap[lib] = hnd;
+        }
+    }
+    // add a symbol->address mapping for the JIT
+    void *sval = jl_dlsym_e((uv_lib_t*)hnd, name);
+    if (lib != NULL && hnd != jl_dl_handle) {
+        void *exist = sys::DynamicLibrary::SearchForAddressOfSymbol(name);
+        if (exist != NULL && exist != sval &&
+            // openlibm conflicts with libm, and lots of our libraries
+            // (including LLVM) link to libm. fortunately AddSymbol() is
+            // able to resolve these in favor of openlibm, but this could
+            // be an issue in the future (TODO).
+            strcmp(lib,"libopenlibm")) {
+            ios_printf(ios_stderr, "Warning: Possible conflict in library symbol %s\n", name);
+        }
+        sys::DynamicLibrary::AddSymbol(name, sval);
+    }
+    return sval;
+}
+
+// --- argument passing and scratch space utilities ---
+
 static Function *value_to_pointer_func;
 
 // TODO: per-thread
@@ -151,6 +233,9 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             // array to pointer
             return builder.CreateBitCast(emit_arrayptr(jv), ty);
         }
+        if (aty == (jl_value_t*)jl_ascii_string_type || aty == (jl_value_t*)jl_utf8_string_type) {
+            return builder.CreateBitCast(emit_arrayptr(emit_nthptr(jv,1)), ty);
+        }
         Value *p = builder.CreateCall4(value_to_pointer_func,
                                        literal_pointer_val(jl_tparam0(jt)), jv,
                                        ConstantInt::get(T_int32, argn),
@@ -169,6 +254,8 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                                                     PointerType::get(ty,0)),
                               false);
 }
+
+// --- code generator for ccall itself ---
 
 // ccall(pointer, rettype, (argtypes...), args...)
 static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
@@ -190,33 +277,62 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
                                         &jl_tupleref(ctx->sp,0),
                                         jl_tuple_len(ctx->sp)/2);
-    void *fptr;
-    if (jl_is_symbol(ptr)) {
+    void *fptr=NULL;
+    char *f_name=NULL, *f_lib=NULL;
+    if (jl_is_tuple(ptr) && jl_tuple_len(ptr)==1) {
+        ptr = jl_tupleref(ptr,0);
+    }
+    if (jl_is_symbol(ptr))
+        f_name = ((jl_sym_t*)ptr)->name;
+    else if (jl_is_byte_string(ptr))
+        f_name = jl_string_data(ptr);
+    if (f_name != NULL) {
         // just symbol, default to JuliaDLHandle
 #ifdef __WIN32__
-
-        fptr = jl_dlsym_e(jl_dl_handle, ((jl_sym_t*)ptr)->name);
-        if(!fptr) {
-            fptr = jl_dlsym_e(jl_kernel32_handle, ((jl_sym_t*)ptr)->name);
-            if(!fptr) {
-                fptr = jl_dlsym_e(jl_ntdll_handle, ((jl_sym_t*)ptr)->name);
-                if(!fptr) {
-                    fptr = jl_dlsym_e(jl_crtdll_handle, ((jl_sym_t*)ptr)->name);
-                    if(!fptr) {
-                        fptr = jl_dlsym(jl_winsock_handle, ((jl_sym_t*)ptr)->name);
+        fptr = jl_dlsym_e(jl_dl_handle, f_name);
+        if (!fptr) {
+            fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
+            if (!fptr) {
+                fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
+                if (!fptr) {
+                    fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
+                    if (!fptr) {
+                        fptr = jl_dlsym(jl_winsock_handle, f_name);
                     }
                 }
             }
         }
+        else {
+            // available in process symbol table
+            fptr = NULL;
+        }
 #else
-        fptr = jl_dlsym(jl_dl_handle, ((jl_sym_t*)ptr)->name);
+        // will look in process symbol table
 #endif
+    }
+    else if (jl_is_cpointer_type(jl_typeof(ptr))) {
+        fptr = *(void**)jl_bits_data(ptr);
+    }
+    else if (jl_is_tuple(ptr) && jl_tuple_len(ptr)>1) {
+        jl_value_t *t0 = jl_tupleref(ptr,0);
+        jl_value_t *t1 = jl_tupleref(ptr,1);
+        if (jl_is_symbol(t0))
+            f_name = ((jl_sym_t*)t0)->name;
+        else if (jl_is_byte_string(t0))
+            f_name = jl_string_data(t0);
+        else
+            JL_TYPECHK(ccall, symbol, t0);
+        if (jl_is_symbol(t1))
+            f_lib = ((jl_sym_t*)t1)->name;
+        else if (jl_is_byte_string(t1))
+            f_lib = jl_string_data(t1);
+        else
+            JL_TYPECHK(ccall, symbol, t1);
     }
     else {
         JL_TYPECHK(ccall, pointer, ptr);
-        fptr = *(void**)jl_bits_data(ptr);
     }
-    if (fptr == NULL) {
+    if (f_name == NULL && fptr == NULL) {
         JL_GC_POP();
         emit_error("ccall: null function pointer", ctx);
         return literal_pointer_val(jl_nothing);
@@ -291,11 +407,19 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // make LLVM function object for the target
-    Function *llvmf =
-        Function::Create(FunctionType::get(lrt, fargt_sig, isVa),
-                         Function::ExternalLinkage,
-                         "ccall_", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(llvmf, fptr);
+    Function *llvmf;
+    FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
+
+    if (fptr != NULL) {
+        llvmf = Function::Create(functype, Function::ExternalLinkage,
+                                 "ccall_", jl_Module);
+        jl_ExecutionEngine->addGlobalMapping(llvmf, fptr);
+    }
+    else {
+        if (f_lib != NULL)
+            add_library_sym(f_name, f_lib);
+        llvmf = (Function*)jl_Module->getOrInsertFunction(f_name, functype);
+    }
 
     // save temp argument area stack pointer
     Value *saveloc=NULL;

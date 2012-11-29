@@ -1,7 +1,4 @@
-libgrisu = dlopen("libgrisu")
-
 module Grisu
-using Base
 export print_shortest
 export @grisu_ccall, NEG, DIGITS, BUFLEN, LEN, POINT
 
@@ -15,7 +12,7 @@ const POINT  = Array(Int32,1)
 
 macro grisu_ccall(value, mode, ndigits)
     quote
-        ccall(dlsym(Base.libgrisu, :grisu), Void,
+        ccall((:grisu, :libgrisu), Void,
               (Float64, Int32, Int32, Ptr{Uint8}, Int32,
                Ptr{Bool}, Ptr{Int32}, Ptr{Int32}),
               $(esc(value)), $(esc(mode)), $(esc(ndigits)),

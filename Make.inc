@@ -9,10 +9,6 @@ USRINC = $(USR)/include
 LLVMROOT = $(USR)
 BUILD = $(USR)
 
-# List of "private" libraries, e.g. ones that get installed to lib/julia
-JL_PRIVATE_LIBS = Rmath openlibm julia-release suitesparse_wrapper tk_wrapper gmp_wrapper glpk_wrapper random
-JL_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads fftw3f_threads glpk gmp grisu history $(OPENBLASNAME) pcre readline spqr umfpack z
-
 # Directories where said libraries get installed to
 JL_PRIVATE_LIBDIR = lib/julia
 JL_LIBDIR = lib
@@ -52,8 +48,13 @@ USE_COPY_STACKS = 1
 FC = gfortran
 JFFLAGS = -O2 $(fPIC)
 
+ifeq ($(CC), clang)
+USEGCC = 0
+USECLANG = 1
+else
 USEGCC = 1
 USECLANG = 0
+endif
 
 ifeq ($(OS), Darwin)
 OSVER = $(shell uname -r | cut -b 1-2)
@@ -140,7 +141,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
-LIBUNWIND=$(USR)/$(JL_LIBDIR)/libunwind-generic.a $(USR)/$(JL_LIBDIR)/libunwind.a
+LIBUNWIND=$(USR)/lib/libunwind-generic.a $(USR)/lib/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
@@ -152,13 +153,13 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline 
 else
-READLINE = $(USR)/$(JL_LIBDIR)/libreadline.a
+READLINE = $(USR)/lib/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
 READLINE += -lncurses
 else
-READLINE += $(USR)/$(JL_LIBDIR)/libhistory.a
+READLINE += $(USR)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -176,13 +177,8 @@ LIBBLAS = -lblas
 LIBBLASNAME = libblas
 endif
 else
-ifeq ($(OS), WINNT)
-LIBBLAS = $(USR)/$(JL_LIBDIR)/libopenblas-r0.2.2.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
-LIBBLASNAME = libopenblas-r0.2.2
-else
-LIBBLAS = -L$(USR)/$(JL_LIBDIR) -lopenblas
+LIBBLAS = -L$(USR)/lib -lopenblas
 LIBBLASNAME = libopenblas
-endif
 endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 1)
@@ -200,59 +196,67 @@ endif
 
 # OS specific stuff
 
-# must end with a / and have no trailing spaces
-INSTALL_NAME_ID_DIR = @rpath/
-
-RPATH = 
-RPATH_ORIGIN = 
-
-ifeq ($(OS), WINNT)
-SHELL_EXT = bat
+# install_name_tool
+ifeq ($(OS), Darwin)
+  # must end with a / and have no trailing spaces
+  INSTALL_NAME_ID_DIR = @rpath/
+  INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
+  INSTALL_NAME_CHANGE_CMD = install_name_tool -change
 else
-SHELL_EXT = sh
+  INSTALL_NAME_ID_DIR =
+  INSTALL_NAME_CMD = true -ignore 
+  INSTALL_NAME_CHANGE_CMD = true -ignore 
+endif
+
+# shared library runtime paths
+ifeq ($(OS), WINNT)
+  RPATH =
+  RPATH_ORIGIN =
+else ifeq ($(OS), Darwin)
+  RPATH = -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)'
+  RPATH_ORIGIN =
+else
+  RPATH = -Wl,-rpath,'$$ORIGIN/../$(JL_PRIVATE_LIBDIR)' -Wl,-rpath,'$$ORIGIN/../$(JL_LIBDIR)' -Wl,-z,origin
+  RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
+endif
+
+# file extensions
+ifeq ($(OS), WINNT)
+  SHLIB_EXT = dll
+  SHELL_EXT = bat
+else ifeq ($(OS), Darwin)
+  SHLIB_EXT = dylib
+  SHELL_EXT = sh
+else
+  SHLIB_EXT = so
+  SHELL_EXT = sh
+endif
+
+# --whole-archive
+ifeq ($(OS), Darwin)
+  WHOLE_ARCHIVE = -Xlinker -all_load
+  NO_WHOLE_ARCHIVE =
+else
+  WHOLE_ARCHIVE = -Wl,--whole-archive
+  NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), Linux)
-INSTALL_NAME_CMD = true -ignore
-INSTALL_NAME_CHANGE_CMD = true -ignore
-SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/../$(JL_LIBDIR)' -Wl,-rpath,'$$ORIGIN/../$(JL_PRIVATE_LIBDIR)'
-RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
-WHOLE_ARCHIVE = -Wl,--whole-archive
-NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 JLDFLAGS = -Wl,-Bdynamic
 endif
 
 ifeq ($(OS), FreeBSD)
-INSTALL_NAME_CMD = true -ignore
-INSTALL_NAME_CHANGE_CMD = true -ignore
-SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/../$(JL_LIBDIR)' -Wl,-rpath,'$$ORIGIN/../$(JL_PRIVATE_LIBDIR)' -Wl,-z,origin
-RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
-WHOLE_ARCHIVE = -Wl,--whole-archive
-NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 JLDFLAGS = -Wl,-Bdynamic
 OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
-INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
-INSTALL_NAME_CHANGE_CMD = install_name_tool -change
-RPATH = -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)'
-SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
-WHOLE_ARCHIVE = -Xlinker -all_load
-NO_WHOLE_ARCHIVE =
 JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-INSTALL_NAME_CMD = true -ignore
-INSTALL_NAME_CHANGE_CMD = true -ignore
-SHLIB_EXT = dll
-WHOLE_ARCHIVE = -Wl,--whole-archive
-NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lpthread $(NO_WHOLE_ARCHIVE) -lPsapi -lkernel32 -lWs2_32 -lIphlpapi
 endif
 

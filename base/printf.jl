@@ -1,5 +1,4 @@
 module Printf
-using Base
 using Base.Grisu
 export @printf, @sprintf
 

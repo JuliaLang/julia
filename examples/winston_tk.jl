@@ -1,5 +1,6 @@
-load("plot")
-load("tk")
+require("Tk")
+require("Winston")
+require("Winston/src/Plot")
 
 using Tk, Cairo, Winston, Plot
 

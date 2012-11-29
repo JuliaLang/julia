@@ -2,7 +2,6 @@ require("linprog")
 
 module Metadata
 
-using Base
 using LinProgGLPK
 
 import Git

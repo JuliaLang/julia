@@ -5,7 +5,6 @@
 require("sparse")
 
 module GLPK
-using Base
 
 export
     # Types

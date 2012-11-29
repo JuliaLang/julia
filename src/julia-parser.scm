@@ -87,8 +87,8 @@
 
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
-			 abstract typealias type bitstype
-			 module using import export ccall do))
+			 abstract typealias type bitstype ccall do
+			 module baremodule using import export importall))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -943,9 +943,9 @@
 			 (eq? (car assgn) 'local))))
 	   (error "expected assignment after const")
 	   `(const ,assgn))))
-    ((module)
+    ((module baremodule)
      (let ((name (parse-atom s)))
-       (begin0 (list word name (parse-block s))
+       (begin0 (list 'module (eq? word 'module) name (parse-block s))
 	       (expect-end s))))
     ((export)
      (let ((es (map macrocall-to-atsym

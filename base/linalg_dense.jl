@@ -232,54 +232,90 @@ function expm!{T<:LapackType}(A::StridedMatrix{T})
     if m < 2 return exp(A) end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
-    I    = convert(Array{T,2}, eye(n))
+    I    = eye(T,n)
     ## For sufficiently small nA, use lower order Padé-Approximations
     if (nA <= 2.1)
         if nA > 0.95
-            C = [17643225600.,8821612800.,2075673600.,302702400.,
-                    30270240.,   2162160.,    110880.,     3960.,
-                          90.,         1.]
+            C = T[17643225600.,8821612800.,2075673600.,302702400.,
+                     30270240.,   2162160.,    110880.,     3960.,
+                           90.,         1.]
         elseif nA > 0.25
-            C = [17297280.,8648640.,1995840.,277200.,
-                    25200.,   1512.,     56.,     1.]
+            C = T[17297280.,8648640.,1995840.,277200.,
+                     25200.,   1512.,     56.,     1.]
         elseif nA > 0.015
-            C = [30240.,15120.,3360.,
-                   420.,   30.,   1.]
+            C = T[30240.,15120.,3360.,
+                    420.,   30.,   1.]
         else
-            C = [120.,60.,12.,1.]
+            C = T[120.,60.,12.,1.]
         end
         A2 = A * A
         P  = copy(I)
-        U  = C[2] * P
-        V  = C[1] * P
+#        U  = C[2] * P
+#        V  = C[1] * P
+        U = zeros(T, n, n)
+        V = zeros(T, n, n)
+        C2 = C[2]; C1 = C[1]
+        for i=1:n
+            U[i,i] = C2
+            V[i,i] = C1
+        end
         for k in 1:(div(size(C, 1), 2) - 1)
             k2 = 2 * k
             P *= A2
-            U += C[k2 + 2] * P
-            V += C[k2 + 1] * P
+            #U += C[k2 + 2] * P
+            #V += C[k2 + 1] * P
+            Ck21 = C[k2 + 1]
+            Ck22 = C[k2 + 2]
+            for i=1:length(P)
+                U[i] += Ck22 * P[i]
+                V[i] += Ck21 * P[i]
+            end
         end
         U  = A * U
-        X  = (V - U)\(V + U)
+        #X  = (V - U)\(V + U)
+        X = V + U
+        LAPACK.gesv!(V-U, X)
     else
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
         if s > 0
             si = iceil(s)
-            A /= 2^si
+            A /= oftype(T,2^si)
         end
-        CC = [64764752532480000.,32382376266240000.,7771770303897600.,
-               1187353796428800.,  129060195264000.,  10559470521600.,
-                   670442572800.,      33522128640.,      1323241920.,
-                       40840800.,           960960.,           16380.,
-                            182.,                1.]
+        CC = T[64764752532480000.,32382376266240000.,7771770303897600.,
+                1187353796428800.,  129060195264000.,  10559470521600.,
+                    670442572800.,      33522128640.,      1323241920.,
+                        40840800.,           960960.,           16380.,
+                             182.,                1.]
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
-        U  = A * (A6 * (CC[14]*A6 + CC[12]*A4 + CC[10]*A2) +
-                  CC[8]*A6 + CC[6]*A4 + CC[4]*A2 + CC[2]*I)
-        V  = A6 * (CC[13]*A6 + CC[11]*A4 + CC[9]*A2) +
-                  CC[7]*A6 + CC[5]*A4 + CC[3]*A2 + CC[1]*I
-        X  = (V-U)\(V+U)
-                         
+#         U  = A * (A6 * (CC[14]*A6 + CC[12]*A4 + CC[10]*A2) +
+#                   CC[8]*A6 + CC[6]*A4 + CC[4]*A2 + CC[2]*I)
+#         V  = A6 * (CC[13]*A6 + CC[11]*A4 + CC[9]*A2) +
+#                   CC[7]*A6 + CC[5]*A4 + CC[3]*A2 + CC[1]*I
+        P1 = zeros(T, n, n)
+        P2 = zeros(T, n, n)
+        P3 = zeros(T, n, n)
+        P4 = zeros(T, n, n)
+        CC14 = CC[14]; CC12 = CC[12]; CC10 = CC[10]
+        CC8 = CC[8];   CC6 = CC[6];   CC4 = CC[4];   CC2 = CC[2];   
+        CC13 = CC[13]; CC11 = CC[11]; CC9 = CC[9]   
+        CC7 = CC[7];   CC5 = CC[5];   CC3 = CC[3];   CC1 = CC[1]
+        for i=1:length(I)
+            P1[i] += CC14*A6[i] + CC12*A4[i] + CC10*A2[i]
+            P2[i] += CC8*A6[i] + CC6*A4[i] + CC4*A2[i] + CC2*I[i]
+            P3[i] += CC13*A6[i] + CC11*A4[i] + CC9*A2[i]
+            P4[i] += CC7*A6[i] + CC5*A4[i] + CC3*A2[i] + CC1*I[i]
+        end
+        #U = A * (A6*P1 + P2)
+        #V = A6*P3 + P4
+        U = A * (BLAS.gemm!('N', 'N', one(T), A6, P1, one(T), P2))
+        V = BLAS.gemm!('N', 'N', one(T), A6, P3, one(T), P4)
+
+        #X  = (V-U)\(V+U)
+        X = V + U
+        LAPACK.gesv!(V-U, X)
+    
         if s > 0            # squaring to reverse dividing by power of 2
             for t in 1:si X *= X end
         end

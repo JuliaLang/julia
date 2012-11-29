@@ -798,7 +798,7 @@ void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
 
-void jl_save_system_image(char *fname, char *startscriptname);
+void jl_save_system_image(char *fname);
 void jl_restore_system_image(char *fname);
 
 // front end interface

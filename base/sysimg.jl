@@ -1,4 +1,4 @@
-module Base
+baremodule Base
 
 include("export.jl")
 
@@ -52,9 +52,6 @@ include("int.jl")
 include("promotion.jl")
 include("operators.jl")
 include("pointer.jl")
-
-_jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
-libopenlibm = dlopen("libopenlibm")
 
 include("float.jl")
 include("reduce.jl")
@@ -273,11 +270,12 @@ begin
     typeinf_ext(minf[1][3], atypes, (), minf[1][3])
 end
 
-end # module Base
+end # baremodule Base
 
 using Base
 
-JL_PRIVATE_LIBDIR = getenv("JL_PRIVATE_LIBDIR")
+let JL_PRIVATE_LIBDIR = getenv("JL_PRIVATE_LIBDIR")
 # create system image file
-ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
-      "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji", "start_image.jl")
+ccall(:jl_save_system_image, Void, (Ptr{Uint8},),
+      "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji")
+end

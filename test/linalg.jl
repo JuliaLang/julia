@@ -199,23 +199,27 @@ begin
     Aref = Ai[1:2:2*cutoff, 1:3]
     @assert Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
     # Matrix exponential
-    A1  = float([4 2 0; 1 4 1; 1 1 4])
-    eA1 = [147.866622446369 127.781085523181  127.781085523182;
-    183.765138646367 183.765138646366  163.679601723179;
-    71.797032399996  91.8825693231832 111.968106246371]'
-    @assert norm((expm(A1) - eA1) ./ eA1) < 1000*eps()
-    A2  = [29.87942128909879    0.7815750847907159 -2.289519314033932;
-    0.7815750847907159 25.72656945571064    8.680737820540137;
-    -2.289519314033932   8.680737820540137  34.39400925519054]
-    eA2 = [  5496313853692216. -18231880972008932. -30475770808579672.;
-    -18231880972008928.  60605228702222480. 101291842930249776.;
-    -30475770808579672. 101291842930249808. 169294411240850528]
-    @assert norm((expm(A2) - eA2) ./ eA2) < 1000*eps()
-    A3  = float([-131 19 18;-390 56 54;-387 57 52])
-    eA3 = [-1.50964415879218 -5.6325707998812  -4.934938326092;
-    0.367879439109187 1.47151775849686  1.10363831732856;
-    0.135335281175235 0.406005843524598 0.541341126763207]'
-    @assert norm((expm(A3) - eA3) ./ eA3) < 50000*eps()
+    for eltype in (Float32, Float64, Complex64, Complex128)
+        @eval begin
+            A1  = convert(Matrix{$eltype}, [4 2 0; 1 4 1; 1 1 4])
+            eA1 = convert(Matrix{$eltype}, [147.866622446369 127.781085523181  127.781085523182;
+            183.765138646367 183.765138646366  163.679601723179;
+            71.797032399996  91.8825693231832 111.968106246371]')
+            @assert norm((expm(A1) - eA1) ./ eA1) < 1000*eps(real(A1[1]))
+            A2  = convert(Matrix{$eltype}, [29.87942128909879    0.7815750847907159 -2.289519314033932;
+            0.7815750847907159 25.72656945571064    8.680737820540137;
+            -2.289519314033932   8.680737820540137  34.39400925519054])
+            eA2 = convert(Matrix{$eltype},[  5496313853692216. -18231880972008932. -30475770808579672.;
+            -18231880972008928.  60605228702222480. 101291842930249776.;
+            -30475770808579672. 101291842930249808. 169294411240850528])
+            @assert norm((expm(A2) - eA2) ./ eA2) < 1000*eps(real(A2[1]))
+            A3  = convert(Matrix{$eltype}, [-131 19 18;-390 56 54;-387 57 52])
+            eA3 = convert(Matrix{$eltype}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
+            0.367879439109187 1.47151775849686  1.10363831732856;
+            0.135335281175235 0.406005843524598 0.541341126763207]')
+            @assert norm((expm(A3) - eA3) ./ eA3) < 50000*eps(real(A3[1]))
+        end
+    end
 
     # matmul for types w/o sizeof (issue #1282)
     A = Array(ComplexPair{Int},10,10)
@@ -323,7 +327,6 @@ begin
     qpyz = qrz' * yyz
     @assert abs(norm(qyz) - norm(yyz)) < Eps # Q is unitary
     @assert abs(norm(qpyz) - norm(yyz)) < Eps # Q is unitary
-    
 end
 
 # Test det(A::Matrix)
@@ -352,6 +355,25 @@ for theta = pi ./ [1:4]
   @assert abs(det(R) - 1.0) < Eps
 end
 
+# LAPACK tests
+srand(111)
+Ainit = randn(5,5)
+for elty in (Float32, Float64, Complex64, Complex128)
+    @eval begin
+        # syevr!
+        A = convert(Array{$elty, 2}, Ainit)
+        Asym = A'A
+        Z = Array($elty, 5, 5)
+        vals = LAPACK.syevr!(copy(Asym), Z)
+        @assert norm(Z*diagmm(vals, Z') - Asym) < sqrt(eps(real(Asym[1])))
+        @assert all(vals .> 0.0)
+        @assert norm(LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,zeros($elty,0,0),-1.0) - vals[vals .< 1.0]) < sqrt(eps(real(Asym[1])))
+        @assert norm(LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,zeros($elty,0,0),-1.0) - vals[4:5]) < sqrt(eps(real(Asym[1])))
+        @assert norm(vals - LAPACK.syev!('N','U',copy(Asym))) < sqrt(eps(real(Asym[1])))
+    end
+end
+
+## Issue related tests
 # issue 1447
 let
     A = [1.+0.im 0; 0 1]

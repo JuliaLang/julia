@@ -23,6 +23,7 @@
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
 #include <setjmp.h>
 #include <string>
@@ -107,6 +108,7 @@ static GlobalVariable *jlboundserr_var;
 // important functions
 static Function *jlnew_func;
 static Function *jlraise_func;
+static Function *jlraise_line_func;
 static Function *jlerror_func;
 static Function *jltypeerror_func;
 static Function *jlcheckassign_func;
@@ -330,6 +332,7 @@ typedef struct {
     jl_sym_t *vaName;  // name of vararg argument
     bool vaStack;      // varargs stack-allocated
     int nReqArgs;
+    int lineno;
 } jl_codectx_t;
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
@@ -1730,7 +1733,7 @@ extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
 static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
 {
     Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
-                                   lam->name->name, jl_Module);
+                                   f->getName(), jl_Module);
     Function::arg_iterator AI = w->arg_begin();
     AI++; //const Argument &fArg = *AI++;
     Value *argArray = AI++;
@@ -1869,6 +1872,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
             specsig = true;
     }
 
+    std::string funcName = lam->name->name;
+    // try to avoid conflicts in the global symbol table
+    funcName = "julia_" + funcName;
+
     if (specsig) {
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < lam->specTypes->length; i++) {
@@ -1877,7 +1884,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         jl_value_t *jlrettype = ast_rettype((jl_value_t*)ast);
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
-                             Function::ExternalLinkage, lam->name->name, jl_Module);
+                             Function::ExternalLinkage, funcName, jl_Module);
         if (lam->functionObject == NULL) {
             lam->cFunctionObject = (void*)f;
             lam->functionObject = (void*)gen_jlcall_wrapper(lam, f);
@@ -1885,7 +1892,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     }
     else {
         f = Function::Create(jl_func_sig, Function::ExternalLinkage,
-                             lam->name->name, jl_Module);
+                             funcName, jl_Module);
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
         }
@@ -1908,6 +1915,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
         }
     }
+    ctx.lineno = lno;
     
     // TODO: Fix when moving to new LLVM version
     dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0); 
@@ -2208,10 +2216,12 @@ static Function *emit_function(jl_lambda_info_t *lam)
         if (jl_is_linenode(stmt)) {
             int lno = jl_linenode_line(stmt);
             builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
+            ctx.lineno = lno;
         }
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             int lno = jl_unbox_long(jl_exprarg(stmt, 0));
             builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
+            ctx.lineno = lno;
         }
         if (jl_is_labelnode(stmt)) {
             if (prevlabel) continue;
@@ -2424,6 +2434,14 @@ static void init_julia_llvm_env(Module *m)
                          "jl_raise", jl_Module);
     jlraise_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jlraise_func, (void*)&jl_raise);
+
+    std::vector<Type*> args2_raise(0);
+    args2_raise.push_back(jl_pvalue_llvmt);
+    args2_raise.push_back(T_int32);
+    jlraise_line_func =
+        (Function*)jl_Module->getOrInsertFunction("jl_raise_with_superfluous_argument",
+                                                  FunctionType::get(T_void, args2_raise, false));
+    jlraise_line_func->setDoesNotReturn();
 
     jlnew_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, args1_, false),

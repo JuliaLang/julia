@@ -555,6 +555,11 @@ void jl_raise(jl_value_t *e)
     jl_exit(1);
 }
 
+DLLEXPORT void jl_raise_with_superfluous_argument(jl_value_t *e, int line)
+{
+    jl_raise(e);
+}
+
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;

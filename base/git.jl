@@ -3,8 +3,6 @@ module Git
 # some utility functions for working with git repos
 #
 
-using Base
-
 dir() = readchomp(`git rev-parse --git-dir`)
 modules(args::Cmd) = readchomp(`git config -f .gitmodules $args`)
 different(verA::String, verB::String, path::String) =

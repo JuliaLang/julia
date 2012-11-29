@@ -581,7 +581,8 @@ static Value *emit_array_nd_index(Value *a, size_t nd, jl_value_t **args,
 
     ctx->f->getBasicBlockList().push_back(failBB);
     builder.SetInsertPoint(failBB);
-    builder.CreateCall(jlraise_func, builder.CreateLoad(jlboundserr_var));
+    builder.CreateCall2(jlraise_line_func, builder.CreateLoad(jlboundserr_var),
+                        ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
 
     ctx->f->getBasicBlockList().push_back(endBB);

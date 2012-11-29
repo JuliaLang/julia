@@ -168,6 +168,8 @@
     jl_ptr_to_array_1d;
     jl_readdir;
     jl_readuntil;
+    jl_raise;
+    jl_raise_with_superfluous_argument;
     jl_register_toplevel_eh;
     jl_reshape_array;
     jl_restore_system_image;

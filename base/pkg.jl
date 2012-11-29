@@ -6,7 +6,6 @@ module Pkg
 # Julia's git-based declarative package manager
 #
 
-using Base
 using Metadata
 
 import Git
@@ -166,7 +165,7 @@ function _resolve()
                 if have[pkg] != want[pkg]
                     oldver = Metadata.version(pkg,have[pkg])
                     newver = Metadata.version(pkg,want[pkg])
-                    up = oldver < newver ? "Up" : "Down"
+                    up = oldver <= newver ? "Up" : "Down"
                     println("$(up)grading $pkg: v$oldver => v$newver")
                     cd(pkg) do
                         run(`git checkout -q $(want[pkg])`)
@@ -219,9 +218,8 @@ end
 # checkout a particular repo version
 
 checkout(rev::String) = cd(julia_pkgdir()) do
-    dir = cwd()
-    run(`git checkout -fq $rev`)
-    run(`git submodule update --init --reference $dir --recursive`)
+    run(`git checkout -fq $rev -- REQUIRE`)
+    _resolve()
 end
 checkout() = checkout("HEAD")
 
@@ -352,7 +350,7 @@ update() = cd(julia_pkgdir()) do
             if Git.attached()
                 run(`git pull`)
             else
-                run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+                run(`git fetch -q --all --tags --prune --recurse-submodules`)
             end
         end
     end
@@ -374,6 +372,39 @@ create(name::String) = cd(julia_pkgdir()) do
         run(`touch README.md`)
         run(`mkdir src`)
     end
+end
+
+# Create a skeleton package that can be easily filled in
+function skeleton(package_name::String)
+    try
+        mkdir(package_name)
+    catch
+        error("Unable to create directory for new package: $(package_name)")
+    end
+    try
+        cd(package_name) do
+            file_create("LICENSE.md") # Should insert MIT content
+            file_create("README.md")
+            file_create("REQUIRE")
+            mkdir("src")
+            file_create(file_path("src", strcat(package_name, ".jl")))
+            mkdir("test")
+            file_create(file_path("test", strcat("01", ".jl")))
+        end
+    catch
+        error("Unable to initialize contents of new package")
+    end
+end
+
+skeleton() = skeleton("Example")
+
+# If a package contains data, make it easy to find its location
+function package_directory(package_name::String)
+  if has(ENV, "JULIA_PKGDIR")
+    return file_path(ENV["JULIA_PKGDIR"], package_name)
+  else
+    return path_expand(file_path("~/.julia", package_name))
+  end
 end
 
 end # module
