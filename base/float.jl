@@ -81,23 +81,23 @@ promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
 promote_rule(::Type{Float32}, ::Type{Int8} ) = Float32
 promote_rule(::Type{Float32}, ::Type{Int16}) = Float32
-promote_rule(::Type{Float32}, ::Type{Int32}) = Float64
-promote_rule(::Type{Float32}, ::Type{Int64}) = Float64 # TODO: should be Float80
+promote_rule(::Type{Float32}, ::Type{Int32}) = Float32
+promote_rule(::Type{Float32}, ::Type{Int64}) = Float32
 
 promote_rule(::Type{Float64}, ::Type{Int8} ) = Float64
 promote_rule(::Type{Float64}, ::Type{Int16}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int32}) = Float64
-promote_rule(::Type{Float64}, ::Type{Int64}) = Float64 # TODO: should be Float80
+promote_rule(::Type{Float64}, ::Type{Int64}) = Float64
 
 promote_rule(::Type{Float32}, ::Type{Uint8} ) = Float32
 promote_rule(::Type{Float32}, ::Type{Uint16}) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint32}) = Float64
-promote_rule(::Type{Float32}, ::Type{Uint64}) = Float64 # TODO: should be Float80
+promote_rule(::Type{Float32}, ::Type{Uint32}) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint64}) = Float32
 
 promote_rule(::Type{Float64}, ::Type{Uint8} ) = Float64
 promote_rule(::Type{Float64}, ::Type{Uint16}) = Float64
 promote_rule(::Type{Float64}, ::Type{Uint32}) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint64}) = Float64 # TODO: should be Float80
+promote_rule(::Type{Float64}, ::Type{Uint64}) = Float64
 
 promote_rule(::Type{Float32}, ::Type{Char}) = Float32
 promote_rule(::Type{Float64}, ::Type{Char}) = Float64
@@ -174,6 +174,15 @@ isless (a::FloatingPoint, b::Integer) = (a<b) | isless(a,float(b))
 <=(x::Float32, y::Uint64 ) = lefui64(unbox(Float64,float64(x)),unbox(Uint64,y))
 <=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Float64,float64(y)))
 <=(x::Uint64 , y::Float32) = leuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
+
+==(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)==float64(y)
+==(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)==float64(y)
+
+<(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)<float64(y)
+<(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)<float64(y)
+
+<=(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)<=float64(y)
+<=(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)<=float64(y)
 
 ## floating point traits ##
 
