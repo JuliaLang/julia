@@ -232,23 +232,22 @@ function expm!{T<:LapackType}(A::StridedMatrix{T})
     if m < 2 return exp(A) end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
-    I    = convert(Array{T,2}, eye(n))
+    I    = eye(T,n)
     ## For sufficiently small nA, use lower order Padé-Approximations
     if (nA <= 2.1)
         if nA > 0.95
-            C = [17643225600.,8821612800.,2075673600.,302702400.,
-                    30270240.,   2162160.,    110880.,     3960.,
-                          90.,         1.]
+            C = T[17643225600.,8821612800.,2075673600.,302702400.,
+                     30270240.,   2162160.,    110880.,     3960.,
+                           90.,         1.]
         elseif nA > 0.25
-            C = [17297280.,8648640.,1995840.,277200.,
-                    25200.,   1512.,     56.,     1.]
+            C = T[17297280.,8648640.,1995840.,277200.,
+                     25200.,   1512.,     56.,     1.]
         elseif nA > 0.015
-            C = [30240.,15120.,3360.,
-                   420.,   30.,   1.]
+            C = T[30240.,15120.,3360.,
+                    420.,   30.,   1.]
         else
-            C = [120.,60.,12.,1.]
+            C = T[120.,60.,12.,1.]
         end
-        C = convert(Array{T,1}, C)
         A2 = A * A
         P  = copy(I)
 #        U  = C[2] * P
@@ -280,14 +279,13 @@ function expm!{T<:LapackType}(A::StridedMatrix{T})
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
         if s > 0
             si = iceil(s)
-            A /= 2^si
+            A /= oftype(T,2^si)
         end
-        CC = [64764752532480000.,32382376266240000.,7771770303897600.,
-               1187353796428800.,  129060195264000.,  10559470521600.,
-                   670442572800.,      33522128640.,      1323241920.,
-                       40840800.,           960960.,           16380.,
-                            182.,                1.]
-        CC = convert(Array{T,1}, CC)
+        CC = T[64764752532480000.,32382376266240000.,7771770303897600.,
+                1187353796428800.,  129060195264000.,  10559470521600.,
+                    670442572800.,      33522128640.,      1323241920.,
+                        40840800.,           960960.,           16380.,
+                             182.,                1.]
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
@@ -350,7 +348,7 @@ function expm!{T<:LapackType}(A::StridedMatrix{T})
     if ihi < n       # apply upper permutations in forward order
         for j in (ihi+1):n    rcswap!(j, int(scale[j]), X) end
     end
-    convert(Matrix{T}, X)
+    X
 end
 
 ## Swap rows j and jp and columns j and jp in X
