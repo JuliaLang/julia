@@ -165,7 +165,7 @@ function _resolve()
                 if have[pkg] != want[pkg]
                     oldver = Metadata.version(pkg,have[pkg])
                     newver = Metadata.version(pkg,want[pkg])
-                    up = oldver < newver ? "Up" : "Down"
+                    up = oldver <= newver ? "Up" : "Down"
                     println("$(up)grading $pkg: v$oldver => v$newver")
                     cd(pkg) do
                         run(`git checkout -q $(want[pkg])`)
