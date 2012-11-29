@@ -20,6 +20,7 @@ debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $
 	$(MAKEs) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
 
 julia-debug julia-release:
+	@git submodule update
 	@$(MAKEs) -C deps
 	@$(MAKEs) -C src lib$@
 	@$(MAKEs) -C base

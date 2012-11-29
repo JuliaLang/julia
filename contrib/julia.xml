@@ -276,7 +276,6 @@ endRegion="block" />
       <itemData name="Keyword" defStyleNum="dsKeyword"/>
       <itemData name="Data Type" defStyleNum="dsDataType"/>
       <itemData name="Comment" defStyleNum="dsComment"/>
-      <itemData name="Comment" defStyleNum="dsComment"/>
       <itemData name="FoldingComment" defStyleNum="dsComment" />
     </itemDatas>
 
