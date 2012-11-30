@@ -18,7 +18,7 @@ end
 
 strptime(timestr::ByteString) = strptime("%c", timestr)
 function strptime(fmt::ByteString, timestr::ByteString)
-    tmstruct = Array(Int32, 14)
+    tmstruct = zeros(Int32, 14)
     r = ccall(:strptime, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}),
               timestr, fmt, tmstruct)
     if r == C_NULL
