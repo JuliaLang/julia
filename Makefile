@@ -52,7 +52,7 @@ install: release
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
-	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
+	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
 		cp -a $(BUILD)/lib/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
