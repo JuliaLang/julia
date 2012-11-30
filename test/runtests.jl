@@ -4,14 +4,22 @@ function runtests(name)
     load("$name")
 end
 
-function check_approx_eq(va, vb, astr, bstr)
-    diff = abs(va - vb)
-    sdiff = strcat("|", astr, " - ", bstr, "| < 1e-6")
-    if diff < 1e-6
+function check_approx_eq(va, vb, Eps, astr, bstr)
+    diff = max(abs(va - vb))
+    sdiff = strcat("|", astr, " - ", bstr, "| < ", Eps)
+    if diff < Eps
         nothing
     else
         error("assertion failed: ", sdiff, "\n  ", astr, " = ", va, "\n  ",
               bstr, " = ", vb)
+    end
+end
+
+check_approx_eq(va, vb, astr, bstr) = check_approx_eq(va, vb, 10^4*length(va)*eps(max(max(abs(va)), max(abs(vb)))) * max(1, max(abs(va)), max(abs(vb))), astr, bstr)
+
+macro assert_approx_eq_eps(a, b, c)
+    quote
+        check_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b)))
     end
 end
 

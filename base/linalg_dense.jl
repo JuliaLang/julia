@@ -418,9 +418,9 @@ factors(C::CholeskyDense) = C.LR
 \{T<:LapackType}(C::CholeskyDense{T}, B::StridedVecOrMat{T}) =
     LAPACK.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B))
 
-function det(C::CholeskyDense)
+function det{T}(C::CholeskyDense{T})
     ff = C.LR
-    dd = 1.
+    dd = one(T)
     for i in 1:size(ff,1) dd *= abs2(ff[i,i]) end
     dd
 end
@@ -501,11 +501,11 @@ end
 size(A::LUDense) = size(A.lu)
 size(A::LUDense,n) = size(A.lu,n)
 
-function factors{T<:LapackType}(lu::LUDense{T}) 
+function factors{T}(lu::LUDense{T}) 
     LU, ipiv = lu.lu, lu.ipiv
     m, n = size(LU)
 
-    L = m >= n ? tril(LU, -1) + eye(m,n) : tril(LU, -1)[:, 1:m] + eye(m,m)
+    L = m >= n ? tril(LU, -1) + eye(T,m,n) : tril(LU, -1)[:, 1:m] + eye(T,m)
     U = m <= n ? triu(LU) : triu(LU)[1:n, :]
     P = [1:m]
     for i = 1:min(m,n)
@@ -527,10 +527,10 @@ lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
 ## Matlab-compatible
 lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
 
-function det(lu::LUDense)
+function det{T}(lu::LUDense{T})
     m, n = size(lu)
     if lu.info > 0; return zero(typeof(lu.lu[1])); end
-    prod(diag(lu.lu)) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
+    prod(diag(lu.lu)) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
 
 function det(A::Matrix)
@@ -636,7 +636,16 @@ function eig{T<:LapackType}(A::StridedMatrix{T}, vecs::Bool)
     n = size(A, 2)
     if n == 0; return vecs ? (zeros(T, 0), zeros(T, 0, 0)) : zeros(T, 0, 0); end
 
-    if ishermitian(A); return LAPACK.syev!(vecs ? 'V' : 'N', 'U', copy(A)); end
+    if ishermitian(A)
+        if vecs
+            Z = similar(A)
+            W = LAPACK.syevr!(copy(A), Z)
+        else
+            Z = Array(T, 0, 0)
+            W = LAPACK.syevr!(copy(A))
+        end
+        return W, Z
+    end
 
     if iscomplex(A)
         W, VR = LAPACK.geev!('N', vecs ? 'V' : 'N', copy(A))[2:3]
@@ -784,7 +793,7 @@ function SymTridiagonal{T<:Real}(dv::Vector{T}, ev::Vector{T})
     SymTridiagonal{Float64}(float64(dv),float64(ev))
 end
 function SymTridiagonal{Td<:Number,Te<:Number}(dv::Vector{Td}, ev::Vector{Te})
-    T = promote(Td,Tv)
+    T = promote(Td,Te)
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end
 copy(S::SymTridiagonal) = SymTridiagonal(S.dv,S.ev)
@@ -1009,16 +1018,23 @@ end
 *(A::Tridiagonal, B::Tridiagonal) = A*full(B)
 
 #### Factorizations for Tridiagonal ####
-type LDLTTridiagonal{T} <: Factorization{T}
-    D::Vector{T}
+type LDLTTridiagonal{T<:LapackType,S<:LapackType} <: Factorization{T}
+    D::Vector{S}
     E::Vector{T}
+    function LDLTTridiagonal(D::Vector{S}, E::Vector{T})
+        if typeof(real(E[1])) != eltype(D) error("Wrong eltype") end
+        new(D, E)
+    end
 end
+LDLTTridiagonal{S<:LapackType,T<:LapackType}(D::Vector{S}, E::Vector{T}) = LDLTTridiagonal{T,S}(D, E)
 
-ldltd!{T<:LapackType}(A::SymTridiagonal{T}) = LDLTTridiagonal{T}(LAPACK.pttrf!(A.dv,A.ev)...)
+ldltd!{T<:LapackType}(A::SymTridiagonal{T}) = LDLTTridiagonal(LAPACK.pttrf!(real(A.dv),A.ev)...)
 ldltd{T<:LapackType}(A::SymTridiagonal{T}) = ldltd!(copy(A))
 
-(\){T<:LapackType}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) =
+function (\){T<:LapackType}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T})
+    if iscomplex(B) return LAPACK.pttrs!('L', C.D, C.E, copy(B)) end
     LAPACK.pttrs!(C.D, C.E, copy(B))
+end
 
 type LUTridiagonal{T} <: Factorization{T}
     dl::Vector{T}
@@ -1042,9 +1058,9 @@ lud{T}(A::Tridiagonal{T}) =
     LUTridiagonal{T}(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
 lu(A::Tridiagonal) = factors(lud(A))
 
-function det(lu::LUTridiagonal)
+function det{T}(lu::LUTridiagonal{T})
     n = length(lu.d)
-    prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
+    prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
 
 det(A::Tridiagonal) = det(lud(A))

@@ -1015,25 +1015,24 @@ end
 
 ## (PT) positive-definite, symmetric, tri-diagonal matrices
 ## Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
-for (ptsv, pttrf, pttrs, elty) in
-    ((:dptsv_,:dpttrf_,:dpttrs_,:Float64),
-     (:sptsv_,:spttrf_,:spttrs_,:Float32)
-#     , (:zptsv_,:zpttrf_,:zpttrs_,:Complex128)  # need to fix calling sequence.
-#     , (:cptsv_,:cpttrf_,:cpttrs_,:Complex64)   # D is real, not complex
-     )
+for (ptsv, pttrf, pttrs, elty, relty) in
+    ((:dptsv_,:dpttrf_,:dpttrs_,:Float64,:Float64),
+     (:sptsv_,:spttrf_,:spttrs_,:Float32,:Float32), 
+     (:zptsv_,:zpttrf_,:zpttrs_,:Complex128,:Float64), 
+     (:cptsv_,:cpttrf_,:cpttrs_,:Complex64,:Float32))
     @eval begin
         #       SUBROUTINE DPTSV( N, NRHS, D, E, B, LDB, INFO )
         #       .. Scalar Arguments ..
         #       INTEGER            INFO, LDB, N, NRHS
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), E( * )
-        function ptsv!(D::Vector{$elty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
+        function ptsv!(D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(B)
             n    = length(D)
             if length(E) != n - 1 || n != size(B,1) throw(LapackDimMismatch("ptsv!")) end
             info = Array(Int32, 1)
             ccall(($(string(ptsv)),liblapack), Void,
-                  (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty},
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                   &n, &size(B,2), D, E, B, &stride(B,2), info)
             if info[1] != 0 throw(LapackException(info[1])) end
@@ -1044,30 +1043,62 @@ for (ptsv, pttrf, pttrs, elty) in
         #       INTEGER            INFO, N
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   D( * ), E( * )
-        function pttrf!(D::Vector{$elty}, E::Vector{$elty})
+        function pttrf!(D::Vector{$relty}, E::Vector{$elty})
             n    = length(D)
             if length(E) != (n-1) throw(LapackDimMisMatch("pttrf!")) end
             info = Array(Int32, 1)
             ccall(($(string(pttrf)),liblapack), Void,
-                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                  (Ptr{Int32}, Ptr{$relty}, Ptr{$elty}, Ptr{Int32}),
                   &n, D, E, info)
             if info[1] != 0 throw(LapackException(info[1])) end
             D, E
         end
+    end
+end
+for (pttrs, elty, relty) in
+    ((:dpttrs_,:Float64,:Float64),
+     (:spttrs_,:Float32,:Float32))
+    @eval begin
         #       SUBROUTINE DPTTRS( N, NRHS, D, E, B, LDB, INFO )
         #       .. Scalar Arguments ..
         #       INTEGER            INFO, LDB, N, NRHS
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), E( * )
-        function pttrs!(D::Vector{$elty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
+        function pttrs!(D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(B)
             n    = length(D)
             if length(E) != (n-1) || size(B,1) != n throw(LapackDimMisMatch("pttrs!")) end
             info = Array(Int32, 1)
             ccall(($(string(pttrs)),liblapack), Void,
-                  (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty},
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                   &n, &size(B,2), D, E, B, &stride(B,2), info)
+            if info[1] != 0 throw(LapackException(info[1])) end
+            B
+        end
+    end
+end
+for (pttrs, elty, relty) in
+    ((:zpttrs_,:Complex128,:Float64),
+     (:cpttrs_,:Complex64,:Float32))
+    @eval begin
+#       SUBROUTINE ZPTTRS( UPLO, N, NRHS, D, E, B, LDB, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDB, N, NRHS
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   D( * )
+#       COMPLEX*16         B( LDB, * ), E( * )
+        function pttrs!(uplo::LapackChar, D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(B)
+            n    = length(D)
+            if length(E) != (n-1) || size(B,1) != n throw(LapackDimMisMatch("pttrs!")) end
+            info = Array(Int32, 1)
+            ccall(($(string(pttrs)),liblapack), Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$relty}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
+                  &uplo, &n, &size(B,2), D, E, B, &stride(B,2), info)
             if info[1] != 0 throw(LapackException(info[1])) end
             B
         end
