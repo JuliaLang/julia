@@ -173,12 +173,9 @@ function cd(f::Function, dir::String)
     system_error("open", fd == -1)
     try
         cd(dir)
-        retval = f()
+        f()
+    finally
         system_error("fchdir", ccall(:fchdir,Int32,(Int32,),fd) != 0)
-        retval
-    catch err
-        system_error("fchdir", ccall(:fchdir,Int32,(Int32,),fd) != 0)
-        throw(err)
     end
 end
 cd(f::Function) = cd(f, ENV["HOME"])

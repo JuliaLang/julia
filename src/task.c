@@ -413,6 +413,15 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
+#if defined(__APPLE__) || defined(__WIN32__)
+#define MAX_BT_SIZE 1023
+#else
+#define MAX_BT_SIZE 80000
+#endif
+
+static ptrint_t bt_data[MAX_BT_SIZE+1];
+static size_t bt_size = 0;
+
 void getFunctionInfo(char **name, int *line, const char **filename, size_t pointer);
 
 static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
@@ -431,36 +440,26 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
     }
 }
 
-#if defined(__APPLE__)
-// stacktrace using execinfo
-static jl_value_t *build_backtrace(void)
+DLLEXPORT jl_value_t *jl_get_backtrace()
 {
-    void *array[1024];
-    size_t ip;
-    size_t *p;
-    jl_array_t *a;
-    a = jl_alloc_cell_1d(0);
+    jl_array_t *a = jl_alloc_cell_1d(0);
     JL_GC_PUSH(&a);
-    
-    backtrace(array, 1023);
-    p = (size_t*)array;
-    while ((ip = *(p++)) != 0) {
-        push_frame_info_from_ip(a, ip);
+    for(size_t i=0; i < bt_size; i++) {
+        push_frame_info_from_ip(a, (size_t)bt_data[i]);
     }
     JL_GC_POP();
     return (jl_value_t*)a;
 }
-#elif defined(__WIN32__)
-static jl_value_t *build_backtrace(void)
-{
-    void *array[1024];
-    size_t ip;
-    size_t *p;
-    jl_array_t *a;
-    unsigned short num;
-    a = jl_alloc_cell_1d(0);
-    JL_GC_PUSH(&a);
 
+#if defined(__APPLE__)
+// stacktrace using execinfo
+static void record_backtrace(void)
+{
+    bt_size = backtrace(bt_data, MAX_BT_SIZE);
+}
+#elif defined(__WIN32__)
+static void record_backtrace(void)
+{
     /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
 #if defined(__MINGW_H)
     HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
@@ -473,10 +472,11 @@ static jl_value_t *build_backtrace(void)
             FreeLibrary(kernel32);
             kernel32 = NULL;
             func = NULL;
-            return (jl_value_t*)a;
+            bt_size = 0;
+            return;
         }
         else {
-            num = func(0, 1023, array, NULL);
+            bt_size = func(0, MAX_BT_SIZE, bt_data, NULL);
         }
     }
     else {
@@ -485,59 +485,32 @@ static jl_value_t *build_backtrace(void)
     }
     FreeLibrary(kernel32);
 #else
-    num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
+    bt_size = RtlCaptureStackBackTrace(0, MAX_BT_SIZE, bt_data, NULL);
 #endif
-
-    p = (size_t*)array;
-    while ((ip = *(p++)) != 0 && (num--)>0) {
-        push_frame_info_from_ip(a, ip);
-    }
-    JL_GC_POP();
-    return (jl_value_t*)a;
 }
 #else
 // stacktrace using libunwind
-static jl_value_t *build_backtrace(void)
+static void record_backtrace(void)
 {
     unw_cursor_t cursor; unw_context_t uc;
     unw_word_t ip;
-    jl_array_t *a;
     size_t n=0;
-    a = jl_alloc_cell_1d(0);
-    JL_GC_PUSH(&a);
     
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
-    while (unw_step(&cursor) && n < 80000) { 
+    while (unw_step(&cursor) && n < MAX_BT_SIZE) {
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
-        push_frame_info_from_ip(a, ip);
-        n++;
+        bt_data[n++] = ip;
     }
-    JL_GC_POP();
-    return (jl_value_t*)a;
+    bt_size = n;
 }
 #endif
 
-DLLEXPORT void jl_register_toplevel_eh(void)
-{
-    jl_current_task->state.eh_task->state.bt = 1;
-}
-
 // yield to exception handler
-void jl_raise(jl_value_t *e)
+static void throw_internal(jl_value_t *e)
 {
     jl_task_t *eh = jl_current_task->state.eh_task;
-    eh->state.err = 1;
     jl_exception_in_transit = e;
-    if (eh->state.bt) {
-        jl_value_t *tracedata, *bt;
-        tracedata = build_backtrace();
-        JL_GC_PUSH(&tracedata);
-        bt = jl_new_struct(jl_backtrace_type,
-                           jl_exception_in_transit, tracedata);
-        jl_exception_in_transit = bt;
-        JL_GC_POP();
-    }
     if (jl_current_task == eh && eh->state.eh_ctx!=0) {
         jl_longjmp(*eh->state.eh_ctx, 1);
     }
@@ -555,9 +528,26 @@ void jl_raise(jl_value_t *e)
     jl_exit(1);
 }
 
-DLLEXPORT void jl_raise_with_superfluous_argument(jl_value_t *e, int line)
+// record backtrace and raise an error
+DLLEXPORT void jl_throw(jl_value_t *e)
 {
-    jl_raise(e);
+    record_backtrace();
+    throw_internal(e);
+}
+
+DLLEXPORT void jl_rethrow()
+{
+    throw_internal(jl_exception_in_transit);
+}
+
+DLLEXPORT void jl_rethrow_other(jl_value_t *e)
+{
+    throw_internal(e);
+}
+
+DLLEXPORT void jl_throw_with_superfluous_argument(jl_value_t *e, int line)
+{
+    jl_throw(e);
 }
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
@@ -575,8 +565,6 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->runnable = 1;
     t->start = start;
     t->result = NULL;
-    t->state.err = 0;
-    t->state.bt = 0;
     t->state.eh_task = jl_current_task->state.eh_task;
     // there is no active exception handler available on this stack yet
     t->state.eh_ctx = NULL;
@@ -700,8 +688,6 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->runnable = 1;
     jl_current_task->start = NULL;
     jl_current_task->result = NULL;
-    jl_current_task->state.err = 0;
-    jl_current_task->state.bt = 0;
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = NULL;
     jl_current_task->state.prev = NULL;

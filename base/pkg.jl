@@ -239,12 +239,12 @@ end
 function commit(f::Function, msg::String)
     assert_git_clean()
     try f()
-    catch err
+    catch
         print(stderr_stream,
               "\n\n*** ERROR ENCOUNTERED ***\n\n",
               "Rolling back to HEAD...\n")
         checkout()
-        throw(err)
+        rethrow()
     end
     if Git.staged() && !Git.unstaged()
         commit(msg)

@@ -46,6 +46,7 @@
     </list>
     <list name="block_eb">
       <item> catch </item>
+      <item> finally </item>
       <item> else </item>
       <item> elseif </item>
     </list>

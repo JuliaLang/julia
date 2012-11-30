@@ -42,16 +42,28 @@ function repl_show(io, v::ANY)
     end
 end
 
+function add_backtrace(e, bt)
+    if isa(e,LoadError)
+        if isa(e.error,LoadError)
+            add_backtrace(e.error,bt)
+        else
+            e.error = BackTrace(e.error, bt)
+            e
+        end
+    else
+        BackTrace(e, bt)
+    end
+end
+
 function _jl_eval_user_input(ast::ANY, show_value)
-    iserr, lasterr = false, ()
+    iserr, lasterr, bt = false, (), nothing
     while true
         try
-            ccall(:jl_register_toplevel_eh, Void, ())
             if _jl_have_color
                 print(_jl_color_normal)
             end
             if iserr
-                show(lasterr)
+                show(add_backtrace(lasterr,bt))
                 println()
                 iserr, lasterr = false, ()
             else
@@ -71,6 +83,7 @@ function _jl_eval_user_input(ast::ANY, show_value)
             break
         catch err
             iserr, lasterr = true, err
+            bt = backtrace()
         end
     end
     println()
@@ -215,7 +228,6 @@ function _start()
 
     atexit(()->flush(stdout_stream))
     try
-        ccall(:jl_register_toplevel_eh, Void, ())
         ccall(:jl_start_io_thread, Void, ())
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
@@ -256,7 +268,7 @@ function _start()
             run_repl()
         end
     catch e
-        show(e)
+        show(add_backtrace(e,backtrace()))
         println()
         exit(1)
     end

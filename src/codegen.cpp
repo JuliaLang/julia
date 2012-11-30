@@ -107,8 +107,8 @@ static GlobalVariable *jlboundserr_var;
 
 // important functions
 static Function *jlnew_func;
-static Function *jlraise_func;
-static Function *jlraise_line_func;
+static Function *jlthrow_func;
+static Function *jlthrow_line_func;
 static Function *jlerror_func;
 static Function *jltypeerror_func;
 static Function *jlcheckassign_func;
@@ -185,9 +185,9 @@ static Function *to_function(jl_lambda_info_t *li)
                               li->name->name, str);
             jl_value_t *msg = jl_pchar_to_string(buf, nc);
             JL_GC_PUSH(&msg);
-            jl_raise(jl_new_struct(jl_errorexception_type, msg));
+            jl_throw(jl_new_struct(jl_errorexception_type, msg));
         }
-        jl_raise(jl_exception_in_transit);
+        jl_rethrow();
     }
     assert(f != NULL);
     nested_compile = last_n_c;
@@ -956,7 +956,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     return emit_nthptr(arg1, idx+1);
                 }
                 if (idx==0 || (!isseqt && idx > tlen)) {
-                    builder.CreateCall(jlraise_func, builder.CreateLoad(jlboundserr_var));
+                    builder.CreateCall(jlthrow_func, builder.CreateLoad(jlboundserr_var));
                     JL_GC_POP();
                     return V_null;
                 }
@@ -1023,7 +1023,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_throw && nargs==1) {
         Value *arg1 = boxed(emit_expr(args[1], ctx));
         JL_GC_POP();
-        builder.CreateCall(jlraise_func, arg1);
+        builder.CreateCall(jlthrow_func, arg1);
         return V_null;
     }
     else if (f->fptr == &jl_f_arraylen && nargs==1) {
@@ -2428,20 +2428,20 @@ static void init_julia_llvm_env(Module *m)
 
     std::vector<Type*> args1_(0);
     args1_.push_back(jl_pvalue_llvmt);
-    jlraise_func =
+    jlthrow_func =
         Function::Create(FunctionType::get(T_void, args1_, false),
                          Function::ExternalLinkage,
-                         "jl_raise", jl_Module);
-    jlraise_func->setDoesNotReturn();
-    jl_ExecutionEngine->addGlobalMapping(jlraise_func, (void*)&jl_raise);
+                         "jl_throw", jl_Module);
+    jlthrow_func->setDoesNotReturn();
+    jl_ExecutionEngine->addGlobalMapping(jlthrow_func, (void*)&jl_throw);
 
-    std::vector<Type*> args2_raise(0);
-    args2_raise.push_back(jl_pvalue_llvmt);
-    args2_raise.push_back(T_int32);
-    jlraise_line_func =
-        (Function*)jl_Module->getOrInsertFunction("jl_raise_with_superfluous_argument",
-                                                  FunctionType::get(T_void, args2_raise, false));
-    jlraise_line_func->setDoesNotReturn();
+    std::vector<Type*> args2_throw(0);
+    args2_throw.push_back(jl_pvalue_llvmt);
+    args2_throw.push_back(T_int32);
+    jlthrow_line_func =
+        (Function*)jl_Module->getOrInsertFunction("jl_throw_with_superfluous_argument",
+                                                  FunctionType::get(T_void, args2_throw, false));
+    jlthrow_line_func->setDoesNotReturn();
 
     jlnew_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, args1_, false),

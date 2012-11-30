@@ -1042,11 +1042,9 @@ function start_sge_workers(n)
                 try
                     conninfo = readline(fl)
                     hostname, port = parse_connection_info(conninfo)
-                catch e
+                finally
                     close(fl)
-                    throw(e)
                 end
-                close(fl)
                 fexists = (hostname != "")
             catch
                 print("."); flush(stdout_stream)

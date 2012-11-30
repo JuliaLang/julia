@@ -993,6 +993,8 @@ export
 # errors
     assert,
     error,
+    rethrow,
+    backtrace,
     system_error,
     
 # types

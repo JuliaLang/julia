@@ -147,7 +147,6 @@ static int exec_program(void)
     int err = 0;
  again: ;
     JL_TRY {
-        jl_register_toplevel_eh();
         if (err) {
             //jl_lisp_prompt();
             //return 1;
@@ -161,9 +160,6 @@ static int exec_program(void)
                     if (jl_typeof(e) == (jl_type_t*)jl_loaderror_type) {
                         e = jl_fieldref(e, 2);
                         // TODO: show file and line
-                    }
-                    else if (jl_typeof(e) == (jl_type_t*)jl_backtrace_type) {
-                        e = jl_fieldref(e, 0);
                     }
                     else break;
                 }

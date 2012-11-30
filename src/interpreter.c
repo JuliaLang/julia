@@ -36,7 +36,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
     }
     JL_CATCH {
         jl_current_module = last_m;
-        jl_raise(jl_exception_in_transit);
+        jl_rethrow();
     }
     jl_current_module = last_m;
     assert(v);
@@ -281,7 +281,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == error_sym || ex->head == jl_continue_sym) {
         if (jl_is_byte_string(args[0]))
             jl_errorf("syntax error: %s", jl_string_data(args[0]));
-        jl_raise(args[0]);
+        jl_throw(args[0]);
     }
     jl_errorf("unsupported or misplaced expression %s", ex->head->name);
     return (jl_value_t*)jl_nothing;

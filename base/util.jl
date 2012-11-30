@@ -236,21 +236,17 @@ function load_now(fname::ByteString)
         end
     else
         in_load = true
-        iserr, err = false, ()
         try
-            ccall(:jl_register_toplevel_eh, Void, ())
             load_now(fname)
             for p = 1:nprocs()
                 if p != myid()
                     remote_do(p, remote_load, load_dict)
                 end
             end
-        catch e
-            iserr, err = true, e
+        finally
+            load_dict = {}
+            in_load = false
         end
-        load_dict = {}
-        in_load = false
-        if iserr throw(err); end
     end
 end
 
@@ -259,11 +255,9 @@ function remote_load(dict)
     in_remote_load = true
     try
         load_now(dict[1])
-    catch e
+    finally
         in_remote_load = false
-        throw(e)
     end
-    in_remote_load = false
     nothing
 end
 end

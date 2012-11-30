@@ -542,14 +542,31 @@
 		   (receive (name params super) (analyze-type-sig sig)
 			    (struct-def-expr name params super fields)))
 
-   (pattern-lambda (try tryblk var catchblk)
+   ;; try with finally
+   (pattern-lambda (try tryb var catchb finalb)
+		   (let ((err (gensy))
+			 (val (gensy)))
+		     `(scope-block
+		       (block
+			(= ,err false)
+			(= ,val (try ,(if catchb
+					  `(try ,tryb ,var ,catchb)
+					  tryb)
+				     #f
+				     (= ,err true)))
+			,finalb
+			(if ,err (ccall 'jl_rethrow Void (tuple)))
+			,val))))
+
+   ;; try - catch
+   (pattern-lambda (try tryb var catchb)
 		   (if (symbol? var)
-		       `(trycatch (scope-block ,tryblk)
+		       `(trycatch (scope-block ,tryb)
 				  (scope-block
 				   (block (= ,var (the_exception))
-					  ,catchblk)))
-		       `(trycatch (scope-block ,tryblk)
-				  (scope-block ,catchblk))))
+					  ,catchb)))
+		       `(trycatch (scope-block ,tryb)
+				  (scope-block ,catchb))))
 
    )) ; binding-form-patterns
 

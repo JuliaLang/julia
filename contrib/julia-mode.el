@@ -88,7 +88,7 @@
   (list "else" "elseif"))
 
 (defconst julia-block-end-keywords
-  (list "end" "else" "elseif" "catch"))
+  (list "end" "else" "elseif" "catch" "finally"))
 
 (defun julia-member (item lst)
   (if (null lst)

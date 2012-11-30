@@ -366,7 +366,6 @@ extern DLLEXPORT jl_struct_type_t *jl_utf8_string_type;
 extern DLLEXPORT jl_struct_type_t *jl_errorexception_type;
 extern jl_struct_type_t *jl_typeerror_type;
 extern DLLEXPORT jl_struct_type_t *jl_loaderror_type;
-extern DLLEXPORT jl_struct_type_t *jl_backtrace_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_memory_exception;
 extern jl_value_t *jl_divbyzero_exception;
@@ -1009,8 +1008,6 @@ typedef struct _jl_savestate_t {
     struct _jl_task_t *eh_task;
     // eh_ctx is where I go to handle an exception yielded to me
     jl_jmp_buf *eh_ctx;
-    ptrint_t err : 1;
-    ptrint_t bt : 1;  // whether exceptions caught here build a backtrace
 #ifdef JL_GC_MARKSWEEP
     jl_gcframe_t *gcstack;
 #endif
@@ -1046,8 +1043,9 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
-DLLEXPORT void jl_raise(jl_value_t *e);
-DLLEXPORT void jl_register_toplevel_eh(void);
+DLLEXPORT void jl_throw(jl_value_t *e);
+DLLEXPORT void jl_rethrow();
+DLLEXPORT void jl_rethrow_other(jl_value_t *e);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
@@ -1071,7 +1069,6 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     JL_SIGATOMIC_BEGIN();
     jl_current_task->state.eh_task = ss->eh_task;
     jl_current_task->state.eh_ctx = ss->eh_ctx;
-    jl_current_task->state.bt = ss->bt;
     jl_current_task->state.prev = ss->prev;
 #ifdef JL_GC_MARKSWEEP
     jl_pgcstack = ss->gcstack;
@@ -1107,7 +1104,6 @@ DLLEXPORT void jl_pop_handler(int n);
 
 #define JL_CATCH                                                \
     else                                                        \
-        for (i__ca=1, jl_current_task->state.err = 0,           \
-             jl_eh_restore_state(&__ss); i__ca; i__ca=0)
+        for (i__ca=1, jl_eh_restore_state(&__ss); i__ca; i__ca=0)
 
 #endif

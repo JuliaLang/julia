@@ -253,7 +253,7 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
-    builder.CreateCall(jlraise_func, exc);
+    builder.CreateCall(jlthrow_func, exc);
     builder.CreateUnreachable();
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
@@ -581,7 +581,7 @@ static Value *emit_array_nd_index(Value *a, size_t nd, jl_value_t **args,
 
     ctx->f->getBasicBlockList().push_back(failBB);
     builder.SetInsertPoint(failBB);
-    builder.CreateCall2(jlraise_line_func, builder.CreateLoad(jlboundserr_var),
+    builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
                         ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
 
