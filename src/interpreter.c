@@ -303,8 +303,7 @@ static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                              int start)
 {
-    jl_savestate_t __ss;
-    jl_jmp_buf __handlr;
+    jl_handler_t __eh;
     size_t i=start;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -329,8 +328,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                 return eval(jl_exprarg(stmt,0), locals, nl);
             }
             else if (head == enter_sym) {
-                jl_enter_handler(&__ss, &__handlr);
-                if (!jl_setjmp(__handlr,1)) {
+                jl_enter_handler(&__eh);
+                if (!jl_setjmp(__eh.eh_ctx,1)) {
                     return eval_body(stmts, locals, nl, i+1);
                 }
                 else {

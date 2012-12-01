@@ -571,7 +571,6 @@ static void gc_mark_all()
         gc_push_root(ta->consumers);
         if (ta->start)  gc_push_root(ta->start);
         if (ta->result) gc_push_root(ta->result);
-        gc_push_root(ta->state.eh_task);
         if (ta->stkbuf != NULL || ta == jl_current_task) {
             if (ta->stkbuf != NULL)
                 gc_setmark_buf(ta->stkbuf);
@@ -583,10 +582,10 @@ static void gc_mark_all()
             }
             else {
                 offset = ta->stkbuf - (ta->stackbase-ta->ssize);
-                gc_mark_stack(ta->state.gcstack, offset);
+                gc_mark_stack(ta->gcstack, offset);
             }
 #else
-            gc_mark_stack(ta->state.gcstack, 0);
+            gc_mark_stack(ta->gcstack, 0);
 #endif
         }
     }

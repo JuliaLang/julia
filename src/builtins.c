@@ -82,19 +82,14 @@ JL_CALLABLE(jl_f_throw)
     return (jl_value_t*)jl_null;
 }
 
-void jl_enter_handler(jl_savestate_t *ss, jl_jmp_buf *handlr)
+void jl_enter_handler(jl_handler_t *eh)
 {
     JL_SIGATOMIC_BEGIN();
-    ss->eh_task = jl_current_task->state.eh_task;
-    ss->eh_ctx = jl_current_task->state.eh_ctx;
-    ss->prev = jl_current_task->state.prev;
+    eh->prev = jl_current_task->eh;
 #ifdef JL_GC_MARKSWEEP
-    ss->gcstack = jl_pgcstack;
+    eh->gcstack = jl_pgcstack;
 #endif
-
-    jl_current_task->state.prev = ss;
-    jl_current_task->state.eh_task = jl_current_task;
-    jl_current_task->state.eh_ctx = handlr;
+    jl_current_task->eh = eh;
     // TODO: this should really go after setjmp(). see comment in
     // ctx_switch in task.c.
     JL_SIGATOMIC_END();
@@ -103,7 +98,7 @@ void jl_enter_handler(jl_savestate_t *ss, jl_jmp_buf *handlr)
 void jl_pop_handler(int n)
 {
     while (n > 0) {
-        jl_eh_restore_state(jl_current_task->state.prev);
+        jl_eh_restore_state(jl_current_task->eh);
         n--;
     }
 }

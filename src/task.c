@@ -224,8 +224,8 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 
         // set up global state for new task
 #ifdef JL_GC_MARKSWEEP
-        jl_current_task->state.gcstack = jl_pgcstack;
-        jl_pgcstack = t->state.gcstack;
+        jl_current_task->gcstack = jl_pgcstack;
+        jl_pgcstack = t->gcstack;
 #endif
         t->last = jl_current_task;
         // by default, exit to first task to switch to this one
@@ -509,20 +509,17 @@ static void record_backtrace(void)
 // yield to exception handler
 static void throw_internal(jl_value_t *e)
 {
-    jl_task_t *eh = jl_current_task->state.eh_task;
     jl_exception_in_transit = e;
-    if (jl_current_task == eh && eh->state.eh_ctx!=0) {
-        jl_longjmp(*eh->state.eh_ctx, 1);
+    if (jl_current_task->eh != NULL) {
+        jl_longjmp(jl_current_task->eh->eh_ctx, 1);
     }
     else {
-        if (eh->done || eh->state.eh_ctx==NULL) {
-            // our handler is not available, use root task
-            JL_PRINTF(JL_STDERR, "warning: exception handler exited\n");
-            eh = jl_root_task;
-        }
+        jl_task_t *cont = jl_current_task->on_exit;
+        while (cont->done)
+            cont = cont->on_exit;
         // for now, exit the task
         finish_task(jl_current_task, e);
-        ctx_switch(eh, eh->state.eh_ctx);
+        ctx_switch(cont, &cont->eh->eh_ctx);
         // TODO: continued exception
     }
     jl_exit(1);
@@ -565,12 +562,10 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->runnable = 1;
     t->start = start;
     t->result = NULL;
-    t->state.eh_task = jl_current_task->state.eh_task;
     // there is no active exception handler available on this stack yet
-    t->state.eh_ctx = NULL;
-    t->state.prev = NULL;
+    t->eh = NULL;
 #ifdef JL_GC_MARKSWEEP
-    t->state.gcstack = NULL;
+    t->gcstack = NULL;
 #endif
     t->stkbuf = NULL;
 
@@ -688,11 +683,9 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->runnable = 1;
     jl_current_task->start = NULL;
     jl_current_task->result = NULL;
-    jl_current_task->state.eh_task = jl_current_task;
-    jl_current_task->state.eh_ctx = NULL;
-    jl_current_task->state.prev = NULL;
+    jl_current_task->eh = NULL;
 #ifdef JL_GC_MARKSWEEP
-    jl_current_task->state.gcstack = NULL;
+    jl_current_task->gcstack = NULL;
 #endif
 
     jl_root_task = jl_current_task;

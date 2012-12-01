@@ -315,8 +315,7 @@ typedef struct {
     std::set<jl_sym_t*> *volatilevars;
     std::map<std::string, jl_value_t*> *declTypes;
     std::map<int, BasicBlock*> *labels;
-    std::map<int, Value*> *savestates;
-    std::map<int, Value*> *jmpbufs;
+    std::map<int, Value*> *handlers;
     jl_module_t *module;
     jl_expr_t *ast;
     jl_tuple_t *sp;
@@ -1667,12 +1666,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     else if (head == enter_sym) {
         assert(jl_is_long(args[0]));
         int labl = jl_unbox_long(args[0]);
-        Value *jbuf = builder.CreateGEP((*ctx->jmpbufs)[labl],
+        Value *jbuf = builder.CreateGEP((*ctx->handlers)[labl],
                                         ConstantInt::get(T_size,0));
-        builder.CreateCall2(jlenter_func,
-                            builder.CreateGEP((*ctx->savestates)[labl],
-                                              ConstantInt::get(T_size,0)),
-                            jbuf);
+        builder.CreateCall(jlenter_func, jbuf);
         Value *sj = builder.CreateCall2(setjmp_func, jbuf, ConstantInt::get(T_int32,0));
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
         BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
@@ -1794,8 +1790,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     std::set<jl_sym_t*> volvars;
     std::map<std::string, jl_value_t*> declTypes;
     std::map<int, BasicBlock*> labels;
-    std::map<int, Value*> savestates;
-    std::map<int, Value*> jmpbufs;
+    std::map<int, Value*> handlers;
     jl_codectx_t ctx;
     ctx.vars = &localVars;
     //ctx.arguments = &argumentMap;
@@ -1807,8 +1802,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     ctx.volatilevars = &volvars;
     ctx.declTypes = &declTypes;
     ctx.labels = &labels;
-    ctx.savestates = &savestates;
-    ctx.jmpbufs = &jmpbufs;
+    ctx.handlers = &handlers;
     ctx.module = lam->module;
     ctx.ast = ast;
     ctx.sp = sparams;
@@ -2075,16 +2069,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == enter_sym) {
             int labl = jl_unbox_long(jl_exprarg(stmt,0));
-            Value *svst =
+            Value *handlr =
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
-                                                      sizeof(jl_savestate_t)));
-            Value *jmpb =
-                builder.CreateAlloca(T_int8,
-                                     ConstantInt::get(T_int32,
-                                                      sizeof(jl_jmp_buf)));
-            savestates[labl] = svst;
-            jmpbufs[labl] = jmpb;
+                                                      sizeof(jl_handler_t)));
+            handlers[labl] = handlr;
         }
     }
 
@@ -2541,7 +2530,6 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlmethod_func, (void*)&jl_method_def);
 
     std::vector<Type*> ehargs(0);
-    ehargs.push_back(T_pint8);
     ehargs.push_back(T_pint8);
     jlenter_func =
         Function::Create(FunctionType::get(T_void, ehargs, false),
