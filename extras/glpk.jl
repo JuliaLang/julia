@@ -175,8 +175,7 @@ typealias SparseMatrixCSC Main.SparseMatrixCSC # XXX to be removed when sparse g
 
 ## Shared library interface setup
 #{{{
-load("glpk_h") # XXX include would probably be more apt here, but it doesn't
-                  # search LOAD_PATH
+include("$JULIA_HOME/../share/julia/extras/glpk_h.jl")
 
 _jl_libglpk = dlopen("libglpk")
 _jl_libglpk_wrapper = dlopen("libglpk_wrapper")

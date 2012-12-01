@@ -2,6 +2,7 @@
 
 import Base.read, Base.skip, Base.seek, Base.seek_end, Base.position
 import Base.truncate, Base.eof, Base.close, Base.write
+import Base.bytestring
 
 # Stateful string
 type IOString <: IO
