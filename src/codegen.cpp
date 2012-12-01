@@ -956,7 +956,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     return emit_nthptr(arg1, idx+1);
                 }
                 if (idx==0 || (!isseqt && idx > tlen)) {
-                    builder.CreateCall(jlthrow_func, builder.CreateLoad(jlboundserr_var));
+                    builder.CreateCall2(jlthrow_line_func,
+                                        builder.CreateLoad(jlboundserr_var),
+                                        ConstantInt::get(T_int32, ctx->lineno));
                     JL_GC_POP();
                     return V_null;
                 }
@@ -1023,7 +1025,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_throw && nargs==1) {
         Value *arg1 = boxed(emit_expr(args[1], ctx));
         JL_GC_POP();
-        builder.CreateCall(jlthrow_func, arg1);
+        builder.CreateCall2(jlthrow_line_func, arg1,
+                            ConstantInt::get(T_int32, ctx->lineno));
         return V_null;
     }
     else if (f->fptr == &jl_f_arraylen && nargs==1) {

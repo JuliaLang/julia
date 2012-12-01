@@ -509,7 +509,7 @@ function digamma(x::Float64)
     return y
 end
 digamma(x::Float32) = float32(digamma(float64(x)))
-digamma{T<:Real}(x::T) = digamma(float64(x))
+digamma(x::Real) = digamma(float64(x))
 
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
