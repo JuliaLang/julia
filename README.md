@@ -29,7 +29,8 @@ This is the GitHub repository of Julia source code, including instructions for c
 
 The mailing list for developer discussion is
 <http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
-of messages is higher, and the discussions tend to be more esoteric.
+of messages is higher, and the discussions tend to be more esoteric. New
+developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the julia codebase.
 
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
