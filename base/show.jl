@@ -723,7 +723,7 @@ function print_matrix(io,
     end
 end
 print_matrix(io, X::AbstractMatrix, rows::Integer, cols::Integer) =
-    print_matrix(io, X, rows, cols, " ", "  ", "", "  :  ", ":", 5, 5)
+    print_matrix(io, X, rows, cols, " ", "  ", "", "  \u2026  ", "\u22ee", 5, 5)
 
 print_matrix(io, X::AbstractMatrix) = print_matrix(io, X, tty_rows()-4, tty_cols())
 
