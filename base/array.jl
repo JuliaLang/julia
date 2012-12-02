@@ -1318,6 +1318,7 @@ function findmax(a::Array)
     end
     return (m, mi)
 end
+argmax(a::Array) = findmax(a)[2]
 
 function findmin(a::Array)
     m = typemax(eltype(a))
@@ -1330,6 +1331,7 @@ function findmin(a::Array)
     end
     return (m, mi)
 end
+argmin(a::Array) = findmin(a)[2]
 
 ## Reductions ##
 

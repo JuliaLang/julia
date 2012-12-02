@@ -544,6 +544,8 @@ export
 # arrays
     amap,
     areduce,
+    argmax,
+    argmin,
     bsxfun,
     cartesian_map,
     cat,
