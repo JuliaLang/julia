@@ -497,6 +497,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                            stacksave);
     }
     ctx->argDepth = last_depth;
+    if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
+        ctx->f->addFnAttr(Attribute::StackProtectReq);
+    }
 
     JL_GC_POP();
     if (lrt == T_void)
