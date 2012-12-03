@@ -669,6 +669,8 @@ export
     eye,
     factors,
     ishermitian,
+    isposdef,
+    isposdef!,
     issym,
     issym_rnd,
     istril,
