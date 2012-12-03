@@ -228,11 +228,11 @@ Iterable Collections
 
    Determine minimum element in a collection
 
-.. function:: argmax(itr)
+.. function:: indmax(itr)
 
    Returns the index of the maximum element in a collection
 
-.. function:: argmin(itr)
+.. function:: indmin(itr)
 
    Returns the index of the minimum element in a collection
 

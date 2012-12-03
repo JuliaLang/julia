@@ -142,8 +142,8 @@ end
 @assert isequal(a,findn(z))
 
 #argmin argmax
-@assert argmax([10,12,9,11]) == 2
-@assert argmin([10,12,9,11]) == 3
+@assert indmax([10,12,9,11]) == 2
+@assert indmin([10,12,9,11]) == 3
 
 ## permute ##
 

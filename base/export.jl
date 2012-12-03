@@ -544,8 +544,6 @@ export
 # arrays
     amap,
     areduce,
-    argmax,
-    argmin,
     bsxfun,
     cartesian_map,
     cat,
@@ -582,6 +580,8 @@ export
     hcat,
     hvcat,
     ind2sub,
+    indmax,
+    indmin,
     invperm,
     ipermute,
     isperm,
