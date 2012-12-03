@@ -14,6 +14,16 @@ import Git
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 
+# some utility functions
+
+function cd_pkgdir(f::Function)
+    dir = julia_pkgdir()
+    if !isdir(dir)
+        error("Package directory $dir doesn't exist; run Pkg.init() to create it.")
+    end
+    cd(f,dir)
+end
+
 # create a new empty packge repository
 
 function init(meta::String)
@@ -45,19 +55,19 @@ init() = init(DEFAULT_META)
 
 # get/set the origin url for package repo
 
-origin() = cd(julia_pkgdir()) do
+origin() = cd_pkgdir() do
     try readchomp(`git config remote.origin.url`)
     catch
         return nothing
     end
 end
-origin(url::String) = cd(julia_pkgdir()) do
+origin(url::String) = cd_pkgdir() do
     run(`git config remote.origin.url $url`)
 end
 
 # add and remove packages by name
 
-add(pkgs::Vector{VersionSet}) = cd(julia_pkgdir()) do
+add(pkgs::Vector{VersionSet}) = cd_pkgdir() do
     for pkg in pkgs
         if !contains(Metadata.packages(),pkg.package)
             error("invalid package: $(pkg.package)")
@@ -85,7 +95,7 @@ function add(pkgs::Union(String,VersionSet)...)
     add(pkgs_)
 end
 
-rm(pkgs::Vector{String}) = cd(julia_pkgdir()) do
+rm(pkgs::Vector{String}) = cd_pkgdir() do
     for pkg in pkgs
         if !contains(Metadata.packages(),pkg)
             error("invalid package: $pkg")
@@ -113,23 +123,19 @@ rm(pkgs::String...) = rm(String[pkgs...])
 
 # list available, required & installed packages
 
-available() = cd(julia_pkgdir()) do
+available() = cd_pkgdir() do
     [Metadata.each_package()...]
 end
 
-required() = cd(julia_pkgdir()) do
+required() = cd_pkgdir() do
     parse_requires("REQUIRE")
 end
 
-installed() = cd(julia_pkgdir()) do
+installed() = cd_pkgdir() do
     h = Dict{String,Union(VersionNumber,String)}()
     Git.each_submodule(false) do name, path, sha1
         if name != "METADATA"
-            try
-                h[name] = Metadata.version(name,sha1)
-            catch
-                h[name] = sha1
-            end
+            h[name] = Metadata.version(name,sha1)
         end
     end
     return h
@@ -217,7 +223,7 @@ end
 
 # checkout a particular repo version
 
-checkout(rev::String) = cd(julia_pkgdir()) do
+checkout(rev::String) = cd_pkgdir() do
     run(`git checkout -fq $rev -- REQUIRE`)
     _resolve()
 end
@@ -259,14 +265,14 @@ end
 
 # push & pull package repos to/from remotes
 
-push() = cd(julia_pkgdir()) do
+push() = cd_pkgdir() do
     assert_git_clean()
     tag_submodules()
     run(`git push --tags`)
     run(`git push`)
 end
 
-pull() = cd(julia_pkgdir()) do
+pull() = cd_pkgdir() do
     assert_git_clean()
 
     # get remote data
@@ -344,7 +350,7 @@ end
 
 # update system to latest and greatest
 
-update() = cd(julia_pkgdir()) do
+update() = cd_pkgdir() do
     Git.each_submodule(false) do name, path, sha1
         cd(path) do
             if Git.attached()
@@ -364,7 +370,7 @@ end
 
 # create a new package repo (unregistered)
 
-create(name::String) = cd(julia_pkgdir()) do
+create(name::String) = cd_pkgdir() do
     run(`mkdir -p $name`)
     cd(name) do
         run(`git init`)

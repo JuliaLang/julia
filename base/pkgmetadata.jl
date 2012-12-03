@@ -36,8 +36,12 @@ end
 gen_hashes() = for pkg in each_package() gen_hashes(pkg) end
 
 pkg_url(pkg::String) = readchomp("METADATA/$pkg/url")
-version(pkg::String, sha1::String) =
-    convert(VersionNumber,readchomp("METADATA/$pkg/hashes/$sha1"))
+
+function version(pkg::String, sha1::String)
+    path = "METADATA/$pkg/hashes/$sha1"
+    isfile(path) || Metadata.gen_hashes(pkg)
+    isfile(path) ? convert(VersionNumber,readchomp(path)) : sha1
+end
 
 each_package() = @task begin
     for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD`)
