@@ -42,6 +42,17 @@ function istril(A::Matrix)
     return true
 end
 
+#Test whether a matrix is positive-definite
+
+isposdef!{T<:LapackType}(A::Matrix{T}, upper::Bool) =
+    LAPACK.potrf!(upper ? 'U' : 'L', A)[2] == 0
+isposdef!{T<:LapackType}(A::Matrix{T}) = ishermitian(A) && isposdef!(A, true)
+
+isposdef{T<:LapackType}(A::Matrix{T}, upper::Bool) = isposdef!(copy(A), upper)
+isposdef{T<:LapackType}(A::Matrix{T}) = isposdef!(copy(A))
+isposdef{T<:Number}(A::Matrix{T}, upper::Bool) = isposdef!(float64(A), upper)
+isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
+
 norm{T<:LapackType}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
 
 function norm{T<:LapackType, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
