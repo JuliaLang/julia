@@ -265,10 +265,19 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
     JL_NARGSV(ccall, 3);
     jl_value_t *ptr=NULL, *rt=NULL, *at=NULL;
+    Value *jl_ptr=NULL;
     JL_GC_PUSH(&ptr, &rt, &at);
-    ptr = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                        &jl_tupleref(ctx->sp,0),
-                                        jl_tuple_len(ctx->sp)/2);
+    //ptr = static_eval(args[1], ctx, true);
+    //if (ptr == NULL) {
+        jl_value_t *ptr_ty = expr_type(args[1], ctx);
+        if (jl_is_cpointer_type(ptr_ty)) {
+            jl_ptr = emit_expr(args[1], ctx);
+        } else {
+            ptr = jl_interpret_toplevel_expr_in(ctx->module, args[1],
+                                                &jl_tupleref(ctx->sp,0),
+                                                jl_tuple_len(ctx->sp)/2);
+        }
+    //}
     rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
                                         &jl_tupleref(ctx->sp,0),
                                         jl_tuple_len(ctx->sp)/2);
@@ -282,64 +291,68 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                         jl_tuple_len(ctx->sp)/2);
     void *fptr=NULL;
     char *f_name=NULL, *f_lib=NULL;
-    if (jl_is_tuple(ptr) && jl_tuple_len(ptr)==1) {
-        ptr = jl_tupleref(ptr,0);
-    }
-    if (jl_is_symbol(ptr))
-        f_name = ((jl_sym_t*)ptr)->name;
-    else if (jl_is_byte_string(ptr))
-        f_name = jl_string_data(ptr);
-    if (f_name != NULL) {
-        // just symbol, default to JuliaDLHandle
+    if (ptr != NULL) {
+        if (jl_is_tuple(ptr) && jl_tuple_len(ptr)==1) {
+            ptr = jl_tupleref(ptr,0);
+        }
+        if (jl_is_symbol(ptr))
+            f_name = ((jl_sym_t*)ptr)->name;
+        else if (jl_is_byte_string(ptr))
+            f_name = jl_string_data(ptr);
+        if (f_name != NULL) {
+            // just symbol, default to JuliaDLHandle
 #ifdef __WIN32__
-        fptr = jl_dlsym_e(jl_dl_handle, f_name);
-        if (!fptr) {
-            fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
+            fptr = jl_dlsym_e(jl_dl_handle, f_name);
             if (!fptr) {
-                fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
+                //TODO: when one of these succeeds, store the f_lib name (and clear fptr)
+                fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
                 if (!fptr) {
-                    fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
+                    fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
                     if (!fptr) {
-                        fptr = jl_dlsym(jl_winsock_handle, f_name);
+                        fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
+                        if (!fptr) {
+                            fptr = jl_dlsym(jl_winsock_handle, f_name);
+                        }
                     }
                 }
             }
+            else {
+                // available in process symbol table
+                fptr = NULL;
+            }
+#else
+            // will look in process symbol table
+#endif
+        }
+        else if (jl_is_cpointer_type(jl_typeof(ptr))) {
+            fptr = *(void**)jl_bits_data(ptr);
+        }
+        else if (jl_is_tuple(ptr) && jl_tuple_len(ptr)>1) {
+            jl_value_t *t0 = jl_tupleref(ptr,0);
+            jl_value_t *t1 = jl_tupleref(ptr,1);
+            if (jl_is_symbol(t0))
+                f_name = ((jl_sym_t*)t0)->name;
+            else if (jl_is_byte_string(t0))
+                f_name = jl_string_data(t0);
+            else
+                JL_TYPECHK(ccall, symbol, t0);
+            if (jl_is_symbol(t1))
+                f_lib = ((jl_sym_t*)t1)->name;
+            else if (jl_is_byte_string(t1))
+                f_lib = jl_string_data(t1);
+            else
+                JL_TYPECHK(ccall, symbol, t1);
         }
         else {
-            // available in process symbol table
-            fptr = NULL;
+            JL_TYPECHK(ccall, pointer, ptr);
         }
-#else
-        // will look in process symbol table
-#endif
     }
-    else if (jl_is_cpointer_type(jl_typeof(ptr))) {
-        fptr = *(void**)jl_bits_data(ptr);
-    }
-    else if (jl_is_tuple(ptr) && jl_tuple_len(ptr)>1) {
-        jl_value_t *t0 = jl_tupleref(ptr,0);
-        jl_value_t *t1 = jl_tupleref(ptr,1);
-        if (jl_is_symbol(t0))
-            f_name = ((jl_sym_t*)t0)->name;
-        else if (jl_is_byte_string(t0))
-            f_name = jl_string_data(t0);
-        else
-            JL_TYPECHK(ccall, symbol, t0);
-        if (jl_is_symbol(t1))
-            f_lib = ((jl_sym_t*)t1)->name;
-        else if (jl_is_byte_string(t1))
-            f_lib = jl_string_data(t1);
-        else
-            JL_TYPECHK(ccall, symbol, t1);
-    }
-    else {
-        JL_TYPECHK(ccall, pointer, ptr);
-    }
-    if (f_name == NULL && fptr == NULL) {
+    if (f_name == NULL && fptr == NULL && jl_ptr == NULL) {
         JL_GC_POP();
         emit_error("ccall: null function pointer", ctx);
         return literal_pointer_val(jl_nothing);
     }
+
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, tuple, at);
     JL_TYPECHK(ccall, type, at);
@@ -413,7 +426,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     Value *llvmf;
     FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
     
-    if (fptr != NULL) {
+    if (jl_ptr != NULL) {
+        Type *funcptype = PointerType::get(functype,0);
+        llvmf = builder.CreateBitCast(jl_ptr, funcptype);
+    } else if (fptr != NULL) {
         Type *funcptype = PointerType::get(functype,0);
         llvmf = literal_pointer_val(fptr, funcptype);
     }
