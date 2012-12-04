@@ -252,7 +252,7 @@ OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/
 endif
 
 ifeq ($(OS), Darwin)
-OSLIBS += -ldl -Wl,-w -framework ApplicationServices
+OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices
 JLDFLAGS =
 endif
 
