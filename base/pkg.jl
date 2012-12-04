@@ -27,14 +27,17 @@ end
 # create a new empty packge repository
 
 function init(meta::String)
-    pkgdir = julia_pkgdir()
-    dir = mktempdir()
-    cd(dir) do
+    dir = julia_pkgdir()
+    if isdir(dir)
+        error("Package directory $dir already exists.")
+    end
+    tmpdir = mktempdir()
+    cd(tmpdir) do
         # create & configure
         run(`git init`)
         run(`git remote add origin .`)
         if success(`git config --global github.user` > "/dev/null")
-            base = basename(pkgdir)
+            base = basename(dir)
             user = readchomp(`git config --global github.user`)
             run(`git config remote.origin.url git@github.com:$user/$base`)
         else
@@ -50,7 +53,7 @@ function init(meta::String)
         cd(Git.autoconfig_pushurl,"METADATA")
         Metadata.gen_hashes()
     end
-    run(`mv $dir $pkgdir`)
+    run(`mv $tmpdir $dir`)
 end
 init() = init(DEFAULT_META)
 
@@ -206,9 +209,13 @@ resolve() = cd(_resolve,julia_pkgdir())
 
 # TODO: this is horribly broken
 function clone(url::String)
-    dir = mktempdir()
-    run(`git clone $url $dir`)
-    cd(dir) do
+    dir = julia_pkgdir()
+    if isdir(dir)
+        error("Package directory $dir already exists.")
+    end
+    tmpdir = mktempdir()
+    run(`git clone $url $tmpdir`)
+    cd(tmpdir) do
         gitdir = abs_path(readchomp(`git rev-parse --git-dir`))
         Git.each_submodule(false) do name, path, sha1
             cd(path) do
@@ -216,7 +223,7 @@ function clone(url::String)
             end
         end
     end
-    run(`mv $dir $(julia_pkgdir())`)
+    run(`mv $tmpdir $dir`)
 end
 
 # record all submodule commits as tags
