@@ -67,6 +67,7 @@ include("dict.jl")
 include("set.jl")
 
 # compiler
+import Core.Undef  # used internally by compiler
 include("inference.jl")
 
 # I/O, strings & printing
