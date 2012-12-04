@@ -610,11 +610,12 @@ function eta(z::Union(Float64,Complex128))
     return s
 end
 
-eta(x::Real)    = eta(float64(x))
-eta(z::Complex) = eta(complex128(z))
+eta(x::Integer) = eta(float64(x))
+eta(x::Real)    = oftype(x,eta(float64(x)))
+eta(z::Complex) = oftype(z,eta(complex128(z)))
 
 function zeta(z::Number)
-    zz = 2.0^z
+    zz = 2^z
     eta(z) * zz/(zz-2)
 end
 
