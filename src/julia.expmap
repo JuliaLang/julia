@@ -168,9 +168,11 @@
     jl_ptr_to_array_1d;
     jl_readdir;
     jl_readuntil;
-    jl_raise;
-    jl_raise_with_superfluous_argument;
-    jl_register_toplevel_eh;
+    jl_throw;
+    jl_rethrow;
+    jl_rethrow_other;
+    jl_throw_with_superfluous_argument;
+    jl_get_backtrace;
     jl_reshape_array;
     jl_restore_system_image;
     jl_save_system_image;

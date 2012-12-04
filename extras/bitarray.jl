@@ -9,7 +9,7 @@ import Base.(./), Base.(.^), Base./, Base.\, Base.&, Base.|, Base.$, Base.(.*)
 import Base.(.==), Base.==, Base.(.<), Base.<, Base.(.!=), Base.!=
 import Base.(.<=), Base.<=, Base.slicedim, Base.flipdim, Base.rotl90
 import Base.rotr90, Base.rot180, Base.reverse!, Base.<<, Base.>>, Base.>>>
-import Base.nnz, Base.find, Base.findn, Base.nonzeros
+import Base.nnz, Base.findfirst, Base.find, Base.findn, Base.nonzeros
 import Base.areduce, Base.max, Base.min, Base.sum, Base.prod, Base.map_to
 import Base.filter, Base.transpose, Base.ctranspose, Base.permute, Base.hcat
 import Base.vcat, Base.cat, Base.isequal, Base.cumsum, Base.cumprod
@@ -1328,6 +1328,60 @@ function nnz(B::BitArray)
         n += count_ones(B.chunks[i])
     end
     return n
+end
+
+# returns the index of the first non-zero element, or 0 if all zeros
+function findfirst(B::BitArray)
+    for i = 1:length(B.chunks)
+        if B.chunks[i] != 0
+            return (i-1) << 6 + trailing_zeros(B.chunks[i]) + 1
+        end
+    end
+    return 0
+end
+
+# aux function: same as findfirst(~B), but performed without temporaries
+function _jl_findfirstnot(B::BitArray)
+    l = length(B.chunks)
+    if l == 0
+        return 0
+    end
+    for i = 1:l-1
+        if B.chunks[i] != _msk64
+            return (i-1) << 6 + trailing_ones(B.chunks[i]) + 1
+        end
+    end
+    ce = B.chunks[end]
+    if ce != @_msk_end length(B)
+        return (l-1) << 6 + trailing_ones(ce) + 1
+    end
+    return 0
+end
+
+# returns the index of the first matching element
+function findfirst{T}(B::BitArray{T}, v)
+    if v == zero(T)
+        return _jl_findfirstnot(B)
+    elseif v == one(T)
+        return findfirst(B)
+    else
+        return 0
+    end
+end
+
+# returns the index of the first element for which the function returns true
+function findfirst{T}(testf::Function, B::BitArray{T})
+    f0::Bool = testf(zero(T))
+    f1::Bool = testf(one(T))
+    if length(B) == 0 || !(f0 || f1)
+        return 0
+    elseif f0 && f1
+        return 1
+    elseif !f0 && f1
+        return findfirst(B)
+    else
+        return _jl_findfirstnot(B)
+    end
 end
 
 function find{T<:Integer}(B::BitArray{T})

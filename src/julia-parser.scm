@@ -423,7 +423,7 @@
 
 (define (invalid-initial-token? tok)
   (or (eof-object? tok)
-      (memv tok '(#\) #\] #\} else elseif catch =))))
+      (memv tok '(#\) #\] #\} else elseif catch finally =))))
 
 (define (line-number-node s)
   `(line ,(input-port-line (ts:port s))))
@@ -526,7 +526,7 @@
 ; the principal non-terminals follow, in increasing precedence order
 
 (define (parse-block s) (parse-Nary s parse-eq '(#\newline #\;) 'block
-				    '(end else elseif catch) #t))
+				    '(end else elseif catch finally) #t))
 
 ;; ";" at the top level produces a sequence of top level expressions
 (define (parse-stmts s)
@@ -909,27 +909,48 @@
 	   (list 'typealias (cadr lhs) (cons 'tuple (cddr lhs)))
 	   (list 'typealias lhs (parse-arrow s)))))
     ((try)
-     (let* ((try-block (if (eq? (require-token s) 'catch)
-			   '(block)
-			   (parse-block s)))
-	    (nxt       (require-token s)))
-       (take-token s)
-       (case nxt
-	 ((end)   (list 'try try-block #f '(block)))
-	 ((catch) (let ((nl (eqv? (peek-token s) #\newline)))
-		    (if (eq? (require-token s) 'end)
-			(begin (take-token s)
-			       (list 'try try-block #f '(block)))
-			(let* ((var (parse-eq* s))
-			       (var? (and (not nl) (symbol? var)))
-			       (catch-block (parse-block s)))
-			  (expect-end s)
-			  (list 'try try-block
-				(and var? var)
-				(if var?
-				    catch-block
-				    `(block ,var ,@(cdr catch-block))))))))
-	 (else    (error (string "unexpected " nxt))))))
+     (let ((try-block (if (memq (require-token s) '(catch finally))
+			  '(block)
+			  (parse-block s))))
+       (let loop ((nxt    (require-token s))
+		  (catchb #f)
+		  (catchv #f)
+		  (finalb #f))
+	 (take-token s)
+	 (cond
+	  ((eq? nxt 'end)
+	   (list* 'try try-block catchv catchb (if finalb
+						   (list finalb)
+						   '())))
+	  ((and (eq? nxt 'catch)
+		(not catchb))
+	   (let ((nl (eqv? (peek-token s) #\newline)))
+	     (if (memq (require-token s) '(end finally))
+		 (loop (require-token s)
+		       '(block)
+		       #f
+		       finalb)
+		 (let* ((var (parse-eq* s))
+			(var? (and (not nl) (symbol? var)))
+			(catch-block (if (eq? (require-token s) 'finally)
+					 '(block)
+					 (parse-block s))))
+		   (loop (require-token s)
+			 (if var?
+			     catch-block
+			     `(block ,var ,@(cdr catch-block)))
+			 (and var? var)
+			 finalb)))))
+	  ((and (eq? nxt 'finally)
+		(not finalb))
+	   (let ((fb (if (eq? (require-token s) 'catch)
+			 '(block)
+			 (parse-block s))))
+	     (loop (require-token s)
+		   catchb
+		   catchv
+		   fb)))
+	  (else    (error (string "unexpected " nxt)))))))
     ((return)          (let ((t (peek-token s)))
 			 (if (or (eqv? t #\newline) (closing-token? t))
 			     (list 'return '(null))

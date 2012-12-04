@@ -7,14 +7,13 @@ macro check_bit_operation(func, RetT, args)
     end
 end
 
-macro timesofar(str)
-    return # no-op, comment to see timings
-    global t0
-    local t1 = gensym()
-    quote
-        $t1 = time()
-        println($str, ": ", $t1-t0, " seconds")
-        t0 = $t1
+let t0 = time()
+    global timesofar
+    function timesofar(str)
+        return # no-op, comment to see timings
+        t1 = time()
+        println(str, ": ", t1-t0, " seconds")
+        t0 = t1
     end
 end
 
@@ -35,8 +34,6 @@ s2 = 8
 s3 = 3
 s4 = 4
 
-t0 = time()
-
 ## Conversions ##
 
 b1 = bitrand(TT, n1, n2)
@@ -44,7 +41,7 @@ b1 = bitrand(TT, n1, n2)
 i1 = randi(2, n1, n2) - 1
 @assert isequal(bitunpack(bitpack(i1)), i1)
 
-@timesofar "conversions"
+timesofar("conversions")
 
 ## utility functions ##
 
@@ -59,7 +56,7 @@ i1 = randi(2, n1, n2) - 1
 @assert isequal(fill!(b1, one(TT)), bitones(TT, size(b1)))
 @assert isequal(fill!(b1, zero(TT)), bitzeros(TT, size(b1)))
 
-@timesofar "utils"
+timesofar("utils")
 
 ## Indexing ##
 
@@ -92,7 +89,7 @@ t2 = bitrand(Bool, n2)
 @assert isequal(bitunpack(b1[t1, t2]), bitunpack(b1)[t1, t2])
 @assert isequal(bitunpack(b1[t1, t2]), bitunpack(b1)[bitunpack(t1), bitunpack(t2)])
 
-@timesofar "indexing"
+timesofar("indexing")
 
 ## Dequeue functionality ##
 
@@ -201,7 +198,7 @@ del_all(b1)
 del_all(i1)
 @assert isequal(bitunpack(b1), i1)
 
-@timesofar "dequeue"
+timesofar("dequeue")
 
 ## Unary operators ##
 
@@ -219,7 +216,7 @@ b1 = bitrand(Bool, n1, n2)
 @check_bit_operation (-) BitArray{Bool} (b1,)
 @check_bit_operation sign BitArray{Int} (b1,)
 
-@timesofar "unary arithmetic"
+timesofar("unary arithmetic")
 
 ## Binary arithmetic operators ##
 
@@ -282,7 +279,7 @@ b2 = bitrand(Bool, n1, n2)
 @check_bit_operation (.*) BitArray{Bool} (b1, b2)
 @check_bit_operation (*) BitArray{Bool} (b1, b1')
 
-@timesofar "binary arithmetic"
+timesofar("binary arithmetic")
 
 ## Binary comparison operators ##
 
@@ -293,7 +290,7 @@ b2 = bitrand(TT, n1, n2)
 @check_bit_operation (.<) BitArray{Bool} (b1, b2)
 @check_bit_operation (.<=) BitArray{Bool} (b1, b2)
 
-@timesofar "binary comparison"
+timesofar("binary comparison")
 
 ## Data movement ##
 
@@ -324,18 +321,32 @@ for m = [randi(v1)-1 0 1 63 64 65 191 192 193 v1-1]
     @assert isequal(rotr(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
 end
 
-@timesofar "datamove"
+timesofar("datamove")
 
 ## nnz & find ##
 
 b1 = bitrand(TT, v1)
 @check_bit_operation nnz Int (b1,)
+
+@check_bit_operation findfirst Int (b1,)
+@check_bit_operation findfirst Int (bitones(TT, v1),)
+@check_bit_operation findfirst Int (bitzeros(TT, v1),)
+
+@check_bit_operation findfirst Int (b1, one(TT))
+@check_bit_operation findfirst Int (b1, zero(TT))
+@check_bit_operation findfirst Int (b1, 3)
+
+@check_bit_operation findfirst Int (x->bool(x), b1)
+@check_bit_operation findfirst Int (x->!bool(x), b1)
+@check_bit_operation findfirst Int (x->true, b1)
+@check_bit_operation findfirst Int (x->false, b1)
+
 @check_bit_operation find Array{Int} (b1,)
 
 b1 = bitrand(TT, n1, n2)
 @check_bit_operation findn_nzs (Array{Int}, Array{Int}, BitArray{TT}) (b1,)
 
-@timesofar "nnz&find"
+timesofar("nnz&find")
 
 ## Reductions ##
 
@@ -347,7 +358,7 @@ m2 = randi(s3)
 @check_bit_operation sum Array{Int} (b1, (m1, m2))
 @check_bit_operation prod BitArray{TT} (b1, (m1, m2))
 
-@timesofar "reductions"
+timesofar("reductions")
 
 ## map over bitarrays ##
 
@@ -369,7 +380,7 @@ for m1 = 0 : n1
     end
 end
 
-@timesofar "transpose"
+timesofar("transpose")
 
 ## Permute ##
 
@@ -377,7 +388,7 @@ b1 = bitrand(TT, s1, s2, s3, s4)
 p = randperm(4)
 @check_bit_operation permute BitArray{TT} (b1, p)
 
-@timesofar "permute"
+timesofar("permute")
 
 ## Concatenation ##
 
@@ -417,7 +428,7 @@ for m1 = 1 : n1 - 1
     end
 end
 
-@timesofar "cat"
+timesofar("cat")
 
 # Linear algebra
 
@@ -438,6 +449,6 @@ end
 #b1 = bitrand(TT, n1, n2)
 #@check_bit_operation diff Array{S} (b1,)
 
-@timesofar "linalg"
+timesofar("linalg")
 
 end # do

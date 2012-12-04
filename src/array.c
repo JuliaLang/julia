@@ -368,7 +368,7 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     else {
         elt = ((jl_value_t**)a->data)[i];
         if (elt == NULL) {
-            jl_raise(jl_undefref_exception);
+            jl_throw(jl_undefref_exception);
         }
     }
     return elt;
@@ -394,13 +394,13 @@ static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
             if (k < nidxs-1) {
                 size_t d = k>=nd ? 1 : jl_array_dim(a, k);
                 if (ii >= d)
-                    jl_raise(jl_bounds_exception);
+                    jl_throw(jl_bounds_exception);
                 stride = stride * d;
             }
         }
     }
     if (i >= a->length) {
-        jl_raise(jl_bounds_exception);
+        jl_throw(jl_bounds_exception);
     }
     return i;
 }
@@ -452,7 +452,7 @@ JL_CALLABLE(jl_f_arrayset)
 void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= a->length)
-        jl_raise(jl_bounds_exception);
+        jl_throw(jl_bounds_exception);
     char *ptail = (char*)a->data + i*a->elsize;
     if (a->ptrarray)
         memset(ptail, 0, a->elsize);
@@ -500,7 +500,7 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
 void jl_array_del_end(jl_array_t *a, size_t dec)
 {
     if (dec > a->length)
-        jl_raise(jl_bounds_exception);
+        jl_throw(jl_bounds_exception);
     char *ptail = (char*)a->data + (a->length-dec)*a->elsize;
     if (a->ptrarray)
         memset(ptail, 0, dec*a->elsize);
@@ -553,7 +553,7 @@ void jl_array_del_beg(jl_array_t *a, size_t dec)
     if (dec == 0)
         return;
     if (dec > a->length)
-        jl_raise(jl_bounds_exception);
+        jl_throw(jl_bounds_exception);
     size_t es = a->elsize;
     size_t nb = dec*es;
     memset(a->data, 0, nb);

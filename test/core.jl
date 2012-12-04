@@ -326,6 +326,42 @@ begin
     @assert is(g(a),a)
 end
 
+# try/finally
+begin
+    after = 0
+    b = try
+        1+2
+    finally
+        after = 1
+    end
+    @assert b == 3
+    @assert after == 1
+
+    after = 0
+    gothere = 0
+    try
+        try
+            error(" ")
+        finally
+            after = 1
+        end
+        gothere = 1
+    end
+    @assert after == 1
+    @assert gothere == 0
+
+    after = 0
+    b = try
+        error(" ")
+    catch
+        42
+    finally
+        after = 1
+    end
+    @assert b == 42
+    @assert after == 1
+end
+
 # allow typevar in Union to match as long as the arguments contain
 # sufficient information
 # issue #814

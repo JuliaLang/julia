@@ -407,18 +407,19 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // make LLVM function object for the target
-    Function *llvmf;
+    Constant *llvmf;
     FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
-
+    
     if (fptr != NULL) {
-        llvmf = Function::Create(functype, Function::ExternalLinkage,
-                                 "ccall_", jl_Module);
-        jl_ExecutionEngine->addGlobalMapping(llvmf, fptr);
+        Type *funcptype = PointerType::get(functype,0);
+        llvmf = ConstantExpr::getIntToPtr( 
+            ConstantInt::get(funcptype, (uint64_t)fptr), 
+            funcptype);
     }
     else {
         if (f_lib != NULL)
             add_library_sym(f_name, f_lib);
-        llvmf = (Function*)jl_Module->getOrInsertFunction(f_name, functype);
+        llvmf = jl_Module->getOrInsertFunction(f_name, functype);
     }
 
     // save temp argument area stack pointer
@@ -496,6 +497,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                            stacksave);
     }
     ctx->argDepth = last_depth;
+    if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
+        ctx->f->addFnAttr(Attribute::StackProtectReq);
+    }
 
     JL_GC_POP();
     if (lrt == T_void)

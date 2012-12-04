@@ -29,7 +29,7 @@ void jl_error(const char *str)
     }
     jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
     JL_GC_PUSH(&msg);
-    jl_raise(jl_new_struct(jl_errorexception_type, msg));
+    jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
 void jl_errorf(const char *fmt, ...)
@@ -45,7 +45,7 @@ void jl_errorf(const char *fmt, ...)
     }
     jl_value_t *msg = jl_pchar_to_string(buf, nc);
     JL_GC_PUSH(&msg);
-    jl_raise(jl_new_struct(jl_errorexception_type, msg));
+    jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
 void jl_too_few_args(const char *fname, int min)
@@ -67,7 +67,7 @@ void jl_type_error_rt(const char *fname, const char *context,
     ctxt = jl_pchar_to_string((char*)context, strlen(context));
     jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname),
                                    ctxt, ty, got);
-    jl_raise(ex);
+    jl_throw(ex);
 }
 
 void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
@@ -78,25 +78,18 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);
-    jl_raise(args[0]);
+    jl_throw(args[0]);
     return (jl_value_t*)jl_null;
 }
 
-void jl_enter_handler(jl_savestate_t *ss, jl_jmp_buf *handlr)
+void jl_enter_handler(jl_handler_t *eh)
 {
     JL_SIGATOMIC_BEGIN();
-    ss->eh_task = jl_current_task->state.eh_task;
-    ss->eh_ctx = jl_current_task->state.eh_ctx;
-    ss->bt = jl_current_task->state.bt;
-    ss->prev = jl_current_task->state.prev;
+    eh->prev = jl_current_task->eh;
 #ifdef JL_GC_MARKSWEEP
-    ss->gcstack = jl_pgcstack;
+    eh->gcstack = jl_pgcstack;
 #endif
-
-    jl_current_task->state.prev = ss;
-    jl_current_task->state.eh_task = jl_current_task;
-    jl_current_task->state.eh_ctx = handlr;
-    jl_current_task->state.bt = 0;
+    jl_current_task->eh = eh;
     // TODO: this should really go after setjmp(). see comment in
     // ctx_switch in task.c.
     JL_SIGATOMIC_END();
@@ -105,7 +98,7 @@ void jl_enter_handler(jl_savestate_t *ss, jl_jmp_buf *handlr)
 void jl_pop_handler(int n)
 {
     while (n > 0) {
-        jl_eh_restore_state(jl_current_task->state.prev);
+        jl_eh_restore_state(jl_current_task->eh);
         n--;
     }
 }
@@ -297,7 +290,7 @@ JL_CALLABLE(jl_f_top_eval)
     }
     JL_CATCH {
         jl_current_module = last_m;
-        jl_raise(jl_exception_in_transit);
+        jl_rethrow();
     }
     jl_current_module = last_m;
     assert(v);
@@ -357,7 +350,7 @@ JL_CALLABLE(jl_f_tupleref)
     jl_tuple_t *t = (jl_tuple_t*)args[0];
     size_t i = jl_unbox_long(args[1])-1;
     if (i >= jl_tuple_len(t))
-        jl_raise(jl_bounds_exception);
+        jl_throw(jl_bounds_exception);
     return jl_tupleref(t, i);
 }
 
@@ -386,7 +379,7 @@ JL_CALLABLE(jl_f_get_field)
     jl_sym_t *fld = (jl_sym_t*)args[1];
     jl_value_t *fval = jl_get_nth_field(v, jl_field_index(st, fld, 1));
     if (fval == NULL)
-        jl_raise(jl_undefref_exception);
+        jl_throw(jl_undefref_exception);
     return fval;
 }
 

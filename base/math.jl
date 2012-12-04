@@ -435,41 +435,81 @@ end
 
 gamma(z::Complex) = exp(lgamma(z))
 
-# Use Algorithm AS 103 by J. M. Bernardo
-# May be slightly less precise numerically than implementation in Netlib,
-# but Bernardo's algorithm is much simpler
-function psigamma(x::Float64)
-  if x <= 0.0
-    error("x must be positive")
-  end
+# Translation of psi.c from cephes
+function digamma(x::Float64)
+  
+    EUL = 0.57721566490153286061
+    a6 = 8.33333333333333333333e-2
+    a5 = -2.10927960927960927961e-2
+    a4 = 7.57575757575757575758e-3
+    a3 = -4.16666666666666666667e-3
+    a2 = 3.96825396825396825397e-3
+    a1 = -8.33333333333333333333e-3
+    a0 = 8.33333333333333333333e-2
 
-  s = 1.0e-5
-  c = 8.5
-  s3 = 8.333333333e-2
-  s4 = 8.333333333e-3
-  s5 = 3.968253968e-3
-  d1 = -0.5772156649
+    negative = false
+    nz = 0.0
 
-  if x <= s
-    return d1 - 1.0 / x
-  end
+    if x <= 0.0
+        negative = true
+        q = x
+        p = floor(q)
+        if p == q
+            return NaN
+        end
 
-  results = 0.0
-  y = x
+        nz = q - p
+        if nz != 0.5
+            if nz > 0.5
+                p += 1.0
+                nz = q - p
+            end
+            nz = pi / tan(pi * nz)
+        else
+            nz = 0.0
+        end
+        x = 1.0 - x
+    end
 
-  while y < c
-    results -= 1.0 / y
-    y += 1.0
-  end
+    if x <= 10.0 && x == floor(x)
+        y = 0.0
+        n = x
+        for i = 1:n-1
+            w = i
+            y += 1.0 / w
+        end
+        y -= EUL
 
-  r = 1.0 / y
-  results += log(y) - 0.5 * r
-  r = r^2
-  results -= r * (s3 - r * (s4 - r * s5))
-  return results
+        if negative
+            y -= nz
+        end
+        return y
+    end
+
+    s = x
+    w = 0.0
+    while s < 10.0
+        w += 1.0 / s
+        s += 1.0
+    end
+
+    if s < 1.0e17
+        z = 1.0 / (s*s)
+        y = a0*z + a1*z^2 + a2*z^3 + a3*z^4 + a4*z^5 + a5*z^6 + a6*z^7
+    else
+        y = 0.0
+    end
+
+    y = log(s) - 0.5/s - y - w
+
+    if negative
+        y -= nz
+    end
+
+    return y
 end
-
-const digamma = psigamma
+digamma(x::Float32) = float32(digamma(float64(x)))
+digamma(x::Real) = digamma(float64(x))
 
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)

@@ -138,6 +138,9 @@ for (f,t) in ((:char,   Char),
     @eval ($f)(x::AbstractArray) = iround_to(similar(x,$t), x)
 end
 
+bool(x::AbstractArray{Bool}) = x
+bool(x::AbstractArray) = copy_to(similar(x,Bool), x)
+
 for (f,t) in ((:float32,    Float32),
               (:float64,    Float64),
               (:complex64,  Complex64),

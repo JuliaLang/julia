@@ -107,8 +107,8 @@ static GlobalVariable *jlboundserr_var;
 
 // important functions
 static Function *jlnew_func;
-static Function *jlraise_func;
-static Function *jlraise_line_func;
+static Function *jlthrow_func;
+static Function *jlthrow_line_func;
 static Function *jlerror_func;
 static Function *jltypeerror_func;
 static Function *jlcheckassign_func;
@@ -185,9 +185,9 @@ static Function *to_function(jl_lambda_info_t *li)
                               li->name->name, str);
             jl_value_t *msg = jl_pchar_to_string(buf, nc);
             JL_GC_PUSH(&msg);
-            jl_raise(jl_new_struct(jl_errorexception_type, msg));
+            jl_throw(jl_new_struct(jl_errorexception_type, msg));
         }
-        jl_raise(jl_exception_in_transit);
+        jl_rethrow();
     }
     assert(f != NULL);
     nested_compile = last_n_c;
@@ -315,8 +315,7 @@ typedef struct {
     std::set<jl_sym_t*> *volatilevars;
     std::map<std::string, jl_value_t*> *declTypes;
     std::map<int, BasicBlock*> *labels;
-    std::map<int, Value*> *savestates;
-    std::map<int, Value*> *jmpbufs;
+    std::map<int, Value*> *handlers;
     jl_module_t *module;
     jl_expr_t *ast;
     jl_tuple_t *sp;
@@ -956,7 +955,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     return emit_nthptr(arg1, idx+1);
                 }
                 if (idx==0 || (!isseqt && idx > tlen)) {
-                    builder.CreateCall(jlraise_func, builder.CreateLoad(jlboundserr_var));
+                    builder.CreateCall2(jlthrow_line_func,
+                                        builder.CreateLoad(jlboundserr_var),
+                                        ConstantInt::get(T_int32, ctx->lineno));
                     JL_GC_POP();
                     return V_null;
                 }
@@ -1023,7 +1024,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_throw && nargs==1) {
         Value *arg1 = boxed(emit_expr(args[1], ctx));
         JL_GC_POP();
-        builder.CreateCall(jlraise_func, arg1);
+        builder.CreateCall2(jlthrow_line_func, arg1,
+                            ConstantInt::get(T_int32, ctx->lineno));
         return V_null;
     }
     else if (f->fptr == &jl_f_arraylen && nargs==1) {
@@ -1664,12 +1666,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     else if (head == enter_sym) {
         assert(jl_is_long(args[0]));
         int labl = jl_unbox_long(args[0]);
-        Value *jbuf = builder.CreateGEP((*ctx->jmpbufs)[labl],
+        Value *jbuf = builder.CreateGEP((*ctx->handlers)[labl],
                                         ConstantInt::get(T_size,0));
-        builder.CreateCall2(jlenter_func,
-                            builder.CreateGEP((*ctx->savestates)[labl],
-                                              ConstantInt::get(T_size,0)),
-                            jbuf);
+        builder.CreateCall(jlenter_func, jbuf);
         Value *sj = builder.CreateCall2(setjmp_func, jbuf, ConstantInt::get(T_int32,0));
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
         BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
@@ -1791,8 +1790,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     std::set<jl_sym_t*> volvars;
     std::map<std::string, jl_value_t*> declTypes;
     std::map<int, BasicBlock*> labels;
-    std::map<int, Value*> savestates;
-    std::map<int, Value*> jmpbufs;
+    std::map<int, Value*> handlers;
     jl_codectx_t ctx;
     ctx.vars = &localVars;
     //ctx.arguments = &argumentMap;
@@ -1804,8 +1802,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     ctx.volatilevars = &volvars;
     ctx.declTypes = &declTypes;
     ctx.labels = &labels;
-    ctx.savestates = &savestates;
-    ctx.jmpbufs = &jmpbufs;
+    ctx.handlers = &handlers;
     ctx.module = lam->module;
     ctx.ast = ast;
     ctx.sp = sparams;
@@ -2072,16 +2069,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == enter_sym) {
             int labl = jl_unbox_long(jl_exprarg(stmt,0));
-            Value *svst =
+            Value *handlr =
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
-                                                      sizeof(jl_savestate_t)));
-            Value *jmpb =
-                builder.CreateAlloca(T_int8,
-                                     ConstantInt::get(T_int32,
-                                                      sizeof(jl_jmp_buf)));
-            savestates[labl] = svst;
-            jmpbufs[labl] = jmpb;
+                                                      sizeof(jl_handler_t)));
+            handlers[labl] = handlr;
         }
     }
 
@@ -2428,20 +2420,20 @@ static void init_julia_llvm_env(Module *m)
 
     std::vector<Type*> args1_(0);
     args1_.push_back(jl_pvalue_llvmt);
-    jlraise_func =
+    jlthrow_func =
         Function::Create(FunctionType::get(T_void, args1_, false),
                          Function::ExternalLinkage,
-                         "jl_raise", jl_Module);
-    jlraise_func->setDoesNotReturn();
-    jl_ExecutionEngine->addGlobalMapping(jlraise_func, (void*)&jl_raise);
+                         "jl_throw", jl_Module);
+    jlthrow_func->setDoesNotReturn();
+    jl_ExecutionEngine->addGlobalMapping(jlthrow_func, (void*)&jl_throw);
 
-    std::vector<Type*> args2_raise(0);
-    args2_raise.push_back(jl_pvalue_llvmt);
-    args2_raise.push_back(T_int32);
-    jlraise_line_func =
-        (Function*)jl_Module->getOrInsertFunction("jl_raise_with_superfluous_argument",
-                                                  FunctionType::get(T_void, args2_raise, false));
-    jlraise_line_func->setDoesNotReturn();
+    std::vector<Type*> args2_throw(0);
+    args2_throw.push_back(jl_pvalue_llvmt);
+    args2_throw.push_back(T_int32);
+    jlthrow_line_func =
+        (Function*)jl_Module->getOrInsertFunction("jl_throw_with_superfluous_argument",
+                                                  FunctionType::get(T_void, args2_throw, false));
+    jlthrow_line_func->setDoesNotReturn();
 
     jlnew_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, args1_, false),
@@ -2538,7 +2530,6 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlmethod_func, (void*)&jl_method_def);
 
     std::vector<Type*> ehargs(0);
-    ehargs.push_back(T_pint8);
     ehargs.push_back(T_pint8);
     jlenter_func =
         Function::Create(FunctionType::get(T_void, ehargs, false),

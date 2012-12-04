@@ -72,9 +72,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         }
     }
     JL_CATCH {
-        JL_GC_POP();
         jl_current_module = last_module;
-        jl_raise(jl_exception_in_transit);
+        jl_rethrow();
     }
     JL_GC_POP();
     jl_current_module = last_module;
@@ -342,7 +341,6 @@ void jl_parse_eval_all(char *fname)
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
     JL_GC_PUSH(&fn, &ln, &form);
     JL_TRY {
-        jl_register_toplevel_eh();
         // handle syntax error
         while (1) {
             form = jl_parse_next();
@@ -364,8 +362,8 @@ void jl_parse_eval_all(char *fname)
         fn = jl_pchar_to_string(fname, strlen(fname));
         ln = jl_box_long(jl_lineno);
         jl_lineno = last_lineno;
-        jl_raise(jl_new_struct(jl_loaderror_type, fn, ln,
-                               jl_exception_in_transit));
+        jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
+                                       jl_exception_in_transit));
     }
     jl_stop_parsing();
     jl_lineno = last_lineno;
