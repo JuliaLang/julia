@@ -767,6 +767,7 @@ export
     toggle_each,
     union,
     union!,
+    unique,
     values,
     valtype,
     xor!,
