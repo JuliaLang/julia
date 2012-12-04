@@ -27,14 +27,14 @@ end
 # create a new empty packge repository
 
 function init(meta::String)
-    dir = julia_pkgdir()
-    run(`mkdir $dir`)
+    pkgdir = julia_pkgdir()
+    dir = mktempdir()
     cd(dir) do
         # create & configure
         run(`git init`)
         run(`git remote add origin .`)
         if success(`git config --global github.user` > "/dev/null")
-            base = basename(julia_pkgdir())
+            base = basename(pkgdir)
             user = readchomp(`git config --global github.user`)
             run(`git config remote.origin.url git@github.com:$user/$base`)
         else
@@ -50,6 +50,7 @@ function init(meta::String)
         cd(Git.autoconfig_pushurl,"METADATA")
         Metadata.gen_hashes()
     end
+    path_rename(dir,pkgdir)
 end
 init() = init(DEFAULT_META)
 
@@ -203,12 +204,19 @@ resolve() = cd(_resolve,julia_pkgdir())
 
 # clone a new package repo from a URL
 
+# TODO: this is horribly broken
 function clone(url::String)
-    dir = julia_pkgdir()
+    dir = mktempdir()
     run(`git clone $url $dir`)
     cd(dir) do
-        checkout("HEAD")
+        gitdir = abs_path(readchomp(`git rev-parse --git-dir`))
+        Git.each_submodule(false) do name, path, sha1
+            cd(path) do
+                run(`git fetch-pack $gitdir $sha1`)
+            end
+        end
     end
+    path_rename(dir,julia_pkgdir())
 end
 
 # record all submodule commits as tags
