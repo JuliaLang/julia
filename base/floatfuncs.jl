@@ -68,7 +68,6 @@ function _signif_og(x, digits, base)
         float(base) ^ floor(log2(abs(x))/log2(base) - digits + 1.)
     end
 end
-_round_og(digits, base) = float(base) ^ (- digits)
 
 function signif(x, digits::Integer, base::Integer)
     if digits < 0
@@ -79,11 +78,13 @@ function signif(x, digits::Integer, base::Integer)
 end
 signif(x, digits) = signif(x, digits, 10)
 
+_round_og(digits, base) = float(base) ^ digits
+
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
         function ($f)(x, digits::Integer, base::Integer)
             og = _round_og(digits, base)
-            ($f)(float(x) / og) * og
+            ($f)(float(x) * og) / og
         end
         ($f)(x, digits) = ($f)(x, digits, 10)
     end
