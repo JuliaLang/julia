@@ -50,7 +50,7 @@ function init(meta::String)
         cd(Git.autoconfig_pushurl,"METADATA")
         Metadata.gen_hashes()
     end
-    path_rename(dir,pkgdir)
+    run(`mv $dir $pkgdir`)
 end
 init() = init(DEFAULT_META)
 
@@ -216,7 +216,7 @@ function clone(url::String)
             end
         end
     end
-    path_rename(dir,julia_pkgdir())
+    run(`mv $dir $(julia_pkgdir())`)
 end
 
 # record all submodule commits as tags
