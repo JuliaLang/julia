@@ -44,7 +44,7 @@ for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
     end
 end
 
-for (fd, f) in ((:sind, :sins), (:cosd, :cos), (:tand, :tan),
+for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan),
                 (:secd, :sec), (:cscd, :csc), (:cotd, :cot))
     @eval begin
         ($fd)(z) = ($f)(degrees2radians(z))
