@@ -193,6 +193,8 @@
 (define (function-expr argl body)
   (let ((t (llist-types argl))
 	(n (llist-vars argl)))
+    (if (has-dups n)
+	(error "function argument names not unique"))
     (let ((argl (map make-decl n t)))
       `(lambda ,argl
 	 (scope-block ,body)))))
@@ -229,6 +231,8 @@
 	 (error "malformed type parameter list"))))
 
 (define (method-def-expr name sparams argl body)
+  (if (has-dups (llist-vars argl))
+      (error "function argument names not unique"))
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
   (let* ((types (llist-types argl))
@@ -494,13 +498,16 @@
 			      (locls ())
 			      (stmts ()))
 		     (if (null? binds)
-			 `(call (-> (tuple ,@args)
-				    (block ,@(if (null? locls)
-						 '()
-						 `((local ,@locls)))
-					   ,@stmts
-					   ,ex))
-				,@inits)
+			 (begin
+			   (if (has-dups args)
+			       (error "let variables not unique"))
+			   `(call (-> (tuple ,@args)
+				      (block ,@(if (null? locls)
+						   '()
+						   `((local ,@locls)))
+					     ,@stmts
+					     ,ex))
+				  ,@inits))
 			 (cond
 			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local

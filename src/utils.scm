@@ -24,6 +24,12 @@
 	  (unique (cdr lst))
 	  (cons (car lst) (unique (cdr lst))))))
 
+(define (has-dups lst)
+  (if (null? lst)
+      #f
+      (or (memq (car lst) (cdr lst))
+	  (has-dups (cdr lst)))))
+
 (define (contains p expr)
   (or (p expr)
       (and (pair? expr)
