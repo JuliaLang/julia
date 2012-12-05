@@ -1,5 +1,8 @@
 baremodule Base
 
+eval(x) = Core.eval(Base,x)
+eval(m,x) = Core.eval(m,x)
+
 include("export.jl")
 
 if false

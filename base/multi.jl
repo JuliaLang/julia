@@ -1185,7 +1185,7 @@ end
 macro everywhere(ex)
     quote
         @sync begin
-            at_each(()->eval($(expr(:quote,ex))))
+            at_each(()->eval(Main,$(expr(:quote,ex))))
         end
     end
 end

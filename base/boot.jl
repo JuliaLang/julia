@@ -133,7 +133,7 @@ export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     GetfieldNode,
     # functions
     setfield, applicable, apply, apply_type, arraylen, arrayref, arrayset,
-    arraysize, convert_default, convert_tuple, eval, fieldtype, getfield,
+    arraysize, convert_default, convert_tuple, fieldtype, getfield,
     include, invoke, is, ===, isa, isdefined, method_exists,
     subtype, throw, tuple, tuplelen, tupleref, typeassert, typeof, yieldto,
     # constants

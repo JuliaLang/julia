@@ -210,6 +210,8 @@ void julia_init(char *imageFile)
     // it does "using Base" if Base is available.
     if (jl_base_module != NULL)
         jl_module_using(jl_main_module, jl_base_module);
+    // eval() uses Main by default, so Main.eval === Core.eval
+    jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
     jl_current_module = jl_main_module;
 
 #ifndef __WIN32__

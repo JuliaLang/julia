@@ -776,7 +776,7 @@ function whos(m::Module, pattern::Regex)
     for s in sort(map(string, names(m)))
         v = symbol(s)
         if isdefined(m,v) && ismatch(pattern, s)
-            println(rpad(v, 30), summary(eval(m,v)))
+            println(rpad(s, 30), summary(eval(m,v)))
         end
     end
 end
