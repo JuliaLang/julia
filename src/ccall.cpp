@@ -271,7 +271,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     //if (ptr == NULL) {
         jl_value_t *ptr_ty = expr_type(args[1], ctx);
         if (jl_is_cpointer_type(ptr_ty)) {
-            jl_ptr = emit_expr(args[1], ctx);
+            jl_ptr = emit_unbox(T_size, T_psize, emit_unboxed(args[1], ctx));
         } else {
             ptr = jl_interpret_toplevel_expr_in(ctx->module, args[1],
                                                 &jl_tupleref(ctx->sp,0),
@@ -428,7 +428,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     
     if (jl_ptr != NULL) {
         Type *funcptype = PointerType::get(functype,0);
-        llvmf = builder.CreateBitCast(jl_ptr, funcptype);
+        llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
     } else if (fptr != NULL) {
         Type *funcptype = PointerType::get(functype,0);
         llvmf = literal_pointer_val(fptr, funcptype);
