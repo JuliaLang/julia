@@ -267,17 +267,17 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     jl_value_t *ptr=NULL, *rt=NULL, *at=NULL;
     Value *jl_ptr=NULL;
     JL_GC_PUSH(&ptr, &rt, &at);
-    //ptr = static_eval(args[1], ctx, true);
-    //if (ptr == NULL) {
+    ptr = static_eval(args[1], ctx, true);
+    if (ptr == NULL) {
         jl_value_t *ptr_ty = expr_type(args[1], ctx);
         if (jl_is_cpointer_type(ptr_ty)) {
             jl_ptr = emit_unbox(T_size, T_psize, emit_unboxed(args[1], ctx));
         } else {
-            ptr = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                                &jl_tupleref(ctx->sp,0),
-                                                jl_tuple_len(ctx->sp)/2);
+            std::string msg = "in " + ctx->funcName +
+                ": ccall: function argument not a pointer or valid constant";
+            jl_error(msg.c_str());
         }
-    //}
+    }
     rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
                                         &jl_tupleref(ctx->sp,0),
                                         jl_tuple_len(ctx->sp)/2);
