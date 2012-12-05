@@ -31,29 +31,32 @@ function init(meta::String)
     if isdir(dir)
         error("Package directory $dir already exists.")
     end
-    tmpdir = mktempdir()
-    cd(tmpdir) do
-        # create & configure
-        run(`git init`)
-        run(`git remote add origin .`)
-        if success(`git config --global github.user` > "/dev/null")
-            base = basename(dir)
-            user = readchomp(`git config --global github.user`)
-            run(`git config remote.origin.url git@github.com:$user/$base`)
-        else
-            run(`git config --unset remote.origin.url`)
+    try
+        run(`mkdir -p $dir`)
+        cd(dir) do
+            # create & configure
+            run(`git init`)
+            run(`git remote add origin .`)
+            if success(`git config --global github.user` > "/dev/null")
+                base = basename(dir)
+                user = readchomp(`git config --global github.user`)
+                run(`git config remote.origin.url git@github.com:$user/$base`)
+            else
+                run(`git config --unset remote.origin.url`)
+            end
+            run(`git config branch.master.remote origin`)
+            run(`git config branch.master.merge refs/heads/master`)
+            # initial content
+            run(`touch REQUIRE`)
+            run(`git add REQUIRE`)
+            run(`git submodule add $meta METADATA`)
+            run(`git commit -m "empty package repo"`)
+            cd(Git.autoconfig_pushurl,"METADATA")
+            Metadata.gen_hashes()
         end
-        run(`git config branch.master.remote origin`)
-        run(`git config branch.master.merge refs/heads/master`)
-        # initial content
-        run(`touch REQUIRE`)
-        run(`git add REQUIRE`)
-        run(`git submodule add $meta METADATA`)
-        run(`git commit -m "empty package repo"`)
-        cd(Git.autoconfig_pushurl,"METADATA")
-        Metadata.gen_hashes()
+    catch
+        run(`rm -rf $dir`)
     end
-    run(`mv $tmpdir $dir`)
 end
 init() = init(DEFAULT_META)
 
@@ -193,6 +196,7 @@ function _resolve()
         else
             ver = Metadata.version(pkg,want[pkg])
             println("Installing $pkg: v$ver")
+            # TODO: what to do here if already exists
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
