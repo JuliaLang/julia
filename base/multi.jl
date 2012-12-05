@@ -648,7 +648,7 @@ end
 function perform_work(job::WorkItem)
     local result
     try
-        ccall(:jl_register_toplevel_eh, Void, ())
+        #ccall(:jl_register_toplevel_eh, Void, ())
         if isa(job.task,Task)
             # continuing interrupted work item
             arg = job.argument
@@ -1404,7 +1404,7 @@ function event_loop(isclient)
     iserr, lasterr = false, ()
     while true
         try
-            ccall(:jl_register_toplevel_eh, Void, ())
+            #ccall(:jl_register_toplevel_eh, Void, ())
             if iserr
                 show(lasterr)
                 iserr, lasterr = false, ()
@@ -1412,19 +1412,18 @@ function event_loop(isclient)
                 run_event_loop();
             end
         catch backtrace
-            e = backtrace.e
             if isa(e,DisconnectException)
                 # TODO: wake up tasks waiting for failed process
                 if !isclient
                     return
                 end
-            elseif isclient && isa(e,InterruptException)
+            elseif isclient && isa(e,InterruptException) &&
+                !has(_jl_fd_handlers, STDIN.fd)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
                 interrupt_waiting_task(_jl_roottask_wi, e)
-                continue
             end
-            iserr, lasterr = true, backtrace
+            iserr, lasterr = true, e
         end
     end
 end

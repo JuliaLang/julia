@@ -438,6 +438,7 @@ extern jl_function_t *jl_bottom_func;
 extern uv_lib_t *jl_dl_handle;
 #if defined(__WIN32__) || defined (_WIN32)
 extern uv_lib_t *jl_ntdll_handle;
+extern uv_lib_t *jl_exe_handle;
 extern uv_lib_t *jl_kernel32_handle;
 extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;

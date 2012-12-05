@@ -2,7 +2,7 @@ baremodule Base
 
 eval(x) = Core.eval(Base,x)
 eval(m,x) = Core.eval(m,x)
-ccall(:jl_load_progress_setmax, Void, (Int,), 72)
+#ccall(:jl_load_progress_setmax, Void, (Int,), 72)
 include("export.jl")
 
 if false
@@ -279,7 +279,7 @@ end # baremodule Base
 
 using Base
 
-JL_PRIVATE_LIBDIR = getenv("JL_PRIVATE_LIBDIR")
+let JL_PRIVATE_LIBDIR = getenv("JL_PRIVATE_LIBDIR")
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},),
       "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji")

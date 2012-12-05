@@ -263,11 +263,13 @@ void jl_get_builtin_hooks(void);
 uv_lib_t *jl_dl_handle;
 #ifdef __WIN32__
 uv_lib_t _jl_ntdll_handle;
+uv_lib_t _jl_exe_handle;
 uv_lib_t _jl_kernel32_handle;
 uv_lib_t _jl_crtdll_handle;
 uv_lib_t _jl_winsock_handle;
 
 uv_lib_t *jl_ntdll_handle=&_jl_ntdll_handle;
+uv_lib_t *jl_exe_handle=&_jl_exe_handle;
 uv_lib_t *jl_kernel32_handle=&_jl_kernel32_handle;
 uv_lib_t *jl_crtdll_handle=&_jl_crtdll_handle;
 uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
@@ -343,6 +345,7 @@ void julia_init(char *imageFile)
     uv_dlopen("Kernel32.dll",jl_kernel32_handle);
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
     uv_dlopen("Ws2_32.dll",jl_winsock_handle);
+    jl_exe_handle = GetModuleHandleA(NULL);
 #endif
     jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
     init_stdio();

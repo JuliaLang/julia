@@ -289,15 +289,18 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (f_name != NULL) {
         // just symbol, default to JuliaDLHandle
 #ifdef __WIN32__
-        fptr = jl_dlsym_e(jl_dl_handle, f_name);
-        if (!fptr) {
-            fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
+        fptr = jl_dlsym_e(jl_exe_handle, f_name);
+        if(!fptr) {
+            fptr = jl_dlsym_e(jl_dl_handle, f_name);
             if (!fptr) {
-                fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
+                fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
                 if (!fptr) {
-                    fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
+                    fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
                     if (!fptr) {
-                        fptr = jl_dlsym(jl_winsock_handle, f_name);
+                        fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
+                        if (!fptr) {
+                            fptr = jl_dlsym(jl_winsock_handle, f_name);
+                        }
                     }
                 }
             }

@@ -1,9 +1,6 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-@unix_only _jl_repl = _jl_lib
-@windows_only _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
-
 const _jl_color_normal = "\033[0m"
 
 function _jl_answer_color()
@@ -71,7 +68,7 @@ function _jl_eval_user_input(ast::ANY, show_value)
     iserr, lasterr, bt = false, (), nothing
     while true
         try
-            ccall(:jl_register_toplevel_eh, Void, ())
+            #ccall(:jl_register_toplevel_eh, Void, ())
             ccall(:restore_signals, Void, ())
             if _jl_have_color
                 print(_jl_color_normal)
@@ -124,7 +121,7 @@ function readBuffer(stream::TTY, nread)
         end
         ptr = pointer(stream.buffer.data,stream.buffer.ptr)
         skip(stream.buffer,nread)
-        ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(Ptr{Void},Int32),ptr,nread)
+        ccall(:jl_readBuffer,Void,(Ptr{Void},Int32),ptr,nread)
     end
     return false
 end
@@ -133,7 +130,7 @@ function run_repl()
     global const _jl_repl_channel = RemoteRef()
 
     if _jl_have_color
-        ccall(dlsym(_jl_repl,:jl_enable_color), Void, ())
+        ccall(:jl_enable_color, Void, ())
     end
     atexit() do
         if _jl_have_color
@@ -143,7 +140,7 @@ function run_repl()
     end
 
     while true
-        ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
+        ccall(:repl_callback_enable, Void, ())
         global _repl_enough_stdin = false
         start_reading(STDIN, readBuffer)
         (ast, show_value) = take(_jl_repl_channel)
@@ -256,7 +253,7 @@ julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
 
 function _start()
     # set up standard streams
-
+    reinit_stdio()
     librandom_init()
 
     # set CPU core count
@@ -264,7 +261,7 @@ function _start()
 
     #atexit(()->flush(stdout_stream))
     try
-        ccall(:jl_register_toplevel_eh, Void, ())
+        #ccall(:jl_register_toplevel_eh, Void, ())
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
 

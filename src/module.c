@@ -127,7 +127,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
     if (to == from)
         return;
     jl_binding_t *b = jl_get_binding(from, s);
-    if (b == NULL || !b->exportp) {
+    if (b == NULL) {
         jl_printf(JL_STDERR,
                    "Warning: could not import %s.%s into %s\n",
                    from->name->name, s->name, to->name->name);
