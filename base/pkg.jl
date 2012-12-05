@@ -486,6 +486,11 @@ to prepare METADATA with the details for your package."
     end
 end
 
+# Remove local traces of a package (broken due to a bad .new(), for instance)
+obliterate(package_name::String) = cd_pkgdir() do
+    run(`rm -rf $(package_name) $(file_path("METADATA", package_name))`)
+end
+
 # If a package contains data, make it easy to find its location
 function package_directory(package_name::String)
   if has(ENV, "JULIA_PKGDIR")
