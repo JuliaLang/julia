@@ -383,6 +383,64 @@ update() = cd_pkgdir() do
     _resolve()
 end
 
+latest_version(pkg::String) = cd_pkgdir() do
+    vers = VersionNumber[]
+    for (ver, _) in Metadata.each_tagged_version(pkg)
+        Base.push(vers, ver)
+    end
+    max(vers)
+end
+
+version(pkg::String, ver::VersionNumber) = cd_pkgdir() do
+    if any(pkg .== Metadata.packages())
+        if ver != v"0.0.0" && ver <= latest_version(pkg)
+            error("The latest version of package $(pkg) is $(string(ver)). You must specify a later version.")
+        end
+    else
+        if !isdir(file_path("METADATA", pkg))
+            mkdir(file_path("METADATA", pkg))
+        end
+    end
+    sha1 = ""
+    cd(pkg) do
+        sha1 = readchomp(`git rev-parse HEAD`)
+        if ver > v"0.0.0"
+            run(`git tag $(string(ver)) HEAD`)
+        end
+    end
+    cd(file_path("METADATA", pkg)) do
+        if !isdir("hashes") mkdir("hashes") end
+        if !isdir("versions") mkdir("versions") end
+        cd("versions") do
+            if !isdir(string(ver)) mkdir(string(ver)) end
+            open(file_path(string(ver), "sha1"), "w") do io
+                println(io, sha1)
+            end
+        end
+    end
+    file_copy(
+        file_path(pkg, "REQUIRE"),
+        file_path("METADATA", pkg, "versions", string(ver), "requires"))
+    Metadata.gen_hashes(pkg)
+end
+
+function patch(pkg)
+    lver = latest_version(pkg)
+    if lver > v"0.0.0"
+        version(pkg, VersionNumber(lver.major, lver.minor, lver.patch+1))
+    else
+        version(pkg, v"0.0.0")
+    end
+end
+function minor(pkg)
+    lver = latest_version(pkg)
+    version(pkg, VersionNumber(lver.major, lver.minor+1))
+end
+function major(pkg)
+    lver = latest_version(pkg)
+    version(pkg, VersionNumber(lver.major+1))
+end
+
 # create a new package repo (unregistered)
 
 create(name::String) = cd_pkgdir() do
