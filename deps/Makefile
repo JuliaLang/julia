@@ -596,11 +596,8 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	touch $@
 $(ARPACK_OBJ_TARGET): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE) | $(USR)/$(JL_LIBDIR)
 	cd arpack-ng_$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)"
-	touch $@
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(USR)/lib
-	cd arpack-ng_$(ARPACK_VER) && \
-	$(MAKE) install F77="$(FC)" MPIF77="$(FC)"
+	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)" && \
+	$(MAKE) install F77="$(FC)" MPIF77="$(FC)" && \
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(USR)/lib/libarpack.$(SHLIB_EXT)
 ifeq ($(OS), Linux)
 	for filename in $(USR)/lib/libarpack.so* ; do \
@@ -1032,7 +1029,7 @@ zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
 ifeq ($(OS), WINNT)
 	cd zlib-$(ZLIB_VER) && \
 	cp win32/Makefile.gcc Makefile
-else
+endif
 	cd zlib-$(ZLIB_VER) && \
 	CC="$(CC)" $(ZLIB_CFLAGS) ./configure --prefix=$(abspath $(USR))
 	touch $@

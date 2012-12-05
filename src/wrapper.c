@@ -75,7 +75,7 @@ int base_module_conflict = 0; //set to 1 if Base is getting redefined since it m
                 ret = jl_callback_call(cb_func,args); \
                 /* jl_puts(#hook " succeeded\n",jl_uv_stderr); */ \
             } else { \
-                jl_raise(jl_exception_in_transit); \
+                jl_throw(jl_exception_in_transit); \
             } \
         } \
     }
