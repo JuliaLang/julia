@@ -441,41 +441,50 @@ function major(pkg)
     version(pkg, VersionNumber(lver.major+1))
 end
 
-# create a new package repo (unregistered)
-
-create(name::String) = cd_pkgdir() do
-    run(`mkdir -p $name`)
-    cd(name) do
-        run(`git init`)
-        run(`git commit --allow-empty -m "initial empty commit"`)
-        run(`touch README.md`)
-        run(`mkdir src`)
-    end
-end
-
 # Create a skeleton package that can be easily filled in
-function skeleton(package_name::String)
-    try
-        mkdir(package_name)
-    catch
-        error("Unable to create directory for new package: $(package_name)")
-    end
-    try
-        cd(package_name) do
-            file_create("LICENSE.md") # Should insert MIT content
-            file_create("README.md")
-            file_create("REQUIRE")
-            mkdir("src")
-            file_create(file_path("src", strcat(package_name, ".jl")))
-            mkdir("test")
-            file_create(file_path("test", strcat("01", ".jl")))
+function new(package_name::String)
+    cd_pkgdir() do
+        try
+            mkdir(package_name)
+        catch
+            error("Unable to create directory for new package: $(package_name)")
         end
-    catch
-        error("Unable to initialize contents of new package")
+        try
+            sha1 = ""
+            cd(package_name) do
+                run(`git init`)
+                run(`git commit --allow-empty -m "Initial empty commit"`)
+                file_create("LICENSE.md") # Should insert MIT content
+                file_create("README.md")
+                file_create("REQUIRE")
+                mkdir("src")
+                file_create(file_path("src", strcat(package_name, ".jl")))
+                mkdir("test")
+                run(`git add --all`)
+                run(`git commit -m "Scaffold for Julia package $(package_name)"`)
+                sha1 = readchomp(`git rev-parse HEAD`)
+            end
+            version(package_name, v"0.0.0")
+        catch
+            error("Unable to initialize contents of new package")
+        end
+        newpath = file_path(julia_pkgdir(), package_name)
+        println(
+"
+You have created a new package in
+
+  $(file_path(julia_pkgdir(), package_name))
+
+When the package is ready to submit, push it to a public repository, set it as
+the remote \"origin\", then run:
+
+  > Pkg.set_origin($(package_name))
+  > Pkg.version($(package_name))
+
+to prepare METADATA with the details for your package."
+                )
     end
 end
-
-skeleton() = skeleton("Example")
 
 # If a package contains data, make it easy to find its location
 function package_directory(package_name::String)
