@@ -47,9 +47,9 @@ x2 = GLPK.get_col_prim(lp, 2)
 x3 = GLPK.get_col_prim(lp, 3)
 
 tol = 1e-10
-@assert abs(z - 2200. / 3) < tol
-@assert abs(x1 - 100. / 3) < tol
-@assert abs(x2 - 200. / 3) < tol
-@assert abs(x3) < tol
+@test abs(z - 2200. / 3) < tol
+@test abs(x1 - 100. / 3) < tol
+@test abs(x2 - 200. / 3) < tol
+@test abs(x3) < tol
 
 end # cd
