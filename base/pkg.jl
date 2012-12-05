@@ -157,7 +157,7 @@ function _resolve()
                 append!(reqs,parse_requires("$path/REQUIRE"))
                 if isfile("$path/VERSION")
                     ver = convert(VersionNumber,readchomp("$path/VERSION"))
-                    push(reqs,VersionSet(pkg,[ver]))
+                    Base.push(reqs,VersionSet(pkg,[ver]))
                 end
             end
         end
