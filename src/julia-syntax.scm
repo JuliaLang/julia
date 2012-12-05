@@ -648,6 +648,11 @@
    (pattern-lambda (macro (call name . argl) body)
 		   `(-> (tuple ,@argl) ,body))
 
+   (pattern-lambda (try tryb var catchb finalb)
+		   (if var (list 'varlist var) '()))
+   (pattern-lambda (try tryb var catchb)
+		   (if var (list 'varlist var) '()))
+
    )) ; vars-introduced-by-patterns
 
 ; local x, y=2, z => local x;local y;local z;y = 2
