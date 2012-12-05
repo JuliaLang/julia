@@ -278,6 +278,23 @@ function commit(f::Function, msg::String)
     end
 end
 
+# set package remote in METADATA
+
+pkg_origin(pkg::String, remote::String) = cd_pkgdir() do
+    for line in each_line(`git --git-dir=$(file_path(pkg,".git")) remote -v`)
+        m = match(r"^(\S*)\s*(\S*)\s*\(fetch\)", line)
+        if m != nothing && m.captures[1] == remote
+            cd(file_path("METADATA", pkg)) do
+                open("url", "w") do io
+                    println(io, m.captures[2])
+                end
+            end
+            return
+        end
+    end
+end
+pkg_origin(pkg) = pkg_origin(pkg, "origin")
+
 # push & pull package repos to/from remotes
 
 push() = cd_pkgdir() do
