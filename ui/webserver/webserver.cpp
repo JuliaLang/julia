@@ -360,8 +360,10 @@ void connected(uv_connect_t* req, int status)
 //read from julia (on stdin)
 void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
+#ifdef JULIA_DEBUG_TRACE
     cout<<"Recevied Data from Julia on STDOUT:\n";
     cout<<std::string(buf.base,buf.len)<<"\n";
+#endif
 
     julia_session *julia_session_ptr=(julia_session*)stream->data;
 

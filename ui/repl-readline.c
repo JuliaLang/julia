@@ -445,7 +445,12 @@ static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
     // given str "X.Y.a", set module := X.Y and name := "a"
     jl_module_t *module = jl_current_module;
     char *name = NULL, *strcopy = strdup(str);
-    for (char *s=strcopy, *t, *r; (t=strtok_r(s, ".", &r)); s=NULL) {
+    for (char *s=strcopy, *r;; s=NULL) {
+        char *t = strtok_r(s, ".", &r);
+        if (!t) {
+            if (str[strlen(str)-1] == '.') name = NULL;
+            break;
+        }
         if (name) {
             module = find_submodule_named(module, name);
             if (!module) goto symtab_get_matches_exit;

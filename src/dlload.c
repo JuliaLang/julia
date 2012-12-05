@@ -31,6 +31,8 @@ static char *extensions[] = { ".so", "" };
 
 extern char *julia_home;
 
+char *jl_lookup_soname(char *pfx, size_t n);
+
 int jl_uv_dlopen(const char* filename, uv_lib_t* lib)
 {
 #ifdef RTLD_DEEPBIND
@@ -91,7 +93,8 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
                 struct stat sbuf;
                 if (stat(path, &sbuf) != -1) {
                     //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
-                    jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
+                    //jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
+                    goto error;
                 }
             }
         }
@@ -100,7 +103,13 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
         error = jl_uv_dlopen(path, handle);
         if (!error) goto done;
     }
+#if !defined(__APPLE__) && !defined(_WIN32)
+    char *soname = jl_lookup_soname(modname, strlen(modname));
+    error = jl_uv_dlopen(soname, handle);
+    if (!error) goto done;
+#endif
 
+error:
     //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
     jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
     uv_dlclose(handle);

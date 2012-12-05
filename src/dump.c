@@ -723,7 +723,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
 // --- entry points ---
 
 DLLEXPORT
-void jl_save_system_image(char *fname, char *startscriptname)
+void jl_save_system_image(char *fname)
 {
     jl_gc_collect();
     jl_gc_collect();
@@ -756,12 +756,6 @@ void jl_save_system_image(char *fname, char *startscriptname)
     write_int32(&f, jl_get_t_uid_ctr());
     write_int32(&f, jl_get_gs_ctr());
     htable_reset(&backref_table, 0);
-
-    ios_t ss;
-    ios_file(&ss, startscriptname, 1, 0, 0, 0);
-    ios_copyall(&f, &ss);
-    ios_close(&ss);
-    ios_putc(0, &f);
 
     ios_close(&f);
     if (en) jl_gc_enable();
@@ -825,19 +819,12 @@ void jl_restore_system_image(char *fname)
     jl_set_gs_ctr(read_int32(&f));
     htable_reset(&backref_table, 0);
 
-    ios_t ss;
-    ios_mem(&ss, 0);
-    ios_copyuntil(&ss, &f, '\0');
     ios_close(&f);
     if (fpath != fname) free(fpath);
 
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
-
-    // TODO: there is no exception handler here!
-    jl_load_file_string(ss.buf);
-    ios_close(&ss);
 }
 
 DLLEXPORT

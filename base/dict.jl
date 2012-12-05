@@ -87,6 +87,9 @@ function filter!(f::Function, d::Associative)
 end
 filter(f::Function, d::Associative) = filter!(f,copy(d))
 
+keytype{K,V}(a::Associative{K, V}) = K
+valtype{K,V}(a::Associative{K, V}) = V
+
 # some support functions
 
 function _tablesz(i::Integer)

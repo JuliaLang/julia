@@ -670,6 +670,8 @@ export
     eye,
     factors,
     ishermitian,
+    isposdef,
+    isposdef!,
     issym,
     issym_rnd,
     istril,
@@ -748,6 +750,7 @@ export
     isempty,
     key,
     keys,
+    keytype,
     length,
     setdiff,
     map,
@@ -765,7 +768,9 @@ export
     toggle_each,
     union,
     union!,
+    unique,
     values,
+    valtype,
     xor!,
     pop,
     push,
@@ -994,6 +999,8 @@ export
 # errors
     assert,
     error,
+    rethrow,
+    backtrace,
     system_error,
     
 # types

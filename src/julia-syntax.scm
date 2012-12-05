@@ -193,6 +193,8 @@
 (define (function-expr argl body)
   (let ((t (llist-types argl))
 	(n (llist-vars argl)))
+    (if (has-dups n)
+	(error "function argument names not unique"))
     (let ((argl (map make-decl n t)))
       `(lambda ,argl
 	 (scope-block ,body)))))
@@ -229,6 +231,8 @@
 	 (error "malformed type parameter list"))))
 
 (define (method-def-expr name sparams argl body)
+  (if (has-dups (llist-vars argl))
+      (error "function argument names not unique"))
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
   (let* ((types (llist-types argl))
@@ -494,13 +498,16 @@
 			      (locls ())
 			      (stmts ()))
 		     (if (null? binds)
-			 `(call (-> (tuple ,@args)
-				    (block ,@(if (null? locls)
-						 '()
-						 `((local ,@locls)))
-					   ,@stmts
-					   ,ex))
-				,@inits)
+			 (begin
+			   (if (has-dups args)
+			       (error "let variables not unique"))
+			   `(call (-> (tuple ,@args)
+				      (block ,@(if (null? locls)
+						   '()
+						   `((local ,@locls)))
+					     ,@stmts
+					     ,ex))
+				  ,@inits))
 			 (cond
 			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
@@ -542,14 +549,31 @@
 		   (receive (name params super) (analyze-type-sig sig)
 			    (struct-def-expr name params super fields)))
 
-   (pattern-lambda (try tryblk var catchblk)
+   ;; try with finally
+   (pattern-lambda (try tryb var catchb finalb)
+		   (let ((err (gensy))
+			 (val (gensy)))
+		     `(scope-block
+		       (block
+			(= ,err false)
+			(= ,val (try ,(if catchb
+					  `(try ,tryb ,var ,catchb)
+					  tryb)
+				     #f
+				     (= ,err true)))
+			,finalb
+			(if ,err (ccall 'jl_rethrow Void (tuple)))
+			,val))))
+
+   ;; try - catch
+   (pattern-lambda (try tryb var catchb)
 		   (if (symbol? var)
-		       `(trycatch (scope-block ,tryblk)
+		       `(trycatch (scope-block ,tryb)
 				  (scope-block
 				   (block (= ,var (the_exception))
-					  ,catchblk)))
-		       `(trycatch (scope-block ,tryblk)
-				  (scope-block ,catchblk))))
+					  ,catchb)))
+		       `(trycatch (scope-block ,tryb)
+				  (scope-block ,catchb))))
 
    )) ; binding-form-patterns
 
@@ -623,6 +647,11 @@
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
 		   `(-> (tuple ,@argl) ,body))
+
+   (pattern-lambda (try tryb var catchb finalb)
+		   (if var (list 'varlist var) '()))
+   (pattern-lambda (try tryb var catchb)
+		   (if var (list 'varlist var) '()))
 
    )) ; vars-introduced-by-patterns
 

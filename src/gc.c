@@ -227,11 +227,11 @@ static void *alloc_big(size_t sz)
     sz = (sz+3) & -4;
     size_t offs = BVOFFS*sizeof(void*);
     if (sz + offs < offs)  // overflow in adding offs, size was "negative"
-        jl_raise(jl_memory_exception);
+        jl_throw(jl_memory_exception);
     bigval_t *v = (bigval_t*)malloc(sz + offs);
     allocd_bytes += (sz+offs);
     if (v == NULL)
-        jl_raise(jl_memory_exception);
+        jl_throw(jl_memory_exception);
     v->sz = sz;
     v->flags = 0;
     v->next = big_objects;
@@ -286,7 +286,7 @@ jl_mallocptr_t *jl_gc_managed_malloc(size_t sz)
     sz = (sz+3) & -4;
     void *b = malloc(sz);
     if (b == NULL)
-        jl_raise(jl_memory_exception);
+        jl_throw(jl_memory_exception);
     allocd_bytes += sz;
     return jl_gc_acquire_buffer(b, sz);
 }
@@ -318,7 +318,7 @@ static void add_page(pool_t *p)
 {
     gcpage_t *pg = malloc(sizeof(gcpage_t));
     if (pg == NULL)
-        jl_raise(jl_memory_exception);
+        jl_throw(jl_memory_exception);
     gcval_t *v = (gcval_t*)&pg->data[0];
     char *lim = (char*)v + GC_PAGE_SZ - p->osize;
     gcval_t *fl;
@@ -571,7 +571,6 @@ static void gc_mark_all()
         gc_push_root(ta->consumers);
         if (ta->start)  gc_push_root(ta->start);
         if (ta->result) gc_push_root(ta->result);
-        gc_push_root(ta->state.eh_task);
         if (ta->stkbuf != NULL || ta == jl_current_task) {
             if (ta->stkbuf != NULL)
                 gc_setmark_buf(ta->stkbuf);
@@ -583,10 +582,10 @@ static void gc_mark_all()
             }
             else {
                 offset = ta->stkbuf - (ta->stackbase-ta->ssize);
-                gc_mark_stack(ta->state.gcstack, offset);
+                gc_mark_stack(ta->gcstack, offset);
             }
 #else
-            gc_mark_stack(ta->state.gcstack, 0);
+            gc_mark_stack(ta->gcstack, 0);
 #endif
         }
     }

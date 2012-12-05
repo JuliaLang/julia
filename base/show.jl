@@ -731,7 +731,7 @@ function print_matrix(io,
     end
 end
 print_matrix(io, X::AbstractMatrix, rows::Integer, cols::Integer) =
-    print_matrix(io, X, rows, cols, " ", "  ", "", "  :  ", ":", 5, 5)
+    print_matrix(io, X, rows, cols, " ", "  ", "", "  \u2026  ", "\u22ee", 5, 5)
 
 print_matrix(io, X::AbstractMatrix) = print_matrix(io, X, tty_rows()-4, tty_cols())
 
@@ -784,7 +784,7 @@ function whos(m::Module, pattern::Regex)
     for s in sort(map(string, names(m)))
         v = symbol(s)
         if isdefined(m,v) && ismatch(pattern, s)
-            println(rpad(v, 30), summary(eval(m,v)))
+            println(rpad(s, 30), summary(eval(m,v)))
         end
     end
 end

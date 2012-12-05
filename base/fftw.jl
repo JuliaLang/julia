@@ -1,11 +1,12 @@
 module FFTW
 
-using Base
-
 export bfft, bfftn, brfft, brfftn, fft, fft2, fft3, fftn,
        ifft, ifft2, ifft3, ifftn, irfft, irfftn, rfft, rfftn
 
 ## FFT: Implement fft by calling fftw.
+
+const libfftw = "libfftw3_threads"
+const libfftwf = "libfftw3f_threads"
 
 ## Direction of FFT
 
@@ -42,7 +43,7 @@ const RODFT11 = int32(10)
 # Wisdom
 
 function import_64bit_wisdom(filename::String)
-    stat = ccall(dlsym(Base.libfftw,:fftw_import_wisdom_from_filename),
+    stat = ccall((:fftw_import_wisdom_from_filename,libfftw),
         Int32, (Ptr{Uint8},), bytestring(filename))
     if stat == 0
         error("failed to import wisdom from $filename")
@@ -50,7 +51,7 @@ function import_64bit_wisdom(filename::String)
 end
 
 function import_32bit_wisdom(filename::String)
-    stat = ccall(dlsym(Base.libfftwf,:fftwf_import_wisdom_from_filename),
+    stat = ccall((:fftwf_import_wisdom_from_filename,libfftwf),
         Int32, (Ptr{Uint8},), bytestring(filename))
     if stat == 0
         error("failed to import wisdom from $filename")
@@ -58,8 +59,8 @@ function import_32bit_wisdom(filename::String)
 end
 
 function forget_wisdom()
-    ccall(dlsym(Base.libfftw,:fftw_forget_wisdom), Void, ())
-    ccall(dlsym(Base.libfftwf,:fftwf_forget_wisdom), Void, ())
+    ccall((:fftw_forget_wisdom,libfftw), Void, ())
+    ccall((:fftwf_forget_wisdom,libfftwf), Void, ())
 end
 
 # Threads
@@ -68,54 +69,54 @@ let initialized = false
     global num_threads
     function num_threads(nthreads::Integer)
         if !initialized
-            stat = ccall(dlsym(Base.libfftw,:fftw_init_threads), Int32, ())
-            statf = ccall(dlsym(Base.libfftwf,:fftwf_init_threads), Int32, ())
+            stat = ccall((:fftw_init_threads,libfftw), Int32, ())
+            statf = ccall((:fftwf_init_threads,libfftwf), Int32, ())
             if stat == 0 || statf == 0
                 error("could not initialize fft threads")
             end
             initialized = true
         end
-        ccall(dlsym(Base.libfftw,:fftw_plan_with_nthreads), Void, (Int32,), nthreads)
-        ccall(dlsym(Base.libfftwf,:fftwf_plan_with_nthreads), Void, (Int32,), nthreads)
+        ccall((:fftw_plan_with_nthreads,libfftw), Void, (Int32,), nthreads)
+        ccall((:fftwf_plan_with_nthreads,libfftwf), Void, (Int32,), nthreads)
     end
 end
 
 # Execute
 
 execute(precision::Union(Type{Float64}, Type{Complex128}), plan) =
-    ccall(dlsym(Base.libfftw, :fftw_execute), Void, (Ptr{Void},), plan)
+    ccall((:fftw_execute,libfftw), Void, (Ptr{Void},), plan)
 
 execute(precision::Union(Type{Float32}, Type{Complex64}), plan) =
-    ccall(dlsym(Base.libfftwf, :fftwf_execute), Void, (Ptr{Void},), plan)
+    ccall((:fftwf_execute,libfftwf), Void, (Ptr{Void},), plan)
 
 # Destroy plan
 
 destroy_plan(precision::Union(Type{Float64}, Type{Complex128}), plan) =
-    ccall(dlsym(Base.libfftw, :fftw_destroy_plan), Void, (Ptr{Void},), plan)
+    ccall((:fftw_destroy_plan,libfftw), Void, (Ptr{Void},), plan)
 
 destroy_plan(precision::Union(Type{Float32}, Type{Complex64}), plan) =
-    ccall(dlsym(Base.libfftwf, :fftwf_destroy_plan), Void, (Ptr{Void},), plan)
+    ccall((:fftwf_destroy_plan,libfftwf), Void, (Ptr{Void},), plan)
 
 # Create nd plan
 
 for (libname, fname_complex, fname_r2c, fname_c2r, T_in, T_out) in
-    ((:(Base.libfftw),"fftw_plan_dft","fftw_plan_dft_r2c","fftw_plan_dft_c2r",:Float64,:Complex128),
-     (:(Base.libfftwf),"fftwf_plan_dft","fftwf_plan_dft_r2c","fftwf_plan_dft_c2r",:Float32,:Complex64))
+    ((:libfftw,"fftw_plan_dft","fftw_plan_dft_r2c","fftw_plan_dft_c2r",:Float64,:Complex128),
+     (:libfftwf,"fftwf_plan_dft","fftwf_plan_dft_r2c","fftwf_plan_dft_c2r",:Float32,:Complex64))
     @eval begin
         function plan_dft(X::Array{$T_out}, Y::Array{$T_out}, direction::Integer)
-            ccall(dlsym($libname, $fname_complex),
+            ccall(($fname_complex,$libname),
                   Ptr{Void},
                   (Int32, Ptr{Int32}, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
                   ndims(X), int32(reverse([size(X)...])), X, Y, direction, ESTIMATE)
         end
         function plan_dft(X::Array{$T_in}, Y::Array{$T_out})
-            ccall(dlsym($libname, $fname_r2c),
+            ccall(($fname_r2c,$libname),
                   Ptr{Void},
                   (Int32, Ptr{Int32}, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
                   ndims(X), int32(reverse([size(X)...])), X, Y, ESTIMATE)
         end
         function plan_dft(X::Array{$T_out}, Y::Array{$T_in})
-            ccall(dlsym($libname, $fname_c2r),
+            ccall(($fname_c2r,$libname),
                   Ptr{Void},
                   (Int32, Ptr{Int32}, Ptr{$T_out}, Ptr{$T_in}, Uint32),
                   ndims(Y), int32(reverse([size(Y)...])), X, Y, ESTIMATE)
@@ -126,12 +127,12 @@ end
 # Guru plans
 
 for (libname, fname_complex, fname_r2c, fname_c2r, T_in, T_out) in
-    ((:(Base.libfftw),"fftw_plan_guru64_dft","fftw_plan_guru64_dft_r2c","fftw_plan_guru64_dft_c2r",:Float64,:Complex128),
-     (:(Base.libfftwf),"fftwf_plan_guru64_dft","fftwf_plan_guru64_dft_r2c","fftwf_plan_guru64_dft_c2r",:Float32,:Complex64))
+    ((:libfftw,"fftw_plan_guru64_dft","fftw_plan_guru64_dft_r2c","fftw_plan_guru64_dft_c2r",:Float64,:Complex128),
+     (:libfftwf,"fftwf_plan_guru64_dft","fftwf_plan_guru64_dft_r2c","fftwf_plan_guru64_dft_c2r",:Float32,:Complex64))
     @eval begin
         function plan_guru_dft(dims::Array{Int,2}, howmany::Array{Int,2},
             X::Array{$T_out}, Y::Array{$T_out}, direction::Int32)
-            ccall(dlsym($libname, $fname_complex),
+            ccall(($fname_complex,$libname),
                   Ptr{Void},
                   (Int32, Ptr{Int}, Int32, Ptr{Int},
                    Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32),
@@ -140,7 +141,7 @@ for (libname, fname_complex, fname_r2c, fname_c2r, T_in, T_out) in
         end
         function plan_guru_dft(dims::Array{Int,2}, howmany::Array{Int,2},
             X::Array{$T_in}, Y::Array{$T_out})
-            ccall(dlsym($libname, $fname_r2c),
+            ccall(($fname_r2c,$libname),
                   Ptr{Void},
                   (Int32, Ptr{Int}, Int32, Ptr{Int},
                    Ptr{$T_in}, Ptr{$T_out}, Uint32),
@@ -149,7 +150,7 @@ for (libname, fname_complex, fname_r2c, fname_c2r, T_in, T_out) in
         end
         function plan_guru_dft(dims::Array{Int,2}, howmany::Array{Int,2},
             X::Array{$T_out}, Y::Array{$T_in})
-            ccall(dlsym($libname, $fname_c2r),
+            ccall(($fname_c2r,$libname),
                   Ptr{Void},
                   (Int32, Ptr{Int}, Int32, Ptr{Int},
                    Ptr{$T_out}, Ptr{$T_in}, Uint32),
@@ -303,13 +304,13 @@ irfftn(X,d) = (Y=brfftn(X,d); Y./length(Y))
 # NOTE: Using MEASURE and PATIENT zeros out the input the 
 # first time it is used for a particular size. Use ESTIMATE
 
-for (libname, fname, elty) in ((:(Base.libfftw) ,"fftw_plan_guru_r2r",:Float64),
-                               (:(Base.libfftwf),"fftwf_plan_guru_r2r",:Float32))
+for (libname, fname, elty) in ((:libfftw ,"fftw_plan_guru_r2r",:Float64),
+                               (:libfftwf,"fftwf_plan_guru_r2r",:Float32))
     @eval begin
         function transpose(X::Matrix{$elty})
             P = similar(X)
             (n1, n2) = size(X)
-            plan = ccall(dlsym($libname, $fname), Ptr{Void},
+            plan = ccall(($fname,$libname), Ptr{Void},
                          (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Uint32),
                          0, C_NULL, 2, int32([n1,n2,1,n2,1,n1]), X, P, [HC2R], ESTIMATE | PRESERVE_INPUT)
             execute($elty, plan)
@@ -319,13 +320,13 @@ for (libname, fname, elty) in ((:(Base.libfftw) ,"fftw_plan_guru_r2r",:Float64),
     end
 end
 
-for (libname, fname, celty) in ((:(Base.libfftw) ,"fftw_plan_guru_dft",:Complex128),
-                                (:(Base.libfftwf),"fftwf_plan_guru_dft",:Complex64))
+for (libname, fname, celty) in ((:libfftw ,"fftw_plan_guru_dft",:Complex128),
+                                (:libfftwf,"fftwf_plan_guru_dft",:Complex64))
     @eval begin
         function transpose(X::Matrix{$celty})
             P = similar(X)
             (n1, n2) = size(X)
-            plan = ccall(dlsym($libname, $fname), Ptr{Void},
+            plan = ccall(($fname,$libname), Ptr{Void},
                          (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$celty}, Ptr{$celty}, Int32, Uint32),
                          0, C_NULL, 2, int32([n1,n2,1,n2,1,n1]), X, P, FORWARD, ESTIMATE | PRESERVE_INPUT)
             execute($celty, plan)

@@ -86,7 +86,7 @@ void fpe_handler(int arg)
         break;
         case _FPE_ZERODIVIDE:
 #endif
-    jl_raise(jl_divbyzero_exception);
+    jl_throw(jl_divbyzero_exception);
 #ifdef __WIN32__
         break;
     }
@@ -112,7 +112,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
         ) {
-        jl_raise(jl_stackovf_exception);
+        jl_throw(jl_stackovf_exception);
     }
     else {
         signal(SIGSEGV, SIG_DFL);
@@ -181,7 +181,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
         jl_signal_pending = sig;
     } else {
         jl_signal_pending = 0;
-        jl_raise(jl_interrupt_exception);
+        jl_throw(jl_interrupt_exception);
     }
 }
 #endif
@@ -418,6 +418,8 @@ void julia_init(char *imageFile)
     // it does "using Base" if Base is available.
     if (jl_base_module != NULL)
         jl_module_using(jl_main_module, jl_base_module);
+    // eval() uses Main by default, so Main.eval === Core.eval
+    jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
     jl_current_module = jl_main_module;
 
 #ifndef __WIN32__
@@ -577,7 +579,6 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_errorexception_type = (jl_struct_type_t*)basemod("ErrorException");
     jl_typeerror_type = (jl_struct_type_t*)basemod("TypeError");
     jl_loaderror_type = (jl_struct_type_t*)basemod("LoadError");
-    jl_backtrace_type = (jl_struct_type_t*)basemod("BackTrace");
     jl_weakref_type = (jl_struct_type_t*)basemod("WeakRef");
 
     jl_method_missing_func = (jl_function_t*)basemod("method_missing");

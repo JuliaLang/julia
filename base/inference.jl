@@ -944,7 +944,7 @@ function typeinf_ext(linfo, atypes::ANY, sparams::ANY, def)
 end
 
 typeinf(linfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo,true)
-typeinf(linfo,atypes::ANY,sparams::ANY,linfo) = typeinf(linfo,atypes,sparams,linfo,true)
+typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,true)
 
 ast_rettype(ast) = ast.args[3].typ
 
@@ -959,16 +959,15 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     # check cached t-functions
     tf = def.tfunc
     if !is(tf,())
-        typearr = tf[1]::Array{Any,1}
-        codearr = tf[2]::Array{Any,1}
-        for i = 1:length(codearr)
-            if typeseq(typearr[i],atypes)
-                code = codearr[i]
+        tfarr = tf::Array{Any,1}
+        for i = 1:2:length(tfarr)
+            if typeseq(tfarr[i],atypes)
+                code = tfarr[i+1]
                 assert(isa(code, Tuple))
                 if code[5]
                     curtype = code[3]
                     redo = true
-                    tfunc_idx = i
+                    tfunc_idx = i+1
                     break
                 end
                 return (code, code[3])
@@ -1009,7 +1008,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         f = f.prev
     end
 
-    #print("typeinf ", linfo.name, " ", atypes, "\n")
+    #if dbg print("typeinf ", linfo.name, " ", atypes, "\n") end
 
     if cop
         sparams = tuple(sparams..., linfo.sparams...)
@@ -1032,6 +1031,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     frame.result = curtype
 
     rec = false
+    toprec = false
 
     s = { () for i=1:n }
     recpts = IntSet()  # statements that depend recursively on our value
@@ -1096,8 +1096,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             stmt = body[pc]
             changes = abstract_interpret(stmt, s[pc], sv)
             if frame.recurred
-                if isa(frame.prev,CallStack) && frame.prev.recurred
-                    rec = true
+                rec = true
+                if !(isa(frame.prev,CallStack) && frame.prev.recurred)
+                    toprec = true
                 end
                 add(recpts, pc)
                 #if dbg
@@ -1143,8 +1144,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     pc´ = n+1
                     rt = abstract_eval(stmt.args[1], s[pc], sv)
                     if frame.recurred
-                        if isa(frame.prev,CallStack) && frame.prev.recurred
-                            rec = true
+                        rec = true
+                        if !(isa(frame.prev,CallStack) && frame.prev.recurred)
+                            toprec = true
                         end
                         add(recpts, pc)
                         #if dbg
@@ -1190,8 +1192,8 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         end
     end
     #print("\n",ast,"\n")
-    #print("==> ", frame.result,"\n")
-    if redo && typeseq(curtype, frame.result)
+    #if dbg print("==> ", frame.result,"\n") end
+    if (toprec && typeseq(curtype, frame.result)) || !isa(frame.prev,CallStack)
         rec = false
     end
     
@@ -1209,15 +1211,13 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     
     if !redo
         if is(def.tfunc,())
-            def.tfunc = ({},{})
+            def.tfunc = {}
         end
         compr = (compr[1],compr[2],compr[3],compr[4],rec)
-        push(def.tfunc[1]::Array{Any,1}, atypes)
-        push(def.tfunc[2]::Array{Any,1}, compr)
-    elseif !rec
-        codearr = def.tfunc[2]
-        compr = codearr[tfunc_idx]
-        codearr[tfunc_idx] = (compr[1],compr[2],compr[3],compr[4],false)
+        push(def.tfunc::Array{Any,1}, atypes)
+        push(def.tfunc::Array{Any,1}, compr)
+    else
+        def.tfunc[tfunc_idx] = (compr[1],compr[2],compr[3],compr[4],rec)
     end
     
     inference_stack = (inference_stack::CallStack).prev
@@ -1629,6 +1629,8 @@ function mk_tuplecall(args)
     Expr(:call1, {_jl_top_tuple, args...}, tuple(map(exprtype, args)...))
 end
 
+const basenumtype = Union(Int32,Int64,Float32,Float64,Complex64,Complex128,Rational)
+
 function inlining_pass(e::Expr, sv, ast)
     # don't inline first argument of ccall, as this needs to be evaluated
     # by the interpreter and inlining might put in something it can't handle,
@@ -1692,10 +1694,10 @@ function inlining_pass(e::Expr, sv, ast)
         end
 
         if is(f, ^) || is(f, .^)
-            if length(e.args) == 3 && isa(e.args[3],Integer)
+            if length(e.args) == 3 && isa(e.args[3],Union(Int32,Int64))
                 a1 = e.args[2]
-                if isa(a1,Number) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
-                                      exprtype(a1) <: Number)
+                if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
+                                           exprtype(a1) <: basenumtype)
                     if e.args[3]==2
                         e.args = {_jl_tn(:*), a1, a1}
                         f = *

@@ -13,6 +13,7 @@
 /lighttpd-*
 /llvm-*
 /openblas-*
+/patchelf-*
 /pcre-*
 /readline-*
 /readline62-*

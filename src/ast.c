@@ -53,8 +53,6 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     jl_value_t *result;
 
     JL_TRY {
-        jl_register_toplevel_eh();
-
         margs[0] = scm_to_julia(args[0]);
         f = (jl_function_t*)jl_toplevel_eval(margs[0]);
         result = jl_apply(f, &margs[1], nargs-1);
@@ -717,7 +715,7 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
     }
     JL_CATCH {
         jl_current_module = last_m;
-        jl_raise(jl_exception_in_transit);
+        jl_rethrow();
     }
     jl_current_module = last_m;
     JL_GC_POP();

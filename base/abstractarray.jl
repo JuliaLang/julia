@@ -138,6 +138,9 @@ for (f,t) in ((:char,   Char),
     @eval ($f)(x::AbstractArray) = iround_to(similar(x,$t), x)
 end
 
+bool(x::AbstractArray{Bool}) = x
+bool(x::AbstractArray) = copy_to(similar(x,Bool), x)
+
 for (f,t) in ((:float32,    Float32),
               (:float64,    Float64),
               (:complex64,  Complex64),
@@ -230,6 +233,11 @@ end
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
     N = length(ranges)
     if !has(cache,N)
+        if isdefined(genbodies,:code)
+            mod = genbodies.code.module
+        else
+            mod = Main
+        end
         dimargnames = { symbol(string("_d",i)) for i=1:N }
         ivars = { symbol(string("_i",i)) for i=1:N }
         bodies = genbodies(ivars)
@@ -266,7 +274,7 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
             end
             _F_
         end
-        f = eval(fexpr)
+        f = eval(mod,fexpr)
         cache[N] = f
     else
         f = cache[N]

@@ -20,6 +20,7 @@ debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $
 	$(MAKEs) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
 
 julia-debug julia-release:
+	@-git submodule update
 	@$(MAKEs) -C deps
 	@$(MAKEs) -C src lib$@
 	@$(MAKEs) -C base
@@ -35,6 +36,15 @@ $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl $(BUILD)/share/julia/hel
 	$(QUIET_JULIA) cd base && \
 	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make cleanall'."
 
+# public libraries, that are installed in $(PREFIX)/lib
+JL_LIBS = julia-release julia-debug
+
+# private libraries, that are installed in $(PREFIX)/lib/julia
+JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
+                  fftw3f_threads glpk glpk_wrapper gmp gmp_wrapper grisu \
+                  history openlibm pcre random readline Rmath spqr \
+                  suitesparse_wrapper tk_wrapper umfpack z openblas
+
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
 	@$(MAKEs) -C test/unicode
@@ -44,10 +54,10 @@ install: release
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
-		cp $(BUILD)/$(JL_LIBDIR)/lib$${suffix}.$(SHLIB_EXT) $(PREFIX)/$(JL_LIBDIR) ; \
+		cp -a $(BUILD)/lib/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
-		cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/lib$${suffix}.$(SHLIB_EXT) $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		cp -a $(BUILD)/lib/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	# Copy system image
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
@@ -67,16 +77,10 @@ dist: cleanall
 #	-$(MAKE) -C deps clean-openblas
 	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
 ifeq ($(OS), Darwin)
-	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_LIBDIR) /usr/local/lib
+	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_LIBDIR) $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 	rm -fr julia-$(JULIA_COMMIT)
-
-deb:
-	fakeroot debian/rules binary
-
-debclean:
-	fakeroot debian/rules clean
 
 h2j: $(BUILD)/$(JL_LIBDIR)/libLLVM*.a $(BUILD)/$(JL_LIBDIR)/libclang*.a src/h2j.cpp
 	$(QUIET_CC) g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@

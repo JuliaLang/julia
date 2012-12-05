@@ -1,31 +1,8 @@
-module Base
-import Intrinsics.ccall
-cconvert(T, x) = convert_default(T,x,cconvert)
-ccall(:putchar, Void, (Char,), 'B')
-ccall(:putchar, Void, (Char,), 'u')
-ccall(:putchar, Void, (Char,), 'i')
-ccall(:putchar, Void, (Char,), 'l')
-ccall(:putchar, Void, (Char,), 'd')
-ccall(:putchar, Void, (Char,), 'i')
-ccall(:putchar, Void, (Char,), 'n')
-ccall(:putchar, Void, (Char,), 'g')
-ccall(:putchar, Void, (Char,), ' ')
-ccall(:putchar, Void, (Char,), 's')
-ccall(:putchar, Void, (Char,), 'y')
-ccall(:putchar, Void, (Char,), 's')
-ccall(:putchar, Void, (Char,), 't')
-ccall(:putchar, Void, (Char,), 'e')
-ccall(:putchar, Void, (Char,), 'm')
-ccall(:putchar, Void, (Char,), ' ')
-ccall(:putchar, Void, (Char,), 'i')
-ccall(:putchar, Void, (Char,), 'm')
-ccall(:putchar, Void, (Char,), 'a')
-ccall(:putchar, Void, (Char,), 'g')
-ccall(:putchar, Void, (Char,), 'e')
-ccall(:putchar, Void, (Char,), ':')
-ccall(:putchar, Void, (Char,), '\n')
-ccall(:jl_load_progress_setmax, Void, (Int,), 72)
+baremodule Base
 
+eval(x) = Core.eval(Base,x)
+eval(m,x) = Core.eval(m,x)
+ccall(:jl_load_progress_setmax, Void, (Int,), 72)
 include("export.jl")
 
 if false
@@ -79,9 +56,6 @@ include("promotion.jl")
 include("operators.jl")
 include("pointer.jl")
 
-_jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
-libopenlibm = dlopen("libopenlibm")
-
 include("float.jl")
 include("reduce.jl")
 include("complex.jl")
@@ -96,6 +70,7 @@ include("dict.jl")
 include("set.jl")
 
 # compiler
+import Core.Undef  # used internally by compiler
 include("inference.jl")
 
 # I/O, strings & printing
@@ -300,11 +275,12 @@ begin
     typeinf_ext(minf[1][3], atypes, (), minf[1][3])
 end
 
-end # module Base
+end # baremodule Base
 
 using Base
 
-JL_PRIVATE_LIBDIR = get(ENV,"JL_PRIVATE_LIBDIR","lib/julia")
+JL_PRIVATE_LIBDIR = getenv("JL_PRIVATE_LIBDIR")
 # create system image file
-ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
-      "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji", "start_image.jl")
+ccall(:jl_save_system_image, Void, (Ptr{Uint8},),
+      "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji")
+end

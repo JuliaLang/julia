@@ -69,7 +69,8 @@
           '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
             "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
 	    "finally" "typealias" "break" "continue" "type" "global" "@\\w+"
-	    "module" "using" "import" "export" "const" "let" "bitstype" "do")
+	    "module" "using" "import" "export" "const" "let" "bitstype" "do"
+	    "baremodule" "importall")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
     '("\\<\\(true\\|false\\|C_NULL\\|Inf\\|NaN\\|Inf32\\|NaN32\\|nothing\\)\\>" . font-lock-constant-face)
@@ -87,7 +88,7 @@
   (list "else" "elseif"))
 
 (defconst julia-block-end-keywords
-  (list "end" "else" "elseif" "catch"))
+  (list "end" "else" "elseif" "catch" "finally"))
 
 (defun julia-member (item lst)
   (if (null lst)

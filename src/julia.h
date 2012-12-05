@@ -379,7 +379,6 @@ extern DLLEXPORT jl_struct_type_t *jl_utf8_string_type;
 extern DLLEXPORT jl_struct_type_t *jl_errorexception_type;
 extern jl_struct_type_t *jl_typeerror_type;
 extern DLLEXPORT jl_struct_type_t *jl_loaderror_type;
-extern DLLEXPORT jl_struct_type_t *jl_backtrace_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_memory_exception;
 extern jl_value_t *jl_divbyzero_exception;
@@ -851,7 +850,7 @@ void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
 
-void jl_save_system_image(char *fname, char *startscriptname);
+void jl_save_system_image(char *fname);
 void jl_restore_system_image(char *fname);
 
 // front end interface
@@ -1065,19 +1064,14 @@ DLLEXPORT void restore_signals(void);
 
 // tasks and exceptions
 
-// context that needs to be restored around a try block
-typedef struct _jl_savestate_t {
-    // eh_task is who I yield to for exception handling
-    struct _jl_task_t *eh_task;
-    // eh_ctx is where I go to handle an exception yielded to me
-    jl_jmp_buf *eh_ctx;
-    ptrint_t err : 1;
-    ptrint_t bt : 1;  // whether exceptions caught here build a backtrace
+// info describing an exception handler
+typedef struct _jl_handler_t {
+    jl_jmp_buf eh_ctx;
 #ifdef JL_GC_MARKSWEEP
     jl_gcframe_t *gcstack;
 #endif
-    struct _jl_savestate_t *prev;
-} jl_savestate_t;
+    struct _jl_handler_t *prev;
+} jl_handler_t;
 
 typedef struct _jl_task_t {
     JL_STRUCT_TYPE
@@ -1098,8 +1092,10 @@ typedef struct _jl_task_t {
     size_t ssize;
     jl_function_t *start;
     jl_value_t *result;
-    // exception state and per-task dynamic parameters
-    jl_savestate_t state;
+    // current exception handler
+    jl_handler_t *eh;
+    // saved gc stack top for context switches
+    jl_gcframe_t *gcstack;
 } jl_task_t;
 
 typedef union jl_any_stream {
@@ -1116,9 +1112,9 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
-DLLEXPORT void NORETURN jl_raise(jl_value_t *e);
-DLLEXPORT void jl_register_toplevel_eh(void);
-
+DLLEXPORT void jl_throw(jl_value_t *e);
+DLLEXPORT void jl_rethrow();
+DLLEXPORT void jl_rethrow_other(jl_value_t *e);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
@@ -1150,20 +1146,17 @@ DLLEXPORT JL_STREAM *jl_stdout_stream();
 DLLEXPORT JL_STREAM *jl_stdin_stream();
 DLLEXPORT JL_STREAM *jl_stderr_stream();
 
-static inline void jl_eh_restore_state(jl_savestate_t *ss)
+static inline void jl_eh_restore_state(jl_handler_t *eh)
 {
     JL_SIGATOMIC_BEGIN();
-    jl_current_task->state.eh_task = ss->eh_task;
-    jl_current_task->state.eh_ctx = ss->eh_ctx;
-    jl_current_task->state.bt = ss->bt;
-    jl_current_task->state.prev = ss->prev;
+    jl_current_task->eh = eh->prev;
 #ifdef JL_GC_MARKSWEEP
-    jl_pgcstack = ss->gcstack;
+    jl_pgcstack = eh->gcstack;
 #endif
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT void jl_enter_handler(jl_savestate_t *ss, jl_jmp_buf *handlr);
+DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
 DLLEXPORT void jl_pop_handler(int n);
 
 #if defined(__WIN32__)
@@ -1181,17 +1174,16 @@ DLLEXPORT void jl_pop_handler(int n);
 #define jl_longjmp(a,b) siglongjmp(a,b)
 #endif
 
-#define JL_TRY                                                          \
-    int i__tr, i__ca; jl_savestate_t __ss; jl_jmp_buf __handlr;            \
-    jl_enter_handler(&__ss, &__handlr);                                 \
-    if (!jl_setjmp(__handlr,0))                                         \
-        for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))
+#define JL_TRY                                                    \
+    int i__tr, i__ca; jl_handler_t __eh;                          \
+    jl_enter_handler(&__eh);                                      \
+    if (!jl_setjmp(__eh.eh_ctx,0))                                \
+        for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__eh))
 
-#define JL_EH_POP() jl_eh_restore_state(&__ss)
+#define JL_EH_POP() jl_eh_restore_state(&__eh)
 
 #define JL_CATCH                                                \
     else                                                        \
-        for (i__ca=1, jl_current_task->state.err = 0,           \
-             jl_eh_restore_state(&__ss); i__ca; i__ca=0)
+        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
 
 #endif

@@ -1,6 +1,5 @@
 module DSP
 
-using Base
 using Base.FFTW
 
 export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
