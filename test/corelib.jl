@@ -133,22 +133,6 @@ begin
     end
 end
 
-# Helper for writing tests about error conditions
-macro assert_raises(ExcType, expression)
-    quote
-        try
-            $expression
-        catch e
-            if !isa(e, $ExcType)
-                println("Error        : ",        e )
-                println("Type of error: ", typeof(e))
-                println("Expected     : ", $ExcType)
-                @test false
-            end
-        end
-    end
-end
-
 @test  isequal(Dict(), Dict())
 @test  isequal({1 => 1}, {1 => 1})
 @test !isequal({1 => 1}, {})
@@ -194,7 +178,7 @@ d4[1001] = randstring(3)
 # Here is what currently happens when dictionaries of different types
 # are compared. This is not necessarily desirable. These tests are
 # descriptive rather than proscriptive.
-@assert_raises MethodError !isequal({1 => 2}, {"dog" => "bone"})
+@test !isequal({1 => 2}, {"dog" => "bone"})
 @test isequal(Dict{Int, Int}(), Dict{String, String}())
 
 # ############# end of dict tests #############
@@ -294,14 +278,14 @@ for (operator, name) in ((|, union), (&, intersect), (-, setdiff))
 end
     
 # add_each
-s =                Set(1,  3,  5,  7)
-add_each(s,           (  2,3,4,5    ))
-@test isequal(s, Set(1,2,3,4,5,  7))
+s = Set(1,3,5,7)
+add_each(s,(2,3,4,5))
+@test isequal(s,Set(1,2,3,4,5,7))
 
 # del_each
-s =                Set(1,  3,  5,  7)
-del_each(s,           (    3,  5    ))
-@test isequal(s, Set(1,          7))
+s = Set(1,3,5,7)
+del_each(s,(3,5))
+@test isequal(s,Set(1,7))
 
 # similar
 s = similar(Set(1,"Banana"))
@@ -350,18 +334,18 @@ end
 # Not sure whether the behaviour of isequal (as demonstrated below) on
 # sets of unrelated types, is desirable, but it's what there is at the
 # moment.
-@test                    isequal(Set{Int}(), Set{String}())
-@assert_raises TypeError   isequal(Set{Int}(),    Set{String}{""})
-@test                   !isequal(Set{String}(), Set{Int}(0))
-@assert_raises MethodError isequal(Set{Int}(1),   Set{String}())
+@test       isequal(Set{Int}(), Set{String}())
+@test_fails isequal(Set{Int}(), Set{String}{""})
+@test      !isequal(Set{String}(), Set{Int}(0))
+@test_fails isequal(Set{Int}(1), Set{String}())
 
-@test   isequal(Set{Any}(1,2,3), Set{Int}(1,2,3))
-@test   isequal(Set{Int}(1,2,3), Set{Any}(1,2,3))
+@test  isequal(Set{Any}(1,2,3), Set{Int}(1,2,3))
+@test  isequal(Set{Int}(1,2,3), Set{Any}(1,2,3))
 
-@test  !isequal(Set{Any}(1,2,3), Set{Int}(1,2,3,4))
-@test  !isequal(Set{Int}(1,2,3), Set{Any}(1,2,3,4))
+@test !isequal(Set{Any}(1,2,3), Set{Int}(1,2,3,4))
+@test !isequal(Set{Int}(1,2,3), Set{Any}(1,2,3,4))
 
-@test  !isequal(Set{Any}(1,2,3,4), Set{Int}(1,2,3))
-@test  !isequal(Set{Int}(1,2,3,4), Set{Any}(1,2,3))
+@test !isequal(Set{Any}(1,2,3,4), Set{Int}(1,2,3))
+@test !isequal(Set{Int}(1,2,3,4), Set{Any}(1,2,3))
 
 # ########## end of set tests ##########

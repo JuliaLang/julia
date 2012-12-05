@@ -42,20 +42,6 @@ macro timeit(ex,name)
     end
 end
 
-macro assert_fails(expr)
-    quote
-        ok = false
-        try
-            $(esc(expr))
-        catch
-            ok = true
-        end
-        if !ok
-            error(strcat("assertion failed: expected ",$(string(expr))," to fail"))
-        end
-    end
-end
-
 for t in ARGS
     runtests(t)
     println("    \033[32;1mSUCCESS\033[0m")
