@@ -2117,7 +2117,7 @@ So far only the second case can actually occur.
   (map (lambda (s) (cons s (gensy))) v))
 
 (define (resolve-expansion-vars- e env m)
-  (cond ((or (eq? e 'true) (eq? e 'false))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
 	 e)
 	((symbol? e)
 	 (let ((a (assq e env)))
