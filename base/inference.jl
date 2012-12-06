@@ -944,7 +944,7 @@ function typeinf_ext(linfo, atypes::ANY, sparams::ANY, def)
 end
 
 typeinf(linfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo,true)
-typeinf(linfo,atypes::ANY,sparams::ANY,linfo) = typeinf(linfo,atypes,sparams,linfo,true)
+typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,true)
 
 ast_rettype(ast) = ast.args[3].typ
 
@@ -1629,6 +1629,8 @@ function mk_tuplecall(args)
     Expr(:call1, {_jl_top_tuple, args...}, tuple(map(exprtype, args)...))
 end
 
+const basenumtype = Union(Int32,Int64,Float32,Float64,Complex64,Complex128,Rational)
+
 function inlining_pass(e::Expr, sv, ast)
     # don't inline first argument of ccall, as this needs to be evaluated
     # by the interpreter and inlining might put in something it can't handle,
@@ -1692,10 +1694,10 @@ function inlining_pass(e::Expr, sv, ast)
         end
 
         if is(f, ^) || is(f, .^)
-            if length(e.args) == 3 && isa(e.args[3],Integer)
+            if length(e.args) == 3 && isa(e.args[3],Union(Int32,Int64))
                 a1 = e.args[2]
-                if isa(a1,Number) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
-                                      exprtype(a1) <: Number)
+                if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
+                                           exprtype(a1) <: basenumtype)
                     if e.args[3]==2
                         e.args = {_jl_tn(:*), a1, a1}
                         f = *

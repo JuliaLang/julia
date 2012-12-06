@@ -14,7 +14,7 @@ and specify which of your names are intended to be public (via exporting).
 The following example illustrates the major features of modules::
 
     module MyModule
-    using Base
+    using Lib
     
     export MyType, foo
     
@@ -38,13 +38,13 @@ and type ``MyType`` are
 exported, and so will be available for importing into other modules.
 Function ``bar`` is private to ``MyModule``.
 
-The statement ``using Base`` means that the ``Base`` module (which contains
-the standard library definitions) will be available for resolving names
+The statement ``using Lib`` means that a module called ``Lib``
+will be available for resolving names
 as needed. When a global variable is encountered that has no definition in
-the current module, the system will search for it in ``Base`` and import it
+the current module, the system will search for it in ``Lib`` and import it
 if it is found there.
 This means that all uses of that global within the current module will
-resolve to the definition of that variable in ``Base``.
+resolve to the definition of that variable in ``Lib``.
 
 Once a variable is imported this way (or, equivalently, with the ``import``
 keyword), a module may not create its own variable with the same name.
@@ -78,7 +78,6 @@ for example testing code by running it with "safe" versions of some
 operators::
 
     module Normal
-    using Base
     include("mycode.jl")
     end
 
@@ -96,15 +95,34 @@ There are three important standard modules: Main, Core, and Base.
 Main is the top-level module, and Julia starts with Main set as the
 current module.
 Variables defined at the prompt go in Main, and ``whos()`` lists variables
-in Main. Main implicitly contains ``using Base``.
+in Main.
 
 Core contains all identifiers considered "built in" to the language, i.e.
 part of the core language and not libraries. Every module implicitly
 specifies ``using Core``, since you can't do anything without those
 definitions.
 
-Base is the standard library (the contents of base/). This is not imported
-by default, so most modules will want to start with ``using Base``.
+Base is the standard library (the contents of base/). All modules implicitly
+contain ``using Base``, since this is needed in the vast majority of cases.
+
+
+Default top-level definitions and bare modules
+----------------------------------------------
+
+In addition to ``using Base``, a module automatically contains a definition
+of the ``eval`` function, which evaluates expressions within the context of
+that module.
+
+If these definitions are not wanted, modules can be defined using the
+keyword ``baremodule`` instead. In terms of ``baremodule``, a standard
+``module`` looks like this:
+
+    baremodule Mod
+    using Base
+    eval(x) = Core.eval(Mod, x)
+    eval(m,x) = Core.eval(m, x)
+    ...
+    end
 
 
 Miscellaneous details

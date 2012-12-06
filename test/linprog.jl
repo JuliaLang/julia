@@ -24,9 +24,9 @@ lb = [ 0.; 0.];
 
 (z, x, flag) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
 
-@assert flag == 0
-@assert z == -180.0
-@assert isequal(x, [20.; 60.])
+@test flag == 0
+@test z == -180.0
+@test isequal(x, [20.; 60.])
 
 
 # A constraint satisfaction (matching) problem
@@ -50,9 +50,9 @@ ub = ones(Float64, 9);
 
 (z, x, flag) = linprog_simplex(f, [], [], Aeq, beq, lb, ub, lps_opts);
 
-@assert flag == 0
-@assert z == 5.
-@assert isequal(x, [ 0.; 0.; 1. ;
+@test flag == 0
+@test z == 5.
+@test isequal(x, [ 0.; 0.; 1. ;
                      0.; 1.; 0. ;
                      1.; 0.; 0. ])
 
@@ -68,9 +68,9 @@ lpi_opts["msg_lev"] = GLPK.MSG_ERR
 
 tol = 1e-4
 
-@assert flag == 0
-@assert abs(z - 5.) < tol
-@assert max(abs(x - [ 0.; 0.; 1. ;
+@test flag == 0
+@test abs(z - 5.) < tol
+@test max(abs(x - [ 0.; 0.; 1. ;
                       0.; 1.; 0. ;
                       1.; 0.; 0. ])) < tol
 
@@ -88,9 +88,9 @@ colkind = int32([ GLPK.BV for i = 1 : 9 ])
 
 (z, x, ret, ret_ps) = mixintprog(f, [], [], Aeq, beq, [], [], colkind, mip_opts);
 
-@assert flag == 0
-@assert z == 5.
-@assert isequal(x, [ 0.; 0.; 1. ;
+@test flag == 0
+@test z == 5.
+@test isequal(x, [ 0.; 0.; 1. ;
                      0.; 1.; 0. ;
                      1.; 0.; 0. ])
 

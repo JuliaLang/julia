@@ -32,20 +32,20 @@ end
 data = open(readall, test_infile);
 
 gzfile = gzopen(test_compressed, "wb")
-@assert write(gzfile, data) == length(data)
-@assert close(gzfile) == Z_OK
-@assert close(gzfile) != Z_OK
+@test write(gzfile, data) == length(data)
+@test close(gzfile) == Z_OK
+@test close(gzfile) != Z_OK
 
-#@assert throws_exception(write(gzfile, data), GZError)
-@assert_fails write(gzfile, data)
+#@test throws_exception(write(gzfile, data), GZError)
+@test_fails write(gzfile, data)
 
 if test_gunzip
     data2 = readall(`$gunzip -c $test_compressed`)
-    @assert data == data2
+    @test data == data2
 end
 
 data3 = gzopen(readall, test_compressed)
-@assert data == data3
+@test data == data3
 
 # Test gzfdio
 raw_file = open(test_compressed, "r")
@@ -53,7 +53,7 @@ gzfile = gzdopen(fd(raw_file), "r")
 data4 = readall(gzfile)
 close(gzfile)
 close(raw_file)
-@assert data == data4
+@test data == data4
 
 
 # Screw up the file
@@ -62,8 +62,8 @@ seek(raw_file, 3) # leave the gzip magic 2-byte header
 write(raw_file, zeros(Uint8, 10))
 close(raw_file)
 
-#@assert throws_exception(gzopen(readall, test_compressed), GZError)
-@assert_fails gzopen(readall, test_compressed)
+#@test throws_exception(gzopen(readall, test_compressed), GZError)
+@test_fails gzopen(readall, test_compressed)
 
 
 ##########################
@@ -71,20 +71,20 @@ close(raw_file)
 ##########################
 gzfile = gzopen(test_compressed, "wb")
 write(gzfile, data) == length(data)
-@assert flush(gzfile) == Z_OK
+@test flush(gzfile) == Z_OK
 
 pos = position(gzfile)
-@assert_fails seek(gzfile, 100)   # can't seek backwards on write
-@assert position(gzfile) == pos
-@assert skip(gzfile, 100)
-@assert position(gzfile) == pos + 100
+@test_fails seek(gzfile, 100)   # can't seek backwards on write
+@test position(gzfile) == pos
+@test skip(gzfile, 100)
+@test position(gzfile) == pos + 100
 
-#@assert throws_exception(truncate(gzfile, 100), ErrorException)
-#@assert throws_exception(seek_end(gzfile), ErrorException)
-@assert_fails truncate(gzfile, 100)
-@assert_fails seek_end(gzfile)
+#@test throws_exception(truncate(gzfile, 100), ErrorException)
+#@test throws_exception(seek_end(gzfile), ErrorException)
+@test_fails truncate(gzfile, 100)
+@test_fails seek_end(gzfile)
 
-@assert close(gzfile) == Z_OK
+@test close(gzfile) == Z_OK
 
 
 ##########################
@@ -102,21 +102,21 @@ for ch in modes
     end
     for level = 0:9
         gzfile = gzopen(test_compressed, "wb$level$ch")
-        @assert write(gzfile, data) == length(data)
-        @assert close(gzfile) == Z_OK
+        @test write(gzfile, data) == length(data)
+        @test close(gzfile) == Z_OK
 
         file_size = filesize(test_compressed)
 
         #println("wb$level$ch: ", file_size)
 
         if ch == 'T'
-            @assert(file_size == length(data))
+            @test(file_size == length(data))
         elseif ch == 'F'
-            @assert(file_size >= length(data))
+            @test(file_size >= length(data))
         elseif level == 0
-            @assert(file_size > length(data))
+            @test(file_size > length(data))
         else
-            @assert(file_size < length(data))
+            @test(file_size < length(data))
         end
 
         # readline test
@@ -135,8 +135,8 @@ for ch in modes
         data3 = takebuf_string(s);
         close(gzf)
 
-        @assert(data == data2)
-        @assert(data == data3)
+        @test(data == data2)
+        @test(data == data3)
 
     end
 end
@@ -207,8 +207,8 @@ let BUFSIZE = 65536
             read(r2_infile, r2);
             close(r2_infile)
 
-            @assert b == b2
-            @assert r == r2
+            @test b == b2
+            @test r == r2
         end
     end
 end
@@ -228,8 +228,8 @@ close(UTF32LE_gz)
 
 str1b = readall(`gunzip -c $unicode_gz_file`);
 str1c = gzopen(readall, unicode_gz_file);
-@assert str1 == str1b
-@assert str1 == str1c
+@test str1 == str1b
+@test str1 == str1c
 
 UTF8_gz = gzopen(unicode_gz_file, "w");
 write(UTF8_gz, str2)
@@ -237,8 +237,8 @@ close(UTF8_gz)
 
 str2b = readall(`gunzip -c $unicode_gz_file`);
 str2c = gzopen(readall, unicode_gz_file);
-@assert str2 == str2b
-@assert str2 == str2c
+@test str2 == str2b
+@test str2 == str2c
 
 
 run(`rm -Rf $tmp`)

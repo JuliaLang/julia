@@ -262,7 +262,7 @@ function remote_load(dict)
 end
 end
 
-evalfile(fname::String) = eval(parse(readall(fname))[1])
+evalfile(fname::String) = eval(Main,parse(readall(fname))[1])
 
 # help
 

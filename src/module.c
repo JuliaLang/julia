@@ -127,7 +127,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
     if (to == from)
         return;
     jl_binding_t *b = jl_get_binding(from, s);
-    if (b == NULL || !b->exportp) {
+    if (b == NULL) {
         ios_printf(JL_STDERR,
                    "Warning: could not import %s.%s into %s\n",
                    from->name->name, s->name, to->name->name);
@@ -280,7 +280,7 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all)
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (all || b->exportp || m == jl_main_module) {
+            if (b->exportp || (b->owner == m && (all || m == jl_main_module))) {
                 jl_array_grow_end(a, 1);
                 //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
                 jl_cellset(a, a->length-1, (jl_value_t*)b->name);

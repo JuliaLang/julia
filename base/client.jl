@@ -67,7 +67,7 @@ function _jl_eval_user_input(ast::ANY, show_value)
                 println()
                 iserr, lasterr = false, ()
             else
-                value = eval(ast)
+                value = eval(Main,ast)
                 global ans = value
                 if !is(value,nothing) && show_value
                     if _jl_have_color
@@ -143,7 +143,7 @@ function process_options(args::Array{Any,1})
     repl = true
     startup = true
     if has(ENV, "JL_POST_BOOT")
-        eval(parse_input_line(ENV["JL_POST_BOOT"]))
+        eval(Main,parse_input_line(ENV["JL_POST_BOOT"]))
     end
     i = 1
     while i <= length(args)
@@ -157,18 +157,18 @@ function process_options(args::Array{Any,1})
             repl = false
             i+=1
             ARGS = args[i+1:end]
-            eval(parse_input_line(args[i]))
+            eval(Main,parse_input_line(args[i]))
             break
         elseif args[i]=="-E"
             repl = false
             i+=1
             ARGS = args[i+1:end]
-            show(eval(parse_input_line(args[i])))
+            show(eval(Main,parse_input_line(args[i])))
             println()
             break
         elseif args[i]=="-P"
             i+=1
-            eval(parse_input_line(args[i]))
+            eval(Main,parse_input_line(args[i]))
         elseif args[i]=="-L"
             i+=1
             load(args[i])

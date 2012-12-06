@@ -193,6 +193,8 @@
 (define (function-expr argl body)
   (let ((t (llist-types argl))
 	(n (llist-vars argl)))
+    (if (has-dups n)
+	(error "function argument names not unique"))
     (let ((argl (map make-decl n t)))
       `(lambda ,argl
 	 (scope-block ,body)))))
@@ -229,6 +231,8 @@
 	 (error "malformed type parameter list"))))
 
 (define (method-def-expr name sparams argl body)
+  (if (has-dups (llist-vars argl))
+      (error "function argument names not unique"))
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
   (let* ((types (llist-types argl))
@@ -494,13 +498,16 @@
 			      (locls ())
 			      (stmts ()))
 		     (if (null? binds)
-			 `(call (-> (tuple ,@args)
-				    (block ,@(if (null? locls)
-						 '()
-						 `((local ,@locls)))
-					   ,@stmts
-					   ,ex))
-				,@inits)
+			 (begin
+			   (if (has-dups args)
+			       (error "let variables not unique"))
+			   `(call (-> (tuple ,@args)
+				      (block ,@(if (null? locls)
+						   '()
+						   `((local ,@locls)))
+					     ,@stmts
+					     ,ex))
+				  ,@inits))
 			 (cond
 			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
@@ -640,6 +647,11 @@
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
 		   `(-> (tuple ,@argl) ,body))
+
+   (pattern-lambda (try tryb var catchb finalb)
+		   (if var (list 'varlist var) '()))
+   (pattern-lambda (try tryb var catchb)
+		   (if var (list 'varlist var) '()))
 
    )) ; vars-introduced-by-patterns
 
@@ -2080,6 +2092,23 @@ So far only the second case can actually occur.
 			 (cons `(cell1d ,(expand-backquote (car p)))
 			       q))))))))
 
+(define (julia-expand-strs e)
+  (cond ((not (pair? e))     e)
+	((and (eq? (car e) 'macrocall) (eq? (cadr e) '@str))
+	 ;; expand macro
+	 (let ((form
+		(apply invoke-julia-macro (cadr e) (cddr e))))
+	   (if (not form)
+	       (error (string "macro " (cadr e) " not defined")))
+	   (if (and (pair? form) (eq? (car form) 'error))
+	       (error (cadr form)))
+	   (let ((form (car form))
+		 (m    (cdr form)))
+	     ;; m is the macro's def module, or #f if def env === use env
+	     (resolve-expansion-vars form m))))
+	(else
+	 (map julia-expand-strs e))))
+
 (define (julia-expand-macros e)
   (cond ((not (pair? e))     e)
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
@@ -2097,7 +2126,7 @@ So far only the second case can actually occur.
 		 (m    (cdr form)))
 	     ;; m is the macro's def module, or #f if def env === use env
 	     (julia-expand-macros
-	      (resolve-expansion-vars form m)))))
+	      (resolve-expansion-vars (julia-expand-strs form) m)))))
 	(else
 	 (map julia-expand-macros e))))
 
@@ -2105,7 +2134,7 @@ So far only the second case can actually occur.
   (map (lambda (s) (cons s (gensy))) v))
 
 (define (resolve-expansion-vars- e env m)
-  (cond ((or (eq? e 'true) (eq? e 'false))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
 	 e)
 	((symbol? e)
 	 (let ((a (assq e env)))

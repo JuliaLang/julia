@@ -965,9 +965,20 @@
 	   (error "expected assignment after const")
 	   `(const ,assgn))))
     ((module baremodule)
-     (let ((name (parse-atom s)))
-       (begin0 (list 'module (eq? word 'module) name (parse-block s))
-	       (expect-end s))))
+     (let* ((name (parse-atom s))
+	    (body (parse-block s)))
+       (expect-end s)
+       (list 'module (eq? word 'module) name
+	     (if (eq? word 'module)
+		 (list* 'block
+			;; add definitions for module-local eval
+			(let ((x (gensym)))
+			  `(= (call eval ,x)
+			      (call (|.| Core 'eval) ,name ,x)))
+			`(= (call eval m x)
+			    (call (|.| Core 'eval) m x))
+			(cdr body))
+		 body))))
     ((export)
      (let ((es (map macrocall-to-atsym
 		    (parse-comma-separated-assignments s))))

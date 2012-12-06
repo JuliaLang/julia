@@ -1,13 +1,13 @@
 ## paths
 
 @unix_only begin
-    @assert split_extension(".bashrc") == (".bashrc","")
-    @assert split_extension("/dir/.bashrc") == ("/dir/.bashrc","")
-    @assert split_extension("a.b/a") == ("a.b/a","")
-    @assert split_extension("a/a.b.c") == ("a/a.b",".c")
+    @test split_extension(".bashrc") == (".bashrc","")
+    @test split_extension("/dir/.bashrc") == ("/dir/.bashrc","")
+    @test split_extension("a.b/a") == ("a.b/a","")
+    @test split_extension("a/a.b.c") == ("a/a.b",".c")
 
-    @assert split_path("a/b/c") == ["a","b","c"]
-    @assert split_path("a//b/c") == ["a","b","c"]
+    @test split_path("a/b/c") == ["a","b","c"]
+    @test split_path("a//b/c") == ["a","b","c"]
 end
 
 #############################################
@@ -23,28 +23,28 @@ file_create(filename)
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
-@assert isdir(dir_name) == true
-@assert isfile(dir_name) == false
-@assert islink(dir_name) == false
-@assert isdir(filename) == false
-@assert isfile(filename) == true
-@assert islink(filename) == false
-@assert isreadable(filename) == true
-@assert iswriteable(filename) == true
+@test isdir(dir_name) == true
+@test isfile(dir_name) == false
+@test islink(dir_name) == false
+@test isdir(filename) == false
+@test isfile(filename) == true
+@test islink(filename) == false
+@test isreadable(filename) == true
+@test iswriteable(filename) == true
 # Here's something else that might be UNIX-specific?
 run(`chmod -w $filename`)
-@assert iswriteable(filename) == false
+@test iswriteable(filename) == false
 run(`chmod +w $filename`)
-@assert isexecutable(filename) == false
-@assert filesize(filename) == 0
-@assert filesize(dir_name) > 0
-@assert mtime(filename) >= mtime(dir_name)
+@test isexecutable(filename) == false
+@test filesize(filename) == 0
+@test filesize(dir_name) > 0
+@test mtime(filename) >= mtime(dir_name)
 
 # rename file
 newfilename = file_path(dir_name, "bfile.txt")
 path_rename(filename, newfilename)
-@assert ispath(filename) == false
-@assert isfile(newfilename) == true
+@test ispath(filename) == false
+@test isfile(newfilename) == true
 filename = newfilename
 
 #######################################################################
@@ -52,21 +52,21 @@ filename = newfilename
 #######################################################################
 
 # my_tempdir = tempdir()
-# @assert isdir(my_tempdir) == true
+# @test isdir(my_tempdir) == true
 
 # path = tempname()
-# @assert ispath(path) == false
+# @test ispath(path) == false
 
 # (filename, f) = mktemp()
 # print(f, "Here is some text")
 # close(f)
-# @assert isfile(filename) == true
-# @assert readall(filename) == "Here is some text"
+# @test isfile(filename) == true
+# @test readall(filename) == "Here is some text"
 
 ############
 # Clean up #
 ############
 file_remove(filename)
 rmdir(dir_name)
-@assert ispath(filename) == false
-@assert ispath(dir_name) == false
+@test ispath(filename) == false
+@test ispath(dir_name) == false

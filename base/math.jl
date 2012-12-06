@@ -44,7 +44,7 @@ for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
     end
 end
 
-for (fd, f) in ((:sind, :sins), (:cosd, :cos), (:tand, :tan),
+for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan),
                 (:secd, :sec), (:cscd, :csc), (:cotd, :cot))
     @eval begin
         ($fd)(z) = ($f)(degrees2radians(z))
@@ -436,17 +436,12 @@ end
 gamma(z::Complex) = exp(lgamma(z))
 
 # Translation of psi.c from cephes
+const digamma_EUL = 0.57721566490153286061
+const digamma_coefs = [8.33333333333333333333e-2,-2.10927960927960927961e-2, 7.57575757575757575758e-3,
+                      -4.16666666666666666667e-3, 3.96825396825396825397e-3,-8.33333333333333333333e-3,
+                       8.33333333333333333333e-2]
 function digamma(x::Float64)
   
-    EUL = 0.57721566490153286061
-    a6 = 8.33333333333333333333e-2
-    a5 = -2.10927960927960927961e-2
-    a4 = 7.57575757575757575758e-3
-    a3 = -4.16666666666666666667e-3
-    a2 = 3.96825396825396825397e-3
-    a1 = -8.33333333333333333333e-3
-    a0 = 8.33333333333333333333e-2
-
     negative = false
     nz = 0.0
 
@@ -473,12 +468,10 @@ function digamma(x::Float64)
 
     if x <= 10.0 && x == floor(x)
         y = 0.0
-        n = x
-        for i = 1:n-1
-            w = i
-            y += 1.0 / w
+        for i = 1:x-1
+            y += 1.0 / i
         end
-        y -= EUL
+        y -= digamma_EUL
 
         if negative
             y -= nz
@@ -486,21 +479,24 @@ function digamma(x::Float64)
         return y
     end
 
-    s = x
     w = 0.0
-    while s < 10.0
-        w += 1.0 / s
-        s += 1.0
+    while x < 10.0
+        w += 1.0 / x
+        x += 1.0
     end
 
-    if s < 1.0e17
-        z = 1.0 / (s*s)
-        y = a0*z + a1*z^2 + a2*z^3 + a3*z^4 + a4*z^5 + a5*z^6 + a6*z^7
+    if x < 1.0e17
+        z = 1.0 / (x*x)
+        y = digamma_coefs[1]
+        for j = 2:7
+            y = y*z + digamma_coefs[j]
+        end
+        y *= z
     else
         y = 0.0
     end
 
-    y = log(s) - 0.5/s - y - w
+    y = log(x) - 0.5/x - y - w
 
     if negative
         y -= nz
@@ -510,6 +506,7 @@ function digamma(x::Float64)
 end
 digamma(x::Float32) = float32(digamma(float64(x)))
 digamma(x::Real) = digamma(float64(x))
+@vectorize_1arg Real digamma
 
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
@@ -613,11 +610,12 @@ function eta(z::Union(Float64,Complex128))
     return s
 end
 
-eta(x::Real)    = eta(float64(x))
-eta(z::Complex) = eta(complex128(z))
+eta(x::Integer) = eta(float64(x))
+eta(x::Real)    = oftype(x,eta(float64(x)))
+eta(z::Complex) = oftype(z,eta(complex128(z)))
 
 function zeta(z::Number)
-    zz = 2.0^z
+    zz = 2^z
     eta(z) * zz/(zz-2)
 end
 

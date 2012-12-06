@@ -228,6 +228,22 @@ Iterable Collections
 
    Determine minimum element in a collection
 
+.. function:: indmax(itr)
+
+   Returns the index of the maximum element in a collection
+
+.. function:: indmin(itr)
+
+   Returns the index of the minimum element in a collection
+
+.. function:: findmax(iter)
+
+   Returns a tuple of the maximum element and its index
+
+.. function:: findmin(iter)
+
+   Returns a tuple of the minimum element and its index
+
 .. function:: sum(itr)
 
    Sum elements of a collection

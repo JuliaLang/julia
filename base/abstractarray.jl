@@ -233,6 +233,11 @@ end
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
     N = length(ranges)
     if !has(cache,N)
+        if isdefined(genbodies,:code)
+            mod = genbodies.code.module
+        else
+            mod = Main
+        end
         dimargnames = { symbol(string("_d",i)) for i=1:N }
         ivars = { symbol(string("_i",i)) for i=1:N }
         bodies = genbodies(ivars)
@@ -269,7 +274,7 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
             end
             _F_
         end
-        f = eval(fexpr)
+        f = eval(mod,fexpr)
         cache[N] = f
     else
         f = cache[N]

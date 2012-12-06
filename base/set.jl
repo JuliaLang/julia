@@ -82,3 +82,5 @@ end
 -(a::Set, b::Set) = setdiff(a,b)
 
 isequal(l::Set, r::Set) = length(l) == length(r) == length(intersect(l,r))
+
+unique(C) = elements(add_each(Set{eltype(C)}(), C))
