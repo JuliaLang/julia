@@ -44,20 +44,21 @@ function version(pkg::String, sha1::String)
 end
 
 each_package() = @task begin
-    for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD`)
-        m = match(r"\d{6} tree [0-9a-f]{40}\t(\S+)$", line)
-        if m != nothing && isdir("METADATA/$(m.captures[1])/versions")
-            produce(m.captures[1])
+    for line in each_line(`ls -1 METADATA`)
+        line = chomp(line)
+        # stat() chokes if we try to check if the subdirectory of a non-directory exists
+        if isdir(file_path("METADATA", line)) && isdir(file_path("METADATA", line, "versions"))
+            produce(line)
         end
     end
 end
 
 each_tagged_version(pkg::String) = @task begin
-    for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD:$pkg/versions`)
-        m = match(r"\d{6} tree [0-9a-f]{40}\t(\d\S*)$", line)
-        if m != nothing && ismatch(Base.VERSION_REGEX,m.captures[1])
-            ver = convert(VersionNumber,m.captures[1])
-            dir = "METADATA/$pkg/versions/$(m.captures[1])"
+    for line in each_line(`ls -1 $(file_path("METADATA", pkg, "versions"))`)
+        line = chomp(line)
+        if isdir(file_path("METADATA", pkg, "versions", line)) && ismatch(Base.VERSION_REGEX, line)
+            ver = convert(VersionNumber,line)
+            dir = "METADATA/$pkg/versions/$(line)"
             if isfile("$dir/sha1")
                 produce((ver,dir))
             end
