@@ -331,13 +331,10 @@ end
 
 # Comparison of unrelated types seems rather inconsistent
 
-# Not sure whether the behaviour of isequal (as demonstrated below) on
-# sets of unrelated types, is desirable, but it's what there is at the
-# moment.
-@test       isequal(Set{Int}(), Set{String}())
-@test_fails isequal(Set{Int}(), Set{String}{""})
-@test      !isequal(Set{String}(), Set{Int}(0))
-@test_fails isequal(Set{Int}(1), Set{String}())
+@test  isequal(Set{Int}(), Set{String}())
+@test !isequal(Set{Int}(), Set{String}(""))
+@test !isequal(Set{String}(), Set{Int}(0))
+@test !isequal(Set{Int}(1), Set{String}())
 
 @test  isequal(Set{Any}(1,2,3), Set{Int}(1,2,3))
 @test  isequal(Set{Int}(1,2,3), Set{Any}(1,2,3))
