@@ -63,6 +63,7 @@ install: release
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well
 	-cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
+	# OS-specific install stuffages
 ifeq ($(OS), WINNT)
 	-cp dist/windows/* $(PREFIX)
 ifeq ($(shell uname),MINGW32_NT-6.1)
@@ -70,6 +71,16 @@ ifeq ($(shell uname),MINGW32_NT-6.1)
 		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
 	done
 endif
+	# Fixup RPATH's on other OS'es
+else ifeq ($(OS), Darwin)	
+	-for executable in $(PREFIX)/bin/julia-* ; do \
+		install_name_tool -add_rpath "@executable_path/../$(JL_PRIVATE_LIBDIR)" $$executable; \
+		install_name_tool -add_rpath "@executable_path/../$(JL_LIBDIR)" $$executable; \
+	done
+else
+	-for executable in $(PREFIX)/bin/julia-* ; do \
+		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN/../$(JL_PRIVATE_LIBDIR):$$ORIGIN/../$(JL_LIBDIR)' $$executable; \
+	done
 endif
 
 dist: cleanall
@@ -97,11 +108,15 @@ clean: | $(CLEAN_TARGETS)
 		done \
 	done
 	@rm -f *~ *# *.tar.gz
-	@rm -fr $(BUILD)/$(JL_PRIVATE_LIBDIR)
+	# Only delete the private libraries
+	@for suffix in $(JL_PRIVATE_LIBS) ; do \
+		rm -f $(BUILD)/lib/lib$${suffix}.*; \
+	done
+
 
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
-	@rm -fr $(BUILD)/$(JL_LIBDIR)
+	@rm -fr $(BUILD)/lib
 #	@$(MAKE) -C deps clean-uv
 
 .PHONY: default debug release julia-debug julia-release \

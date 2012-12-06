@@ -210,10 +210,10 @@ ifeq ($(OS), WINNT)
   RPATH =
   RPATH_ORIGIN =
 else ifeq ($(OS), Darwin)
-  RPATH = -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)'
+  RPATH = -Wl,-rpath,'@executable_path/../lib'
   RPATH_ORIGIN =
 else
-  RPATH = -Wl,-rpath,'$$ORIGIN/../$(JL_PRIVATE_LIBDIR)' -Wl,-rpath,'$$ORIGIN/../$(JL_LIBDIR)' -Wl,-z,origin
+  RPATH = -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-z,origin
   RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 endif
 
