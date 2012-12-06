@@ -90,10 +90,8 @@ auto pow4(const T& input) -> decltype((input*input) * (input*input)) {
 }
 
 
-void randmul(int n) {
-    MatrixXd A = MatrixXd::Random(n,n);
-    MatrixXd B = MatrixXd::Random(n,n);
-    MatrixXd C = A*B;
+void rand_mat_mul(int n) {
+    MatrixXd C = MatrixXd::Random(n,n) * MatrixXd::Random(n,n);
 }
 
 std::pair<double, double> randmatstat(int t) {
@@ -172,7 +170,7 @@ int main() {
     });
 
     execute_test("rand_mat_mul", []() {
-        randmul(1000);
+        rand_mat_mul(1000);
     });
 
     execute_test("printfd", []() {
