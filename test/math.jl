@@ -72,15 +72,13 @@ y33 = bessely(3,3.)
 # digamma
 euler_mascheroni = 0.5772156649015329
 for elty in (Float32, Float64)
-	@eval begin
-		@assert_approx_eq digamma(convert($elty, 0.1)) convert($elty, -10.42375494041108)
-		@assert_approx_eq -digamma(convert($elty, 1.0)) convert($elty, euler_mascheroni)
-		@assert_approx_eq digamma(convert($elty, 2.0)) convert($elty, 0.4227843350984675)
-		@assert_approx_eq digamma(convert($elty, 3.0)) convert($elty, 0.9227843350984675)
-		@assert_approx_eq digamma(convert($elty, 4.0)) convert($elty, 1.256117668431801)
-		@assert_approx_eq digamma(convert($elty, 5.0)) convert($elty, 1.506117668431801)
-		@assert_approx_eq digamma(convert($elty, 10.0)) convert($elty, 2.251752589066721)
-	end
+    @assert_approx_eq digamma(convert(elty, 0.1)) convert(elty, -10.42375494041108)
+    @assert_approx_eq -digamma(convert(elty, 1.0)) convert(elty, euler_mascheroni)
+    @assert_approx_eq digamma(convert(elty, 2.0)) convert(elty, 0.4227843350984675)
+    @assert_approx_eq digamma(convert(elty, 3.0)) convert(elty, 0.9227843350984675)
+    @assert_approx_eq digamma(convert(elty, 4.0)) convert(elty, 1.256117668431801)
+    @assert_approx_eq digamma(convert(elty, 5.0)) convert(elty, 1.506117668431801)
+    @assert_approx_eq digamma(convert(elty, 10.0)) convert(elty, 2.251752589066721)
 end
 
 # eta, zeta

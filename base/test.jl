@@ -19,27 +19,31 @@ default_handler(r::Error)   = error("test error during $(r.expr)\n$(r.err)")
 
 const handlers = [default_handler]
 
+function do_test(thk, qex)
+    handlers[end](try
+        thk() ? Success(qex) : Failure(qex)
+    catch err
+        Error(qex,err)
+    end)
+end
+
+function do_test_fails(thk, qex)
+    handlers[end](try
+        thk()
+        Failure(qex)
+    catch err
+        Success(qex)
+    end)
+end
+
 macro test(ex)
     qex = expr(:quote,ex)
-    quote
-        handlers[length(handlers)](try
-            $(esc(ex)) ? Success($qex) : Failure($qex)
-        catch err
-            Error($qex,err)
-        end)
-    end
+    :(do_test(()->($(esc(ex))),$qex))
 end
 
 macro test_fails(ex)
     qex = expr(:quote,ex)
-    quote
-        handlers[length(handlers)](try
-            $(esc(ex))
-            Failure($qex)
-        catch
-            Success($qex)
-        end)
-    end
+    :(do_test_fails(()->($(esc(ex))),$qex))
 end
 
 end # module

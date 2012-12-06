@@ -3,18 +3,17 @@ srand(1234321)
 a     = rand(n,n)
 b     = rand(n)
 for elty in (Float32, Float64, Complex64, Complex128)
-    @eval begin
-        a     = convert(Matrix{$elty}, a)
+        a     = convert(Matrix{elty}, a)
         asym  = a' + a                          # symmetric indefinite
         apd   = a'*a                            # symmetric positive-definite
-        b     = convert(Vector{$elty}, b)
+        b     = convert(Vector{elty}, b)
         
         capd  = chold(apd)                      # upper Cholesky factor
         r     = factors(capd)
         @test r == chol(apd)
         @assert_approx_eq r'*r apd
         @assert_approx_eq b apd * (capd\b)
-        @assert_approx_eq apd * inv(capd) eye($elty, n)
+        @assert_approx_eq apd * inv(capd) eye(elty, n)
         @assert_approx_eq a*(capd\(a'*b)) b          # least squares soln for square a
         @assert_approx_eq det(capd) det(apd)
 
@@ -25,13 +24,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.LR))).<=0.)  # diagonal show be non-increasing
         @assert_approx_eq b apd * (cpapd\b)
-        @assert_approx_eq apd * inv(cpapd) eye($elty, n)
+        @assert_approx_eq apd * inv(cpapd) eye(elty, n)
 
         bc1   = BunchKaufman(asym)              # Bunch-Kaufman factor of indefinite matrix
-        @assert_approx_eq inv(bc1) * asym eye($elty, n)
+        @assert_approx_eq inv(bc1) * asym eye(elty, n)
         @assert_approx_eq asym * (bc1\b) b
         bc2   = BunchKaufman(apd)               # Bunch-Kaufman factors of a pos-def matrix
-        @assert_approx_eq inv(bc2) * apd eye($elty, n)
+        @assert_approx_eq inv(bc2) * apd eye(elty, n)
         @assert_approx_eq apd * (bc2\b) b
 
         lua   = lud(a)                          # LU decomposition
@@ -40,13 +39,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test l == L && u == U && p == P
         @assert_approx_eq l*u a[p,:]
         @assert_approx_eq l[invperm(p),:]*u a
-        @assert_approx_eq a * inv(lua) eye($elty, n)
+        @assert_approx_eq a * inv(lua) eye(elty, n)
         @assert_approx_eq a*(lua\b) b
 
         qra   = qrd(a)                          # QR decomposition
         q,r   = factors(qra)
-        @assert_approx_eq q'*q eye($elty, n)
-        @assert_approx_eq q*q' eye($elty, n)
+        @assert_approx_eq q'*q eye(elty, n)
+        @assert_approx_eq q*q' eye(elty, n)
         Q,R   = qr(a)
         @test q == Q && r == R
         @assert_approx_eq q*r a
@@ -56,8 +55,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
         qrpa  = qrpd(a)                         # pivoted QR decomposition
         q,r,p = factors(qrpa)
-        @assert_approx_eq q'*q eye($elty, n)
-        @assert_approx_eq q*q' eye($elty, n)
+        @assert_approx_eq q'*q eye(elty, n)
+        @assert_approx_eq q*q' eye(elty, n)
         Q,R,P = qrp(a)
         @test q == Q && r == R && p == P
         @assert_approx_eq q*r a[:,p]
@@ -85,8 +84,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
         # Test null
         bnull = null(b')
-        @assert_approx_eq_eps norm(b'bnull) zero($elty) n*eps(one($elty))
-        @assert_approx_eq_eps norm(bnull'b) zero($elty) n*eps(one($elty))
+        @assert_approx_eq_eps norm(b'bnull) zero(elty) n*eps(one(elty))
+        @assert_approx_eq_eps norm(bnull'b) zero(elty) n*eps(one(elty))
         @test size(null(b), 2) == 0
 
         # Test pinv
@@ -97,30 +96,27 @@ for elty in (Float32, Float64, Complex64, Complex128)
         # Complex vector rhs
         x = a\complex(b)
         @assert_approx_eq a*x complex(b)
-    end
 end
 a = [ones(20) 1:20 1:20]
 b = reshape(eye(8, 5), 20, 2)
 for elty in (Float32, Float64, Complex64, Complex128)
-    @eval begin
-        a = convert(Matrix{$elty}, a)
-        b = convert(Matrix{$elty}, b)
+        a = convert(Matrix{elty}, a)
+        b = convert(Matrix{elty}, b)
 
         # Least squares        
         x = a[:,1:2]\b[:,1]                             # Vector rhs
-        @assert_approx_eq ((a[:,1:2]*x-b[:,1])'*(a[:,1:2]*x-b[:,1]))[1] convert($elty, 2.546616541353384)
+        @assert_approx_eq ((a[:,1:2]*x-b[:,1])'*(a[:,1:2]*x-b[:,1]))[1] convert(elty, 2.546616541353384)
     
         x = a[:,1:2]\b                                  # Matrix rhs
-        @assert_approx_eq det((a[:,1:2]*x-b)'*(a[:,1:2]*x-b)) convert($elty, 4.437969924812031)
+        @assert_approx_eq det((a[:,1:2]*x-b)'*(a[:,1:2]*x-b)) convert(elty, 4.437969924812031)
     
         x = a\b                            # Rank deficient
-        @assert_approx_eq det((a*x-b)'*(a*x-b)) convert($elty, 4.437969924812031)
+        @assert_approx_eq det((a*x-b)'*(a*x-b)) convert(elty, 4.437969924812031)
 
         # symmetric, positive definite
-        @assert_approx_eq inv(convert(Matrix{$elty}, [6. 2; 2 1])) convert(Matrix{$elty}, [0.5 -1; -1 3])
+        @assert_approx_eq inv(convert(Matrix{elty}, [6. 2; 2 1])) convert(Matrix{elty}, [0.5 -1; -1 3])
         # symmetric, negative definite
-        @assert_approx_eq inv(convert(Matrix{$elty}, [1. 2; 2 1])) convert(Matrix{$elty}, [-1. 2; 2 -1]/3)
-    end
+        @assert_approx_eq inv(convert(Matrix{elty}, [1. 2; 2 1])) convert(Matrix{elty}, [-1. 2; 2 -1]/3)
 end
 
 ## Test Julia fallbacks to BLAS routines
@@ -206,29 +202,27 @@ Aref = Ai[1:2:2*cutoff, 1:3]
 
 # Matrix exponential
 for elty in (Float32, Float64, Complex64, Complex128)
-    @eval begin
-        A1  = convert(Matrix{$elty}, [4 2 0; 1 4 1; 1 1 4])
-        eA1 = convert(Matrix{$elty}, [147.866622446369 127.781085523181  127.781085523182;
+        A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
+        eA1 = convert(Matrix{elty}, [147.866622446369 127.781085523181  127.781085523182;
         183.765138646367 183.765138646366  163.679601723179;
         71.797032399996  91.8825693231832 111.968106246371]')
         @assert_approx_eq expm(A1) eA1
 
-        A2  = convert(Matrix{$elty}, 
+        A2  = convert(Matrix{elty}, 
             [29.87942128909879    0.7815750847907159 -2.289519314033932;
             0.7815750847907159 25.72656945571064    8.680737820540137;
             -2.289519314033932   8.680737820540137  34.39400925519054])
-        eA2 = convert(Matrix{$elty},
+        eA2 = convert(Matrix{elty},
             [  5496313853692458.0 -18231880972009236.0 -30475770808580460.0;
              -18231880972009252.0  60605228702221920.0 101291842930249760.0;
              -30475770808580480.0 101291842930249728.0 169294411240851968.0])
         @assert_approx_eq expm(A2) eA2
 
-        A3  = convert(Matrix{$elty}, [-131 19 18;-390 56 54;-387 57 52])
-        eA3 = convert(Matrix{$elty}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
+        A3  = convert(Matrix{elty}, [-131 19 18;-390 56 54;-387 57 52])
+        eA3 = convert(Matrix{elty}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
         0.367879439109187 1.47151775849686  1.10363831732856;
         0.135335281175235 0.406005843524598 0.541341126763207]')
         @assert_approx_eq expm(A3) eA3
-    end
 end
 
 # matmul for types w/o sizeof (issue #1282)
@@ -250,10 +244,9 @@ V = randn(2,n)
 C = randn(2,2)
 
 for elty in (Float32, Float64, Complex64, Complex128)
-    @eval begin
-        d = convert(Vector{$elty}, d)
-        dl = convert(Vector{$elty}, dl)
-        du = convert(Vector{$elty}, du)
+        d = convert(Vector{elty}, d)
+        dl = convert(Vector{elty}, dl)
+        du = convert(Vector{elty}, du)
         T = Tridiagonal(dl, d, du)
         @test size(T, 1) == n
         @test size(T) == (n, n)
@@ -265,12 +258,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test full(T) == F
 
         # tridiagonal linear algebra
-        v = convert(Vector{$elty}, v)
+        v = convert(Vector{elty}, v)
         @assert_approx_eq T*v F*v
         invFv = F\v
         @assert_approx_eq T\v invFv
         @assert_approx_eq solve(T,v) invFv
-        B = convert(Matrix{$elty}, B)
+        B = convert(Matrix{elty}, B)
         @assert_approx_eq solve(T, B) F\B
         Tlu = lud(T)
         x = Tlu\v
@@ -286,17 +279,17 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq x invFsv
 
         # eigenvalues/eigenvectors of symmetric tridiagonal
-        if $elty == Float32 || $elty == Float64
+        if elty === Float32 || elty === Float64
             DT, VT = eig(Ts)
             D, Vecs = eig(Fs)
             @assert_approx_eq DT D
-            @assert_approx_eq abs(VT'Vecs) eye($elty, n)
+            @assert_approx_eq abs(VT'Vecs) eye(elty, n)
         end
         
         # Woodbury
-        U = convert(Matrix{$elty}, U)
-        V = convert(Matrix{$elty}, V)
-        C = convert(Matrix{$elty}, C)
+        U = convert(Matrix{elty}, U)
+        V = convert(Matrix{elty}, V)
+        C = convert(Matrix{elty}, C)
         W = Woodbury(T, U, C, V)
         F = full(W)
         @assert_approx_eq W*v F*v
@@ -311,45 +304,42 @@ for elty in (Float32, Float64, Complex64, Complex128)
         
         # The determinant of the identity matrix should always be 1.
         for i = 1:10
-            A = eye($elty, i)
-            @assert_approx_eq det(A) one($elty)
+            A = eye(elty, i)
+            @assert_approx_eq det(A) one(elty)
         end
         
         # The determinant of a Householder reflection matrix should always be -1.
         for i = 1:10
-            A = eye($elty, 10)
-            A[i, i] = -one($elty)
-            @assert_approx_eq det(A) -one($elty)
+            A = eye(elty, 10)
+            A[i, i] = -one(elty)
+            @assert_approx_eq det(A) -one(elty)
         end
         
         # The determinant of a rotation matrix should always be 1.
-        for theta = convert(Vector{$elty}, pi ./ [1:4])
+        for theta = convert(Vector{elty}, pi ./ [1:4])
             R = [cos(theta) -sin(theta);
                  sin(theta) cos(theta)]
-            @assert_approx_eq convert($elty, det(R)) one($elty)
+            @assert_approx_eq convert(elty, det(R)) one(elty)
         end
         
         # issue 1490
-        @assert_approx_eq_eps det(ones($elty, 3,3)) zero($elty) 3*eps(one($elty))
-    end
+        @assert_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(one(elty))
 end
 
 # LAPACK tests
 srand(111)
 Ainit = randn(5,5)
 for elty in (Float32, Float64, Complex64, Complex128)
-    @eval begin
         # syevr!
-        A = convert(Array{$elty, 2}, Ainit)
+        A = convert(Array{elty, 2}, Ainit)
         Asym = A'A
-        Z = Array($elty, 5, 5)
+        Z = Array(elty, 5, 5)
         vals = LAPACK.syevr!(copy(Asym), Z)
         @assert_approx_eq Z*diagmm(vals, Z') Asym
         @test all(vals .> 0.0)
-        @assert_approx_eq LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,zeros($elty,0,0),-1.0) vals[vals .< 1.0]
-        @assert_approx_eq LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,zeros($elty,0,0),-1.0) vals[4:5]
+        @assert_approx_eq LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,zeros(elty,0,0),-1.0) vals[vals .< 1.0]
+        @assert_approx_eq LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,zeros(elty,0,0),-1.0) vals[4:5]
         @assert_approx_eq vals LAPACK.syev!('N','U',copy(Asym))
-    end
 end
 
 ## Issue related tests

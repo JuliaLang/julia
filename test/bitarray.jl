@@ -1,7 +1,7 @@
 macro check_bit_operation(func, RetT, args)
     quote
-        r1 = eval(($func)(($args)...))
-        r2 = eval(($func)(map(x->(isa(x, BitArray) ? bitunpack(x) : x), $args)...))
+        r1 = ($func)($(args.args...))
+        r2 = ($func)(map(x->(isa(x, BitArray) ? bitunpack(x) : x), $args)...)
         @test isa(r1, $RetT)
         @test isequal(r1, convert($RetT, r2))
     end

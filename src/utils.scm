@@ -38,9 +38,11 @@
 
 (define *gensyms* '())
 (define *current-gensyms* '())
+(define *gensy-counter* 1)
 (define (gensy)
   (if (null? *current-gensyms*)
-      (let ((g (gensym)))
+      (let ((g (symbol (string "#s" *gensy-counter*))))
+	(set! *gensy-counter* (+ *gensy-counter* 1))
 	(set! *gensyms* (cons g *gensyms*))
 	g)
       (begin0 (car *current-gensyms*)
