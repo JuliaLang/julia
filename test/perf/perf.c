@@ -34,8 +34,8 @@ int fib(int n) {
 long parse_int(const char *s, long base) {
     long n = 0;
 
-    for (unsigned int i=0; i<strlen(s); ++i) {
-        char c = s[i];
+    while (*s) {
+        char c = *s++;
         long d = 0;
         if (c >= '0' && c <= '9') d = c-'0';
         else if (c >= 'A' && c <= 'Z') d = c-'A' + (int) 10;
