@@ -1,17 +1,15 @@
 #include <sys/time.h>
-#include <cstdio>
-#include <cstdlib>
-#include <cassert>
-#include <cmath>
-#include <cstring>
-#include <complex>
-#include <algorithm>
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <math.h>
+#include <string.h>
+#include <complex.h>
+#include <cblas.h>
 
 #define DSFMT_MEXP 19937
 #include "perf.h"
 #include "../../deps/random/randmtzig.c"
-
-using namespace std;
 
 double *myrand(int n) {
     double *d = (double *)malloc(n*sizeof(double));
@@ -64,15 +62,15 @@ double *matmul_aat(int n, double *b) {
     return c;
 }
 
-int mandel(complex<double> z) {
+int mandel(double _Complex z) {
     int n = 0;
-    complex<double> c = complex<double>(real(z), imag(z));
+    double _Complex c = z;
     for (n=0; n<=79; ++n) {
-        if (abs(z) > 2.0) {
+        if (cabs(z) > 2.0) {
             n -= 1;
             break;
         }
-        z = pow(z,2)+c;
+        z = z*z + c;
     }
     return n+1;
 }
@@ -81,7 +79,7 @@ int mandelperf() {
     int mandel_sum = 0;
     for (double re=-2.0; re<=0.5; re+=0.1) {
         for (double im=-1.0; im<=1.0; im+=0.1) {
-            int m = mandel(complex<double>(re, im));
+            int m = mandel(re + _Complex_I * im);
             mandel_sum += m;
         }
     }
