@@ -206,7 +206,7 @@ function _resolve()
             cd(pkg) do
                 try run(`git checkout -q $(want[pkg])`)
                 catch
-                    run(`git fetch -q --all --tags --prune --recurse-submodules`)
+                    run(`git fetch -q`)
                     try run(`git checkout -q $(want[pkg])`)
                     catch
                         error("An invalid SHA1 hash seems to be registered for $pkg. Please contact the package maintainer.")
@@ -398,20 +398,29 @@ end
 # update system to latest and greatest
 
 update() = cd_pkgdir() do
-    Git.each_submodule(false) do name, path, sha1
-        cd(path) do
-            if Git.attached()
-                run(`git pull`)
-            else
-                run(`git fetch -q --all --tags --prune --recurse-submodules`)
-            end
-        end
-    end
     cd("METADATA") do
         run(`git pull`)
     end
-    run(`git add METADATA`)
     Metadata.gen_hashes()
+    run(`git add METADATA`)
+    Git.each_submodule(false) do pkg, path, sha1
+        if pkg != "METADATA"
+            url = Metadata.pkg_url(pkg)
+            Git.modules(`submodule.$pkg.url $url`)
+            cd(path) do
+                if !Git.dirty()
+                    if Git.attached()
+                        run(ignorestatus(`git pull --ff-only`))
+                    else
+                        run(`git config remote.origin.url $url`)
+                        run(`git fetch -q`)
+                    end
+                end
+            end
+        end
+    end
+    run(`git add .gitmodules`)
+    run(`git submodule sync -q`)
     _resolve()
 end
 
