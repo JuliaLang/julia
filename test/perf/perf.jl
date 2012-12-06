@@ -1,3 +1,6 @@
+require("test")   # for running perf standalone
+using Test
+
 macro timeit(ex,name)
     quote
         t = Inf
@@ -19,13 +22,13 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 ## parse integer ##
 
 function parseintperf(t)
-    local n
+    local n, m
     for i=1:t
         n = randi(Uint32)
         s = hex(n)
         m = uint32(parse_hex(s))
-        @test m == n
     end
+    @test m == n
     return n
 end
 
