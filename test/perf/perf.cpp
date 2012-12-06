@@ -2,6 +2,7 @@
 
 #include <utility>
 #include <iostream>
+#include <fstream>
 #include <complex>
 #include <cstdio>
 #include <cstdlib>
@@ -39,6 +40,35 @@ int fib(int n) {
     return fib(n-2) + fib(n-1);
 }
 
+double pi_sum() {
+    double sum = 0.0;
+    for (int j=0; j<500; ++j) {
+        sum = 0.0;
+        for (int k=1; k<=10000; ++k) {
+            sum += 1.0/(k*k);
+        }
+    }
+    return sum;
+}
+
+
+long parse_int(const char *s, long base) {
+    long n = 0;
+
+    while (*s) {
+        const char c = *s++;
+        long d = base+1;
+        if (c >= '0' && c <= '9') d = c-'0';
+        else if (c >= 'A' && c <= 'Z') d = c-'A' + (int) 10;
+        else if (c >= 'a' && c <= 'z') d = c-'a' + (int) 10;
+        else throw "oops";
+
+        if (base <= d) throw "oops";
+        n = n*base + d;
+    }
+    return n;
+}
+
 
 std::vector<double> randv(const int n) {
     std::vector<double> res;
@@ -60,11 +90,10 @@ auto pow4(const T& input) -> decltype((input*input) * (input*input)) {
 }
 
 
-double randmul(int n) {
+void randmul(int n) {
     MatrixXd A = MatrixXd::Random(n,n);
     MatrixXd B = MatrixXd::Random(n,n);
     MatrixXd C = A*B;
-    return C.trace();
 }
 
 std::pair<double, double> randmatstat(int t) {
@@ -87,6 +116,11 @@ std::pair<double, double> randmatstat(int t) {
         w[i] = pow4(Q.transpose() * Q).trace();
     }
     return std::make_pair(std_dev_over_mean(v), std_dev_over_mean(w));
+}
+
+void printfd(int n) {
+    std::ofstream out("/dev/null");
+    for (int i = 0; i < n; ++i) out << i << ' ' << i;
 }
 
 
@@ -115,18 +149,34 @@ double execute_test(const char* name, const T& f) {
 int main() {
     using namespace std;
     execute_test("fib", [](){fib(20);});
-    execute_test("mandelsum", mandelperf);
+    execute_test("parse_int", []() {
+        char s[11];
+        for (int k=0; k<1000; ++k) {
+            uint32_t n = rand();
+            sprintf(s, "%x", n);
+            uint32_t m = (uint32_t)parse_int(s, 16);
+            assert(m == n);
+        }
+
+    });
     execute_test("quicksort", []() { 
         std::vector<double> d = randv(5000);
         std::sort(d.begin(), d.end());
     });
 
-    execute_test("randmatstat", []() {
+
+    execute_test("mandelsum", mandelperf);
+    execute_test("pi_sum", pi_sum);
+    execute_test("rand_mat_stat", []() {
         pair<double,double> r = randmatstat(1000);
     });
 
-    execute_test("randmul", []() {
+    execute_test("rand_mat_mul", []() {
         randmul(1000);
+    });
+
+    execute_test("printfd", []() {
+        printfd(100000);
     });
 
     return 0;
