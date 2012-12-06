@@ -12,10 +12,12 @@ _jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox(Float64,y),unbox(Float64,x
 
 ## internal sorting functionality ##
 
+include("timsort.jl")
+
 macro _jl_sort_functions(suffix, lt, args...)
-insertionsort = esc(symbol("_jl_insertionsort$suffix"))
-quicksort = esc(symbol("_jl_quicksort$suffix"))
-mergesort = esc(symbol("_jl_mergesort$suffix"))
+insertionsort = esc(symbol("insertionsort$(suffix)!"))
+quicksort = esc(symbol("quicksort$(suffix)!"))
+mergesort = esc(symbol("mergesort$(suffix)!"))
 pivot_middle = esc(symbol("_jl_pivot_middle$suffix"))
 lt = @eval (a,b)->$lt
 quote
@@ -42,6 +44,9 @@ function ($insertionsort)($(args...), a::AbstractVector, lo::Int, hi::Int)
     end
     return a
 end
+
+($insertionsort)($(args...), a::AbstractVector) = ($insertionsort)($(args...), a, 1, length(a))
+
 
 # permutes an auxilliary array mirroring the sort
 function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
@@ -95,6 +100,8 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
     return a
 end
 
+($quicksort)($(args...), a::AbstractVector) = ($quicksort)($(args...), a::AbstractVector, 1, length(a))
+
 # less fast & not in-place, but stable
 function ($mergesort)($(args...), a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     if lo < hi
@@ -135,6 +142,8 @@ function ($mergesort)($(args...), a::AbstractVector, lo::Int, hi::Int, b::Abstra
     end
     return a
 end
+
+($mergesort){T}($(args...), a::AbstractVector{T}) = ($mergesort)($(args...), a, 1, length(a), Array(T,length(a)))
 
 # permutes auxilliary arrays mirroring the sort
 function ($mergesort)($(args...),
@@ -187,20 +196,20 @@ end; end # quote / macro
 
 @_jl_sort_functions ""    :(isless($a,$b))
 @_jl_sort_functions "_r"  :(isless($b,$a))
-@_jl_sort_functions "_lt" :(lt($a,$b)) lt::Function
+@_jl_sort_functions ""    :(lt($a,$b)) lt::Function
 @_jl_sort_functions "_by" :(isless(by($a),by($b))) by::Function
 
 ## external sorting functions ##
 
-sort!{T<:Real}(a::AbstractVector{T})  = _jl_quicksort(a, 1, length(a))
-sortr!{T<:Real}(a::AbstractVector{T}) = _jl_quicksort_r(a, 1, length(a))
-sort!{T}(a::AbstractVector{T})  = _jl_mergesort(a, 1, length(a), Array(T,length(a)))
-sortr!{T}(a::AbstractVector{T}) = _jl_mergesort_r(a, 1, length(a), Array(T,length(a)))
+sort!{T<:Real}(a::AbstractVector{T})  = quicksort!(a, 1, length(a))
+sortr!{T<:Real}(a::AbstractVector{T}) = quicksort_r!(a, 1, length(a))
+sort!{T}(a::AbstractVector{T})  = mergesort!(a, 1, length(a), Array(T,length(a)))
+sortr!{T}(a::AbstractVector{T}) = mergesort_r!(a, 1, length(a), Array(T,length(a)))
 
 sort!{T}(lt::Function, a::AbstractVector{T}) =
-    _jl_mergesort_lt(lt, a, 1, length(a), Array(T,length(a)))
+    mergesort_lt!(lt, a, 1, length(a), Array(T,length(a)))
 sort_by!{T}(by::Function, a::AbstractVector{T}) =
-    _jl_mergesort_by(by, a, 1, length(a), Array(T,length(a)))
+    mergesort_by!(by, a, 1, length(a), Array(T,length(a)))
 
 ## special sorting for floating-point arrays ##
 
@@ -249,8 +258,8 @@ function sort!{T<:FloatingPoint}(a::AbstractVector{T})
             break
         end
     end
-    _jl_quicksort_fp_neg(a, 1, j)
-    _jl_quicksort_fp_pos(a, i, n)
+    quicksort_fp_neg!(a, 1, j)
+    quicksort_fp_pos!(a, i, n)
     return a
 end
 
@@ -333,7 +342,7 @@ function sort(a::AbstractArray, dim::Int)
 end
 
 sortperm{T}(a::AbstractVector{T}) =
-    _jl_mergesort(copy(a), [1:length(a)], 1, length(a),
+    mergesort(copy(a), [1:length(a)], 1, length(a),
                   Array(T, length(a)), Array(Int, length(a)))
 
 function issorted(v::AbstractVector)
