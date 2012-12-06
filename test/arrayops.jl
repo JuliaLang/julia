@@ -139,6 +139,9 @@ for i = 1:3
 end
 @test isequal(a,findn(z))
 
+#argmin argmax
+@assert indmax([10,12,9,11]) == 2
+@assert indmin([10,12,9,11]) == 3
 
 ## permute ##
 
