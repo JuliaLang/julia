@@ -36,6 +36,7 @@ function init(meta::String)
         cd(dir) do
             # create & configure
             run(`git init`)
+            run(`git commit --allow-empty -m "Initial empty commit"`)
             run(`git remote add origin .`)
             if success(`git config --global github.user` > "/dev/null")
                 base = basename(dir)
@@ -50,7 +51,7 @@ function init(meta::String)
             run(`touch REQUIRE`)
             run(`git add REQUIRE`)
             run(`git submodule add $meta METADATA`)
-            run(`git commit -m "empty package repo"`)
+            run(`git commit -m "Empty package repo"`)
             cd(Git.autoconfig_pushurl,"METADATA")
             Metadata.gen_hashes()
         end
@@ -151,8 +152,8 @@ end
 # update packages from requirements
 
 function _resolve()
-    reqs = parse_requires("REQUIRE")
     have = (String=>ASCIIString)[]
+    reqs = parse_requires("REQUIRE")
     Git.each_submodule(false) do pkg, path, sha1
         if pkg != "METADATA"
             have[pkg] = sha1
@@ -170,10 +171,10 @@ function _resolve()
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
         if has(have,pkg)
-            if cd(Git.attached,pkg)
-                # don't touch packages with attached heads
-                continue
+            managed = cd(pkg) do
+                !Git.dirty() && !Git.attached()
             end
+            if !managed continue end
             if has(want,pkg)
                 if have[pkg] != want[pkg]
                     oldver = Metadata.version(pkg,have[pkg])
@@ -196,12 +197,22 @@ function _resolve()
         else
             ver = Metadata.version(pkg,want[pkg])
             println("Installing $pkg: v$ver")
-            # TODO: what to do here if already exists
+            if ispath(pkg)
+                # TODO: maybe if this is a git repo or submodule, just take it over?
+                error("Path $pkg already exists! Please remove to allow installation.")
+            end
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
+                try run(`git checkout -q $(want[pkg])`)
+                catch
+                    run(`git fetch -q --all --tags --prune --recurse-submodules`)
+                    try run(`git checkout -q $(want[pkg])`)
+                    catch
+                        error("An invalid SHA1 hash seems to be registered for $pkg. Please contact the package maintainer.")
+                    end
+                end
                 Git.autoconfig_pushurl()
-                run(`git checkout -q $(want[pkg])`)
             end
             run(`git add -- $pkg`)
         end
