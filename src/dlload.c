@@ -83,21 +83,6 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
         ext = extensions[i];
         path[0] = '\0';
         handle->handle = NULL;
-        if (modname[0] != '/') {
-            if (julia_home) {
-                /* try julia_home/../lib */
-                snprintf(path, PATHBUF, "%s/../lib/%s%s", julia_home, modname, ext);
-                error = jl_uv_dlopen(path, handle);
-                if (!error) goto done;
-                // if file exists but didn't load, show error details
-                struct stat sbuf;
-                if (stat(path, &sbuf) != -1) {
-                    //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
-                    //jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
-                    goto error;
-                }
-            }
-        }
         /* try loading from standard library path */
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         error = jl_uv_dlopen(path, handle);
@@ -109,7 +94,6 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
     if (!error) goto done;
 #endif
 
-error:
     //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
     jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
     uv_dlclose(handle);
