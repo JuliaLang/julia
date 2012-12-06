@@ -196,7 +196,7 @@ end; end # quote / macro
 
 @_jl_sort_functions ""    :(isless($a,$b))
 @_jl_sort_functions "_r"  :(isless($b,$a))
-@_jl_sort_functions ""    :(lt($a,$b)) lt::Function
+@_jl_sort_functions "_lt" :(lt($a,$b)) lt::Function
 @_jl_sort_functions "_by" :(isless(by($a),by($b))) by::Function
 
 ## external sorting functions ##
@@ -342,7 +342,7 @@ function sort(a::AbstractArray, dim::Int)
 end
 
 sortperm{T}(a::AbstractVector{T}) =
-    mergesort(copy(a), [1:length(a)], 1, length(a),
+    mergesort!(copy(a), [1:length(a)], 1, length(a),
                   Array(T, length(a)), Array(Int, length(a)))
 
 function issorted(v::AbstractVector)

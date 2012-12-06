@@ -1,11 +1,11 @@
 # timsort for julia
-# Kevin Squire
 #
 # This is an implementation of timsort based on the algorithm description at
 #
 #    http://svn.python.org/projects/python/trunk/Objects/listsort.txt
 #    http://en.wikipedia.org/wiki/Timsort
 #
+# @kmsquire
 
 
 typealias Run Range1{Int}
@@ -30,6 +30,8 @@ function merge_compute_minrun(N::Int)
     N + r
 end
 
+# Macro to create different versions of the sort function,
+# cribbed from sort.jl
 macro _jl_timsort_functions(suffix, lt, args...)
 insertionsort = esc(symbol("insertionsort$(suffix)!"))
 timsort = esc(symbol("timsort$(suffix)!"))
@@ -45,9 +47,9 @@ rgallop_last = esc(symbol("_jl_rgallop_last$suffix"))
 rgallop_first = esc(symbol("_jl_rgallop_first$suffix"))
 
 lt = @eval (a,b)->$lt
-#lte = @eval (b,a)->!($lt)
 
 quote
+
 
 # Galloping binary search starting at left
 function ($gallop_last)($(args...), a::AbstractVector, x, lo::Int, hi::Int)
@@ -98,6 +100,7 @@ function ($rgallop_last)($(args...), a::AbstractVector, x, lo::Int, hi::Int)
     hi
 end
 
+
 # Galloping binary search starting at left
 function ($gallop_first)($(args...), a::AbstractVector, x, lo::Int, hi::Int)
     i = lo
@@ -121,6 +124,7 @@ function ($gallop_first)($(args...), a::AbstractVector, x, lo::Int, hi::Int)
     end
     hi
 end
+
 
 # Galloping binary search starting at right
 function ($rgallop_first)($(args...), a::AbstractVector, x, lo::Int, hi::Int)
@@ -172,6 +176,7 @@ function ($next_run)($(args...), v::AbstractVector, lo::Int, hi::Int)
         return hi:-1:lo
     end
 end
+
 
 # Merge consecutive runs
 # For A,B,C = last three lengths, merge_collapse!()
@@ -225,6 +230,7 @@ function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, for
     v
 end
 
+
 # Merge runs a and b in vector v
 function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState)
 
@@ -247,6 +253,7 @@ function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeSta
     end
 end
 
+# Merge runs a and b in vector v (a is smaller)
 function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState)
 
     # Copy a
@@ -341,6 +348,7 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
     end
 end
 
+# Merge runs a and b in vector v (b is smaller)
 function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState)
 
     # Copy b
@@ -435,6 +443,7 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
     end
 end
 
+# Timsort function
 function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
     # Initialization
     minrun = merge_compute_minrun(hi-lo+1)
@@ -460,7 +469,6 @@ function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
             end
         end
 
-
         # Push this run onto the queue and merge if needed
         push(state.runs, run_range)
         p = p+count
@@ -481,10 +489,6 @@ end; end # quote; macro
 
 @_jl_timsort_functions ""    :(isless($a,$b))
 @_jl_timsort_functions "_r"  :(isless($b,$a))
-@_jl_timsort_functions ""    :(lt($a,$b)) lt::Function
+@_jl_timsort_functions "_lt" :(lt($a,$b)) lt::Function
 @_jl_timsort_functions "_by" :(isless(by($a),by($b))) by::Function
 
-# timsort!(a::AbstractVector) = _jl_timsort(a, 1, length(a))
-# timsortr!(a::AbstractVector) = _jl_timsort_r(a, 1, length(a))
-# timsort!(lt::Function, a::AbstractVector) = _jl_timsort_lt(lt, a, 1, length(a))
-# timsort_by!(by::Function, a::AbstractVector) = _jl_timsort_by(by, a, 1, length(a))
