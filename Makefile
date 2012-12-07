@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/$(JL_LIBDIR) $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia
+DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,extras base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
@@ -54,7 +54,7 @@ install: release
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
-		cp -a $(BUILD)/lib/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
 		cp -a $(BUILD)/lib/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
