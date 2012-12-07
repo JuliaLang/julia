@@ -35,7 +35,10 @@ function gen_hashes(pkg::String)
 end
 gen_hashes() = for pkg in each_package() gen_hashes(pkg) end
 
-pkg_url(pkg::String) = readchomp("METADATA/$pkg/url")
+function pkg_url(pkg::String)
+    path = "METADATA/$pkg/url"
+    isfile(path) ? readchomp(path) : nothing
+end
 
 function version(pkg::String, sha1::String)
     path = "METADATA/$pkg/hashes/$sha1"
