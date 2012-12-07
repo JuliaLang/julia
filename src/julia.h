@@ -899,6 +899,7 @@ DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
 void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
+void *jl_dlsym_win32(char *name);
 
 //event loop
 DLLEXPORT void jl_runEventLoop();

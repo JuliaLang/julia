@@ -43,10 +43,16 @@ DLLEXPORT void jl_enable_color(void)
 
 static void init_history(void) {
     using_history();
+    if (disable_history) return;
+#ifndef __WIN32__
     char *home = getenv("HOME");
     if (!home) return;
-    if (disable_history) return;
     asprintf(&history_file, "%s/.julia_history", home);
+#else
+    char *home = getenv("AppData");
+    if (!home) return;
+    asprintf(&history_file, "%s/history", home);
+#endif
     struct stat stat_info;
     if (!stat(history_file, &stat_info)) {
         read_history(history_file);

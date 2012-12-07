@@ -60,7 +60,9 @@ install: release
 		cp -a $(BUILD)/lib/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	# Copy system image
+ifneq ($(OS), WINNT)
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+endif
 	# Copy in all .jl sources as well
 	-cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
 ifeq ($(OS), WINNT)
@@ -72,7 +74,7 @@ ifeq ($(shell uname),MINGW32_NT-6.1)
 endif
 endif
 
-dist: cleanall
+dist: 
 	rm -fr julia-*.tar.gz julia-$(JULIA_COMMIT)
 #	-$(MAKE) -C deps clean-openblas
 	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1

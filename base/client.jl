@@ -249,12 +249,20 @@ const _jl_roottask_wi = WorkItem(_jl_roottask)
 _jl_is_interactive = false
 isinteractive() = (_jl_is_interactive::Bool)
 
-julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
+@unix_only julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
+@windows_only begin
+    const JULIA_USER_DATA_DIR = string(ENV["AppData"],"/julia")
+    julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(JULIA_USER_DATA_DIR,"/packages")))
+end
 
 function _start()
     # set up standard streams
     reinit_stdio()
     librandom_init()
+
+    @windows_only if(!isdir(JULIA_USER_DATA_DIR))
+        mkdir(JULIA_USER_DATA_DIR)
+    end
 
     # set CPU core count
     global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())

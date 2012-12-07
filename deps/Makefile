@@ -334,7 +334,7 @@ $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(INSTALL_NAME_CMD)libpcre.dylib $@
 ifeq ($(OS),WINNT)
 	-rm $(USR)/lib/libpcre.dll
-	mv $(USRBIN)/libpcre-1.dll $(USR)/lib/libpcre.dll
+	mv $(USRBIN)/libpcre.dll $(USR)/lib/libpcre.dll
 endif
 	touch $@
 
@@ -595,6 +595,12 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	tar zxf $< 
 	touch $@
 $(ARPACK_OBJ_TARGET): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE) | $(USR)/$(JL_LIBDIR)
+ifeq ($(OS),WINNT)
+	cd arpack-ng_$(ARPACK_VER) && \
+	rm -f UTIL/second_NONE.f && \
+	$(FC) -shared $(ARPACK_OPTS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
+	cp libarpack.$(SHLIB_EXT) $(USR)/lib/libarpack.$(SHLIB_EXT)
+else
 	cd arpack-ng_$(ARPACK_VER) && \
 	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) install F77="$(FC)" MPIF77="$(FC)" && \
@@ -603,6 +609,7 @@ ifeq ($(OS), Linux)
 	for filename in $(USR)/lib/libarpack.so* ; do \
 		$(USR)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
+endif
 endif
 	touch $@
 

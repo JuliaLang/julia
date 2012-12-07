@@ -130,7 +130,7 @@ void restore_signals() {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
 }
 void win_raise_sigint() {
-    jl_raise(jl_interrupt_exception);
+    jl_throw(jl_interrupt_exception);
 }
 BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {   
@@ -345,7 +345,7 @@ void julia_init(char *imageFile)
     uv_dlopen("Kernel32.dll",jl_kernel32_handle);
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
     uv_dlopen("Ws2_32.dll",jl_winsock_handle);
-    jl_exe_handle = GetModuleHandleA(NULL);
+    _jl_exe_handle.handle = GetModuleHandleA(NULL);
 #endif
     jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
     init_stdio();

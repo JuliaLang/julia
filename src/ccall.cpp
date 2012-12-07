@@ -2,6 +2,7 @@
 
 // --- library symbol lookup ---
 
+#ifndef __WIN32__
 // map from "libX" to full soname "libX.so.ver"
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
@@ -46,6 +47,7 @@ extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
     }
     return NULL;
 }
+#endif
 
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
@@ -68,11 +70,11 @@ static void *add_library_sym(char *name, char *lib)
     if (lib != NULL && hnd != jl_dl_handle) {
         void *exist = sys::DynamicLibrary::SearchForAddressOfSymbol(name);
         if (exist != NULL && exist != sval &&
-            // openlibm conflicts with libm, and lots of our libraries
-            // (including LLVM) link to libm. fortunately AddSymbol() is
-            // able to resolve these in favor of openlibm, but this could
-            // be an issue in the future (TODO).
-            strcmp(lib,"libopenlibm")) {
+                // openlibm conflicts with libm, and lots of our libraries
+                // (including LLVM) link to libm. fortunately AddSymbol() is
+                // able to resolve these in favor of openlibm, but this could
+                // be an issue in the future (TODO).
+                strcmp(lib,"libopenlibm")) {
             ios_printf(ios_stderr, "Warning: Possible conflict in library symbol %s\n", name);
         }
         sys::DynamicLibrary::AddSymbol(name, sval);
@@ -289,26 +291,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (f_name != NULL) {
         // just symbol, default to JuliaDLHandle
 #ifdef __WIN32__
-        fptr = jl_dlsym_e(jl_exe_handle, f_name);
-        if(!fptr) {
-            fptr = jl_dlsym_e(jl_dl_handle, f_name);
-            if (!fptr) {
-                fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
-                if (!fptr) {
-                    fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
-                    if (!fptr) {
-                        fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
-                        if (!fptr) {
-                            fptr = jl_dlsym(jl_winsock_handle, f_name);
-                        }
-                    }
-                }
-            }
-        }
-        else {
-            // available in process symbol table
-            fptr = NULL;
-        }
+        fptr = jl_dlsym_win32(f_name);
 #else
         // will look in process symbol table
 #endif

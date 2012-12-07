@@ -135,7 +135,13 @@ end
 
 ## julia version info
 
-const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
+if(isfile("$JULIA_HOME/../../VERSION"))
+	const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
+elseif(isfile("$JULIA_HOME/../VERSION"))
+	const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../VERSION"))
+else
+	const VERSION = convert(VersionNumber,"0.0.0")
+end
 let
     expected = ErrorException("error: don't copy this code, for breaking out of uv_run during boot-strapping only")
     acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
