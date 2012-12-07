@@ -84,6 +84,7 @@ export
     SubOrDArray,
     SubString,
     SymTridiagonal,
+    SymmetricMatrix,
     TransformedString,
     Tridiagonal,
     VecOrMat,
