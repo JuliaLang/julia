@@ -78,7 +78,7 @@ end
 add(pkgs::Vector{VersionSet}) = cd_pkgdir() do
     for pkg in pkgs
         if !contains(Metadata.packages(),pkg.package)
-            error("invalid package: $(pkg.package)")
+            error("Unknown package $(pkg.package); Perhaps you need to Pkg.update() for new metadata?")
         end
         reqs = parse_requires("REQUIRE")
         if anyp(req->req.package==pkg.package,reqs)
