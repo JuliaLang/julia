@@ -651,11 +651,11 @@ function eig{T<:LapackType}(A::StridedMatrix{T}, vecs::Bool)
         if vecs
             Z = similar(A)
             W = LAPACK.syevr!(copy(A), Z)
+            return W, Z
         else
-            Z = Array(T, 0, 0)
             W = LAPACK.syevr!(copy(A))
+            return W
         end
-        return W, Z
     end
 
     if iscomplex(A)
