@@ -69,7 +69,7 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
     return a, p
 end
 
-($pivot_middle)(a,b,c) = $(lt(:a,:b)) ? ($(lt(:b,:c)) ? b : c) : ($(lt(:a,:c)) ? a : c)
+($pivot_middle)($(args...),a,b,c) = $(lt(:a,:b)) ? ($(lt(:b,:c)) ? b : c) : ($(lt(:a,:c)) ? a : c)
 
 # very fast but unstable
 function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
@@ -196,7 +196,7 @@ end; end # quote / macro
 
 @_jl_sort_functions ""    :(isless($a,$b))
 @_jl_sort_functions "_r"  :(isless($b,$a))
-@_jl_sort_functions "_lt" :(lt($a,$b)) lt::Function
+@_jl_sort_functions ""    :(lt($a,$b)) lt::Function
 @_jl_sort_functions "_by" :(isless(by($a),by($b))) by::Function
 
 ## external sorting functions ##
@@ -207,7 +207,7 @@ sort!{T}(a::AbstractVector{T})  = mergesort!(a, 1, length(a), Array(T,length(a))
 sortr!{T}(a::AbstractVector{T}) = mergesort_r!(a, 1, length(a), Array(T,length(a)))
 
 sort!{T}(lt::Function, a::AbstractVector{T}) =
-    mergesort_lt!(lt, a, 1, length(a), Array(T,length(a)))
+    mergesort!(lt, a, 1, length(a), Array(T,length(a)))
 sort_by!{T}(by::Function, a::AbstractVector{T}) =
     mergesort_by!(by, a, 1, length(a), Array(T,length(a)))
 

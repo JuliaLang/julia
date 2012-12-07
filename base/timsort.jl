@@ -489,6 +489,6 @@ end; end # quote; macro
 
 @_jl_timsort_functions ""    :(isless($a,$b))
 @_jl_timsort_functions "_r"  :(isless($b,$a))
-@_jl_timsort_functions "_lt" :(lt($a,$b)) lt::Function
+@_jl_timsort_functions ""    :(lt($a,$b)) lt::Function
 @_jl_timsort_functions "_by" :(isless(by($a),by($b))) by::Function
 
