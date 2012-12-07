@@ -13,7 +13,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
-       beta, lbeta, eta, zeta, psigamma, digamma
+       beta, lbeta, eta, zeta, digamma
 
 import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
        Base.tanh, Base.asin, Base.acos, Base.atan, Base.asinh, Base.acosh,
