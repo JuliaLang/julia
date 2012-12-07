@@ -407,14 +407,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // make LLVM function object for the target
-    Constant *llvmf;
+    Value *llvmf;
     FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
     
     if (fptr != NULL) {
         Type *funcptype = PointerType::get(functype,0);
-        llvmf = ConstantExpr::getIntToPtr( 
-            ConstantInt::get(funcptype, (uint64_t)fptr), 
-            funcptype);
+        llvmf = literal_pointer_val(fptr, funcptype);
     }
     else {
         if (f_lib != NULL)
