@@ -61,7 +61,7 @@ static void *add_library_sym(char *name, char *lib)
         if (hnd == NULL) {
             hnd = jl_load_dynamic_library(lib);
             if (hnd != NULL)
-                libMap[lib] = hnd;
+            libMap[lib] = hnd;
             else
                 return NULL;
         }
@@ -270,13 +270,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     ptr = static_eval(args[1], ctx, true);
     if (ptr == NULL) {
         jl_value_t *ptr_ty = expr_type(args[1], ctx);
-        if (jl_is_cpointer_type(ptr_ty)) {
-            jl_ptr = emit_unbox(T_size, T_psize, emit_unboxed(args[1], ctx));
-        } else {
-            std::string msg = "in " + ctx->funcName +
-                ": ccall: function argument not a pointer or valid constant";
-            jl_error(msg.c_str());
+        Value *arg1 = emit_unboxed(args[1], ctx);
+        if (!jl_is_cpointer_type(ptr_ty)) {
+            emit_typecheck(arg1, (jl_value_t*)jl_voidpointer_type,
+                    "ccall: function argument not a pointer or valid constant", ctx);
         }
+        jl_ptr = emit_unbox(T_size, T_psize, arg1);
     }
     rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
                                         &jl_tupleref(ctx->sp,0),
@@ -427,6 +426,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
     
     if (jl_ptr != NULL) {
+        null_pointer_check(jl_ptr,ctx);
         Type *funcptype = PointerType::get(functype,0);
         llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
     } else if (fptr != NULL) {
