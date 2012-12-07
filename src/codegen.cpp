@@ -418,15 +418,20 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
                     size_t n = e->args->length-1;
                     if (n==0) return (jl_value_t*)jl_null;
                     jl_value_t **v = (jl_value_t**)alloca(n*sizeof(jl_value_t*));
+                    memset(v, 0, n*sizeof(jl_value_t*));
+                    JL_GC_PUSHARGS(v, n);
                     for (i = 0; i < n; i++) {
                         v[i] = static_eval(jl_exprarg(e,i+1),ctx,sparams);
-                        if (v[i] == NULL)
+                        if (v[i] == NULL) {
+                            JL_GC_POP();
                             return NULL;
+                        }
                     }
                     jl_tuple_t *tup = jl_alloc_tuple_uninit(n);
                     for(i=0; i < n; i++) {
                         jl_tupleset(tup, i, v[i]);
                     }
+                    JL_GC_POP();
                     return (jl_value_t*)tup;
                 }
             }
