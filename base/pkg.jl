@@ -204,7 +204,7 @@ function _resolve()
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
-                try run(`git checkout -q $(want[pkg])`)
+                try run(`git checkout -q $(want[pkg])` .> "/dev/null")
                 catch
                     run(`git fetch -q`)
                     try run(`git checkout -q $(want[pkg])`)
@@ -403,9 +403,10 @@ update() = cd_pkgdir() do
     end
     Metadata.gen_hashes()
     run(`git add METADATA`)
+    # TODO: handle package deletions
     Git.each_submodule(false) do pkg, path, sha1
-        if pkg != "METADATA"
-            url = Metadata.pkg_url(pkg)
+        url = Metadata.pkg_url(pkg)
+        if url != nothing
             Git.modules(`submodule.$pkg.url $url`)
             cd(path) do
                 if !Git.dirty()
