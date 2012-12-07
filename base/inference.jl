@@ -633,9 +633,17 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     end
 end
 
+function abstract_eval_arg(a, vtypes, sv)
+    t = abstract_eval(a, vtypes, sv)
+    if isa(a,Symbol) || isa(a,SymbolNode)
+        t = tintersect(t,Any)  # remove Undef
+    end
+    return t
+end
+
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = e.args[2:]
-    argtypes = tuple([abstract_eval(a, vtypes, sv) for a in fargs]...)
+    argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
     if anyp(x->is(x,None), argtypes)
         return None
     end
@@ -1142,7 +1150,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     end
                 elseif is(hd,:return)
                     pc´ = n+1
-                    rt = abstract_eval(stmt.args[1], s[pc], sv)
+                    rt = abstract_eval_arg(stmt.args[1], s[pc], sv)
                     if frame.recurred
                         rec = true
                         if !(isa(frame.prev,CallStack) && frame.prev.recurred)
