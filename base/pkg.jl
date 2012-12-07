@@ -520,7 +520,7 @@ When the package is ready to submit, push it to a public repository, set it as
 the remote \"origin\", then run:
 
   > Pkg.set_origin($(package_name))
-  > Pkg.version($(package_name))
+  > Pkg.patch($(package_name))
 
 to prepare METADATA with the details for your package."
                 )
