@@ -650,13 +650,13 @@ end
 function print_matrix(io,
     X::AbstractMatrix, rows::Integer, cols::Integer,
     pre::String, sep::String, post::String,
-    hdots::String, vdots::String,
+    hdots::String, vdots::String, ddots::String,
     hmod::Integer, vmod::Integer
 )
     cols -= strlen(pre) + strlen(post)
     presp = repeat(" ", strlen(pre))
     postsp = ""
-    hdotssp = repeat(" ", strlen(hdots))
+    @assert strlen(hdots) == strlen(ddots)
     ss = strlen(sep)
     m, n = size(X)
     if m <= rows # rows fit
@@ -703,7 +703,7 @@ function print_matrix(io,
             R = reverse(alignment(X,I,n:-1:1,c,c,ss))
             c = cols - sum(map(sum,R)) - (length(R)-1)*ss - strlen(hdots)
             L = alignment(X,I,1:n,c,c,ss)
-            r = (length(R)-n+1) % vmod
+            r = mod((length(R)-n+1),vmod)
             for i in I
                 print(io, i == 1 ? pre : presp)
                 print_matrix_row(io, X,L,i,1:length(L),sep)
@@ -714,7 +714,7 @@ function print_matrix(io,
                 if i == t
                     print(io, i == 1 ? pre : presp)
                     print_matrix_vdots(io, vdots,L,sep,vmod,1)
-                    print(io, hdotssp)
+                    print(io, ddots)
                     print_matrix_vdots(io, vdots,R,sep,vmod,r)
                     println(io, i == m ? post : postsp)
                 end
@@ -723,7 +723,8 @@ function print_matrix(io,
     end
 end
 print_matrix(io, X::AbstractMatrix, rows::Integer, cols::Integer) =
-    print_matrix(io, X, rows, cols, " ", "  ", "", "  \u2026  ", "\u22ee", 5, 5)
+    print_matrix(io, X, rows, cols, " ", "  ", "",
+                 "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 
 print_matrix(io, X::AbstractMatrix) = print_matrix(io, X, tty_rows()-4, tty_cols())
 
