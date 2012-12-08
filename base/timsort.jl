@@ -187,8 +187,6 @@ end
 #
 # If any of these are violated, a merge occurs to 
 # correct it
-($merge_collapse)($(args...), v::AbstractVector, state::MergeState) = ($merge_collapse)($(args...), v, state, false)
-
 function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, force::Bool)
 
     while length(state.runs) > 2
@@ -230,9 +228,6 @@ end
 
 
 # Version which permutes an auxilliary array mirroring the sort
-($merge_collapse)($(args...), v::AbstractVector, p::AbstractVector{Int}, state::MergeState) = 
-    ($merge_collapse)($(args...), v, p, state, false)
-
 function ($merge_collapse)($(args...), v::AbstractVector, p::AbstractVector{Int}, state::MergeState, force::Bool)
 
     while length(state.runs) > 2
@@ -294,6 +289,7 @@ function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeSta
         ($merge_hi)($(args...), v, a, b, state)
     end
 end
+
 
 # Merge runs a and b in vector v (verseion which permutes an auxilliary array mirroring the sort)
 function ($merge)($(args...), v::AbstractVector, p::AbstractVector{Int}, a::Run, b::Run, state::MergeState)
@@ -744,7 +740,7 @@ function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
         # Push this run onto the queue and merge if needed
         push(state.runs, run_range)
         i = i+count
-        ($merge_collapse)($(args...), v, state);
+        ($merge_collapse)($(args...), v, state, false)
     end
 
     # Force merge at the end
