@@ -1,4 +1,4 @@
-require("../extras/arpack")
+require("$JULIA_HOME/../../extras/arpack.jl")
 
 using ARPACK
 
