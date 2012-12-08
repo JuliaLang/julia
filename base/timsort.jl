@@ -187,9 +187,9 @@ end
 #
 # If any of these are violated, a merge occurs to 
 # correct it
-#($merge_collapse)($(args...), v::AbstractVector, state::MergeState) = ($merge_collapse)($(args...), v, state, false)
+($merge_collapse)($(args...), v::AbstractVector, state::MergeState) = ($merge_collapse)($(args...), v, state, false)
 
-function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, force::Bool, p...)
+function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, force::Bool)
 
     while length(state.runs) > 2
         (a,b,c) = state.runs[end-2:end]
@@ -199,14 +199,14 @@ function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, for
         end
 
         if length(a) < length(c)
-            ($merge)($(args...), v,a,b,state,p)
+            ($merge)($(args...), v,a,b,state)
             pop(state.runs)
             pop(state.runs)
             pop(state.runs)
             push(state.runs, first(a):last(b))
             push(state.runs, c)
         else
-            ($merge)($(args...), v,b,c,state,p)
+            ($merge)($(args...), v,b,c,state)
             pop(state.runs)
             pop(state.runs)
             push(state.runs, first(b):last(c))
@@ -217,7 +217,51 @@ function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, for
         (a,b) = state.runs[end-1:end]
 
         if length(a) <= length(b) || force
-            ($merge)($(args...), v,a,b,state,p)
+            ($merge)($(args...), v,a,b,state)
+            pop(state.runs)
+            pop(state.runs)
+            push(state.runs, first(a):last(b))
+        end
+    end
+
+    return # v   ## Used to return v, but should be unnecessary, as the only user of this function
+                  ## is timsort(), and the return value is ignored there...
+end
+
+
+# Version which permutes an auxilliary array mirroring the sort
+($merge_collapse)($(args...), v::AbstractVector, p::AbstractVector{Int}, state::MergeState) = 
+    ($merge_collapse)($(args...), v, p, state, false)
+
+function ($merge_collapse)($(args...), v::AbstractVector, p::AbstractVector{Int}, state::MergeState, force::Bool)
+
+    while length(state.runs) > 2
+        (a,b,c) = state.runs[end-2:end]
+       
+        if length(a) > length(b)+length(c) && length(b) > length(c) && !force
+            break # invariants are satisfied, leave loop
+        end
+
+        if length(a) < length(c)
+            ($merge)($(args...), v,p,a,b,state)
+            pop(state.runs)
+            pop(state.runs)
+            pop(state.runs)
+            push(state.runs, first(a):last(b))
+            push(state.runs, c)
+        else
+            ($merge)($(args...), v,p,b,c,state)
+            pop(state.runs)
+            pop(state.runs)
+            push(state.runs, first(b):last(c))
+        end
+    end
+
+    if length(state.runs) == 2
+        (a,b) = state.runs[end-1:end]
+
+        if length(a) <= length(b) || force
+            ($merge)($(args...), v,p,a,b,state)
             pop(state.runs)
             pop(state.runs)
             push(state.runs, first(a):last(b))
@@ -230,7 +274,7 @@ end
 
 
 # Merge runs a and b in vector v
-function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState, p)
+function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState)
 
     # First elements in a <= b[1] are already in place
     a = ($gallop_last)($(args...), v, v[first(b)], first(a), last(a)) : last(a)
@@ -245,9 +289,31 @@ function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeSta
     # Choose merge_lo or merge_hi based on the amount
     # of temporary memory needed (smaller of a and b)
     if length(a) < length(b)
-        ($merge_lo)($(args...), v, a, b, state, p...)
+        ($merge_lo)($(args...), v, a, b, state)
     else
-        ($merge_hi)($(args...), v, a, b, state, p...)
+        ($merge_hi)($(args...), v, a, b, state)
+    end
+end
+
+# Merge runs a and b in vector v (verseion which permutes an auxilliary array mirroring the sort)
+function ($merge)($(args...), v::AbstractVector, p::AbstractVector{Int}, a::Run, b::Run, state::MergeState)
+
+    # First elements in a <= b[1] are already in place
+    a = ($gallop_last)($(args...), v, v[first(b)], first(a), last(a)) : last(a)
+
+    # Last elements in b >= a[end] are already in place
+    b = first(b) : ($rgallop_first)($(args...), v, v[last(a)], first(b), last(b))-1
+
+    if length(a) == 0 || length(b) == 0
+        return
+    end
+
+    # Choose merge_lo or merge_hi based on the amount
+    # of temporary memory needed (smaller of a and b)
+    if length(a) < length(b)
+        ($merge_lo)($(args...), v, p, a, b, state)
+    else
+        ($merge_hi)($(args...), v, p, a, b, state)
     end
 end
 
@@ -347,7 +413,7 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
 end
 
 # Merge runs a and b in vector v (a is smaller)
-function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState, p::AbstractVector{Int})
+function ($merge_lo)($(args...), v::AbstractVector, p::AbstractVector{Int}, a::Run, b::Run, state::MergeState)
 
     # Copy a
     v_a = v[a]
@@ -546,7 +612,7 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
 end
 
 # Merge runs a and b in vector v (b is smaller)
-function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState, p::AbstractVector{Int})
+function ($merge_hi)($(args...), v::AbstractVector, p::AbstractVector{Int}, a::Run, b::Run, state::MergeState)
 
     # Copy b
     v_b = v[b]
@@ -706,7 +772,7 @@ function ($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::I
             # Make a run of length minrun
             count = min(minrun, hi-i+1)
             run_range = i:i+count-1
-            ($insertionsort)($(args...), v, i, i+count-1)
+            ($insertionsort)($(args...), v, p, i, i+count-1)
         else
             if !issorted(run_range)
                 #reverse!(sub(v, run_range))
@@ -722,12 +788,12 @@ function ($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::I
         # Push this run onto the queue and merge if needed
         push(state.runs, run_range)
         i = i+count
-        ($merge_collapse)($(args...), v, state, false, p)
+        ($merge_collapse)($(args...), v, p, state, false)
     end
 
     # Force merge at the end
     if length(state.runs) > 1
-        ($merge_collapse)($(args...), v, state, true, p)
+        ($merge_collapse)($(args...), v, p, state, true)
     end
 
     v, p
