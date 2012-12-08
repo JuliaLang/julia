@@ -1310,6 +1310,8 @@ export
 export
 #libuv branch stuff
     accept,
+    listen,
+    bind,
     AsyncStream,
     Buffer,
     IOString,
@@ -1317,5 +1319,10 @@ export
     Stream,
     TcpSocket,
     jl_alloca,
-    systmpdir
+    systmpdir,
+    open_any_tcp_port,
+    connect_to_host,
+    spawn_nostdin,
+    start_reading,
+    stop_reading
 

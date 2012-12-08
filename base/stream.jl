@@ -367,12 +367,11 @@ function _uv_hook_connectioncb(sock::AsyncStream, status::Int32)
     tasknotify(sock.connectnotify, sock, status)
 end
 
-function _jl_listen(sock::AsyncStream,backlog::Int32,cb::Callback)
-    sock.ccb = cb
-    ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog)
-end
+listen(sock::AsyncStream,backlog::Integer) = ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog)
+listen(sock::AsyncStream) = listen(sock,4)
 
-_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
+bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
+
 _jl_tcp_accept(server::Ptr{Void},client::Ptr{Void}) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
 function accept(server::TcpSocket,client::TcpSocket)
     err = _jl_tcp_accept(server.handle,client.handle)
@@ -387,10 +386,11 @@ function open_any_tcp_port(preferred_port::Uint16,cb::Callback)
     addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
     while true
         socket = TcpSocket()
-        if _jl_tcp_bind(socket,addr)!=0
+        if bind(socket,addr)!=0
             error("open_any_tcp_port: could not bind to socket")
         end
-        if((_jl_listen(socket,int32(4),cb)) == 0)
+        socket.ccb = cb
+        if(listen(socket) == 0)
             return (addr.port,socket)
         end
         socket.open = true
