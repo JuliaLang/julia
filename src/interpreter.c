@@ -36,7 +36,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
     }
     JL_CATCH {
         jl_current_module = last_m;
-        jl_raise(jl_exception_in_transit);
+        jl_rethrow();
     }
     jl_current_module = last_m;
     assert(v);
@@ -281,7 +281,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == error_sym || ex->head == jl_continue_sym) {
         if (jl_is_byte_string(args[0]))
             jl_errorf("syntax error: %s", jl_string_data(args[0]));
-        jl_raise(args[0]);
+        jl_throw(args[0]);
     }
     jl_errorf("unsupported or misplaced expression %s", ex->head->name);
     return (jl_value_t*)jl_nothing;
@@ -303,8 +303,7 @@ static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                              int start)
 {
-    jl_savestate_t __ss;
-    jl_jmp_buf __handlr;
+    jl_handler_t __eh;
     size_t i=start;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -329,8 +328,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                 return eval(jl_exprarg(stmt,0), locals, nl);
             }
             else if (head == enter_sym) {
-                jl_enter_handler(&__ss, &__handlr);
-                if (!jl_setjmp(__handlr,1)) {
+                jl_enter_handler(&__eh);
+                if (!jl_setjmp(__eh.eh_ctx,1)) {
                     return eval_body(stmts, locals, nl, i+1);
                 }
                 else {

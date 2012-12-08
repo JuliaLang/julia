@@ -170,6 +170,31 @@ function convert{S,T,N}(::Type{Array{S,N}}, s::SubDArray{T,N})
     a
 end
 
+function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
+    if prod(d) != numel(A)
+        error("reshape: invalid dimensions")
+    end
+    DArray(d) do I
+        sz = map(length,I)
+        d1offs = first(I[1])
+        nd = length(I)
+
+        B = Array(T,sz)
+        nr = size(B,1)
+        sztail = size(B)[2:]
+
+        for i=1:div(numel(B),nr)
+            i2 = ind2sub(sztail, i)
+            globalidx = [ I[j][i2[j-1]] for j=2:nd ]
+            
+            a = sub2ind(d, d1offs, globalidx...)
+            
+            B[:,i] = A[a:(a+nr-1)]
+        end
+        B
+    end
+end
+
 ## indexing ##
 
 function ref(r::RemoteRef, args...)
@@ -214,10 +239,14 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
     n = length(I)
     d = s.parent
     J = s.indexes
+    if length(J) < n
+        a[I...] = convert(Array,s)
+        return a
+    end
     offs = [isa(J[i],Int) ? J[i]-1 : first(J[i])-1 for i=1:n]
     @sync begin
         for i = 1:length(d.chunks)
-            K_c = d.indexes[i]
+            K_c = {d.indexes[i]...}
             K = [ intersect(J[j],K_c[j]) for j=1:n ]
             if !anyp(isempty, K)
                 idxs = [ I[j][K[j]-offs[j]] for j=1:n ]

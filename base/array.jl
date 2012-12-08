@@ -1330,6 +1330,8 @@ function findmin(a::Array)
     end
     return (m, mi)
 end
+indmax(a::Array) = findmax(a)[2]
+indmin(a::Array) = findmin(a)[2]
 
 ## Reductions ##
 

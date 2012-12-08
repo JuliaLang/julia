@@ -11,7 +11,7 @@ function buildvec(f)
 end
 
 macro assert_buildvec(ex...)
-    :(@assert buildvec($(ex[1])) == $(ex[2]))
+    :(@test buildvec($(ex[1])) == $(ex[2]))
 end
 
 @assert_buildvec take(count(), 0)           []

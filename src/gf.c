@@ -994,6 +994,8 @@ static int is_va_tuple(jl_tuple_t *t)
     return (jl_tuple_len(t)>0 && jl_is_seq_type(jl_tupleref(t,jl_tuple_len(t)-1)));
 }
 
+static void print_func_loc(ios_t *s, jl_lambda_info_t *li);
+
 /*
   warn about ambiguous method priorities
   
@@ -1013,7 +1015,8 @@ static int is_va_tuple(jl_tuple_t *t)
   so (T,T) is not equivalent to (Any,Any). (TODO)
 */
 static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
-                            jl_tuple_t *sig, jl_sym_t *fname)
+                            jl_tuple_t *sig, jl_sym_t *fname,
+                            jl_lambda_info_t *linfo)
 {
     size_t tl = jl_tuple_len(type);
     size_t sl = jl_tuple_len(sig);
@@ -1038,8 +1041,10 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         ios_t *s = JL_STDERR;
         ios_printf(s, "Warning: New definition %s", n);
         jl_show(errstream, (jl_value_t*)type);
+        print_func_loc(s, linfo);
         ios_printf(s, " is ambiguous with %s", n);
         jl_show(errstream, (jl_value_t*)sig);
+        print_func_loc(s, ml->func->linfo);
         ios_printf(s, ".\n         Make sure %s", n);
         jl_show(errstream, isect);
         ios_printf(s, " is defined first.\n");
@@ -1094,7 +1099,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         if (check_amb) {
             check_ambiguous(*pml, (jl_tuple_t*)type, (jl_tuple_t*)l->sig,
                             method->linfo ? method->linfo->name :
-                            anonymous_sym);
+                            anonymous_sym,
+                            method->linfo);
         }
         pl = &l->next;
         l = l->next;
@@ -1433,6 +1439,15 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
     return jl_apply(mfunc, args, nargs);
 }
 
+static void print_func_loc(ios_t *s, jl_lambda_info_t *li)
+{
+    long lno = li->line;
+    if (lno > 0) {
+        char *fname = ((jl_sym_t*)li->file)->name;
+        JL_PRINTF(s, " at %s:%d", fname, lno);
+    }
+}
+
 static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
 {
     ios_t *s = (ios_t*)jl_iostr_data(outstr);
@@ -1455,11 +1470,7 @@ static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
         else {
             jl_lambda_info_t *li = ml->func->linfo;
             assert(li);
-            long lno = li->line;
-            if (lno > 0) {
-                char *fname = ((jl_sym_t*)li->file)->name;
-                JL_PRINTF(s, " at %s:%d", fname, lno);
-            }
+            print_func_loc(s, li);
         }
         if (ml->next != JL_NULL)
             JL_PRINTF(s, "\n");

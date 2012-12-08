@@ -1,5 +1,4 @@
 module Zlib
-using Base
 
 export
 # Compression routines

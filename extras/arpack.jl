@@ -4,7 +4,6 @@ require("linalg_sparse")
 ## SparseMatrixCSC is not defined even after the require("sparse")
 
 #module ARPACK 
-#using Base
 #export eigs, svds
 
 _jl_libarpack = dlopen("libarpack")

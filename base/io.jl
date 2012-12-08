@@ -279,12 +279,11 @@ end
 
 function open(f::Function, args...)
     io = open(args...)
-    x = try f(io) catch err
+    try
+        f(io)
+    finally
         close(io)
-        throw(err)
     end
-    close(io)
-    return x
 end
 
 function memio(x::Integer, finalize::Bool)
@@ -385,10 +384,8 @@ function with_output_to_string(thunk)
     OUTPUT_STREAM = m
     try
         thunk()
+    finally
         OUTPUT_STREAM = oldio
-    catch e
-        OUTPUT_STREAM = oldio
-        throw(e)
     end
     takebuf_string(m)
 end

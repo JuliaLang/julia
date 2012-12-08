@@ -8,6 +8,9 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
+#include <assert.h>
+#include <stdio.h>
+#include <errno.h>
 #include "server.h"
 #include "json.h"
 #include "message_types.h"
@@ -248,7 +251,7 @@ void socketClosed(uv_handle_t *stream)
     delete (uv_tcp_t *)stream;
 }
 
-//read from julia on metadata socket (4444)
+//read from julia on metadata socket (typically starts at 4444)
 void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
 {
     julia_session *julia_session_ptr=(julia_session*)sock->data;
@@ -323,32 +326,44 @@ void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
     return;
 }
 
+void cleanup_web_sessions(julia_session *session, time_t t);
+void cleanup_session(julia_session *session);
 
 void connected(uv_connect_t* req, int status)
 {
     julia_session *julia_session_ptr=(julia_session*)req->handle->data;
-    // switch to normal operation
-    julia_session_ptr->status = SESSION_NORMAL;
+    if(status == -1) {
+        std::cerr << "An error occured during the connection: " << uv_last_error(uv_default_loop()).code;
+        cleanup_web_sessions(julia_session_ptr,0); //close all web sessions
+        cleanup_session(julia_session_ptr);
+    } else {
+        // switch to normal operation
+        julia_session_ptr->status = SESSION_NORMAL;
 
-    // send a ready message
-    message ready_message;
-    ready_message.type = MSG_OUTPUT_READY;
-    julia_session_ptr->outbox_history.push_back(ready_message);
-    for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
-        iter->second.outbox.push_back(ready_message);
-#ifdef DEBUG_TRACE
-   cout<<"Julia Process Connected\n"; 
+        // send a ready message
+        message ready_message;
+        ready_message.type = MSG_OUTPUT_READY;
+        julia_session_ptr->outbox_history.push_back(ready_message);
+        for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
+            iter->second.outbox.push_back(ready_message);
+#ifdef JULIA_DEBUG_TRACE
+        cout<<"Julia Process Connected\n";
 #endif
-    uv_read_start((uv_stream_t*)julia_session_ptr->sock,&alloc_buf,readSocketData);
-
+        uv_read_start((uv_stream_t*)julia_session_ptr->sock,&alloc_buf,readSocketData);
+    }
+    delete req;
 }
+
 
 #define JL_TCP_LOOP uv_default_loop()
 
 //read from julia (on stdin)
 void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
-    cout<<"Recevied Data from Julia on STDOUT\n";
+#ifdef JULIA_DEBUG_TRACE
+    cout<<"Recevied Data from Julia on STDOUT:\n";
+    cout<<std::string(buf.base,buf.len)<<"\n";
+#endif
 
     julia_session *julia_session_ptr=(julia_session*)stream->data;
 
@@ -460,6 +475,28 @@ void close_process(julia_session *julia_session_ptr)
     }
 }
 
+void cleanup_web_sessions(julia_session *session, time_t t)
+{
+    vector<string> web_session_zombies;
+    for (map<string, web_session>::iterator iter = session->web_session_map.begin(); iter != session->web_session_map.end(); iter++)
+    {
+        if ((t == 0) || (t-(iter->second).update_time >= WEB_SESSION_TIMEOUT))
+            web_session_zombies.push_back(iter->first);
+    }
+    for (size_t j = 0; j < web_session_zombies.size(); j++)
+    {
+        cout<<"User \""<<session->web_session_map[web_session_zombies[j]].user_name<<"\" has left session \""<<session->session_name<<"\".\n";
+        session->web_session_map.erase(web_session_zombies[j]);
+    }
+}
+
+void cleanup_session(julia_session *session)
+{
+    if(session->status==SESSION_NORMAL)
+        session->status = SESSION_TERMINATING;
+    close_process(session);
+}
+
 void watchdog(uv_timer_t* handle, int status)
 {
     // get the current time
@@ -469,21 +506,9 @@ void watchdog(uv_timer_t* handle, int status)
     for (size_t i = 0; i < julia_session_list.size(); i++)
     {
         julia_session* julia_session_ptr = julia_session_list[i];
-        vector<string> web_session_zombies;
-        for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
-        {
-            if (t-(iter->second).update_time >= WEB_SESSION_TIMEOUT)
-                web_session_zombies.push_back(iter->first);
-        }
-        for (size_t j = 0; j < web_session_zombies.size(); j++)
-        {
-            cout<<"User \""<<julia_session_ptr->web_session_map[web_session_zombies[j]].user_name<<"\" has left session \""<<julia_session_ptr->session_name<<"\".\n";
-            julia_session_ptr->web_session_map.erase(web_session_zombies[j]);
-        }
+        cleanup_web_sessions(julia_session_ptr,t);
         if (julia_session_ptr->web_session_map.empty()) {
-            if(julia_session_ptr->status==SESSION_NORMAL)
-                julia_session_ptr->status = SESSION_TERMINATING;
-            close_process(julia_session_ptr);
+            cleanup_session(julia_session_ptr);
         }
     }
 
@@ -543,7 +568,12 @@ string respond(string session_token, string body) {
 }
 
 
-//#define READ_STDERR
+#define READ_STDERR
+#ifdef READ_STDERR
+#define STDIO_COUNT 3
+#else
+#define STDIO_COUNT 2
+#endif
 
 // get a session with a particular name (creating it if it does not exist) and return a session token
 // returns the empty string if a new session could not be created
@@ -580,6 +610,8 @@ string get_session(string user_name, string session_name) {
     // create the session
     julia_session* session_data = new julia_session;
 
+    session_data->sock = NULL;
+
     // generate the web session
     web_session ws;
     ws.update_time = time(0);
@@ -600,33 +632,64 @@ string get_session(string user_name, string session_name) {
 
     session_data->proc=new uv_process_t;
 
-    //allocate pipess
-    session_data->julia_in=new uv_pipe_t;
-    uv_pipe_init(uv_default_loop(),session_data->julia_in,0);
-    session_data->julia_out=new uv_pipe_t;
-    uv_pipe_init(uv_default_loop(),session_data->julia_out,0);
-
+//-------------- SPAWN ------------------------------//
+    //------------- ALLOCATE PIPES-------------------//
+    session_data->julia_in = new uv_pipe_t;
+    session_data->julia_out = new uv_pipe_t;
 #ifdef READ_STDERR
-    session_data->julia_err=new uv_pipe_t;
-    uv_pipe_init(session_data->event_loop,session_data->julia_err,0);
-    session_data->julia_err->data = session_data;
+    session_data->julia_err = new uv_pipe_t;
 #else
-    session_data->julia_err=0;
+    session_data->julia_err = NULL;
+#endif
+    session_data->julia_in->data = session_data->julia_out->data =
+#ifdef READ_STDERR
+            session_data->julia_err->data =
+#endif
+            session_data;
+    uv_pipe_t child_pipes[3];
+
+    //------------- SETUP PIPES---------------------//
+
+    uv_pipe_init(uv_default_loop(), session_data->julia_in, UV_PIPE_WRITEABLE);
+    uv_pipe_init(uv_default_loop(), session_data->julia_out, UV_PIPE_READABLE);
+#ifdef READ_STDERR
+    uv_pipe_init(uv_default_loop(), session_data->julia_err, UV_PIPE_READABLE);
+#endif
+    uv_pipe_init(uv_default_loop(), &child_pipes[0], UV_PIPE_SPAWN_SAFE|UV_PIPE_READABLE);
+    uv_pipe_init(uv_default_loop(), &child_pipes[1], UV_PIPE_SPAWN_SAFE|UV_PIPE_WRITEABLE);
+#ifdef READ_STDERR
+    uv_pipe_init(uv_default_loop(), &child_pipes[2], UV_PIPE_SPAWN_SAFE|UV_PIPE_WRITEABLE);
 #endif
 
-    
+    uv_pipe_link(&child_pipes[0],session_data->julia_in);
+    uv_pipe_link(session_data->julia_out,&child_pipes[1]);
+#ifdef READ_STDERR
+    uv_pipe_link(session_data->julia_err,&child_pipes[2]);
+#endif
+    //-------------- SETUP PROCESS OPTIONS ---------//
     uv_process_options_t opts;
-    opts.stdin_stream = session_data->julia_in;
-    opts.stdout_stream = session_data->julia_out;
-    opts.stderr_stream = session_data->julia_err;
-    session_data->julia_in->data = session_data->julia_out->data = session_data;
+    int r;
 
+    //------------------ STDIO ---------------------//
+    uv_stdio_container_t stdio[STDIO_COUNT];
+    stdio[0].type = UV_STREAM;
+    stdio[1].type = UV_STREAM;
+    stdio[0].data.stream = (uv_stream_t*)&child_pipes[0];
+    stdio[1].data.stream = (uv_stream_t*)&child_pipes[1];
+    stdio[2].type = UV_STREAM;
+#ifdef READ_STDERR
+    stdio[2].data.stream = (uv_stream_t*)&child_pipes[2];
+#endif
+    opts.stdio_count = STDIO_COUNT;
+    opts.stdio = stdio;
+
+    //------------------ ARGUMENTS ----------------//
 #if 0
-    char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "../lib/julia/extras/julia_web_base.jl", NULL};
+    char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "../share/julia/extras/julia_web_base.jl", NULL};
 #else
     char arg0[]="./julia-release-readline";
     char arg1[]="--no-history";
-    char arg2[]="../lib/julia/extras/julia_web_base.jl";
+    char arg2[]="../share/julia/extras/julia_web_base.jl";
     char *argv[4]={arg0,arg1,arg2,NULL};
 #endif
     opts.exit_cb=&process_exited2;
@@ -639,7 +702,17 @@ string get_session(string user_name, string session_name) {
     opts.args=argv;
     opts.file=argv[0];
     opts.flags=0;
+
+
     int err = uv_spawn(uv_default_loop(),session_data->proc,opts);
+
+    //------------------ CLEAN UP ---------------//
+    uv_pipe_close_sync(&child_pipes[0]);
+    uv_pipe_close_sync(&child_pipes[1]);
+#ifdef READ_STDERR
+    uv_pipe_close_sync(&child_pipes[2]);
+#endif
+
     if(err!=0)
         return "";
     session_data->data_notifier = new uv_async_t;
@@ -650,10 +723,9 @@ string get_session(string user_name, string session_name) {
 
     //start reading
     cout << "Started Reading from Julia stdout";
-    uv_read_start((uv_stream_t*)opts.stdout_stream,&alloc_buf,&julia_incoming);
+    uv_read_start((uv_stream_t*)session_data->julia_out,&alloc_buf,&julia_incoming);
 #ifdef READ_STDERR
-    uv_read_start((uv_stream_t*)opts.stderr_stream,&alloc_buf,&julia_incoming);
-    session_data->julia_err->data = data;
+    uv_read_start((uv_stream_t*)session_data->julia_err,&alloc_buf,&julia_incoming);
 #endif
     
     /*
@@ -687,8 +759,8 @@ string get_session(string user_name, string session_name) {
 
 void requestDone(uv_handle_t *handle)
 {
-#ifdef DEBUG_TRACE
-    cout << "Request Done";
+#ifdef CPP_DEBUG_TRACE
+    cout << "Request Done\n";
 #endif
     delete (reading_in_progress*)handle->data;
     delete (uv_tcp_t*)(handle);
@@ -698,7 +770,7 @@ void close_stream(uv_shutdown_t* req, int status)
 {
     uv_close((uv_handle_t*)req->handle,&requestDone);
 	delete req;
-#ifdef DEBUG_TRACE
+#ifdef CPP_DEBUG_TRACE
     cout << "Closing connection "
 #ifdef __WIN32__
 <<WSAGetLastError()
@@ -717,7 +789,7 @@ void get_response(request* req,uv_stream_t *client)
     if (req->get_cookie_exists("SESSION_TOKEN"))
         session_token = req->get_cookie_value("SESSION_TOKEN");
 
-#ifdef DEBUG_TRACE
+#ifdef CPP_DEBUG_TRACE
     cout << "Request from user " << session_token << "\n";
 #endif
 
@@ -933,7 +1005,7 @@ void get_response(request* req,uv_stream_t *client)
         message_root.append(response_messages[i].type);
         for (size_t j = 0; j < response_messages[i].args.size(); j++)
             message_root.append(response_messages[i].args[j]);
-#ifdef DEBUG_TRACE
+#ifdef CPP_DEBUG_TRACE
         cout<<"Sending message "<<(int)response_messages[i].type<<" to user "<<session_token<<"\n"; 
 #endif
         response_root.append(message_root);
@@ -958,8 +1030,8 @@ void get_response(request* req,uv_stream_t *client)
     buf.base=p->cstr;
     buf.len=response.size();
     uv_write_t *wr = new uv_write_t;
-    uv_write(wr,(uv_stream_t*)client,&buf,1,&free_write_buffer);
     wr->data=(void*)buf.base;
+    uv_write(wr,(uv_stream_t*)client,&buf,1,&free_write_buffer);
 
     // destroySoon the connection to the client
     uv_shutdown_t *sr = new uv_shutdown_t;
@@ -968,10 +1040,16 @@ void get_response(request* req,uv_stream_t *client)
 
 
 // CTRL+C signal handler
-void sigproc(int)
-{
+#if defined(__WIN32__)
+BOOL WINAPI sigint_handler(DWORD wsig) { //This needs winapi types to guarantee __stdcall
+#else
+void sigint_handler(int sig, siginfo_t *info, void *context) {
+#endif
     // print a message
-    cout<<"cleaning up...\n";
+    cout<<"cleaning up...\nexiting...\n";
+#if defined(__WIN32__)
+    cout<<"\nImportant: Please answer N to the following question:\n";
+#endif
     
     // clean up
     for (size_t i = 0; i < julia_session_list.size(); i++)
@@ -994,11 +1072,29 @@ void sigproc(int)
     exit(0);
 }
 
+uv_tty_t *stdin_handle;
+static void jl_install_sigint_handler() {
+#ifdef __WIN32__
+    SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
+    SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
+#else
+    struct sigaction act;
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = sigint_handler;
+    act.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGINT, &act, NULL) < 0) {
+        fprintf(stderr, "sigaction: %s\n", strerror(errno));
+        exit(1);
+    }
+#endif
+}
+
 // program entrypoint
 int main(int argc, char* argv[])
 {
     // set the Ctrl+C handler
-    signal(SIGINT, sigproc);
+    jl_install_sigint_handler();
 
     // get the command line arguments
     int port_num = 1441;

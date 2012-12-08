@@ -1,9 +1,6 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-@unix_only _jl_repl = _jl_lib
-@windows_only _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
-
 const _jl_color_normal = "\033[0m"
 
 function _jl_answer_color()
@@ -45,20 +42,32 @@ function repl_show(io, v::ANY)
     end
 end
 
+function add_backtrace(e, bt)
+    if isa(e,LoadError)
+        if isa(e.error,LoadError)
+            add_backtrace(e.error,bt)
+        else
+            e.error = BackTrace(e.error, bt)
+            e
+        end
+    else
+        BackTrace(e, bt)
+    end
+end
+
 function _jl_eval_user_input(ast::ANY, show_value)
-    iserr, lasterr = false, ()
+    iserr, lasterr, bt = false, (), nothing
     while true
         try
-            ccall(:jl_register_toplevel_eh, Void, ())
             if _jl_have_color
                 print(_jl_color_normal)
             end
             if iserr
-                show(lasterr)
+                show(add_backtrace(lasterr,bt))
                 println()
                 iserr, lasterr = false, ()
             else
-                value = eval(ast)
+                value = eval(Main,ast)
                 global ans = value
                 if !is(value,nothing) && show_value
                     if _jl_have_color
@@ -74,6 +83,7 @@ function _jl_eval_user_input(ast::ANY, show_value)
             break
         catch err
             iserr, lasterr = true, err
+            bt = backtrace()
         end
     end
     println()
@@ -133,7 +143,7 @@ function process_options(args::Array{Any,1})
     repl = true
     startup = true
     if has(ENV, "JL_POST_BOOT")
-        eval(parse_input_line(ENV["JL_POST_BOOT"]))
+        eval(Main,parse_input_line(ENV["JL_POST_BOOT"]))
     end
     i = 1
     while i <= length(args)
@@ -147,18 +157,18 @@ function process_options(args::Array{Any,1})
             repl = false
             i+=1
             ARGS = args[i+1:end]
-            eval(parse_input_line(args[i]))
+            eval(Main,parse_input_line(args[i]))
             break
         elseif args[i]=="-E"
             repl = false
             i+=1
             ARGS = args[i+1:end]
-            show(eval(parse_input_line(args[i])))
+            show(eval(Main,parse_input_line(args[i])))
             println()
             break
         elseif args[i]=="-P"
             i+=1
-            eval(parse_input_line(args[i]))
+            eval(Main,parse_input_line(args[i]))
         elseif args[i]=="-L"
             i+=1
             load(args[i])
@@ -218,7 +228,6 @@ function _start()
 
     atexit(()->flush(stdout_stream))
     try
-        ccall(:jl_register_toplevel_eh, Void, ())
         ccall(:jl_start_io_thread, Void, ())
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
@@ -259,7 +268,7 @@ function _start()
             run_repl()
         end
     catch e
-        show(e)
+        show(add_backtrace(e,backtrace()))
         println()
         exit(1)
     end

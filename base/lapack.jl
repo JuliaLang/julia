@@ -434,6 +434,10 @@ for (gels, gesv, getrs, getri, elty) in
                 ccall(($(string(getri)),liblapack), Void,
                       (Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{Int}),
+=======
+                      (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
+                       Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
+>>>>>>> master
                       &n, A, &lda, ipiv, work, &lwork, info)
                 if info[1] != 0 error("getri!: error $(info[1])") end
                 if lwork < 0

@@ -1,7 +1,6 @@
 require("linalg_sparse")
 
 #module Suitesparse
-#using Base
 #import Base.SparseMatrixCSC
 
 import Base.size, Base.nnz, Base.eltype, Base.show

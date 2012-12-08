@@ -129,11 +129,11 @@ export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     OverflowError, Ptr, QuoteNode, Real, Signed, StackOverflowError, String,
     Symbol, SymbolNode, Task, Top, TopNode, Tuple, Type, TypeConstructor,
     TypeName, TypeVar, UTF8String, Uint, Uint8, Uint16, Uint32, Uint64, Uint128,
-    Undef, UndefRefError, Union, UnionKind, Unsigned, Void,
+    UndefRefError, Union, UnionKind, Unsigned, Void,
     GetfieldNode,
     # functions
     setfield, applicable, apply, apply_type, arraylen, arrayref, arrayset,
-    arraysize, convert_default, convert_tuple, eval, fieldtype, getfield,
+    arraysize, convert_default, convert_tuple, fieldtype, getfield,
     include, invoke, is, ===, isa, isdefined, method_exists,
     subtype, throw, tuple, tuplelen, tupleref, typeassert, typeof, yieldto,
     # constants

@@ -46,6 +46,7 @@
     </list>
     <list name="block_eb">
       <item> catch </item>
+      <item> finally </item>
       <item> else </item>
       <item> elseif </item>
     </list>
@@ -62,10 +63,12 @@
       <item> export </item>
       <item> global </item>
       <item> import </item>
+      <item> importall </item>
       <item> in </item>
       <item> local </item>
       <item> macro </item>
       <item> module </item>
+      <item> baremodule </item>
       <item> return </item>
       <item> typealias </item>
     </list>
@@ -273,7 +276,6 @@ endRegion="block" />
       <itemData name="System" defStyleNum="dsBaseN"/>
       <itemData name="Keyword" defStyleNum="dsKeyword"/>
       <itemData name="Data Type" defStyleNum="dsDataType"/>
-      <itemData name="Comment" defStyleNum="dsComment"/>
       <itemData name="Comment" defStyleNum="dsComment"/>
       <itemData name="FoldingComment" defStyleNum="dsComment" />
     </itemDatas>

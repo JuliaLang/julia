@@ -87,8 +87,8 @@
 
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
-			 abstract typealias type bitstype
-			 module using import export ccall do))
+			 abstract typealias type bitstype ccall do
+			 module baremodule using import export importall))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -423,7 +423,7 @@
 
 (define (invalid-initial-token? tok)
   (or (eof-object? tok)
-      (memv tok '(#\) #\] #\} else elseif catch =))))
+      (memv tok '(#\) #\] #\} else elseif catch finally =))))
 
 (define (line-number-node s)
   `(line ,(input-port-line (ts:port s))))
@@ -526,7 +526,7 @@
 ; the principal non-terminals follow, in increasing precedence order
 
 (define (parse-block s) (parse-Nary s parse-eq '(#\newline #\;) 'block
-				    '(end else elseif catch) #t))
+				    '(end else elseif catch finally) #t))
 
 ;; ";" at the top level produces a sequence of top level expressions
 (define (parse-stmts s)
@@ -909,27 +909,48 @@
 	   (list 'typealias (cadr lhs) (cons 'tuple (cddr lhs)))
 	   (list 'typealias lhs (parse-arrow s)))))
     ((try)
-     (let* ((try-block (if (eq? (require-token s) 'catch)
-			   '(block)
-			   (parse-block s)))
-	    (nxt       (require-token s)))
-       (take-token s)
-       (case nxt
-	 ((end)   (list 'try try-block #f '(block)))
-	 ((catch) (let ((nl (eqv? (peek-token s) #\newline)))
-		    (if (eq? (require-token s) 'end)
-			(begin (take-token s)
-			       (list 'try try-block #f '(block)))
-			(let* ((var (parse-eq* s))
-			       (var? (and (not nl) (symbol? var)))
-			       (catch-block (parse-block s)))
-			  (expect-end s)
-			  (list 'try try-block
-				(and var? var)
-				(if var?
-				    catch-block
-				    `(block ,var ,@(cdr catch-block))))))))
-	 (else    (error (string "unexpected " nxt))))))
+     (let ((try-block (if (memq (require-token s) '(catch finally))
+			  '(block)
+			  (parse-block s))))
+       (let loop ((nxt    (require-token s))
+		  (catchb #f)
+		  (catchv #f)
+		  (finalb #f))
+	 (take-token s)
+	 (cond
+	  ((eq? nxt 'end)
+	   (list* 'try try-block catchv catchb (if finalb
+						   (list finalb)
+						   '())))
+	  ((and (eq? nxt 'catch)
+		(not catchb))
+	   (let ((nl (eqv? (peek-token s) #\newline)))
+	     (if (memq (require-token s) '(end finally))
+		 (loop (require-token s)
+		       '(block)
+		       #f
+		       finalb)
+		 (let* ((var (parse-eq* s))
+			(var? (and (not nl) (symbol? var)))
+			(catch-block (if (eq? (require-token s) 'finally)
+					 '(block)
+					 (parse-block s))))
+		   (loop (require-token s)
+			 (if var?
+			     catch-block
+			     `(block ,var ,@(cdr catch-block)))
+			 (and var? var)
+			 finalb)))))
+	  ((and (eq? nxt 'finally)
+		(not finalb))
+	   (let ((fb (if (eq? (require-token s) 'catch)
+			 '(block)
+			 (parse-block s))))
+	     (loop (require-token s)
+		   catchb
+		   catchv
+		   fb)))
+	  (else    (error (string "unexpected " nxt)))))))
     ((return)          (let ((t (peek-token s)))
 			 (if (or (eqv? t #\newline) (closing-token? t))
 			     (list 'return '(null))
@@ -943,10 +964,21 @@
 			 (eq? (car assgn) 'local))))
 	   (error "expected assignment after const")
 	   `(const ,assgn))))
-    ((module)
-     (let ((name (parse-atom s)))
-       (begin0 (list word name (parse-block s))
-	       (expect-end s))))
+    ((module baremodule)
+     (let* ((name (parse-atom s))
+	    (body (parse-block s)))
+       (expect-end s)
+       (list 'module (eq? word 'module) name
+	     (if (eq? word 'module)
+		 (list* 'block
+			;; add definitions for module-local eval
+			(let ((x (gensym)))
+			  `(= (call eval ,x)
+			      (call (|.| Core 'eval) ,name ,x)))
+			`(= (call eval m x)
+			    (call (|.| Core 'eval) m x))
+			(cdr body))
+		 body))))
     ((export)
      (let ((es (map macrocall-to-atsym
 		    (parse-comma-separated-assignments s))))

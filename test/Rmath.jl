@@ -3,7 +3,7 @@ require("../extras/Rmath")
 srand(124)
 
 function allEq(target::Vector{Float64}, current::Vector{Float64}, tolerance::Float64)
-    @assert numel(target) == numel(current)
+    @test numel(target) == numel(current)
     if all(target == current)
         return true
     end
@@ -12,7 +12,7 @@ function allEq(target::Vector{Float64}, current::Vector{Float64}, tolerance::Flo
     if (isfinite(xn) && xn > tolerance)
         xy /= xn
     end
-    @assert xy < tolerance
+    @test xy < tolerance
     return true
 end
 
@@ -20,27 +20,27 @@ allEq(target::Vector{Float64}, current::Vector{Float64}) =
     allEq(target, current, sqrt(eps()))
 
 # dbeta
-@assert abs(dbeta(-1, 1, 1) - 0.0) < 10e-8
-@assert abs(dbeta(0, 1, 1) - 1.0) < 10e-8
-@assert abs(dbeta(1, 1, 1) - 1.0) < 10e-8
+@test abs(dbeta(-1, 1, 1) - 0.0) < 10e-8
+@test abs(dbeta(0, 1, 1) - 1.0) < 10e-8
+@test abs(dbeta(1, 1, 1) - 1.0) < 10e-8
 
 # dbinom
-@assert abs(dbinom(0, 2, 0.5) - 0.25) < 10e-8
-@assert abs(dbinom(1, 2, 0.5) - 0.5) < 10e-8
-@assert abs(dbinom(2, 2, 0.5) - 0.25) < 10e-8
+@test abs(dbinom(0, 2, 0.5) - 0.25) < 10e-8
+@test abs(dbinom(1, 2, 0.5) - 0.5) < 10e-8
+@test abs(dbinom(2, 2, 0.5) - 0.25) < 10e-8
 
 # dcauchy
-@assert abs(dcauchy(0, 0, 1) - (1 / pi) * (1 / ((0 - 0)^2 + 1^2))) < 10e-8
-@assert abs(dcauchy(0, 1, 2) - (1 / pi) * (2 / ((0 - 1)^2 + 2^2))) < 10e-8
+@test abs(dcauchy(0, 0, 1) - (1 / pi) * (1 / ((0 - 0)^2 + 1^2))) < 10e-8
+@test abs(dcauchy(0, 1, 2) - (1 / pi) * (2 / ((0 - 1)^2 + 2^2))) < 10e-8
 
 # dchisq
-@assert abs(dchisq(1, 1) - let x = 1; k = 1; (x^((k / 2) - 1) * exp(-(x / 2))) / (2^(k / 2) * gamma(k / 2)) end) < 10e-8
-@assert abs(dchisq(2, 3) - let x = 2; k = 3; (x^((k / 2) - 1) * exp(-(x / 2))) / (2^(k / 2) * gamma(k / 2)) end) < 10e-8
+@test abs(dchisq(1, 1) - let x = 1; k = 1; (x^((k / 2) - 1) * exp(-(x / 2))) / (2^(k / 2) * gamma(k / 2)) end) < 10e-8
+@test abs(dchisq(2, 3) - let x = 2; k = 3; (x^((k / 2) - 1) * exp(-(x / 2))) / (2^(k / 2) * gamma(k / 2)) end) < 10e-8
 
 # dexp
-@assert abs(dexp(1, 2) - (1 / 2) * exp(-(1 / 2) * 1)) < 10e-8
-@assert abs(dexp(1, 3) - (1 / 3) * exp(-(1 / 3) * 1)) < 10e-8
-@assert abs(dexp(2, 3) - (1 / 3) * exp(-(1 / 3) * 2)) < 10e-8
+@test abs(dexp(1, 2) - (1 / 2) * exp(-(1 / 2) * 1)) < 10e-8
+@test abs(dexp(1, 3) - (1 / 3) * exp(-(1 / 3) * 1)) < 10e-8
+@test abs(dexp(2, 3) - (1 / 3) * exp(-(1 / 3) * 2)) < 10e-8
 
 n = 26
 

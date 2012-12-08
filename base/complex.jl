@@ -277,7 +277,7 @@ function sin(z::Complex)
     u = exp(imag(z))
     v = 1/u
     rz = real(z)
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     complex(u*sin(rz), v*cos(rz))
 end
@@ -286,7 +286,7 @@ function cos(z::Complex)
     u = exp(imag(z))
     v = 1/u
     rz = real(z)
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     complex(u*cos(rz), -v*sin(rz))
 end
@@ -296,20 +296,20 @@ function log(z::Complex)
     ai = abs(imag(z))
     if ar < ai
         r = ar/ai
-        re = log(ai) + 0.5*log1p(r*r)
+        re = log(ai) + log1p(r*r)/2
     else
         if ar == 0
             re = -inv(ar)
         else
             r = ai/ar
-            re = log(ar) + 0.5*log1p(r*r)
+            re = log(ar) + log1p(r*r)/2
         end
     end
     complex(re, atan2(imag(z), real(z)))
 end
 
-log10(z::Complex) = log(z)/2.302585092994046
-log2(z::Complex) = log(z)/0.6931471805599453
+log10(z::Complex) = log(z)/oftype(real(z),2.302585092994046)
+log2(z::Complex) = log(z)/oftype(real(z),0.6931471805599453)
 
 function exp(z::Complex)
     er = exp(real(z))
@@ -382,7 +382,7 @@ end
 function tan(z::Complex)
     u = exp(imag(z))
     v = 1/u
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     sinre = sin(real(z))
     cosre = cos(real(z))
@@ -415,14 +415,14 @@ function atan(z::Complex)
     yp1 = 1+imag(z)
     m1ysq = m1y*m1y
     yp1sq = yp1*yp1
-    complex(0.5(atan2(real(z),m1y) - atan2(-real(z),yp1)),
-            0.25*log((yp1sq + xsq)/(xsq + m1ysq)))
+    complex((atan2(real(z),m1y) - atan2(-real(z),yp1))/2,
+            log((yp1sq + xsq)/(xsq + m1ysq))/4)
 end
 
 function sinh(z::Complex)
     u = exp(real(z))
     v = 1/u
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     complex(v*cos(imag(z)), u*sin(imag(z)))
 end
@@ -430,7 +430,7 @@ end
 function cosh(z::Complex)
     u = exp(real(z))
     v = 1/u
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     complex(u*cos(imag(z)), v*sin(imag(z)))
 end
@@ -439,7 +439,7 @@ function tanh(z::Complex)
     cosim = cos(imag(z))
     u = exp(real(z))
     v = 1/u
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     d = cosim*cosim + v*v
     complex(u*v/d, sin(imag(z))*cosim/d)

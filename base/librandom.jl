@@ -1,8 +1,4 @@
-librandom = dlopen("librandom")
-
 module LibRandom
-
-using Base
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_gv_init_gen_rand, 
@@ -28,14 +24,14 @@ type DSFMT_state
 end
 
 function dsfmt_get_idstring()
-    idstring = ccall(dlsym(Base.librandom, :dsfmt_get_idstring),
+    idstring = ccall((:dsfmt_get_idstring,:librandom),
                      Ptr{Uint8},
                      ())
     return bytestring(idstring)
 end
 
 function dsfmt_get_min_array_size()
-    min_array_size = ccall(dlsym(Base.librandom, :dsfmt_get_min_array_size), 
+    min_array_size = ccall((:dsfmt_get_min_array_size,:librandom), 
                            Int32, 
                            ())
 end
@@ -43,28 +39,28 @@ end
 const dsfmt_min_array_size = dsfmt_get_min_array_size()
 
 function dsfmt_init_gen_rand(s::DSFMT_state, seed::Uint32)
-    ccall(dlsym(Base.librandom, :dsfmt_init_gen_rand),
+    ccall((:dsfmt_init_gen_rand,:librandom),
           Void, 
           (Ptr{Void}, Uint32,), 
           s.val, seed)
 end
 
 function dsfmt_gv_init_gen_rand(seed::Uint32)
-    ccall(dlsym(Base.librandom, :dsfmt_gv_init_gen_rand),
+    ccall((:dsfmt_gv_init_gen_rand,:librandom),
           Void,
           (Uint32,),
           seed)
 end
 
 function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{Uint32})
-    ccall(dlsym(Base.librandom, :dsfmt_init_by_array),
+    ccall((:dsfmt_init_by_array,:librandom),
           Void, 
           (Ptr{Void}, Ptr{Uint32}, Int32), 
           s.val, seed, length(seed))
 end
 
 function dsfmt_gv_init_by_array(seed::Vector{Uint32})
-  ccall(dlsym(Base.librandom, :dsfmt_gv_init_by_array),
+  ccall((:dsfmt_gv_init_by_array,:librandom),
         Void, 
         (Ptr{Uint32}, Int32), 
         seed, length(seed))
@@ -78,14 +74,14 @@ for (genrand, gv_genrand) in
     @eval begin
      
         function ($genrand)(s::DSFMT_state)
-            ccall(dlsym(Base.librandom, $(string(genrand)) ),
+            ccall(($(string(genrand)),:librandom),
                   Float64,
                   (Ptr{Void},),
                   s.val)
         end
 
         function ($gv_genrand)()
-            ccall(dlsym(Base.librandom, $(string(gv_genrand)) ),
+            ccall(($(string(gv_genrand)),:librandom),
                   Float64,
                   ())
         end
@@ -111,7 +107,7 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
                     A[i] = rand()
                 end
             else
-                ccall(dlsym(Base.librandom, $(string(genrand_fill)) ),
+                ccall(($(string(genrand_fill)),:librandom),
                       Void,
                       (Ptr{Void}, Ptr{Float64}, Int32),
                       s.val, A, n & 0xfffffffe)
@@ -129,7 +125,7 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
                     A[i] = rand()
                 end
             else
-                ccall(dlsym(Base.librandom, $(string(gv_genrand_fill)) ),
+                ccall(($(string(gv_genrand_fill)),:librandom),
                       Void,
                       (Ptr{Void}, Int32),
                       A, n & 0xfffffffe)
@@ -144,14 +140,14 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
 end
 
 function dsfmt_genrand_uint32(s::DSFMT_state)
-    ccall(dlsym(Base.librandom, :dsfmt_genrand_uint32), 
+    ccall((:dsfmt_genrand_uint32,:librandom), 
           Uint32,
           (Ptr{Void},),
           s.val)
 end
 
 function dsfmt_gv_genrand_uint32()
-    ccall(dlsym(Base.librandom, :dsfmt_gv_genrand_uint32), 
+    ccall((:dsfmt_gv_genrand_uint32,:librandom), 
           Uint32,
           ())
 end
@@ -159,19 +155,19 @@ end
 ## randmtzig
 
 function randmtzig_create_ziggurat_tables()
-    ccall(dlsym(Base.librandom, :randmtzig_create_ziggurat_tables), 
+    ccall((:randmtzig_create_ziggurat_tables,:librandom), 
           Void,
           ())
 end
 
 function randmtzig_randn()
-    ccall(dlsym(Base.librandom, :randmtzig_randn), 
+    ccall((:randmtzig_randn,:librandom), 
           Float64,
           ())
 end
 
 function randmtzig_fill_randn!(A)
-    ccall(dlsym(Base.librandom, :randmtzig_fill_randn),
+    ccall((:randmtzig_fill_randn,:librandom),
           Void,
           (Ptr{Float64}, Int), 
           A, numel(A))
@@ -179,13 +175,13 @@ function randmtzig_fill_randn!(A)
 end
 
 function randmtzig_exprnd()
-    ccall(dlsym(Base.librandom, :randmtzig_exprnd),
+    ccall((:randmtzig_exprnd,:librandom),
           Float64, 
           ())
 end
 
 function randmtzig_fill_exprnd!(A)
-    ccall(dlsym(Base.librandom, :randmtzig_fill_exprnd),
+    ccall((:randmtzig_fill_exprnd,:librandom),
           Void,
           (Ptr{Float64}, Int), 
           A, numel(A))
@@ -196,7 +192,7 @@ end
 
 @windows_only begin
     function win32_SystemFunction036!(a::Array{Uint32})
-        ccall(dlsym(advapi32,:SystemFunction036),stdcall,Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
+        ccall((:SystemFunction036,:Advapi32),stdcall,Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
     end
 end
 

@@ -253,7 +253,8 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
-    builder.CreateCall(jlraise_func, exc);
+    builder.CreateCall2(jlthrow_line_func, exc,
+                        ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
@@ -581,7 +582,8 @@ static Value *emit_array_nd_index(Value *a, size_t nd, jl_value_t **args,
 
     ctx->f->getBasicBlockList().push_back(failBB);
     builder.SetInsertPoint(failBB);
-    builder.CreateCall(jlraise_func, builder.CreateLoad(jlboundserr_var));
+    builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
+                        ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
 
     ctx->f->getBasicBlockList().push_back(endBB);
@@ -616,14 +618,6 @@ static Value *allocate_box_dynamic(Value *jlty, int nb, Value *v)
     if (v->getType()->isPointerTy()) {
         v = builder.CreatePtrToInt(v, T_size);
     }
-    if (nb == 8)
-        return builder.CreateCall2(box8_func,  jlty, v);
-    if (nb == 16)
-        return builder.CreateCall2(box16_func, jlty, v);
-    if (nb == 32)
-        return builder.CreateCall2(box32_func, jlty, v);
-    if (nb == 64)
-        return builder.CreateCall2(box64_func, jlty, v);
     size_t sz = sizeof(void*) + (nb+7)/8;
     Value *newv = builder.CreateCall(jlallocobj_func,
                                      ConstantInt::get(T_size, sz));

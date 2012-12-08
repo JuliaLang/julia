@@ -1042,11 +1042,9 @@ function start_sge_workers(n)
                 try
                     conninfo = readline(fl)
                     hostname, port = parse_connection_info(conninfo)
-                catch e
+                finally
                     close(fl)
-                    throw(e)
                 end
-                close(fl)
                 fexists = (hostname != "")
             catch
                 print("."); flush(stdout_stream)
@@ -1187,7 +1185,7 @@ end
 macro everywhere(ex)
     quote
         @sync begin
-            at_each(()->eval($(expr(:quote,ex))))
+            at_each(()->eval(Main,$(expr(:quote,ex))))
         end
     end
 end
