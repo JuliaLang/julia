@@ -102,6 +102,8 @@ type NamedPipe <: AsyncStream
     NamedPipe() = new(C_NULL,PipeString(),false,true,false,WaitTask[],false,WaitTask[])
 end
 
+show(io,stream::NamedPipe) = print(io,"NamedPipe(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
+
 type TTY <: AsyncStream
     handle::Ptr{Void}
     open::Bool
@@ -113,6 +115,8 @@ type TTY <: AsyncStream
     closenotify::Vector{WaitTask}
     TTY(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],false,WaitTask[])
 end
+
+show(io,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
 
 abstract Socket <: AsyncStream
 
@@ -138,6 +142,8 @@ type TcpSocket <: Socket
     end
 end
 
+show(io,sock::TcpSocket) = print(io,"TcpSocket(",sock.open?"connected,":"disconnected,",nb_available(sock.buffer)," bytes waiting)")
+
 type UdpSocket <: Socket
     handle::Ptr{Void}
     open::Bool
@@ -156,6 +162,8 @@ type UdpSocket <: Socket
         this
     end
 end
+
+show(io,sock::UdpSocket) = print(io,"TcpSocket(",sock.open?"connected,":"disconnected,",nb_available(sock.buffer)," bytes waiting)")
 
 copy(s::TTY) = TTY(s.handle,s.open)
 
@@ -376,17 +384,17 @@ end
 connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,addr.host,hton(addr.port))
 
 function open_any_tcp_port(preferred_port::Uint16,cb::Callback)
-	addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
+    addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
     while true
-		socket = TcpSocket()
+        socket = TcpSocket()
         if _jl_tcp_bind(socket,addr)!=0
             error("open_any_tcp_port: could not bind to socket")
         end
         if((_jl_listen(socket,int32(4),cb)) == 0)
             return (addr.port,socket)
         end
-		socket.open = true
-		close(socket)
+        socket.open = true
+        close(socket)
         addr.port+=1;
     end
 end
