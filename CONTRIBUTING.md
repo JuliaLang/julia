@@ -14,6 +14,8 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 ## Submitting your contributions
 
+Julia now has a [package manager](https://github.com/JuliaLang/METADATA.jl). Most developers writing julia libraries are encouraged to provide them as a julia package. In case you are contributing to the core functionality or the base libraries, the process is as follows.
+
 The Julia team uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests.
 
 You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" or "RFC:" as appropriate to indicate that the work is incomplete, so that it is not accidentally merged.
