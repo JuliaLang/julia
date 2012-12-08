@@ -1,21 +1,3 @@
-# overloads
-import Base.length, Base.eltype, Base.ndims, Base.numel, Base.size
-import Base.similar, Base.fill!, Base.one, Base.copy_to, Base.reshape
-import Base.convert, Base.reinterpret, Base.ref, Base.assign, Base.check_bounds
-import Base.push, Base.append!, Base.grow, Base.pop, Base.enqueue, Base.shift
-import Base.insert, Base.del, Base.del_all, Base.~, Base.-, Base.sign, Base.real
-import Base.imag, Base.conj!, Base.conj, Base.!, Base.+, Base.div, Base.mod
-import Base.(./), Base.(.^), Base./, Base.\, Base.&, Base.|, Base.$, Base.(.*)
-import Base.(.==), Base.==, Base.(.<), Base.<, Base.(.!=), Base.!=
-import Base.(.<=), Base.<=, Base.slicedim, Base.flipdim, Base.rotl90
-import Base.rotr90, Base.rot180, Base.reverse!, Base.<<, Base.>>, Base.>>>
-import Base.nnz, Base.findfirst, Base.find, Base.findn, Base.nonzeros
-import Base.areduce, Base.max, Base.min, Base.sum, Base.prod, Base.map_to
-import Base.filter, Base.transpose, Base.ctranspose, Base.permute, Base.hcat
-import Base.vcat, Base.cat, Base.isequal, Base.cumsum, Base.cumprod
-import Base.write, Base.read, Base.msync, Base.findn_nzs, Base.reverse
-import Base.iround, Base.itrunc, Base.ifloor, Base.iceil, Base.abs
-
 # prelimnary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
@@ -60,38 +42,6 @@ BitArray(dims::Int...) = BitArray(Bool, dims...)
 
 typealias BitVector{T} BitArray{T,1}
 typealias BitMatrix{T} BitArray{T,2}
-
-# non-standard compact representation
-
-function _jl_print_bit_chunk(io::IO, c::Uint64, l::Integer)
-    for s = 0 : l - 1
-        d = (c >>> s) & 1
-        print(io, "01"[d + 1])
-        if (s + 1) & 7 == 0
-            print(io, " ")
-        end
-    end
-end
-
-_jl_print_bit_chunk(io::IO, c::Uint64) = _jl_print_bit_chunk(io, c, 64)
-
-_jl_print_bit_chunk(c::Uint64, l::Integer) = _jl_print_bit_chunk(stdout_stream, c, l)
-_jl_print_bit_chunk(c::Uint64) = _jl_print_bit_chunk(stdout_stream, c)
-
-function bitshow(io::IO, B::BitArray)
-    if length(B) == 0
-        return
-    end
-    for i = 1 : length(B.chunks) - 1
-        _jl_print_bit_chunk(io, B.chunks[i])
-        print(io, ": ")
-    end
-    l = (@_mod64 (length(B)-1)) + 1
-    _jl_print_bit_chunk(io, B.chunks[end], l)
-end
-bitshow(B::BitArray) = bitshow(stdout_stream, B)
-
-bitstring(B::BitArray) = sprint(bitshow, B)
 
 ## utility functions ##
 
@@ -1952,33 +1902,3 @@ function cumprod{T}(v::BitVector{T})
     end
     return c
 end
-
-write(s::IO, B::BitArray) = write(s, B.chunks)
-
-read(s::IO, B::BitArray) = read(s, B.chunks)
-
-function mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
-    prot, flags, iswrite = mmap_stream_settings(s)
-    if length(dims) == 0
-        dims = 0
-    end
-    n = prod(dims)
-    nc = _jl_num_bit_chunks(n)
-    B = BitArray{T,N}()
-    chunks = mmap_array(Uint64, (nc,), s, offset)
-    if iswrite
-        chunks[end] &= @_msk_end n
-    else
-        if chunks[end] != chunks[end] & @_msk_end n
-            error("The given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with r+ to override)")
-        end
-    end
-    dims = [i::Int for i in dims]
-    B.chunks = chunks
-    B.dims = dims
-    return B
-end
-mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(T, dims, s, position(s))
-
-msync{T}(B::BitArray{T}, flags::Integer) = msync(pointer(B.chunks), flags)
-msync{T}(B::BitArray{T}) = msync(B.chunks,MS_SYNC)

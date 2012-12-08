@@ -1,5 +1,3 @@
-## linalg_dense.jl: Linear Algebra functions for dense representations ##
-
 function issym(A::Matrix)
     m, n = size(A)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end

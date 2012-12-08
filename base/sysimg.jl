@@ -65,6 +65,7 @@ include("rational.jl")
 include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
+include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
@@ -136,11 +137,10 @@ include("build_h.jl")
 include("blas.jl")
 include("lapack.jl")
 include("matmul.jl")
+include("sparse.jl")
 include("linalg.jl")
 include("linalg_dense.jl")
-
-# sparse matrix operations
-include("sparse.jl")
+include("linalg_bitarray.jl")
 include("linalg_sparse.jl")
 
 # signal processing

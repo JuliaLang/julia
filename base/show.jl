@@ -656,7 +656,7 @@ function print_matrix(io,
     cols -= strlen(pre) + strlen(post)
     presp = repeat(" ", strlen(pre))
     postsp = ""
-    @assert strlen(hdots) == strlen(ddots)
+    @assert strwidth(hdots) == strwidth(ddots)
     ss = strlen(sep)
     m, n = size(X)
     if m <= rows # rows fit
@@ -838,3 +838,35 @@ end
 
 show(io, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
 show(io, v::AbstractVector)      = show_vector(io, v, "[", "]")
+
+# printing bit arrays
+
+function _jl_print_bit_chunk(io::IO, c::Uint64, l::Integer)
+    for s = 0 : l - 1
+        d = (c >>> s) & 1
+        print(io, "01"[d + 1])
+        if (s + 1) & 7 == 0
+            print(io, " ")
+        end
+    end
+end
+
+_jl_print_bit_chunk(io::IO, c::Uint64) = _jl_print_bit_chunk(io, c, 64)
+
+_jl_print_bit_chunk(c::Uint64, l::Integer) = _jl_print_bit_chunk(stdout_stream, c, l)
+_jl_print_bit_chunk(c::Uint64) = _jl_print_bit_chunk(stdout_stream, c)
+
+function bitshow(io::IO, B::BitArray)
+    if length(B) == 0
+        return
+    end
+    for i = 1 : length(B.chunks) - 1
+        _jl_print_bit_chunk(io, B.chunks[i])
+        print(io, ": ")
+    end
+    l = (@_mod64 (length(B)-1)) + 1
+    _jl_print_bit_chunk(io, B.chunks[end], l)
+end
+bitshow(B::BitArray) = bitshow(stdout_stream, B)
+
+bitstring(B::BitArray) = sprint(bitshow, B)

@@ -1,5 +1,3 @@
-## linalg_sparse.jl: Basic Linear Algebra functions for sparse representations ##
-
 ## sparse matrix multiplication
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.

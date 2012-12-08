@@ -1,3 +1,7 @@
+# for now, manually import necessary bit array functions:
+import Base.BitArray, Base.bitrand, Base.bitpack, Base.bitunpack,
+       Base.bitones, Base.bitzeros, Base.rotl, Base.rotr
+
 macro check_bit_operation(func, RetT, args)
     quote
         r1 = ($func)($(args.args...))
@@ -17,11 +21,8 @@ let t0 = time()
     end
 end
 
-cd("../extras") do
-require("linalg_bitarray")
-
 TT = Uint8
-S = promote_type(TT, Int)
+SS = promote_type(TT, Int)
 
 # vectors size
 v1 = 260
@@ -249,15 +250,15 @@ b2 = bitrand(TT, n1, n1)
 
 b1 = bitrand(TT, n1, n2)
 b2 = randi(10, n1, n2)
-@check_bit_operation (&) Array{S} (b1, b2)
-@check_bit_operation (|) Array{S} (b1, b2)
-@check_bit_operation ($) Array{S} (b1, b2)
-@check_bit_operation (-) Array{S} (b1, b2)
-@check_bit_operation (.*) Array{S} (b1, b2)
+@check_bit_operation (&) Array{SS} (b1, b2)
+@check_bit_operation (|) Array{SS} (b1, b2)
+@check_bit_operation ($) Array{SS} (b1, b2)
+@check_bit_operation (-) Array{SS} (b1, b2)
+@check_bit_operation (.*) Array{SS} (b1, b2)
 @check_bit_operation (./) Array{Float64} (b1, b2)
 @check_bit_operation (.^) Array{Float64} (b1, b2)
-@check_bit_operation div Array{S} (b1, b2)
-@check_bit_operation mod Array{S} (b1, b2)
+@check_bit_operation div Array{SS} (b1, b2)
+@check_bit_operation mod Array{SS} (b1, b2)
 
 while true
     global b1
@@ -414,8 +415,8 @@ b3 = bitrand(TT, s1, s2, s3, s1)
 @check_bit_operation cat BitArray{TT} (6, b1, b1)
 
 b1 = bitrand(TT, 1, v1, 1)
-@check_bit_operation cat Array{S} (2, 0, b1, 1, 1, b1)
-@check_bit_operation cat Array{S} (2, 3, b1, 4, 5, b1)
+@check_bit_operation cat Array{SS} (2, 0, b1, 1, 1, b1)
+@check_bit_operation cat Array{SS} (2, 3, b1, 4, 5, b1)
 
 b1 = bitrand(Bool, 1, v1, 1)
 @check_bit_operation cat BitArray{Bool} (2, false, b1, true, true, b1)
@@ -445,10 +446,8 @@ for k = -max(n1,n2) : max(n1,n2)
 end
 
 #b1 = bitrand(TT, v1)
-#@check_bit_operation diff Array{S} (b1,)
+#@check_bit_operation diff Array{SS} (b1,)
 #b1 = bitrand(TT, n1, n2)
-#@check_bit_operation diff Array{S} (b1,)
+#@check_bit_operation diff Array{SS} (b1,)
 
 timesofar("linalg")
-
-end # do
