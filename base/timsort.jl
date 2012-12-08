@@ -349,10 +349,9 @@ end
 # Merge runs a and b in vector v (a is smaller)
 function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState, p::AbstractVector{Int})
 
-    # TODO: update me FRED
-
     # Copy a
     v_a = v[a]
+    p_a = p[a]
 
     # Pointer into (sub)arrays
     i = first(a)
@@ -367,11 +366,13 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
             while from_a <= length(a) && from_b <= last(b)
                 if $(lt(:(v[from_b]), :(v_a[from_a])))
                     v[i] = v[from_b]
+                    p[i] = p[from_b]
                     from_b += 1
                     count_a = 0
                     count_b += 1
                 else
                     v[i] = v_a[from_a]
+                    p[i] = p_a[from_a]
                     from_a += 1
                     count_a += 1
                     count_b = 0
@@ -398,11 +399,13 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
                 b_run = from_b : ($gallop_first)($(args...), v, v_a[from_a], from_b, last(b)) - 1
                 i_end = i + length(b_run) - 1
                 v[i:i_end] = v[b_run]
+                p[i:i_end] = p[b_run]
                 i = i_end + 1
                 from_b = last(b_run) + 1
                 
                 # ... then copy the first element from a
                 v[i] = v_a[from_a]
+                p[i] = p_a[from_a]
                 i += 1
                 from_a += 1
 
@@ -412,11 +415,13 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
                 a_run = from_a : ($gallop_last)($(args...), v_a, v[from_b], from_a, length(a)) - 1
                 i_end = i + length(a_run) - 1
                 v[i:i_end] = v_a[a_run]
+                p[i:i_end] = p_a[a_run]
                 i = i_end + 1
                 from_a = last(a_run) + 1
 
                 # ... then copy the first element from b
                 v[i] = v[from_b]
+                p[i] = p[from_b]
                 i += 1
                 from_b += 1
 
@@ -438,6 +443,7 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
             # copy end of a
             i_end = i + (length(a) - from_a)
             v[i:i_end] = v_a[from_a:end]
+            p[i:i_end] = p_a[from_a:end]
             break
         end
     end
@@ -542,10 +548,9 @@ end
 # Merge runs a and b in vector v (b is smaller)
 function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState, p::AbstractVector{Int})
 
-    # TODO: update me FRED
-
     # Copy b
     v_b = v[b]
+    p_b = p[b]
 
     # Pointer into (sub)arrays
     i = last(b)
@@ -560,11 +565,13 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
             while from_a >= first(a) && from_b >= 1
                 if $(lt(:(v[from_a]), :(v_b[from_b])))
                     v[i] = v_b[from_b]
+                    p[i] = p_b[from_b]
                     from_b -= 1
                     count_a = 0
                     count_b += 1
                 else
                     v[i] = v[from_a]
+                    p[i] = p[from_a]
                     from_a -= 1
                     count_a += 1
                     count_b = 0
@@ -591,11 +598,13 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
                 b_run = ($rgallop_first)($(args...), v_b, v[from_a], 1, from_b) : from_b
                 i_start = i - length(b_run) + 1
                 v[i_start:i] = v_b[b_run]
+                p[i_start:i] = p_b[b_run]
                 i = i_start - 1
                 from_b = first(b_run) - 1
 
                 # ... then copy the first element from a
                 v[i] = v[from_a]
+                p[i] = p[from_a]
                 i -= 1
                 from_a -= 1
 
@@ -605,11 +614,13 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
                 a_run = ($rgallop_last)($(args...), v, v_b[from_b], first(a), from_a) : from_a
                 i_start = i - length(a_run) + 1
                 v[i_start:i] = v[a_run]
+                p[i_start:i] = p[a_run]
                 i = i_start - 1
                 from_a = first(a_run) - 1
                 
                 # ... then copy the first element from b
                 v[i] = v_b[from_b]
+                p[i] = p_b[from_b]
                 i -= 1
                 from_b -= 1
 
@@ -631,6 +642,7 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
             # copy start of b
             i_start = i - from_b + 1
             v[i_start:i] = v_b[1:from_b]
+            p[i_start:i] = p_b[1:from_b]
             break
         end
     end
@@ -677,7 +689,7 @@ function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
     v
 end
 
-($timsort)($(args...), v::AbstractVector) = ($timsort)($(args...), v::AbstractVector, 1, length(v))
+($timsort)($(args...), v::AbstractVector) = ($timsort)($(args...), v, 1, length(v))
 
 
 # Timsort function which permutes an auxilliary array mirroring the sort
