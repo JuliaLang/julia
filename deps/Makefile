@@ -234,10 +234,14 @@ readline-$(READLINE_VER).tar.gz:
 	$(WGET) http://ftp.gnu.org/gnu/readline/$@
 	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
 	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
+	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-003
+	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-004
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-001
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-002
+	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-003
+	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-004
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
