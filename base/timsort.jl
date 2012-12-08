@@ -187,13 +187,10 @@ end
 #
 # If any of these are violated, a merge occurs to 
 # correct it
-($merge_collapse)($(args...), v::AbstractVector, state::MergeState) = ($merge_collapse)($(args...), v, state, false)
+#($merge_collapse)($(args...), v::AbstractVector, state::MergeState) = ($merge_collapse)($(args...), v, state, false)
 
-function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, force::Bool)
-    if length(state.runs) < 2
-        return v
-    end
-    
+function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, force::Bool, p...)
+
     while length(state.runs) > 2
         (a,b,c) = state.runs[end-2:end]
        
@@ -202,14 +199,14 @@ function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, for
         end
 
         if length(a) < length(c)
-            ($merge)($(args...), v,a,b,state)
+            ($merge)($(args...), v,a,b,state,p)
             pop(state.runs)
             pop(state.runs)
             pop(state.runs)
             push(state.runs, first(a):last(b))
             push(state.runs, c)
         else
-            ($merge)($(args...), v,b,c,state)
+            ($merge)($(args...), v,b,c,state,p)
             pop(state.runs)
             pop(state.runs)
             push(state.runs, first(b):last(c))
@@ -220,19 +217,20 @@ function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, for
         (a,b) = state.runs[end-1:end]
 
         if length(a) <= length(b) || force
-            ($merge)($(args...), v,a,b,state)
+            ($merge)($(args...), v,a,b,state,p)
             pop(state.runs)
             pop(state.runs)
             push(state.runs, first(a):last(b))
         end
     end
 
-    v
+    return # v   ## Used to return v, but should be unnecessary, as the only user of this function
+                  ## is timsort(), and the return value is ignored there...
 end
 
 
 # Merge runs a and b in vector v
-function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState)
+function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState, p)
 
     # First elements in a <= b[1] are already in place
     a = ($gallop_last)($(args...), v, v[first(b)], first(a), last(a)) : last(a)
@@ -247,9 +245,9 @@ function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeSta
     # Choose merge_lo or merge_hi based on the amount
     # of temporary memory needed (smaller of a and b)
     if length(a) < length(b)
-        ($merge_lo)($(args...), v, a, b, state)
+        ($merge_lo)($(args...), v, a, b, state, p...)
     else
-        ($merge_hi)($(args...), v, a, b, state)
+        ($merge_hi)($(args...), v, a, b, state, p...)
     end
 end
 
@@ -260,7 +258,7 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
     v_a = v[a]
 
     # Pointer into (sub)arrays
-    p = first(a)
+    i = first(a)
     from_a = 1
     from_b = first(b)
 
@@ -271,17 +269,17 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
             count_a = count_b = 0
             while from_a <= length(a) && from_b <= last(b)
                 if $(lt(:(v[from_b]), :(v_a[from_a])))
-                    v[p] = v[from_b]
+                    v[i] = v[from_b]
                     from_b += 1
                     count_a = 0
                     count_b += 1
                 else
-                    v[p] = v_a[from_a]
+                    v[i] = v_a[from_a]
                     from_a += 1
                     count_a += 1
                     count_b = 0
                 end
-                p += 1
+                i += 1
 
                 # Switch to galloping mode if a string of elements
                 # has come from the same set
@@ -301,28 +299,28 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
             while from_a <= length(a) && from_b <= last(b)
                 # Copy the next run from b
                 b_run = from_b : ($gallop_first)($(args...), v, v_a[from_a], from_b, last(b)) - 1
-                p_end = p + length(b_run) - 1
-                v[p:p_end] = v[b_run]
-                p = p_end + 1
+                i_end = i + length(b_run) - 1
+                v[i:i_end] = v[b_run]
+                i = i_end + 1
                 from_b = last(b_run) + 1
                 
                 # ... then copy the first element from a
-                v[p] = v_a[from_a]
-                p += 1
+                v[i] = v_a[from_a]
+                i += 1
                 from_a += 1
 
                 if from_a > length(a) || from_b > last(b) break end
 
                 # Copy the next run from a
                 a_run = from_a : ($gallop_last)($(args...), v_a, v[from_b], from_a, length(a)) - 1
-                p_end = p + length(a_run) - 1
-                v[p:p_end] = v_a[a_run]
-                p = p_end + 1
+                i_end = i + length(a_run) - 1
+                v[i:i_end] = v_a[a_run]
+                i = i_end + 1
                 from_a = last(a_run) + 1
 
                 # ... then copy the first element from b
-                v[p] = v[from_b]
-                p += 1
+                v[i] = v[from_b]
+                i += 1
                 from_b += 1
 
                 # Return to normal mode if we haven't galloped...
@@ -341,12 +339,110 @@ function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
 
         if mode == :finalize
             # copy end of a
-            p_end = p + (length(a) - from_a)
-            v[p:p_end] = v_a[from_a:end]
+            i_end = i + (length(a) - from_a)
+            v[i:i_end] = v_a[from_a:end]
             break
         end
     end
 end
+
+# Merge runs a and b in vector v (a is smaller)
+function ($merge_lo)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState, p::AbstractVector{Int})
+
+    # TODO: update me FRED
+
+    # Copy a
+    v_a = v[a]
+
+    # Pointer into (sub)arrays
+    i = first(a)
+    from_a = 1
+    from_b = first(b)
+
+    mode = :normal
+    while true
+        if mode == :normal
+            # Compare and copy element by element
+            count_a = count_b = 0
+            while from_a <= length(a) && from_b <= last(b)
+                if $(lt(:(v[from_b]), :(v_a[from_a])))
+                    v[i] = v[from_b]
+                    from_b += 1
+                    count_a = 0
+                    count_b += 1
+                else
+                    v[i] = v_a[from_a]
+                    from_a += 1
+                    count_a += 1
+                    count_b = 0
+                end
+                i += 1
+
+                # Switch to galloping mode if a string of elements
+                # has come from the same set
+                if count_b >= state.min_gallop || count_a >= state.min_gallop
+                    mode = :galloping
+                    break
+                end
+            end
+            # Finalize if we've exited the loop normally
+            if mode == :normal
+                mode = :finalize
+            end
+        end
+
+        if mode == :galloping
+            # Use binary search to find range to copy
+            while from_a <= length(a) && from_b <= last(b)
+                # Copy the next run from b
+                b_run = from_b : ($gallop_first)($(args...), v, v_a[from_a], from_b, last(b)) - 1
+                i_end = i + length(b_run) - 1
+                v[i:i_end] = v[b_run]
+                i = i_end + 1
+                from_b = last(b_run) + 1
+                
+                # ... then copy the first element from a
+                v[i] = v_a[from_a]
+                i += 1
+                from_a += 1
+
+                if from_a > length(a) || from_b > last(b) break end
+
+                # Copy the next run from a
+                a_run = from_a : ($gallop_last)($(args...), v_a, v[from_b], from_a, length(a)) - 1
+                i_end = i + length(a_run) - 1
+                v[i:i_end] = v_a[a_run]
+                i = i_end + 1
+                from_a = last(a_run) + 1
+
+                # ... then copy the first element from b
+                v[i] = v[from_b]
+                i += 1
+                from_b += 1
+
+                # Return to normal mode if we haven't galloped...
+                if length(a_run) < MIN_GALLOP && length(b_run) < MIN_GALLOP
+                    mode = :normal
+                    break
+                end
+                # Reduce min_gallop if this gallop was successful
+                state.min_gallop -= 1
+            end
+            if mode == :galloping
+                mode = :finalize
+            end
+            state.min_gallop = max(state.min_gallop,0) + 2  # penalty for leaving gallop mode
+        end
+
+        if mode == :finalize
+            # copy end of a
+            i_end = i + (length(a) - from_a)
+            v[i:i_end] = v_a[from_a:end]
+            break
+        end
+    end
+end
+
 
 # Merge runs a and b in vector v (b is smaller)
 function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState)
@@ -355,7 +451,7 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
     v_b = v[b]
 
     # Pointer into (sub)arrays
-    p = last(b)
+    i = last(b)
     from_a = last(a)
     from_b = length(b)
 
@@ -366,17 +462,17 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
             count_a = count_b = 0
             while from_a >= first(a) && from_b >= 1
                 if $(lt(:(v[from_a]), :(v_b[from_b])))
-                    v[p] = v_b[from_b]
+                    v[i] = v_b[from_b]
                     from_b -= 1
                     count_a = 0
                     count_b += 1
                 else
-                    v[p] = v[from_a]
+                    v[i] = v[from_a]
                     from_a -= 1
                     count_a += 1
                     count_b = 0
                 end
-                p -= 1
+                i -= 1
 
                 # Switch to galloping mode if a string of elements
                 # has come from the same set
@@ -396,28 +492,28 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
             while from_a >= first(a) && from_b >= 1
                 # Copy the next run from b
                 b_run = ($rgallop_first)($(args...), v_b, v[from_a], 1, from_b) : from_b
-                p_start = p - length(b_run) + 1
-                v[p_start:p] = v_b[b_run]
-                p = p_start - 1
+                i_start = i - length(b_run) + 1
+                v[i_start:i] = v_b[b_run]
+                i = i_start - 1
                 from_b = first(b_run) - 1
 
                 # ... then copy the first element from a
-                v[p] = v[from_a]
-                p -= 1
+                v[i] = v[from_a]
+                i -= 1
                 from_a -= 1
 
                 if from_a < first(a) || from_b < 1 break end
                 
                 # Copy the next run from a
                 a_run = ($rgallop_last)($(args...), v, v_b[from_b], first(a), from_a) : from_a
-                p_start = p - length(a_run) + 1
-                v[p_start:p] = v[a_run]
-                p = p_start - 1
+                i_start = i - length(a_run) + 1
+                v[i_start:i] = v[a_run]
+                i = i_start - 1
                 from_a = first(a_run) - 1
                 
                 # ... then copy the first element from b
-                v[p] = v_b[from_b]
-                p -= 1
+                v[i] = v_b[from_b]
+                i -= 1
                 from_b -= 1
 
                 # Return to normal mode if we haven't galloped...
@@ -436,12 +532,110 @@ function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::Merge
 
         if mode == :finalize
             # copy start of b
-            p_start = p - from_b + 1
-            v[p_start:p] = v_b[1:from_b]
+            i_start = i - from_b + 1
+            v[i_start:i] = v_b[1:from_b]
             break
         end
     end
 end
+
+# Merge runs a and b in vector v (b is smaller)
+function ($merge_hi)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeState, p::AbstractVector{Int})
+
+    # TODO: update me FRED
+
+    # Copy b
+    v_b = v[b]
+
+    # Pointer into (sub)arrays
+    i = last(b)
+    from_a = last(a)
+    from_b = length(b)
+
+    mode = :normal
+    while true
+        if mode == :normal
+            # Compare and copy element by element
+            count_a = count_b = 0
+            while from_a >= first(a) && from_b >= 1
+                if $(lt(:(v[from_a]), :(v_b[from_b])))
+                    v[i] = v_b[from_b]
+                    from_b -= 1
+                    count_a = 0
+                    count_b += 1
+                else
+                    v[i] = v[from_a]
+                    from_a -= 1
+                    count_a += 1
+                    count_b = 0
+                end
+                i -= 1
+
+                # Switch to galloping mode if a string of elements
+                # has come from the same set
+                if count_b >= state.min_gallop || count_a >= state.min_gallop
+                   mode = :galloping
+                   break
+                end
+            end
+            # Finalize if we've exited the loop normally
+            if mode == :normal
+                mode = :finalize
+            end
+        end
+
+        if mode == :galloping
+            # Use binary search to find range to copy
+            while from_a >= first(a) && from_b >= 1
+                # Copy the next run from b
+                b_run = ($rgallop_first)($(args...), v_b, v[from_a], 1, from_b) : from_b
+                i_start = i - length(b_run) + 1
+                v[i_start:i] = v_b[b_run]
+                i = i_start - 1
+                from_b = first(b_run) - 1
+
+                # ... then copy the first element from a
+                v[i] = v[from_a]
+                i -= 1
+                from_a -= 1
+
+                if from_a < first(a) || from_b < 1 break end
+                
+                # Copy the next run from a
+                a_run = ($rgallop_last)($(args...), v, v_b[from_b], first(a), from_a) : from_a
+                i_start = i - length(a_run) + 1
+                v[i_start:i] = v[a_run]
+                i = i_start - 1
+                from_a = first(a_run) - 1
+                
+                # ... then copy the first element from b
+                v[i] = v_b[from_b]
+                i -= 1
+                from_b -= 1
+
+                # Return to normal mode if we haven't galloped...
+                if length(a_run) < MIN_GALLOP && length(b_run) < MIN_GALLOP
+                    mode = :normal
+                    break
+                end
+                # Reduce min_gallop if this gallop was successful
+                state.min_gallop -= 1
+            end
+            if mode == :galloping
+                mode = :finalize
+            end
+            state.min_gallop = max(state.min_gallop, 0) + 2  # penalty for leaving gallop mode
+        end
+
+        if mode == :finalize
+            # copy start of b
+            i_start = i - from_b + 1
+            v[i_start:i] = v_b[1:from_b]
+            break
+        end
+    end
+end
+
 
 # Timsort function
 function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
@@ -449,21 +643,21 @@ function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
     minrun = merge_compute_minrun(hi-lo+1)
     state = MergeState()
 
-    p = lo
-    while p <= hi
-        run_range = $(next_run)($(args...), v, p, hi)
+    i = lo
+    while i <= hi
+        run_range = $(next_run)($(args...), v, i, hi)
         count = length(run_range)
         if count < minrun
             # Make a run of length minrun
-            count = min(minrun, hi-p+1)
-            run_range = p:p+count-1
-            ($insertionsort)($(args...), v, p, p+count-1)
+            count = min(minrun, hi-i+1)
+            run_range = i:i+count-1
+            ($insertionsort)($(args...), v, i, i+count-1)
         else
             if !issorted(run_range)
                 #reverse!(sub(v, run_range))
                 # Why is this faster?
-                for i = 0:div(count,2)-1
-                    v[p+i], v[p+count-i-1] = v[p+count-i-1], v[p+i]
+                for j = 0:div(count,2)-1
+                    v[i+j], v[i+count-j-1] = v[i+count-j-1], v[i+j]
                 end
                 run_range = last(run_range):first(run_range)
             end
@@ -471,7 +665,7 @@ function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
 
         # Push this run onto the queue and merge if needed
         push(state.runs, run_range)
-        p = p+count
+        i = i+count
         ($merge_collapse)($(args...), v, state);
     end
 
@@ -484,6 +678,50 @@ function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
 end
 
 ($timsort)($(args...), v::AbstractVector) = ($timsort)($(args...), v::AbstractVector, 1, length(v))
+
+
+# Timsort function which permutes an auxilliary array mirroring the sort
+function ($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
+    # Initialization
+    minrun = merge_compute_minrun(hi-lo+1)
+    state = MergeState()
+
+    i = lo
+    while i <= hi
+        run_range = $(next_run)($(args...), v, i, hi)
+        count = length(run_range)
+        if count < minrun
+            # Make a run of length minrun
+            count = min(minrun, hi-i+1)
+            run_range = i:i+count-1
+            ($insertionsort)($(args...), v, i, i+count-1)
+        else
+            if !issorted(run_range)
+                #reverse!(sub(v, run_range))
+                # Why is this faster?
+                for j = 0:div(count,2)-1
+                    v[i+j], v[i+count-j-1] = v[i+count-j-1], v[i+j]
+                    p[i+j], p[i+count-j-1] = p[i+count-j-1], p[i+j]
+                end
+                run_range = last(run_range):first(run_range)
+            end
+        end
+
+        # Push this run onto the queue and merge if needed
+        push(state.runs, run_range)
+        i = i+count
+        ($merge_collapse)($(args...), v, state, false, p)
+    end
+
+    # Force merge at the end
+    if length(state.runs) > 1
+        ($merge_collapse)($(args...), v, state, true, p)
+    end
+
+    v
+end
+
+($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}) = ($timsort)($(args...), v, p, 1, length(v))
 
 end; end # quote; macro
 

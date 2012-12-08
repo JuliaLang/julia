@@ -78,11 +78,11 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
             return $(expr(:call, insertionsort, args..., :a, :lo, :hi))
         end
         i, j = lo, hi
-        # pivot = (a[lo]+a[hi])/2                                   # 1.14x
-          pivot = a[(lo+hi)>>>1]                                    # 1.15x
-        # pivot = (a[lo]+a[hi]+a[(lo+hi)>>>1])/3                    # 1.16x
-        # pivot = _jl_pivot_middle(a[lo], a[hi], a[(lo+hi)>>>1])    # 1.23x
-        # pivot = a[randival(lo,hi)]                                # 1.28x
+        # pivot = (a[lo]+a[hi])/2                                               # 1.14x
+          pivot = a[(lo+hi)>>>1]                                                # 1.15x
+        # pivot = (a[lo]+a[hi]+a[(lo+hi)>>>1])/3                                # 1.16x
+        # pivot = _jl_pivot_middle($(args...), a[lo], a[hi], a[(lo+hi)>>>1])    # 1.23x
+        # pivot = a[randival(lo,hi)]                                            # 1.28x
         while i <= j
             while $(lt(:(a[i]), :pivot)); i += 1; end
             while $(lt(:pivot, :(a[j]))); j -= 1; end
