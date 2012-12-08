@@ -2,8 +2,6 @@
 ### GLPK API Wrapper
 ###
 
-require("sparse")
-
 module GLPK
 
 export

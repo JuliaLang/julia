@@ -1,9 +1,6 @@
-require("linalg_sparse")
-
 #module Suitesparse
-#import Base.SparseMatrixCSC
 
-import Base.size, Base.nnz, Base.eltype, Base.show
+import Base.SparseMatrixCSC, Base.size, Base.nnz, Base.eltype, Base.show, Base.triu, Base.norm, Base.solve
 
 export                                  # types
     CholmodPtr,

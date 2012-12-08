@@ -1,12 +1,3 @@
-# overloads
-import Base.size, Base.nnz, Base.eltype, Base.show, Base.reinterpret, Base.copy
-import Base.reshape, Base.similar, Base.convert, Base.find, Base.findn
-import Base.one, Base.transpose, Base.ctranspose, Base.+, Base.-, Base.(.*), Base.!
-import Base.(./), Base.(.\), Base.(.^), Base.sum, Base.ref, Base.assign
-import Base.vcat, Base.hcat, Base.cat, Base.hvcat, Base.length, Base.findn_nzs
-import Base.full, Base.\, Base.areduce, Base.min, Base.max, Base.sum, Base.prod
-import Base.tril, Base.triu, Base.(==), Base.>, Base.>=, Base.<, Base.<=
-
 abstract AbstractSparseMatrix{Tv,Ti} <: AbstractMatrix{Tv}
 
 issparse(A::AbstractArray) = false

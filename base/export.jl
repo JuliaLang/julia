@@ -13,6 +13,7 @@ export
     
 # Types
     AbstractMatrix,
+    AbstractSparseMatrix,
     AbstractVector,
     Array,
     Associative,
@@ -75,6 +76,7 @@ export
     Reverse,
     RopeString,
     Set,
+    SparseMatrixCSC,
     StridedArray,
     StridedMatrix,
     StridedVecOrMat,
@@ -707,6 +709,18 @@ export
     triu,
     tril!,
     triu!,
+
+# sparse
+    dense,
+    full,
+    issparse,
+    sparse,
+    speye,
+    spones,
+    sprand,
+    sprandbool,
+    sprandn,
+    spzeros,
 
 # dequeues
     append!,

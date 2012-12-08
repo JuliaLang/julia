@@ -1,3 +1,4 @@
+runtests("suitesparse")
 runtests("glpk")
 runtests("linprog")
 runtests("bigfloat")

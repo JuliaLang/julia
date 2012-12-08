@@ -1,5 +1,3 @@
-require("linalg_sparse")
-
 ## Can't modularize until Sparse is a module - at least the
 ## SparseMatrixCSC is not defined even after the require("sparse")
 

@@ -131,16 +131,17 @@ include("util.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
 
-## Load optional external libraries
-
-include("build_h.jl")
-
 # linear algebra
+include("build_h.jl")
 include("blas.jl")
 include("lapack.jl")
 include("matmul.jl")
 include("linalg.jl")
 include("linalg_dense.jl")
+
+# sparse matrix operations
+include("sparse.jl")
+include("linalg_sparse.jl")
 
 # signal processing
 include("fftw.jl")
