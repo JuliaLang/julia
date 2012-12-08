@@ -312,8 +312,8 @@ function _start()
             end
             run_repl()
         end
-    catch e
-        show(add_backtrace(e,backtrace()))
+    catch err
+        show(add_backtrace(err,backtrace()))
         println()
         exit(1)
     end
@@ -328,8 +328,8 @@ function _atexit()
     for f in _jl_atexit_hooks
         try
             f()
-        catch e
-            show(e)
+        catch err
+            show(err)
             println()
         end
     end

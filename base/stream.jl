@@ -744,10 +744,10 @@ function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callb
     try
         spawn(pc, cmds.a, (stdios[1], out_pipe, stdios[3]), exitcb, closecb)
         spawn(pc, cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb)
-    catch e
+    catch err
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
-        throw(e)
+        rethrow(err)
     end
     close_pipe_sync(out_pipe)
     close_pipe_sync(in_pipe)
@@ -921,8 +921,8 @@ end
 function exec(thunk::Function)
     try
         thunk()
-    catch e
-        show(e)
+    catch err
+        show(err)
         exit(0xff)
     end
     exit(0)

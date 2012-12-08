@@ -220,7 +220,7 @@ function cd(f::Function, dir::String)
         retval
     catch err
         cd(old)
-        throw(err)
+        rethrow(err)
     end
 end
 end

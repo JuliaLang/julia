@@ -660,11 +660,11 @@ function perform_work(job::WorkItem)
             job.task.tls = nothing
             result = yieldto(job.task)
         end
-    catch e
+    catch err
         print("exception on ", myid(), ": ")
-        show(e)
+        show(err)
         println()
-        result = e.e
+        result = err.e
     end
     # restart job by yielding back to whatever task just switched to us
     job.task = current_task().last
@@ -720,10 +720,10 @@ function deliver_result(sock::Stream, msg, oid, value)
     end
     try
         send_msg_now(sock, :result, msg, oid, val)
-    catch e
+    catch err
         # send exception in case of serialization error; otherwise
         # request side would hang.
-        send_msg_now(sock, :result, msg, oid, e)
+        send_msg_now(sock, :result, msg, oid, err)
     end
 end
 
@@ -902,8 +902,8 @@ function start_worker(out::Stream)
 
     try
         event_loop(false)
-    catch e
-        print("unhandled exception on $(myid()): $e\nexiting.\n")
+    catch err
+        print("unhandled exception on $(myid()): $(err)\nexiting.\n")
     end
 
     close(sock)
@@ -950,8 +950,8 @@ function start_remote_workers(machines, cmds, tunnel)
                     try
                         line = readbytes(stream.buffer, nread)
                         print("\tFrom worker $(wrker.id):\t",line)
-                    catch e
-                        println("\tError parsing reply from worker $(wrker.id):\t",e)
+                    catch err
+                        println("\tError parsing reply from worker $(wrker.id):\t",err)
                         return false
         end
                 end
@@ -1396,7 +1396,6 @@ _jl_work_cb(args...) = _jl_work_cb()
 
 function event_loop(isclient)
     global multi_cb_handles
-    fdset = FDSet()
     multi_cb_handles.work_cb = SingleAsyncWork(globalEventLoop(),_jl_work_cb)
     multi_cb_handles.fgcm = SingleAsyncWork(globalEventLoop(),(args...)->flush_gc_msgs());
     timer = TimeoutAsyncWork(globalEventLoop(),(args...)->queueAsync(multi_cb_handles.work_cb))
@@ -1412,18 +1411,17 @@ function event_loop(isclient)
                 run_event_loop();
             end
         catch backtrace
-            if isa(e,DisconnectException)
+            if isa(backtrace,DisconnectException)
                 # TODO: wake up tasks waiting for failed process
                 if !isclient
                     return
                 end
-            elseif isclient && isa(e,InterruptException) &&
-                !has(_jl_fd_handlers, STDIN.fd)
+            elseif isclient && isa(backtrace,InterruptException) &&
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
-                interrupt_waiting_task(_jl_roottask_wi, e)
+                interrupt_waiting_task(_jl_roottask_wi,backtrace)
             end
-            iserr, lasterr = true, e
+            iserr, lasterr = true, backtrace
         end
     end
 end
