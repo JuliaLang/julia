@@ -1,6 +1,7 @@
 ## The LAPACK module of interfaces to LAPACK subroutines
 module LAPACK
-using Base
+
+liblapack = Base.liblapack_name
 
 typealias LapackChar Char
 type LapackException <: Exception
@@ -42,7 +43,7 @@ for (gbtrf, gbtrs, elty) in
             n    = size(AB, 2)
             mnmn = min(m, n)
             ipiv = Array(Int, mnmn)
-            ccall(dlsym(Base.liblapack, $(string(gbtrf))), Void,
+            ccall(($(string(gbtrf)),liblapack), Void,
                   (Ptr{Int}, Ptr{Int}, Ptr{Int}, Ptr{Int},
                    Ptr{$elty}, Ptr{Int}, Ptr{Int}, Ptr{Int}),
                   &m, &n, &kl, &ku, AB, &stride(AB,2), ipiv, info)
@@ -63,7 +64,7 @@ for (gbtrf, gbtrs, elty) in
             info = Array(Int, 1)
             n    = size(AB,2)
             if m != n || m != size(B,1) throw(LapackDimMisMatch("gbtrs!")) end
-            ccall(dlsym(Base.liblapack, $(string(gbtrs))), Void,
+            ccall(($(string(gbtrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{Int}, Ptr{Int},
                    Ptr{$elty}, Ptr{Int}, Ptr{Int}, Ptr{Int}),
                   &trans, &n, &kl, &ku, &size(B,2), AB, &stride(AB,2), ipiv,
@@ -95,7 +96,7 @@ for (gebal, gebak, elty, relty) in
             ihi     = Array(Int, 1)
             ilo     = Array(Int, 1)
             scale   = Array($relty, n)
-            ccall(dlsym(Base.liblapack, $(string(gebal))), Void,
+            ccall(($(string(gebal)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                    Ptr{Int}, Ptr{Int}, Ptr{$relty}, Ptr{Int}),
                   &job, &n, A, &stride(A,2), ilo, ihi, scale, info)
@@ -114,7 +115,7 @@ for (gebal, gebak, elty, relty) in
             chkstride1(V)
             chksquare(V)
             info    = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(gebak))), Void,
+            ccall(($(string(gebak)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{Int},
                    Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &job, &side, &size(V,1), &ilo, &ihi, scale, &n, V, &stride(V,2), info)
@@ -157,7 +158,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             lwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(gebrd))), Void,
+                ccall(($(string(gebrd)),liblapack), Void,
                       (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                        Ptr{$elty}, Ptr{Int}, Ptr{Int}),
@@ -184,7 +185,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             lwork = int(-1)
             work  = Array($elty, (1,))
             for i in 1:2                # first call returns lwork as work[1]
-                ccall(dlsym(Base.liblapack, $(string(gelqf))), Void,
+                ccall(($(string(gelqf)),liblapack), Void,
                       (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                        Ptr{$elty}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
@@ -211,7 +212,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             lwork = int(-1)
             work  = Array($elty, (1,))
             for i in 1:2                # first call returns lwork as work[1]
-                ccall(dlsym(Base.liblapack, $(string(geqlf))), Void,
+                ccall(($(string(geqlf)),liblapack), Void,
                       (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                        Ptr{$elty}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
@@ -242,13 +243,13 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             if cmplx rwork = Array(Rtyp, 2n) end
             for i in 1:2
                 if cmplx
-                    ccall(dlsym(Base.liblapack, $(string(geqp3))), Void,
+                    ccall(($(string(geqp3)),liblapack), Void,
                           (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                            Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int},
                            Ptr{Rtyp}, Ptr{Int}),
                           &m, &n, A, &stride(A,2), jpvt, tau, work, &lwork, rwork, info)
                 else
-                    ccall(dlsym(Base.liblapack, $(string(geqp3))), Void,
+                    ccall(($(string(geqp3)),liblapack), Void,
                           (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                            Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int},
                            Ptr{Int}),
@@ -279,7 +280,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             lwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2                # first call returns lwork as work[1]
-                ccall(dlsym(Base.liblapack, $(string(geqrf))), Void,
+                ccall(($(string(geqrf)),liblapack), Void,
                       (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                        Ptr{$elty}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                       &m, &n, A, &stride(A,2), tau, work, &lwork, info)
@@ -304,7 +305,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             lwork = int(-1)
             work  = Array($elty, 1)
             for i in 1:2                # first call returns lwork as work[1]
-                ccall(dlsym(Base.liblapack, $(string(gerqf))), Void,
+                ccall(($(string(gerqf)),liblapack), Void,
                       (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                        Ptr{$elty}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                       &m, &n, A, &stride(A,2), tau, work, &lwork, info)
@@ -328,7 +329,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             m, n = size(A)
             lda  = stride(A, 2)
             ipiv = Array(Int, min(m,n))
-            ccall(dlsym(Base.liblapack, $(string(getrf))), Void,
+            ccall(($(string(getrf)),liblapack), Void,
                   (Ptr{Int}, Ptr{Int}, Ptr{$elty},
                    Ptr{Int}, Ptr{Int}, Ptr{Int}),
                   &m, &n, A, &lda, ipiv, info)
@@ -358,7 +359,7 @@ for (gels, gesv, getrs, getri, elty) in
             work  = Array($elty, 1)
             lwork = int(-1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(gels))), Void,
+                ccall(($(string(gels)),liblapack), Void,
                       (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{Int}),
@@ -388,7 +389,7 @@ for (gels, gesv, getrs, getri, elty) in
             if size(B,1) != n throw(LapackDimMisMatch("gesv!")) end
             ipiv    = Array(Int, n)
             info    = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(gesv))), Void,
+            ccall(($(string(gesv)),liblapack), Void,
                   (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int},
                    Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
@@ -408,7 +409,7 @@ for (gels, gesv, getrs, getri, elty) in
             if m != n || size(B, 1) != m error("getrs!: dimension mismatch") end
             nrhs    = size(B, 2)
             info    = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(getrs))), Void,
+            ccall(($(string(getrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                    Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &trans, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
@@ -430,7 +431,7 @@ for (gels, gesv, getrs, getri, elty) in
             lwork   = -1
             work    = Array($elty, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(getri))), Void,
+                ccall(($(string(getri)),liblapack), Void,
                       (Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                       &n, A, &lda, ipiv, work, &lwork, info)
@@ -467,7 +468,7 @@ for (gelsd, elty) in ((:dgelsd_, Float64),
             lwork = int(-1)
             iwork = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(gelsd))), Void,
+                ccall(($(string(gelsd)),liblapack), Void,
                       (Ptr{Int}, Ptr{Int}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                        Ptr{$elty}, Ptr{$elty}, Ptr{Int}, Ptr{$elty},
@@ -511,7 +512,7 @@ for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
             rwork = Array($relty, 1)
             iwork = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(gelsd))), Void,
+                ccall(($(string(gelsd)),liblapack), Void,
                       (Ptr{Int}, Ptr{Int}, Ptr{Int}, Ptr{$elty},
                        Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{$relty},
                        Ptr{$relty}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
@@ -569,7 +570,7 @@ for (geev, gesvd, gesdd, elty) in
             info  = Array(Int, 1)
             for i = 1:2
                 if cmplx
-                    ccall(dlsym(Base.liblapack, $(string(geev))), Void,
+                    ccall(($(string(geev)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{$elty},
                            Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int}, 
                            Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
@@ -577,7 +578,7 @@ for (geev, gesvd, gesdd, elty) in
                           &jobvl, &jobvr, &n, A, &stride(A,2), W, VL, &n, VR, &n,
                           work, &lwork, rwork, info)
                 else
-                    ccall(dlsym(Base.liblapack, $(string(geev))), Void,
+                    ccall(($(string(geev)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{$elty},
                            Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                            Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{$elty},
@@ -632,7 +633,7 @@ for (geev, gesvd, gesdd, elty) in
             info   = Array(Int, 1)
             for i = 1:2
                 if cmplx
-                    ccall(dlsym(Base.liblapack, $(string(gesdd))), Void,
+                    ccall(($(string(gesdd)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{$elty},
                            Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int},
                            Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
@@ -640,7 +641,7 @@ for (geev, gesvd, gesdd, elty) in
                           &job, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, iwork, info)
                 else
-                    ccall(dlsym(Base.liblapack, $(string(gesdd))), Void,
+                    ccall(($(string(gesdd)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{$elty},
                            Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int},
                            Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
@@ -683,7 +684,7 @@ for (geev, gesvd, gesdd, elty) in
             info   = Array(Int, 1)
             for i in 1:2
                 if cmplx
-                    ccall(dlsym(Base.liblapack, $(string(gesvd))), Void,
+                    ccall(($(string(gesvd)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{Int},
                            Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{$elty},
                            Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{$elty},
@@ -691,7 +692,7 @@ for (geev, gesvd, gesdd, elty) in
                           &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, info)
                 else
-                    ccall(dlsym(Base.liblapack, $(string(gesvd))), Void,
+                    ccall(($(string(gesvd)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{Int},
                            Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{$elty},
                            Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{$elty},
@@ -733,7 +734,7 @@ for (gtsv, gttrf, gttrs, elty) in
             end
             if n != size(B,1) throw(LapackDimMisMatch("gtsv!")) end
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(gtsv))), Void,
+            ccall(($(string(gtsv)),liblapack), Void,
                   (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &n, &size(B,2), dl, d, du, B, &stride(B,2), info)
@@ -754,7 +755,7 @@ for (gtsv, gttrf, gttrs, elty) in
             du2  = Array($elty, n-2)
             ipiv = Array(Int, n)
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(gttrf))), Void,
+            ccall(($(string(gttrf)),liblapack), Void,
                   (Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int}, Ptr{Int}),
                   &n, dl, d, du, du2, ipiv, info)
@@ -776,7 +777,7 @@ for (gtsv, gttrf, gttrs, elty) in
             if length(dl) != n - 1 || length(du) != n - 1 throw(LapackDimMisMatch("gttrs!")) end
             if n != size(B,1) throw(LapackDimMisMatch("gttrs!")) end
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(gttrs))), Void,
+            ccall(($(string(gttrs)),liblapack), Void,
                    (Ptr{Uint8}, Ptr{Int}, Ptr{Int},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                     Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
@@ -805,7 +806,7 @@ for (orglq, orgqr, ormlq, ormqr, elty) in
             lwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(orglq))), Void,
+                ccall(($(string(orglq)),liblapack), Void,
                       (Ptr{Int}, Ptr{Int}, Ptr{Int}, Ptr{$elty},
                        Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                       &size(A,1), &size(A,2), &k, A, &stride(A,2), tau, work, &lwork, info)
@@ -828,7 +829,7 @@ for (orglq, orgqr, ormlq, ormqr, elty) in
             lwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(orgqr))), Void,
+                ccall(($(string(orgqr)),liblapack), Void,
                       (Ptr{Int}, Ptr{Int}, Ptr{Int}, Ptr{$elty},
                        Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                       &size(A,1), &size(A,2), &k, A, &stride(A,2), tau, work, &lwork, info)
@@ -856,7 +857,7 @@ for (orglq, orgqr, ormlq, ormqr, elty) in
             lwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(ormlq))), Void,
+                ccall(($(string(ormlq)),liblapack), Void,
                       (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{Int}),
@@ -886,7 +887,7 @@ for (orglq, orgqr, ormlq, ormqr, elty) in
             lwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(ormqr))), Void,
+                ccall(($(string(ormqr)),liblapack), Void,
                       (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{Int}),
@@ -925,7 +926,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             n     = size(A,1)
             if size(B,1) != n throw(LapackDimMisMatch("posv!")) end
             info    = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(posv))), Void,
+            ccall(($(string(posv)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                    Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
@@ -944,7 +945,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkstride1(A)
             chksquare(A)
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(potrf))), Void,
+            ccall(($(string(potrf)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &uplo, &size(A,1), A, &stride(A,2), info)
             if info[1] < 0 throw(LapackException(info[1])) end
@@ -961,7 +962,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         function potri!(uplo::LapackChar, A::StridedMatrix{$elty})
             chkstride1(A)
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(potri))), Void,
+            ccall(($(string(potri)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &uplo, &size(A,1), A, &stride(A,2), info)
             if info[1] < 0 throw(LapackException(info[1])) end
@@ -979,7 +980,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             n    =  size(A,2)
             if size(B,1) != n error("potrs!: dimension mismatch") end
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(potrs))), Void,
+            ccall(($(string(potrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                    Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
@@ -1002,7 +1003,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             rank = Array(Int, 1)
             work = Array($rtyp, 2n)
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(pstrf))), Void,
+            ccall(($(string(pstrf)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int},
                    Ptr{Int}, Ptr{$rtyp}, Ptr{$rtyp}, Ptr{Int}),
                   &uplo, &n, A, &stride(A,2), piv, rank, &tol, work, info)
@@ -1014,25 +1015,24 @@ end
 
 ## (PT) positive-definite, symmetric, tri-diagonal matrices
 ## Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
-for (ptsv, pttrf, pttrs, elty) in
-    ((:dptsv_,:dpttrf_,:dpttrs_,:Float64),
-     (:sptsv_,:spttrf_,:spttrs_,:Float32)
-#     , (:zptsv_,:zpttrf_,:zpttrs_,:Complex128)  # need to fix calling sequence.
-#     , (:cptsv_,:cpttrf_,:cpttrs_,:Complex64)   # D is real, not complex
-     )
+for (ptsv, pttrf, pttrs, elty, relty) in
+    ((:dptsv_,:dpttrf_,:dpttrs_,:Float64,:Float64),
+     (:sptsv_,:spttrf_,:spttrs_,:Float32,:Float32), 
+     (:zptsv_,:zpttrf_,:zpttrs_,:Complex128,:Float64), 
+     (:cptsv_,:cpttrf_,:cpttrs_,:Complex64,:Float32))
     @eval begin
         #       SUBROUTINE DPTSV( N, NRHS, D, E, B, LDB, INFO )
         #       .. Scalar Arguments ..
         #       INTEGER            INFO, LDB, N, NRHS
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), E( * )
-        function ptsv!(D::Vector{$elty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
+        function ptsv!(D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(B)
             n    = length(D)
             if length(E) != n - 1 || n != size(B,1) throw(LapackDimMismatch("ptsv!")) end
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(ptsv))), Void,
-                  (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{$elty},
+            ccall(($(string(ptsv)),liblapack), Void,
+                  (Ptr{Int}, Ptr{Int}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &n, &size(B,2), D, E, B, &stride(B,2), info)
             if info[1] != 0 throw(LapackException(info[1])) end
@@ -1043,30 +1043,62 @@ for (ptsv, pttrf, pttrs, elty) in
         #       INTEGER            INFO, N
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   D( * ), E( * )
-        function pttrf!(D::Vector{$elty}, E::Vector{$elty})
+        function pttrf!(D::Vector{$relty}, E::Vector{$elty})
             n    = length(D)
             if length(E) != (n-1) throw(LapackDimMisMatch("pttrf!")) end
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(pttrf))), Void,
-                  (Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int}),
+            ccall(($(string(pttrf)),liblapack), Void,
+                  (Ptr{Int}, Ptr{$relty}, Ptr{$elty}, Ptr{Int}),
                   &n, D, E, info)
             if info[1] != 0 throw(LapackException(info[1])) end
             D, E
         end
+    end
+end
+for (pttrs, elty, relty) in
+    ((:dpttrs_,:Float64,:Float64),
+     (:spttrs_,:Float32,:Float32))
+    @eval begin
         #       SUBROUTINE DPTTRS( N, NRHS, D, E, B, LDB, INFO )
         #       .. Scalar Arguments ..
         #       INTEGER            INFO, LDB, N, NRHS
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), E( * )
-        function pttrs!(D::Vector{$elty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
+        function pttrs!(D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(B)
             n    = length(D)
             if length(E) != (n-1) || size(B,1) != n throw(LapackDimMisMatch("pttrs!")) end
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(pttrs))), Void,
-                  (Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{$elty},
+            ccall(($(string(pttrs)),liblapack), Void,
+                  (Ptr{Int}, Ptr{Int}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &n, &size(B,2), D, E, B, &stride(B,2), info)
+            if info[1] != 0 throw(LapackException(info[1])) end
+            B
+        end
+    end
+end
+for (pttrs, elty, relty) in
+    ((:zpttrs_,:Complex128,:Float64),
+     (:cpttrs_,:Complex64,:Float32))
+    @eval begin
+#       SUBROUTINE ZPTTRS( UPLO, N, NRHS, D, E, B, LDB, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDB, N, NRHS
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   D( * )
+#       COMPLEX*16         B( LDB, * ), E( * )
+        function pttrs!(uplo::LapackChar, D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(B)
+            n    = length(D)
+            if length(E) != (n-1) || size(B,1) != n throw(LapackDimMisMatch("pttrs!")) end
+            info = Array(Int, 1)
+            ccall(($(string(pttrs)),liblapack), Void,
+                  (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{$relty}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{Int}, Ptr{Int}),
+                  &uplo, &n, &size(B,2), D, E, B, &stride(B,2), info)
             if info[1] != 0 throw(LapackException(info[1])) end
             B
         end
@@ -1092,7 +1124,7 @@ for (trtri, trtrs, elty) in
             if m != n error("trtri!: dimension mismatch") end
             lda     = stride(A, 2)
             info    = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $trtri), Void,
+            ccall(($trtri,liblapack), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                    Ptr{Int}),
                   &uplo, &diag, &n, A, &lda, info)
@@ -1112,7 +1144,7 @@ for (trtri, trtrs, elty) in
             n    = size(A,2)
             if size(B,1) != n throw(LapackDimMisMatch("trtrs!")) end
             info    = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(trtrs))), Void,
+            ccall(($(string(trtrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{Int},
                    Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &uplo, &trans, &diag, &n, &size(B,2), A, &stride(A,2),
@@ -1137,7 +1169,7 @@ for (stev, elty) in
             Zmat = Array($elty, (n, job != 'N' ? n : 0))
             work = Array($elty, max(1, 2n-2))
             info = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(stev))), Void,
+            ccall(($(string(stev)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int}, Ptr{$elty}, Ptr{Int}),
                   &job, &n, dv, ev, Zmat, &n, work, info)
@@ -1168,7 +1200,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
             n     = size(A,1)
             work  = Array($elty, n)
             info  = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(syconv))), Void,
+            ccall(($(string(syconv)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                    Ptr{Int}, Ptr{$elty}, Ptr{Int}),
                   &uplo, &'C', &n, A, &stride(A,2), ipiv, work, info)
@@ -1196,12 +1228,12 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
             info  = Array(Int, 1)
             for i in 1:2
                 if cmplx
-                    ccall(dlsym(Base.liblapack, $(string(syev))), Void,
+                    ccall(($(string(syev)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                           Ptr{Rtyp}, Ptr{$elty}, Ptr{Int}, Ptr{Rtyp}, Ptr{Int}),
                           &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
                 else
-                    ccall(dlsym(Base.liblapack, $(string(syev))), Void,
+                    ccall(($(string(syev)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                           Ptr{Rtyp}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                           &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, info)
@@ -1232,7 +1264,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
             lwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(sysv))), Void,
+                ccall(($(string(sysv)),liblapack), Void,
                       (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int},
                        Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                       &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2),
@@ -1261,7 +1293,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
             lwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(sytrf))), Void,
+                ccall(($(string(sytrf)),liblapack), Void,
                       (Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                        Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
@@ -1288,7 +1320,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
 #             lwork = int(-1)
 #             info  = Array(Int, 1)
 #             for i in 1:2
-#                 ccall(dlsym(Base.liblapack, $(string(sytri))), Void,
+#                 ccall(($(string(sytri)),liblapack), Void,
 #                       (Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
 #                        Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
 #                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
@@ -1313,7 +1345,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
             n     = size(A,1)
             work  = Array($elty, n)
             info  = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(sytri))), Void,
+            ccall(($(string(sytri)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                    Ptr{Int}, Ptr{$elty}, Ptr{Int}),
                   &uplo, &n, A, &stride(A,2), ipiv, work, info)
@@ -1335,7 +1367,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
             n     = size(A,1)
             if n != size(B,1) throw(LapackDimMismatch("sytrs!")) end
             info  = Array(Int, 1)
-            ccall(dlsym(Base.liblapack, $(string(sytrs))), Void,
+            ccall(($(string(sytrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
                    Ptr{Int}, Ptr{$elty}, Ptr{Int}, Ptr{Int}),
                   &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
@@ -1382,7 +1414,7 @@ for (syevr, elty) in
             liwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(syevr))), Void,
+                ccall(($(string(syevr)),liblapack), Void,
                     (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, 
                         Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{$elty}, 
                         Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
@@ -1449,7 +1481,7 @@ for (syevr, elty, relty) in
             liwork = int(-1)
             info  = Array(Int, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(syevr))), Void,
+                ccall(($(string(syevr)),liblapack), Void,
                     (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int}, 
                         Ptr{$elty}, Ptr{Int}, Ptr{$elty}, Ptr{$elty}, 
                         Ptr{Int}, Ptr{Int}, Ptr{$elty}, Ptr{Int},
