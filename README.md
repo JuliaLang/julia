@@ -5,7 +5,7 @@
       (_)     | (_) (_)    |   A fresh approach to technical computing
        _ _   _| |_  __ _   |
       | | | | | | |/ _` |  |          http://julialang.org
-      | | |_| | | | (_| |  |       julia-dev@googlegroups.com
+      | | |_| | | | (_| |  |       julia-users@googlegroups.com
      _/ |\__'_|_|_|\__'_|  |           #julia on freenode
     |__/                   |
 
@@ -21,7 +21,8 @@ This is the GitHub repository of Julia source code, including instructions for c
 
 - **Homepage:** <http://julialang.org>
 - **Binaries:** <https://github.com/JuliaLang/julia/downloads>
-- **Mailing list:** <http://groups.google.com/group/julia-users/>
+- **Packages:** <https://github.com/JuliaLang/METADATA.jl>
+- **Mailing lists:** <http://julialang.org/mailing_lists>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
