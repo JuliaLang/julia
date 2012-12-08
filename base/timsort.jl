@@ -730,7 +730,7 @@ function ($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::I
         ($merge_collapse)($(args...), v, state, true, p)
     end
 
-    v
+    v, p
 end
 
 ($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}) = ($timsort)($(args...), v, p, 1, length(v))
