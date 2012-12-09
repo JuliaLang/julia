@@ -833,7 +833,7 @@ end
 
 function show_vector(io, v, opn, cls)
     X = reshape(v,(1,length(v)))
-    print_matrix(io, X, 1, tty_cols(), opn, ", ", cls, "  ...  ", ":", 5, 5)
+    print_matrix(io, X, 1, tty_cols(), opn, ", ", cls, "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 end
 
 show(io, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
