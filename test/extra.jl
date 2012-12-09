@@ -1,5 +1,5 @@
-runtests("suitesparse")
-runtests("arpack")
+#runtests("suitesparse")
+#runtests("arpack")
 runtests("glpk")
 runtests("linprog")
 runtests("bigfloat")
