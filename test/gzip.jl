@@ -1,5 +1,5 @@
 # Testing for gzip
-require("../extras/gzip")
+require("extras/gzip")
 
 using GZip
 
