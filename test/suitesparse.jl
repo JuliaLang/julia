@@ -1,4 +1,4 @@
-require("$JULIA_HOME/../../extras/suitesparse.jl")
+require("extras/suitesparse")
 
 using SuiteSparse
 
