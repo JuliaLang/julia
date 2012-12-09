@@ -364,8 +364,9 @@ extern jl_struct_type_t *jl_weakref_type;
 extern DLLEXPORT jl_struct_type_t *jl_ascii_string_type;
 extern DLLEXPORT jl_struct_type_t *jl_utf8_string_type;
 extern DLLEXPORT jl_struct_type_t *jl_errorexception_type;
-extern jl_struct_type_t *jl_typeerror_type;
 extern DLLEXPORT jl_struct_type_t *jl_loaderror_type;
+extern jl_struct_type_t *jl_typeerror_type;
+extern jl_struct_type_t *jl_methoderror_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_memory_exception;
 extern jl_value_t *jl_divbyzero_exception;
@@ -418,7 +419,6 @@ extern jl_value_t *jl_true;
 extern jl_value_t *jl_false;
 DLLEXPORT extern jl_value_t *jl_nothing;
 
-extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 

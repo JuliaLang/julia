@@ -305,8 +305,6 @@ static jl_value_t *basemod(char *name)
     return jl_get_global(jl_base_module, jl_symbol(name));
 }
 
-jl_function_t *jl_method_missing_func=NULL;
-
 // fetch references to things defined in boot.jl
 void jl_get_builtin_hooks(void)
 {
@@ -357,12 +355,11 @@ void jl_get_builtin_hooks(void)
 
 DLLEXPORT void jl_get_system_hooks(void)
 {
-    if (jl_method_missing_func) return; // only do this once
+    if (jl_errorexception_type) return; // only do this once
 
     jl_errorexception_type = (jl_struct_type_t*)basemod("ErrorException");
     jl_typeerror_type = (jl_struct_type_t*)basemod("TypeError");
+    jl_methoderror_type = (jl_struct_type_t*)basemod("MethodError");
     jl_loaderror_type = (jl_struct_type_t*)basemod("LoadError");
     jl_weakref_type = (jl_struct_type_t*)basemod("WeakRef");
-
-    jl_method_missing_func = (jl_function_t*)basemod("method_missing");
 }

@@ -508,12 +508,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     x::Array{Any,1} = applicable
     if isempty(x)
         # no methods match
-        if is(f,method_missing)
-            # match failure due to None (error) argument, propagate
-            return None
-        end
-        return abstract_call_gf(method_missing, tuple(f, fargs...),
-                                tuple(Function, argtypes...), ())
+        return None
     end
     if isa(e,Expr)
         if length(x)==1

@@ -1073,7 +1073,6 @@ export
     exit,
     quit,
     atexit,
-    method_missing,
     ntuple,
     peakflops,
     tty_cols,
