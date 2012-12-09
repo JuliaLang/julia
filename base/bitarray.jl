@@ -33,7 +33,7 @@ type BitArray{T<:Integer, N} <: AbstractArray{T, N}
     end
 end
 
-BitArray{T}(::Type{T}) = BitArray{T, 1}(0)
+BitArray{T}(::Type{T}) = BitArray{T,1}(0)
 BitArray() = BitArray(Bool, 0)
 BitArray{T}(::Type{T}, dims::Dims) = BitArray{T, max(length(dims), 1)}(dims...)
 BitArray(dims::Dims) = BitArray(Bool, dims)
@@ -164,9 +164,8 @@ bitzeros(args...) = fill!(BitArray(Int, args...), 0)
 bitones{T}(::Type{T}, args...) = fill!(BitArray(T, args...), 1)
 bitones(args...) = fill!(BitArray(Int, args...), 1)
 
-# XXX: temporary!?
-bitfalses(args...) = bitzeros(Bool, args...)
-bittrues(args...) = bitones(Bool, args...)
+trues(args...) = bitones(Bool, args...)
+falses(args...) = bitzeros(Bool, args...)
 
 biteye{T}(::Type{T}, n::Integer) = biteye(T, n, n)
 function biteye{T}(::Type{T}, m::Integer, n::Integer)
@@ -1009,17 +1008,25 @@ end
 
 # TODO?
 
-## Binary comparison operators ##
-# note: these return BitArray{Bool}
-for (f,scalarf,t) in ((:(.==),:(==),:Number), (:.<, :<,:Real), (:.!=,:!=,:Number), (:.<=,:<=,:Real))
+## element-wise comparison operators returning BitArray{Bool} ##
+
+for (f,scalarf,t) in ((:(.==),:(==),:Number),
+                      (:.<, :<,:Real),
+                      (:.!=,:!=,:Number),
+                      (:.<=,:<=,:Real))
     @eval begin
-        function ($f)(A::BitArray, B::BitArray)
+        function ($f)(A::AbstractArray, B::AbstractArray)
             F = BitArray(Bool, promote_shape(size(A),size(B)))
             for i = 1:numel(B)
                 F[i] = ($scalarf)(A[i], B[i])
             end
             return F
         end
+        ($f)(A, B::AbstractArray) =
+            reshape([ ($scalarf)(A, B[i]) for i=1:length(B)], size(B))
+        ($f)(A::AbstractArray, B) =
+            reshape([ ($scalarf)(A[i], B) for i=1:length(A)], size(A))
+
         function ($f)(x::($t), B::BitArray)
             F = similar(B, Bool)
             for i = 1:numel(F)

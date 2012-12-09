@@ -185,9 +185,6 @@ zeros(args...)               = fill!(Array(Float64, args...), float64(0))
 ones{T}(::Type{T}, args...) = fill!(Array(T, args...), one(T))
 ones(args...)               = fill!(Array(Float64, args...), float64(1))
 
-trues(args...)  = fill(true, args...)
-falses(args...) = fill(false, args...)
-
 function eye(T::Type, m::Int, n::Int)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
@@ -969,24 +966,6 @@ function complex{T<:Real}(A::Array{T}, B::Real)
         F[i] = complex(A[i], B)
     end
     return F
-end
-
-## Binary comparison operators ##
-
-for (f,scalarf) in ((:(.==),:(==)), (:.<, :<), (:.!=,:!=), (:.<=,:<=))
-    @eval begin
-        function ($f)(A::AbstractArray, B::AbstractArray)
-            F = Array(Bool, promote_shape(size(A),size(B)))
-            for i = 1:numel(B)
-                F[i] = ($scalarf)(A[i], B[i])
-            end
-            return F
-        end
-        ($f)(A, B::AbstractArray) =
-            reshape([ ($scalarf)(A, B[i]) for i=1:length(B)], size(B))
-        ($f)(A::AbstractArray, B) =
-            reshape([ ($scalarf)(A[i], B) for i=1:length(A)], size(A))
-    end
 end
 
 # use memcmp for cmp on byte arrays
