@@ -1,6 +1,6 @@
 module SuiteSparse
 
-import Base.SparseMatrixCSC, Base.size, Base.nnz, Base.eltype, Base.show, Base.triu, Base.norm, Base.solve
+import Base.SparseMatrixCSC, Base.size, Base.nnz, Base.eltype, Base.show, Base.triu, Base.norm, Base.solve, Base.(\), Base.ctranspose, Base.transpose
 
 export                                  # types
     CholmodPtr,
@@ -11,6 +11,7 @@ export                                  # types
     CholmodSparseOut,
     UmfpackPtr,
     UmfpackLU,
+    UmfpackLU!,
     UmfpackLUTrans,
                                         # methods
     chm_aat, # drop prefix?
