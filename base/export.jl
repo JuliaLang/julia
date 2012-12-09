@@ -17,6 +17,9 @@ export
     AbstractVector,
     Array,
     Associative,
+    BitArray,
+    BitMatrix,
+    BitVector,
     CharString,
     Chars,
     Cmd,
@@ -721,6 +724,17 @@ export
     sprandbool,
     sprandn,
     spzeros,
+
+# bitarrays
+    bitareduce,
+    biteye,
+    bitones,
+    bitpack,
+    bitrand,
+    bitshow,
+    bitunpack,
+    bitzeros,
+    flipbits,
 
 # dequeues
     append!,

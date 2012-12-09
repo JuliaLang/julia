@@ -159,10 +159,7 @@ end
 fill!(B::BitArray, x) = fill!(B, int(x))
 
 bitzeros{T}(::Type{T}, args...) = fill!(BitArray(T, args...), 0)
-bitzeros(args...) = fill!(BitArray(Int, args...), 0)
-
 bitones{T}(::Type{T}, args...) = fill!(BitArray(T, args...), 1)
-bitones(args...) = fill!(BitArray(Int, args...), 1)
 
 trues(args...) = bitones(Bool, args...)
 falses(args...) = bitzeros(Bool, args...)
@@ -175,8 +172,8 @@ function biteye{T}(::Type{T}, m::Integer, n::Integer)
     end
     return a
 end
-biteye(n::Integer) = biteye(Int, n)
-biteye(m::Integer, n::Integer) = biteye(Int, m, n)
+biteye(n::Integer) = biteye(Bool, n)
+biteye(m::Integer, n::Integer) = biteye(Bool, m, n)
 
 function one{T}(x::BitMatrix{T})
     m, n = size(x)

@@ -416,6 +416,7 @@ function sprand(m::Int, n::Int, density::FloatingPoint, rng::Function, v)
     return S
 end
 
+sprand(m::Int, n::Int, density::FloatingPoint, rng::Function) = sprand(m,n,density,rng, 1.0)
 sprand(m::Int, n::Int, density::FloatingPoint)  = sprand(m,n,density,rand, 1.0)
 sprandn(m::Int, n::Int, density::FloatingPoint) = sprand(m,n,density,randn, 1.0)
 sprandbool(m::Int, n::Int, density::FloatingPoint) = sprand(m,n,density,randbool, true)
