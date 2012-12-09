@@ -1,8 +1,8 @@
 .. _man-sparse-matrices:
 
-****************
+******************
  Sparse Matrices
-****************
+******************
 
 `Sparse matrices <http://en.wikipedia.org/wiki/Sparse_matrix>`_ are
 matrices that are primarily populated with zeros. Sparse matrices may
