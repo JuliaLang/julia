@@ -51,7 +51,7 @@ static void init_history(void) {
 #else
     char *home = getenv("AppData");
     if (!home) return;
-    asprintf(&history_file, "%s/history", home);
+    asprintf(&history_file, "%s/julia/history", home);
 #endif
     struct stat stat_info;
     if (!stat(history_file, &stat_info)) {
