@@ -16,10 +16,6 @@ export
     linprog_exact,
     mixintprog
 
-# XXX the sparse stuff shall be removed when sparse
-# gets into Base
-typealias SparseMatrixCSC Main.SparseMatrixCSC
-issparse = Main.issparse
 typealias VecOrNothing GLPK.VecOrNothing
 
 # General notes: the interface is provided as a collection of

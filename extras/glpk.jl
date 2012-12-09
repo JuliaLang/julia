@@ -169,8 +169,6 @@ export
 
 import Base.pointer, Base.assign, Base.ref
 
-typealias SparseMatrixCSC Main.SparseMatrixCSC # XXX to be removed when sparse gets into Base
-
 ## Shared library interface setup
 #{{{
 include("$JULIA_HOME/../share/julia/extras/glpk_h.jl")
