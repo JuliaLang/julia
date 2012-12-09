@@ -60,7 +60,10 @@ static void *add_library_sym(char *name, char *lib)
         hnd = libMap[lib];
         if (hnd == NULL) {
             hnd = jl_load_dynamic_library(lib);
-            libMap[lib] = hnd;
+            if (hnd != NULL)
+                libMap[lib] = hnd;
+            else
+                return NULL;
         }
     }
     // add a symbol->address mapping for the JIT
@@ -415,8 +418,18 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         llvmf = literal_pointer_val(fptr, funcptype);
     }
     else {
-        if (f_lib != NULL)
-            add_library_sym(f_name, f_lib);
+        if (f_lib != NULL) {
+            if (add_library_sym(f_name, f_lib) == NULL) {
+                JL_GC_POP();
+                std::stringstream msg;
+                msg << "ccall: could not find function ";
+                msg << f_name;
+                msg << " in library ";
+                msg << f_lib;
+                emit_error(msg.str(), ctx);
+                return literal_pointer_val(jl_nothing);
+            }
+        }
         llvmf = jl_Module->getOrInsertFunction(f_name, functype);
     }
 
