@@ -44,12 +44,3 @@ Math & Numerical
    blas
    glpk
 
-************
-File Formats
-************
-
-.. toctree::
-   :maxdepth: 1
-
-   fitsio
-
