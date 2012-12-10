@@ -222,6 +222,12 @@ b1 = bitrand(Bool, n1, n2)
 @check_bit_operation (-) BitArray{Bool} (b1,)
 @check_bit_operation sign BitArray{Int} (b1,)
 
+b0 = falses(0)
+@check_bit_operation (~) BitArray{Bool} (b0,)
+@check_bit_operation (!) BitArray{Bool} (b0,)
+@check_bit_operation (-) BitArray{Bool} (b0,)
+@check_bit_operation sign BitArray{Int} (b0,)
+
 timesofar("unary arithmetic")
 
 ## Binary arithmetic operators ##
@@ -284,6 +290,13 @@ b2 = bitrand(Bool, n1, n2)
 @check_bit_operation ($) BitArray{Bool} (b1, b2)
 @check_bit_operation (.*) BitArray{Bool} (b1, b2)
 @check_bit_operation (*) BitArray{Bool} (b1, b1')
+
+b0 = falses(0)
+@check_bit_operation (&) BitArray{Bool} (b0, b0)
+@check_bit_operation (|) BitArray{Bool} (b0, b0)
+@check_bit_operation ($) BitArray{Bool} (b0, b0)
+@check_bit_operation (.*) BitArray{Bool} (b0, b0)
+@check_bit_operation (*) BitArray{Bool} (b0, b0')
 
 timesofar("binary arithmetic")
 
