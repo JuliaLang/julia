@@ -394,7 +394,7 @@ extern jl_bits_type_t *jl_int64_type;
 extern jl_bits_type_t *jl_uint64_type;
 extern jl_bits_type_t *jl_float32_type;
 extern jl_bits_type_t *jl_float64_type;
-
+extern jl_bits_type_t *jl_voidpointer_type;
 extern jl_bits_type_t *jl_pointer_type;
 
 extern jl_type_t *jl_array_uint8_type;
@@ -454,7 +454,7 @@ extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
-extern jl_sym_t *global_sym;
+extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -685,6 +685,7 @@ DLLEXPORT jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
 jl_value_t *jl_box_float32(float x);
 jl_value_t *jl_box_float64(double x);
+jl_value_t *jl_box_voidpointer(void *x);
 jl_value_t *jl_box8 (jl_bits_type_t *t, int8_t  x);
 jl_value_t *jl_box16(jl_bits_type_t *t, int16_t x);
 jl_value_t *jl_box32(jl_bits_type_t *t, int32_t x);
@@ -700,6 +701,7 @@ int64_t jl_unbox_int64(jl_value_t *v);
 uint64_t jl_unbox_uint64(jl_value_t *v);
 float jl_unbox_float32(jl_value_t *v);
 double jl_unbox_float64(jl_value_t *v);
+void *jl_unbox_voidpointer(jl_value_t *v);
 
 #ifdef __LP64__
 #define jl_box_long(x)   jl_box_int64(x)

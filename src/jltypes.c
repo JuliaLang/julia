@@ -2640,4 +2640,5 @@ void jl_init_types(void)
     compositetype_sym = jl_symbol("composite_type");
     type_goto_sym = jl_symbol("type_goto");
     toplevel_sym = jl_symbol("toplevel");
+    tuple_sym = jl_symbol("tuple");
 }
