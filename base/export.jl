@@ -660,10 +660,10 @@ export
     insertionsort_by!,
     quicksort!,
     quicksort_r!,
-    quicksort_by!
+    quicksort_by!,
     mergesort!,
     mergesort_r!,
-    mergesort_by!
+    mergesort_by!,
     timsort!,
     timsort_r!,
     timsort_by!,
