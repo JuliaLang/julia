@@ -280,7 +280,7 @@ macro (see
 `error.jl <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_)::
 
     macro assert(ex)
-        :($ex ? nothing : error("Assertion failed: ", $string(ex)))
+        :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
     end
 
 This macro can be used like this::
