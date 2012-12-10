@@ -1,5 +1,45 @@
 ## standard sort comparisons ##
 
+module Sort
+
+export 
+    @in_place_matrix_op,
+    issorted,
+    each_col,
+    each_col!,
+    each_row,
+    each_row!,
+    each_vec,
+    each_vec!,
+    order,
+    search_sorted,
+    search_sorted_first,
+    search_sorted_last,
+    select,
+    select!,
+    sort,
+    sort!,
+    sort_by,
+    sort_by!,
+    sortperm,
+    sortr,
+    sortr!,
+
+    insertionsort!,
+    insertionsort_r!,
+    insertionsort_by!,
+    quicksort!,
+    quicksort_r!,
+    quicksort_by!,
+    mergesort!,
+    mergesort_r!,
+    mergesort_by!,
+    timsort!,
+    timsort_r!,
+    timsort_by!
+
+import Base.sort, Base.issorted, Base.sort, Base.sort!, Base.sortperm
+
 _jl_fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox(Float32,x),unbox(Float32,y))
 _jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox(Float64,x),unbox(Float64,y))
 _jl_fp_pos_le(x::Float32, y::Float32) = sle_int(unbox(Float32,x),unbox(Float32,y))
@@ -191,6 +231,10 @@ function ($mergesort)($(args...),
     end
     return a, p
 end
+
+($mergesort){T}($(args...), a::AbstractVector{T}, p::AbstractVector{Int}) = 
+    ($mergesort)($(args...), a, p, 1, length(a), Array(T,length(a)), Array(Int,length(a)))
+
 
 end; end # quote / macro
 
@@ -445,3 +489,5 @@ function search_sorted_first(a::Vector, x, lo::Int, hi::Int)
 end
 
 order(a::AbstractVector) = sortperm(a)[2]
+
+end # module Sort

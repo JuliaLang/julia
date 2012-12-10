@@ -292,7 +292,7 @@ function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeSta
 end
 
 
-# Merge runs a and b in vector v (verseion which permutes an auxilliary array mirroring the sort)
+# Merge runs a and b in vector v (version which permutes an auxilliary array mirroring the sort)
 function ($merge)($(args...), v::AbstractVector, p::AbstractVector{Int}, a::Run, b::Run, state::MergeState)
 
     # First elements in a <= b[1] are already in place
@@ -768,13 +768,9 @@ function ($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::I
             ($insertionsort)($(args...), v, p, i, i+count-1)
         else
             if !issorted(run_range)
-                #reverse!(sub(v, run_range))
-                # Why is this faster?
-                for j = 0:div(count,2)-1
-                    v[i+j], v[i+count-j-1] = v[i+count-j-1], v[i+j]
-                    p[i+j], p[i+count-j-1] = p[i+count-j-1], p[i+j]
-                end
                 run_range = last(run_range):first(run_range)
+                reverse!(sub(v, run_range))
+                reverse!(sub(p, run_range))
             end
         end
 
