@@ -402,20 +402,67 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
     if (jl_is_expr(ex)) {
         jl_expr_t *e = (jl_expr_t*)ex;
         if (e->head == call_sym || e->head == call1_sym) {
-            if (e->args->length == 3) {
-                jl_value_t *f = static_eval(jl_exprarg(e,0),ctx,sparams);
-                if (f && jl_is_function(f)) {
-                    if (((jl_function_t*)f)->fptr == &jl_f_get_field) {
-                        m = (jl_module_t*)static_eval(jl_exprarg(e,1),ctx,sparams);
-                        s = (jl_sym_t*)static_eval(jl_exprarg(e,2),ctx,sparams);
-                        if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
-                            jl_binding_t *b = jl_get_binding(m, s);
-                            if (b && b->constp)
-                                return b->value;
+            jl_value_t *f = static_eval(jl_exprarg(e,0),ctx,sparams);
+            if (f && jl_is_function(f)) {
+                jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
+                if (fptr == &jl_apply_generic) {
+                    if (f == jl_get_global(jl_base_module, jl_symbol("dlsym")) ||
+                        f == jl_get_global(jl_base_module, jl_symbol("dlopen")))
+                    {
+                        size_t i;
+                        size_t n = e->args->length;
+                        jl_value_t **v = (jl_value_t**)alloca(n*sizeof(jl_value_t*));
+                        memset(v, 0, n*sizeof(jl_value_t*));
+                        v[0] = f;
+                        JL_GC_PUSHARGS(v, n);
+                        for (i = 1; i < n; i++) {
+                            v[i] = static_eval(jl_exprarg(e,i),ctx,sparams);
+                            if (v[i] == NULL) {
+                                JL_GC_POP();
+                                return NULL;
+                            }
+                        }
+                        jl_value_t *result = jl_apply_generic(f, v+1, (uint32_t)n-1);
+                        JL_GC_POP();
+                        return result;
+                    }
+                } else if (e->args->length == 3 && fptr == &jl_f_get_field) {
+                    m = (jl_module_t*)static_eval(jl_exprarg(e,1),ctx,sparams);
+                    s = (jl_sym_t*)static_eval(jl_exprarg(e,2),ctx,sparams);
+                    if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
+                        jl_binding_t *b = jl_get_binding(m, s);
+                        if (b && b->constp)
+                            return b->value;
+                    }
+                } else if (fptr == &jl_f_tuple) {
+                    size_t i;
+                    size_t n = e->args->length-1;
+                    if (n==0) return (jl_value_t*)jl_null;
+                    jl_value_t **v = (jl_value_t**)alloca(n*sizeof(jl_value_t*));
+                    memset(v, 0, n*sizeof(jl_value_t*));
+                    JL_GC_PUSHARGS(v, n);
+                    for (i = 0; i < n; i++) {
+                        v[i] = static_eval(jl_exprarg(e,i+1),ctx,sparams);
+                        if (v[i] == NULL) {
+                            JL_GC_POP();
+                            return NULL;
                         }
                     }
+                    jl_tuple_t *tup = jl_alloc_tuple_uninit(n);
+                    for(i=0; i < n; i++) {
+                        jl_tupleset(tup, i, v[i]);
+                    }
+                    JL_GC_POP();
+                    return (jl_value_t*)tup;
                 }
             }
+        // The next part is probably valid, but it is untested
+        //} else if (e->head == tuple_sym) {
+        //  size_t i;
+        //  for (i = 0; i < e->args->length; i++) 
+        //        if (static_eval(jl_exprarg(e,i), ctx, sparams) == NULL)
+        //          return NULL;
+        //  return ex;
         }
         return NULL;
     }
@@ -554,7 +601,8 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                         }
                         else {
                             esc = true;
-                            // first 3 arguments are static
+                            // 2nd and 3d arguments are static
+                            max_arg_depth(jl_exprarg(e,1), max, sp, esc, ctx);
                             for(i=4; i < (size_t)alen; i++) {
                                 max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
                             }
