@@ -654,6 +654,20 @@ export
     make_loop_nest,
     check_bounds, 
 
+# sort routines
+    insertionsort!,
+    insertionsort_r!,
+    insertionsort_by!,
+    quicksort!,
+    quicksort_r!,
+    quicksort_by!
+    mergesort!,
+    mergesort_r!,
+    mergesort_by!
+    timsort!,
+    timsort_r!,
+    timsort_by!,
+
 # linear algebra
     axpy,
     chol,

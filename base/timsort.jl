@@ -21,14 +21,17 @@ MergeState() = MergeState(Run[], MIN_GALLOP)
 # Determine a good minimum run size for efficient merging
 # For details, see "Computing minrun" in 
 # http://svn.python.org/projects/python/trunk/Objects/listsort.txt
-function merge_compute_minrun(N::Int)
+function merge_compute_minrun(N::Int, bits::Int)
     r = 0
-    while N > 63
+    max_val = 2^bits
+    while N >= max_val
         r |= (N & 1)
         N >>= 1
     end
     N + r
 end
+
+merge_compute_minrun(N::Int) = merge_compute_minrun(N, 6)
 
 # Macro to create different versions of the sort function,
 # cribbed from sort.jl
