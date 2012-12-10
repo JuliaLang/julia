@@ -923,14 +923,16 @@ conj!(B::BitArray) = B
 conj(B::BitArray) = copy(B)
 
 function flipbits(B::BitArray)
-    C = similar(B)
-    Cc = C.chunks
     Bc = B.chunks
-    for i = 1:length(B.chunks) - 1
-        Cc[i] = ~Bc[i]
+    C = similar(B)
+    if !isempty(Bc)
+        Cc = C.chunks
+        for i = 1:length(Bc)-1
+            Cc[i] = ~Bc[i]
+        end
+        msk = @_msk_end length(B)
+        Cc[end] = msk & (~Bc[end])
     end
-    msk = @_msk_end length(B)
-    C.chunks[end] = msk & (~B.chunks[end])
     return C
 end
 
