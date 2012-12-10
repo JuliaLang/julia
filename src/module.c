@@ -227,6 +227,13 @@ int jl_boundp(jl_module_t *m, jl_sym_t *var)
     return b && (b->value != NULL);
 }
 
+int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
+    if (*bp == HT_NOTFOUND) return 0;
+    return (*bp)->exportp || (*bp)->owner==m;
+}
+
 jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);

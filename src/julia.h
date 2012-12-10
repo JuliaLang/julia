@@ -829,6 +829,7 @@ DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
 jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var);
 jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
+DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
