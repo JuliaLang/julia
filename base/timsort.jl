@@ -154,8 +154,6 @@ end
 # Get the next run
 # Returns the a range a:b, or b:-1:a for a reversed sequence
 function ($next_run)($(args...), v::AbstractVector, lo::Int, hi::Int)
-    flush(stdout_stream)
-
     if lo == hi
         return lo:lo
     end
@@ -728,12 +726,8 @@ function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
             ($insertionsort)($(args...), v, i, i+count-1)
         else
             if !issorted(run_range)
-                #reverse!(sub(v, run_range))
-                # Why is this faster?
-                for j = 0:div(count,2)-1
-                    v[i+j], v[i+count-j-1] = v[i+count-j-1], v[i+j]
-                end
                 run_range = last(run_range):first(run_range)
+                reverse!(sub(v, run_range))
             end
         end
 
