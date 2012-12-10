@@ -596,6 +596,18 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                     end
                     return Tuple
                 end
+            else
+                ft = abstract_eval(fargs[1], vtypes, sv)
+                if isType(ft)
+                    # TODO: improve abstract_call_constructor
+                    st = ft.parameters[1]
+                    if isa(st,TypeVar) && isa(st.ub,CompositeKind)
+                        return st.ub
+                    end
+                    if isa(st,CompositeKind)
+                        return st
+                    end
+                end
             end
         end
         if is(f,invoke) && length(fargs)>1
@@ -652,13 +664,18 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
             return result
         end
         ft = abstract_eval(called, vtypes, sv)
-        if isType(ft) && isa(ft.parameters[1],CompositeKind)
+        if isType(ft)
             st = ft.parameters[1]
-            if isgeneric(st) && isleaftype(st)
-                return abstract_call_gf(st, fargs, argtypes, e)
+            if isa(st,TypeVar) && isa(st.ub,CompositeKind)
+                return st.ub
             end
-            # struct constructor
-            return st
+            if isa(st,CompositeKind)
+                if isgeneric(st) && isleaftype(st)
+                    return abstract_call_gf(st, fargs, argtypes, e)
+                end
+                # struct constructor
+                return st
+            end
         end
         return Any
     end
