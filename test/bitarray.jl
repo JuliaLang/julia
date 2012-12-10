@@ -1,6 +1,5 @@
 # for now, manually import necessary bit array functions:
-import Base.BitArray, Base.bitrand, Base.bitpack, Base.bitunpack,
-       Base.bitones, Base.bitzeros, Base.rotl, Base.rotr
+import Base.rotl, Base.rotr, Base.bitzeros, Base.bitones
 
 macro check_bit_operation(func, RetT, args)
     quote
@@ -20,6 +19,12 @@ let t0 = time()
         t0 = t1
     end
 end
+
+## wrappers for compatibility with old functions ##
+bitrand{T}(::Type{T}, dims::Dims) = rand!(BitArray(T, dims))
+bitrand{T}(::Type{T}, dims::Int...) = bitrand(T, dims)
+bitrand(dims::Dims) = rand!(BitArray(dims))
+bitrand(dims::Int...) = bitrand(dims)
 
 TT = Uint8
 SS = promote_type(TT, Int)

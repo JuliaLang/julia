@@ -273,23 +273,18 @@ bitpack{T,n}(A::Array{T,n}) = convert(BitArray{T,n}, A)
 
 ## Random ##
 
-function bitrand!(B::BitArray)
+function bitarray_rand_fill!(B::BitArray)
     if length(B) == 0
         return B
     end
+    Bc = B.chunks
     for i = 1 : length(B.chunks) - 1
-        B.chunks[i] = randi(Uint64)
+        Bc[i] = randi(Uint64)
     end
     msk = @_msk_end length(B)
     B.chunks[end] = msk & randi(Uint64)
     return B
 end
-
-bitrand{T}(::Type{T}, dims::Dims) = bitrand!(BitArray(T, dims))
-bitrand{T}(::Type{T}, dims::Int...) = bitrand(T, dims)
-
-bitrand(dims::Dims) = bitrand!(BitArray(dims))
-bitrand(dims::Int...) = bitrand(dims)
 
 ## Bounds checking ##
 

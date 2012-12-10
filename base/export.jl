@@ -728,12 +728,9 @@ export
 # bitarrays
     bitareduce,
     biteye,
-    bitones,
     bitpack,
-    bitrand,
     bitshow,
     bitunpack,
-    bitzeros,
     flipbits,
 
 # dequeues
@@ -935,8 +932,6 @@ export
     rand!,
     randbeta,
     randbeta!,
-    randbit,
-    randbit!,
     randbool,
     randbool!,
     randchi2,
