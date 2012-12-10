@@ -959,11 +959,13 @@ for f in (:&, :|, :$)
             fc = F.chunks
             ac = A.chunks
             bc = B.chunks
-            for i = 1:length(F.chunks) - 1
-                fc[i] = ($f)(ac[i], bc[i])
+            if !isempty(ac) && !isempty(bc)
+                for i = 1:length(F.chunks) - 1
+                    fc[i] = ($f)(ac[i], bc[i])
+                end
+                msk = @_msk_end length(F)
+                F.chunks[end] = msk & ($f)(A.chunks[end], B.chunks[end])
             end
-            msk = @_msk_end length(F)
-            F.chunks[end] = msk & ($f)(A.chunks[end], B.chunks[end])
             return F
         end
         ($f)(x::Number, B::BitArray) = ($f)(x, bitunpack(B))
