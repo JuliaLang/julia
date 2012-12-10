@@ -565,7 +565,6 @@ export
     each_row!,
     each_vec,
     each_vec!,
-    falses,
     fill,
     fill!,
     find,
@@ -641,7 +640,6 @@ export
     sub2ind,
     sum,
     sum_kbn,
-    trues,
     vcat,
     vec,
     zeros,
@@ -726,11 +724,14 @@ export
     spzeros,
 
 # bitarrays
-    biteye,
     bitpack,
-    bitshow,
     bitunpack,
+    falses,
     flipbits,
+    flipbits!,
+    rotl,
+    rotr,
+    trues,
 
 # dequeues
     append!,
@@ -1112,6 +1113,7 @@ export
     memio,
     mmap,
     mmap_array,
+    mmap_bitarray,
     mmap_grow,
     mmap_stream_settings,
     msync,
