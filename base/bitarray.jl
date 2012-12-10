@@ -139,15 +139,17 @@ similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
 function fill!{T<:Integer}(B::BitArray{T}, x::Number)
     y = convert(T, x)
     if isequal(y, zero(T))
+        Bc = B.chunks
         for i = 1 : length(B.chunks)
-            B.chunks[i] = uint64(0)
+            Bc[i] = uint64(0)
         end
     elseif isequal(y, one(T))
         if length(B) == 0
             return B
         end
+        Bc = B.chunks
         for i = 1 : length(B.chunks) - 1
-            B.chunks[i] = _msk64
+            Bc[i] = _msk64
         end
         B.chunks[end] = @_msk_end length(B)
     else
@@ -185,21 +187,22 @@ function one{T}(x::BitMatrix{T})
 end
 
 function copy_to(dest::BitArray, src::BitArray)
-    nc_d = length(dest.chunks)
-    nc_s = length(src.chunks)
+    destc = dest.chunks; srcc = src.chunks
+    nc_d = length(destc)
+    nc_s = length(srcc)
     nc = min(nc_s, nc_d)
     if nc == 0
         return dest
     end
     for i = 1 : nc - 1
-        dest.chunks[i] = src.chunks[i]
+        destc[i] = srcc[i]
     end
     if length(src) >= length(dest)
-        dest.chunks[nc] = src.chunks[nc]
+        destc[nc] = srcc[nc]
     else
         msk_s = @_msk_end length(src)
         msk_d = ~msk_s
-        dest.chunks[nc] = (msk_d & dest.chunks[nc]) | (msk_s & src.chunks[nc])
+        destc[nc] = (msk_d & destc[nc]) | (msk_s & srcc[nc])
     end
     return dest
 end
@@ -926,8 +929,10 @@ conj(B::BitArray) = copy(B)
 
 function flipbits(B::BitArray)
     C = similar(B)
+    Cc = C.chunks
+    Bc = B.chunks
     for i = 1:length(B.chunks) - 1
-        C.chunks[i] = ~B.chunks[i]
+        Cc[i] = ~Bc[i]
     end
     msk = @_msk_end length(B)
     C.chunks[end] = msk & (~B.chunks[end])
@@ -954,8 +959,11 @@ for f in (:&, :|, :$)
     @eval begin
         function ($f){T<:Integer}(A::BitArray{T}, B::BitArray{T})
             F = BitArray(T, promote_shape(size(A),size(B))...)
+            fc = F.chunks
+            ac = A.chunks
+            bc = B.chunks
             for i = 1:length(F.chunks) - 1
-                F.chunks[i] = ($f)(A.chunks[i], B.chunks[i])
+                fc[i] = ($f)(ac[i], bc[i])
             end
             msk = @_msk_end length(F)
             F.chunks[end] = msk & ($f)(A.chunks[end], B.chunks[end])
@@ -1052,8 +1060,9 @@ function (==)(A::BitArray, B::BitArray)
     if size(A) != size(B)
         return false
     end
+    Ac = A.chunks; Bc = B.chunks
     for i = 1:length(A.chunks)
-        if A.chunks[i] != B.chunks[i]
+        if Ac[i] != Bc[i]
             return false
         end
     end
@@ -1064,8 +1073,9 @@ function (!=)(A::BitArray, B::BitArray)
     if size(A) != size(B)
         return true
     end
+    Ac = A.chunks; Bc = B.chunks
     for i = 1:length(A.chunks)
-        if A.chunks[i] != B.chunks[i]
+        if Ac[i] != Bc[i]
             return true
         end
     end
