@@ -726,7 +726,6 @@ export
     spzeros,
 
 # bitarrays
-    bitareduce,
     biteye,
     bitpack,
     bitshow,

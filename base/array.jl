@@ -1314,8 +1314,10 @@ indmin(a::Array) = findmin(a)[2]
 
 ## Reductions ##
 
-areduce{T}(f::Function, A::StridedArray{T}, region::Dimspec, v0) =
-    areduce(f,A,region,v0,T)
+reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 : size(A,i)))
+
+areduce(f::Function, A, region::Dimspec, v0) =
+    areduce(f, A, region, v0, similar(A, reduced_dims(A, region)))
 
 # TODO:
 # - find out why inner loop with dimsA[i] instead of size(A,i) is way too slow
@@ -1358,11 +1360,8 @@ function gen_areduce_func(n, f)
 end
 
 global areduce
-function areduce(f::Function, A::StridedArray, region::Dimspec, v0, RType::Type)
-    dimsA = size(A)
+function areduce(f::Function, A, region::Dimspec, v0, R)
     ndimsA = ndims(A)
-    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-    R = similar(A, RType, dimsR)
 
     if is(areduce_cache,nothing)
         areduce_cache = Dict()
@@ -1393,6 +1392,21 @@ function areduce(f::Function, A::StridedArray, region::Dimspec, v0, RType::Type)
     return R
 end
 end
+
+max{T}(A::AbstractArray{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T))
+min{T}(A::AbstractArray{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T))
+sum{T}(A::AbstractArray{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
+prod{T}(A::AbstractArray{T}, region::Dimspec) = areduce(*,A,region,one(T))
+
+all(A::AbstractArray{Bool}, region::Dimspec) = areduce(all,A,region,true)
+any(A::AbstractArray{Bool}, region::Dimspec) = areduce(any,A,region,false)
+sum(A::AbstractArray{Bool}, region::Dimspec) = areduce(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
+sum(A::AbstractArray{Bool}) = count(A)
+sum(A::StridedArray{Bool})  = count(A)
+prod(A::AbstractArray{Bool}) =
+    error("use all() instead of prod() for boolean arrays")
+prod(A::AbstractArray{Bool}, region::Dimspec) =
+    error("use all() instead of prod() for boolean arrays")
 
 function sum{T}(A::StridedArray{T})
     if isempty(A)
@@ -1516,20 +1530,6 @@ function max{T<:Integer}(A::StridedArray{T})
     end
     v
 end
-
-max{T}(A::StridedArray{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T),T)
-min{T}(A::StridedArray{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T),T)
-sum{T}(A::StridedArray{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
-prod{T}(A::StridedArray{T}, region::Dimspec) = areduce(*,A,region,one(T))
-
-all(A::StridedArray{Bool}, region::Dimspec) = areduce(all,A,region,true)
-any(A::StridedArray{Bool}, region::Dimspec) = areduce(any,A,region,false)
-sum(A::StridedArray{Bool}, region::Dimspec) = areduce(+,A,region,0,Int)
-sum(A::StridedArray{Bool}) = count(A)
-prod(A::StridedArray{Bool}) =
-    error("use all() instead of prod() for boolean arrays")
-prod(A::StridedArray{Bool}, region::Dimspec) =
-    error("use all() instead of prod() for boolean arrays")
 
 ## map over arrays ##
 
