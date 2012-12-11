@@ -38,7 +38,8 @@ export
     timsort_r!,
     timsort_by!
 
-import Base.sort, Base.issorted, Base.sort, Base.sort!, Base.sortperm
+import Base.sort, Base.issorted, Base.sort, Base.sort!, Base.sortperm, Base.slt_int,
+       Base.unbox, Base.sle_int
 
 _jl_fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox(Float32,x),unbox(Float32,y))
 _jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox(Float64,x),unbox(Float64,y))
