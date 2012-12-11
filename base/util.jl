@@ -51,6 +51,15 @@ macro elapsed(ex)
     end
 end
 
+# print nothing, return value & elapsed time
+macro timed(ex)
+    quote
+        local t0 = time()
+        local val = $(esc(ex))
+        val, time()-t0
+    end
+end
+
 function peakflops(n)
     a = rand(n,n)
     t = @elapsed a*a
