@@ -455,7 +455,7 @@ DLLEXPORT jl_value_t *jl_get_backtrace()
 // stacktrace using execinfo
 static void record_backtrace(void)
 {
-    bt_size = backtrace(bt_data, MAX_BT_SIZE);
+    bt_size = backtrace((void**)bt_data, MAX_BT_SIZE);
 }
 #elif defined(__WIN32__)
 static void record_backtrace(void)

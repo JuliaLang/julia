@@ -37,13 +37,11 @@ function do_test_fails(thk, qex)
 end
 
 macro test(ex)
-    qex = expr(:quote,ex)
-    :(do_test(()->($(esc(ex))),$qex))
+    :(do_test(()->($(esc(ex))),$(expr(:quote,ex))))
 end
 
 macro test_fails(ex)
-    qex = expr(:quote,ex)
-    :(do_test_fails(()->($(esc(ex))),$qex))
+    :(do_test_fails(()->($(esc(ex))),$(expr(:quote,ex))))
 end
 
 end # module

@@ -618,14 +618,6 @@ static Value *allocate_box_dynamic(Value *jlty, int nb, Value *v)
     if (v->getType()->isPointerTy()) {
         v = builder.CreatePtrToInt(v, T_size);
     }
-    if (nb == 8)
-        return builder.CreateCall2(box8_func,  jlty, v);
-    if (nb == 16)
-        return builder.CreateCall2(box16_func, jlty, v);
-    if (nb == 32)
-        return builder.CreateCall2(box32_func, jlty, v);
-    if (nb == 64)
-        return builder.CreateCall2(box64_func, jlty, v);
     size_t sz = sizeof(void*) + (nb+7)/8;
     Value *newv = builder.CreateCall(jlallocobj_func,
                                      ConstantInt::get(T_size, sz));

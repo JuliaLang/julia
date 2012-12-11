@@ -148,7 +148,7 @@ end
 function combinations(a::AbstractVector, t::Integer)
   # T1
   n = length(a)
-  c = [0:t-1, n, 0]
+  c = [0:t-1, [n, 0]]
   j = t
   if (t >= n) 
     # Algorithm T assumes t < n, just return a

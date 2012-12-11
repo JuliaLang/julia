@@ -1,21 +1,3 @@
-# overloads
-import Base.length, Base.eltype, Base.ndims, Base.numel, Base.size
-import Base.similar, Base.fill!, Base.one, Base.copy_to, Base.reshape
-import Base.convert, Base.reinterpret, Base.ref, Base.assign, Base.check_bounds
-import Base.push, Base.append!, Base.grow, Base.pop, Base.enqueue, Base.shift
-import Base.insert, Base.del, Base.del_all, Base.~, Base.-, Base.sign, Base.real
-import Base.imag, Base.conj!, Base.conj, Base.!, Base.+, Base.div, Base.mod
-import Base.(./), Base.(.^), Base./, Base.\, Base.&, Base.|, Base.$, Base.(.*)
-import Base.(.==), Base.==, Base.(.<), Base.<, Base.(.!=), Base.!=
-import Base.(.<=), Base.<=, Base.slicedim, Base.flipdim, Base.rotl90
-import Base.rotr90, Base.rot180, Base.reverse!, Base.<<, Base.>>, Base.>>>
-import Base.nnz, Base.findfirst, Base.find, Base.findn, Base.nonzeros
-import Base.areduce, Base.max, Base.min, Base.sum, Base.prod, Base.map_to
-import Base.filter, Base.transpose, Base.ctranspose, Base.permute, Base.hcat
-import Base.vcat, Base.cat, Base.isequal, Base.cumsum, Base.cumprod
-import Base.write, Base.read, Base.msync, Base.findn_nzs, Base.reverse
-import Base.iround, Base.itrunc, Base.ifloor, Base.iceil, Base.abs
-
 # prelimnary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
@@ -51,7 +33,7 @@ type BitArray{T<:Integer, N} <: AbstractArray{T, N}
     end
 end
 
-BitArray{T}(::Type{T}) = BitArray{T, 1}(0)
+BitArray{T}(::Type{T}) = BitArray{T,1}(0)
 BitArray() = BitArray(Bool, 0)
 BitArray{T}(::Type{T}, dims::Dims) = BitArray{T, max(length(dims), 1)}(dims...)
 BitArray(dims::Dims) = BitArray(Bool, dims)
@@ -60,38 +42,6 @@ BitArray(dims::Int...) = BitArray(Bool, dims...)
 
 typealias BitVector{T} BitArray{T,1}
 typealias BitMatrix{T} BitArray{T,2}
-
-# non-standard compact representation
-
-function _jl_print_bit_chunk(io::IO, c::Uint64, l::Integer)
-    for s = 0 : l - 1
-        d = (c >>> s) & 1
-        print(io, "01"[d + 1])
-        if (s + 1) & 7 == 0
-            print(io, " ")
-        end
-    end
-end
-
-_jl_print_bit_chunk(io::IO, c::Uint64) = _jl_print_bit_chunk(io, c, 64)
-
-_jl_print_bit_chunk(c::Uint64, l::Integer) = _jl_print_bit_chunk(stdout_stream, c, l)
-_jl_print_bit_chunk(c::Uint64) = _jl_print_bit_chunk(stdout_stream, c)
-
-function bitshow(io::IO, B::BitArray)
-    if length(B) == 0
-        return
-    end
-    for i = 1 : length(B.chunks) - 1
-        _jl_print_bit_chunk(io, B.chunks[i])
-        print(io, ": ")
-    end
-    l = (@_mod64 (length(B)-1)) + 1
-    _jl_print_bit_chunk(io, B.chunks[end], l)
-end
-bitshow(B::BitArray) = bitshow(stdout_stream, B)
-
-bitstring(B::BitArray) = sprint(bitshow, B)
 
 ## utility functions ##
 
@@ -189,15 +139,17 @@ similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
 function fill!{T<:Integer}(B::BitArray{T}, x::Number)
     y = convert(T, x)
     if isequal(y, zero(T))
+        Bc = B.chunks
         for i = 1 : length(B.chunks)
-            B.chunks[i] = uint64(0)
+            Bc[i] = uint64(0)
         end
     elseif isequal(y, one(T))
         if length(B) == 0
             return B
         end
+        Bc = B.chunks
         for i = 1 : length(B.chunks) - 1
-            B.chunks[i] = _msk64
+            Bc[i] = _msk64
         end
         B.chunks[end] = @_msk_end length(B)
     else
@@ -209,14 +161,10 @@ end
 fill!(B::BitArray, x) = fill!(B, int(x))
 
 bitzeros{T}(::Type{T}, args...) = fill!(BitArray(T, args...), 0)
-bitzeros(args...) = fill!(BitArray(Int, args...), 0)
-
 bitones{T}(::Type{T}, args...) = fill!(BitArray(T, args...), 1)
-bitones(args...) = fill!(BitArray(Int, args...), 1)
 
-# XXX: temporary!?
-bitfalses(args...) = bitzeros(Bool, args...)
-bittrues(args...) = bitones(Bool, args...)
+trues(args...) = bitones(Bool, args...)
+falses(args...) = bitzeros(Bool, args...)
 
 biteye{T}(::Type{T}, n::Integer) = biteye(T, n, n)
 function biteye{T}(::Type{T}, m::Integer, n::Integer)
@@ -226,8 +174,8 @@ function biteye{T}(::Type{T}, m::Integer, n::Integer)
     end
     return a
 end
-biteye(n::Integer) = biteye(Int, n)
-biteye(m::Integer, n::Integer) = biteye(Int, m, n)
+biteye(n::Integer) = biteye(Bool, n)
+biteye(m::Integer, n::Integer) = biteye(Bool, m, n)
 
 function one{T}(x::BitMatrix{T})
     m, n = size(x)
@@ -239,21 +187,22 @@ function one{T}(x::BitMatrix{T})
 end
 
 function copy_to(dest::BitArray, src::BitArray)
-    nc_d = length(dest.chunks)
-    nc_s = length(src.chunks)
+    destc = dest.chunks; srcc = src.chunks
+    nc_d = length(destc)
+    nc_s = length(srcc)
     nc = min(nc_s, nc_d)
     if nc == 0
         return dest
     end
     for i = 1 : nc - 1
-        dest.chunks[i] = src.chunks[i]
+        destc[i] = srcc[i]
     end
     if length(src) >= length(dest)
-        dest.chunks[nc] = src.chunks[nc]
+        destc[nc] = srcc[nc]
     else
         msk_s = @_msk_end length(src)
         msk_d = ~msk_s
-        dest.chunks[nc] = (msk_d & dest.chunks[nc]) | (msk_s & src.chunks[nc])
+        destc[nc] = (msk_d & destc[nc]) | (msk_s & srcc[nc])
     end
     return dest
 end
@@ -324,23 +273,18 @@ bitpack{T,n}(A::Array{T,n}) = convert(BitArray{T,n}, A)
 
 ## Random ##
 
-function bitrand!(B::BitArray)
+function bitarray_rand_fill!(B::BitArray)
     if length(B) == 0
         return B
     end
+    Bc = B.chunks
     for i = 1 : length(B.chunks) - 1
-        B.chunks[i] = randi(Uint64)
+        Bc[i] = randi(Uint64)
     end
     msk = @_msk_end length(B)
     B.chunks[end] = msk & randi(Uint64)
     return B
 end
-
-bitrand{T}(::Type{T}, dims::Dims) = bitrand!(BitArray(T, dims))
-bitrand{T}(::Type{T}, dims::Int...) = bitrand(T, dims)
-
-bitrand(dims::Dims) = bitrand!(BitArray(dims))
-bitrand(dims::Int...) = bitrand(dims)
 
 ## Bounds checking ##
 
@@ -979,12 +923,16 @@ conj!(B::BitArray) = B
 conj(B::BitArray) = copy(B)
 
 function flipbits(B::BitArray)
+    Bc = B.chunks
     C = similar(B)
-    for i = 1:length(B.chunks) - 1
-        C.chunks[i] = ~B.chunks[i]
+    if !isempty(Bc)
+        Cc = C.chunks
+        for i = 1:length(Bc)-1
+            Cc[i] = ~Bc[i]
+        end
+        msk = @_msk_end length(B)
+        Cc[end] = msk & (~Bc[end])
     end
-    msk = @_msk_end length(B)
-    C.chunks[end] = msk & (~B.chunks[end])
     return C
 end
 
@@ -1008,11 +956,16 @@ for f in (:&, :|, :$)
     @eval begin
         function ($f){T<:Integer}(A::BitArray{T}, B::BitArray{T})
             F = BitArray(T, promote_shape(size(A),size(B))...)
-            for i = 1:length(F.chunks) - 1
-                F.chunks[i] = ($f)(A.chunks[i], B.chunks[i])
+            fc = F.chunks
+            ac = A.chunks
+            bc = B.chunks
+            if !isempty(ac) && !isempty(bc)
+                for i = 1:length(F.chunks) - 1
+                    fc[i] = ($f)(ac[i], bc[i])
+                end
+                msk = @_msk_end length(F)
+                F.chunks[end] = msk & ($f)(A.chunks[end], B.chunks[end])
             end
-            msk = @_msk_end length(F)
-            F.chunks[end] = msk & ($f)(A.chunks[end], B.chunks[end])
             return F
         end
         ($f)(x::Number, B::BitArray) = ($f)(x, bitunpack(B))
@@ -1059,17 +1012,25 @@ end
 
 # TODO?
 
-## Binary comparison operators ##
-# note: these return BitArray{Bool}
-for (f,scalarf,t) in ((:(.==),:(==),:Number), (:.<, :<,:Real), (:.!=,:!=,:Number), (:.<=,:<=,:Real))
+## element-wise comparison operators returning BitArray{Bool} ##
+
+for (f,scalarf,t) in ((:(.==),:(==),:Number),
+                      (:.<, :<,:Real),
+                      (:.!=,:!=,:Number),
+                      (:.<=,:<=,:Real))
     @eval begin
-        function ($f)(A::BitArray, B::BitArray)
+        function ($f)(A::AbstractArray, B::AbstractArray)
             F = BitArray(Bool, promote_shape(size(A),size(B)))
             for i = 1:numel(B)
                 F[i] = ($scalarf)(A[i], B[i])
             end
             return F
         end
+        ($f)(A, B::AbstractArray) =
+            reshape([ ($scalarf)(A, B[i]) for i=1:length(B)], size(B))
+        ($f)(A::AbstractArray, B) =
+            reshape([ ($scalarf)(A[i], B) for i=1:length(A)], size(A))
+
         function ($f)(x::($t), B::BitArray)
             F = similar(B, Bool)
             for i = 1:numel(F)
@@ -1098,8 +1059,9 @@ function (==)(A::BitArray, B::BitArray)
     if size(A) != size(B)
         return false
     end
+    Ac = A.chunks; Bc = B.chunks
     for i = 1:length(A.chunks)
-        if A.chunks[i] != B.chunks[i]
+        if Ac[i] != Bc[i]
             return false
         end
     end
@@ -1110,8 +1072,9 @@ function (!=)(A::BitArray, B::BitArray)
     if size(A) != size(B)
         return true
     end
+    Ac = A.chunks; Bc = B.chunks
     for i = 1:length(A.chunks)
-        if A.chunks[i] != B.chunks[i]
+        if Ac[i] != Bc[i]
             return true
         end
     end
@@ -1456,91 +1419,7 @@ nonzeros{T<:Integer}(B::BitArray{T}) = bitones(T, nnz(B))
 
 ## Reductions ##
 
-areduce(f::Function, B::BitArray, region::Dimspec, v0, RType::Type) =
-    areduce(f, bitunpack(B), region, v0, RType)
-
-let bitareduce_cache = nothing
-# generate the body of the N-d loop to compute a reduction
-function gen_bitareduce_func(n, f)
-    ivars = { gensym() for i=1:n }
-    # limits and vars for reduction loop
-    lo    = { gensym() for i=1:n }
-    hi    = { gensym() for i=1:n }
-    rvars = { gensym() for i=1:n }
-    setlims = { quote
-        # each dim of reduction is either 1:sizeA or ivar:ivar
-        if contains(region,$i)
-            $(lo[i]) = 1
-            $(hi[i]) = size(A,$i)
-        else
-            $(lo[i]) = $(hi[i]) = $(ivars[i])
-        end
-               end for i=1:n }
-    rranges = { :( $(lo[i]):$(hi[i]) ) for i=1:n }  # lo:hi for all dims
-    body =
-    quote
-        _tot = v0
-        $(setlims...)
-        $(make_loop_nest(rvars, rranges,
-                         :(_tot = ($f)(_tot, A[$(rvars...)]))))
-        R[_ind] = _tot
-        _ind += 1
-    end
-    quote
-        local _F_
-        function _F_(f, A, region, R, v0)
-            _ind = 1
-            $(make_loop_nest(ivars, { :(1:size(R,$i)) for i=1:n }, body))
-        end
-        _F_
-    end
-end
-
-global bitareduce
-function bitareduce{T<:Integer}(f::Function, A::BitArray{T}, region::Dimspec, v0)
-    dimsA = size(A)
-    ndimsA = ndims(A)
-    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-    R = BitArray(T, dimsR)
-
-    if is(bitareduce_cache,nothing)
-        bitareduce_cache = Dict()
-    end
-
-    key = ndimsA
-    fname = :f
-
-    if  (is(f,*)     && (fname=:*;true)) ||
-        (is(f,max)   && (fname=:max;true)) ||
-        (is(f,min)   && (fname=:min;true))
-        key = (fname, ndimsA)
-    end
-
-    if !has(bitareduce_cache,key)
-        fexpr = gen_bitareduce_func(ndimsA, fname)
-        func = eval(fexpr)
-        bitareduce_cache[key] = func
-    else
-        func = bitareduce_cache[key]
-    end
-
-    func(f, A, region, R, v0)
-
-    return R
-end
-end
-
-max{T}(A::BitArray{T}, b::(), region::Dimspec) = bitareduce(max,A,region,typemin(T))
-min{T}(A::BitArray{T}, b::(), region::Dimspec) = bitareduce(min,A,region,typemax(T))
-sum{T}(A::BitArray{T}, region::Dimspec)  = areduce(+,A,region,0,Int)
-prod{T}(A::BitArray{T}, region::Dimspec) = bitareduce(*,A,region,one(T))
-
-sum(B::BitArray) = nnz(B)
-
-prod{T}(B::BitArray{T}) = (nnz(B) == length(B) ? one(T) : zero(T))
-
-min{T}(B::BitArray{T}) = length(B) > 0 ? prod(B) : typemax(T)
-max{T}(B::BitArray{T}) = length(B) > 0 ? (nnz(B) > 0 ? one(T) : zero(T)) : typemin(T)
+sum(A::BitArray, region::Dimspec) = areduce(+,A,region,0,Array(Int,reduced_dims(A,region)))
 
 ## map over bitarrays ##
 
@@ -1952,33 +1831,3 @@ function cumprod{T}(v::BitVector{T})
     end
     return c
 end
-
-write(s::IO, B::BitArray) = write(s, B.chunks)
-
-read(s::IO, B::BitArray) = read(s, B.chunks)
-
-function mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
-    prot, flags, iswrite = mmap_stream_settings(s)
-    if length(dims) == 0
-        dims = 0
-    end
-    n = prod(dims)
-    nc = _jl_num_bit_chunks(n)
-    B = BitArray{T,N}()
-    chunks = mmap_array(Uint64, (nc,), s, offset)
-    if iswrite
-        chunks[end] &= @_msk_end n
-    else
-        if chunks[end] != chunks[end] & @_msk_end n
-            error("The given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with r+ to override)")
-        end
-    end
-    dims = [i::Int for i in dims]
-    B.chunks = chunks
-    B.dims = dims
-    return B
-end
-mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(T, dims, s, position(s))
-
-msync{T}(B::BitArray{T}, flags::Integer) = msync(pointer(B.chunks), flags)
-msync{T}(B::BitArray{T}) = msync(B.chunks,MS_SYNC)

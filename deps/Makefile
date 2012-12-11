@@ -182,10 +182,10 @@ $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	touch $@
 
 clean-llvm:
-	$(MAKE) -C llvm-$(LLVM_VER) clean
-	rm -f $(USRBIN)/llvm-config
+	-$(MAKE) -C llvm-$(LLVM_VER) clean
+	-rm -f $(USRBIN)/llvm-config
 distclean-llvm:
-	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
+	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
 ## GNU readline ##
 
@@ -223,10 +223,10 @@ $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	touch $@
 
 clean-readline:
-	$(MAKE) -C readline-$(READLINE_VER) clean
-	rm -f $(READLINE_OBJ_TARGET)
+	-$(MAKE) -C readline-$(READLINE_VER) clean
+	-rm -f $(READLINE_OBJ_TARGET)
 distclean-readline:
-	rm -rf readline-$(READLINE_VER).tar.gz readline-$(READLINE_VER)
+	-rm -rf readline-$(READLINE_VER).tar.gz readline-$(READLINE_VER)
 
 else
 
@@ -234,10 +234,14 @@ readline-$(READLINE_VER).tar.gz:
 	$(WGET) http://ftp.gnu.org/gnu/readline/$@
 	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
 	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
+	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-003
+	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-004
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-001
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-002
+	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-003
+	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-004
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
@@ -258,10 +262,10 @@ endif
 	touch $@
 
 clean-readline:
-	$(MAKE) -C readline-$(READLINE_VER) clean
-	rm -f $(READLINE_OBJ_TARGET)
+	-$(MAKE) -C readline-$(READLINE_VER) clean
+	-rm -f $(READLINE_OBJ_TARGET)
 distclean-readline:
-	rm -rf readline-$(READLINE_VER).tar.gz readline-$(READLINE_VER)
+	-rm -rf readline-$(READLINE_VER).tar.gz readline-$(READLINE_VER)
 
 endif
 
@@ -290,8 +294,8 @@ $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 install-uv: $(UV_OBJ_TARGET)
 
 clean-uv:
-	$(MAKE) -C libuv clean
-	rm -rf $(USR)/lib/libuv.a $(USR)/include/uv.h $(USR)/include/uv-private
+	-$(MAKE) -C libuv clean
+	-rm -rf $(USR)/lib/libuv.a $(USR)/include/uv.h $(USR)/include/uv-private
 distclean-uv: clean-uv
 
 ## PCRE ##
@@ -319,10 +323,10 @@ endif
 	touch $@
 
 clean-pcre:
-	$(MAKE) -C pcre-$(PCRE_VER) clean
-	rm -f $(PCRE_OBJ_TARGET)
+	-$(MAKE) -C pcre-$(PCRE_VER) clean
+	-rm -f $(PCRE_OBJ_TARGET)
 distclean-pcre:
-	rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
+	-rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
 
 ## Grisu floating-point printing library ##
 
@@ -354,10 +358,10 @@ $(USR)/lib/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(
 	$(INSTALL_NAME_CMD)libgrisu.dylib $@
 
 clean-double-conversion:
-	rm -f double-conversion-$(GRISU_VER)/src/*.o
-	rm -f double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+	-rm -f double-conversion-$(GRISU_VER)/src/*.o
+	-rm -f double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
 distclean-double-conversion:
-	rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
+	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
 
 ## openlibm ##
 
@@ -383,8 +387,8 @@ $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USR)/lib
 install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 clean-openlibm:
-	$(MAKE) -C openlibm distclean
-	rm $(OPENLIBM_OBJ_TARGET)
+	-$(MAKE) -C openlibm distclean
+	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm      
 
 ## Rmath ##
@@ -403,8 +407,8 @@ $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
 	cp $< $@
 
 clean-rmath:
-	cd Rmath/src && $(MAKE) clean
-	rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
+	-cd Rmath/src && $(MAKE) clean
+	-rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
 distclean-rmath: clean-rmath
 
 ## LIBRANDOM ##
@@ -438,9 +442,9 @@ $(LIBRANDOM_OBJ_TARGET): $(LIBRANDOM_OBJ_SOURCE)
 	cp $< $@
 
 clean-random:
-	rm -f random/librandom.$(SHLIB_EXT)
+	-rm -f random/librandom.$(SHLIB_EXT)
 distclean-random: clean-random
-	cd random && rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
+	-cd random && rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
 
 ## OpenBLAS ##
 
@@ -476,9 +480,9 @@ $(USR)/lib/libopenblas.$(SHLIB_EXT): $(OPENBLAS_OBJ_SOURCE) | $(USR)/lib
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(USR)/lib/libopenblas.$(SHLIB_EXT)
 
 clean-openblas:
-	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
+	-$(MAKE) -C openblas-$(OPENBLAS_VER) clean
 distclean-openblas:
-	rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
+	-rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
 
 ## LAPACK ##
 
@@ -510,10 +514,10 @@ $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	cp $< $@
 
 clean-lapack:
-	$(MAKE) -C lapack-$(LAPACK_VER) clean
-	rm -f $(LAPACK_OBJ_SOURCE) $(LAPACK_OBJ_TARGET)
+	-$(MAKE) -C lapack-$(LAPACK_VER) clean
+	-rm -f $(LAPACK_OBJ_SOURCE) $(LAPACK_OBJ_TARGET)
 distclean-lapack:
-	rm -rf lapack-$(LAPACK_VER).tgz lapack-$(LAPACK_VER)
+	-rm -rf lapack-$(LAPACK_VER).tgz lapack-$(LAPACK_VER)
 
 ## ARPACK ##
 
@@ -545,10 +549,10 @@ endif
 	touch $@
 
 clean-arpack:
-	$(MAKE) -C arpack-ng_$(ARPACK_VER) clean
-	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
+	-$(MAKE) -C arpack-ng_$(ARPACK_VER) clean
+	-rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	rm -rf arpack-ng_$(ARPACK_VER).tar.gz arpack-ng_$(ARPACK_VER)
+	-rm -rf arpack-ng_$(ARPACK_VER).tar.gz arpack-ng_$(ARPACK_VER)
 
 ## FFTW ##
 
@@ -627,12 +631,12 @@ endif
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
 	-$(MAKE) -C fftw-$(FFTW_VER)-single clean
-	rm -f $(FFTW_SINGLE_OBJ_TARGET)
+	-rm -f $(FFTW_SINGLE_OBJ_TARGET)
 clean-fftw-double:
 	-$(MAKE) -C fftw-$(FFTW_VER)-double clean
-	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
+	-rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
-	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
+	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
 
 
 ## SUITESPARSE ##
@@ -681,9 +685,9 @@ endif
 
 clean-suitesparse:
 	-$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
-	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
+	-rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
 distclean-suitesparse: clean-suitesparse
-	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
+	-rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
 
 # SUITESPARSE WRAPPER
 
@@ -702,7 +706,7 @@ $(USR)/lib/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPA
 install-suitesparse-wrapper: $(USR)/lib/libsuitesparse_wrapper.$(SHLIB_EXT)
 
 clean-suitesparse-wrapper:
-	rm -f $(SUITESPARSE_OBJ_TARGET) $(USR)/lib/libsuitesparse_wrapper.$(SHLIB_EXT)
+	-rm -f $(SUITESPARSE_OBJ_TARGET) $(USR)/lib/libsuitesparse_wrapper.$(SHLIB_EXT)
 distclean-suitesparse-wrapper: clean-suitesparse-wrapper
 
 ## CLP ##
@@ -726,10 +730,10 @@ $(CLP_OBJ_TARGET): clp-$(CLP_VER)/config.status
 	touch $@
 
 clean-clp:
-	$(MAKE) -C clp-$(CLP_VER) clean
-	rm -f $(CLP_OBJ_TARGET)
+	-$(MAKE) -C clp-$(CLP_VER) clean
+	-rm -f $(CLP_OBJ_TARGET)
 distclean-clp:
-	rm -rf clp-$(CLP_VER).tar.gz clp-$(CLP_VER)
+	-rm -rf clp-$(CLP_VER).tar.gz clp-$(CLP_VER)
 
 ## UNWIND ##
 
@@ -762,11 +766,11 @@ $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
 	cd libunwind-$(UNWIND_VER) && $(MAKE) install
 
 clean-unwind:
-	$(MAKE) -C libunwind-$(UNWIND_VER) clean
-	rm -f $(LIBUNWIND_TARGET_OBJ) $(LIBUNWIND_TARGET_SOURCE)
+	-$(MAKE) -C libunwind-$(UNWIND_VER) clean
+	-rm -f $(LIBUNWIND_TARGET_OBJ) $(LIBUNWIND_TARGET_SOURCE)
 
 distclean-unwind:
-	rm -rf libunwind-$(UNWIND_VER).tar.gz libunwind-$(UNWIND_VER)
+	-rm -rf libunwind-$(UNWIND_VER).tar.gz libunwind-$(UNWIND_VER)
 
 ## GNU LIGHTTPD ##
 
@@ -795,10 +799,10 @@ $(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
 	touch $@
 
 clean-lighttpd:
-	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) clean
-	rm -f $(LIGHTTPD_OBJ_TARGET)
+	-$(MAKE) -C lighttpd-$(LIGHTTPD_VER) clean
+	-rm -f $(LIGHTTPD_OBJ_TARGET)
 distclean-lighttpd:
-	rm -rf lighttpd-$(LIGHTTPD_VER).tar.gz lighttpd-$(LIGHTTPD_VER)
+	-rm -rf lighttpd-$(LIGHTTPD_VER).tar.gz lighttpd-$(LIGHTTPD_VER)
 
 ## GMP ##
 
@@ -827,10 +831,10 @@ $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	touch $@
 
 clean-gmp:
-	$(MAKE) -C gmp-$(GMP_VER) clean
-	rm -f $(GMP_OBJ_TARGET)
+	-$(MAKE) -C gmp-$(GMP_VER) clean
+	-rm -f $(GMP_OBJ_TARGET)
 distclean-gmp:
-	rm -rf gmp-$(GMP_VER).tar.bz2 gmp-$(GMP_VER)
+	-rm -rf gmp-$(GMP_VER).tar.bz2 gmp-$(GMP_VER)
 
 ## GMP Wrapper
 
@@ -849,7 +853,7 @@ $(USR)/lib/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET) | $(USR)
 install-gmp-wrapper: $(USR)/lib/libgmp_wrapper.$(SHLIB_EXT)
 
 clean-gmp-wrapper:
-	rm -f $(GMP_OBJ_TARGET) $(USR)/lib/libgmp_wrapper.$(SHLIB_EXT)
+	-rm -f $(GMP_OBJ_TARGET) $(USR)/lib/libgmp_wrapper.$(SHLIB_EXT)
 distclean-gmp-wrapper: clean-gmp-wrapper
 
 ## GLPK ##
@@ -881,7 +885,7 @@ clean-glpk:
 	-$(MAKE) -C glpk-$(GLPK_VER) uninstall || true
 	-$(MAKE) -C glpk-$(GLPK_VER) clean
 distclean-glpk: clean-glpk
-	rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
+	-rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
 
 
 ## GLPK Wrapper
@@ -902,7 +906,7 @@ $(USR)/lib/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
 install-glpk-wrapper: $(USR)/lib/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
 
 clean-glpk-wrapper:
-	rm -f $(GLPK_OBJ_TARGET) $(USR)/lib/libglpk_wrapper.$(SHLIB_EXT)
+	-rm -f $(GLPK_OBJ_TARGET) $(USR)/lib/libglpk_wrapper.$(SHLIB_EXT)
 distclean-glpk-wrapper: clean-glpk-wrapper
 
 ## ZLIB ##
@@ -934,10 +938,10 @@ $(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
 	touch $@
 
 clean-zlib:
-	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) clean
-	rm -f $(ZLIB_OBJ_TARGET)
+	-$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) clean
+	-rm -f $(ZLIB_OBJ_TARGET)
 distclean-zlib:
-	rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
+	-rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
 
 ## Tk wrapper ##
 
@@ -964,7 +968,7 @@ $(USR)/lib/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
 install-tk-wrapper: $(USR)/lib/libtk_wrapper.$(SHLIB_EXT) tk_wrapper.c
 
 clean-tk-wrapper:
-	rm -f $(USR)/lib/libtk_wrapper.$(SHLIB_EXT)
+	-rm -f $(USR)/lib/libtk_wrapper.$(SHLIB_EXT)
 distclean-tk-wrapper: clean-tk-wrapper
 
 ## patchelf
@@ -987,10 +991,10 @@ $(PATCHELF_TARGET): patchelf-$(PATCHELF_VER)/config.status
 	touch $@
 
 clean-patchelf:
-	$(MAKE) -C patchelf-$(PATCHELF_VER) clean
-	rm -f $(PATCHELF_OBJ_TARGET)
+	-$(MAKE) -C patchelf-$(PATCHELF_VER) clean
+	-rm -f $(PATCHELF_OBJ_TARGET)
 distclean-patchelf:
-	rm -rf patchelf-$(PATCHELF_VER).tar.bz2 patchelf-$(PATCHELF_VER)
+	-rm -rf patchelf-$(PATCHELF_VER).tar.bz2 patchelf-$(PATCHELF_VER)
 
 ## phony targets ##
 

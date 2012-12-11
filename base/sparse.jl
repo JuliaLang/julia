@@ -1,12 +1,3 @@
-# overloads
-import Base.size, Base.nnz, Base.eltype, Base.show, Base.reinterpret, Base.copy
-import Base.reshape, Base.similar, Base.convert, Base.find, Base.findn
-import Base.one, Base.transpose, Base.ctranspose, Base.+, Base.-, Base.(.*), Base.!
-import Base.(./), Base.(.\), Base.(.^), Base.sum, Base.ref, Base.assign
-import Base.vcat, Base.hcat, Base.cat, Base.hvcat, Base.length, Base.findn_nzs
-import Base.full, Base.\, Base.areduce, Base.min, Base.max, Base.sum, Base.prod
-import Base.tril, Base.triu, Base.(==), Base.>, Base.>=, Base.<, Base.<=
-
 abstract AbstractSparseMatrix{Tv,Ti} <: AbstractMatrix{Tv}
 
 issparse(A::AbstractArray) = false
@@ -425,6 +416,7 @@ function sprand(m::Int, n::Int, density::FloatingPoint, rng::Function, v)
     return S
 end
 
+sprand(m::Int, n::Int, density::FloatingPoint, rng::Function) = sprand(m,n,density,rng, 1.0)
 sprand(m::Int, n::Int, density::FloatingPoint)  = sprand(m,n,density,rand, 1.0)
 sprandn(m::Int, n::Int, density::FloatingPoint) = sprand(m,n,density,randn, 1.0)
 sprandbool(m::Int, n::Int, density::FloatingPoint) = sprand(m,n,density,randbool, true)

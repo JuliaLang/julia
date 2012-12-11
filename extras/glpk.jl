@@ -2,8 +2,6 @@
 ### GLPK API Wrapper
 ###
 
-require("sparse")
-
 module GLPK
 
 export
@@ -170,8 +168,6 @@ export
     intfeas1
 
 import Base.pointer, Base.assign, Base.ref
-
-typealias SparseMatrixCSC Main.SparseMatrixCSC # XXX to be removed when sparse gets into Base
 
 ## Shared library interface setup
 #{{{

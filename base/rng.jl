@@ -10,7 +10,7 @@ export librandom_init, srand,
        randexp, randexp!, exprnd,
        randchi2, randchi2!, chi2rnd,
        randbeta, randbeta!, betarnd,
-       randbit, randbit!, randbool, randbool!,
+       randbool, randbool!,
        Rng, Rng_MT
 
 abstract Rng
@@ -214,11 +214,21 @@ randi(r::(Integer,Integer), dims::Int...) = randival(r[1], r[2], dims)
 
 ## random Bools
 
-randbit() = int(dsfmt_randui32() & 1)
-@rand_matrix_builder Int randbit
+rand!(B::BitArray) = Base.bitarray_rand_fill!(B)
 
-randbool() = randbit() == 1
-@rand_matrix_builder Bool randbool
+randbool(dims::Dims) = rand!(BitArray(dims))
+randbool(dims::Int...) = rand!(BitArray(dims))
+
+randbool() = ((dsfmt_randui32() & 1) == 1)
+
+randbool!(B::BitArray) = rand!(B)
+
+function randbool!(A::Array)
+    for i = 1:numel(A)
+        A[i] = randbool()
+    end
+    return A
+end
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 

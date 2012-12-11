@@ -185,7 +185,15 @@ static void flatten_type_union(jl_tuple_t *types, jl_value_t **out, size_t *idx)
 
 static int union_elt_morespecific(const void *a, const void *b)
 {
-    return jl_args_morespecific(*(jl_value_t**)a, *(jl_value_t**)b) ? -1 : 1;
+    jl_value_t *va = *(jl_value_t**)a;
+    jl_value_t *vb = *(jl_value_t**)b;
+    if (jl_args_morespecific(va, vb))
+        return -1;
+    // impose a partially-arbitrary ordering on Union elements, to make it more
+    // likely that many Unions will be identical and can be merged.
+    // NOTE: we know !(a <: b) && !(b <: a), since otherwise one would have
+    // been eliminated from the Union.
+    return jl_object_id(va) < jl_object_id(vb) ? -1 : 1;
 }
 
 DLLEXPORT
@@ -221,6 +229,8 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
         }
     }
     assert(j == n-ndel);
+    // sort Union components by specificity, so "complex" type Unions work as
+    // long as there are no ambiguities (see e.g. issue #126).
     // TODO: maybe warn about ambiguities
     qsort(result->data, j, sizeof(jl_value_t*), union_elt_morespecific);
     JL_GC_POP();
@@ -2630,4 +2640,5 @@ void jl_init_types(void)
     compositetype_sym = jl_symbol("composite_type");
     type_goto_sym = jl_symbol("type_goto");
     toplevel_sym = jl_symbol("toplevel");
+    tuple_sym = jl_symbol("tuple");
 }

@@ -548,6 +548,30 @@
 
 "),
 
+(E"Iterable Collections",E"Base",E"indmax",E"indmax(itr)
+
+   Returns the index of the maximum element in a collection
+
+"),
+
+(E"Iterable Collections",E"Base",E"indmin",E"indmin(itr)
+
+   Returns the index of the minimum element in a collection
+
+"),
+
+(E"Iterable Collections",E"Base",E"findmax",E"findmax(iter)
+
+   Returns a tuple of the maximum element and its index
+
+"),
+
+(E"Iterable Collections",E"Base",E"findmin",E"findmin(iter)
+
+   Returns a tuple of the minimum element and its index
+
+"),
+
 (E"Iterable Collections",E"Base",E"sum",E"sum(itr)
 
    Sum elements of a collection
@@ -3602,107 +3626,6 @@ airyaiprime(x)
    * Currently only g++ is supported
 
    The latter three may not be difficult to fix.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_create_file",E"fits_create_file(filename::String)
-
-   Create and open a new empty output FITS file.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_clobber_file",E"fits_clobber_file(filename::String)
-
-   Like fits_create_file, but overwrites \"filename\" if it exists.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_open_file",E"fits_open_file(filename::String)
-
-   Open an existing data file.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_close_file",E"fits_close_file(f::FITSFile)
-
-   Close a previously opened FITS file.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_get_hdrspace",E"fits_get_hdrspace(f::FITSFile) -> (keysexist, morekeys)
-
-   Return the number of existing keywords (not counting the END
-   keyword) and the amount of space currently available for more
-   keywords.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_read_keyword",E"fits_read_keyword(f::FITSFile, keyname::String) -> (value, comment)
-
-   Return the specified keyword.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_read_record",E"fits_read_record(f::FITSFile, keynum::Int) -> String
-
-   Return the nth header record in the CHU. The first keyword in the
-   header is at \"keynum = 1\".
-
-"),
-
-(E"fitsio.jl",E"",E"fits_read_keyn",E"fits_read_keyn(f::FITSFile, keynum::Int) -> (name, value, comment)
-
-   Return the nth header record in the CHU. The first keyword in the
-   header is at \"keynum = 1\".
-
-"),
-
-(E"fitsio.jl",E"",E"fits_write_key",E"fits_write_key(f::FITSFile, keyname::String, value, comment::String)
-
-   Write a keyword of the appropriate data type into the CHU.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_write_record",E"fits_write_record(f::FITSFile, card::String)
-
-   Write a user specified keyword record into the CHU.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_delete_record",E"fits_delete_record(f::FITSFile, keynum::Int)
-
-   Delete the keyword record at the specified index.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_delete_key",E"fits_delete_key(f::FITSFile, keyname::String)
-
-   Delete the keyword named \"keyname\".
-
-"),
-
-(E"fitsio.jl",E"",E"fits_get_img_size",E"fits_get_img_size(f::FITSFile)
-
-   Get the dimensions of the image.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_create_img",E"fits_create_img(f::FITSFile, t::Type, naxes::Vector{Int})
-
-   Create a new primary array or IMAGE extension with a specified data
-   type and size.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_write_pix",E"fits_write_pix(f::FITSFile, fpixel::Vector{Int}, nelements::Int, data::Array)
-
-   Write pixels from *data* into the FITS file.
-
-"),
-
-(E"fitsio.jl",E"",E"fits_read_pix",E"fits_read_pix(f::FITSFile, fpixel::Vector{Int}, nelements::Int, data::Array)
-
-   Read pixels from the FITS file into \"data\".
 
 "),
 

@@ -1200,12 +1200,12 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
 
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
-    jl_value_t **a = alloca(sizeof(jl_value_t*)*(na+1));
-    a[0] = (jl_value_t*)f;
-    int i;
-    for(i=0; i < na; i++)
-        a[i+1] = args[i];
-    return jl_apply(jl_method_missing_func, a, na+1);
+    jl_value_t *argtup = jl_f_tuple(NULL, args, na);
+    JL_GC_PUSH(&argtup);
+    jl_value_t *fargs[2] = { (jl_value_t*)f, argtup };
+    jl_throw(jl_apply((jl_function_t*)jl_methoderror_type, fargs, 2));
+    // not reached
+    return jl_nothing;
 }
 
 static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)

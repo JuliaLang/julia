@@ -428,7 +428,12 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
 {
     jl_value_t *gf;
     if (bnd) {
-        jl_declare_constant(bnd);
+        //jl_declare_constant(bnd);
+        if (bnd->value != NULL && !bnd->constp) {
+            jl_errorf("cannot define function %s; it already has a value",
+                      bnd->name->name);
+        }
+        bnd->constp = 1;
     }
     if (*bp == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name);

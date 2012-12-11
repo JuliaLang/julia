@@ -304,10 +304,15 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
             vx = builder.CreateIntToPtr(vx, llvmt);
         }
         else {
-            if (llvmt == T_int1)
+            if (llvmt == T_int1) {
                 vx = builder.CreateTrunc(vx, llvmt);
-            else
+            }
+            else {
+                if (vx->getType()->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
+                    jl_error("box: argument is of incorrect size");
+                }
                 vx = builder.CreateBitCast(vx, llvmt);
+            }
         }
     }
 

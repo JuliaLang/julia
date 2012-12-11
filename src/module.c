@@ -95,16 +95,30 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                            int explicit);
 
+typedef struct _modstack_t {
+    jl_module_t *m;
+    struct _modstack_t *prev;
+} modstack_t;
+
 // get binding for reading. might return NULL for unbound.
-jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
+static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *st)
 {
+    modstack_t top = { m, st };
+    modstack_t *tmp = st;
+    while (tmp != NULL) {
+        if (tmp->m == m) {
+            // import cycle without finding actual location
+            return NULL;
+        }
+        tmp = tmp->prev;
+    }
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
     if (b == HT_NOTFOUND || b->owner == NULL) {
         for(int i=(int)m->usings.len-1; i >= 0; --i) {
             jl_module_t *imp = (jl_module_t*)m->usings.items[i];
             b = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
             if (b != HT_NOTFOUND && b->exportp) {
-                b = jl_get_binding(imp, var);
+                b = jl_get_binding_(imp, var, &top);
                 if (b == NULL || b->owner == NULL)
                     return NULL;
                 // do a full import to prevent the result of this lookup
@@ -117,8 +131,13 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
         return NULL;
     }
     if (b->owner != m)
-        return jl_get_binding(b->owner, var);
+        return jl_get_binding_(b->owner, var, &top);
     return b;
+}
+
+jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
+{
+    return jl_get_binding_(m, var, NULL);
 }
 
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
@@ -206,6 +225,13 @@ int jl_boundp(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
     return b && (b->value != NULL);
+}
+
+int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
+    if (*bp == HT_NOTFOUND) return 0;
+    return (*bp)->exportp || (*bp)->owner==m;
 }
 
 jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
