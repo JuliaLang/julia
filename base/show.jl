@@ -839,7 +839,12 @@ end
 show(io, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
 show(io, v::AbstractVector)      = show_vector(io, v, "[", "]")
 
-# printing bit arrays
+# printing BitArrays
+
+summary(a::BitArray) =
+    string(dims2string(size(a)), " ", typeof(a).name)
+
+# (following functions not exported - mainly intended for debug)
 
 function _jl_print_bit_chunk(io::IO, c::Uint64, l::Integer)
     for s = 0 : l - 1
