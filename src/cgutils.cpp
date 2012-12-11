@@ -280,7 +280,8 @@ static void raise_exception_if(Value *cond, GlobalVariable *exc,
 
 static void null_pointer_check(Value *v, jl_codectx_t *ctx)
 {
-    raise_exception_unless(builder.CreateICmpNE(v,V_null), jlundeferr_var, ctx);
+    raise_exception_unless(builder.CreateICmpNE(v,Constant::getNullValue(v->getType())),
+                           jlundeferr_var, ctx);
 }
 
 static Value *boxed(Value *v, jl_value_t *jt=NULL);
