@@ -81,38 +81,6 @@ end
     randmtzig_create_ziggurat_tables()
 end
 
-# macros to generate random arrays
-
-macro rand_matrix_builder(T, f)
-    f! = esc(symbol("$(f)!"))
-    f = esc(f)
-    quote
-        function ($f!)(A::Array{$T})
-            for i = 1:numel(A)
-                A[i] = ($f)()
-            end
-            return A
-        end
-        ($f)(dims::Dims) = ($f!)(Array($T, dims))
-        ($f)(dims::Int...) = ($f)(dims)
-    end
-end
-
-macro rand_matrix_builder_1arg(T, f)
-    f! = esc(symbol("$(f)!"))
-    f = esc(f)
-    quote
-        function ($f!)(arg, A::Array{$T})
-            for i = 1:numel(A)
-                A[i] = ($f)(arg)
-            end
-            return A
-        end
-        ($f)(arg::Number, dims::Dims) = ($f!)(arg, Array($T, dims))
-        ($f)(arg::Number, dims::Int...) = ($f)(arg, dims)
-    end
-end
-
 ## srand()
 
 function srand(seed::Uint32)
