@@ -789,6 +789,12 @@ function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
                 val = sp[i+1]
                 if isa(val,TypeVar)
                     # static param bound to typevar
+                    if Any <: val.ub
+                        # if the tvar does not refer to anything more specific
+                        # than Any, the static param might actually be an
+                        # integer, symbol, etc.
+                        return Any
+                    end
                     return Type{val}
                 end
                 return abstract_eval_constant(val)
