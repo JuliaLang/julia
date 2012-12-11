@@ -62,8 +62,11 @@ m2 = randi(n2)
 b2 = randbool(m1, m2)
 @check_bit_operation copy_to BitMatrix (b1, b2)
 @check_bit_operation ref BitMatrix (b1, 1:m1, m2:n2)
+@check_bit_operation ref BitVector (b1, 1:m1, m2)
 b2 = randbool(m1, m2)
 @check_bit_operation assign BitMatrix (b1, b2, 1:m1, n2-m2+1:n2)
+b2 = randbool(m1)
+@check_bit_operation assign BitMatrix (b1, b2, 1:m1, m2)
 
 for p1 = [randi(v1) 1 63 64 65 191 192 193]
     for p2 = [randi(v1) 1 63 64 65 191 192 193]

@@ -299,20 +299,14 @@ let ref_cache = nothing
             error("wrong number of dimensions in ref")
         end
         X = BitArray(ref_shape(I0, I...))
-        nI = ndims(X)
+        nI = 1 + length(I)
 
         I = map(x->(isa(x,Integer) ? (x:x) : x), I[1:nI-1])
 
         f0 = first(I0)
         l0 = length(I0)
-        if nI == 1
-            _jl_copy_chunks(X.chunks, 1, B.chunks, f0, l0)
-            return X
-        end
-        if is(ref_cache,nothing)
-            ref_cache = Dict()
-        end
-        gap_lst = [last(r)-first(r)+1 for r in I]
+
+        gap_lst = Int[last(r)-first(r)+1 for r in I]
         stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
@@ -325,6 +319,15 @@ let ref_cache = nothing
         # we only need nI-1 elements, the last one
         # is dummy (used in bodies[k,2] below)
         stride_lst[nI] = 0
+
+        if ndims(X) == 1
+            _jl_copy_chunks(X.chunks, 1, B.chunks, ind, l0)
+            return X
+        end
+
+        if is(ref_cache,nothing)
+            ref_cache = Dict()
+        end
 
         gen_cartesian_map(ref_cache,
             ivars->begin
