@@ -17,6 +17,7 @@ unstaged(paths) = !success(`git diff --quiet -- $paths`)
 
 attached() = success(`git symbolic-ref -q HEAD` > "/dev/null")
 branch() = readchomp(`git rev-parse --symbolic-full-name --abbrev-ref HEAD`)
+head() = readchomp(`git rev-parse HEAD`)
 
 function each_tagged_version()
     git_dir = abs_path(dir())

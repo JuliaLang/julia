@@ -10,8 +10,6 @@ using Metadata
 
 import Git
 
-# default locations: local package repo, remote metadata repo
-
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 
 # some utility functions
@@ -22,6 +20,21 @@ function cd_pkgdir(f::Function)
         error("Package directory $dir doesn't exist; run Pkg.init() to create it.")
     end
     cd(f,dir)
+end
+
+# show the status packages in the repo
+
+status() = cd_pkgdir() do
+    Git.each_submodule(false) do pkg, path, sha1
+        cd(path) do
+            head = Git.head()
+            ver = Git.attached() ? Git.branch() : cd("..") do
+                Metadata.version(pkg,head)
+            end
+            dirty = Git.dirty() ? " (dirty)" : ""
+            println("$(rpad(pkg,16)) $ver$dirty")
+        end
+    end
 end
 
 # create a new empty packge repository
