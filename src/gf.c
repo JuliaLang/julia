@@ -732,7 +732,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         type = limited;
         if (all_are_subtypes) {
             // avoid Type{Type{...}...}...
-            if (jl_is_type_type(lasttype))
+            if (jl_is_type_type(lasttype) && jl_is_type_type(jl_tparam0(lasttype)))
                 lasttype = (jl_value_t*)jl_type_type;
             temp = (jl_value_t*)jl_tuple1(lasttype);
             jl_tupleset(type, i, jl_apply_type((jl_value_t*)jl_seq_type,
