@@ -491,19 +491,19 @@ function eatwspace_comment(s::IOStream, cmt::Char)
     end
 end
 
-# bit array I/O
+# BitArray I/O
 
 write(s::IO, B::BitArray) = write(s, B.chunks)
 read(s::IO, B::BitArray) = read(s, B.chunks)
 
-function mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
     prot, flags, iswrite = mmap_stream_settings(s)
     if length(dims) == 0
         dims = 0
     end
     n = prod(dims)
     nc = _jl_num_bit_chunks(n)
-    B = BitArray{T,N}()
+    B = BitArray{N}()
     chunks = mmap_array(Uint64, (nc,), s, offset)
     if iswrite
         chunks[end] &= @_msk_end n
@@ -517,7 +517,10 @@ function mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream
     B.dims = dims
     return B
 end
-mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(T, dims, s, position(s))
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
+    mmap_bitarray(dims, s, offset)
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
 
-msync{T}(B::BitArray{T}, flags::Integer) = msync(pointer(B.chunks), flags)
-msync{T}(B::BitArray{T}) = msync(B.chunks,MS_SYNC)
+msync(B::BitArray, flags::Integer) = msync(pointer(B.chunks), flags)
+msync(B::BitArray) = msync(B.chunks,MS_SYNC)
