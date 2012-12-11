@@ -814,7 +814,7 @@ Mathematical Functions
 
    Compute the inverse tangent of ``x`` specified in radians
 
-.. function:: atan2(x, y)
+.. function:: atan2(y, x)
 
    Compute the inverse tangent of ``y/x``, using the signs of both ``x`` and ``y`` to determine the quadrant of the return value.
 
