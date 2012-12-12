@@ -1,0 +1,4 @@
+--langdef=julia
+--langmap=julia:.jl
+--regex-julia=/^[ \t]*function[ \t]+([ A-Za-z0-9]+).*$/\1/f,function/
+--regex-julia=/^[ \t]*([ A-Za-z0-9]+)[ \t]*(\([A-za-z0-9:, \t]*\)[ \t]*=).*$/\1/f,function/
