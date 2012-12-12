@@ -48,7 +48,7 @@
       (begin0 (car *current-gensyms*)
 	      (set! *current-gensyms* (cdr *current-gensyms*)))))
 (define (named-gensy name)
-  (let ((g (symbol (string "#" name *gensy-counter*))))
+  (let ((g (symbol (string "#<" name ">" *gensy-counter*))))
     (set! *gensy-counter* (+ *gensy-counter* 1))
     g))
 (define (reset-gensyms)
