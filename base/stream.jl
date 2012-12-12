@@ -234,7 +234,6 @@ function tasknotify(waittasks::Vector{WaitTask}, args...)
         if (isa(f, Function) ? f(wt.localdata, args...) : f) === false
             work = WorkItem(wt.task)
             work.argument = args
-            println("enq_work ", wt.localdata)
             enq_work(work)
         else
             push(newwts,wt)
@@ -290,9 +289,7 @@ for (fcn, notify, filter_fcn, types) in
                     push(getfield(a,$(expr(:quote,notify))),tw)
                 end
                 ct.runnable = false
-                println("yield")
                 args = yield()
-                println("back")
                 if isa(x,Vector)
                     for a = x
                         if isa(a,Tuple)
