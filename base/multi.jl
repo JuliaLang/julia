@@ -1416,7 +1416,7 @@ function event_loop(isclient)
                 if !isclient
                     return
                 end
-            elseif isclient && isa(backtrace,InterruptException) &&
+            elseif isclient && isa(backtrace,InterruptException)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
                 interrupt_waiting_task(_jl_roottask_wi,backtrace)
