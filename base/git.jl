@@ -83,8 +83,10 @@ function write_config(file::String, cfg::Dict)
             run(`git config -f $tmp $key $val`)
         end
     end
-    open(file,"w") do io
-        print(io,readall(tmp))
+    if isfile(tmp)
+        open(file,"w") do io
+            print(io,readall(tmp))
+        end
     end
 end
 
