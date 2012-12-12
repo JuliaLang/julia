@@ -473,9 +473,11 @@ version(pkg::String, ver::VersionNumber) = cd_pkgdir() do
             end
         end
     end
-    file_copy(
-        file_path(pkg, "REQUIRE"),
-        file_path("METADATA", pkg, "versions", string(ver), "requires"))
+    if isfile(file_path(pkg, "REQUIRE"))
+        file_copy(
+            file_path(pkg, "REQUIRE"),
+            file_path("METADATA", pkg, "versions", string(ver), "requires"))
+    end
     Metadata.gen_hashes(pkg)
 end
 

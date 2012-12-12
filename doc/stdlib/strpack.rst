@@ -71,12 +71,12 @@ into a Julia type::
 
 Voila! You have the result back.
     
-.. function:: pack(io, composite[, strategy])
+.. function:: pack(io, composite, [strategy])
 
     Create a packed buffer representation of ``composite`` in stream ``io``, using data alignment coded by
     ``strategy``. This buffer is suitable to pass as a ``struct`` argument in a ``ccall``.
     
-.. function:: unpack(io, T[, strategy])
+.. function:: unpack(io, T, [strategy])
 
     Extract an instance of the Julia composite type ``T`` from the packed representation in the stream ``io``.
     ``io`` must be positioned at the beginning (using ``seek``). This allows you to read C ``struct`` outputs

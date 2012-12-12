@@ -3,6 +3,7 @@
 // --- library symbol lookup ---
 
 // map from "libX" to full soname "libX.so.ver"
+#if !defined(__APPLE__) && !defined(_WIN32)
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
 
@@ -46,6 +47,7 @@ extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
     }
     return NULL;
 }
+#endif
 
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;

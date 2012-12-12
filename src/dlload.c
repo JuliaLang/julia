@@ -31,7 +31,9 @@ static char *extensions[] = { ".so", "" };
 
 extern char *julia_home;
 
+#if !defined(__APPLE__) && !defined(_WIN32)
 char *jl_lookup_soname(char *pfx, size_t n);
+#endif
 
 int jl_uv_dlopen(const char* filename, uv_lib_t* lib)
 {
