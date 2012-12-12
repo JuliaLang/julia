@@ -47,7 +47,7 @@ extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
     }
     return NULL;
 }
-#endifs
+#endif
 
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
