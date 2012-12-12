@@ -50,7 +50,6 @@
 (define (named-gensy name)
   (let ((g (symbol (string "#" name *gensy-counter*))))
     (set! *gensy-counter* (+ *gensy-counter* 1))
-    (set! *gensyms* (cons g *gensyms*))
     g))
 (define (reset-gensyms)
   (set! *current-gensyms* *gensyms*))
