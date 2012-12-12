@@ -663,7 +663,7 @@ arguments, displayed in that order. Example::
 
 It is possible to partition the arguments differently by defining and using customized argument groups.
 
-.. function:: add_arg_group(settings, description, [name [, set_as_default]])
+.. function:: add_arg_group(settings, description, [name , [set_as_default]])
 
     This function adds an argument group to the argument table in ``settings``. The ``description`` is a ``String`` used in
     the help screen as a title for that group. The ``name`` is a unique name which can be provided to refer to that group
@@ -698,7 +698,7 @@ It is possible to partition the arguments differently by defining and using cust
     The ``name`` can also be passed as a ``Symbol``. Forbidden names are the standard groups names (``"command"``,
     ``"positional"`` and ``"optional"``) and those beginning with a hash character ``'#'``.
 
-.. function:: set_default_arg_group(settings[, name])
+.. function:: set_default_arg_group(settings, [name])
 
     Set the default group for subsequent invocations of the ``@add_arg_table`` macro and ``add_arg_table`` function.
     ``name`` is a ``String``, and must be one of the standard group names (``"command"``, ``"positional"`` or

@@ -52,7 +52,7 @@ Due to limitations in ``zlib``, :func:`seek_end` and :func:`truncate` are not av
 Functions
 ---------
 
-.. function:: gzopen(fname[, gzmode[, buf_size]])
+.. function:: gzopen(fname, [gzmode, [buf_size]])
 
    Opens a file with mode (default ``"r"``), setting internal buffer size
    to buf_size (default ``Z_DEFAULT_BUFSIZE=8192``), and returns a the
@@ -88,12 +88,12 @@ Functions
    If an error occurs, ``gzopen`` throws a :class:`GZError`
 
 
-.. function:: gzdopen(fd[, gzmode[, buf_size]])
+.. function:: gzdopen(fd, [gzmode, [buf_size]])
 
    Create a :class:`GZipStream` object from an integer file descriptor.
    See :func:`gzopen` for ``gzmode`` and ``buf_size`` descriptions.
 
-.. function:: gzdopen(s[, gzmode[, buf_size]])
+.. function:: gzdopen(s, [gzmode, [buf_size]])
 
    Create a :class:`GZipStream` object from :class:`IOStream` ``s``.
 
@@ -101,7 +101,7 @@ Functions
 Types
 -----
 
-.. type:: GZipStream(name, gz_file[, buf_size[, fd[, s]]])
+.. type:: GZipStream(name, gz_file, [buf_size, [fd, [s]]])
 
    Subtype of :class:`IO` which wraps a gzip stream.  Returned by
    :func:`gzopen` and :func:`gzdopen`.

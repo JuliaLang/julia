@@ -30,7 +30,7 @@ Here is a quick example:
 
 It's very similar to Python's textwrap module, but the interface is slightly different.
 
-.. function:: wrap(string [, options])
+.. function:: wrap(string , [options])
 
     Returns a string in which newlines are inserted as appropriate in order for each line
     to fit within a specified width.
@@ -53,10 +53,10 @@ It's very similar to Python's textwrap module, but the interface is slightly dif
     * ``fix_sentence_endings`` (default = ``false``): if this flag is true, the wrapper will try to recognize sentence endings
       in the middle of a paragraph and put two spaces before the next sentence in case only one is present.
 
-.. function:: print_wrapped(text... [, options])
-              print_wrapped(io, text... [, options])
-              println_wrapped(text... [, options])
-              println_wrapped(io, text... [, options])
+.. function:: print_wrapped(text... , [options])
+              print_wrapped(io, text... , [options])
+              println_wrapped(text... , [options])
+              println_wrapped(io, text... , [options])
 
     These are just like the standard :func:`print` and :func:`println` functions (they print multiple arguments and
     accept an optional ``IO`` first argument), except that they wrap the result, and accept an optional

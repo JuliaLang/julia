@@ -7,16 +7,16 @@ Getting Around
 
    Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
 
-.. function:: whos([Module][, pattern::Regex])
+.. function:: whos([Module,] [pattern::Regex])
 
    Print information about global variables in a module, optionally restricted
    to those matching ``pattern``.
 
-.. function:: edit("file"[, line])
+.. function:: edit("file", [line])
 
    Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor. If the file name ends in ".jl" it is reloaded when the editor closes the file.
 
-.. function:: edit(function[, types])
+.. function:: edit(function, [types])
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit. When the editor exits, the source file containing the definition is reloaded.
 
@@ -471,7 +471,7 @@ Strings
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 
-.. function:: strchr(string, char[, i])
+.. function:: strchr(string, char, [i])
 
    Return the index of ``char`` in ``string``, giving 0 if not found. The second argument may also be a vector or a set of characters. The third argument optionally specifies a starting index.
 
@@ -558,11 +558,11 @@ I/O
 
    Global variable referring to the standard input stream.
 
-.. function:: open(file_name[, read, write, create, truncate, append])
+.. function:: open(file_name, [read, write, create, truncate, append])
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
-.. function:: open(file_name[, mode])
+.. function:: open(file_name, [mode])
 
    Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
 
@@ -579,7 +579,7 @@ I/O
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
-.. function:: fdio(descriptor[, own])
+.. function:: fdio(descriptor, [own])
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected.
 
@@ -675,7 +675,7 @@ Text I/O
 
    Write an array to a text file using the given delimeter (defaults to comma).
 
-.. function:: csvread(filename[, T::Type])
+.. function:: csvread(filename, [T::Type])
 
    Equivalent to ``dlmread`` with ``delim`` set to comma.
 
@@ -686,7 +686,7 @@ Text I/O
 Memory-mapped I/O
 -----------------
 
-.. function:: mmap_array(type, dims, stream[, offset])
+.. function:: mmap_array(type, dims, stream, [offset])
 
    Create an array whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
 
@@ -935,19 +935,19 @@ Mathematical Functions
 
    Accurately compute :math:`e^x-1`
 
-.. function:: round(x[, digits[, base]]) -> FloatingPoint
+.. function:: round(x, [digits, [base]]) -> FloatingPoint
 
    ``round(x)`` returns the nearest integer to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
 
-.. function:: ceil(x[, digits[, base]]) -> FloatingPoint
+.. function:: ceil(x, [digits, [base]]) -> FloatingPoint
 
    Returns the nearest integer not less than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: floor(x[, digits[, base]]) -> FloatingPoint
+.. function:: floor(x, [digits, [base]]) -> FloatingPoint
 
    Returns the nearest integer not greater than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: trunc(x[, digits[, base]]) -> FloatingPoint
+.. function:: trunc(x, [digits, [base]]) -> FloatingPoint
 
    Returns the nearest integer not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
 
@@ -967,7 +967,7 @@ Mathematical Functions
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
-.. function:: signif(x, digits[, base]) -> FloatingPoint
+.. function:: signif(x, digits, [base]) -> FloatingPoint
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``. 
 
@@ -1165,23 +1165,23 @@ Mathematical Functions
 Data Formats
 ------------
 
-.. function:: bin(n[, pad])
+.. function:: bin(n, [pad])
 
    Convert an integer to a binary string, optionally specifying a number of digits to pad to.
 
-.. function:: hex(n[, pad])
+.. function:: hex(n, [pad])
 
    Convert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.
 
-.. function:: dec(n[, pad])
+.. function:: dec(n, [pad])
 
    Convert an integer to a decimal string, optionally specifying a number of digits to pad to.
 
-.. function:: oct(n[, pad])
+.. function:: oct(n, [pad])
 
    Convert an integer to an octal string, optionally specifying a number of digits to pad to.
 
-.. function:: base(b, n[, pad])
+.. function:: base(b, n, [pad])
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 
@@ -1783,7 +1783,7 @@ Combinatorics
 
    Sort an array along the given dimension
 
-.. function:: sort(lessthan, a[, dim])
+.. function:: sort(lessthan, a, [dim])
 
    Sort with a custom comparison function
 
@@ -1838,7 +1838,7 @@ Combinatorics
 Statistics
 ----------
 
-.. function:: mean(v[, dim])
+.. function:: mean(v, [dim])
 
    Compute the mean of whole array ``v``, or optionally along dimension ``dim``
 
@@ -1850,7 +1850,7 @@ Statistics
 
    Compute the median of a vector ``v``
 
-.. function:: hist(v[, n])
+.. function:: hist(v, [n])
 
    Compute the histogram of ``v``, optionally using ``n`` bins
 
@@ -1895,10 +1895,10 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Inverse N-d FFT
 
-.. function:: rfft(A [, dim=1])
+.. function:: rfft(A, [dim])
 
    One-dimensional FFT of real array A along dimension dim. If A has size
-   ``(..., n_dim, ...)``, the result has size ``(..., floor(n_dim/2)+1, ...)``.
+   ``(..., n_dim, ...)``, the result has size ``(..., floor(n_dim/2)+1, ...)``. The ``dim`` argument is optional and defaults to 1.
 
 .. function:: rfftn(A)
 
@@ -1913,7 +1913,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Swap the first and second halves of the given dimension of array ``x``.
 
-.. function:: ifftshift(x[, dim])
+.. function:: ifftshift(x, [dim])
 
    Undoes the effect of ``fftshift``.
 
@@ -1995,7 +1995,7 @@ Parallel Computing
 Distributed Arrays
 ------------------
 
-.. function:: darray(init, type, dims[, distdim, procs, dist])
+.. function:: darray(init, type, dims, [distdim, procs, dist])
 
    Construct a distributed array. ``init`` is a function of three arguments that will run on each processor, and should return an ``Array`` holding the local data for the current processor. Its arguments are ``(T,d,da)`` where ``T`` is the element type, ``d`` is the dimensions of the needed local piece, and ``da`` is the new ``DArray`` being constructed (though, of course, it is not fully initialized). ``type`` is the element type. ``dims`` is the dimensions of the entire ``DArray``. ``distdim`` is the dimension to distribute in. ``procs`` is a vector of processor ids to use. ``dist`` is a vector giving the first index of each contiguous distributed piece, such that the nth piece consists of indexes ``dist[n]`` through ``dist[n+1]-1``. If you have a vector ``v`` of the sizes of the pieces, ``dist`` can be computed as ``cumsum([1,v])``. Fortunately, all arguments after ``dims`` are optional.
 
@@ -2027,7 +2027,7 @@ Distributed Arrays
 
    Construct a distributed cell array. Trailing arguments are the same as those accepted by ``darray``.
 
-.. function:: distribute(a[, distdim])
+.. function:: distribute(a, [distdim])
 
    Convert a local array to distributed
 
@@ -2078,7 +2078,7 @@ System
 
    Set the current working directory. Returns the new current directory.
 
-.. function:: mkdir(path[, mode])
+.. function:: mkdir(path, [mode])
 
    Make a new directory with name ``path`` and permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
