@@ -483,13 +483,13 @@ Strings
 
    Make a string at least ``n`` characters long by padding on the right with copies of ``p``.
 
-.. function:: search(string, chars[, start])
+.. function:: search(string, chars, [start])
 
    Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a tuple with 2 integers: the index of the match and the first valid index past the match (or an index beyond the end of the string if the match is at the end); it returns ``(0,0)`` if no match was found, and ``(start,start)`` if ``chars`` is empty.
 
-.. function:: split(string, chars[, limit][, include_empty])
+.. function:: split(string, [chars, [limit,] [include_empty]])
 
-   Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument. The last two arguments are optional; they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
+   Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``include_empty`` is taken to be false. The last two arguments are also optional: they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
 
 .. function:: strip(string)
 
