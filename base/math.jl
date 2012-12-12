@@ -88,7 +88,7 @@ for f in (:cbrt, :sin, :cos, :tan, :sinh, :cosh, :tanh, :asin, :acos, :atan,
     end
 end
 
-for f in (:log1p, :logb, :expm1, :ceil, :floor, :trunc, :round, :significand) # :rint, :nearbyint
+for f in (:log1p, :logb, :expm1, :ceil, :trunc, :round, :significand) # :rint, :nearbyint
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),:libopenlibm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),:libopenlibm), Float32, (Float32,), x)
@@ -96,6 +96,10 @@ for f in (:log1p, :logb, :expm1, :ceil, :floor, :trunc, :round, :significand) # 
         @vectorize_1arg Real $f
     end
 end
+
+floor(x::Float32) = ccall((:floorf, :libopenlibm), Float32, (Float32,), x)
+floor(x::Real) = floor(float(x))
+@vectorize_1arg Real floor
 
 atan2(x::Real, y::Real) = atan2(float64(x), float64(y))
 

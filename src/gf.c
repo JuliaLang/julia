@@ -1078,6 +1078,23 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         if (((l->tvars==jl_null) == (tvars==jl_null)) &&
             sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig)) {
             // method overwritten
+            jl_module_t *newmod = method->linfo->module;
+            if (check_amb && l->func->linfo &&
+                (l->func->linfo->module != newmod) &&
+                // special case: allow adding Array() methods in Base
+                (pml != &((jl_methtable_t*)jl_array_type->env)->defs ||
+                 newmod != jl_base_module)) {
+                jl_value_t *errstream = jl_stderr_obj();
+                ios_t *s = JL_STDERR;
+                ios_printf(s, "Warning: Method definition %s", method->linfo->name->name);
+                jl_show(errstream, (jl_value_t*)type);
+                ios_printf(s, " in module %s", l->func->linfo->module->name->name);
+                print_func_loc(s, l->func->linfo);
+                ios_printf(s, " overwritten in module %s",
+                           newmod->name->name);
+                print_func_loc(s, method->linfo);
+                ios_printf(s, ".\n");
+            }
             JL_SIGATOMIC_BEGIN();
             l->sig = type;
             l->tvars = tvars;
