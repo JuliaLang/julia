@@ -68,7 +68,6 @@ function _jl_eval_user_input(ast::ANY, show_value)
     iserr, lasterr, bt = false, (), nothing
     while true
         try
-            #ccall(:jl_register_toplevel_eh, Void, ())
             ccall(:restore_signals, Void, ())
             if _jl_have_color
                 print(_jl_color_normal)
@@ -269,7 +268,6 @@ function _start()
 
     #atexit(()->flush(stdout_stream))
     try
-        #ccall(:jl_register_toplevel_eh, Void, ())
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
 

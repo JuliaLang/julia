@@ -648,7 +648,6 @@ end
 function perform_work(job::WorkItem)
     local result
     try
-        #ccall(:jl_register_toplevel_eh, Void, ())
         if isa(job.task,Task)
             # continuing interrupted work item
             arg = job.argument
@@ -662,9 +661,9 @@ function perform_work(job::WorkItem)
         end
     catch err
         print("exception on ", myid(), ": ")
-        show(err)
+        show(add_backtrace(err,backtrace()))
         println()
-        result = err.e
+        result = err
     end
     # restart job by yielding back to whatever task just switched to us
     job.task = current_task().last
@@ -1403,25 +1402,25 @@ function event_loop(isclient)
     iserr, lasterr = false, ()
     while true
         try
-            #ccall(:jl_register_toplevel_eh, Void, ())
             if iserr
                 show(lasterr)
                 iserr, lasterr = false, ()
             else
                 run_event_loop();
             end
-        catch backtrace
-            if isa(backtrace,DisconnectException)
+        catch err
+            bt = backtrace()
+            if isa(err,DisconnectException)
                 # TODO: wake up tasks waiting for failed process
                 if !isclient
                     return
                 end
-            elseif isclient && isa(backtrace,InterruptException)
+            elseif isclient && isa(err,InterruptException)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
-                interrupt_waiting_task(_jl_roottask_wi,backtrace)
+                interrupt_waiting_task(_jl_roottask_wi,err)
             end
-            iserr, lasterr = true, backtrace
+            iserr, lasterr = true, add_backtrace(err,bt)
         end
     end
 end
