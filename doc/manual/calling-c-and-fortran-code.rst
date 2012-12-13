@@ -26,14 +26,20 @@ possible to perform whole-program optimizations that can even optimize
 across this boundary, but Julia does not yet support that. In the
 future, however, it may do so, yielding even greater performance gains.)
 
-Shared libraries and functions are referenced by a tuple pair of the 
-form (:function, "library") or ("function", "library") where ``function``
+Shared libraries and functions are referenced by a tuple of the 
+form ``(:function, "library")`` or ``("function", "library")`` where ``function``
 is the C-exported function name. ``library`` refers to the shared library
 name: shared libraries available in the (platform-specific) load path
 will be resolved by name, and if necessary a direct path may be specified.
 
+A function name may be used alone in place of the tuple (just
+``:function`` or ``"function"``). In this case the name is resolved within
+the current process. This form can be used to call C library functions,
+functions in the Julia runtime, or functions in an application linked to
+Julia.
+
 Finally, you can use ``ccall`` to actually generate a call to the
-library function. Inputs to ``ccall`` are as follows:
+library function. Arguments to ``ccall`` are as follows:
 
 1. (:function, "library") pair.
 2. Return type, which may be any bits type, including ``Int32``,
@@ -239,6 +245,14 @@ can be called via the following Julia code::
     argv = [ "a.out", "arg1", "arg2" ]
     ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
 
+Indirect calls
+--------------
+
+The first argument to ``call`` can also be an expression evaluated at
+run time. In this case, the expression must evaluate to a ``Ptr``,
+which will be used as the address of the native function to call. This
+behavior occurs when the first ``ccall`` argument contains references
+to non-constants, such as local variables or function arguments.
 
 C++
 ---
