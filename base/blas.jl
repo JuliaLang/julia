@@ -23,7 +23,7 @@ export copy!,
        symv!,
        symv
 
-libblas = Base.libblas_name
+const libblas = Base.libblas_name
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),

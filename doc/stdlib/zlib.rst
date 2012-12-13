@@ -25,7 +25,7 @@ Utility Functions
    given uncompressed input size.
 
 
-.. function:: compress(source[, level])
+.. function:: compress(source, [level])
 
    Compresses source using the given compression level, and returns
    the compressed buffer (``Array{Uint8,1}``).  ``level`` is an
@@ -47,7 +47,7 @@ Utility Functions
    information about the error.
 
 
-.. function:: uncompress(source[, uncompressed_size])
+.. function:: uncompress(source, [uncompressed_size])
 
    Allocates a buffer of size ``uncompressed_size``, uncompresses
    source to this buffer using the given compression level, and

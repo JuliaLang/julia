@@ -31,6 +31,7 @@
 	((quoted? e) '())
 	(else (case (car e)
 		((=)            (list (decl-var (cadr e))))
+		((method)       (list (cadr e)))
 		((lambda)       '())
 		((local local!) '())
 		((break-block)  (find-possible-globals (caddr e)))

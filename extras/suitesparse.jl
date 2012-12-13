@@ -1,9 +1,6 @@
-require("linalg_sparse")
+module SuiteSparse
 
-#module Suitesparse
-#import Base.SparseMatrixCSC
-
-import Base.size, Base.nnz, Base.eltype, Base.show
+import Base.SparseMatrixCSC, Base.size, Base.nnz, Base.eltype, Base.show, Base.triu, Base.norm, Base.solve, Base.(\), Base.ctranspose, Base.transpose
 
 export                                  # types
     CholmodPtr,
@@ -14,6 +11,7 @@ export                                  # types
     CholmodSparseOut,
     UmfpackPtr,
     UmfpackLU,
+    UmfpackLU!,
     UmfpackLUTrans,
                                         # methods
     chm_aat, # drop prefix?
@@ -29,11 +27,11 @@ export                                  # types
 
 require("suitesparse_h")
 
-const _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
-const _jl_libcholmod = dlopen("libcholmod")
-const _jl_libumfpack = dlopen("libumfpack")
+const libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
+const libcholmod = dlopen("libcholmod")
+const libumfpack = dlopen("libumfpack")
 try
-    global const _jl_libspqr = dlopen("libspqr")
+    global const libspqr = dlopen("libspqr")
 catch err
     # XXX:can be removed when suitesparse > 4.0.2
     println(E"
@@ -44,32 +42,32 @@ Oops, Suitesparse needs to be rebuilt. Try running:
 ")
     throw(err)
 end
-const _chm_aat       = dlsym(_jl_libcholmod, :cholmod_aat)
-const _chm_amd       = dlsym(_jl_libcholmod, :cholmod_amd)
-const _chm_analyze   = dlsym(_jl_libcholmod, :cholmod_analyze)
-const _chm_colamd    = dlsym(_jl_libcholmod, :cholmod_colamd)
-const _chm_copy      = dlsym(_jl_libcholmod, :cholmod_copy)
-const _chm_factorize = dlsym(_jl_libcholmod, :cholmod_factorize)
-const _chm_free_dn   = dlsym(_jl_libcholmod, :cholmod_free_dense)
-const _chm_free_fa   = dlsym(_jl_libcholmod, :cholmod_free_factor)
-const _chm_free_sp   = dlsym(_jl_libcholmod, :cholmod_free_sparse)
-const _chm_print_dn  = dlsym(_jl_libcholmod, :cholmod_print_dense)
-const _chm_print_fa  = dlsym(_jl_libcholmod, :cholmod_print_factor)
-const _chm_print_sp  = dlsym(_jl_libcholmod, :cholmod_print_sparse)
-const _chm_solve     = dlsym(_jl_libcholmod, :cholmod_solve)
-const _chm_sort      = dlsym(_jl_libcholmod, :cholmod_sort)
-const _chm_submatrix = dlsym(_jl_libcholmod, :cholmod_submatrix)
+const _chm_aat       = dlsym(libcholmod, :cholmod_aat)
+const _chm_amd       = dlsym(libcholmod, :cholmod_amd)
+const _chm_analyze   = dlsym(libcholmod, :cholmod_analyze)
+const _chm_colamd    = dlsym(libcholmod, :cholmod_colamd)
+const _chm_copy      = dlsym(libcholmod, :cholmod_copy)
+const _chm_factorize = dlsym(libcholmod, :cholmod_factorize)
+const _chm_free_dn   = dlsym(libcholmod, :cholmod_free_dense)
+const _chm_free_fa   = dlsym(libcholmod, :cholmod_free_factor)
+const _chm_free_sp   = dlsym(libcholmod, :cholmod_free_sparse)
+const _chm_print_dn  = dlsym(libcholmod, :cholmod_print_dense)
+const _chm_print_fa  = dlsym(libcholmod, :cholmod_print_factor)
+const _chm_print_sp  = dlsym(libcholmod, :cholmod_print_sparse)
+const _chm_solve     = dlsym(libcholmod, :cholmod_solve)
+const _chm_sort      = dlsym(libcholmod, :cholmod_sort)
+const _chm_submatrix = dlsym(libcholmod, :cholmod_submatrix)
 
-const _spqr_C_QR                = dlsym(_jl_libspqr, :SuiteSparseQR_C_QR)
-const _spqr_C_backslash         = dlsym(_jl_libspqr, :SuiteSparseQR_C_backslash)
-const _spqr_C_backslash_default = dlsym(_jl_libspqr, :SuiteSparseQR_C_backslash_default)
-const _spqr_C_backslash_sparse  = dlsym(_jl_libspqr, :SuiteSparseQR_C_backslash_sparse)
-const _spqr_C_factorize         = dlsym(_jl_libspqr, :SuiteSparseQR_C_factorize)
-const _spqr_C_symbolic          = dlsym(_jl_libspqr, :SuiteSparseQR_C_symbolic)
-const _spqr_C_numeric           = dlsym(_jl_libspqr, :SuiteSparseQR_C_numeric)
-const _spqr_C_free              = dlsym(_jl_libspqr, :SuiteSparseQR_C_free)
-const _spqr_C_solve             = dlsym(_jl_libspqr, :SuiteSparseQR_C_solve)
-const _spqr_C_qmult             = dlsym(_jl_libspqr, :SuiteSparseQR_C_qmult)
+const _spqr_C_QR                = dlsym(libspqr, :SuiteSparseQR_C_QR)
+const _spqr_C_backslash         = dlsym(libspqr, :SuiteSparseQR_C_backslash)
+const _spqr_C_backslash_default = dlsym(libspqr, :SuiteSparseQR_C_backslash_default)
+const _spqr_C_backslash_sparse  = dlsym(libspqr, :SuiteSparseQR_C_backslash_sparse)
+const _spqr_C_factorize         = dlsym(libspqr, :SuiteSparseQR_C_factorize)
+const _spqr_C_symbolic          = dlsym(libspqr, :SuiteSparseQR_C_symbolic)
+const _spqr_C_numeric           = dlsym(libspqr, :SuiteSparseQR_C_numeric)
+const _spqr_C_free              = dlsym(libspqr, :SuiteSparseQR_C_free)
+const _spqr_C_solve             = dlsym(libspqr, :SuiteSparseQR_C_solve)
+const _spqr_C_qmult             = dlsym(libspqr, :SuiteSparseQR_C_qmult)
 
 type MatrixIllConditionedException <: Exception end
 
@@ -118,7 +116,7 @@ eltype{Tv,Ti}(P::CholmodPtr{Tv,Ti}) = Tv
 indtype{Tv,Ti}(P::CholmodPtr{Tv,Ti}) = Ti
 
 function _jl_cholmod_common_finalizer(x::Vector{Ptr{Void}})
-    st = ccall(dlsym(_jl_libcholmod, :cholmod_finish), Int, (Ptr{Void},), x[1])
+    st = ccall(dlsym(libcholmod, :cholmod_finish), Int, (Ptr{Void},), x[1])
     if st != _jl_CHOLMOD_TRUE error("Error calling cholmod_finish") end
     c_free(x[1])
 end
@@ -127,9 +125,9 @@ type CholmodCommon
     pt::Vector{Ptr{Void}}
     function CholmodCommon()
         pt = Array(Ptr{Void}, 1)
-        ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_common), Void,
+        ccall(dlsym(libsuitesparse_wrapper, :jl_cholmod_common), Void,
               (Ptr{Void},), pt)
-        st = ccall(dlsym(_jl_libcholmod, :cholmod_start), Int, (Ptr{Void}, ), pt[1])
+        st = ccall(dlsym(libcholmod, :cholmod_start), Int, (Ptr{Void}, ), pt[1])
         if st != _jl_CHOLMOD_TRUE error("Error calling cholmod_start") end
         finalizer(pt, _jl_cholmod_common_finalizer)
         new(pt)
@@ -137,7 +135,7 @@ type CholmodCommon
 end
 
 function show(io, cm::CholmodCommon)
-    st = ccall(dlsym(_jl_libcholmod, :cholmod_print_common), Int,
+    st = ccall(dlsym(libcholmod, :cholmod_print_common), Int,
                (Ptr{Uint8},Ptr{Void}), "", cm.pt[1])
     if st != _jl_CHOLMOD_TRUE error("Error calling cholmod_print_common") end
 end
@@ -152,7 +150,7 @@ type CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
         pt = CholmodPtr{Tv,Ti}(Array(Ptr{Void}, 1))
         cp = _jl_convert_to_0_based_indexing(S)
         
-        ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse), Void,
+        ccall(dlsym(libsuitesparse_wrapper, :jl_cholmod_sparse), Void,
               (Ptr{Void}, Uint, Uint, Uint, Ptr{Void}, Ptr{Void}, Ptr{Void},
                Ptr{Void}, Ptr{Void}, Int, Int, Int, Int, Int, Int),
               pt.val, S.m, S.n, nnz(S), cp.colptr, cp.rowval, C_NULL,
@@ -187,7 +185,7 @@ SparseMatrixCSC(cs::CholmodSparse) = _jl_convert_to_1_based_indexing(cs.cp)
 ## For testing only.  The infinity and 1 norms of a sparse matrix are simply
 ## the same norm applied to its nzval field.
 function norm(cs::CholmodSparse, p::Number)
-    ccall(dlsym(_jl_libcholmod, :cholmod_norm_sparse), Float64,
+    ccall(dlsym(libcholmod, :cholmod_norm_sparse), Float64,
           (Ptr{Void}, Int, Ptr{Void}), cs.pt.val[1], p == Inf ? 0 : 1, cs.cm.pt[1])
 end
 
@@ -261,7 +259,7 @@ function CholmodDense{T<:CHMVTypes}(b::VecOrMat{T}, cm::CholmodCommon)
 
     pt = Array(Ptr{Void}, 1)
 
-    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense), Void,
+    ccall(dlsym(libsuitesparse_wrapper, :jl_cholmod_dense), Void,
           (Ptr{Void}, Uint, Uint, Uint, Uint, Ptr{Void}, Ptr{Void}, Int, Int),
           pt, m, n, length(b), m, b, C_NULL, xtype, dtype)
     finalizer(pt, x->c_free(pt[1]))
@@ -300,7 +298,7 @@ size(cd::CholmodDenseOut) = (cd.m, cd.n)
 
 function convert{T}(::Type{Array{T}}, cdo::CholmodDenseOut{T})
     mm = Array(T, size(cdo))
-    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense_copy_out), Void,
+    ccall(dlsym(libsuitesparse_wrapper, :jl_cholmod_dense_copy_out), Void,
           (Ptr{Void}, Ptr{T}), cdo.pt.val[1], mm)
     mm
 end
@@ -338,7 +336,7 @@ function _jl_cholmod_sparseout_finalizer(cso::CholmodSparseOut)
 end
 
 function nnz(cso::CholmodSparseOut)
-    ccall(dlsym(_jl_libcholmod, :cholmod_nnz), Int,
+    ccall(dlsym(libcholmod, :cholmod_nnz), Int,
           (Ptr{Void}, Ptr{Void}), cso.pt.val[1], cso.cm.pt[1])
 end
 size(cso::CholmodSparseOut) = (cso.m, cso.n)
@@ -348,7 +346,7 @@ indtype{Tv,Ti}(cso::CholmodSparseOut{Tv,Ti}) = Ti
 function solve{Tv,Ti}(cf::CholmodFactor{Tv,Ti}, B::CholmodSparse{Tv,Ti}, solv::Integer)
     m, n = size(B)
     cso = CholmodPtr{Tv,Ti}(Array(Ptr{Void},1))
-    cso.val[1] = ccall(dlsym(_jl_libcholmod, :cholmod_spsolve), Ptr{Void},
+    cso.val[1] = ccall(dlsym(libcholmod, :cholmod_spsolve), Ptr{Void},
                        (Int, Ptr{Void}, Ptr{Void}, Ptr{Void}),
                        solv, cf.pt.val[1], B.pt[1], B.cm.pt[1])
     CholmodSparseOut{Tv,Ti}(cso, m, n, cf.cs.cm)
@@ -357,7 +355,7 @@ end
 function CholmodSparseOut{Tv,Ti}(cf::CholmodFactor{Tv,Ti})
     n = size(cf.cs)[1]
     cso = CholmodPtr{Tv,Ti}(Array(Ptr{Void},1))
-    cso.val[1] = ccall(dlsym(_jl_libcholmod, :cholmod_factor_to_sparse), Ptr{Void},
+    cso.val[1] = ccall(dlsym(libcholmod, :cholmod_factor_to_sparse), Ptr{Void},
                        (Ptr{Void}, Ptr{Void}), cf.pt.val[1], cf.cs.cm.pt[1])
     CholmodSparseOut{Tv,Ti}(cso, n, n, cf.cs.cm)
 end
@@ -365,7 +363,7 @@ end
 function SparseMatrixCSC{Tv,Ti}(cso::CholmodSparseOut{Tv,Ti})
     nz = nnz(cso)
     sp = SparseMatrixCSC{Tv,Ti}(cso.m, cso.n, Array(Ti, cso.n + 1), Array(Ti, nz), Array(Tv, nz))
-    st = ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse_copy_out), Int,
+    st = ccall(dlsym(libsuitesparse_wrapper, :jl_cholmod_sparse_copy_out), Int,
                 (Ptr{Void}, Ptr{Ti}, Ptr{Ti}, Ptr{Tv}),
                 cso.pt.val[1], sp.colptr, sp.rowval, sp.nzval)
     if st == 1 error("CholmodSparseOut object is not packed") end
@@ -416,7 +414,7 @@ function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, stype::Int)
     if     Tv == Float64 || Tv == Complex128; dtype = _jl_CHOLMOD_DOUBLE; 
     elseif Tv == Float32 || Tv == Complex64 ; dtype = _jl_CHOLMOD_SINGLE; end
 
-    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
+    ccall(dlsym(libsuitesparse_wrapper, :jl_cholmod_sparse),
           Ptr{Void},
           (Ptr{Void}, Int, Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
            Int, Int, Int, Int, Int, Int),
@@ -440,7 +438,7 @@ function _jl_cholmod_dense{T}(B::VecOrMat{T})
     if     T == Float64 || T == Complex128; dtype = _jl_CHOLMOD_DOUBLE; 
     elseif T == Float32 || T == Complex64 ; dtype = _jl_CHOLMOD_SINGLE; end
 
-    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense),
+    ccall(dlsym(libsuitesparse_wrapper, :jl_cholmod_dense),
           Ptr{Void},
           (Ptr{Void}, Int, Int, Int, Int, Ptr{T}, Ptr{Void}, Int, Int),
           cd, m, n, numel(B), m, B, C_NULL, xtype, dtype
@@ -450,7 +448,7 @@ function _jl_cholmod_dense{T}(B::VecOrMat{T})
 end
 
 function _jl_cholmod_dense_copy_out{T}(x::Ptr{Void}, sol::VecOrMat{T})
-    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense_copy_out),
+    ccall(dlsym(libsuitesparse_wrapper, :jl_cholmod_dense_copy_out),
           Void,
           (Ptr{Void}, Ptr{T}),
           x, sol
@@ -465,8 +463,8 @@ function _jl_cholmod_transpose_unsym{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cm::Array
     cs = _jl_cholmod_sparse(S)
     cs_t = _jl_cholmod_sparse(S_t)
     
-    status = ccall(dlsym(_jl_libcholmod, :cholmod_transpose_unsym),
-                   Int,
+    status = ccall(dlsym(libcholmod, :cholmod_transpose_unsym),
+                   Int32,
                    (Ptr{Void}, Int, Ptr{Int}, Ptr{Int}, Int, Ptr{Void}, Ptr{Void}),
                    cs[1], int32(1), C_NULL, C_NULL, int32(-1), cs_t[1], cm[1]);
 
@@ -596,7 +594,7 @@ for (f_sym_r, f_sym_c, inttype) in
         function _jl_umfpack_symbolic{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti})
             # Pointer to store the symbolic factorization returned by UMFPACK
             Symbolic = UmfpackPtr{Tv,Ti}(Array(Ptr{Void},1))
-            status = ccall(dlsym(_jl_libumfpack, $f_sym_r),
+            status = ccall(dlsym(libumfpack, $f_sym_r),
                            Ti,
                            (Ti, Ti, 
                             Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
@@ -610,7 +608,7 @@ for (f_sym_r, f_sym_c, inttype) in
         function _jl_umfpack_symbolic{Tv<:Complex128,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti})
             # Pointer to store the symbolic factorization returned by UMFPACK
             Symbolic = UmfpackPtr{Tv,Ti}(Array(Ptr{Void},1))
-            status = ccall(dlsym(_jl_libumfpack, $f_sym_c),
+            status = ccall(dlsym(libumfpack, $f_sym_c),
                            Ti,
                            (Ti, Ti, 
                             Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, 
@@ -634,7 +632,7 @@ for (f_num_r, f_num_c, inttype) in
         function _jl_umfpack_numeric{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Symbolic)
             # Pointer to store the numeric factorization returned by UMFPACK
             Numeric = UmfpackPtr{Tv,Ti}(Array(Ptr{Void},1))
-            status = ccall(dlsym(_jl_libumfpack, $f_num_r),
+            status = ccall(dlsym(libumfpack, $f_num_r),
                            Ti,
                            (Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, 
                             Ptr{Float64}, Ptr{Float64}),
@@ -649,7 +647,7 @@ for (f_num_r, f_num_c, inttype) in
         function _jl_umfpack_numeric{Tv<:Complex128,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Symbolic)
             # Pointer to store the numeric factorization returned by UMFPACK
             Numeric = UmfpackPtr{Tv,Ti}(Array(Ptr{Void},1))
-            status = ccall(dlsym(_jl_libumfpack, $f_num_c),
+            status = ccall(dlsym(libumfpack, $f_num_c),
                            Ti,
                            (Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, 
                             Ptr{Float64}, Ptr{Float64}),
@@ -672,7 +670,7 @@ for (f_sol_r, f_sol_c, inttype) in
         function _jl_umfpack_solve{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, 
                                                              b::Vector{Tv}, Numeric::UmfpackPtr{Tv,Ti})
             x = similar(b)
-            status = ccall(dlsym(_jl_libumfpack, $f_sol_r),
+            status = ccall(dlsym(libumfpack, $f_sol_r),
                            Ti,
                            (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, 
                             Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
@@ -686,7 +684,7 @@ for (f_sol_r, f_sol_c, inttype) in
                                                                 b::Vector{Tv}, Numeric::UmfpackPtr{Tv,Ti})
             xr = similar(b, Float64)
             xi = similar(b, Float64)
-            status = ccall(dlsym(_jl_libumfpack, $f_sol_c),
+            status = ccall(dlsym(libumfpack, $f_sol_c),
                            Ti,
                            (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, 
                             Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
@@ -699,7 +697,7 @@ for (f_sol_r, f_sol_c, inttype) in
         function _jl_umfpack_transpose_solve{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, 
                                                              b::Vector{Tv}, Numeric::UmfpackPtr{Tv,Ti})
             x = similar(b)
-            status = ccall(dlsym(_jl_libumfpack, $f_sol_r),
+            status = ccall(dlsym(libumfpack, $f_sol_r),
                            Ti,
                            (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, 
                             Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
@@ -713,7 +711,7 @@ for (f_sol_r, f_sol_c, inttype) in
                                                                 b::Vector{Tv}, Numeric::UmfpackPtr{Tv,Ti})
             xr = similar(b, Float64)
             xi = similar(b, Float64)
-            status = ccall(dlsym(_jl_libumfpack, $f_sol_c),
+            status = ccall(dlsym(libumfpack, $f_sol_c),
                            Ti,
                            (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, 
                             Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
@@ -738,7 +736,7 @@ for (f_report, elty, inttype) in
              control = zeros(Float64, _jl_UMFPACK_CONTROL)
              control[_jl_UMFPACK_PRL] = 4
          
-             ccall(dlsym(_jl_libumfpack, $f_report),
+             ccall(dlsym(libumfpack, $f_report),
                    Ti,
                    (Ptr{Void}, Ptr{Float64}),
                    slu.numeric.val[1], control)
@@ -756,12 +754,12 @@ for (f_symfree, f_numfree, elty, inttype) in
     @eval begin
 
         _jl_umfpack_free_symbolic{Tv<:$elty,Ti<:$inttype}(Symbolic::UmfpackPtr{Tv,Ti}) =
-        ccall(dlsym(_jl_libumfpack, $f_symfree), Void, (Ptr{Void},), Symbolic.val)
+        ccall(dlsym(libumfpack, $f_symfree), Void, (Ptr{Void},), Symbolic.val)
         
         _jl_umfpack_free_numeric{Tv<:$elty,Ti<:$inttype}(Numeric::UmfpackPtr{Tv,Ti}) =
-        ccall(dlsym(_jl_libumfpack, $f_numfree), Void, (Ptr{Void},), Numeric.val)
+        ccall(dlsym(libumfpack, $f_numfree), Void, (Ptr{Void},), Numeric.val)
         
     end
 end
 
-#end #module
+end #module

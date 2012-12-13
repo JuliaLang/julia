@@ -2131,7 +2131,7 @@ So far only the second case can actually occur.
 	 (map julia-expand-macros e))))
 
 (define (pair-with-gensyms v)
-  (map (lambda (s) (cons s (gensy))) v))
+  (map (lambda (s) (cons s (named-gensy s))) v))
 
 (define (resolve-expansion-vars- e env m)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))

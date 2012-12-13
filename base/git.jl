@@ -17,6 +17,7 @@ unstaged(paths) = !success(`git diff --quiet -- $paths`)
 
 attached() = success(`git symbolic-ref -q HEAD` > "/dev/null")
 branch() = readchomp(`git rev-parse --symbolic-full-name --abbrev-ref HEAD`)
+head() = readchomp(`git rev-parse HEAD`)
 
 function each_tagged_version()
     git_dir = abs_path(dir())
@@ -82,8 +83,10 @@ function write_config(file::String, cfg::Dict)
             run(`git config -f $tmp $key $val`)
         end
     end
-    open(file,"w") do io
-        print(io,readall(tmp))
+    if isfile(tmp)
+        open(file,"w") do io
+            print(io,readall(tmp))
+        end
     end
 end
 

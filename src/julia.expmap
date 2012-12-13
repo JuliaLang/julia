@@ -57,6 +57,7 @@
     jl_backtrace_type;
     jl_base_module;
     jl_boundp;
+    jl_defines_or_exports_p;
     jl_box_int32;
     jl_box_int64;
     jl_buf_mutex_lock;

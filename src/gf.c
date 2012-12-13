@@ -732,7 +732,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         type = limited;
         if (all_are_subtypes) {
             // avoid Type{Type{...}...}...
-            if (jl_is_type_type(lasttype))
+            if (jl_is_type_type(lasttype) && jl_is_type_type(jl_tparam0(lasttype)))
                 lasttype = (jl_value_t*)jl_type_type;
             temp = (jl_value_t*)jl_tuple1(lasttype);
             jl_tupleset(type, i, jl_apply_type((jl_value_t*)jl_seq_type,
@@ -1078,6 +1078,22 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         if (((l->tvars==jl_null) == (tvars==jl_null)) &&
             sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig)) {
             // method overwritten
+            jl_module_t *newmod = method->linfo->module;
+            if (check_amb && l->func->linfo &&
+                (l->func->linfo->module != newmod) &&
+                // special case: allow adding Array() methods in Base
+                (pml != &((jl_methtable_t*)jl_array_type->env)->defs ||
+                 newmod != jl_base_module)) {
+                jl_value_t *errstream = jl_stderr_obj();
+                ios_t *s = JL_STDERR;
+                ios_printf(s, "Warning: Method definition %s", method->linfo->name->name);
+                jl_show(errstream, (jl_value_t*)type);
+                ios_printf(s, " in module %s", l->func->linfo->module->name->name);
+                print_func_loc(s, l->func->linfo);
+                ios_printf(s, " overwritten in module %s", newmod->name->name);
+                print_func_loc(s, method->linfo);
+                ios_printf(s, ".\n");
+            }
             JL_SIGATOMIC_BEGIN();
             l->sig = type;
             l->tvars = tvars;
@@ -1200,12 +1216,12 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
 
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
-    jl_value_t **a = alloca(sizeof(jl_value_t*)*(na+1));
-    a[0] = (jl_value_t*)f;
-    int i;
-    for(i=0; i < na; i++)
-        a[i+1] = args[i];
-    return jl_apply(jl_method_missing_func, a, na+1);
+    jl_value_t *argtup = jl_f_tuple(NULL, args, na);
+    JL_GC_PUSH(&argtup);
+    jl_value_t *fargs[2] = { (jl_value_t*)f, argtup };
+    jl_throw(jl_apply((jl_function_t*)jl_methoderror_type, fargs, 2));
+    // not reached
+    return jl_nothing;
 }
 
 static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)

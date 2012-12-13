@@ -810,7 +810,7 @@ function (!=)(A::AbstractArray, B::AbstractArray)
 end
 
 (<)(A::AbstractArray, B::AbstractArray) =
-    error("< not defined for arrays. Try .< or isless.")
+    error("Not defined. To compare arrays, try .< .> .<= .>= or isless.")
 
 (==)(A::AbstractArray, B) = error("Not defined. Try .== or isequal.")
 

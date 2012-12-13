@@ -1,12 +1,8 @@
-require("linalg_sparse")
+module ARPACK 
 
-## Can't modularize until Sparse is a module - at least the
-## SparseMatrixCSC is not defined even after the require("sparse")
+export eigs, svds
 
-#module ARPACK 
-#export eigs, svds
-
-_jl_libarpack = dlopen("libarpack")
+libarpack = dlopen("libarpack")
 
 # For a dense matrix A is ignored and At is actually A'*A
 _jl_sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = BLAS.symv('U', one(T), At, X)
@@ -15,14 +11,14 @@ _jl_sarupdate{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, At::SparseMatrixCSC{Tv,Ti}, X::S
 for (T, saupd, seupd, naupd, neupd) in
     ((:Float64, :dsaupd_, :dseupd_, :dnaupd_, :dneupd_),
      (:Float32, :ssaupd_, :sseupd_, :snaupd_, :sneupd_))
-   @eval begin
-       function eigs(A::AbstractMatrix{$T}, nev::Integer, evtype::ASCIIString, rvec::Bool)
-           (m, n) = size(A)
-           if m  != n error("eigs: matrix A is $m by $n but must be square") end
-           sym    = issym(A)
-           if n <= nev nev = n - 1 end
+    @eval begin
+        function eigs(A::AbstractMatrix{$T}, nev::Integer, evtype::ASCIIString, rvec::Bool)
+            (m, n) = size(A)
+            if m  != n error("eigs: matrix A is $m by $n but must be square") end
+            sym    = issym(A)
+            if n <= nev nev = n - 1 end
 
-           ncv = min(max(nev*2, 20), n)
+            ncv = min(max(nev*2, 20), n)
 #           if ncv-nev < 2 || ncv > n error("Compute fewer eigenvalues using eigs(A, k)") end
 
            bmat   = "I"
@@ -48,14 +44,14 @@ for (T, saupd, seupd, naupd, neupd) in
 
            while true
                if sym
-                   ccall(dlsym(_jl_libarpack, $(string(saupd))), Void,
+                   ccall(dlsym(libarpack, $(string(saupd))), Void,
                          (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                           Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
                           Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
                          ido, bmat, &n, evtype, &nev, tol, resid, &ncv, v, &n, 
                          iparam, ipntr, workd, workl, &lworkl, info)
                else
-                   ccall(dlsym(_jl_libarpack, $(string(naupd))), Void,
+                   ccall(dlsym(libarpack, $(string(naupd))), Void,
                          (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                           Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
                           Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
@@ -72,7 +68,7 @@ for (T, saupd, seupd, naupd, neupd) in
            if sym
                d = Array($T, nev)
                sigma = zeros($T, 1)
-               ccall(dlsym(_jl_libarpack, $(string(seupd))), Void,
+               ccall(dlsym(libarpack, $(string(seupd))), Void,
                      (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int},
                       Ptr{$T}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                       Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int}, Ptr{Int},
@@ -88,7 +84,7 @@ for (T, saupd, seupd, naupd, neupd) in
            sigmar = zeros($T, 1)
            sigmai = zeros($T, 1)
            workev = Array($T, 3*ncv)
-           ccall(dlsym(_jl_libarpack, $(string(neupd))), Void,
+           ccall(dlsym(libarpack, $(string(neupd))), Void,
                  (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{$T},
                   Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int},
                   Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T},
@@ -150,7 +146,7 @@ for (T, TR, naupd, neupd) in
            zernm1 = 0:(n-1)
 
            while true
-               ccall(dlsym(_jl_libarpack, $(string(naupd))), Void,
+               ccall(dlsym(libarpack, $(string(naupd))), Void,
                          (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                           Ptr{$TR}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
                           Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int},
@@ -167,7 +163,7 @@ for (T, TR, naupd, neupd) in
            d = Array($T, nev+1)
            sigma = zeros($T, 1)
            workev = Array($T, 2ncv)
-           ccall(dlsym(_jl_libarpack, $(string(neupd))), Void,
+           ccall(dlsym(libarpack, $(string(neupd))), Void,
                  (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int},
                   Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                   Ptr{$TR}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int}, Ptr{Int},
@@ -223,7 +219,7 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
            zernm1 = 0:(n-1)
 
            while true
-               ccall(dlsym(_jl_libarpack, $(string(saupd))), Void,
+               ccall(dlsym(libarpack, $(string(saupd))), Void,
                      (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                       Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
                       Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
@@ -237,7 +233,7 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
            d      = Array($T, nev)
            howmny = "A"
 
-           ccall(dlsym(_jl_libarpack, $(string(seupd))), Void,
+           ccall(dlsym(libarpack, $(string(seupd))), Void,
                   (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T},
                    Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                    Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int}, Ptr{Int},
@@ -260,4 +256,4 @@ svds(A::AbstractMatrix, rvec::Bool) = svds(A, 6, "LA", rvec)
 svds(A::AbstractMatrix, nev::Integer) = svds(A, nev, "LA", true)
 svds(A::AbstractMatrix) = svds(A, 6, "LA", true)
 
-# end #module ARPACK
+end #module ARPACK

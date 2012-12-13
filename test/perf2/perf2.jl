@@ -39,7 +39,6 @@ load("gk")
 @timeit gk(350,[0.1]) "gk      "
 
 # issue #942
-require("linalg_sparse")
 s = sparse(ones(280,280));
 @timeit s*s "sparsemul"
 

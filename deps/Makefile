@@ -588,6 +588,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
+	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-avx --enable-single CC="$(CC)" CXX="$(CXX)" || \
 	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-single CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) clean
 	touch $@
@@ -613,6 +614,7 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
+	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-avx CC="$(CC)" CXX="$(CXX)" || \
 	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) clean
 	touch $@

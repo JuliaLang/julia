@@ -1,15 +1,6 @@
-## linalg_bitarray.jl: Basic Linear Algebra functions for BitArrays ##
-
-require("bitarray")
-
-import Base.dot, Base.triu, Base.tril, Base./, Base.\, Base.gradient
-import Base.svd, Base.qr, Base.*, Base.diag, Base.diagm, Base.kron
-import Base.issym, Base.ishermitian, Base.istriu, Base.istril, Base.findmax
-import Base.findmin
-
-function dot{T,S}(x::BitVector{T}, y::BitVector{S})
+function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
-    s = zero(one(T) * one(S))
+    s = 0
     for i = 1 : length(x.chunks)
         s += count_ones(x.chunks[i] & y.chunks[i])
     end
@@ -19,10 +10,10 @@ end
 ## slower than the unpacked version, which is MUCH slower
 #  than blas'd (this one saves storage though, keeping it commented
 #  just in case)
-#function aTb{T,S}(A::BitMatrix{T}, B::BitMatrix{S})
+#function aTb(A::BitMatrix, B::BitMatrix)
     #(mA, nA) = size(A)
     #(mB, nB) = size(B)
-    #C = zeros(promote_type(T,S), nA, nB)
+    #C = falses(nA, nB)
     #if mA != mB; error("*: argument shapes do not match"); end
     #if mA == 0; return C; end
     #col_ch = _jl_num_bit_chunks(mA)
@@ -36,6 +27,7 @@ end
         #_jl_copy_chunks(aux_chunksA, 1, A.chunks, (i-1)*mA+1, mA)
         #for j = 1:nB
             #for k = 1:col_ch
+                ## TODO: improve
                 #C[i, j] += count_ones(aux_chunksA[k] & aux_chunksB[j][k])
             #end
         #end
@@ -45,9 +37,9 @@ end
 
 #aCb{T, S}(A::BitMatrix{T}, B::BitMatrix{S}) = aTb(A, B)
 
-function triu{T}(B::BitMatrix{T}, k::Int)
+function triu(B::BitMatrix, k::Int)
     m,n = size(B)
-    A = bitzeros(T, m,n)
+    A = falses(m,n)
     for i = max(k+1,1):n
         j = clamp((i - 1) * m + 1, 1, i * m)
         _jl_copy_chunks(A.chunks, j, B.chunks, j, min(i-k, m))
@@ -56,9 +48,9 @@ function triu{T}(B::BitMatrix{T}, k::Int)
 end
 triu(B::BitMatrix, k::Integer) = triu(B, int(k))
 
-function tril{T}(B::BitMatrix{T}, k::Int)
+function tril(B::BitMatrix, k::Int)
     m,n = size(B)
-    A = bitzeros(T, m, n)
+    A = falses(m, n)
     for i = 1:min(n, m+k)
         j = clamp((i - 1) * m + i - k, 1, i * m)
         _jl_copy_chunks(A.chunks, j, B.chunks, j, max(m-i+k+1, 0))
@@ -68,20 +60,8 @@ end
 tril(B::BitMatrix, k::Integer) = tril(B, int(k))
 
 ## Matrix multiplication and division
-
-#disambiguations
-(*){T<:Integer,S<:Integer}(A::BitMatrix{T}, B::BitVector{S}) = bitunpack(A) * bitunpack(B)
-(*){T<:Integer,S<:Integer}(A::BitVector{T}, B::BitMatrix{S}) = bitunpack(A) * bitunpack(B)
-(*){T<:Integer,S<:Integer}(A::BitMatrix{T}, B::BitMatrix{S}) = bitunpack(A) * bitunpack(B)
-(*){T<:Integer}(A::BitMatrix{T}, B::AbstractVector) = (*)(bitunpack(A), B)
-(*){T<:Integer}(A::BitVector{T}, B::AbstractMatrix) = (*)(bitunpack(A), B)
-(*){T<:Integer}(A::BitMatrix{T}, B::AbstractMatrix) = (*)(bitunpack(A), B)
-(*){T<:Integer}(A::AbstractVector, B::BitMatrix{T}) = (*)(A, bitunpack(B))
-(*){T<:Integer}(A::AbstractMatrix, B::BitVector{T}) = (*)(A, bitunpack(B))
-(*){T<:Integer}(A::AbstractMatrix, B::BitMatrix{T}) = (*)(A, bitunpack(B))
-#end disambiguations
-
-for f in (:/, :\, :*)
+#
+for f in (:/, :\)
     @eval begin
         ($f)(A::BitArray, B::BitArray) = ($f)(bitunpack(A), bitunpack(B))
         ($f)(A::BitArray, B::AbstractArray) = ($f)(bitunpack(A), B)
@@ -89,16 +69,12 @@ for f in (:/, :\, :*)
     end
 end
 
-# specialized Bool versions
-
-#disambiguations (TODO: improve!)
-(*)(A::BitMatrix{Bool}, B::BitVector{Bool}) = bitpack(bitunpack(A) * bitunpack(B))
-(*)(A::BitVector{Bool}, B::BitMatrix{Bool}) = bitpack(bitunpack(A) * bitunpack(B))
-(*)(A::BitMatrix{Bool}, B::BitMatrix{Bool}) = bitpack(bitunpack(A) * bitunpack(B))
-#end disambiguations
-
 # TODO: improve this!
-(*)(A::BitArray{Bool}, B::BitArray{Bool}) = bitpack(bitunpack(A) * bitunpack(B))
+(*)(A::BitArray, B::BitArray) = bitpack(bitunpack(A) * bitunpack(B))
+(*)(A::BitArray, B::Array{Bool}) = bitpack(bitunpack(A) * B)
+(*)(A::Array{Bool}, B::BitArray) = bitpack(A * bitunpack(B))
+(*)(A::BitArray, B::AbstractArray) = bitunpack(A) * B
+(*)(A::AbstractArray, B::BitArray) = A * bitunpack(B)
 
 ## diff and gradient
 
@@ -120,7 +96,7 @@ function diag(B::BitMatrix)
     return v
 end
 
-function diagm{T}(v::Union(BitVector{T},BitMatrix{T}))
+function diagm(v::Union(BitVector,BitMatrix))
     if isa(v, BitMatrix)
         if (size(v,1) != 1 && size(v,2) != 1)
             error("Input should be nx1 or 1xn")
@@ -128,7 +104,7 @@ function diagm{T}(v::Union(BitVector{T},BitMatrix{T}))
     end
 
     n = numel(v)
-    a = bitzeros(T, n, n)
+    a = falses(n, n)
     for i=1:n
         a[i,i] = v[i]
     end
@@ -144,10 +120,10 @@ qr(A::BitMatrix) = qr(float(A))
 
 ## kron
 
-function kron{T,S}(a::BitVector{T}, b::BitVector{S})
+function kron(a::BitVector, b::BitVector)
     m = length(a)
     n = length(b)
-    R = BitArray(promote_type(T,S), m, n)
+    R = BitArray(m, n)
     zS = zero(S)
     for j = 1:n
         if b[j] != zS
@@ -157,16 +133,15 @@ function kron{T,S}(a::BitVector{T}, b::BitVector{S})
     return R
 end
 
-function kron{T,S}(a::BitMatrix{T}, b::BitMatrix{S})
+function kron(a::BitMatrix, b::BitMatrix)
     mA,nA = size(a)
     mB,nB = size(b)
-    R = bitzeros(promote_type(T,S), mA*mB, nA*nB)
+    R = falses(mA*mB, nA*nB)
 
-    zT = zero(T)
     for i = 1:mA
         ri = (1:mB)+(i-1)*mB
         for j = 1:nA
-            if a[i,j] != zT
+            if a[i,j]
                 rj = (1:nB)+(j-1)*nB
                 R[ri,rj] = b
             end
@@ -249,17 +224,16 @@ end
 
 function findmax(a::BitArray)
     if length(a) == 0
-        return (typemin(eltype(a)), 0)
+        return (false, 0)
     end
-    m = zero(eltype(a))
-    o = one(eltype(a))
+    m = false
     mi = 1
     ti = 1
     for i=1:length(a.chunks)
         k = trailing_zeros(a.chunks[i])
         ti += k
         if k != 64
-            m = o
+            m = true
             mi = ti
             break
         end
@@ -269,17 +243,16 @@ end
 
 function findmin(a::BitArray)
     if length(a) == 0
-        return (typemax(eltype(a)), 0)
+        return (true, 0)
     end
-    m = one(eltype(a))
-    z = zero(eltype(a))
+    m = true
     mi = 1
     ti = 1
     for i=1:length(a.chunks) - 1
         k = trailing_ones(a.chunks[i])
         ti += k
         if k != 64
-            return (z, ti)
+            return (false, ti)
         end
     end
     l = (@_mod64 (length(a)-1)) + 1
@@ -287,7 +260,7 @@ function findmin(a::BitArray)
     k = trailing_ones(a.chunks[end] & msk)
     ti += k
     if k != l
-        m = z
+        m = false
         mi = ti
     end
     return (m, mi)

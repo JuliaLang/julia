@@ -1,4 +1,4 @@
-require("../extras/zlib")
+require("extras/zlib")
 
 import Zlib
 using Zlib

@@ -10,11 +10,8 @@ Fortran. To allow easy use of this existing code, Julia makes it simple
 and efficient to call C and Fortran functions. Julia has a "no
 boilerplate" philosophy: functions can be called directly from Julia
 without any "glue" code, code generation, or compilation — even from the
-interactive prompt. This is accomplished in three steps:
-
-1. Load a shared library and create a handle to it.
-2. Lookup a library function by name, getting a handle to it.
-3. Call the library function using the built-in ``ccall`` function.
+interactive prompt. This is accomplished just by making an appropriate call
+with ``call`` syntax, which looks like an ordinary function call.
 
 The code to be called must be available as a shared library. Most C and
 Fortran libraries ship compiled as shared libraries already, but if you
@@ -29,26 +26,22 @@ possible to perform whole-program optimizations that can even optimize
 across this boundary, but Julia does not yet support that. In the
 future, however, it may do so, yielding even greater performance gains.)
 
-Shared libraries are loaded with ``dlopen`` function, which provides
-access to the functionality of the POSIX ``dlopen(3)`` call: it locates
-a shared library binary and loads it into the process' memory allowing
-the program to access functions and variables contained in the library.
-The following call loads the standard C library, and stores the
-resulting handle in a Julia variable called ``libc``::
+Shared libraries and functions are referenced by a tuple of the 
+form ``(:function, "library")`` or ``("function", "library")`` where ``function``
+is the C-exported function name. ``library`` refers to the shared library
+name: shared libraries available in the (platform-specific) load path
+will be resolved by name, and if necessary a direct path may be specified.
 
-    libc = dlopen("libc")
-
-Once a library has been loaded, functions can be looked up by name using
-the ``dlsym`` function, which exposes the functionality of the POSIX
-``dlsym(3)`` call. This returns a handle to the ``clock`` function from
-the standard C library::
-
-    libc_clock = dlsym(libc, :clock)
+A function name may be used alone in place of the tuple (just
+``:function`` or ``"function"``). In this case the name is resolved within
+the current process. This form can be used to call C library functions,
+functions in the Julia runtime, or functions in an application linked to
+Julia.
 
 Finally, you can use ``ccall`` to actually generate a call to the
-library function. Inputs to ``ccall`` are as follows:
+library function. Arguments to ``ccall`` are as follows:
 
-1. Function reference from ``dlsym`` — a value of type ``Ptr{Void}``.
+1. (:function, "library") pair.
 2. Return type, which may be any bits type, including ``Int32``,
    ``Int64``, ``Float64``, or ``Ptr{T}`` for any type parameter ``T``,
    indicating a pointer to values of type ``T``, or just ``Ptr`` for
@@ -60,7 +53,7 @@ library function. Inputs to ``ccall`` are as follows:
 As a complete but simple example, the following calls the ``clock``
 function from the standard C library::
 
-    julia> t = ccall(dlsym(libc, :clock), Int32, ())
+    julia> t = ccall( (:clock, "libc"), Int32, ())
     5380445
 
     julia> typeof(ans)
@@ -71,7 +64,7 @@ is that a 1-tuple must be written with with a trailing comma. For
 example, to call the ``getenv`` function to get a pointer to the value
 of an environment variable, one makes a call like this::
 
-    julia> path = ccall(dlsym(libc, :getenv), Ptr{Uint8}, (Ptr{Uint8},), "SHELL")
+    julia> path = ccall( (:getenv, "libc"), Ptr{Uint8}, (Ptr{Uint8},), "SHELL")
     Ptr{Uint8} @0x00007fff5fbfd670
 
     julia> bytestring(path)
@@ -98,7 +91,7 @@ in
 `env.jl <https://github.com/JuliaLang/julia/blob/master/base/env.jl>`_::
 
     function getenv(var::String)
-      val = ccall(dlsym(libc, :getenv),
+      val = ccall( (:getenv, "libc"),
                   Ptr{Uint8}, (Ptr{Uint8},), bytestring(var))
       if val == C_NULL
         error("getenv: undefined variable: ", var)
@@ -123,7 +116,7 @@ machine's hostname::
 
     function gethostname()
       hostname = Array(Uint8, 128)
-      ccall(dlsym(libc, :gethostname), Int32,
+      ccall( (:gethostname, "libc"), Int32,
             (Ptr{Uint8}, Ulong),
             hostname, length(hostname))
       return bytestring(convert(Ptr{Uint8}, hostname))
@@ -146,13 +139,11 @@ example computes a dot product using a BLAS function.
 
 ::
 
-    libBLAS = dlopen("libLAPACK")
-
     function compute_dot(DX::Vector, DY::Vector)
       assert(length(DX) == length(DY))
       n = length(DX)
       incx = incy = 1
-      product = ccall(dlsym(libBLAS, :ddot_),
+      product = ccall( (:ddot_, "libLAPACK"),
                       Float64,
                       (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
                       &n, DX, &incx, DY, &incy)
@@ -181,12 +172,12 @@ Mapping C Types to Julia
 Julia automatically inserts calls to the ``convert`` function to convert
 each argument to the specified type. For example, the following call::
 
-    ccall(dlsym(libfoo, :foo), Void, (Int32, Float64),
+    ccall( (:foo, "libfoo"), Void, (Int32, Float64),
           x, y)
 
 will behave as if the following were written::
 
-    ccall(dlsym(libfoo, :foo), Void, (Int32, Float64),
+    ccall( (:foo, "libfoo"), Void, (Int32, Float64),
           convert(Int32, x), convert(Float64, y))
 
 When a scalar value is passed with ``&`` as an argument of type
@@ -254,6 +245,14 @@ can be called via the following Julia code::
     argv = [ "a.out", "arg1", "arg2" ]
     ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
 
+Indirect calls
+--------------
+
+The first argument to ``call`` can also be an expression evaluated at
+run time. In this case, the expression must evaluate to a ``Ptr``,
+which will be used as the address of the native function to call. This
+behavior occurs when the first ``ccall`` argument contains references
+to non-constants, such as local variables or function arguments.
 
 C++
 ---

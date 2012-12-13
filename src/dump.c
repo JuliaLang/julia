@@ -924,7 +924,7 @@ void jl_init_serializer(void)
                      jl_symbol("convert"), jl_symbol("typeassert"),
                      jl_symbol("getfield"), jl_symbol("setfield"),
                      jl_symbol("tupleref"), jl_symbol("tuplelen"),
-                     jl_symbol("apply_type"), jl_symbol("tuple"),
+                     jl_symbol("apply_type"), tuple_sym,
 
                      jl_box_int32(0), jl_box_int32(1), jl_box_int32(2),
                      jl_box_int32(3), jl_box_int32(4), jl_box_int32(5),

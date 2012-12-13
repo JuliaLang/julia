@@ -193,6 +193,21 @@ d4[1001] = randstring(3)
 @test !isempty(Set("banana", "apple"))
 @test !isempty(Set(1, 1:10, "pear"))
 
+# isless
+@test isless(Set(), Set(1))
+@test isless(Set(1), Set(1,2))
+@test !isless(Set(3), Set(1,2))
+@test !(Set(3) > Set(1,2))
+@test Set(1,2,3) > Set(1,2)
+@test !(Set(3) <= Set(1,2))
+@test !(Set(3) >= Set(1,2))
+@test Set(1) <= Set(1,2)
+@test Set(1,2) <= Set(1,2)
+@test Set(1,2) >= Set(1,2)
+@test Set(1,2,3) >= Set(1,2)
+@test !(Set(1,2,3) >= Set(1,2,4))
+@test !(Set(1,2,3) <= Set(1,2,4))
+
 # add, length
 s = Set()
 @test isempty(s)
@@ -323,6 +338,15 @@ for data_in in ((7,8,4,5),
     end
 end
 
+# pop
+origs = Set(1,2,3,"apple")
+s = copy(origs)
+for i in 1:numel(origs)
+    el = pop(s)
+    @test !has(s, el)
+    @test has(origs, el)
+end
+@test isempty(s)
 # isequal
 @test  isequal(Set(), Set())
 @test !isequal(Set(), Set(1))

@@ -1,13 +1,4 @@
-## linalg_sparse.jl: Basic Linear Algebra functions for sparse representations ##
-
-require("sparse")
-
-import Base.(*), Base.triu, Base.tril, Base.diff, Base.diag, Base.diagm
-import Base.trace, Base.kron, Base.issym, Base.ishermitian, Base.istriu
-import Base.istril, Base.diagmm!, Base.diagmm, Base.norm, Base.rank
-import Base.solve
-
-## Matrix multiplication
+## sparse matrix multiplication
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})

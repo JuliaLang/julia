@@ -31,7 +31,9 @@ static char *extensions[] = { ".so", "" };
 
 extern char *julia_home;
 
+#if !defined(__APPLE__) && !defined(_WIN32)
 char *jl_lookup_soname(char *pfx, size_t n);
+#endif
 
 int jl_uv_dlopen(const char* filename, uv_lib_t* lib)
 {
@@ -83,21 +85,6 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
         ext = extensions[i];
         path[0] = '\0';
         handle->handle = NULL;
-        if (modname[0] != '/') {
-            if (julia_home) {
-                /* try julia_home/../lib */
-                snprintf(path, PATHBUF, "%s/../lib/%s%s", julia_home, modname, ext);
-                error = jl_uv_dlopen(path, handle);
-                if (!error) goto done;
-                // if file exists but didn't load, show error details
-                struct stat sbuf;
-                if (stat(path, &sbuf) != -1) {
-                    //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
-                    //jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
-                    goto error;
-                }
-            }
-        }
         /* try loading from standard library path */
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         error = jl_uv_dlopen(path, handle);
@@ -105,11 +92,10 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
     }
 #if !defined(__APPLE__) && !defined(_WIN32)
     char *soname = jl_lookup_soname(modname, strlen(modname));
-    error = jl_uv_dlopen(soname, handle);
+    error = (soname==NULL) || jl_uv_dlopen(soname, handle);
     if (!error) goto done;
 #endif
 
-error:
     //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
     jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
     uv_dlclose(handle);

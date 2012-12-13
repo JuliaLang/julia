@@ -508,12 +508,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     x::Array{Any,1} = applicable
     if isempty(x)
         # no methods match
-        if is(f,method_missing)
-            # match failure due to None (error) argument, propagate
-            return None
-        end
-        return abstract_call_gf(method_missing, tuple(f, fargs...),
-                                tuple(Function, argtypes...), ())
+        return None
     end
     if isa(e,Expr)
         if length(x)==1
@@ -601,6 +596,18 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                     end
                     return Tuple
                 end
+            else
+                ft = abstract_eval(fargs[1], vtypes, sv)
+                if isType(ft)
+                    # TODO: improve abstract_call_constructor
+                    st = ft.parameters[1]
+                    if isa(st,TypeVar) && isa(st.ub,CompositeKind)
+                        return st.ub
+                    end
+                    if isa(st,CompositeKind)
+                        return st
+                    end
+                end
             end
         end
         if is(f,invoke) && length(fargs)>1
@@ -657,13 +664,18 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
             return result
         end
         ft = abstract_eval(called, vtypes, sv)
-        if isType(ft) && isa(ft.parameters[1],CompositeKind)
+        if isType(ft)
             st = ft.parameters[1]
-            if isgeneric(st) && isleaftype(st)
-                return abstract_call_gf(st, fargs, argtypes, e)
+            if isa(st,TypeVar) && isa(st.ub,CompositeKind)
+                return st.ub
             end
-            # struct constructor
-            return st
+            if isa(st,CompositeKind)
+                if isgeneric(st) && isleaftype(st)
+                    return abstract_call_gf(st, fargs, argtypes, e)
+                end
+                # struct constructor
+                return st
+            end
         end
         return Any
     end
@@ -777,6 +789,12 @@ function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
                 val = sp[i+1]
                 if isa(val,TypeVar)
                     # static param bound to typevar
+                    if Any <: val.ub
+                        # if the tvar does not refer to anything more specific
+                        # than Any, the static param might actually be an
+                        # integer, symbol, etc.
+                        return Any
+                    end
                     return Type{val}
                 end
                 return abstract_eval_constant(val)
@@ -1272,7 +1290,10 @@ function eval_annotate(e::Expr, vtypes, sv, decls, clo)
     end
     i0 = is(head,:method) ? 2 : 1
     for i=i0:length(e.args)
-        e.args[i] = eval_annotate(e.args[i], vtypes, sv, decls, clo)
+        subex = e.args[i]
+        if !(isa(subex,Number) || isa(subex,String))
+            e.args[i] = eval_annotate(subex, vtypes, sv, decls, clo)
+        end
     end
     e
 end
@@ -1402,7 +1423,10 @@ end
 function resolve_globals(e::Expr, from, to, env1, env2)
     if !is(e.head,:line)
         for i=1:length(e.args)
-            e.args[i] = resolve_globals(e.args[i], from, to, env1, env2)
+            subex = e.args[i]
+            if !(isa(subex,Number) || isa(subex,String))
+                e.args[i] = resolve_globals(subex, from, to, env1, env2)
+            end
         end
     end
     e
