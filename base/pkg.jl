@@ -235,23 +235,13 @@ resolve() = cd(_resolve,julia_pkgdir())
 
 # clone a new package repo from a URL
 
-# TODO: this is horribly broken
-function clone(url::String)
-    dir = julia_pkgdir()
-    if isdir(dir)
-        error("Package directory $dir already exists.")
-    end
-    tmpdir = mktempdir()
-    run(`git clone $url $tmpdir`)
-    cd(tmpdir) do
-        gitdir = abs_path(readchomp(`git rev-parse --git-dir`))
-        Git.each_submodule(false) do name, path, sha1
-            cd(path) do
-                run(`git fetch-pack $gitdir $sha1`)
-            end
+function clone(url::String, pkgname::String)
+    cd_pkgdir() do
+        if isdir(pkgname)
+            error("Package directory $dir already exists.")
         end
+        run(`git submodule add $url $pkgname`)
     end
-    run(`mv $tmpdir $dir`)
 end
 
 # record all submodule commits as tags
