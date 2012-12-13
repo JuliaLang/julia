@@ -215,7 +215,15 @@ d = drand(10,10)
 #@test isequal(d'', d)
 @test isequal(convert(Array,d), d)
 
-## cumsum
+## cumsum, cummin, cummax
+
+@assert isequal(cummin([1, 2, 5, -1, 3, -2]), [1, 1, 1, -1, -1, -2])
+@assert isequal(cummax([1, 2, 5, -1, 3, -2]), [1, 2, 5, 5, 5, 5])
+
+@assert isequal(cummax([1 0; 0 1], 1), [1 0; 1 1])
+@assert isequal(cummax([1 0; 0 1], 2), [1 1; 0 1])
+@assert isequal(cummin([1 0; 0 1], 1), [1 0; 0 0])
+@assert isequal(cummin([1 0; 0 1], 2), [1 0; 0 0])
 
 @test sum_kbn([1,1e100,1,-1e100]) == 2
 

@@ -560,6 +560,8 @@ export
     cumprod,
     cumsum,
     cumsum_kbn,
+    cummin,
+    cummax,
     diff,
     each_col,
     each_col!,

@@ -858,6 +858,48 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
 
+for (f, op) = ((:cummin, :min), (:cummax, :max))
+    @eval function ($f)(v::AbstractVector)
+        n = length(v)
+        cur_val = v[1]
+        res = similar(v, n)
+        res[1] = cur_val
+        for i in 2:n
+            cur_val = ($op)(v[i], cur_val)
+            res[i] = cur_val
+        end
+        return res
+    end
+
+    @eval function ($f)(A::AbstractArray, axis::Integer)
+        dimsA = size(A)
+        ndimsA = ndims(A)
+        axis_size = dimsA[axis]
+        axis_stride = 1
+        for i = 1:(axis-1)
+            axis_stride *= size(A,i)
+        end
+
+        if axis_size <= 1
+            return A
+        end
+
+        B = similar(A)
+
+        for i = 1:length(A)
+            if div(i-1, axis_stride) % axis_size == 0
+               B[i] = A[i]
+            else
+               B[i] = ($op)(A[i], B[i-axis_stride])
+            end
+        end
+
+        return B
+    end
+
+    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
+end
+
 ## ipermute in terms of permute ##
 
 function ipermute(A::AbstractArray,perm)
