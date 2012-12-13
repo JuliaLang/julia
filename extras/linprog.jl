@@ -40,7 +40,7 @@ typealias VecOrNothing GLPK.VecOrNothing
 # where the vector x is subject to these constraints:
 #
 #   A * x <= b
-#   Aeq * x == b
+#   Aeq * x == beq
 #   lb <= x <= ub
 #
 # The return flag is 0 in case of success, and follows
@@ -225,6 +225,9 @@ linprog_exact{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
 #
 #    (z, x, flag, ps_flag) = mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, param, ps_param)
 #
+#  * the col_kind vector contains one entry per variable in x, each with value
+#        GLPK.CV (continuous variable), GLPK.IV (integer variable), or
+#        GLPK.BV (binary variable)
 #  * if the col_kind vector is not provided, all variables default to integer
 #  * if the "presolve" options is set to GLPK.OFF, then it uses linear programming
 #    for presolving, via the simplex point method with parameters ps_param (if ps_param is nothing
