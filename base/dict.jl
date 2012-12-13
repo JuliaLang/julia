@@ -425,6 +425,8 @@ end
 
 has(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 
+insert{K,V}(h::Dict{K,V}, key, val) = h[key] = val
+
 function key{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
     return (index<0) ? deflt : h.keys[index]::K
