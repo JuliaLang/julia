@@ -436,17 +436,22 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         llvmf = literal_pointer_val(fptr, funcptype);
     }
     else {
-        if (f_lib != NULL) {
-            if (add_library_sym(f_name, f_lib) == NULL) {
-                JL_GC_POP();
-                std::stringstream msg;
-                msg << "ccall: could not find function ";
-                msg << f_name;
+        void *symaddr;
+        if (f_lib != NULL)
+            symaddr = add_library_sym(f_name, f_lib);
+        else
+            symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(f_name);
+        if (symaddr == NULL) {
+            JL_GC_POP();
+            std::stringstream msg;
+            msg << "ccall: could not find function ";
+            msg << f_name;
+            if (f_lib != NULL) {
                 msg << " in library ";
                 msg << f_lib;
-                emit_error(msg.str(), ctx);
-                return literal_pointer_val(jl_nothing);
             }
+            emit_error(msg.str(), ctx);
+            return literal_pointer_val(jl_nothing);
         }
         llvmf = jl_Module->getOrInsertFunction(f_name, functype);
     }
