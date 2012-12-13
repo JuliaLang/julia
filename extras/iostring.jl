@@ -22,7 +22,8 @@ function read{T}(from::IOString, a::Array{T})
             throw(EOFError())
         end
         from.ptr += nb
-        return reshape(reinterpret(T, from.data[from.ptr-nb:from.ptr-1]), size(a))
+        a[:] = reshape(reinterpret(T, from.data[from.ptr-nb:from.ptr-1]), size(a))
+        return a
     else
         error("Read from IOString only supports bits types or arrays of bits types; got $T.")
     end
