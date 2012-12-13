@@ -35,6 +35,8 @@ done(s::Set, state) = done(s.hash, state)
 # NOTE: manually optimized to take advantage of Dict representation
 next(s::Set, i)     = (s.hash.keys[i], skip_deleted(s.hash,i+1))
 
+pop(s::Set) = (val = s.hash.keys[start(s.hash)]; del(s.hash, val); val)
+
 union() = Set()
 union(s::Set) = copy(s)
 function union(s::Set, sets::Set...)
@@ -82,5 +84,7 @@ end
 -(a::Set, b::Set) = setdiff(a,b)
 
 isequal(l::Set, r::Set) = length(l) == length(r) == length(intersect(l,r))
+isless(l::Set, r::Set) = (length(l) < length(r)) && ((l&r) == l)
+<=(l::Set, r::Set) = isless(l,r) || isequal(l,r)
 
 unique(C) = elements(add_each(Set{eltype(C)}(), C))
