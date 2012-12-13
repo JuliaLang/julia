@@ -1078,12 +1078,12 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         if (((l->tvars==jl_null) == (tvars==jl_null)) &&
             sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig)) {
             // method overwritten
-            jl_module_t *newmod = method->linfo->module;
-            if (check_amb && l->func->linfo &&
-                (l->func->linfo->module != newmod) &&
+            if (check_amb && l->func->linfo && method->linfo &&
+                (l->func->linfo->module != method->linfo->module) &&
                 // special case: allow adding Array() methods in Base
                 (pml != &((jl_methtable_t*)jl_array_type->env)->defs ||
-                 newmod != jl_base_module)) {
+                 method->linfo->module != jl_base_module)) {
+                jl_module_t *newmod = method->linfo->module;
                 jl_value_t *errstream = jl_stderr_obj();
                 ios_t *s = JL_STDERR;
                 ios_printf(s, "Warning: Method definition %s", method->linfo->name->name);
