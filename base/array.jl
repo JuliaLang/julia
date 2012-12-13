@@ -839,6 +839,8 @@ for f in (:-, :~, :conj, :sign)
     end
 end
 
+(-)(A::StridedArray{Bool}) = reshape([ -A[i] for i=1:numel(A) ], size(A))
+
 for f in (:real, :imag)
     @eval begin
         function ($f){T}(A::StridedArray{T})
