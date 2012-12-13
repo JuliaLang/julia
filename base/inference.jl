@@ -1290,7 +1290,10 @@ function eval_annotate(e::Expr, vtypes, sv, decls, clo)
     end
     i0 = is(head,:method) ? 2 : 1
     for i=i0:length(e.args)
-        e.args[i] = eval_annotate(e.args[i], vtypes, sv, decls, clo)
+        subex = e.args[i]
+        if !(isa(subex,Number) || isa(subex,String))
+            e.args[i] = eval_annotate(subex, vtypes, sv, decls, clo)
+        end
     end
     e
 end
@@ -1420,7 +1423,10 @@ end
 function resolve_globals(e::Expr, from, to, env1, env2)
     if !is(e.head,:line)
         for i=1:length(e.args)
-            e.args[i] = resolve_globals(e.args[i], from, to, env1, env2)
+            subex = e.args[i]
+            if !(isa(subex,Number) || isa(subex,String))
+                e.args[i] = resolve_globals(subex, from, to, env1, env2)
+            end
         end
     end
     e

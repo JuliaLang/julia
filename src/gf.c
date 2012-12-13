@@ -1090,8 +1090,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                 jl_show(errstream, (jl_value_t*)type);
                 ios_printf(s, " in module %s", l->func->linfo->module->name->name);
                 print_func_loc(s, l->func->linfo);
-                ios_printf(s, " overwritten in module %s",
-                           newmod->name->name);
+                ios_printf(s, " overwritten in module %s", newmod->name->name);
                 print_func_loc(s, method->linfo);
                 ios_printf(s, ".\n");
             }
