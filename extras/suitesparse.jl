@@ -164,7 +164,7 @@ end
 CholmodSparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, stype::Int) = CholmodSparse{Tv,Ti}(S, stype, CholmodCommon())
 
 function CholmodSparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cm::CholmodCommon)
-    stype = S.m == S.n && ishermitian(m)
+    stype = S.m == S.n && ishermitian(S)
     CholmodSparse{Tv,Ti}(stype ? triu(S) : S, int(stype), cm)
 end
 
