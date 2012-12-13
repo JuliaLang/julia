@@ -2,11 +2,11 @@ module ARPACK
 
 export eigs, svds
 
-libarpack = dlopen("libarpack")
+const libarpack = "libarpack"
 
 # For a dense matrix A is ignored and At is actually A'*A
-_jl_sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = BLAS.symv('U', one(T), At, X)
-_jl_sarupdate{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, At::SparseMatrixCSC{Tv,Ti}, X::StridedVector{Tv}) = At*(A*X)
+sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = BLAS.symv('U', one(T), At, X)
+sarupdate{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, At::SparseMatrixCSC{Tv,Ti}, X::StridedVector{Tv}) = At*(A*X)
 
 for (T, saupd, seupd, naupd, neupd) in
     ((:Float64, :dsaupd_, :dseupd_, :dnaupd_, :dneupd_),
@@ -44,14 +44,14 @@ for (T, saupd, seupd, naupd, neupd) in
 
            while true
                if sym
-                   ccall(dlsym(libarpack, $(string(saupd))), Void,
+                   ccall(($(string(saupd)), libarpack), Void,
                          (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                           Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
                           Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
                          ido, bmat, &n, evtype, &nev, tol, resid, &ncv, v, &n, 
                          iparam, ipntr, workd, workl, &lworkl, info)
                else
-                   ccall(dlsym(libarpack, $(string(naupd))), Void,
+                   ccall(($(string(naupd)), libarpack), Void,
                          (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                           Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
                           Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
@@ -68,7 +68,8 @@ for (T, saupd, seupd, naupd, neupd) in
            if sym
                d = Array($T, nev)
                sigma = zeros($T, 1)
-               ccall(dlsym(libarpack, $(string(seupd))), Void,
+
+               ccall(($(string(seupd)), libarpack), Void,
                      (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int},
                       Ptr{$T}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                       Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int}, Ptr{Int},
@@ -84,7 +85,7 @@ for (T, saupd, seupd, naupd, neupd) in
            sigmar = zeros($T, 1)
            sigmai = zeros($T, 1)
            workev = Array($T, 3*ncv)
-           ccall(dlsym(libarpack, $(string(neupd))), Void,
+            ccall(($(string(neupd)), libarpack), Void,
                  (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{$T},
                   Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int},
                   Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T},
@@ -146,7 +147,7 @@ for (T, TR, naupd, neupd) in
            zernm1 = 0:(n-1)
 
            while true
-               ccall(dlsym(libarpack, $(string(naupd))), Void,
+               ccall(($(string(naupd)), libarpack), Void,
                          (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                           Ptr{$TR}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
                           Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int},
@@ -163,7 +164,7 @@ for (T, TR, naupd, neupd) in
            d = Array($T, nev+1)
            sigma = zeros($T, 1)
            workev = Array($T, 2ncv)
-           ccall(dlsym(libarpack, $(string(neupd))), Void,
+           ccall(($(string(neupd)), libarpack), Void,
                  (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int},
                   Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                   Ptr{$TR}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int}, Ptr{Int},
@@ -185,8 +186,8 @@ eigs(A::AbstractMatrix) = eigs(A, 6, "LM", true)
 
 
 # For a dense matrix A is ignored and At is actually A'*A
-_jl_sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = BLAS.symv('U', one(T), At, X)
-_jl_sarupdate{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, At::SparseMatrixCSC{Tv,Ti}, X::StridedVector{Tv}) = At*(A*X)
+sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = BLAS.symv('U', one(T), At, X)
+sarupdate{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, At::SparseMatrixCSC{Tv,Ti}, X::StridedVector{Tv}) = At*(A*X)
 
 for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :sseupd_))
    @eval begin
@@ -219,7 +220,7 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
            zernm1 = 0:(n-1)
 
            while true
-               ccall(dlsym(libarpack, $(string(saupd))), Void,
+               ccall(($(string(saupd)), libarpack), Void,
                      (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                       Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
                       Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
@@ -227,13 +228,13 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
                      iparam, ipntr, workd, workl, &lworkl, info)
                if (info[1] < 0) error("error code $(info[1]) from ARPACK saupd") end
                if (ido[1] != -1 && ido[1] != 1) break end
-               workd[ipntr[2]+zernm1] = _jl_sarupdate(A, At, ref(workd, ipntr[1]+zernm1))
+               workd[ipntr[2]+zernm1] = sarupdate(A, At, ref(workd, ipntr[1]+zernm1))
            end
 
            d      = Array($T, nev)
            howmny = "A"
 
-           ccall(dlsym(libarpack, $(string(seupd))), Void,
+           ccall(($(string(seupd)), libarpack), Void,
                   (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T},
                    Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
                    Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int}, Ptr{Int},
