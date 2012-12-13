@@ -83,8 +83,15 @@ end
 (&)(s::Set...) = intersect(s...)
 -(a::Set, b::Set) = setdiff(a,b)
 
-isequal(l::Set, r::Set) = length(l) == length(r) == length(intersect(l,r))
-isless(l::Set, r::Set) = (length(l) < length(r)) && ((l&r) == l)
-<=(l::Set, r::Set) = isless(l,r) || isequal(l,r)
+isequal(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
+isless(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
+function <=(l::Set, r::Set)
+    for elt in l
+        if !has(r, elt)
+            return false
+        end
+    end
+    return true
+end
 
 unique(C) = elements(add_each(Set{eltype(C)}(), C))
