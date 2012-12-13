@@ -96,6 +96,9 @@ d = randn(len)
 
 @timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectoriz"
 
+open("random.csv","w") do io
+    csvwrite(io, rand(100000,4))
+end
 
 function parse()
     file = EachLine(open("random.csv"))
@@ -105,6 +108,8 @@ function parse()
 end
 
 @timeit parse() "splitline"
+
+file_remove("random.csv")
 
 load("json")
 

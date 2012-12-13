@@ -164,16 +164,22 @@ function similar(A::SparseMatrixCSC, Tv::Type, Ti::Type)
     SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), Array(Tv, length(S.rowval)))
 end
 
-function convert{T}(::Type{Matrix{T}}, S::SparseMatrixCSC{T})
-    A = zeros(T, int(S.m), int(S.n))
+convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC) =
+    SparseMatrixCSC(S.m, S.n, convert(Vector{Ti},S.colptr), convert(Vector{Ti},S.rowval), convert(Vector{Tv},S.nzval))
+
+convert(::Type{SparseMatrixCSC}, M::Matrix) = sparse(M)
+
+convert(::Type{Matrix}, S::SparseMatrixCSC) = dense(S)
+
+full(S::SparseMatrixCSC) = dense(S)
+
+function dense{T}(S::SparseMatrixCSC{T})
+    A = zeros(T, S.m, S.n)
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         A[S.rowval[k], col] = S.nzval[k]
     end
     return A
 end
-
-dense{T}(S::SparseMatrixCSC{T}) = convert(Matrix{T}, S)
-full(S::SparseMatrixCSC) = dense(S)
 
 function sparse(a::Vector)
     n = numel(a)
