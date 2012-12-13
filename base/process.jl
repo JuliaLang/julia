@@ -681,7 +681,7 @@ function _each_line(ports::Ports, cmds::Cmds)
     r = read_from(ports)
     spawn(cmds)
     fh = fdio(r.fd, true)
-    EachLine(fh)
+    EachLine(fh, ()->wait(cmds))
 end
 
 each_line(ports::Ports) = _each_line(ports, cmds(ports))

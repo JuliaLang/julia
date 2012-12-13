@@ -151,6 +151,9 @@ readchomp(x) = chomp(readall(x))
 
 type EachLine
     stream::IO
+    ondone::Function
+    EachLine(stream) = EachLine(stream, ()->nothing)
+    EachLine(stream, ondone) = new(stream, ondone)
 end
 each_line(stream::IO) = EachLine(stream)
 
@@ -160,6 +163,7 @@ function done(itr::EachLine, line)
         return false
     end
     close(itr.stream)
+    itr.ondone()
     true
 end
 next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
