@@ -11,8 +11,8 @@ before_install:
     - sudo add-apt-repository ppa:staticfloat/julia-deps -y
     - sudo apt-get update -qq -y
     - sudo apt-get install gfortran llvm-3.1-dev libsuitesparse-dev libncurses5-dev libopenblas-dev libarpack2-dev libfftw3-dev libpcre3-dev libglpk-dev lighttpd libgmp-dev libunwind7-dev libreadline-dev -y
-script: make $BUILDOPTS PREFIX=/tmp/julia install
-after_script:
+script:
+    - make $BUILDOPTS PREFIX=/tmp/julia install
     - cd .. && mv julia julia2
     - make -C /tmp/julia/share/julia/test/unicode
     - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia runtests.jl all
