@@ -771,7 +771,7 @@ function ($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int},
             # Make a run of length minrun
             count = min(minrun, hi-i+1)
             run_range = i:i+count-1
-            ($insertionsort!)($(args...), v, p, i, i+count-1)
+            ($insertionsort_perm!)($(args...), v, p, i, i+count-1)
         else
             if !issorted(run_range)
                 run_range = last(run_range):first(run_range)
@@ -795,6 +795,7 @@ function ($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int},
 end
 
 ($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int}) = ($timsort_perm!)($(args...), v, p, 1, length(v))
+($timsort_perm!)($(args...), v::AbstractVector) = ($timsort_perm!)($(args...), v, [1:length(v)])
 ($timsort_perm)($(args...), v::AbstractVector, args2...) = ($timsort_perm!)($(args...), copy(v), args2...)
 
 end; end # quote; macro

@@ -176,13 +176,10 @@ function ($insertionsort_perm!)($(args...), a::AbstractVector, p::AbstractVector
 end
 
 ($insertionsort_perm!){T}($(args...), a::AbstractVector{T}) =
-    ($insertionsort_perm!)($(args...), a, [1:length(a)], 1, length(a),
-                           Array(T, length(a)), Array(Int, length(a)))
+    ($insertionsort_perm!)($(args...), a, [1:length(a)], 1, length(a))
 
 ($insertionsort_perm){T}($(args...), a::AbstractVector{T}) =
-    ($insertionsort_perm!)($(args...), copy(a), [1:length(a)], 1, length(a),
-                           Array(T, length(a)), Array(Int, length(a)))
-
+    ($insertionsort_perm!)($(args...), copy(a), [1:length(a)], 1, length(a))
 
 
 ($pivot_middle)($(args...),a,b,c) = $(lt(:a,:b)) ? ($(lt(:b,:c)) ? b : c) : ($(lt(:a,:c)) ? a : c)
