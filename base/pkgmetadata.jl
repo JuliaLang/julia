@@ -184,7 +184,12 @@ function resolve(reqs::Vector{VersionSet})
     mipopts = GLPK.IntoptParam()
     mipopts["msg_lev"] = GLPK.MSG_ERR
     mipopts["presolve"] = GLPK.ON
-    w = iround(mixintprog(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,nothing,mipopts)[2])
+    _, ws, flag, _ = mixintprog(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,nothing,mipopts)
+    if flag != 0
+        msg = sprint(print_linprog_flag, flag)
+        error("resolve() failed: $msg.")
+    end
+    w = iround(ws)
 
     V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
     R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
@@ -193,7 +198,12 @@ function resolve(reqs::Vector{VersionSet})
           -ones(Int,length(reqs))
           zeros(Int,length(deps)) ]
 
-    x = mixintprog(w,[V;R;D],b,nothing,nothing,z,u,nothing,mipopts)[2] .== 1
+    _, xs, flag, _ = mixintprog(w,[V;R;D],b,nothing,nothing,z,u,nothing,mipopts)
+    if flag != 0
+        msg = sprint(print_linprog_flag, flag)
+        error("resolve() failed: $msg.")
+    end
+    x = bool(xs)
     h = (String=>ASCIIString)[]
     for v in vers[x]
         h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")
