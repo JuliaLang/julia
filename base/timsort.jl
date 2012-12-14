@@ -37,9 +37,13 @@ merge_compute_minrun(N::Int) = merge_compute_minrun(N, 6)
 # cribbed from sort.jl
 macro _jl_timsort_functions(suffix, lt, args...)
 insertionsort! = esc(symbol("insertionsort$(suffix)!"))
+insertionsort_perm! = esc(symbol("insertionsort_perm$(suffix)!"))
 timsort = esc(symbol("timsort$(suffix)"))
 timsort! = esc(symbol("timsort$(suffix)!"))
+timsort_perm = esc(symbol("timsort_perm$(suffix)"))
+timsort_perm! = esc(symbol("timsort_perm$(suffix)!"))
 next_run = esc(symbol("_jl_next_run$suffix"))
+merge_collapse = esc(symbol("_jl_merge_collapse$suffix"))
 merge_collapse = esc(symbol("_jl_merge_collapse$suffix"))
 merge = esc(symbol("_jl_merge$suffix"))
 merge_lo = esc(symbol("_jl_merge_lo$suffix"))
@@ -750,10 +754,11 @@ function ($timsort!)($(args...), v::AbstractVector, lo::Int, hi::Int)
 end
 
 ($timsort!)($(args...), v::AbstractVector) = ($timsort!)($(args...), v, 1, length(v))
+($timsort)($(args...), v::AbstractVector, args2...) = ($timsort!)($(args...), copy(v), args2...)
 
 
 # Timsort function which permutes an auxilliary array mirroring the sort
-function ($timsort!)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
+function ($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
     # Initialization
     minrun = merge_compute_minrun(hi-lo+1)
     state = MergeState()
@@ -789,9 +794,8 @@ function ($timsort!)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::
     v, p
 end
 
-($timsort!)($(args...), v::AbstractVector, p::AbstractVector{Int}) = ($timsort!)($(args...), v, p, 1, length(v))
-
-($timsort)($(args...), v:AbstractVector, args2...) = ($timsort!)($(args...), copy(v), args2...)
+($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int}) = ($timsort_perm!)($(args...), v, p, 1, length(v))
+($timsort_perm)($(args...), v::AbstractVector, args2...) = ($timsort_perm!)($(args...), copy(v), args2...)
 
 end; end # quote; macro
 
