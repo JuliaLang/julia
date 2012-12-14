@@ -1171,6 +1171,7 @@ export
     remote_call_wait,
     remote_do,
     rr2id,
+    signal,
     spawn,
     spawnat,
     spawnlocal,
@@ -1273,6 +1274,7 @@ export
     successful,
     system,
     wait,
+    wait_and_reset,
     wait_nohang,
     write_to,
     

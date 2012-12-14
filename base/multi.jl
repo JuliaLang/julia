@@ -573,6 +573,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
 end
 
 wait(r::RemoteRef) = sync_msg(:wait, r)
+wait_and_reset(r::RemoteRef) = sync_msg(:fetch, r)
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
 fetch(x::ANY) = x
 
@@ -597,6 +598,8 @@ function put(rr::RemoteRef, val::ANY)
     end
     val
 end
+
+signal(rr::RemoteRef) = put(rr, None)
 
 function take_ref(rid)
     wi = lookup_ref(rid)
