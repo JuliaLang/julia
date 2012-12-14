@@ -304,7 +304,10 @@ Associative Collections
 
 ``ObjectIdDict`` is a special hash table where the keys are always object identities. ``WeakKeyDict`` is a hash table implementation where the keys are weak references to objects, and thus may be garbage collected even when referenced in a hash table.
 
-Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``
+Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``. Use of curly brackets will create a ``Dict`` of type ``Dict{Any,Any}``. To specify type information use the literal syntax: ``(KeyType=>ValueType)[...]``. For example, ``(ASCIIString=>Int32)["A"=>1, "B"=>2]``.
+
+As with arrays, ``Dicts`` may be created with comprehensions. For example,
+``{i => f(i) for i = 1:10}``.
 
 .. function:: Dict{K,V}(n)
 
