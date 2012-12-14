@@ -22,20 +22,33 @@ export
     sort_by,
     sort_by!,
     sortperm,
+    sortperm!,
     sortr,
     sortr!,
 
+    insertionsort,
     insertionsort!,
+    insertionsort_r,
     insertionsort_r!,
+    insertionsort_by,
     insertionsort_by!,
+    quicksort,
     quicksort!,
+    quicksort_r,
     quicksort_r!,
+    quicksort_by,
     quicksort_by!,
+    mergesort,
     mergesort!,
+    mergesort_r,
     mergesort_r!,
+    mergesort_by,
     mergesort_by!,
+    timsort,
     timsort!,
+    timsort_r,
     timsort_r!,
+    timsort_by,
     timsort_by!
 
 import Base.sort, Base.issorted, Base.sort, Base.sort!, Base.sortperm, Base.slt_int,
@@ -56,11 +69,21 @@ _jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox(Float64,y),unbox(Float64,x
 include("timsort.jl")
 
 macro _jl_sort_functions(suffix, lt, args...)
-insertionsort = esc(symbol("insertionsort$(suffix)!"))
-quicksort = esc(symbol("quicksort$(suffix)!"))
-mergesort = esc(symbol("mergesort$(suffix)!"))
-pivot_middle = esc(symbol("_jl_pivot_middle$suffix"))
+insertionsort = esc(symbol("insertionsort$(suffix)"))
+insertionsort! = esc(symbol("insertionsort$(suffix)!"))
+quicksort = esc(symbol("quicksort$(suffix)"))
+quicksort! = esc(symbol("quicksort$(suffix)!"))
+mergesort = esc(symbol("mergesort$(suffix)"))
+mergesort! = esc(symbol("mergesort$(suffix)!"))
+pivot_middle = esc(symbol("_jl_pivot_middle$(suffix)"))
 lt = @eval (a,b)->$lt
+issorted = esc(symbol("issorted$(suffix)"))
+_jl_quickselect = esc(symbol("_jl_quickselect$(suffix)"))
+select = esc(symbol("select$(suffix)"))
+select! = esc(symbol("select$(suffix)!"))
+search_sorted = esc(symbol("search_sorted$(suffix)"))
+search_sorted_first = esc(symbol("search_sorted_first$(suffix)"))
+search_sorted_last = esc(symbol("search_sorted_last$(suffix)"))
 quote
 
 # sorting should be stable
@@ -69,7 +92,7 @@ quote
 # If only numbers are being sorted, a faster quicksort can be used.
 
 # fast sort for small arrays
-function ($insertionsort)($(args...), a::AbstractVector, lo::Int, hi::Int)
+function ($insertionsort!)($(args...), a::AbstractVector, lo::Int, hi::Int)
     for i = lo+1:hi
         j = i
         x = a[i]
@@ -86,11 +109,11 @@ function ($insertionsort)($(args...), a::AbstractVector, lo::Int, hi::Int)
     return a
 end
 
-($insertionsort)($(args...), a::AbstractVector) = ($insertionsort)($(args...), a, 1, length(a))
+($insertionsort!)($(args...), a::AbstractVector) = ($insertionsort!)($(args...), a, 1, length(a))
 
 
 # permutes an auxilliary array mirroring the sort
-function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
+function ($insertionsort!)($(args...), a::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
     for i = lo+1:hi
         j = i
         x = a[i]
@@ -110,10 +133,12 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
     return a, p
 end
 
+($insertionsort)($(args...), a::AbstractVector, args2...) = ($insertionsort!)($(args...), copy(a), args2...)
+
 ($pivot_middle)($(args...),a,b,c) = $(lt(:a,:b)) ? ($(lt(:b,:c)) ? b : c) : ($(lt(:a,:c)) ? a : c)
 
 # very fast but unstable
-function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
+function ($quicksort!)($(args...), a::AbstractVector, lo::Int, hi::Int)
     while hi > lo
         if hi-lo <= 20
             return $(expr(:call, insertionsort, args..., :a, :lo, :hi))
@@ -141,18 +166,20 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
     return a
 end
 
-($quicksort)($(args...), a::AbstractVector) = ($quicksort)($(args...), a::AbstractVector, 1, length(a))
+($quicksort!)($(args...), a::AbstractVector) = ($quicksort!)($(args...), a::AbstractVector, 1, length(a))
+
+($quicksort)($(args...), a::AbstractVector, args2...) = ($quicksort!)($(args...), copy(a), args2...)
 
 # less fast & not in-place, but stable
-function ($mergesort)($(args...), a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
+function ($mergesort!)($(args...), a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     if lo < hi
         if hi-lo <= 20
-            return ($insertionsort)($(args...), a, lo, hi)
+            return ($insertionsort!)($(args...), a, lo, hi)
         end
 
         m = (lo+hi)>>>1
-        ($mergesort)($(args...), a, lo, m, b)
-        ($mergesort)($(args...), a, m+1, hi, b)
+        ($mergesort!)($(args...), a, lo, m, b)
+        ($mergesort!)($(args...), a, m+1, hi, b)
 
         # merge(lo,m,hi)
         i = 1
@@ -184,20 +211,20 @@ function ($mergesort)($(args...), a::AbstractVector, lo::Int, hi::Int, b::Abstra
     return a
 end
 
-($mergesort){T}($(args...), a::AbstractVector{T}) = ($mergesort)($(args...), a, 1, length(a), Array(T,length(a)))
+($mergesort!){T}($(args...), a::AbstractVector{T}) = ($mergesort!)($(args...), a, 1, length(a), Array(T,length(a)))
 
 # permutes auxilliary arrays mirroring the sort
-function ($mergesort)($(args...),
+function ($mergesort!)($(args...),
                       a::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int,
                       b::AbstractVector, pb::AbstractVector{Int})
     if lo < hi
         if hi-lo <= 20
-            return ($insertionsort)($(args...), a, p, lo, hi)
+            return ($insertionsort!)($(args...), a, p, lo, hi)
         end
 
         m = (lo+hi)>>>1
-        ($mergesort)($(args...), a, p, lo, m, b, pb)
-        ($mergesort)($(args...), a, p, m+1, hi, b, pb)
+        ($mergesort!)($(args...), a, p, lo, m, b, pb)
+        ($mergesort!)($(args...), a, p, m+1, hi, b, pb)
 
         # merge(lo,m,hi)
         i = 1
@@ -233,9 +260,100 @@ function ($mergesort)($(args...),
     return a, p
 end
 
-($mergesort){T}($(args...), a::AbstractVector{T}, p::AbstractVector{Int}) = 
-    ($mergesort)($(args...), a, p, 1, length(a), Array(T,length(a)), Array(Int,length(a)))
+($mergesort!){T}($(args...), a::AbstractVector{T}, p::AbstractVector{Int}) = 
+    ($mergesort!)($(args...), a, p, 1, length(a), Array(T,length(a)), Array(Int,length(a)))
 
+($mergesort){T}($(args...), a::AbstractVector{T}, args2...) = 
+    ($mergesort!)($(args...), copy(a), args2...)
+
+function ($issorted)($(args...), v::AbstractVector)
+  for i = 1:length(v)-1
+      if $(lt(:(v[i+1]), :(v[i])))
+          return false
+      end
+  end
+  return true
+end
+
+function ($_jl_quickselect)($(args...), a::AbstractArray, k::Int, lo::Int, hi::Int)
+    if k < lo || k > hi; error("k is out of bounds"); end
+
+    while true
+
+        if lo == hi; return a[lo]; end
+
+        i, j = lo, hi
+        pivot = _jl_pivot_middle($(args...), a[lo], a[hi], a[(lo+hi)>>>1])
+        while i < j
+            while $(lt(:(a[i]), :(pivot))); i += 1; end
+            while $(lt(:(pivot), :(a[j]))); j -= 1; end
+            #if isequal(a[i], a[j])
+            if !$(lt(:(a[i]), :(a[j]))) && !$(lt(:(a[j]), :(a[i])))
+                i += 1
+            elseif i < j
+                a[i], a[j] = a[j], a[i]
+            end
+        end
+        pivot_ind = j
+
+        length = pivot_ind - lo + 1
+        if k == length
+            return a[pivot_ind]
+        elseif k <  length
+            hi = pivot_ind - 1
+        else
+            lo = pivot_ind + 1
+            k = k - length
+        end
+
+    end # while true...
+
+end
+
+($select)($(args...), a::AbstractArray, k::Int) = ($_jl_quickselect)($(args...), copy(a), k, 1, length(a))
+($select!)($(args...), a::AbstractArray, k::Int) = ($_jl_quickselect)($(args...), a, k, 1, length(a))
+
+($search_sorted)($(args...), a::Vector, x) = ($search_sorted_first)($(args...), a, x, 1, length(a))
+
+($search_sorted_last)($(args...), a::Vector, x) = ($search_sorted_last)($(args...), a, x, 1, length(a))
+
+function ($search_sorted_last)($(args...), a::Vector, x, lo::Int, hi::Int)
+    ## Index of the last value of vector a that is less than or equal to x.
+    ## Returns 0 if x is less than all values of a.
+    ## 
+    ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
+    lo = lo-1
+    hi = hi+1
+    while lo < hi-1
+        i = (lo+hi)>>>1
+        if isless(x,a[i])
+            hi = i
+        else
+            lo = i
+        end
+    end
+    lo
+end
+
+($search_sorted_first)($(args...), a::Vector, x) = ($search_sorted_first)($(args...), a, x, 1, length(a))
+
+function ($search_sorted_first)($(args...), a::Vector, x, lo::Int, hi::Int)
+    ## Index of the first value of vector a that is greater than or equal to x.
+    ## Returns length(a) + 1 if x is greater than all values in a.
+    ## 
+    ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
+    lo = lo-1
+    hi = hi+1
+    while lo < hi-1
+        i = (lo+hi)>>>1
+        if isless(a[i],x)
+            lo = i
+        else
+            hi = i
+        end
+    end
+    hi
+end
 
 end; end # quote / macro
 
@@ -390,104 +508,9 @@ sortperm{T}(a::AbstractVector{T}) =
     mergesort!(copy(a), [1:length(a)], 1, length(a),
                   Array(T, length(a)), Array(Int, length(a)))
 
-function issorted(v::AbstractVector)
-  for i = 1:length(v)-1
-      if isless(v[i+1], v[i])
-          return false
-      end
-  end
-  return true
-end
-
-function _jl_quickselect(a::AbstractArray, k::Int, lo::Int, hi::Int)
-    if k < lo || k > hi; error("k is out of bounds"); end
-
-    while true
-
-        if lo == hi; return a[lo]; end
-
-        i, j = lo, hi
-        pivot = _jl_pivot_middle(a[lo], a[hi], a[(lo+hi)>>>1])
-        while i < j
-            while isless(a[i], pivot); i += 1; end
-            while isless(pivot, a[j]); j -= 1; end
-            if isequal(a[i], a[j])
-                i += 1
-            elseif i < j
-                a[i], a[j] = a[j], a[i]
-            end
-        end
-        pivot_ind = j
-
-        length = pivot_ind - lo + 1
-        if k == length
-            return a[pivot_ind]
-        elseif k <  length
-            hi = pivot_ind - 1
-        else
-            lo = pivot_ind + 1
-            k = k - length
-        end
-
-    end # while true...
-
-end
-
-select(a::AbstractArray, k::Int) = _jl_quickselect(copy(a), k, 1, length(a))
-select!(a::AbstractArray, k::Int) = _jl_quickselect(a, k, 1, length(a))
-
-search_sorted(a::Vector, x) = search_sorted(a, x, 1, length(a))
-
-function search_sorted(a::Vector, x, lo::Int, hi::Int)
-    if isless(a[hi], x)
-        return hi+1
-    end
-    while lo < hi-1
-        i = (lo+hi)>>>1
-        if isless(x,a[i])
-            hi = i
-        else
-            lo = i
-        end
-    end
-    return isless(a[lo],x) ? hi : lo
-end
-
-search_sorted_last(a::Vector, x) = search_sorted_last(a, x, 0, length(a)+1)
-
-function search_sorted_last(a::Vector, x, lo::Int, hi::Int)
-    ## Index of the last value of vector a that is less than or equal to x.
-    ## Returns 0 if x is less than all values of a.
-    ## 
-    ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
-    while lo < hi-1
-        i = (lo+hi)>>>1
-        if isless(x,a[i])
-            hi = i
-        else
-            lo = i
-        end
-    end
-    lo
-end
-
-search_sorted_first(a::Vector, x) = search_sorted_first(a, x, 0, length(a)+1)
-
-function search_sorted_first(a::Vector, x, lo::Int, hi::Int)
-    ## Index of the first value of vector a that is greater than or equal to x.
-    ## Returns length(a) + 1 if x is greater than all values in a.
-    ## 
-    ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
-    while lo < hi-1
-        i = (lo+hi)>>>1
-        if isless(a[i],x)
-            lo = i
-        else
-            hi = i
-        end
-    end
-    hi
-end
+sortperm!{T}(a::AbstractVector{T}) =
+    mergesort!(a, [1:length(a)], 1, length(a),
+                  Array(T, length(a)), Array(Int, length(a)))
 
 order(a::AbstractVector) = sortperm(a)[2]
 

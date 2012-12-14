@@ -36,8 +36,9 @@ merge_compute_minrun(N::Int) = merge_compute_minrun(N, 6)
 # Macro to create different versions of the sort function,
 # cribbed from sort.jl
 macro _jl_timsort_functions(suffix, lt, args...)
-insertionsort = esc(symbol("insertionsort$(suffix)!"))
-timsort = esc(symbol("timsort$(suffix)!"))
+insertionsort! = esc(symbol("insertionsort$(suffix)!"))
+timsort = esc(symbol("timsort$(suffix)"))
+timsort! = esc(symbol("timsort$(suffix)!"))
 next_run = esc(symbol("_jl_next_run$suffix"))
 merge_collapse = esc(symbol("_jl_merge_collapse$suffix"))
 merge = esc(symbol("_jl_merge$suffix"))
@@ -713,7 +714,7 @@ end
 
 
 # Timsort function
-function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
+function ($timsort!)($(args...), v::AbstractVector, lo::Int, hi::Int)
     # Initialization
     minrun = merge_compute_minrun(hi-lo+1)
     state = MergeState()
@@ -726,7 +727,7 @@ function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
             # Make a run of length minrun
             count = min(minrun, hi-i+1)
             run_range = i:i+count-1
-            ($insertionsort)($(args...), v, i, i+count-1)
+            ($insertionsort!)($(args...), v, i, i+count-1)
         else
             if !issorted(run_range)
                 run_range = last(run_range):first(run_range)
@@ -748,11 +749,11 @@ function ($timsort)($(args...), v::AbstractVector, lo::Int, hi::Int)
     v
 end
 
-($timsort)($(args...), v::AbstractVector) = ($timsort)($(args...), v, 1, length(v))
+($timsort!)($(args...), v::AbstractVector) = ($timsort!)($(args...), v, 1, length(v))
 
 
 # Timsort function which permutes an auxilliary array mirroring the sort
-function ($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
+function ($timsort!)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
     # Initialization
     minrun = merge_compute_minrun(hi-lo+1)
     state = MergeState()
@@ -765,7 +766,7 @@ function ($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::I
             # Make a run of length minrun
             count = min(minrun, hi-i+1)
             run_range = i:i+count-1
-            ($insertionsort)($(args...), v, p, i, i+count-1)
+            ($insertionsort!)($(args...), v, p, i, i+count-1)
         else
             if !issorted(run_range)
                 run_range = last(run_range):first(run_range)
@@ -788,7 +789,9 @@ function ($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::I
     v, p
 end
 
-($timsort)($(args...), v::AbstractVector, p::AbstractVector{Int}) = ($timsort)($(args...), v, p, 1, length(v))
+($timsort!)($(args...), v::AbstractVector, p::AbstractVector{Int}) = ($timsort!)($(args...), v, p, 1, length(v))
+
+($timsort)($(args...), v:AbstractVector, args2...) = ($timsort!)($(args...), copy(v), args2...)
 
 end; end # quote; macro
 
