@@ -89,7 +89,6 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C extras clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
-	@$(MAKE) -C test/unicode clean
 	@for buildtype in "release" "debug" ; do \
 		for repltype in "basic" "readline"; do \
 			rm -f julia-$${buildtype}-$${repltype}; \
