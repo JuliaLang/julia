@@ -47,7 +47,6 @@ JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
-	@$(MAKEs) -C test/unicode
 	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
