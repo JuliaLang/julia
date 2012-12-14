@@ -10,6 +10,7 @@ export
     LibRandom,
     RNG,
     Math,
+    Meta,
     
 # Types
     AbstractMatrix,
