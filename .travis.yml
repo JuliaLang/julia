@@ -14,8 +14,6 @@ before_install:
 script:
     - make $BUILDOPTS PREFIX=/tmp/julia install
     - cd .. && mv julia julia2
-    - make -C /tmp/julia/share/julia/test/unicode
     - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia runtests.jl all
-    - make -C /tmp/julia/share/julia/test/unicode clean
     - cd - && mv julia2 julia
     - echo "Ready for packaging..."
