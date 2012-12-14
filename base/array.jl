@@ -236,69 +236,6 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
-## Bounds checking ##
-function check_bounds(sz::Int, I::Integer)
-    if I < 1 || I > sz
-        throw(BoundsError())
-    end
-end
-
-function check_bounds(sz::Int, I::AbstractVector{Bool})
-    if length(I) > sz
-        throw(BoundsError())
-    end
-end
-
-function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
-    if min(I) < 1 || max(I) > sz
-        throw(BoundsError())
-    end
-end
-
-function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
-    for i in I
-        if i < 1 || i > sz
-            throw(BoundsError())
-        end
-    end
-end
-
-function check_bounds(A::Array, I::Array{Bool})
-    if !isequal(size(A), size(I))
-        throw(BoundsError())
-    end
-end
-
-check_bounds(A::AbstractVector, I::Indices) = check_bounds(length(A), I)
-
-function check_bounds(A::AbstractMatrix, I::Indices, J::Indices)
-    check_bounds(size(A,1), I)
-    check_bounds(size(A,2), J)
-end
-
-function check_bounds(A::AbstractArray, I::Indices, J::Indices)
-    check_bounds(size(A,1), I)
-    sz = size(A,2)
-    for i = 3:ndims(A)
-        sz *= size(A, i) # TODO: sync. with decision on issue #1030
-    end
-    check_bounds(sz, J)
-end
-
-function check_bounds(A::AbstractArray, I::Indices...)
-    n = length(I)
-    if n > 0
-        for dim = 1:(n-1)
-            check_bounds(size(A,dim), I[dim])
-        end
-        sz = size(A,n)
-        for i = n+1:ndims(A)
-            sz *= size(A,i)     # TODO: sync. with decision on issue #1030
-        end
-        check_bounds(sz, I[n])
-    end
-end
-
 ## Indexing: ref ##
 
 ref(a::Array) = arrayref(a,1)
@@ -325,13 +262,8 @@ function ref(A::Array, I::Range1{Int})
 end
 
 # note: this is also useful for Ranges
-function ref{T<:Integer}(A::Array, I::AbstractVector{T})
-    check_bounds(A, I)
-    return [ A[i] for i=I ]
-end
 function ref{T<:Integer}(A::AbstractArray, I::AbstractVector{T})
-    check_bounds(A, I)
-    return [ A[i] for i=I ]
+    return [ A[i] for i in I ]
 end
 
 # 2d indexing

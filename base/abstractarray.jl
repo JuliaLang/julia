@@ -53,6 +53,75 @@ function trailingsize(A, n)
     return s
 end
 
+## Bounds checking ##
+function check_bounds(sz::Int, I::Integer)
+    if I < 1 || I > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds(sz::Int, I::AbstractVector{Bool})
+    if length(I) > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
+    if min(I) < 1 || max(I) > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
+    for i in I
+        if i < 1 || i > sz
+            throw(BoundsError())
+        end
+    end
+end
+
+function check_bounds(A::AbstractVector, I::AbstractVector{Bool})
+    if !isequal(size(A), size(I)) throw(BoundsError()) end
+end
+
+function check_bounds(A::AbstractArray, I::AbstractVector{Bool})
+    if !isequal(size(A), size(I)) throw(BoundsError()) end
+end
+
+function check_bounds(A::AbstractArray, I::AbstractArray{Bool})
+    if !isequal(size(A), size(I)) throw(BoundsError()) end
+end
+
+check_bounds(A::AbstractVector, I::Indices) = check_bounds(length(A), I)
+
+function check_bounds(A::AbstractMatrix, I::Indices, J::Indices)
+    check_bounds(size(A,1), I)
+    check_bounds(size(A,2), J)
+end
+
+function check_bounds(A::AbstractArray, I::Indices, J::Indices)
+    check_bounds(size(A,1), I)
+    sz = size(A,2)
+    for i = 3:ndims(A)
+        sz *= size(A, i) # TODO: sync. with decision on issue #1030
+    end
+    check_bounds(sz, J)
+end
+
+function check_bounds(A::AbstractArray, I::Indices...)
+    n = length(I)
+    if n > 0
+        for dim = 1:(n-1)
+            check_bounds(size(A,dim), I[dim])
+        end
+        sz = size(A,n)
+        for i = n+1:ndims(A)
+            sz *= size(A,i)     # TODO: sync. with decision on issue #1030
+        end
+        check_bounds(sz, I[n])
+    end
+end
+
 ## Constructors ##
 
 # default arguments to similar()

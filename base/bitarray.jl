@@ -250,13 +250,6 @@ function bitarray_rand_fill!(B::BitArray)
     return B
 end
 
-## Bounds checking ##
-
-# @carlo: fixme
-function check_bounds(A::Array, B::BitArray)
-    return nothing
-end
-
 ## Indexing: ref ##
 
 function ref(B::BitArray, i::Integer)
