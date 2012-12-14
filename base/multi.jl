@@ -573,6 +573,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
 end
 
 wait(r::RemoteRef) = sync_msg(:wait, r)
+wait_and_reset(r::RemoteRef) = sync_msg(:fetch, r)
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
 fetch(x::ANY) = x
 
@@ -598,17 +599,7 @@ function put(rr::RemoteRef, val::ANY)
     val
 end
 
-signal_ref(rid) = put_ref(rid, None)
-
-function signal(rr::RemoteRef)
-    rid = rr2id(rr)
-    if rr.where == myid()
-        signal_ref(rid)
-    else
-        remote_call_fetch(rr.where, signal_ref, rid)
-    end
-    rr
-end
+signal(rr::RemoteRef) = put(rr, None)
 
 function take_ref(rid)
     wi = lookup_ref(rid)
@@ -627,22 +618,6 @@ function take(rr::RemoteRef)
         take_ref(rid)
     else
         remote_call_fetch(rr.where, take_ref, rid)
-    end
-end
-
-function clear_ref(rid)
-    wi = lookup_ref(rid)
-    wi.done = false
-    notify_empty(wi)
-    rid
-end
-
-function clear(rr::RemoteRef)
-    rid = rr2id(rr)
-    if rr.where == myid()
-        clear_ref(rid)
-    else
-        remote_call_fetch(rr.where, clear_ref, rid)
     end
 end
 

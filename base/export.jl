@@ -1155,7 +1155,6 @@ export
     addprocs_ssh,
     addprocs_ssh_tunnel,
     at_each,
-    clear,
     fetch,
     isready,
     make_scheduled,
@@ -1275,6 +1274,7 @@ export
     successful,
     system,
     wait,
+    wait_and_reset,
     wait_nohang,
     write_to,
     
