@@ -15,8 +15,8 @@ os_detect.jl: ../src/os_detect.h
 	$(QUIET_PERL) $(CC) -E -P -DJULIA ../src/os_detect.h | perl -p -e 's/\\n/\n/g' > $@
 
 build_h.jl: ../Make.inc
-	@echo "libblas_name = \"$(LIBBLASNAME)\"" > $@
-	@echo "liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
+	@echo "const libblas_name = \"$(LIBBLASNAME)\"" > $@
+	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
 clean:
 	rm -f *# *~
