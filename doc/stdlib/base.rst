@@ -1787,6 +1787,11 @@ Combinatorics
    Sort a vector by the result of applying function ``by``
    to every element.
 
+.. function:: sort_by!(by, v)
+
+   Sort a vector in place by the result of applying function ``by``
+   to every element.
+
 .. function:: sort(a, dim)
 
    Sort an array along the given dimension.

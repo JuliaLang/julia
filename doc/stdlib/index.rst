@@ -24,15 +24,16 @@ Extras
 .. toctree::
    :maxdepth: 1
 
-   profile
-   options
+   argparse
    cpp
+   options
+   gzip
+   profile
+   sort
+   sound
+   strpack
    textwrap
    zlib
-   strpack
-   sound
-   argparse
-   gzip
 
 ****************
 Math & Numerical
