@@ -7,6 +7,24 @@ const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
                                _jl_secret_table_token)
 
+# @get! works like get, but evaluates the default value only if the key is not
+# present; it then assigns the default value to the key and returns the
+# (converted) value
+macro get!(d, k, default)
+    quote
+        d::Associative, k = $(esc(d)), $(esc(k))
+        p, index = _assoc_keyindex(d, k)
+        V = valtype(d)
+        ( p ? _get_at(d, index) : (d[k] = convert(V,$(esc(default)))) )::V
+    end
+end
+
+# Used by @get!.
+# If you provide _assoc_keyindex for a type,
+# you must provide a matching _get_at.
+_assoc_keyindex(d::Associative, k) = (has(d, k), k)
+_get_at(d::Associative, index)     = d[index]
+
 function show{K,V}(io, t::Associative{K,V})
     if isempty(t)
         print(io, typeof(t),"()")
@@ -422,6 +440,9 @@ function get{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
     return (index<0) ? deflt : h.vals[index]::V
 end
+
+_assoc_keyindex(d::Dict, k) = (i=ht_keyindex(d,k);(i<0) ? (false,0) : (true,i))
+_get_at(d::Dict, index)     = d.vals[index]
 
 has(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 
