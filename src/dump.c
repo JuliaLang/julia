@@ -24,8 +24,9 @@ static const ptrint_t LongExpr_tag   = 25;
 static const ptrint_t LiteralVal_tag = 26;
 static const ptrint_t SmallInt64_tag = 27;
 static const ptrint_t IdTable_tag    = 28;
-static const ptrint_t Null_tag       = 254;
-static const ptrint_t BackRef_tag    = 255;
+static const ptrint_t Null_tag         = 253;
+static const ptrint_t ShortBackRef_tag = 254;
+static const ptrint_t BackRef_tag      = 255;
 
 static ptrint_t VALUE_TAGS;
 
@@ -95,7 +96,7 @@ static void jl_serialize_fptr(ios_t *s, void *fptr)
     void **pbp = ptrhash_bp(&fptr_to_id, fptr);
     if (*pbp == HT_NOTFOUND)
         jl_error("unknown function pointer");
-    write_int32(s, *(ptrint_t*)pbp);
+    write_uint16(s, *(ptrint_t*)pbp);
 }
 
 static void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
@@ -182,6 +183,12 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
 
 static int is_ast_node(jl_value_t *v)
 {
+    if (jl_is_lambda_info(v)) {
+        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+        if (jl_is_expr(li->ast))
+            li->ast = jl_compress_ast(li, li->ast);
+        return 0;
+    }
     return jl_is_symbol(v) || jl_is_expr(v) ||
         jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
         jl_is_union_type(v) || jl_is_int32(v) || jl_is_int64(v) ||
@@ -224,8 +231,14 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else {
         bp = ptrhash_bp(&backref_table, v);
         if (*bp != HT_NOTFOUND) {
-            write_uint8(s, BackRef_tag);
-            write_int32(s, (ptrint_t)*bp);
+            if ((uptrint_t)*bp < 65536) {
+                write_uint8(s, ShortBackRef_tag);
+                write_uint16(s, (uptrint_t)*bp);
+            }
+            else {
+                write_uint8(s, BackRef_tag);
+                write_int32(s, (uptrint_t)*bp);
+            }
             return;
         }
         ptrhash_put(&backref_table, v, (void*)(ptrint_t)ios_pos(s));
@@ -397,7 +410,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s);
 
 static jl_fptr_t jl_deserialize_fptr(ios_t *s)
 {
-    int fptr = read_int32(s);
+    int fptr = read_uint16(s);
     if (fptr == 0)
         return NULL;
     void **pbp = ptrhash_bp(&id_to_fptr, (void*)(ptrint_t)fptr);
@@ -497,9 +510,9 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         assert(v != HT_NOTFOUND);
         return v;
     }
-    if (tag == BackRef_tag) {
+    if (tag == BackRef_tag || tag == ShortBackRef_tag) {
         assert(tree_literal_values == NULL);
-        ptrint_t offs = read_int32(s);
+        ptrint_t offs = (tag == BackRef_tag) ? read_int32(s) : read_uint16(s);
         void **bp = ptrhash_bp(&backref_table, (void*)(ptrint_t)offs);
         assert(*bp != HT_NOTFOUND);
         return (jl_value_t*)*bp;
@@ -849,6 +862,7 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
     ios_t dest;
     ios_mem(&dest, 0);
+    jl_array_t *last_tlv = tree_literal_values;
     int en = jl_gc_is_enabled();
     jl_gc_disable();
 
@@ -858,6 +872,8 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     }
     tree_literal_values = def->roots;
     li->capt = (jl_value_t*)jl_lam_capt((jl_expr_t*)ast);
+    if (jl_array_len(li->capt) == 0)
+        li->capt = NULL;
     jl_serialize_value(&dest, jl_lam_body((jl_expr_t*)ast)->etype);
     jl_serialize_value(&dest, ast);
 
@@ -867,7 +883,7 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     if (jl_array_len(tree_literal_values) == 0) {
         def->roots = NULL;
     }
-    tree_literal_values = NULL;
+    tree_literal_values = last_tlv;
     if (en)
         jl_gc_enable();
     return v;
@@ -928,7 +944,7 @@ void jl_init_serializer(void)
                      jl_symbol("v"), jl_symbol("w"), jl_symbol("x"),
                      jl_symbol("y"), jl_symbol("z"),
                      jl_symbol("A"), jl_symbol("B"), jl_symbol("C"),
-                     jl_symbol("M"), jl_symbol("I"), jl_symbol("N"),
+                     jl_symbol("I"), jl_symbol("N"),
                      jl_symbol("T"), jl_symbol("S"),
                      jl_symbol("X"), jl_symbol("Y"),
                      jl_symbol("add_int"), jl_symbol("sub_int"),

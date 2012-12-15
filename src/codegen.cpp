@@ -681,6 +681,7 @@ static void make_gcroot(Value *v, jl_codectx_t *ctx)
 
 static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
 {
+    li = li->def;
     if (li->roots == NULL) {
         li->roots = jl_alloc_cell_1d(1);
         jl_cellset(li->roots, 0, val);
@@ -704,7 +705,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         capt = jl_lam_capt((jl_expr_t*)ast);
     else
         capt = (jl_array_t*)((jl_lambda_info_t*)expr)->capt;
-    if (capt->length == 0) {
+    if (capt == NULL || capt->length == 0) {
         // no captured vars; lift
         jl_value_t *fun =
             (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null,
