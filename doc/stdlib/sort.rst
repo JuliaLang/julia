@@ -31,6 +31,12 @@ There are currently four main sorting algorithms available in Julia::
   mergesort
   timsort
 
+Insertion sort is an ``O(n^2)`` stable sorting algorithm.  It is
+efficient only for very small ``n``.  It is used internally by
+``quicksort!`` and ``timsort!``. 
+
+
+
 The `sort`, `sortr`, `sort_by`, and `sortperm` functions select a reasonable
 default algorithm, depending on the type of the target array.
 
@@ -110,276 +116,220 @@ Sorting Functions
 
 .. function:: insertionsort(v)
 
-   Sorts ``v`` with an insertion sort, and returns the sorted array.
-   The original array is not changed.
+   Sort a vector in ascending order with insertion sort, according to ``isless``.
 
-.. function:: insertionsort(fn_lt,v)
+.. function:: insertionsort(lessthan,v)
 
-   Sorts ``v`` with an insertion sort using ``fn_lt`` as a comparison
-   function, and returns the sorted array.  The original array is not
-   changed.
-
-   ``fn_lt(a,b)`` should return true if ``a`` comes strictly before
-   ``b``, and false otherwise.
-
-   Insertion sort is an ``O(n^2)`` stable sorting algorithm.  It is
-   efficient only for very small ``n``.  It is used internally by
-   ``quicksort!`` and ``timsort!``. 
+   Sort a vector in ascending order with insertion sort, using a
+   custom comparison function.
 
 .. function:: insertionsort!(v[,lo,hi])
 
-   Sorts ``v`` in place with an insertion sort using ``fn_lt`` as a
-   comparison function, and returns the sorted array.
+   In-place insertion sort, accoring to ``isless``.
 
-   If ``lo`` and ``hi`` are provided, ``v`` is sorted in the range
-   ``lo:hi``. 
+.. function:: insertionsort!(lessthan,v[,lo,hi])
 
-   Insertion sort is an ``O(n^2)`` stable sorting algorithm.  It is
-   efficient only for very small ``n``.  It is used internally by
-   ``quicksort!`` and ``timsort!``. 
-
-.. function:: insertionsort!(fn_lt,v[,lo,hi])
-
-   Sorts ``v`` in place with an insertion sort using ``fn_lt`` as a
-   comparison function, and returns the sorted array.
-
-   If ``lo`` and ``hi`` are provided, ``v`` is sorted in the range
-   ``lo:hi``. 
-
-   This is an ``O(n^2)`` algorithm, but is efficient for very small
-   ``n``.  It is used internally by ``quicksort!`` and ``timsort!``
-   algorithms.
-
+   In-place insertion sort with a custom comparison function.
 
 .. function:: insertionsort_r(v[,lo,hi])
 
-   Like ``insertionsort``, but in descending order.
+   Sort a vector in descending order using insertion sort.
 
 .. function:: insertionsort_r!(v[,lo,hi])
 
-   Like ``insertionsort!``, but in descending order.
+   In-place insertion sort in descending order.
 
 .. function:: insertionsort_by(by,v[,lo,hi])
 
-   Like ``insertionsort``, but sort ``v`` according to the value of
-   ``by(x)`` for ``x`` in ``v``. 
+   Sort a vector with insertion sort according to the result of
+   function ``by`` applied to all values.
 
 .. function:: insertionsort_by!(by,v[,lo,hi]) 
 
-   Like ``insertionsort!``, but sort ``v`` according to the value of
-   ``by(x)`` for ``x`` in ``v``. 
+   Sort a vector with insertion sort in place according to the result
+   of function ``by`` applied to all values.
 
-.. function:: insertionsort_perm(v)
-.. function:: insertionsort_perm(fn_lt,v)
+.. function:: insertionsort_perm(v[,p[,lo,hi]]) -> s,p
 
-   Like ``insertionsort``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the original
-   indices which produces ``b``.
+   Sort a vector in ascending order, also constructing the
+   permutation that sorts the vector 
 
-.. function:: insertionsort_perm!(v[,lo,hi])
-.. function:: insertionsort_perm!(fn_lt,v[,lo,hi])
+   If provided, ``p`` is an initial permutation.
 
-   Like ``insertionsort!``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the original
-   indices which produces ``b``.
+.. function:: insertionsort_perm(lessthan,v[,p[,lo,hi]]) -> s,p
 
-.. function:: insertionsort_perm_r(v[,lo,hi])
+   Sort a vector, using a custom comparison function, also
+   constructing the permutation that sorts the vector .
 
-   Like ``insertionsort_r``, but returns ``(b, ix)``, where ``b``
-   is the reverse sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+   If provided, ``p`` is an initial permutation.
 
-.. function:: insertionsort_perm_r!(v[,lo,hi])
+.. function:: insertionsort_perm!(v[,p[,lo,hi]])
 
-   Like ``insertionsort_r!``, but returns ``(b, ix)``, where ``b``
-   is the reverse sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+   Sort a vector in ascending order in-place, also constructing the
+   permutation that sorts the vector 
 
-.. function:: insertionsort_perm_by(by,v[,lo,hi])
+   If provided, ``p`` is an initial permutation.
 
-   Like ``insertionsort_by``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+.. function:: insertionsort_perm!(lessthan,v[,p[,lo,hi]])
 
-.. function:: insertionsort_perm_by!(by,v[,lo,hi]) 
+   Sort a vector in place, using a custom comparison function, also 
+   constructing the permutation that sorts the vector .
 
-   Like ``insertionsort_by!``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+   If provided, ``p`` is an initial permutation.
+
+.. function:: insertionsort_perm_r(v[,p,[,lo,hi]])
+
+   Sort a vector in descending order, also constructing the
+   permutation that sorts the vector 
+
+   If provided, ``p`` is an initial permutation.
+
+.. function:: insertionsort_perm_r!(v[,p,[,lo,hi]])
+
+   Sort a vector in descending order in place, also constructing the
+   permutation that sorts the vector 
+
+   If provided, ``p`` is an initial permutation.
+
+.. function:: insertionsort_perm_by(by,v[,p[,lo,hi]])
+
+   Sort a vector with insertion sort according to the result
+   of function ``by`` applied to all values.
+
+   If provided, ``p`` is an initial permutation.
+
+.. function:: insertionsort_perm_by!(by,v[,p[,lo,hi]])
+
+   Sort a vector with insertion sort in place according to the result 
+   of function ``by`` applied to all values.
+
+   If provided, ``p`` is an initial permutation.
 
 
 .. function:: mergesort(v)
 
-   Sorts ``v`` with a merge sort, and returns the sorted array.
-   The original array is not changed.
+   Sort a vector in ascending order with mergesort, according to ``isless``.
 
-.. function:: mergesort(fn_lt,v)
+.. function:: mergesort(lessthan,v)
 
-   Sorts ``v`` with a merge sort using ``fn_lt`` as a comparison
-   function, and returns the sorted array.  The original array is not
-   changed.
-
-   ``fn_lt(a,b)`` should return true if ``a`` comes strictly before
-   ``b``, and false otherwise.
-
-   Mergesort is an ``O(n log n)`` stable sorting algorithm.
+   Sort a vector in ascending order with mergesort, using a
+   custom comparison function.
 
 .. function:: mergesort!(v[,lo,hi])
 
-   Sorts ``v`` in place with a merge sort, and returns the sorted
-   array. 
+   In-place mergesort, accoring to ``isless``.
 
-.. function:: mergesort!(fn_lt,v[,lo,hi])
+.. function:: mergesort!(lessthan,v[,lo,hi])
 
-   Sorts ``v`` in place with a merge sort using ``fn_lt`` as a
-   comparison function, and returns the sorted array.
-
-   If ``lo`` and ``hi`` are provided, ``v`` is sorted in the range
-   ``lo:hi``. 
-
-   Mergesort is an ``O(n log n)`` stable sorting algorithm.
+   In-place mergesort with a custom comparison function.
 
 .. function:: mergesort_r(v[,lo,hi])
 
-   Like ``mergesort``, but in descending order.
+   Sort a vector in descending order using mergesort.
 
 .. function:: mergesort_r!(v[,lo,hi])
 
-   Like ``mergesort!``, but in descending order.
+   In-place mergesort in descending order.
 
 .. function:: mergesort_by(by,v[,lo,hi])
 
-   Like ``mergesort``, but sort ``v`` according to the value of
-   ``by(x)`` for ``x`` in ``v``. 
+   Sort a vector with mergesort according to the result of
+   function ``by`` applied to all values.
 
 .. function:: mergesort_by!(by,v[,lo,hi]) 
 
-   Like ``mergesort!``, but sort ``v`` according to the value of
-   ``by(x)`` for ``x`` in ``v``. 
+   Sort a vector with mergesort in place according to the result
+   of function ``by`` applied to all values.
 
-.. function:: mergesort_perm(v)
-.. function:: mergesort_perm(fn_lt,v)
+.. function:: mergesort_perm(v[,p[,lo,hi]]) -> s,p
 
-   Like ``mergesort``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the original
-   indices which produces ``b``.
+   Sort a vector in ascending order, also constructing the
+   permutation that sorts the vector 
 
-.. function:: mergesort_perm!(v[,lo,hi])
-.. function:: mergesort_perm!(fn_lt,v[,lo,hi])
+   If provided, ``p`` is an initial permutation.
 
-   Like ``mergesort!``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the original
-   indices which produces ``b``.
+.. function:: mergesort_perm(lessthan,v[,p[,lo,hi]]) -> s,p
 
-.. function:: mergesort_perm_r(v[,lo,hi])
+   Sort a vector, using a custom comparison function, also
+   constructing the permutation that sorts the vector .
 
-   Like ``mergesort_r``, but returns ``(b, ix)``, where ``b``
-   is the reverse sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+   If provided, ``p`` is an initial permutation.
 
-.. function:: mergesort_perm_r!(v[,lo,hi])
+.. function:: mergesort_perm!(v[,p[,lo,hi]])
 
-   Like ``mergesort_r!``, but returns ``(b, ix)``, where ``b``
-   is the reverse sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+   Sort a vector in ascending order in-place, also constructing the
+   permutation that sorts the vector 
 
-.. function:: mergesort_perm_by(by,v[,lo,hi])
+   If provided, ``p`` is an initial permutation.
 
-   Like ``mergesort_by``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+.. function:: mergesort_perm!(lessthan,v[,p[,lo,hi]])
 
-.. function:: mergesort_perm_by!(by,v[,lo,hi]) 
+   Sort a vector in place, using a custom comparison function, also 
+   constructing the permutation that sorts the vector .
 
-   Like ``mergesort_by!``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+   If provided, ``p`` is an initial permutation.
 
-.. function:: timsort(v)
+.. function:: mergesort_perm_r(v[,p,[,lo,hi]])
 
-   Sorts ``v`` with timsort, and returns the sorted array.
-   The original array is not changed.
+   Sort a vector in descending order, also constructing the
+   permutation that sorts the vector 
 
-.. function:: timsort(fn_lt,v)
+   If provided, ``p`` is an initial permutation.
 
-   Sorts ``v`` with timsort using ``fn_lt`` as a comparison
-   function, and returns the sorted array.  The original array is not
-   changed.
+.. function:: mergesort_perm_r!(v[,p,[,lo,hi]])
 
-   ``fn_lt(a,b)`` should return true if ``a`` comes strictly before
-   ``b``, and false otherwise.
+   Sort a vector in descending order in place, also constructing the
+   permutation that sorts the vector 
 
-   Timsort is an ``O(n log n)`` stable sorting algorithm, and is very
-   efficient when data is already partially sorted.
+   If provided, ``p`` is an initial permutation.
 
-.. function:: timsort!(v[,lo,hi])
+.. function:: mergesort_perm_by(by,v[,p[,lo,hi]])
 
-   Sorts ``v`` in place with timsort, and returns the sorted array.
+   Sort a vector with mergesort according to the result
+   of function ``by`` applied to all values.
 
-.. function:: timsort!(fn_lt,v[,lo,hi])
+   If provided, ``p`` is an initial permutation.
 
-   Sorts ``v`` in place with timsort using ``fn_lt`` as a
-   comparison function, and returns the sorted array.
+.. function:: mergesort_perm_by!(by,v[,p[,lo,hi]])
 
-   If ``lo`` and ``hi`` are provided, ``v`` is sorted in the range
-   ``lo:hi``. 
+   Sort a vector with mergesort in place according to the result 
+   of function ``by`` applied to all values.
 
-   Timsort is an ``O(n log n)`` stable sorting algorithm, and is very
-   efficient when data is already partially sorted.
+   If provided, ``p`` is an initial permutation.
 
-.. function:: timsort_r(v[,lo,hi])
 
-   Like ``timsort``, but in descending order.
+.. function:: quicksort(v)
 
-.. function:: timsort_r!(v[,lo,hi])
+   Sort a vector in ascending order with quicksort, according to ``isless``.
 
-   Like ``timsort!``, but in descending order.
+.. function:: quicksort(lessthan,v)
 
-.. function:: timsort_by(by,v[,lo,hi])
+   Sort a vector in ascending order with quicksort, using a
+   custom comparison function.
 
-   Like ``timsort``, but sort ``v`` according to the value of
-   ``by(x)`` for ``x`` in ``v``. 
+.. function:: quicksort!(v[,lo,hi])
 
-.. function:: timsort_by!(by,v[,lo,hi]) 
+   In-place quicksort, accoring to ``isless``.
 
-   Like ``timsort!``, but sort ``v`` according to the value of
-   ``by(x)`` for ``x`` in ``v``. 
+.. function:: quicksort!(lessthan,v[,lo,hi])
 
-.. function:: timsort_perm(v)
-.. function:: timsort_perm(fn_lt,v)
+   In-place quicksort with a custom comparison function.
 
-   Like ``timsort``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the original
-   indices which produces ``b``.
+.. function:: quicksort_r(v[,lo,hi])
 
-.. function:: timsort_perm!(v[,lo,hi])
-.. function:: timsort_perm!(fn_lt,v[,lo,hi])
+   Sort a vector in descending order using quicksort.
 
-   Like ``timsort!``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the original
-   indices which produces ``b``.
+.. function:: quicksort_r!(v[,lo,hi])
 
-.. function:: timsort_perm_r(v[,lo,hi])
+   In-place quicksort in descending order.
 
-   Like ``timsort_r``, but returns ``(b, ix)``, where ``b``
-   is the reverse sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+.. function:: quicksort_by(by,v[,lo,hi])
 
-.. function:: timsort_perm_r!(v[,lo,hi])
+   Sort a vector with quicksort according to the result of
+   function ``by`` applied to all values.
 
-   Like ``timsort_r!``, but returns ``(b, ix)``, where ``b``
-   is the reverse sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+.. function:: quicksort_by!(by,v[,lo,hi]) 
 
-.. function:: timsort_perm_by(by,v[,lo,hi])
-
-   Like ``timsort_by``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
-
-.. function:: timsort_perm_by!(by,v[,lo,hi]) 
-
-   Like ``timsort_by!``, but returns ``(b, ix)``, where ``b``
-   is the sorted array and ``ix`` is the permutation of the
-   original indices which produces ``b``.
+   Sort a vector with quicksort in place according to the result
+   of function ``by`` applied to all values.
 

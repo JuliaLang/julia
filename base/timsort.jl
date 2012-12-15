@@ -794,9 +794,12 @@ function ($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int},
     v, p
 end
 
-($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int}) = ($timsort_perm!)($(args...), v, p, 1, length(v))
-($timsort_perm!)($(args...), v::AbstractVector) = ($timsort_perm!)($(args...), v, [1:length(v)])
-($timsort_perm)($(args...), v::AbstractVector, args2...) = ($timsort_perm!)($(args...), copy(v), args2...)
+($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int}) = 
+    ($timsort_perm!)($(args...), v, p, 1, length(v))
+($timsort_perm!)($(args...), v::AbstractVector) = 
+    ($timsort_perm!)($(args...), v, [1:length(v)])
+($timsort_perm)($(args...), v::AbstractVector, args2...) = 
+    ($timsort_perm!)($(args...), copy(v), args2...)
 
 end; end # quote; macro
 

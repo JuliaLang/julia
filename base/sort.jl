@@ -37,53 +37,53 @@ export
     sortr!,
     sortperm,
     sortperm!,
-    # sortperm_r,
-    # sortperm_r!,
-    # sortperm_by,
-    # sortperm_by!,
+    sortperm_r,
+    sortperm_r!,
+    sortperm_by,
+    sortperm_by!,
 
     insertionsort,
     insertionsort!,
-    # insertionsort_r,
-    # insertionsort_r!,
-    # insertionsort_by,
-    # insertionsort_by!,
-    # insertionsort_perm,
-    # insertionsort_perm!,
-    # insertionsort_perm_r,
-    # insertionsort_perm_r!,
-    # insertionsort_perm_by,
-    # insertionsort_perm_by!,
+    insertionsort_r,
+    insertionsort_r!,
+    insertionsort_by,
+    insertionsort_by!,
+    insertionsort_perm,
+    insertionsort_perm!,
+    insertionsort_perm_r,
+    insertionsort_perm_r!,
+    insertionsort_perm_by,
+    insertionsort_perm_by!,
     quicksort,
     quicksort!,
-    # quicksort_r,
-    # quicksort_r!,
-    # quicksort_by,
-    # quicksort_by!,
+    quicksort_r,
+    quicksort_r!,
+    quicksort_by,
+    quicksort_by!,
     mergesort,
     mergesort!,
-    # mergesort_r,
-    # mergesort_r!,
-    # mergesort_by,
-    # mergesort_by!,
-    # mergesort_perm,
-    # mergesort_perm!,
-    # mergesort_perm_r,
-    # mergesort_perm_r!,
-    # mergesort_perm_by,
-    # mergesort_perm_by!,
+    mergesort_r,
+    mergesort_r!,
+    mergesort_by,
+    mergesort_by!,
+    mergesort_perm,
+    mergesort_perm!,
+    mergesort_perm_r,
+    mergesort_perm_r!,
+    mergesort_perm_by,
+    mergesort_perm_by!,
     timsort,
     timsort!,
-    # timsort_r,
-    # timsort_r!,
-    # timsort_by,
-    # timsort_by!,
-    # timsort_perm,
-    # timsort_perm!,
-    # timsort_perm_r,
-    # timsort_perm_r!,
-    # timsort_perm_by,
-    # timsort_perm_by!
+    timsort_r,
+    timsort_r!,
+    timsort_by,
+    timsort_by!,
+    timsort_perm,
+    timsort_perm!,
+    timsort_perm_r,
+    timsort_perm_r!,
+    timsort_perm_by,
+    timsort_perm_by!
 
 import Base.sort, Base.issorted, Base.sort, Base.sort!, Base.sortperm, Base.slt_int,
        Base.unbox, Base.sle_int, Base.length
@@ -175,11 +175,12 @@ function ($insertionsort_perm!)($(args...), a::AbstractVector, p::AbstractVector
     return a, p
 end
 
+($insertionsort_perm!){T}($(args...), a::AbstractVector{T}, p::AbstractVector{Int}) =
+    ($insertionsort_perm!)($(args...), a, p, 1, length(a))
 ($insertionsort_perm!){T}($(args...), a::AbstractVector{T}) =
-    ($insertionsort_perm!)($(args...), a, [1:length(a)], 1, length(a))
-
-($insertionsort_perm){T}($(args...), a::AbstractVector{T}) =
-    ($insertionsort_perm!)($(args...), copy(a), [1:length(a)], 1, length(a))
+    ($insertionsort_perm!)($(args...), a, [1:length(a)])
+($insertionsort_perm){T}($(args...), a::AbstractVector{T}, args2...) =
+    ($insertionsort_perm!)($(args...), copy(a), [1:length(a)], args2...)
 
 
 ($pivot_middle)($(args...),a,b,c) = $(lt(:a,:b)) ? ($(lt(:b,:c)) ? b : c) : ($(lt(:a,:c)) ? a : c)
@@ -310,9 +311,10 @@ end
 
 ($mergesort_perm!){T}($(args...), a::AbstractVector{T}, p::AbstractVector{Int}) = 
     ($mergesort_perm!)($(args...), a, p, 1, length(a), Array(T,length(a)), Array(Int,length(a)))
-
-($mergesort_perm!){T}($(args...), a::AbstractVector{T}) = ($mergesort_perm!)($(args...), a, [1:length(a)])
-($mergesort_perm){T}($(args...), a::AbstractVector{T}) = ($mergesort_perm!)($(args...), copy(a), [1:length(a)])
+($mergesort_perm!){T}($(args...), a::AbstractVector{T}) = 
+    ($mergesort_perm!)($(args...), a, [1:length(a)])
+($mergesort_perm){T}($(args...), a::AbstractVector{T}, args2...) = 
+    ($mergesort_perm!)($(args...), copy(a), [1:length(a)], args2...)
 
 
 function ($issorted)($(args...), v::AbstractVector)
@@ -404,8 +406,8 @@ function ($search_sorted_first)($(args...), a::Vector, x, lo::Int, hi::Int)
     hi
 end
 
-($sortperm){T}($(args...), a::AbstractVector{T}) = ($mergesort_perm)($(args...), a)
-($sortperm!){T}($(args...), a::AbstractVector{T}) = ($mergesort_perm!)($(args...), a)
+($sortperm){T}($(args...), a::AbstractVector{T}, args2...) = ($mergesort_perm)($(args...), a, args2...)
+($sortperm!){T}($(args...), a::AbstractVector{T}, args2...) = ($mergesort_perm!)($(args...), a, args2...)
 
 end; end # quote / macro
 
