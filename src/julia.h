@@ -158,19 +158,21 @@ typedef struct _jl_lambda_info_t {
     struct _jl_function_t *unspecialized;
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
-    int8_t inferred;
-    jl_value_t *file;
-    ptrint_t line;
     struct _jl_module_t *module;
+    struct _jl_lambda_info_t *def;  // original this is specialized from
+    jl_value_t *capt;  // captured var info
+    jl_value_t *file;
+    int32_t line;
+    int8_t inferred;
 
     // hidden fields:
+    // flag telling if inference is running on this function
+    // used to avoid infinite recursion
+    int8_t inInference : 1;
+    int8_t inCompile : 1;
     jl_fptr_t fptr;        // jlcall entry point
     void *functionObject;  // jlcall llvm Function
     void *cFunctionObject; // c callable llvm Function
-    // flag telling if inference is running on this function
-    // used to avoid infinite recursion
-    uptrint_t inInference : 1;
-    uptrint_t inCompile : 1;
 } jl_lambda_info_t;
 
 #define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t))-1)
@@ -872,13 +874,14 @@ jl_array_t *jl_lam_locals(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
+jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
 
 jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
-jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
+jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);
 
 static inline int jl_vinfo_capt(jl_array_t *vi)
 {

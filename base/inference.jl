@@ -989,11 +989,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         for i = 1:3:length(tfarr)
             if typeseq(tfarr[i],atypes)
                 code = tfarr[i+1]
-                if isa(code, Tuple)
-                    curtype = code[3]
-                else
-                    curtype = ast_rettype(code)
-                end
+                curtype = ccall(:jl_ast_rettype, Any, (Any,Any), def, code)
                 if tfarr[i+2]
                     redo = true
                     tfunc_idx = i+1
@@ -1234,7 +1230,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
         tuple_elim_pass(fulltree)
         linfo.inferred = true
-        fulltree = ccall(:jl_compress_ast, Any, (Any, Any,), def, fulltree)
+        fulltree = ccall(:jl_compress_ast, Any, (Any,Any), def, fulltree)
     end
     
     if !redo
@@ -1582,8 +1578,8 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if is(ast,())
         return NF
     end
-    if isa(ast,Tuple)
-        ast = ccall(:jl_uncompress_ast, Any, (Any,), ast)
+    if !isa(ast,Expr)
+        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), meth[3], ast)
     end
     ast = ast::Expr
     for vi in ast.args[2][2]
@@ -1948,7 +1944,7 @@ function finfer(f, types)
     x = methods(f,types)[1]
     (tree, ty) = typeinf(x[3], x[1], x[2])
     if isa(tree,Tuple)
-        return ccall(:jl_uncompress_ast, Any, (Any,), tree)
+        return ccall(:jl_uncompress_ast, Any, (Any,Any), x[3], tree)
     end
     tree
 end

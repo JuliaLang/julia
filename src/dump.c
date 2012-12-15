@@ -307,9 +307,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_function_t *f = (jl_function_t*)v;
         jl_serialize_value(s, (jl_value_t*)f->linfo);
         jl_serialize_value(s, f->env);
-        if (f->linfo && f->linfo->ast &&
-            (jl_is_expr(f->linfo->ast) || jl_is_tuple(f->linfo->ast)) &&
-            f->fptr != &jl_trampoline) {
+        if (f->linfo && f->linfo->ast && f->fptr != &jl_trampoline) {
             jl_serialize_fptr(s, &jl_trampoline);
         }
         else {
@@ -334,6 +332,9 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->file);
         write_int32(s, li->line);
         jl_serialize_value(s, (jl_value_t*)li->module);
+        jl_serialize_value(s, (jl_value_t*)li->roots);
+        jl_serialize_value(s, (jl_value_t*)li->def);
+        jl_serialize_value(s, (jl_value_t*)li->capt);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -617,9 +618,11 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->file = jl_deserialize_value(s);
         li->line = read_int32(s);
         li->module = (jl_module_t*)jl_deserialize_value(s);
+        li->roots = (jl_array_t*)jl_deserialize_value(s);
+        li->def = (jl_lambda_info_t*)jl_deserialize_value(s);
+        li->capt = jl_deserialize_value(s);
 
         li->fptr = &jl_trampoline;
-        li->roots = NULL;
         li->functionObject = NULL;
         li->cFunctionObject = NULL;
         li->inInference = 0;
@@ -826,6 +829,22 @@ void jl_restore_system_image(char *fname)
 }
 
 DLLEXPORT
+jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
+{
+    if (jl_is_expr(ast))
+        return jl_lam_body((jl_expr_t*)ast)->etype;
+    tree_literal_values = li->def->roots;
+    ios_t src;
+    jl_array_t *bytes = (jl_array_t*)ast;
+    ios_mem(&src, 0);
+    ios_setbuf(&src, bytes->data, jl_array_len(bytes), 0);
+    src.size = jl_array_len(bytes);
+    jl_value_t *rt = jl_deserialize_value(&src);
+    tree_literal_values = NULL;
+    return rt;
+}
+
+DLLEXPORT
 jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
     ios_t dest;
@@ -833,22 +852,21 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     int en = jl_gc_is_enabled();
     jl_gc_disable();
 
-    if (li->roots == NULL)
-        li->roots = jl_alloc_cell_1d(0);
-    tree_literal_values = li->roots;
+    jl_lambda_info_t *def = li->def;
+    if (def->roots == NULL) {
+        def->roots = jl_alloc_cell_1d(0);
+    }
+    tree_literal_values = def->roots;
+    li->capt = (jl_value_t*)jl_lam_capt((jl_expr_t*)ast);
+    jl_serialize_value(&dest, jl_lam_body((jl_expr_t*)ast)->etype);
     jl_serialize_value(&dest, ast);
 
     //JL_PRINTF(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
     if (jl_array_len(tree_literal_values) == 0) {
-        tree_literal_values = (jl_array_t*)jl_an_empty_cell;
-        li->roots = NULL;
+        def->roots = NULL;
     }
-    v = (jl_value_t*)jl_tuple(4, v, tree_literal_values,
-                              jl_lam_body((jl_expr_t*)ast)->etype,
-                              jl_lam_capt((jl_expr_t*)ast));
-
     tree_literal_values = NULL;
     if (en)
         jl_gc_enable();
@@ -856,10 +874,10 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 }
 
 DLLEXPORT
-jl_value_t *jl_uncompress_ast(jl_tuple_t *data)
+jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 {
-    jl_array_t *bytes = (jl_array_t*)jl_tupleref(data, 0);
-    tree_literal_values = (jl_array_t*)jl_tupleref(data, 1);
+    jl_array_t *bytes = (jl_array_t*)data;
+    tree_literal_values = li->def->roots;
     ios_t src;
     ios_mem(&src, 0);
     ios_setbuf(&src, bytes->data, jl_array_len(bytes), 0);
@@ -867,6 +885,7 @@ jl_value_t *jl_uncompress_ast(jl_tuple_t *data)
     int en = jl_gc_is_enabled();
     jl_gc_disable();
     jl_gc_ephemeral_on();
+    (void)jl_deserialize_value(&src); // skip ret type
     jl_value_t *v = jl_deserialize_value(&src);
     jl_gc_ephemeral_off();
     if (en)

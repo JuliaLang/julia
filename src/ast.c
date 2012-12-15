@@ -562,10 +562,6 @@ jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 // get array of var info records for captured vars
 jl_array_t *jl_lam_capt(jl_expr_t *l)
 {
-    if (jl_is_tuple(l)) {
-        // in compressed form
-        return (jl_array_t*)jl_tupleref(l, 3);
-    }
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
@@ -719,13 +715,12 @@ DLLEXPORT
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
 {
     jl_tuple_t *spenv = NULL;
-    jl_value_t *l_ast = li->ast;
-    if (l_ast == NULL) return NULL;
-    jl_value_t *ast = l_ast;
+    jl_value_t *ast = li->ast;
+    if (ast == NULL) return NULL;
     JL_GC_PUSH(&spenv, &ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
-    if (jl_is_tuple(ast)) {
-        ast = jl_uncompress_ast((jl_tuple_t*)ast);
+    if (!jl_is_expr(ast)) {
+        ast = jl_uncompress_ast(li, ast);
         ast = dont_copy_ast(ast, sparams, 1);
     }
     else {

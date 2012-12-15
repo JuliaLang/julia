@@ -333,6 +333,8 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->unspecialized = NULL;
     li->specializations = NULL;
     li->name = anonymous_sym;
+    li->def = li;
+    li->capt = NULL;
     return li;
 }
 
