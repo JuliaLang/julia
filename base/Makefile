@@ -17,6 +17,12 @@ os_detect.jl: ../src/os_detect.h
 build_h.jl: ../Make.inc
 	@echo "const libblas_name = \"$(LIBBLASNAME)\"" > $@
 	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
+ifeq ($(USE_LIB64), 1)
+	@echo "const use_lib64 = true" >> $@
+else
+	@echo "const use_lib64 = false" >> $@
+endif
+
 
 clean:
 	rm -f *# *~
