@@ -317,3 +317,46 @@ end
 
 readdir(cmd::Cmd) = readdir(string(cmd)[2:end-1])
 readdir() = readdir(".")
+
+# YouTests for this function available at https://gist.github.com/4294860
+export walkdir
+function walkdir(startdir, order)
+    function pre(dirname)
+        produce(dirname)
+        for filename in readdir(dirname)
+            fullname = file_path(dirname, filename)
+            if isdir(fullname)
+                pre(fullname)
+            else
+                produce(fullname)
+            end
+        end
+    end
+    function post(dirname)
+        for filename in readdir(dirname)
+            fullname = file_path(dirname, filename)
+            if isdir(fullname)
+                post(fullname)
+            else
+                produce(fullname)
+            end
+        end
+        produce(dirname)
+    end
+    function breadth(dirname)
+        q = {}
+        push(q, dirname)
+        produce(dirname)
+        while length(q) > 0
+            dirname = shift(q)
+            for filename in readdir(dirname)
+                fullname = file_path(dirname, filename)
+                if isdir(fullname) push(q, fullname) end
+                produce(fullname)
+            end
+        end
+    end
+    fn = {:pre => pre, :post => post, :breadth => breadth}[order]
+    @task fn(abs_path(startdir))
+end
+walkdir(startdir) = walkdir(startdir, :pre)
