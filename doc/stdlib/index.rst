@@ -43,4 +43,5 @@ Math & Numerical
 
    blas
    glpk
+   sparse
 

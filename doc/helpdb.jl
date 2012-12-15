@@ -2856,6 +2856,35 @@ airyaiprime(x)
 
 "),
 
+(E"Combinatorics",E"Base",E"search_sorted",E"search_sorted(a, x[, lo, hi])
+
+   Returns the index of the first value greater than or equal to \"x\"
+   in sorted sequence \"a\".  Assumes \"a\" is sorted low to high.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first()\"
+
+"),
+
+(E"Combinatorics",E"Base",E"search_sorted_first",E"search_sorted_first(a, x[, lo, hi])
+
+   Returns the index of the first value greater than or equal to \"x\"
+   in sorted sequence \"a\".  Assumes \"a\" is sorted low to high.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Combinatorics",E"Base",E"search_sorted_last",E"search_sorted_last(a, x[, lo, hi])
+
+   Returns the index of the last value less than or equal to \"x\" in
+   sorted sequence \"a\".  Assumes \"a\" is sorted low to high.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
 (E"Combinatorics",E"Base",E"nthperm",E"nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector

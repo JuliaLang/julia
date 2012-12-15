@@ -1798,6 +1798,29 @@ Combinatorics
 
    Test whether a vector is in ascending sorted order
 
+.. function:: search_sorted(a, x[, lo, hi])
+
+   Returns the index of the first value greater than or equal to ``x``
+   in sorted sequence ``a``.  Assumes ``a`` is sorted low to high.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+   Alias for ``search_sorted_first()``
+
+.. function:: search_sorted_first(a, x[, lo, hi])
+
+   Returns the index of the first value greater than or equal to ``x``
+   in sorted sequence ``a``.  Assumes ``a`` is sorted low to high.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+.. function:: search_sorted_last(a, x[, lo, hi])
+
+   Returns the index of the last value less than or equal to ``x``
+   in sorted sequence ``a``.  Assumes ``a`` is sorted low to high.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
 .. function:: nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
