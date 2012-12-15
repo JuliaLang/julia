@@ -16,6 +16,7 @@ Built-ins
    :maxdepth: 1
 
    base
+   sort
 
 ******
 Extras
@@ -29,7 +30,6 @@ Extras
    options
    gzip
    profile
-   sort
    sound
    strpack
    textwrap
