@@ -1015,9 +1015,10 @@ static void print_func_loc(ios_t *s, jl_lambda_info_t *li);
   so (T,T) is not equivalent to (Any,Any). (TODO)
 */
 static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
-                            jl_tuple_t *sig, jl_sym_t *fname,
+                            jl_methlist_t *oldmeth, jl_sym_t *fname,
                             jl_lambda_info_t *linfo)
 {
+    jl_tuple_t *sig = oldmeth->sig;
     size_t tl = jl_tuple_len(type);
     size_t sl = jl_tuple_len(sig);
     // we know !jl_args_morespecific(type, sig)
@@ -1044,7 +1045,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         print_func_loc(s, linfo);
         ios_printf(s, " is ambiguous with %s", n);
         jl_show(errstream, (jl_value_t*)sig);
-        print_func_loc(s, ml->func->linfo);
+        print_func_loc(s, oldmeth->func->linfo);
         ios_printf(s, ".\n         Make sure %s", n);
         jl_show(errstream, isect);
         ios_printf(s, " is defined first.\n");
@@ -1113,10 +1114,9 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         if (jl_args_morespecific((jl_value_t*)type, (jl_value_t*)l->sig))
             break;
         if (check_amb) {
-            check_ambiguous(*pml, (jl_tuple_t*)type, (jl_tuple_t*)l->sig,
+            check_ambiguous(*pml, (jl_tuple_t*)type, l,
                             method->linfo ? method->linfo->name :
-                            anonymous_sym,
-                            method->linfo);
+                            anonymous_sym, method->linfo);
         }
         pl = &l->next;
         l = l->next;

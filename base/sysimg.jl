@@ -76,6 +76,7 @@ include("inference.jl")
 
 # I/O, strings & printing
 include("io.jl")
+include("iostring.jl")
 include("char.jl")
 include("ascii.jl")
 include("utf8.jl")

@@ -308,20 +308,27 @@ end
 
 # set package remote in METADATA
 
-pkg_origin(pkg::String, remote::String) = cd_pkgdir() do
+get_origin(pkg::String, remote::String) = cd_pkgdir() do
     for line in each_line(`git --git-dir=$(file_path(pkg,".git")) remote -v`)
         m = match(r"^(\S*)\s*(\S*)\s*\(fetch\)", line)
         if m != nothing && m.captures[1] == remote
-            cd(file_path("METADATA", pkg)) do
-                open("url", "w") do io
-                    println(io, m.captures[2])
-                end
-            end
-            return
+            return m.captures[2]
+        end
+    end
+    error("The git remote '", remote, "' is not present in the configuration file")
+end
+get_origin(pkg::String) = get_origin(pkg, "origin")
+
+set_origin(pkg::String, url::String) = cd_pkgdir() do
+    cd(file_path("METADATA", pkg)) do
+        open("url", "w") do io
+            println(io, url)
         end
     end
 end
-pkg_origin(pkg) = pkg_origin(pkg, "origin")
+
+pkg_origin(pkg::String, remote::String) = set_origin(pkg, get_origin(pkg, remote))
+pkg_origin(pkg::String) = pkg_origin(pkg, "origin")
 
 # push & pull package repos to/from remotes
 
@@ -498,48 +505,69 @@ function major(pkg)
     version(pkg, VersionNumber(lver.major+1))
 end
 
-# Create a skeleton package that can be easily filled in
 function new(package_name::String)
+    newpath = file_path(julia_pkgdir(), package_name)
     cd_pkgdir() do
-        try
-            mkdir(package_name)
-        catch
-            error("Unable to create directory for new package: $(package_name)")
-        end
-        try
-            sha1 = ""
-            cd(package_name) do
-                run(`git init`)
-                run(`git commit --allow-empty -m "Initial empty commit"`)
-                file_create("LICENSE.md") # Should insert MIT content
-                file_create("README.md")
-                file_create("REQUIRE")
-                mkdir("src")
-                file_create(file_path("src", strcat(package_name, ".jl")))
-                mkdir("test")
-                run(`git add --all`)
-                run(`git commit -m "Scaffold for Julia package $(package_name)"`)
-                sha1 = readchomp(`git rev-parse HEAD`)
-            end
+        if isdir(package_name)
+            # This is an existing package that we assume is ready to go
             version(package_name, v"0.0.0")
-        catch
-            error("Unable to initialize contents of new package")
-        end
-        newpath = file_path(julia_pkgdir(), package_name)
-        println(
+            try
+                pkg_origin(package_name, "origin")
+            catch
+                error("
+Your package in
+
+    $(newpath)
+    
+is almost ready. But the default remote, \"origin\", does not exist in
+this repository's configuration. To finish the process, run
+
+    > Pkg.pkg_origin(", package_name, ", remotename)
+
+with the correct remote name for your repository."
+                )
+            end
+        else
+            # Create a skeleton package that can be easily filled in
+            try
+                mkdir(package_name)
+            catch
+                error("Unable to create directory for new package: $(package_name)")
+            end
+            try
+                sha1 = ""
+                cd(package_name) do
+                    run(`git init`)
+                    run(`git commit --allow-empty -m "Initial empty commit"`)
+                    file_create("LICENSE.md") # Should insert MIT content
+                    file_create("README.md")
+                    file_create("REQUIRE")
+                    mkdir("src")
+                    file_create(file_path("src", strcat(package_name, ".jl")))
+                    mkdir("test")
+                    run(`git add --all`)
+                    run(`git commit -m "Scaffold for Julia package $(package_name)"`)
+                    sha1 = readchomp(`git rev-parse HEAD`)
+                end
+                version(package_name, v"0.0.0")
+            catch
+                error("Unable to initialize contents of new package")
+            end
+            println(
 "
 You have created a new package in
 
-  $(file_path(julia_pkgdir(), package_name))
+  $(newpath)
 
 When the package is ready to submit, push it to a public repository, set it as
 the remote \"origin\", then run:
 
-  > Pkg.set_origin($(package_name))
+  > Pkg.pkg_origin($(package_name))
   > Pkg.patch($(package_name))
 
 to prepare METADATA with the details for your package."
                 )
+        end
     end
 end
 

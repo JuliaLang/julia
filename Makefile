@@ -47,17 +47,16 @@ JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
-	@$(MAKEs) -C test/unicode
 	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
-		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
-		cp -a $(BUILD)/lib/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		cp -a $(BUILD)/lib/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	# Copy system image
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
@@ -90,7 +89,6 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C extras clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
-	@$(MAKE) -C test/unicode clean
 	@for buildtype in "release" "debug" ; do \
 		for repltype in "basic" "readline"; do \
 			rm -f julia-$${buildtype}-$${repltype}; \
