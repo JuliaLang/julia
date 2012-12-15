@@ -42,9 +42,9 @@ for _sort in [insertionsort, mergesort, timsort]
     @test a[ix] == b
 
     b = Base.(_sort_by)((x -> -10x), a)
-    @test issorted_r(b)
+    @test issorted_by((x -> -10x), b)
     (b, ix) = Base.(_sort_perm_by)((x -> -10x), a)
-    @test issorted_r(b)
+    @test issorted_by((x -> -10x), b)
     @test a[ix] == b
 end
 
@@ -53,7 +53,7 @@ b = quicksort(a)
 b = Base.quicksort_r(a)
 @test issorted_r(b)
 b = Base.quicksort_by((x -> -10x), a)
-@test issorted_r(b)
+@test issorted_by((x -> -10x), b)
 
 @test select_r([3,6,30,1,9],2) == 9
 @test select_by((x -> -x),[3,6,30,1,9],2) == 9
