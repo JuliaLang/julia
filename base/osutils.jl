@@ -1,4 +1,11 @@
-include("os_detect.jl")
+function _jl_is_unix(os::Symbol)
+    if (os==:Windows) return false; 
+    elseif (os==:Linux) return true; 
+    elseif (os==:FreeBSD) return true; 
+    elseif (os==:Darwin) return true; 
+    else error("Unknown Operating System")
+    end
+end
 
 macro windows_only(ex)
     OS_NAME == :Windows ? esc(ex) : :nothing
