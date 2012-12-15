@@ -7,12 +7,6 @@ export
     issorted,
     issorted_r,
     issorted_by,
-    each_col,
-    each_col!,
-    each_row,
-    each_row!,
-    each_vec,
-    each_vec!,
     order,
     search_sorted,
     search_sorted_r,
@@ -54,12 +48,6 @@ export
     insertionsort_perm_r!,
     insertionsort_perm_by,
     insertionsort_perm_by!,
-    quicksort,
-    quicksort!,
-    quicksort_r,
-    quicksort_r!,
-    quicksort_by,
-    quicksort_by!,
     mergesort,
     mergesort!,
     mergesort_r,
@@ -72,6 +60,12 @@ export
     mergesort_perm_r!,
     mergesort_perm_by,
     mergesort_perm_by!,
+    quicksort,
+    quicksort!,
+    quicksort_r,
+    quicksort_r!,
+    quicksort_by,
+    quicksort_by!,
     timsort,
     timsort!,
     timsort_r,
@@ -480,33 +474,6 @@ function sort!{T<:FloatingPoint}(a::AbstractVector{T})
     return a
 end
 
-# TODO: something sensible should happen when each_col et. al. are used with a
-# pure function argument
-function each_col!(f::Function, a::AbstractMatrix)
-    m = size(a,1)
-    for i = 1:m:numel(a)
-        f(sub(a, i:(i+m-1)))
-    end
-    return a
-end
-
-function each_row!(f::Function, a::AbstractMatrix)
-    m = size(a,1)
-    for i = 1:m
-        f(sub(a, i:m:numel(a)))
-    end
-    return a
-end
-
-function each_vec!(f::Function, a::AbstractMatrix, dim::Integer)
-    if dim == 1; return each_col!(f,a); end
-    if dim == 2; return each_row!(f,a); end
-    error("invalid matrix dimensions: $dim")
-end
-
-each_col(f::Function, a::AbstractMatrix) = each_col!(f,copy(a))
-each_row(f::Function, a::AbstractMatrix) = each_row!(f,copy(a))
-each_vec(f::Function, a::AbstractMatrix, d::Integer) = each_vec!(f,copy(a),d)
 
 ## other sorting functions defined in terms of sort! ##
 
@@ -540,6 +507,26 @@ end
 @in_place_matrix_op sort lt::Function
 @in_place_matrix_op sortr
 @in_place_matrix_op sort_by by::Function
+
+@in_place_matrix_op insertionsort
+@in_place_matrix_op insertionsort lt::Function
+@in_place_matrix_op insertionsort_r
+@in_place_matrix_op insertionsort_by by::Function
+
+@in_place_matrix_op quicksort
+@in_place_matrix_op quicksort lt::Function
+@in_place_matrix_op quicksort_r
+@in_place_matrix_op quicksort_by by::Function
+
+@in_place_matrix_op mergesort
+@in_place_matrix_op mergesort lt::Function
+@in_place_matrix_op mergesortr
+@in_place_matrix_op mergesort_by by::Function
+
+@in_place_matrix_op timsort
+@in_place_matrix_op timsort lt::Function
+@in_place_matrix_op timsortr
+@in_place_matrix_op timsort_by by::Function
 
 # TODO: implement generalized in-place, ditch this
 function sort(a::AbstractArray, dim::Int)
