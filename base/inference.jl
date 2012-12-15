@@ -986,17 +986,20 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     tf = def.tfunc
     if !is(tf,())
         tfarr = tf::Array{Any,1}
-        for i = 1:2:length(tfarr)
+        for i = 1:3:length(tfarr)
             if typeseq(tfarr[i],atypes)
                 code = tfarr[i+1]
-                assert(isa(code, Tuple))
-                if code[5]
+                if isa(code, Tuple)
                     curtype = code[3]
+                else
+                    curtype = ast_rettype(code)
+                end
+                if tfarr[i+2]
                     redo = true
                     tfunc_idx = i+1
                     break
                 end
-                return (code, code[3])
+                return (code, curtype)
             end
         end
     end
@@ -1231,23 +1234,23 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
         tuple_elim_pass(fulltree)
         linfo.inferred = true
+        fulltree = ccall(:jl_compress_ast, Any, (Any, Any,), def, fulltree)
     end
-    
-    compr = ccall(:jl_compress_ast, Any, (Any, Any,), def, fulltree)
     
     if !redo
         if is(def.tfunc,())
             def.tfunc = {}
         end
-        compr = (compr[1],compr[2],compr[3],compr[4],rec)
         push(def.tfunc::Array{Any,1}, atypes)
-        push(def.tfunc::Array{Any,1}, compr)
+        push(def.tfunc::Array{Any,1}, fulltree)
+        push(def.tfunc::Array{Any,1}, rec)
     else
-        def.tfunc[tfunc_idx] = (compr[1],compr[2],compr[3],compr[4],rec)
+        def.tfunc[tfunc_idx] = fulltree
+        def.tfunc[tfunc_idx+1] = rec
     end
     
     inference_stack = (inference_stack::CallStack).prev
-    return (compr, frame.result)
+    return (fulltree, frame.result)
 end
 
 function record_var_type(e::Symbol, t, decls)

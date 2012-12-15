@@ -413,7 +413,7 @@ void jl_set_tag_type_super(jl_tag_type_t *tt, jl_value_t *super)
     }
     tt->super = (jl_tag_type_t*)super;
     if (jl_tuple_len(tt->parameters) > 0) {
-        tt->name->cache = jl_null;
+        tt->name->cache = (jl_value_t*)jl_null;
         jl_reinstantiate_inner_types((jl_tag_type_t*)tt);
     }
 }

@@ -193,7 +193,7 @@ static int is_ast_node(jl_value_t *v)
 static int literal_val_id(jl_value_t *v)
 {
     for(int i=0; i < jl_array_len(tree_literal_values); i++) {
-        if (jl_cellref(tree_literal_values,i) == v)
+        if (jl_egal(jl_cellref(tree_literal_values,i), v))
             return i;
     }
     jl_cell_1d_push(tree_literal_values, v);
@@ -982,7 +982,8 @@ void jl_init_serializer(void)
                      jl_typename_type, jl_task_type, jl_union_kind,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
                      jl_array_any_type, jl_intrinsic_type, jl_method_type,
-                     jl_methtable_type,
+                     jl_methtable_type, jl_voidpointer_type,
+                     jl_array_symbol_type, jl_tupleref(jl_tuple_type,0),
 
                      jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,

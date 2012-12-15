@@ -67,12 +67,6 @@ typedef struct {
     jl_value_t *data[1];
 } jl_tuple_t;
 
-typedef struct {
-    JL_STRUCT_TYPE
-    size_t length;
-    jl_value_t *data[2];
-} jl_tuple2_t;
-
 // pseudo-object to track managed malloc pointers
 // currently only referenced from an array's data owner field
 typedef struct _jl_mallocptr_t {
@@ -206,7 +200,7 @@ typedef struct {
     // a type alias, for example, might make a type constructor that is
     // not the original.
     jl_value_t *primary;
-    jl_tuple_t *cache;
+    jl_value_t *cache;
 } jl_typename_t;
 
 typedef struct {

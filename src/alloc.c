@@ -26,7 +26,7 @@ jl_struct_type_t *jl_typector_type;
 jl_struct_type_t *jl_array_type;
 jl_typename_t *jl_array_typename;
 jl_type_t *jl_array_uint8_type;
-jl_type_t *jl_array_any_type;
+jl_type_t *jl_array_any_type=NULL;
 jl_type_t *jl_array_symbol_type;
 jl_function_t *jl_bottom_func;
 jl_struct_type_t *jl_weakref_type;
@@ -444,7 +444,7 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
     tn->name = name;
     tn->module = jl_current_module;
     tn->primary = NULL;
-    tn->cache = jl_null;
+    tn->cache = (jl_value_t*)jl_null;
     return tn;
 }
 
