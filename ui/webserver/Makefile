@@ -20,23 +20,27 @@ WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
 %.do: %.c
 	$(QUIET_CC)$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
-	
+
 LAUNCH_SCRIPT = launch-julia-webserver
 ifeq ($(OS),WINNT)
 LAUNCH_SCRIPT = launch-julia-webserver.bat
 endif 
-	
+
 julia-release julia-debug: %: $(USRBIN)/%-webserver $(USRBIN)/$(LAUNCH_SCRIPT)
 
 release debug:
 	$(MAKE) julia-$@
 
 $(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS)
+ifeq ($(OS), Darwin)
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+else
+	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS) -framework ApplicationServices
+endif
 
 $(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
-	
+
 $(USRBIN)/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
 	cp $< $@
 
