@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-LIBS = -lpthread $(USR)/$(JL_LIBDIR)/libuv.a 
+LIBS = -lpthread $(BUILD)/$(JL_LIBDIR)/libuv.a 
 ifeq ($(OS), Linux)
 LIBS += -lrt 
 endif
@@ -26,20 +26,20 @@ ifeq ($(OS),WINNT)
 LAUNCH_SCRIPT = launch-julia-webserver.bat
 endif 
 	
-julia-release julia-debug: %: $(USRBIN)/%-webserver $(USRBIN)/$(LAUNCH_SCRIPT)
+julia-release julia-debug: %: $(BUILD)/bin/%-webserver $(BUILD)/bin/$(LAUNCH_SCRIPT)
 
 release debug:
 	$(MAKE) julia-$@
 
-$(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS)
+$(BUILD)/bin/julia-release-webserver: $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
-$(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS)
+$(BUILD)/bin/julia-debug-webserver: $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 	
-$(USRBIN)/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
+$(BUILD)/bin/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
 	cp $< $@
 
 clean:
 	rm -f *.o *.do
-	rm -f $(USRBIN)/julia-*-webserver
+	rm -f $(BUILD)/bin/julia-*-webserver
