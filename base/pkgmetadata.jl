@@ -35,7 +35,10 @@ function gen_hashes(pkg::String)
 end
 gen_hashes() = for pkg in each_package() gen_hashes(pkg) end
 
-pkg_url(pkg::String) = readchomp("METADATA/$pkg/url")
+function pkg_url(pkg::String)
+    path = "METADATA/$pkg/url"
+    isfile(path) ? readchomp(path) : nothing
+end
 
 function version(pkg::String, sha1::String)
     path = "METADATA/$pkg/hashes/$sha1"
@@ -44,20 +47,21 @@ function version(pkg::String, sha1::String)
 end
 
 each_package() = @task begin
-    for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD`)
-        m = match(r"\d{6} tree [0-9a-f]{40}\t(\S+)$", line)
-        if m != nothing && isdir("METADATA/$(m.captures[1])/versions")
-            produce(m.captures[1])
+    for line in each_line(`ls -1 METADATA`)
+        line = chomp(line)
+        # stat() chokes if we try to check if the subdirectory of a non-directory exists
+        if isdir(file_path("METADATA", line)) && isdir(file_path("METADATA", line, "versions"))
+            produce(line)
         end
     end
 end
 
 each_tagged_version(pkg::String) = @task begin
-    for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD:$pkg/versions`)
-        m = match(r"\d{6} tree [0-9a-f]{40}\t(\d\S*)$", line)
-        if m != nothing && ismatch(Base.VERSION_REGEX,m.captures[1])
-            ver = convert(VersionNumber,m.captures[1])
-            dir = "METADATA/$pkg/versions/$(m.captures[1])"
+    for line in each_line(`ls -1 $(file_path("METADATA", pkg, "versions"))`)
+        line = chomp(line)
+        if isdir(file_path("METADATA", pkg, "versions", line)) && ismatch(Base.VERSION_REGEX, line)
+            ver = convert(VersionNumber,line)
+            dir = "METADATA/$pkg/versions/$(line)"
             if isfile("$dir/sha1")
                 produce((ver,dir))
             end
@@ -180,7 +184,12 @@ function resolve(reqs::Vector{VersionSet})
     mipopts = GLPK.IntoptParam()
     mipopts["msg_lev"] = GLPK.MSG_ERR
     mipopts["presolve"] = GLPK.ON
-    w = iround(mixintprog(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,nothing,mipopts)[2])
+    _, ws, flag, _ = mixintprog(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,nothing,mipopts)
+    if flag != 0
+        msg = sprint(print_linprog_flag, flag)
+        error("resolve() failed: $msg.")
+    end
+    w = iround(ws)
 
     V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
     R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
@@ -189,7 +198,12 @@ function resolve(reqs::Vector{VersionSet})
           -ones(Int,length(reqs))
           zeros(Int,length(deps)) ]
 
-    x = mixintprog(w,[V;R;D],b,nothing,nothing,z,u,nothing,mipopts)[2] .== 1
+    _, xs, flag, _ = mixintprog(w,[V;R;D],b,nothing,nothing,z,u,nothing,mipopts)
+    if flag != 0
+        msg = sprint(print_linprog_flag, flag)
+        error("resolve() failed: $msg.")
+    end
+    x = bool(xs)
     h = (String=>ASCIIString)[]
     for v in vers[x]
         h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")

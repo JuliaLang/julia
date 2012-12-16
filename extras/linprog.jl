@@ -14,12 +14,9 @@ export
     linprog_interior,
     linprog_simplex,
     linprog_exact,
-    mixintprog
+    mixintprog,
+    print_linprog_flag
 
-# XXX the sparse stuff shall be removed when sparse
-# gets into Base
-typealias SparseMatrixCSC Main.SparseMatrixCSC
-issparse = Main.issparse
 typealias VecOrNothing GLPK.VecOrNothing
 
 # General notes: the interface is provided as a collection of
@@ -44,11 +41,13 @@ typealias VecOrNothing GLPK.VecOrNothing
 # where the vector x is subject to these constraints:
 #
 #   A * x <= b
-#   Aeq * x == b
+#   Aeq * x == beq
 #   lb <= x <= ub
 #
 # The return flag is 0 in case of success, and follows
-# the glpk library convention otherwise.
+# the glpk library convention otherwise. It can be printed as
+# a human-readable error message with the print_linprog_flag()
+# function.
 # In case of failure, z and x are set to nothing, otherwise
 # they will hold the solution found
 #
@@ -229,6 +228,9 @@ linprog_exact{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
 #
 #    (z, x, flag, ps_flag) = mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, param, ps_param)
 #
+#  * the col_kind vector contains one entry per variable in x, each with value
+#        GLPK.CV (continuous variable), GLPK.IV (integer variable), or
+#        GLPK.BV (binary variable)
 #  * if the col_kind vector is not provided, all variables default to integer
 #  * if the "presolve" options is set to GLPK.OFF, then it uses linear programming
 #    for presolving, via the simplex point method with parameters ps_param (if ps_param is nothing
@@ -301,6 +303,41 @@ mixintprog{T<:Real,P<:Union(GLPK.IntoptParam,Nothing)}(f::Vector{T}, A::MatOrNot
         Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing,
         ub::VecOrNothing, col_kind::VecOrNothing, params::P) =
         mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, params, nothing)
+#}}}
+
+# Output flags readout
+#{{{
+let msg_map = [
+    0 => "success",
+    GLPK.EBOUND => "incurrect bounds",
+    GLPK.EROOT => "no optimal basis given",
+    GLPK.ENOPFS => "no primal fasible LP solution",
+    GLPK.ENODFS => "no dual feasible LP solution",
+    GLPK.EFAIL => "solver failure",
+    GLPK.EMIPGAP => "mixed integer programming tolerance reached",
+    GLPK.ETMLIM => "time limit exceeded",
+    GLPK.ESTOP => "terminated by application",
+    GLPK.ENOCVG => "very slow convergence, or divergence",
+    GLPK.ETMLIM => "iterations limit exceeded",
+    GLPK.EINSTAB => "numberical instability",
+    GLPK.EBADB => "invalid base",
+    GLPK.ESING => "singular matrix",
+    GLPK.ECOND => "ill-conditioned matrix",
+    GLPK.EOBJLL => "lower limit reached",
+    GLPK.EOBJUL => "upper limit reached",
+    GLPK.EDATA => "invalid data format",
+    GLPK.ERANGE => "integer overflow"
+    ]
+
+    global print_linprog_flag
+    function print_linprog_flag(io::IO, flag::Int32)
+        if has(msg_map, flag)
+            print(io, msg_map[flag])
+        else
+            error("unknown GLPK flag")
+        end
+    end
+end
 #}}}
 
 ## Common auxiliary functions

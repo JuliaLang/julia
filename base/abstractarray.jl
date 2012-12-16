@@ -53,6 +53,75 @@ function trailingsize(A, n)
     return s
 end
 
+## Bounds checking ##
+function check_bounds(sz::Int, I::Integer)
+    if I < 1 || I > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds(sz::Int, I::AbstractVector{Bool})
+    if length(I) > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
+    if min(I) < 1 || max(I) > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
+    for i in I
+        if i < 1 || i > sz
+            throw(BoundsError())
+        end
+    end
+end
+
+function check_bounds(A::AbstractVector, I::AbstractVector{Bool})
+    if !isequal(size(A), size(I)) throw(BoundsError()) end
+end
+
+function check_bounds(A::AbstractArray, I::AbstractVector{Bool})
+    if !isequal(size(A), size(I)) throw(BoundsError()) end
+end
+
+function check_bounds(A::AbstractArray, I::AbstractArray{Bool})
+    if !isequal(size(A), size(I)) throw(BoundsError()) end
+end
+
+check_bounds(A::AbstractVector, I::Indices) = check_bounds(length(A), I)
+
+function check_bounds(A::AbstractMatrix, I::Indices, J::Indices)
+    check_bounds(size(A,1), I)
+    check_bounds(size(A,2), J)
+end
+
+function check_bounds(A::AbstractArray, I::Indices, J::Indices)
+    check_bounds(size(A,1), I)
+    sz = size(A,2)
+    for i = 3:ndims(A)
+        sz *= size(A, i) # TODO: sync. with decision on issue #1030
+    end
+    check_bounds(sz, J)
+end
+
+function check_bounds(A::AbstractArray, I::Indices...)
+    n = length(I)
+    if n > 0
+        for dim = 1:(n-1)
+            check_bounds(size(A,dim), I[dim])
+        end
+        sz = size(A,n)
+        for i = n+1:ndims(A)
+            sz *= size(A,i)     # TODO: sync. with decision on issue #1030
+        end
+        check_bounds(sz, I[n])
+    end
+end
+
 ## Constructors ##
 
 # default arguments to similar()
@@ -810,7 +879,7 @@ function (!=)(A::AbstractArray, B::AbstractArray)
 end
 
 (<)(A::AbstractArray, B::AbstractArray) =
-    error("< not defined for arrays. Try .< or isless.")
+    error("Not defined. To compare arrays, try .< .> .<= .>= or isless.")
 
 (==)(A::AbstractArray, B) = error("Not defined. Try .== or isequal.")
 
@@ -827,6 +896,48 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
            c[i] = ($op)(v[i], c[i-1])
         end
         return c
+    end
+
+    @eval function ($f)(A::AbstractArray, axis::Integer)
+        dimsA = size(A)
+        ndimsA = ndims(A)
+        axis_size = dimsA[axis]
+        axis_stride = 1
+        for i = 1:(axis-1)
+            axis_stride *= size(A,i)
+        end
+
+        if axis_size <= 1
+            return A
+        end
+
+        B = similar(A)
+
+        for i = 1:length(A)
+            if div(i-1, axis_stride) % axis_size == 0
+               B[i] = A[i]
+            else
+               B[i] = ($op)(A[i], B[i-axis_stride])
+            end
+        end
+
+        return B
+    end
+
+    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
+end
+
+for (f, op) = ((:cummin, :min), (:cummax, :max))
+    @eval function ($f)(v::AbstractVector)
+        n = length(v)
+        cur_val = v[1]
+        res = similar(v, n)
+        res[1] = cur_val
+        for i in 2:n
+            cur_val = ($op)(v[i], cur_val)
+            res[i] = cur_val
+        end
+        return res
     end
 
     @eval function ($f)(A::AbstractArray, axis::Integer)

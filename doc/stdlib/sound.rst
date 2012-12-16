@@ -27,7 +27,7 @@ Here is a quick example that copies an existing file::
 
 .. note:: This implementation only supports little endian machines right now.
 
-.. function:: wavread(io [, options])
+.. function:: wavread(io, [options])
 
    Reads and returns the samples from a RIFF/WAVE file. The samples are converted to floating
    point values in the range from -1.0 to 1.0 by default. The ``io`` argument accepts either an
@@ -61,7 +61,7 @@ Here is a quick example that copies an existing file::
     wavread(filename::String, N::Int, fmt::String) = wavread(filename, @options subrange=N format=fmt)
     wavread(filename::String, N::Range1{Int}, fmt::String) = wavread(filename, @options subrange=N format=fmt)
    
-.. function:: wavwrite(samples, io [, options])
+.. function:: wavwrite(samples, io, [options])
 
     Writes samples to a RIFF/WAVE file io object. The ``io`` argument
     accepts either an ``IO`` object or a filename (``String``). The

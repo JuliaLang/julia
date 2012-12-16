@@ -249,8 +249,12 @@ function serialize(s, x)
     elseif isa(t,CompositeKind)
         serialize_type(s, t)
         serialize(s, length(t.names))
-        for n = t.names
-            serialize(s, getfield(x, n))
+        for n in t.names
+            if isdefined(x, n)
+                serialize(s, getfield(x, n))
+            else
+                writetag(s, UndefRefTag)
+            end
         end
     else
         error(x," is not serializable")
@@ -415,26 +419,14 @@ function deserialize(s, t::CompositeKind)
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
-    elseif nf == 1
-        f1 = deserialize(s)
-        ccall(:jl_new_struct, Any, (Any,Any...), t, f1)
-    elseif nf == 2
-        f1 = deserialize(s)
-        f2 = deserialize(s)
-        ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2)
-    elseif nf == 3
-        f1 = deserialize(s)
-        f2 = deserialize(s)
-        f3 = deserialize(s)
-        ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
-    elseif nf == 4
-        f1 = deserialize(s)
-        f2 = deserialize(s)
-        f3 = deserialize(s)
-        f4 = deserialize(s)
-        ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3, f4)
     else
-        f = ntuple(nf, i->deserialize(s))
-        ccall(:jl_new_structt, Any, (Any,Any), t, f)
+        x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
+        for n in t.names
+            tag = int32(read(s, Uint8))
+            if tag==0 || !is(_jl_deser_tag[tag], UndefRefTag)
+                setfield(x, n, handle_deserialize(s, tag))
+            end
+        end
+        return x
     end
 end

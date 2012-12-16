@@ -23,5 +23,6 @@
 *.creator
 *.user
 *.orig
+*.swp
 
 /usr

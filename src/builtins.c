@@ -137,6 +137,8 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
         }
         return 1;
     }
+    if (ta == (jl_value_t*)jl_union_kind)
+        return jl_egal(jl_fieldref(a,0), jl_fieldref(b,0));
     return 0;
 }
 
@@ -685,8 +687,8 @@ JL_CALLABLE(jl_trampoline)
     // to run inference on all thunks. slows down loading files.
     if (f->linfo->inferred == 0) {
         if (!jl_in_inference) {
-            if (jl_is_tuple(f->linfo->ast)) {
-                f->linfo->ast = jl_uncompress_ast((jl_tuple_t*)f->linfo->ast);
+            if (!jl_is_expr(f->linfo->ast)) {
+                f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
             }
             if (jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1)) {
                 jl_type_infer(f->linfo, jl_tuple_type, f->linfo);
@@ -831,8 +833,6 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
     if (jl_is_symbol(v))
         return ((jl_sym_t*)v)->hash;
     jl_value_t *tv = (jl_value_t*)jl_typeof(v);
-    if (jl_is_struct_type(tv))
-        return inthash((uptrint_t)v);
     if (jl_is_bits_type(tv)) {
         size_t nb = jl_bitstype_nbits(tv)/8;
         uptrint_t h = inthash((uptrint_t)tv);
@@ -853,6 +853,15 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
 #endif
         }
     }
+    if (tv == (jl_value_t*)jl_union_kind) {
+#ifdef __LP64__
+        return jl_object_id(jl_fieldref(v,0))^0xA5A5A5A5A5A5A5A5L;
+#else
+        return jl_object_id(jl_fieldref(v,0))^0xA5A5A5A5;
+#endif
+    }
+    if (jl_is_struct_type(tv))
+        return inthash((uptrint_t)v);
     assert(jl_is_tuple(v));
     uptrint_t h = 0;
     size_t l = jl_tuple_len(v);

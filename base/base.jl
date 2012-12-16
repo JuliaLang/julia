@@ -78,8 +78,6 @@ function show(io, se::ShowError)
     show(io, se.err)
 end
 
-method_missing(f, args...) = throw(MethodError(f, args))
-
 type WeakRef
     value
     WeakRef() = WeakRef(nothing)

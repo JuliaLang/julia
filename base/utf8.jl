@@ -31,25 +31,28 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 length(s::UTF8String) = length(s.data)
 strlen(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
 
-function next(s::UTF8String, i::Int)
-    if !is_utf8_start(s.data[i])
+function ref(s::UTF8String, i::Int)
+    d = s.data
+    b = d[i]
+    if !is_utf8_start(b)
         error("invalid UTF-8 character index")
     end
-    trailing = _jl_utf8_trailing[s.data[i]+1]
-    if length(s.data) < i + trailing
+    trailing = _jl_utf8_trailing[b+1]
+    if length(d) < i + trailing
         error("premature end of UTF-8 data")
     end
     c::Uint32 = 0
-    for j = 1:trailing
-        c += s.data[i]
+    for j = 1:trailing+1
         c <<= 6
+        c += d[i]
         i += 1
     end
-    c += s.data[i]
-    i += 1
     c -= _jl_utf8_offset[trailing+1]
-    char(c), i
+    char(c)
 end
+
+# this is a trick to allow inlining and tuple elision
+next(s::UTF8String, i::Int) = (s[i], i+1+_jl_utf8_trailing[s.data[i]+1])
 
 function first_utf8_byte(c::Char)
     c < 0x80    ? uint8(c)            :

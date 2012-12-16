@@ -553,7 +553,7 @@ static void gc_mark_all()
             }
         }
         if (a->ptrarray) {
-            size_t l = a->length;
+            size_t l = jl_array_len(a);
             for(size_t i=0; i < l; i++) {
                 jl_value_t *elt = ((jl_value_t**)data)[i];
                 if (elt != NULL) gc_push_root(elt);

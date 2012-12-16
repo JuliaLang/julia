@@ -2,14 +2,13 @@ JULIAHOME = $(abspath ..)
 include ../Make.inc
 
 default all extra unicode gzip::
-	@$(MAKE) -sC unicode
 
 TESTS = default all extra \
 core numbers strings unicode corelib hashing remote \
-arrayops linalg fft sparse arpack bitarray \
+arrayops linalg fft sparse bitarray suitesparse arpack \
 random math functional bigint combinatorics statistics \
-glpk linprog bigfloat poly file Rmath remote zlib image gzip \
-integers spawn iostring
+glpk linprog bigfloat poly file Rmath remote zlib image \
+iostring gzip integers spawn
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
@@ -25,7 +24,6 @@ benchmark:
 	@$(MAKE) -C perf $@
 
 clean:
-	@$(MAKE) -C unicode $@
 	@$(MAKE) -C perf $@
 
 .PHONY: $(TESTS) perf benchmark clean

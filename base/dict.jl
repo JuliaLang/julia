@@ -388,8 +388,6 @@ end
 
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex{K,V}(h::Dict{K,V}, key)
-    key = convert(K,key)
-
     sz = length(h.keys)
     iter = 0
     maxprobe = max(16, sz>>6)
@@ -504,18 +502,18 @@ WeakKeyDict() = WeakKeyDict{Any,Any}()
 assign{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
 
 function key{K}(wkh::WeakKeyDict{K}, kk, deflt)
-    k = key(wkh.ht, convert(K,kk), _jl_secret_table_token)
+    k = key(wkh.ht, kk, _jl_secret_table_token)
     if is(k, _jl_secret_table_token)
         return deflt
     end
     return k.value::K
 end
 
-get{K}(wkh::WeakKeyDict{K}, key, deflt) = get(wkh.ht, convert(K,key), deflt)
-del{K}(wkh::WeakKeyDict{K}, key) = del(wkh.ht, convert(K,key))
+get{K}(wkh::WeakKeyDict{K}, key, deflt) = get(wkh.ht, key, deflt)
+del{K}(wkh::WeakKeyDict{K}, key) = del(wkh.ht, key)
 del_all(wkh::WeakKeyDict)  = (del_all(wkh.ht); wkh)
-has{K}(wkh::WeakKeyDict{K}, key) = has(wkh.ht, convert(K,key))
-ref{K}(wkh::WeakKeyDict{K}, key) = ref(wkh.ht, convert(K,key))
+has{K}(wkh::WeakKeyDict{K}, key) = has(wkh.ht, key)
+ref{K}(wkh::WeakKeyDict{K}, key) = ref(wkh.ht, key)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 
 start(t::WeakKeyDict) = start(t.ht)

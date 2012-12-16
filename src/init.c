@@ -522,8 +522,6 @@ static jl_value_t *basemod(char *name)
     return jl_get_global(jl_base_module, jl_symbol(name));
 }
 
-jl_function_t *jl_method_missing_func=NULL;
-
 // fetch references to things defined in boot.jl
 void jl_get_builtin_hooks(void)
 {
@@ -541,9 +539,6 @@ void jl_get_builtin_hooks(void)
 
     jl_float32_type = (jl_bits_type_t*)core("Float32");
     jl_float64_type = (jl_bits_type_t*)core("Float64");
-    jl_voidpointer_type = (jl_bits_type_t*)
-        jl_apply_type((jl_value_t*)jl_pointer_type,
-                      jl_tuple(1,jl_bottom_type));
 
     jl_stackovf_exception =
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
@@ -577,12 +572,11 @@ void jl_get_builtin_hooks(void)
 
 DLLEXPORT void jl_get_system_hooks(void)
 {
-    if (jl_method_missing_func) return; // only do this once
+    if (jl_errorexception_type) return; // only do this once
 
     jl_errorexception_type = (jl_struct_type_t*)basemod("ErrorException");
     jl_typeerror_type = (jl_struct_type_t*)basemod("TypeError");
+    jl_methoderror_type = (jl_struct_type_t*)basemod("MethodError");
     jl_loaderror_type = (jl_struct_type_t*)basemod("LoadError");
     jl_weakref_type = (jl_struct_type_t*)basemod("WeakRef");
-
-    jl_method_missing_func = (jl_function_t*)basemod("method_missing");
 }

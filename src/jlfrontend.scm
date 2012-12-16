@@ -31,6 +31,7 @@
 	((quoted? e) '())
 	(else (case (car e)
 		((=)            (list (decl-var (cadr e))))
+		((method)       (list (cadr e)))
 		((lambda)       '())
 		((local local!) '())
 		((break-block)  (find-possible-globals (caddr e)))
@@ -42,12 +43,15 @@
 ;; this is overwritten when we run in actual julia
 (define (defined-julia-global v) #f)
 
+(define (some-gensym? x)
+  (or (gensym? x) (memq x *gensyms*)))
+
 ;; find variables that should be forced to be global in a toplevel expr
 (define (toplevel-expr-globals e)
   (delete-duplicates
    (append
     ;; vars assigned at the outer level
-    (filter (lambda (x) (not (gensym? x))) (find-assigned-vars e '()))
+    (filter (lambda (x) (not (some-gensym? x))) (find-assigned-vars e '()))
     ;; vars assigned anywhere, if they have been defined as global
     (filter defined-julia-global (find-possible-globals e)))))
 

@@ -393,7 +393,7 @@ static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
 {
     do {
         if (common_prefix(prefix, tree->name) == plen &&
-            jl_boundp(module, tree)) {
+            (module ? jl_defines_or_exports_p(module, tree) : jl_boundp(jl_current_module, tree))) {
             ios_puts(str, result);
             ios_puts(tree->name + plen, result);
             ios_putc('\n', result);
@@ -449,22 +449,30 @@ static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
     ios_t ans;
 
     // given str "X.Y.a", set module := X.Y and name := "a"
-    jl_module_t *module = jl_current_module;
+    jl_module_t *module = NULL;
     char *name = NULL, *strcopy = strdup(str);
     for (char *s=strcopy, *r;; s=NULL) {
         char *t = strtok_r(s, ".", &r);
         if (!t) {
-            if (str[strlen(str)-1] == '.') name = NULL;
+            if (str[strlen(str)-1] == '.') {
+                // this case is "Module."
+                if (name) {
+                    if (!module) module = jl_current_module;
+                    module = find_submodule_named(module, name);
+                    if (!module) goto symtab_get_matches_exit;
+                }
+                name = "";
+            }
             break;
         }
         if (name) {
+            if (!module) module = jl_current_module;
             module = find_submodule_named(module, name);
             if (!module) goto symtab_get_matches_exit;
         }
         name = t;
     }
 
-    if (!name) goto symtab_get_matches_exit;
     plen = strlen(name);
 
     while (tree != NULL) {

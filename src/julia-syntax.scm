@@ -2092,6 +2092,23 @@ So far only the second case can actually occur.
 			 (cons `(cell1d ,(expand-backquote (car p)))
 			       q))))))))
 
+(define (julia-expand-strs e)
+  (cond ((not (pair? e))     e)
+	((and (eq? (car e) 'macrocall) (eq? (cadr e) '@str))
+	 ;; expand macro
+	 (let ((form
+		(apply invoke-julia-macro (cadr e) (cddr e))))
+	   (if (not form)
+	       (error (string "macro " (cadr e) " not defined")))
+	   (if (and (pair? form) (eq? (car form) 'error))
+	       (error (cadr form)))
+	   (let ((form (car form))
+		 (m    (cdr form)))
+	     ;; m is the macro's def module, or #f if def env === use env
+	     (resolve-expansion-vars form m))))
+	(else
+	 (map julia-expand-strs e))))
+
 (define (julia-expand-macros e)
   (cond ((not (pair? e))     e)
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
@@ -2109,15 +2126,15 @@ So far only the second case can actually occur.
 		 (m    (cdr form)))
 	     ;; m is the macro's def module, or #f if def env === use env
 	     (julia-expand-macros
-	      (resolve-expansion-vars form m)))))
+	      (resolve-expansion-vars (julia-expand-strs form) m)))))
 	(else
 	 (map julia-expand-macros e))))
 
 (define (pair-with-gensyms v)
-  (map (lambda (s) (cons s (gensy))) v))
+  (map (lambda (s) (cons s (named-gensy s))) v))
 
 (define (resolve-expansion-vars- e env m)
-  (cond ((or (eq? e 'true) (eq? e 'false))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
 	 e)
 	((symbol? e)
 	 (let ((a (assq e env)))

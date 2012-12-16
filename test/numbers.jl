@@ -1,418 +1,418 @@
 # basic booleans
-@assert true
-@assert !false
-@assert !!true
-@assert !!!false
+@test true
+@test !false
+@test !!true
+@test !!!false
 
-@assert true  == true
-@assert false == false
-@assert true  != false
-@assert false != true
+@test true  == true
+@test false == false
+@test true  != false
+@test false != true
 
-@assert ~true == false
-@assert ~false == true
+@test ~true == false
+@test ~false == true
 
-@assert false & false == false
-@assert true  & false == false
-@assert false & true  == false
-@assert true  & true  == true
+@test false & false == false
+@test true  & false == false
+@test false & true  == false
+@test true  & true  == true
 
-@assert false | false == false
-@assert true  | false == true
-@assert false | true  == true
-@assert true  | true  == true
+@test false | false == false
+@test true  | false == true
+@test false | true  == true
+@test true  | true  == true
 
-@assert false $ false == false
-@assert true  $ false == true
-@assert false $ true  == true
-@assert true  $ true  == false
+@test false $ false == false
+@test true  $ false == true
+@test false $ true  == true
+@test true  $ true  == false
 
 # the bool operator
-@assert bool(false) == false
-@assert bool(true) == true
-@assert bool(0) == false
-@assert bool(1) == true
-@assert bool(-1) == true
-@assert bool(0.0) == false
-@assert bool(1.0) == true
-@assert bool(0.1) == true
-@assert bool(-1.0) == true
-@assert bool(ComplexPair(0,0)) == false
-@assert bool(ComplexPair(1,0)) == true
-@assert_fails bool(ComplexPair(0,1)) == true
-@assert bool(0//1) == false
-@assert bool(1//1) == true
-@assert bool(1//2) == true
+@test bool(false) == false
+@test bool(true) == true
+@test bool(0) == false
+@test bool(1) == true
+@test bool(-1) == true
+@test bool(0.0) == false
+@test bool(1.0) == true
+@test bool(0.1) == true
+@test bool(-1.0) == true
+@test bool(ComplexPair(0,0)) == false
+@test bool(ComplexPair(1,0)) == true
+@test_fails bool(ComplexPair(0,1)) == true
+@test bool(0//1) == false
+@test bool(1//1) == true
+@test bool(1//2) == true
 
 # basic arithmetic
-@assert 2+3 == 5
-@assert 2.+3. == 5.
-@assert 2*3 == 6
-@assert 2.*3 == 6
-@assert 2. * 3. == 6.
-@assert min(1.0,1) == 1
+@test 2+3 == 5
+@test 2.+3. == 5.
+@test 2*3 == 6
+@test 2.*3 == 6
+@test 2. * 3. == 6.
+@test min(1.0,1) == 1
 
 # definition and printing of extreme integers
-@assert bin(typemin(Uint8)) == "0"
-@assert bin(typemax(Uint8)) == "1"^8
-@assert oct(typemin(Uint8)) == "0"
-@assert oct(typemax(Uint8)) == "377"
-@assert dec(typemin(Uint8)) == "0"
-@assert dec(typemax(Uint8)) == "255"
-@assert hex(typemin(Uint8)) == "0"
-@assert hex(typemax(Uint8)) == "ff"
-@assert string(typemin(Uint8)) == "0x00"
-@assert string(typemax(Uint8)) == "0xff"
-@assert base(3,typemin(Uint8)) == "0"
-@assert base(3,typemax(Uint8)) == "100110"
-@assert base(12,typemin(Uint8)) == "0"
-@assert base(12,typemax(Uint8)) == "193"
+@test bin(typemin(Uint8)) == "0"
+@test bin(typemax(Uint8)) == "1"^8
+@test oct(typemin(Uint8)) == "0"
+@test oct(typemax(Uint8)) == "377"
+@test dec(typemin(Uint8)) == "0"
+@test dec(typemax(Uint8)) == "255"
+@test hex(typemin(Uint8)) == "0"
+@test hex(typemax(Uint8)) == "ff"
+@test string(typemin(Uint8)) == "0x00"
+@test string(typemax(Uint8)) == "0xff"
+@test base(3,typemin(Uint8)) == "0"
+@test base(3,typemax(Uint8)) == "100110"
+@test base(12,typemin(Uint8)) == "0"
+@test base(12,typemax(Uint8)) == "193"
 
-@assert bin(typemin(Uint16)) == "0"
-@assert bin(typemax(Uint16)) == "1"^16
-@assert oct(typemin(Uint16)) == "0"
-@assert oct(typemax(Uint16)) == "177777"
-@assert dec(typemin(Uint16)) == "0"
-@assert dec(typemax(Uint16)) == "65535"
-@assert hex(typemin(Uint16)) == "0"
-@assert hex(typemax(Uint16)) == "ffff"
-@assert string(typemin(Uint16)) == "0x0000"
-@assert string(typemax(Uint16)) == "0xffff"
-@assert base(3,typemin(Uint16)) == "0"
-@assert base(3,typemax(Uint16)) == "10022220020"
-@assert base(12,typemin(Uint16)) == "0"
-@assert base(12,typemax(Uint16)) == "31b13"
+@test bin(typemin(Uint16)) == "0"
+@test bin(typemax(Uint16)) == "1"^16
+@test oct(typemin(Uint16)) == "0"
+@test oct(typemax(Uint16)) == "177777"
+@test dec(typemin(Uint16)) == "0"
+@test dec(typemax(Uint16)) == "65535"
+@test hex(typemin(Uint16)) == "0"
+@test hex(typemax(Uint16)) == "ffff"
+@test string(typemin(Uint16)) == "0x0000"
+@test string(typemax(Uint16)) == "0xffff"
+@test base(3,typemin(Uint16)) == "0"
+@test base(3,typemax(Uint16)) == "10022220020"
+@test base(12,typemin(Uint16)) == "0"
+@test base(12,typemax(Uint16)) == "31b13"
 
-@assert bin(typemin(Uint32)) == "0"
-@assert bin(typemax(Uint32)) == "1"^32
-@assert oct(typemin(Uint32)) == "0"
-@assert oct(typemax(Uint32)) == "37777777777"
-@assert dec(typemin(Uint32)) == "0"
-@assert dec(typemax(Uint32)) == "4294967295"
-@assert hex(typemin(Uint32)) == "0"
-@assert hex(typemax(Uint32)) == "ffffffff"
-@assert string(typemin(Uint32)) == "0x00000000"
-@assert string(typemax(Uint32)) == "0xffffffff"
-@assert base(3,typemin(Uint32)) == "0"
-@assert base(3,typemax(Uint32)) == "102002022201221111210"
-@assert base(12,typemin(Uint32)) == "0"
-@assert base(12,typemax(Uint32)) == "9ba461593"
+@test bin(typemin(Uint32)) == "0"
+@test bin(typemax(Uint32)) == "1"^32
+@test oct(typemin(Uint32)) == "0"
+@test oct(typemax(Uint32)) == "37777777777"
+@test dec(typemin(Uint32)) == "0"
+@test dec(typemax(Uint32)) == "4294967295"
+@test hex(typemin(Uint32)) == "0"
+@test hex(typemax(Uint32)) == "ffffffff"
+@test string(typemin(Uint32)) == "0x00000000"
+@test string(typemax(Uint32)) == "0xffffffff"
+@test base(3,typemin(Uint32)) == "0"
+@test base(3,typemax(Uint32)) == "102002022201221111210"
+@test base(12,typemin(Uint32)) == "0"
+@test base(12,typemax(Uint32)) == "9ba461593"
 
-@assert bin(typemin(Uint64)) == "0"
-@assert bin(typemax(Uint64)) == "1"^64
-@assert oct(typemin(Uint64)) == "0"
-@assert oct(typemax(Uint64)) == "1777777777777777777777"
-@assert dec(typemin(Uint64)) == "0"
-@assert dec(typemax(Uint64)) == "18446744073709551615"
-@assert hex(typemin(Uint64)) == "0"
-@assert hex(typemax(Uint64)) == "ffffffffffffffff"
-@assert string(typemin(Uint64)) == "0x0000000000000000"
-@assert string(typemax(Uint64)) == "0xffffffffffffffff"
-@assert base(3,typemin(Uint64)) == "0"
-@assert base(3,typemax(Uint64)) == "11112220022122120101211020120210210211220"
-@assert base(12,typemin(Uint64)) == "0"
-@assert base(12,typemax(Uint64)) == "839365134a2a240713"
+@test bin(typemin(Uint64)) == "0"
+@test bin(typemax(Uint64)) == "1"^64
+@test oct(typemin(Uint64)) == "0"
+@test oct(typemax(Uint64)) == "1777777777777777777777"
+@test dec(typemin(Uint64)) == "0"
+@test dec(typemax(Uint64)) == "18446744073709551615"
+@test hex(typemin(Uint64)) == "0"
+@test hex(typemax(Uint64)) == "ffffffffffffffff"
+@test string(typemin(Uint64)) == "0x0000000000000000"
+@test string(typemax(Uint64)) == "0xffffffffffffffff"
+@test base(3,typemin(Uint64)) == "0"
+@test base(3,typemax(Uint64)) == "11112220022122120101211020120210210211220"
+@test base(12,typemin(Uint64)) == "0"
+@test base(12,typemax(Uint64)) == "839365134a2a240713"
 
-@assert bin(typemin(Uint128)) == "0"
-@assert bin(typemax(Uint128)) == "1"^128
-@assert oct(typemin(Uint128)) == "0"
-@assert oct(typemax(Uint128)) == "3777777777777777777777777777777777777777777"
-@assert hex(typemin(Uint128)) == "0"
-@assert hex(typemax(Uint128)) == "ffffffffffffffffffffffffffffffff"
-@assert string(typemin(Uint128)) == "0x00000000000000000000000000000000"
-@assert string(typemax(Uint128)) == "0xffffffffffffffffffffffffffffffff"
+@test bin(typemin(Uint128)) == "0"
+@test bin(typemax(Uint128)) == "1"^128
+@test oct(typemin(Uint128)) == "0"
+@test oct(typemax(Uint128)) == "3777777777777777777777777777777777777777777"
+@test hex(typemin(Uint128)) == "0"
+@test hex(typemax(Uint128)) == "ffffffffffffffffffffffffffffffff"
+@test string(typemin(Uint128)) == "0x00000000000000000000000000000000"
+@test string(typemax(Uint128)) == "0xffffffffffffffffffffffffffffffff"
 
 if WORD_SIZE > 32
-@assert dec(typemin(Uint128)) == "0"
-@assert dec(typemax(Uint128)) == "340282366920938463463374607431768211455"
-@assert base(3,typemin(Uint128)) == "0"
-@assert base(3,typemax(Uint128)) ==
+@test dec(typemin(Uint128)) == "0"
+@test dec(typemax(Uint128)) == "340282366920938463463374607431768211455"
+@test base(3,typemin(Uint128)) == "0"
+@test base(3,typemax(Uint128)) ==
     "202201102121002021012000211012011021221022212021111001022110211020010021100121010"
-@assert base(12,typemin(Uint128)) == "0"
-@assert base(12,typemax(Uint128)) == "5916b64b41143526a777873841863a6a6993"
+@test base(12,typemin(Uint128)) == "0"
+@test base(12,typemax(Uint128)) == "5916b64b41143526a777873841863a6a6993"
 end
 
-@assert bin(typemin(Int8)) == "-1"*"0"^7
-@assert bin(typemax(Int8)) == "1"^7
-@assert oct(typemin(Int8)) == "-200"
-@assert oct(typemax(Int8)) == "177"
-@assert dec(typemin(Int8)) == "-128"
-@assert dec(typemax(Int8)) == "127"
-@assert hex(typemin(Int8)) == "-80"
-@assert hex(typemax(Int8)) == "7f"
-@assert string(typemin(Int8)) == "-128"
-@assert string(typemax(Int8)) == "127"
-@assert base(3,typemin(Int8)) == "-11202"
-@assert base(3,typemax(Int8)) == "11201"
-@assert base(12,typemin(Int8)) == "-a8"
-@assert base(12,typemax(Int8)) == "a7"
+@test bin(typemin(Int8)) == "-1"*"0"^7
+@test bin(typemax(Int8)) == "1"^7
+@test oct(typemin(Int8)) == "-200"
+@test oct(typemax(Int8)) == "177"
+@test dec(typemin(Int8)) == "-128"
+@test dec(typemax(Int8)) == "127"
+@test hex(typemin(Int8)) == "-80"
+@test hex(typemax(Int8)) == "7f"
+@test string(typemin(Int8)) == "-128"
+@test string(typemax(Int8)) == "127"
+@test base(3,typemin(Int8)) == "-11202"
+@test base(3,typemax(Int8)) == "11201"
+@test base(12,typemin(Int8)) == "-a8"
+@test base(12,typemax(Int8)) == "a7"
 
-@assert bin(typemin(Int16)) == "-1"*"0"^15
-@assert bin(typemax(Int16)) == "1"^15
-@assert oct(typemin(Int16)) == "-100000"
-@assert oct(typemax(Int16)) == "77777"
-@assert dec(typemin(Int16)) == "-32768"
-@assert dec(typemax(Int16)) == "32767"
-@assert hex(typemin(Int16)) == "-8000"
-@assert hex(typemax(Int16)) == "7fff"
-@assert string(typemin(Int16)) == "-32768"
-@assert string(typemax(Int16)) == "32767"
-@assert base(3,typemin(Int16)) == "-1122221122"
-@assert base(3,typemax(Int16)) == "1122221121"
-@assert base(12,typemin(Int16)) == "-16b68"
-@assert base(12,typemax(Int16)) == "16b67"
+@test bin(typemin(Int16)) == "-1"*"0"^15
+@test bin(typemax(Int16)) == "1"^15
+@test oct(typemin(Int16)) == "-100000"
+@test oct(typemax(Int16)) == "77777"
+@test dec(typemin(Int16)) == "-32768"
+@test dec(typemax(Int16)) == "32767"
+@test hex(typemin(Int16)) == "-8000"
+@test hex(typemax(Int16)) == "7fff"
+@test string(typemin(Int16)) == "-32768"
+@test string(typemax(Int16)) == "32767"
+@test base(3,typemin(Int16)) == "-1122221122"
+@test base(3,typemax(Int16)) == "1122221121"
+@test base(12,typemin(Int16)) == "-16b68"
+@test base(12,typemax(Int16)) == "16b67"
 
-@assert bin(typemin(Int32)) == "-1"*"0"^31
-@assert bin(typemax(Int32)) == "1"^31
-@assert oct(typemin(Int32)) == "-20000000000"
-@assert oct(typemax(Int32)) == "17777777777"
-@assert dec(typemin(Int32)) == "-2147483648"
-@assert dec(typemax(Int32)) == "2147483647"
-@assert hex(typemin(Int32)) == "-80000000"
-@assert hex(typemax(Int32)) == "7fffffff"
-@assert string(typemin(Int32)) == "-2147483648"
-@assert string(typemax(Int32)) == "2147483647"
-@assert base(3,typemin(Int32)) == "-12112122212110202102"
-@assert base(3,typemax(Int32)) == "12112122212110202101"
-@assert base(12,typemin(Int32)) == "-4bb2308a8"
-@assert base(12,typemax(Int32)) == "4bb2308a7"
+@test bin(typemin(Int32)) == "-1"*"0"^31
+@test bin(typemax(Int32)) == "1"^31
+@test oct(typemin(Int32)) == "-20000000000"
+@test oct(typemax(Int32)) == "17777777777"
+@test dec(typemin(Int32)) == "-2147483648"
+@test dec(typemax(Int32)) == "2147483647"
+@test hex(typemin(Int32)) == "-80000000"
+@test hex(typemax(Int32)) == "7fffffff"
+@test string(typemin(Int32)) == "-2147483648"
+@test string(typemax(Int32)) == "2147483647"
+@test base(3,typemin(Int32)) == "-12112122212110202102"
+@test base(3,typemax(Int32)) == "12112122212110202101"
+@test base(12,typemin(Int32)) == "-4bb2308a8"
+@test base(12,typemax(Int32)) == "4bb2308a7"
 
-@assert bin(typemin(Int64)) == "-1"*"0"^63
-@assert bin(typemax(Int64)) == "1"^63
-@assert oct(typemin(Int64)) == "-1000000000000000000000"
-@assert oct(typemax(Int64)) == "777777777777777777777"
-@assert dec(typemin(Int64)) == "-9223372036854775808"
-@assert dec(typemax(Int64)) == "9223372036854775807"
-@assert hex(typemin(Int64)) == "-8000000000000000"
-@assert hex(typemax(Int64)) == "7fffffffffffffff"
-@assert string(typemin(Int64)) == "-9223372036854775808"
-@assert string(typemax(Int64)) == "9223372036854775807"
-@assert base(3,typemin(Int64)) == "-2021110011022210012102010021220101220222"
-@assert base(3,typemax(Int64)) == "2021110011022210012102010021220101220221"
-@assert base(12,typemin(Int64)) == "-41a792678515120368"
-@assert base(12,typemax(Int64)) == "41a792678515120367"
+@test bin(typemin(Int64)) == "-1"*"0"^63
+@test bin(typemax(Int64)) == "1"^63
+@test oct(typemin(Int64)) == "-1000000000000000000000"
+@test oct(typemax(Int64)) == "777777777777777777777"
+@test dec(typemin(Int64)) == "-9223372036854775808"
+@test dec(typemax(Int64)) == "9223372036854775807"
+@test hex(typemin(Int64)) == "-8000000000000000"
+@test hex(typemax(Int64)) == "7fffffffffffffff"
+@test string(typemin(Int64)) == "-9223372036854775808"
+@test string(typemax(Int64)) == "9223372036854775807"
+@test base(3,typemin(Int64)) == "-2021110011022210012102010021220101220222"
+@test base(3,typemax(Int64)) == "2021110011022210012102010021220101220221"
+@test base(12,typemin(Int64)) == "-41a792678515120368"
+@test base(12,typemax(Int64)) == "41a792678515120367"
 
-@assert bin(typemin(Int128)) == "-1"*"0"^127
-@assert bin(typemax(Int128)) == "1"^127
-@assert oct(typemin(Int128)) == "-2000000000000000000000000000000000000000000"
-@assert oct(typemax(Int128)) == "1777777777777777777777777777777777777777777"
-@assert hex(typemin(Int128)) == "-80000000000000000000000000000000"
-@assert hex(typemax(Int128)) == "7fffffffffffffffffffffffffffffff"
+@test bin(typemin(Int128)) == "-1"*"0"^127
+@test bin(typemax(Int128)) == "1"^127
+@test oct(typemin(Int128)) == "-2000000000000000000000000000000000000000000"
+@test oct(typemax(Int128)) == "1777777777777777777777777777777777777777777"
+@test hex(typemin(Int128)) == "-80000000000000000000000000000000"
+@test hex(typemax(Int128)) == "7fffffffffffffffffffffffffffffff"
 
 if WORD_SIZE > 32
-@assert dec(typemin(Int128)) == "-170141183460469231731687303715884105728"
-@assert dec(typemax(Int128)) == "170141183460469231731687303715884105727"
-@assert string(typemin(Int128)) == "-170141183460469231731687303715884105728"
-@assert string(typemax(Int128)) == "170141183460469231731687303715884105727"
-@assert base(3,typemin(Int128)) ==
+@test dec(typemin(Int128)) == "-170141183460469231731687303715884105728"
+@test dec(typemax(Int128)) == "170141183460469231731687303715884105727"
+@test string(typemin(Int128)) == "-170141183460469231731687303715884105728"
+@test string(typemax(Int128)) == "170141183460469231731687303715884105727"
+@test base(3,typemin(Int128)) ==
     "-101100201022001010121000102002120122110122221010202000122201220121120010200022002"
-@assert base(3,typemax(Int128)) ==
+@test base(3,typemax(Int128)) ==
     "101100201022001010121000102002120122110122221010202000122201220121120010200022001"
-@assert base(12,typemin(Int128)) == "-2a695925806818735399a37a20a31b3534a8"
-@assert base(12,typemax(Int128)) == "2a695925806818735399a37a20a31b3534a7"
+@test base(12,typemin(Int128)) == "-2a695925806818735399a37a20a31b3534a8"
+@test base(12,typemax(Int128)) == "2a695925806818735399a37a20a31b3534a7"
 end
 
 # signs
-@assert sign(1) == 1
-@assert sign(-1) == -1
-@assert sign(0) == 0
-@assert sign(1.0) == 1
-@assert sign(-1.0) == -1
-@assert sign(0.0) == 0
-@assert sign(-0.0) == 0
-@assert sign( 1.0/0.0) == 1
-@assert sign(-1.0/0.0) == -1
-@assert sign(Inf) == 1
-@assert sign(-Inf) == -1
-@assert isequal(sign(NaN), NaN)
-@assert isequal(sign(-NaN), NaN)
-@assert sign(2//3) == 1
-@assert sign(-2//3) == -1
-@assert sign(0//1) == 0
-@assert sign(-0//1) == 0
-@assert sign(1//0) == 1
-@assert sign(-1//0) == -1
+@test sign(1) == 1
+@test sign(-1) == -1
+@test sign(0) == 0
+@test sign(1.0) == 1
+@test sign(-1.0) == -1
+@test sign(0.0) == 0
+@test sign(-0.0) == 0
+@test sign( 1.0/0.0) == 1
+@test sign(-1.0/0.0) == -1
+@test sign(Inf) == 1
+@test sign(-Inf) == -1
+@test isequal(sign(NaN), NaN)
+@test isequal(sign(-NaN), NaN)
+@test sign(2//3) == 1
+@test sign(-2//3) == -1
+@test sign(0//1) == 0
+@test sign(-0//1) == 0
+@test sign(1//0) == 1
+@test sign(-1//0) == -1
 
-@assert signbit(1) == 0
-@assert signbit(0) == 0
-@assert signbit(-1) == 1
-@assert signbit(1.0) == 0
-@assert signbit(0.0) == 0
-@assert signbit(-0.0) == 1
-@assert signbit(-1.0) == 1
-@assert signbit(1.0/0.0) == 0
-@assert signbit(-1.0/0.0) == 1
-@assert signbit(Inf) == 0
-@assert signbit(-Inf) == 1
-@assert signbit(NaN) == 0
-@assert signbit(-NaN) == 1
-@assert signbit(2//3) == 0
-@assert signbit(-2//3) == 1
-@assert signbit(0//1) == 0
-@assert signbit(-0//1) == 0
-@assert signbit(1//0) == 0
-@assert signbit(-1//0) == 1
+@test signbit(1) == 0
+@test signbit(0) == 0
+@test signbit(-1) == 1
+@test signbit(1.0) == 0
+@test signbit(0.0) == 0
+@test signbit(-0.0) == 1
+@test signbit(-1.0) == 1
+@test signbit(1.0/0.0) == 0
+@test signbit(-1.0/0.0) == 1
+@test signbit(Inf) == 0
+@test signbit(-Inf) == 1
+@test signbit(NaN) == 0
+@test signbit(-NaN) == 1
+@test signbit(2//3) == 0
+@test signbit(-2//3) == 1
+@test signbit(0//1) == 0
+@test signbit(-0//1) == 0
+@test signbit(1//0) == 0
+@test signbit(-1//0) == 1
 
-@assert isnan(1)     == false
-@assert isnan(1.0)   == false
-@assert isnan(-1.0)  == false
-@assert isnan(Inf)   == false
-@assert isnan(-Inf)  == false
-@assert isnan(NaN)   == true
-@assert isnan(1//2)  == false
-@assert isnan(-2//3) == false
-@assert isnan(5//0)  == false
-@assert isnan(-3//0) == false
+@test isnan(1)     == false
+@test isnan(1.0)   == false
+@test isnan(-1.0)  == false
+@test isnan(Inf)   == false
+@test isnan(-Inf)  == false
+@test isnan(NaN)   == true
+@test isnan(1//2)  == false
+@test isnan(-2//3) == false
+@test isnan(5//0)  == false
+@test isnan(-3//0) == false
 
-@assert isinf(1)     == false
-@assert isinf(1.0)   == false
-@assert isinf(-1.0)  == false
-@assert isinf(Inf)   == true
-@assert isinf(-Inf)  == true
-@assert isinf(NaN)   == false
-@assert isinf(1//2)  == false
-@assert isinf(-2//3) == false
-@assert isinf(5//0)  == true
-@assert isinf(-3//0) == true
+@test isinf(1)     == false
+@test isinf(1.0)   == false
+@test isinf(-1.0)  == false
+@test isinf(Inf)   == true
+@test isinf(-Inf)  == true
+@test isinf(NaN)   == false
+@test isinf(1//2)  == false
+@test isinf(-2//3) == false
+@test isinf(5//0)  == true
+@test isinf(-3//0) == true
 
-@assert isfinite(1)     == true
-@assert isfinite(1.0)   == true
-@assert isfinite(-1.0)  == true
-@assert isfinite(Inf)   == false
-@assert isfinite(-Inf)  == false
-@assert isfinite(NaN)   == false
-@assert isfinite(1//2)  == true
-@assert isfinite(-2//3) == true
-@assert isfinite(5//0)  == false
-@assert isfinite(-3//0) == false
+@test isfinite(1)     == true
+@test isfinite(1.0)   == true
+@test isfinite(-1.0)  == true
+@test isfinite(Inf)   == false
+@test isfinite(-Inf)  == false
+@test isfinite(NaN)   == false
+@test isfinite(1//2)  == true
+@test isfinite(-2//3) == true
+@test isfinite(5//0)  == false
+@test isfinite(-3//0) == false
 
-@assert isequal(-Inf,-Inf)
-@assert isequal(-1.0,-1.0)
-@assert isequal(-0.0,-0.0)
-@assert isequal(+0.0,+0.0)
-@assert isequal(+1.0,+1.0)
-@assert isequal(+Inf,+Inf)
-@assert isequal(-NaN,-NaN)
-@assert isequal(-NaN,+NaN)
-@assert isequal(+NaN,-NaN)
-@assert isequal(+NaN,+NaN)
+@test isequal(-Inf,-Inf)
+@test isequal(-1.0,-1.0)
+@test isequal(-0.0,-0.0)
+@test isequal(+0.0,+0.0)
+@test isequal(+1.0,+1.0)
+@test isequal(+Inf,+Inf)
+@test isequal(-NaN,-NaN)
+@test isequal(-NaN,+NaN)
+@test isequal(+NaN,-NaN)
+@test isequal(+NaN,+NaN)
 
-@assert !isequal(-Inf,+Inf)
-@assert !isequal(-1.0,+1.0)
-@assert !isequal(-0.0,+0.0)
-@assert !isequal(+0.0,-0.0)
-@assert !isequal(+1.0,-1.0)
-@assert !isequal(+Inf,-Inf)
+@test !isequal(-Inf,+Inf)
+@test !isequal(-1.0,+1.0)
+@test !isequal(-0.0,+0.0)
+@test !isequal(+0.0,-0.0)
+@test !isequal(+1.0,-1.0)
+@test !isequal(+Inf,-Inf)
 
-@assert !isless(-Inf,-Inf)
-@assert  isless(-Inf,-1.0)
-@assert  isless(-Inf,-0.0)
-@assert  isless(-Inf,+0.0)
-@assert  isless(-Inf,+1.0)
-@assert  isless(-Inf,+Inf)
-@assert  isless(-Inf,-NaN)
-@assert  isless(-Inf,+NaN)
+@test !isless(-Inf,-Inf)
+@test  isless(-Inf,-1.0)
+@test  isless(-Inf,-0.0)
+@test  isless(-Inf,+0.0)
+@test  isless(-Inf,+1.0)
+@test  isless(-Inf,+Inf)
+@test  isless(-Inf,-NaN)
+@test  isless(-Inf,+NaN)
 
-@assert !isless(-1.0,-Inf)
-@assert !isless(-1.0,-1.0)
-@assert  isless(-1.0,-0.0)
-@assert  isless(-1.0,+0.0)
-@assert  isless(-1.0,+1.0)
-@assert  isless(-1.0,+Inf)
-@assert  isless(-1.0,-NaN)
-@assert  isless(-1.0,+NaN)
+@test !isless(-1.0,-Inf)
+@test !isless(-1.0,-1.0)
+@test  isless(-1.0,-0.0)
+@test  isless(-1.0,+0.0)
+@test  isless(-1.0,+1.0)
+@test  isless(-1.0,+Inf)
+@test  isless(-1.0,-NaN)
+@test  isless(-1.0,+NaN)
 
-@assert !isless(-0.0,-Inf)
-@assert !isless(-0.0,-1.0)
-@assert !isless(-0.0,-0.0)
-@assert  isless(-0.0,+0.0)
-@assert  isless(-0.0,+1.0)
-@assert  isless(-0.0,+Inf)
-@assert  isless(-0.0,-NaN)
-@assert  isless(-0.0,+NaN)
+@test !isless(-0.0,-Inf)
+@test !isless(-0.0,-1.0)
+@test !isless(-0.0,-0.0)
+@test  isless(-0.0,+0.0)
+@test  isless(-0.0,+1.0)
+@test  isless(-0.0,+Inf)
+@test  isless(-0.0,-NaN)
+@test  isless(-0.0,+NaN)
 
-@assert !isless(+0.0,-Inf)
-@assert !isless(+0.0,-1.0)
-@assert !isless(+0.0,-0.0)
-@assert !isless(+0.0,+0.0)
-@assert  isless(+0.0,+1.0)
-@assert  isless(+0.0,+Inf)
-@assert  isless(+0.0,-NaN)
-@assert  isless(+0.0,+NaN)
+@test !isless(+0.0,-Inf)
+@test !isless(+0.0,-1.0)
+@test !isless(+0.0,-0.0)
+@test !isless(+0.0,+0.0)
+@test  isless(+0.0,+1.0)
+@test  isless(+0.0,+Inf)
+@test  isless(+0.0,-NaN)
+@test  isless(+0.0,+NaN)
 
-@assert !isless(+1.0,-Inf)
-@assert !isless(+1.0,-1.0)
-@assert !isless(+1.0,-0.0)
-@assert !isless(+1.0,+0.0)
-@assert !isless(+1.0,+1.0)
-@assert  isless(+1.0,+Inf)
-@assert  isless(+1.0,-NaN)
-@assert  isless(+1.0,+NaN)
+@test !isless(+1.0,-Inf)
+@test !isless(+1.0,-1.0)
+@test !isless(+1.0,-0.0)
+@test !isless(+1.0,+0.0)
+@test !isless(+1.0,+1.0)
+@test  isless(+1.0,+Inf)
+@test  isless(+1.0,-NaN)
+@test  isless(+1.0,+NaN)
 
-@assert !isless(+Inf,-Inf)
-@assert !isless(+Inf,-1.0)
-@assert !isless(+Inf,-0.0)
-@assert !isless(+Inf,+0.0)
-@assert !isless(+Inf,+1.0)
-@assert !isless(+Inf,+Inf)
-@assert  isless(+Inf,-NaN)
-@assert  isless(+Inf,+NaN)
+@test !isless(+Inf,-Inf)
+@test !isless(+Inf,-1.0)
+@test !isless(+Inf,-0.0)
+@test !isless(+Inf,+0.0)
+@test !isless(+Inf,+1.0)
+@test !isless(+Inf,+Inf)
+@test  isless(+Inf,-NaN)
+@test  isless(+Inf,+NaN)
 
-@assert !isless(-NaN,-Inf)
-@assert !isless(-NaN,-1.0)
-@assert !isless(-NaN,-0.0)
-@assert !isless(-NaN,+0.0)
-@assert !isless(-NaN,+1.0)
-@assert !isless(-NaN,+Inf)
-@assert !isless(-NaN,-NaN)
-@assert !isless(-NaN,+NaN)
+@test !isless(-NaN,-Inf)
+@test !isless(-NaN,-1.0)
+@test !isless(-NaN,-0.0)
+@test !isless(-NaN,+0.0)
+@test !isless(-NaN,+1.0)
+@test !isless(-NaN,+Inf)
+@test !isless(-NaN,-NaN)
+@test !isless(-NaN,+NaN)
 
-@assert !isless(+NaN,-Inf)
-@assert !isless(+NaN,-1.0)
-@assert !isless(+NaN,-0.0)
-@assert !isless(+NaN,+0.0)
-@assert !isless(+NaN,+1.0)
-@assert !isless(+NaN,+Inf)
-@assert !isless(+NaN,-NaN)
-@assert !isless(+NaN,+NaN)
+@test !isless(+NaN,-Inf)
+@test !isless(+NaN,-1.0)
+@test !isless(+NaN,-0.0)
+@test !isless(+NaN,+0.0)
+@test !isless(+NaN,+1.0)
+@test !isless(+NaN,+Inf)
+@test !isless(+NaN,-NaN)
+@test !isless(+NaN,+NaN)
 
-@assert  isequal(   0, 0.0)
-@assert  isequal( 0.0,   0)
-@assert !isequal(   0,-0.0)
-@assert !isequal(-0.0,   0)
-@assert  isless(-0.0,   0)
-@assert !isless(   0,-0.0)
+@test  isequal(   0, 0.0)
+@test  isequal( 0.0,   0)
+@test !isequal(   0,-0.0)
+@test !isequal(-0.0,   0)
+@test  isless(-0.0,   0)
+@test !isless(   0,-0.0)
 
 for x=-5:5, y=-5:5
-    @assert (x==y)==(float64(x)==int64(y))
-    @assert (x!=y)==(float64(x)!=int64(y))
-    @assert (x< y)==(float64(x)< int64(y))
-    @assert (x> y)==(float64(x)> int64(y))
-    @assert (x<=y)==(float64(x)<=int64(y))
-    @assert (x>=y)==(float64(x)>=int64(y))
+    @test (x==y)==(float64(x)==int64(y))
+    @test (x!=y)==(float64(x)!=int64(y))
+    @test (x< y)==(float64(x)< int64(y))
+    @test (x> y)==(float64(x)> int64(y))
+    @test (x<=y)==(float64(x)<=int64(y))
+    @test (x>=y)==(float64(x)>=int64(y))
 
-    @assert (x==y)==(int64(x)==float64(y))
-    @assert (x!=y)==(int64(x)!=float64(y))
-    @assert (x< y)==(int64(x)< float64(y))
-    @assert (x> y)==(int64(x)> float64(y))
-    @assert (x<=y)==(int64(x)<=float64(y))
-    @assert (x>=y)==(int64(x)>=float64(y))
+    @test (x==y)==(int64(x)==float64(y))
+    @test (x!=y)==(int64(x)!=float64(y))
+    @test (x< y)==(int64(x)< float64(y))
+    @test (x> y)==(int64(x)> float64(y))
+    @test (x<=y)==(int64(x)<=float64(y))
+    @test (x>=y)==(int64(x)>=float64(y))
 
     if x >= 0
-        @assert (x==y)==(uint64(x)==float64(y))
-        @assert (x!=y)==(uint64(x)!=float64(y))
-        @assert (x< y)==(uint64(x)< float64(y))
-        @assert (x> y)==(uint64(x)> float64(y))
-        @assert (x<=y)==(uint64(x)<=float64(y))
-        @assert (x>=y)==(uint64(x)>=float64(y))
+        @test (x==y)==(uint64(x)==float64(y))
+        @test (x!=y)==(uint64(x)!=float64(y))
+        @test (x< y)==(uint64(x)< float64(y))
+        @test (x> y)==(uint64(x)> float64(y))
+        @test (x<=y)==(uint64(x)<=float64(y))
+        @test (x>=y)==(uint64(x)>=float64(y))
     end
     if y >= 0
-        @assert (x==y)==(float64(x)==uint64(y))
-        @assert (x!=y)==(float64(x)!=uint64(y))
-        @assert (x< y)==(float64(x)< uint64(y))
-        @assert (x> y)==(float64(x)> uint64(y))
-        @assert (x<=y)==(float64(x)<=uint64(y))
-        @assert (x>=y)==(float64(x)>=uint64(y))
+        @test (x==y)==(float64(x)==uint64(y))
+        @test (x!=y)==(float64(x)!=uint64(y))
+        @test (x< y)==(float64(x)< uint64(y))
+        @test (x> y)==(float64(x)> uint64(y))
+        @test (x<=y)==(float64(x)<=uint64(y))
+        @test (x>=y)==(float64(x)>=uint64(y))
     end
 end
 
@@ -473,204 +473,204 @@ end
 for x=int64(2)^53-2:int64(2)^53+5,
     y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
     u = uint64(x)
-    @assert y == float64(itrunc(y))
+    @test y == float64(itrunc(y))
     # println("x=$x; y=float64($(itrunc(y)));")
 
-    @assert (x==y)==(y==x)
-    @assert (x!=y)==!(x==y)
-    @assert (-x==-y)==(-y==-x)
-    @assert (-x!=-y)==!(-x==-y)
+    @test (x==y)==(y==x)
+    @test (x!=y)==!(x==y)
+    @test (-x==-y)==(-y==-x)
+    @test (-x!=-y)==!(-x==-y)
 
-    @assert (x<y)==(x<=y)&(x!=y)
-    @assert (x<=y)==(x<y)|(x==y)
-    @assert (x==y)==(x<=y)&!(x<y)
+    @test (x<y)==(x<=y)&(x!=y)
+    @test (x<=y)==(x<y)|(x==y)
+    @test (x==y)==(x<=y)&!(x<y)
 
-    @assert -x != x
-    @assert -y != y
-    @assert -x != y
-    @assert -y != x
-    @assert -x <  x
-    @assert -y <  y
-    @assert -x <  y
-    @assert -y <  x
-    @assert -x <= x
-    @assert -y <= y
-    @assert -x <= y
-    @assert -y <= x
+    @test -x != x
+    @test -y != y
+    @test -x != y
+    @test -y != x
+    @test -x <  x
+    @test -y <  y
+    @test -x <  y
+    @test -y <  x
+    @test -x <= x
+    @test -y <= y
+    @test -x <= y
+    @test -y <= x
 
-    @assert -y != u
-    @assert -y <  u
-    @assert -y <= u
+    @test -y != u
+    @test -y <  u
+    @test -y <= u
 
     c = _cmp_(x,y)
     if c < 0
-        @assert !(x == y)
-        @assert  (x <  y)
-        @assert !(y <  x)
-        @assert  (x <= y)
-        @assert !(y <= x)
+        @test !(x == y)
+        @test  (x <  y)
+        @test !(y <  x)
+        @test  (x <= y)
+        @test !(y <= x)
 
-        @assert !(u == y)
-        @assert  (u <  y)
-        @assert !(y <  u)
-        @assert  (u <= y)
-        @assert !(y <= u)
+        @test !(u == y)
+        @test  (u <  y)
+        @test !(y <  u)
+        @test  (u <= y)
+        @test !(y <= u)
 
-        @assert !(-x == -y)
-        @assert !(-x <  -y)
-        @assert  (-y <  -x)
-        @assert !(-x <= -y)
-        @assert  (-y <= -x)
+        @test !(-x == -y)
+        @test !(-x <  -y)
+        @test  (-y <  -x)
+        @test !(-x <= -y)
+        @test  (-y <= -x)
     elseif c > 0
-        @assert !(x == y)
-        @assert !(x <  y)
-        @assert  (y <  x)
-        @assert !(x <= y)
-        @assert  (y <= x)
+        @test !(x == y)
+        @test !(x <  y)
+        @test  (y <  x)
+        @test !(x <= y)
+        @test  (y <= x)
 
-        @assert !(u == y)
-        @assert !(u <  y)
-        @assert  (y <  u)
-        @assert !(u <= y)
-        @assert  (y <= u)
+        @test !(u == y)
+        @test !(u <  y)
+        @test  (y <  u)
+        @test !(u <= y)
+        @test  (y <= u)
 
-        @assert !(-x == -y)
-        @assert  (-x <  -y)
-        @assert !(-y <  -x)
-        @assert  (-x <= -y)
-        @assert !(-y <= -x)
+        @test !(-x == -y)
+        @test  (-x <  -y)
+        @test !(-y <  -x)
+        @test  (-x <= -y)
+        @test !(-y <= -x)
     else
-        @assert  (x == y)
-        @assert !(x <  y)
-        @assert !(y <  x)
-        @assert  (x <= y)
-        @assert  (y <= x)
+        @test  (x == y)
+        @test !(x <  y)
+        @test !(y <  x)
+        @test  (x <= y)
+        @test  (y <= x)
 
-        @assert  (u == y)
-        @assert !(u <  y)
-        @assert !(y <  u)
-        @assert  (u <= y)
-        @assert  (y <= u)
+        @test  (u == y)
+        @test !(u <  y)
+        @test !(y <  u)
+        @test  (u <= y)
+        @test  (y <= u)
 
-        @assert  (-x == -y)
-        @assert !(-x <  -y)
-        @assert !(-y <  -x)
-        @assert  (-x <= -y)
-        @assert  (-y <= -x)
+        @test  (-x == -y)
+        @test !(-x <  -y)
+        @test !(-y <  -x)
+        @test  (-x <= -y)
+        @test  (-y <= -x)
     end
 end
 
-@assert int64(2)^62-1 != 2.0^62
-@assert int64(2)^62   == 2.0^62
-@assert int64(2)^62+1 != 2.0^62
-@assert 2.0^62 != int64(2)^62-1
-@assert 2.0^62 == int64(2)^62
-@assert 2.0^62 != int64(2)^62+1
+@test int64(2)^62-1 != 2.0^62
+@test int64(2)^62   == 2.0^62
+@test int64(2)^62+1 != 2.0^62
+@test 2.0^62 != int64(2)^62-1
+@test 2.0^62 == int64(2)^62
+@test 2.0^62 != int64(2)^62+1
 
-@assert typemax(Int64)   != +2.0^63
-@assert typemin(Int64)   == -2.0^63
-@assert typemin(Int64)+1 != -2.0^63
+@test typemax(Int64)   != +2.0^63
+@test typemin(Int64)   == -2.0^63
+@test typemin(Int64)+1 != -2.0^63
 
-@assert uint64(2)^60-1 != 2.0^60
-@assert uint64(2)^60   == 2.0^60
-@assert uint64(2)^60+1 != 2.0^60
-@assert 2.0^60 != uint64(2)^60-1
-@assert 2.0^60 == uint64(2)^60
-@assert 2.0^60 != uint64(2)^60+1
+@test uint64(2)^60-1 != 2.0^60
+@test uint64(2)^60   == 2.0^60
+@test uint64(2)^60+1 != 2.0^60
+@test 2.0^60 != uint64(2)^60-1
+@test 2.0^60 == uint64(2)^60
+@test 2.0^60 != uint64(2)^60+1
 
-@assert uint64(2)^63-1 != 2.0^63
-@assert uint64(2)^63   == 2.0^63
-@assert uint64(2)^63+1 != 2.0^63
-@assert 2.0^63 != uint64(2)^63-1
-@assert 2.0^63 == uint64(2)^63
-@assert 2.0^63 != uint64(2)^63+1
+@test uint64(2)^63-1 != 2.0^63
+@test uint64(2)^63   == 2.0^63
+@test uint64(2)^63+1 != 2.0^63
+@test 2.0^63 != uint64(2)^63-1
+@test 2.0^63 == uint64(2)^63
+@test 2.0^63 != uint64(2)^63+1
 
-@assert typemax(Uint64) != 2.0^64
+@test typemax(Uint64) != 2.0^64
 
-@assert !(NaN <= 1)
-@assert !(NaN >= 1)
-@assert !(NaN < 1)
-@assert !(NaN > 1)
-@assert !(1 <= NaN)
-@assert !(1 >= NaN)
-@assert !(1 < NaN)
-@assert !(1 > NaN)
+@test !(NaN <= 1)
+@test !(NaN >= 1)
+@test !(NaN < 1)
+@test !(NaN > 1)
+@test !(1 <= NaN)
+@test !(1 >= NaN)
+@test !(1 < NaN)
+@test !(1 > NaN)
 
-@assert 1//1 == 1
-@assert 2//2 == 1
-@assert 1//1 == 1//1
-@assert 2//2 == 1//1
-@assert 2//4 == 3//6
-@assert 1//2 + 1//2 == 1
-@assert (-1)//3 == -(1//3)
-@assert 1//2 + 3//4 == 5//4
-@assert 1//3 * 3//4 == 1//4
-@assert 1//2 / 3//4 == 2//3
-@assert 1//0 == 1//0
-@assert 5//0 == 1//0
-@assert -1//0 == -1//0
-@assert -7//0 == -1//0
+@test 1//1 == 1
+@test 2//2 == 1
+@test 1//1 == 1//1
+@test 2//2 == 1//1
+@test 2//4 == 3//6
+@test 1//2 + 1//2 == 1
+@test (-1)//3 == -(1//3)
+@test 1//2 + 3//4 == 5//4
+@test 1//3 * 3//4 == 1//4
+@test 1//2 / 3//4 == 2//3
+@test 1//0 == 1//0
+@test 5//0 == 1//0
+@test -1//0 == -1//0
+@test -7//0 == -1//0
 
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
-    @assert a//b == a/b
-    @assert a//b == a//b
-    @assert a//b == rational(a/b)
+    @test a//b == a/b
+    @test a//b == a//b
+    @test a//b == rational(a/b)
     if b == 0
-        @assert_fails integer(a//b) == integer(a/b)
+        @test_fails integer(a//b) == integer(a/b)
     else
-        @assert integer(a//b) == integer(a/b)
+        @test integer(a//b) == integer(a/b)
     end
     for c = -5:5
-        @assert (a//b == c) == (a/b == c)
-        @assert (a//b != c) == (a/b != c)
-        @assert (a//b <= c) == (a/b <= c)
-        @assert (a//b <  c) == (a/b <  c)
-        @assert (a//b >= c) == (a/b >= c)
-        @assert (a//b >  c) == (a/b >  c)
+        @test (a//b == c) == (a/b == c)
+        @test (a//b != c) == (a/b != c)
+        @test (a//b <= c) == (a/b <= c)
+        @test (a//b <  c) == (a/b <  c)
+        @test (a//b >= c) == (a/b >= c)
+        @test (a//b >  c) == (a/b >  c)
         for d = -5:5
             if c == d == 0; continue; end
-            @assert (a//b == c//d) == (a/b == c/d)
-            @assert (a//b != c//d) == (a/b != c/d)
-            @assert (a//b <= c//d) == (a/b <= c/d)
-            @assert (a//b <  c//d) == (a/b <  c/d)
-            @assert (a//b >= c//d) == (a/b >= c/d)
-            @assert (a//b >  c//d) == (a/b >  c/d)
+            @test (a//b == c//d) == (a/b == c/d)
+            @test (a//b != c//d) == (a/b != c/d)
+            @test (a//b <= c//d) == (a/b <= c/d)
+            @test (a//b <  c//d) == (a/b <  c/d)
+            @test (a//b >= c//d) == (a/b >= c/d)
+            @test (a//b >  c//d) == (a/b >  c/d)
         end
     end
 end
 
-@assert sqrt(2) == 1.4142135623730951
+@test sqrt(2) == 1.4142135623730951
 
-@assert 1+1.5 == 2.5
-@assert 1.5+1 == 2.5
-@assert 1+1.5+2 == 4.5
-@assert is(typeof(convert(ComplexPair{Int16},1)),ComplexPair{Int16})
-@assert ComplexPair(1,2)+1 == ComplexPair(2,2)
-@assert ComplexPair(1,2)+1.5 == ComplexPair(2.5,2.0)
-@assert 1/ComplexPair(2,2) == ComplexPair(.25,-.25)
-@assert ComplexPair(1.5,1.0) + 1//2 == ComplexPair(2.0,1.0)
-@assert real(ComplexPair(1//2,2//3)) == 1//2
-@assert imag(ComplexPair(1//2,2//3)) == 2//3
-@assert ComplexPair(1,2) + 1//2 == ComplexPair(3//2,2//1)
-@assert ComplexPair(1,2) + 1//2 * 0.5 == ComplexPair(1.25,2.0)
-@assert (ComplexPair(1,2) + 1//2) * 0.5 == ComplexPair(0.75,1.0)
-@assert (ComplexPair(1,2)/ComplexPair(2.5,3.0))*ComplexPair(2.5,3.0) == ComplexPair(1,2)
-@assert 0.7 < real(sqrt(ComplexPair(0,1))) < 0.707107
+@test 1+1.5 == 2.5
+@test 1.5+1 == 2.5
+@test 1+1.5+2 == 4.5
+@test is(typeof(convert(ComplexPair{Int16},1)),ComplexPair{Int16})
+@test ComplexPair(1,2)+1 == ComplexPair(2,2)
+@test ComplexPair(1,2)+1.5 == ComplexPair(2.5,2.0)
+@test 1/ComplexPair(2,2) == ComplexPair(.25,-.25)
+@test ComplexPair(1.5,1.0) + 1//2 == ComplexPair(2.0,1.0)
+@test real(ComplexPair(1//2,2//3)) == 1//2
+@test imag(ComplexPair(1//2,2//3)) == 2//3
+@test ComplexPair(1,2) + 1//2 == ComplexPair(3//2,2//1)
+@test ComplexPair(1,2) + 1//2 * 0.5 == ComplexPair(1.25,2.0)
+@test (ComplexPair(1,2) + 1//2) * 0.5 == ComplexPair(0.75,1.0)
+@test (ComplexPair(1,2)/ComplexPair(2.5,3.0))*ComplexPair(2.5,3.0) == ComplexPair(1,2)
+@test 0.7 < real(sqrt(ComplexPair(0,1))) < 0.707107
 
 for S = {Int8,  Int16,  Int32,  Int64},
     U = {Uint8, Uint16, Uint32, Uint64}
-    @assert !(-one(S) == typemax(U))
-    @assert -one(S) != typemax(U)
-    @assert -one(S) < typemax(U)
-    @assert !(typemax(U) <= -one(S))
+    @test !(-one(S) == typemax(U))
+    @test -one(S) != typemax(U)
+    @test -one(S) < typemax(U)
+    @test !(typemax(U) <= -one(S))
 end
 
 # check type of constructed rationals
 int_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64}
 for N = int_types, D = int_types
     T = promote_type(N,D)
-    @assert typeof(convert(N,2)//convert(D,3)) <: Rational{T}
+    @test typeof(convert(N,2)//convert(D,3)) <: Rational{T}
 end
 
 # check type of constructed complexes
@@ -679,12 +679,12 @@ real_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32,
               Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}}
 for A = real_types, B = real_types
     T = promote_type(A,B)
-    @assert typeof(ComplexPair(convert(A,2),convert(B,3))) <: ComplexPair{T}
+    @test typeof(ComplexPair(convert(A,2),convert(B,3))) <: ComplexPair{T}
 end
 
 # comparison should fail on complex
-@assert_fails complex(1,2) > 0
-@assert_fails complex(1,2) > complex(0,0)
+@test_fails complex(1,2) > 0
+@test_fails complex(1,2) > complex(0,0)
 
 # div, fld, rem, mod
 for yr = {
@@ -699,60 +699,60 @@ for yr = {
     for y = yr, x = xr
         # check basic div functionality
         if 0 <= x < 1y
-            @assert div(+x,+y) == 0
-            @assert div(+x,-y) == 0
-            @assert div(-x,+y) == 0
-            @assert div(-x,-y) == 0
+            @test div(+x,+y) == 0
+            @test div(+x,-y) == 0
+            @test div(-x,+y) == 0
+            @test div(-x,-y) == 0
         end
         if 1y <= x < 2y
-            @assert div(+x,+y) == +1
-            @assert div(+x,-y) == -1
-            @assert div(-x,+y) == -1
-            @assert div(-x,-y) == +1
+            @test div(+x,+y) == +1
+            @test div(+x,-y) == -1
+            @test div(-x,+y) == -1
+            @test div(-x,-y) == +1
         end
         if 2y <= x < 3y
-            @assert div(+x,+y) == +2
-            @assert div(+x,-y) == -2
-            @assert div(-x,+y) == -2
-            @assert div(-x,-y) == +2
+            @test div(+x,+y) == +2
+            @test div(+x,-y) == -2
+            @test div(-x,+y) == -2
+            @test div(-x,-y) == +2
         end
 
         # check basic fld functionality
         if 0 == x
-            @assert fld(+x,+y) == 0
-            @assert fld(+x,-y) == 0
-            @assert fld(-x,+y) == 0
-            @assert fld(-x,-y) == 0
+            @test fld(+x,+y) == 0
+            @test fld(+x,-y) == 0
+            @test fld(-x,+y) == 0
+            @test fld(-x,-y) == 0
         end
         if 0 < x < 1y
-            @assert fld(+x,+y) == +0
-            @assert fld(+x,-y) == -1
-            @assert fld(-x,+y) == -1
-            @assert fld(-x,-y) == +0
+            @test fld(+x,+y) == +0
+            @test fld(+x,-y) == -1
+            @test fld(-x,+y) == -1
+            @test fld(-x,-y) == +0
         end
         if 1y == x
-            @assert fld(+x,+y) == +1
-            @assert fld(+x,-y) == -1
-            @assert fld(-x,+y) == -1
-            @assert fld(-x,-y) == +1
+            @test fld(+x,+y) == +1
+            @test fld(+x,-y) == -1
+            @test fld(-x,+y) == -1
+            @test fld(-x,-y) == +1
         end
         if 1y < x < 2y
-            @assert fld(+x,+y) == +1
-            @assert fld(+x,-y) == -2
-            @assert fld(-x,+y) == -2
-            @assert fld(-x,-y) == +1
+            @test fld(+x,+y) == +1
+            @test fld(+x,-y) == -2
+            @test fld(-x,+y) == -2
+            @test fld(-x,-y) == +1
         end
         if 2y == x
-            @assert fld(+x,+y) == +2
-            @assert fld(+x,-y) == -2
-            @assert fld(-x,+y) == -2
-            @assert fld(-x,-y) == +2
+            @test fld(+x,+y) == +2
+            @test fld(+x,-y) == -2
+            @test fld(-x,+y) == -2
+            @test fld(-x,-y) == +2
         end
         if 2y < x < 3y
-            @assert fld(+x,+y) == +2
-            @assert fld(+x,-y) == -3
-            @assert fld(-x,+y) == -3
-            @assert fld(-x,-y) == +2
+            @test fld(+x,+y) == +2
+            @test fld(+x,-y) == -3
+            @test fld(-x,+y) == -3
+            @test fld(-x,-y) == +2
         end
 
         # check everything else in terms of div & fld
@@ -769,15 +769,15 @@ for yr = {
 
         t2 = promote_type(typeof(x),typeof(y))
 
-        @assert typeof(d) <: t1
-        @assert typeof(f) <: t1
-        @assert typeof(r) <: t2
-        @assert typeof(m) <: t2
+        @test typeof(d) <: t1
+        @test typeof(f) <: t1
+        @test typeof(r) <: t2
+        @test typeof(m) <: t2
 
-        @assert d == f
-        @assert r == m
-        @assert 0 <= r < y
-        @assert x == y*d + r
+        @test d == f
+        @test r == m
+        @test 0 <= r < y
+        @test x == y*d + r
 
         for X=[-1,1], Y=[-1,1]
             sx = X*x
@@ -788,226 +788,226 @@ for yr = {
             sr = rem(sx,sy)
             sm = mod(sx,sy)
 
-            @assert typeof(sd) <: t1
-            @assert typeof(sf) <: t1
-            @assert typeof(sr) <: t2
-            @assert typeof(sm) <: t2
+            @test typeof(sd) <: t1
+            @test typeof(sf) <: t1
+            @test typeof(sr) <: t2
+            @test typeof(sm) <: t2
 
-            @assert sx < 0 ? -y < sr <= 0 : 0 <= sr < +y
-            @assert sy < 0 ? -y < sm <= 0 : 0 <= sm < +y
-            @assert sx == sy*sd + sr
-            @assert sx == sy*sf + sm
+            @test sx < 0 ? -y < sr <= 0 : 0 <= sr < +y
+            @test sy < 0 ? -y < sm <= 0 : 0 <= sm < +y
+            @test sx == sy*sd + sr
+            @test sx == sy*sf + sm
         end
     end
 end
 
-@assert div(typemax(Int64)  , 1) ==  9223372036854775807
-@assert div(typemax(Int64)  , 2) ==  4611686018427387903
-@assert div(typemax(Int64)  , 7) ==  1317624576693539401
-@assert div(typemax(Int64)  ,-1) == -9223372036854775807
-@assert div(typemax(Int64)  ,-2) == -4611686018427387903
-@assert div(typemax(Int64)  ,-7) == -1317624576693539401
-@assert div(typemax(Int64)-1, 1) ==  9223372036854775806
-@assert div(typemax(Int64)-1, 2) ==  4611686018427387903
-@assert div(typemax(Int64)-1, 7) ==  1317624576693539400
-@assert div(typemax(Int64)-1,-1) == -9223372036854775806
-@assert div(typemax(Int64)-1,-2) == -4611686018427387903
-@assert div(typemax(Int64)-1,-7) == -1317624576693539400
-@assert div(typemax(Int64)-2, 1) ==  9223372036854775805
-@assert div(typemax(Int64)-2, 2) ==  4611686018427387902
-@assert div(typemax(Int64)-2, 7) ==  1317624576693539400
-@assert div(typemax(Int64)-2,-1) == -9223372036854775805
-@assert div(typemax(Int64)-2,-2) == -4611686018427387902
-@assert div(typemax(Int64)-2,-7) == -1317624576693539400
+@test div(typemax(Int64)  , 1) ==  9223372036854775807
+@test div(typemax(Int64)  , 2) ==  4611686018427387903
+@test div(typemax(Int64)  , 7) ==  1317624576693539401
+@test div(typemax(Int64)  ,-1) == -9223372036854775807
+@test div(typemax(Int64)  ,-2) == -4611686018427387903
+@test div(typemax(Int64)  ,-7) == -1317624576693539401
+@test div(typemax(Int64)-1, 1) ==  9223372036854775806
+@test div(typemax(Int64)-1, 2) ==  4611686018427387903
+@test div(typemax(Int64)-1, 7) ==  1317624576693539400
+@test div(typemax(Int64)-1,-1) == -9223372036854775806
+@test div(typemax(Int64)-1,-2) == -4611686018427387903
+@test div(typemax(Int64)-1,-7) == -1317624576693539400
+@test div(typemax(Int64)-2, 1) ==  9223372036854775805
+@test div(typemax(Int64)-2, 2) ==  4611686018427387902
+@test div(typemax(Int64)-2, 7) ==  1317624576693539400
+@test div(typemax(Int64)-2,-1) == -9223372036854775805
+@test div(typemax(Int64)-2,-2) == -4611686018427387902
+@test div(typemax(Int64)-2,-7) == -1317624576693539400
 
-@assert div(typemin(Int64)  , 1) == -9223372036854775807-1
-@assert div(typemin(Int64)  , 2) == -4611686018427387904
-@assert div(typemin(Int64)  , 7) == -1317624576693539401
-#@assert div(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
-@assert div(typemin(Int64)  ,-2) ==  4611686018427387904
-@assert div(typemin(Int64)  ,-7) ==  1317624576693539401
-@assert div(typemin(Int64)+1, 1) == -9223372036854775807
-@assert div(typemin(Int64)+1, 2) == -4611686018427387903
-@assert div(typemin(Int64)+1, 7) == -1317624576693539401
-@assert div(typemin(Int64)+1,-1) ==  9223372036854775807
-@assert div(typemin(Int64)+1,-2) ==  4611686018427387903
-@assert div(typemin(Int64)+1,-7) ==  1317624576693539401
-@assert div(typemin(Int64)+2, 1) == -9223372036854775806
-@assert div(typemin(Int64)+2, 2) == -4611686018427387903
-@assert div(typemin(Int64)+2, 7) == -1317624576693539400
-@assert div(typemin(Int64)+2,-1) ==  9223372036854775806
-@assert div(typemin(Int64)+2,-2) ==  4611686018427387903
-@assert div(typemin(Int64)+2,-7) ==  1317624576693539400
-@assert div(typemin(Int64)+3, 1) == -9223372036854775805
-@assert div(typemin(Int64)+3, 2) == -4611686018427387902
-@assert div(typemin(Int64)+3, 7) == -1317624576693539400
-@assert div(typemin(Int64)+3,-1) ==  9223372036854775805
-@assert div(typemin(Int64)+3,-2) ==  4611686018427387902
-@assert div(typemin(Int64)+3,-7) ==  1317624576693539400
+@test div(typemin(Int64)  , 1) == -9223372036854775807-1
+@test div(typemin(Int64)  , 2) == -4611686018427387904
+@test div(typemin(Int64)  , 7) == -1317624576693539401
+#@test div(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
+@test div(typemin(Int64)  ,-2) ==  4611686018427387904
+@test div(typemin(Int64)  ,-7) ==  1317624576693539401
+@test div(typemin(Int64)+1, 1) == -9223372036854775807
+@test div(typemin(Int64)+1, 2) == -4611686018427387903
+@test div(typemin(Int64)+1, 7) == -1317624576693539401
+@test div(typemin(Int64)+1,-1) ==  9223372036854775807
+@test div(typemin(Int64)+1,-2) ==  4611686018427387903
+@test div(typemin(Int64)+1,-7) ==  1317624576693539401
+@test div(typemin(Int64)+2, 1) == -9223372036854775806
+@test div(typemin(Int64)+2, 2) == -4611686018427387903
+@test div(typemin(Int64)+2, 7) == -1317624576693539400
+@test div(typemin(Int64)+2,-1) ==  9223372036854775806
+@test div(typemin(Int64)+2,-2) ==  4611686018427387903
+@test div(typemin(Int64)+2,-7) ==  1317624576693539400
+@test div(typemin(Int64)+3, 1) == -9223372036854775805
+@test div(typemin(Int64)+3, 2) == -4611686018427387902
+@test div(typemin(Int64)+3, 7) == -1317624576693539400
+@test div(typemin(Int64)+3,-1) ==  9223372036854775805
+@test div(typemin(Int64)+3,-2) ==  4611686018427387902
+@test div(typemin(Int64)+3,-7) ==  1317624576693539400
 
-@assert fld(typemax(Int64)  , 1) ==  9223372036854775807
-@assert fld(typemax(Int64)  , 2) ==  4611686018427387903
-@assert fld(typemax(Int64)  , 7) ==  1317624576693539401
-@assert fld(typemax(Int64)  ,-1) == -9223372036854775807
-@assert fld(typemax(Int64)  ,-2) == -4611686018427387904
-@assert fld(typemax(Int64)  ,-7) == -1317624576693539401
-@assert fld(typemax(Int64)-1, 1) ==  9223372036854775806
-@assert fld(typemax(Int64)-1, 2) ==  4611686018427387903
-@assert fld(typemax(Int64)-1, 7) ==  1317624576693539400
-@assert fld(typemax(Int64)-1,-1) == -9223372036854775806
-@assert fld(typemax(Int64)-1,-2) == -4611686018427387903
-@assert fld(typemax(Int64)-1,-7) == -1317624576693539401
-@assert fld(typemax(Int64)-2, 1) ==  9223372036854775805
-@assert fld(typemax(Int64)-2, 2) ==  4611686018427387902
-@assert fld(typemax(Int64)-2, 7) ==  1317624576693539400
-@assert fld(typemax(Int64)-2,-1) == -9223372036854775805
-@assert fld(typemax(Int64)-2,-2) == -4611686018427387903
-@assert fld(typemax(Int64)-2,-7) == -1317624576693539401
+@test fld(typemax(Int64)  , 1) ==  9223372036854775807
+@test fld(typemax(Int64)  , 2) ==  4611686018427387903
+@test fld(typemax(Int64)  , 7) ==  1317624576693539401
+@test fld(typemax(Int64)  ,-1) == -9223372036854775807
+@test fld(typemax(Int64)  ,-2) == -4611686018427387904
+@test fld(typemax(Int64)  ,-7) == -1317624576693539401
+@test fld(typemax(Int64)-1, 1) ==  9223372036854775806
+@test fld(typemax(Int64)-1, 2) ==  4611686018427387903
+@test fld(typemax(Int64)-1, 7) ==  1317624576693539400
+@test fld(typemax(Int64)-1,-1) == -9223372036854775806
+@test fld(typemax(Int64)-1,-2) == -4611686018427387903
+@test fld(typemax(Int64)-1,-7) == -1317624576693539401
+@test fld(typemax(Int64)-2, 1) ==  9223372036854775805
+@test fld(typemax(Int64)-2, 2) ==  4611686018427387902
+@test fld(typemax(Int64)-2, 7) ==  1317624576693539400
+@test fld(typemax(Int64)-2,-1) == -9223372036854775805
+@test fld(typemax(Int64)-2,-2) == -4611686018427387903
+@test fld(typemax(Int64)-2,-7) == -1317624576693539401
 
-@assert fld(typemin(Int64)  , 1) == -9223372036854775807-1
-@assert fld(typemin(Int64)  , 2) == -4611686018427387904
-@assert fld(typemin(Int64)  , 7) == -1317624576693539402
-#@assert fld(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
-@assert fld(typemin(Int64)  ,-2) ==  4611686018427387904
-@assert fld(typemin(Int64)  ,-7) ==  1317624576693539401
-@assert fld(typemin(Int64)+1, 1) == -9223372036854775807
-@assert fld(typemin(Int64)+1, 2) == -4611686018427387904
-@assert fld(typemin(Int64)+1, 7) == -1317624576693539401
-@assert fld(typemin(Int64)+1,-1) ==  9223372036854775807
-@assert fld(typemin(Int64)+1,-2) ==  4611686018427387903
-@assert fld(typemin(Int64)+1,-7) ==  1317624576693539401
-@assert fld(typemin(Int64)+2, 1) == -9223372036854775806
-@assert fld(typemin(Int64)+2, 2) == -4611686018427387903
-@assert fld(typemin(Int64)+2, 7) == -1317624576693539401
-@assert fld(typemin(Int64)+2,-1) ==  9223372036854775806
-@assert fld(typemin(Int64)+2,-2) ==  4611686018427387903
-@assert fld(typemin(Int64)+2,-7) ==  1317624576693539400
-@assert fld(typemin(Int64)+3, 1) == -9223372036854775805
-@assert fld(typemin(Int64)+3, 2) == -4611686018427387903
-@assert fld(typemin(Int64)+3, 7) == -1317624576693539401
-@assert fld(typemin(Int64)+3,-1) ==  9223372036854775805
-@assert fld(typemin(Int64)+3,-2) ==  4611686018427387902
-@assert fld(typemin(Int64)+3,-7) ==  1317624576693539400
+@test fld(typemin(Int64)  , 1) == -9223372036854775807-1
+@test fld(typemin(Int64)  , 2) == -4611686018427387904
+@test fld(typemin(Int64)  , 7) == -1317624576693539402
+#@test fld(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
+@test fld(typemin(Int64)  ,-2) ==  4611686018427387904
+@test fld(typemin(Int64)  ,-7) ==  1317624576693539401
+@test fld(typemin(Int64)+1, 1) == -9223372036854775807
+@test fld(typemin(Int64)+1, 2) == -4611686018427387904
+@test fld(typemin(Int64)+1, 7) == -1317624576693539401
+@test fld(typemin(Int64)+1,-1) ==  9223372036854775807
+@test fld(typemin(Int64)+1,-2) ==  4611686018427387903
+@test fld(typemin(Int64)+1,-7) ==  1317624576693539401
+@test fld(typemin(Int64)+2, 1) == -9223372036854775806
+@test fld(typemin(Int64)+2, 2) == -4611686018427387903
+@test fld(typemin(Int64)+2, 7) == -1317624576693539401
+@test fld(typemin(Int64)+2,-1) ==  9223372036854775806
+@test fld(typemin(Int64)+2,-2) ==  4611686018427387903
+@test fld(typemin(Int64)+2,-7) ==  1317624576693539400
+@test fld(typemin(Int64)+3, 1) == -9223372036854775805
+@test fld(typemin(Int64)+3, 2) == -4611686018427387903
+@test fld(typemin(Int64)+3, 7) == -1317624576693539401
+@test fld(typemin(Int64)+3,-1) ==  9223372036854775805
+@test fld(typemin(Int64)+3,-2) ==  4611686018427387902
+@test fld(typemin(Int64)+3,-7) ==  1317624576693539400
 
 for x={typemin(Int64), -typemax(Int64), -typemax(Int64)+1, -typemax(Int64)+2,
        typemax(Int64)-2, typemax(Int64)-1, typemax(Int64),
        typemax(Uint64)-1, typemax(Uint64)-2, typemax(Uint64)},
     y={-7,-2,-1,1,2,7}
     if x >= 0
-        @assert div(unsigned(x),y) == unsigned(div(x,y))
-        @assert fld(unsigned(x),y) == unsigned(fld(x,y))
+        @test div(unsigned(x),y) == unsigned(div(x,y))
+        @test fld(unsigned(x),y) == unsigned(fld(x,y))
     end
     if isa(x,Signed) && y >= 0
-        @assert div(x,unsigned(y)) == div(x,y)
-        @assert fld(x,unsigned(y)) == fld(x,y)
+        @test div(x,unsigned(y)) == div(x,y)
+        @test fld(x,unsigned(y)) == fld(x,y)
     end
 end
 
 for x=0:5, y=1:5
-    @assert div(uint(x),uint(y)) == div(x,y)
-    @assert div(uint(x),y) == div(x,y)
-    @assert div(x,uint(y)) == div(x,y)
-    @assert div(uint(x),-y) == uint(div(x,-y))
-    @assert div(-x,uint(y)) == div(-x,y)
+    @test div(uint(x),uint(y)) == div(x,y)
+    @test div(uint(x),y) == div(x,y)
+    @test div(x,uint(y)) == div(x,y)
+    @test div(uint(x),-y) == uint(div(x,-y))
+    @test div(-x,uint(y)) == div(-x,y)
 
-    @assert fld(uint(x),uint(y)) == fld(x,y)
-    @assert fld(uint(x),y) == fld(x,y)
-    @assert fld(x,uint(y)) == fld(x,y)
-    @assert fld(uint(x),-y) == uint(fld(x,-y))
-    @assert fld(-x,uint(y)) == fld(-x,y)
+    @test fld(uint(x),uint(y)) == fld(x,y)
+    @test fld(uint(x),y) == fld(x,y)
+    @test fld(x,uint(y)) == fld(x,y)
+    @test fld(uint(x),-y) == uint(fld(x,-y))
+    @test fld(-x,uint(y)) == fld(-x,y)
 
-    @assert rem(uint(x),uint(y)) == rem(x,y)
-    @assert rem(uint(x),y) == rem(x,y)
-    @assert rem(x,uint(y)) == rem(x,y)
-    @assert rem(uint(x),-y) == rem(x,-y)
-    @assert rem(-x,uint(y)) == rem(-x,y)
+    @test rem(uint(x),uint(y)) == rem(x,y)
+    @test rem(uint(x),y) == rem(x,y)
+    @test rem(x,uint(y)) == rem(x,y)
+    @test rem(uint(x),-y) == rem(x,-y)
+    @test rem(-x,uint(y)) == rem(-x,y)
 
-    @assert mod(uint(x),uint(y)) == mod(x,y)
-    @assert mod(uint(x),y) == mod(x,y)
-    @assert mod(x,uint(y)) == mod(x,y)
-    @assert mod(uint(x),-y) == mod(x,-y)
-    @assert mod(-x,uint(y)) == mod(-x,y)
+    @test mod(uint(x),uint(y)) == mod(x,y)
+    @test mod(uint(x),y) == mod(x,y)
+    @test mod(x,uint(y)) == mod(x,y)
+    @test mod(uint(x),-y) == mod(x,-y)
+    @test mod(-x,uint(y)) == mod(-x,y)
 end
 
-@assert div(typemax(Uint64)  , 1) ==  typemax(Uint64)
-@assert div(typemax(Uint64)  ,-1) == -typemax(Uint64)
-@assert div(typemax(Uint64)-1, 1) ==  typemax(Uint64)-1
-@assert div(typemax(Uint64)-1,-1) == -typemax(Uint64)+1
-@assert div(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
-@assert div(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
+@test div(typemax(Uint64)  , 1) ==  typemax(Uint64)
+@test div(typemax(Uint64)  ,-1) == -typemax(Uint64)
+@test div(typemax(Uint64)-1, 1) ==  typemax(Uint64)-1
+@test div(typemax(Uint64)-1,-1) == -typemax(Uint64)+1
+@test div(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
+@test div(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
 
-@assert signed(div(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
-@assert signed(div(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
-@assert signed(div(unsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
-@assert signed(div(unsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
-@assert signed(div(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
-@assert signed(div(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
+@test signed(div(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
+@test signed(div(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
+@test signed(div(unsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
+@test signed(div(unsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
+@test signed(div(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
+@test signed(div(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
 
-@assert signed(div(typemax(Uint),typemax(Int)))        ==  2
-@assert signed(div(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
-@assert signed(div(typemax(Uint),typemax(Int)>>1))     ==  4
-@assert signed(div(typemax(Uint),typemin(Int)))        == -1
-@assert signed(div(typemax(Uint),typemin(Int)+1))      == -2
-@assert signed(div(typemax(Uint),typemin(Int)>>1))     == -3
-@assert signed(div(typemax(Uint),(typemin(Int)>>1)+1)) == -4
+@test signed(div(typemax(Uint),typemax(Int)))        ==  2
+@test signed(div(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
+@test signed(div(typemax(Uint),typemax(Int)>>1))     ==  4
+@test signed(div(typemax(Uint),typemin(Int)))        == -1
+@test signed(div(typemax(Uint),typemin(Int)+1))      == -2
+@test signed(div(typemax(Uint),typemin(Int)>>1))     == -3
+@test signed(div(typemax(Uint),(typemin(Int)>>1)+1)) == -4
 
-@assert fld(typemax(Uint64)  , 1) ==  typemax(Uint64)
-@assert fld(typemax(Uint64)  ,-1) == -typemax(Uint64)
-@assert fld(typemax(Uint64)-1, 1) ==  typemax(Uint64)-1
-@assert fld(typemax(Uint64)-1,-1) == -typemax(Uint64)+1
-@assert fld(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
-@assert fld(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
+@test fld(typemax(Uint64)  , 1) ==  typemax(Uint64)
+@test fld(typemax(Uint64)  ,-1) == -typemax(Uint64)
+@test fld(typemax(Uint64)-1, 1) ==  typemax(Uint64)-1
+@test fld(typemax(Uint64)-1,-1) == -typemax(Uint64)+1
+@test fld(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
+@test fld(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
 
-@assert signed(fld(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
-@assert signed(fld(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
-@assert signed(fld(unsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
-@assert signed(fld(unsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
-@assert signed(fld(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
-@assert signed(fld(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
+@test signed(fld(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
+@test signed(fld(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
+@test signed(fld(unsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
+@test signed(fld(unsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
+@test signed(fld(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
+@test signed(fld(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
 
-@assert signed(fld(typemax(Uint),typemax(Int)))        ==  2
-@assert signed(fld(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
-@assert signed(fld(typemax(Uint),typemax(Int)>>1))     ==  4
-@assert signed(fld(typemax(Uint),typemin(Int)))        == -2
-@assert signed(fld(typemax(Uint),typemin(Int)+1))      == -3
-@assert signed(fld(typemax(Uint),typemin(Int)>>1))     == -4
-@assert signed(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
+@test signed(fld(typemax(Uint),typemax(Int)))        ==  2
+@test signed(fld(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
+@test signed(fld(typemax(Uint),typemax(Int)>>1))     ==  4
+@test signed(fld(typemax(Uint),typemin(Int)))        == -2
+@test signed(fld(typemax(Uint),typemin(Int)+1))      == -3
+@test signed(fld(typemax(Uint),typemin(Int)>>1))     == -4
+@test signed(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
 
 # things related to floating-point epsilon
-@assert eps(float(0)) == 5e-324
-@assert .1+.1+.1 != .3
+@test eps(float(0)) == 5e-324
+@test .1+.1+.1 != .3
 # TODO: uncomment when isapprox() becomes part of base.
-# @assert isapprox(.1+.1+.1, .3)
-# @assert !isapprox(.1+.1+.1-.3, 0)
-# @assert isapprox(.1+.1+.1-.3, 0, eps(.3))
+# @test isapprox(.1+.1+.1, .3)
+# @test !isapprox(.1+.1+.1-.3, 0)
+# @test isapprox(.1+.1+.1-.3, 0, eps(.3))
 
-@assert div(1e50,1) == 1e50
-@assert fld(1e50,1) == 1e50
+@test div(1e50,1) == 1e50
+@test fld(1e50,1) == 1e50
 
 # rounding difficult values
 
 for x = 2^53-10:2^53+10
     y = float64(x)
     i = itrunc(y)
-    @assert int64(trunc(y)) == i
-    @assert int64(round(y)) == i
-    @assert int64(floor(y)) == i
-    @assert int64(ceil(y))  == i
-    @assert iround(y)       == i
-    @assert ifloor(y)       == i
-    @assert iceil(y)        == i
+    @test int64(trunc(y)) == i
+    @test int64(round(y)) == i
+    @test int64(floor(y)) == i
+    @test int64(ceil(y))  == i
+    @test iround(y)       == i
+    @test ifloor(y)       == i
+    @test iceil(y)        == i
 end
 
 for x = 2^24-10:2^24+10
     y = float32(x)
     i = itrunc(y)
-    @assert int(trunc(y)) == i
-    @assert int(round(y)) == i
-    @assert int(floor(y)) == i
-    @assert int(ceil(y))  == i
-    @assert iround(y)     == i
-    @assert ifloor(y)     == i
-    @assert iceil(y)      == i
+    @test int(trunc(y)) == i
+    @test int(round(y)) == i
+    @test int(floor(y)) == i
+    @test int(ceil(y))  == i
+    @test iround(y)     == i
+    @test ifloor(y)     == i
+    @test iceil(y)      == i
 end
 
 for n = 1:100
@@ -1015,52 +1015,52 @@ for n = 1:100
     for (p,k) in factor(n)
         m *= p^k
     end
-    @assert n == m
+    @test n == m
 end
 
 # binary literals
 
-@assert 0b1010101 == 0x55
-@assert isa(0b00000000,Uint8)
-@assert isa(0b000000000,Uint16)
-@assert isa(0b0000000000000000,Uint16)
-@assert isa(0b00000000000000000,Uint32)
-@assert isa(0b00000000000000000000000000000000,Uint32)
-@assert isa(0b000000000000000000000000000000000,Uint64)
-@assert isa(0b11111111,Uint8)
-@assert isa(0b111111111,Uint16)
-@assert isa(0b1111111111111111,Uint16)
-@assert isa(0b11111111111111111,Uint32)
-@assert isa(0b11111111111111111111111111111111,Uint32)
-@assert isa(0b111111111111111111111111111111111,Uint64)
+@test 0b1010101 == 0x55
+@test isa(0b00000000,Uint8)
+@test isa(0b000000000,Uint16)
+@test isa(0b0000000000000000,Uint16)
+@test isa(0b00000000000000000,Uint32)
+@test isa(0b00000000000000000000000000000000,Uint32)
+@test isa(0b000000000000000000000000000000000,Uint64)
+@test isa(0b11111111,Uint8)
+@test isa(0b111111111,Uint16)
+@test isa(0b1111111111111111,Uint16)
+@test isa(0b11111111111111111,Uint32)
+@test isa(0b11111111111111111111111111111111,Uint32)
+@test isa(0b111111111111111111111111111111111,Uint64)
 
 # octal literals
 
-@assert 0o10 == 0x8
-@assert 0o100 == 0x40
-@assert 0o1000 == 0x200
-@assert 0o724 == 0x1d4
-@assert isa(0o377,Uint8)
-@assert isa(0o00,Uint8)
-@assert isa(0o000,Uint16)
-@assert isa(0o00000,Uint16)
-@assert isa(0o000000,Uint32)
-@assert isa(0o0000000000,Uint32)
-@assert isa(0o00000000000,Uint64)
-@assert isa(0o11,Uint8)
-@assert isa(0o111,Uint8)
-@assert isa(0o11111,Uint16)
-@assert isa(0o111111,Uint16)
-@assert isa(0o1111111111,Uint32)
-@assert isa(0o11111111111,Uint32)
+@test 0o10 == 0x8
+@test 0o100 == 0x40
+@test 0o1000 == 0x200
+@test 0o724 == 0x1d4
+@test isa(0o377,Uint8)
+@test isa(0o00,Uint8)
+@test isa(0o000,Uint16)
+@test isa(0o00000,Uint16)
+@test isa(0o000000,Uint32)
+@test isa(0o0000000000,Uint32)
+@test isa(0o00000000000,Uint64)
+@test isa(0o11,Uint8)
+@test isa(0o111,Uint8)
+@test isa(0o11111,Uint16)
+@test isa(0o111111,Uint16)
+@test isa(0o1111111111,Uint32)
+@test isa(0o11111111111,Uint32)
 
 # float32 literals
-@assert isa(1f0,Float32)
-@assert isa(1.f0,Float32)
-@assert isa(1.0f0,Float32)
-@assert 1f0 == 1.
-@assert isa(1f1,Float32)
-@assert 1f1 == 10.
+@test isa(1f0,Float32)
+@test isa(1.f0,Float32)
+@test isa(1.0f0,Float32)
+@test 1f0 == 1.
+@test isa(1f1,Float32)
+@test 1f1 == 10.
 
 # custom rounding and significant-digit ops
 function approx_eq(a, b, tol)
@@ -1068,49 +1068,49 @@ function approx_eq(a, b, tol)
 end
 approx_eq(a, b) = approx_eq(a, b, 1e-6)
 # rounding to digits relative to the decimal point 
-@assert approx_eq(round(pi,0), 3.)
-@assert approx_eq(round(pi,1), 3.1)
-@assert approx_eq(round(10*pi,-1), 30.)
-@assert round(.1,0) == 0.
-@assert round(-.1,0) == -0.
-@assert isnan(round(NaN, 2))
-@assert isinf(round(Inf,2))
-@assert isinf(round(-Inf,2))
+@test approx_eq(round(pi,0), 3.)
+@test approx_eq(round(pi,1), 3.1)
+@test approx_eq(round(10*pi,-1), 30.)
+@test round(.1,0) == 0.
+@test round(-.1,0) == -0.
+@test isnan(round(NaN, 2))
+@test isinf(round(Inf,2))
+@test isinf(round(-Inf,2))
 # round vs trunc vs floor vs ceil
-@assert approx_eq(round(123.456,1), 123.5)
-@assert approx_eq(round(-123.456,1), -123.5)
-@assert approx_eq(trunc(123.456,1), 123.4)
-@assert approx_eq(trunc(-123.456,1), -123.4)
-@assert approx_eq(ceil(123.456,1), 123.5)
-@assert approx_eq(ceil(-123.456,1), -123.4)
-@assert approx_eq(floor(123.456,1), 123.4)
-@assert approx_eq(floor(-123.456,1), -123.5)
+@test approx_eq(round(123.456,1), 123.5)
+@test approx_eq(round(-123.456,1), -123.5)
+@test approx_eq(trunc(123.456,1), 123.4)
+@test approx_eq(trunc(-123.456,1), -123.4)
+@test approx_eq(ceil(123.456,1), 123.5)
+@test approx_eq(ceil(-123.456,1), -123.4)
+@test approx_eq(floor(123.456,1), 123.4)
+@test approx_eq(floor(-123.456,1), -123.5)
 # rounding in other bases
-@assert approx_eq(round(pi,2,2), 3.25)
-@assert approx_eq(round(pi,3,2), 3.125)
-@assert approx_eq(round(pi,3,5), 3.144)
+@test approx_eq(round(pi,2,2), 3.25)
+@test approx_eq(round(pi,3,2), 3.125)
+@test approx_eq(round(pi,3,5), 3.144)
 # significant digits (would be nice to have a smart vectorized
 # version of signif)
-@assert approx_eq(signif(123.456,1), 100.)
-@assert approx_eq(signif(123.456,3), 123.)
-@assert approx_eq(signif(123.456,5), 123.46)
-@assert approx_eq(signif(123.456,8,2), 123.5)
+@test approx_eq(signif(123.456,1), 100.)
+@test approx_eq(signif(123.456,3), 123.)
+@test approx_eq(signif(123.456,5), 123.46)
+@test approx_eq(signif(123.456,8,2), 123.5)
 
 # issue #1308
-@assert hex(~uint128(0)) == "f"^32
-@assert uint128(~0) == ~uint128(0)
-@assert int128(~0) == ~int128(0)
+@test hex(~uint128(0)) == "f"^32
+@test uint128(~0) == ~uint128(0)
+@test int128(~0) == ~int128(0)
 
 # issue 1552
-@assert isa(convert(Rational{Int8},pi),Rational{Int8})
-@assert convert(Rational{Int8},pi) == 22//7
-@assert convert(Rational{Int64},0.957762604052997) == 42499549//44373782
-@assert convert(Rational{Int16},0.929261477046077) == 11639//12525
-@assert convert(Rational{Int16},0.2264705884044309) == 77//340
-@assert convert(Rational{Int16},0.39999899264235683) == 2//5
-@assert convert(Rational{Int16},1.1264233500618559e-5) == 0//1
-@assert convert(Rational{Uint16},1.1264233500618559e-5) == 1//65535
-@assert convert(Rational{Uint16},0.6666652791223875) == 2//3
-@assert convert(Rational{Int8},0.9374813124660655) == 15//16
-@assert convert(Rational{Int8},0.003803032342443835) == 0//1
-@assert convert(Rational{Uint8},0.003803032342443835) == 1//255
+@test isa(convert(Rational{Int8},pi),Rational{Int8})
+@test convert(Rational{Int8},pi) == 22//7
+@test convert(Rational{Int64},0.957762604052997) == 42499549//44373782
+@test convert(Rational{Int16},0.929261477046077) == 11639//12525
+@test convert(Rational{Int16},0.2264705884044309) == 77//340
+@test convert(Rational{Int16},0.39999899264235683) == 2//5
+@test convert(Rational{Int16},1.1264233500618559e-5) == 0//1
+@test convert(Rational{Uint16},1.1264233500618559e-5) == 1//65535
+@test convert(Rational{Uint16},0.6666652791223875) == 2//3
+@test convert(Rational{Int8},0.9374813124660655) == 15//16
+@test convert(Rational{Int8},0.003803032342443835) == 0//1
+@test convert(Rational{Uint8},0.003803032342443835) == 1//255

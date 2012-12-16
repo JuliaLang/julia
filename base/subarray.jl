@@ -56,6 +56,8 @@ function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
     SubArray{T,L,typeof(A),typeof(i)}(A, i)
 end
 
+sub{N}(A::SubArray, i::NTuple{N,RangeIndex}) = sub(A, i...)
+
 sub(A::AbstractArray, i::RangeIndex...) = sub(A, i)
 
 function sub(A::SubArray, i::RangeIndex...)

@@ -1,6 +1,6 @@
 # fft
 a = rand(8) + im*rand(8)
-@assert norm(ifft(fft(a)) - a) < 1e-8
+@test norm(ifft(fft(a)) - a) < 1e-8
 
 m4 = [16.    2     3    13;
     5    11    10     8;
@@ -45,7 +45,7 @@ m3d = float32(reshape(1:5*3*2, 5, 3, 2))
 ifft3_fft3_m3d = ifft3(fft3(m3d))
 fftd3_m3d = fft(m3d,3)
 ifftd3_fftd3_m3d = ifft(fftd3_m3d,3)
-@assert isa(fftd3_m3d, Array{Complex64,3})
+@test isa(fftd3_m3d, Array{Complex64,3})
 
 true_fftd3_m3d = Array(Float32, 5, 3, 2)
 true_fftd3_m3d[:,:,1] = 17:2:45
@@ -80,7 +80,7 @@ end
 
 rfftn_m3d = rfftn(m3d)
 rfftd3_m3d = rfft(m3d,3)
-@assert size(rfftd3_m3d) == size(fftd3_m3d)
+@test size(rfftd3_m3d) == size(fftd3_m3d)
 irfft_rfftd3_m3d = irfft(rfftd3_m3d,size(m3d,3),3)
 irfftn_rfftn_m3d = irfftn(rfftn_m3d,size(m3d,1))
 for i = 1:length(m3d)
@@ -90,9 +90,9 @@ for i = 1:length(m3d)
 end
 
 fftn_m3d = fftn(m3d)
-@assert size(fftn_m3d) == (5,3,2)
+@test size(fftn_m3d) == (5,3,2)
 rfftn_m3d = rfftn(m3d)
-@assert size(rfftn_m3d) == (3,3,2)
+@test size(rfftn_m3d) == (3,3,2)
 for i = 1:3, j = 1:3, k = 1:2
     @assert_approx_eq rfftn_m3d[i,j,k] fftn_m3d[i,j,k]
 end

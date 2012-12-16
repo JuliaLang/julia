@@ -37,16 +37,6 @@ end
 set_seed(a1::Integer, a2::Integer) =
     ccall(dlsym(_jl_libRmath,:set_seed), Void, (Int32,Int32), a1, a2)
 
-## The d-p-q functions in Rmath for signrank allocate storage that must be freed
-## Signrank - Wilcoxon Signed Rank statistic
-rsignrank(nn::Integer, p1::Number) =
-    [ ccall(dlsym(_jl_libRmath, "rsignrank"), Float64, (Float64,), p1) for i=1:nn ]
-
-## Need to handle the d-p-q for Wilcox separately because the Rmath functions allocate storage that must be freed.
-## Wilcox - Wilcox's Rank Sum statistic (m, n) - probably only makes sense for positive integers
-rwilcox(nn::Integer, p1::Number, p2::Number) =
-    [ ccall(dlsym(_jl_libRmath, "rwilcox"), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
-
 ## Vectorize over four numeric arguments
 macro _jl_libRmath_vectorize_4arg(f)
     quote
@@ -106,6 +96,55 @@ macro _jl_libRmath_vectorize_4arg(f)
     end
 end
 
+## Macro for deferring freeing data until GC for wilcox and signrank
+macro _jl_libRmath_deferred_free(base)
+    libcall = symbol(strcat(string(base), "_free"))
+    func = symbol(strcat(string(base), "_deferred_free"))
+    quote
+        let gc_tracking_obj = []
+            global $func
+            function $libcall(x::Vector{None})
+                gc_tracking_obj = []
+                ccall(dlsym(_jl_libRmath, $(string(libcall))), Void, ())
+            end
+            function $func()
+                if !isa(gc_tracking_obj, Bool)
+                    finalizer(gc_tracking_obj, $libcall)
+                    gc_tracking_obj = false
+                end
+            end
+        end
+    end
+end
+
+## Non-ccall functions for distributions with 1 parameter and no defaults
+macro _jl_libRmath_1par_0d_aliases(base)
+    dd = symbol(strcat("d", string(base)))
+    pp = symbol(strcat("p", string(base)))
+    qq = symbol(strcat("q", string(base)))
+    quote
+        global $dd, $pp, $qq
+        ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) =
+            reshape([ ($dd)(x[i], p1, give_log) for i=1:numel(x) ], size(x))
+        ($dd)(x::Number, p1::Number) = ($dd)(x, p1, false)
+        @vectorize_2arg Number $dd
+
+        ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
+            reshape([ ($pp)(q[i], p1, lower_tail, log_p) for i=1:numel(q) ], size(q))
+        ($pp)(q::Number, p1::Number, lower_tail::Bool) = ($pp)(q, p1, lower_tail, false)
+        ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool) = ($pp)(q, p1, lower_tail, false)
+        ($pp)(q::Number, p1::Number) = ($pp)(q, p1, true, false)
+        @vectorize_2arg Number $pp
+
+        ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
+            reshape([ ($qq)(p[i], p1, lower_tail, log_p) for i=1:numel(p) ], size(p))
+        ($qq)(p::Number, p1::Number, lower_tail::Bool) = ($qq)(p, p1, lower_tail, false)
+        ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool) = ($qq)(p, p1, lower_tail, false)
+        ($qq)(p::Number, p1::Number) = ($qq)(p, p1, true, false)
+        @vectorize_2arg Number $qq
+    end
+end
+
 ## Distributions with 1 parameter and no default
 macro _jl_libRmath_1par_0d(base)
     dd = symbol(strcat("d", string(base)))
@@ -116,31 +155,13 @@ macro _jl_libRmath_1par_0d(base)
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, give_log::Bool) = 
             ccall(dlsym(_jl_libRmath,$(string(dd))), Float64, (Float64,Float64,Int32), x, p1, give_log)
-        ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) =
-            reshape([ ($dd)(x[i], p1, give_log) for i=1:numel(x) ], size(x))
-        ($dd)(x::Number, p1::Number) = ($dd)(x, p1, false)
-        @vectorize_2arg Number $dd
-
         ($pp)(q::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$(string(pp))), Float64, (Float64,Float64,Int32,Int32), q, p1, lower_tail, log_p)
-        ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($pp)(q[i], p1, lower_tail, log_p) for i=1:numel(q) ], size(q))
-        ($pp)(q::Number, p1::Number, lower_tail::Bool) = ($pp)(q, p1, lower_tail, false)
-        ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool) = ($pp)(q, p1, lower_tail, false)
-        ($pp)(q::Number, p1::Number) = ($pp)(q, p1, true, false)
-        @vectorize_2arg Number $pp
-
         ($qq)(p::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$(string(qq))), Float64, (Float64,Float64,Int32,Int32), p, p1, lower_tail, log_p)
-        ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($qq)(p[i], p1, lower_tail, log_p) for i=1:numel(p) ], size(p))
-        ($qq)(p::Number, p1::Number, lower_tail::Bool) = ($qq)(p, p1, lower_tail, false)
-        ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool) = ($qq)(p, p1, lower_tail, false)
-        ($qq)(p::Number, p1::Number) = ($qq)(p, p1, true, false)
-        @vectorize_2arg Number $qq
-
         ($rr)(nn::Integer, p1::Number) =
             [ ccall(dlsym(_jl_libRmath,$(string(rr))), Float64, (Float64,), p1) for i=1:nn ]
+        @_jl_libRmath_1par_0d_aliases $base
     end
 end
 
@@ -148,6 +169,25 @@ end
 @_jl_libRmath_1par_0d chisq       # Central Chi-squared distribution (df)
 @_jl_libRmath_1par_0d pois        # Poisson distribution (lambda)
 @_jl_libRmath_1par_0d geom        # Geometric distribution (prob)
+
+## The d-p-q functions in Rmath for signrank allocate storage that must be freed
+## Signrank - Wilcoxon Signed Rank statistic
+@_jl_libRmath_deferred_free signrank
+function dsignrank(x::Number, p1::Number, give_log::Bool)
+    signrank_deferred_free()
+    ccall(dlsym(_jl_libRmath, "dsignrank"), Float64, (Float64,Float64,Int32), x, p1, give_log)
+end
+function psignrank(q::Number, p1::Number, lower_tail::Bool, log_p::Bool)
+    signrank_deferred_free()
+    ccall(dlsym(_jl_libRmath, "psignrank"), Float64, (Float64,Float64,Int32,Int32), q, p1, lower_tail, log_p)
+end
+function qsignrank(p::Number, p1::Number, lower_tail::Bool, log_p::Bool)
+    signrank_deferred_free()
+    ccall(dlsym(_jl_libRmath, "qsignrank"), Float64, (Float64,Float64,Int32,Int32), p, p1, lower_tail, log_p)
+end
+@_jl_libRmath_1par_0d_aliases signrank
+rsignrank(nn::Integer, p1::Number) =
+    [ ccall(dlsym(_jl_libRmath, "rsignrank"), Float64, (Float64,), p1) for i=1:nn ]
 
 ## Distributions with 1 parameter and a default
 macro _jl_libRmath_1par_1d(base, d1)
@@ -207,6 +247,36 @@ end
 ## May need to handle this as a special case.  The Rmath library uses 1/rate, not rate
 @_jl_libRmath_1par_1d exp 1      # Exponential distribution (rate)
 
+## Non-ccall functions for distributions with 2 parameters and no defaults
+macro _jl_libRmath_2par_0d_aliases(base)
+    dd = symbol(strcat("d", string(base)))
+    pp = symbol(strcat("p", string(base)))
+    qq = symbol(strcat("q", string(base)))
+    quote
+        global $dd, $pp, $qq
+        ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
+            reshape([ ($dd)(x[i], p1, p2, give_log) for i=1:numel(x) ], size(x))
+        ($dd)(x::Number, p1::Number, p2::Number) = ($dd)(x, p1, p2, false)
+        @_jl_libRmath_vectorize_3arg $dd
+
+        ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
+            reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) for i=1:numel(q) ], size(q))
+        ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool) = ($pp)(q, p1, p2, lower_tail, false)
+        ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool) =
+            reshape([ ($pp)(q[i], p1, p2, lower_tail, false) for i=1:numel(q) ], size(q))
+        ($pp)(q::Number, p1::Number, p2::Number) = ($pp)(q, p1, p2, true, false)
+        @_jl_libRmath_vectorize_3arg $pp
+
+        ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
+            reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) for i=1:numel(p) ], size(p))
+        ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool) = ($qq)(p, p1, p2, lower_tail, false)
+        ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool) =
+            reshape([ ($qq)(p[i], p1, p2, lower_tail, false) for i=1:numel(p) ], size(p))
+        ($qq)(p::Number, p1::Number, p2::Number) = ($qq)(p, p1, p2, true, false)
+        @_jl_libRmath_vectorize_3arg $qq
+    end
+end
+
 ## Distributions with 2 parameters and no defaults
 macro _jl_libRmath_2par_0d(base)
     dd = symbol(strcat("d", string(base)))
@@ -217,33 +287,13 @@ macro _jl_libRmath_2par_0d(base)
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
             ccall(dlsym(_jl_libRmath,$(string(dd))), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
-        ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
-            reshape([ ($dd)(x[i], p1, p2, give_log) for i=1:numel(x) ], size(x))
-        ($dd)(x::Number, p1::Number, p2::Number) = ($dd)(x, p1, p2, false)
-        @_jl_libRmath_vectorize_3arg $dd
-
         ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$(string(pp))), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
-        ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) for i=1:numel(q) ], size(q))
-        ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool) = ($pp)(q, p1, p2, lower_tail, false)
-        ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool) =
-            reshape([ ($pp)(q[i], p1, p2, lower_tail, false) for i=1:numel(q) ], size(q))
-        ($pp)(q::Number, p1::Number, p2::Number) = ($pp)(q, p1, p2, true, false)
-        @_jl_libRmath_vectorize_3arg $pp
-
         ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$(string(qq))), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
-        ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) for i=1:numel(p) ], size(p))
-        ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool) = ($qq)(p, p1, p2, lower_tail, false)
-        ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool) =
-            reshape([ ($qq)(p[i], p1, p2, lower_tail, false) for i=1:numel(p) ], size(p))
-        ($qq)(p::Number, p1::Number, p2::Number) = ($qq)(p, p1, p2, true, false)
-        @_jl_libRmath_vectorize_3arg $qq
-
         ($rr)(nn::Integer, p1::Number, p2::Number) =
             [ ccall(dlsym(_jl_libRmath,$(string(rr))), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
+        @_jl_libRmath_2par_0d_aliases $base
     end
 end
 
@@ -253,6 +303,25 @@ end
 @_jl_libRmath_2par_0d nbinom_mu   # Negative binomial distribution (size, mu)
 @_jl_libRmath_2par_0d beta        # Beta distribution (shape1, shape2)
 @_jl_libRmath_2par_0d nchisq      # Noncentral Chi-squared distribution (df, ncp)
+
+## Need to handle the d-p-q for Wilcox separately because the Rmath functions allocate storage that must be freed.
+## Wilcox - Wilcox's Rank Sum statistic (m, n) - probably only makes sense for positive integers
+@_jl_libRmath_deferred_free wilcox
+function dwilcox(x::Number, p1::Number, p2::Number, give_log::Bool)
+    wilcox_deferred_free()
+    ccall(dlsym(_jl_libRmath,"dwilcox"), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
+end
+function pwilcox(q::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool)
+    wilcox_deferred_free()
+    ccall(dlsym(_jl_libRmath, "pwilcox"), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
+end
+function qwilcox(p::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool)
+    wilcox_deferred_free()
+    ccall(dlsym(_jl_libRmath, "qwilcox"), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
+end
+rwilcox(nn::Integer, p1::Number, p2::Number) =
+    [ ccall(dlsym(_jl_libRmath, "rwilcox"), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
+@_jl_libRmath_2par_0d_aliases wilcox
 
 ## Distributions with 2 parameters and 1 default
 macro _jl_libRmath_2par_1d(base, d2)

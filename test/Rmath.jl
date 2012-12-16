@@ -1,9 +1,9 @@
-require("../extras/Rmath")
+require("extras/Rmath")
 
 srand(124)
 
 function allEq(target::Vector{Float64}, current::Vector{Float64}, tolerance::Float64)
-    @assert numel(target) == numel(current)
+    @test numel(target) == numel(current)
     if all(target == current)
         return true
     end
@@ -12,7 +12,7 @@ function allEq(target::Vector{Float64}, current::Vector{Float64}, tolerance::Flo
     if (isfinite(xn) && xn > tolerance)
         xy /= xn
     end
-    @assert xy < tolerance
+    @test xy < tolerance
     return true
 end
 
@@ -20,27 +20,27 @@ allEq(target::Vector{Float64}, current::Vector{Float64}) =
     allEq(target, current, sqrt(eps()))
 
 # dbeta
-@assert abs(dbeta(-1, 1, 1) - 0.0) < 10e-8
-@assert abs(dbeta(0, 1, 1) - 1.0) < 10e-8
-@assert abs(dbeta(1, 1, 1) - 1.0) < 10e-8
+@test abs(dbeta(-1, 1, 1) - 0.0) < 10e-8
+@test abs(dbeta(0, 1, 1) - 1.0) < 10e-8
+@test abs(dbeta(1, 1, 1) - 1.0) < 10e-8
 
 # dbinom
-@assert abs(dbinom(0, 2, 0.5) - 0.25) < 10e-8
-@assert abs(dbinom(1, 2, 0.5) - 0.5) < 10e-8
-@assert abs(dbinom(2, 2, 0.5) - 0.25) < 10e-8
+@test abs(dbinom(0, 2, 0.5) - 0.25) < 10e-8
+@test abs(dbinom(1, 2, 0.5) - 0.5) < 10e-8
+@test abs(dbinom(2, 2, 0.5) - 0.25) < 10e-8
 
 # dcauchy
-@assert abs(dcauchy(0, 0, 1) - (1 / pi) * (1 / ((0 - 0)^2 + 1^2))) < 10e-8
-@assert abs(dcauchy(0, 1, 2) - (1 / pi) * (2 / ((0 - 1)^2 + 2^2))) < 10e-8
+@test abs(dcauchy(0, 0, 1) - (1 / pi) * (1 / ((0 - 0)^2 + 1^2))) < 10e-8
+@test abs(dcauchy(0, 1, 2) - (1 / pi) * (2 / ((0 - 1)^2 + 2^2))) < 10e-8
 
 # dchisq
-@assert abs(dchisq(1, 1) - let x = 1; k = 1; (x^((k / 2) - 1) * exp(-(x / 2))) / (2^(k / 2) * gamma(k / 2)) end) < 10e-8
-@assert abs(dchisq(2, 3) - let x = 2; k = 3; (x^((k / 2) - 1) * exp(-(x / 2))) / (2^(k / 2) * gamma(k / 2)) end) < 10e-8
+@test abs(dchisq(1, 1) - let x = 1; k = 1; (x^((k / 2) - 1) * exp(-(x / 2))) / (2^(k / 2) * gamma(k / 2)) end) < 10e-8
+@test abs(dchisq(2, 3) - let x = 2; k = 3; (x^((k / 2) - 1) * exp(-(x / 2))) / (2^(k / 2) * gamma(k / 2)) end) < 10e-8
 
 # dexp
-@assert abs(dexp(1, 2) - (1 / 2) * exp(-(1 / 2) * 1)) < 10e-8
-@assert abs(dexp(1, 3) - (1 / 3) * exp(-(1 / 3) * 1)) < 10e-8
-@assert abs(dexp(2, 3) - (1 / 3) * exp(-(1 / 3) * 2)) < 10e-8
+@test abs(dexp(1, 2) - (1 / 2) * exp(-(1 / 2) * 1)) < 10e-8
+@test abs(dexp(1, 3) - (1 / 3) * exp(-(1 / 3) * 1)) < 10e-8
+@test abs(dexp(2, 3) - (1 / 3) * exp(-(1 / 3) * 2)) < 10e-8
 
 n = 26
 
@@ -80,12 +80,12 @@ Plogis	  = plogis   (Rlogis, 12, 2)
 Pnbinom   = pnbinom  (Rnbinom, 7, .01)
 Pnorm	  = pnorm    (Rnorm, -1, 3)
 Ppois	  = ppois    (Rpois, 12)
-#Psignrank = psignrank(Rsignrank, 47)
+Psignrank = psignrank(Rsignrank, 47)
 Pt	  = pt	     (Rt, 11)
 Pt2	  = pt	     (Rt2, 1.01)
 Punif	  = punif    (Runif, .2, 2)
 Pweibull  = pweibull (Rweibull, 3, 2)
-#Pwilcox   = pwilcox  (Rwilcox, 13, 17)
+Pwilcox   = pwilcox  (Rwilcox, 13, 17)
 
 dbeta	 (Rbeta, .8, 2)
 dbinom	 (Rbinom, 55, pi/16)
@@ -101,11 +101,11 @@ dlogis	 (Rlogis, 12, 2)
 dnbinom	 (Rnbinom, 7, .01)
 dnorm	 (Rnorm, -1, 3)
 dpois	 (Rpois, 12)
-#dsignrank(Rsignrank, 47)
+dsignrank(Rsignrank, 47)
 dt	 (Rt, 11)
 dunif	 (Runif, .2, 2)
 dweibull (Rweibull, 3, 2)
-#dwilcox	 (Rwilcox, 13, 17)
+dwilcox	 (Rwilcox, 13, 17)
 
 ## Check q*(p*(.)) = identity
 allEq(Rbeta,	  qbeta	   (Pbeta, .8, 2))
@@ -122,12 +122,12 @@ allEq(Rlogis,	  qlogis   (Plogis, 12, 2))
 allEq(Rnbinom,	  qnbinom  (Pnbinom, 7, .01))
 allEq(Rnorm,	  qnorm	   (Pnorm, -1, 3))
 allEq(Rpois,	  qpois	   (Ppois, 12))
-#allEq(Rsignrank,  qsignrank(Psignrank, 47))
+allEq(Rsignrank,  qsignrank(Psignrank, 47))
 allEq(Rt,	  qt	   (Pt,	11))
 allEq(Rt2,	  qt	   (Pt2, 1.01), 1e-2)
 allEq(Runif,	  qunif	   (Punif, .2, 2))
 allEq(Rweibull,   qweibull (Pweibull, 3, 2))
-#allEq(Rwilcox,	  qwilcox  (Pwilcox, 13, 17))
+allEq(Rwilcox,	  qwilcox  (Pwilcox, 13, 17))
 
 ## Same with "upper tail":
 allEq(Rbeta,	  qbeta	   (1- Pbeta, .8, 2, false))
@@ -144,12 +144,12 @@ allEq(Rlogis,	  qlogis   (1- Plogis, 12, 2, false))
 allEq(Rnbinom,	  qnbinom  (1- Pnbinom, 7, .01, false))
 allEq(Rnorm,	  qnorm	   (1- Pnorm, -1, 3,false))
 allEq(Rpois,	  qpois	   (1- Ppois, 12, false))
-#allEq(Rsignrank,  qsignrank(1- Psignrank, 47, false))
+allEq(Rsignrank,  qsignrank(1- Psignrank, 47, false))
 allEq(Rt,	  qt	   (1- Pt,  11,   false))
 allEq(Rt2,	  qt	   (1- Pt2, 1.01, false), 1e-2)
 allEq(Runif,	  qunif	   (1- Punif, .2, 2, false))
 allEq(Rweibull,   qweibull (1- Pweibull, 3, 2, false))
-#allEq(Rwilcox,	  qwilcox  (1- Pwilcox, 13, 17, false))
+allEq(Rwilcox,	  qwilcox  (1- Pwilcox, 13, 17, false))
 
 ## Check q*(p* ( log ), log) = identity
 allEq(Rbeta,	  qbeta	   (log(Pbeta), .8, 2, true, true))
@@ -166,12 +166,12 @@ allEq(Rlogis,	  qlogis   (log(Plogis), 12, 2, true, true))
 allEq(Rnbinom,	  qnbinom  (log(Pnbinom), 7, .01, true, true))
 allEq(Rnorm,	  qnorm	   (log(Pnorm), -1, 3, true, true))
 allEq(Rpois,	  qpois	   (log(Ppois), 12, true, true))
-#allEq(Rsignrank,  qsignrank(log(Psignrank), 47, true, true))
+allEq(Rsignrank,  qsignrank(log(Psignrank), 47, true, true))
 allEq(Rt,	  qt	   (log(Pt), 11, true, true))
 allEq(Rt2,	  qt	   (log(Pt2), 1.01, true, true), 1e-2)
 allEq(Runif,	  qunif	   (log(Punif), .2, 2, true, true))
 allEq(Rweibull,  qweibull (log(Pweibull), 3, 2, true, true))
-#allEq(Rwilcox,	  qwilcox  (log(Pwilcox), m = 13, n = 17, true, true))
+allEq(Rwilcox,	  qwilcox  (log(Pwilcox), 13, 17, true, true))
 
 ## same q*(p* (log) log) with upper tail:
 
@@ -189,9 +189,9 @@ allEq(Rlogis,	  qlogis   (log(1- Plogis), 12, 2, false, true))
 allEq(Rnbinom,	  qnbinom  (log(1- Pnbinom), 7, .01, false, true))
 allEq(Rnorm,	  qnorm	   (log(1- Pnorm), -1, 3, false, true))
 allEq(Rpois,	  qpois	   (log(1- Ppois), 12, false, true))
-#allEq(Rsignrank, qsignrank(log(1- Psignrank), 47, false, true))
+allEq(Rsignrank, qsignrank(log(1- Psignrank), 47, false, true))
 allEq(Rt,	  qt	   (log(1- Pt ), 11,   false, true))
 allEq(Rt2,	  qt	   (log(1- Pt2), 1.01, false, true), 1e-2)
 allEq(Runif,	  qunif	   (log(1- Punif), .2, 2, false, true))
 allEq(Rweibull,   qweibull (log(1- Pweibull), 3, 2, false, true))
-#allEq(Rwilcox,	  qwilcox  (log(1- Pwilcox), 13, 17, false, true))
+allEq(Rwilcox,	  qwilcox  (log(1- Pwilcox), 13, 17, false, true))

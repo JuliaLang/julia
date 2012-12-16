@@ -280,7 +280,8 @@ static void raise_exception_if(Value *cond, GlobalVariable *exc,
 
 static void null_pointer_check(Value *v, jl_codectx_t *ctx)
 {
-    raise_exception_unless(builder.CreateICmpNE(v,V_null), jlundeferr_var, ctx);
+    raise_exception_unless(builder.CreateICmpNE(v,Constant::getNullValue(v->getType())),
+                           jlundeferr_var, ctx);
 }
 
 static Value *boxed(Value *v, jl_value_t *jt=NULL);
@@ -618,14 +619,6 @@ static Value *allocate_box_dynamic(Value *jlty, int nb, Value *v)
     if (v->getType()->isPointerTy()) {
         v = builder.CreatePtrToInt(v, T_size);
     }
-    if (nb == 8)
-        return builder.CreateCall2(box8_func,  jlty, v);
-    if (nb == 16)
-        return builder.CreateCall2(box16_func, jlty, v);
-    if (nb == 32)
-        return builder.CreateCall2(box32_func, jlty, v);
-    if (nb == 64)
-        return builder.CreateCall2(box64_func, jlty, v);
     size_t sz = sizeof(void*) + (nb+7)/8;
     Value *newv = builder.CreateCall(jlallocobj_func,
                                      ConstantInt::get(T_size, sz));

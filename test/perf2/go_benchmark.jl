@@ -1,6 +1,8 @@
 # Benchmark implementing the board logic for the game of go and
 # exercising it by playing random games. Derived from
 # http://www.lysator.liu.se/~gunnar/gtp/brown-1.0.tar.gz
+import Base.ref
+
 const EMPTY = 0
 const WHITE = 1
 const BLACK = 2

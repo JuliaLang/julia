@@ -152,6 +152,9 @@ readchomp(x) = chomp(readall(x))
 
 type EachLine
     stream::IO
+    ondone::Function
+    EachLine(stream) = EachLine(stream, ()->nothing)
+    EachLine(stream, ondone) = new(stream, ondone)
 end
 each_line(stream::IO) = EachLine(stream)
 
@@ -161,6 +164,7 @@ function done(itr::EachLine, line)
         return false
     end
     close(itr.stream)
+    itr.ondone()
     true
 end
 next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
@@ -211,13 +215,9 @@ type IOStream <: Stream
 end
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
-
 show(io, s::IOStream) = print(io, "IOStream(", s.name, ")")
-
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
-
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
-
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Integer) =
@@ -348,7 +348,6 @@ end
 ## text I/O ##
 
 write(s::IOStream, c::Char) = ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
-
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
 takebuf_string(s::IOStream) =
@@ -496,3 +495,37 @@ function eatwspace_comment(s::IOStream, cmt::Char)
         status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     end
 end
+
+# BitArray I/O
+
+write(s::IO, B::BitArray) = write(s, B.chunks)
+read(s::IO, B::BitArray) = read(s, B.chunks)
+
+function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+    prot, flags, iswrite = mmap_stream_settings(s)
+    if length(dims) == 0
+        dims = 0
+    end
+    n = prod(dims)
+    nc = _jl_num_bit_chunks(n)
+    B = BitArray{N}()
+    chunks = mmap_array(Uint64, (nc,), s, offset)
+    if iswrite
+        chunks[end] &= @_msk_end n
+    else
+        if chunks[end] != chunks[end] & @_msk_end n
+            error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with r+ to override)")
+        end
+    end
+    dims = [i::Int for i in dims]
+    B.chunks = chunks
+    B.dims = dims
+    return B
+end
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
+    mmap_bitarray(dims, s, offset)
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+
+msync(B::BitArray, flags::Integer) = msync(pointer(B.chunks), flags)
+msync(B::BitArray) = msync(B.chunks,MS_SYNC)

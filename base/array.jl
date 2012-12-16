@@ -185,9 +185,6 @@ zeros(args...)               = fill!(Array(Float64, args...), float64(0))
 ones{T}(::Type{T}, args...) = fill!(Array(T, args...), one(T))
 ones(args...)               = fill!(Array(Float64, args...), float64(1))
 
-trues(args...)  = fill(true, args...)
-falses(args...) = fill(false, args...)
-
 function eye(T::Type, m::Int, n::Int)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
@@ -239,69 +236,6 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
-## Bounds checking ##
-function check_bounds(sz::Int, I::Integer)
-    if I < 1 || I > sz
-        throw(BoundsError())
-    end
-end
-
-function check_bounds(sz::Int, I::AbstractVector{Bool})
-    if length(I) > sz
-        throw(BoundsError())
-    end
-end
-
-function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
-    if min(I) < 1 || max(I) > sz
-        throw(BoundsError())
-    end
-end
-
-function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
-    for i in I
-        if i < 1 || i > sz
-            throw(BoundsError())
-        end
-    end
-end
-
-function check_bounds(A::Array, I::Array{Bool})
-    if !isequal(size(A), size(I))
-        throw(BoundsError())
-    end
-end
-
-check_bounds(A::AbstractVector, I::Indices) = check_bounds(length(A), I)
-
-function check_bounds(A::AbstractMatrix, I::Indices, J::Indices)
-    check_bounds(size(A,1), I)
-    check_bounds(size(A,2), J)
-end
-
-function check_bounds(A::AbstractArray, I::Indices, J::Indices)
-    check_bounds(size(A,1), I)
-    sz = size(A,2)
-    for i = 3:ndims(A)
-        sz *= size(A, i) # TODO: sync. with decision on issue #1030
-    end
-    check_bounds(sz, J)
-end
-
-function check_bounds(A::AbstractArray, I::Indices...)
-    n = length(I)
-    if n > 0
-        for dim = 1:(n-1)
-            check_bounds(size(A,dim), I[dim])
-        end
-        sz = size(A,n)
-        for i = n+1:ndims(A)
-            sz *= size(A,i)     # TODO: sync. with decision on issue #1030
-        end
-        check_bounds(sz, I[n])
-    end
-end
-
 ## Indexing: ref ##
 
 ref(a::Array) = arrayref(a,1)
@@ -328,13 +262,8 @@ function ref(A::Array, I::Range1{Int})
 end
 
 # note: this is also useful for Ranges
-function ref{T<:Integer}(A::Array, I::AbstractVector{T})
-    check_bounds(A, I)
-    return [ A[i] for i=I ]
-end
 function ref{T<:Integer}(A::AbstractArray, I::AbstractVector{T})
-    check_bounds(A, I)
-    return [ A[i] for i=I ]
+    return [ A[i] for i in I ]
 end
 
 # 2d indexing
@@ -842,6 +771,8 @@ for f in (:-, :~, :conj, :sign)
     end
 end
 
+(-)(A::StridedArray{Bool}) = reshape([ -A[i] for i=1:numel(A) ], size(A))
+
 for f in (:real, :imag)
     @eval begin
         function ($f){T}(A::StridedArray{T})
@@ -905,24 +836,43 @@ end
 
 for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
     @eval begin
-        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
+        function ($f){S,T}(A::StridedArray{S}, B::StridedArray{T})
             F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B[i])
             end
             return F
         end
-        function ($f){T}(A::Number, B::AbstractArray{T})
+        function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_type(typeof(A),T))
             for i=1:numel(B)
                 F[i] = ($f)(A, B[i])
             end
             return F
         end
-        function ($f){T}(A::AbstractArray{T}, B::Number)
+        function ($f){T}(A::StridedArray{T}, B::Number)
             F = similar(A, promote_type(T,typeof(B)))
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B)
+            end
+            return F
+        end
+        # interaction with Ranges
+        function ($f){S,T<:Real}(A::StridedArray{S}, B::Ranges{T})
+            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
+            i = 1
+            for b in B
+                F[i] = ($f)(A[i], b)
+                i += 1
+            end
+            return F
+        end
+        function ($f){S<:Real,T}(A::Ranges{S}, B::StridedArray{T})
+            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
+            i = 1
+            for a in A
+                F[i] = ($f)(a, B[i])
+                i += 1
             end
             return F
         end
@@ -932,13 +882,13 @@ end
 # functions that should give an Int result for Bool arrays
 for f in (:+, :-, :div)
     @eval begin
-        function ($f)(x::Bool, y::Array{Bool})
+        function ($f)(x::Bool, y::StridedArray{Bool})
             reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
         end
-        function ($f)(x::Array{Bool}, y::Bool)
+        function ($f)(x::StridedArray{Bool}, y::Bool)
             reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
         end
-        function ($f)(x::Array{Bool}, y::Array{Bool})
+        function ($f)(x::StridedArray{Bool}, y::StridedArray{Bool})
             shp = promote_shape(size(x),size(y))
             reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
         end
@@ -969,24 +919,6 @@ function complex{T<:Real}(A::Array{T}, B::Real)
         F[i] = complex(A[i], B)
     end
     return F
-end
-
-## Binary comparison operators ##
-
-for (f,scalarf) in ((:(.==),:(==)), (:.<, :<), (:.!=,:!=), (:.<=,:<=))
-    @eval begin
-        function ($f)(A::AbstractArray, B::AbstractArray)
-            F = Array(Bool, promote_shape(size(A),size(B)))
-            for i = 1:numel(B)
-                F[i] = ($scalarf)(A[i], B[i])
-            end
-            return F
-        end
-        ($f)(A, B::AbstractArray) =
-            reshape([ ($scalarf)(A, B[i]) for i=1:length(B)], size(B))
-        ($f)(A::AbstractArray, B) =
-            reshape([ ($scalarf)(A[i], B) for i=1:length(A)], size(A))
-    end
 end
 
 # use memcmp for cmp on byte arrays
@@ -1330,11 +1262,15 @@ function findmin(a::Array)
     end
     return (m, mi)
 end
+indmax(a::Array) = findmax(a)[2]
+indmin(a::Array) = findmin(a)[2]
 
 ## Reductions ##
 
-areduce{T}(f::Function, A::StridedArray{T}, region::Dimspec, v0) =
-    areduce(f,A,region,v0,T)
+reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 : size(A,i)))
+
+areduce(f::Function, A, region::Dimspec, v0) =
+    areduce(f, A, region, v0, similar(A, reduced_dims(A, region)))
 
 # TODO:
 # - find out why inner loop with dimsA[i] instead of size(A,i) is way too slow
@@ -1377,11 +1313,8 @@ function gen_areduce_func(n, f)
 end
 
 global areduce
-function areduce(f::Function, A::StridedArray, region::Dimspec, v0, RType::Type)
-    dimsA = size(A)
+function areduce(f::Function, A, region::Dimspec, v0, R)
     ndimsA = ndims(A)
-    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-    R = similar(A, RType, dimsR)
 
     if is(areduce_cache,nothing)
         areduce_cache = Dict()
@@ -1412,6 +1345,21 @@ function areduce(f::Function, A::StridedArray, region::Dimspec, v0, RType::Type)
     return R
 end
 end
+
+max{T}(A::AbstractArray{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T))
+min{T}(A::AbstractArray{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T))
+sum{T}(A::AbstractArray{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
+prod{T}(A::AbstractArray{T}, region::Dimspec) = areduce(*,A,region,one(T))
+
+all(A::AbstractArray{Bool}, region::Dimspec) = areduce(all,A,region,true)
+any(A::AbstractArray{Bool}, region::Dimspec) = areduce(any,A,region,false)
+sum(A::AbstractArray{Bool}, region::Dimspec) = areduce(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
+sum(A::AbstractArray{Bool}) = count(A)
+sum(A::StridedArray{Bool})  = count(A)
+prod(A::AbstractArray{Bool}) =
+    error("use all() instead of prod() for boolean arrays")
+prod(A::AbstractArray{Bool}, region::Dimspec) =
+    error("use all() instead of prod() for boolean arrays")
 
 function sum{T}(A::StridedArray{T})
     if isempty(A)
@@ -1535,20 +1483,6 @@ function max{T<:Integer}(A::StridedArray{T})
     end
     v
 end
-
-max{T}(A::StridedArray{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T),T)
-min{T}(A::StridedArray{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T),T)
-sum{T}(A::StridedArray{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
-prod{T}(A::StridedArray{T}, region::Dimspec) = areduce(*,A,region,one(T))
-
-all(A::StridedArray{Bool}, region::Dimspec) = areduce(all,A,region,true)
-any(A::StridedArray{Bool}, region::Dimspec) = areduce(any,A,region,false)
-sum(A::StridedArray{Bool}, region::Dimspec) = areduce(+,A,region,0,Int)
-sum(A::StridedArray{Bool}) = count(A)
-prod(A::StridedArray{Bool}) =
-    error("use all() instead of prod() for boolean arrays")
-prod(A::StridedArray{Bool}, region::Dimspec) =
-    error("use all() instead of prod() for boolean arrays")
 
 ## map over arrays ##
 

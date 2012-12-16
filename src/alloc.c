@@ -26,7 +26,7 @@ jl_struct_type_t *jl_typector_type;
 jl_struct_type_t *jl_array_type;
 jl_typename_t *jl_array_typename;
 jl_type_t *jl_array_uint8_type;
-jl_type_t *jl_array_any_type;
+jl_type_t *jl_array_any_type=NULL;
 jl_type_t *jl_array_symbol_type;
 jl_function_t *jl_bottom_func;
 jl_struct_type_t *jl_weakref_type;
@@ -47,6 +47,7 @@ jl_struct_type_t *jl_lambda_info_type;
 jl_struct_type_t *jl_module_type;
 jl_struct_type_t *jl_errorexception_type=NULL;
 jl_struct_type_t *jl_typeerror_type;
+jl_struct_type_t *jl_methoderror_type;
 jl_struct_type_t *jl_loaderror_type;
 jl_bits_type_t *jl_pointer_type;
 jl_bits_type_t *jl_voidpointer_type;
@@ -82,7 +83,7 @@ jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
 jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
-jl_sym_t *global_sym;
+jl_sym_t *global_sym; jl_sym_t *tuple_sym;
 
 typedef struct {
     int64_t a;
@@ -332,6 +333,8 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->unspecialized = NULL;
     li->specializations = NULL;
     li->name = anonymous_sym;
+    li->def = li;
+    li->capt = NULL;
     return li;
 }
 
@@ -443,7 +446,7 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
     tn->name = name;
     tn->module = jl_current_module;
     tn->primary = NULL;
-    tn->cache = jl_null;
+    tn->cache = (jl_value_t*)jl_null;
     return tn;
 }
 
@@ -535,7 +538,7 @@ void jl_compute_struct_offsets(jl_struct_type_t *st)
 {
     size_t sz = 0, alignm = 0;
 
-    for(size_t i=0; i < st->types->length; i++) {
+    for(size_t i=0; i < jl_tuple_len(st->types); i++) {
         jl_value_t *ty = jl_tupleref(st->types, i);
         size_t fsz, al;
         if (jl_is_bits_type(ty)) {
@@ -565,7 +568,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
 {
     jl_typename_t *tn = jl_new_typename(name);
     JL_GC_PUSH(&tn);
-    jl_struct_type_t *t = jl_new_uninitialized_struct_type(fnames->length);
+    jl_struct_type_t *t = jl_new_uninitialized_struct_type(jl_tuple_len(fnames));
     t->name = tn;
     t->name->primary = (jl_value_t*)t;
     t->super = super;

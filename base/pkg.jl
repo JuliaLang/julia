@@ -10,8 +10,6 @@ using Metadata
 
 import Git
 
-# default locations: local package repo, remote metadata repo
-
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 
 # some utility functions
@@ -24,6 +22,21 @@ function cd_pkgdir(f::Function)
     cd(f,dir)
 end
 
+# show the status packages in the repo
+
+status() = cd_pkgdir() do
+    Git.each_submodule(false) do pkg, path, sha1
+        cd(path) do
+            head = Git.head()
+            ver = Git.attached() ? Git.branch() : cd("..") do
+                Metadata.version(pkg,head)
+            end
+            dirty = Git.dirty() ? " (dirty)" : ""
+            println("$(rpad(pkg,16)) $ver$dirty")
+        end
+    end
+end
+
 # create a new empty packge repository
 
 function init(meta::String)
@@ -31,29 +44,33 @@ function init(meta::String)
     if isdir(dir)
         error("Package directory $dir already exists.")
     end
-    tmpdir = mktempdir()
-    cd(tmpdir) do
-        # create & configure
-        run(`git init`)
-        run(`git remote add origin .`)
+    try
+        run(`mkdir -p $dir`)
+        cd(dir) do
+            # create & configure
+            run(`git init`)
+            run(`git commit --allow-empty -m "Initial empty commit"`)
+            run(`git remote add origin .`)
         if success(`git config --global github.user` > SpawnNullStream())
-            base = basename(dir)
-            user = readchomp(`git config --global github.user`)
-            run(`git config remote.origin.url git@github.com:$user/$base`)
-        else
-            run(`git config --unset remote.origin.url`)
+                base = basename(dir)
+                user = readchomp(`git config --global github.user`)
+                run(`git config remote.origin.url git@github.com:$user/$base`)
+            else
+                run(`git config --unset remote.origin.url`)
+            end
+            run(`git config branch.master.remote origin`)
+            run(`git config branch.master.merge refs/heads/master`)
+            # initial content
+            run(`touch REQUIRE`)
+            run(`git add REQUIRE`)
+            run(`git submodule add $meta METADATA`)
+            run(`git commit -m "Empty package repo"`)
+            cd(Git.autoconfig_pushurl,"METADATA")
+            Metadata.gen_hashes()
         end
-        run(`git config branch.master.remote origin`)
-        run(`git config branch.master.merge refs/heads/master`)
-        # initial content
-        run(`touch REQUIRE`)
-        run(`git add REQUIRE`)
-        run(`git submodule add $meta METADATA`)
-        run(`git commit -m "empty package repo"`)
-        cd(Git.autoconfig_pushurl,"METADATA")
-        Metadata.gen_hashes()
+    catch
+        run(`rm -rf $dir`)
     end
-    run(`mv $tmpdir $dir`)
 end
 init() = init(DEFAULT_META)
 
@@ -74,7 +91,7 @@ end
 add(pkgs::Vector{VersionSet}) = cd_pkgdir() do
     for pkg in pkgs
         if !contains(Metadata.packages(),pkg.package)
-            error("invalid package: $(pkg.package)")
+            error("Unknown package $(pkg.package); Perhaps you need to Pkg.update() for new metadata?")
         end
         reqs = parse_requires("REQUIRE")
         if anyp(req->req.package==pkg.package,reqs)
@@ -148,8 +165,8 @@ end
 # update packages from requirements
 
 function _resolve()
-    reqs = parse_requires("REQUIRE")
     have = (String=>ASCIIString)[]
+    reqs = parse_requires("REQUIRE")
     Git.each_submodule(false) do pkg, path, sha1
         if pkg != "METADATA"
             have[pkg] = sha1
@@ -167,10 +184,10 @@ function _resolve()
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
         if has(have,pkg)
-            if cd(Git.attached,pkg)
-                # don't touch packages with attached heads
-                continue
+            managed = cd(pkg) do
+                !Git.dirty() && !Git.attached()
             end
+            if !managed continue end
             if has(want,pkg)
                 if have[pkg] != want[pkg]
                     oldver = Metadata.version(pkg,have[pkg])
@@ -193,11 +210,22 @@ function _resolve()
         else
             ver = Metadata.version(pkg,want[pkg])
             println("Installing $pkg: v$ver")
+            if ispath(pkg)
+                # TODO: maybe if this is a git repo or submodule, just take it over?
+                error("Path $pkg already exists! Please remove to allow installation.")
+            end
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
+                try run(`git checkout -q $(want[pkg])` .> "/dev/null")
+                catch
+                    run(`git fetch -q`)
+                    try run(`git checkout -q $(want[pkg])`)
+                    catch
+                        error("An invalid SHA1 hash seems to be registered for $pkg. Please contact the package maintainer.")
+                    end
+                end
                 Git.autoconfig_pushurl()
-                run(`git checkout -q $(want[pkg])`)
             end
             run(`git add -- $pkg`)
         end
@@ -277,6 +305,30 @@ function commit(f::Function, msg::String)
         error("There are both staged and unstaged changes to packages.")
     end
 end
+
+# set package remote in METADATA
+
+get_origin(pkg::String, remote::String) = cd_pkgdir() do
+    for line in each_line(`git --git-dir=$(file_path(pkg,".git")) remote -v`)
+        m = match(r"^(\S*)\s*(\S*)\s*\(fetch\)", line)
+        if m != nothing && m.captures[1] == remote
+            return m.captures[2]
+        end
+    end
+    error("The git remote '", remote, "' is not present in the configuration file")
+end
+get_origin(pkg::String) = get_origin(pkg, "origin")
+
+set_origin(pkg::String, url::String) = cd_pkgdir() do
+    cd(file_path("METADATA", pkg)) do
+        open("url", "w") do io
+            println(io, url)
+        end
+    end
+end
+
+pkg_origin(pkg::String, remote::String) = set_origin(pkg, get_origin(pkg, remote))
+pkg_origin(pkg::String) = pkg_origin(pkg, "origin")
 
 # push & pull package repos to/from remotes
 
@@ -366,58 +418,163 @@ end
 # update system to latest and greatest
 
 update() = cd_pkgdir() do
-    Git.each_submodule(false) do name, path, sha1
-        cd(path) do
-            if Git.attached()
-                run(`git pull`)
-            else
-                run(`git fetch -q --all --tags --prune --recurse-submodules`)
-            end
-        end
-    end
     cd("METADATA") do
         run(`git pull`)
     end
-    run(`git add METADATA`)
     Metadata.gen_hashes()
+    run(`git add METADATA`)
+    # TODO: handle package deletions
+    Git.each_submodule(false) do pkg, path, sha1
+        url = Metadata.pkg_url(pkg)
+        if url != nothing
+            Git.modules(`submodule.$pkg.url $url`)
+            cd(path) do
+                if !Git.dirty()
+                    if Git.attached()
+                        run(ignorestatus(`git pull --ff-only`))
+                    else
+                        run(`git config remote.origin.url $url`)
+                        run(`git fetch -q`)
+                    end
+                end
+            end
+        end
+    end
+    run(`git add .gitmodules`)
+    run(`git submodule sync -q`)
     _resolve()
 end
 
-# create a new package repo (unregistered)
-
-create(name::String) = cd_pkgdir() do
-    run(`mkdir -p $name`)
-    cd(name) do
-        run(`git init`)
-        run(`git commit --allow-empty -m "initial empty commit"`)
-        run(`touch README.md`)
-        run(`mkdir src`)
+latest_version(pkg::String) = cd_pkgdir() do
+    vers = VersionNumber[]
+    for (ver, _) in Metadata.each_tagged_version(pkg)
+        Base.push(vers, ver)
     end
+    max(vers)
 end
 
-# Create a skeleton package that can be easily filled in
-function skeleton(package_name::String)
-    try
-        mkdir(package_name)
-    catch
-        error("Unable to create directory for new package: $(package_name)")
-    end
-    try
-        cd(package_name) do
-            file_create("LICENSE.md") # Should insert MIT content
-            file_create("README.md")
-            file_create("REQUIRE")
-            mkdir("src")
-            file_create(file_path("src", strcat(package_name, ".jl")))
-            mkdir("test")
-            file_create(file_path("test", strcat("01", ".jl")))
+version(pkg::String, ver::VersionNumber) = cd_pkgdir() do
+    if any(pkg .== Metadata.packages())
+        if ver != v"0.0.0" && ver <= latest_version(pkg)
+            error("The latest version of package $(pkg) is $(string(ver)). You must specify a later version.")
         end
-    catch
-        error("Unable to initialize contents of new package")
+    else
+        if !isdir(file_path("METADATA", pkg))
+            mkdir(file_path("METADATA", pkg))
+        end
+    end
+    sha1 = ""
+    cd(pkg) do
+        sha1 = readchomp(`git rev-parse HEAD`)
+        if ver > v"0.0.0"
+            run(`git tag $(string(ver)) HEAD`)
+        end
+    end
+    cd(file_path("METADATA", pkg)) do
+        if !isdir("hashes") mkdir("hashes") end
+        if !isdir("versions") mkdir("versions") end
+        cd("versions") do
+            if !isdir(string(ver)) mkdir(string(ver)) end
+            open(file_path(string(ver), "sha1"), "w") do io
+                println(io, sha1)
+            end
+        end
+    end
+    if isfile(file_path(pkg, "REQUIRE"))
+        file_copy(
+            file_path(pkg, "REQUIRE"),
+            file_path("METADATA", pkg, "versions", string(ver), "requires"))
+    end
+    Metadata.gen_hashes(pkg)
+end
+
+function patch(pkg)
+    lver = latest_version(pkg)
+    if lver > v"0.0.0"
+        version(pkg, VersionNumber(lver.major, lver.minor, lver.patch+1))
+    else
+        version(pkg, v"0.0.0")
+    end
+end
+function minor(pkg)
+    lver = latest_version(pkg)
+    version(pkg, VersionNumber(lver.major, lver.minor+1))
+end
+function major(pkg)
+    lver = latest_version(pkg)
+    version(pkg, VersionNumber(lver.major+1))
+end
+
+function new(package_name::String)
+    newpath = file_path(julia_pkgdir(), package_name)
+    cd_pkgdir() do
+        if isdir(package_name)
+            # This is an existing package that we assume is ready to go
+            version(package_name, v"0.0.0")
+            try
+                pkg_origin(package_name, "origin")
+            catch
+                error("
+Your package in
+
+    $(newpath)
+    
+is almost ready. But the default remote, \"origin\", does not exist in
+this repository's configuration. To finish the process, run
+
+    > Pkg.pkg_origin(", package_name, ", remotename)
+
+with the correct remote name for your repository."
+                )
+            end
+        else
+            # Create a skeleton package that can be easily filled in
+            try
+                mkdir(package_name)
+            catch
+                error("Unable to create directory for new package: $(package_name)")
+            end
+            try
+                sha1 = ""
+                cd(package_name) do
+                    run(`git init`)
+                    run(`git commit --allow-empty -m "Initial empty commit"`)
+                    file_create("LICENSE.md") # Should insert MIT content
+                    file_create("README.md")
+                    file_create("REQUIRE")
+                    mkdir("src")
+                    file_create(file_path("src", strcat(package_name, ".jl")))
+                    mkdir("test")
+                    run(`git add --all`)
+                    run(`git commit -m "Scaffold for Julia package $(package_name)"`)
+                    sha1 = readchomp(`git rev-parse HEAD`)
+                end
+                version(package_name, v"0.0.0")
+            catch
+                error("Unable to initialize contents of new package")
+            end
+            println(
+"
+You have created a new package in
+
+  $(newpath)
+
+When the package is ready to submit, push it to a public repository, set it as
+the remote \"origin\", then run:
+
+  > Pkg.pkg_origin($(package_name))
+  > Pkg.patch($(package_name))
+
+to prepare METADATA with the details for your package."
+                )
+        end
     end
 end
 
-skeleton() = skeleton("Example")
+# Remove local traces of a package (broken due to a bad .new(), for instance)
+obliterate(package_name::String) = cd_pkgdir() do
+    run(`rm -rf $(package_name) $(file_path("METADATA", package_name))`)
+end
 
 # If a package contains data, make it easy to find its location
 function package_directory(package_name::String)

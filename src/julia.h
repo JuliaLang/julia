@@ -67,12 +67,6 @@ typedef struct {
     jl_value_t *data[1];
 } jl_tuple_t;
 
-typedef struct {
-    JL_STRUCT_TYPE
-    size_t length;
-    jl_value_t *data[2];
-} jl_tuple2_t;
-
 // pseudo-object to track managed malloc pointers
 // currently only referenced from an array's data owner field
 typedef struct _jl_mallocptr_t {
@@ -120,6 +114,8 @@ typedef struct {
 #define jl_array_len(a)   (((jl_array_t*)(a))->length)
 #define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
 #define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
+#define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
+#define jl_array_nrows(a) (((jl_array_t*)(a))->nrows)
 #define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
 #define jl_array_data_owner(a) (*((jl_value_t**)jl_array_inline_data_area(a)))
 
@@ -164,19 +160,21 @@ typedef struct _jl_lambda_info_t {
     struct _jl_function_t *unspecialized;
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
-    int8_t inferred;
-    jl_value_t *file;
-    ptrint_t line;
     struct _jl_module_t *module;
+    struct _jl_lambda_info_t *def;  // original this is specialized from
+    jl_value_t *capt;  // captured var info
+    jl_value_t *file;
+    int32_t line;
+    int8_t inferred;
 
     // hidden fields:
+    // flag telling if inference is running on this function
+    // used to avoid infinite recursion
+    int8_t inInference : 1;
+    int8_t inCompile : 1;
     jl_fptr_t fptr;        // jlcall entry point
     void *functionObject;  // jlcall llvm Function
     void *cFunctionObject; // c callable llvm Function
-    // flag telling if inference is running on this function
-    // used to avoid infinite recursion
-    uptrint_t inInference : 1;
-    uptrint_t inCompile : 1;
 } jl_lambda_info_t;
 
 #define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t))-1)
@@ -206,7 +204,7 @@ typedef struct {
     // a type alias, for example, might make a type constructor that is
     // not the original.
     jl_value_t *primary;
-    jl_tuple_t *cache;
+    jl_value_t *cache;
 } jl_typename_t;
 
 typedef struct {
@@ -377,8 +375,9 @@ extern jl_struct_type_t *jl_weakref_type;
 extern DLLEXPORT jl_struct_type_t *jl_ascii_string_type;
 extern DLLEXPORT jl_struct_type_t *jl_utf8_string_type;
 extern DLLEXPORT jl_struct_type_t *jl_errorexception_type;
-extern jl_struct_type_t *jl_typeerror_type;
 extern DLLEXPORT jl_struct_type_t *jl_loaderror_type;
+extern jl_struct_type_t *jl_typeerror_type;
+extern jl_struct_type_t *jl_methoderror_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_memory_exception;
 extern jl_value_t *jl_divbyzero_exception;
@@ -431,7 +430,6 @@ extern jl_value_t *jl_true;
 extern jl_value_t *jl_false;
 DLLEXPORT extern jl_value_t *jl_nothing;
 
-extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
@@ -469,7 +467,7 @@ extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
-extern jl_sym_t *global_sym;
+extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 
 
 
@@ -883,6 +881,7 @@ DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
 jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var);
 jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
+DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
@@ -936,13 +935,14 @@ jl_array_t *jl_lam_locals(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
+jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
 
 jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
-jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
+jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);
 
 static inline int jl_vinfo_capt(jl_array_t *vi)
 {

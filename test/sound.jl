@@ -1,14 +1,14 @@
 ## -*-Julia-*-
 ## Test suite for Julia's sound module
 
-require("../extras/sound")
-require("../extras/options")
+require("extras/sound")
+require("extras/options")
 using Sound
 using OptionsMod
 
 # These float array comparison functions are from dists.jl
 function absdiff{T<:Real}(current::AbstractArray{T}, target::AbstractArray{T})
-    @assert all(size(current) == size(target))
+    @test all(size(current) == size(target))
     max(abs(current - target))
 end
 
@@ -17,7 +17,7 @@ function reldiff{T<:Real}(current::T, target::T)
 end
 
 function reldiff{T<:Real}(current::AbstractArray{T}, target::AbstractArray{T})
-    @assert all(size(current) == size(target))
+    @test all(size(current) == size(target))
     max([reldiff(current[i], target[i]) for i in 1:numel(target)])
 end
 
@@ -29,8 +29,8 @@ for fs = (8000,11025,22050,44100,48000,96000,192000), nbits = (1,7,8,9,12,16,20,
     tol = 2.0 / (2.0^nbits - 1)
 
     in_data = rand(nsamples, nchans)
-    @assert max(in_data) <= 1.0
-    @assert min(in_data) >= -1.0
+    @test max(in_data) <= 1.0
+    @test min(in_data) >= -1.0
     io = memio()
     wavwrite(in_data, io, @options Fs=fs nbits=nbits compression=WAVE_FORMAT_PCM)
     flush(io)
@@ -38,25 +38,25 @@ for fs = (8000,11025,22050,44100,48000,96000,192000), nbits = (1,7,8,9,12,16,20,
 
     ## Check for the common header identifiers
     seek(io, 0)
-    @assert read(io, Uint8, 4) == b"RIFF"
-    @assert read(io, Uint32) == file_size - 8
-    @assert read(io, Uint8, 4) == b"WAVE"
+    @test read(io, Uint8, 4) == b"RIFF"
+    @test read(io, Uint32) == file_size - 8
+    @test read(io, Uint8, 4) == b"WAVE"
 
     ## Check that wavread works on the wavwrite produced memory
     seek(io, 0)
     sz = wavread(io, @options format="size")
-    @assert sz == (nsamples, nchans)
+    @test sz == (nsamples, nchans)
 
     seek(io, 0)
     out_data, out_fs, out_nbits, out_extra = wavread(io)
-    @assert length(out_data) == nsamples * nchans
-    @assert size(out_data, 1) == nsamples
-    @assert size(out_data, 2) == nchans
-    @assert typeof(out_data) == Array{Float64, 2}
-    @assert out_fs == fs
-    @assert out_nbits == nbits
-    @assert out_extra == None
-    @assert absdiff(out_data, in_data) < tol
+    @test length(out_data) == nsamples * nchans
+    @test size(out_data, 1) == nsamples
+    @test size(out_data, 2) == nchans
+    @test typeof(out_data) == Array{Float64, 2}
+    @test out_fs == fs
+    @test out_nbits == nbits
+    @test out_extra == None
+    @test absdiff(out_data, in_data) < tol
 
     ## test the "subrange" option.
     if nsamples > 0
@@ -64,26 +64,26 @@ for fs = (8000,11025,22050,44100,48000,96000,192000), nbits = (1,7,8,9,12,16,20,
         # Don't convert to Int, test if passing a float (nsamples/2) behaves as expected
         subsamples = min(10, nsamples / 2)
         out_data, out_fs, out_nbits, out_extra = wavread(io, @options subrange=subsamples)
-        @assert length(out_data) == subsamples * nchans
-        @assert size(out_data, 1) == subsamples
-        @assert size(out_data, 2) == nchans
-        @assert typeof(out_data) == Array{Float64, 2}
-        @assert out_fs == fs
-        @assert out_nbits == nbits
-        @assert out_extra == None
-        @assert absdiff(out_data, in_data[1:int(subsamples), :]) < tol
+        @test length(out_data) == subsamples * nchans
+        @test size(out_data, 1) == subsamples
+        @test size(out_data, 2) == nchans
+        @test typeof(out_data) == Array{Float64, 2}
+        @test out_fs == fs
+        @test out_nbits == nbits
+        @test out_extra == None
+        @test absdiff(out_data, in_data[1:int(subsamples), :]) < tol
 
         seek(io, 0)
         sr = convert(Int, min(5, nsamples / 2)):convert(Int, min(23, nsamples - 1))
         out_data, out_fs, out_nbits, out_extra = wavread(io, @options subrange=sr)
-        @assert length(out_data) == length(sr) * nchans
-        @assert size(out_data, 1) == length(sr)
-        @assert size(out_data, 2) == nchans
-        @assert typeof(out_data) == Array{Float64, 2}
-        @assert out_fs == fs
-        @assert out_nbits == nbits
-        @assert out_extra == None
-        @assert absdiff(out_data, in_data[sr, :]) < tol
+        @test length(out_data) == length(sr) * nchans
+        @test size(out_data, 1) == length(sr)
+        @test size(out_data, 2) == nchans
+        @test typeof(out_data) == Array{Float64, 2}
+        @test out_fs == fs
+        @test out_nbits == nbits
+        @test out_extra == None
+        @test absdiff(out_data, in_data[sr, :]) < tol
     end
 end
 
@@ -96,10 +96,10 @@ for nchans = (1,2,4)
 
     seek(io, 0)
     out_data_8, fs, nbits, extra = wavread(io, @options format="native")
-    @assert fs == 8000
-    @assert nbits == 8
-    @assert extra == None
-    @assert in_data_8 == out_data_8
+    @test fs == 8000
+    @test nbits == 8
+    @test extra == None
+    @test in_data_8 == out_data_8
 end
 
 ## Test native encoding of 16 bits
@@ -111,10 +111,10 @@ for nchans = (1,2,4)
 
     seek(io, 0)
     out_data_16, fs, nbits, extra = wavread(io, @options format="native")
-    @assert fs == 8000
-    @assert nbits == 16
-    @assert extra == None
-    @assert in_data_16 == out_data_16
+    @test fs == 8000
+    @test nbits == 16
+    @test extra == None
+    @test in_data_16 == out_data_16
 end
 
 ## Test native encoding of 24 bits
@@ -126,10 +126,10 @@ for nchans = (1,2,4)
 
     seek(io, 0)
     out_data_24, fs, nbits, extra = wavread(io, @options format="native")
-    @assert fs == 8000
-    @assert nbits == 24
-    @assert extra == None
-    @assert in_data_24 == out_data_24
+    @test fs == 8000
+    @test nbits == 24
+    @test extra == None
+    @test in_data_24 == out_data_24
 end
 
 ## Test encoding 32 bit values
@@ -141,10 +141,10 @@ for nchans = (1,2,4)
 
     seek(io, 0)
     out_data_single, fs, nbits, extra = wavread(io, @options format="native")
-    @assert fs == 8000
-    @assert nbits == 32
-    @assert extra == None
-    @assert in_data_single == out_data_single
+    @test fs == 8000
+    @test nbits == 32
+    @test extra == None
+    @test in_data_single == out_data_single
 end
 
 ## Test encoding 32 bit values outside the valid range
@@ -157,8 +157,8 @@ for nchans = (1,2,4)
 
     seek(io, 0)
     out_data_single, fs, nbits, extra = wavread(io, @options format="native")
-    @assert fs == 8000
-    @assert nbits == 32
-    @assert extra == None
-    @assert [clamp(in_data_single[i, j], float32(-1), float32(1)) for i = 1:nsamps, j = 1:nchans] == out_data_single
+    @test fs == 8000
+    @test nbits == 32
+    @test extra == None
+    @test [clamp(in_data_single[i, j], float32(-1), float32(1)) for i = 1:nsamps, j = 1:nchans] == out_data_single
 end

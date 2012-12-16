@@ -20,17 +20,17 @@ for T=types, S=types, x=vals
     b = convert(S,x)
     #println("$(typeof(a)) $a")
     #println("$(typeof(b)) $b")
-    @assert !isequal(a,b) || hash(a)==hash(b)
+    @test !isequal(a,b) || hash(a)==hash(b)
     # for y=vals
     #     println("T=$T; S=$S; x=$x; y=$y")
     #     c = convert(T,x//y)
     #     d = convert(S,x//y)
-    #     @assert !isequal(a,b) || hash(a)==hash(b)
+    #     @test !isequal(a,b) || hash(a)==hash(b)
     # end
 end
 
 f = prevfloat(float64(typemax(Uint64)))
-@assert hash(f) == hash(0xfffffffffffff800)
-@assert hash(f) == hash(-2048)
+@test hash(f) == hash(0xfffffffffffff800)
+@test hash(f) == hash(-2048)
 
-@assert hash(RopeString("1","2")) == hash("12")
+@test hash(RopeString("1","2")) == hash("12")

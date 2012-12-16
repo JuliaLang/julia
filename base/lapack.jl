@@ -1,7 +1,7 @@
 ## The LAPACK module of interfaces to LAPACK subroutines
 module LAPACK
 
-liblapack = Base.liblapack_name
+const liblapack = Base.liblapack_name
 
 typealias LapackChar Char
 type LapackException <: Exception

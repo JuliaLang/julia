@@ -11,7 +11,7 @@ function list_all(T::Type, modules::Array{Module}, f::Function)
         sm = string(m)
         for s = names(m,true)
             try
-                t = eval(s)
+                t = eval(m,s)
                 if f(t)
                     a[string(s)] = t
                 end
@@ -118,7 +118,7 @@ end
 show_tree(root) = show_tree(root, "", "")
 
 ## main ##
-all_types = list_all(Type, [Core, Base], (x)->isa(x, Type))
+all_types = list_all(Type, [Core, Base, Main], (x)->isa(x, Type))
 children_map = Dict{String, Set{String}}(length(all_types))
 mk_tree()
 println("\n\nType Tree:")
