@@ -4,6 +4,9 @@ export eigs, svds
 
 const libarpack = "libarpack"
 
+import Base.BlasInt
+import Base.blas_int
+
 # For a dense matrix A is ignored and At is actually A'*A
 sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = BLAS.symv('U', one(T), At, X)
 sarupdate{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, At::SparseMatrixCSC{Tv,Ti}, X::StridedVector{Tv}) = At*(A*X)
@@ -28,33 +31,33 @@ for (T, saupd, seupd, naupd, neupd) in
            workd  = Array($T, 3*n)
            workl  = Array($T, lworkl)
            resid  = Array($T, n)
-           select = Array(Int, ncv)
-           iparam = zeros(Int, 11)
-           ipntr  = zeros(Int, 14)
+           select = Array(BlasInt, ncv)
+           iparam = zeros(BlasInt, 11)
+           ipntr  = zeros(BlasInt, 14)
 
            tol    = zeros($T, 1)
-           ido    = zeros(Int, 1)
-           info   = zeros(Int, 1)
+           ido    = zeros(BlasInt, 1)
+           info   = zeros(BlasInt, 1)
 
-           iparam[1] = int(1)    # ishifts
-           iparam[3] = int(1000) # maxitr
-           iparam[7] = int(1)    # mode 1
+           iparam[1] = blas_int(1)    # ishifts
+           iparam[3] = blas_int(1000) # maxitr
+           iparam[7] = blas_int(1)    # mode 1
 
            zernm1 = 0:(n-1)
 
            while true
                if sym
                    ccall(($(string(saupd)), libarpack), Void,
-                         (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
-                          Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
-                          Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
+                         (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                          Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
+                          Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}),
                          ido, bmat, &n, evtype, &nev, tol, resid, &ncv, v, &n, 
                          iparam, ipntr, workd, workl, &lworkl, info)
                else
                    ccall(($(string(naupd)), libarpack), Void,
-                         (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
-                          Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
-                          Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
+                         (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                          Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
+                          Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}),
                          ido, bmat, &n, evtype, &nev, tol, resid, &ncv, v, &n, 
                          iparam, ipntr, workd, workl, &lworkl, info)
                end
@@ -70,10 +73,10 @@ for (T, saupd, seupd, naupd, neupd) in
                sigma = zeros($T, 1)
 
                ccall(($(string(seupd)), libarpack), Void,
-                     (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int},
-                      Ptr{$T}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
-                      Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int}, Ptr{Int},
-                      Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
+                     (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt},
+                      Ptr{$T}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                      Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt},
+                      Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}),
                      &rvec, howmny, select, d, v, &n, sigma,
                      bmat, &n, evtype, &nev, tol, resid, &ncv, v, &n,
                      iparam, ipntr, workd, workl, &lworkl, info) 
@@ -86,11 +89,11 @@ for (T, saupd, seupd, naupd, neupd) in
            sigmai = zeros($T, 1)
            workev = Array($T, 3*ncv)
             ccall(($(string(neupd)), libarpack), Void,
-                 (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{$T},
-                  Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int},
-                  Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T},
-                  Ptr{Int}, Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T},
-                  Ptr{Int}, Ptr{Int}),
+                 (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{$T},
+                  Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{BlasInt},
+                  Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T},
+                  Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T},
+                  Ptr{BlasInt}, Ptr{BlasInt}),
                  &rvec, howmny, select, dr, di, v, &n, sigmar, sigmai,
                  workev, bmat, &n, evtype, &nev, tol, resid, &ncv, v, &n,
                  iparam, ipntr, workd, workl, &lworkl, info)
@@ -132,26 +135,26 @@ for (T, TR, naupd, neupd) in
            workl  = Array($T, lworkl)
            rwork  = Array($TR, ncv)
            resid  = Array($T, n)
-           select = Array(Int, ncv)
-           iparam = zeros(Int, 11)
-           ipntr  = zeros(Int, 14)
+           select = Array(BlasInt, ncv)
+           iparam = zeros(BlasInt, 11)
+           ipntr  = zeros(BlasInt, 14)
 
            tol    = zeros($TR, 1)
-           ido    = zeros(Int, 1)
-           info   = zeros(Int, 1)
+           ido    = zeros(BlasInt, 1)
+           info   = zeros(BlasInt, 1)
 
-           iparam[1] = int(1)    # ishifts
-           iparam[3] = int(1000) # maxitr
-           iparam[7] = int(1)    # mode 1
+           iparam[1] = blas_int(1)    # ishifts
+           iparam[3] = blas_int(1000) # maxitr
+           iparam[7] = blas_int(1)    # mode 1
 
            zernm1 = 0:(n-1)
 
            while true
                ccall(($(string(naupd)), libarpack), Void,
-                         (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
-                          Ptr{$TR}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
-                          Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int},
-                          Ptr{$TR}, Ptr{Int}),
+                         (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                          Ptr{$TR}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
+                          Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt},
+                          Ptr{$TR}, Ptr{BlasInt}),
                          ido, bmat, &n, evtype, &nev, tol, resid, &ncv, v, &n, 
                          iparam, ipntr, workd, workl, &lworkl, rwork, info)
                if info[1] != 0 error("error code $(info[1]) from ARPACK aupd") end
@@ -165,10 +168,10 @@ for (T, TR, naupd, neupd) in
            sigma = zeros($T, 1)
            workev = Array($T, 2ncv)
            ccall(($(string(neupd)), libarpack), Void,
-                 (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int},
-                  Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
-                  Ptr{$TR}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int}, Ptr{Int},
-                  Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$TR}, Ptr{Int}),
+                 (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt},
+                  Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                  Ptr{$TR}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt},
+                  Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$TR}, Ptr{BlasInt}),
                  &rvec, howmny, select, d, v, &n, workev, sigma,
                  bmat, &n, evtype, &nev, tol, resid, &ncv, v, &n,
                  iparam, ipntr, workd, workl, &lworkl, rwork, info) 
@@ -205,25 +208,25 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
            workd  = Array($T, 3n)
            workl  = Array($T, lworkl)
            resid  = Array($T, n)
-           select = Array(Int, ncv)
-           iparam = zeros(Int, 11)
+           select = Array(BlasInt, ncv)
+           iparam = zeros(BlasInt, 11)
            iparam[1] = 1                # ishifts
            iparam[3] = 1000             # maxitr
            iparam[7] = 1                # mode 1
-           ipntr  = zeros(Int, 14)
+           ipntr  = zeros(BlasInt, 14)
     
            tol    = zeros($T, 1)
            sigma  = zeros($T, 1)
-           ido    = zeros(Int, 1)
-           info   = Array(Int, 1)
+           ido    = zeros(BlasInt, 1)
+           info   = Array(BlasInt, 1)
            bmat   = "I"
            zernm1 = 0:(n-1)
 
            while true
                ccall(($(string(saupd)), libarpack), Void,
-                     (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
-                      Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int},
-                      Ptr{Int}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
+                     (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                      Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
+                      Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}),
                      ido, bmat, &n, which, &nev, tol, resid, &ncv, v, &n, 
                      iparam, ipntr, workd, workl, &lworkl, info)
                if (info[1] < 0) error("error code $(info[1]) from ARPACK saupd") end
@@ -235,10 +238,10 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
            howmny = "A"
 
            ccall(($(string(seupd)), libarpack), Void,
-                  (Ptr{Int}, Ptr{Uint8}, Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T},
-                   Ptr{Uint8}, Ptr{Int}, Ptr{Uint8}, Ptr{Int},
-                   Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{$T}, Ptr{Int}, Ptr{Int},
-                   Ptr{Int}, Ptr{$T}, Ptr{$T}, Ptr{Int}, Ptr{Int}),
+                  (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T},
+                   Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                   Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}),
                  &rvec, howmny, select, d, v, &n, sigma,
                  bmat, &n, which, &nev, tol, resid, &ncv, v, &n,
                  iparam, ipntr, workd, workl, &lworkl, info)
