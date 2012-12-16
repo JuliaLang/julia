@@ -65,7 +65,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     JL_TRY {
-        for(int i=0; i < exprs->length; i++) {
+        for(int i=0; i < jl_array_len(exprs); i++) {
             // process toplevel form
             jl_value_t *form = jl_cellref(exprs, i);
             (void)jl_toplevel_eval_flex(form, 1);
@@ -114,7 +114,7 @@ jl_module_t *jl_base_relative_to(jl_module_t *m)
 
 static int has_intrinsics(jl_expr_t *e)
 {
-    if (e->args->length == 0)
+    if (jl_array_len(e->args) == 0)
         return 0;
     if (e->head == static_typeof_sym) return 1;
     jl_value_t *e0 = jl_exprarg(e,0);
@@ -123,7 +123,7 @@ static int has_intrinsics(jl_expr_t *e)
          (jl_is_topnode(e0) && is_intrinsic(jl_base_relative_to(jl_current_module),(jl_sym_t*)jl_fieldref(e0,0)))))
         return 1;
     int i;
-    for(i=0; i < e->args->length; i++) {
+    for(i=0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
         if (jl_is_expr(a) && has_intrinsics((jl_expr_t*)a))
             return 1;
@@ -140,7 +140,7 @@ int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops)
         jl_array_t *body = expr->args;
         size_t i, maxlabl=0;
         // compile if there are backwards branches
-        for(i=0; i < body->length; i++) {
+        for(i=0; i < jl_array_len(body); i++) {
             jl_value_t *stmt = jl_cellref(body,i);
             if (jl_is_labelnode(stmt)) {
                 int l = jl_labelnode_label(stmt);
@@ -149,7 +149,7 @@ int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops)
         }
         size_t sz = (maxlabl+1+7)/8;
         char *labls = alloca(sz); memset(labls,0,sz);
-        for(i=0; i < body->length; i++) {
+        for(i=0; i < jl_array_len(body); i++) {
             jl_value_t *stmt = jl_cellref(body,i);
             if (jl_is_labelnode(stmt)) {
                 int l = jl_labelnode_label(stmt);
@@ -203,7 +203,7 @@ static jl_module_t *eval_import_path(jl_array_t *args)
         m = m->parent;
     }
 
-    for(size_t i=1; i < args->length-1; i++) {
+    for(size_t i=1; i < jl_array_len(args)-1; i++) {
         jl_value_t *s = jl_cellref(args,i);
         assert(jl_is_symbol(s));
         m = (jl_module_t*)jl_eval_global_var(m, (jl_sym_t*)s);
@@ -233,7 +233,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     // handle import, using, export toplevel-only forms
     if (ex->head == using_sym) {
         jl_module_t *m = eval_import_path(ex->args);
-        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, ex->args->length-1);
+        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         assert(jl_is_symbol(name));
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
@@ -244,14 +244,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     if (ex->head == import_sym) {
         jl_module_t *m = eval_import_path(ex->args);
-        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, ex->args->length-1);
+        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         assert(jl_is_symbol(name));
         jl_module_import(jl_current_module, m, name);
         return jl_nothing;
     }
 
     if (ex->head == export_sym) {
-        for(size_t i=0; i < ex->args->length; i++) {
+        for(size_t i=0; i < jl_array_len(ex->args); i++) {
             jl_module_export(jl_current_module,
                              (jl_sym_t*)jl_cellref(ex->args, i));
         }
@@ -260,7 +260,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     if (ex->head == toplevel_sym) {
         int i=0; jl_value_t *res=jl_nothing;
-        for(i=0; i < ex->args->length; i++) {
+        for(i=0; i < jl_array_len(ex->args); i++) {
             res = jl_toplevel_eval_flex(jl_cellref(ex->args, i), fast);
         }
         return res;
@@ -279,7 +279,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     if (jl_is_expr(ex) && ex->head == toplevel_sym) {
         int i=0; jl_value_t *res=jl_nothing;
-        for(i=0; i < ex->args->length; i++) {
+        for(i=0; i < jl_array_len(ex->args); i++) {
             res = jl_toplevel_eval_flex(jl_cellref(ex->args, i), fast);
         }
         return res;
@@ -292,7 +292,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         if (!ewc) {
             jl_array_t *vinfos = jl_lam_vinfo((jl_expr_t*)thk->ast);
             int i;
-            for(i=0; i < vinfos->length; i++) {
+            for(i=0; i < jl_array_len(vinfos); i++) {
                 if (jl_vinfo_capt((jl_array_t*)jl_cellref(vinfos,i))) {
                     // interpreter doesn't handle closure environment
                     ewc = 1;
@@ -456,7 +456,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     assert(jl_is_tuple(argtypes));
     assert(jl_is_tuple(t));
     jl_check_type_tuple(argtypes, name, "method definition");
-    for(size_t i=0; i < t->length; i++) {
+    for(size_t i=0; i < jl_tuple_len(t); i++) {
         if (!jl_is_typevar(jl_tupleref(t,i)))
             jl_type_error_rt(name->name, "method definition",
                              (jl_value_t*)jl_tvar_type, jl_tupleref(t,i));

@@ -104,11 +104,11 @@ static void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
     if (jl_is_struct_type(v)) {
         writetag(s, (jl_value_t*)jl_struct_kind);
         jl_serialize_value(s, jl_struct_kind);
-        write_uint16(s, ((jl_struct_type_t*)v)->names->length);
+        write_uint16(s, jl_tuple_len(((jl_struct_type_t*)v)->names));
         write_int32(s, ((jl_struct_type_t*)v)->uid);
         write_int32(s, ((jl_struct_type_t*)v)->size);
         write_int32(s, ((jl_struct_type_t*)v)->alignment);
-        size_t nf = ((jl_struct_type_t*)v)->names->length;
+        size_t nf = jl_tuple_len(((jl_struct_type_t*)v)->names);
         ios_write(s, (char*)&((jl_struct_type_t*)v)->fields[0], nf*sizeof(jl_fielddesc_t));
         jl_serialize_value(s, ((jl_struct_type_t*)v)->name);
         jl_serialize_value(s, ((jl_struct_type_t*)v)->parameters);
@@ -381,7 +381,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 jl_array_t *data = (jl_array_t*)jl_get_nth_field(v, 0);
                 jl_value_t **d = (jl_value_t**)data->data;
                 size_t i;
-                for(i=0; i < data->length; i+=2) {
+                for(i=0; i < jl_array_len(data); i+=2) {
                     if (d[i+1] != NULL) {
                         jl_serialize_value(s, d[i+1]);
                         jl_serialize_value(s, d[i]);
@@ -755,7 +755,7 @@ void jl_save_system_image(char *fname)
     // delete cached slow ASCIIString constructor if present
     jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
     jl_array_t *spec = mt->defs->func->linfo->specializations;
-    if (spec->length > 0 &&
+    if (jl_array_len(spec) > 0 &&
         ((jl_lambda_info_t*)jl_cellref(spec,0))->inferred == 0) {
         mt->cache = JL_NULL;
         mt->cache_arg1 = JL_NULL;

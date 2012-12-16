@@ -114,6 +114,8 @@ typedef struct {
 #define jl_array_len(a)   (((jl_array_t*)(a))->length)
 #define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
 #define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
+#define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
+#define jl_array_nrows(a) (((jl_array_t*)(a))->nrows)
 #define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
 #define jl_array_data_owner(a) (*((jl_value_t**)jl_array_inline_data_area(a)))
 
