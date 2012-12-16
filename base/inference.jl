@@ -986,17 +986,16 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     tf = def.tfunc
     if !is(tf,())
         tfarr = tf::Array{Any,1}
-        for i = 1:2:length(tfarr)
+        for i = 1:3:length(tfarr)
             if typeseq(tfarr[i],atypes)
                 code = tfarr[i+1]
-                assert(isa(code, Tuple))
-                if code[5]
-                    curtype = code[3]
+                curtype = ccall(:jl_ast_rettype, Any, (Any,Any), def, code)
+                if tfarr[i+2]
                     redo = true
                     tfunc_idx = i+1
                     break
                 end
-                return (code, code[3])
+                return (code, curtype)
             end
         end
     end
@@ -1231,23 +1230,23 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
         tuple_elim_pass(fulltree)
         linfo.inferred = true
+        fulltree = ccall(:jl_compress_ast, Any, (Any,Any), def, fulltree)
     end
-    
-    compr = ccall(:jl_compress_ast, Any, (Any, Any,), def, fulltree)
     
     if !redo
         if is(def.tfunc,())
             def.tfunc = {}
         end
-        compr = (compr[1],compr[2],compr[3],compr[4],rec)
         push(def.tfunc::Array{Any,1}, atypes)
-        push(def.tfunc::Array{Any,1}, compr)
+        push(def.tfunc::Array{Any,1}, fulltree)
+        push(def.tfunc::Array{Any,1}, rec)
     else
-        def.tfunc[tfunc_idx] = (compr[1],compr[2],compr[3],compr[4],rec)
+        def.tfunc[tfunc_idx] = fulltree
+        def.tfunc[tfunc_idx+1] = rec
     end
     
     inference_stack = (inference_stack::CallStack).prev
-    return (compr, frame.result)
+    return (fulltree, frame.result)
 end
 
 function record_var_type(e::Symbol, t, decls)
@@ -1359,8 +1358,8 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
                 end
             end
             na = length(a.args[1])
-            typeinf(li, ntuple(na+1, i->(i>na ? (Tuple)[1] : Any)),
-                    li.sparams, li, false)
+            li.ast, _ = typeinf(li, ntuple(na+1, i->(i>na ? (Tuple)[1] : Any)),
+                                li.sparams, li, false)
         end
     end
 
@@ -1579,8 +1578,8 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if is(ast,())
         return NF
     end
-    if isa(ast,Tuple)
-        ast = ccall(:jl_uncompress_ast, Any, (Any,), ast)
+    if !isa(ast,Expr)
+        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), meth[3], ast)
     end
     ast = ast::Expr
     for vi in ast.args[2][2]
@@ -1945,7 +1944,7 @@ function finfer(f, types)
     x = methods(f,types)[1]
     (tree, ty) = typeinf(x[3], x[1], x[2])
     if isa(tree,Tuple)
-        return ccall(:jl_uncompress_ast, Any, (Any,), tree)
+        return ccall(:jl_uncompress_ast, Any, (Any,Any), x[3], tree)
     end
     tree
 end

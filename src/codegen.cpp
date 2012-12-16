@@ -272,8 +272,6 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types)
     return jl_cstr_to_string((char*)stream.str().c_str());
 }
 
-static jl_value_t *ast_rettype(jl_value_t *ast);
-
 extern "C" DLLEXPORT
 void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 {
@@ -285,7 +283,7 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
         if (ff != NULL && ff->env == (jl_value_t*)jl_null && ff->linfo != NULL &&
             ff->linfo->cFunctionObject != NULL) {
             jl_lambda_info_t *li = ff->linfo;
-            jl_value_t *astrt = ast_rettype(li->ast);
+            jl_value_t *astrt = jl_ast_rettype(li, li->ast);
             if (jl_types_equal((jl_value_t*)li->specTypes, argt) &&
                 (jl_types_equal(astrt, rt) ||
                  (astrt==(jl_value_t*)jl_nothing->type && rt==(jl_value_t*)jl_bottom_type))) {
@@ -681,18 +679,9 @@ static void make_gcroot(Value *v, jl_codectx_t *ctx)
 
 // --- lambda ---
 
-extern "C" jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
-
-static jl_value_t *ast_rettype(jl_value_t *ast)
-{
-    if (jl_is_tuple(ast))
-        return jl_tupleref(ast, 2);
-    assert(jl_is_expr(ast));
-    return jl_lam_body((jl_expr_t*)ast)->etype;
-}
-
 static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
 {
+    li = li->def;
     if (li->roots == NULL) {
         li->roots = jl_alloc_cell_1d(1);
         jl_cellset(li->roots, 0, val);
@@ -711,8 +700,12 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
     assert(jl_is_lambda_info(expr));
     size_t i;
     jl_value_t *ast = ((jl_lambda_info_t*)expr)->ast;
-    jl_array_t *capt = jl_lam_capt((jl_expr_t*)ast);
-    if (capt->length == 0) {
+    jl_array_t *capt;
+    if (jl_is_expr(ast))
+        capt = jl_lam_capt((jl_expr_t*)ast);
+    else
+        capt = (jl_array_t*)((jl_lambda_info_t*)expr)->capt;
+    if (capt == NULL || capt->length == 0) {
         // no captured vars; lift
         jl_value_t *fun =
             (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null,
@@ -1316,7 +1309,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             result = literal_pointer_val((jl_value_t*)jl_nothing);
         }
         else {
-            result = mark_julia_type(result, ast_rettype(f->linfo->ast));
+            result = mark_julia_type(result, jl_ast_rettype(f->linfo, f->linfo->ast));
         }
     }
     else {
@@ -1809,7 +1802,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
     // wrappers can be reused for different functions of the same type.
     Value *r = builder.CreateCall(f, ArrayRef<Value*>(&args[0], nargs));
     if (r->getType() != jl_pvalue_llvmt) {
-        r = boxed(r, ast_rettype(lam->ast));
+        r = boxed(r, jl_ast_rettype(lam, lam->ast));
     }
     builder.CreateRet(r);
     return w;
@@ -1821,8 +1814,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     jl_tuple_t *sparams = NULL;
     JL_GC_PUSH(&ast, &sparams);
-    if (jl_is_tuple(ast)) {
-        ast = (jl_expr_t*)jl_uncompress_ast((jl_tuple_t*)ast);
+    if (!jl_is_expr(ast)) {
+        ast = (jl_expr_t*)jl_uncompress_ast(lam, (jl_value_t*)ast);
     }
     assert(jl_is_expr(ast));
     sparams = jl_tuple_tvars_to_symbols(lam->sparams);
@@ -1926,7 +1919,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         for(size_t i=0; i < lam->specTypes->length; i++) {
             fsig.push_back(julia_type_to_llvm(jl_tupleref(lam->specTypes,i)));
         }
-        jl_value_t *jlrettype = ast_rettype((jl_value_t*)ast);
+        jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
                              Function::ExternalLinkage, funcName, jl_Module);

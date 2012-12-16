@@ -683,8 +683,8 @@ JL_CALLABLE(jl_trampoline)
     // to run inference on all thunks. slows down loading files.
     if (f->linfo->inferred == 0) {
         if (!jl_in_inference) {
-            if (jl_is_tuple(f->linfo->ast)) {
-                f->linfo->ast = jl_uncompress_ast((jl_tuple_t*)f->linfo->ast);
+            if (!jl_is_expr(f->linfo->ast)) {
+                f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
             }
             if (jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1)) {
                 jl_type_infer(f->linfo, jl_tuple_type, f->linfo);
