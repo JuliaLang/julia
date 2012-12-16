@@ -309,7 +309,7 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all)
             if (b->exportp || (b->owner == m && (all || m == jl_main_module))) {
                 jl_array_grow_end(a, 1);
                 //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
-                jl_cellset(a, a->length-1, (jl_value_t*)b->name);
+                jl_cellset(a, jl_array_dim0(a)-1, (jl_value_t*)b->name);
             }
         }
     }

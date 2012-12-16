@@ -618,7 +618,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
         /*
         if (sp == jl_null && li->ast &&
-            jl_lam_capt((jl_expr_t*)li->ast)->length == 0)
+            jl_array_len(jl_lam_capt((jl_expr_t*)li->ast)) == 0)
             return expr;
         */
         // TODO: avoid if above condition is true and decls have already

@@ -152,7 +152,7 @@ jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
     uptrint_t uid;
     if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
         (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
-        jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->length-1));
+        jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->nrows-1));
         if (ml && ml!=JL_NULL) {
             jl_value_t *t = jl_tupleref(ml->sig, 0);
             if (tparam) t = jl_tparam0(t);
@@ -165,7 +165,7 @@ jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
 
 static void mtcache_rehash(jl_array_t **pa)
 {
-    size_t len = (*pa)->length;
+    size_t len = (*pa)->nrows;
     jl_value_t **d = (jl_value_t**)(*pa)->data;
     jl_array_t *n = jl_alloc_cell_1d(len*2);
     jl_value_t **nd = (jl_value_t**)n->data;
@@ -194,7 +194,7 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
     if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
         (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
         while (1) {
-            jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->length-1));
+            jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->nrows-1));
             if (*pml == NULL || *pml == JL_NULL) {
                 *pml = JL_NULL;
                 return pml;
@@ -784,12 +784,12 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         // a new closure is generated on each call to the enclosing function.
         lilist = method->linfo->specializations;
         int k;
-        for(k=0; k < lilist->length; k++) {
+        for(k=0; k < lilist->nrows; k++) {
             li = (jl_lambda_info_t*)jl_cellref(lilist, k);
             if (jl_types_equal((jl_value_t*)li->specTypes, (jl_value_t*)type))
                 break;
         }
-        if (k == lilist->length) lilist=NULL;
+        if (k == lilist->nrows) lilist=NULL;
     }
     if (lilist != NULL && !li->inInference) {
         assert(li);

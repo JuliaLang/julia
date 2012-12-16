@@ -538,7 +538,7 @@ void jl_compute_struct_offsets(jl_struct_type_t *st)
 {
     size_t sz = 0, alignm = 0;
 
-    for(size_t i=0; i < st->types->length; i++) {
+    for(size_t i=0; i < jl_tuple_len(st->types); i++) {
         jl_value_t *ty = jl_tupleref(st->types, i);
         size_t fsz, al;
         if (jl_is_bits_type(ty)) {
@@ -568,7 +568,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
 {
     jl_typename_t *tn = jl_new_typename(name);
     JL_GC_PUSH(&tn);
-    jl_struct_type_t *t = jl_new_uninitialized_struct_type(fnames->length);
+    jl_struct_type_t *t = jl_new_uninitialized_struct_type(jl_tuple_len(fnames));
     t->name = tn;
     t->name->primary = (jl_value_t*)t;
     t->super = super;

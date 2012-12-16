@@ -1676,7 +1676,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             jl_struct_type_t *st = (jl_struct_type_t*)t;
             // create and initialize new struct type
             jl_struct_type_t *nst =
-                jl_new_uninitialized_struct_type(st->names->length);
+                jl_new_uninitialized_struct_type(jl_tuple_len(st->names));
             *rt2 = (jl_value_t*)nst;
             // associate these parameters with the new struct type on
             // the stack, in case one of its field types references it.
