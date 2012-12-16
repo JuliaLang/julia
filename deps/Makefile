@@ -459,7 +459,7 @@ ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
 endif
 
-ifeq ($(ARCH), x86_64)
+ifeq ($(USE_LIB64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1
 endif
 
@@ -521,7 +521,7 @@ distclean-lapack:
 
 ## ARPACK ##
 
-ifeq ($(ARCH), x86_64)
+ifeq ($(USE_LIB64), 1)
 ARPACK_FFLAGS = -fdefault-integer-8
 endif
 
@@ -652,7 +652,7 @@ SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(USR)/lib/libumfpack.$(SHLIB_EXT)
 endif
 
-ifeq ($(ARCH), x86_64)
+ifeq ($(USE_LIB64), 1)
 UMFPACK_CONFIG = -DLONGBLAS='long long' 
 CHOLMOD_CONFIG = -DLONGBLAS='long long' 
 endif
