@@ -33,11 +33,6 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 STAGE1_DEPS += llvm
 endif
 
-# Disable web repl
-#ifneq ($(OS),WINNT)
-#STAGE1_DEPS += lighttpd
-#endif
-
 ifeq ($(OS),WINNT)
 READLINE_VER = 5.0
 endif
@@ -774,37 +769,44 @@ clean-unwind:
 distclean-unwind:
 	-rm -rf libunwind-$(UNWIND_VER).tar.gz libunwind-$(UNWIND_VER)
 
-## GNU LIGHTTPD ##
+## NGINX ##
 
-ifeq ($(USE_SYSTEM_LIGHTTPD), 0)
-LIGHTTPD_OBJ_TARGET = $(USR)/sbin/lighttpd
+ifeq ($(USE_SYSTEM_NGINX), 0)
+NGINX_OBJ_TARGET = $(USR)/sbin/nginx
 else
-LIGHTTPD_OBJ_TARGET = 
+NGINX_OBJ_TARGET =
 endif
 
-compile-lighttpd: install-lighttpd
-install-lighttpd: $(LIGHTTPD_OBJ_TARGET) lighttpd.conf
-	mkdir -p $(USR)/etc
-	cp -f lighttpd.conf $(USR)/etc/lighttpd.conf
+ifeq ($(OS), WINNT)
+NGINX_FLAGS += \
+	--with-cc-opt="-D_NO_OLDNAMES -UWIN32 -Wno-error" \
+	--with-ld-opt="-L'$(USR)/$(JL_LIBDIR)' -lpcre"
+else
+NGINX_FLAGS += \
+	--with-ld-opt="-L'$(USR)/$(JL_LIBDIR) -lpcre -Wl,-rpath,'$(USR)/$(JL_LIBDIR)' $(RPATH)"
+endif
 
-lighttpd-$(LIGHTTPD_VER).tar.gz:
-	$(WGET) http://download.lighttpd.net/lighttpd/releases-1.4.x/lighttpd-$(LIGHTTPD_VER).tar.gz
-lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
-	tar zxf $<
+compile-nginx: install-nginx
+install-nginx: $(NGINX_OBJ_TARGET)
+
+nginx/auto/configure: | compile-pcre
+	(cd .. && git submodule update --init)
 	touch $@
-lighttpd-$(LIGHTTPD_VER)/config.status: lighttpd-$(LIGHTTPD_VER)/configure
-	mkdir -p $(USR)/lib/lighttpd && \
-	cd lighttpd-$(LIGHTTPD_VER) && \
-	./configure --prefix=$(USR) --libdir=$(USR)/lib/lighttpd --without-pcre --without-zlib --without-bzip2 CC="$(CC)" CXX="$(CXX)"
-$(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
-	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
+nginx/Makefile: nginx/auto/configure
+	cd nginx && \
+	./auto/configure --without-http_gzip_module --without-http_rewrite_module $(NGINX_FLAGS) --with-debug --prefix=".."
+$(NGINX_OBJ_TARGET): nginx/Makefile
+ifeq ($(OS), WINNT)
+	-cp '/c/Program Files/Microsoft SDKs/Windows/'*/Lib/AdvAPI32.Lib '/c/Program Files (x86)/Microsoft SDKs/Windows/'*/Lib/AdvAPI32.Lib nginx
+	-cp '/c/Program Files/Microsoft SDKs/Windows/'*/Lib/WS2_32.Lib '/c/Program Files (x86)/Microsoft SDKs/Windows/'*/Lib/WS2_32.Lib nginx
+endif
+	$(MAKE) -C nginx install DESTDIR="$(abspath $(USRBIN))/"
 	touch $@
 
-clean-lighttpd:
-	-$(MAKE) -C lighttpd-$(LIGHTTPD_VER) clean
-	-rm -f $(LIGHTTPD_OBJ_TARGET)
-distclean-lighttpd:
-	-rm -rf lighttpd-$(LIGHTTPD_VER).tar.gz lighttpd-$(LIGHTTPD_VER)
+clean-nginx:
+	-$(MAKE) -C nginx clean
+distclean-nginx:
+	-rm -rf nginx
 
 ## GMP ##
 
