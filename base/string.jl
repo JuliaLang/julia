@@ -1055,6 +1055,16 @@ chomp(s::ByteString) =
     (length(s) < 1 || s.data[end]   != 0x0a) ? s :
     (length(s) < 2 || s.data[end-1] != 0x0d) ? s[1:end-1] : s[1:end-2]
 
+# NOTE: use with caution -- breaks the immutable string convention!
+function chomp!(s::ByteString)
+    if length(s) >= 1 && s.data[end] == 0x0a
+        n = (length(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
+        ccall(:jl_array_del_end, Void, (Any, Uint), s.data, n)
+    end
+    return s
+end
+chomp!(s::String) = chomp(s) # copying fallback for other string types
+
 function lstrip(s::String)
     i = start(s)
     while !done(s,i)

@@ -124,7 +124,7 @@ end
 
 function readuntil(s::IO, delim)
     out = memio()
-    while (!eof(s))
+    while !eof(s)
         c = read(s, Char)
         write(out, c)
         if c == delim
@@ -138,14 +138,14 @@ readline(s::IO) = readuntil(s, '\n')
 
 function readall(s::IO)
     out = memio()
-    while (!eof(s))
+    while !eof(s)
         a = read(s, Uint8)
         write(out, a)
     end
     takebuf_string(out)
 end
 
-readchomp(x) = chomp(readall(x))
+readchomp(x) = chomp!(readall(x))
 
 ## high-level iterator interfaces ##
 
