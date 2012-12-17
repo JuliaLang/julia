@@ -15,8 +15,11 @@ perf.h:
 CC99 = $(CC) -std=c99
 CXX11 = $(CXX) -std=c++11
 
+bin/pperf0: perf.cpp
+	$(CXX11) -O0 $< -o $@
+
 bin/pperf%: perf.cpp
-	$(CXX11) -O$* $< -o $@
+	$(CXX11) -DNDEBUG -O$* $< -o $@
 
 bin/perf%: perf.c perf.h
 	$(CC99) -O$* $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread -lm
