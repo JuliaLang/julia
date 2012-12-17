@@ -1943,7 +1943,7 @@ end
 function finfer(f, types)
     x = methods(f,types)[1]
     (tree, ty) = typeinf(x[3], x[1], x[2])
-    if isa(tree,Tuple)
+    if !isa(tree,Expr)
         return ccall(:jl_uncompress_ast, Any, (Any,Any), x[3], tree)
     end
     tree
