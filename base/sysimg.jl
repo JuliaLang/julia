@@ -128,11 +128,12 @@ include("combinatorics.jl")
 include("darray2.jl")
 include("mmap.jl")
 
-# utilities - version, timing, help, edit
+# utilities - version, timing, help, edit, metaprogramming
 include("version.jl")
 include("util.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
+include("meta.jl")
 
 # linear algebra
 include("blas.jl")
