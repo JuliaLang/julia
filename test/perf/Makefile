@@ -12,8 +12,17 @@ perf.h:
 	echo '#include "$(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/cblas.h"' > $@
 	echo '#include "$(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)/dSFMT.c"' >> $@
 
-bin/perf%: perf.cpp perf.h
-	$(CXX) -O$* $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
+CC99 = $(CC) -std=c99
+CXX11 = $(CXX) -std=c++11
+
+bin/pperf0: perf.cpp
+	$(CXX11) -O0 $< -o $@
+
+bin/pperf%: perf.cpp
+	$(CXX11) -DNDEBUG -O$* $< -o $@
+
+bin/perf%: perf.c perf.h
+	$(CC99) -O$* $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread -lm
 
 bin/fperf%: perf.f90
 	$(FC) -static-libgfortran -O$* -fexternal-blas $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
@@ -25,6 +34,13 @@ benchmarks/c.csv: \
 	benchmarks/c3.csv
 	cat $^ > $@
 
+benchmarks/cpp.csv: \
+	benchmarks/p0.csv \
+	benchmarks/p1.csv \
+	benchmarks/p2.csv \
+	benchmarks/p3.csv
+	cat $^ > $@
+
 benchmarks/fortran.csv: \
 	benchmarks/fortran0.csv \
 	benchmarks/fortran1.csv \
@@ -33,6 +49,9 @@ benchmarks/fortran.csv: \
 	cat $^ > $@
 
 benchmarks/c%.csv: bin/perf%
+	for t in 1 2 3 4 5; do $<; done >$@
+
+benchmarks/p%.csv: bin/pperf%
 	for t in 1 2 3 4 5; do $<; done >$@
 
 benchmarks/fortran%.csv: bin/fperf%
@@ -58,6 +77,7 @@ benchmarks/javascript.csv: perf.js
 
 BENCHMARKS = \
 	benchmarks/c.csv \
+	benchmarks/cpp.csv \
 	benchmarks/fortran.csv \
 	benchmarks/julia.csv \
 	benchmarks/python.csv \
@@ -73,6 +93,6 @@ benchmarks.html: bin/table.pl benchmarks.csv
 	$(QUIET_PERL) $^ >$@
 
 clean:
-	@rm -rf bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv *.mod
+	@rm -rf bin/perf* bin/pperf* bin/fperf* benchmarks/*.csv benchmarks.csv *.mod
 
 .PHONY: all perf clean
