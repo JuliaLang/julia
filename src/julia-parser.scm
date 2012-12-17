@@ -977,9 +977,9 @@
 			;; add definitions for module-local eval
 			(let ((x (gensym)))
 			  `(= (call eval ,x)
-			      (call (|.| Core 'eval) ,name ,x)))
+			      (call (|.| (top Core) 'eval) ,name ,x)))
 			`(= (call eval m x)
-			    (call (|.| Core 'eval) m x))
+			    (call (|.| (top Core) 'eval) m x))
 			(cdr body))
 		 body))))
     ((export)
