@@ -11,14 +11,18 @@ _jl_fp_neg_le(x::Float32, y::Float32) = sle_int(unbox(Float32,y),unbox(Float32,x
 _jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox(Float64,y),unbox(Float64,x))
 
 ## internal sorting functionality ##
-
-macro _jl_sort_functions(suffix, lt, args...)
-insertionsort = esc(symbol("_jl_insertionsort$suffix"))
-quicksort = esc(symbol("_jl_quicksort$suffix"))
-mergesort = esc(symbol("_jl_mergesort$suffix"))
-pivot_middle = esc(symbol("_jl_pivot_middle$suffix"))
-lt = @eval (a,b)->$lt
-quote
+for (suffix, lt, args) in (("",    (a,b)->:(isless($a,$b)), ()),
+                           ("_r",  (a,b)->:(isless($b,$a)), ()),
+                           ("_lt", (a,b)->:(lt($a,$b)), (:(lt::Function),)),
+                           ("_by", (a,b)->:(isless(by($a),by($b))), (:(by::Function),)),
+                           ## special sorting for floating-point arrays ##
+                           ("_fp_pos", (a,b)->:(_jl_fp_pos_lt($a,$b)), ()),
+                           ("_fp_neg", (a,b)->:(_jl_fp_neg_lt($a,$b)), ()))
+    insertionsort = symbol("_jl_insertionsort$suffix")
+    quicksort = symbol("_jl_quicksort$suffix")
+    mergesort = symbol("_jl_mergesort$suffix")
+    pivot_middle = symbol("_jl_pivot_middle$suffix")
+@eval begin
 
 # sorting should be stable
 # Thus, if a permutation is required, or records are being sorted
@@ -183,12 +187,7 @@ function ($mergesort)($(args...),
     return a, p
 end
 
-end; end # quote / macro
-
-@_jl_sort_functions ""    :(isless($a,$b))
-@_jl_sort_functions "_r"  :(isless($b,$a))
-@_jl_sort_functions "_lt" :(lt($a,$b)) lt::Function
-@_jl_sort_functions "_by" :(isless(by($a),by($b))) by::Function
+end; end # @eval / for
 
 ## external sorting functions ##
 
@@ -201,11 +200,6 @@ sort!{T}(lt::Function, a::AbstractVector{T}) =
     _jl_mergesort_lt(lt, a, 1, length(a), Array(T,length(a)))
 sort_by!{T}(by::Function, a::AbstractVector{T}) =
     _jl_mergesort_by(by, a, 1, length(a), Array(T,length(a)))
-
-## special sorting for floating-point arrays ##
-
-@_jl_sort_functions "_fp_pos" :(_jl_fp_pos_lt($a,$b))
-@_jl_sort_functions "_fp_neg" :(_jl_fp_neg_lt($a,$b))
 
 # push NaNs to the end of a, returning # of non-NaNs
 function _jl_nans_to_end{T<:FloatingPoint}(a::AbstractVector{T})
