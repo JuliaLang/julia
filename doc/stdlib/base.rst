@@ -1772,31 +1772,73 @@ Combinatorics
 
 .. function:: sort!(v)
 
-   In-place sort
+   In-place sort.
 
 .. function:: sortr(v)
 
-   Sort a vector in descending order
+   Sort a vector in descending order.
 
 .. function:: sortr!(v)
 
-   In-place descending-order sort
+   In-place sort in descending-order.
+
+.. function:: sort_by(by, v)
+
+   Sort a vector by the result of applying function ``by``
+   to every element.
+
+.. function:: sort_by!(by, v)
+
+   Sort a vector in place by the result of applying function ``by``
+   to every element.
 
 .. function:: sort(a, dim)
 
-   Sort an array along the given dimension
+   Sort an array along the given dimension.
 
 .. function:: sort(lessthan, a, [dim])
 
-   Sort with a custom comparison function
+   Sort with a custom comparison function.
 
 .. function:: sortperm(v) -> s,p
 
    Sort a vector in ascending order, also constructing the permutation that sorts the vector
 
+.. function:: sortperm!(v) -> s,p
+
+   Sort a vector in ascending order in-place, also constructing the permutation that sorts the vector
+
+.. function:: sortperm_r(v) -> s,p
+
+   Sort a vector in descending order, also constructing the permutation that sorts the vector
+
+.. function:: sortperm_r!(v) -> s,p
+
+   Sort a vector in descending order in-place, also constructing the permutation that sorts the vector
+
+.. function:: sortperm_by(by,v) -> s,p
+
+   Sort a vector according to the result of function ``by`` applied to
+   all values, also constructing the permutation that sorts the vector.
+
+.. function:: sortperm_by!(by,v) -> s,p
+
+   Sort a vector in-place according to the result of function ``by``
+   applied to all values of ``v``, also constructing the permutation
+   that sorts the vector
+
 .. function:: issorted(v)
 
    Test whether a vector is in ascending sorted order
+
+.. function:: issorted_r(v)
+
+   Test whether a vector is in descending sorted order
+
+.. function:: issorted_by(by,v)
+
+   Test whether a vector is sorted by the result of function ``by``
+   applied to all values of ``v``
 
 .. function:: nthperm(v, k)
 
