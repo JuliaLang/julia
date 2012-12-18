@@ -17,9 +17,9 @@ release debug:
 	$(MAKE) julia-$@
 
 %.o: %.c repl.h
-	$(QUIET_CC) $(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c repl.h
-	$(QUIET_CC) $(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 julia-release-basic: $(BUILD)/bin/julia-release-basic
 julia-debug-basic: $(BUILD)/bin/julia-debug-basic

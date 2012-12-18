@@ -16,9 +16,9 @@ endif
 WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
 
 %.o: %.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC)$(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	$(QUIET_CC)$(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 	
 LAUNCH_SCRIPT = launch-julia-webserver
@@ -32,10 +32,10 @@ release debug:
 	$(MAKE) julia-$@
 
 $(BUILD)/bin/julia-release-webserver: $(WEBSERVER_SRCS)
-	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
 $(BUILD)/bin/julia-debug-webserver: $(WEBSERVER_SRCS)
-	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 	
 $(BUILD)/bin/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
 	cp $< $@
