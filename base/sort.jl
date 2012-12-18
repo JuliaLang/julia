@@ -308,6 +308,7 @@ function ($mergesort_perm!)($(args...),
     return a, p
 end
 
+<<<<<<< HEAD
 ($mergesort_perm!){T}($(args...), a::AbstractVector{T}, p::AbstractVector{Int}) = 
     ($mergesort_perm!)($(args...), a, p, 1, length(a), Array(T,length(a)), Array(Int,length(a)))
 ($mergesort_perm!){T}($(args...), a::AbstractVector{T}) = 

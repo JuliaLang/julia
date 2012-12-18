@@ -152,7 +152,7 @@ jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
     uptrint_t uid;
     if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
         (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
-        jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->length-1));
+        jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->nrows-1));
         if (ml && ml!=JL_NULL) {
             jl_value_t *t = jl_tupleref(ml->sig, 0);
             if (tparam) t = jl_tparam0(t);
@@ -165,7 +165,7 @@ jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
 
 static void mtcache_rehash(jl_array_t **pa)
 {
-    size_t len = (*pa)->length;
+    size_t len = (*pa)->nrows;
     jl_value_t **d = (jl_value_t**)(*pa)->data;
     jl_array_t *n = jl_alloc_cell_1d(len*2);
     jl_value_t **nd = (jl_value_t**)n->data;
@@ -194,7 +194,7 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
     if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
         (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
         while (1) {
-            jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->length-1));
+            jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->nrows-1));
             if (*pml == NULL || *pml == JL_NULL) {
                 *pml = JL_NULL;
                 return pml;
@@ -309,6 +309,7 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
     nli->module = l->module;
     nli->file = l->file;
     nli->line = l->line;
+    nli->def  = l->def;
     JL_GC_POP();
     return nli;
 }
@@ -783,12 +784,12 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         // a new closure is generated on each call to the enclosing function.
         lilist = method->linfo->specializations;
         int k;
-        for(k=0; k < lilist->length; k++) {
+        for(k=0; k < lilist->nrows; k++) {
             li = (jl_lambda_info_t*)jl_cellref(lilist, k);
             if (jl_types_equal((jl_value_t*)li->specTypes, (jl_value_t*)type))
                 break;
         }
-        if (k == lilist->length) lilist=NULL;
+        if (k == lilist->nrows) lilist=NULL;
     }
     if (lilist != NULL && !li->inInference) {
         assert(li);
@@ -1015,9 +1016,10 @@ static void print_func_loc(ios_t *s, jl_lambda_info_t *li);
   so (T,T) is not equivalent to (Any,Any). (TODO)
 */
 static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
-                            jl_tuple_t *sig, jl_sym_t *fname,
+                            jl_methlist_t *oldmeth, jl_sym_t *fname,
                             jl_lambda_info_t *linfo)
 {
+    jl_tuple_t *sig = oldmeth->sig;
     size_t tl = jl_tuple_len(type);
     size_t sl = jl_tuple_len(sig);
     // we know !jl_args_morespecific(type, sig)
@@ -1044,7 +1046,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         print_func_loc(s, linfo);
         ios_printf(s, " is ambiguous with %s", n);
         jl_show(errstream, (jl_value_t*)sig);
-        print_func_loc(s, ml->func->linfo);
+        print_func_loc(s, oldmeth->func->linfo);
         ios_printf(s, ".\n         Make sure %s", n);
         jl_show(errstream, isect);
         ios_printf(s, " is defined first.\n");
@@ -1113,10 +1115,9 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         if (jl_args_morespecific((jl_value_t*)type, (jl_value_t*)l->sig))
             break;
         if (check_amb) {
-            check_ambiguous(*pml, (jl_tuple_t*)type, (jl_tuple_t*)l->sig,
+            check_ambiguous(*pml, (jl_tuple_t*)type, l,
                             method->linfo ? method->linfo->name :
-                            anonymous_sym,
-                            method->linfo);
+                            anonymous_sym, method->linfo);
         }
         pl = &l->next;
         l = l->next;

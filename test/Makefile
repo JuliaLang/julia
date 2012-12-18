@@ -2,7 +2,6 @@ JULIAHOME = ..
 include ../Make.inc
 
 default all extra unicode gzip::
-	@$(MAKE) -sC unicode
 
 TESTS = default all extra \
 core numbers strings unicode corelib hashing remote \
@@ -25,7 +24,6 @@ benchmark:
 	@$(MAKE) -C perf $@
 
 clean:
-	@$(MAKE) -C unicode $@
 	@$(MAKE) -C perf $@
 
 .PHONY: $(TESTS) perf benchmark clean

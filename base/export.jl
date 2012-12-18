@@ -1,7 +1,6 @@
 export
 # Modules
     Grisu,
-    Printf,
     PCRE,
     FFTW,
     DSP,
@@ -74,7 +73,6 @@ export
     Regex,
     RegexMatch,
     RegexMatchIterator,
-    Dimspec,
     RemoteRef,
     RepString,
     RevString,
@@ -1330,6 +1328,7 @@ export
     @cmd,
     @time,
     @elapsed,
+    @timed,
     @windows_only,
     @unix_only,
     @osx_only,

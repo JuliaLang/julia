@@ -96,6 +96,7 @@ include("serialize.jl")
 include("multi.jl")
 
 # system & environment
+include("build_h.jl")
 include("osutils.jl")
 include("libc.jl")
 include("env.jl")
@@ -135,7 +136,6 @@ include("datafmt.jl")
 include("deepcopy.jl")
 
 # linear algebra
-include("build_h.jl")
 include("blas.jl")
 include("lapack.jl")
 include("matmul.jl")

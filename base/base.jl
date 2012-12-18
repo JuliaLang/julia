@@ -98,6 +98,15 @@ names(m::Module, all::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int3
 names(m::Module) = names(m,false)
 module_name(m::Module) = ccall(:jl_module_name, Symbol, (Any,), m)
 module_parent(m::Module) = ccall(:jl_module_parent, Module, (Any,), m)
+function names(v)
+    if typeof(v) === CompositeKind
+        return v.names
+    elseif typeof(typeof(v)) === CompositeKind
+        return typeof(v).names
+    else
+        error("cannot call names() on a non-composite type")
+    end
+end
 
 # index colon
 type Colon

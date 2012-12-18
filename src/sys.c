@@ -311,7 +311,7 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
         }
     }
     JL_GC_PUSH(&a);
-    jl_struct_type_t* string_type = u8_isvalid(a->data, a->length) == 1 ? // ASCII
+    jl_struct_type_t* string_type = u8_isvalid(jl_array_data(a), jl_array_len(a)) == 1 ? // ASCII
         jl_ascii_string_type : jl_utf8_string_type;
     jl_value_t *str = alloc_2w();
     str->type = (jl_type_t*)string_type;

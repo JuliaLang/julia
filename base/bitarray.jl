@@ -1173,17 +1173,14 @@ function rot180(A::BitMatrix)
     return B
 end
 
-# implemented as a macro to improve performance
-macro _jl_reverse_bits(dest, src)
-    quote
-        z    = $(esc(src))
-        z    = ((z >>>  1) & 0x5555555555555555) | ((z <<  1) & 0xaaaaaaaaaaaaaaaa)
-        z    = ((z >>>  2) & 0x3333333333333333) | ((z <<  2) & 0xcccccccccccccccc)
-        z    = ((z >>>  4) & 0x0f0f0f0f0f0f0f0f) | ((z <<  4) & 0xf0f0f0f0f0f0f0f0)
-        z    = ((z >>>  8) & 0x00ff00ff00ff00ff) | ((z <<  8) & 0xff00ff00ff00ff00)
-        z    = ((z >>> 16) & 0x0000ffff0000ffff) | ((z << 16) & 0xffff0000ffff0000)
-        $(esc(dest)) = ((z >>> 32) & 0x00000000ffffffff) | ((z << 32) & 0xffffffff00000000)
-    end
+function _jl_reverse_bits(src::Uint64)
+    z    = src
+    z    = ((z >>>  1) & 0x5555555555555555) | ((z <<  1) & 0xaaaaaaaaaaaaaaaa)
+    z    = ((z >>>  2) & 0x3333333333333333) | ((z <<  2) & 0xcccccccccccccccc)
+    z    = ((z >>>  4) & 0x0f0f0f0f0f0f0f0f) | ((z <<  4) & 0xf0f0f0f0f0f0f0f0)
+    z    = ((z >>>  8) & 0x00ff00ff00ff00ff) | ((z <<  8) & 0xff00ff00ff00ff00)
+    z    = ((z >>> 16) & 0x0000ffff0000ffff) | ((z << 16) & 0xffff0000ffff0000)
+    return ((z >>> 32) & 0x00000000ffffffff) | ((z << 32) & 0xffffffff00000000)
 end
 
 function reverse!(B::BitVector)
@@ -1198,9 +1195,9 @@ function reverse!(B::BitVector)
 
     for i = 1 : hnc
         j = ((i - 1) << 6)
-        @_jl_reverse_bits aux_chunks[1] B.chunks[i]
+        aux_chunks[1] = _jl_reverse_bits(B.chunks[i])
         _jl_copy_chunks(B.chunks, j+1, B.chunks, n-63-j, 64)
-        @_jl_reverse_bits B.chunks[i] B.chunks[i]
+        B.chunks[i] = _jl_reverse_bits(B.chunks[i])
         _jl_copy_chunks(B.chunks, n-63-j, aux_chunks, 1, 64)
     end
 
@@ -1213,7 +1210,7 @@ function reverse!(B::BitVector)
     l = (@_mod64 (n+63)) + 1
     msk = @_mskr l
 
-    @_jl_reverse_bits aux_chunks[1] (B.chunks[i] & msk)
+    aux_chunks[1] = _jl_reverse_bits(B.chunks[i] & msk)
     aux_chunks[1] >>>= (64 - l)
     _jl_copy_chunks(B.chunks, j+1, aux_chunks, 1, l)
 
@@ -1495,17 +1492,14 @@ transpose(B::BitVector) = reshape(copy(B), 1, length(B))
 
 # fast 8x8 bit transpose from Henry S. Warrens's "Hacker's Delight"
 # http://www.hackersdelight.org/HDcode/transpose8.c.txt
-# implemented as a macro to improve performance
-macro _jl_transpose8x8(x)
-    quote
-        y = $(esc(x))
-        t = (y $ (y >>> 7)) & 0x00aa00aa00aa00aa;
-        y = y $ t $ (t << 7)
-        t = (y $ (y >>> 14)) & 0x0000cccc0000cccc
-        y = y $ t $ (t << 14)
-        t = (y $ (y >>> 28)) & 0x00000000f0f0f0f0
-        $(esc(x)) = y $ t $ (t << 28)
-    end
+function _jl_transpose8x8(x::Uint64)
+    y = x
+    t = (y $ (y >>> 7)) & 0x00aa00aa00aa00aa
+    y = y $ t $ (t << 7)
+    t = (y $ (y >>> 14)) & 0x0000cccc0000cccc
+    y = y $ t $ (t << 14)
+    t = (y $ (y >>> 28)) & 0x00000000f0f0f0f0
+    return y $ t $ (t << 28)
 end
 
 function _jl_form_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
@@ -1571,7 +1565,7 @@ function transpose(B::BitMatrix)
 
         for j = 1 : 8 : l2
             x = _jl_form_8x8_chunk(B, i, j, l1, cgap1, cinc1, nc, msk8_1)
-            @_jl_transpose8x8 x
+            x = _jl_transpose8x8(x)
 
             msk8_2 = uint64(0xff)
             if (l2 < j + 7)

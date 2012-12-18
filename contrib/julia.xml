@@ -71,6 +71,7 @@
       <item> baremodule </item>
       <item> return </item>
       <item> typealias </item>
+      <item> using </item>
     </list>
     <list name="types">
       <item> AbstractArray </item>
