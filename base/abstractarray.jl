@@ -1079,6 +1079,34 @@ indices(I::(Indices...)) = map(indices, I)
 
 ## iteration utilities ##
 
+# TODO: something sensible should happen when each_col et. al. are used with a
+# pure function argument
+function each_col!(f::Function, a::AbstractMatrix)
+    m = size(a,1)
+    for i = 1:m:numel(a)
+        f(sub(a, i:(i+m-1)))
+    end
+    return a
+end
+
+function each_row!(f::Function, a::AbstractMatrix)
+    m = size(a,1)
+    for i = 1:m
+        f(sub(a, i:m:numel(a)))
+    end
+    return a
+end
+
+function each_vec!(f::Function, a::AbstractMatrix, dim::Integer)
+    if dim == 1; return each_col!(f,a); end
+    if dim == 2; return each_row!(f,a); end
+    error("invalid matrix dimensions: ", dim)
+end
+
+each_col(f::Function, a::AbstractMatrix) = each_col!(f,copy(a))
+each_row(f::Function, a::AbstractMatrix) = each_row!(f,copy(a))
+each_vec(f::Function, a::AbstractMatrix, d::Integer) = each_vec!(f,copy(a),d)
+
 # slow, but useful
 function cartesian_map(body, t::(Int...), it...)
     idx = length(t)-length(it)
