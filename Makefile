@@ -94,6 +94,7 @@ clean: | $(CLEAN_TARGETS)
 			rm -f julia-$${buildtype}-$${repltype}; \
 		done \
 	done
+	@rm -f julia
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/$(JL_PRIVATE_LIBDIR)
 

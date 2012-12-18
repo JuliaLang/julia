@@ -46,6 +46,7 @@ help:
 
 clean:
 	-rm -rf $(BUILDDIR)/*
+	-rm -f sphinx/*.pyc
 
 clean-jquery:
 	-rm -f $(JQUERYDEST)
