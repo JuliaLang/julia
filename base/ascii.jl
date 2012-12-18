@@ -5,6 +5,9 @@
 # end
 #
 
+import Core.ASCIIString
+ASCIIString(data::Array{None}) = ASCIIString(Uint8[])
+
 ## required core functionality ##
 
 length(s::ASCIIString) = length(s.data)

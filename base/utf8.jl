@@ -5,6 +5,9 @@
 # end
 #
 
+import Core.UTF8String
+UTF8String(data::Array{None}) = UTF8String(Uint8[])
+
 ## basic UTF-8 decoding & iteration ##
 
 const _jl_utf8_offset = [
@@ -35,11 +38,19 @@ function ref(s::UTF8String, i::Int)
     d = s.data
     b = d[i]
     if !is_utf8_start(b)
-        error("invalid UTF-8 character index")
+        j = i-1
+        while 0 < j && !is_utf8_start(d[j])
+            j -= 1
+        end
+        if 0 < j && i <= j+_jl_utf8_trailing[d[j]+1] <= length(d)
+            # b is a continuation byte of a valid UTF-8 character
+            error("invalid UTF-8 character index")
+        end
+        return '\ufffd'
     end
     trailing = _jl_utf8_trailing[b+1]
     if length(d) < i + trailing
-        error("premature end of UTF-8 data")
+        return '\ufffd'
     end
     c::Uint32 = 0
     for j = 1:trailing+1
