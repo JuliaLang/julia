@@ -9,6 +9,7 @@ export
     LibRandom,
     RNG,
     Math,
+    Sort,
     
 # Types
     AbstractMatrix,
