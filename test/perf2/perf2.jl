@@ -109,7 +109,7 @@ end
 
 @timeit parse() "splitline"
 
-file_remove("random.csv")
+rm("random.csv")
 
 load("json")
 

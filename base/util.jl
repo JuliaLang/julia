@@ -201,8 +201,8 @@ function is_file_readable(path)
 end
 
 function find_in_path(name::String)
-    name[1] == '/' && return realpath(name)
-    isfile(name) && return realpath(name)
+    name[1] == '/' && return abspath(name)
+    isfile(name) && return abspath(name)
     base = name
     if ends_with(name,".jl")
         base = match(r"^(.*)\.jl$",name).captures[1]
@@ -211,11 +211,11 @@ function find_in_path(name::String)
     end
     for prefix in LOAD_PATH
         path = strcat(prefix,"/",base,"/src/",name)
-        is_file_readable(path) && return realpath(path)
+        is_file_readable(path) && return abspath(path)
         path = strcat(prefix,"/",name)
-        is_file_readable(path) && return realpath(path)
+        is_file_readable(path) && return abspath(path)
     end
-    return realpath(name)
+    return abspath(name)
 end
 
 begin

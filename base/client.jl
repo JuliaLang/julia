@@ -212,7 +212,7 @@ const _jl_roottask_wi = WorkItem(_jl_roottask)
 _jl_is_interactive = false
 isinteractive() = (_jl_is_interactive::Bool)
 
-julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
+julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
 
 function _start()
     # set up standard streams
@@ -246,10 +246,10 @@ function _start()
         global const LOAD_PATH = ByteString[
             ".",
             julia_pkgdir(),
-            abs_path("$JULIA_HOME/../share/julia"),
-            abs_path("$JULIA_HOME/../share/julia/base"),
-            abs_path("$JULIA_HOME/../share/julia/extras"),
-            abs_path("$JULIA_HOME/../share/julia/ui"),
+            abspath("$JULIA_HOME/../share/julia"),
+            abspath("$JULIA_HOME/../share/julia/base"),
+            abspath("$JULIA_HOME/../share/julia/extras"),
+            abspath("$JULIA_HOME/../share/julia/ui"),
         ]
 
         (quiet,repl,startup) = process_options(ARGS)
