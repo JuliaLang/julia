@@ -35,29 +35,27 @@ merge_compute_minrun(N::Int) = merge_compute_minrun(N, 6)
 
 # Macro to create different versions of the sort function,
 # cribbed from sort.jl
-macro _jl_timsort_functions(suffix, lt, args...)
-insertionsort! = esc(symbol("insertionsort$(suffix)!"))
-insertionsort_perm! = esc(symbol("insertionsort_perm$(suffix)!"))
-timsort = esc(symbol("timsort$(suffix)"))
-timsort! = esc(symbol("timsort$(suffix)!"))
-timsort_perm = esc(symbol("timsort_perm$(suffix)"))
-timsort_perm! = esc(symbol("timsort_perm$(suffix)!"))
-next_run = esc(symbol("_jl_next_run$suffix"))
-merge_collapse = esc(symbol("_jl_merge_collapse$suffix"))
-merge_collapse = esc(symbol("_jl_merge_collapse$suffix"))
-merge = esc(symbol("_jl_merge$suffix"))
-merge_lo = esc(symbol("_jl_merge_lo$suffix"))
-merge_hi = esc(symbol("_jl_merge_hi$suffix"))
+for (suffix, lt, args) in (("",    (a,b)->:(isless($a,$b)), ()),
+                           ("_r",  (a,b)->:(isless($b,$a)), ()),
+                           ("",    (a,b)->:(lt($a,$b)), (:(lt::Function),)),
+                           ("_by", (a,b)->:(isless(by($a),by($b))), (:(by::Function),)))
+    insertionsort! = symbol("insertionsort$(suffix)!")
+    insertionsort_perm! = symbol("insertionsort_perm$(suffix)!")
+    timsort = symbol("timsort$(suffix)")
+    timsort! = symbol("timsort$(suffix)!")
+    timsort_perm = symbol("timsort_perm$(suffix)")
+    timsort_perm! = symbol("timsort_perm$(suffix)!")
+    next_run = symbol("_jl_next_run$suffix")
+    merge_collapse = symbol("_jl_merge_collapse$suffix")
+    merge = symbol("_jl_merge$suffix")
+    merge_lo = symbol("_jl_merge_lo$suffix")
+    merge_hi = symbol("_jl_merge_hi$suffix")
 
-gallop_last = esc(symbol("_jl_gallop_last$suffix"))
-gallop_first = esc(symbol("_jl_gallop_first$suffix"))
-rgallop_last = esc(symbol("_jl_rgallop_last$suffix"))
-rgallop_first = esc(symbol("_jl_rgallop_first$suffix"))
-
-lt = @eval (a,b)->$lt
-
-quote
-
+    gallop_last = symbol("_jl_gallop_last$suffix")
+    gallop_first = symbol("_jl_gallop_first$suffix")
+    rgallop_last = symbol("_jl_rgallop_last$suffix")
+    rgallop_first = symbol("_jl_rgallop_first$suffix")
+@eval begin
 
 # Galloping binary search starting at left
 function ($gallop_last)($(args...), a::AbstractVector, x, lo::Int, hi::Int)
@@ -280,12 +278,10 @@ function ($merge)($(args...), v::AbstractVector, a::Run, b::Run, state::MergeSta
     # First elements in a <= b[1] are already in place
     a = ($gallop_last)($(args...), v, v[first(b)], first(a), last(a)) : last(a)
 
+    if length(a) == 0  return  end
+
     # Last elements in b >= a[end] are already in place
     b = first(b) : ($rgallop_first)($(args...), v, v[last(a)], first(b), last(b))-1
-
-    if length(a) == 0 || length(b) == 0
-        return
-    end
 
     # Choose merge_lo or merge_hi based on the amount
     # of temporary memory needed (smaller of a and b)
@@ -303,12 +299,10 @@ function ($merge)($(args...), v::AbstractVector, p::AbstractVector{Int}, a::Run,
     # First elements in a <= b[1] are already in place
     a = ($gallop_last)($(args...), v, v[first(b)], first(a), last(a)) : last(a)
 
+    if length(a) == 0  return  end
+
     # Last elements in b >= a[end] are already in place
     b = first(b) : ($rgallop_first)($(args...), v, v[last(a)], first(b), last(b))-1
-
-    if length(a) == 0 || length(b) == 0
-        return
-    end
 
     # Choose merge_lo or merge_hi based on the amount
     # of temporary memory needed (smaller of a and b)
@@ -802,9 +796,3 @@ end
     ($timsort_perm!)($(args...), copy(v), args2...)
 
 end; end # quote; macro
-
-@_jl_timsort_functions ""    :(isless($a,$b))
-@_jl_timsort_functions "_r"  :(isless($b,$a))
-@_jl_timsort_functions ""    :(lt($a,$b)) lt::Function
-@_jl_timsort_functions "_by" :(isless(by($a),by($b))) by::Function
-

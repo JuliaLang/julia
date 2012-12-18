@@ -96,31 +96,36 @@ _jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox(Float64,y),unbox(Float64,x
 
 include("$JULIA_HOME/../share/julia/base/timsort.jl")
 
-macro _jl_sort_functions(suffix, lt, args...)
-insertionsort = esc(symbol("insertionsort$(suffix)"))
-insertionsort! = esc(symbol("insertionsort$(suffix)!"))
-insertionsort_perm = esc(symbol("insertionsort_perm$(suffix)"))
-insertionsort_perm! = esc(symbol("insertionsort_perm$(suffix)!"))
-quicksort = esc(symbol("quicksort$(suffix)"))
-quicksort! = esc(symbol("quicksort$(suffix)!"))
-quicksort_perm = esc(symbol("quicksort_perm$(suffix)"))
-quicksort_perm! = esc(symbol("quicksort_perm$(suffix)!"))
-mergesort = esc(symbol("mergesort$(suffix)"))
-mergesort! = esc(symbol("mergesort$(suffix)!"))
-mergesort_perm = esc(symbol("mergesort_perm$(suffix)"))
-mergesort_perm! = esc(symbol("mergesort_perm$(suffix)!"))
-pivot_middle = esc(symbol("_jl_pivot_middle$(suffix)"))
-lt = @eval (a,b)->$lt
-issorted = esc(symbol("issorted$(suffix)"))
-_jl_quickselect = esc(symbol("_jl_quickselect$(suffix)"))
-select = esc(symbol("select$(suffix)"))
-select! = esc(symbol("select$(suffix)!"))
-search_sorted = esc(symbol("search_sorted$(suffix)"))
-search_sorted_first = esc(symbol("search_sorted_first$(suffix)"))
-search_sorted_last = esc(symbol("search_sorted_last$(suffix)"))
-sortperm = esc(symbol("sortperm$(suffix)"))
-sortperm! = esc(symbol("sortperm$(suffix)!"))
-quote
+for (suffix, lt, args) in (("",    (a,b)->:(isless($a,$b)), ()),
+                           ("_r",  (a,b)->:(isless($b,$a)), ()),
+                           ("",    (a,b)->:(lt($a,$b)), (:(lt::Function),)),
+                           ("_by", (a,b)->:(isless(by($a),by($b))), (:(by::Function),)),
+                           ## special sorting for floating-point arrays ##
+                           ("_fp_pos", (a,b)->:(_jl_fp_pos_lt($a,$b)), ()),
+                           ("_fp_neg", (a,b)->:(_jl_fp_neg_lt($a,$b)), ()))
+    insertionsort = symbol("insertionsort$(suffix)")
+    insertionsort! = symbol("insertionsort$(suffix)!")
+    insertionsort_perm = symbol("insertionsort_perm$(suffix)")
+    insertionsort_perm! = symbol("insertionsort_perm$(suffix)!")
+    quicksort = symbol("quicksort$(suffix)")
+    quicksort! = symbol("quicksort$(suffix)!")
+    quicksort_perm = symbol("quicksort_perm$(suffix)")
+    quicksort_perm! = symbol("quicksort_perm$(suffix)!")
+    mergesort = symbol("mergesort$(suffix)")
+    mergesort! = symbol("mergesort$(suffix)!")
+    mergesort_perm = symbol("mergesort_perm$(suffix)")
+    mergesort_perm! = symbol("mergesort_perm$(suffix)!")
+    pivot_middle = symbol("_jl_pivot_middle$(suffix)")
+    issorted = symbol("issorted$(suffix)")
+    _jl_quickselect = symbol("_jl_quickselect$(suffix)")
+    select = symbol("select$(suffix)")
+    select! = symbol("select$(suffix)!")
+    search_sorted = symbol("search_sorted$(suffix)")
+    search_sorted_first = symbol("search_sorted_first$(suffix)")
+    search_sorted_last = symbol("search_sorted_last$(suffix)")
+    sortperm = symbol("sortperm$(suffix)")
+    sortperm! = symbol("sortperm$(suffix)!")
+@eval begin
 
 # sorting should be stable
 # Thus, if a permutation is required, or records are being sorted
@@ -403,12 +408,7 @@ end
 ($sortperm){T}($(args...), a::AbstractVector{T}, args2...) = ($mergesort_perm)($(args...), a, args2...)
 ($sortperm!){T}($(args...), a::AbstractVector{T}, args2...) = ($mergesort_perm!)($(args...), a, args2...)
 
-end; end # quote / macro
-
-@_jl_sort_functions ""    :(isless($a,$b))
-@_jl_sort_functions "_r"  :(isless($b,$a))
-@_jl_sort_functions ""    :(lt($a,$b)) lt::Function
-@_jl_sort_functions "_by" :(isless(by($a),by($b))) by::Function
+end; end # @eval / for
 
 ## external sorting functions ##
 
@@ -421,11 +421,6 @@ sort!{T}(lt::Function, a::AbstractVector{T}) =
     mergesort!(lt, a, 1, length(a), Array(T,length(a)))
 sort_by!{T}(by::Function, a::AbstractVector{T}) =
     mergesort_by!(by, a, 1, length(a), Array(T,length(a)))
-
-## special sorting for floating-point arrays ##
-
-@_jl_sort_functions "_fp_pos" :(_jl_fp_pos_lt($a,$b))
-@_jl_sort_functions "_fp_neg" :(_jl_fp_neg_lt($a,$b))
 
 # push NaNs to the end of a, returning # of non-NaNs
 function _jl_nans_to_end{T<:FloatingPoint}(a::AbstractVector{T})
