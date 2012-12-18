@@ -5,9 +5,6 @@
 # end
 #
 
-import Core.UTF8String
-UTF8String(data::Array{None}) = UTF8String(Uint8[])
-
 ## basic UTF-8 decoding & iteration ##
 
 const _jl_utf8_offset = [
