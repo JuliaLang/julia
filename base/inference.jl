@@ -1069,8 +1069,8 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         s[1][v] = Undef
     end
     if la > 0
-        if is(atypes,Tuple)
-            atypes = tuple(NTuple{la,Any}..., Tuple[1])
+        if is(atypes,Tuple) && la > 1
+            atypes = tuple(NTuple{la-1,Any}..., Tuple[1])
         end
         lastarg = ast.args[1][la]
         if is_rest_arg(lastarg)
