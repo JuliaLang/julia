@@ -13,7 +13,7 @@ typealias Run Range1{Int}
 const MIN_GALLOP = 7
 
 type MergeState
-    runs::Array{Run}
+    runs::Vector{Run}
     min_gallop::Int
 end
 MergeState() = MergeState(Run[], MIN_GALLOP)

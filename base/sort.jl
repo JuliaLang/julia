@@ -94,7 +94,7 @@ _jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox(Float64,y),unbox(Float64,x
 
 ## internal sorting functionality ##
 
-include("$JULIA_HOME/../share/julia/base/timsort.jl")
+include("timsort.jl")
 
 for (suffix, lt, args) in (("",    (a,b)->:(isless($a,$b)), ()),
                            ("_r",  (a,b)->:(isless($b,$a)), ()),
