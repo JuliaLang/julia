@@ -43,13 +43,13 @@ release debug: %: libjulia-%
 HEADERS = julia.h $(wildcard support/*.h) $(JULIAHOME)/deps/libuv/include/uv.h
 
 %.o: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp $(HEADERS)
-	$(QUIET_CC) $(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(LLVM_CONFIG) --cppflags) -c $< -o $@
+	$(QUIET_CC) $(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(LLVM_CONFIG) --cppflags) -c $< -o $@
 %.do: %.cpp $(HEADERS)
-	$(QUIET_CC) $(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVM_CONFIG) --cppflags) -c $< -o $@
+	$(QUIET_CC) $(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVM_CONFIG) --cppflags) -c $< -o $@
 
 ast.o ast.do: julia_flisp.boot.inc flisp/*.h
 

@@ -121,6 +121,7 @@ using RNG
 
 # Combinatorics
 include("sort.jl")
+using Sort
 include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
