@@ -212,6 +212,35 @@ if WORD_SIZE > 32
 @test base(12,typemax(Int128)) == "2a695925806818735399a37a20a31b3534a7"
 end
 
+# floating-point printing
+@test repr(1.0) == "1.0"
+@test repr(-1.0) == "-1.0"
+@test repr(0.0) == "0.0"
+@test repr(-0.0) == "-0.0"
+@test repr(0.1) == "0.1"
+@test repr(0.2) == "0.2"
+@test repr(0.3) == "0.3"
+@test repr(0.1+0.2) != "0.3"
+@test repr(Inf) == "Inf"
+@test repr(-Inf) == "-Inf"
+@test repr(NaN) == "NaN"
+@test repr(-NaN) == "NaN"
+@test repr(pi) == "3.141592653589793"
+
+@test repr(1.0f0) == "1.0f0"
+@test repr(-1.0f0) == "-1.0f0"
+@test repr(0.0f0) == "0.0f0"
+@test repr(-0.0f0) == "-0.0f0"
+@test repr(0.1f0) == "0.1f0"
+@test repr(0.2f0) == "0.2f0"
+@test repr(0.3f0) == "0.3f0"
+@test repr(0.1f0+0.2f0) == "0.3f0"
+@test repr(Inf32) == "Inf32"
+@test repr(-Inf32) == "-Inf32"
+@test repr(NaN32) == "NaN32"
+@test repr(-NaN32) == "NaN32"
+@test repr(float32(pi)) == "3.1415927f0"
+
 # signs
 @test sign(1) == 1
 @test sign(-1) == -1
