@@ -410,6 +410,20 @@ end
 
 end; end # @eval / for
 
+search_sorted_last_r{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) = search_sorted_last(a, x)
+search_sorted_first_r{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) = search_sorted_first(a, x)
+search_sorted_r{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) = search_sorted(a, x)
+search_sorted{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) = search_sorted_first(a, x)
+
+search_sorted_last{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) =
+    max(min(int(fld(x - a[1], step(a))) + 1, length(a)), 0)
+
+function search_sorted_first{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real)
+    n = x - a[1]
+    s = step(a)
+    max(min(int(fld(n, s)) + (rem(n, s) != 0), length(a)), 0) + 1
+end
+
 ## external sorting functions ##
 
 sort!{T<:Real}(a::AbstractVector{T})  = quicksort!(a, 1, length(a))
