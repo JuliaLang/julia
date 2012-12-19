@@ -430,23 +430,26 @@ static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
         name = t;
     }
 
-    plen = strlen(name);
-
-    while (tree != NULL) {
-        x = common_prefix(name, tree->name);
-        if (x == plen) {
-            ios_mem(&ans, 0);
-            symtab_search(tree, &count, &ans, module, str, name, plen);
-            size_t nb;
-            *answer = ios_takebuf(&ans, &nb);
-            break;
-        }
-        else {
-            x = strcmp(name, tree->name);
-            if (x < 0)
-                tree = tree->left;
-            else
-                tree = tree->right;
+    if (name)
+    {
+        plen = strlen(name);
+    
+        while (tree != NULL) {
+            x = common_prefix(name, tree->name);
+            if (x == plen) {
+                ios_mem(&ans, 0);
+                symtab_search(tree, &count, &ans, module, str, name, plen);
+                size_t nb;
+                *answer = ios_takebuf(&ans, &nb);
+                break;
+            }
+            else {
+                x = strcmp(name, tree->name);
+                if (x < 0)
+                    tree = tree->left;
+                else
+                    tree = tree->right;
+            }
         }
     }
 
