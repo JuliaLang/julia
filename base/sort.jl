@@ -376,7 +376,7 @@ function ($search_sorted_last)($(args...), a::Vector, x, lo::Int, hi::Int)
     hi = hi+1
     while lo < hi-1
         i = (lo+hi)>>>1
-        if isless(x,a[i])
+        if $(lt(:(x), :(a[i])))
             hi = i
         else
             lo = i
@@ -396,7 +396,7 @@ function ($search_sorted_first)($(args...), a::Vector, x, lo::Int, hi::Int)
     hi = hi+1
     while lo < hi-1
         i = (lo+hi)>>>1
-        if isless(a[i],x)
+        if $(lt(:(a[i]), :(x)))
             lo = i
         else
             hi = i
@@ -409,6 +409,20 @@ end
 ($sortperm!){T}($(args...), a::AbstractVector{T}, args2...) = ($mergesort_perm!)($(args...), a, args2...)
 
 end; end # @eval / for
+
+search_sorted_last_r{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) = search_sorted_last(a, x)
+search_sorted_first_r{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) = search_sorted_first(a, x)
+search_sorted_r{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) = search_sorted(a, x)
+search_sorted{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) = search_sorted_first(a, x)
+
+search_sorted_last{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real) =
+    max(min(int(fld(x - a[1], step(a))) + 1, length(a)), 0)
+
+function search_sorted_first{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real)
+    n = x - a[1]
+    s = step(a)
+    max(min(int(fld(n, s)) + (rem(n, s) != 0), length(a)), 0) + 1
+end
 
 ## external sorting functions ##
 

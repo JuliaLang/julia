@@ -19,6 +19,31 @@
 @test search_sorted_last([1, 1, 2, 2, 3, 3], 4) == 6
 @test search_sorted_last([1.0, 1, 2, 2, 3, 3], 2.5) == 4
 
+rg = 49:57; rgv = [rg]
+rg_r = 57:-1:49; rgv_r = [rg_r]
+for i = 47:59
+    @test search_sorted_first(rg, i) == search_sorted_first(rgv, i)
+    @test search_sorted_last(rg, i) == search_sorted_last(rgv, i)
+    @test search_sorted_first_r(rg_r, i) == search_sorted_first_r(rgv_r, i)
+    @test search_sorted_last_r(rg_r, i) == search_sorted_last_r(rgv_r, i)
+end
+rg = 1:2:17; rgv = [rg]
+rg_r = 17:-2:1; rgv_r = [rg_r]
+for i = -1:19
+    @test search_sorted_first(rg, i) == search_sorted_first(rgv, i)
+    @test search_sorted_last(rg, i) == search_sorted_last(rgv, i)
+    @test search_sorted_first_r(rg_r, i) == search_sorted_first_r(rgv_r, i)
+    @test search_sorted_last_r(rg_r, i) == search_sorted_last_r(rgv_r, i)
+end
+rg = -3:0.5:2; rgv = [rg]
+rg_r = 2:-0.5:-3; rgv_r = [rg_r]
+for i = -5:.5:4
+    @test search_sorted_first(rg, i) == search_sorted_first(rgv, i)
+    @test search_sorted_last(rg, i) == search_sorted_last(rgv, i)
+    @test search_sorted_first_r(rg_r, i) == search_sorted_first_r(rgv_r, i)
+    @test search_sorted_last_r(rg_r, i) == search_sorted_last_r(rgv_r, i)
+end
+
 a = randi(10000, 1000)
 
 # insertion_sort
