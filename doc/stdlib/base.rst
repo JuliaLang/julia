@@ -490,6 +490,14 @@ Strings
 
    Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a tuple with 2 integers: the index of the match and the first valid index past the match (or an index beyond the end of the string if the match is at the end); it returns ``(0,0)`` if no match was found, and ``(start,start)`` if ``chars`` is empty.
 
+.. function:: replace(string, pat, r[, n])
+
+   Search for the given pattern ``pat``, and replace each occurance with ``r``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
+
+.. function:: replace(string, pat, f[, n])
+
+   Search for the given pattern ``pat``, and replace each occurance with ``f(pat)``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
+
 .. function:: split(string, [chars, [limit,] [include_empty]])
 
    Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``include_empty`` is taken to be false. The last two arguments are also optional: they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
@@ -1766,80 +1774,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 Combinatorics
 -------------
 
-.. function:: sort(v)
-
-   Sort a vector in ascending order, according to ``isless``.
-
-.. function:: sort!(v)
-
-   In-place sort.
-
-.. function:: sortr(v)
-
-   Sort a vector in descending order.
-
-.. function:: sortr!(v)
-
-   In-place sort in descending-order.
-
-.. function:: sort_by(by, v)
-
-   Sort a vector by the result of applying function ``by``
-   to every element.
-
-.. function:: sort_by!(by, v)
-
-   Sort a vector in place by the result of applying function ``by``
-   to every element.
-
-.. function:: sort(a, dim)
-
-   Sort an array along the given dimension.
-
-.. function:: sort(lessthan, a, [dim])
-
-   Sort with a custom comparison function.
-
-.. function:: sortperm(v) -> s,p
-
-   Sort a vector in ascending order, also constructing the permutation that sorts the vector
-
-.. function:: sortperm!(v) -> s,p
-
-   Sort a vector in ascending order in-place, also constructing the permutation that sorts the vector
-
-.. function:: sortperm_r(v) -> s,p
-
-   Sort a vector in descending order, also constructing the permutation that sorts the vector
-
-.. function:: sortperm_r!(v) -> s,p
-
-   Sort a vector in descending order in-place, also constructing the permutation that sorts the vector
-
-.. function:: sortperm_by(by,v) -> s,p
-
-   Sort a vector according to the result of function ``by`` applied to
-   all values, also constructing the permutation that sorts the vector.
-
-.. function:: sortperm_by!(by,v) -> s,p
-
-   Sort a vector in-place according to the result of function ``by``
-   applied to all values of ``v``, also constructing the permutation
-   that sorts the vector
-
-.. function:: issorted(v)
-
-   Test whether a vector is in ascending sorted order
-
-.. function:: issorted_r(v)
-
-   Test whether a vector is in descending sorted order
-
-.. function:: issorted_by(by,v)
-
-   Test whether a vector is sorted by the result of function ``by``
-   applied to all values of ``v``
-
 .. function:: nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
@@ -1851,6 +1785,14 @@ Combinatorics
 .. function:: randperm(n)
 
    Construct a random permutation of the given length
+
+.. function:: invperm(v)
+
+   Return the inverse permtation of v
+
+.. function:: isperm(v)
+
+   Returns true if v is a valid permutation
 
 .. function:: randcycle(n)
 
@@ -1871,14 +1813,6 @@ Combinatorics
 .. function:: reverse!(v)
 
    Reverse vector ``v`` in-place
-
-.. function:: select(v, k)
-
-   Find the element in position ``k`` in the sorted vector ``v`` without sorting
-
-.. function:: select!(v, k)
-
-   In-place version of ``select``
 
 Statistics
 ----------

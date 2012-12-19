@@ -4,25 +4,77 @@
 .. module:: Base.Sort
    :synopsis: Sort and related routines
 
-This module contains algorithms and other functions related to
-sorting.  Standard versions of all functions are exported in base.
+The `Sort` module contains algorithms and other functions related to
+sorting.  Default sort functions and standard versions of the various
+sort algorithm are available by default. 
 Specific versions of unexported routines can be used by importing
-`Base.Sort`, or for finer grain control, importing the fully qualified
+`Sort`, or for finer grain control, importing the fully qualified
 function name, e.g.,::
 
   # Julia code
-  import Base.Sort.timsort_perm!
+  import Sort.timsort_perm!
 
 will allow use of the in-place version of timsort which provides a
 permutation, which is not exported by default.  All of the sorting
 routines can be made available directly with::
 
   # Julia code
-  using Base.Sort
+  using Sort
 
 
 Overview
 --------
+
+Many users will simply want to use the default sort algorithms, which
+allow sorting in ascending or descending order,::
+
+  # Julia code
+  julia> sort([2,3,1]) == [1,2,3]
+  true
+
+  julia> sortr([2,3,1]) == [3,2,1]
+  true
+
+return a permutation,::
+
+  julia> v = [20,30,10]
+  3-element Int64 Array:
+   20
+   30
+   10
+
+  julia> (v2,p) = sortperm(v)
+  ([10, 20, 30],[3, 1, 2])
+
+  julia> v[p]
+  3-element Int64 Array:
+   10
+   20
+   30
+
+and use a custom extractor function to order inputs::
+
+  julia> canonicalize(s) = filter(c -> ('A'<=c<='Z' || 'a'<=c<='z'), s) | uppercase
+
+  julia> sort_by(canonicalize, ["New York", "New Jersey", "Nevada", "Nebraska", "Newark"])
+  5-element ASCIIString Array:
+   "Nebraska"  
+   "Nevada"    
+   "Newark"    
+   "New Jersey"
+   "New York"  
+
+Note that none of the variants above modify the original arrays.  To sort in-place (which is often more efficient), each sort function has a mutating version which ends with an exclamation point (``sort!``, ``sortr!``, and ``sort_by!``).
+
+There are also versions of these functions which, in addition to returning a sorted array, will return the permutation of original indices which create the sorted array.  These are ``sortperm``, ``sortperm_r``, and ``sortperm_by``, along with mutating versions ``sortperm!``, ``sortperm_r!``, and ``sortperm_by!``.
+
+These sort functions use reasonable default algorithms, but if you
+want more control or want to see if a different sort algorithm will
+work better on your data, read on... 
+
+
+Sort Algorithms
+---------------
 
 There are currently four main sorting algorithms available in Julia::
 
@@ -31,20 +83,20 @@ There are currently four main sorting algorithms available in Julia::
   mergesort
   timsort
 
-Insertion sort is an ``O(n^2)`` stable sorting algorithm.  It is
-efficient only for very small ``n``.  It is used internally by
+Insertion sort is an O(n^2) stable sorting algorithm.  It is
+efficient for very small ``n``, and is used internally by
 ``quicksort!`` and ``timsort!``. 
 
-Quicksort is an ``O(n log n)`` sorting algorithm.  For efficiency, it
+Quicksort is an O(n log n) sorting algorithm.  For efficiency, it
 is not stable.  It is among the fastest sorting algorithms.
 
-Mergesort is an ``O(n log n)`` stable sorting algorithm.
+Mergesort is an O(n log n) stable sorting algorithm.
 
-Timsort is an ``O(n log n)`` stable adaptive sorting algorithm.  It
+Timsort is an O(n log n) stable adaptive sorting algorithm.  It
 takes advantage of sorted runs which exist in many real world
 datasets.  
 
-The `sort`, `sortr`, `sort_by`, and `sortperm` functions select a reasonable
+The ``sort``, ``sortr``, ``sort_by``, and ``sortperm`` functions select a reasonable
 default algorithm, depending on the type of the target array.
 
 Mutating and non-mutating versions of the sort functions and of each
@@ -117,10 +169,77 @@ the sorted array.  These are shown in the table below.
 |                      | ``quicksort_by``          | ``quicksort_by!``          | Sort by function         |
 +----------------------+---------------------------+----------------------------+--------------------------+
 
+Functions
+---------
 
------------------
-Sorting Functions
------------------
+--------------
+General Sort Functions
+--------------
+.. function:: sort(v)
+
+   Sort a vector in ascending order, according to ``isless``.
+
+.. function:: sort!(v)
+
+   In-place sort.
+
+.. function:: sortr(v)
+
+   Sort a vector in descending order.
+
+.. function:: sortr!(v)
+
+   In-place sort in descending-order.
+
+.. function:: sort_by(by, v)
+
+   Sort a vector by the result of applying function ``by``
+   to every element.
+
+.. function:: sort_by!(by, v)
+
+   Sort a vector in place by the result of applying function ``by``
+   to every element.
+
+.. function:: sort(a, dim)
+
+   Sort an array along the given dimension.
+
+.. function:: sort(lessthan, a, [dim])
+
+   Sort with a custom comparison function.
+
+.. function:: sortperm(v) -> s,p
+
+   Sort a vector in ascending order, also constructing the permutation that sorts the vector
+
+.. function:: sortperm!(v) -> s,p
+
+   Sort a vector in ascending order in-place, also constructing the permutation that sorts the vector
+
+.. function:: sortperm_r(v) -> s,p
+
+   Sort a vector in descending order, also constructing the permutation that sorts the vector
+
+.. function:: sortperm_r!(v) -> s,p
+
+   Sort a vector in descending order in-place, also constructing the permutation that sorts the vector
+
+.. function:: sortperm_by(by,v) -> s,p
+
+   Sort a vector according to the result of function ``by`` applied to
+   all values, also constructing the permutation that sorts the vector.
+
+.. function:: sortperm_by!(by,v) -> s,p
+
+   Sort a vector in-place according to the result of function ``by``
+   applied to all values of ``v``, also constructing the permutation
+   that sorts the vector
+
+
+---------------------------
+Specific Sort Functions
+---------------------------
 
 .. function:: insertionsort(v[,dim])
 
@@ -358,4 +477,137 @@ Sorting Functions
 
    Sort a vector with quicksort in place according to the result
    of function ``by`` applied to all values.
+
+-------------------------
+Sorting-related Functions
+-------------------------
+
+.. function:: issorted(v)
+
+   Test whether a vector is in ascending sorted order
+
+.. function:: issorted_r(v)
+
+   Test whether a vector is in descending sorted order
+
+.. function:: issorted_by(by,v)
+
+   Test whether a vector is sorted by the result of function ``by``
+   applied to all values of ``v``
+
+.. function:: search_sorted(a, x[, lo, hi])
+
+   For ``a`` sorted low to high, returns the index of the first value ``>=x``.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+   Alias for ``search_sorted_first()``
+
+.. function:: search_sorted(lt, a, x[, lo, hi])
+
+   For ``a`` sorted using ordering function ``lt(x,y)``, returns the index of the first value equal to ``x`` or following ``x`` in the induced order
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+   Alias for ``search_sorted_first()``
+
+.. function:: search_sorted_r(a, x[, lo, hi])
+
+   For ``a`` sorted high to low, returns the index of the first value ``<=x``.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+   Alias for ``search_sorted_first_r()``
+
+.. function:: search_sorted_by(by, a, x[, lo, hi])
+
+   For ``a`` sorted according to the natural order of ``by(x)`` for ``x`` in ``a``, returns the index of the first value equal to or following ``x`` in the induced order.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+   Alias for ``search_sorted_first_by()``
+
+.. function:: search_sorted_first(a, x[, lo, hi])
+
+   For ``a`` sorted low to high, returns the index of the first occurance of ``x``, or if ``x`` is not in ``a``, the index of the first value following ``x`` in natural order.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+.. function:: search_sorted_first(lt, a, x[, lo, hi])
+
+   For ``a`` sorted using ordering function ``lt(x,y)``, returns the index of the first occurance of ``x``, or if ``x`` is not in ``a``, the index of the first value following ``x`` in the induced order.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+   Alias for ``search_sorted_first()``
+
+.. function:: search_sorted_first_r(a, x[, lo, hi])
+
+   For ``a`` sorted high to low, returns the index of the first occurance of ``x``, or if ``x`` is not in ``a``, the index of the first value following ``x`` in reverse natural order.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+.. function:: search_sorted_first_by(by, a, x[, lo, hi])
+
+   For ``a`` sorted according to the natural order of ``by(x)`` for ``x`` in ``a``, returns the index of the first occurance of ``x``, or if ``x`` is not in ``a``, the index of the first value following ``x`` in the induced order.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+.. function:: search_sorted_last(a, x[, lo, hi])
+
+   For ``a`` sorted low to high, returns the index of the last occurance of ``x``, or if ``x`` is not in ``a``, the index of the last value preceding ``x`` in natural order.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+.. function:: search_sorted_last(lt, a, x[, lo, hi])
+
+   For ``a`` sorted using ordering function ``lt(x,y)``, returns the index of the last occurance of``x``, or if ``x`` is not in ``a``, the index of the last value preceding ``x`` in the induced order.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+   Alias for ``search_sorted_last()``
+
+.. function:: search_sorted_last_r(a, x[, lo, hi])
+
+   For ``a`` sorted high to low, returns the index of the last occurance of ``x``, or if ``x`` is not in ``a``, the index of the last value preceding ``x`` in reverse natural order.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+.. function:: search_sorted_last_by(by, a, x[, lo, hi])
+
+   For ``a`` sorted according to the natural order of ``by(x)`` for ``x`` in ``a``, returns the index of the last occurance of ``x``, or if ``x`` is not in ``a``, the index of the last value preceding ``x`` in the induced order.
+
+   ``lo`` and ``hi`` optionally limit the search range.
+
+.. function:: select(v, k)
+
+   Find the element in position ``k`` in the sorted vector ``v`` without sorting
+
+.. function:: select!(v, k)
+
+   Version of ``select`` which permutes the input vector in place.
+
+.. function:: select(lt, v, k)
+
+   Find the element in position ``k`` in the vector ``v`` ordered by ``lt``, without sorting.
+
+.. function:: select!(lt, v, k)
+
+   Version of ``select`` which permutes the input vector in place.
+
+.. function:: select_r(v, k)
+
+   Find the element in position ``k`` in the reverse sorted vector ``v``, without sorting.
+
+.. function:: select_r!(v, k)
+
+   Version of ``select_r`` which permutes the input vector in place.
+
+.. function:: select_by(by, v, k)
+
+   Find the element in position ``k`` in the vector ``v`` as if sorted by sort_by, without sorting.
+
+.. function:: select_by!(by, v, k)
+
+   Version of ``select_by`` which permutes the input vector in place.
 
