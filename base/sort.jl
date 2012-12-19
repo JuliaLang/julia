@@ -376,7 +376,7 @@ function ($search_sorted_last)($(args...), a::Vector, x, lo::Int, hi::Int)
     hi = hi+1
     while lo < hi-1
         i = (lo+hi)>>>1
-        if isless(x,a[i])
+        if $(lt(:(x), :(a[i])))
             hi = i
         else
             lo = i
@@ -396,7 +396,7 @@ function ($search_sorted_first)($(args...), a::Vector, x, lo::Int, hi::Int)
     hi = hi+1
     while lo < hi-1
         i = (lo+hi)>>>1
-        if isless(a[i],x)
+        if $(lt(:(a[i]), :(x)))
             lo = i
         else
             hi = i
