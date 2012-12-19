@@ -926,30 +926,29 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 
 #ifdef JL_GC_MARKSWEEP
 typedef struct _jl_gcframe_t {
-    jl_value_t ***roots;
     size_t nroots;
-    int indirect;
     struct _jl_gcframe_t *prev;
+    // actual roots go here
 } jl_gcframe_t;
 
 // NOTE: it is the caller's responsibility to make sure arguments are
 // rooted. foo(f(), g()) will not work, and foo can't do anything about it,
 // so the caller must do
-// jl_value_t *x, *y; JL_GC_PUSH(&x, &y);
+// jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
 extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
-#define JL_GC_PUSH(...)                                                 \
-  void *__gc_rts[] = {__VA_ARGS__};                                     \
-  jl_gcframe_t __gc_stkf_ = { (jl_value_t***)__gc_rts, VA_NARG(__VA_ARGS__), \
-                              1, jl_pgcstack };                         \
-  jl_pgcstack = &__gc_stkf_;
+#define JL_GC_PUSH(...)                                                   \
+  void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
+                       __VA_ARGS__};                                      \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
-#define JL_GC_PUSHARGS(rts,n)                           \
-  jl_gcframe_t __gc_stkf2_ = { (jl_value_t***)rts, (n),  \
-                               0, jl_pgcstack };         \
-  jl_pgcstack = &__gc_stkf2_;
+#define JL_GC_PUSHARGS(rts_var,n)                               \
+  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
+  ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
+  ((void**)rts_var)[-1] = jl_pgcstack;                          \
+  jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
 
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
 
