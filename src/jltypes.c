@@ -2558,12 +2558,11 @@ void jl_init_types(void)
                            jl_any_type, jl_null,
                            jl_tuple(14, jl_symbol("ast"), jl_symbol("sparams"),
                                     jl_symbol("tfunc"), jl_symbol("name"),
-                                    /*
-                                    jl_symbol("roots"), jl_symbol("specTypes"),
+                                    jl_symbol("roots"),
+                                    /* jl_symbol("specTypes"),
                                     jl_symbol("unspecialized"),
                                     jl_symbol("specializations")*/
-                                    jl_symbol(""), jl_symbol(""),
-                                    jl_symbol(""), jl_symbol(""),
+                                    jl_symbol(""), jl_symbol(""), jl_symbol(""),
                                     jl_symbol("module"), jl_symbol("def"),
                                     jl_symbol("capt"),
                                     jl_symbol("file"), jl_symbol("line"),
