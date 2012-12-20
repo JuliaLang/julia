@@ -7,7 +7,8 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
        log, log2, log10, log1p, logb, exp, exp2, expm1, 
-       cbrt, sqrt, square, erf, erfc, ceil, floor, trunc, round, 
+       cbrt, sqrt, square, erf, erfc, erfcx, erfi, dawson,
+       ceil, floor, trunc, round, 
        lgamma, hypot, gamma, lfact, max, min, ilogb, ldexp, frexp,
        clamp, modf, ^, 
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
@@ -622,5 +623,35 @@ function zeta(z::Number)
     zz = 2^z
     eta(z) * zz/(zz-2)
 end
+
+# wrappers for complex Faddeeva functions; these will get a lot simpler,
+# and can call openlibm directly, once ccall supports C99 complex types.
+let
+    for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
+        @eval begin
+            global $f
+            function ($f)(z::Complex128)
+                local w::Array{Float64,1} = Array(Float64,2)
+                ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), pointer(w), &z, zero(Float64))
+                return complex128(w[1],w[2])
+            end
+            function ($f)(z::Complex64)
+                local w::Array{Float64,1} = Array(Float64,2)
+                ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), pointer(w), &complex128(z), float64(eps(Float32)))
+                return complex64(w[1],w[2])
+            end
+            ($f)(z::Complex) = ($f)(complex128(z))
+        end
+    end
+end
+for f in (:erfcx, :erfi, :Dawson)
+    @eval begin
+        ($f)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), x)
+        ($f)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), float64(x)))
+        ($f)(x::Real) = ($f)(float(x))
+        @vectorize_1arg Number $f
+    end
+end
+dawson(z) = Dawson(z) # convert to lower-case naming convention
 
 end # module
