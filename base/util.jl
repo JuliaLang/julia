@@ -191,8 +191,6 @@ function require(name::ByteString)
     end
 end
 
-const load = require
-
 # remote/parallel load
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
@@ -270,6 +268,8 @@ function remote_load(dict)
     nothing
 end
 end
+
+const load = load_now
 
 evalfile(fname::String) = eval(Main,parse(readall(fname))[1])
 

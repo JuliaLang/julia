@@ -200,10 +200,10 @@ DLLEXPORT
 jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
 {
     size_t n = count_union_components(types);
-    jl_value_t **temp = alloca(n * sizeof(jl_value_t*));
+    jl_value_t **temp;
+    JL_GC_PUSHARGS(temp, n);
     size_t idx=0;
     flatten_type_union(types, temp, &idx);
-    JL_GC_PUSHARGS(temp, n);
     assert(idx == n);
     size_t i, j, ndel=0;
     for(i=0; i < n; i++) {
@@ -254,8 +254,10 @@ jl_value_t *jl_type_union(jl_tuple_t *types)
 
 typedef enum {invariant, covariant} variance_t;
 
+#define MAX_CENV_SIZE 128
+
 typedef struct {
-    jl_value_t *data[128];
+    jl_value_t **data;
     size_t n;
 } cenv_t;
 
@@ -279,7 +281,7 @@ static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
                                       type_eqv_(soln->data[i+1],val))))
             return;
     }
-    if (soln->n >= sizeof(soln->data)/sizeof(void*))
+    if (soln->n >= MAX_CENV_SIZE)
         jl_error("type too large");
     soln->data[soln->n++] = var;
     soln->data[soln->n++] = val;
@@ -1126,16 +1128,12 @@ static void print_env(cenv_t *soln)
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars)
 {
-    cenv_t eqc; eqc.n = 0; memset(eqc.data, 0, sizeof(eqc.data));
-    cenv_t env; env.n = 0; memset(env.data, 0, sizeof(env.data));
-    jl_value_t *ti = NULL;
-
-    JL_GC_PUSH(&ti);
-    int nrts = sizeof(eqc.data)/sizeof(void*);
-    JL_GC_PUSHARGS(eqc.data, nrts);
-    jl_gcframe_t __gc_stkf3_ = { (jl_value_t***)env.data, nrts,
-                                 0, jl_pgcstack };
-    jl_pgcstack = &__gc_stkf3_;
+    jl_value_t **rts;
+    JL_GC_PUSHARGS(rts, 1 + 2*MAX_CENV_SIZE);
+    memset(rts, 0, (1+2*MAX_CENV_SIZE)*sizeof(void*));
+    cenv_t eqc; eqc.n = 0; eqc.data = &rts[1];
+    cenv_t env; env.n = 0; env.data = &rts[1+MAX_CENV_SIZE];
+    jl_value_t **pti = &rts[0];
 
     has_ntuple_intersect_tuple = 0;
     JL_TRY {
@@ -1144,15 +1142,15 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         // that we allow Range{T} to exist, even though the declaration of
         // Range specifies Range{T<:Real}. Therefore intersection cannot see
         // that some parameter values actually don't match.
-        ti = jl_type_intersect(a, b, &env, &eqc, covariant);
+        *pti = jl_type_intersect(a, b, &env, &eqc, covariant);
     }
     JL_CATCH {
-        ti = (jl_value_t*)jl_bottom_type;
+        *pti = (jl_value_t*)jl_bottom_type;
     }
-    if (ti == (jl_value_t*)jl_bottom_type ||
+    if (*pti == (jl_value_t*)jl_bottom_type ||
         !(env.n > 0 || eqc.n > 0 || tvars != jl_null)) {
-        JL_GC_POP(); JL_GC_POP(); JL_GC_POP();
-        return ti;
+        JL_GC_POP();
+        return *pti;
     }
 
     int e;
@@ -1174,16 +1172,16 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
               to find all other constraints on N first, then do intersection
               again with that knowledge.
             */
-            ti = jl_type_intersect(a, b, &env, &eqc, covariant);
-            if (ti == (jl_value_t*)jl_bottom_type) {
-                JL_GC_POP(); JL_GC_POP(); JL_GC_POP();
-                return ti;
+            *pti = jl_type_intersect(a, b, &env, &eqc, covariant);
+            if (*pti == (jl_value_t*)jl_bottom_type) {
+                JL_GC_POP();
+                return *pti;
             }
         }
     }
 
     if (!solve_tvar_constraints(&env, &eqc)) {
-        JL_GC_POP(); JL_GC_POP(); JL_GC_POP();
+        JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
     //JL_PRINTF(JL_STDOUT, "env: "); print_env(&env);
@@ -1221,16 +1219,16 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
 
     if (env0 > 0) {
         JL_TRY {
-            ti = (jl_value_t*)jl_instantiate_type_with((jl_type_t*)ti,
+            *pti=(jl_value_t*)jl_instantiate_type_with((jl_type_t*)*pti,
                                                        &jl_t0(*penv), eqc.n/2);
         }
         JL_CATCH {
-            ti = (jl_value_t*)jl_bottom_type;
+            *pti = (jl_value_t*)jl_bottom_type;
         }
     }
 
-    JL_GC_POP(); JL_GC_POP(); JL_GC_POP();
-    return ti;
+    JL_GC_POP();
+    return *pti;
 }
 
 // --- type instantiation and cache ---
@@ -1372,9 +1370,9 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     size_t ntp = jl_tuple_len(tp);
     if (n > ntp)
         jl_errorf("too many parameters for type %s", tname);
-    jl_value_t **env = alloca(2 * ntp * sizeof(jl_value_t*));
-    memset(env, 0, 2 * ntp * sizeof(jl_value_t*));
+    jl_value_t **env;
     JL_GC_PUSHARGS(env, 2*ntp);
+    memset(env, 0, 2 * ntp * sizeof(jl_value_t*));
     size_t ne = 0;
     for(i=0; i < ntp; i++) {
         jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tp,i);
@@ -1561,12 +1559,12 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         jl_type_t *result;
         size_t ntp = jl_tuple_len(tp);
         assert(ntp == jl_tuple_len(((jl_tag_type_t*)tc)->parameters));
-        jl_value_t **iparams = (jl_value_t**)alloca((ntp+2) * sizeof(void*));
+        jl_value_t **iparams;
+        JL_GC_PUSHARGS(iparams, ntp+2);
         for(i=0; i < ntp+2; i++) iparams[i] = NULL;
         jl_value_t **rt1 = &iparams[ntp+0];  // some extra gc roots
         jl_value_t **rt2 = &iparams[ntp+1];
         int cacheable = 1, isabstract = 0;
-        JL_GC_PUSHARGS(iparams, ntp+2);
         for(i=0; i < ntp; i++) {
             jl_value_t *elt = jl_tupleref(tp, i);
             if (elt == t) {
@@ -2105,6 +2103,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         jl_tuple_t *t = ((jl_uniontype_t*)child)->types;
         if (morespecific) {
             cenv_t tenv;
+            tenv.data = alloca(MAX_CENV_SIZE*sizeof(void*));
             for(i=0; i < jl_tuple_len(t); i++) {
                 int n = env->n;
                 tmp = type_match_(jl_tupleref(t,i), parent, env, 1, invariant);
@@ -2257,8 +2256,10 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
 */
 jl_value_t *jl_type_match_(jl_value_t *a, jl_value_t *b, int morespecific)
 {
-    cenv_t env; env.n = 0; memset(env.data, 0, sizeof(env.data));
-    JL_GC_PUSHARGS(env.data, sizeof(env.data)/sizeof(void*));
+    jl_value_t **rts;
+    JL_GC_PUSHARGS(rts, MAX_CENV_SIZE);
+    cenv_t env; env.n = 0; env.data = rts;
+    memset(env.data, 0, MAX_CENV_SIZE*sizeof(void*));
     jl_value_t *m = type_match_(a, b, &env, morespecific, 0);
     if (m != jl_false) {
         m = (jl_value_t*)jl_alloc_tuple_uninit(env.n);
@@ -2557,12 +2558,11 @@ void jl_init_types(void)
                            jl_any_type, jl_null,
                            jl_tuple(14, jl_symbol("ast"), jl_symbol("sparams"),
                                     jl_symbol("tfunc"), jl_symbol("name"),
-                                    /*
-                                    jl_symbol("roots"), jl_symbol("specTypes"),
+                                    jl_symbol("roots"),
+                                    /* jl_symbol("specTypes"),
                                     jl_symbol("unspecialized"),
                                     jl_symbol("specializations")*/
-                                    jl_symbol(""), jl_symbol(""),
-                                    jl_symbol(""), jl_symbol(""),
+                                    jl_symbol(""), jl_symbol(""), jl_symbol(""),
                                     jl_symbol("module"), jl_symbol("def"),
                                     jl_symbol("capt"),
                                     jl_symbol("file"), jl_symbol("line"),

@@ -203,6 +203,11 @@ function serialize(s, linfo::LambdaStaticData)
     writetag(s, LambdaStaticData)
     serialize(s, _jl_lambda_number(linfo))
     serialize(s, linfo.ast)
+    if isdefined(linfo.def, :roots)
+        serialize(s, linfo.def.roots)
+    else
+        serialize(s, {})
+    end
     serialize(s, linfo.sparams)
     serialize(s, linfo.inferred)
     serialize(s, linfo.module)
@@ -322,6 +327,7 @@ end
 function deserialize(s, ::Type{LambdaStaticData})
     lnumber = deserialize(s)
     ast = deserialize(s)
+    roots = deserialize(s)
     sparams = deserialize(s)
     infr = deserialize(s)
     mod = deserialize(s)
@@ -331,6 +337,7 @@ function deserialize(s, ::Type{LambdaStaticData})
         linfo = ccall(:jl_new_lambda_info, Any, (Any, Any), ast, sparams)
         linfo.inferred = infr
         linfo.module = mod
+        linfo.roots = roots
         _jl_known_lambda_data[lnumber] = linfo
         return linfo
     end

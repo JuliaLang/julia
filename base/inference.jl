@@ -1069,13 +1069,21 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         s[1][v] = Undef
     end
     if la > 0
-        if is(atypes,Tuple)
-            atypes = tuple(NTuple{la,Any}..., Tuple[1])
-        end
         lastarg = ast.args[1][la]
         if is_rest_arg(lastarg)
-            s[1][args[la]] = limit_tuple_depth(atypes[la:])
+	    if atypes === Tuple
+                if la > 1
+                    atypes = tuple(NTuple{la-1,Any}..., Tuple[1])
+                end
+                s[1][args[la]] = Tuple
+            else
+                s[1][args[la]] = limit_tuple_depth(atypes[la:])
+            end
             la -= 1
+        else
+            if atypes === Tuple
+                atypes = tuple(NTuple{la,Any}..., Tuple[1])
+            end
         end
     end
     for i=1:la
@@ -1943,7 +1951,7 @@ end
 function finfer(f, types)
     x = methods(f,types)[1]
     (tree, ty) = typeinf(x[3], x[1], x[2])
-    if isa(tree,Tuple)
+    if !isa(tree,Expr)
         return ccall(:jl_uncompress_ast, Any, (Any,Any), x[3], tree)
     end
     tree

@@ -124,7 +124,7 @@ end
 
 function readuntil(s::IO, delim)
     out = memio()
-    while (!eof(s))
+    while !eof(s)
         c = read(s, Char)
         write(out, c)
         if c == delim
@@ -138,14 +138,14 @@ readline(s::IO) = readuntil(s, '\n')
 
 function readall(s::IO)
     out = memio()
-    while (!eof(s))
+    while !eof(s)
         a = read(s, Uint8)
         write(out, a)
     end
     takebuf_string(out)
 end
 
-readchomp(x) = chomp(readall(x))
+readchomp(x) = chomp!(readall(x))
 
 ## high-level iterator interfaces ##
 
@@ -303,7 +303,7 @@ function write{T}(s::IOStream, a::Array{T})
         ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
               s.ios, a, numel(a)*sizeof(T))
     else
-        invoke(write, (Any, Array), s, a)
+        invoke(write, (IO, Array), s, a)
     end
 end
 
@@ -335,11 +335,15 @@ function read(s::IOStream, ::Type{Uint8})
     uint8(b)
 end
 
-function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,Float32,Float64,Complex64,Complex128)}(s::IOStream, a::Array{T})
-    nb = numel(a)*sizeof(T)
-    if ccall(:ios_readall, Uint,
-             (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
-        throw(EOFError())
+function read{T}(s::IOStream, a::Array{T})
+    if isa(T,BitsKind)
+        nb = numel(a)*sizeof(T)
+        if ccall(:ios_readall, Uint,
+                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
+            throw(EOFError())
+        end
+    else
+        invoke(read, (IO, Array), s, a)
     end
     a
 end

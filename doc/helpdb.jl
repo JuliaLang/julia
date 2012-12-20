@@ -223,7 +223,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"whos",E"whos([Module][, pattern::Regex])
+(E"Getting Around",E"Base",E"whos",E"whos([Module,] [pattern::Regex])
 
    Print information about global variables in a module, optionally
    restricted to those matching \"pattern\".
@@ -917,14 +917,36 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"Base",E"split",E"split(string, chars[, limit][, include_empty])
+(E"Strings",E"Base",E"replace",E"replace(string, pat, r[, n])
+
+   Search for the given pattern \"pat\", and replace each occurance
+   with \"r\". If \"n\" is provided, replace at most \"n\" occurances.
+   As with search, the second argument may be a single character, a
+   vector or a set of characters, a string, or a regular expression.
+
+"),
+
+(E"Strings",E"Base",E"replace",E"replace(string, pat, f[, n])
+
+   Search for the given pattern \"pat\", and replace each occurance
+   with \"f(pat)\". If \"n\" is provided, replace at most \"n\"
+   occurances.  As with search, the second argument may be a single
+   character, a vector or a set of characters, a string, or a regular
+   expression.
+
+"),
+
+(E"Strings",E"Base",E"split",E"split(string, [chars, [limit,] [include_empty]])
 
    Return an array of strings by splitting the given string on
    occurrences of the given character delimiters, which may be
    specified in any of the formats allowed by \"search\"'s second
-   argument. The last two arguments are optional; they are are a
-   maximum size for the result and a flag determining whether empty
-   fields should be included in the result.
+   argument (i.e. a single character, collection of characters,
+   string, or regular expression). If \"chars\" is omitted, it
+   defaults to the set of all space characters, and \"include_empty\"
+   is taken to be false. The last two arguments are also optional:
+   they are are a maximum size for the result and a flag determining
+   whether empty fields should be included in the result.
 
 "),
 
@@ -1431,7 +1453,7 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"Base",E"atan2",E"atan2(x, y)
+(E"Mathematical Functions",E"Base",E"atan2",E"atan2(y, x)
 
    Compute the inverse tangent of \"y/x\", using the signs of both
    \"x\" and \"y\" to determine the quadrant of the return value.
@@ -2607,6 +2629,88 @@ airyaiprime(x)
 
 "),
 
+(E"Sparse Matrices",E"Base",E"sparse",E"sparse(I, J, V[, m, n, combine])
+
+   Create a sparse matrix \"S\" of dimensions \"m x n\" such that
+   \"S[I[k], J[k]] = V[k]\". The \"combine\" function is used to
+   combine duplicates. If \"m\" and \"n\" are not specified, they are
+   set to \"max(I)\" and \"max(J)\" respectively. If the \"combine\"
+   function is not supplied, duplicates are added by default.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"issparse",E"issparse(S)
+
+   Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"nnz",E"nnz(S)
+
+   Return the number of nonzeros in \"S\".
+
+"),
+
+(E"Sparse Matrices",E"Base",E"sparse",E"sparse(A)
+
+   Convert a dense matrix \"A\" into a sparse matrix.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"dense",E"dense(S)
+
+   Convert a sparse matrix \"S\" into a dense matrix.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"full",E"full(S)
+
+   Convert a sparse matrix \"S\" into a dense matrix.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"spzeros",E"spzeros(m, n)
+
+   Create an empty sparse matrix of size \"m x n\".
+
+"),
+
+(E"Sparse Matrices",E"Base",E"speye",E"speye(type, m[, n])
+
+   Create a sparse identity matrix of specified type of size \"m x
+   m\". In case \"n\" is supplied, create a sparse identity matrix of
+   size \"m x n\".
+
+"),
+
+(E"Sparse Matrices",E"Base",E"spones",E"spones(S)
+
+   Create a sparse matrix with the same structure as that of \"S\",
+   but with every nonzero element having the value \"1.0\".
+
+"),
+
+(E"Sparse Matrices",E"Base",E"sprand",E"sprand(m, n, density[, rng])
+
+   Create a random sparse matrix with the specified density. Nonzeros
+   are sampled from the distribution specified by \"rng\". The uniform
+   distribution is used in case \"rng\" is not specified.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"sprandn",E"sprandn(m, n, density)
+
+   Create a random sparse matrix of specified density with nonzeros
+   sampled from the normal distribution.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"sprandbool",E"sprandbool(m, n, density)
+
+   Create a random sparse boolean matrix with the specified density.
+
+"),
+
 (E"Linear Algebra",E"Base",E"*",E"*()
 
    Matrix multiplication
@@ -2807,55 +2911,6 @@ airyaiprime(x)
 
 "),
 
-(E"Combinatorics",E"Base",E"sort",E"sort(v)
-
-   Sort a vector in ascending order, according to \"isless\".
-
-"),
-
-(E"Combinatorics",E"Base",E"sort!",E"sort!(v)
-
-   In-place sort
-
-"),
-
-(E"Combinatorics",E"Base",E"sortr",E"sortr(v)
-
-   Sort a vector in descending order
-
-"),
-
-(E"Combinatorics",E"Base",E"sortr!",E"sortr!(v)
-
-   In-place descending-order sort
-
-"),
-
-(E"Combinatorics",E"Base",E"sort",E"sort(a, dim)
-
-   Sort an array along the given dimension
-
-"),
-
-(E"Combinatorics",E"Base",E"sort",E"sort(lessthan, a[, dim])
-
-   Sort with a custom comparison function
-
-"),
-
-(E"Combinatorics",E"Base",E"sortperm",E"sortperm(v) -> s,p
-
-   Sort a vector in ascending order, also constructing the permutation
-   that sorts the vector
-
-"),
-
-(E"Combinatorics",E"Base",E"issorted",E"issorted(v)
-
-   Test whether a vector is in ascending sorted order
-
-"),
-
 (E"Combinatorics",E"Base",E"nthperm",E"nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
@@ -2871,6 +2926,18 @@ airyaiprime(x)
 (E"Combinatorics",E"Base",E"randperm",E"randperm(n)
 
    Construct a random permutation of the given length
+
+"),
+
+(E"Combinatorics",E"Base",E"invperm",E"invperm(v)
+
+   Return the inverse permtation of v
+
+"),
+
+(E"Combinatorics",E"Base",E"isperm",E"isperm(v)
+
+   Returns true if v is a valid permutation
 
 "),
 
@@ -2901,19 +2968,6 @@ airyaiprime(x)
 (E"Combinatorics",E"Base",E"reverse!",E"reverse!(v)
 
    Reverse vector \"v\" in-place
-
-"),
-
-(E"Combinatorics",E"Base",E"select",E"select(v, k)
-
-   Find the element in position \"k\" in the sorted vector \"v\"
-   without sorting
-
-"),
-
-(E"Combinatorics",E"Base",E"select!",E"select!(v, k)
-
-   In-place version of \"select\"
 
 "),
 
@@ -2999,11 +3053,12 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dim=1])
+(E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dim])
 
    One-dimensional FFT of real array A along dimension dim. If A has
    size \"(..., n_dim, ...)\", the result has size \"(...,
-   floor(n_dim/2)+1, ...)\".
+   floor(n_dim/2)+1, ...)\". The \"dim\" argument is optional and
+   defaults to 1.
 
 "),
 
@@ -5234,6 +5289,675 @@ eval_tab_col(glp_prob, k)
 
 "),
 
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(v)
+
+   Sort a vector in ascending order, according to \"isless\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort!",E"sort!(v)
+
+   In-place sort.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortr",E"sortr(v)
+
+   Sort a vector in descending order.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortr!",E"sortr!(v)
+
+   In-place sort in descending-order.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort_by",E"sort_by(by, v)
+
+   Sort a vector by the result of applying function \"by\" to every
+   element.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort_by!",E"sort_by!(by, v)
+
+   Sort a vector in place by the result of applying function \"by\" to
+   every element.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(a, dim)
+
+   Sort an array along the given dimension.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(lessthan, a[, dim])
+
+   Sort with a custom comparison function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v) -> s,p
+
+   Sort a vector in ascending order, also constructing the permutation
+   that sorts the vector
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(v) -> s,p
+
+   Sort a vector in ascending order in-place, also constructing the
+   permutation that sorts the vector
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm_r",E"sortperm_r(v) -> s,p
+
+   Sort a vector in descending order, also constructing the
+   permutation that sorts the vector
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm_r!",E"sortperm_r!(v) -> s,p
+
+   Sort a vector in descending order in-place, also constructing the
+   permutation that sorts the vector
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm_by",E"sortperm_by(by, v) -> s,p
+
+   Sort a vector according to the result of function \"by\" applied to
+   all values, also constructing the permutation that sorts the
+   vector.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm_by!",E"sortperm_by!(by, v) -> s,p
+
+   Sort a vector in-place according to the result of function \"by\"
+   applied to all values of \"v\", also constructing the permutation
+   that sorts the vector
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort",E"insertionsort(v[, dim])
+
+   Sort a vector in ascending order with insertion sort, according to
+   \"isless\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort",E"insertionsort(lessthan, v[, dim])
+
+   Sort a vector in ascending order with insertion sort, using a
+   custom comparison function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort!",E"insertionsort!(v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort!",E"insertionsort!(v[, lo, hi])
+
+   In-place insertion sort, accoring to \"isless\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort!",E"insertionsort!(lessthan, v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort!",E"insertionsort!(lessthan, v[, lo, hi])
+
+   In-place insertion sort with a custom comparison function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_r",E"insertionsort_r(v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_r",E"insertionsort_r(v[, lo, hi])
+
+   Sort a vector in descending order using insertion sort.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_r!",E"insertionsort_r!(v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_r!",E"insertionsort_r!(v[, lo, hi])
+
+   In-place insertion sort in descending order.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_by",E"insertionsort_by(by, v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_by",E"insertionsort_by(by, v[, lo, hi])
+
+   Sort a vector with insertion sort according to the result of
+   function \"by\" applied to all values.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_by!",E"insertionsort_by!(by, v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_by!",E"insertionsort_by!(by, v[, lo, hi])
+
+   Sort a vector with insertion sort in place according to the result
+   of function \"by\" applied to all values.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_perm",E"insertionsort_perm(v[, p[, lo, hi]]) -> s,p
+
+   Sort a vector in ascending order, also constructing the permutation
+   that sorts the vector
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_perm",E"insertionsort_perm(lessthan, v[, p[, lo, hi]]) -> s,p
+
+   Sort a vector, using a custom comparison function, also
+   constructing the permutation that sorts the vector .
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_perm!",E"insertionsort_perm!(v[, p[, lo, hi]])
+
+   Sort a vector in ascending order in-place, also constructing the
+   permutation that sorts the vector
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_perm!",E"insertionsort_perm!(lessthan, v[, p[, lo, hi]])
+
+   Sort a vector in place, using a custom comparison function, also
+   constructing the permutation that sorts the vector .
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_perm_r",E"insertionsort_perm_r(v[, p[, lo, hi]])
+
+   Sort a vector in descending order, also constructing the
+   permutation that sorts the vector
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_perm_r!",E"insertionsort_perm_r!(v[, p[, lo, hi]])
+
+   Sort a vector in descending order in place, also constructing the
+   permutation that sorts the vector
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_perm_by",E"insertionsort_perm_by(by, v[, p[, lo, hi]])
+
+   Sort a vector with insertion sort according to the result of
+   function \"by\" applied to all values.
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"insertionsort_perm_by!",E"insertionsort_perm_by!(by, v[, p[, lo, hi]])
+
+   Sort a vector with insertion sort in place according to the result
+   of function \"by\" applied to all values.
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort",E"mergesort(v[, dim])
+
+   Sort a vector in ascending order with mergesort, according to
+   \"isless\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort",E"mergesort(lessthan, v[, dim])
+
+   Sort a vector in ascending order with mergesort, using a custom
+   comparison function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort!",E"mergesort!(v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort!",E"mergesort!(v[, lo, hi])
+
+   In-place mergesort, accoring to \"isless\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort!",E"mergesort!(lessthan, v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort!",E"mergesort!(lessthan, v[, lo, hi])
+
+   In-place mergesort with a custom comparison function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_r",E"mergesort_r(v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_r",E"mergesort_r(v[, lo, hi])
+
+   Sort a vector in descending order using mergesort.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_r!",E"mergesort_r!(v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_r!",E"mergesort_r!(v[, lo, hi])
+
+   In-place mergesort in descending order.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_by",E"mergesort_by(by, v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_by",E"mergesort_by(by, v[, lo, hi])
+
+   Sort a vector with mergesort according to the result of function
+   \"by\" applied to all values.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_by!",E"mergesort_by!(by, v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_by!",E"mergesort_by!(by, v[, lo, hi])
+
+   Sort a vector with mergesort in place according to the result of
+   function \"by\" applied to all values.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_perm",E"mergesort_perm(v[, p[, lo, hi]]) -> s,p
+
+   Sort a vector in ascending order, also constructing the permutation
+   that sorts the vector
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_perm",E"mergesort_perm(lessthan, v[, p[, lo, hi]]) -> s,p
+
+   Sort a vector, using a custom comparison function, also
+   constructing the permutation that sorts the vector .
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_perm!",E"mergesort_perm!(v[, p[, lo, hi]])
+
+   Sort a vector in ascending order in-place, also constructing the
+   permutation that sorts the vector
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_perm!",E"mergesort_perm!(lessthan, v[, p[, lo, hi]])
+
+   Sort a vector in place, using a custom comparison function, also
+   constructing the permutation that sorts the vector .
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_perm_r",E"mergesort_perm_r(v[, p[, lo, hi]])
+
+   Sort a vector in descending order, also constructing the
+   permutation that sorts the vector
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_perm_r!",E"mergesort_perm_r!(v[, p[, lo, hi]])
+
+   Sort a vector in descending order in place, also constructing the
+   permutation that sorts the vector
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_perm_by",E"mergesort_perm_by(by, v[, p[, lo, hi]])
+
+   Sort a vector with mergesort according to the result of function
+   \"by\" applied to all values.
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"mergesort_perm_by!",E"mergesort_perm_by!(by, v[, p[, lo, hi]])
+
+   Sort a vector with mergesort in place according to the result of
+   function \"by\" applied to all values.
+
+   If provided, \"p\" is an initial permutation.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort",E"quicksort(v[, dim])
+
+   Sort a vector in ascending order with quicksort, according to
+   \"isless\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort",E"quicksort(lessthan, v[, dim])
+
+   Sort a vector in ascending order with quicksort, using a custom
+   comparison function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort!",E"quicksort!(v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort!",E"quicksort!(v[, lo, hi])
+
+   In-place quicksort, accoring to \"isless\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort!",E"quicksort!(lessthan, v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort!",E"quicksort!(lessthan, v[, lo, hi])
+
+   In-place quicksort with a custom comparison function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort_r",E"quicksort_r(v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort_r",E"quicksort_r(v[, lo, hi])
+
+   Sort a vector in descending order using quicksort.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort_r!",E"quicksort_r!(v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort_r!",E"quicksort_r!(v[, lo, hi])
+
+   In-place quicksort in descending order.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort_by",E"quicksort_by(by, v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort_by",E"quicksort_by(by, v[, lo, hi])
+
+   Sort a vector with quicksort according to the result of function
+   \"by\" applied to all values.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort_by!",E"quicksort_by!(by, v[, dim])
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"quicksort_by!",E"quicksort_by!(by, v[, lo, hi])
+
+   Sort a vector with quicksort in place according to the result of
+   function \"by\" applied to all values.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"issorted",E"issorted(v)
+
+   Test whether a vector is in ascending sorted order
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"issorted_r",E"issorted_r(v)
+
+   Test whether a vector is in descending sorted order
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"issorted_by",E"issorted_by(by, v)
+
+   Test whether a vector is sorted by the result of function \"by\"
+   applied to all values of \"v\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted",E"search_sorted(a, x[, lo, hi])
+
+   For \"a\" sorted low to high, returns the index of the first value
+   \">=x\".
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted",E"search_sorted(lt, a, x[, lo, hi])
+
+   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
+   index of the first value equal to \"x\" or following \"x\" in the
+   induced order
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_r",E"search_sorted_r(a, x[, lo, hi])
+
+   For \"a\" sorted high to low, returns the index of the first value
+   \"<=x\".
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first_r()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_by",E"search_sorted_by(by, a, x[, lo, hi])
+
+   For \"a\" sorted according to the natural order of \"by(x)\" for
+   \"x\" in \"a\", returns the index of the first value equal to or
+   following \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first_by()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_first",E"search_sorted_first(a, x[, lo, hi])
+
+   For \"a\" sorted low to high, returns the index of the first
+   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
+   first value following \"x\" in natural order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_first",E"search_sorted_first(lt, a, x[, lo, hi])
+
+   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
+   index of the first occurance of \"x\", or if \"x\" is not in \"a\",
+   the index of the first value following \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_first_r",E"search_sorted_first_r(a, x[, lo, hi])
+
+   For \"a\" sorted high to low, returns the index of the first
+   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
+   first value following \"x\" in reverse natural order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_first_by",E"search_sorted_first_by(by, a, x[, lo, hi])
+
+   For \"a\" sorted according to the natural order of \"by(x)\" for
+   \"x\" in \"a\", returns the index of the first occurance of \"x\",
+   or if \"x\" is not in \"a\", the index of the first value following
+   \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_last",E"search_sorted_last(a, x[, lo, hi])
+
+   For \"a\" sorted low to high, returns the index of the last
+   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
+   last value preceding \"x\" in natural order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_last",E"search_sorted_last(lt, a, x[, lo, hi])
+
+   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
+   index of the last occurance of``x``, or if \"x\" is not in \"a\",
+   the index of the last value preceding \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_last()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_last_r",E"search_sorted_last_r(a, x[, lo, hi])
+
+   For \"a\" sorted high to low, returns the index of the last
+   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
+   last value preceding \"x\" in reverse natural order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_last_by",E"search_sorted_last_by(by, a, x[, lo, hi])
+
+   For \"a\" sorted according to the natural order of \"by(x)\" for
+   \"x\" in \"a\", returns the index of the last occurance of \"x\",
+   or if \"x\" is not in \"a\", the index of the last value preceding
+   \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select",E"select(v, k)
+
+   Find the element in position \"k\" in the sorted vector \"v\"
+   without sorting
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select!",E"select!(v, k)
+
+   Version of \"select\" which permutes the input vector in place.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select",E"select(lt, v, k)
+
+   Find the element in position \"k\" in the vector \"v\" ordered by
+   \"lt\", without sorting.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select!",E"select!(lt, v, k)
+
+   Version of \"select\" which permutes the input vector in place.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select_r",E"select_r(v, k)
+
+   Find the element in position \"k\" in the reverse sorted vector
+   \"v\", without sorting.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select_r!",E"select_r!(v, k)
+
+   Version of \"select_r\" which permutes the input vector in place.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select_by",E"select_by(by, v, k)
+
+   Find the element in position \"k\" in the vector \"v\" as if sorted
+   by sort_by, without sorting.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select_by!",E"select_by!(by, v, k)
+
+   Version of \"select_by\" which permutes the input vector in place.
+
+"),
+
 (E"Sound",E"Sound",E"wavread",E"wavread(io[, options])
 
    Reads and returns the samples from a RIFF/WAVE file. The samples
@@ -5341,7 +6065,6 @@ eval_tab_col(glp_prob, k)
       wavwrite(y::Array, Fs::Real, N::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs nbits=N)
 
 "),
-
 
 (E"strpack.jl",E"",E"pack",E"pack(io, composite[, strategy])
 

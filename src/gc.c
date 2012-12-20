@@ -469,19 +469,17 @@ static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
 {
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
-        size_t i;
-        jl_value_t ***rts = (jl_value_t***)((char*)s->roots + offset);
-        if (s->indirect) {
-            size_t nr = s->nroots;
-            for(i=0; i < nr; i++) {
+        jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+        size_t nr = s->nroots>>1;
+        if (s->nroots & 1) {
+            for(size_t i=0; i < nr; i++) {
                 jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
                 if (*ptr != NULL)
                     gc_push_root(*ptr);
             }
         }
         else {
-            size_t nr = s->nroots;
-            for(i=0; i < nr; i++) {
+            for(size_t i=0; i < nr; i++) {
                 if (rts[i] != NULL)
                     gc_push_root(rts[i]);
             }

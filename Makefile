@@ -9,23 +9,23 @@ DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/ju
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,extras base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
-MAKEs = $(MAKE)
+QUIET_MAKE =
 ifeq ($(USE_QUIET), 1)
-MAKEs += -s
+QUIET_MAKE = -s
 endif
 
 debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
-	@$(MAKEs) julia-$@
+	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
-	$(MAKEs) LD_LIBRARY_PATH=$(BUILD)/lib JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
+	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
 
 julia-debug julia-release:
 	@-git submodule update
-	@$(MAKEs) -C deps
-	@$(MAKEs) -C src lib$@
-	@$(MAKEs) -C base
-	@$(MAKEs) -C extras
-	@$(MAKEs) -C ui $@
+	@$(MAKE) $(QUIET_MAKE) -C deps
+	@$(MAKE) $(QUIET_MAKE) -C src lib$@
+	@$(MAKE) $(QUIET_MAKE) -C base
+	@$(MAKE) $(QUIET_MAKE) -C extras
+	@$(MAKE) $(QUIET_MAKE) -C ui $@
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
 
 $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
@@ -94,6 +94,7 @@ clean: | $(CLEAN_TARGETS)
 			rm -f julia-$${buildtype}-$${repltype}; \
 		done \
 	done
+	@rm -f julia
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/$(JL_PRIVATE_LIBDIR)
 
@@ -106,10 +107,10 @@ cleanall: clean
 	test testall test-* clean cleanall
 
 test: release
-	@$(MAKEs) -C test default
+	@$(MAKE) $(QUIET_MAKE) -C test default
 
 testall: release
-	@$(MAKEs) -C test all
+	@$(MAKE) $(QUIET_MAKE) -C test all
 
 test-%: release
-	@$(MAKEs) -C test $*
+	@$(MAKE) $(QUIET_MAKE) -C test $*
