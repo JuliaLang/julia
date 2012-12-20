@@ -1,0 +1,100 @@
+--- dsfmt-2.2/dSFMT.c	2012-06-29 03:24:27.000000000 -0400
++++ dSFMT-patched.c	2012-12-20 12:45:45.000000000 -0500
+@@ -32,13 +32,13 @@
+ inline static uint32_t ini_func1(uint32_t x);
+ inline static uint32_t ini_func2(uint32_t x);
+ inline static void gen_rand_array_c1o2(dsfmt_t *dsfmt, w128_t *array,
+-				       int size);
++				       ptrdiff_t size);
+ inline static void gen_rand_array_c0o1(dsfmt_t *dsfmt, w128_t *array,
+-				       int size);
++				       ptrdiff_t size);
+ inline static void gen_rand_array_o0c1(dsfmt_t *dsfmt, w128_t *array,
+-				       int size);
++				       ptrdiff_t size);
+ inline static void gen_rand_array_o0o1(dsfmt_t *dsfmt, w128_t *array,
+-				       int size);
++				       ptrdiff_t size);
+ inline static int idxof(int i);
+ static void initial_mask(dsfmt_t *dsfmt);
+ static void period_certification(dsfmt_t *dsfmt);
+@@ -142,8 +142,8 @@
+  * @param size number of 128-bit pseudorandom numbers to be generated.
+  */
+ inline static void gen_rand_array_c1o2(dsfmt_t *dsfmt, w128_t *array,
+-				       int size) {
+-    int i, j;
++				       ptrdiff_t size) {
++    ptrdiff_t i, j;
+     w128_t lung;
+ 
+     lung = dsfmt->status[DSFMT_N];
+@@ -180,8 +180,8 @@
+  * @param size number of 128-bit pseudorandom numbers to be generated.
+  */
+ inline static void gen_rand_array_c0o1(dsfmt_t *dsfmt, w128_t *array,
+-				       int size) {
+-    int i, j;
++				       ptrdiff_t size) {
++    ptrdiff_t i, j;
+     w128_t lung;
+ 
+     lung = dsfmt->status[DSFMT_N];
+@@ -223,8 +223,8 @@
+  * @param size number of 128-bit pseudorandom numbers to be generated.
+  */
+ inline static void gen_rand_array_o0o1(dsfmt_t *dsfmt, w128_t *array,
+-				       int size) {
+-    int i, j;
++				       ptrdiff_t size) {
++    ptrdiff_t i, j;
+     w128_t lung;
+ 
+     lung = dsfmt->status[DSFMT_N];
+@@ -266,8 +266,8 @@
+  * @param size number of 128-bit pseudorandom numbers to be generated.
+  */
+ inline static void gen_rand_array_o0c1(dsfmt_t *dsfmt, w128_t *array,
+-				       int size) {
+-    int i, j;
++				       ptrdiff_t size) {
++    ptrdiff_t i, j;
+     w128_t lung;
+ 
+     lung = dsfmt->status[DSFMT_N];
+@@ -453,7 +453,7 @@
+  * memory. Mac OSX doesn't have these functions, but \b malloc of OSX
+  * returns the pointer to the aligned memory block.
+  */
+-void dsfmt_fill_array_close1_open2(dsfmt_t *dsfmt, double array[], int size) {
++void dsfmt_fill_array_close1_open2(dsfmt_t *dsfmt, double array[], ptrdiff_t size) {
+     assert(size % 2 == 0);
+     assert(size >= DSFMT_N64);
+     gen_rand_array_c1o2(dsfmt, (w128_t *)array, size / 2);
+@@ -471,7 +471,7 @@
+  * @param size the number of pseudorandom numbers to be generated.
+  * see also \sa fill_array_close1_open2()
+  */
+-void dsfmt_fill_array_open_close(dsfmt_t *dsfmt, double array[], int size) {
++void dsfmt_fill_array_open_close(dsfmt_t *dsfmt, double array[], ptrdiff_t size) {
+     assert(size % 2 == 0);
+     assert(size >= DSFMT_N64);
+     gen_rand_array_o0c1(dsfmt, (w128_t *)array, size / 2);
+@@ -489,7 +489,7 @@
+  * @param size the number of pseudorandom numbers to be generated.
+  * see also \sa fill_array_close1_open2()
+  */
+-void dsfmt_fill_array_close_open(dsfmt_t *dsfmt, double array[], int size) {
++void dsfmt_fill_array_close_open(dsfmt_t *dsfmt, double array[], ptrdiff_t size) {
+     assert(size % 2 == 0);
+     assert(size >= DSFMT_N64);
+     gen_rand_array_c0o1(dsfmt, (w128_t *)array, size / 2);
+@@ -507,7 +507,7 @@
+  * @param size the number of pseudorandom numbers to be generated.
+  * see also \sa fill_array_close1_open2()
+  */
+-void dsfmt_fill_array_open_open(dsfmt_t *dsfmt, double array[], int size) {
++void dsfmt_fill_array_open_open(dsfmt_t *dsfmt, double array[], ptrdiff_t size) {
+     assert(size % 2 == 0);
+     assert(size >= DSFMT_N64);
+     gen_rand_array_o0o1(dsfmt, (w128_t *)array, size / 2);
