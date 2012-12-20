@@ -431,7 +431,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
-	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch
+	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	touch $@
 $(LIBRANDOM_OBJ_SOURCE): random/jl_random.c random/randmtzig.c
 	cd random && \
