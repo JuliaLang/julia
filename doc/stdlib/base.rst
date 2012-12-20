@@ -1030,6 +1030,21 @@ Mathematical Functions
 
    Compute the complementary error function of ``x``
 
+.. function:: erfcx(x)
+
+   Compute the scaled complementary error function of ``x``,
+   defined by :math:`e^{x^2} \operatorname{erfc}(x)`
+
+.. function:: erfi(x)
+
+   Compute the imaginary error function of ``x``,
+   defined by :math:`-i \operatorname{erf}(ix)`
+
+.. function:: dawson(x)
+
+   Compute the Dawson function (scaled imaginary error function) of ``x``,
+   defined by :math:`\frac{\pi}{2} e^{-x^2} \operatorname{erfi}(x)`
+
 .. function:: real(z)
 
    Return the real part of the complex number ``z``
