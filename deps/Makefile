@@ -431,7 +431,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
-	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch
+	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	touch $@
 $(LIBRANDOM_OBJ_SOURCE): random/jl_random.c random/randmtzig.c
 	cd random && \
@@ -459,9 +459,9 @@ ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
 endif
 
-#ifeq ($(ARCH), x86_64)
-#OPENBLAS_BUILD_OPTS += -DINTERFACE64=1
-#endif
+ifeq ($(USE_LIB64), 1)
+OPENBLAS_BUILD_OPTS += INTERFACE64=1
+endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: $(BUILD)/lib/libopenblas.$(SHLIB_EXT)
@@ -521,6 +521,10 @@ distclean-lapack:
 
 ## ARPACK ##
 
+ifeq ($(USE_LIB64), 1)
+ARPACK_FFLAGS = -fdefault-integer-8
+endif
+
 ARPACK_OBJ_TARGET = $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
@@ -535,7 +539,7 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 	cd arpack-ng_$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(BUILD)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)"
+	./configure  --prefix=$(abspath $(BUILD)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)" FFLAGS="$(ARPACK_FFLAGS)"
 	touch $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(BUILD)/lib
 	cd arpack-ng_$(ARPACK_VER) && \
@@ -648,6 +652,11 @@ SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(BUILD)/lib/libumfpack.$(SHLIB_EXT)
 endif
 
+ifeq ($(USE_LIB64), 1)
+UMFPACK_CONFIG = -DLONGBLAS='long long' 
+CHOLMOD_CONFIG = -DLONGBLAS='long long' 
+endif
+
 SUITE_SPARSE_LIB = -lm
 ifneq ($(OS), Darwin)
   SUITE_SPARSE_LIB += -lrt
@@ -664,7 +673,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)"
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)" UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)

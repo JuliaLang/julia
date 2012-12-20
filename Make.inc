@@ -17,8 +17,14 @@ JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
 JL_LIBDIR = lib/$(MULTIARCH)/
 endif
 
+# Figure out OS and architecture
 OS = $(shell uname)
 ARCH = $(shell uname -m)
+
+# Use 64-bit libraries by default on 64-bit architectures
+ifeq ($(ARCH), x86_64)
+USE_LIB64 = 1
+endif
 
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
