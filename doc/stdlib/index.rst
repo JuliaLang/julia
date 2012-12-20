@@ -16,6 +16,14 @@ Built-ins
    :maxdepth: 1
 
    base
+
+****************
+Built-in Modules
+****************
+
+.. toctree::
+   :maxdepth: 1
+
    sort
 
 ******
