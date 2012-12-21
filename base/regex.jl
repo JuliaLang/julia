@@ -2,6 +2,8 @@
 
 include("pcre.jl")
 
+const DEFAULT_OPTS = PCRE.UTF8
+
 type Regex
     pattern::ByteString
     options::Int32
@@ -18,31 +20,30 @@ type Regex
         new(pat, opts, re, ex)
     end
 end
-Regex(p::String, s::Bool)    = Regex(p, 0, s)
-Regex(p::String, o::Integer) = Regex(p, o, false)
-Regex(p::String)             = Regex(p, 0, false)
 
-copy(r::Regex) = r
-
-# TODO: make sure thing are escaped in a way PCRE
-# likes so that Julia all the Julia string quoting
-# constructs are correctly handled.
-
-macro r_str(pattern, flags...)
-    options = PCRE.UTF8
-    for fx in flags, f in fx
+function Regex(pattern::String, flags::String, study::Bool)
+    options = DEFAULT_OPTS
+    for f in flags
         options |= f=='i' ? PCRE.CASELESS  :
                    f=='m' ? PCRE.MULTILINE :
                    f=='s' ? PCRE.DOTALL    :
                    f=='x' ? PCRE.EXTENDED  :
                    error("unknown regex flag: $f")
     end
-    Regex(pattern, options)
+    Regex(pattern, options, study)
 end
+Regex(p::String, o::Integer) = Regex(p, o, false)
+Regex(p::String, f::String)  = Regex(p, f, false)
+Regex(p::String, s::Bool)    = Regex(p, DEFAULT_OPTS, s)
+Regex(p::String)             = Regex(p, DEFAULT_OPTS, false)
+
+macro r_str(pattern, flags...) Regex(pattern, flags...) end
+
+copy(r::Regex) = r
 
 function show(io, re::Regex)
     imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
-    if (re.options & ~imsx) == PCRE.UTF8
+    if (re.options & ~imsx) == DEFAULT_OPTS
         print(io, 'r')
         print_quoted_literal(io, re.pattern)
         if (re.options & PCRE.CASELESS ) != 0; print(io, 'i'); end
