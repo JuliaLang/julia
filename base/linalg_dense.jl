@@ -307,7 +307,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
         P3 = zeros(T, n, n)
         P4 = zeros(T, n, n)
         CC14 = CC[14]; CC12 = CC[12]; CC10 = CC[10]
-        CC8 = CC[8];   CC6 = CC[6];   CC4 = CC[4];   CC2 = CC[2];   
+        CC8 = CC[8];   CC6 = CC[6];   CC4 = CC[4];   CC2 = CC[2]
         CC13 = CC[13]; CC11 = CC[11]; CC9 = CC[9]   
         CC7 = CC[7];   CC5 = CC[5];   CC3 = CC[3];   CC1 = CC[1]
         for i=1:length(I)
@@ -361,7 +361,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
 end
 
 ## Swap rows j and jp and columns j and jp in X
-function rcswap!{T<:Number}(j::Int, jp::Int, X::StridedMatrix{T})
+function rcswap!{T<:Number}(j::Integer, jp::Integer, X::StridedMatrix{T})
     for k in 1:size(X, 2)
         tmp     = X[k,j]
         X[k,j]  = X[k,jp]
@@ -385,7 +385,7 @@ abstract Factorization{T}
 
 type BunchKaufman{T<:BlasFloat} <: Factorization{T}
     LD::Matrix{T}
-    ipiv::Vector{Int}
+    ipiv::Vector{BlasInt}
     upper::Bool
     function BunchKaufman(A::Matrix{T}, upper::Bool)
         LD, ipiv = LAPACK.sytrf!(upper ? 'U' : 'L' , copy(A))
@@ -453,8 +453,8 @@ chol{T<:Number}(A::Matrix{T}) = factors(chold(A))
 type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
     upper::Bool
-    piv::Vector{Int}
-    rank::Int
+    piv::Vector{BlasInt}
+    rank::BlasInt
     tol::Real
     function CholeskyDensePivoted(A::Matrix{T}, upper::Bool, tol::Real)
         A, piv, rank, info = LAPACK.pstrf!(upper ? 'U' : 'L' , A, tol)
@@ -499,9 +499,9 @@ cholpd{T<:BlasFloat}(A::Matrix{T}) = cholpd!(copy(A), true, -1.)
 
 type LUDense{T} <: Factorization{T}
     lu::Matrix{T}
-    ipiv::Vector{Int}
-    info::Int
-    function LUDense(lu::Matrix{T}, ipiv::Vector{Int}, info::Int)
+    ipiv::Vector{BlasInt}
+    info::BlasInt
+    function LUDense(lu::Matrix{T}, ipiv::Vector{BlasInt}, info::BlasInt)
         m, n = size(lu)
         m == n ? new(lu, ipiv, info) : error("LUDense only defined for square matrices")
     end
@@ -603,8 +603,8 @@ end
 type QRPDense{T} <: Factorization{T}
     hh::Matrix{T}
     tau::Vector{T}
-    jpvt::Vector{Int}
-    function QRPDense(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{Int})
+    jpvt::Vector{BlasInt}
+    function QRPDense(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{BlasInt})
         m, n = size(hh)
         if length(tau) != min(m,n) || length(jpvt) != n
             error("QRPDense: mismatched dimensions")
@@ -772,7 +772,7 @@ function pinv{T<:BlasFloat}(A::StridedMatrix{T})
     sinv[index] = 1 ./ s[index]
     vt'diagmm(sinv, u')
 end
-pinv(A::StridedMatrix{Int}) = pinv(float(A))
+pinv(A::StridedMatrix{Integer}) = pinv(float(A))
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
 
 ## Basis for null space
@@ -782,7 +782,7 @@ function null{T<:BlasFloat}(A::StridedMatrix{T})
     u,s,vt = svd(A)
     vt[m+1:,:]'
 end
-null(A::StridedMatrix{Int}) = null(float(A))
+null(A::StridedMatrix{Integer}) = null(float(A))
 null(a::StridedVector) = null(reshape(a, length(a), 1))
 
 #### Specialized matrix types ####
@@ -839,7 +839,7 @@ type Tridiagonal{T} <: AbstractMatrix{T}
     dutmp::Vector{T} # scratch space for vector RHS solver, sup-diagonal
     rhstmp::Vector{T}# scratch space, rhs
 
-    function Tridiagonal(N::Int)
+    function Tridiagonal(N::Integer)
         dutmp = Array(T, N-1)
         rhstmp = Array(T, N)
         new(dutmp, rhstmp, dutmp, dutmp, rhstmp)  # first three will be overwritten
