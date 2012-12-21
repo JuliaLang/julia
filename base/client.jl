@@ -310,12 +310,12 @@ function print_with_color(msg::String, color::Symbol)
 end
 
 # Use colors to print messages and warnings in the REPL
-function message(msg::String)
+function info(msg::String)
     print_with_color(strcat("MESSAGE: ", msg, "\n"), :green)
     return
 end
 
-function warning(msg::String)
+function warn(msg::String)
     print_with_color(strcat("WARNING: ", msg, "\n"), :red)
     return
 end

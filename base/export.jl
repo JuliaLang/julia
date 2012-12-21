@@ -936,8 +936,8 @@ export
     unescape_string,
     base,
     print_with_color,
-    message,
-    warning,
+    info,
+    warn,
 
 # statistics and random numbers
     betarnd,
