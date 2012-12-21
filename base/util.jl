@@ -230,7 +230,7 @@ function load_now(fname::ByteString)
     if in_load
         path = find_in_path(fname)
         push(load_dict, fname)
-        if nproc() > 1
+        if nprocs() > 1
             f = open(path)
             push(load_dict, readall(f))
             close(f)
