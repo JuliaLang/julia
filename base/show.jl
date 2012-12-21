@@ -10,7 +10,7 @@ showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
 
 macro show(ex)
     quote
-        print($(sprint(show_unquoted, ex)*"\t= "))
+        print($(sprint(show_unquoted, ex)*" => "))
         show($(esc(ex)))
         println()
     end
@@ -136,9 +136,9 @@ function show_indented(io::IO, sym::Symbol, indent::Int)
     end
 end
 function default_show_quoted(io::IO, ex, indent::Int)
-    print(io, ":( ")
+    print(io, ":(")
     show_unquoted(io, ex, indent + indent_width)
-    print(io, " )")
+    print(io, ")")
 end
 
 ## AST printing helpers ##
@@ -157,8 +157,8 @@ function show_expr_type(io::IO, ty)
     end
 end
 
-show_linenumber(io::IO, line)       = print(io,"\t#  line ",line,':')
-show_linenumber(io::IO, line, file) = print(io,"\t#  ",file,", line ",line,':')
+show_linenumber(io::IO, line)       = print(io," # line ",line,':')
+show_linenumber(io::IO, line, file) = print(io," # ",file,", line ",line,':')
 
 # show a block, e g if/for/etc
 function show_block(io::IO, head, args::Vector, body, indent::Int)
@@ -227,13 +227,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif has(_expr_parens, head)               # :tuple/:vcat/:cell1d
         op, cl = _expr_parens[head]
         print(io, op)
-        show_list(io, args, ", ", indent)
+        show_list(io, args, ",", indent)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
         print(io, cl)
     elseif has(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         op, cl = _expr_calls[head]
         show_unquoted(io, args[1], indent)
-        show_enclosed_list(io, op, args[2:end], ", ", cl, indent)
+        show_enclosed_list(io, op, args[2:end], ",", cl, indent)
     elseif is(head, :comparison) && nargs >= 3 && (nargs&1==1)
         show_enclosed_list(io, '(', args, "", ')', indent)
     elseif is(head, :(...)) && nargs == 1
@@ -242,7 +242,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif (nargs == 1 && contains((:return, :abstract, :const), head)) ||
                           contains((:local,  :global), head)
         print(io, head, ' ')
-        show_list(io, args, ", ", indent)
+        show_list(io, args, ",", indent)
     elseif is(head, :macrocall) && nargs >= 1
         show_list(io, args, ' ', indent)
     elseif is(head, :typealias) && nargs == 2
