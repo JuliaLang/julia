@@ -772,7 +772,7 @@ function pinv{T<:BlasFloat}(A::StridedMatrix{T})
     sinv[index] = 1 ./ s[index]
     vt'diagmm(sinv, u')
 end
-pinv(A::StridedMatrix{Integer}) = pinv(float(A))
+pinv{T<:Integer}(A::StridedMatrix{T}) = pinv(float(A))
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
 
 ## Basis for null space
@@ -782,7 +782,7 @@ function null{T<:BlasFloat}(A::StridedMatrix{T})
     u,s,vt = svd(A)
     vt[m+1:,:]'
 end
-null(A::StridedMatrix{Integer}) = null(float(A))
+null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
 null(a::StridedVector) = null(reshape(a, length(a), 1))
 
 #### Specialized matrix types ####

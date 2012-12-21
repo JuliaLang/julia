@@ -445,8 +445,8 @@ const digamma_EUL = 0.57721566490153286061
 const digamma_coefs = [8.33333333333333333333e-2,-2.10927960927960927961e-2, 7.57575757575757575758e-3,
                       -4.16666666666666666667e-3, 3.96825396825396825397e-3,-8.33333333333333333333e-3,
                        8.33333333333333333333e-2]
+
 function digamma(x::Float64)
-  
     negative = false
     nz = 0.0
 
@@ -624,34 +624,35 @@ function zeta(z::Number)
     eta(z) * zz/(zz-2)
 end
 
+const Faddeeva_tmp = Array(Float64,2)
+
 # wrappers for complex Faddeeva functions; these will get a lot simpler,
 # and can call openlibm directly, once ccall supports C99 complex types.
 let
     for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
+        fname = (f === :Dawson) ? :dawson : f
         @eval begin
-            global $f
-            function ($f)(z::Complex128)
-                local w::Array{Float64,1} = Array(Float64,2)
-                ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), pointer(w), &z, zero(Float64))
-                return complex128(w[1],w[2])
+            global $fname
+            function ($fname)(z::Complex128)
+                ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &z, zero(Float64))
+                return complex128(Faddeeva_tmp[1],Faddeeva_tmp[2])
             end
-            function ($f)(z::Complex64)
-                local w::Array{Float64,1} = Array(Float64,2)
-                ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), pointer(w), &complex128(z), float64(eps(Float32)))
-                return complex64(w[1],w[2])
+            function ($fname)(z::Complex64)
+                ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &complex128(z), float64(eps(Float32)))
+                return complex64(Faddeeva_tmp[1],Faddeeva_tmp[2])
             end
-            ($f)(z::Complex) = ($f)(complex128(z))
+            ($fname)(z::Complex) = ($fname)(complex128(z))
         end
     end
 end
 for f in (:erfcx, :erfi, :Dawson)
+    fname = (f === :Dawson) ? :dawson : f
     @eval begin
-        ($f)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), x)
-        ($f)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), float64(x)))
-        ($f)(x::Real) = ($f)(float(x))
-        @vectorize_1arg Number $f
+        ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), x)
+        ($fname)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), float64(x)))
+        ($fname)(x::Real) = ($fname)(float(x))
+        @vectorize_1arg Number $fname
     end
 end
-dawson(z) = Dawson(z) # convert to lower-case naming convention
 
 end # module
