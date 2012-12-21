@@ -372,22 +372,35 @@ void jl_parse_eval_all(char *fname)
 
 int asprintf(char **strp, const char *fmt, ...);
 
-void jl_load(const char *fname)
+void jl_load(const char *fname, int inmain)
 {
     char *fpath = (char*)fname;
     struct stat stbuf;
     if (jl_stat(fpath, (char*)&stbuf) != 0) {
         jl_errorf("could not open file %s", fpath);
     }
+    jl_module_t *last_module = NULL;
+    if (inmain && jl_current_module != jl_main_module) {
+        last_module = jl_current_module;
+        jl_current_module = jl_main_module;
+    }
+    // Error handling? What if the file has a syntax error, does the module context need to be handled safely?
     jl_start_parsing_file(fpath);
     jl_parse_eval_all(fpath);
+    if (last_module)
+        jl_current_module = last_module;
     if (fpath != fname) free(fpath);
 }
 
 // load from filename given as a ByteString object
-DLLEXPORT void jl_load_(jl_value_t *str)
+DLLEXPORT void jl_load_(jl_value_t *str, int inmain)
 {
-    jl_load(jl_string_data(str));
+    jl_load(jl_string_data(str), inmain);
+}
+// this version is needed (?) in boot.jl, since neither specifying zero(Int32) nor ccall conversion is available yet
+DLLEXPORT void jl_load__(jl_value_t *str)
+{
+    jl_load(jl_string_data(str), 0);
 }
 
 // type definition ------------------------------------------------------------

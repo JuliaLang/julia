@@ -194,6 +194,7 @@ end
 # remote/parallel load
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
+include_main(fname::ByteString, inmain::Bool) = ccall(:jl_load_, Void, (Any, Int32), fname, inmain)
 
 function is_file_readable(path)
     s = stat(bytestring(path))
@@ -229,10 +230,12 @@ function load_now(fname::ByteString)
     if in_load
         path = find_in_path(fname)
         push(load_dict, fname)
-        f = open(path)
-        push(load_dict, readall(f))
-        close(f)
-        include(path)
+        if nproc() > 1
+            f = open(path)
+            push(load_dict, readall(f))
+            close(f)
+        end
+        include_main(path, true)
         _jl_package_list[path] = time()
         return
     elseif in_remote_load

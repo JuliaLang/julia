@@ -175,7 +175,7 @@ static int exec_program(void)
             JL_EH_POP();
             return 1;
         }
-        jl_load(program);
+        jl_load(program, 0);
     }
     JL_CATCH {
         err = 1;
