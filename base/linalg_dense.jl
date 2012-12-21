@@ -955,11 +955,14 @@ function solve(x::AbstractArray, xrng::Ranges{Int}, M::Tridiagonal, rhs::Abstrac
     end
     return x
 end
+
 solve(x::StridedVector, M::Tridiagonal, rhs::StridedVector) = solve(x, 1:length(x), M, rhs, 1:length(rhs))
+
 function solve(M::Tridiagonal, rhs::StridedVector)
     x = similar(rhs)
     solve(x, M, rhs)
 end
+
 function solve(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     if size(B, 1) != size(M, 1)
         error("dimension mismatch")
@@ -975,6 +978,7 @@ function solve(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     end
     return X
 end
+
 function solve(M::Tridiagonal, B::StridedMatrix)
     X = similar(B)
     solve(X, M, B)
@@ -1003,7 +1007,9 @@ function mult(x::AbstractArray, xrng::Ranges{Int}, M::Tridiagonal, v::AbstractAr
     x[xi] = dl[N-1]*v[vi] + d[N]*v[vi+vstride]
     return x
 end
+
 mult(x::StridedVector, M::Tridiagonal, v::StridedVector) = mult(x, 1:length(x), M, v, 1:length(v))
+
 function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     if size(B, 1) != size(M, 1)
         error("dimension mismatch")
@@ -1019,11 +1025,14 @@ function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     end
     return X
 end
+
 mult(X::StridedMatrix, M1::Tridiagonal, M2::Tridiagonal) = mult(X, M1, full(M2))
+
 function *(M::Tridiagonal, B::Union(StridedVector,StridedMatrix))
     X = similar(B)
     mult(X, M, B)
 end
+
 *(A::Tridiagonal, B::Tridiagonal) = A*full(B)
 
 #### Factorizations for Tridiagonal ####
@@ -1035,6 +1044,7 @@ type LDLTTridiagonal{T<:BlasFloat,S<:BlasFloat} <: Factorization{T}
         new(D, E)
     end
 end
+
 LDLTTridiagonal{S<:BlasFloat,T<:BlasFloat}(D::Vector{S}, E::Vector{T}) = LDLTTridiagonal{T,S}(D, E)
 
 ldltd!{T<:BlasFloat}(A::SymTridiagonal{T}) = LDLTTridiagonal(LAPACK.pttrf!(real(A.dv),A.ev)...)
@@ -1050,9 +1060,9 @@ type LUTridiagonal{T} <: Factorization{T}
     d::Vector{T}
     du::Vector{T}
     du2::Vector{T}
-    ipiv::Vector{Int}
+    ipiv::Vector{BlasInt}
     function LUTridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T},
-                           du2::Vector{T}, ipiv::Vector{Int})
+                           du2::Vector{T}, ipiv::Vector{BlasInt})
         n = length(d)
         if length(dl) != n - 1 || length(du) != n - 1 || length(ipiv) != n || length(du2) != n-2
             error("LUTridiagonal: dimension mismatch")
@@ -1060,11 +1070,11 @@ type LUTridiagonal{T} <: Factorization{T}
         new(dl, d, du, du2, ipiv)
     end
 end
+
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
-lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
-lud{T}(A::Tridiagonal{T}) = 
-    LUTridiagonal{T}(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
+lud!(A::Tridiagonal) = LUTridiagonal(LAPACK.gttrf!(A.dl,A.d,A.du)...)
+lud(A::Tridiagonal) = LUTridiagonal(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
 lu(A::Tridiagonal) = factors(lud(A))
 
 function det{T}(lu::LUTridiagonal{T})
