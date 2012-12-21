@@ -13,7 +13,7 @@ include $(JULIAHOME)/Make.inc
 unexport CONFIG_SITE
 
 STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
-STAGE2_DEPS = gmp-wrapper
+STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
 ifeq ($(OS), Linux)
@@ -384,12 +384,23 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
-install-openlibm: $(OPENLIBM_OBJ_TARGET)
+install-openlibm: $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 
 clean-openlibm:
 	-$(MAKE) -C openlibm distclean
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm      
+
+# Wrapper for openlibm/Faddeeva since ccall doesn't support C99 complex:
+$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBM_OBJ_TARGET)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm
+	$(INSTALL_NAME_CMD)libFaddeeva_wrapper.$(SHLIB_EXT) $@
+	touch $@
+install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+
+clean-Faddeeva-wrapper:
+	-rm -f $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+distclean-Faddeeva-wrapper: clean-Faddeeva-wrapper
 
 ## Rmath ##
 
