@@ -29,7 +29,7 @@ export                                  # types
     At_ldiv_B,
     Ac_ldiv_B
 
-require("suitesparse_h")
+include(find_in_path("suitesparse_h"))
 
 const libsuitesparse_wrapper = "libsuitesparse_wrapper"
 const libcholmod = "libcholmod"
