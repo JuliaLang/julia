@@ -8,12 +8,12 @@ show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::IOStream, x)
 showcompact(io, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
 
-macro show(ex)
-    quote
-        print($(sprint(show_unquoted, ex)*" => "))
-        show($(esc(ex)))
-        println()
+macro show(exs...)
+    blk = expr(:block)
+    for ex in exs
+        push(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),repr($(esc(ex))))))
     end
+    return blk
 end
 
 show(io, s::Symbol) = show_indented(io, s)
