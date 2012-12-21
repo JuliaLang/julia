@@ -628,21 +628,18 @@ const Faddeeva_tmp = Array(Float64,2)
 
 # wrappers for complex Faddeeva functions; these will get a lot simpler,
 # and can call openlibm directly, once ccall supports C99 complex types.
-let
-    for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
-        fname = (f === :Dawson) ? :dawson : f
-        @eval begin
-            global $fname
-            function ($fname)(z::Complex128)
-                ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &z, zero(Float64))
-                return complex128(Faddeeva_tmp[1],Faddeeva_tmp[2])
-            end
-            function ($fname)(z::Complex64)
-                ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &complex128(z), float64(eps(Float32)))
-                return complex64(Faddeeva_tmp[1],Faddeeva_tmp[2])
-            end
-            ($fname)(z::Complex) = ($fname)(complex128(z))
+for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
+    fname = (f === :Dawson) ? :dawson : f
+    @eval begin
+        function ($fname)(z::Complex128)
+            ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &z, zero(Float64))
+            return complex128(Faddeeva_tmp[1],Faddeeva_tmp[2])
         end
+        function ($fname)(z::Complex64)
+            ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &complex128(z), float64(eps(Float32)))
+            return complex64(Faddeeva_tmp[1],Faddeeva_tmp[2])
+        end
+        ($fname)(z::Complex) = ($fname)(complex128(z))
     end
 end
 for f in (:erfcx, :erfi, :Dawson)
