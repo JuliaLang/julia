@@ -1024,26 +1024,31 @@ Mathematical Functions
 
 .. function:: erf(x)
 
-   Compute the error function of ``x``
+   Compute the error function of ``x``, defined by
+   :math:`\frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} dt`
+   for arbitrary complex ``x``.
 
 .. function:: erfc(x)
 
-   Compute the complementary error function of ``x``
+   Compute the complementary error function of ``x``,
+   defined by :math:`1 - \operatorname{erf}(x)`.
 
 .. function:: erfcx(x)
 
    Compute the scaled complementary error function of ``x``,
-   defined by :math:`e^{x^2} \operatorname{erfc}(x)`
+   defined by :math:`e^{x^2} \operatorname{erfc}(x)`.  Note
+   also that :math:`\operatorname{erfcx}(-ix)` computes the
+   Faddeeva function :math:`w(x)`.
 
 .. function:: erfi(x)
 
    Compute the imaginary error function of ``x``,
-   defined by :math:`-i \operatorname{erf}(ix)`
+   defined by :math:`-i \operatorname{erf}(ix)`.
 
 .. function:: dawson(x)
 
    Compute the Dawson function (scaled imaginary error function) of ``x``,
-   defined by :math:`\frac{\pi}{2} e^{-x^2} \operatorname{erfi}(x)`
+   defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
 
 .. function:: real(z)
 
