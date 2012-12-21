@@ -288,3 +288,34 @@ function _atexit()
         end
     end
 end
+
+# Have colors passed as simple symbols: :black, :red, ...
+function print_with_color(msg::String, color::Symbol)
+    color_list = {:green => "\033[1m\033[32m",
+                  :black => "\033[1m\033[30m",
+                  :red => "\033[1m\033[31m",
+                  :green => "\033[1m\033[32m",
+                  :yellow => "\033[1m\033[33m",
+                  :magenta => "\033[1m\033[35m",
+                  :cyan => "\033[1m\033[36m",
+                  :white => "\033[1m\033[37m"}
+    if Base._jl_have_color
+        default = Base._jl_answer_color()
+        printed_color = get(color_list, color, default)
+        print(OUTPUT_STREAM, strcat(printed_color, msg, default))
+    else
+        print(OUTPUT_STREAM, msg)
+    end
+    return
+end
+
+# Use colors to print messages and warnings in the REPL
+function message(msg::String)
+    print_with_color(strcat("MESSAGE: ", msg, "\n"), :green)
+    return
+end
+
+function warning(msg::String)
+    print_with_color(strcat("WARNING: ", msg, "\n"), :red)
+    return
+end

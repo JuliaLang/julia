@@ -935,7 +935,10 @@ export
     unescape_chars,
     unescape_string,
     base,
-    
+    print_with_color,
+    message,
+    warning,
+
 # statistics and random numbers
     betarnd,
     chi2rnd,
