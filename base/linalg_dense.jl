@@ -1073,8 +1073,8 @@ end
 
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
-lud!(A::Tridiagonal) = LUTridiagonal(LAPACK.gttrf!(A.dl,A.d,A.du)...)
-lud(A::Tridiagonal) = LUTridiagonal(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
+lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
+lud{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
 lu(A::Tridiagonal) = factors(lud(A))
 
 function det{T}(lu::LUTridiagonal{T})
