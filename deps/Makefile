@@ -13,7 +13,7 @@ include $(JULIAHOME)/Make.inc
 unexport CONFIG_SITE
 
 STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
-STAGE2_DEPS = gmp-wrapper
+STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
 ifeq ($(OS), Linux)
