@@ -69,28 +69,24 @@ assert(all(matmul(o) == 200))
 
 %% mandelbrot set: complex arithmetic and comprehensions %%
 
-function n = mandel(z)
-    n = 0;
-    c = z;
-    for n=0:79
-        if abs(z)>2
-            break
-        end
-        z = z^2+c;
-    end
+function M = mandel(C)
+	Z = C;
+	M = zeros(size(C));
+	n = 0;
+	keep_going = abs(Z) <= 2;
+	while any(keep_going(:)) && (n < 79)
+		keep_going(keep_going) = abs(Z(keep_going)) <= 2;
+		Z(keep_going) = (Z(keep_going).^2) + C(keep_going);
+		M(keep_going) = M(keep_going) + 1;
+		n = n + 1;
+	end
 end
 
 mandel(complex(-.53,.68));
 
 function M = mandelperf(ignore)
-  M = zeros(length(-2.0:.1:0.5), length(-1:.1:1));
-  count = 1;
-  for i = -1:.1:1
-    for r = -2:0.1:0.5
-      M(count) = mandel(complex(r,i));
-      count = count + 1;
-    end
-  end
+	Z = bsxfun(@plus,(-2.0:0.1:0.5)',complex(0,(-1:0.1:1)));
+	M = mandel(Z);
 end
 assert(sum(sum(mandelperf(true))) == 14628)
 timeit('mandel', @mandelperf, true)
