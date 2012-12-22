@@ -813,6 +813,7 @@ export
     pairs,
     reduce,
     ref,
+    resize,
     similar,
     toggle,
     toggle_each,

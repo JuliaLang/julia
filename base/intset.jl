@@ -12,7 +12,7 @@ similar(s::IntSet) = IntSet()
 
 copy(s::IntSet) = union!(IntSet(), s)
 
-function grow(s::IntSet, top::Integer)
+function resize(s::IntSet, top::Integer)
     if top >= s.limit
         lim = ((top+31) & -32)>>>5
         olsz = length(s.bits)
@@ -32,7 +32,7 @@ function add(s::IntSet, n::Integer)
             return s
         else
             lim = int(n + div(n,2))
-            grow(s, lim)
+            resize(s, lim)
         end
     end
     s.bits[n>>5 + 1] |= (uint32(1)<<(n&31))
@@ -50,7 +50,7 @@ function del(s::IntSet, n::Integer)
     if n >= s.limit
         if s.fill1s
             lim = int(n + div(n,2))
-            grow(s, lim)
+            resize(s, lim)
         else
             return s
         end
@@ -76,7 +76,7 @@ end
 function toggle(s::IntSet, n::Integer)
     if n >= s.limit
         lim = int(n + dim(n,2))
-        grow(s, lim)
+        resize(s, lim)
     end
     s.bits[n>>5 + 1] $= (uint32(1)<<(n&31))
    return s
@@ -157,7 +157,7 @@ end
 # Math functions
 function union!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
-        grow(s, s2.limit)
+        resize(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim
@@ -178,7 +178,7 @@ add_each(s::IntSet, s2::IntSet) = union!(s, s2)
 
 function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
-        grow(s, s2.limit)
+        resize(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim
@@ -207,7 +207,7 @@ complement(s::IntSet) = complement!(copy(s))
 
 function xor!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
-        grow(s, s2.limit)
+        resize(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim

@@ -316,6 +316,19 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     return h
 end
 
+function resize(d::Dict, newsz)
+    oldsz = length(d.slots)
+    if newsz <= oldsz
+        # todo: shrink
+        # be careful: rehash() assumes everything fits. it was only designed
+        # for growing.
+        return d
+    end
+    # grow at least 25%
+    newsz = max(newsz, (oldsz*5)>>2)
+    rehash(d, newsz)
+end
+
 function del_all{K,V}(h::Dict{K,V})
     fill!(h.slots, 0x0)
     sz = length(h.slots)

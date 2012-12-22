@@ -82,9 +82,9 @@ end
 function study(regex::Array{Uint8}, options::Integer)
     # NOTE: options should always be zero in current PCRE
     errstr = Array(Ptr{Uint8},1)
-    extra = (()->ccall((:pcre_study, :libpcre), Ptr{Void},
-                       (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
-                       regex, options, errstr))()
+    extra = ccall((:pcre_study, :libpcre), Ptr{Void},
+                  (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
+                  regex, options, errstr)
     if errstr[1] != C_NULL
         error("study: $(errstr[1])")
     end

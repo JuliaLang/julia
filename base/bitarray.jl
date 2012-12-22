@@ -1,10 +1,10 @@
 # prelimnary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
-macro _mskr(l) quote _msk64 >>> (64-$(esc(l))) end end
-macro _div64(l) quote $(esc(l)) >>> 6 end end
-macro _mod64(l) quote $(esc(l)) & 63 end end
-macro _msk_end(l) quote @_mskr @_mod64 $(esc(l)) end end
+macro _mskr(l) :(_msk64 >>> (64-$(esc(l)))) end
+macro _div64(l) :($(esc(l)) >>> 6) end
+macro _mod64(l) :($(esc(l)) & 63) end
+macro _msk_end(l) :(@_mskr @_mod64 $(esc(l))) end
 _jl_num_bit_chunks(n::Int) = @_div64 (n+63)
 
 ## BitArray
@@ -45,10 +45,7 @@ size(B::BitArray) = tuple(B.dims...)
 
 ## Aux functions ##
 
-function _jl_get_chunks_id(i::Integer)
-    j = int(i-1)
-    return (@_div64 j)+1, @_mod64 j
-end
+_jl_get_chunks_id(i::Integer) = @_div64(int(i-1))+1, @_mod64(int(i-1))
 
 function _jl_glue_src_bitchunks(src::Vector{Uint64}, k::Int, ks1::Int, msk_s0::Uint64, ls0::Int)
     chunk = ((src[k] & msk_s0) >>> ls0)
