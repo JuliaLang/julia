@@ -93,8 +93,8 @@ mandelperf = function() {
     im = seq(-1,1,.1)
     M = matrix(0.0,nrow=length(re),ncol=length(im))
     count = 1
-    for (r in re) {
-        for (i in im) {
+    for (i in im) {
+        for (r in re) {
             M[count] = mandel(complex(real=r,imag=i))
             count = count + 1
         }
