@@ -328,6 +328,7 @@ end
 
 function assign{K,V}(h::Dict{K,V}, v, key)
     key = convert(K,key)
+    v   = convert(V,  v)
 
     sz = length(h.keys)
 
