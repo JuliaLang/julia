@@ -27,47 +27,11 @@
 #include "ios.h"
 #include "timefuncs.h"
 
-//#define MEMDEBUG
-//#define MEMPROFILE
-
-#if defined(MEMDEBUG) || defined(MEMPROFILE)
-# ifdef __LP64__
-#  define BVOFFS 3
-# else
-#  define BVOFFS 4
-# endif
-#else
-#define BVOFFS 2
-#endif
-
-// allocate a buffer that can be used as a bigval_t in julia's GC
-void *julia_malloc(size_t n)
-{
-    void *b = LLT_ALLOC(n+sizeof(void*)*BVOFFS);
-    if (b == NULL)
-        return b;
-    return (void*)(((void**)b)+BVOFFS);
-}
-
-void julia_free(void *b)
-{
-    LLT_FREE((void*)(((void**)b)-BVOFFS));
-}
-
-void *julia_realloc(void *b, size_t n)
-{
-    void *p = (b==NULL ? NULL : (void*)(((void**)b)-BVOFFS));
-    p = LLT_REALLOC(p, n + sizeof(void*)*BVOFFS);
-    if (p == NULL)
-        return p;
-    return (void*)(((void**)p)+BVOFFS);
-}
-
 #define MOST_OF(x) ((x) - ((x)>>4))
 
 /* OS-level primitive wrappers */
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__WIN32__)
 void *memrchr(const void *s, int c, size_t n)
 {
     const unsigned char *src = s + n;
@@ -143,7 +107,7 @@ static int _os_read_all(long fd, void *buf, size_t n, size_t *nread)
     return 0;
 }
 
-static int _os_write(long fd, void *buf, size_t n, size_t *nwritten)
+static int _os_write(long fd, const void *buf, size_t n, size_t *nwritten)
 {
     ssize_t r;
 
@@ -162,7 +126,7 @@ static int _os_write(long fd, void *buf, size_t n, size_t *nwritten)
     return 0;
 }
 
-int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten)
+int _os_write_all(long fd, const void *buf, size_t n, size_t *nwritten)
 {
     size_t wrote;
 
@@ -201,18 +165,12 @@ static char *_buf_realloc(ios_t *s, size_t sz)
         // if we own the buffer we're free to resize it
         // always allocate 1 bigger in case user wants to add a NUL
         // terminator after taking over the buffer
-        if (s->julia_alloc)
-            temp = julia_realloc(s->buf, sz+1);
-        else
-            temp = LLT_REALLOC(s->buf, sz+1);
+        temp = LLT_REALLOC(s->buf, sz+1);
         if (temp == NULL)
             return NULL;
     }
     else {
-        if (s->julia_alloc)
-            temp = julia_malloc(sz+1);
-        else
-            temp = LLT_ALLOC(sz+1);
+        temp = LLT_ALLOC(sz+1);
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
@@ -227,7 +185,7 @@ static char *_buf_realloc(ios_t *s, size_t sz)
 
 // write a block of data into the buffer at the current position, resizing
 // if necessary. returns # written.
-static size_t _write_grow(ios_t *s, char *data, size_t n)
+static size_t _write_grow(ios_t *s, const char *data, size_t n)
 {
     size_t amt;
     size_t newsize;
@@ -364,6 +322,7 @@ size_t ios_readprep(ios_t *s, size_t n)
         }
     }
     size_t got;
+    s->fpos = -1;
     int result = _os_read(s->fd, s->buf+s->size, s->maxsize - s->size, &got);
     if (result)
         return space;
@@ -388,7 +347,7 @@ DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src)
     return nwr;
 }
 
-size_t ios_write(ios_t *s, char *data, size_t n)
+size_t ios_write(ios_t *s, const char *data, size_t n)
 {
     if (s->readonly) return 0;
     if (n == 0) return 0;
@@ -458,6 +417,7 @@ off_t ios_seek(ios_t *s, off_t pos)
         off_t fdpos = lseek(s->fd, pos, SEEK_SET);
         if (fdpos == (off_t)-1)
             return fdpos;
+        s->fpos = fdpos;
         s->bpos = s->size = 0;
     }
     return 0;
@@ -474,6 +434,7 @@ off_t ios_seek_end(ios_t *s)
         off_t fdpos = lseek(s->fd, 0, SEEK_END);
         if (fdpos == (off_t)-1)
             return fdpos;
+        s->fpos = fdpos;
         s->bpos = s->size = 0;
     }
     return 0;
@@ -536,24 +497,33 @@ off_t ios_pos(ios_t *s)
     return fdpos;
 }
 
-size_t ios_trunc(ios_t *s, size_t size)
+int ios_trunc(ios_t *s, size_t size)
 {
     if (s->bm == bm_mem) {
         if (size == s->size)
-            return s->size;
+            return 0;
         if (size < s->size) {
             if (s->bpos > size)
                 s->bpos = size;
         }
         else {
             if (_buf_realloc(s, size)==NULL)
-                return s->size;
+                return 0;
         }
         s->size = size;
-        return size;
+        return 0;
     }
-    //todo
-    return 0;
+    else {
+        ios_flush(s);
+        if (s->state == bst_rd) {
+            off_t p = ios_pos(s);
+            if (size < p + (s->size - s->bpos))
+                s->size -= (p + (s->size - s->bpos) - size);
+        }
+        if (ftruncate(s->fd, size)==0)
+            return 0;
+    }
+    return 1;
 }
 
 int ios_eof(ios_t *s)
@@ -625,10 +595,7 @@ void ios_close(ios_t *s)
         close(s->fd);
     s->fd = -1;
     if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0]) {
-        if (s->julia_alloc)
-            julia_free(s->buf);
-        else
-            LLT_FREE(s->buf);
+        LLT_FREE(s->buf);
     }
     s->buf = NULL;
     s->size = s->maxsize = s->bpos = 0;
@@ -655,10 +622,7 @@ char *ios_takebuf(ios_t *s, size_t *psize)
     ios_flush(s);
 
     if (s->buf == &s->local[0]) {
-        if (s->julia_alloc)
-            buf = julia_malloc(s->size+1);
-        else
-            buf = LLT_ALLOC(s->size+1);
+        buf = LLT_ALLOC(s->size+1);
         if (buf == NULL)
             return NULL;
         if (s->size)
@@ -692,10 +656,7 @@ int ios_setbuf(ios_t *s, char *buf, size_t size, int own)
     s->size = nvalid;
 
     if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0]) {
-        if (s->julia_alloc)
-            julia_free(s->buf);
-        else
-            LLT_FREE(s->buf);
+        LLT_FREE(s->buf);
     }
     s->buf = buf;
     s->maxsize = size;
@@ -808,7 +769,6 @@ static void _ios_init(ios_t *s)
     s->_eof = 0;
     s->rereadable = 0;
     s->readonly = 0;
-    s->julia_alloc = 0;
     s->mutex_initialized = 0;
 }
 
@@ -839,15 +799,7 @@ ios_t *ios_mem(ios_t *s, size_t initsize)
 {
     _ios_init(s);
     s->bm = bm_mem;
-    _buf_realloc(s, initsize);
-    return s;
-}
-
-ios_t *jl_ios_mem(ios_t *s, size_t initsize)
-{
-    _ios_init(s);
-    s->bm = bm_mem;
-    s->julia_alloc = 1;
+    s->rereadable = 1;
     _buf_realloc(s, initsize);
     return s;
 }
@@ -888,14 +840,14 @@ ios_t *ios_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
-    ios_stdin = julia_malloc(sizeof(ios_t));
+    ios_stdin = malloc(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0, 0);
 
-    ios_stdout = julia_malloc(sizeof(ios_t));
+    ios_stdout = malloc(sizeof(ios_t));
     ios_fd(ios_stdout, STDOUT_FILENO, 0, 0);
     ios_stdout->bm = bm_line;
 
-    ios_stderr = julia_malloc(sizeof(ios_t));
+    ios_stderr = malloc(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
 }
@@ -1036,7 +988,7 @@ char *ios_readline(ios_t *s)
     return ios_takebuf(&dest, &n);
 }
 
-int vasprintf(char **strp, const char *fmt, va_list ap);
+extern int vasprintf(char **strp, const char *fmt, va_list ap);
 
 int ios_vprintf(ios_t *s, const char *format, va_list args)
 {

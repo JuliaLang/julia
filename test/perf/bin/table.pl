@@ -19,18 +19,19 @@ our @benchmarks = qw(
   rand_mat_mul
 );
 
-our $julia_ver = `julia -e 'print(VERSION_COMMIT[1:8])'`;
+our $julia_ver = `julia -e 'print(Base.VERSION_COMMIT[1:8])'`;
 
 our %systems = (
+  "fortran"    => ["Fortran"     , "GCC 4.5.1"  ],
   "julia"      => ["Julia"       , $julia_ver   ],
-  "python"     => ["NumPy"       , "1.5.1"      ],
+  "python"     => ["Python"      , "2.7.3"      ],
   "matlab"     => ["Matlab"      , "R2011a"     ],
   "octave"     => ["Octave"      , "3.4"        ],
   "r"          => ["R"           , "2.14.2"     ],
   "javascript" => ["JavaScript"  , "V8 3.6.6.11"],
 );
 
-our @systems = qw(julia python matlab octave r javascript);
+our @systems = qw(fortran julia python matlab octave r javascript);
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];

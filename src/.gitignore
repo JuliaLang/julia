@@ -1,9 +1,11 @@
 /*.o
 /*.do
+/*.exe
 
 /boot.j.inc
-/julia_flisp.boot
-/julia_flisp.boot.inc
+julia_flisp.boot
+julia_flisp.boot.inc
+flisp.boot.inc
 
 /libjulia-debug.a
 /libjulia-debug.so

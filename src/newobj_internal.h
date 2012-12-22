@@ -8,8 +8,14 @@ static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
     return jv;
 }
 
+static inline jl_value_t *newstruct(jl_struct_type_t *type)
+{
+    jl_value_t *jv = (jl_value_t*)allocobj(sizeof(void*) + type->size);
+    jv->type = (jl_type_t*)type;
+    return jv;
+}
+
 #define TAG_TYPE_NW (NWORDS(sizeof(jl_tag_type_t))-1)
-#define STRUCT_TYPE_NW (NWORDS(sizeof(jl_struct_type_t))-1)
 #define BITS_TYPE_NW (NWORDS(sizeof(jl_bits_type_t))-1)
 
 int jl_assign_type_uid(void);

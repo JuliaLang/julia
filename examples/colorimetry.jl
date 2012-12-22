@@ -475,7 +475,7 @@ const cie_color_match =
 
 # compute the perceived color of a spectral distribution function
 function spectrum2xyz(intensity::Function)
-    Me = [ intensity(i) | i=380:780 ]
+    Me = [ intensity(i) for i=380:780 ]
     X = dot(Me, cie_color_match[1, :])
     Y = dot(Me, cie_color_match[2, :])
     Z = dot(Me, cie_color_match[3, :])

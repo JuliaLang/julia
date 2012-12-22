@@ -1,12 +1,6 @@
 #ifndef IEEE754_H
 #define IEEE754_H
 
-#ifdef __linux
-
-#include <ieee754.h>
-
-#else
-
 union ieee754_float {
     float f;
 
@@ -69,7 +63,5 @@ union ieee854_long_double {
 };
 
 #define IEEE854_LONG_DOUBLE_BIAS 0x3fff
-
-#endif
 
 #endif

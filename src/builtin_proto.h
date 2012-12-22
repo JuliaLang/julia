@@ -14,7 +14,7 @@ JL_CALLABLE(jl_f_isa);
 JL_CALLABLE(jl_f_typeassert);
 JL_CALLABLE(jl_f_apply);
 JL_CALLABLE(jl_f_top_eval);
-JL_CALLABLE(jl_f_isbound);
+JL_CALLABLE(jl_f_isdefined);
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_tupleref);
 JL_CALLABLE(jl_f_tuplelen);
@@ -29,13 +29,7 @@ JL_CALLABLE(jl_f_instantiate_type);
 JL_CALLABLE(jl_f_convert_default);
 JL_CALLABLE(jl_f_convert_tuple);
 JL_CALLABLE(jl_trampoline);
-JL_CALLABLE(jl_f_new_struct_type);
-JL_CALLABLE(jl_f_new_struct_fields);
 JL_CALLABLE(jl_f_new_type_constructor);
-JL_CALLABLE(jl_f_new_tag_type);
-JL_CALLABLE(jl_f_new_tag_type_super);
-JL_CALLABLE(jl_f_new_bits_type);
-JL_CALLABLE(jl_f_def_macro);
 JL_CALLABLE(jl_f_typevar);
 JL_CALLABLE(jl_f_union);
 JL_CALLABLE(jl_f_methodexists);
@@ -46,7 +40,5 @@ JL_CALLABLE(jl_unprotect_stack);
 JL_CALLABLE(jl_f_task);
 JL_CALLABLE(jl_f_yieldto);
 JL_CALLABLE(jl_f_ctor_trampoline);
-
-jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
 
 #endif

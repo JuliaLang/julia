@@ -1,3 +1,7 @@
+/perf.h
 /benchmarks.csv
 /benchmarks.txt
 /benchmarks.html
+/bench.mod
+/types.mod
+/utils.mod

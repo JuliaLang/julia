@@ -1,6 +1,6 @@
 # code 2.5
 function patiencesort(p)
-    piles = empty(p)
+    piles = similar(p, 0)
     for i = 1:length(p)
         idx = 1+sum(p[i]>piles)
         if idx > length(piles)

@@ -1,5 +1,8 @@
 function perf()
 
+warning off;
+maxNumCompThreads(1);
+
 function assert(bool)
    if ~bool
      error('Assertion failed')

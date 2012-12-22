@@ -2,33 +2,28 @@
   sys.c
   I/O and operating system utility functions
 */
+#include "julia.h"
+#include "uv.h"
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
-#include <setjmp.h>
 #include <assert.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#ifndef __WIN32__
+#include <sys/sysctl.h>
 #include <sys/wait.h>
-#include <limits.h>
+#endif
 #include <errno.h>
-#include <math.h>
 #include <signal.h>
 #include <libgen.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
-#include "julia.h"
+
+#ifdef __SSE__
+#include <xmmintrin.h>
+#endif
 
 // --- io and select ---
-
-void jl__not__used__(void)
-{
-    // force inclusion of lib/socket.o in executable
-    short p=0;
-    open_any_tcp_port(&p);
-}
 
 DLLEXPORT int jl_sizeof_fd_set(void) { return sizeof(fd_set); }
 
@@ -37,7 +32,7 @@ DLLEXPORT int jl_sizeof_timeval(void) { return sizeof(struct timeval); }
 DLLEXPORT void jl_set_timeval(struct timeval *tv, double tout)
 {
     tv->tv_sec = (int)tout;
-    tv->tv_usec = (int)((tout-trunc(tout))*1.0e6);
+    tv->tv_usec = (int)((tout-(int)tout)*1.0e6);
 }
 
 DLLEXPORT void jl_fd_clr(fd_set *set, int fd)
@@ -72,6 +67,8 @@ DLLEXPORT size_t jl_ios_size(ios_t *s)
     return s->size;
 }
 
+DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
+
 DLLEXPORT long jl_ios_fd(ios_t *s)
 {
     return s->fd;
@@ -80,6 +77,17 @@ DLLEXPORT long jl_ios_fd(ios_t *s)
 DLLEXPORT int32_t jl_nb_available(ios_t *s)
 {
     return (int32_t)(s->size - s->bpos);
+}
+
+DLLEXPORT int jl_ios_eof(ios_t *s)
+{
+    if (ios_eof(s))
+        return 1;
+    if (s->state == bst_rd) {
+        if (ios_readprep(s, 1) < 1)
+            return 1;
+    }
+    return 0;
 }
 
 // --- io constructors ---
@@ -94,34 +102,149 @@ DLLEXPORT jl_value_t *jl_stdout_stream(void)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, sizeof(ios_t));
     a->data = (void*)ios_stdout;
+    jl_array_data_owner(a) = (jl_value_t*)a;
     return (jl_value_t*)a;
 }
 
-// --- current output stream ---
+// --- dir/file stuff ---
 
-jl_value_t *jl_current_output_stream_obj(void)
-{
-    return jl_current_task->state.ostream_obj;
+DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
+DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t* req) {
+  uv_fs_req_cleanup(req);
 }
 
-DLLEXPORT ios_t *jl_current_output_stream(void)
+DLLEXPORT int jl_readdir(const char* path, uv_fs_t* readdir_req)
 {
-    return jl_current_task->state.current_output_stream;
+  // Note that the flags field is mostly ignored by libuv
+  return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
 }
 
-void jl_set_current_output_stream_obj(jl_value_t *v)
+DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) {return req->ptr; }
+DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) {return req->ptr + offset; }
+
+// --- stat ---
+DLLEXPORT int jl_sizeof_stat(void) { return sizeof(struct stat); }
+
+DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
 {
-    jl_current_task->state.ostream_obj = v;
-    ios_t *s = (ios_t*)jl_array_data(jl_fieldref(v,0));
-    jl_current_task->state.current_output_stream = s;
-    // if current stream has never been set before, propagate to all
-    // outer contexts.
-    jl_savestate_t *ss = jl_current_task->state.prev;
-    while (ss != NULL && ss->ostream_obj == (jl_value_t*)jl_null) {
-        ss->ostream_obj = v;
-        ss->current_output_stream = s;
-        ss = ss->prev;
-    }
+  uv_fs_t req;
+  int ret;
+
+  // Ideally one would use the statbuf for the storage in req, but
+  // it's not clear that this is possible using libuv
+  ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
+  if (ret == 0)
+    memcpy(statbuf, req.ptr, sizeof(struct stat));
+  uv_fs_req_cleanup(&req);
+  return ret;
+}
+
+DLLEXPORT int32_t jl_lstat(const char* path, char* statbuf)
+{
+  uv_fs_t req;
+  int ret;
+
+  ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
+  if (ret == 0)
+    memcpy(statbuf, req.ptr, sizeof(struct stat));
+  uv_fs_req_cleanup(&req);
+  return ret;
+}
+
+DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
+{
+  uv_fs_t req;
+  int ret;
+
+  ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
+  if (ret == 0)
+    memcpy(statbuf, req.ptr, sizeof(struct stat));
+  uv_fs_req_cleanup(&req);
+  return ret;
+}
+
+DLLEXPORT unsigned int jl_stat_dev(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_dev;
+}
+
+DLLEXPORT unsigned int jl_stat_ino(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_ino;
+}
+
+DLLEXPORT unsigned int jl_stat_mode(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_mode;
+}
+
+DLLEXPORT unsigned int jl_stat_nlink(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_nlink;
+}
+
+DLLEXPORT unsigned int jl_stat_uid(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_uid;
+}
+
+DLLEXPORT unsigned int jl_stat_gid(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_gid;
+}
+
+DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_rdev;
+}
+
+DLLEXPORT off_t jl_stat_size(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_size;
+}
+
+DLLEXPORT unsigned int jl_stat_blksize(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_blksize;
+}
+
+DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_blocks;
+}
+
+#if defined(__APPLE__) || defined(__FreeBSD__)
+#define st_ATIM st_atimespec
+#define st_MTIM st_mtimespec
+#define st_CTIM st_ctimespec
+#else
+#define st_ATIM st_atim
+#define st_MTIM st_mtim
+#define st_CTIM st_ctim
+#endif
+
+/*
+// atime is stupid, let's not support it
+DLLEXPORT double jl_stat_atime(char *statbuf)
+{
+  struct stat *s;
+  s = (struct stat*) statbuf;
+  return (double)s->st_ATIM.tv_sec + (double)s->st_ATIM.tv_nsec * 1e-9;
+}
+*/
+
+DLLEXPORT double jl_stat_mtime(char *statbuf)
+{
+  struct stat *s;
+  s = (struct stat*) statbuf;
+  return (double)s->st_MTIM.tv_sec + (double)s->st_MTIM.tv_nsec * 1e-9;
+}
+
+DLLEXPORT double jl_stat_ctime(char *statbuf)
+{
+  struct stat *s;
+  s = (struct stat*) statbuf;
+  return (double)s->st_CTIM.tv_sec + (double)s->st_CTIM.tv_nsec * 1e-9;
 }
 
 // --- buffer manipulation ---
@@ -137,13 +260,8 @@ jl_array_t *jl_takebuf_array(ios_t *s)
         ios_trunc(s, 0);
     }
     else {
-        assert(s->julia_alloc);
         char *b = ios_takebuf(s, &n);
-        a = jl_alloc_array_1d(jl_array_uint8_type, 0);
-        a->data = b;
-        a->length = n-1;
-        a->nrows = n-1;
-        jl_gc_acquire_buffer(b);
+        a = jl_ptr_to_array_1d(jl_array_uint8_type, b, n-1, 1);
     }
     return a;
 }
@@ -157,32 +275,108 @@ jl_value_t *jl_takebuf_string(ios_t *s)
     return str;
 }
 
-jl_array_t *jl_readuntil(ios_t *s, uint8_t delim)
+// the returned buffer must be manually freed. To determine the size,
+// call position(s) before using this function.
+void *jl_takebuf_raw(ios_t *s)
 {
-    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, 80);
-    ios_t dest;
-    jl_ios_mem(&dest, 0);
-    ios_setbuf(&dest, a->data, 80, 0);
-    size_t n = ios_copyuntil(&dest, s, delim);
-    if (dest.buf != a->data) {
-        return jl_takebuf_array(&dest);
+    size_t sz;
+    void *buf = ios_takebuf(s, &sz);
+    return buf;
+}
+
+jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
+{
+    jl_array_t *a;
+    // manually inlined common case
+    char *pd = (char*)memchr(s->buf+s->bpos, delim, s->size - s->bpos);
+    if (pd) {
+        size_t n = pd-(s->buf+s->bpos)+1;
+        a = jl_alloc_array_1d(jl_array_uint8_type, n);
+        memcpy(jl_array_data(a), s->buf+s->bpos, n);
+        s->bpos += n;
     }
     else {
-        a->length = n;
-        a->nrows = n;
-        ((char*)a->data)[n] = '\0';
+        a = jl_alloc_array_1d(jl_array_uint8_type, 80);
+        ios_t dest;
+        ios_mem(&dest, 0);
+        ios_setbuf(&dest, a->data, 80, 0);
+        size_t n = ios_copyuntil(&dest, s, delim);
+        if (dest.buf != a->data) {
+            a = jl_takebuf_array(&dest);
+        }
+        else {
+            a->length = n;
+            a->nrows = n;
+            ((char*)a->data)[n] = '\0';
+        }
     }
-    return a;
+    JL_GC_PUSH(&a);
+    jl_struct_type_t* string_type = u8_isvalid(jl_array_data(a), jl_array_len(a)) == 1 ? // ASCII
+        jl_ascii_string_type : jl_utf8_string_type;
+    jl_value_t *str = alloc_2w();
+    str->type = (jl_type_t*)string_type;
+    jl_set_nth_field(str, 0, (jl_value_t*)a);
+    JL_GC_POP();
+    return str;
+}
+
+void jl_free2(void *p, void *hint)
+{
+    free(p);
 }
 
 // -- syscall utilities --
 
 int jl_errno(void) { return errno; }
 
-jl_value_t *jl_strerror(int errnum)
+// -- get the number of CPU cores --
+
+#ifdef __WIN32__
+typedef DWORD (WINAPI *GAPC)(WORD);
+#ifndef ALL_PROCESSOR_GROUPS
+#define ALL_PROCESSOR_GROUPS 0xffff
+#endif
+#endif
+
+DLLEXPORT int jl_cpu_cores(void)
 {
-    char *str = strerror(errnum);
-    return jl_pchar_to_string((char*)str, strlen(str));
+#if defined(HW_AVAILCPU) && defined(HW_NCPU)
+    size_t len = 4;
+    int32_t count;
+    int nm[2] = {CTL_HW, HW_AVAILCPU};
+    sysctl(nm, 2, &count, &len, NULL, 0);
+    if (count < 1) {
+        nm[1] = HW_NCPU;
+        sysctl(nm, 2, &count, &len, NULL, 0);
+        if (count < 1) { count = 1; }
+    }
+    return count;
+#elif defined(_SC_NPROCESSORS_ONLN)
+    return sysconf(_SC_NPROCESSORS_ONLN);
+#elif defined(__WIN32__)
+    //Try to get WIN7 API method
+    GAPC gapc = (GAPC) jl_dlsym(
+        jl_kernel32_handle,
+        "GetActiveProcessorCount"
+    );
+
+    if (gapc) {
+        return gapc(ALL_PROCESSOR_GROUPS);
+    } else { //fall back on GetSystemInfo
+        SYSTEM_INFO info;
+        GetSystemInfo(&info);
+        return info.dwNumberOfProcessors;
+    }
+#else
+    return 1;
+#endif
+}
+
+// -- high resolution timers --
+// Returns time in nanosec
+DLLEXPORT uint64_t jl_hrtime(void)
+{
+  return uv_hrtime();
 }
 
 // -- iterating the environment --
@@ -203,6 +397,21 @@ jl_value_t *jl_environ(int i)
 }
 
 // -- child process status --
+
+#if defined _MSC_VER || defined __MINGW32__
+
+/* Native Woe32 API.  */
+#include <process.h>
+#define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
+#define WAIT_T int
+#define WTERMSIG(x) ((x) & 0xff) /* or: SIGABRT ?? */
+#define WCOREDUMP(x) 0
+#define WEXITSTATUS(x) (((x) >> 8) & 0xff) /* or: (x) ?? */
+#define WIFSIGNALED(x) (WTERMSIG (x) != 0) /* or: ((x) == 3) ?? */
+#define WIFEXITED(x) (WTERMSIG (x) == 0) /* or: ((x) != 3) ?? */
+#define WIFSTOPPED(x) 0
+#define WSTOPSIG(x) 0 //Is this correct?
+#endif
 
 int jl_process_exited(int status)      { return WIFEXITED(status); }
 int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
@@ -278,7 +487,7 @@ static void *run_io_thr(void *arg)
 
         size_t nw;
         _os_write_all(r->fd, buf, n, &nw);
-        julia_free(buf);
+        free(buf);
 
         pthread_mutex_lock(&q_mut);
         r->next = ioq_freelist;
@@ -360,5 +569,31 @@ DLLEXPORT void jl_start_io_thread(void)
     pthread_mutex_init(&q_mut, NULL);
     pthread_mutex_init(&wake_mut, NULL);
     pthread_cond_init(&wake_cond, NULL);
-    pthread_create(&io_thread, NULL, run_io_thr, NULL);
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 262144);
+    pthread_create(&io_thread, &attr, run_io_thr, NULL);
+}
+
+DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
+{
+#ifdef __SSE2__
+    // SSE2 supports both FZ and DAZ
+    uint32_t flags = 0x8040;
+#elif __SSE__
+    // SSE supports only the FZ flag
+    uint32_t flags = 0x8000;
+#endif
+
+#ifdef __SSE__
+    if (isZero) {
+	_mm_setcsr(_mm_getcsr() | flags);
+    }
+    else {
+	_mm_setcsr(_mm_getcsr() & ~flags);
+    }
+    return 1;
+#else
+    return 0;
+#endif
 }

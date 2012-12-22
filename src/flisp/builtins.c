@@ -304,16 +304,20 @@ static value_t fl_time_now(value_t *args, u_int32_t nargs)
 
 static value_t fl_path_cwd(value_t *args, uint32_t nargs)
 {
+    uv_err_t err;
     if (nargs > 1)
         argcount("path.cwd", nargs, 1);
     if (nargs == 0) {
         char buf[1024];
-        get_cwd(buf, sizeof(buf));
+        err = uv_cwd(buf, sizeof(buf));
+        if (err.code != UV_OK)
+          lerrorf(IOError, "path.cwd: could not get cwd: %s", uv_strerror(err));
         return string_from_cstr(buf);
     }
     char *ptr = tostring(args[0], "path.cwd");
-    if (set_cwd(ptr))
-        lerrorf(IOError, "path.cwd: could not cd to %s", ptr);
+    err = uv_chdir(ptr);
+    if (err.code != UV_OK)
+        lerrorf(IOError, "path.cwd: could not cd to %s: %s", ptr, uv_strerror(err));
     return FL_T;
 }
 
@@ -347,16 +351,23 @@ static value_t fl_os_setenv(value_t *args, uint32_t nargs)
     char *name = tostring(args[0], "os.setenv");
     int result;
     if (args[1] == FL_F) {
-#ifdef __linux
+#ifdef __linux__
         result = unsetenv(name);
+#elif defined(__WIN32__)
+        result = SetEnvironmentVariable(name,NULL);
 #else
         (void)unsetenv(name);
         result = 0;
 #endif
+
     }
     else {
         char *val = tostring(args[1], "os.setenv");
-        result = setenv(name, val, 1);
+#if defined (__WIN32__)
+        result = SetEnvironmentVariable(name,val);
+#else
+		result = setenv(name, val, 1);
+#endif
     }
     if (result != 0)
         lerror(ArgError, "os.setenv: invalid environment variable");

@@ -16,11 +16,11 @@
 #  julia> wordcount_files("/tmp/output.txt", "/tmp/input1.txt","/tmp/input2.txt",...) 
 
 # "Map" function.
-# Takes a string. Returns a HashTable with the number of times each word 
+# Takes a string. Returns a Dict with the number of times each word 
 # appears in that string.
 function wordcount(text)
-    words=split(text,(' ','\n','\t','-','.',',',':',';'),false)
-    counts=HashTable()
+    words=split(text,[' ','\n','\t','-','.',',',':',';'],false)
+    counts=Dict()
     for w = words
         counts[w]=get(counts,w,0)+1
     end
@@ -28,11 +28,11 @@ function wordcount(text)
 end
 
 # "Reduce" function.
-# Takes a collection of HashTables in the format returned by wordcount()
-# Returns a HashTable in which words that appear in multiple inputs
+# Takes a collection of Dicts in the format returned by wordcount()
+# Returns a Dict in which words that appear in multiple inputs
 # have their totals added together.
 function wcreduce(wcs)
-    counts=HashTable()
+    counts=Dict()
     for c = wcs
         for (k,v)=c
             counts[k] = get(counts,k,0)+v

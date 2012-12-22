@@ -28,6 +28,7 @@ char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[0m\033[1m\002";
 char prompt_plain[] = "julia> ";
 char *prompt_string = prompt_plain;
 int prompt_length;
+int disable_history;
 static char *history_file = NULL;
 static jl_value_t *rl_ast = NULL;
 
@@ -43,6 +44,7 @@ static void init_history(void) {
     using_history();
     char *home = getenv("HOME");
     if (!home) return;
+    if (disable_history) return;
     asprintf(&history_file, "%s/.julia_history", home);
     struct stat stat_info;
     if (!stat(history_file, &stat_info)) {
@@ -133,8 +135,7 @@ static void reset_indent(void) {
 // TODO: is it appropriate to call this on the int values readline uses?
 static int jl_word_char(uint32_t wc)
 {
-    return ('A' <= wc && wc <= 'Z') || ('a' <= wc && wc <= 'z') ||
-           ('0' <= wc && wc <= '9') || (0xA1 <= wc) || (wc == '_');
+    return strchr(rl_completer_word_break_characters, wc) == NULL;
 }
 
 static int newline_callback(int count, int key) {
@@ -253,7 +254,9 @@ static int backspace_callback(int count, int key) {
     goto finish;
 
 backspace:
-    rl_point = (i == 0 || rl_point-i > prompt_length) ? rl_point-1 : i-1;
+    do {
+        rl_point = (i == 0 || rl_point-i > prompt_length) ? rl_point-1 : i-1;
+    } while (locale_is_utf8 && !isutf(rl_line_buffer[rl_point]) && rl_point > i-1);
 
 finish:
     rl_delete_text(rl_point, j);
@@ -263,7 +266,9 @@ finish:
 static int delete_callback(int count, int key) {
     reset_indent();
     int j = rl_point;
-    j += (rl_line_buffer[j] == '\n') ? prompt_length+1 : 1;
+    do {
+        j += (rl_line_buffer[j] == '\n') ? prompt_length+1 : 1;
+    } while (locale_is_utf8 && !isutf(rl_line_buffer[j]));
     if (rl_end < j) j = rl_end;
     rl_delete_text(rl_point, j);
     return 0;
@@ -273,15 +278,18 @@ static int left_callback(int count, int key) {
     reset_indent();
     if (rl_point > 0) {
         int i = line_start(rl_point);
-        rl_point = (i == 0 || rl_point-i > prompt_length) ?
-            rl_point-1 : i-1;
+        do {
+            rl_point = (i == 0 || rl_point-i > prompt_length) ? rl_point-1 : i-1;
+        } while (locale_is_utf8 && !isutf(rl_line_buffer[rl_point]) && rl_point > i-1);
     }
     return 0;
 }
 
 static int right_callback(int count, int key) {
     reset_indent();
-    rl_point += (rl_line_buffer[rl_point] == '\n') ? prompt_length+1 : 1;
+    do {
+        rl_point += (rl_line_buffer[rl_point] == '\n') ? prompt_length+1 : 1;
+    } while (locale_is_utf8 && !isutf(rl_line_buffer[rl_point]));
     if (rl_end < rl_point) rl_point = rl_end;
     return 0;
 }
@@ -321,12 +329,18 @@ static int down_callback(int count, int key) {
     }
 }
 
+static int callback_en=0;
+
 void jl_input_line_callback(char *input)
 {
     int end=0, doprint=1;
     if (!input || ios_eof(ios_stdin)) {
         end = 1;
         rl_ast = NULL;
+    } else if (!rl_ast) {
+        // In vi mode, it's possible for this function to be called w/o a
+        // previous call to return_callback.
+        rl_ast = jl_parse_input_line(rl_line_buffer);
     }
 
     if (rl_ast != NULL) {
@@ -336,8 +350,10 @@ void jl_input_line_callback(char *input)
         free(input);
     }
 
+    callback_en = 0;
     rl_callback_handler_remove();
     handle_input(rl_ast, end, doprint);
+    rl_ast = NULL;
 }
 
 char *read_expr(char *prompt)
@@ -355,19 +371,33 @@ static int common_prefix(const char *s1, const char *s2)
 }
 
 static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
+                          jl_module_t *module, const char *str,
                           const char *prefix, int plen)
 {
     do {
         if (common_prefix(prefix, tree->name) == plen &&
-            jl_boundp(jl_system_module, tree)) {
-            ios_puts(tree->name, result);
+            (module ? jl_defines_or_exports_p(module, tree) : jl_boundp(jl_current_module, tree))) {
+            ios_puts(str, result);
+            ios_puts(tree->name + plen, result);
             ios_putc('\n', result);
             (*pcount)++;
         }
         if (tree->left)
-            symtab_search(tree->left, pcount, result, prefix, plen);
+            symtab_search(tree->left, pcount, result, module, str, prefix, plen);
         tree = tree->right;
     } while (tree != NULL);
+}
+
+static jl_module_t *
+find_submodule_named(jl_module_t *module, const char *name)
+{
+    jl_sym_t *s = jl_symbol_lookup(name);
+    if (!s) return NULL;
+
+    jl_binding_t *b = jl_get_binding(module, s);
+    if (!b) return NULL;
+
+    return (jl_is_module(b->value)) ? (jl_module_t *)b->value : NULL;
 }
 
 static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
@@ -375,26 +405,55 @@ static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
     int x, plen, count=0;
     ios_t ans;
 
-    plen = strlen(str);
+    // given str "X.Y.a", set module := X.Y and name := "a"
+    jl_module_t *module = NULL;
+    char *name = NULL, *strcopy = strdup(str);
+    for (char *s=strcopy, *r;; s=NULL) {
+        char *t = strtok_r(s, ".", &r);
+        if (!t) {
+            if (str[strlen(str)-1] == '.') {
+                // this case is "Module."
+                if (name) {
+                    if (!module) module = jl_current_module;
+                    module = find_submodule_named(module, name);
+                    if (!module) goto symtab_get_matches_exit;
+                }
+                name = "";
+            }
+            break;
+        }
+        if (name) {
+            if (!module) module = jl_current_module;
+            module = find_submodule_named(module, name);
+            if (!module) goto symtab_get_matches_exit;
+        }
+        name = t;
+    }
+
+    if (!name) goto symtab_get_matches_exit;
+    plen = strlen(name);
 
     while (tree != NULL) {
-        x = common_prefix(str, tree->name);
+        x = common_prefix(name, tree->name);
         if (x == plen) {
             ios_mem(&ans, 0);
-            symtab_search(tree, &count, &ans, str, plen);
+            symtab_search(tree, &count, &ans, module, str, name, plen);
             size_t nb;
             *answer = ios_takebuf(&ans, &nb);
-            return count;
+            break;
         }
         else {
-            x = strcmp(str, tree->name);
+            x = strcmp(name, tree->name);
             if (x < 0)
                 tree = tree->left;
             else
                 tree = tree->right;
         }
     }
-    return 0;
+
+symtab_get_matches_exit:
+    free(strcopy);
+    return count;
 }
 
 int tab_complete(const char *line, char **answer, int *plen)
@@ -446,6 +505,27 @@ static char **julia_completion(const char *text, int start, int end)
     return rl_completion_matches(text, do_completions);
 }
 
+void sigtstp_handler(int arg)
+{
+    rl_cleanup_after_signal();
+
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGTSTP);
+    sigprocmask(SIG_UNBLOCK, &mask, NULL);
+    signal(SIGTSTP, SIG_DFL);
+    raise(SIGTSTP);
+
+    signal(SIGTSTP, sigtstp_handler);
+}
+
+void sigcont_handler(int arg)
+{
+    rl_reset_after_signal();
+    if (callback_en)
+        rl_forced_update_display();
+}
+
 static void init_rl(void)
 {
     rl_readline_name = "julia";
@@ -468,11 +548,24 @@ static void init_rl(void)
         rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[C",  right_callback,      keymaps[i]);
         rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
-    };
+    }
+
+    signal(SIGTSTP, sigtstp_handler);
+    signal(SIGCONT, sigcont_handler);
 }
 
-void init_repl_environment(void)
+void init_repl_environment(int argc, char *argv[])
 {
+    disable_history = 0;
+    for (int i = 0; i < argc; i++)
+    {
+        if (!strcmp(argv[i], "--no-history"))
+        {
+            disable_history = 1;
+            break;
+        }
+    }
+
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
     init_history();
@@ -481,10 +574,12 @@ void init_repl_environment(void)
 
 void repl_callback_enable()
 {
+    callback_en = 1;
     rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
 void jl_stdin_callback(void)
 {
-    rl_callback_read_char();
+    if (callback_en)
+        rl_callback_read_char();
 }

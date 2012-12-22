@@ -1,20 +1,17 @@
-/*
- * SCGI Server
- * Version 1.0
- * Stephan Boyer
- * May 2011
- */
-
 #ifndef INCLUDE_SERVER
 #define INCLUDE_SERVER
 
-#include "network.h"
+#include "../../deps/libuv/include/uv.h"
 #include <string>
 #include <vector>
 #include <sstream>
+//#define JULIA_DEBUG_TRACE
+//#define CPP_DEBUG_TRACE
 
 namespace scgi
 {
+
+
 	// represents a GET/POST field
 	class field
 	{
@@ -81,13 +78,39 @@ namespace scgi
 		std::vector<cookie> cookie_list;
 	};
 
-	// the callback function for requests:  string response = callback(request req);
-	// if the "multithreaded" parameter of run_server is true, this callback must be
-	// thread safe!
-	typedef std::string (*callback)(request*);
+    // represents an SCGI header
+    class header
+    {
+    public:
+        std::string name;
+        std::string value;
+    };
+
+    // the callback function for requests:  string response = callback(request req);
+    // if the "multithreaded" parameter of run_server is true, this callback must be
+    // thread safe!
+    typedef void (*callback)(request*,uv_stream_t *client);
+
+    struct reading_in_progress {
+        std::string header_length_str;
+        int header_length;
+        int body_length;
+        int pos;
+        std::vector<header> header_list;
+        header current_header;
+        bool inName;
+        bool isComma;
+        request request_obj;
+        char *cstr;
+        std::string body;
+        callback cb;
+        const char *bufBase;
+    };
 
 	// run the server - this blocks forever
-	void run_server(int port, callback cb);
+    void run_server(int port, callback cb);
 }
+
+struct julia_session;
 
 #endif

@@ -101,9 +101,9 @@ type ILVertex <: Vertex
 end
 
 #print(v::ILVertex) = print("Vertex $(v.name): $(v.value)")
-show(v::ILVertex) = (v.value == 0 ?
-                     print("Vertex $(v.name)") : 
-                     print("Vertex $(v.name): $(v.value)"))
+show(io,v::ILVertex) = (v.value == 0 ?
+                        print(io, "Vertex $(v.name)") : 
+                        print(io, "Vertex $(v.name): $(v.value)"))
 
 type ILEdge <: Edge
     v1::ILVertex
@@ -112,9 +112,9 @@ type ILEdge <: Edge
 end
 
 #print(e::ILEdge) = print("Edge: $(e.v1), $(e.v2): $(e.value)")
-show(e::ILEdge) = (e.value == 0 ?
-                   print("Edge $(e.v1.name),$(e.v2.name)") :
-                   print("Edge $(e.v1.name),$(e.v2.name): $(e.value)"))
+show(io, e::ILEdge) = (e.value == 0 ?
+                       print(io,"Edge $(e.v1.name),$(e.v2.name)") :
+                       print(io,"Edge $(e.v1.name),$(e.v2.name): $(e.value)"))
 
 ILEdge(v1, v2) = ILEdge(v1, v2, 0)
 
@@ -134,7 +134,7 @@ end
 
 
 #print(G::ILGraph) = (for edge = G.edges; println(edge); end) 
-show(G::ILGraph) = (for edge = G.edges; println(edge); end) 
+show(io, G::ILGraph) = (for edge = G.edges; println(io, edge); end) 
 
 function ILGraph(edges)
     this = ILGraph()
@@ -368,12 +368,12 @@ end
 sides(side::Bool) = (side ? "A" : "B")
 
 #print(v::BVertex) = print("Vertex $(v.name): $(v.value)")
-function show(v::BVertex)
+function show(io, v::BVertex)
     side = sides(v.side)
     if v.value == 0
-        print("Vertex $side/$(v.name)") 
+        print(io, "Vertex $side/$(v.name)") 
     else
-        print("Vertex $side/$(v.name): $(v.value)")
+        print(io, "Vertex $side/$(v.name): $(v.value)")
     end
 end
 
@@ -384,9 +384,9 @@ type BEdge <: Edge
 end
 
 #print(e::BEdge) = print("Edge: $(e.v1), $(e.v2): $(e.value)")
-show(e::BEdge) = (e.value == 0 ?
-                   print("Edge $(e.v1.name),$(e.v2.name)") :
-                   print("Edge $(e.v1.name),$(e.v2.name): $(e.value)"))
+show(io, e::BEdge) = (e.value == 0 ?
+                      print(io,"Edge $(e.v1.name),$(e.v2.name)") :
+                      print(io,"Edge $(e.v1.name),$(e.v2.name): $(e.value)"))
 
 BEdge(v1, v2) = BEdge(v1, v2, 0)
 
@@ -404,7 +404,7 @@ type BGraph <: Graph
 end
 
 #print(G::BGraph) = (for edge = G.edges; println(edge); end) 
-show(G::BGraph) = (for edge = G.edges; println(edge); end) 
+show(io, G::BGraph) = (for edge = G.edges; println(io,edge); end) 
 
 function BGraph(edges)
     this = BGraph()

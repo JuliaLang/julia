@@ -1,9 +1,16 @@
 JULIAHOME = $(abspath ../..)
 include $(JULIAHOME)/Make.inc
 
+override CFLAGS += $(JCFLAGS)
+override CXXFLAGS += $(JCXXFLAGS)
+
 SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c operators.c socket.c \
-	utf8.c ios.c dirpath.c htable.c bitvector.c \
-	int2str.c dump.c libsupportinit.c arraylist.c
+	utf8.c ios.c htable.c bitvector.c \
+	int2str.c libsupportinit.c arraylist.c
+
+ifeq ($(OS),WINNT)
+SRCS += asprintf
+endif
 
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
@@ -21,10 +28,12 @@ SHIPFLAGS += $(FLAGS)
 
 default: release
 
-%.o: %.c
-	$(QUIET_CC) $(CC) $(SHIPFLAGS) -c $< -o $@
-%.do: %.c
-	$(QUIET_CC) $(CC) $(DEBUGFLAGS) -c $< -o $@
+HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
+
+%.o: %.c $(HEADERS)
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@
+%.do: %.c $(HEADERS)
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 release debug: libsupport.a
 

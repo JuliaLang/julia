@@ -1,33 +1,30 @@
 JULIAHOME = ..
 include ../Make.inc
 
-default::
+default all extra unicode gzip::
 
-all extra unicode::
-	@$(MAKE) -sC unicode
+TESTS = default all extra \
+core numbers strings unicode corelib hashing remote \
+arrayops linalg fft sparse bitarray suitesparse arpack \
+random math functional bigint combinatorics statistics \
+glpk linprog bigfloat poly file Rmath remote zlib image \
+iostring gzip
 
-default all extra \
-core numbers strings corelib hashing arrayops \
-sparse lapack fft arpack random unicode special bigint bigfloat::
-	$(QUIET_JULIA) ../julia ./runtests.jl $@
+$(TESTS) ::
+	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
 
 perf:
 ifneq ($(MAKECMDGOALS),perf)
-	$(QUIET_JULIA) ../julia perf/$@.jl
+	$(QUIET_JULIA) $(JULIA_EXECUTABLE) perf/$@.jl
 else
-	@../julia perf/$@.jl | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
+	@$(JULIA_EXECUTABLE) perf/$@.jl | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
 endif
 
 benchmark:
 	@$(MAKE) -C perf $@
 
 clean:
-	@$(MAKE) -C unicode $@
 	@$(MAKE) -C perf $@
 
-.PHONY: \
-	default all extra \
-	core numbers strings corelib hashing arrayops \
-	sparse lapack fft arpack random special \
-	unicode perf \
-	benchmark clean
+.PHONY: $(TESTS) perf benchmark clean
+

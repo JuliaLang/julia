@@ -1,0 +1,41 @@
+#!/bin/sh
+#
+# usage: jldownload [<output-filename>] <url>
+#
+
+MIRROR_HOST=http://d304tytmzqn1fl.cloudfront.net
+
+WGET=/usr/bin/wget
+CURL=/usr/bin/curl
+FETCH=/usr/bin/fetch
+
+WGET_OPTS=--no-check-certificate
+CURL_OPTS=-fkL
+FETCH_OPTS=
+
+if [ $# -eq 1 ]; then
+    CURL_OPTS="$CURL_OPTS -O"
+    URL=$1
+    URL_BASENAME=`basename $1`
+    MIRROR_URL="$MIRROR_HOST/$URL_BASENAME"
+elif [ $# -eq 2 ]; then
+    WGET_OPTS="$WGET_OPTS -O $1"
+    CURL_OPTS="$CURL_OPTS -o $1"
+    FETCH_OPTS="$FETCH_OPTS -o $1"
+    URL=$2
+    MIRROR_URL="$MIRROR_HOST/$1"
+else
+    exit 1
+fi
+
+if [ -x $CURL ]; then
+    GETURL="$CURL $CURL_OPTS"
+elif [ -x $WGET ]; then
+    GETURL="$WGET $WGET_OPTS"
+elif [ -x $FETCH ]; then
+    GETURL="$FETCH $FETCH_OPTS"
+else
+    exit 1
+fi
+
+$GETURL $URL || $GETURL $MIRROR_URL

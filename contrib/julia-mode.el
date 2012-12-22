@@ -4,7 +4,7 @@
 
 (defvar julia-mode-hook nil)
 
-(add-to-list 'auto-mode-alist '("\\.j\\'\\|\\.jl\\'" . julia-mode))
+(add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
 
 (defvar julia-mode-syntax-table
   (let ((table (make-syntax-table)))
@@ -57,10 +57,10 @@
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
 
 (defconst julia-forloop-in-regex
-  "for +[^ 	]+ +.*\\(in\\)\\(\\s-\\|$\\)+")
+  "for +.*[^ 	].* \\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-font-lock-keywords
-  (list '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Integer\\|Float\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexNum\\|Bool\\|Char\\|Number\\|Scalar\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|Range\\|Range1\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Buffer\\|Size\\|Index\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|PtrInt\\|Long\\|Ulong\\)\\>" .
+  (list '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|Integer\\|Float\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|Range\\|Range1\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Ranges\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
       font-lock-type-face)
     (cons
      (concat "\\<\\("
@@ -68,11 +68,12 @@
           'identity
           '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
             "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
-	    "typealias" "break" "continue" "type" "global" "@\\w+"
-	    "module" "import" "export" "const" "let" "bitstype")
+	    "finally" "typealias" "break" "continue" "type" "global" "@\\w+"
+	    "module" "using" "import" "export" "const" "let" "bitstype" "do"
+	    "baremodule" "importall")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
-    '("\\<\\(true\\|false\\|C_NULL\\|Inf\\|NaN\\|Inf32\\|NaN32\\)\\>" . font-lock-constant-face)
+    '("\\<\\(true\\|false\\|C_NULL\\|Inf\\|NaN\\|Inf32\\|NaN32\\|nothing\\)\\>" . font-lock-constant-face)
     (list julia-unquote-regex 2 'font-lock-constant-face)
     (list julia-char-regex 2 'font-lock-string-face)
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
@@ -81,27 +82,42 @@
 
 (defconst julia-block-start-keywords
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
-	"quote"))
+	"quote" "do"))
 
 (defconst julia-block-other-keywords
   (list "else" "elseif"))
 
 (defconst julia-block-end-keywords
-  (list "end" "else" "elseif" "catch"))
+  (list "end" "else" "elseif" "catch" "finally"))
 
-(defun member (item lst)
+(defun julia-member (item lst)
   (if (null lst)
       nil
     (or (equal item (car lst))
-	(member item (cdr lst)))))
+	(julia-member item (cdr lst)))))
 
-; TODO: skip keywords inside strings
+(if (not (fboundp 'evenp))
+    (defun evenp (x) (zerop (% x 2))))
 
-(defun in-comment ()
-  (equal (char-after (+ (line-beginning-position) (current-indentation)))
-	 ?#))
+(defun julia-find-comment-open (p0)
+  (if (< (point) p0)
+      nil
+    (if (and (equal (char-after (point)) ?#)
+	     (evenp (julia-strcount
+		     (buffer-substring p0 (point)) ?\")))
+	t
+      (if (= (point) p0)
+	  nil
+	(progn (backward-char 1)
+	       (julia-find-comment-open p0))))))
 
-(defun strcount (str chr)
+(defun julia-in-comment ()
+  (save-excursion
+    (end-of-line)
+    (backward-char 1)
+    (julia-find-comment-open (line-beginning-position))))
+
+(defun julia-strcount (str chr)
   (let ((i 0)
 	(c 0))
     (while (< i (length str))
@@ -110,30 +126,35 @@
       (setq i (+ i 1)))
     c))
 
-(defun in-brackets ()
+(defun julia-in-brackets ()
   (let ((before (buffer-substring (line-beginning-position) (point))))
-    (> (strcount before ?[)
-       (strcount before ?]))))
+    (> (julia-strcount before ?[)
+       (julia-strcount before ?]))))
 
-(defun at-keyword (kw-list)
+(defun julia-at-keyword (kw-list)
   ; not a keyword if used as a field name, X.word, or quoted, :word
   (and (or (= (point) 1)
 	   (and (not (equal (char-before (point)) ?.))
 		(not (equal (char-before (point)) ?:))))
-       (not (in-comment))
-       (not (in-brackets))
-       (member (current-word) kw-list)))
+       (not (julia-in-comment))
+       (not (julia-in-brackets))
+       (julia-member (current-word t) kw-list)))
+
+;; if backward-sexp gives an error, move back 1 char to move over the '('
+(defun julia-safe-backward-sexp ()
+  (if (condition-case nil (backward-sexp) (error t))
+      (error2nil (backward-char))))
 
 ; get the position of the last open block
-(defun last-open-block-pos (min)
+(defun julia-last-open-block-pos (min)
   (let ((count 0))
     (while (not (or (> count 0) (<= (point) min)))
-      (backward-word 1)
+      (julia-safe-backward-sexp)
       (setq count
-	    (cond ((at-keyword julia-block-start-keywords)
+	    (cond ((julia-at-keyword julia-block-start-keywords)
 		   (+ count 1))
-		  ((and (equal (current-word) "end")
-			(not (in-comment)) (not (in-brackets)))
+		  ((and (equal (current-word t) "end")
+			(not (julia-in-comment)) (not (julia-in-brackets)))
 		   (- count 1))
 		  (t count))))
     (if (> count 0)
@@ -141,40 +162,21 @@
       nil)))
 
 ; get indent for last open block
-(defun last-open-block (min)
-  (let ((pos (last-open-block-pos min)))
+(defun julia-last-open-block (min)
+  (let ((pos (julia-last-open-block-pos min)))
     (and pos
 	 (progn
 	   (goto-char pos)
 	   (+ julia-basic-offset (current-indentation))))))
 
-; return indent implied by a special form opening on the previous line, if any
-(defun form-indent ()
-  (forward-line -1)
-  (end-of-line)
-  (backward-sexp)
-  (if (at-keyword julia-block-other-keywords)
-      (+ julia-basic-offset (current-indentation))
-    (if (char-equal (char-after (point)) ?\()
-        (progn
-          (backward-word 1)
-          (let ((cur (current-indentation)))
-            (if (at-keyword julia-block-start-keywords)
-                (+ julia-basic-offset cur)
-              nil)))
-      nil)))
-
-;(defun far-back ()
-;  (max (point-min) (- (point) 2000)))
-
 (defmacro error2nil (body) `(condition-case nil ,body (error nil)))
 
-(defun paren-indent ()
+(defun julia-paren-indent ()
   (let* ((p (parse-partial-sexp (save-excursion
 				  ;; only indent by paren if the last open
 				  ;; paren is closer than the last open
 				  ;; block
-				  (or (last-open-block-pos (point-min))
+				  (or (julia-last-open-block-pos (point-min))
 				      (point-min)))
 				(progn (beginning-of-line)
 				       (point))))
@@ -182,14 +184,6 @@
     (if (or (= 0 (car p)) (null pos))
         nil
       (progn (goto-char pos) (+ 1 (current-column))))))
-;  (forward-line -1)
-;  (end-of-line)
-;  (let ((pos (condition-case nil
-;                (scan-lists (point) -1 1)
-;              (error nil))))
-;   (if pos
-;       (progn (goto-char pos) (+ 1 (current-column)))
-;     nil)))
 
 (defun julia-indent-line ()
   "Indent current line of julia code"
@@ -197,14 +191,13 @@
 ;  (save-excursion
     (end-of-line)
     (indent-line-to
-     (or (save-excursion (error2nil (form-indent)))
-         (save-excursion (error2nil (paren-indent)))
+     (or (save-excursion (error2nil (julia-paren-indent)))
          (save-excursion
            (let ((endtok (progn
                            (beginning-of-line)
                            (forward-to-indentation 0)
-                           (at-keyword julia-block-end-keywords))))
-             (error2nil (+ (last-open-block (point-min))
+                           (julia-at-keyword julia-block-end-keywords))))
+             (error2nil (+ (julia-last-open-block (point-min))
                            (if endtok (- julia-basic-offset) 0)))))
 	 ;; previous line ends in =
 	 (save-excursion
@@ -219,7 +212,7 @@
 	 (save-excursion (forward-line -1)
 			 (current-indentation))
          0))
-    (when (at-keyword julia-block-end-keywords)
+    (when (julia-at-keyword julia-block-end-keywords)
       (forward-word 1)))
 
 (defun julia-mode ()

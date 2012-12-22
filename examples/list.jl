@@ -1,3 +1,5 @@
+import Base.length, Base.map, Base.show
+
 abstract List{T}
 
 type Nil{T} <: List{T}
@@ -8,8 +10,7 @@ type Cons{T} <: List{T}
     tail::List{T}
 end
 
-cons{T}(h::List{T}, t::List{List{T}}) = Cons{List{T}}(h, t)
-cons(x,y) = Cons(x,y)
+cons{T}(h, t::List{T}) = Cons{T}(h, t)
 
 nil(T) = Nil{T}()
 nil() = nil(Any)
@@ -17,33 +18,50 @@ nil() = nil(Any)
 head(x::Cons) = x.head
 tail(x::Cons) = x.tail
 
-function show{T}(l::List{T})
+function show{T}(io, l::List{T})
     if isa(l,Nil)
         if is(T,Any)
-            print("nil()")
+            print(io, "nil()")
         else
-            print("nil(")
-            show(T)
-            print(")")
+            print(io, "nil(", T, ")")
         end
     else
-        print("list(")
+        print(io, "list(")
         while true
-            show(head(l))
+            show(io, head(l))
             l = tail(l)
             if isa(l,Cons)
-                print(", ")
+                print(io, ", ")
             else
                 break
             end
         end
-        print(")")
+        print(io, ")")
     end
 end
 
 list() = nil()
-list{T}(first::T) = cons(first, nil(T))
-list(first, rest...) = cons(first, list(rest...))
+function list(elts...)
+    l = nil()
+    for i=length(elts):-1:1
+        l = cons(elts[i],l)
+    end
+    return l
+end
+function list{T}(elts::T...)
+    l = nil(T)
+    for i=length(elts):-1:1
+        l = cons(elts[i],l)
+    end
+    return l
+end
+function list{T}(elts::List{T}...)
+    l = nil(List{T})
+    for i=length(elts):-1:1
+        l = cons(elts[i],l)
+    end
+    return l
+end
 
 length(l::Nil) = 0
 length(l::Cons) = 1 + length(tail(l))
@@ -64,7 +82,7 @@ end
 
 append(lst::List) = lst
 
-function append{T}(lst::List{T}, lsts...)
+function append(lst::List, lsts...)
     n = length(lsts)
     l = lsts[n]
     for i = (n-1):-1:1

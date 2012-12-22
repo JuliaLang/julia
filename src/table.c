@@ -1,16 +1,16 @@
-#define hash_size(h) ((h)->length/2)
+#define hash_size(h) (jl_array_len(h)/2)
 
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size)<=(HT_N_INLINE*2) ? (HT_N_INLINE/2) : (size)>>3)
 
-#define keyhash(k)     inthash((uptrint_t)(k))
+#define keyhash(k)     jl_object_id(k)
 #define h2index(hv,sz) (index_t)(((hv) & ((sz)-1))*2)
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
 
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
 {
-    size_t sz = (*pa)->length;
+    size_t sz = jl_array_len(*pa);
     size_t i;
     void **ol = (void**)(*pa)->data;
     *pa = jl_alloc_cell_1d(newsz);
@@ -43,7 +43,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
             return &tab[index+1];
         }
 
-        if (key == tab[index])
+        if (jl_egal(key, tab[index]))
             return &tab[index+1];
 
         index = (index+2) & (sz-1);
@@ -56,7 +56,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     /* quadruple size, rehash, retry the insert */
     /* it's important to grow the table really fast; otherwise we waste */
     /* lots of time rehashing all the keys over and over. */
-    sz = a->length;
+    sz = jl_array_len(a);
     if (sz >= (1<<19) || (sz <= (1<<8)))
         newsz = sz<<1;
     else if (sz <= HT_N_INLINE)
@@ -91,7 +91,7 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     do {
         if (tab[index] == NULL)
             return NULL;
-        if (key == tab[index])
+        if (jl_egal(key, tab[index]))
             return &tab[index+1];
 
         index = (index+2) & (sz-1);
@@ -135,9 +135,10 @@ DLLEXPORT
 jl_value_t *jl_eqtable_next(jl_array_t *t, uint32_t i)
 {
     if (i&1) i++;
-    while (i < t->length && ((void**)t->data)[i+1] == NULL)
+    size_t alen = jl_array_dim0(t);
+    while (i < alen && ((void**)t->data)[i+1] == NULL)
         i+=2;
-    if (i >= t->length) return (jl_value_t*)jl_null;
+    if (i >= alen) return (jl_value_t*)jl_null;
     jl_value_t *vi=NULL, *vt=NULL, *vv=NULL;
     JL_GC_PUSH(&vi, &vt);
     vi = jl_box_uint32(i+2);

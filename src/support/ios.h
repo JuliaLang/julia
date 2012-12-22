@@ -3,11 +3,14 @@
 
 #include <stdarg.h>
 #include <pthread.h>
+#include "../../deps/libuv/include/uv.h"
 
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
 // never moves out.
-typedef enum { bm_none, bm_line, bm_block, bm_mem } bufmode_t;
+
+//make it compatible with UV Handles
+typedef enum { bm_none=UV_HANDLE_TYPE_MAX+1, bm_line, bm_block, bm_mem } bufmode_t;
 
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
@@ -15,20 +18,20 @@ typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 #define IOS_BUFSIZE 131072
 
 typedef struct {
-    bufmode_t bm;
-
     // the state only indicates where the underlying file position is relative
     // to the buffer. reading: at the end. writing: at the beginning.
     // in general, you can do any operation in any state.
-    bufstate_t state;
+    char *buf;        // start of buffer
+    bufmode_t bm;
 
     int errcode;
 
-    char *buf;        // start of buffer
-    size_t maxsize;   // space allocated to buffer
-    size_t size;      // length of valid data in buf, >=ndirty
-    size_t bpos;      // current position in buffer
-    size_t ndirty;    // # bytes at &buf[0] that need to be written
+    bufstate_t state;
+
+    off_t maxsize;    // space allocated to buffer
+    off_t size;       // length of valid data in buf, >=ndirty
+    off_t bpos;       // current position in buffer
+    off_t ndirty;     // # bytes at &buf[0] that need to be written
 
     off_t fpos;       // cached file pos
     size_t lineno;    // current line number
@@ -55,8 +58,6 @@ typedef struct {
     // request durable writes (fsync)
     // unsigned char durable:1;
 
-    // use julia-compatible buffer allocator
-    unsigned char julia_alloc:1;
     unsigned char mutex_initialized:1;
 
     int64_t userdata;
@@ -69,17 +70,16 @@ typedef struct {
 /* low-level interface functions */
 DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
 DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);
-DLLEXPORT size_t ios_write(ios_t *s, char *data, size_t n);
+DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n);
 DLLEXPORT off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
 DLLEXPORT off_t ios_seek_end(ios_t *s);
 DLLEXPORT off_t ios_skip(ios_t *s, off_t offs);  // relative seek
 DLLEXPORT off_t ios_pos(ios_t *s);  // get current position
-DLLEXPORT size_t ios_trunc(ios_t *s, size_t size);
+DLLEXPORT int ios_trunc(ios_t *s, size_t size);
 DLLEXPORT int ios_eof(ios_t *s);
 DLLEXPORT int ios_flush(ios_t *s);
 DLLEXPORT void ios_close(ios_t *s);
 DLLEXPORT char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
-DLLEXPORT void julia_free(void *b);
 // set buffer space to use
 DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
 DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
@@ -97,7 +97,6 @@ DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
 DLLEXPORT
 ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc);
 DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize);
-DLLEXPORT ios_t *jl_ios_mem(ios_t *s, size_t initsize);
 ios_t *ios_str(ios_t *s, char *str);
 ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
 DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);
@@ -115,12 +114,10 @@ int ios_putstringz(ios_t *s, char *str, bool_t do_write_nulterm);
 DLLEXPORT int ios_printf(ios_t *s, const char *format, ...);
 DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
 
-void hexdump(ios_t *dest, const char *buffer, size_t len, size_t startoffs);
-
 /* high-level stream functions - input */
 int ios_getnum(ios_t *s, char *data, uint32_t type);
 DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
-int ios_peekutf8(ios_t *s, uint32_t *pwc);
+DLLEXPORT int ios_peekutf8(ios_t *s, uint32_t *pwc);
 int ios_ungetutf8(ios_t *s, uint32_t wc);
 //int ios_getstringz(ios_t *dest, ios_t *src);
 //int ios_getstringn(ios_t *dest, ios_t *src, size_t nchars);

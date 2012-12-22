@@ -17,38 +17,39 @@ convert{T}(::Type{Quaternion{T}}, z::Quaternion) =
 
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) =
     Quaternion{promote_type(T,S)}
-promote_rule{T,S}(::Type{Real{T}}, ::Type{Quaternion{S}}) =
+promote_rule{S}(::Type{Bool}, ::Type{Quaternion{S}}) = Quaternion{S}
+promote_rule{T<:Real,S}(::Type{T}, ::Type{Quaternion{S}}) =
     Quaternion{promote_type(T,S)}
 
-function show(z::Quaternion)
-    show(z.q0)
+function show(io, z::Quaternion)
+    show(io, z.q0)
     i = z.q1
     if sign(i) == -1
         i = -i
-        print(" - ")
+        print(io, " - ")
     else
-        print(" + ")
+        print(io, " + ")
     end
-    show(i)
-    print("i")
+    show(io, i)
+    print(io, "i")
     j = z.q2
     if sign(j) == -1
         j = -j
-        print(" - ")
+        print(io, " - ")
     else
-        print(" + ")
+        print(io, " + ")
     end
-    show(j)
-    print("j")
+    show(io, j)
+    print(io, "j")
     k = z.q3
     if sign(k) == -1
         k = -k
-        print(" - ")
+        print(io, " - ")
     else
-        print(" + ")
+        print(io, " + ")
     end
-    show(k)
-    print("k")
+    show(io, k)
+    print(io, "k")
 end
 
 real(z::Quaternion) = z.q0

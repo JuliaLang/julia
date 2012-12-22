@@ -1,7 +1,7 @@
 #ifndef UTF8_H
 #define UTF8_H
 
-extern int locale_is_utf8;
+extern DLLEXPORT int locale_is_utf8;
 
 /* is c the start of a utf8 sequence? */
 #define isutf(c) (((c)&0xC0)!=0x80)
@@ -92,7 +92,7 @@ char *u8_memchr(const char *s, uint32_t ch, size_t sz, size_t *charn);
 char *u8_memrchr(const char *s, uint32_t ch, size_t sz);
 
 /* count the number of characters in a UTF-8 string */
-size_t u8_strlen(const char *s);
+DLLEXPORT size_t u8_strlen(const char *s);
 
 /* number of columns occupied by a string */
 DLLEXPORT size_t u8_strwidth(const char *s);

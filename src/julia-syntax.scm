@@ -5,16 +5,13 @@
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 
-; convert x => (x), (tuple x y) => (x y)
-; used to normalize function signatures like "x->y" and "function +(a,b)"
-(define (fsig-to-lambda-list arglist)
-  (if (pair? arglist)
-      (if (eq? (car arglist) 'tuple)
-	  (cdr arglist)
-	  arglist)
-      (if (symbol? arglist)
-	  (list arglist)
-	  arglist)))
+;; allow (:: T) => (:: #gensym T) in formal argument lists
+(define (fix-arglist l)
+  (map (lambda (a)
+	 (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
+	     `(|::| ,(gensy) ,(cadr a))
+	     a))
+       l))
 
 (define (arg-name v)
   (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
@@ -103,28 +100,38 @@
 		   ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
-(define (end-val a n tuples s)
-  (if s
-      `(call (top numel) ,a)
-      (if (null? tuples)
-	  `(call (top size) ,a ,n)
-	  `(call (top size) ,a (call (top +) ,(- n (length tuples))
-				     ,@(map (lambda (t)
-					      `(call (top length) ,t))
-					    tuples))))))
+;; last = is this last index?
+(define (end-val a n tuples last)
+  (if (null? tuples)
+      (if last
+	  (if (= n 1)
+	      `(call (top length) ,a)
+	      `(call (top trailingsize) ,a ,n))
+	      #;`(call (top div)
+		     (call (top length) ,a)
+		     (call (top *)
+			   ,@(map (lambda (d) `(call (top size) ,a ,(1+ d)))
+				  (iota (- n 1)))))
+	  `(call (top size) ,a ,n))
+      (let ((dimno `(call (top +) ,(- n (length tuples))
+			  ,@(map (lambda (t) `(call (top length) ,t))
+				 tuples))))
+	(if last
+	    `(call (top trailingsize) ,a ,dimno)
+	    `(call (top size) ,a ,dimno)))))
 
 ; replace end inside ex with (call (top size) a n)
 ; affects only the closest ref expression, so doesn't go inside nested refs
-(define (replace-end ex a n tuples s)
-  (cond ((eq? ex 'end)                (end-val a n tuples s))
+(define (replace-end ex a n tuples last)
+  (cond ((eq? ex 'end)                (end-val a n tuples last))
 	((or (atom? ex) (quoted? ex)) ex)
 	((eq? (car ex) 'ref)
 	 ;; inside ref only replace within the first argument
-	 (list* 'ref (replace-end (cadr ex) a n tuples s)
+	 (list* 'ref (replace-end (cadr ex) a n tuples last)
 		(cddr ex)))
 	(else
 	 (cons (car ex)
-	       (map (lambda (x) (replace-end x a n tuples s))
+	       (map (lambda (x) (replace-end x a n tuples last))
 		    (cdr ex))))))
 
 ; translate index x from colons to ranges
@@ -147,17 +154,13 @@
 	       (else x)))
 	(else x)))
 
-(define (process-indexes a i)
-  (process-indexes- a i (length= i 1)))
-
 ;; : inside indexing means 1:end
-;; a:b and a:b:c are ranges instead of calls to colon
-;; expand end to size(a,n), or numel(a) if it is the only index
+;; expand end to size(a,n),
+;;     or div(length(a), prod(size(a)[1:(n-1)])) for the last index
 ;; a = array being indexed, i = list of indexes
-;; s = (length i) equals 1
 ;; returns (values index-list stmts) where stmts are statements that need
 ;; to execute first.
-(define (process-indexes- a i s)
+(define (process-indexes a i)
   (let loop ((lst i)
 	     (n   1)
 	     (stmts '())
@@ -165,23 +168,24 @@
 	     (ret '()))
     (if (null? lst)
 	(values (reverse ret) (reverse stmts))
-	(let ((idx (car lst)))
+	(let ((idx  (car lst))
+	      (last (null? (cdr lst))))
 	  (if (and (pair? idx) (eq? (car idx) '...))
 	      (if (symbol? (cadr idx))
 		  (loop (cdr lst) (+ n 1)
 			stmts
 			(cons (cadr idx) tuples)
-			(cons `(... ,(replace-end (cadr idx) a n tuples s))
+			(cons `(... ,(replace-end (cadr idx) a n tuples last))
 			      ret))
 		  (let ((g (gensy)))
 		    (loop (cdr lst) (+ n 1)
-			  (cons `(= ,g ,(replace-end (cadr idx) a n tuples s))
+			  (cons `(= ,g ,(replace-end (cadr idx) a n tuples last))
 				stmts)
 			  (cons g tuples)
 			  (cons `(... ,g) ret))))
 	      (loop (cdr lst) (+ n 1)
 		    stmts tuples
-		    (cons (replace-end (expand-index-colon idx) a n tuples s)
+		    (cons (replace-end (expand-index-colon idx) a n tuples last)
 			  ret)))))))
 
 (define (make-decl n t) `(|::| ,n ,t))
@@ -189,6 +193,8 @@
 (define (function-expr argl body)
   (let ((t (llist-types argl))
 	(n (llist-vars argl)))
+    (if (has-dups n)
+	(error "function argument names not unique"))
     (let ((argl (map make-decl n t)))
       `(lambda ,argl
 	 (scope-block ,body)))))
@@ -204,10 +210,11 @@
     `(lambda ,argl
        (scope-block ,body))))
 
-(define (symbols->typevars sl upperbounds)
-  (if (null? upperbounds)
-      (map (lambda (x)    `(call (top typevar) ',x)) sl)
-      (map (lambda (x ub) `(call (top typevar) ',x ,ub)) sl upperbounds)))
+(define (symbols->typevars sl upperbounds bnd)
+  (let ((bnd (if bnd '(true) '())))
+    (if (null? upperbounds)
+	(map (lambda (x)    `(call (top TypeVar) ',x ,@bnd)) sl)
+	(map (lambda (x ub) `(call (top TypeVar) ',x ,ub ,@bnd)) sl upperbounds))))
 
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
@@ -215,20 +222,20 @@
 	((symbol? (car sparams))
 	 (sparam-name-bounds (cdr sparams) (cons (car sparams) names)
 			     (cons '(top Any) bounds)))
-	((and (length= (car sparams) 4)
-	      (eq? (caar sparams) 'comparison)
-	      (eq? (caddar sparams) '|<:|)
+	((and (length= (car sparams) 3)
+	      (eq? (caar sparams) '|<:|)
 	      (symbol? (cadar sparams)))
 	 (sparam-name-bounds (cdr sparams) (cons (cadr (car sparams)) names)
-			     (cons (cadddr (car sparams)) bounds)))
+			     (cons (caddr (car sparams)) bounds)))
 	(else
 	 (error "malformed type parameter list"))))
 
 (define (method-def-expr name sparams argl body)
+  (if (has-dups (llist-vars argl))
+      (error "function argument names not unique"))
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
-  (let* ((argl  (fsig-to-lambda-list argl))
-	 (types (llist-types argl))
+  (let* ((types (llist-types argl))
 	 (body  (method-lambda-expr argl body)))
     (if (null? sparams)
 	`(method ,name (tuple ,@types) ,body (tuple))
@@ -237,7 +244,7 @@
 	 (let ((f (gensy)))
 	   `(call (lambda (,@names ,f)
 		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
-		  ,@(symbols->typevars names bounds)
+		  ,@(symbols->typevars names bounds #t)
 		  ,body))))))
 
 (define (struct-def-expr name params super fields)
@@ -253,7 +260,7 @@
 
 (define (default-outer-ctor name field-names field-types params bounds)
   `(function (call (curly ,name
-			  ,@(map (lambda (p b) `(comparison ,p <: ,b))
+			  ,@(map (lambda (p b) `(<: ,p ,b))
 				 params bounds))
 		   ,@(map make-decl field-names field-types))
 	     (block
@@ -274,7 +281,7 @@
 (define (rewrite-ctor ctor Tname params field-names)
   (define (ctor-body body)
     `(block ;; make type name global
-            (global ,Tname)
+	    (global ,Tname)
 	    ,(pattern-replace (pattern-set
 			       (pattern-lambda
 				(call (-/ new) . args)
@@ -321,58 +328,49 @@
 		     defs)))
      (if (null? params)
 	 `(block
+	   (global ,name)
 	   (const ,name)
-	   (= ,name
+	   (composite_type ,name (tuple ,@params)
+			   (tuple ,@(map (lambda (x) `',x) field-names))
+			   (null) ,super (tuple ,@field-types))
+	   (call
+	    (lambda ()
 	      (scope-block
 	       (block
-		(local ,name)
-		(= ,name
-		   (call (top new_struct_type)
-			 (quote ,name)
-			 (tuple ,@params)
-			 (tuple ,@(map (lambda (x) `',x) field-names))
-			 (null)))
-		(call (top new_struct_fields)
-		      ,name ,super (tuple ,@field-types))
-		,name)))
-	   (scope-block
-	    (block
-	     ,@(map (lambda (c)
-		      (rewrite-ctor c name '() field-names))
-		    defs2)))
+		(global ,name)
+		,@(map (lambda (c)
+			 (rewrite-ctor c name '() field-names))
+		       defs2)))))
 	   (null))
 	 ;; parametric case
 	 `(block
-	   (const ,name)
-	   (= ,name
-	   (call
-	    (lambda (,@params)
-	      (scope-block
-	      (block
-	       (local ,name)
-	       (= ,name
-		  (call (top new_struct_type)
-			(quote ,name)
-			(tuple ,@params)
-			(tuple ,@(map (lambda (x) `',x) field-names))
-			(lambda (,name)
-			  (scope-block
-			   ;; don't capture params; in here they are static
-			   ;; parameters
-			   (block
-			    (global ,@params)
-			    ,@(map (lambda (c)
-				     (rewrite-ctor c name params field-names))
-				   defs2)
-			    ,name)))))
-	       (call (top new_struct_fields)
-		     ,name ,super (tuple ,@field-types))
-	       ,name)))
-	    ,@(symbols->typevars params bounds)))
-	   ,@(if (null? defs)
-		 `(,(default-outer-ctor name field-names field-types
-		      params bounds))
-		 '())
+	   (scope-block
+	    (block
+	     (global ,name)
+	     (const ,name)
+	     ,@(map (lambda (v) `(local ,v)) params)
+	     ,@(map make-assignment params (symbols->typevars params bounds #f))
+	     (composite_type ,name (tuple ,@params)
+			     (tuple ,@(map (lambda (x) `',x) field-names))
+			     (lambda (,name)
+			       (scope-block
+				;; don't capture params; in here they are static
+				;; parameters
+				(block
+				 (global ,@params)
+				 ,@(map
+				    (lambda (c)
+				      (rewrite-ctor c name params field-names))
+				    defs2)
+				 ,name)))
+			     ,super (tuple ,@field-types))))
+	   (scope-block
+	    (block
+	     (global ,@params)
+	     ,@(if (null? defs)
+		   `(,(default-outer-ctor name field-names field-types
+			params bounds))
+		   '())))
 	   (null))))))
 
 (define (abstract-type-def-expr name params super)
@@ -381,19 +379,9 @@
    (sparam-name-bounds params '() '())
    `(block
      (const ,name)
-     (= ,name
-	(call
-	 (lambda ,params
-	   (scope-block
-	    (block
-	     (local ,name)
-	     (= ,name
-		(call (top new_tag_type)
-		      (quote ,name) (tuple ,@params)))
-	     (call (top new_tag_type_super) ,name ,super)
-	     ,name)))
-	 ,@(symbols->typevars params bounds)))
-     (null))))
+     ,@(map (lambda (v) `(local ,v)) params)
+     ,@(map make-assignment params (symbols->typevars params bounds #f))
+     (abstract_type ,name (tuple ,@params) ,super))))
 
 (define (bits-def-expr n name params super)
   (receive
@@ -401,19 +389,9 @@
    (sparam-name-bounds params '() '())
    `(block
      (const ,name)
-     (= ,name
-	(call
-	 (lambda ,params
-	   (scope-block
-	    (block
-	     (local ,name)
-	     (= ,name
-		(call (top new_bits_type)
-		      (quote ,name) (tuple ,@params) ,n))
-	     (call (top new_tag_type_super) ,name ,super)
-	     ,name)))
-	 ,@(symbols->typevars params bounds)))
-     (null))))
+     ,@(map (lambda (v) `(local ,v)) params)
+     ,@(map make-assignment params (symbols->typevars params bounds #f))
+     (bits_type ,name (tuple ,@params) ,n ,super))))
 
 ; take apart a type signature, e.g. T{X} <: S{Y}
 (define (analyze-type-sig ex)
@@ -421,10 +399,9 @@
 		       (values name '() 'Any)) ex)
       ((pattern-lambda (curly (-- name (-s)) . params)
 		       (values name params 'Any)) ex)
-      ((pattern-lambda (comparison (-- name (-s)) (-/ |<:|) super)
+      ((pattern-lambda (|<:| (-- name (-s)) super)
 		       (values name '() super)) ex)
-      ((pattern-lambda (comparison (curly (-- name (-s)) . params)
-				   (-/ |<:|) super)
+      ((pattern-lambda (|<:| (curly (-- name (-s)) . params) super)
 		       (values name params super)) ex)
       (error "invalid type signature")))
 
@@ -436,7 +413,7 @@
 	  ((and (pair? x) (eq? (car x) '&))
 	   `(& (call (top ptr_arg_convert) ,T ,(cadr x))))
 	  (else
-	   `(call (top convert) ,T ,x))))
+	   `(call (top cconvert) ,T ,x))))
   (define (argument-root a)
     ;; something to keep rooted for this argument
     (cond ((and (pair? a) (eq? (car a) '&))
@@ -479,16 +456,16 @@
 	  (loop (if isseq F (cdr F)) (cdr A) stmts
 		(list* rt (ccall-conversion ty ca) C))))))
 
-; patterns that introduce lambdas
+;; patterns that introduce lambdas
 (define binding-form-patterns
   (pattern-set
    ;; function with static parameters
    (pattern-lambda (function (call (curly name . sparams) . argl) body)
-		   (method-def-expr name sparams argl body))
+		   (method-def-expr name sparams (fix-arglist argl) body))
 
    ;; function definition
    (pattern-lambda (function (call name . argl) body)
-		   (method-def-expr name '() argl body))
+		   (method-def-expr name '() (fix-arglist argl) body))
 
    (pattern-lambda (function (tuple . args) body)
 		   `(-> (tuple ,@args) ,body))
@@ -505,7 +482,7 @@
 				     (eq? (car a) 'tuple))
 				(cdr a)
 				(list a))))
-		     (function-expr a
+		     (function-expr (fix-arglist a)
 				    `(block
 				      ,@(map (lambda (d)
 					       `(= ,(cadr d)
@@ -521,13 +498,16 @@
 			      (locls ())
 			      (stmts ()))
 		     (if (null? binds)
-			 `(call (-> (tuple ,@args)
-				    (block ,@(if (null? locls)
-						 '()
-						 `((local ,@locls)))
-					   ,@stmts
-					   ,ex))
-				,@inits)
+			 (begin
+			   (if (has-dups args)
+			       (error "let variables not unique"))
+			   `(call (-> (tuple ,@args)
+				      (block ,@(if (null? locls)
+						   '()
+						   `((local ,@locls)))
+					     ,@stmts
+					     ,ex))
+				  ,@inits))
 			 (cond
 			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
@@ -561,24 +541,119 @@
 
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
-		   `(call (top def_macro) (quote ,name)
-			  (-> (tuple ,@argl) ,body)))
+		   `(macro ,(symbol (string #\@ name))
+		      (-> (tuple ,@argl) ,body)))
 
    ;; type definition
    (pattern-lambda (type sig (block . fields))
 		   (receive (name params super) (analyze-type-sig sig)
 			    (struct-def-expr name params super fields)))
 
-   (pattern-lambda (try tryblk var catchblk)
+   ;; try with finally
+   (pattern-lambda (try tryb var catchb finalb)
+		   (let ((err (gensy))
+			 (val (gensy)))
+		     `(scope-block
+		       (block
+			(= ,err false)
+			(= ,val (try ,(if catchb
+					  `(try ,tryb ,var ,catchb)
+					  tryb)
+				     #f
+				     (= ,err true)))
+			,finalb
+			(if ,err (ccall 'jl_rethrow Void (tuple)))
+			,val))))
+
+   ;; try - catch
+   (pattern-lambda (try tryb var catchb)
 		   (if (symbol? var)
-		       `(trycatch (scope-block ,tryblk)
+		       `(trycatch (scope-block ,tryb)
 				  (scope-block
 				   (block (= ,var (the_exception))
-					  ,catchblk)))
-		       `(trycatch (scope-block ,tryblk)
-				  (scope-block ,catchblk))))
+					  ,catchb)))
+		       `(trycatch (scope-block ,tryb)
+				  (scope-block ,catchb))))
 
    )) ; binding-form-patterns
+
+;; a copy of the above patterns, but returning the names of vars
+;; introduced by the forms, instead of their transformations.
+(define vars-introduced-by-patterns
+  (pattern-set
+   ;; function with static parameters
+   (pattern-lambda (function (call (curly name . sparams) . argl) body)
+		   (cons 'varlist (llist-vars (fix-arglist argl))))
+
+   ;; function definition
+   (pattern-lambda (function (call name . argl) body)
+		   (cons 'varlist (llist-vars (fix-arglist argl))))
+
+   (pattern-lambda (function (tuple . args) body)
+		   `(-> (tuple ,@args) ,body))
+
+   ;; expression form function definition
+   (pattern-lambda (= (call (curly name . sparams) . argl) body)
+		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
+   (pattern-lambda (= (call name . argl) body)
+		   `(function (call ,name ,@argl) ,body))
+
+   ;; anonymous function
+   (pattern-lambda (-> a b)
+		   (let ((a (if (and (pair? a)
+				     (eq? (car a) 'tuple))
+				(cdr a)
+				(list a))))
+		     (cons 'varlist (llist-vars (fix-arglist a)))))
+
+   ;; let
+   (pattern-lambda (let ex . binds)
+		   (let loop ((binds binds)
+			      (args  ())
+			      (inits ())
+			      (locls ())
+			      (stmts ()))
+		     (if (null? binds)
+			 (cons 'varlist
+			       (append! (llist-vars (fix-arglist args))
+					locls))
+			 (cond
+			  ((or (symbol? (car binds)) (decl? (car binds)))
+			   ;; just symbol -> add local
+			   (loop (cdr binds) args inits
+				 (cons (car binds) locls)
+				 stmts))
+			  ((and (length= (car binds) 3)
+				(eq? (caar binds) '=))
+			   ;; some kind of assignment
+			   (cond
+			    ((or (symbol? (cadar binds))
+				 (decl?   (cadar binds)))
+			     ;; a=b -> add argument
+			     (loop (cdr binds)
+				   (cons (cadar binds) args)
+				   (cons (caddar binds) inits)
+				   locls stmts))
+			    ((and (pair? (cadar binds))
+				  (eq? (caadar binds) 'call))
+			     ;; f()=c
+			     (let ((asgn (cadr (julia-expand0 (car binds)))))
+			       (loop (cdr binds) args inits
+				     (cons (cadr asgn) locls)
+				     (cons asgn stmts))))
+			    (else '())))
+			  (else '())))))
+
+   ;; macro definition
+   (pattern-lambda (macro (call name . argl) body)
+		   `(-> (tuple ,@argl) ,body))
+
+   (pattern-lambda (try tryb var catchb finalb)
+		   (if var (list 'varlist var) '()))
+   (pattern-lambda (try tryb var catchb)
+		   (if var (list 'varlist var) '()))
+
+   )) ; vars-introduced-by-patterns
 
 ; local x, y=2, z => local x;local y;local z;y = 2
 (define (expand-decls what binds)
@@ -628,17 +703,36 @@
 
 ;; convert (lhss...) = (tuple ...) to assignments, eliminating the tuple
 (define (tuple-to-assignments lhss x)
-  (let ((temps (map (lambda (x) (gensy)) (cdr x))))
-    `(block
-      ,@(map make-assignment temps (cdr x))
-      ,@(map make-assignment lhss temps)
-      (unnecessary-tuple (tuple ,@temps)))))
+  (let loop ((lhss lhss)
+	     (rhss (cdr x))
+	     (stmts '())
+	     (after '())
+	     (elts  '()))
+    (if (null? lhss)
+	`(block ,@(reverse stmts)
+		,@(reverse after)
+		(unnecessary-tuple (tuple ,@(reverse elts))))
+	(let ((L (car lhss))
+	      (R (car rhss)))
+	  (if (and (symbol? L)
+		   ;; overwrite var immediately if it doesn't occur elsewhere
+		   (not (contains (lambda (e) (eq? e L)) (cdr rhss))))
+	      (loop (cdr lhss)
+		    (cdr rhss)
+		    (cons (make-assignment L R) stmts)
+		    after
+		    (cons L elts))
+	      (let ((temp (gensy)))
+		(loop (cdr lhss)
+		      (cdr rhss)
+		      (cons (make-assignment temp R) stmts)
+		      (cons (make-assignment L temp) after)
+		      (cons temp elts))))))))
 
 ;; convert (lhss...) = x to tuple indexing, handling the general case
 (define (lower-tuple-assignment lhss x)
   (let ((t (gensy)))
     `(block
-      (multiple_value)
       (= ,t ,x)
       ,@(let loop ((lhs lhss)
 		   (i   1))
@@ -654,9 +748,6 @@
    (pattern-lambda (block)
 		   `(block (null)))
 
-   (pattern-lambda (--> a b)
-		   `(curly (top Function) ,a ,b))
-
    (pattern-lambda (|.| a b)
 		   `(call (top getfield) ,a ,b))
 
@@ -666,7 +757,7 @@
 		     `(block
 		       ,@(if (eq? aa a) '() `((= ,aa ,a)))
 		       ,@(if (eq? bb b) '() `((= ,bb ,b)))
-		       (call (top _setfield) ,aa ,bb
+		       (call (top setfield) ,aa ,bb
 			     (call (top convert)
 				   (call (top fieldtype) ,aa ,bb)
 				   ,rhs)))))
@@ -688,20 +779,33 @@
 		    (sparam-name-bounds params '() '())
 		    `(call (lambda ,params
 			     (const
-			      (= ,name (call (top new_type_constructor)
+			      (= ,name (call (top TypeConstructor)
 					     (tuple ,@params) ,type-ex))))
-			   ,@(symbols->typevars params bounds))))
+			   ,@(symbols->typevars params bounds #f))))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
-   ;; multiple value assignment
-   (pattern-lambda (= (tuple . lhss) x)
-		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
-			    (length= lhss (length (cdr x))))
-		       ;; (a, b, ...) = (x, y, ...)
-		       (tuple-to-assignments lhss x)
-		       ;; (a, b, ...) = other
-		       (lower-tuple-assignment lhss x)))
+   ;; multiple value assignment a,b = x
+   (pattern-lambda
+    (= (tuple . lhss) x)
+    (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
+	     (length= lhss (length (cdr x))))
+	;; (a, b, ...) = (x, y, ...)
+	(tuple-to-assignments lhss x)
+	;; (a, b, ...) = other
+	(let* ((xx  (if (symbol? x) x (gensy)))
+	       (ini (if (eq? x xx) '() `((= ,xx ,x))))
+	       (st  (gensy)))
+	  `(block
+	    ,@ini
+	    (= ,st (call (top start) ,xx))
+	    ,.(map (lambda (i lhs)
+		     (lower-tuple-assignment
+		      (list lhs st)
+		      `(call (|.| (top Base) (quote indexed_next)) ,xx ,(+ i 1) ,st)))
+		   (iota (length lhss))
+		   lhss)
+	    ,xx))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
 		   (let* ((reuse (and (pair? a)
@@ -728,6 +832,7 @@
 		   (let* ((reuse (and (pair? a)
 				      (contains (lambda (x)
 						  (or (eq? x 'end)
+						      (eq? x ':)
 						      (and (pair? x)
 							   (eq? (car x) ':))))
 						idxs)))
@@ -760,7 +865,7 @@
 					    (cadr x)
 					    (tuple-wrap (cdr a) '())))
 				 (tuple-wrap (cdr a) (cons x run))))))
-		     `(call apply ,f ,@(tuple-wrap argl '()))))
+		     `(call (top apply) ,f ,@(tuple-wrap argl '()))))
 
    ; tuple syntax (a, b...)
    ; note, directly inside tuple ... means sequence type
@@ -775,19 +880,24 @@
 
    (pattern-lambda (... a) `(curly ... ,a))
 
+   ;; dict syntax
+   (pattern-lambda (dict . args)
+		   `(call (top Dict)
+			  (tuple ,@(map cadr  args))
+			  (tuple ,@(map caddr args))))
+
+   ;; typed dict syntax
+   (pattern-lambda (typed-dict atypes . args)
+		   (if (and (length= atypes 3)
+			    (eq? (car atypes) '=>))
+		       `(call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))
+			      (tuple ,@(map cadr  args))
+			      (tuple ,@(map caddr args)))
+		       (error (string "invalid typed-dict syntax " atypes))))
+
    ;; cell array syntax
    (pattern-lambda (cell1d . args)
-		   (cond ((any (lambda (e) (and (length= e 3)
-						(eq? (car e) '=>)))
-			       args)
-			  (if (not (every (lambda (e) (and (length= e 3)
-							   (eq? (car e) '=>)))
-					  args))
-			      (error "invalid hash table literal")
-			      `(call (top hashtable)
-				     (tuple ,@(map cadr  args))
-				     (tuple ,@(map caddr args)))))
-			 ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
+		   (cond ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
 			       args)
 			  `(call (top cell_1d) ,@args))
 			 (else
@@ -796,8 +906,7 @@
 						   ,(length args)))
 				    ,@(map (lambda (i elt)
 					     `(call (top arrayset) ,name
-						    ,(+ 1 i)
-						    ,elt))
+						    ,elt ,(+ 1 i)))
 					   (iota (length args))
 					   args)
 				    ,name)))))
@@ -810,8 +919,8 @@
 			 `(block (= ,name (call (top Array) (top Any)
 						,nr ,nc))
 				 ,@(map (lambda (i elt)
-					  `(call (top arrayset) ,name ,(+ 1 i)
-						 ,elt))
+					  `(call (top arrayset) ,name
+						 ,elt ,(+ 1 i)))
 					(iota (* nr nc))
 					args)
 				 ,name))))
@@ -837,6 +946,10 @@
    ; <expr>::T => typeassert(expr, T)
    (pattern-lambda (|::| (-- expr (-^ (-s))) T)
 		   `(call (top typeassert) ,expr ,T))
+
+   ;; ::T outside arg list syntax error
+   (pattern-lambda (|::| _)
+		   (error "invalid :: syntax"))
 
    ;; constant definition
    (pattern-lambda (const (= lhs rhs))
@@ -865,10 +978,8 @@
    ;; for loops
 
    (pattern-lambda
-    (for (= var (: a b)) body)
+    (for (= lhs (: a b)) body)
     (begin
-      (if (not (symbol? var))
-	  (error "invalid for loop syntax: expected symbol"))
       (let ((cnt (gensy))
 	    (lim (if (number? b) b (gensy))))
 	`(scope-block
@@ -876,18 +987,18 @@
 	   (= ,cnt ,a)
 	   ,@(if (eq? lim b) '() `((= ,lim ,b)))
 	   (break-block loop-exit
-			(_while (call <= ,cnt ,lim)
+			(_while (call (top <=) ,cnt ,lim)
 				(block
-				 (= ,var ,cnt)
+				 (= ,lhs ,cnt)
 				 (break-block loop-cont
 					      ,body)
 				 (= ,cnt (call (top convert)
 					       (call (top typeof) ,cnt)
-					       (call + 1 ,cnt)))))))))))
+					       (call (top +) 1 ,cnt)))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
-    (for (= i X) body)
+    (for (= lhs X) body)
     (let ((coll  (gensy))
 	  (state (gensy)))
       `(scope-block
@@ -895,7 +1006,8 @@
 	       (= ,state (call (top start) ,coll))
 	       (while (call (top !) (call (top done) ,coll ,state))
 		      (block
-		       (= (tuple ,i ,state) (call (top next) ,coll ,state))
+		       ,(lower-tuple-assignment (list lhs state)
+						`(call (top next) ,coll ,state))
 		       ,body))))))
 
    ; update operators
@@ -909,6 +1021,8 @@
    (pattern-lambda (.//= a b)   (expand-update-operator '.// a b))
    (pattern-lambda (|\\=| a b)  (expand-update-operator '|\\| a b))
    (pattern-lambda (|.\\=| a b) (expand-update-operator '|.\\| a b))
+   (pattern-lambda (|.+=| a b)  (expand-update-operator '|.+| a b))
+   (pattern-lambda (|.-=| a b)  (expand-update-operator '|.-| a b))
    (pattern-lambda (^= a b)     (expand-update-operator '^ a b))
    (pattern-lambda (.^= a b)    (expand-update-operator '.^ a b))
    (pattern-lambda (%= a b)     (expand-update-operator '% a b))
@@ -936,61 +1050,59 @@
 		   `(call (top hcat) ,@a))
 
    (pattern-lambda (vcat . a)
-		   `(call (top vcat) ,@a))
+		   (if (any (lambda (x)
+			      (and (pair? x) (eq? (car x) 'row)))
+			    a)
+		       ;; convert nested hcat inside vcat to hvcat
+		       (let ((rows (map (lambda (x)
+					  (if (and (pair? x) (eq? (car x) 'row))
+					      (cdr x)
+					      (list x)))
+					a)))
+			 `(call (top hvcat)
+				(tuple ,@(map length rows))
+				,@(apply nconc rows)))
+		       `(call (top vcat) ,@a)))
 
    ;; transpose operator
    (pattern-lambda (|'| a) `(call ctranspose ,a))
    (pattern-lambda (|.'| a) `(call transpose ,a))
 
    ;; transposed multiply
-   (pattern-lambda (call (-/ *) (|'| a) b)
-		   `(call aCb ,a ,b))
+   (pattern-lambda (call (-/ *) (|'| a) (|'| b))   `(call Ac_mul_Bc ,a ,b))
+   (pattern-lambda (call (-/ *) (|.'| a) (|.'| b)) `(call At_mul_Bt ,a ,b))
+   (pattern-lambda (call (-/ *) (|'| a) b)  `(call Ac_mul_B ,a ,b))
+   (pattern-lambda (call (-/ *) a (|'| b))  `(call A_mul_Bc ,a ,b))
+   (pattern-lambda (call (-/ *) (|.'| a) b) `(call At_mul_B ,a ,b))
+   (pattern-lambda (call (-/ *) a (|.'| b)) `(call A_mul_Bt ,a ,b))
 
-   (pattern-lambda (call (-/ *) a (|'| b))
-		   `(call abC ,a ,b))
+   ;; transposed divide
+   (pattern-lambda (call (-/ /) (|'| a) (|'| b))   `(call Ac_rdiv_Bc ,a ,b))
+   (pattern-lambda (call (-/ /) (|.'| a) (|.'| b)) `(call At_rdiv_Bt ,a ,b))
+   (pattern-lambda (call (-/ /) (|'| a) b)  `(call Ac_rdiv_B ,a ,b))
+   (pattern-lambda (call (-/ /) a (|'| b))  `(call A_rdiv_Bc ,a ,b))
+   (pattern-lambda (call (-/ /) (|.'| a) b) `(call At_rdiv_B ,a ,b))
+   (pattern-lambda (call (-/ /) a (|.'| b)) `(call A_rdiv_Bt ,a ,b))
 
-   (pattern-lambda (call (-/ *) (|'| a) (|'| b))
-		   `(call aCbC ,a ,b))
+   (pattern-lambda (call (-/ \\) (|'| a) (|'| b))   `(call Ac_ldiv_Bc ,a ,b))
+   (pattern-lambda (call (-/ \\) (|.'| a) (|.'| b)) `(call At_ldiv_Bt ,a ,b))
+   (pattern-lambda (call (-/ \\) (|'| a) b)  `(call Ac_ldiv_B ,a ,b))
+   (pattern-lambda (call (-/ \\) a (|'| b))  `(call A_ldiv_Bc ,a ,b))
+   (pattern-lambda (call (-/ \\) (|.'| a) b) `(call At_ldiv_B ,a ,b))
+   (pattern-lambda (call (-/ \\) a (|.'| b)) `(call A_ldiv_Bt ,a ,b))
 
-   (pattern-lambda (call (-/ *) (|.'| a) b)
-		   `(call aTb ,a ,b))
-
-   (pattern-lambda (call (-/ *) a (|.'| b))
-		   `(call abT ,a ,b))
-
-   (pattern-lambda (call (-/ *) (|.'| a) (|.'| b))
-		   `(call aTbT ,a ,b))
-
-   (pattern-lambda (ccall name RT (tuple . argtypes) . args)
-		   (lower-ccall name RT argtypes args))
+   (pattern-lambda (ccall name RT argtypes . args)
+		   (begin
+		     (if (not (and (pair? argtypes)
+				   (eq? (car argtypes) 'tuple)))
+			 (error "ccall argument types must be a tuple; try (T,)"))
+		     (lower-ccall name RT (cdr argtypes) args)))
 
    )) ; patterns
 
-; patterns that verify all syntactic sugar was well-formed
-; if any sugary forms remain after the above patterns, it means the
-; patterns didn't match, which implies a syntax error.
-(define check-desugared
-  (pattern-set
-   (pattern-lambda (function . any)
-		   (error "invalid function definition"))
-
-   (pattern-lambda (for . any)
-		   (error "invalid for loop syntax"))
-
-   (pattern-lambda (type . any)
-		   (error "invalid type definition"))
-
-   (pattern-lambda (typealias . any)
-		   (error "invalid typealias statement"))
-
-   (pattern-lambda (macro . any)
-		   (error "macros must be defined at the top level"))
-
-   ))
-
 ;; Comprehensions
 
-(define (lower-nd-comprehension expr ranges)
+(define (lower-nd-comprehension atype expr ranges)
   (let ((result    (gensy))
 	(ri        (gensy))
 	(oneresult (gensy)))
@@ -1010,9 +1122,9 @@
       (if (null? ranges)
 	  (list)
 	  (if (eq? (car ranges) `:)
-	      (cons `(call size ,oneresult ,oneresult-dim)
+	      (cons `(call (top size) ,oneresult ,oneresult-dim)
 		    (compute-dims (cdr ranges) (+ oneresult-dim 1)))
-	      (cons `(call length ,(caddr (car ranges)))
+	      (cons `(call (top length) ,(caddr (car ranges)))
 		    (compute-dims (cdr ranges) oneresult-dim)) )))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
@@ -1025,20 +1137,32 @@
 		      (+= ,ri 1)) )
 	  (if (eq? (car ranges) `:)
 	      (let ((i (gensy)))
-		`(for (= ,i (: 1 (call size ,oneresult ,oneresult-dim)))
+		`(for (= ,i (: 1 (call (top size) ,oneresult ,oneresult-dim)))
 		      ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
 	      `(for ,(car ranges)
 		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
 
+    (define (get-eltype)
+      (if (null? atype)
+	`((call (top eltype) ,oneresult))
+	`(,atype)))
+
     ;; Evaluate the comprehension
     `(scope-block
-      (block 
+      (block
        (= ,oneresult (tuple))
        ,(evaluate-one ranges)
-       (= ,result (call _jl_comprehension_zeros ,oneresult ,@(compute-dims ranges 1) ))
+       (= ,result (call (top Array) ,@(get-eltype)
+			,@(compute-dims ranges 1)))
        (= ,ri 1)
        ,(construct-loops (reverse ranges) (list) 1)
        ,result ))))
+
+(define (lhs-vars e)
+  (cond ((symbol? e) (list e))
+	((and (pair? e) (eq? (car e) 'tuple))
+	 (apply append (map lhs-vars (cdr e))))
+	(else '())))
 
 (define lower-comprehensions
   (pattern-set
@@ -1046,36 +1170,24 @@
    (pattern-lambda
     (comprehension expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
-	(lower-nd-comprehension expr ranges)
+	(lower-nd-comprehension '() expr ranges)
     (let ((result    (gensy))
 	  (ri        (gensy))
+	  (initlabl  (gensy))
 	  (oneresult (gensy))
 	  (rv        (map (lambda (x) (gensy)) ranges)))
 
-      ;; get the first value in a range
-      (define (first-val range)
-	`(call (top tupleref)
-	       (call (top next) ,range (call (top start) ,range)) 1))
-
-      ;; evaluate one expression to figure out type and size
-      (define (evaluate-one ranges)
-	`(block
-	  ,@(map (lambda (r)
-		   ;; r is (= var range)
-		   `(= ,(cadr r) ,(first-val (caddr r))))
-		 ranges)
-	  (= ,oneresult ,expr)
-	  ,oneresult))
-
       ;; compute the dimensions of the result
       (define (compute-dims ranges)
-	(map (lambda (r) `(call length ,(caddr r)))
+	(map (lambda (r) `(call (top length) ,(caddr r)))
 	     ranges))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges)
-        (if (null? ranges)
-	    `(block (call (top assign) ,result ,expr ,ri)
+	(if (null? ranges)
+	    `(block (= ,oneresult ,expr)
+		    (type_goto ,initlabl)
+		    (call (top assign) ,result ,oneresult ,ri)
 		    (+= ,ri 1))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
@@ -1083,50 +1195,124 @@
       ;; Evaluate the comprehension
       (let ((loopranges
 	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
-	`(scope-block
-	  (block
+	`(block
+	  ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+	  (scope-block
+	   (block
 	   (local ,oneresult)
-	   ,@(map (lambda (r) `(local ,(cadr r))) ranges)
-	   ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-	   ;; the evaluate-one code is used by type inference but does not run
-	   (if (call (top !) true) ,(evaluate-one loopranges))
+	   ,@(map (lambda (r) `(local ,r))
+		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	   (label ,initlabl)
 	   (= ,result (call (top Array)
 			    (static_typeof ,oneresult)
 			    ,@(compute-dims loopranges)))
 	   (= ,ri 1)
 	   ,(construct-loops (reverse loopranges))
-	   ,result))))))
+	   ,result)))))))
 
-   ;; cell array comprehensions
+   ;; typed array comprehensions
    (pattern-lambda
-    (cell-comprehension expr . ranges)
+    (typed-comprehension atype expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(lower-nd-comprehension atype expr ranges)
     (let ( (result (gensy))
 	   (ri (gensy))
 	   (rs (map (lambda (x) (gensy)) ranges)) )
 
       ;; compute the dimensions of the result
       (define (compute-dims ranges)
-	(if (null? ranges)
-	    (list)
-	    (cons `(call (top length) ,(car ranges))
-		  (compute-dims (cdr ranges)))))
+	(map (lambda (r) `(call (top length) ,r))
+	     ranges))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
-        (if (null? ranges)
+	(if (null? ranges)
 	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
 		  ,(construct-loops (cdr ranges) (cdr rs)))))
 
       ;; Evaluate the comprehension
-      `(scope-block
-	(block 
-	 ,@(map make-assignment rs (map caddr ranges))
-	 (= ,result (call (top Array) (top Any) ,@(compute-dims rs)))
+      `(block
+	,@(map make-assignment rs (map caddr ranges))
+	(local ,result)
+	(= ,result (call (top Array) ,atype ,@(compute-dims rs)))
+	(scope-block
+	(block
+	 ,@(map (lambda (r) `(local ,r))
+		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	 (= ,ri 1)
 	 ,(construct-loops (reverse ranges) (reverse rs))
-	 ,result))))
+	 ,result))))))
+
+   ;; dict comprehensions
+   (pattern-lambda
+    (dict-comprehension expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(error "invalid iteration syntax")
+    (let ((result   (gensy))
+	  (initlabl (gensy))
+	  (onekey   (gensy))
+	  (oneval   (gensy))
+	  (rv         (map (lambda (x) (gensy)) ranges)))
+
+      ;; construct loops to cycle over all dimensions of an n-d comprehension
+      (define (construct-loops ranges)
+	(if (null? ranges)
+	    `(block (= ,onekey ,(cadr expr))
+		    (= ,oneval ,(caddr expr))
+		    (type_goto ,initlabl)
+		    (call (top assign) ,result ,oneval ,onekey))
+	    `(for ,(car ranges)
+		  ,(construct-loops (cdr ranges)))))
+
+      ;; Evaluate the comprehension
+      (let ((loopranges
+	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
+	`(block
+	  ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+	  (scope-block
+	   (block
+	   (local ,onekey)
+	   (local ,oneval)
+	   ,@(map (lambda (r) `(local ,r))
+		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	   (label ,initlabl)
+	   (= ,result (call (curly (top Dict)
+			    (static_typeof ,onekey)
+			    (static_typeof ,oneval))))
+	   ,(construct-loops (reverse loopranges))
+	   ,result)))))))
+
+   ;; typed dict comprehensions
+   (pattern-lambda
+    (typed-dict-comprehension atypes expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(error "invalid iteration syntax")
+    (if (not (and (length= atypes 3)
+		  (eq? (car atypes) '=>)))
+	(error "invalid typed-dict-comprehension syntax")
+    (let ( (result (gensy))
+	   (rs (map (lambda (x) (gensy)) ranges)) )
+
+      ;; construct loops to cycle over all dimensions of an n-d comprehension
+      (define (construct-loops ranges rs)
+	(if (null? ranges)
+	    `(call (top assign) ,result ,(caddr expr) ,(cadr expr))
+	    `(for (= ,(cadr (car ranges)) ,(car rs))
+		  ,(construct-loops (cdr ranges) (cdr rs)))))
+
+      ;; Evaluate the comprehension
+      `(block
+	,@(map make-assignment rs (map caddr ranges))
+	(local ,result)
+	(= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
+	(scope-block
+	(block
+	 ,@(map (lambda (r) `(local ,r))
+		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	 ,(construct-loops (reverse ranges) (reverse rs))
+	 ,result)))))))
 
 )) ;; lower-comprehensions
 
@@ -1167,6 +1353,21 @@
 			    (if ,g ,g
 				,(loop (cdr tail)))))))))))
 
+;; in "return x()" inside a try block, "x()" is not really in tail position
+;; since we need to pop the exception handler first. convert these cases
+;; to "tmp = x(); return tmp"
+(define (fix-try-block-returns e)
+  (cond ((or (atom? e) (quoted? e))  e)
+	((and (eq? (car e) 'return) (or (symbol? (cadr e)) (pair? (cadr e))))
+	 (let ((sym (gensy)))
+	   `(block (local! ,sym)
+		   (= ,sym ,(cadr e))
+		   (return ,sym))))
+	((eq? (car e) 'lambda) e)
+	(else
+	 (cons (car e)
+	       (map fix-try-block-returns (cdr e))))))
+
 ; conversion to "linear flow form"
 ;
 ; This pass removes control flow constructs from value position.
@@ -1189,7 +1390,18 @@
 ; In this form, expressions can be analyzed freely without fear of
 ; intervening branches. Similarly, control flow can be analyzed without
 ; worrying about implicit value locations (the "evaluation stack").
+(define *lff-line* 0)
 (define (to-LFF e)
+  (set! *lff-line* 0)
+  (with-exception-catcher
+   (lambda (e)
+     (if (and (> *lff-line* 0) (pair? e) (eq? (car e) 'error))
+	 (let ((msg (cadr e)))
+	   (raise `(error ,(string msg " at line " *lff-line*))))
+	 (raise e)))
+   (lambda () (to-LFF- e))))
+
+(define (to-LFF- e)
   (define (to-blk r)
     (if (length= r 1)
 	(car r)
@@ -1211,7 +1423,7 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (or (not (pair? e)) (memq (car e) '(quote top line))
+    (if (or (not (pair? e)) (memq (car e) '(quote top))
 	    (equal? e '(null)))
 	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
 	      (dest (cons (if tail `(return ,e) e)
@@ -1223,7 +1435,7 @@
 	   (if (or (not (symbol? (cadr e)))
 		   (eq? (cadr e) 'true)
 		   (eq? (cadr e) 'false))
-	       (error (string "invalid assignment lvalue " (cadr e)))
+	       (error (string "invalid assignment location " (cadr e)))
 	       (let ((r (to-lff (caddr e) (cadr e) #f)))
 		 (cond ((symbol? dest)
 			(cons `(block ,(car r)
@@ -1247,19 +1459,18 @@
 			 (cons g
 			       (cons `(local! ,g) (to-lff e g #f)))))))
 
+	  ((line)
+	   (set! *lff-line* (cadr e))
+	   (cons e '()))
+
 	  ((trycatch)
-	   (cond (tail
-		  (let ((g (gensy)))
-		    (to-lff `(block (local! ,g)
-				    (= ,g ,e)
-				    (return ,g))
-			    #f #f)))
-		 ((eq? dest #t)
+	   (cond ((and (eq? dest #t) (not tail))
 		  (let ((g (gensy)))
 		    (cons g
 			  (cons `(local! ,g) (to-lff e g #f)))))
 		 (else
-		  (cons `(trycatch ,(to-blk (to-lff (cadr e) dest tail))
+		  (cons `(trycatch ,(fix-try-block-returns
+				     (to-blk (to-lff (cadr e) dest tail)))
 				   ,(to-blk (to-lff (caddr e) dest tail)))
 			()))))
 
@@ -1364,6 +1575,8 @@
 	       (to-lff '(null) dest tail)))
 
 	  (else
+	   (if (and dest (not tail) (eq? (car e) 'method))
+	       (error (string "misplaced method definition for " (cadr e))))
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
 			 (cdr e))))
 	     (cond ((symbol? dest)
@@ -1460,7 +1673,7 @@ So far only the second case can actually occur.
 	     (let* ((env (append (lam:vars e) env))
 		    (body (add-local-decls (caddr e) env)))
 	       (list 'lambda (cadr e) body)))
-	    
+
 	    ((eq? (car e) 'scope-block)
 	     (let* ((glob (declared-global-vars (cadr e)))
 		    (vars (find-locals
@@ -1511,11 +1724,16 @@ So far only the second case can actually occur.
 	((quoted? e)      e)
 	(else
 	 (let (; remove vars bound by current expr from rename list
-	       (new-renames (without renames
-				     (case (car e)
-				       ((lambda)      (lam:vars e))
-				       ((scope-block) (declared-local-vars e))
-				       (else '())))))
+	       (new-renames
+		(without renames
+			 (case (car e)
+			   ((lambda)
+			    (append (lambda-all-vars e)
+				    (declared-global-vars (cadddr e))))
+			   ((scope-block)
+			    (append (declared-local-vars e)
+				    (declared-global-vars (cadr e))))
+			   (else '())))))
 	   (cons (car e)
 		 (map (lambda (x)
 			(rename-vars x new-renames))
@@ -1560,7 +1778,7 @@ So far only the second case can actually occur.
 	       bod)))
 	  (else (map (lambda (e) (remove-scope-blocks e context usedv))
 		     e))))
-  
+
   (cond ((not (pair? e))   e)
 	((quoted? e)       e)
 	((eq? (car e)      'lambda)
@@ -1640,14 +1858,20 @@ So far only the second case can actually occur.
 	 ;(let ((vi (var-info-for (cadr e) env)))
 	 ;  (if vi
 	 ;      (begin (vinfo:set-type! vi (caddr e))
-	 ;             (cadr e))
+	 ;	     (cadr e))
 	 `(call (top typeassert) ,(cadr e) ,(caddr e)))
 	((or (eq? (car e) 'decl) (eq? (car e) '|::|))
 	 ; handle var::T declaration by storing the type in the var-info
 	 ; record. for non-symbols or globals, emit a type assertion.
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
-	       (begin (vinfo:set-type! vi (caddr e))
+	       (begin (if (not (eq? (vinfo:type vi) 'Any))
+			  (error (string "multiple type declarations for "
+					 (cadr e))))
+		      (if (assq (cadr e) captvars)
+			  (error (string "type of " (cadr e)
+					 " declared in inner scope")))
+		      (vinfo:set-type! vi (caddr e))
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
 	((eq? (car e) 'lambda)
@@ -1724,6 +1948,7 @@ So far only the second case can actually occur.
   (let ((code '())
 	(ip   0)
 	(label-counter 0)
+	(label-map '())
 	(handler-level 0))
     (define (emit c)
       (set! code (cons c code))
@@ -1742,7 +1967,7 @@ So far only the second case can actually occur.
     (define (compile e break-labels vi)
       (if (or (not (pair? e)) (equal? e '(null)))
 	  ; atom has no effect, but keep symbols for undefined-var checking
-	  (if (symbol? e) (emit e) #f)
+	  #f #;(if (symbol? e) (emit e) #f)
 	  (case (car e)
 	    ((call)  (emit (goto-form e)))
 	    ((=)     (let ((vt (vinfo:type
@@ -1790,6 +2015,19 @@ So far only the second case can actually occur.
 			(if (> handler-level 0)
 			    (emit `(leave ,handler-level)))
 			(emit (goto-form e))))
+	    ((label) (let ((m (assq (cadr e) label-map)))
+		       (if m
+			   (emit `(label ,(cdr m)))
+			   (let ((l (make&mark-label)))
+			     (set! label-map
+				   (cons (cons (cadr e) l) label-map))))))
+	    ((type_goto) (let ((m (assq (cadr e) label-map)))
+			   (if m
+			       (emit `(type_goto ,(cdr m)))
+			       (let ((l (make-label)))
+				 (set! label-map
+				       (cons (cons (cadr e) l) label-map))
+				 (emit `(type_goto ,l))))))
 	    ;; exception handlers are lowered using
 	    ;; (enter L) - push handler with catch block at label L
 	    ;; (leave n) - pop N exception handlers
@@ -1801,12 +2039,17 @@ So far only the second case can actually occur.
 	       (set! handler-level (+ handler-level 1))
 	       (compile (cadr e) break-labels vi)
 	       (set! handler-level (- handler-level 1))
-	       (emit `(leave 1))
-	       (emit `(goto ,endl))
+	       (if (not (and (pair? (car code)) (eq? (caar code) 'return)))
+		   ;; try ends in return, no need to handle flow off end of it
+		   (begin (emit `(leave 1))
+			  (emit `(goto ,endl)))
+		   (set! endl #f))
 	       (mark-label catch)
 	       (emit `(leave 1))
 	       (compile (caddr e) break-labels vi)
-	       (mark-label endl)))
+	       (if endl
+		   (mark-label endl))
+	       ))
 
 	    ((global) #f)  ; remove global declarations
 	    (else  (emit (goto-form e))))))
@@ -1822,10 +2065,12 @@ So far only the second case can actually occur.
 (define (to-goto-form e)
   (goto-form e))
 
+;; macro expander
+
 (define (expand-backquote e)
   (cond ((or (eq? e 'true) (eq? e 'false))  e)
 	((symbol? e)          `(quote ,e))
-        ((not (pair? e))      e)
+	((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
 	 (expand-backquote (expand-backquote (cadr e))))
@@ -1838,14 +2083,31 @@ So far only the second case can actually occur.
 	   (if (null? p)
 	       (let ((forms (reverse q)))
 		 `(call (top expr) ,(expand-backquote (car e))
-			(call (top append) ,@forms)))
-	       ; look for splice inside backquote, e.g. (a,$(x...),b)
+			(call (top append_any) ,@forms)))
+	       ;; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (match '($ (tuple (... x))) (car p))
 		   (loop (cdr p)
 			 (cons (cadr (cadadr (car p))) q))
 		   (loop (cdr p)
 			 (cons `(cell1d ,(expand-backquote (car p)))
 			       q))))))))
+
+(define (julia-expand-strs e)
+  (cond ((not (pair? e))     e)
+	((and (eq? (car e) 'macrocall) (eq? (cadr e) '@str))
+	 ;; expand macro
+	 (let ((form
+		(apply invoke-julia-macro (cadr e) (cddr e))))
+	   (if (not form)
+	       (error (string "macro " (cadr e) " not defined")))
+	   (if (and (pair? form) (eq? (car form) 'error))
+	       (error (cadr form)))
+	   (let ((form (car form))
+		 (m    (cdr form)))
+	     ;; m is the macro's def module, or #f if def env === use env
+	     (resolve-expansion-vars form m))))
+	(else
+	 (map julia-expand-strs e))))
 
 (define (julia-expand-macros e)
   (cond ((not (pair? e))     e)
@@ -1858,11 +2120,105 @@ So far only the second case can actually occur.
 		(apply invoke-julia-macro (cadr e) (cddr e))))
 	   (if (not form)
 	       (error (string "macro " (cadr e) " not defined")))
-	   (if (equal? form '(error))
-	       (error (string "error expanding macro " (cadr e))))
-	   (julia-expand-macros form)))
+	   (if (and (pair? form) (eq? (car form) 'error))
+	       (error (cadr form)))
+	   (let ((form (car form))
+		 (m    (cdr form)))
+	     ;; m is the macro's def module, or #f if def env === use env
+	     (julia-expand-macros
+	      (resolve-expansion-vars (julia-expand-strs form) m)))))
 	(else
 	 (map julia-expand-macros e))))
+
+(define (pair-with-gensyms v)
+  (map (lambda (s) (cons s (named-gensy s))) v))
+
+(define (resolve-expansion-vars- e env m)
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
+	 e)
+	((symbol? e)
+	 (let ((a (assq e env)))
+	   (if a (cdr a)
+	       (if m `(|.| ,m (quote ,e))
+		   e))))
+	((or (not (pair? e)) (quoted? e))
+	 e)
+	(else
+	 (case (car e)
+	   ((escape) (cadr e))
+	   ((macrocall)
+	    `(macrocall ,@(map (lambda (x)
+				 (resolve-expansion-vars- x env m))
+			       (cdr e))))
+	   ;; todo: trycatch
+	   (else
+	    (cons (car e)
+		  (map (lambda (x)
+			 (resolve-expansion-vars-
+			  x
+			  (append!
+			   (filter (lambda (x)
+				     (not (assq (car x) env)))
+				   (pair-with-gensyms (vars-introduced-by x)))
+			   env)
+			  m))
+		       (cdr e))))))))
+
+;; decl-var that also identifies f in f()=...
+(define (decl-var* e)
+  (cond ((not (pair? e))       e)
+	((eq? (car e) 'escape) '())
+	((eq? (car e) 'call)   (decl-var* (cadr e)))
+	((eq? (car e) '=)      (decl-var* (cadr e)))
+	((eq? (car e) 'curly)  (decl-var* (cadr e)))
+	(else                  (decl-var e))))
+
+(define (find-declared-vars-in-expansion e decl)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (cond ((eq? (car e) 'escape)  '())
+	    ((eq? (car e) decl)     (map decl-var* (cdr e)))
+	    (else
+	     (apply append! (map (lambda (x)
+				   (find-declared-vars-in-expansion x decl))
+				 e))))))
+
+(define (find-assigned-vars-in-expansion e)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (case (car e)
+	((escape)  '())
+	((= function)
+	 (append! (filter
+		   symbol?
+		   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
+		       (map decl-var* (cdr (cadr e)))
+		       (list (decl-var* (cadr e)))))
+		  (find-assigned-vars-in-expansion (caddr e))))
+	(else
+	 (apply append! (map find-assigned-vars-in-expansion e))))))
+
+(define (vars-introduced-by e)
+  (let ((v (pattern-expand1 vars-introduced-by-patterns e)))
+    (if (and (pair? v) (eq? (car v) 'varlist))
+	(cdr v)
+	'())))
+
+(define (env-for-expansion e)
+  (let ((v (diff (delete-duplicates
+		  (append! (find-declared-vars-in-expansion e 'local)
+			   (find-assigned-vars-in-expansion e)
+			   (vars-introduced-by e)))
+		 (find-declared-vars-in-expansion e 'global))))
+    (pair-with-gensyms v)))
+
+(define (resolve-expansion-vars e m)
+  ;; expand binding form patterns
+  ;; keep track of environment, rename locals to gensyms
+  ;; and wrap globals in (getfield module var) for macro's home module
+  (resolve-expansion-vars- e (env-for-expansion e) m))
+
+;; expander entry point
 
 (define (julia-expand1 ex)
   (to-goto-form
@@ -1870,13 +2226,17 @@ So far only the second case can actually occur.
     (flatten-scopes
      (identify-locals ex)))))
 
-(define (julia-expand0 ex)
-  (reset-gensyms)
+(define (julia-expand01 ex)
   (to-LFF
    (pattern-expand patterns
     (pattern-expand lower-comprehensions
-     (pattern-expand binding-form-patterns
-      (julia-expand-macros ex))))))
+     (pattern-expand binding-form-patterns ex)))))
+
+(define (julia-expand0 ex)
+  (let ((e (julia-expand-macros ex)))
+    (if (and (pair? e) (eq? (car e) 'toplevel))
+	`(toplevel ,@(map julia-expand01 (cdr e)))
+	(julia-expand01 e))))
 
 (define (julia-expand ex)
   (julia-expand1 (julia-expand0 ex)))
