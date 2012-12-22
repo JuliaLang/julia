@@ -41,7 +41,7 @@ Julia.
 Finally, you can use ``ccall`` to actually generate a call to the
 library function. Arguments to ``ccall`` are as follows:
 
-1. (:function, "library") pair.
+1. (:function, "library") pair (must be a constant, but see below).
 2. Return type, which may be any bits type, including ``Int32``,
    ``Int64``, ``Float64``, or ``Ptr{T}`` for any type parameter ``T``,
    indicating a pointer to values of type ``T``, or just ``Ptr`` for
@@ -244,6 +244,23 @@ can be called via the following Julia code::
 
     argv = [ "a.out", "arg1", "arg2" ]
     ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
+
+Non-constant Function Specifications
+------------------------------------
+
+A ``(name, library)`` function specification must be a constant expression.
+However, it is possible to use computed values as function names by staging
+through ``eval`` as follows:
+
+    @eval ccall(($(strcat("a","b")), :lib), ...
+
+This expression constructs a name using ``strcat``, then substitutes this
+name into a new ``ccall`` expression, which is then evaluated. Keep in mind that
+``eval`` only operates at the top level, so within this expression local
+variables will not be available (unless their values are substituted with
+``$``). For this reason, ``eval`` is typically only used to form top-level
+definitions, for example when wrapping libraries that contain many
+similar functions.
 
 Indirect calls
 --------------
