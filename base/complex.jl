@@ -254,15 +254,14 @@ end
 function sqrt(z::Complex)
     rz = float(real(z))
     iz = float(imag(z))
-    T = promote_type(typeof(rz),typeof(z))
-    r = sqrt(0.5*(hypot(rz,iz)+abs(rz)))
+    r = sqrt((hypot(rz,iz)+abs(rz))/2)
     if r == 0
-        return convert(T,complex(0.0, iz))
+        return complex(zero(iz), iz)
     end
     if rz >= 0
-        return convert(T,complex(r, 0.5*iz/r))
+        return complex(r, iz/r/2)
     end
-    return convert(T,complex(0.5*abs(iz)/r, iz >= 0 ? r : -r))
+    return complex(abs(iz)/r/2, iz >= 0 ? r : -r)
 end
 
 cis(theta::Real) = complex(cos(theta),sin(theta))
