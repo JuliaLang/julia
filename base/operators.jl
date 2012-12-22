@@ -141,6 +141,9 @@ one(::Type{Function}) = identity
 map(f::Function) = (x...)->map(f, x...)
 filter(f::Function) = (x...)->filter(f, x...)
 
+# symbol concatenation
+*(a::Symbol, b::Symbol) = symbol(string(a, b))
+
 # array shape rules
 
 function promote_shape(a::(Int,), b::(Int,))
