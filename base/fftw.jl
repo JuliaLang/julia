@@ -13,7 +13,7 @@ const libfftwf = "libfftw3f_threads"
 const FORWARD = int32(-1)
 const BACKWARD = int32(1)
 
-## _jl_FFTW Flags from fftw3.h
+## FFTW Flags from fftw3.h
 
 const MEASURE         = uint32(0)
 const DESTROY_INPUT   = uint32(1 << 0)

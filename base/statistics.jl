@@ -161,7 +161,7 @@ end
 ## pearson covariance functions ##
 
 # pearson covariance between two vectors, with known means
-function _jl_cov_pearson1(x::AbstractArray, y::AbstractArray, mx::Number, my::Number, corrected::Bool)
+function cov_pearson1(x::AbstractArray, y::AbstractArray, mx::Number, my::Number, corrected::Bool)
     n = numel(x)
     if n == 0 || (n == 1 && corrected)
         return NaN
@@ -179,12 +179,12 @@ function cov_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
 
     mx = mean(x)
     my = mean(y)
-    _jl_cov_pearson1(x, y, mx, my, corrected)
+    cov_pearson1(x, y, mx, my, corrected)
 end
 cov_pearson(x::AbstractVector, y::AbstractVector) = cov_pearson(x, y, true)
 
 # pearson covariance over all pairs of columns of a matrix
-function _jl_cov_pearson(x::AbstractMatrix, mxs::AbstractMatrix, corrected::Bool)
+function cov_pearson(x::AbstractMatrix, mxs::AbstractMatrix, corrected::Bool)
     n = size(x, 1)
     if n == 0 || (n == 1 && corrected)
         return NaN
@@ -192,11 +192,11 @@ function _jl_cov_pearson(x::AbstractMatrix, mxs::AbstractMatrix, corrected::Bool
     x0 = x - repmat(mxs, n, 1)
     return (x0'*x0) / (n - (corrected ? 1 : 0))
 end
-cov_pearson(x::AbstractMatrix, corrected::Bool) = _jl_cov_pearson(x, mean(x, 1), corrected)
+cov_pearson(x::AbstractMatrix, corrected::Bool) = cov_pearson(x, mean(x, 1), corrected)
 cov_pearson(x::AbstractMatrix) = cov_pearson(x, true)
 
 # pearson covariance over all pairs of columns of two matrices
-function _jl_cov_pearson(x::AbstractMatrix, y::AbstractMatrix,
+function cov_pearson(x::AbstractMatrix, y::AbstractMatrix,
                      mxs::AbstractMatrix, mys::AbstractMatrix,
                      corrected::Bool)
     n = size(x, 1)
@@ -219,7 +219,7 @@ function cov_pearson(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
     n = size(x, 1)
     mxs = mean(x, 1)
     mys = mean(y, 1)
-    return _jl_cov_pearson(x, y, mxs, mys, corrected)
+    return cov_pearson(x, y, mxs, mys, corrected)
 end
 cov_pearson(x::AbstractMatrix, y::AbstractMatrix) = cov_pearson(x, y, true)
 
@@ -265,7 +265,7 @@ function cor_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
     sx = std(x, mx, corrected)
     sy = std(y, my, corrected)
 
-    return _jl_cov_pearson1(x, y, mx, my, corrected) / (sx * sy)
+    return cov_pearson1(x, y, mx, my, corrected) / (sx * sy)
 end
 cor_pearson(x::AbstractVector, y::AbstractVector) = cor_pearson(x, y, true)
 
@@ -277,7 +277,7 @@ function cor_pearson{T}(x::AbstractMatrix{T}, corrected::Bool)
     for i = 1:m
         sxs[i] = std(sub(x, (1:n, i)), mxs[i], corrected)
     end
-    R = _jl_cov_pearson(x, mxs, corrected) ./ (sxs' * sxs)
+    R = cov_pearson(x, mxs, corrected) ./ (sxs' * sxs)
 
     R[1:m+1:end] = one(T) # fix diagonal for numerical errors
 
@@ -305,7 +305,7 @@ function cor_pearson(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
         sys[i] = std(sub(y, (1:n, i)), mys[i], corrected)
     end
 
-    return _jl_cov_pearson(x, y, mxs, mys, corrected) ./ (sxs' * sys)
+    return cov_pearson(x, y, mxs, mys, corrected) ./ (sxs' * sys)
 end
 cor_pearson(x::AbstractMatrix, y::AbstractMatrix) = cor_pearson(x, y, true)
 

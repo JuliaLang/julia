@@ -14,7 +14,7 @@ imag(x::Real) = zero(x)
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
 
-function _jl_show(io, z::Complex, compact::Bool)
+function complex_show(io, z::Complex, compact::Bool)
     r, i = reim(z)
     if isnan(r) || isfinite(i)
         compact ? showcompact(io,r) : show(io,r)
@@ -34,8 +34,8 @@ function _jl_show(io, z::Complex, compact::Bool)
         print(io, "complex(",r,",",i,")")
     end
 end
-show(io, z::Complex) = _jl_show(io, z, false)
-showcompact(io, z::Complex) = _jl_show(io, z, true)
+show(io, z::Complex) = complex_show(io, z, false)
+showcompact(io, z::Complex) = complex_show(io, z, true)
 
 convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                            throw(InexactError()))
