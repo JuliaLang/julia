@@ -234,4 +234,4 @@ end
 
 typealias ByteString Union(ASCIIString,UTF8String)
 
-include(fname::ByteString) = ccall(:jl_load_, Void, (Any,), fname)
+include(fname::ByteString) = ccall(:jl_load__, Void, (Any,), fname)

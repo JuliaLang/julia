@@ -850,7 +850,7 @@ void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
-DLLEXPORT void jl_load(const char *fname);
+DLLEXPORT void jl_load(const char *fname, int inmain);
 void jl_parse_eval_all(char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);

@@ -127,6 +127,7 @@
     jl_is_rest_arg;
     jl_lisp_prompt;
     jl_load_;
+    jl_load__;
     jl_load;
     jl_load_dynamic_library;
     jl_loaderror_type;
