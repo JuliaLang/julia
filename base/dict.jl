@@ -2,10 +2,10 @@
 
 abstract Associative{K,V}
 
-const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
+const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
-                               _jl_secret_table_token)
+has(t::Associative, key) = !is(get(t, key, secret_table_token),
+                               secret_table_token)
 
 function show{K,V}(io, t::Associative{K,V})
     if isempty(t)
@@ -106,8 +106,8 @@ function _tablesz(i::Integer)
 end
 
 function ref(t::Associative, key)
-    v = get(t, key, _jl_secret_table_token)
-    if is(v,_jl_secret_table_token)
+    v = get(t, key, secret_table_token)
+    if is(v,secret_table_token)
         throw(KeyError(key))
     end
     return v
@@ -162,18 +162,18 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
                                            shl_int(unbox(Uint64,b), 32))))
 
 if WORD_SIZE == 64
-    _jl_hash64(x::Float64) =
+    hash64(x::Float64) =
         ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Float64,x)))
-    _jl_hash64(x::Union(Int64,Uint64)) =
+    hash64(x::Union(Int64,Uint64)) =
         ccall(:int64hash, Uint64, (Uint64,), x)
 else
-    _jl_hash64(x::Float64) =
+    hash64(x::Float64) =
         ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Float64,x)))
-    _jl_hash64(x::Union(Int64,Uint64)) =
+    hash64(x::Union(Int64,Uint64)) =
         ccall(:int64to32hash, Uint32, (Uint64,), x)
 end
 
-hash(x::Integer) = _jl_hash64(uint64(x))
+hash(x::Integer) = hash64(uint64(x))
 @eval function hash(x::FloatingPoint)
     if trunc(x) == x
         # hash as integer if equal to some integer. note the result of
@@ -189,7 +189,7 @@ hash(x::Integer) = _jl_hash64(uint64(x))
             end
         end
     end
-    isnan(x) ? $(_jl_hash64(NaN)) : _jl_hash64(float64(x))
+    isnan(x) ? $(hash64(NaN)) : hash64(float64(x))
 end
 
 function hash(t::Tuple)
@@ -516,8 +516,8 @@ WeakKeyDict() = WeakKeyDict{Any,Any}()
 assign{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
 
 function key{K}(wkh::WeakKeyDict{K}, kk, deflt)
-    k = key(wkh.ht, kk, _jl_secret_table_token)
-    if is(k, _jl_secret_table_token)
+    k = key(wkh.ht, kk, secret_table_token)
+    if is(k, secret_table_token)
         return deflt
     end
     return k.value::K

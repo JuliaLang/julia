@@ -742,13 +742,13 @@ function abstract_eval(e::TopNode, vtypes, sv::StaticVarInfo)
     return abstract_eval_global(_basemod(), e.name)
 end
 
-const _jl_Type_Array = Type{Array}
+const Type_Array = Type{Array}
 
 function abstract_eval_constant(x::ANY)
     if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,CompositeKind) ||
         isa(x,UnionKind) || isa(x,TypeConstructor)
         if is(x,Array)
-            return _jl_Type_Array
+            return Type_Array
         end
         return Type{x}
     end
@@ -1420,7 +1420,7 @@ function resolve_relative(sym, from, to, typ, orig)
         end
         m = _basemod()
         if is(from,m) || is(from,Core)
-            return _jl_tn(sym)
+            return tn(sym)
         end
     end
     return GetfieldNode(from, sym, typ)
@@ -1652,20 +1652,20 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     return (sym_replace(expr, args, spnames, argexprs, spvals), stmts)
 end
 
-_jl_tn(sym::Symbol) =
+tn(sym::Symbol) =
     ccall(:jl_new_struct, Any, (Any,Any...), TopNode, sym, Any)
 
-const _jl_top_tupleref = _jl_tn(:tupleref)
-const _jl_top_tuple = _jl_tn(:tuple)
+const top_tupleref = tn(:tupleref)
+const top_tuple = tn(:tuple)
 
 function mk_tupleref(texpr, i)
-    e = :(($_jl_top_tupleref)($texpr, $i))
+    e = :(($top_tupleref)($texpr, $i))
     e.typ = exprtype(texpr)[i]
     e
 end
 
 function mk_tuplecall(args)
-    Expr(:call1, {_jl_top_tuple, args...}, tuple(map(exprtype, args)...))
+    Expr(:call1, {top_tuple, args...}, tuple(map(exprtype, args)...))
 end
 
 const basenumtype = Union(Int32,Int64,Float32,Float64,Complex64,Complex128,Rational)
@@ -1738,10 +1738,10 @@ function inlining_pass(e::Expr, sv, ast)
                 if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
                                            exprtype(a1) <: basenumtype)
                     if e.args[3]==2
-                        e.args = {_jl_tn(:*), a1, a1}
+                        e.args = {tn(:*), a1, a1}
                         f = *
                     elseif e.args[3]==3
-                        e.args = {_jl_tn(:*), a1, a1, a1}
+                        e.args = {tn(:*), a1, a1, a1}
                         f = *
                     end
                 end

@@ -70,7 +70,7 @@ const OS_NAME = :OS_CURRENT
 
 #define OS_NAME_IFELSE(NUM,NAME) JL_IF(JL_BOOL(NUM),elseif,if) (os==:NAME) return
 #define ATTR(IS_UNIX) JL_TF(JL_BOOL(IS_UNIX)); \n
-function _jl_is_unix(os::Symbol)
+function is_unix(os::Symbol)
 JL_OS_MAP2(OS_NAME_IFELSE,ATTR)
 else
 error("Unknown Operating System")

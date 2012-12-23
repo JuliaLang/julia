@@ -20,7 +20,7 @@ function bidiag(A::Matrix{Float64}, nb, nargout)
         X = zeros(m-k+1, nb)
         Y = zeros(n-k+1, nb)
 
-        ccall(dlsym(_jl_libLAPACK, :dlabrd_), Void,
+        ccall(dlsym(libLAPACK, :dlabrd_), Void,
               (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
                Ptr{Float64},
@@ -50,7 +50,7 @@ function bidiag(A::Matrix{Float64}, nb, nargout)
     tauqblk = zeros(s-k+1)
     taupblk = zeros(s-k+1)
 
-    ccall(dlsym(_jl_libLAPACK,:dgebd2_), Void,
+    ccall(dlsym(libLAPACK,:dgebd2_), Void,
           (Ptr{Int32}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
            Ptr{Float64}, Ptr{Int32}),
@@ -77,13 +77,13 @@ function bidiag(A::Matrix{Float64}, nb, nargout)
 
     if m >= n
         Q = copy(A0)
-        ccall(dlsym(_jl_libLAPACK,:dorgbr_), Void,
+        ccall(dlsym(libLAPACK,:dorgbr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Float64},
                Ptr{Int32}, Ptr{Int32}),
               "Q", m, n, n, Q, m, tauq, zeros(s), s, 0)
         PT = A0
-        ccall(dlsym(_jl_libLAPACK,:dorgbr_), Void,
+        ccall(dlsym(libLAPACK,:dorgbr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Float64},
                Ptr{Int32}, Ptr{Int32}),
@@ -91,14 +91,14 @@ function bidiag(A::Matrix{Float64}, nb, nargout)
         PT = PT[1:n,:]
     else
         Q = copy(A0)
-        ccall(dlsym(_jl_libLAPACK,:dorgbr_), Void,
+        ccall(dlsym(libLAPACK,:dorgbr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Float64},
                Ptr{Int32}, Ptr{Int32}),
               "Q", m, m, n, Q, m, tauq, zeros(s), s, 0)
         Q = Q[:,1:m]
         PT = A0
-        ccall(dlsym(_jl_libLAPACK,:dorgbr_), Void,
+        ccall(dlsym(libLAPACK,:dorgbr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Float64},
                Ptr{Int32}, Ptr{Int32}),
@@ -117,7 +117,7 @@ function blksvd(A::Matrix{Float64}, nargout)
     (Q, D, E, PT) = bidiag(A, nb, 4)
 
     if m >= n
-        ccall(dlsym(_jl_libLAPACK, :dbdsqr_), Void,
+        ccall(dlsym(libLAPACK, :dbdsqr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32},
@@ -125,7 +125,7 @@ function blksvd(A::Matrix{Float64}, nargout)
               "U",
               n, n, m, 0, D, E, PT, n, Q, m, zeros(1,1), 1, zeros(4*n,1), 0)
     else
-        ccall(dlsym(_jl_libLAPACK, :dbdsqr_), Void,
+        ccall(dlsym(libLAPACK, :dbdsqr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32},

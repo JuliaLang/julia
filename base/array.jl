@@ -339,7 +339,7 @@ end
 
 # logical indexing
 
-function _jl_ref_bool_1d(A::Array, I::AbstractArray{Bool})
+function ref_bool_1d(A::Array, I::AbstractArray{Bool})
     check_bounds(A, I)
     n = sum(I)
     out = similar(A, n)
@@ -353,10 +353,10 @@ function _jl_ref_bool_1d(A::Array, I::AbstractArray{Bool})
     out
 end
 
-ref(A::Vector, I::AbstractVector{Bool}) = _jl_ref_bool_1d(A, I)
-ref(A::Vector, I::AbstractArray{Bool}) = _jl_ref_bool_1d(A, I)
-ref(A::Array, I::AbstractVector{Bool}) = _jl_ref_bool_1d(A, I)
-ref(A::Array, I::AbstractArray{Bool}) = _jl_ref_bool_1d(A, I)
+ref(A::Vector, I::AbstractVector{Bool}) = ref_bool_1d(A, I)
+ref(A::Vector, I::AbstractArray{Bool}) = ref_bool_1d(A, I)
+ref(A::Array, I::AbstractVector{Bool}) = ref_bool_1d(A, I)
+ref(A::Array, I::AbstractArray{Bool}) = ref_bool_1d(A, I)
 
 # @Jeff: more efficient is to check the bool vector, and then do
 # indexing without checking. Turn off checking for the second stage?
@@ -573,7 +573,7 @@ end
 
 # logical indexing
 
-function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
+function assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
     check_bounds(A, I)
     for i = 1:numel(I)
         if I[i]
@@ -583,7 +583,7 @@ function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
     A
 end
 
-function _jl_assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
+function assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
     check_bounds(A, I)
     c = 1
     for i = 1:numel(I)
@@ -595,10 +595,10 @@ function _jl_assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{
     A
 end
 
-assign(A::Array, X::AbstractArray, I::AbstractVector{Bool}) = _jl_assign_bool_vector_1d(A, X, I)
-assign(A::Array, X::AbstractArray, I::AbstractArray{Bool}) = _jl_assign_bool_vector_1d(A, X, I)
-assign(A::Array, x, I::AbstractVector{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
-assign(A::Array, x, I::AbstractArray{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
+assign(A::Array, X::AbstractArray, I::AbstractVector{Bool}) = assign_bool_vector_1d(A, X, I)
+assign(A::Array, X::AbstractArray, I::AbstractArray{Bool}) = assign_bool_vector_1d(A, X, I)
+assign(A::Array, x, I::AbstractVector{Bool}) = assign_bool_scalar_1d(A, x, I)
+assign(A::Array, x, I::AbstractArray{Bool}) = assign_bool_scalar_1d(A, x, I)
 
 assign(A::Array, x, I::Integer, J::AbstractVector{Bool}) = assign(A, x, I,find(J))
 
@@ -823,7 +823,7 @@ function .^{T<:Integer}(A::Integer, B::Array{T})
     return F
 end
 
-function _jl_power_array_int_body{T}(F::Array{T}, A, B)
+function power_array_int_body{T}(F::Array{T}, A, B)
     for i=1:numel(A)
         F[i] = A[i]^convert(T,B)
     end
@@ -832,7 +832,7 @@ end
 
 function .^{T<:Integer}(A::Array{T}, B::Integer)
     F = similar(A, B < 0 ? Float64 : promote_type(T,typeof(B)))
-    _jl_power_array_int_body(F, A, B)
+    power_array_int_body(F, A, B)
 end
 
 for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)

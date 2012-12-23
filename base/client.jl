@@ -1,9 +1,9 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-const _jl_color_normal = "\033[0m"
+const color_normal = "\033[0m"
 
-function _jl_answer_color()
+function answer_color()
     c = get(ENV, "JL_ANSWER_COLOR", "")
     return c == "black"   ? "\033[1m\033[30m" :
            c == "red"     ? "\033[1m\033[31m" :
@@ -15,12 +15,12 @@ function _jl_answer_color()
            "\033[1m\033[34m"
 end
 
-_jl_banner() = print(_jl_have_color ? _jl_banner_color : _jl_banner_plain)
+banner() = print(have_color ? banner_color : banner_plain)
 
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
     del_fd_handler(STDIN.fd)
-    put(_jl_repl_channel, (ast, show_value))
+    put(repl_channel, (ast, show_value))
 end
 
 # called to show a REPL result
@@ -55,12 +55,12 @@ function add_backtrace(e, bt)
     end
 end
 
-function _jl_eval_user_input(ast::ANY, show_value)
+function eval_user_input(ast::ANY, show_value)
     iserr, lasterr, bt = false, (), nothing
     while true
         try
-            if _jl_have_color
-                print(_jl_color_normal)
+            if have_color
+                print(color_normal)
             end
             if iserr
                 show(add_backtrace(lasterr,bt))
@@ -70,8 +70,8 @@ function _jl_eval_user_input(ast::ANY, show_value)
                 value = eval(Main,ast)
                 global ans = value
                 if !is(value,nothing) && show_value
-                    if _jl_have_color
-                        print(_jl_answer_color())
+                    if have_color
+                        print(answer_color())
                     end
                     try repl_show(value)
                     catch err
@@ -90,14 +90,14 @@ function _jl_eval_user_input(ast::ANY, show_value)
 end
 
 function run_repl()
-    global const _jl_repl_channel = RemoteRef()
+    global const repl_channel = RemoteRef()
 
-    if _jl_have_color
+    if have_color
         ccall(:jl_enable_color, Void, ())
     end
     atexit() do
-        if _jl_have_color
-            print(_jl_color_normal)
+        if have_color
+            print(color_normal)
         end
         println()
     end
@@ -108,12 +108,12 @@ function run_repl()
     while true
         ccall(:repl_callback_enable, Void, ())
         add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
-        (ast, show_value) = take(_jl_repl_channel)
+        (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
             break
         end
-        _jl_eval_user_input(ast, show_value!=0)
+        eval_user_input(ast, show_value!=0)
     end
 end
 
@@ -206,11 +206,11 @@ function process_options(args::Array{Any,1})
     return (quiet,repl,startup)
 end
 
-const _jl_roottask = current_task()
-const _jl_roottask_wi = WorkItem(_jl_roottask)
+const roottask = current_task()
+const roottask_wi = WorkItem(roottask)
 
-_jl_is_interactive = false
-isinteractive() = (_jl_is_interactive::Bool)
+is_interactive = false
+isinteractive() = (is_interactive::Bool)
 
 julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
 
@@ -237,7 +237,7 @@ function _start()
             global const Scheduler = Task(()->event_loop(true), 1024*1024)
             global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
             # make scheduler aware of current (root) task
-            enq_work(_jl_roottask_wi)
+            enq_work(roottask_wi)
             yield()
         else
             global PGRP = ProcessGroup(0, {}, {})
@@ -259,11 +259,11 @@ function _start()
                 try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             end
 
-            global _jl_have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
+            global have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
                                     success(`tput setaf 0`)
-            global _jl_is_interactive = true
+            global is_interactive = true
             if !quiet
-                _jl_banner()
+                banner()
             end
             run_repl()
         end
@@ -274,12 +274,12 @@ function _start()
     end
 end
 
-const _jl_atexit_hooks = {}
+const atexit_hooks = {}
 
-atexit(f::Function) = (enqueue(_jl_atexit_hooks, f); nothing)
+atexit(f::Function) = (enqueue(atexit_hooks, f); nothing)
 
 function _atexit()
-    for f in _jl_atexit_hooks
+    for f in atexit_hooks
         try
             f()
         catch e

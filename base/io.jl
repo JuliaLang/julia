@@ -110,7 +110,7 @@ function read(s::IO, ::Type{Char})
     end
 
     # mimic utf8.next function
-    trailing = Base._jl_utf8_trailing[ch+1]
+    trailing = Base.utf8_trailing[ch+1]
     c::Uint32 = 0
     for j = 1:trailing
         c += ch
@@ -118,7 +118,7 @@ function read(s::IO, ::Type{Char})
         ch = read(s, Uint8)
     end
     c += ch
-    c -= Base._jl_utf8_offset[trailing+1]
+    c -= Base.utf8_offset[trailing+1]
     char(c)
 end
 
@@ -510,7 +510,7 @@ function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
         dims = 0
     end
     n = prod(dims)
-    nc = _jl_num_bit_chunks(n)
+    nc = num_bit_chunks(n)
     B = BitArray{N}()
     chunks = mmap_array(Uint64, (nc,), s, offset)
     if iswrite
