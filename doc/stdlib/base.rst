@@ -1841,21 +1841,21 @@ Statistics
 
    Compute the mean of whole array ``v``, or optionally along dimension ``dim``
 
-.. function:: std(v, m, [corrected])
-
-   Compute the standard deviation of a vector ``v`` with known mean ``m``. Get the corrected standard deviation by setting ``corrected`` to ``true`` (default), and ``false`` otherwise.
-
 .. function:: std(v, [corrected])
 
-   Compute the standard deviation of a vector ``v``. Get the corrected standard deviation by setting ``corrected`` to ``true`` (default), and ``false`` otherwise.
+   Compute the sample standard deviation of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- mean(v)).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- mean(v)).^2) / length(v))``, which is the empirical standard deviation of the sample.
+
+.. function:: std(v, m, [corrected])
+
+   Compute the sample standard deviation of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- m).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- m).^2) / length(v))``, which is the empirical standard deviation of the sample.
 
 .. function:: var(v, [corrected])
 
-   Compute the variance of a vector ``v``. Get the corrected variance by setting ``corrected`` to ``true`` (default), and ``false`` otherwise.
+   Compute the sample variance of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- mean(v)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- mean(v)).^2) / length(v)``, which is the empirical variance of the sample.
 
 .. function:: var(v, m, [corrected])
 
-   Compute the variance of a vector ``v`` with known mean ``m``. Get the corrected variance by setting ``corrected`` to ``true`` (default), and ``false`` otherwise.
+   Compute the sample variance of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- m)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- m)).^2) / length(v)``, which is the empirical variance of the sample.
 
 .. function:: median(v)
 
