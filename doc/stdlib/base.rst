@@ -1731,13 +1731,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Lower triangle of a matrix
 
-.. function:: diag(M)
+.. function:: diag(M, [k])
 
-   The diagonal of a matrix, as a vector
+   The ``k``-th diagonal of a matrix, as a vector
 
-.. function:: diagm(v)
+.. function:: diagm(v, [k])
 
-   Construct a diagonal matrix from a vector
+   Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
 
 .. function:: Tridiagonal(dl, d, du)
 
