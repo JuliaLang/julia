@@ -819,6 +819,8 @@ lighttpd-$(LIGHTTPD_VER)/config.status: lighttpd-$(LIGHTTPD_VER)/configure
 	./configure --prefix=$(BUILD) --libdir=$(BUILD)/lib/lighttpd --without-pcre --without-zlib --without-bzip2 CC="$(CC)" CXX="$(CXX)"
 $(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
 	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
+	$(INSTALL_NAME_CMD)lighttpd/liblightcomp.$(SHLIB_EXT) $(BUILD)/lib/lighttpd/liblightcomp.$(SHLIB_EXT)
+	$(INSTALL_NAME_CHANGE_CMD) $(BUILD)/lib/lighttpd/liblightcomp.dylib @executable_path/../lib/lighttpd/liblightcomp.dylib  $(BUILD)/sbin/lighttpd
 	touch $@
 
 clean-lighttpd:
