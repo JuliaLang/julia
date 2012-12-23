@@ -13,19 +13,22 @@ ifeq ($(OS),WINNT)
 LIBS += -lWs2_32 -lIphlpapi -lpsapi
 endif
 
-WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
+ifeq ($(OS),Darwin)
+LIBS += -framework ApplicationServices
+endif
 
-%.o: %.c
-	$(QUIET_CC)$(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
-%.do: %.c
-	$(QUIET_CC)$(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+WEBSERVER_SRCS = webserver.o server.o jsoncpp.o
 
-	
+%.o: %.cpp
+	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@
+%.do: %.cpp
+	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@
+
 LAUNCH_SCRIPT = launch-julia-webserver
 ifeq ($(OS),WINNT)
 LAUNCH_SCRIPT = launch-julia-webserver.bat
 endif 
-	
+
 julia-release julia-debug: %: $(BUILD)/bin/%-webserver $(BUILD)/bin/$(LAUNCH_SCRIPT)
 
 release debug:
@@ -36,7 +39,7 @@ $(BUILD)/bin/julia-release-webserver: $(WEBSERVER_SRCS)
 
 $(BUILD)/bin/julia-debug-webserver: $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
-	
+
 $(BUILD)/bin/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
 	cp $< $@
 
