@@ -3,8 +3,6 @@ import Base.isnan, Base.isinf, Base.^, Base.cmp, Base.sqrt
 import Base.==, Base.<=, Base.>=, Base.<, Base.>, Base.string, Base.show
 import Base.showcompact
 
-libgmp_wrapper = dlopen("libgmp_wrapper")
-
 require("bigint")
 
 type BigFloat <: FloatingPoint
@@ -12,7 +10,7 @@ type BigFloat <: FloatingPoint
 
     function BigFloat(x::String)
         z = BigFloat_init()
-        ccall(dlsym(libgmp_wrapper, :jl_mpf_set_string), Void, (Ptr{Void}, Ptr{Uint8}), z, bytestring(x))
+        ccall((:jl_mpf_set_string, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Uint8}), z, bytestring(x))
         b = new(z)
         finalizer(b, BigFloat_clear)
         b
@@ -20,7 +18,7 @@ type BigFloat <: FloatingPoint
 
     function BigFloat(x::Float64)
         z = BigFloat_init()
-        ccall(dlsym(libgmp_wrapper, :jl_mpf_set_d), Void, (Ptr{Void}, Float64), z, x)
+        ccall((:jl_mpf_set_d, :libgmp_wrapper), Void, (Ptr{Void}, Float64), z, x)
         b = new(z)
         finalizer(b, BigFloat_clear)
         b
@@ -28,7 +26,7 @@ type BigFloat <: FloatingPoint
 
     function BigFloat(x::Uint)
         z = BigFloat_init()
-        ccall(dlsym(libgmp_wrapper, :jl_mpf_set_ui), Void, (Ptr{Void}, Uint), z, x)
+        ccall((:jl_mpf_set_ui, :libgmp_wrapper), Void, (Ptr{Void}, Uint), z, x)
         b = new(z)
         finalizer(b, BigFloat_clear)
         b
@@ -36,7 +34,7 @@ type BigFloat <: FloatingPoint
 
     function BigFloat(x::Int)
         z = BigFloat_init()
-        ccall(dlsym(libgmp_wrapper, :jl_mpf_set_si), Void, (Ptr{Void}, Int), z, x)
+        ccall((:jl_mpf_set_si, :libgmp_wrapper), Void, (Ptr{Void}, Int), z, x)
         b = new(z)
         finalizer(b, BigFloat_clear)
         b
@@ -44,7 +42,7 @@ type BigFloat <: FloatingPoint
 
     function BigFloat(x::BigInt)
         z = BigFloat_init()
-        ccall(dlsym(libgmp_wrapper, :jl_mpf_set_z), Void, (Ptr{Void}, Ptr{Void}), z, x.mpz)
+        ccall((:jl_mpf_set_z, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}), z, x.mpz)
         b = new(z)
         finalizer(b, BigFloat_clear)
         b
@@ -89,47 +87,47 @@ isinf(x::BigFloat) = false
 
 function +(x::BigFloat, y::BigFloat)
     z= BigFloat_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpf_add), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
+    ccall((:jl_mpf_add, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
     BigFloat(z)
 end
 
 function -(x::BigFloat)
     z= BigFloat_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpf_neg), Void, (Ptr{Void}, Ptr{Void}), z, x.mpf)
+    ccall((:jl_mpf_neg, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}), z, x.mpf)
     BigFloat(z)
 end
 
 function -(x::BigFloat, y::BigFloat)
     z= BigFloat_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpf_sub), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
+    ccall((:jl_mpf_sub, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
     BigFloat(z)
 end
 
 function *(x::BigFloat, y::BigFloat)
     z= BigFloat_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpf_mul), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
+    ccall((:jl_mpf_mul, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
     BigFloat(z)
 end
 
 function /(x::BigFloat, y::BigFloat)
     z= BigFloat_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpf_div), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
+    ccall((:jl_mpf_div, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
     BigFloat(z)
 end
 
 function cmp(x::BigFloat, y::BigFloat)
-    ccall(dlsym(libgmp_wrapper, :jl_mpf_cmp), Int32, (Ptr{Void}, Ptr{Void}), x.mpf, y.mpf)
+    ccall((:jl_mpf_cmp, :libgmp_wrapper), Int32, (Ptr{Void}, Ptr{Void}), x.mpf, y.mpf)
 end
 
 function sqrt(x::BigFloat)
     z = BigFloat_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpf_sqrt), Void, (Ptr{Void}, Ptr{Void}), z, x.mpf)
+    ccall((:jl_mpf_sqrt, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}), z, x.mpf)
     BigFloat(z)
 end
 
 function ^(x::BigFloat, y::Uint)
     z = BigFloat_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpf_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpf, y)
+    ccall((:jl_mpf_pow_ui, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpf, y)
     BigFloat(z)
 end
 
@@ -140,9 +138,9 @@ end
 >(x::BigFloat, y::BigFloat) = cmp(x,y) > 0
 
 function string(x::BigFloat)
-    s=ccall(dlsym(libgmp_wrapper, :jl_mpf_printf), Ptr{Uint8}, (Ptr{Void},), x.mpf)
+    s=ccall((:jl_mpf_printf, :libgmp_wrapper), Ptr{Uint8}, (Ptr{Void},), x.mpf)
     ret = bytestring(s) #This copies s.
-    ccall(dlsym(libgmp_wrapper,:jl_gmp_free), Void, (Ptr{Void},), s)
+    ccall((:jl_gmp_free, :libgmp_wrapper), Void, (Ptr{Void},), s)
     ret
 end
 
@@ -150,9 +148,9 @@ show(io, b::BigFloat) = print(io, string(b))
 showcompact(io, b::BigFloat) = print(io, string(b))
 
 function BigFloat_clear(x::BigFloat)
-    ccall(dlsym(libgmp_wrapper, :jl_mpf_clear), Void, (Ptr{Void},), x.mpf)
+    ccall((:jl_mpf_clear, :libgmp_wrapper), Void, (Ptr{Void},), x.mpf)
 end
 
 function BigFloat_init()
-    return ccall(dlsym(libgmp_wrapper, :jl_mpf_init), Ptr{Void}, ())
+    return ccall((:jl_mpf_init, :libgmp_wrapper), Ptr{Void}, ())
 end

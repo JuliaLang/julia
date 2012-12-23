@@ -3,14 +3,12 @@ import Base.^, Base.div, Base.rem, Base.cmp, Base.sqrt
 import Base.gcd, Base.gcdx, Base.factorial, Base.binomial
 import Base.==, Base.<=, Base.>=, Base.<, Base.>, Base.string, Base.show
 
-libgmp_wrapper = dlopen("libgmp_wrapper")
-
 type BigInt <: Integer
     mpz::Ptr{Void}
 
     function BigInt(x::String)
         z = BigInt_init()
-        ccall(dlsym(libgmp_wrapper, :jl_mpz_set_string), Void, (Ptr{Void}, Ptr{Uint8}),z,bytestring(x))
+        ccall((:jl_mpz_set_string, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Uint8}),z,bytestring(x))
         b = new(z)
         finalizer(b, BigInt_clear)
         b
@@ -18,7 +16,7 @@ type BigInt <: Integer
 
     function BigInt(x::Int)
         z = BigInt_init()
-        ccall(dlsym(libgmp_wrapper, :jl_mpz_set_si), Void, (Ptr{Void}, Int),z,x)
+        ccall((:jl_mpz_set_si, :libgmp_wrapper), Void, (Ptr{Void}, Int),z,x)
         b = new(z)
         finalizer(b, BigInt_clear)
         b
@@ -28,7 +26,7 @@ type BigInt <: Integer
 
     function BigInt(x::Uint)
         z = BigInt_init()
-        ccall(dlsym(libgmp_wrapper, :jl_mpz_set_ui), Void,
+        ccall((:jl_mpz_set_ui, :libgmp_wrapper), Void,
             (Ptr{Void}, Uint), z, x)
         b = new(z)
         finalizer(b, BigInt_clear)
@@ -63,10 +61,10 @@ else
 end
 
 convert(::Type{Int}, n::BigInt) =
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_get_si), Int, (Ptr{Void},), n.mpz)
+    ccall((:jl_mpz_get_si, :libgmp_wrapper), Int, (Ptr{Void},), n.mpz)
 
 convert(::Type{Uint}, n::BigInt) =
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_get_ui), Uint, (Ptr{Void},), n.mpz)
+    ccall((:jl_mpz_get_ui, :libgmp_wrapper), Uint, (Ptr{Void},), n.mpz)
 
 promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 promote_rule(::Type{BigInt}, ::Type{Int16}) = BigInt
@@ -82,31 +80,31 @@ promote_rule(::Type{BigInt}, ::Type{Uint128}) = BigInt
 
 function +(x::BigInt, y::BigInt)
     z= BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_add), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
+    ccall((:jl_mpz_add, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
     BigInt(z)
 end
 
 function -(x::BigInt)
     z= BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_neg), Void, (Ptr{Void}, Ptr{Void}),z,x.mpz)
+    ccall((:jl_mpz_neg, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}),z,x.mpz)
     BigInt(z)
 end
 
 function -(x::BigInt, y::BigInt)
     z= BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_sub), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
+    ccall((:jl_mpz_sub, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
     BigInt(z)
 end
 
 function *(x::BigInt, y::BigInt)
     z= BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_mul), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
+    ccall((:jl_mpz_mul, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
     BigInt(z)
 end
 
 function <<(x::BigInt, c::Uint)
     z= BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_lshift), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, c)
+    ccall((:jl_mpz_lshift, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, c)
     BigInt(z)
 end
 <<(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x<<uint(c)
@@ -114,43 +112,43 @@ end
 
 function div(x::BigInt, y::BigInt)
     z= BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_div), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
+    ccall((:jl_mpz_div, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
     BigInt(z)
 end
 
 function divmod(x::BigInt, y::BigInt)
     z1= BigInt_init()
     z2= BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_divmod), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1, z2, x.mpz, y.mpz)
+    ccall((:jl_mpz_divmod, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1, z2, x.mpz, y.mpz)
     BigInt(z1),BigInt(z2)
 end
 
 function rem(x::BigInt, y::BigInt)
     z= BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_rem), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
+    ccall((:jl_mpz_rem, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
     BigInt(z)
 end
 
 function cmp(x::BigInt, y::BigInt)
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_cmp), Int32, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
+    ccall((:jl_mpz_cmp, :libgmp_wrapper), Int32, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
 end
 
 function sqrt(x::BigInt)
     z = BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_sqrt), Void, (Ptr{Void}, Ptr{Void}),z,x.mpz)
+    ccall((:jl_mpz_sqrt, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}),z,x.mpz)
     BigInt(z)
 end
 
 function ^(x::BigInt, y::Uint)
     z = BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, y)
+    ccall((:jl_mpz_pow_ui, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, y)
     BigInt(z)
 end
 ^(x::BigInt, y::Integer) = y<0 ? throw(DomainError()) : ^(x, uint(y))
 
 function gcd(x::BigInt, y::BigInt)
     z = BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_gcd), Void,
+    ccall((:jl_mpz_gcd, :libgmp_wrapper), Void,
         (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpz, y.mpz)
     BigInt(z)
 end
@@ -159,7 +157,7 @@ function gcdx(a::BigInt, b::BigInt)
     g = BigInt_init()
     s = BigInt_init()
     t = BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_gcdext), Void,
+    ccall((:jl_mpz_gcdext, :libgmp_wrapper), Void,
         (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
         g, s, t, a.mpz, b.mpz)
     BigInt(g), BigInt(s), BigInt(t)
@@ -172,14 +170,14 @@ function factorial(bn::BigInt)
         n = uint(bn)
     end
     z = BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_fac_ui), Void,
+    ccall((:jl_mpz_fac_ui, :libgmp_wrapper), Void,
         (Ptr{Void}, Uint), z, n)
     BigInt(z)
 end
 
 function binomial(n::BigInt, k::Uint)
     z = BigInt_init()
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_bin_ui), Void,
+    ccall((:jl_mpz_bin_ui, :libgmp_wrapper), Void,
         (Ptr{Void}, Ptr{Void}, Uint), z, n.mpz, k)
     BigInt(z)
 end
@@ -192,9 +190,9 @@ binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(
 >(x::BigInt, y::BigInt) = cmp(x,y) > 0
 
 function string(x::BigInt)
-    s=ccall(dlsym(libgmp_wrapper, :jl_mpz_printf), Ptr{Uint8}, (Ptr{Void},),x.mpz)
+    s=ccall((:jl_mpz_printf, :libgmp_wrapper), Ptr{Uint8}, (Ptr{Void},),x.mpz)
     ret = bytestring(s) #This copies s.
-    ccall(dlsym(libgmp_wrapper,:jl_gmp_free), Void, (Ptr{Void},), s)
+    ccall((:jl_gmp_free, :libgmp_wrapper), Void, (Ptr{Void},), s)
     ret
 end
 
@@ -203,9 +201,9 @@ function show(io, x::BigInt)
 end
 
 function BigInt_clear(x::BigInt)
-    ccall(dlsym(libgmp_wrapper, :jl_mpz_clear), Void, (Ptr{Void},),x.mpz)
+    ccall((:jl_mpz_clear, :libgmp_wrapper), Void, (Ptr{Void},),x.mpz)
 end
 
 function BigInt_init()
-    return ccall(dlsym(libgmp_wrapper, :jl_mpz_init), Ptr{Void}, ())
+    return ccall((:jl_mpz_init, :libgmp_wrapper), Ptr{Void}, ())
 end
