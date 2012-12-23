@@ -1841,9 +1841,21 @@ Statistics
 
    Compute the mean of whole array ``v``, or optionally along dimension ``dim``
 
-.. function:: std(v)
+.. function:: std(v, m, [corrected])
 
-   Compute the standard deviation of a vector ``v``
+   Compute the standard deviation of a vector ``v`` with known mean ``m``. Get the corrected standard deviation by setting ``corrected`` to ``true`` (default), and ``false`` otherwise.
+
+.. function:: std(v, [corrected])
+
+   Compute the standard deviation of a vector ``v``. Get the corrected standard deviation by setting ``corrected`` to ``true`` (default), and ``false`` otherwise.
+
+.. function:: var(v, [corrected])
+
+   Compute the variance of a vector ``v``. Get the corrected variance by setting ``corrected`` to ``true`` (default), and ``false`` otherwise.
+
+.. function:: var(v, m, [corrected])
+
+   Compute the variance of a vector ``v`` with known mean ``m``. Get the corrected variance by setting ``corrected`` to ``true`` (default), and ``false`` otherwise.
 
 .. function:: median(v)
 
