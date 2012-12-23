@@ -117,9 +117,34 @@ function gradient(F::Vector, h::Vector)
     return g
 end
 
-diag(A::Matrix) = [ A[i,i] for i=1:min(size(A,1),size(A,2)) ]
+function diag{T}(A::Matrix{T}, k::Integer)
+    m, n = size(A)
+    if k >= 0 && k < n
+        nV = min(m, n-k)
+    elseif k < 0 && -k < m
+        nV = min(m+k, n)
+    else
+        throw(BoundsError())
+    end
 
-function diagm{T}(v::Union(Vector{T},Matrix{T}))
+    V = zeros(T, nV)
+
+    if k > 0
+        for i=1:nV
+            V[i] = A[i, i+k]
+        end
+    else
+        for i=1:nV
+            V[i] = A[i-k, i]
+        end
+    end
+
+    return V
+end
+
+diag(A) = diag(A, 0)
+
+function diagm{T}(v::VecOrMat{T}, k::Integer)
     if isa(v, Matrix)
         if (size(v,1) != 1 && size(v,2) != 1)
             error("Input should be nx1 or 1xn")
@@ -127,13 +152,22 @@ function diagm{T}(v::Union(Vector{T},Matrix{T}))
     end
 
     n = numel(v)
-    a = zeros(T, n, n)
-    for i=1:n
-        a[i,i] = v[i]
+    if k >= 0 
+        a = zeros(T, n+k, n+k)
+        for i=1:n
+            a[i,i+k] = v[i]
+        end
+    else
+        a = zeros(T, n-k, n-k)
+        for i=1:n
+            a[i-k,i] = v[i]
+        end
     end
 
     return a
-end
+end  
+
+diagm(v) = diagm(v, 0)
 
 function trace{T}(A::Matrix{T})
     t = zero(T)

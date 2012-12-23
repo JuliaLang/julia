@@ -114,3 +114,8 @@ testall: release
 
 test-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
+
+webrepl:
+	make -C deps install-lighttpd
+	make -C ui/webserver
+	cd $(BUILD)/share/julia && ln -sf ../../../ui/website .
