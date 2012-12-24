@@ -33,7 +33,7 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
-nnz(S::SparseMatrixCSC) = S.colptr[end]-1
+nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
 
 function show(io, S::SparseMatrixCSC)
     println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
