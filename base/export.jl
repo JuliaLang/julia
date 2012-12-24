@@ -938,6 +938,7 @@ export
     base,
     
 # statistics and random numbers
+    autocor,
     betarnd,
     chi2rnd,
     cor,
@@ -947,9 +948,13 @@ export
     cov_pearson,
     cov_spearman,
     decile,
+    dist,
     exprnd,
     hist,
     histc,
+    inverse_rle,
+    iqr,
+    kurtosis,
     mad,
     mean,
     median,
@@ -977,12 +982,14 @@ export
     randival!,
     randn,
     randn!,
+    rle,
+    skewness,
     srand,
     std,
     tiedrank,
     var,
     weighted_mean,
-    
+
 # signal processing
     bfft,
     bfftn,

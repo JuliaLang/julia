@@ -5,7 +5,7 @@ weighted_mean(v::AbstractArray, w::AbstractArray) = sum(v.*w)/sum(w)
 function median(v::AbstractArray)
     n = numel(v)
     if isodd(n)
-        return select(v, div(n+1, 2))
+        return float(select(v, div(n+1, 2)))
     else
         vs = sort(v)
         return (vs[div(n, 2)] + vs[div(n, 2) + 1]) / 2
@@ -62,11 +62,60 @@ std(v::AbstractArray) = std(v, true)
 std(v::Ranges, corrected::Bool) = sqrt(var(v, corrected))
 std(v::Ranges) = std(v, true)
 
-## median absolute deviation with known center
-mad(v::AbstractArray, center::Number) = median(abs(v - center))
+## median absolute deviation with known center with consistency adjustment
+mad(v::AbstractArray, center::Number) = 1.4826 * median(abs(v - center))
 
 ## median absolute deviation
 mad(v::AbstractArray) = mad(v, median(v))
+
+## maximum likelihood estimate of skewness with known mean m
+function skewness(v::AbstractVector, m::Number)
+    n = length(v)
+    empirical_third_centered_moment = 0.0
+    empirical_variance = 0.0
+    for x_i in v
+        empirical_third_centered_moment += (x_i - m)^3
+        empirical_variance += (x_i - m)^2
+    end
+    empirical_third_centered_moment /= n
+    empirical_variance /= n
+    return empirical_third_centered_moment / (empirical_variance^1.5)
+end
+
+## maximum likelihood estimate of skewness
+skewness(v::AbstractVector) = skewness(v, mean(v))
+
+## maximum likelihood estimate of kurtosis with known mean m
+function kurtosis(v::AbstractVector, m::Number)
+    n = length(v)
+    empirical_fourth_centered_moment = 0.0
+    empirical_variance = 0.0
+    for x_i in v
+        empirical_fourth_centered_moment += (x_i - m)^4
+        empirical_variance += (x_i - m)^2
+    end
+    empirical_fourth_centered_moment /= n
+    empirical_variance /= n
+    return (empirical_fourth_centered_moment / (empirical_variance^2)) - 3.0
+end
+
+## maximum likelihood estimate of kurtosis
+kurtosis(v::AbstractVector) = kurtosis(v, mean(v))
+
+## distance matrix
+function dist(m::AbstractMatrix)
+    n = size(m, 1)
+    d = Array(Float64, n, n)
+    for i in 1:n
+        d[i, i] = 0.0
+        for j in (i + 1):n
+            x = norm(m[i, :] - m[j, :])
+            d[i, j] = x
+            d[j, i] = x
+        end
+    end
+    return d
+end
 
 ## hist ##
 
@@ -338,42 +387,93 @@ cor_spearman(x::AbstractMatrix, y::AbstractMatrix) = cor_spearman(x, y, true)
 
 const cor = cor_pearson
 
+## autocorrelation at a specific lag
+autocor(v::AbstractVector, lag::Int) = cor(v[1:(end-lag)], v[(1 + lag):end])
+
+## autocorrelation at a default lag of 1
+autocor(v::AbstractVector) = autocor(v, 1)
+
 ## quantiles ##
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
-function quantile(x, qs)
+function quantile(v::AbstractVector, qs::AbstractVector)
     # make sure the quantiles are in [0,1]
     bqs = _bound_quantiles(qs)
-    
-    lx = length(x)
+
+    lx = length(v)
     lqs = length(bqs)
-    
+
     if lx > 0 && lqs > 0
         index = 1 + (lx-1) * bqs
         lo = ifloor(index)
         hi = iceil(index)
-        sortedX = sort(x)
+        sortedV = sort(v)
         i = index .> lo
-        ret = float(sortedX[lo])
+        ret = float(sortedV[lo])
         i = [1:length(i)][i]
         h = (index - lo)[i]
-        ret[i] = (1-h) .* ret[i] + h .* sortedX[hi[i]]
+        ret[i] = (1-h) .* ret[i] + h .* sortedV[hi[i]]
     else
         ret = zeros(lqs) * NaN
     end
-    
+
     ret
 end
-quantile(x, q::Number) = quantile(x, [q])[1]
-quartile(x) = quantile(x, [.25, .5, .75])
-quintile(x) = quantile(x, [.2:.2:.8])
-decile(x) = quantile(x, [.1:.1:.9])
+quantile(v::AbstractVector, q::Number) = quantile(v, [q])[1]
+quantile(v::AbstractVector) = quantile(v, [.0, .25, .5, .75, 1.0])
+quartile(v::AbstractVector) = quantile(v, [.25, .5, .75])
+quintile(v::AbstractVector) = quantile(v, [.2, .4, .6, .8])
+decile(v::AbstractVector) = quantile(v, [.1, .2, .3, .4, .5, .6, .7, .8, .9])
+iqr(v::AbstractVector) = quantile(v, [0.25, 0.75])
 
-function _bound_quantiles(qs)
+function _bound_quantiles(qs::AbstractVector)
     epsilon = 100 * eps()
     if (any(qs .< -epsilon) || any(qs .> 1 + epsilon))
         error("quantiles out of [0,1] range!")
     end
     [min(1, max(0, q)) for q = qs]
+end
+
+## run-length encoding
+function rle{T}(v::Vector{T})
+    n = length(v)
+    current_value = v[1]
+    current_length = 1
+    values = Array(T, n)
+    total_values = 1
+    lengths = Array(Int, n)
+    total_lengths = 1
+    for i in 2:n
+        if v[i] == current_value
+            current_length += 1
+        else
+            values[total_values] = current_value
+            total_values += 1
+            lengths[total_lengths] = current_length
+            total_lengths += 1
+            current_value = v[i]
+            current_length = 1
+        end
+    end
+    values[total_values] = current_value
+    lengths[total_lengths] = current_length
+    return (values[1:total_values], lengths[1:total_lengths])
+end
+
+## inverse run-length encoding
+function inverse_rle{T}(values::Vector{T}, lengths::Vector{Int})
+    total_n = sum(lengths)
+    pos = 0
+    res = Array(T, total_n)
+    n = length(values)
+    for i in 1:n
+        v = values[i]
+        l = lengths[i]
+        for j in 1:l
+            pos += 1
+            res[pos] = v
+        end
+    end
+    return res
 end
