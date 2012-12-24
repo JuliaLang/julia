@@ -400,6 +400,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             cc = CallingConv::X86_FastCall;
             nargs--;
         }
+        else if (lhd == jl_symbol("thiscall")) {
+            cc = CallingConv::X86_ThisCall;
+            nargs--;
+        }
     }
     
     if ((!isVa && jl_tuple_len(tt)  != (nargs-2)/2) ||

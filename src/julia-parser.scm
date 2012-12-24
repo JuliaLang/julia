@@ -1002,7 +1002,7 @@
 	   (take-token s)
 	   (let ((al (parse-arglist s #\))))
 	     (if (and (length> al 1)
-		      (memq (cadr al) '(cdecl stdcall fastcall)))
+		      (memq (cadr al) '(cdecl stdcall fastcall thiscall)))
 		 ;; place (callingconv) at end of arglist
 		 `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
 		 `(ccall ,.al))))))
