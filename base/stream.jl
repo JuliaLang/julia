@@ -543,28 +543,26 @@ function queueAsync(work::SingleAsyncWork)
 end
 
 ## process status ##
-abstract ProcessStatus
-type ProcessNotRun   <: ProcessStatus; end
-type ProcessRunning  <: ProcessStatus; end
-type ProcessExited   <: ProcessStatus; status::Int32; end
-type ProcessSignaled <: ProcessStatus; signal::Int32; end
-type ProcessStopped  <: ProcessStatus; signal::Int32; end
-
-process_running (s::Process) = s.exit_code == -2
-process_exited  (s::Process) = !process_running(s)
-process_exited  (s::Vector{Process}) = all(map(process_exited,s))
-process_signaled(s::Process) = (s.term_signal > 0)
-process_stopped (s::Process) = false #not supported by libuv. Do we need this?
+process_running(s::Process) = s.exit_code == -2
+process_running(s::Vector{Process}) = all(map(process_running,s))
+process_running(s::ProcessChain) = process_running(s.processes)
 
 process_exit_status(s::Process) = s.exit_code
+process_exited(s::Process) = !process_running(s)
+process_exited(s::Vector{Process}) = all(map(process_exited,s))
+process_exited(s::ProcessChain) = process_running(s.processes)
+
 process_term_signal(s::Process) = s.term_signal
-process_stop_signal(s::Process) = false #not supported by libuv. Do we need this?
+process_signaled(s::Process) = (s.term_signal > 0)
+
+#process_stopped (s::Process) = false #not supported by libuv. Do we need this?
+#process_stop_signal(s::Process) = false #not supported by libuv. Do we need this?
 
 function process_status(s::Process)
-    process_running (s) ? ProcessRunning () :
-    process_exited  (s) ? ProcessExited  (process_exit_status(s)) :
-    process_signaled(s) ? ProcessSignaled(process_term_signal(s)) :
-    process_stopped (s) ? ProcessStopped (process_stop_signal(s)) :
+    process_running (s) ? "ProcessRunning" :
+    process_signaled(s) ? "ProcessSignaled("*string(process_term_signal(s))*")" :
+    #process_stopped (s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
+    process_exited  (s) ? "ProcessExited("*string(process_exit_status(s))*")" :
     error("process status error")
 end
 
@@ -946,17 +944,17 @@ function exec(thunk::Function)
     exit(0)
 end
 
-_jl_kill(p::Process,signum::Int32) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int32),p.handle,signum)
-function kill(p::Process,signum::Int32)
-    if p.exit_code == -2
-        _jl_kill(p, int32(9))
+_jl_kill(p::Process,signum::Integer) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int32),p.handle,signum)
+function kill(p::Process,signum::Integer)
+    if process_running(p)
+        _jl_kill(p, signum)
     else
-        -1
+        int32(-1)
     end
 end
 kill(ps::Vector{Process}) = map(kill, ps)
 kill(ps::ProcessChain) = map(kill, ps.processes)
-kill(p::Process) = kill(p,int32(9))
+kill(p::Process) = kill(p,15) #SIGTERM
 
 function _contains_newline(bufptr::Ptr{Void},len::Int32)
     return (ccall(:memchr,Ptr{Uint8},(Ptr{Void},Int32,Uint),bufptr,'\n',len)!=C_NULL)
