@@ -108,7 +108,7 @@ end
 
 ## triu, tril
 
-function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Int)
+function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     m,n = size(S)
     colptr = Array(Ti, n+1)
     nnz = 0
@@ -139,7 +139,7 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Int)
 end
 triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer) = triu(S, int(k))
 
-function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Int)
+function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     m,n = size(S)
     colptr = Array(Ti, n+1)
     nnz = 0
