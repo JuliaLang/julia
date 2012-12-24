@@ -11,8 +11,8 @@ indtype{Tv,Ti}(S::AbstractSparseMatrix{Tv,Ti}) = Ti
 # Assumes that row values in rowval for each colum are sorted 
 #      issorted(rowval[colptr[i]]:rowval[colptr[i+1]]-1) == true
 type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
-    m::Integer              # Number of rows
-    n::Integer              # Number of columns
+    m::Int                  # Number of rows
+    n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
     rowval::Vector{Ti}      # Row values of nonzeros
     nzval::Vector{Tv}       # Nonzero values
@@ -25,7 +25,11 @@ function SparseMatrixCSC(Tv::Type, Ti::Type, m::Integer, n::Integer, numnz::Inte
 
     colptr[1] = 1
     colptr[end] = numnz+1
-    SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    SparseMatrixCSC{Tv,Ti}(int(m), int(n), colptr, rowval, nzval)
+end
+
+function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
+    return SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
@@ -189,7 +193,7 @@ sparse_IJ_sorted!(I,J,V::AbstractVector{Bool},m,n) = sparse_IJ_sorted!(I,J,V,m,n
 
 function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                         V::AbstractVector,
-                                        m::Int, n::Int, combine::Function)
+                                        m::Integer, n::Integer, combine::Function)
 
     cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes
@@ -245,7 +249,7 @@ sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), in
 # Based on http://www.cise.ufl.edu/research/sparse/cholmod/CHOLMOD/Core/cholmod_triplet.c
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
                                 V::AbstractVector{Tv},
-                                nrow::Int, ncol::Int, combine::Function)
+                                nrow::Integer, ncol::Integer, combine::Function)
 
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
 
@@ -396,7 +400,7 @@ function findn_nzs{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-function sprand(m::Int, n::Int, density::FloatingPoint, rng::Function, v)
+function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v)
     numnz = int(m*n*density)
     I = randival!(1, m, Array(Int, numnz))
     J = randival!(1, n, Array(Int, numnz))
@@ -408,26 +412,26 @@ function sprand(m::Int, n::Int, density::FloatingPoint, rng::Function, v)
     return S
 end
 
-sprand(m::Int, n::Int, density::FloatingPoint, rng::Function) = sprand(m,n,density,rng, 1.0)
-sprand(m::Int, n::Int, density::FloatingPoint)  = sprand(m,n,density,rand, 1.0)
-sprandn(m::Int, n::Int, density::FloatingPoint) = sprand(m,n,density,randn, 1.0)
-sprandbool(m::Int, n::Int, density::FloatingPoint) = sprand(m,n,density,randbool, true)
+sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function) = sprand(m,n,density,rng, 1.0)
+sprand(m::Integer, n::Integer, density::FloatingPoint)  = sprand(m,n,density,rand, 1.0)
+sprandn(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randn, 1.0)
+sprandbool(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randbool, true)
 
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
 
-spzeros(m::Int) = spzeros(m, m)
-spzeros(m::Int, n::Int) = spzeros(Float64, m, n)
-spzeros(Tv::Type, m::Int) = spzeros(Tv, m, m)
-spzeros(Tv::Type, m::Int, n::Int) =
+spzeros(m::Integer) = spzeros(m, m)
+spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
+spzeros(Tv::Type, m::Integer) = spzeros(Tv, m, m)
+spzeros(Tv::Type, m::Integer, n::Integer) =
     SparseMatrixCSC(m, n, ones(Int, n+1), Array(Int, 0), Array(Tv, 0))
 
-speye(n::Int) = speye(Float64, n)
-speye(T::Type, n::Int) = speye(T, n, n)
-speye(m::Int, n::Int) = speye(Float64, m, n)
+speye(n::Integer) = speye(Float64, n)
+speye(T::Type, n::Integer) = speye(T, n, n)
+speye(m::Integer, n::Integer) = speye(Float64, m, n)
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 
-function speye(T::Type, m::Int, n::Int)
+function speye(T::Type, m::Integer, n::Integer)
     x = min(m,n)
     rowval = [1:x]
     colptr = [rowval, fill(int(x+1), n+1-x)]
