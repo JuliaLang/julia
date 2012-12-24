@@ -11,24 +11,14 @@ indtype{Tv,Ti}(S::AbstractSparseMatrix{Tv,Ti}) = Ti
 # Assumes that row values in rowval for each colum are sorted 
 #      issorted(rowval[colptr[i]]:rowval[colptr[i+1]]-1) == true
 type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
-    m::Int                  # Number of rows
-    n::Int                  # Number of columns
+    m::Integer              # Number of rows
+    n::Integer              # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
     rowval::Vector{Ti}      # Row values of nonzeros
     nzval::Vector{Tv}       # Nonzero values
 end
 
-function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
-    colptr = Array(Int, n+1)
-    rowval = Array(Int, numnz)
-    nzval = Array(Tv, numnz)
-
-    colptr[1] = 1
-    colptr[end] = numnz+1
-    SparseMatrixCSC{Tv,Int}(m, n, colptr, rowval, nzval)
-end
-
-function SparseMatrixCSC(Tv::Type, Ti::Type, m::Int, n::Int, numnz::Integer)
+function SparseMatrixCSC(Tv::Type, Ti::Type, m::Integer, n::Integer, numnz::Integer)
     colptr = Array(Ti, n+1)
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
@@ -36,10 +26,6 @@ function SparseMatrixCSC(Tv::Type, Ti::Type, m::Int, n::Int, numnz::Integer)
     colptr[1] = 1
     colptr[end] = numnz+1
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
-end
-
-function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
-    return SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
@@ -56,7 +42,7 @@ function show(io, S::SparseMatrixCSC)
             println(io, "\t[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
                     sprint(showcompact, S.nzval[k]))
         elseif k == half_screen_rows
-            println(io, "\t."); println(io, "\t."); println(io, "\t.");
+            println("\t\u22ee")
         end
         k += 1
     end
@@ -68,10 +54,10 @@ function reinterpret{T,Tv,Ti}(::Type{T}, a::SparseMatrixCSC{Tv,Ti})
     if sizeof(T) != sizeof(Tv)
         error("SparseMatrixCSC reinterpret is only supported for element types of the same size")
     end
-    mA,nA = size(a)
+    mA, nA = size(a)
     colptr = copy(a.colptr)
     rowval = copy(a.rowval)
-    nzval = reinterpret(T, a.nzval)
+    nzval  = reinterpret(Tv, a.nzval)
     return SparseMatrixCSC{T,Ti}(mA, nA, colptr, rowval, nzval)
 end
 
@@ -173,8 +159,8 @@ convert(::Type{Matrix}, S::SparseMatrixCSC) = dense(S)
 
 full(S::SparseMatrixCSC) = dense(S)
 
-function dense{T}(S::SparseMatrixCSC{T})
-    A = zeros(T, S.m, S.n)
+function dense{Tv}(S::SparseMatrixCSC{Tv})
+    A = zeros(Tv, S.m, S.n)
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         A[S.rowval[k], col] = S.nzval[k]
     end
