@@ -22,11 +22,14 @@ using namespace clang;
 
 class PrintFunctionsConsumer : public ASTConsumer {
 public:
-    virtual void HandleTopLevelDecl(DeclGroupRef DG) {
+    virtual bool HandleTopLevelDecl(DeclGroupRef DG) {
         for (DeclGroupRef::iterator i = DG.begin(), e = DG.end(); i != e; ++i) {
             const Decl *D = *i;
             const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
-            if (!FD || !FD->hasPrototype() || !FD->isExternC() || !FD->isGlobal()) return;
+            //D->dump();
+            //cout << '\n';
+            //return true;
+            if (!FD || !FD->hasPrototype() || !FD->isExternC() || !FD->isGlobal() || FD->getBuiltinID() != 0) return true;
             cout << FD->getResultType().getAsString() << " ";
             cout << FD->getNameAsString() << "(";
             bool printComma = false;
@@ -40,6 +43,7 @@ public:
             }
             cout << ");\n";
         }
+        return true;
     }
 };
 
@@ -49,15 +53,15 @@ int main()
     ci.createDiagnostics(0,NULL);
 
     TargetOptions to;
-    to.Triple = llvm::sys::getHostTriple();
+    to.Triple = llvm::sys::getDefaultTargetTriple();
     TargetInfo *pti = TargetInfo::CreateTargetInfo(ci.getDiagnostics(), to);
     ci.setTarget(pti);
 
     ci.getHeaderSearchOpts().AddPath(
-        StringRef("lib/clang/3.0/include"), frontend::Angled, false, false, false
+        StringRef("../usr/lib/clang/3.0/include"), frontend::Angled, false, false, false
     );
     ci.getHeaderSearchOpts().AddPath(
-        StringRef("src/support"), frontend::Quoted, true, false, false
+        StringRef("support"), frontend::Quoted, true, false, false
     );
 
     ci.createFileManager();
@@ -67,7 +71,7 @@ int main()
     ci.setASTConsumer(astConsumer);
 
     ci.createASTContext();
-  	const FileEntry *pFile = ci.getFileManager().getFile("src/julia.h");
+    const FileEntry *pFile = ci.getFileManager().getFile("julia.h");
     ci.getSourceManager().createMainFileID(pFile);
     ci.getDiagnosticClient().BeginSourceFile(ci.getLangOpts(), &ci.getPreprocessor());
     clang::ParseAST(ci.getPreprocessor(), astConsumer, ci.getASTContext());

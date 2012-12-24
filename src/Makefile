@@ -92,16 +92,26 @@ libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 libjulia-release: $(BUILD)/$(JL_LIBDIR)/libjulia-release.$(SHLIB_EXT)
 
 clean:
-	rm -f $(BUILD)/$(JL_LIBDIR)/libjulia*
-	rm -f julia_flisp.boot julia_flisp.boot.inc
-	rm -f *.do *.o *~ *# *.$(SHLIB_EXT) *.a
+	-rm -f $(BUILD)/$(JL_LIBDIR)/libjulia*
+	-rm -f julia_flisp.boot julia_flisp.boot.inc
+	-rm -f *.do *.o *~ *# *.$(SHLIB_EXT) *.a h2j
 
 clean-flisp:
-	$(MAKE) -C flisp clean
+	-$(MAKE) -C flisp clean
 
 clean-support:
-	$(MAKE) -C support clean
+	-$(MAKE) -C support clean
 
 cleanall: clean clean-flisp clean-support
 
 .PHONY: debug release clean cleanall clean-*
+
+
+h2j: h2j.cpp
+	$(QUIET_CC) $(CXX) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVM_CONFIG) --cppflags) $< -o $@ \
+		-lclangFrontendTool -lclangBasic -lclangLex -lclangDriver -lclangFrontend -lclangParse \
+		-lclangAST -lclangSema -lclangAnalysis -lclangEdit \
+		-lclangRewrite -lclangSerialization -lclangStaticAnalyzerCheckers \
+		-lclangStaticAnalyzerCore -lclangStaticAnalyzerFrontend -lclangTooling \
+		-lclangCodeGen -lclangARCMigrate -lclang  $(LIBS) $(LDFLAGS)
+	
