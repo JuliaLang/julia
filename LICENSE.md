@@ -51,6 +51,7 @@ External libraries, if used, include their own licenses:
 - [DOUBLE-CONVERSION](https://code.google.com/p/double-conversion/)
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt)
 - [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md)
+- [FADDEEVA](http://ab-initio.mit.edu/Faddeeva)
 - [FEMTOLISP](https://github.com/JeffBezanson/femtolisp)
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
 - [GLPK](http://www.gnu.org/software/glpk)

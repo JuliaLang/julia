@@ -39,6 +39,7 @@ sign(x::Bool) = int(x)
 abs(x::Bool) = int(x)
 
 <(x::Bool, y::Bool) = y&!x
+<=(x::Bool, y::Bool) = y|!x
 ==(x::Bool, y::Bool) = eq_int(unbox(Bool,x),unbox(Bool,y))
 
 -(x::Bool) = -int(x)

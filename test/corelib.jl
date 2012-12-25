@@ -109,6 +109,14 @@ end
 _d = {"a"=>0}
 @test isa([k for k in filter(x->length(x)==1, keys(_d))], Vector{Any})
 
+# issue #1821
+let
+    d = Dict{UTF8String, Vector{Int}}()
+    d["a"] = [1, 2]
+    @test_fails d["b"] = 1
+    @test isa(repr(d), String)  # check that printable without error
+end
+
 # issue #1438
 type I1438T
     id
@@ -192,6 +200,21 @@ d4[1001] = randstring(3)
 @test !isempty(Set(1))
 @test !isempty(Set("banana", "apple"))
 @test !isempty(Set(1, 1:10, "pear"))
+
+# isless
+@test isless(Set(), Set(1))
+@test isless(Set(1), Set(1,2))
+@test !isless(Set(3), Set(1,2))
+@test !(Set(3) > Set(1,2))
+@test Set(1,2,3) > Set(1,2)
+@test !(Set(3) <= Set(1,2))
+@test !(Set(3) >= Set(1,2))
+@test Set(1) <= Set(1,2)
+@test Set(1,2) <= Set(1,2)
+@test Set(1,2) >= Set(1,2)
+@test Set(1,2,3) >= Set(1,2)
+@test !(Set(1,2,3) >= Set(1,2,4))
+@test !(Set(1,2,3) <= Set(1,2,4))
 
 # add, length
 s = Set()
@@ -323,6 +346,15 @@ for data_in in ((7,8,4,5),
     end
 end
 
+# pop
+origs = Set(1,2,3,"apple")
+s = copy(origs)
+for i in 1:numel(origs)
+    el = pop(s)
+    @test !has(s, el)
+    @test has(origs, el)
+end
+@test isempty(s)
 # isequal
 @test  isequal(Set(), Set())
 @test !isequal(Set(), Set(1))

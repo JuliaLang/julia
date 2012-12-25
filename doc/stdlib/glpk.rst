@@ -542,7 +542,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 
     Constructs the standard (trivial) initial LP basis for the problem object.
 
-.. function:: adv_basis(glp_prob[, flags])
+.. function:: adv_basis(glp_prob, [flags])
 
     Constructs an advanced initial LP basis for the problem object. The flag ``flags`` is optional; it must be 0 if given.
 
@@ -889,7 +889,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
     Retrieves control parameters, which are used on computing and updating the basis factorization
     associated with the problem object, and stores them in the ``GLPK.BasisFactParam`` object ``glp_param``.
 
-.. function:: set_bfcp(glp_prob[, glp_param])
+.. function:: set_bfcp(glp_prob, [glp_param])
 
     Sets the control parameters stored in the ``GLPK.BasisFactParam`` object ``glp_param`` into the problem
     object. If ``glp_param`` is ``nothing`` or is omitted, resets the parameters to their defaults.

@@ -455,7 +455,7 @@ DLLEXPORT jl_value_t *jl_get_backtrace()
 // stacktrace using execinfo
 static void record_backtrace(void)
 {
-    bt_size = backtrace(bt_data, MAX_BT_SIZE);
+    bt_size = backtrace((void**)bt_data, MAX_BT_SIZE);
 }
 #elif defined(__WIN32__)
 static void record_backtrace(void)
@@ -501,6 +501,14 @@ static void record_backtrace(void)
     while (unw_step(&cursor) && n < MAX_BT_SIZE) {
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
         bt_data[n++] = ip;
+        /*
+        char *func_name;
+        int line_num;
+        const char *file_name;
+        getFunctionInfo(&func_name, &line_num, &file_name, ip);
+        if (func_name != NULL)
+            ios_printf(ios_stdout, "in %s at %s:%d\n", func_name, file_name, line_num);
+        */
     }
     bt_size = n;
 }

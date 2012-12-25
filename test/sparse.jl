@@ -1,13 +1,7 @@
-cd("../extras") do
-require("suitesparse")
-
 # check matrix operations
 se33 = speye(3)
-@test isequal(se33 * se33, se33)
-
-# check mixed sparse-dense matrix operations
 do33 = ones(3)
-@test isequal(se33 \ do33, do33)
+@test isequal(se33 * se33, se33)
 
 # check horiz concatenation
 @test all([se33 se33] == sparse([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 5, 6], ones(6)))
@@ -74,5 +68,3 @@ end
 @test prod(se33)[1] == 0.0
 @test prod(se33, 1) == [0.0 0.0 0.0]
 @test prod(se33, 2) == [0.0 0.0 0.0]'
-
-end # cd

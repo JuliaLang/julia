@@ -213,7 +213,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     :ok
 end
 
-function _jl_join_pgroup(myid, locs, sockets)
+function join_pgroup(myid, locs, sockets)
     # joining existing process group
     np = length(locs)
     w = cell(np)
@@ -261,7 +261,7 @@ function worker_id_from_socket(s)
 end
 
 # establish a Worker connection for processes that connected to us
-function _jl_identify_socket(otherid, fd, sock)
+function identify_socket(otherid, fd, sock)
     i = otherid
     #locs = PGRP.locs
     @assert i > PGRP.myid
@@ -278,7 +278,7 @@ end
 
 ## remote refs and core messages: do, call, fetch, wait, ref, put ##
 
-const _jl_client_refs = WeakKeyDict()
+const client_refs = WeakKeyDict()
 
 type RemoteRef
     where::Int
@@ -288,11 +288,11 @@ type RemoteRef
 
     function RemoteRef(w, wh, id)
         r = new(w,wh,id)
-        found = key(_jl_client_refs, r, false)
+        found = key(client_refs, r, false)
         if !is(found,false)
             return found
         end
-        _jl_client_refs[r] = true
+        client_refs[r] = true
         finalizer(r, send_del_client)
         r
     end
@@ -435,7 +435,7 @@ function deserialize(s, t::Type{RemoteRef})
     if where == myid()
         add_client(rr2id(rr), myid())
     end
-    # call ctor to make sure this rr gets added to the _jl_client_refs table
+    # call ctor to make sure this rr gets added to the client_refs table
     RemoteRef(where, rr.whence, rr.id)
 end
 
@@ -738,10 +738,10 @@ function deliver_result(sock::IOStream, msg, oid, value)
     end
 end
 
-const _jl_empty_cell_ = {}
+const empty_cell_ = {}
 function deliver_result(sock::(), msg, oid, value)
     # restart task that's waiting on oid
-    jobs = get(Waiting, oid, _jl_empty_cell_)
+    jobs = get(Waiting, oid, empty_cell_)
     for i = 1:length(jobs)
         j = jobs[i]
         if j[1]==msg
@@ -752,7 +752,7 @@ function deliver_result(sock::(), msg, oid, value)
             break
         end
     end
-    if isempty(jobs) && !is(jobs,_jl_empty_cell_)
+    if isempty(jobs) && !is(jobs,empty_cell_)
         del(Waiting, oid)
     end
     nothing
@@ -801,7 +801,7 @@ function accept_handler(accept_fd, sockets)
             # first connection; get process group info from client
             _myid = deserialize(sock)
             locs = deserialize(sock)
-            PGRP = _jl_join_pgroup(_myid, locs, sockets)
+            PGRP = join_pgroup(_myid, locs, sockets)
             PGRP.workers[1] = Worker("", 0, connectfd, sock, 1)
         end
         add_fd_handler(connectfd, fd->message_handler(fd, sockets))
@@ -847,7 +847,7 @@ function message_handler(fd, sockets)
                 deliver_result((), mkind, oid, val)
             elseif is(msg, :identify_socket)
                 otherid = deserialize(sock)
-                _jl_identify_socket(otherid, fd, sock)
+                identify_socket(otherid, fd, sock)
             else
                 # the synchronization messages
                 oid = deserialize(sock)::(Int,Int)
@@ -965,17 +965,17 @@ function parse_connection_info(str)
     end
 end
 
-_jl_tunnel_port = 9201
+tunnel_port = 9201
 # establish an SSH tunnel to a remote worker
 # returns P such that localhost:P connects to host:port
 ssh_tunnel(host, port) = ssh_tunnel(ENV["USER"], host, port)
 function ssh_tunnel(user, host, port)
-    global _jl_tunnel_port
-    localp = _jl_tunnel_port::Int
+    global tunnel_port
+    localp = tunnel_port::Int
     while !success(`ssh -f -o ExitOnForwardFailure=yes $(user)@$host -L $localp:$host:$port -N`)
         localp += 1
     end
-    _jl_tunnel_port = localp+1
+    tunnel_port = localp+1
     localp
 end
 
@@ -1374,10 +1374,10 @@ function yield(args...)
     return v
 end
 
-const _jl_fd_handlers = Dict()
+const fd_handlers = Dict()
 
-add_fd_handler(fd::Int32, H) = (_jl_fd_handlers[fd]=H)
-del_fd_handler(fd::Int32) = del(_jl_fd_handlers, fd)
+add_fd_handler(fd::Int32, H) = (fd_handlers[fd]=H)
+del_fd_handler(fd::Int32) = del(fd_handlers, fd)
 
 function event_loop(isclient)
     fdset = FDSet()
@@ -1391,7 +1391,7 @@ function event_loop(isclient)
             end
             while true
                 del_all(fdset)
-                for (fd,_) = _jl_fd_handlers
+                for (fd,_) = fd_handlers
                     add(fdset, fd)
                 end
 
@@ -1407,7 +1407,7 @@ function event_loop(isclient)
                 else
                     for fd=int32(0):int32(fdset.nfds-1)
                         if has(fdset,fd)
-                            h = _jl_fd_handlers[fd]
+                            h = fd_handlers[fd]
                             h(fd)
                         end
                     end
@@ -1420,10 +1420,10 @@ function event_loop(isclient)
                     return
                 end
             elseif isclient && isa(e,InterruptException) &&
-                !has(_jl_fd_handlers, STDIN.fd)
+                !has(fd_handlers, STDIN.fd)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
-                interrupt_waiting_task(_jl_roottask_wi, e)
+                interrupt_waiting_task(roottask_wi, e)
             end
             iserr, lasterr = true, e
         end

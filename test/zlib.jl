@@ -1,4 +1,4 @@
-require("../extras/zlib")
+require("extras/zlib")
 
 import Zlib
 using Zlib
@@ -27,7 +27,7 @@ r = b[randi((1,256), BUFSIZE)]
 # zlibCompileFlags function.
 
 # Get compile-time option flags
-zlib_compile_flags = ccall(dlsym(Zlib._zlib, :zlibCompileFlags), Uint, ())
+zlib_compile_flags = ccall((:zlibCompileFlags, Zlib._zlib), Uint, ())
 
 # Type sizes, two bits each, 00 = 16 bits, 01 = 32, 10 = 64, 11 = other:
 #
@@ -48,7 +48,10 @@ z_off_t_sz   = 2 << ((zlib_compile_flags >> 6) & uint(3))
 @test(z_uInt_sz == sizeof(Uint32))
 @test(z_uLong_sz == sizeof(Uint))
 @test(z_voidpf_sz == sizeof(Ptr))
-@test(z_off_t_sz == sizeof(Zlib.ZFileOffset) || (dlsym(Zlib._zlib, :crc32_combine64) != C_NULL && sizeof(Zlib.ZFileOffset) == 8))
+
+let _zlib_h = dlopen("libz")
+   @test(z_off_t_sz == sizeof(Zlib.ZFileOffset) || (dlsym_e(_zlib_h, :gzopen64) != C_NULL && sizeof(Zlib.ZFileOffset) == 8))
+end
 
 ########################
 # compress/uncompress tests

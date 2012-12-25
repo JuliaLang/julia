@@ -17,6 +17,15 @@ Built-ins
 
    base
 
+****************
+Built-in Modules
+****************
+
+.. toctree::
+   :maxdepth: 1
+
+   sort
+
 ******
 Extras
 ******
@@ -24,15 +33,15 @@ Extras
 .. toctree::
    :maxdepth: 1
 
-   profile
-   options
+   argparse
    cpp
+   options
+   gzip
+   profile
+   sound
+   strpack
    textwrap
    zlib
-   strpack
-   sound
-   argparse
-   gzip
 
 ****************
 Math & Numerical
@@ -43,13 +52,4 @@ Math & Numerical
 
    blas
    glpk
-
-************
-File Formats
-************
-
-.. toctree::
-   :maxdepth: 1
-
-   fitsio
 

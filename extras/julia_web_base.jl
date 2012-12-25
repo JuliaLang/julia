@@ -200,11 +200,11 @@ function __eval_exprs(__parsed_exprs)
 end
 
 # print version info
-println("Julia ", Base._jl_version_string)
-println(Base._jl_commit_string, "\n")
+println("Julia ", Base.version_string)
+println(Base.commit_string, "\n")
 
 # work around bug displaying "\n "
-#print("  ",replace(Base._jl_banner_plain, "\n", "\n  "))
+#print("  ",replace(Base.banner_plain, "\n", "\n  "))
 
 ###########################################
 # wait forever while asynchronous processing happens

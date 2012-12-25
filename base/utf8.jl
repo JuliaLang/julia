@@ -7,13 +7,13 @@
 
 ## basic UTF-8 decoding & iteration ##
 
-const _jl_utf8_offset = [
+const utf8_offset = [
     0x00000000, 0x00003080,
     0x000e2080, 0x03c82080,
     0xfa082080, 0x82082080,
 ]
 
-const _jl_utf8_trailing = [
+const utf8_trailing = [
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -31,25 +31,36 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 length(s::UTF8String) = length(s.data)
 strlen(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
 
-function next(s::UTF8String, i::Int)
-    if !is_utf8_start(s.data[i])
-        error("invalid UTF-8 character index")
+function ref(s::UTF8String, i::Int)
+    d = s.data
+    b = d[i]
+    if !is_utf8_start(b)
+        j = i-1
+        while 0 < j && !is_utf8_start(d[j])
+            j -= 1
+        end
+        if 0 < j && i <= j+utf8_trailing[d[j]+1] <= length(d)
+            # b is a continuation byte of a valid UTF-8 character
+            error("invalid UTF-8 character index")
+        end
+        return '\ufffd'
     end
-    trailing = _jl_utf8_trailing[s.data[i]+1]
-    if length(s.data) < i + trailing
-        error("premature end of UTF-8 data")
+    trailing = utf8_trailing[b+1]
+    if length(d) < i + trailing
+        return '\ufffd'
     end
     c::Uint32 = 0
-    for j = 1:trailing
-        c += s.data[i]
+    for j = 1:trailing+1
         c <<= 6
+        c += d[i]
         i += 1
     end
-    c += s.data[i]
-    i += 1
-    c -= _jl_utf8_offset[trailing+1]
-    char(c), i
+    c -= utf8_offset[trailing+1]
+    char(c)
 end
+
+# this is a trick to allow inlining and tuple elision
+next(s::UTF8String, i::Int) = (s[i], i+1+utf8_trailing[s.data[i]+1])
 
 function first_utf8_byte(c::Char)
     c < 0x80    ? uint8(c)            :

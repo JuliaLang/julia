@@ -40,3 +40,5 @@ isempty(a::Number) = false
 contains(s::Number, n::Number) = (s == n)
 
 reinterpret{T<:Real}(::Type{T}, x::Real) = box(T,x)
+
+map(f, x::Number) = f(x)

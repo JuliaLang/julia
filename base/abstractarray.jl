@@ -53,6 +53,75 @@ function trailingsize(A, n)
     return s
 end
 
+## Bounds checking ##
+function check_bounds(sz::Int, I::Integer)
+    if I < 1 || I > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds(sz::Int, I::AbstractVector{Bool})
+    if length(I) > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
+    if min(I) < 1 || max(I) > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
+    for i in I
+        if i < 1 || i > sz
+            throw(BoundsError())
+        end
+    end
+end
+
+function check_bounds(A::AbstractVector, I::AbstractVector{Bool})
+    if !isequal(size(A), size(I)) throw(BoundsError()) end
+end
+
+function check_bounds(A::AbstractArray, I::AbstractVector{Bool})
+    if !isequal(size(A), size(I)) throw(BoundsError()) end
+end
+
+function check_bounds(A::AbstractArray, I::AbstractArray{Bool})
+    if !isequal(size(A), size(I)) throw(BoundsError()) end
+end
+
+check_bounds(A::AbstractVector, I::Indices) = check_bounds(length(A), I)
+
+function check_bounds(A::AbstractMatrix, I::Indices, J::Indices)
+    check_bounds(size(A,1), I)
+    check_bounds(size(A,2), J)
+end
+
+function check_bounds(A::AbstractArray, I::Indices, J::Indices)
+    check_bounds(size(A,1), I)
+    sz = size(A,2)
+    for i = 3:ndims(A)
+        sz *= size(A, i) # TODO: sync. with decision on issue #1030
+    end
+    check_bounds(sz, J)
+end
+
+function check_bounds(A::AbstractArray, I::Indices...)
+    n = length(I)
+    if n > 0
+        for dim = 1:(n-1)
+            check_bounds(size(A,dim), I[dim])
+        end
+        sz = size(A,n)
+        for i = n+1:ndims(A)
+            sz *= size(A,i)     # TODO: sync. with decision on issue #1030
+        end
+        check_bounds(sz, I[n])
+    end
+end
+
 ## Constructors ##
 
 # default arguments to similar()
@@ -730,7 +799,7 @@ function hvcat{T<:Number}(rows::(Int...), xs::T...)
     a
 end
 
-function _jl_hvcat_fill(a, xs)
+function hvcat_fill(a, xs)
     k = 1
     nr, nc = size(a)
     for i=1:nr
@@ -755,7 +824,7 @@ function hvcat(rows::(Int...), xs::Number...)
     for i=2:length(xs)
         T = promote_type(T,typeof(xs[i]))
     end
-    _jl_hvcat_fill(Array(T, nr, nc), xs)
+    hvcat_fill(Array(T, nr, nc), xs)
 end
 
 ## Reductions and scans ##
@@ -810,7 +879,7 @@ function (!=)(A::AbstractArray, B::AbstractArray)
 end
 
 (<)(A::AbstractArray, B::AbstractArray) =
-    error("< not defined for arrays. Try .< or isless.")
+    error("Not defined. To compare arrays, try .< .> .<= .>= or isless.")
 
 (==)(A::AbstractArray, B) = error("Not defined. Try .== or isequal.")
 
@@ -827,6 +896,48 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
            c[i] = ($op)(v[i], c[i-1])
         end
         return c
+    end
+
+    @eval function ($f)(A::AbstractArray, axis::Integer)
+        dimsA = size(A)
+        ndimsA = ndims(A)
+        axis_size = dimsA[axis]
+        axis_stride = 1
+        for i = 1:(axis-1)
+            axis_stride *= size(A,i)
+        end
+
+        if axis_size <= 1
+            return A
+        end
+
+        B = similar(A)
+
+        for i = 1:length(A)
+            if div(i-1, axis_stride) % axis_size == 0
+               B[i] = A[i]
+            else
+               B[i] = ($op)(A[i], B[i-axis_stride])
+            end
+        end
+
+        return B
+    end
+
+    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
+end
+
+for (f, op) = ((:cummin, :min), (:cummax, :max))
+    @eval function ($f)(v::AbstractVector)
+        n = length(v)
+        cur_val = v[1]
+        res = similar(v, n)
+        res[1] = cur_val
+        for i in 2:n
+            cur_val = ($op)(v[i], cur_val)
+            res[i] = cur_val
+        end
+        return res
     end
 
     @eval function ($f)(A::AbstractArray, axis::Integer)
@@ -967,6 +1078,34 @@ indices(I::AbstractVector{Bool}) = find(I)
 indices(I::(Indices...)) = map(indices, I)
 
 ## iteration utilities ##
+
+# TODO: something sensible should happen when each_col et. al. are used with a
+# pure function argument
+function each_col!(f::Function, a::AbstractMatrix)
+    m = size(a,1)
+    for i = 1:m:numel(a)
+        f(sub(a, i:(i+m-1)))
+    end
+    return a
+end
+
+function each_row!(f::Function, a::AbstractMatrix)
+    m = size(a,1)
+    for i = 1:m
+        f(sub(a, i:m:numel(a)))
+    end
+    return a
+end
+
+function each_vec!(f::Function, a::AbstractMatrix, dim::Integer)
+    if dim == 1; return each_col!(f,a); end
+    if dim == 2; return each_row!(f,a); end
+    error("invalid matrix dimensions: ", dim)
+end
+
+each_col(f::Function, a::AbstractMatrix) = each_col!(f,copy(a))
+each_row(f::Function, a::AbstractMatrix) = each_row!(f,copy(a))
+each_vec(f::Function, a::AbstractMatrix, d::Integer) = each_vec!(f,copy(a),d)
 
 # slow, but useful
 function cartesian_map(body, t::(Int...), it...)

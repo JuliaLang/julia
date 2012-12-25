@@ -219,6 +219,27 @@ static int szclass(size_t sz)
     return 41;
 }
 
+#ifdef __LP64__
+#define malloc_a16(sz) malloc(sz)
+#else
+#if defined(WIN32)
+// TODO - use _aligned_malloc, which requires _aligned_free
+#define malloc_a16(sz) malloc(sz)
+
+#elif defined(__APPLE__)
+#define malloc_a16(sz) malloc(sz)
+
+#else
+static inline void *malloc_a16(size_t sz)
+{
+    void *ptr;
+    if (posix_memalign(&ptr, 16, sz))
+        return NULL;
+    return ptr;
+}
+#endif
+#endif
+
 static void *alloc_big(size_t sz)
 {
     if (allocd_bytes > collect_interval) {
@@ -228,7 +249,7 @@ static void *alloc_big(size_t sz)
     size_t offs = BVOFFS*sizeof(void*);
     if (sz + offs < offs)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
-    bigval_t *v = (bigval_t*)malloc(sz + offs);
+    bigval_t *v = (bigval_t*)malloc_a16(sz + offs);
     allocd_bytes += (sz+offs);
     if (v == NULL)
         jl_throw(jl_memory_exception);
@@ -284,7 +305,7 @@ jl_mallocptr_t *jl_gc_managed_malloc(size_t sz)
         jl_gc_collect();
     }
     sz = (sz+3) & -4;
-    void *b = malloc(sz);
+    void *b = malloc_a16(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
     allocd_bytes += sz;
@@ -316,7 +337,7 @@ static void sweep_malloc_ptrs(void)
 
 static void add_page(pool_t *p)
 {
-    gcpage_t *pg = malloc(sizeof(gcpage_t));
+    gcpage_t *pg = malloc_a16(sizeof(gcpage_t));
     if (pg == NULL)
         jl_throw(jl_memory_exception);
     gcval_t *v = (gcval_t*)&pg->data[0];
@@ -469,19 +490,17 @@ static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
 {
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
-        size_t i;
-        jl_value_t ***rts = (jl_value_t***)((char*)s->roots + offset);
-        if (s->indirect) {
-            size_t nr = s->nroots;
-            for(i=0; i < nr; i++) {
+        jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+        size_t nr = s->nroots>>1;
+        if (s->nroots & 1) {
+            for(size_t i=0; i < nr; i++) {
                 jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
                 if (*ptr != NULL)
                     gc_push_root(*ptr);
             }
         }
         else {
-            size_t nr = s->nroots;
-            for(i=0; i < nr; i++) {
+            for(size_t i=0; i < nr; i++) {
                 if (rts[i] != NULL)
                     gc_push_root(rts[i]);
             }
@@ -553,7 +572,7 @@ static void gc_mark_all()
             }
         }
         if (a->ptrarray) {
-            size_t l = a->length;
+            size_t l = jl_array_len(a);
             for(size_t i=0; i < l; i++) {
                 jl_value_t *elt = ((jl_value_t**)data)[i];
                 if (elt != NULL) gc_push_root(elt);

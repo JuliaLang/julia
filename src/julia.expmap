@@ -57,6 +57,7 @@
     jl_backtrace_type;
     jl_base_module;
     jl_boundp;
+    jl_defines_or_exports_p;
     jl_box_int32;
     jl_box_int64;
     jl_buf_mutex_lock;
@@ -156,6 +157,7 @@
     jl_pchar_to_string;
     jl_pgcstack;
     jl_prepare_ast;
+    jl_ast_rettype;
     jl_print_int64;
     jl_print_symbol;
     jl_process_exited;

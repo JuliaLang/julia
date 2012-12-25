@@ -7,16 +7,16 @@ Getting Around
 
    Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
 
-.. function:: whos([Module][, pattern::Regex])
+.. function:: whos([Module,] [pattern::Regex])
 
    Print information about global variables in a module, optionally restricted
    to those matching ``pattern``.
 
-.. function:: edit("file"[, line])
+.. function:: edit("file", [line])
 
    Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor. If the file name ends in ".jl" it is reloaded when the editor closes the file.
 
-.. function:: edit(function[, types])
+.. function:: edit(function, [types])
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit. When the editor exits, the source file containing the definition is reloaded.
 
@@ -304,7 +304,10 @@ Associative Collections
 
 ``ObjectIdDict`` is a special hash table where the keys are always object identities. ``WeakKeyDict`` is a hash table implementation where the keys are weak references to objects, and thus may be garbage collected even when referenced in a hash table.
 
-Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``
+Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``. Use of curly brackets will create a ``Dict`` of type ``Dict{Any,Any}``. Use of square brackets will attempt to infer type information from the keys and values (i.e. ``["A"=>1, "B"=>2]`` creates a ``Dict{ASCIIString, Int64}``). To explicitly specify types use the syntax: ``(KeyType=>ValueType)[...]``. For example, ``(ASCIIString=>Int32)["A"=>1, "B"=>2]``.
+
+As with arrays, ``Dicts`` may be created with comprehensions. For example,
+``{i => f(i) for i = 1:10}``.
 
 .. function:: Dict{K,V}(n)
 
@@ -471,7 +474,7 @@ Strings
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 
-.. function:: strchr(string, char[, i])
+.. function:: strchr(string, char, [i])
 
    Return the index of ``char`` in ``string``, giving 0 if not found. The second argument may also be a vector or a set of characters. The third argument optionally specifies a starting index.
 
@@ -483,13 +486,21 @@ Strings
 
    Make a string at least ``n`` characters long by padding on the right with copies of ``p``.
 
-.. function:: search(string, chars[, start])
+.. function:: search(string, chars, [start])
 
    Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a tuple with 2 integers: the index of the match and the first valid index past the match (or an index beyond the end of the string if the match is at the end); it returns ``(0,0)`` if no match was found, and ``(start,start)`` if ``chars`` is empty.
 
-.. function:: split(string, chars[, limit][, include_empty])
+.. function:: replace(string, pat, r[, n])
 
-   Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument. The last two arguments are optional; they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
+   Search for the given pattern ``pat``, and replace each occurance with ``r``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
+
+.. function:: replace(string, pat, f[, n])
+
+   Search for the given pattern ``pat``, and replace each occurance with ``f(pat)``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
+
+.. function:: split(string, [chars, [limit,] [include_empty]])
+
+   Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``include_empty`` is taken to be false. The last two arguments are also optional: they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
 
 .. function:: strip(string)
 
@@ -558,11 +569,11 @@ I/O
 
    Global variable referring to the standard input stream.
 
-.. function:: open(file_name[, read, write, create, truncate, append])
+.. function:: open(file_name, [read, write, create, truncate, append])
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
-.. function:: open(file_name[, mode])
+.. function:: open(file_name, [mode])
 
    Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
 
@@ -579,7 +590,7 @@ I/O
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
-.. function:: fdio(descriptor[, own])
+.. function:: fdio(descriptor, [own])
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected.
 
@@ -675,7 +686,7 @@ Text I/O
 
    Write an array to a text file using the given delimeter (defaults to comma).
 
-.. function:: csvread(filename[, T::Type])
+.. function:: csvread(filename, [T::Type])
 
    Equivalent to ``dlmread`` with ``delim`` set to comma.
 
@@ -686,7 +697,7 @@ Text I/O
 Memory-mapped I/O
 -----------------
 
-.. function:: mmap_array(type, dims, stream[, offset])
+.. function:: mmap_array(type, dims, stream, [offset])
 
    Create an array whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
 
@@ -814,7 +825,7 @@ Mathematical Functions
 
    Compute the inverse tangent of ``x`` specified in radians
 
-.. function:: atan2(x, y)
+.. function:: atan2(y, x)
 
    Compute the inverse tangent of ``y/x``, using the signs of both ``x`` and ``y`` to determine the quadrant of the return value.
 
@@ -935,19 +946,19 @@ Mathematical Functions
 
    Accurately compute :math:`e^x-1`
 
-.. function:: round(x[, digits[, base]]) -> FloatingPoint
+.. function:: round(x, [digits, [base]]) -> FloatingPoint
 
    ``round(x)`` returns the nearest integer to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
 
-.. function:: ceil(x[, digits[, base]]) -> FloatingPoint
+.. function:: ceil(x, [digits, [base]]) -> FloatingPoint
 
    Returns the nearest integer not less than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: floor(x[, digits[, base]]) -> FloatingPoint
+.. function:: floor(x, [digits, [base]]) -> FloatingPoint
 
    Returns the nearest integer not greater than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: trunc(x[, digits[, base]]) -> FloatingPoint
+.. function:: trunc(x, [digits, [base]]) -> FloatingPoint
 
    Returns the nearest integer not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
 
@@ -967,7 +978,7 @@ Mathematical Functions
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
-.. function:: signif(x, digits[, base]) -> FloatingPoint
+.. function:: signif(x, digits, [base]) -> FloatingPoint
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``. 
 
@@ -1013,11 +1024,31 @@ Mathematical Functions
 
 .. function:: erf(x)
 
-   Compute the error function of ``x``
+   Compute the error function of ``x``, defined by
+   :math:`\frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} dt`
+   for arbitrary complex ``x``.
 
 .. function:: erfc(x)
 
-   Compute the complementary error function of ``x``
+   Compute the complementary error function of ``x``,
+   defined by :math:`1 - \operatorname{erf}(x)`.
+
+.. function:: erfcx(x)
+
+   Compute the scaled complementary error function of ``x``,
+   defined by :math:`e^{x^2} \operatorname{erfc}(x)`.  Note
+   also that :math:`\operatorname{erfcx}(-ix)` computes the
+   Faddeeva function :math:`w(x)`.
+
+.. function:: erfi(x)
+
+   Compute the imaginary error function of ``x``,
+   defined by :math:`-i \operatorname{erf}(ix)`.
+
+.. function:: dawson(x)
+
+   Compute the Dawson function (scaled imaginary error function) of ``x``,
+   defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
 
 .. function:: real(z)
 
@@ -1165,23 +1196,23 @@ Mathematical Functions
 Data Formats
 ------------
 
-.. function:: bin(n[, pad])
+.. function:: bin(n, [pad])
 
    Convert an integer to a binary string, optionally specifying a number of digits to pad to.
 
-.. function:: hex(n[, pad])
+.. function:: hex(n, [pad])
 
    Convert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.
 
-.. function:: dec(n[, pad])
+.. function:: dec(n, [pad])
 
    Convert an integer to a decimal string, optionally specifying a number of digits to pad to.
 
-.. function:: oct(n[, pad])
+.. function:: oct(n, [pad])
 
    Convert an integer to an octal string, optionally specifying a number of digits to pad to.
 
-.. function:: base(b, n[, pad])
+.. function:: base(b, n, [pad])
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 
@@ -1577,6 +1608,60 @@ Indexing, Assignment, and Concatenation
 
    Make a vector out of an array with only one non-singleton dimension.
 
+Sparse Matrices
+---------------
+
+Sparse matrices support much of the same set of operations as dense matrices. The following functions are specific to sparse matrices.
+
+.. function:: sparse(I,J,V[,m,n,combine])
+
+   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``. The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``max(I)`` and ``max(J)`` respectively. If the ``combine`` function is not supplied, duplicates are added by default.
+
+.. function:: issparse(S)
+
+   Returns ``true`` if ``S`` is sparse, and ``false`` otherwise.
+
+.. function:: nnz(S)
+
+   Return the number of nonzeros in ``S``.
+
+.. function:: sparse(A)
+
+   Convert a dense matrix ``A`` into a sparse matrix.
+
+.. function:: dense(S)
+
+   Convert a sparse matrix ``S`` into a dense matrix.   
+
+.. function:: full(S)
+
+   Convert a sparse matrix ``S`` into a dense matrix.   
+
+.. function:: spzeros(m,n)
+
+   Create an empty sparse matrix of size ``m x n``.
+
+.. function:: speye(type,m[,n])
+
+   Create a sparse identity matrix of specified type of size ``m x m``. In case ``n`` is supplied, create a sparse identity matrix of size ``m x n``.
+
+.. function:: spones(S)
+
+   Create a sparse matrix with the same structure as that of ``S``, but with every nonzero element having the value ``1.0``.
+
+.. function:: sprand(m,n,density[,rng])
+
+   Create a random sparse matrix with the specified density. Nonzeros are sampled from the distribution specified by ``rng``. The uniform distribution is used in case ``rng`` is not specified.
+
+.. function:: sprandn(m,n,density)
+
+   Create a random sparse matrix of specified density with nonzeros sampled from the normal distribution.
+
+.. function:: sprandbool(m,n,density)
+
+   Create a random sparse boolean matrix with the specified density.
+
+
 Linear Algebra
 --------------
 
@@ -1646,13 +1731,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Lower triangle of a matrix
 
-.. function:: diag(M)
+.. function:: diag(M, [k])
 
-   The diagonal of a matrix, as a vector
+   The ``k``-th diagonal of a matrix, as a vector
 
-.. function:: diagm(v)
+.. function:: diagm(v, [k])
 
-   Construct a diagonal matrix from a vector
+   Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
 
 .. function:: Tridiagonal(dl, d, du)
 
@@ -1709,38 +1794,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 Combinatorics
 -------------
 
-.. function:: sort(v)
-
-   Sort a vector in ascending order, according to ``isless``.
-
-.. function:: sort!(v)
-
-   In-place sort
-
-.. function:: sortr(v)
-
-   Sort a vector in descending order
-
-.. function:: sortr!(v)
-
-   In-place descending-order sort
-
-.. function:: sort(a, dim)
-
-   Sort an array along the given dimension
-
-.. function:: sort(lessthan, a[, dim])
-
-   Sort with a custom comparison function
-
-.. function:: sortperm(v) -> s,p
-
-   Sort a vector in ascending order, also constructing the permutation that sorts the vector
-
-.. function:: issorted(v)
-
-   Test whether a vector is in ascending sorted order
-
 .. function:: nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
@@ -1752,6 +1805,14 @@ Combinatorics
 .. function:: randperm(n)
 
    Construct a random permutation of the given length
+
+.. function:: invperm(v)
+
+   Return the inverse permtation of v
+
+.. function:: isperm(v)
+
+   Returns true if v is a valid permutation
 
 .. function:: randcycle(n)
 
@@ -1773,36 +1834,140 @@ Combinatorics
 
    Reverse vector ``v`` in-place
 
-.. function:: select(v, k)
-
-   Find the element in position ``k`` in the sorted vector ``v`` without sorting
-
-.. function:: select!(v, k)
-
-   In-place version of ``select``
-
 Statistics
 ----------
 
-.. function:: mean(v[, dim])
+.. function:: mean(v, [dim])
 
    Compute the mean of whole array ``v``, or optionally along dimension ``dim``
 
-.. function:: std(v)
+.. function:: std(v, [corrected])
 
-   Compute the standard deviation of a vector ``v``
+   Compute the sample standard deviation of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- mean(v)).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- mean(v)).^2) / length(v))``, which is the empirical standard deviation of the sample.
+
+.. function:: std(v, m, [corrected])
+
+   Compute the sample standard deviation of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- m).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- m).^2) / length(v))``, which is the empirical standard deviation of the sample.
+
+.. function:: var(v, [corrected])
+
+   Compute the sample variance of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- mean(v)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- mean(v)).^2) / length(v)``, which is the empirical variance of the sample.
+
+.. function:: var(v, m, [corrected])
+
+   Compute the sample variance of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- m)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- m)).^2) / length(v)``, which is the empirical variance of the sample.
 
 .. function:: median(v)
 
    Compute the median of a vector ``v``
 
-.. function:: hist(v[, n])
+.. function:: hist(v, [n])
 
    Compute the histogram of ``v``, optionally using ``n`` bins
 
 .. function:: histc(v, e)
 
    Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
+
+.. function:: weighted_mean(v, w)
+
+   Compute the weighted mean of ``v`` using a vector of weights ``w``
+
+.. function:: mad(v, m)
+
+   Compute the median absolute deviation from the entries of a vector ``v`` relative to a known median ``m``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
+
+.. function:: mad(v)
+
+   Compute the median absolute deviation from the entries of a vector ``v`` relative to the median of ``v``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
+
+.. function:: skewness(v, m)
+
+   Compute the sample skewness of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: skewness(v)
+
+   Compute the sample skewness of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: kurtosis(v, m)
+
+   Compute the sample kurtosis of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: kurtosis(v)
+
+   Compute the sample kurtosis of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: quantile(v, p)
+
+   Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``.
+
+.. function:: quantile(v)
+
+   Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+
+.. function:: quartile(v)
+
+   Compute the quartiles of a vector ``v`` at the probability values ``[.0, .25, .5, .75, 1.0]``.
+
+.. function:: quintile(v)
+
+   Compute the quintiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+
+.. function:: decile(v)
+
+   Compute the deciles of a vector ``v`` at the probability values ``[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]``.
+
+.. function:: iqr(v)
+
+   Compute the interquantile range of a vector ``v`` at the probability values ``[.25, .75]``.
+
+.. function:: tiedrank(v)
+
+   Compute the ranks of the entries of vector ``v``. Ties are resolved by taking the average rank over all tied values.
+
+.. function:: cov_pearson(v1, v2)
+
+   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
+
+.. function:: cov_spearman(v)
+
+   Compute the Spearman covariance between two vectors ``v1`` and ``v2``.
+
+.. function:: cov(v)
+
+   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
+
+.. function:: cor_pearson(v)
+
+   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
+
+.. function:: cor_spearman(v)
+
+   Compute the Spearman correlation between two vectors ``v1`` and ``v2``.
+
+.. function:: cor(v)
+
+   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
+
+.. function:: autocor(v, l)
+
+   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``l``.
+
+.. function:: autocor(v)
+
+   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``1``.
+
+.. function:: dist(m)
+
+   Compute the distance matrix between all of the rows of ``m``.
+
+.. function:: rle(v)
+
+   Compute a run-length encoding representation of a vector ``v``.
+
+.. function:: inverse_rle(vals, lens)
+
+   Compute a vector from its run-length vector representation as values ``vals`` and run lengths ``lens``.
 
 Signal Processing
 -----------------
@@ -1841,10 +2006,10 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Inverse N-d FFT
 
-.. function:: rfft(A [, dim=1])
+.. function:: rfft(A, [dim])
 
    One-dimensional FFT of real array A along dimension dim. If A has size
-   ``(..., n_dim, ...)``, the result has size ``(..., floor(n_dim/2)+1, ...)``.
+   ``(..., n_dim, ...)``, the result has size ``(..., floor(n_dim/2)+1, ...)``. The ``dim`` argument is optional and defaults to 1.
 
 .. function:: rfftn(A)
 
@@ -1859,7 +2024,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Swap the first and second halves of the given dimension of array ``x``.
 
-.. function:: ifftshift(x[, dim])
+.. function:: ifftshift(x, [dim])
 
    Undoes the effect of ``fftshift``.
 
@@ -1941,7 +2106,7 @@ Parallel Computing
 Distributed Arrays
 ------------------
 
-.. function:: darray(init, type, dims[, distdim, procs, dist])
+.. function:: darray(init, type, dims, [distdim, procs, dist])
 
    Construct a distributed array. ``init`` is a function of three arguments that will run on each processor, and should return an ``Array`` holding the local data for the current processor. Its arguments are ``(T,d,da)`` where ``T`` is the element type, ``d`` is the dimensions of the needed local piece, and ``da`` is the new ``DArray`` being constructed (though, of course, it is not fully initialized). ``type`` is the element type. ``dims`` is the dimensions of the entire ``DArray``. ``distdim`` is the dimension to distribute in. ``procs`` is a vector of processor ids to use. ``dist`` is a vector giving the first index of each contiguous distributed piece, such that the nth piece consists of indexes ``dist[n]`` through ``dist[n+1]-1``. If you have a vector ``v`` of the sizes of the pieces, ``dist`` can be computed as ``cumsum([1,v])``. Fortunately, all arguments after ``dims`` are optional.
 
@@ -1973,7 +2138,7 @@ Distributed Arrays
 
    Construct a distributed cell array. Trailing arguments are the same as those accepted by ``darray``.
 
-.. function:: distribute(a[, distdim])
+.. function:: distribute(a, [distdim])
 
    Convert a local array to distributed
 
@@ -2024,7 +2189,7 @@ System
 
    Set the current working directory. Returns the new current directory.
 
-.. function:: mkdir(path[, mode])
+.. function:: mkdir(path, [mode])
 
    Make a new directory with name ``path`` and permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.

@@ -109,8 +109,8 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
             else
                 ccall(($(string(genrand_fill)),:librandom),
                       Void,
-                      (Ptr{Void}, Ptr{Float64}, Int32),
-                      s.val, A, n & 0xfffffffe)
+                      (Ptr{Void}, Ptr{Float64}, Int),
+                      s.val, A, n & 0xfffffffffffffffe)
                 if isodd(n)
                     A[n] = rand()
                 end
@@ -127,8 +127,8 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
             else
                 ccall(($(string(gv_genrand_fill)),:librandom),
                       Void,
-                      (Ptr{Void}, Int32),
-                      A, n & 0xfffffffe)
+                      (Ptr{Void}, Int),
+                      A, n & 0xfffffffffffffffe)
                 if isodd(n)
                     A[n] = rand()
                 end

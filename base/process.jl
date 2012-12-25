@@ -94,7 +94,7 @@ end
 # this could cause a segfault. this is really just for use by the
 # spawn function below so that we can exec more efficiently.
 #
-function _jl_pre_exec(args::Vector{ByteString})
+function pre_exec(args::Vector{ByteString})
     if length(args) < 1
         error("exec: too few words to exec")
     end
@@ -107,7 +107,7 @@ function _jl_pre_exec(args::Vector{ByteString})
 end
 
 function exec(args::Vector{ByteString})
-    ptrs = _jl_pre_exec(args)
+    ptrs = pre_exec(args)
     ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
     system_error(:exec, true)
 end
@@ -514,7 +514,7 @@ function spawn(cmd::Cmd)
     for c = cmd.pipeline
         # minimize work after fork, in particular no writing
         c.status = ProcessRunning()
-        ptrs = isa(c.exec,Vector{ByteString}) ? _jl_pre_exec(c.exec) : nothing
+        ptrs = isa(c.exec,Vector{ByteString}) ? pre_exec(c.exec) : nothing
         dup2_fds = Array(Int32, 2*numel(c.pipes))
         dup2_sinks = Array(Int32, 2*numel(c.sinks))
         close_fds_ = copy(fds)
@@ -681,7 +681,7 @@ function _each_line(ports::Ports, cmds::Cmds)
     r = read_from(ports)
     spawn(cmds)
     fh = fdio(r.fd, true)
-    EachLine(fh)
+    EachLine(fh, ()->wait(cmds))
 end
 
 each_line(ports::Ports) = _each_line(ports, cmds(ports))
@@ -726,5 +726,5 @@ function cmd_gen(parsed)
 end
 
 macro cmd(str)
-    :(cmd_gen($(_jl_shell_parse(str))))
+    :(cmd_gen($(shell_parse(str))))
 end

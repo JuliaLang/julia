@@ -1,5 +1,5 @@
 # Testing for gzip
-require("../extras/gzip")
+require("extras/gzip")
 
 using GZip
 
@@ -219,8 +219,16 @@ end
 
 unicode_gz_file = "$tmp/unicode_test.gz"
 
-str1 = CharString(reinterpret(Char, read(open("$JULIA_HOME/../share/julia/test/unicode/UTF-32LE.unicode"), Uint32, 1112065)[2:]));
-str2 = UTF8String(read(open("$JULIA_HOME/../share/julia/test/unicode/UTF-8.unicode"), Uint8, 4382595)[4:]);
+# Use perl to generate UTF-32BE unicode data a la unicode.jl, then convert to UTF-32LE, UTF-8 via iconv
+UTF32BE_path = file_path(tmp,"UTF32BE.unicode")
+UTF32LE_path = file_path(tmp,"UTF32LE.unicode")
+UTF8_path = file_path(tmp,"UTF8.unicode")
+run(`perl -e 'print pack "N*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' ` > UTF32BE_path )
+run(`iconv -f UTF-32BE -t UTF-32LE $UTF32BE_path` > UTF32LE_path )
+run(`iconv -f UTF-32BE -t UTF-8 $UTF32BE_path` > UTF8_path )
+
+str1 = CharString(reinterpret(Char, read(open(UTF32LE_path), Uint32, 1112065)[2:]));
+str2 = UTF8String(read(open(UTF8_path), Uint8, 4382595)[4:]);
 
 UTF32LE_gz = gzopen(unicode_gz_file, "w")
 write(UTF32LE_gz, str1)

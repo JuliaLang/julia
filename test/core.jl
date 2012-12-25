@@ -475,3 +475,29 @@ begin
     @test f1442(S1442{Int}) == 2
     @test f1442(CompositeKind) == 1
 end
+
+# issue #1727
+abstract Component
+
+type Transform <: Component
+  x
+  y
+  z
+
+  Transform() = new(0, 0, 0)
+end
+
+type Body <: Component
+  vel
+  curr_force
+
+  Body() = new(0, 0)
+end
+
+function NewEntity{ T<:Component }(components::Type{T}...)
+  map((c)->c(), components)
+end
+
+@test_fails NewEntity(Transform, Transform, Body, Body)
+@test isa(NewEntity(Transform, Transform), (Transform, Transform))
+@test_fails NewEntity(Transform, Transform, Body, Body)

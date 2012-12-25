@@ -4,28 +4,28 @@ include $(JULIAHOME)/Make.inc
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/$(JL_LIBDIR) $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia
+DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,extras base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
-MAKEs = $(MAKE)
+QUIET_MAKE =
 ifeq ($(USE_QUIET), 1)
-MAKEs += -s
+QUIET_MAKE = -s
 endif
 
 debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
-	@$(MAKEs) julia-$@
+	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
-	$(MAKEs) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
+	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
 
 julia-debug julia-release:
 	@-git submodule update
-	@$(MAKEs) -C deps
-	@$(MAKEs) -C src lib$@
-	@$(MAKEs) -C base
-	@$(MAKEs) -C extras
-	@$(MAKEs) -C ui $@
+	@$(MAKE) $(QUIET_MAKE) -C deps
+	@$(MAKE) $(QUIET_MAKE) -C src lib$@
+	@$(MAKE) $(QUIET_MAKE) -C base
+	@$(MAKE) $(QUIET_MAKE) -C extras
+	@$(MAKE) $(QUIET_MAKE) -C ui $@
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
 
 $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
@@ -42,22 +42,21 @@ JL_LIBS = julia-release julia-debug
 # private libraries, that are installed in $(PREFIX)/lib/julia
 JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
                   fftw3f_threads glpk glpk_wrapper gmp gmp_wrapper grisu \
-                  history openlibm pcre random readline Rmath spqr \
-                  suitesparse_wrapper tk_wrapper umfpack z openblas
+                  history Faddeeva_wrapper openlibm pcre random readline \
+	          Rmath spqr suitesparse_wrapper tk_wrapper umfpack z openblas
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
-	@$(MAKEs) -C test/unicode
 	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
-	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
+	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
-		cp -a $(BUILD)/lib/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
-		cp -a $(BUILD)/lib/lib$${suffix}.* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		cp -a $(BUILD)/lib/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	# Copy system image
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
@@ -77,7 +76,7 @@ dist: cleanall
 	-$(MAKE) -C deps clean-openblas
 	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
 ifeq ($(OS), Darwin)
-	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_LIBDIR) $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 	rm -fr julia-$(JULIA_COMMIT)
@@ -90,12 +89,12 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C extras clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
-	@$(MAKE) -C test/unicode clean
 	@for buildtype in "release" "debug" ; do \
 		for repltype in "basic" "readline"; do \
 			rm -f julia-$${buildtype}-$${repltype}; \
 		done \
 	done
+	@rm -f julia
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/$(JL_PRIVATE_LIBDIR)
 
@@ -108,10 +107,15 @@ cleanall: clean
 	test testall test-* clean cleanall
 
 test: release
-	@$(MAKEs) -C test default
+	@$(MAKE) $(QUIET_MAKE) -C test default
 
 testall: release
-	@$(MAKEs) -C test all
+	@$(MAKE) $(QUIET_MAKE) -C test all
 
 test-%: release
-	@$(MAKEs) -C test $*
+	@$(MAKE) $(QUIET_MAKE) -C test $*
+
+webrepl:
+	make -C deps install-lighttpd
+	make -C ui/webserver
+	cd $(BUILD)/share/julia && ln -sf ../../../ui/website .

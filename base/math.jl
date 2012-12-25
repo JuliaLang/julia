@@ -7,13 +7,14 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
        log, log2, log10, log1p, logb, exp, exp2, expm1, 
-       cbrt, sqrt, square, erf, erfc, ceil, floor, trunc, round, 
+       cbrt, sqrt, square, erf, erfc, erfcx, erfi, dawson,
+       ceil, floor, trunc, round, 
        lgamma, hypot, gamma, lfact, max, min, ilogb, ldexp, frexp,
        clamp, modf, ^, 
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
-       beta, lbeta, eta, zeta, psigamma, digamma
+       beta, lbeta, eta, zeta, digamma
 
 import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
        Base.tanh, Base.asin, Base.acos, Base.atan, Base.asinh, Base.acosh,
@@ -88,7 +89,7 @@ for f in (:cbrt, :sin, :cos, :tan, :sinh, :cosh, :tanh, :asin, :acos, :atan,
     end
 end
 
-for f in (:log1p, :logb, :expm1, :ceil, :floor, :trunc, :round, :significand) # :rint, :nearbyint
+for f in (:log1p, :logb, :expm1, :ceil, :trunc, :round, :significand) # :rint, :nearbyint
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),:libopenlibm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),:libopenlibm), Float32, (Float32,), x)
@@ -96,6 +97,10 @@ for f in (:log1p, :logb, :expm1, :ceil, :floor, :trunc, :round, :significand) # 
         @vectorize_1arg Real $f
     end
 end
+
+floor(x::Float32) = ccall((:floorf, :libopenlibm), Float32, (Float32,), x)
+floor(x::Real) = floor(float(x))
+@vectorize_1arg Real floor
 
 atan2(x::Real, y::Real) = atan2(float64(x), float64(y))
 
@@ -440,8 +445,8 @@ const digamma_EUL = 0.57721566490153286061
 const digamma_coefs = [8.33333333333333333333e-2,-2.10927960927960927961e-2, 7.57575757575757575758e-3,
                       -4.16666666666666666667e-3, 3.96825396825396825397e-3,-8.33333333333333333333e-3,
                        8.33333333333333333333e-2]
+
 function digamma(x::Float64)
-  
     negative = false
     nz = 0.0
 
@@ -617,6 +622,34 @@ eta(z::Complex) = oftype(z,eta(complex128(z)))
 function zeta(z::Number)
     zz = 2^z
     eta(z) * zz/(zz-2)
+end
+
+const Faddeeva_tmp = Array(Float64,2)
+
+# wrappers for complex Faddeeva functions; these will get a lot simpler,
+# and can call openlibm directly, once ccall supports C99 complex types.
+for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
+    fname = (f === :Dawson) ? :dawson : f
+    @eval begin
+        function ($fname)(z::Complex128)
+            ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &z, zero(Float64))
+            return complex128(Faddeeva_tmp[1],Faddeeva_tmp[2])
+        end
+        function ($fname)(z::Complex64)
+            ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &complex128(z), float64(eps(Float32)))
+            return complex64(Faddeeva_tmp[1],Faddeeva_tmp[2])
+        end
+        ($fname)(z::Complex) = ($fname)(complex128(z))
+    end
+end
+for f in (:erfcx, :erfi, :Dawson)
+    fname = (f === :Dawson) ? :dawson : f
+    @eval begin
+        ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), x)
+        ($fname)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), float64(x)))
+        ($fname)(x::Real) = ($fname)(float(x))
+        @vectorize_1arg Number $fname
+    end
 end
 
 end # module

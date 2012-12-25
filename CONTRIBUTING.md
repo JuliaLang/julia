@@ -14,11 +14,13 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 ## Submitting your contributions
 
+Julia now has a [package manager](https://github.com/JuliaLang/METADATA.jl). Most developers writing julia libraries are encouraged to provide them as a julia package. In case you are contributing to the core functionality or the base libraries, the process is as follows.
+
 The Julia team uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests.
 
-You can make pull requests for incomplete features to get code review, in which case we have a convention of prefixing the pull request title with "RFC:" to indicate that the work is incomplete so it doesn't accidentally get merged into the master branch before it's ready.
+You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
 
-Before submitting, make sure that all tests pass by running `make testall`. Even better, add your own tests for your change or feature to the test files in `test/`. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git).
+Before submitting, make sure that all tests pass by running `make testall`. Add your own tests for the new functionality in `test/`. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git). Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a `Good to merge` message.
 
 *By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
@@ -29,9 +31,14 @@ While getting familiar with Julia, remember to check out [the docs](http://docs.
 ## Resources
 
 * Julia
-  - [Julia](http://julialang.org)
-  - [Julia Manual and Library Guide](http://docs.julialang.org/en/latest/)
-  - [Julia dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev)
+  - **Homepage:** <http://julialang.org>
+  - **Mailing lists:** <http://julialang.org/mailing_lists>
+  - **IRC:** <http://webchat.freenode.net/?channels=julia>
+  - **Source code:** <https://github.com/JuliaLang/julia>
+  - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
+  - **Documentation:** <http://julialang.org/manual/>
+* Design of Julia
+  - [Julia: A Fast Dynamic Language for Technical Computing](http://julialang.org/images/julia-dynamic-2012-tr.pdf)
 * Working with Types
   - [Some Type Patterns](https://github.com/JuliaLang/julia/wiki/Code-Patterns)
   - [The Type Hierarchy](https://github.com/JuliaLang/julia/wiki/Types-Hierarchy)

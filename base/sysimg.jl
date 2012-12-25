@@ -65,6 +65,7 @@ include("rational.jl")
 include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
+include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
@@ -75,6 +76,7 @@ include("inference.jl")
 
 # I/O, strings & printing
 include("io.jl")
+include("iostring.jl")
 include("char.jl")
 include("ascii.jl")
 include("utf8.jl")
@@ -94,6 +96,7 @@ include("serialize.jl")
 include("multi.jl")
 
 # system & environment
+include("build_h.jl")
 include("osutils.jl")
 include("libc.jl")
 include("env.jl")
@@ -118,6 +121,7 @@ using RNG
 
 # Combinatorics
 include("sort.jl")
+using Sort
 include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
@@ -131,16 +135,15 @@ include("util.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
 
-## Load optional external libraries
-
-include("build_h.jl")
-
 # linear algebra
 include("blas.jl")
 include("lapack.jl")
 include("matmul.jl")
+include("sparse.jl")
 include("linalg.jl")
 include("linalg_dense.jl")
+include("linalg_bitarray.jl")
+include("linalg_sparse.jl")
 
 # signal processing
 include("fftw.jl")
@@ -220,7 +223,7 @@ compile_hint(hash, (Int,))
 compile_hint(isequal, (Symbol, Symbol))
 compile_hint(isequal, (Bool, Bool))
 compile_hint(WaitFor, (Symbol, RemoteRef))
-compile_hint(_jl_answer_color, ())
+compile_hint(answer_color, ())
 compile_hint(get, (EnvHash, ASCIIString, ASCIIString))
 compile_hint(notify_empty, (WorkItem,))
 compile_hint(rr2id, (RemoteRef,))
@@ -233,11 +236,11 @@ compile_hint(assign, (Dict{Any,Any}, WorkItem, (Int,Int)))
 compile_hint(isequal, ((Int,Int),(Int,Int)))
 compile_hint(isequal, (Int,Int))
 compile_hint(RemoteRef, (Int, Int, Int))
-compile_hint(_jl_eval_user_input, (Expr, Bool))
+compile_hint(eval_user_input, (Expr, Bool))
 compile_hint(print, (Float64,))
 compile_hint(a2t, (Array{Any,1},))
 compile_hint(flush, (IOStream,))
-compile_hint(ref, (Type{String}, ASCIIString, ASCIIString, ASCIIString, ASCIIString, ASCIIString))
+compile_hint(ref, (Type{ByteString}, ASCIIString, ASCIIString, ASCIIString, ASCIIString, ASCIIString, ASCIIString))
 compile_hint(int, (Int,))
 compile_hint(uint, (Uint,))
 compile_hint(_atexit, ())
@@ -263,8 +266,23 @@ compile_hint(abs_path, (ASCIIString,))
 compile_hint(isrooted, (ASCIIString,))
 compile_hint(split, (ASCIIString,))
 compile_hint(split, (ASCIIString, ASCIIString, Int, Bool))
+compile_hint(split, (ASCIIString, Regex, Int, Bool))
 compile_hint(print_joined, (IOStream, Array{String,1}, ASCIIString))
 compile_hint(begins_with, (ASCIIString, ASCIIString))
+compile_hint(resolve_globals, (Symbol, Module, Module, Vector{Any}, Vector{Any}))
+compile_hint(resolve_globals, (SymbolNode, Module, Module, Vector{Any}, Vector{Any}))
+compile_hint(BitArray, (Int,))
+compile_hint(ref, (BitArray{1}, Int,))
+compile_hint(assign, (BitArray{1}, Bool, Int,))
+compile_hint(fill!, (BitArray{1}, Bool))
+compile_hint(nnz, (BitArray{1},))
+compile_hint(get_chunks_id, (Int,))
+compile_hint(occurs_more, (Uint8, Function, Int))
+compile_hint(abstract_eval_arg, (Uint8, ObjectIdDict, StaticVarInfo))
+compile_hint(occurs_outside_tupleref, (Function, Symbol, StaticVarInfo, Int))
+compile_hint(search, (ASCIIString, Regex, Int))
+compile_hint(astcopy, (Uint8,))
+compile_hint(assign, (Vector{Uint8}, Uint8, Int))
 
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.

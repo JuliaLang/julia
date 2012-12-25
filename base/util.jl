@@ -51,6 +51,15 @@ macro elapsed(ex)
     end
 end
 
+# print nothing, return value & elapsed time
+macro timed(ex)
+    quote
+        local t0 = time()
+        local val = $(esc(ex))
+        val, time()-t0
+    end
+end
+
 function peakflops(n)
     a = rand(n,n)
     t = @elapsed a*a
@@ -167,22 +176,20 @@ methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
 
 # require
 # Store list of files and their load time
-_jl_package_list = (ByteString=>Float64)[]
+package_list = (ByteString=>Float64)[]
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 function require(name::ByteString)
     path = find_in_path(name)
-    if !has(_jl_package_list,path)
+    if !has(package_list,path)
         load_now(name)
     else
         # Determine whether the file has been modified since it was last loaded
-        if mtime(path) > _jl_package_list[path]
+        if mtime(path) > package_list[path]
             load_now(name)
         end
     end
 end
-
-const load = require
 
 # remote/parallel load
 
@@ -226,7 +233,7 @@ function load_now(fname::ByteString)
         push(load_dict, readall(f))
         close(f)
         include(path)
-        _jl_package_list[path] = time()
+        package_list[path] = time()
         return
     elseif in_remote_load
         for i=1:2:length(load_dict)
@@ -262,16 +269,18 @@ function remote_load(dict)
 end
 end
 
+const load = load_now
+
 evalfile(fname::String) = eval(Main,parse(readall(fname))[1])
 
 # help
 
-_jl_help_category_list = nothing
-_jl_help_category_dict = nothing
-_jl_help_module_dict = nothing
-_jl_help_function_dict = nothing
+help_category_list = nothing
+help_category_dict = nothing
+help_module_dict = nothing
+help_function_dict = nothing
 
-function _jl_decor_help_desc(func::String, mfunc::String, desc::String)
+function decor_help_desc(func::String, mfunc::String, desc::String)
     sd = split(desc, '\n')
     for i = 1:length(sd)
         if begins_with(sd[i], func)
@@ -283,20 +292,20 @@ function _jl_decor_help_desc(func::String, mfunc::String, desc::String)
     return join(sd, '\n')
 end
 
-function _jl_init_help()
-    global _jl_help_category_list, _jl_help_category_dict,
-           _jl_help_module_dict, _jl_help_function_dict
-    if _jl_help_category_dict == nothing
+function init_help()
+    global help_category_list, help_category_dict,
+           help_module_dict, help_function_dict
+    if help_category_dict == nothing
         println("Loading help data...")
         helpdb = evalfile("$JULIA_HOME/../share/julia/helpdb.jl")
-        _jl_help_category_list = {}
-        _jl_help_category_dict = Dict()
-        _jl_help_module_dict = Dict()
-        _jl_help_function_dict = Dict()
+        help_category_list = {}
+        help_category_dict = Dict()
+        help_module_dict = Dict()
+        help_function_dict = Dict()
         for (cat,mod,func,desc) in helpdb
-            if !has(_jl_help_category_dict, cat)
-                push(_jl_help_category_list, cat)
-                _jl_help_category_dict[cat] = {}
+            if !has(help_category_dict, cat)
+                push(help_category_list, cat)
+                help_category_dict[cat] = {}
             end
             if !isempty(mod)
                 if begins_with(func, '@')
@@ -304,27 +313,27 @@ function _jl_init_help()
                 else
                     mfunc = mod * "." * func
                 end
-                desc = _jl_decor_help_desc(func, mfunc, desc)
+                desc = decor_help_desc(func, mfunc, desc)
             else
                 mfunc = func
             end
-            push(_jl_help_category_dict[cat], mfunc)
-            if !has(_jl_help_function_dict, mfunc)
-                _jl_help_function_dict[mfunc] = {}
+            push(help_category_dict[cat], mfunc)
+            if !has(help_function_dict, mfunc)
+                help_function_dict[mfunc] = {}
             end
-            push(_jl_help_function_dict[mfunc], desc)
-            if !has(_jl_help_module_dict, func)
-                _jl_help_module_dict[func] = {}
+            push(help_function_dict[mfunc], desc)
+            if !has(help_module_dict, func)
+                help_module_dict[func] = {}
             end
-            if !contains(_jl_help_module_dict[func], mod)
-                push(_jl_help_module_dict[func], mod)
+            if !contains(help_module_dict[func], mod)
+                push(help_module_dict[func], mod)
             end
         end
     end
 end
 
 function help()
-    _jl_init_help()
+    init_help()
     print(
 " Welcome to Julia. The full manual is available at
 
@@ -335,8 +344,8 @@ function help()
  for one of the following categories:
 
 ")
-    for cat = _jl_help_category_list
-        if !isempty(_jl_help_category_dict[cat])
+    for cat = help_category_list
+        if !isempty(help_category_dict[cat])
             print("  ")
             show(cat); println()
         end
@@ -344,19 +353,19 @@ function help()
 end
 
 function help(cat::String)
-    _jl_init_help()
-    if !has(_jl_help_category_dict, cat)
+    init_help()
+    if !has(help_category_dict, cat)
         # if it's not a category, try another named thing
         return help_for(cat)
     end
     println("Help is available for the following items:")
-    for func = _jl_help_category_dict[cat]
+    for func = help_category_dict[cat]
         print(func, " ")
     end
     println()
 end
 
-function _jl_print_help_entries(entries)
+function print_help_entries(entries)
     first = true
     for desc in entries
         if !first
@@ -369,11 +378,11 @@ end
 
 help_for(s::String) = help_for(s, 0)
 function help_for(fname::String, obj)
-    _jl_init_help()
+    init_help()
     found = false
     if contains(fname, '.')
-        if has(_jl_help_function_dict, fname)
-            _jl_print_help_entries(_jl_help_function_dict[fname])
+        if has(help_function_dict, fname)
+            print_help_entries(help_function_dict[fname])
             found = true
         end
     else
@@ -384,14 +393,14 @@ function help_for(fname::String, obj)
         else
             sfname = fname
         end
-        if has(_jl_help_module_dict, fname)
-            allmods = _jl_help_module_dict[fname]
+        if has(help_module_dict, fname)
+            allmods = help_module_dict[fname]
             alldesc = {}
             for mod in allmods
                 mod_prefix = isempty(mod) ? "" : mod * "."
-                append!(alldesc, _jl_help_function_dict[macrocall * mod_prefix * sfname])
+                append!(alldesc, help_function_dict[macrocall * mod_prefix * sfname])
             end
-            _jl_print_help_entries(alldesc)
+            print_help_entries(alldesc)
             found = true
         end
     end
@@ -405,15 +414,15 @@ function help_for(fname::String, obj)
 end
 
 function apropos(txt::String)
-    _jl_init_help()
+    init_help()
     n = 0
     r = Regex("\\Q$txt", PCRE.CASELESS)
-    for (cat, _) in _jl_help_category_dict
+    for (cat, _) in help_category_dict
         if ismatch(r, cat)
             println("Category: \"$cat\"")
         end
     end
-    for (func, entries) in _jl_help_function_dict
+    for (func, entries) in help_function_dict
         if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
             for desc in entries
                 nl = search(desc,'\n')

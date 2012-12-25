@@ -232,7 +232,9 @@ function profile_parse(ex::Expr)
         # Put all this inside a let block
         excore = expr(:block,coreargs)
         exlet = expr(:let,{expr(:block,excore), :($timers = zeros(Uint64, $n_lines)), :($counters = zeros(Uint64, $n_lines))})
-        return exlet, tags, funcreport, funcclear
+        # Export the reporting and clearing functions, in case we're inside a module
+        exret = expr(:toplevel, {esc(exlet), expr(:export, {esc(funcclear), esc(funcreport)})})
+        return exret, tags, funcreport, funcclear
     else
         return ex ,{}, :funcnoop, :funcnoop
     end
@@ -338,7 +340,7 @@ macro profile(ex)
             push(PROFILE_REPORTS, esc(funcreport))
             push(PROFILE_CLEARS, esc(funcclear))
         end
-        return esc(exret)
+        return exret
     end
 end
 

@@ -110,7 +110,7 @@ function read(s::IO, ::Type{Char})
     end
 
     # mimic utf8.next function
-    trailing = Base._jl_utf8_trailing[ch+1]
+    trailing = Base.utf8_trailing[ch+1]
     c::Uint32 = 0
     for j = 1:trailing
         c += ch
@@ -118,13 +118,13 @@ function read(s::IO, ::Type{Char})
         ch = read(s, Uint8)
     end
     c += ch
-    c -= Base._jl_utf8_offset[trailing+1]
+    c -= Base.utf8_offset[trailing+1]
     char(c)
 end
 
 function readuntil(s::IO, delim)
     out = memio()
-    while (!eof(s))
+    while !eof(s)
         c = read(s, Char)
         write(out, c)
         if c == delim
@@ -138,19 +138,22 @@ readline(s::IO) = readuntil(s, '\n')
 
 function readall(s::IO)
     out = memio()
-    while (!eof(s))
+    while !eof(s)
         a = read(s, Uint8)
         write(out, a)
     end
     takebuf_string(out)
 end
 
-readchomp(x) = chomp(readall(x))
+readchomp(x) = chomp!(readall(x))
 
 ## high-level iterator interfaces ##
 
 type EachLine
     stream::IO
+    ondone::Function
+    EachLine(stream) = EachLine(stream, ()->nothing)
+    EachLine(stream, ondone) = new(stream, ondone)
 end
 each_line(stream::IO) = EachLine(stream)
 
@@ -160,6 +163,7 @@ function done(itr::EachLine, line)
         return false
     end
     close(itr.stream)
+    itr.ondone()
     true
 end
 next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
@@ -207,13 +211,9 @@ type IOStream <: IO
 end
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
-
 show(io, s::IOStream) = print(io, "IOStream(", s.name, ")")
-
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
-
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
-
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Integer) =
@@ -303,7 +303,7 @@ function write{T}(s::IOStream, a::Array{T})
         ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
               s.ios, a, numel(a)*sizeof(T))
     else
-        invoke(write, (Any, Array), s, a)
+        invoke(write, (IO, Array), s, a)
     end
 end
 
@@ -335,11 +335,15 @@ function read(s::IOStream, ::Type{Uint8})
     uint8(b)
 end
 
-function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,Float32,Float64,Complex64,Complex128)}(s::IOStream, a::Array{T})
-    nb = numel(a)*sizeof(T)
-    if ccall(:ios_readall, Uint,
-             (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
-        throw(EOFError())
+function read{T}(s::IOStream, a::Array{T})
+    if isa(T,BitsKind)
+        nb = numel(a)*sizeof(T)
+        if ccall(:ios_readall, Uint,
+                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
+            throw(EOFError())
+        end
+    else
+        invoke(read, (IO, Array), s, a)
     end
     a
 end
@@ -347,7 +351,6 @@ end
 ## text I/O ##
 
 write(s::IOStream, c::Char) = ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
-
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
 takebuf_string(s::IOStream) =
@@ -495,3 +498,37 @@ function eatwspace_comment(s::IOStream, cmt::Char)
         status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     end
 end
+
+# BitArray I/O
+
+write(s::IO, B::BitArray) = write(s, B.chunks)
+read(s::IO, B::BitArray) = read(s, B.chunks)
+
+function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+    prot, flags, iswrite = mmap_stream_settings(s)
+    if length(dims) == 0
+        dims = 0
+    end
+    n = prod(dims)
+    nc = num_bit_chunks(n)
+    B = BitArray{N}()
+    chunks = mmap_array(Uint64, (nc,), s, offset)
+    if iswrite
+        chunks[end] &= @_msk_end n
+    else
+        if chunks[end] != chunks[end] & @_msk_end n
+            error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with r+ to override)")
+        end
+    end
+    dims = [i::Int for i in dims]
+    B.chunks = chunks
+    B.dims = dims
+    return B
+end
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
+    mmap_bitarray(dims, s, offset)
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+
+msync(B::BitArray, flags::Integer) = msync(pointer(B.chunks), flags)
+msync(B::BitArray) = msync(B.chunks,MS_SYNC)

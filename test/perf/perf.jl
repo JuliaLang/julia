@@ -59,7 +59,7 @@ function mandel(z)
     return maxiter
 end
 
-mandelperf() = [ mandel(complex(r,i)) for r=-2.0:.1:0.5, i=-1.:.1:1. ]
+mandelperf() = [ mandel(complex(r,i)) for i=-1.:.1:1., r=-2.0:.1:0.5 ]
 @test sum(mandelperf()) == 14791
 @timeit mandelperf() "mandel"
 

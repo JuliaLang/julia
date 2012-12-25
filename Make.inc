@@ -3,25 +3,28 @@
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
-USR = $(JULIAHOME)/usr
-USRBIN = $(USR)/bin
-USRINC = $(USR)/include
-LLVMROOT = $(USR)
-BUILD = $(USR)
+LLVMROOT = $(BUILD)
+BUILD = $(JULIAHOME)/usr
 
 # Directories where said libraries get installed to
 JL_PRIVATE_LIBDIR = lib/julia
 JL_LIBDIR = lib
 
 # If we're on debian, default to arch-dependent library dirs
-ifeq ($(USE_DEBIAN), 1)
+ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH = $(shell gcc -print-multiarch)
 JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
 JL_LIBDIR = lib/$(MULTIARCH)/
 endif
 
+# Figure out OS and architecture
 OS = $(shell uname)
 ARCH = $(shell uname -m)
+
+# Use 64-bit libraries by default on 64-bit architectures
+ifeq ($(ARCH), x86_64)
+USE_LIB64 = 1
+endif
 
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
@@ -141,7 +144,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
-LIBUNWIND=$(USR)/lib/libunwind-generic.a $(USR)/lib/libunwind.a
+LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
@@ -153,19 +156,19 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline 
 else
-READLINE = $(USR)/lib/libreadline.a
+READLINE = $(BUILD)/lib/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
 READLINE += -lncurses
 else
-READLINE += $(USR)/lib/libhistory.a
+READLINE += $(BUILD)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG = pcre-config
 else
-PCRE_CONFIG = $(USRBIN)/pcre-config
+PCRE_CONFIG = $(BUILD)/bin/pcre-config
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)
@@ -177,7 +180,7 @@ LIBBLAS = -lblas
 LIBBLASNAME = libblas
 endif
 else
-LIBBLAS = -L$(USR)/lib -lopenblas
+LIBBLAS = -L$(BUILD)/lib -lopenblas
 LIBBLASNAME = libopenblas
 endif
 

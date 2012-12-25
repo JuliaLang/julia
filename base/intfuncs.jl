@@ -155,7 +155,7 @@ end
 
 
 # decimal digits in an unsigned integer
-const _jl_powers_of_ten = [
+const powers_of_ten = [
     0x0000000000000001, 0x000000000000000a, 0x0000000000000064, 0x00000000000003e8,
     0x0000000000002710, 0x00000000000186a0, 0x00000000000f4240, 0x0000000000989680,
     0x0000000005f5e100, 0x000000003b9aca00, 0x00000002540be400, 0x000000174876e800,
@@ -165,7 +165,7 @@ const _jl_powers_of_ten = [
 function ndigits0z(x::Union(Uint8,Uint16,Uint32,Uint64))
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
-    nd -= x < _jl_powers_of_ten[nd]
+    nd -= x < powers_of_ten[nd]
 end
 function ndigits0z(x::Uint128)
     n = 0
@@ -178,9 +178,9 @@ end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
 if WORD_SIZE == 32
-const _jl_ndigits_max_mul = 69000000
+const ndigits_max_mul = 69000000
 else
-const _jl_ndigits_max_mul = 290000000000000000
+const ndigits_max_mul = 290000000000000000
 end
 
 function ndigits0z(n::Unsigned, b::Integer)
@@ -189,7 +189,7 @@ function ndigits0z(n::Unsigned, b::Integer)
     if b == 16 return (sizeof(n)<<1)-(leading_zeros(n)>>2); end
     if b == 10 return ndigits0z(n); end
     nd = 1
-    if n <= _jl_ndigits_max_mul
+    if n <= ndigits_max_mul
         # multiplication method is faster, but doesn't work for extreme values
         d = b
         while n >= d
@@ -217,7 +217,7 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
-const _jl_dig_syms = uint8(['0':'9','a':'z','A':'Z'])
+const dig_syms = uint8(['0':'9','a':'z','A':'Z'])
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
@@ -259,7 +259,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = _jl_dig_syms[(x&0xf)+1]
+        a[i] = dig_syms[(x&0xf)+1]
         x >>= 4
         i -= 1
     end
@@ -279,7 +279,7 @@ function base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-base(b::Int, x::Unsigned, p::Int, n::Bool)            = base(_jl_dig_syms, b, x, p, n)
+base(b::Int, x::Unsigned, p::Int, n::Bool)            = base(dig_syms, b, x, p, n)
 base(s::Array{Uint8}, x::Unsigned, p::Int, n::Bool)   = base(s, length(s), x, p, n)
 base(b::Union(Int,Array{Uint8}), x::Unsigned, p::Int) = base(b,x,p,false)
 base(b::Union(Int,Array{Uint8}), x::Unsigned)         = base(b,x,1,false)
