@@ -246,7 +246,9 @@ sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, int(m), int(n), |)
 
 sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), int(m), int(n), combine)
 
-# Based on http://www.cise.ufl.edu/research/sparse/cholmod/CHOLMOD/Core/cholmod_triplet.c
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.4: Triplet form
+# http://www.cise.ufl.edu/research/sparse/CSparse/
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
                                 V::AbstractVector{Tv},
                                 nrow::Integer, ncol::Integer, combine::Function)
@@ -447,7 +449,9 @@ end
 
 ## Transpose
 
-# Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.5: Transpose
+# http://www.cise.ufl.edu/research/sparse/CSparse/
 function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
     nnzS = nnz(S)
@@ -1385,7 +1389,9 @@ function expandptr{T<:Integer}(V::Vector{T})
     res
 end
 
-# Based on the function cs_fkeep from the CSparse library
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.7: Removing entries from a matrix
+# http://www.cise.ufl.edu/research/sparse/CSparse/
 function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     nzorig = nnz(A)
     nz = 1
