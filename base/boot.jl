@@ -118,26 +118,37 @@
 import Main
 import Intrinsics.ccall
 
-export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
-    BitsKind, Bool, BoundsError, Box, ByteString, Char, CompositeKind,
-    Main, DirectIndexString, DivideByZeroError, DomainError, EOFError,
-    Exception, Expr, FloatingPoint, Float32, Float64, Function, GotoNode, IOError,
-    InexactError, Integer, Int, Int8, Int16, Int32, Int64, Int128,
-    InterruptException,
-    IntrinsicFunction, LabelNode, LambdaStaticData, LineNumberNode,
-    MemoryError, Method, MethodTable, Module, NTuple, None, Nothing, Number,
-    OverflowError, Ptr, QuoteNode, Real, Signed, StackOverflowError, String,
-    Symbol, SymbolNode, Task, Top, TopNode, Tuple, Type, TypeConstructor,
-    TypeName, TypeVar, UTF8String, Uint, Uint8, Uint16, Uint32, Uint64, Uint128,
-    UndefRefError, Union, UnionKind, Unsigned, Void,
+export
+    # key types
+    AbstractKind, Any, BitsKind, CompositeKind, ..., ANY, NTuple, None, Top,
+    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionKind, Void,
+    AbstractArray,
+    # special objects
+    Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
+    Module, Nothing, Symbol, Task, Array,
+    # numeric types
+    Bool, FloatingPoint, Float32, Float64, Number, Integer, Int, Int8, Int16,
+    Int32, Int64, Int128, Ptr, Real, Signed, Uint, Uint8, Uint16, Uint32,
+    Uint64, Uint128, Unsigned,
+    # string types
+    Char, ASCIIString, ByteString, DirectIndexString, String, UTF8String,
+    # errors
+    BoundsError, DivideByZeroError, DomainError, EOFError, Exception,
+    IOError, InexactError, InterruptException, MemoryError, OverflowError,
+    StackOverflowError, UndefRefError,
+    # AST representation
+    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
     GetfieldNode,
-    # functions
-    setfield, applicable, apply, apply_type, arraylen, arrayref, arrayset,
-    arraysize, convert_default, convert_tuple, fieldtype, getfield,
-    include, invoke, is, ===, isa, isdefined, method_exists,
-    subtype, throw, tuple, tuplelen, tupleref, typeassert, typeof, yieldto,
+    # object model functions
+    apply, arraylen, arrayref, arrayset, arraysize, fieldtype, getfield,
+    setfield, yieldto, throw, tuple, tuplelen, tupleref, is, ===, isdefined,
+    convert_default, convert_tuple, include,
+    # type reflection
+    subtype, typeassert, typeof, apply_type, isa,
+    # method reflection
+    applicable, invoke, method_exists,
     # constants
-    JULIA_HOME, nothing,
+    JULIA_HOME, nothing, Main,
     # intrinsics module
     Intrinsics
     #ccall, abs_float, add_float, add_int, and_int, ashr_int,
