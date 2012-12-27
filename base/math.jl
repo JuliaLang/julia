@@ -362,10 +362,12 @@ besselh(nu, z) = besselh(nu, 1, z)
 besselh(nu::Real, k::Integer, z::Complex64) = complex64(besselh(float64(nu), k, complex128(z)))
 besselh(nu::Real, k::Integer, z::Complex) = besselh(float64(nu), k, complex128(z))
 besselh(nu::Real, k::Integer, x::Real) = besselh(float64(nu), k, complex128(x))
+@vectorize_2arg Number besselh
 
 besseli(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
 besseli(nu::Real, z::Complex) = besseli(float64(nu), complex128(z))
 besseli(nu::Real, x::Real) = besseli(float64(nu), complex128(x))
+@vectorize_2arg Number besseli
 
 function besselj(nu::FloatingPoint, x::FloatingPoint)
     ans = besselj(float64(nu), complex128(x))
@@ -376,17 +378,24 @@ besselj(nu::Real, z::Complex64) = complex64(besselj(float64(nu), complex128(z)))
 besselj(nu::Real, z::Complex) = besselj(float64(nu), complex128(z))
 besselj(nu::Integer, x::Real) = besselj(nu, float(x))
 besselj(nu::Real, x::Real) = besselj(float(nu), float(x))
+@vectorize_2arg Number besselj
 
 besselk(nu::Real, z::Complex64) = complex64(besselk(float64(nu), complex128(z)))
 besselk(nu::Real, z::Complex) = besselk(float64(nu), complex128(z))
 besselk(nu::Real, x::Real) = besselk(float64(nu), complex128(x))
+@vectorize_2arg Number besselk
 
 bessely(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
 bessely(nu::Real, z::Complex) = bessely(float64(nu), complex128(z))
 bessely(nu::Real, x::Real) = bessely(float64(nu), complex128(x))
+@vectorize_2arg Number bessely
 
 hankelh1(nu, z) = besselh(nu, 1, z)
+@vectorize_2arg Number hankelh1
+
 hankelh2(nu, z) = besselh(nu, 2, z)
+@vectorize_2arg Number hankelh2
+
 
 function angle_restrict_symm(theta)
     P1 = 4 * 7.8539812564849853515625e-01
