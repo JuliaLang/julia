@@ -776,7 +776,8 @@
 		       (loop `(|.| ,ex ,(parse-atom s)))
 		       (let ((name (parse-atom s)))
 			 (if (and (pair? name) (eq? (car name) 'macrocall))
-			     (loop `(macrocall (|.| ,ex (quote ,(cadr name)))))
+			     `(macrocall (|.| ,ex (quote ,(cadr name)))
+					 ,@(cddr name))
 			     (loop `(|.| ,ex (quote ,name)))))))
 		  ((|.'| |'|) (take-token s)
 		   (loop (list t ex)))
@@ -1001,7 +1002,7 @@
 	   (take-token s)
 	   (let ((al (parse-arglist s #\))))
 	     (if (and (length> al 1)
-		      (memq (cadr al) '(cdecl stdcall fastcall)))
+		      (memq (cadr al) '(cdecl stdcall fastcall thiscall)))
 		 ;; place (callingconv) at end of arglist
 		 `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
 		 `(ccall ,.al))))))

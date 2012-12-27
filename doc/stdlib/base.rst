@@ -490,6 +490,14 @@ Strings
 
    Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a tuple with 2 integers: the index of the match and the first valid index past the match (or an index beyond the end of the string if the match is at the end); it returns ``(0,0)`` if no match was found, and ``(start,start)`` if ``chars`` is empty.
 
+.. function:: replace(string, pat, r[, n])
+
+   Search for the given pattern ``pat``, and replace each occurance with ``r``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
+
+.. function:: replace(string, pat, f[, n])
+
+   Search for the given pattern ``pat``, and replace each occurance with ``f(pat)``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
+
 .. function:: split(string, [chars, [limit,] [include_empty]])
 
    Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``include_empty`` is taken to be false. The last two arguments are also optional: they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
@@ -1016,11 +1024,31 @@ Mathematical Functions
 
 .. function:: erf(x)
 
-   Compute the error function of ``x``
+   Compute the error function of ``x``, defined by
+   :math:`\frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} dt`
+   for arbitrary complex ``x``.
 
 .. function:: erfc(x)
 
-   Compute the complementary error function of ``x``
+   Compute the complementary error function of ``x``,
+   defined by :math:`1 - \operatorname{erf}(x)`.
+
+.. function:: erfcx(x)
+
+   Compute the scaled complementary error function of ``x``,
+   defined by :math:`e^{x^2} \operatorname{erfc}(x)`.  Note
+   also that :math:`\operatorname{erfcx}(-ix)` computes the
+   Faddeeva function :math:`w(x)`.
+
+.. function:: erfi(x)
+
+   Compute the imaginary error function of ``x``,
+   defined by :math:`-i \operatorname{erf}(ix)`.
+
+.. function:: dawson(x)
+
+   Compute the Dawson function (scaled imaginary error function) of ``x``,
+   defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
 
 .. function:: real(z)
 
@@ -1505,6 +1533,10 @@ Mathematical operators and functions
 
 All mathematical operations and functions are supported for arrays
 
+.. function:: bsxfun(fn, A, B[, C...])
+
+   Apply binary function ``fn`` to two or more arrays, with singleton dimensions expanded.
+
 Indexing, Assignment, and Concatenation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1703,13 +1735,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Lower triangle of a matrix
 
-.. function:: diag(M)
+.. function:: diag(M, [k])
 
-   The diagonal of a matrix, as a vector
+   The ``k``-th diagonal of a matrix, as a vector
 
-.. function:: diagm(v)
+.. function:: diagm(v, [k])
 
-   Construct a diagonal matrix from a vector
+   Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
 
 .. function:: Tridiagonal(dl, d, du)
 
@@ -1766,80 +1798,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 Combinatorics
 -------------
 
-.. function:: sort(v)
-
-   Sort a vector in ascending order, according to ``isless``.
-
-.. function:: sort!(v)
-
-   In-place sort.
-
-.. function:: sortr(v)
-
-   Sort a vector in descending order.
-
-.. function:: sortr!(v)
-
-   In-place sort in descending-order.
-
-.. function:: sort_by(by, v)
-
-   Sort a vector by the result of applying function ``by``
-   to every element.
-
-.. function:: sort_by!(by, v)
-
-   Sort a vector in place by the result of applying function ``by``
-   to every element.
-
-.. function:: sort(a, dim)
-
-   Sort an array along the given dimension.
-
-.. function:: sort(lessthan, a, [dim])
-
-   Sort with a custom comparison function.
-
-.. function:: sortperm(v) -> s,p
-
-   Sort a vector in ascending order, also constructing the permutation that sorts the vector
-
-.. function:: sortperm!(v) -> s,p
-
-   Sort a vector in ascending order in-place, also constructing the permutation that sorts the vector
-
-.. function:: sortperm_r(v) -> s,p
-
-   Sort a vector in descending order, also constructing the permutation that sorts the vector
-
-.. function:: sortperm_r!(v) -> s,p
-
-   Sort a vector in descending order in-place, also constructing the permutation that sorts the vector
-
-.. function:: sortperm_by(by,v) -> s,p
-
-   Sort a vector according to the result of function ``by`` applied to
-   all values, also constructing the permutation that sorts the vector.
-
-.. function:: sortperm_by!(by,v) -> s,p
-
-   Sort a vector in-place according to the result of function ``by``
-   applied to all values of ``v``, also constructing the permutation
-   that sorts the vector
-
-.. function:: issorted(v)
-
-   Test whether a vector is in ascending sorted order
-
-.. function:: issorted_r(v)
-
-   Test whether a vector is in descending sorted order
-
-.. function:: issorted_by(by,v)
-
-   Test whether a vector is sorted by the result of function ``by``
-   applied to all values of ``v``
-
 .. function:: nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
@@ -1851,6 +1809,14 @@ Combinatorics
 .. function:: randperm(n)
 
    Construct a random permutation of the given length
+
+.. function:: invperm(v)
+
+   Return the inverse permtation of v
+
+.. function:: isperm(v)
+
+   Returns true if v is a valid permutation
 
 .. function:: randcycle(n)
 
@@ -1872,14 +1838,6 @@ Combinatorics
 
    Reverse vector ``v`` in-place
 
-.. function:: select(v, k)
-
-   Find the element in position ``k`` in the sorted vector ``v`` without sorting
-
-.. function:: select!(v, k)
-
-   In-place version of ``select``
-
 Statistics
 ----------
 
@@ -1887,9 +1845,21 @@ Statistics
 
    Compute the mean of whole array ``v``, or optionally along dimension ``dim``
 
-.. function:: std(v)
+.. function:: std(v, [corrected])
 
-   Compute the standard deviation of a vector ``v``
+   Compute the sample standard deviation of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- mean(v)).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- mean(v)).^2) / length(v))``, which is the empirical standard deviation of the sample.
+
+.. function:: std(v, m, [corrected])
+
+   Compute the sample standard deviation of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- m).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- m).^2) / length(v))``, which is the empirical standard deviation of the sample.
+
+.. function:: var(v, [corrected])
+
+   Compute the sample variance of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- mean(v)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- mean(v)).^2) / length(v)``, which is the empirical variance of the sample.
+
+.. function:: var(v, m, [corrected])
+
+   Compute the sample variance of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- m)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- m)).^2) / length(v)``, which is the empirical variance of the sample.
 
 .. function:: median(v)
 
@@ -1902,6 +1872,106 @@ Statistics
 .. function:: histc(v, e)
 
    Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
+
+.. function:: weighted_mean(v, w)
+
+   Compute the weighted mean of ``v`` using a vector of weights ``w``
+
+.. function:: mad(v, m)
+
+   Compute the median absolute deviation from the entries of a vector ``v`` relative to a known median ``m``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
+
+.. function:: mad(v)
+
+   Compute the median absolute deviation from the entries of a vector ``v`` relative to the median of ``v``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
+
+.. function:: skewness(v, m)
+
+   Compute the sample skewness of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: skewness(v)
+
+   Compute the sample skewness of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: kurtosis(v, m)
+
+   Compute the sample kurtosis of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: kurtosis(v)
+
+   Compute the sample kurtosis of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: quantile(v, p)
+
+   Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``.
+
+.. function:: quantile(v)
+
+   Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+
+.. function:: quartile(v)
+
+   Compute the quartiles of a vector ``v`` at the probability values ``[.0, .25, .5, .75, 1.0]``.
+
+.. function:: quintile(v)
+
+   Compute the quintiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+
+.. function:: decile(v)
+
+   Compute the deciles of a vector ``v`` at the probability values ``[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]``.
+
+.. function:: iqr(v)
+
+   Compute the interquantile range of a vector ``v`` at the probability values ``[.25, .75]``.
+
+.. function:: tiedrank(v)
+
+   Compute the ranks of the entries of vector ``v``. Ties are resolved by taking the average rank over all tied values.
+
+.. function:: cov_pearson(v1, v2)
+
+   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
+
+.. function:: cov_spearman(v)
+
+   Compute the Spearman covariance between two vectors ``v1`` and ``v2``.
+
+.. function:: cov(v)
+
+   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
+
+.. function:: cor_pearson(v)
+
+   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
+
+.. function:: cor_spearman(v)
+
+   Compute the Spearman correlation between two vectors ``v1`` and ``v2``.
+
+.. function:: cor(v)
+
+   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
+
+.. function:: autocor(v, l)
+
+   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``l``.
+
+.. function:: autocor(v)
+
+   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``1``.
+
+.. function:: dist(m)
+
+   Compute the distance matrix between all of the rows of ``m``.
+
+.. function:: rle(v)
+
+   Compute a run-length encoding representation of a vector ``v``.
+
+.. function:: inverse_rle(vals, lens)
+
+   Compute a vector from its run-length vector representation as values ``vals`` and run lengths ``lens``.
 
 Signal Processing
 -----------------

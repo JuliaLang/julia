@@ -18,24 +18,14 @@ type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     nzval::Vector{Tv}       # Nonzero values
 end
 
-function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
-    colptr = Array(Int, n+1)
-    rowval = Array(Int, numnz)
-    nzval = Array(Tv, numnz)
-
-    colptr[1] = 1
-    colptr[end] = numnz+1
-    SparseMatrixCSC{Tv,Int}(m, n, colptr, rowval, nzval)
-end
-
-function SparseMatrixCSC(Tv::Type, Ti::Type, m::Int, n::Int, numnz::Integer)
+function SparseMatrixCSC(Tv::Type, Ti::Type, m::Integer, n::Integer, numnz::Integer)
     colptr = Array(Ti, n+1)
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
 
     colptr[1] = 1
     colptr[end] = numnz+1
-    SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    SparseMatrixCSC{Tv,Ti}(int(m), int(n), colptr, rowval, nzval)
 end
 
 function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
@@ -43,7 +33,7 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
-nnz(S::SparseMatrixCSC) = S.colptr[end]-1
+nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
 
 function show(io, S::SparseMatrixCSC)
     println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
@@ -56,7 +46,7 @@ function show(io, S::SparseMatrixCSC)
             println(io, "\t[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
                     sprint(showcompact, S.nzval[k]))
         elseif k == half_screen_rows
-            println(io, "\t."); println(io, "\t."); println(io, "\t.");
+            println("\t\u22ee")
         end
         k += 1
     end
@@ -68,14 +58,14 @@ function reinterpret{T,Tv,Ti}(::Type{T}, a::SparseMatrixCSC{Tv,Ti})
     if sizeof(T) != sizeof(Tv)
         error("SparseMatrixCSC reinterpret is only supported for element types of the same size")
     end
-    mA,nA = size(a)
+    mA, nA = size(a)
     colptr = copy(a.colptr)
     rowval = copy(a.rowval)
-    nzval = reinterpret(T, a.nzval)
+    nzval  = reinterpret(Tv, a.nzval)
     return SparseMatrixCSC{T,Ti}(mA, nA, colptr, rowval, nzval)
 end
 
-function _jl_sparse_compute_reshaped_colptr_and_rowval(colptrS, rowvalS, mS, nS, colptrA, rowvalA, mA, nA)
+function sparse_compute_reshaped_colptr_and_rowval(colptrS, rowvalS, mS, nS, colptrA, rowvalA, mA, nA)
     colptrS[1] = 1
 
     colA = 1
@@ -117,7 +107,7 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
     rowval = Array(Ti, numnz)
     nzval = reinterpret(T, a.nzval)
 
-    _jl_sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
+    sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
 
     return SparseMatrixCSC{T,Ti}(mS, nS, colptr, rowval, nzval)
 end
@@ -133,7 +123,7 @@ function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
     rowval = Array(Ti, numnz)
     nzval = a.nzval
 
-    _jl_sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
+    sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
 
     return SparseMatrixCSC{Tv,Ti}(mS, nS, colptr, rowval, nzval)
 end
@@ -173,8 +163,8 @@ convert(::Type{Matrix}, S::SparseMatrixCSC) = dense(S)
 
 full(S::SparseMatrixCSC) = dense(S)
 
-function dense{T}(S::SparseMatrixCSC{T})
-    A = zeros(T, S.m, S.n)
+function dense{Tv}(S::SparseMatrixCSC{Tv})
+    A = zeros(Tv, S.m, S.n)
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         A[S.rowval[k], col] = S.nzval[k]
     end
@@ -203,7 +193,7 @@ sparse_IJ_sorted!(I,J,V::AbstractVector{Bool},m,n) = sparse_IJ_sorted!(I,J,V,m,n
 
 function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                         V::AbstractVector,
-                                        m::Int, n::Int, combine::Function)
+                                        m::Integer, n::Integer, combine::Function)
 
     cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes
@@ -256,10 +246,12 @@ sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, int(m), int(n), |)
 
 sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), int(m), int(n), combine)
 
-# Based on http://www.cise.ufl.edu/research/sparse/cholmod/CHOLMOD/Core/cholmod_triplet.c
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.4: Triplet form
+# http://www.cise.ufl.edu/research/sparse/CSparse/
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
                                 V::AbstractVector{Tv},
-                                nrow::Int, ncol::Int, combine::Function)
+                                nrow::Integer, ncol::Integer, combine::Function)
 
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
 
@@ -410,7 +402,7 @@ function findn_nzs{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-function sprand(m::Int, n::Int, density::FloatingPoint, rng::Function, v)
+function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v)
     numnz = int(m*n*density)
     I = randival!(1, m, Array(Int, numnz))
     J = randival!(1, n, Array(Int, numnz))
@@ -422,26 +414,26 @@ function sprand(m::Int, n::Int, density::FloatingPoint, rng::Function, v)
     return S
 end
 
-sprand(m::Int, n::Int, density::FloatingPoint, rng::Function) = sprand(m,n,density,rng, 1.0)
-sprand(m::Int, n::Int, density::FloatingPoint)  = sprand(m,n,density,rand, 1.0)
-sprandn(m::Int, n::Int, density::FloatingPoint) = sprand(m,n,density,randn, 1.0)
-sprandbool(m::Int, n::Int, density::FloatingPoint) = sprand(m,n,density,randbool, true)
+sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function) = sprand(m,n,density,rng, 1.0)
+sprand(m::Integer, n::Integer, density::FloatingPoint)  = sprand(m,n,density,rand, 1.0)
+sprandn(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randn, 1.0)
+sprandbool(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randbool, true)
 
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
 
-spzeros(m::Int) = spzeros(m, m)
-spzeros(m::Int, n::Int) = spzeros(Float64, m, n)
-spzeros(Tv::Type, m::Int) = spzeros(Tv, m, m)
-spzeros(Tv::Type, m::Int, n::Int) =
+spzeros(m::Integer) = spzeros(m, m)
+spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
+spzeros(Tv::Type, m::Integer) = spzeros(Tv, m, m)
+spzeros(Tv::Type, m::Integer, n::Integer) =
     SparseMatrixCSC(m, n, ones(Int, n+1), Array(Int, 0), Array(Tv, 0))
 
-speye(n::Int) = speye(Float64, n)
-speye(T::Type, n::Int) = speye(T, n, n)
-speye(m::Int, n::Int) = speye(Float64, m, n)
+speye(n::Integer) = speye(Float64, n)
+speye(T::Type, n::Integer) = speye(T, n, n)
+speye(m::Integer, n::Integer) = speye(Float64, m, n)
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 
-function speye(T::Type, m::Int, n::Int)
+function speye(T::Type, m::Integer, n::Integer)
     x = min(m,n)
     rowval = [1:x]
     colptr = [rowval, fill(int(x+1), n+1-x)]
@@ -457,7 +449,9 @@ end
 
 ## Transpose
 
-# Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.5: Transpose
+# http://www.cise.ufl.edu/research/sparse/CSparse/
 function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
     nnzS = nnz(S)
@@ -1395,7 +1389,9 @@ function expandptr{T<:Integer}(V::Vector{T})
     res
 end
 
-# Based on the function cs_fkeep from the CSparse library
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.7: Removing entries from a matrix
+# http://www.cise.ufl.edu/research/sparse/CSparse/
 function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     nzorig = nnz(A)
     nz = 1

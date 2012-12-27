@@ -799,7 +799,7 @@ function hvcat{T<:Number}(rows::(Int...), xs::T...)
     a
 end
 
-function _jl_hvcat_fill(a, xs)
+function hvcat_fill(a, xs)
     k = 1
     nr, nc = size(a)
     for i=1:nr
@@ -824,7 +824,7 @@ function hvcat(rows::(Int...), xs::Number...)
     for i=2:length(xs)
         T = promote_type(T,typeof(xs[i]))
     end
-    _jl_hvcat_fill(Array(T, nr, nc), xs)
+    hvcat_fill(Array(T, nr, nc), xs)
 end
 
 ## Reductions and scans ##
@@ -1226,3 +1226,4 @@ end
 bsxfun(f, a, b) = f(a, b)
 bsxfun(f, a::AbstractArray, b) = f(a, b)
 bsxfun(f, a, b::AbstractArray) = f(a, b)
+bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)

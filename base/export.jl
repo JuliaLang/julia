@@ -9,6 +9,7 @@ export
     LibRandom,
     RNG,
     Math,
+    Sort,
     
 # Types
     AbstractMatrix,
@@ -392,6 +393,7 @@ export
     csc,
     cscd,
     csch,
+    dawson,
     degrees2radians,
     den,
     digamma,
@@ -399,6 +401,8 @@ export
     eps,
     erf,
     erfc,
+    erfcx,
+    erfi,
     exp,
     exp2,
     expm1,
@@ -809,6 +813,7 @@ export
     pairs,
     reduce,
     ref,
+    resize,
     similar,
     toggle,
     toggle_each,
@@ -933,6 +938,7 @@ export
     base,
     
 # statistics and random numbers
+    autocor,
     betarnd,
     chi2rnd,
     cor,
@@ -942,9 +948,13 @@ export
     cov_pearson,
     cov_spearman,
     decile,
+    dist,
     exprnd,
     hist,
     histc,
+    inverse_rle,
+    iqr,
+    kurtosis,
     mad,
     mean,
     median,
@@ -972,12 +982,14 @@ export
     randival!,
     randn,
     randn!,
+    rle,
+    skewness,
     srand,
     std,
     tiedrank,
     var,
     weighted_mean,
-    
+
 # signal processing
     bfft,
     bfftn,

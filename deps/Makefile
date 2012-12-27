@@ -13,7 +13,7 @@ include $(JULIAHOME)/Make.inc
 unexport CONFIG_SITE
 
 STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
-STAGE2_DEPS = gmp-wrapper
+STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
 ifeq ($(OS), Linux)
@@ -330,7 +330,7 @@ distclean-pcre:
 
 ## Grisu floating-point printing library ##
 
-GRISU_OPTS = -O3 -fvisibility=hidden $(fPIC)
+GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
 
 compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu_.$(SHLIB_EXT)
 install-double-conversion: $(BUILD)/lib/libgrisu.$(SHLIB_EXT)
@@ -352,7 +352,7 @@ double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GR
 	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
-	$(CXX) $(GRISU_OPTS) src/*.o -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
+	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
 $(BUILD)/lib/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
 	cp -f $< $@
 	$(INSTALL_NAME_CMD)libgrisu.dylib $@
@@ -384,12 +384,24 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
-install-openlibm: $(OPENLIBM_OBJ_TARGET)
+	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
+install-openlibm: $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 
 clean-openlibm:
 	-$(MAKE) -C openlibm distclean
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm      
+
+# Wrapper for openlibm/Faddeeva since ccall doesn't support C99 complex:
+$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBM_OBJ_TARGET)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm
+	$(INSTALL_NAME_CMD)libFaddeeva_wrapper.$(SHLIB_EXT) $@
+	touch $@
+install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+
+clean-Faddeeva-wrapper:
+	-rm -f $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+distclean-Faddeeva-wrapper: clean-Faddeeva-wrapper
 
 ## Rmath ##
 
@@ -431,11 +443,11 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
-	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch
+	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	touch $@
 $(LIBRANDOM_OBJ_SOURCE): random/jl_random.c random/randmtzig.c
 	cd random && \
-	$(CC) $(LIBRANDOM_CFLAGS) jl_random.c -o librandom.$(SHLIB_EXT) && \
+	$(CC) $(CPPFLAGS) $(LIBRANDOM_CFLAGS) $(LDFLAGS) jl_random.c -o librandom.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 
 $(LIBRANDOM_OBJ_TARGET): $(LIBRANDOM_OBJ_SOURCE)
@@ -459,9 +471,9 @@ ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
 endif
 
-#ifeq ($(ARCH), x86_64)
-#OPENBLAS_BUILD_OPTS += -DINTERFACE64=1
-#endif
+ifeq ($(USE_LIB64), 1)
+OPENBLAS_BUILD_OPTS += INTERFACE64=1
+endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: $(BUILD)/lib/libopenblas.$(SHLIB_EXT)
@@ -521,6 +533,10 @@ distclean-lapack:
 
 ## ARPACK ##
 
+ifeq ($(USE_LIB64), 1)
+ARPACK_FFLAGS = -fdefault-integer-8
+endif
+
 ARPACK_OBJ_TARGET = $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
@@ -535,7 +551,7 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 	cd arpack-ng_$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(BUILD)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)"
+	./configure  --prefix=$(abspath $(BUILD)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)" FFLAGS="$(ARPACK_FFLAGS)"
 	touch $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(BUILD)/lib
 	cd arpack-ng_$(ARPACK_VER) && \
@@ -648,6 +664,11 @@ SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(BUILD)/lib/libumfpack.$(SHLIB_EXT)
 endif
 
+ifeq ($(USE_LIB64), 1)
+UMFPACK_CONFIG = -DLONGBLAS='long long' 
+CHOLMOD_CONFIG = -DLONGBLAS='long long' 
+endif
+
 SUITE_SPARSE_LIB = -lm
 ifneq ($(OS), Darwin)
   SUITE_SPARSE_LIB += -lrt
@@ -664,7 +685,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)"
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)" UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
@@ -702,7 +723,7 @@ SUITESPARSE_LIB = -L$(BUILD)/lib -lcholmod -lumfpack -lspqr $(RPATH_ORIGIN)
 endif
 
 $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT) $(SUITESPARSE_LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT) $(SUITESPARSE_LIB)
 	$(INSTALL_NAME_CMD)libsuitesparse_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-suitesparse-wrapper: $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -798,6 +819,8 @@ lighttpd-$(LIGHTTPD_VER)/config.status: lighttpd-$(LIGHTTPD_VER)/configure
 	./configure --prefix=$(BUILD) --libdir=$(BUILD)/lib/lighttpd --without-pcre --without-zlib --without-bzip2 CC="$(CC)" CXX="$(CXX)"
 $(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
 	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
+	$(INSTALL_NAME_CMD)lighttpd/liblightcomp.$(SHLIB_EXT) $(BUILD)/lib/lighttpd/liblightcomp.$(SHLIB_EXT)
+	$(INSTALL_NAME_CHANGE_CMD) $(BUILD)/lib/lighttpd/liblightcomp.dylib @executable_path/../lib/lighttpd/liblightcomp.dylib  $(BUILD)/sbin/lighttpd
 	touch $@
 
 clean-lighttpd:
@@ -849,7 +872,7 @@ GMPW_LIB = -L$(BUILD)/lib/ -lgmp
 endif
 
 $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET) | $(BUILD)/lib
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMPW_INC) gmp_wrapper.c -o $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT) $(RPATH_ORIGIN) $(GMPW_LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMPW_INC) gmp_wrapper.c -o $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT) $(RPATH_ORIGIN) $(GMPW_LIB)
 	$(INSTALL_NAME_CMD)libgmp_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-gmp-wrapper: $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT)
@@ -902,7 +925,7 @@ endif
 
 
 $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT) $(RPATH_ORIGIN)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT) $(RPATH_ORIGIN)
 	$(INSTALL_NAME_CMD)libglpk_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-glpk-wrapper: $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c

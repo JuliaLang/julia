@@ -917,6 +917,25 @@ collection[key...] = value
 
 "),
 
+(E"Strings",E"Base",E"replace",E"replace(string, pat, r[, n])
+
+   Search for the given pattern \"pat\", and replace each occurance
+   with \"r\". If \"n\" is provided, replace at most \"n\" occurances.
+   As with search, the second argument may be a single character, a
+   vector or a set of characters, a string, or a regular expression.
+
+"),
+
+(E"Strings",E"Base",E"replace",E"replace(string, pat, f[, n])
+
+   Search for the given pattern \"pat\", and replace each occurance
+   with \"f(pat)\". If \"n\" is provided, replace at most \"n\"
+   occurances.  As with search, the second argument may be a single
+   character, a vector or a set of characters, a string, or a regular
+   expression.
+
+"),
+
 (E"Strings",E"Base",E"split",E"split(string, [chars, [limit,] [include_empty]])
 
    Return an array of strings by splitting the given string on
@@ -1748,13 +1767,39 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"erf",E"erf(x)
 
-   Compute the error function of \"x\"
+   Compute the error function of \"x\", defined by
+   \\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt for arbitrary complex
+   \"x\".
 
 "),
 
 (E"Mathematical Functions",E"Base",E"erfc",E"erfc(x)
 
-   Compute the complementary error function of \"x\"
+   Compute the complementary error function of \"x\", defined by 1 -
+   \\operatorname{erf}(x).
+
+"),
+
+(E"Mathematical Functions",E"Base",E"erfcx",E"erfcx(x)
+
+   Compute the scaled complementary error function of \"x\", defined
+   by e^{x^2} \\operatorname{erfc}(x).  Note also that
+   \\operatorname{erfcx}(-ix) computes the Faddeeva function w(x).
+
+"),
+
+(E"Mathematical Functions",E"Base",E"erfi",E"erfi(x)
+
+   Compute the imaginary error function of \"x\", defined by -i
+   \\operatorname{erf}(ix).
+
+"),
+
+(E"Mathematical Functions",E"Base",E"dawson",E"dawson(x)
+
+   Compute the Dawson function (scaled imaginary error function) of
+   \"x\", defined by \\frac{\\sqrt{\\pi}}{2} e^{-x^2}
+   \\operatorname{erfi}(x).
 
 "),
 
@@ -2489,6 +2534,13 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"bsxfun",E"bsxfun(fn, A, B[, C...])
+
+   Apply binary function \"fn\" to two or more arrays, with singleton
+   dimensions expanded.
+
+"),
+
 (E"Arrays",E"Base",E"ref",E"ref(A, ind)
 
    Returns a subset of \"A\" as specified by \"ind\", which may be an
@@ -2798,15 +2850,16 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"diag",E"diag(M)
+(E"Linear Algebra",E"Base",E"diag",E"diag(M[, k])
 
-   The diagonal of a matrix, as a vector
+   The \"k\"-th diagonal of a matrix, as a vector
 
 "),
 
-(E"Linear Algebra",E"Base",E"diagm",E"diagm(v)
+(E"Linear Algebra",E"Base",E"diagm",E"diagm(v[, k])
 
-   Construct a diagonal matrix from a vector
+   Construct a diagonal matrix and place \"v\" on the \"k\"-th
+   diagonal
 
 "),
 
@@ -2892,119 +2945,6 @@ airyaiprime(x)
 
 "),
 
-(E"Combinatorics",E"Base",E"sort",E"sort(v)
-
-   Sort a vector in ascending order, according to \"isless\".
-
-"),
-
-(E"Combinatorics",E"Base",E"sort!",E"sort!(v)
-
-   In-place sort.
-
-"),
-
-(E"Combinatorics",E"Base",E"sortr",E"sortr(v)
-
-   Sort a vector in descending order.
-
-"),
-
-(E"Combinatorics",E"Base",E"sortr!",E"sortr!(v)
-
-   In-place sort in descending-order.
-
-"),
-
-(E"Combinatorics",E"Base",E"sort_by",E"sort_by(by, v)
-
-   Sort a vector by the result of applying function \"by\" to every
-   element.
-
-"),
-
-(E"Combinatorics",E"Base",E"sort_by!",E"sort_by!(by, v)
-
-   Sort a vector in place by the result of applying function \"by\" to
-   every element.
-
-"),
-
-(E"Combinatorics",E"Base",E"sort",E"sort(a, dim)
-
-   Sort an array along the given dimension.
-
-"),
-
-(E"Combinatorics",E"Base",E"sort",E"sort(lessthan, a[, dim])
-
-   Sort with a custom comparison function.
-
-"),
-
-(E"Combinatorics",E"Base",E"sortperm",E"sortperm(v) -> s,p
-
-   Sort a vector in ascending order, also constructing the permutation
-   that sorts the vector
-
-"),
-
-(E"Combinatorics",E"Base",E"sortperm!",E"sortperm!(v) -> s,p
-
-   Sort a vector in ascending order in-place, also constructing the
-   permutation that sorts the vector
-
-"),
-
-(E"Combinatorics",E"Base",E"sortperm_r",E"sortperm_r(v) -> s,p
-
-   Sort a vector in descending order, also constructing the
-   permutation that sorts the vector
-
-"),
-
-(E"Combinatorics",E"Base",E"sortperm_r!",E"sortperm_r!(v) -> s,p
-
-   Sort a vector in descending order in-place, also constructing the
-   permutation that sorts the vector
-
-"),
-
-(E"Combinatorics",E"Base",E"sortperm_by",E"sortperm_by(by, v) -> s,p
-
-   Sort a vector according to the result of function \"by\" applied to
-   all values, also constructing the permutation that sorts the
-   vector.
-
-"),
-
-(E"Combinatorics",E"Base",E"sortperm_by!",E"sortperm_by!(by, v) -> s,p
-
-   Sort a vector in-place according to the result of function \"by\"
-   applied to all values of \"v\", also constructing the permutation
-   that sorts the vector
-
-"),
-
-(E"Combinatorics",E"Base",E"issorted",E"issorted(v)
-
-   Test whether a vector is in ascending sorted order
-
-"),
-
-(E"Combinatorics",E"Base",E"issorted_r",E"issorted_r(v)
-
-   Test whether a vector is in descending sorted order
-
-"),
-
-(E"Combinatorics",E"Base",E"issorted_by",E"issorted_by(by, v)
-
-   Test whether a vector is sorted by the result of function \"by\"
-   applied to all values of \"v\"
-
-"),
-
 (E"Combinatorics",E"Base",E"nthperm",E"nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
@@ -3020,6 +2960,18 @@ airyaiprime(x)
 (E"Combinatorics",E"Base",E"randperm",E"randperm(n)
 
    Construct a random permutation of the given length
+
+"),
+
+(E"Combinatorics",E"Base",E"invperm",E"invperm(v)
+
+   Return the inverse permtation of v
+
+"),
+
+(E"Combinatorics",E"Base",E"isperm",E"isperm(v)
+
+   Returns true if v is a valid permutation
 
 "),
 
@@ -3053,19 +3005,6 @@ airyaiprime(x)
 
 "),
 
-(E"Combinatorics",E"Base",E"select",E"select(v, k)
-
-   Find the element in position \"k\" in the sorted vector \"v\"
-   without sorting
-
-"),
-
-(E"Combinatorics",E"Base",E"select!",E"select!(v, k)
-
-   In-place version of \"select\"
-
-"),
-
 (E"Statistics",E"Base",E"mean",E"mean(v[, dim])
 
    Compute the mean of whole array \"v\", or optionally along
@@ -3073,9 +3012,74 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"std",E"std(v)
+(E"Statistics",E"Base",E"std",E"std(v[, corrected])
 
-   Compute the standard deviation of a vector \"v\"
+   Compute the sample standard deviation of a vector \"v\". If the
+   optional argument \"corrected\" is either left unspecified or is
+   explicitly set to the default value of \"true\", then the algorithm
+   will return an estimator of the generative distribution's standard
+   deviation under the assumption that each entry of \"v\" is an IID
+   draw from that generative distribution. This computation is
+   equivalent to calculating \"sqrt(sum((v .- mean(v)).^2) /
+   (length(v) - 1))\" and involves an implicit correction term
+   sometimes called the Bessel correction which insures that the
+   estimator of the variance is unbiased. If, instead, the optional
+   argument \"corrected\" is set to \"false\", then the algorithm will
+   produce the equivalent of \"sqrt(sum((v .- mean(v)).^2) /
+   length(v))\", which is the empirical standard deviation of the
+   sample.
+
+"),
+
+(E"Statistics",E"Base",E"std",E"std(v, m[, corrected])
+
+   Compute the sample standard deviation of a vector \"v\" with known
+   mean \"m\". If the optional argument \"corrected\" is either left
+   unspecified or is explicitly set to the default value of \"true\",
+   then the algorithm will return an estimator of the generative
+   distribution's standard deviation under the assumption that each
+   entry of \"v\" is an IID draw from that generative distribution.
+   This computation is equivalent to calculating \"sqrt(sum((v .-
+   m).^2) / (length(v) - 1))\" and involves an implicit correction
+   term sometimes called the Bessel correction which insures that the
+   estimator of the variance is unbiased. If, instead, the optional
+   argument \"corrected\" is set to \"false\", then the algorithm will
+   produce the equivalent of \"sqrt(sum((v .- m).^2) / length(v))\",
+   which is the empirical standard deviation of the sample.
+
+"),
+
+(E"Statistics",E"Base",E"var",E"var(v[, corrected])
+
+   Compute the sample variance of a vector \"v\". If the optional
+   argument \"corrected\" is either left unspecified or is explicitly
+   set to the default value of \"true\", then the algorithm will
+   return an unbiased estimator of the generative distribution's
+   variance under the assumption that each entry of \"v\" is an IID
+   draw from that generative distribution. This computation is
+   equivalent to calculating \"sum((v .- mean(v)).^2) / (length(v) -
+   1)\" and involves an implicit correction term sometimes called the
+   Bessel correction. If, instead, the optional argument \"corrected\"
+   is set to \"false\", then the algorithm will produce the equivalent
+   of \"sum((v .- mean(v)).^2) / length(v)\", which is the empirical
+   variance of the sample.
+
+"),
+
+(E"Statistics",E"Base",E"var",E"var(v, m[, corrected])
+
+   Compute the sample variance of a vector \"v\" with known mean
+   \"m\". If the optional argument \"corrected\" is either left
+   unspecified or is explicitly set to the default value of \"true\",
+   then the algorithm will return an unbiased estimator of the
+   generative distribution's variance under the assumption that each
+   entry of \"v\" is an IID draw from that generative distribution.
+   This computation is equivalent to calculating \"sum((v .- m)).^2) /
+   (length(v) - 1)\" and involves an implicit correction term
+   sometimes called the Bessel correction. If, instead, the optional
+   argument \"corrected\" is set to \"false\", then the algorithm will
+   produce the equivalent of \"sum((v .- m)).^2) / length(v)\", which
+   is the empirical variance of the sample.
 
 "),
 
@@ -3095,6 +3099,186 @@ airyaiprime(x)
 
    Compute the histogram of \"v\" using a vector \"e\" as the edges
    for the bins
+
+"),
+
+(E"Statistics",E"Base",E"weighted_mean",E"weighted_mean(v, w)
+
+   Compute the weighted mean of \"v\" using a vector of weights \"w\"
+
+"),
+
+(E"Statistics",E"Base",E"mad",E"mad(v, m)
+
+   Compute the median absolute deviation from the entries of a vector
+   \"v\" relative to a known median \"m\". The calculation involves an
+   adjustment factor of 1.4826 required to insure that the estimator
+   is consistent for normally distributed data.
+
+"),
+
+(E"Statistics",E"Base",E"mad",E"mad(v)
+
+   Compute the median absolute deviation from the entries of a vector
+   \"v\" relative to the median of \"v\". The calculation involves an
+   adjustment factor of 1.4826 required to insure that the estimator
+   is consistent for normally distributed data.
+
+"),
+
+(E"Statistics",E"Base",E"skewness",E"skewness(v, m)
+
+   Compute the sample skewness of a vector \"v\" relative to a known
+   mean \"m\". Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"skewness",E"skewness(v)
+
+   Compute the sample skewness of a vector \"v\" relative to the
+   sample mean. Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v, m)
+
+   Compute the sample kurtosis of a vector \"v\" relative to a known
+   mean \"m\". Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v)
+
+   Compute the sample kurtosis of a vector \"v\" relative to the
+   sample mean. Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"quantile",E"quantile(v, p)
+
+   Compute the quantiles of a vector \"v\" at a specified set of
+   probability values \"p\".
+
+"),
+
+(E"Statistics",E"Base",E"quantile",E"quantile(v)
+
+   Compute the quantiles of a vector \"v\" at the probability values
+   \"[.0, .2, .4, .6, .8, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"quartile",E"quartile(v)
+
+   Compute the quartiles of a vector \"v\" at the probability values
+   \"[.0, .25, .5, .75, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"quintile",E"quintile(v)
+
+   Compute the quintiles of a vector \"v\" at the probability values
+   \"[.0, .2, .4, .6, .8, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"decile",E"decile(v)
+
+   Compute the deciles of a vector \"v\" at the probability values
+   \"[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"iqr",E"iqr(v)
+
+   Compute the interquantile range of a vector \"v\" at the
+   probability values \"[.25, .75]\".
+
+"),
+
+(E"Statistics",E"Base",E"tiedrank",E"tiedrank(v)
+
+   Compute the ranks of the entries of vector \"v\". Ties are resolved
+   by taking the average rank over all tied values.
+
+"),
+
+(E"Statistics",E"Base",E"cov_pearson",E"cov_pearson(v1, v2)
+
+   Compute the Pearson covariance between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cov_spearman",E"cov_spearman(v)
+
+   Compute the Spearman covariance between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cov",E"cov(v)
+
+   Compute the Pearson covariance between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cor_pearson",E"cor_pearson(v)
+
+   Compute the Pearson correlation between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cor_spearman",E"cor_spearman(v)
+
+   Compute the Spearman correlation between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cor",E"cor(v)
+
+   Compute the Pearson correlation between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"autocor",E"autocor(v, l)
+
+   Compute the Pearson autocorrelation of a vector \"v\" with itself
+   at lag \"l\".
+
+"),
+
+(E"Statistics",E"Base",E"autocor",E"autocor(v)
+
+   Compute the Pearson autocorrelation of a vector \"v\" with itself
+   at lag \"1\".
+
+"),
+
+(E"Statistics",E"Base",E"dist",E"dist(m)
+
+   Compute the distance matrix between all of the rows of \"m\".
+
+"),
+
+(E"Statistics",E"Base",E"rle",E"rle(v)
+
+   Compute a run-length encoding representation of a vector \"v\".
+
+"),
+
+(E"Statistics",E"Base",E"inverse_rle",E"inverse_rle(vals, lens)
+
+   Compute a vector from its run-length vector representation as
+   values \"vals\" and run lengths \"lens\".
 
 "),
 
@@ -5384,6 +5568,100 @@ eval_tab_col(glp_prob, k)
 
 "),
 
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(v)
+
+   Sort a vector in ascending order, according to \"isless\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort!",E"sort!(v)
+
+   In-place sort.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortr",E"sortr(v)
+
+   Sort a vector in descending order.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortr!",E"sortr!(v)
+
+   In-place sort in descending-order.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort_by",E"sort_by(by, v)
+
+   Sort a vector by the result of applying function \"by\" to every
+   element.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort_by!",E"sort_by!(by, v)
+
+   Sort a vector in place by the result of applying function \"by\" to
+   every element.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(a, dim)
+
+   Sort an array along the given dimension.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(lessthan, a[, dim])
+
+   Sort with a custom comparison function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v) -> s,p
+
+   Sort a vector in ascending order, also constructing the permutation
+   that sorts the vector
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(v) -> s,p
+
+   Sort a vector in ascending order in-place, also constructing the
+   permutation that sorts the vector
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm_r",E"sortperm_r(v) -> s,p
+
+   Sort a vector in descending order, also constructing the
+   permutation that sorts the vector
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm_r!",E"sortperm_r!(v) -> s,p
+
+   Sort a vector in descending order in-place, also constructing the
+   permutation that sorts the vector
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm_by",E"sortperm_by(by, v) -> s,p
+
+   Sort a vector according to the result of function \"by\" applied to
+   all values, also constructing the permutation that sorts the
+   vector.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm_by!",E"sortperm_by!(by, v) -> s,p
+
+   Sort a vector in-place according to the result of function \"by\"
+   applied to all values of \"v\", also constructing the permutation
+   that sorts the vector
+
+"),
+
 (E"Base.Sort",E"Base.Sort",E"insertionsort",E"insertionsort(v[, dim])
 
    Sort a vector in ascending order with insertion sort, according to
@@ -5753,6 +6031,209 @@ eval_tab_col(glp_prob, k)
 
    Sort a vector with quicksort in place according to the result of
    function \"by\" applied to all values.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"issorted",E"issorted(v)
+
+   Test whether a vector is in ascending sorted order
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"issorted_r",E"issorted_r(v)
+
+   Test whether a vector is in descending sorted order
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"issorted_by",E"issorted_by(by, v)
+
+   Test whether a vector is sorted by the result of function \"by\"
+   applied to all values of \"v\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted",E"search_sorted(a, x[, lo, hi])
+
+   For \"a\" sorted low to high, returns the index of the first value
+   \">=x\".
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted",E"search_sorted(lt, a, x[, lo, hi])
+
+   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
+   index of the first value equal to \"x\" or following \"x\" in the
+   induced order
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_r",E"search_sorted_r(a, x[, lo, hi])
+
+   For \"a\" sorted high to low, returns the index of the first value
+   \"<=x\".
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first_r()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_by",E"search_sorted_by(by, a, x[, lo, hi])
+
+   For \"a\" sorted according to the natural order of \"by(x)\" for
+   \"x\" in \"a\", returns the index of the first value equal to or
+   following \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first_by()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_first",E"search_sorted_first(a, x[, lo, hi])
+
+   For \"a\" sorted low to high, returns the index of the first
+   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
+   first value following \"x\" in natural order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_first",E"search_sorted_first(lt, a, x[, lo, hi])
+
+   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
+   index of the first occurance of \"x\", or if \"x\" is not in \"a\",
+   the index of the first value following \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_first()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_first_r",E"search_sorted_first_r(a, x[, lo, hi])
+
+   For \"a\" sorted high to low, returns the index of the first
+   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
+   first value following \"x\" in reverse natural order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_first_by",E"search_sorted_first_by(by, a, x[, lo, hi])
+
+   For \"a\" sorted according to the natural order of \"by(x)\" for
+   \"x\" in \"a\", returns the index of the first occurance of \"x\",
+   or if \"x\" is not in \"a\", the index of the first value following
+   \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_last",E"search_sorted_last(a, x[, lo, hi])
+
+   For \"a\" sorted low to high, returns the index of the last
+   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
+   last value preceding \"x\" in natural order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_last",E"search_sorted_last(lt, a, x[, lo, hi])
+
+   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
+   index of the last occurance of``x``, or if \"x\" is not in \"a\",
+   the index of the last value preceding \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"search_sorted_last()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_last_r",E"search_sorted_last_r(a, x[, lo, hi])
+
+   For \"a\" sorted high to low, returns the index of the last
+   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
+   last value preceding \"x\" in reverse natural order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"search_sorted_last_by",E"search_sorted_last_by(by, a, x[, lo, hi])
+
+   For \"a\" sorted according to the natural order of \"by(x)\" for
+   \"x\" in \"a\", returns the index of the last occurance of \"x\",
+   or if \"x\" is not in \"a\", the index of the last value preceding
+   \"x\" in the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select",E"select(v, k)
+
+   Find the element in position \"k\" in the sorted vector \"v\"
+   without sorting
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select!",E"select!(v, k)
+
+   Version of \"select\" which permutes the input vector in place.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select",E"select(lt, v, k)
+
+   Find the element in position \"k\" in the vector \"v\" ordered by
+   \"lt\", without sorting.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select!",E"select!(lt, v, k)
+
+   Version of \"select\" which permutes the input vector in place.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select_r",E"select_r(v, k)
+
+   Find the element in position \"k\" in the reverse sorted vector
+   \"v\", without sorting.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select_r!",E"select_r!(v, k)
+
+   Version of \"select_r\" which permutes the input vector in place.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select_by",E"select_by(by, v, k)
+
+   Find the element in position \"k\" in the vector \"v\" as if sorted
+   by sort_by, without sorting.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"select_by!",E"select_by!(by, v, k)
+
+   Version of \"select_by\" which permutes the input vector in place.
 
 "),
 

@@ -7,7 +7,8 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
        log, log2, log10, log1p, logb, exp, exp2, expm1, 
-       cbrt, sqrt, square, erf, erfc, ceil, floor, trunc, round, 
+       cbrt, sqrt, square, erf, erfc, erfcx, erfi, dawson,
+       ceil, floor, trunc, round, 
        lgamma, hypot, gamma, lfact, max, min, ilogb, ldexp, frexp,
        clamp, modf, ^, 
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
@@ -444,8 +445,8 @@ const digamma_EUL = 0.57721566490153286061
 const digamma_coefs = [8.33333333333333333333e-2,-2.10927960927960927961e-2, 7.57575757575757575758e-3,
                       -4.16666666666666666667e-3, 3.96825396825396825397e-3,-8.33333333333333333333e-3,
                        8.33333333333333333333e-2]
+
 function digamma(x::Float64)
-  
     negative = false
     nz = 0.0
 
@@ -514,6 +515,8 @@ digamma(x::Real) = digamma(float64(x))
 
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
+@vectorize_2arg Number beta
+@vectorize_2arg Number lbeta
 
 const eta_coeffs =
     [.99999999999999999997,
@@ -621,6 +624,34 @@ eta(z::Complex) = oftype(z,eta(complex128(z)))
 function zeta(z::Number)
     zz = 2^z
     eta(z) * zz/(zz-2)
+end
+
+const Faddeeva_tmp = Array(Float64,2)
+
+# wrappers for complex Faddeeva functions; these will get a lot simpler,
+# and can call openlibm directly, once ccall supports C99 complex types.
+for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
+    fname = (f === :Dawson) ? :dawson : f
+    @eval begin
+        function ($fname)(z::Complex128)
+            ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &z, zero(Float64))
+            return complex128(Faddeeva_tmp[1],Faddeeva_tmp[2])
+        end
+        function ($fname)(z::Complex64)
+            ccall(($(string("wrapFaddeeva_",f)),:libFaddeeva_wrapper), Void, (Ptr{Complex128},Ptr{Complex128},Float64,), Faddeeva_tmp, &complex128(z), float64(eps(Float32)))
+            return complex64(Faddeeva_tmp[1],Faddeeva_tmp[2])
+        end
+        ($fname)(z::Complex) = ($fname)(complex128(z))
+    end
+end
+for f in (:erfcx, :erfi, :Dawson)
+    fname = (f === :Dawson) ? :dawson : f
+    @eval begin
+        ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), x)
+        ($fname)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),:libopenlibm), Float64, (Float64,), float64(x)))
+        ($fname)(x::Real) = ($fname)(float(x))
+        @vectorize_1arg Number $fname
+    end
 end
 
 end # module

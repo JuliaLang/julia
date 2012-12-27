@@ -1,4 +1,4 @@
-function _jl_is_unix(os::Symbol)
+function is_unix(os::Symbol)
     if (os==:Windows) return false; 
     elseif (os==:Linux) return true; 
     elseif (os==:FreeBSD) return true; 
@@ -12,7 +12,7 @@ macro windows_only(ex)
 end
 
 macro unix_only(ex)
-    _jl_is_unix(OS_NAME) ? esc(ex) : :nothing
+    is_unix(OS_NAME) ? esc(ex) : :nothing
 end
 
 macro osx_only(ex)
@@ -20,7 +20,7 @@ macro osx_only(ex)
 end
 
 macro linux_only(ex)
-    _jl_is_unix(OS_NAME) && OS_NAME != :Darwin ? esc(ex) : :nothing
+    is_unix(OS_NAME) && OS_NAME != :Darwin ? esc(ex) : :nothing
 end
 
-_jl_os_name(os::Symbol) = string(os)
+os_name(os::Symbol) = string(os)

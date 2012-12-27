@@ -14,7 +14,7 @@ imag(x::Real) = zero(x)
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
 
-function _jl_show(io, z::Complex, compact::Bool)
+function complex_show(io, z::Complex, compact::Bool)
     r, i = reim(z)
     if isnan(r) || isfinite(i)
         compact ? showcompact(io,r) : show(io,r)
@@ -34,8 +34,8 @@ function _jl_show(io, z::Complex, compact::Bool)
         print(io, "complex(",r,",",i,")")
     end
 end
-show(io, z::Complex) = _jl_show(io, z, false)
-showcompact(io, z::Complex) = _jl_show(io, z, true)
+show(io, z::Complex) = complex_show(io, z, false)
+showcompact(io, z::Complex) = complex_show(io, z, true)
 
 convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                            throw(InexactError()))
@@ -254,15 +254,14 @@ end
 function sqrt(z::Complex)
     rz = float(real(z))
     iz = float(imag(z))
-    T = promote_type(typeof(rz),typeof(z))
-    r = sqrt(0.5*(hypot(rz,iz)+abs(rz)))
+    r = sqrt((hypot(rz,iz)+abs(rz))/2)
     if r == 0
-        return convert(T,complex(0.0, iz))
+        return complex(zero(iz), iz)
     end
     if rz >= 0
-        return convert(T,complex(r, 0.5*iz/r))
+        return complex(r, iz/r/2)
     end
-    return convert(T,complex(0.5*abs(iz)/r, iz >= 0 ? r : -r))
+    return complex(abs(iz)/r/2, iz >= 0 ? r : -r)
 end
 
 cis(theta::Real) = complex(cos(theta),sin(theta))

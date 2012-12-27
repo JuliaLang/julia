@@ -109,6 +109,14 @@ end
 _d = {"a"=>0}
 @test isa([k for k in filter(x->length(x)==1, keys(_d))], Vector{Any})
 
+# issue #1821
+let
+    d = Dict{UTF8String, Vector{Int}}()
+    d["a"] = [1, 2]
+    @test_fails d["b"] = 1
+    @test isa(repr(d), String)  # check that printable without error
+end
+
 # issue #1438
 type I1438T
     id

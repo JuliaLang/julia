@@ -173,21 +173,12 @@ import Base.pointer, Base.assign, Base.ref
 #{{{
 include("$JULIA_HOME/../share/julia/extras/glpk_h.jl")
 
-_jl_libglpk = dlopen("libglpk")
-_jl_libglpk_wrapper = dlopen("libglpk_wrapper")
-
-macro glpk_ccall(func, args...)
-    f = "glp_$(func)"
-    quote
-        ccall(dlsym(_jl_libglpk, $f), $(args...))
-    end
+macro glpk_ccall(f, args...)
+    :(ccall(($"glp_$(f)", :libglpk), $(args...)))
 end
 
-macro glpkw_ccall(func, args...)
-    f = "_jl_glpkw__$(func)"
-    quote
-        ccall(dlsym(_jl_libglpk_wrapper, $f), $(args...))
-    end
+macro glpkw_ccall(f, args...)
+    :(ccall(($"jl_glpkw__$(f)", :libglpk_wrapper), $(args...)))
 end
 
 # We need to define GLPK.version as first thing
@@ -257,8 +248,8 @@ function assign{T}(param::Param, val::T, field_name::String)
                 throw(Error("invalid struct"))
             end
             t = param.desc.field_types[i]
-            csf = strcat("_jl_glpkw__", param.desc.struct_name, "_set_", field_name)
-            ccs = :(ccall(dlsym(GLPK._jl_libglpk_wrapper, $csf), Void, (Ptr{Void}, $t), pointer($param), $val))
+            csf = strcat("jl_glpkw__", param.desc.struct_name, "_set_", field_name)
+            ccs = :(ccall(($csf, :libglpk_wrapper), Void, (Ptr{Void}, $t), pointer($param), $val))
             eval(ccs)
             return
         end
@@ -276,8 +267,8 @@ function ref(param::Param, field_name::String)
                 throw(Error("invalid struct"))
             end
             t = param.desc.field_types[i]
-            cgf = strcat("_jl_glpkw__", param.desc.struct_name, "_get_", field_name)
-            ccg = :(ccall(dlsym(GLPK._jl_libglpk_wrapper, $cgf), $t, (Ptr{Void},), pointer($param)))
+            cgf = strcat("jl_glpkw__", param.desc.struct_name, "_get_", field_name)
+            ccg = :(ccall(($cgf, :libglpk_wrapper), $t, (Ptr{Void},), pointer($param)))
             return eval(ccg)
         end
     end
@@ -293,7 +284,7 @@ end
 # as an empty vector [] or as the 'nothing' constant
 
 typealias VecOrNothing Union(Vector, Nothing)
-function _jl_glpk__convert_vecornothing{T}(::Type{T}, a::VecOrNothing)
+function convert_vecornothing{T}(::Type{T}, a::VecOrNothing)
     if isequal(a, nothing) || isa(a, Array{None})
         return T[]
     elseif T <: Integer
@@ -307,7 +298,7 @@ function _jl_glpk__convert_vecornothing{T}(::Type{T}, a::VecOrNothing)
     end
     convert(Array{T}, a)
 end
-_jl_glpk__vecornothing_length(a::VecOrNothing) = is(a, nothing) ? 0 : length(a)
+vecornothing_length(a::VecOrNothing) = is(a, nothing) ? 0 : length(a)
 
 
 # General exception: all GLP functions
@@ -377,7 +368,7 @@ function delete_prob(prob::Prob)
 end
 
 
-_jl_glpk__simplex_param_struct_desc = ParamDescriptor("smcp",
+simplex_param_struct_desc = ParamDescriptor("smcp",
         [("msg_lev", Int32), ("meth", Int32), ("pricing", Int32),
          ("r_test", Int32), ("tol_bnd", Float64), ("tol_dj", Float64),
          ("tol_piv", Float64), ("obj_ll", Float64), ("obj_ul", Float64),
@@ -389,19 +380,19 @@ type SimplexParam <: Param
     desc::ParamDescriptor
     function SimplexParam()
         struct = @glpkw_ccall smcp_init Ptr{Void} ()
-        param = new(struct, _jl_glpk__simplex_param_struct_desc)
-        finalizer(param, _jl_glpkw__smcp_delete)
+        param = new(struct, simplex_param_struct_desc)
+        finalizer(param, smcp_delete)
         return param
     end
 end
 
-function _jl_glpkw__smcp_delete(param::SimplexParam)
+function smcp_delete(param::SimplexParam)
     @glpkw_ccall smcp_delete Void (Ptr{Void},) pointer(param)
     param.struct = C_NULL
 end
 
 
-_jl_glpk__interior_param_struct_desc = ParamDescriptor("iptcp",
+interior_param_struct_desc = ParamDescriptor("iptcp",
         [("msg_lev", Int32), ("ord_alg", Int32)])
 
 type InteriorParam <: Param
@@ -409,19 +400,19 @@ type InteriorParam <: Param
     desc::ParamDescriptor
     function InteriorParam()
         struct = @glpkw_ccall iptcp_init Ptr{Void} ()
-        param = new(struct, _jl_glpk__interior_param_struct_desc)
-        finalizer(param, _jl_glpkw__iptcp_delete)
+        param = new(struct, interior_param_struct_desc)
+        finalizer(param, iptcp_delete)
         return param
     end
 end
 
-function _jl_glpkw__iptcp_delete(param::InteriorParam)
+function iptcp_delete(param::InteriorParam)
     @glpkw_ccall iptcp_delete Void (Ptr{Void},) pointer(param)
     param.struct = C_NULL
 end
 
 
-_jl_glpk__intopt_param_struct_desc = ParamDescriptor("iocp",
+intopt_param_struct_desc = ParamDescriptor("iocp",
     [("msg_lev", Int32), ("br_tech", Int32), ("bt_tech", Int32),
      ("pp_tech", Int32), ("fp_heur", Int32), ("gmi_cuts", Int32),
      ("mir_cuts", Int32), ("cov_cuts", Int32), ("clq_cuts", Int32),
@@ -435,19 +426,19 @@ type IntoptParam <: Param
     desc::ParamDescriptor
     function IntoptParam()
         struct = @glpkw_ccall iocp_init Ptr{Void} ()
-        param = new(struct, _jl_glpk__intopt_param_struct_desc)
-        finalizer(param, _jl_glpkw__iocp_delete)
+        param = new(struct, intopt_param_struct_desc)
+        finalizer(param, iocp_delete)
         return param
     end
 end
 
-function _jl_glpkw__iocp_delete(param::IntoptParam)
+function iocp_delete(param::IntoptParam)
     @glpkw_ccall iocp_delete Void (Ptr{Void},) pointer(param)
     param.struct = C_NULL
 end
 
 
-_jl_glpk__basisfact_param_struct_desc = ParamDescriptor("bfcp",
+basisfact_param_struct_desc = ParamDescriptor("bfcp",
     [("type", Int32), ("lu_size", Int32), ("piv_tol", Float64),
      ("piv_lim", Int32), ("suhl", Int32), ("eps_tol", Float64),
      ("max_gro", Float64), ("nfs_max", Int32), ("upd_tol", Float64),
@@ -458,13 +449,13 @@ type BasisFactParam <: Param
     desc::ParamDescriptor
     function BasisFactParam()
         struct = @glpkw_ccall bfcp_init Ptr{Void} ()
-        param = new(struct, _jl_glpk__basisfact_param_struct_desc)
-        finalizer(param, _jl_glpkw__bfcp_delete)
+        param = new(struct, basisfact_param_struct_desc)
+        finalizer(param, bfcp_delete)
         return param
     end
 end
 
-function _jl_glpkw__bfcp_delete(param::BasisFactParam)
+function bfcp_delete(param::BasisFactParam)
     @glpkw_ccall bfcp_delete Void (Ptr{Void},) pointer(param)
     param.struct = C_NULL
 end
@@ -505,14 +496,14 @@ end
 # to pass an invalid parameter to the
 # underlying glp API.
 
-function _jl_glpk__check_prob(prob::Prob)
+function check_prob(prob::Prob)
     if prob.p == C_NULL
         throw(Error("Invalid GLPK.Prob"))
     end
     return true
 end
 
-function _jl_glpk__check_string_length(s::String, minl::Integer, maxl::Integer)
+function check_string_length(s::String, minl::Integer, maxl::Integer)
     l = length(s)
     if !(minl <= l <= maxl)
         throw(Error("Invalid string length $l (must be $minl <= length <= $maxl)"))
@@ -520,7 +511,7 @@ function _jl_glpk__check_string_length(s::String, minl::Integer, maxl::Integer)
     return true
 end
 
-function _jl_glpk__check_row_is_valid(prob::Prob, row::Integer)
+function check_row_is_valid(prob::Prob, row::Integer)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     if (row < 1 || row > rows)
         throw(Error("Invalid row $row (must be 1 <= row <= $rows)"))
@@ -528,7 +519,7 @@ function _jl_glpk__check_row_is_valid(prob::Prob, row::Integer)
     return true
 end
 
-function _jl_glpk__check_col_is_valid(prob::Prob, col::Integer)
+function check_col_is_valid(prob::Prob, col::Integer)
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
     if (col < 1 || col > cols)
         throw(Error("Invalid col $col (must be 1 <= col <= $cols)"))
@@ -536,7 +527,7 @@ function _jl_glpk__check_col_is_valid(prob::Prob, col::Integer)
     return true
 end
 
-function _jl_glpk__check_col_is_valid_w0(prob::Prob, col::Integer)
+function check_col_is_valid_w0(prob::Prob, col::Integer)
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
     if (col < 0 || col > cols)
         throw(Error("Invalid col $col (must be 0 <= col <= $cols)"))
@@ -544,14 +535,14 @@ function _jl_glpk__check_col_is_valid_w0(prob::Prob, col::Integer)
     return true
 end
 
-function _jl_glpk__check_obj_dir_is_valid(dir::Integer)
+function check_obj_dir_is_valid(dir::Integer)
     if !(dir == MIN || dir == MAX)
         throw(Error("Invalid obj_dir $dir (use MIN or MAX)"))
     end
     return true
 end
 
-function _jl_glpk__check_bounds_type_is_valid(bounds_type::Integer)
+function check_bounds_type_is_valid(bounds_type::Integer)
     if !(bounds_type == FR ||
          bounds_type == LO ||
          bounds_type == UP ||
@@ -562,7 +553,7 @@ function _jl_glpk__check_bounds_type_is_valid(bounds_type::Integer)
     return true
 end
 
-function _jl_glpk__check_bounds_are_valid(bounds_type::Integer, lb::Real, ub::Real)
+function check_bounds_are_valid(bounds_type::Integer, lb::Real, ub::Real)
     if bounds_type == DB && lb > ub
         throw(Error("Invalid bounds for double-bounded variable: $lb > $ub"))
     elseif bounds_type == FX && lb != ub
@@ -571,7 +562,7 @@ function _jl_glpk__check_bounds_are_valid(bounds_type::Integer, lb::Real, ub::Re
     return true
 end
 
-function _jl_glpk__check_vectors_size(numel::Integer, vecs...)
+function check_vectors_size(numel::Integer, vecs...)
     if numel < 0
         throw(Error("Invalid numer of elements: $numel"))
     end
@@ -587,10 +578,10 @@ function _jl_glpk__check_vectors_size(numel::Integer, vecs...)
     return true
 end
 
-function _jl_glpk__check_vectors_all_same_size(vec0::VecOrNothing, vecs::VecOrNothing...)
-    l0 = _jl_glpk__vecornothing_length(vec0)
+function check_vectors_all_same_size(vec0::VecOrNothing, vecs::VecOrNothing...)
+    l0 = vecornothing_length(vec0)
     for v in vecs
-        l = _jl_glpk__vecornothing_length(v)
+        l = vecornothing_length(v)
         if l != l0
             throw(Error("incosistent vector lengths: $l0 and $l"))
         end
@@ -598,7 +589,7 @@ function _jl_glpk__check_vectors_all_same_size(vec0::VecOrNothing, vecs::VecOrNo
     return true
 end
 
-function _jl_glpk__check_indices_vectors_dup(prob::Prob, numel::Integer, ia::Vector{Int32}, ja::Vector{Int32})
+function check_indices_vectors_dup(prob::Prob, numel::Integer, ia::Vector{Int32}, ja::Vector{Int32})
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
     #numel = length(ia)
@@ -616,7 +607,7 @@ function _jl_glpk__check_indices_vectors_dup(prob::Prob, numel::Integer, ia::Vec
     return true
 end
 
-function _jl_glpk__check_rows_and_cols(rows::Integer, cols::Integer)
+function check_rows_and_cols(rows::Integer, cols::Integer)
     if (rows < 0)
         throw(Error("rows < 0 : $rows"))
     end
@@ -625,7 +616,7 @@ function _jl_glpk__check_rows_and_cols(rows::Integer, cols::Integer)
     end
 end
 
-function _jl_glpk__check_rows_ids(prob::Prob, min_size::Integer, num_rows::Integer, rows_ids::Vector{Int32})
+function check_rows_ids(prob::Prob, min_size::Integer, num_rows::Integer, rows_ids::Vector{Int32})
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     if num_rows < min_size || num_rows > rows
         throw(Error("invalid vector size: $num_rows (min=$min_size max=$rows)"))
@@ -646,7 +637,7 @@ function _jl_glpk__check_rows_ids(prob::Prob, min_size::Integer, num_rows::Integ
     return true
 end
 
-function _jl_glpk__check_cols_ids(prob::Prob, min_size::Integer, num_cols::Integer, cols_ids::Vector{Int32})
+function check_cols_ids(prob::Prob, min_size::Integer, num_cols::Integer, cols_ids::Vector{Int32})
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
     if num_cols < min_size || num_cols > cols
         throw(Error("invalid vector size: $num_cols (min=$min_size max=$cols)"))
@@ -667,7 +658,7 @@ function _jl_glpk__check_cols_ids(prob::Prob, min_size::Integer, num_cols::Integ
     return true
 end
 
-function _jl_glpk__check_list_ids(prob::Prob, len::Integer, list_ids::Vector{Int32})
+function check_list_ids(prob::Prob, len::Integer, list_ids::Vector{Int32})
     if len == 0
         return true
     end
@@ -689,7 +680,7 @@ function _jl_glpk__check_list_ids(prob::Prob, len::Integer, list_ids::Vector{Int
     return true
 end
 
-function _jl_glpk__check_status_is_optimal(prob::Prob)
+function check_status_is_optimal(prob::Prob)
     ret = @glpk_ccall get_status Int32 (Ptr{Void},) prob.p
     if ret == OPT
         throw(Error("current basic solution is not optimal"))
@@ -697,7 +688,7 @@ function _jl_glpk__check_status_is_optimal(prob::Prob)
     return true
 end
 
-function _jl_glpk__check_bf_exists(prob::Prob)
+function check_bf_exists(prob::Prob)
     ret = @glpk_ccall bf_exists Int32 (Ptr{Void},) prob.p
     if ret == 0
         throw(Error("no bf solution found (use GLPK.factorize)"))
@@ -705,7 +696,7 @@ function _jl_glpk__check_bf_exists(prob::Prob)
     return true
 end
 
-function _jl_glpk__check_var_is_basic(prob::Prob, ind::Integer)
+function check_var_is_basic(prob::Prob, ind::Integer)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     if ind <= rows
         j = @glpk_ccall get_row_stat Int32 (Ptr{Void}, Int32) prob.p ind
@@ -720,7 +711,7 @@ function _jl_glpk__check_var_is_basic(prob::Prob, ind::Integer)
     end
 end
 
-function _jl_glpk__check_var_is_non_basic(prob::Prob, ind::Integer)
+function check_var_is_non_basic(prob::Prob, ind::Integer)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     if ind <= rows
         j = @glpk_ccall get_row_stat Int32 (Ptr{Void}, Int32) prob.p ind
@@ -735,28 +726,28 @@ function _jl_glpk__check_var_is_non_basic(prob::Prob, ind::Integer)
     end
 end
 
-function _jl_glpk__check_is_prim_feasible(prob::Prob)
+function check_is_prim_feasible(prob::Prob)
     if FEAS != @glpk_ccall get_prim_stat Int32 (Ptr{Void},) prob.p
         throw(Error("problem is not primal feasible"))
     end
     return true
 end
 
-function _jl_glpk__check_is_dual_feasible(prob::Prob)
+function check_is_dual_feasible(prob::Prob)
     if FEAS != @glpk_ccall get_dual_stat Int32 (Ptr{Void},) prob.p
         throw(Error("problem is not dual feasible"))
     end
     return true
 end
 
-function _jl_glpk__check_copy_names_flag(names::Integer)
+function check_copy_names_flag(names::Integer)
     if names != ON && names != OFF
         throw(Error("invalid copy_names flag $names (use GLPK.ON or GLPK.OFF)"))
     end
     return true
 end
 
-function _jl_glpk__check_scale_flags(flags::Integer)
+function check_scale_flags(flags::Integer)
     all = (SF_GM | SF_EQ | SF_2N | SF_SKIP)
     if (flags | all) != all && flags != SF_AUTO
         throw(Error("invalid scale flags $flags"))
@@ -764,7 +755,7 @@ function _jl_glpk__check_scale_flags(flags::Integer)
     return true
 end
 
-function _jl_glpk__check_stat_is_valid(stat::Integer)
+function check_stat_is_valid(stat::Integer)
     if (stat != BS &&
         stat != NL &&
         stat != NU &&
@@ -774,28 +765,28 @@ function _jl_glpk__check_stat_is_valid(stat::Integer)
     end
 end
 
-function _jl_glpk__check_adv_basis_flags(flags::Integer)
+function check_adv_basis_flags(flags::Integer)
     if flags != 0
         throw(Error("adv_basis flags must be set to 0 (found $flags instead)"))
     end
     return true
 end
 
-function _jl_glpk__check_simplex_param(param::SimplexParam)
+function check_simplex_param(param::SimplexParam)
     if pointer(param) == C_NULL
         throw(Error("param = NULL"))
     end
     return true
 end
 
-function _jl_glpk__check_interior_param(param::InteriorParam)
+function check_interior_param(param::InteriorParam)
     if pointer(param) == C_NULL
         throw(Error("param = NULL"))
     end
     return true
 end
 
-function _jl_glpk__check_kind_is_valid(kind::Integer)
+function check_kind_is_valid(kind::Integer)
     if (kind != CV &&
         kind != IV &&
         kind != BV)
@@ -804,14 +795,14 @@ function _jl_glpk__check_kind_is_valid(kind::Integer)
     return true
 end
 
-function _jl_glpk__check_intopt_param(param::IntoptParam)
+function check_intopt_param(param::IntoptParam)
     if pointer(param) == C_NULL
         throw(Error("param = NULL"))
     end
     return true
 end
 
-function _jl_glpk__check_file_is_readable(filename::String)
+function check_file_is_readable(filename::String)
     try
         f = open(filename, "r")
         close(f)
@@ -821,7 +812,7 @@ function _jl_glpk__check_file_is_readable(filename::String)
     return true
 end
 
-function _jl_glpk__check_file_is_writable(filename::String)
+function check_file_is_writable(filename::String)
     try
         f = open(filename, "w")
         close(f)
@@ -831,7 +822,7 @@ function _jl_glpk__check_file_is_writable(filename::String)
     return true
 end
 
-function _jl_glpk__check_mps_format(format::Integer)
+function check_mps_format(format::Integer)
     if (format != MPS_DECK &&
         format != MPS_FILE)
         throw(Error("invalid MPS format $format (use GLPK.MPS_DECK or GLPK.MPS_FILE)"))
@@ -839,35 +830,35 @@ function _jl_glpk__check_mps_format(format::Integer)
     return true
 end
 
-function _jl_glpk__check_mps_param(param)
+function check_mps_param(param)
     if param != C_NULL
         throw(Error("MPS param must be C_NULL"))
     end
     return true
 end
 
-function _jl_glpk__check_lp_param(param)
+function check_lp_param(param)
     if param != C_NULL
         throw(Error("LP param must be C_NULL"))
     end
     return true
 end
 
-function _jl_glpk__check_read_prob_flags(flags::Integer)
+function check_read_prob_flags(flags::Integer)
     if flags != 0
         throw(Error("read_prob flags must be 0"))
     end
     return true
 end
 
-function _jl_glpk__check_write_prob_flags(flags::Integer)
+function check_write_prob_flags(flags::Integer)
     if flags != 0
         throw(Error("write_prob flags must be 0"))
     end
     return true
 end
 
-function _jl_glpk__check_print_ranges_flags(flags::Integer)
+function check_print_ranges_flags(flags::Integer)
     if flags != 0
         throw(Error("print_ranges flags must be set to 0 (found $flags instead)"))
     end
@@ -875,28 +866,28 @@ function _jl_glpk__check_print_ranges_flags(flags::Integer)
 end
 
 
-function _jl_glpk__check_bfcp(param::BasisFactParam)
+function check_bfcp(param::BasisFactParam)
     if pointer(param) == C_NULL
         throw(Error("Invalid GLPK.BasisFactParam"))
     end
     return true
 end
 
-function _jl_glpk__check_data(data::Data)
+function check_data(data::Data)
     if pointer(data) == C_NULL
         throw(Error("Invalid GLPK.Data"))
     end
     return true
 end
 
-function _jl_glpk__check_mpl_workspace(tran::MathProgWorkspace)
+function check_mpl_workspace(tran::MathProgWorkspace)
     if tran.p == C_NULL
         throw(Error("Invalid GLPK.MathProgWorkspace"))
     end
     return true
 end
 
-function _jl_glpk__check_rowcol_is_valid(prob::Prob, k::Integer)
+function check_rowcol_is_valid(prob::Prob, k::Integer)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
 
@@ -908,56 +899,56 @@ function _jl_glpk__check_rowcol_is_valid(prob::Prob, k::Integer)
     return true
 end
 
-function _jl_glpk__check_dir_is_valid(dir::Integer)
+function check_dir_is_valid(dir::Integer)
     if !(dir == 1 || dir == -1)
         throw(Error("invalid direction $dir (must be 1 or -1)"))
     end
     return true
 end
 
-function _jl_glpk__check_eps_is_valid(eps::Real)
+function check_eps_is_valid(eps::Real)
     if (eps < 0)
         throw(Error("invalid eps $eps (must be >= 0)"))
     end
     return true
 end
 
-function _jl_glpk__check_init_env_succeeded(ret::Integer)
+function check_init_env_succeeded(ret::Integer)
     if !(0 <= ret <= 1)
         throw(Error("initialization failed"))
     end
     return true
 end
 
-function _jl_glpk__check_term_out_flag(flag::Integer)
+function check_term_out_flag(flag::Integer)
     if !(flag == ON || flag == OFF)
         throw(Error("invalid flag $flag (use GLPK.ON or GLPK.OFF)"))
     end
     return true
 end
 
-function _jl_glpk__check_open_tee_succeeded(ret::Integer)
+function check_open_tee_succeeded(ret::Integer)
     if !(0 <= ret <= 1)
         throw(Error("GLPK.open_tee failed"))
     end
     return true
 end
 
-function _jl_glpk__check_alloc_size(n::Integer)
+function check_alloc_size(n::Integer)
     if n <= 0
         throw(Error("invalid alloc size $n"))
     end
     return true
 end
 
-function _jl_glpk__check_pointer_is_valid(ptr::Ptr)
+function check_pointer_is_valid(ptr::Ptr)
     if ptr == C_NULL
         throw(Error("invalid pointer"))
     end
     return true
 end
 
-function _jl_glpk__check_sdf_file_opened(data_p::Ptr)
+function check_sdf_file_opened(data_p::Ptr)
     if data_p == C_NULL
         throw(Error("GLPK.sdf_open_file failed"))
     end
@@ -991,85 +982,85 @@ end
 #  rather than a string.
 
 function set_prob_name(prob::Prob, name::Union(String,Nothing))
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     if is(name, nothing)
         name = ""
     end
-    _jl_glpk__check_string_length(name, 0, 255)
+    check_string_length(name, 0, 255)
     @glpk_ccall set_prob_name Void (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(name)
 end
 
 function set_obj_name(prob::Prob, name::Union(String,Nothing))
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     if is(name, nothing)
         name = ""
     end
-    _jl_glpk__check_string_length(name, 0, 255)
+    check_string_length(name, 0, 255)
     @glpk_ccall set_obj_name Void (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(name)
 end
 
 function set_row_name(prob::Prob, row::Integer, name::Union(String,Nothing))
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     if is(name, nothing)
         name = ""
     end
-    _jl_glpk__check_string_length(name, 0, 255)
+    check_string_length(name, 0, 255)
     @glpk_ccall set_row_name Void (Ptr{Void}, Int32, Ptr{Uint8}) prob.p row bytestring(name)
 end
 
 function set_col_name(prob::Prob, col::Integer, name::Union(String,Nothing))
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     if is(name, nothing)
         name = ""
     end
-    _jl_glpk__check_string_length(name, 0, 255)
+    check_string_length(name, 0, 255)
     @glpk_ccall set_col_name Void (Ptr{Void}, Int32, Ptr{Uint8}) prob.p col bytestring(name)
 end
 
 function set_obj_dir(prob::Prob, dir::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_obj_dir_is_valid(dir)
+    check_prob(prob)
+    check_obj_dir_is_valid(dir)
     @glpk_ccall set_obj_dir Void (Ptr{Void}, Int32) prob.p dir
 end
 
 function add_rows(prob::Prob, rows::Integer)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall add_rows Int32 (Ptr{Void}, Int32) prob.p rows
 end
 
 function add_cols(prob::Prob, cols::Integer)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall add_cols Int32 (Ptr{Void}, Int32) prob.p cols
 end
 
 function set_row_bnds(prob::Prob, row::Integer, bounds_type::Integer, lb::Real, ub::Real)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
-    _jl_glpk__check_bounds_type_is_valid(bounds_type)
-    _jl_glpk__check_bounds_are_valid(bounds_type, lb, ub)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
+    check_bounds_type_is_valid(bounds_type)
+    check_bounds_are_valid(bounds_type, lb, ub)
     @glpk_ccall set_row_bnds Void (Ptr{Void}, Int32, Int32, Float64, Float64) prob.p row bounds_type lb ub
 end
 
 function set_col_bnds(prob::Prob, col::Integer, bounds_type::Integer, lb::Real, ub::Real)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
-    _jl_glpk__check_bounds_type_is_valid(bounds_type)
-    _jl_glpk__check_bounds_are_valid(bounds_type, lb, ub)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
+    check_bounds_type_is_valid(bounds_type)
+    check_bounds_are_valid(bounds_type, lb, ub)
     @glpk_ccall set_col_bnds Void (Ptr{Void}, Int32, Int32, Float64, Float64) prob.p col bounds_type lb ub
 end
 
 function set_obj_coef(prob::Prob, col::Integer, coef::Real)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid_w0(prob, col)
+    check_prob(prob)
+    check_col_is_valid_w0(prob, col)
     @glpk_ccall set_obj_coef Void (Ptr{Void}, Int32, Float64) prob.p col coef
 end
 
 function set_mat_row{Ti<:Integer, Tv<:Real}(prob::Prob, row::Integer, len::Integer, ind::Vector{Ti}, val::Vector{Tv})
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_vectors_size(len, ind, val)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_vectors_size(len, ind, val)
+    check_row_is_valid(prob, row)
     if len > 0
         ind32 = int32(ind)
         val64 = float64(val)
@@ -1077,7 +1068,7 @@ function set_mat_row{Ti<:Integer, Tv<:Real}(prob::Prob, row::Integer, len::Integ
         off64 = sizeof(Float64)
         ind32p = pointer(ind32) - off32
         val64p = pointer(val64) - off64
-        _jl_glpk__check_cols_ids(prob, 0, len, ind32)
+        check_cols_ids(prob, 0, len, ind32)
     else
         ind32p = C_NULL
         val64p = C_NULL
@@ -1086,21 +1077,21 @@ function set_mat_row{Ti<:Integer, Tv<:Real}(prob::Prob, row::Integer, len::Integ
     @glpk_ccall set_mat_row Void (Ptr{Void}, Int32, Int32, Ptr{Int32}, Ptr{Float64}) prob.p row len ind32p val64p
 end
 function set_mat_row(prob::Prob, row::Integer, len::Integer, ind::VecOrNothing, val::VecOrNothing)
-    ind = _jl_glpk__convert_vecornothing(Int32, ind)
-    val = _jl_glpk__convert_vecornothing(Float64, ar)
+    ind = convert_vecornothing(Int32, ind)
+    val = convert_vecornothing(Float64, ar)
     set_mat_row(prob, row, len, ind, val)
 end
 function set_mat_row(prob::Prob, row::Integer, ind::VecOrNothing, val::VecOrNothing)
-    _jl_glpk__check_vectors_all_same_size(ind, val)
-    l = _jl_glpk__vecornothing_length(ind)
+    check_vectors_all_same_size(ind, val)
+    l = vecornothing_length(ind)
     set_mat_row(prob, row, l, ind, val)
 end
 
 
 function set_mat_col{Ti<:Integer, Tv<:Real}(prob::Prob, col::Integer, len::Integer, ind::Vector{Ti}, val::Vector{Tv})
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_vectors_size(len, ind, val)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_vectors_size(len, ind, val)
+    check_col_is_valid(prob, col)
     if len > 0
         ind32 = int32(ind)
         val64 = float64(val)
@@ -1108,7 +1099,7 @@ function set_mat_col{Ti<:Integer, Tv<:Real}(prob::Prob, col::Integer, len::Integ
         off64 = sizeof(Float64)
         ind32p = pointer(ind32) - off32
         val64p = pointer(val64) - off64
-        _jl_glpk__check_rows_ids(prob, 0, len, ind32)
+        check_rows_ids(prob, 0, len, ind32)
     else
         ind32p = C_NULL
         val64p = C_NULL
@@ -1117,26 +1108,26 @@ function set_mat_col{Ti<:Integer, Tv<:Real}(prob::Prob, col::Integer, len::Integ
     @glpk_ccall set_mat_col Void (Ptr{Void}, Int32, Int32, Ptr{Int32}, Ptr{Float64}) prob.p col len ind32p val64p
 end
 function set_mat_col(prob::Prob, col::Integer, len::Integer, ind::VecOrNothing, val::VecOrNothing)
-    ind = _jl_glpk__convert_vecornothing(Int32, ind)
-    val = _jl_glpk__convert_vecornothing(Float64, ar)
+    ind = convert_vecornothing(Int32, ind)
+    val = convert_vecornothing(Float64, ar)
     set_mat_col(prob, col, len, ind, val)
 end
 function set_mat_col(prob::Prob, col::Integer, ind::VecOrNothing, val::VecOrNothing)
-    _jl_glpk__check_vectors_all_same_size(ind, val)
-    l = _jl_glpk__vecornothing_length(ind)
+    check_vectors_all_same_size(ind, val)
+    l = vecornothing_length(ind)
     set_mat_col(prob, col, l, ind, val)
 end
 
 function load_matrix{Ti<:Integer, Tv<:Real}(prob::Prob, numel::Integer, ia::Vector{Ti}, ja::Vector{Ti}, ar::Vector{Tv})
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_vectors_size(numel, ia, ja, ar)
+    check_prob(prob)
+    check_vectors_size(numel, ia, ja, ar)
     if numel == 0
         return
     end
     ia32 = int32(ia)
     ja32 = int32(ja)
     ar64 = float64(ar)
-    _jl_glpk__check_indices_vectors_dup(prob, numel, ia32, ja32)
+    check_indices_vectors_dup(prob, numel, ia32, ja32)
 
     off32 = sizeof(Int32)
     off64 = sizeof(Float64)
@@ -1148,15 +1139,15 @@ function load_matrix{Ti<:Integer, Tv<:Real}(prob::Prob, numel::Integer, ia::Vect
 end
 
 function load_matrix(prob::Prob, numel::Integer, ia::VecOrNothing, ja::VecOrNothing, ar::VecOrNothing)
-    ia = _jl_glpk__convert_vecornothing(Int32, ia)
-    ja = _jl_glpk__convert_vecornothing(Int32, ja)
-    ar = _jl_glpk__convert_vecornothing(Float64, ar)
+    ia = convert_vecornothing(Int32, ia)
+    ja = convert_vecornothing(Int32, ja)
+    ar = convert_vecornothing(Float64, ar)
     load_matrix(prob, numel, ia, ja, ar)
 end
 
 function load_matrix(prob::Prob, ia::VecOrNothing, ja::VecOrNothing, ar::VecOrNothing)
-    _jl_glpk__check_vectors_all_same_size(ia, ja, ar)
-    l = _jl_glpk__vecornothing_length(ar)
+    check_vectors_all_same_size(ia, ja, ar)
+    l = vecornothing_length(ar)
     load_matrix(prob, l, ia, ja, ar)
 end
 
@@ -1166,8 +1157,8 @@ function load_matrix{Ti<:Integer, Tv<:Real}(prob::Prob, a::SparseMatrixCSC{Tv, T
 end
 
 function check_dup{Ti<:Integer}(rows::Integer, cols::Integer, numel::Integer, ia::Vector{Ti}, ja::Vector{Ti})
-    _jl_glpk__check_rows_and_cols(rows, cols)
-    _jl_glpk__check_vectors_size(numel, ia, ja)
+    check_rows_and_cols(rows, cols)
+    check_vectors_size(numel, ia, ja)
     ia32 = int32(ia)
     ja32 = int32(ja)
 
@@ -1179,26 +1170,26 @@ function check_dup{Ti<:Integer}(rows::Integer, cols::Integer, numel::Integer, ia
 end
 
 function check_dup(rows::Integer, cols::Integer, numel::Integer, ia::VecOrNothing, ja::VecOrNothing)
-    ia = _jl_glpk__convert_vecornothing(Int32, ia)
-    ja = _jl_glpk__convert_vecornothing(Int32, ja)
+    ia = convert_vecornothing(Int32, ia)
+    ja = convert_vecornothing(Int32, ja)
     check_dup(rows, cols, numel, ia, ja)
 end
 
 function check_dup(rows::Integer, cols::Integer, ia::VecOrNothing, ja::VecOrNothing)
-    _jl_glpk__check_vectors_all_same_size(ia, ja)
-    l = _jl_glpk__vecornothing_length(ia)
+    check_vectors_all_same_size(ia, ja)
+    l = vecornothing_length(ia)
     check_dup(rows, cols, l, ia, ja)
 end
 
 function sort_matrix(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall sort_matrix Void (Ptr{Void},) prob.p
 end
 
 function del_rows{Ti<:Integer}(prob::Prob, num_rows::Integer, rows_ids::AbstractVector{Ti})
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     rows_ids32 = int32(rows_ids)
-    _jl_glpk__check_rows_ids(prob, 1, num_rows, rows_ids32)
+    check_rows_ids(prob, 1, num_rows, rows_ids32)
 
     off32 = sizeof(Int32)
     rows_ids32p = pointer(rows_ids32) - off32
@@ -1208,9 +1199,9 @@ del_rows{Ti<:Integer}(prob::Prob, rows_ids::AbstractVector{Ti}) =
     del_rows(prob, length(rows_ids), rows_ids)
 
 function del_cols{Ti<:Integer}(prob::Prob, num_cols::Integer, cols_ids::AbstractVector{Ti})
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     cols_ids32 = int32(cols_ids)
-    _jl_glpk__check_cols_ids(prob, 1, num_cols, cols_ids32)
+    check_cols_ids(prob, 1, num_cols, cols_ids32)
 
     off32 = sizeof(Int32)
     cols_ids32p = pointer(cols_ids32) - off32
@@ -1220,18 +1211,18 @@ del_cols{Ti<:Integer}(prob::Prob, cols_ids::AbstractVector{Ti}) =
     del_cols(prob, length(cols_ids), cols_ids)
 
 function copy_prob(prob_dest::Prob, prob::Prob, copy_names::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_copy_names_flag(copy_names)
+    check_prob(prob)
+    check_copy_names_flag(copy_names)
     @glpk_ccall copy_prob Void (Ptr{Void}, Ptr{Void}, Int32) prob_dest.p prob.p copy_names
 end
 
 function erase_prob(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall erase_prob Void (Ptr{Void},) prob.p
 end
 
 function get_prob_name(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     name_cstr = @glpk_ccall get_prob_name Ptr{Uint8} (Ptr{Void},) prob.p
     if name_cstr == C_NULL
         return ""
@@ -1241,7 +1232,7 @@ function get_prob_name(prob::Prob)
 end
 
 function get_obj_name(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     name_cstr = @glpk_ccall get_obj_name Ptr{Uint8} (Ptr{Void},) prob.p
     if name_cstr == C_NULL
         return ""
@@ -1251,23 +1242,23 @@ function get_obj_name(prob::Prob)
 end
 
 function get_obj_dir(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_obj_dir Int32 (Ptr{Void},) prob.p
 end
 
 function get_num_rows(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
 end
 
 function get_num_cols(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
 end
 
 function get_row_name(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     name_cstr = @glpk_ccall get_row_name Ptr{Uint8} (Ptr{Void}, Int32) prob.p row
     if name_cstr == C_NULL
         return ""
@@ -1277,8 +1268,8 @@ function get_row_name(prob::Prob, row::Integer)
 end
 
 function get_col_name(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     name_cstr = @glpk_ccall get_col_name Ptr{Uint8} (Ptr{Void}, Int32) prob.p col
     if name_cstr == C_NULL
         return ""
@@ -1288,68 +1279,68 @@ function get_col_name(prob::Prob, col::Integer)
 end
 
 function get_row_type(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall get_row_type Int32 (Ptr{Void}, Int32) prob.p row
 end
 
 function get_row_lb(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall get_row_lb Float64 (Ptr{Void}, Int32) prob.p row
 end
 
 function get_row_ub(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall get_row_ub Float64 (Ptr{Void}, Int32) prob.p row
 end
 
 function get_col_type(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall get_col_type Int32 (Ptr{Void}, Int32) prob.p col
 end
 
 function get_col_lb(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall get_col_lb Float64 (Ptr{Void}, Int32) prob.p col
 end
 
 function get_col_ub(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall get_col_ub Float64 (Ptr{Void}, Int32) prob.p col
 end
 
 function get_obj_coef(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid_w0(prob, col)
+    check_prob(prob)
+    check_col_is_valid_w0(prob, col)
     @glpk_ccall get_obj_coef Float64 (Ptr{Void}, Int32) prob.p col
 end
 
 function get_num_nz(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_num_nz Int32 (Ptr{Void},) prob.p
 end
 
 function get_mat_row(prob::Prob, row::Integer, ind::Union(Vector{Int32},Nothing), val::Union(Vector{Float64},Nothing))
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     numel = @glpk_ccall get_mat_row Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p row C_NULL C_NULL
     if numel == 0
         return 0
     end
     if !isequal(ind, nothing)
-        _jl_glpk__check_vectors_size(numel, ind)
+        check_vectors_size(numel, ind)
         off32 = sizeof(Int32)
         ind32p = pointer(ind) - off32
     else
         ind32p = C_NULL
     end
     if !isequal(val, nothing)
-        _jl_glpk__check_vectors_size(numel, val)
+        check_vectors_size(numel, val)
         off64 = sizeof(Float64)
         val64p = pointer(val) - off64
     else
@@ -1359,8 +1350,8 @@ function get_mat_row(prob::Prob, row::Integer, ind::Union(Vector{Int32},Nothing)
 end
 
 function get_mat_row(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     numel = @glpk_ccall get_mat_row Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p row C_NULL C_NULL
     if numel == 0
         return (Int32[], Float64[])
@@ -1377,21 +1368,21 @@ function get_mat_row(prob::Prob, row::Integer)
 end
 
 function get_mat_col(prob::Prob, col::Integer, ind::Union(Vector{Int32},Nothing), val::Union(Vector{Float64},Nothing))
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     numel = @glpk_ccall get_mat_col Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p col C_NULL C_NULL
     if numel == 0
         return 0
     end
     if !isequal(ind, nothing)
-        _jl_glpk__check_vectors_size(numel, ind)
+        check_vectors_size(numel, ind)
         off32 = sizeof(Int32)
         ind32p = pointer(ind) - off32
     else
         ind32p = C_NULL
     end
     if !isequal(val, nothing)
-        _jl_glpk__check_vectors_size(numel, val)
+        check_vectors_size(numel, val)
         off64 = sizeof(Float64)
         val64p = pointer(val) - off64
     else
@@ -1401,8 +1392,8 @@ function get_mat_col(prob::Prob, col::Integer, ind::Union(Vector{Int32},Nothing)
 end
 
 function get_mat_col(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     numel = @glpk_ccall get_mat_col Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p col C_NULL C_NULL
     if numel == 0
         return (Int32[], Float64[])
@@ -1419,93 +1410,93 @@ function get_mat_col(prob::Prob, col::Integer)
 end
 
 function create_index(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall create_index Void (Ptr{Void},) prob.p
 end
 
 function find_row(prob::Prob, name::String)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall find_row Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(name)
 end
 
 function find_col(prob::Prob, name::String)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall find_col Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(name)
 end
 
 function delete_index(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall delete_index Void (Ptr{Void},) prob.p
 end
 
 function set_rii(prob::Prob, row::Integer, rii::Real)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall set_rii Void (Ptr{Void}, Int32, Float64) prob.p row rii
 end
 
 function set_sjj(prob::Prob, col::Integer, sjj::Real)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall set_sjj Void (Ptr{Void}, Int32, Float64) prob.p col sjj
 end
 
 function get_rii(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall get_rii Float64 (Ptr{Void}, Int32) prob.p row
 end
 
 function get_sjj(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall get_sjj Float64 (Ptr{Void}, Int32) prob.p col
 end
 
 function scale_prob(prob::Prob, flags::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_scale_flags(flags)
+    check_prob(prob)
+    check_scale_flags(flags)
     @glpk_ccall scale_prob Void (Ptr{Void}, Int32) prob.p flags
 end
 
 function unscale_prob(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall unscale_prob Void (Ptr{Void},) prob.p
 end
 
 function set_row_stat(prob::Prob, row::Integer, stat::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
-    _jl_glpk__check_stat_is_valid(stat)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
+    check_stat_is_valid(stat)
     @glpk_ccall set_row_stat Void (Ptr{Void}, Int32, Int32) prob.p row stat
 end
 
 function set_col_stat(prob::Prob, col::Integer, stat::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
-    _jl_glpk__check_stat_is_valid(stat)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
+    check_stat_is_valid(stat)
     @glpk_ccall set_col_stat Void (Ptr{Void}, Int32, Int32) prob.p col stat
 end
 
 function std_basis(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall std_basis Void (Ptr{Void},) prob.p
 end
 
 function adv_basis(prob::Prob, flags::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_adv_basis_flags(flags)
+    check_prob(prob)
+    check_adv_basis_flags(flags)
     @glpk_ccall adv_basis Void (Ptr{Void}, Int32) prob.p flags
 end
 adv_basis(prob::Prob) = adv_basis(prob, 0)
 
 function cpx_basis(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall cpx_basis Void (Ptr{Void},) prob.p
 end
 
 function simplex{Tp<:Union(SimplexParam, Nothing)}(prob::Prob, param::Tp)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     if param == nothing
         param_ptr = C_NULL
     else
@@ -1518,7 +1509,7 @@ simplex(prob::Prob) =
     simplex(prob, nothing)
 
 function exact{Tp<:Union(SimplexParam, Nothing)}(prob::Prob, param::Tp)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     if param == nothing
         param_ptr = C_NULL
     else
@@ -1531,73 +1522,73 @@ exact(prob::Prob) =
     exact(prob, nothing)
 
 function init_smcp(param::SimplexParam)
-    _jl_glpk__check_simplex_param(param)
+    check_simplex_param(param)
     @glpk_ccall init_smcp Int32 (Ptr{Void},) pointer(param)
 end
 
 function get_status(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_status Int32 (Ptr{Void},) prob.p
 end
 
 function get_prim_stat(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_prim_stat Int32 (Ptr{Void},) prob.p
 end
 
 function get_dual_stat(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_dual_stat Int32 (Ptr{Void},) prob.p
 end
 
 function get_obj_val(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_obj_val Float64 (Ptr{Void},) prob.p
 end
 
 function get_row_stat(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall get_row_stat Int32 (Ptr{Void}, Int32) prob.p row
 end
 
 function get_row_prim(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall get_row_prim Float64 (Ptr{Void}, Int32) prob.p row
 end
 
 function get_row_dual(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall get_row_dual Float64 (Ptr{Void}, Int32) prob.p row
 end
 
 function get_col_stat(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall get_col_stat Int32 (Ptr{Void}, Int32) prob.p col
 end
 
 function get_col_prim(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall get_col_prim Float64 (Ptr{Void}, Int32) prob.p col
 end
 
 function get_col_dual(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall get_col_dual Float64 (Ptr{Void}, Int32) prob.p col
 end
 
 function get_unbnd_ray(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_unbnd_ray Int32 (Ptr{Void},) prob.p
 end
 
 function interior{Tp<:Union(InteriorParam, Nothing)}(prob::Prob, param::Tp)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     if param == nothing
         param_ptr::Ptr{Void} = C_NULL
     else
@@ -1609,69 +1600,69 @@ end
 interior(prob::Prob) = interior(prob, nothing)
 
 function init_iptcp(param::InteriorParam)
-    _jl_glpk__check_interior_param(param)
+    check_interior_param(param)
     @glpk_ccall init_iptcp Int32 (Ptr{Void},) pointer(param)
 end
 
 function ipt_status(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall ipt_status Int32 (Ptr{Void},) prob.p
 end
 
 function ipt_obj_val(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall ipt_obj_val Float64 (Ptr{Void},) prob.p
 end
 
 function ipt_row_prim(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall ipt_row_prim Float64 (Ptr{Void}, Int32) prob.p row
 end
 
 function ipt_row_dual(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall ipt_row_dual Float64 (Ptr{Void}, Int32) prob.p row
 end
 
 function ipt_col_prim(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall ipt_col_prim Float64 (Ptr{Void}, Int32) prob.p col
 end
 
 function ipt_col_dual(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall ipt_col_dual Float64 (Ptr{Void}, Int32) prob.p col
 end
 
 function set_col_kind(prob::Prob, col::Integer, kind::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
-    _jl_glpk__check_kind_is_valid(kind)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
+    check_kind_is_valid(kind)
     @glpk_ccall set_col_kind Void (Ptr{Void}, Int32, Int32) prob.p col kind
 end
 
 function get_col_kind(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall get_col_kind Int32 (Ptr{Void}, Int32) prob.p col
 end
 
 function get_num_int(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_num_int Int32 (Ptr{Void},) prob.p
 end
 
 function get_num_bin(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall get_num_bin Int32 (Ptr{Void},) prob.p
 end
 
 function intopt{Tp<:Union(IntoptParam, Nothing)}(prob::Prob, param::Tp)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     if param == nothing
         param_ptr::Ptr{Void} = C_NULL
     else
@@ -1683,29 +1674,29 @@ end
 intopt(prob::Prob) = intopt(prob, nothing)
 
 function init_iocp(param::IntoptParam)
-    _jl_glpk__check_intopt_param(param)
+    check_intopt_param(param)
     @glpk_ccall init_iocp Int32 (Ptr{Void},) pointer(param)
 end
 
 function mip_status(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall mip_status Int32 (Ptr{Void},) prob.p
 end
 
 function mip_obj_val(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall mip_obj_val Float64 (Ptr{Void},) prob.p
 end
 
 function mip_row_val(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall mip_row_val Float64 (Ptr{Void}, Int32) prob.p row
 end
 
 function mip_col_val(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall mip_col_val Float64 (Ptr{Void}, Int32) prob.p col
 end
 
@@ -1713,15 +1704,15 @@ end
 #function lpx_check_kkt(prob::Prob, scaled::Integer, kkt)
 
 function read_mps(prob::Prob, format::Integer, param, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_mps_format(format)
+    check_prob(prob)
+    check_mps_format(format)
     if is(param, nothing)
         param = C_NULL
     else
-        _jl_glpk__check_mps_param(param)
+        check_mps_param(param)
     end
 
-    _jl_glpk__check_file_is_readable(filename)
+    check_file_is_readable(filename)
     ret = @glpk_ccall read_mps Int32 (Ptr{Void}, Int32, Ptr{Void}, Ptr{Uint8}) prob.p format param bytestring(filename)
     if ret != 0
         throw(Error("Error reading MPS file"))
@@ -1733,14 +1724,14 @@ read_mps(prob::Prob, format::Integer, filename::String) =
     read_mps(prob, format, C_NULL, filename)
 
 function write_mps(prob::Prob, format::Integer, param, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_mps_format(format)
+    check_prob(prob)
+    check_mps_format(format)
     if is(param, nothing)
         param = C_NULL
     else
-        _jl_glpk__check_mps_param(param)
+        check_mps_param(param)
     end
-    _jl_glpk__check_file_is_writable(filename)
+    check_file_is_writable(filename)
     ret = @glpk_ccall write_mps Int32 (Ptr{Void}, Int32, Ptr{Void}, Ptr{Uint8}) prob.p format param bytestring(filename)
     if ret != 0
         throw(Error("Error writing MPS file"))
@@ -1752,9 +1743,9 @@ write_mps(prob::Prob, format::Integer, filename::String) =
     write_mps(prob, format, C_NULL, filename)
 
 function read_lp(prob::Prob, param, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_lp_param(param)
-    _jl_glpk__check_file_is_readable(filename)
+    check_prob(prob)
+    check_lp_param(param)
+    check_file_is_readable(filename)
     ret = @glpk_ccall read_lp Int32 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}) prob.p param bytestring(filename)
     if ret != 0
         throw(Error("Error reading LP file"))
@@ -1766,9 +1757,9 @@ read_lp(prob::Prob, filename::String) =
     read_lp(prob, C_NULL, filename)
 
 function write_lp(prob::Prob, param, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_lp_param(param)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_lp_param(param)
+    check_file_is_writable(filename)
     ret = @glpk_ccall write_lp Int32 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}) prob.p param bytestring(filename)
     if ret != 0
         throw(Error("Error writing LP file"))
@@ -1780,9 +1771,9 @@ write_lp(prob::Prob, filename::String) =
     write_lp(prob, C_NULL, filename)
 
 function read_prob(prob::Prob, flags::Integer, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_read_prob_flags(flags)
-    _jl_glpk__check_file_is_readable(filename)
+    check_prob(prob)
+    check_read_prob_flags(flags)
+    check_file_is_readable(filename)
     @glpk_ccall read_prob Int32 (Ptr{Void}, Int32, Ptr{Uint8}) prob.p flags bytestring(filename)
 end
 
@@ -1790,9 +1781,9 @@ read_prob(prob::Prob, filename::String) =
     read_prob(prob, 0, filename)
 
 function write_prob(prob::Prob, flags::Integer, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_write_prob_flags(flags)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_write_prob_flags(flags)
+    check_file_is_writable(filename)
     @glpk_ccall write_prob Int32 (Ptr{Void}, Int32, Ptr{Uint8}) prob.p flags bytestring(filename)
 end
 
@@ -1800,8 +1791,8 @@ write_prob(prob::Prob, filename::String) =
     write_prob(prob, 0, filename)
 
 function mpl_read_model(tran::MathProgWorkspace, filename::String, skip::Integer)
-    _jl_glpk__check_mpl_workspace(tran)
-    _jl_glpk__check_file_is_readable(filename)
+    check_mpl_workspace(tran)
+    check_file_is_readable(filename)
     ret = @glpk_ccall mpl_read_model Int32 (Ptr{Void}, Ptr{Uint8}, Int32) tran.p bytestring(filename) skip
     if ret != 0
         throw(Error("Error reading MathProg file"))
@@ -1810,8 +1801,8 @@ function mpl_read_model(tran::MathProgWorkspace, filename::String, skip::Integer
 end
 
 function mpl_read_data(tran::MathProgWorkspace, filename::String)
-    _jl_glpk__check_mpl_workspace(tran)
-    _jl_glpk__check_file_is_readable(filename)
+    check_mpl_workspace(tran)
+    check_file_is_readable(filename)
     ret = @glpk_ccall mpl_read_data Int32 (Ptr{Void}, Ptr{Uint8}) tran.p bytestring(filename)
     if ret != 0
         throw(Error("Error reading MathProg data file"))
@@ -1820,11 +1811,11 @@ function mpl_read_data(tran::MathProgWorkspace, filename::String)
 end
 
 function mpl_generate(tran::MathProgWorkspace, filename::Union(String, Nothing))
-    _jl_glpk__check_mpl_workspace(tran)
+    check_mpl_workspace(tran)
     if is(filename, nothing)
         cfilename = C_NULL
     else
-        _jl_glpk__check_file_is_writable(filename)
+        check_file_is_writable(filename)
         cfilename = bytestring(filename)
     end
     ret = @glpk_ccall mpl_generate Int32 (Ptr{Void}, Ptr{Uint8}) tran.p cfilename
@@ -1837,14 +1828,14 @@ end
 mpl_generate(tran::MathProgWorkspace) = mpl_generate(tran, nothing)
 
 function mpl_build_prob(tran::MathProgWorkspace, prob::Prob)
-    _jl_glpk__check_mpl_workspace(tran)
-    _jl_glpk__check_prob(prob)
+    check_mpl_workspace(tran)
+    check_prob(prob)
     @glpk_ccall mpl_build_prob Void (Ptr{Void}, Ptr{Void}) tran.p prob.p
 end
 
 function mpl_postsolve(tran::MathProgWorkspace, prob::Prob, sol::Integer)
-    _jl_glpk__check_mpl_workspace(tran)
-    _jl_glpk__check_prob(prob)
+    check_mpl_workspace(tran)
+    check_prob(prob)
     if !(sol == SOL || sol == IPT || sol == MIP)
         throw(Error("Invalid parameter sol $sol (use GLPK.SOL, GLPK.IPT or GLPK.MIP)"))
     end
@@ -1856,8 +1847,8 @@ function mpl_postsolve(tran::MathProgWorkspace, prob::Prob, sol::Integer)
 end
 
 function print_sol(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_file_is_writable(filename)
     ret = @glpk_ccall print_sol Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error printing solution"))
@@ -1866,8 +1857,8 @@ function print_sol(prob::Prob, filename::String)
 end
 
 function read_sol(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_readable(filename)
+    check_prob(prob)
+    check_file_is_readable(filename)
     ret = @glpk_ccall read_sol Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error reading solution"))
@@ -1876,8 +1867,8 @@ function read_sol(prob::Prob, filename::String)
 end
 
 function write_sol(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_file_is_writable(filename)
     ret = @glpk_ccall write_sol Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error writing solution"))
@@ -1886,8 +1877,8 @@ function write_sol(prob::Prob, filename::String)
 end
 
 function print_ipt(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_file_is_writable(filename)
     ret = @glpk_ccall print_ipt Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error printing interior point solution"))
@@ -1896,8 +1887,8 @@ function print_ipt(prob::Prob, filename::String)
 end
 
 function read_ipt(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_readable(filename)
+    check_prob(prob)
+    check_file_is_readable(filename)
     ret = @glpk_ccall read_ipt Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error reading interior point solution"))
@@ -1906,8 +1897,8 @@ function read_ipt(prob::Prob, filename::String)
 end
 
 function write_ipt(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_file_is_writable(filename)
     ret = @glpk_ccall write_ipt Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error writing interior point solution"))
@@ -1916,8 +1907,8 @@ function write_ipt(prob::Prob, filename::String)
 end
 
 function print_mip(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_file_is_writable(filename)
     ret = @glpk_ccall print_mip Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error printing mixed integer programming solution"))
@@ -1926,8 +1917,8 @@ function print_mip(prob::Prob, filename::String)
 end
 
 function read_mip(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_readable(filename)
+    check_prob(prob)
+    check_file_is_readable(filename)
     ret = @glpk_ccall read_mip Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error reading mixed integer programming solution"))
@@ -1936,8 +1927,8 @@ function read_mip(prob::Prob, filename::String)
 end
 
 function write_mip(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_file_is_writable(filename)
     ret = @glpk_ccall write_mip Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error writing mixed integer programming solution"))
@@ -1946,16 +1937,16 @@ function write_mip(prob::Prob, filename::String)
 end
 
 function print_ranges{Ti<:Integer}(prob::Prob, len::Integer, list::Vector{Ti}, flags::Integer, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_vectors_size(len, list)
-    _jl_glpk__check_status_is_optimal(prob)
-    _jl_glpk__check_bf_exists(prob)
-    _jl_glpk__check_print_ranges_flags(flags)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_vectors_size(len, list)
+    check_status_is_optimal(prob)
+    check_bf_exists(prob)
+    check_print_ranges_flags(flags)
+    check_file_is_writable(filename)
 
     if len > 0
         list32 = int32(list)
-        _jl_glpk__check_list_ids(prob, len, list32)
+        check_list_ids(prob, len, list32)
 
         off32 = sizeof(Int32)
         list32p = pointer(list32) - off32
@@ -1976,49 +1967,49 @@ print_ranges{Ti<:Integer}(prob::Prob, list::Vector{Ti}, filename::String) =
     print_ranges(prob, length(list), list, 0, filename)
 
 function print_ranges(prob::Prob, len::Integer, list::VecOrNothing, flags::Integer, filename::String)
-    list = _jl_glpk__convert_vecornothing(Int32, list)
+    list = convert_vecornothing(Int32, list)
     print_ranges(prob, len, list, flags, filename)
 end
 
 print_ranges(prob::Prob, list::VecOrNothing, flags::Integer, filename::String) =
-    print_ranges(prob, _jl_glpk__vecornothing_length(list), list, flags, filename)
+    print_ranges(prob, vecornothing_length(list), list, flags, filename)
 
 print_ranges(prob::Prob, len::Integer, list::VecOrNothing, filename::String) =
     print_ranges(prob, len, list, 0, filename)
 
 print_ranges(prob::Prob, list::VecOrNothing, filename::String) =
-    print_ranges(prob, _jl_glpk__vecornothing_length(list), list, 0, filename)
+    print_ranges(prob, vecornothing_length(list), list, 0, filename)
 
 print_ranges(prob::Prob, filename::String) =
     print_ranges(prob, 0, nothing, 0, filename)
 
 function bf_exists(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall bf_exists Int32 (Ptr{Void},) prob.p
 end
 
 function factorize(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall factorize Int32 (Ptr{Void},) prob.p
 end
 
 function bf_updated(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall bf_updated Int32 (Ptr{Void},) prob.p
 end
 
 function get_bfcp(prob::Prob, param::BasisFactParam)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bfcp(param)
+    check_prob(prob)
+    check_bfcp(param)
     @glpk_ccall get_bfcp Void (Ptr{Void}, Ptr{Void}) prob.p pointer(param)
 end
 
 function set_bfcp(prob::Prob, param::Union(BasisFactParam,Nothing))
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     if is(param, nothing)
         param_p = C_NULL
     else
-        _jl_glpk__check_bfcp(param)
+        check_bfcp(param)
         param_p = pointer(param)
     end
     @glpk_ccall set_bfcp Void (Ptr{Void}, Ptr{Void}) prob.p param_p
@@ -2026,51 +2017,51 @@ end
 set_bfcp(prob::Prob) = set_bfcp(prob, nothing)
 
 function get_bhead(prob::Prob, k::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_row_is_valid(prob, k)
+    check_prob(prob)
+    check_row_is_valid(prob, k)
     @glpk_ccall get_bhead Int32 (Ptr{Void}, Int32) prob.p k
 end
 
 function get_row_bind(prob::Prob, row::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
-    _jl_glpk__check_row_is_valid(prob, row)
+    check_prob(prob)
+    check_bf_exists(prob)
+    check_row_is_valid(prob, row)
     @glpk_ccall get_row_bind Int32 (Ptr{Void}, Int32) prob.p row
 end
 
 function get_col_bind(prob::Prob, col::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
-    _jl_glpk__check_col_is_valid(prob, col)
+    check_prob(prob)
+    check_bf_exists(prob)
+    check_col_is_valid(prob, col)
     @glpk_ccall get_col_bind Int32 (Ptr{Void}, Int32) prob.p col
 end
 
 function ftran(prob::Prob, x::Vector{Float64})
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
-    _jl_glpk__check_vectors_size(rows, x)
+    check_vectors_size(rows, x)
     off64 = sizeof(Float64)
     x64p = pointer(x) - off64
     @glpk_ccall ftran Void (Ptr{Void}, Ptr{Float64}) prob.p x64p
 end
 
 function btran(prob::Prob, x::Vector{Float64})
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
-    _jl_glpk__check_vectors_size(rows, x)
+    check_vectors_size(rows, x)
     off64 = sizeof(Float64)
     x64p = pointer(x) - off64
     @glpk_ccall btran Void (Ptr{Void}, Ptr{Float64}) prob.p x64p
 end
 
 function warm_up(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall warm_up Int32 (Ptr{Void},) prob.p
 end
 
 function eval_tab_row(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Float64})
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
+    check_prob(prob)
+    check_bf_exists(prob)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
 
@@ -2080,7 +2071,7 @@ function eval_tab_row(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Fl
         throw(Error("index out of bounds: $k (bounds are 1 <= k <= $k_max"))
     end
 
-    _jl_glpk__check_var_is_basic(prob, k)
+    check_var_is_basic(prob, k)
 
     grow(ind, k_max - length(ind))
     grow(val, k_max - length(val))
@@ -2099,8 +2090,8 @@ function eval_tab_row(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Fl
 end
 
 function eval_tab_row(prob::Prob, k::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
+    check_prob(prob)
+    check_bf_exists(prob)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
 
@@ -2110,7 +2101,7 @@ function eval_tab_row(prob::Prob, k::Integer)
         throw(Error("index out of bounds: $k (bounds are 1 <= k <= $k_max"))
     end
 
-    _jl_glpk__check_var_is_basic(prob, k)
+    check_var_is_basic(prob, k)
 
     ind = Array(Int32, k_max)
     val = Array(Float64, k_max)
@@ -2129,8 +2120,8 @@ function eval_tab_row(prob::Prob, k::Integer)
 end
 
 function eval_tab_col(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Float64})
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
+    check_prob(prob)
+    check_bf_exists(prob)
 
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
@@ -2141,7 +2132,7 @@ function eval_tab_col(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Fl
         throw(Error("index out of bounds: $k (bounds are 1 <= k <= $k_max"))
     end
 
-    _jl_glpk__check_var_is_non_basic(prob, k)
+    check_var_is_non_basic(prob, k)
 
     grow(ind, k_max - length(ind))
     grow(val, k_max - length(val))
@@ -2160,8 +2151,8 @@ function eval_tab_col(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Fl
 end
 
 function eval_tab_col(prob::Prob, k::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
+    check_prob(prob)
+    check_bf_exists(prob)
 
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
@@ -2172,7 +2163,7 @@ function eval_tab_col(prob::Prob, k::Integer)
         throw(Error("index out of bounds: $k (bounds are 1 <= k <= $k_max"))
     end
 
-    _jl_glpk__check_var_is_non_basic(prob, k)
+    check_var_is_non_basic(prob, k)
 
     ind = Array(Int32, k_max)
     val = Array(Float64, k_max)
@@ -2191,10 +2182,10 @@ function eval_tab_col(prob::Prob, k::Integer)
 end
 
 function transform_row(prob::Prob, len::Integer, ind::Vector{Int32}, val::Vector{Float64})
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
-    _jl_glpk__check_col_is_valid(prob, len)
-    _jl_glpk__check_vectors_size(len, ind, val)
+    check_prob(prob)
+    check_bf_exists(prob)
+    check_col_is_valid(prob, len)
+    check_vectors_size(len, ind, val)
 
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
 
@@ -2215,15 +2206,15 @@ function transform_row(prob::Prob, len::Integer, ind::Vector{Int32}, val::Vector
 end
 
 function transform_row(prob::Prob, ind::Vector{Int32}, val::Vector{Float64})
-    _jl_glpk__check_vectors_all_same_size(ind, val)
+    check_vectors_all_same_size(ind, val)
     transform_row(prob, length(ind), ind, val)
 end
 
 function transform_col(prob::Prob, len::Integer, ind::Vector{Int32}, val::Vector{Float64})
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
-    _jl_glpk__check_row_is_valid(prob, len)
-    _jl_glpk__check_vectors_size(len, ind, val)
+    check_prob(prob)
+    check_bf_exists(prob)
+    check_row_is_valid(prob, len)
+    check_vectors_size(len, ind, val)
 
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
 
@@ -2244,21 +2235,21 @@ function transform_col(prob::Prob, len::Integer, ind::Vector{Int32}, val::Vector
 end
 
 function transform_col(prob::Prob, ind::Vector{Int32}, val::Vector{Float64})
-    _jl_glpk__check_vectors_all_same_size(ind, val)
+    check_vectors_all_same_size(ind, val)
     transform_col(prob, length(ind), ind, val)
 end
 
 function prim_rtest{Ti<:Integer, Tv<:Real}(prob::Prob, len::Integer, ind::Vector{Ti}, val::Vector{Tv}, dir::Integer, eps::Real)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
-    _jl_glpk__check_is_prim_feasible(prob)
-    _jl_glpk__check_row_is_valid(prob, len)
-    _jl_glpk__check_vectors_size(len, ind, val)
-    _jl_glpk__check_dir_is_valid(dir)
-    _jl_glpk__check_eps_is_valid(eps)
+    check_prob(prob)
+    check_bf_exists(prob)
+    check_is_prim_feasible(prob)
+    check_row_is_valid(prob, len)
+    check_vectors_size(len, ind, val)
+    check_dir_is_valid(dir)
+    check_eps_is_valid(eps)
 
     for i = 1:len
-        _jl_glpk__check_var_is_basic(prob, ind[i])
+        check_var_is_basic(prob, ind[i])
     end
 
     ind32 = int32(ind)
@@ -2273,21 +2264,21 @@ function prim_rtest{Ti<:Integer, Tv<:Real}(prob::Prob, len::Integer, ind::Vector
 end
 
 function prim_rtest{Ti<:Integer, Tv<:Real}(prob::Prob, ind::Vector{Ti}, val::Vector{Tv}, dir::Integer, eps::Real)
-    _jl_glpk__check_vectors_all_same_size(ind, val)
+    check_vectors_all_same_size(ind, val)
     prim_rtest(prob, length(ind), ind, val, dir, eps)
 end
 
 function dual_rtest{Ti<:Integer, Tv<:Real}(prob::Prob, len::Integer, ind::Vector{Ti}, val::Vector{Tv}, dir::Integer, eps::Real)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
-    _jl_glpk__check_is_dual_feasible(prob)
-    _jl_glpk__check_col_is_valid(prob, len)
-    _jl_glpk__check_vectors_size(len, ind, val)
-    _jl_glpk__check_dir_is_valid(dir)
-    _jl_glpk__check_eps_is_valid(eps)
+    check_prob(prob)
+    check_bf_exists(prob)
+    check_is_dual_feasible(prob)
+    check_col_is_valid(prob, len)
+    check_vectors_size(len, ind, val)
+    check_dir_is_valid(dir)
+    check_eps_is_valid(eps)
 
     for i = 1:len
-        _jl_glpk__check_var_is_non_basic(prob, ind[i])
+        check_var_is_non_basic(prob, ind[i])
     end
 
     ind32 = int32(ind)
@@ -2302,7 +2293,7 @@ function dual_rtest{Ti<:Integer, Tv<:Real}(prob::Prob, len::Integer, ind::Vector
 end
 
 function dual_rtest{Ti<:Integer, Tv<:Real}(prob::Prob, ind::Vector{Ti}, val::Vector{Tv}, dir::Integer, eps::Real)
-    _jl_glpk__check_vectors_all_same_size(ind, val)
+    check_vectors_all_same_size(ind, val)
     dual_rtest(prob, length(ind), ind, val, dir, eps)
 end
 
@@ -2311,10 +2302,10 @@ function analyze_bound(prob::Prob, k, limit1, var1, limit2, var2)
 end
 
 function analyze_bound(prob::Prob, k::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
-    _jl_glpk__check_rowcol_is_valid(prob, k)
-    _jl_glpk__check_var_is_non_basic(prob, k)
+    check_prob(prob)
+    check_bf_exists(prob)
+    check_rowcol_is_valid(prob, k)
+    check_var_is_non_basic(prob, k)
 
     limit1 = Array(Float64, 1)
     var1 = Array(Int32, 1)
@@ -2331,10 +2322,10 @@ function analyze_coef(prob::Prob, k, coef1, var1, value1, coef2, var2, value2)
 end
 
 function analyze_coef(prob::Prob, k::Integer)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_bf_exists(prob)
-    _jl_glpk__check_rowcol_is_valid(prob, k)
-    _jl_glpk__check_var_is_basic(prob, k)
+    check_prob(prob)
+    check_bf_exists(prob)
+    check_rowcol_is_valid(prob, k)
+    check_var_is_basic(prob, k)
 
     coef1 = Array(Float64, 1)
     var1 = Array(Int32, 1)
@@ -2350,7 +2341,7 @@ end
 
 function init_env()
     ret = @glpk_ccall init_env Int32 ()
-    _jl_glpk__check_init_env_succeeded(ret)
+    check_init_env_succeeded(ret)
     return ret
 end
 
@@ -2359,13 +2350,13 @@ function free_env()
 end
 
 function term_out(flag::Integer)
-    _jl_glpk__check_term_out_flag(flag)
+    check_term_out_flag(flag)
     @glpk_ccall term_out Int32 (Int32,) flag
 end
 
 function open_tee(filename::String)
     ret = @glpk_ccall open_tee Int32 (Ptr{Uint8},) bytestring(filename)
-    _jl_glpk__check_open_tee_succeeded(ret)
+    check_open_tee_succeeded(ret)
     return ret
 end
 
@@ -2374,18 +2365,18 @@ function close_tee()
 end
 
 function malloc(size::Integer)
-    _jl_glpk__check_alloc_size(size)
+    check_alloc_size(size)
     @glpk_ccall malloc Ptr{Void} (Int32,) size
 end
 
 function calloc(n::Integer, size::Integer)
-    _jl_glpk__check_alloc_size(n)
-    _jl_glpk__check_alloc_size(size)
+    check_alloc_size(n)
+    check_alloc_size(size)
     @glpk_ccall calloc Ptr{Void} (Int32, Int32) n size
 end
 
 function free(ptr::Ptr)
-    _jl_glpk__check_pointer_is_valid(ptr)
+    check_pointer_is_valid(ptr)
     @glpk_ccall free Void (Ptr{Void},) ptr
 end
 
@@ -2430,47 +2421,47 @@ function difftime(t1::Integer, t0::Integer)
 end
 
 function sdf_open_file(filename::String)
-    _jl_glpk__check_file_is_readable(filename)
+    check_file_is_readable(filename)
     data_p = @glpk_ccall sdf_open_file Ptr{Void} (Ptr{Uint8},) bytestring(filename)
-    _jl_glpk__check_sdf_file_opened(data_p)
+    check_sdf_file_opened(data_p)
     return Data(data_p)
 end
 
 function sdf_read_int(data::Data)
-    _jl_glpk__check_data(data)
+    check_data(data)
     @glpk_ccall sdf_read_int Int32 (Ptr{Void},) pointer(data)
 end
 
 function sdf_read_num(data::Data)
-    _jl_glpk__check_data(data)
+    check_data(data)
     @glpk_ccall sdf_read_num Float64 (Ptr{Void},) pointer(data)
 end
 
 function sdf_read_item(data::Data)
-    _jl_glpk__check_data(data)
+    check_data(data)
     item_cstr = @glpk_ccall sdf_read_item Ptr{Uint8} (Ptr{Void},) pointer(data)
     return bytestring(item_cstr)
 end
 
 function sdf_read_text(data::Data)
-    _jl_glpk__check_data(data)
+    check_data(data)
     text_cstr = @glpk_ccall sdf_read_text Ptr{Uint8} (Ptr{Void},) pointer(data)
     return bytestring(text_cstr)
 end
 
 function sdf_line(data::Data)
-    _jl_glpk__check_data(data)
+    check_data(data)
     @glpk_ccall sdf_line Int32 (Ptr{Void},) pointer(data)
 end
 
 function sdf_close_file(data::Data)
-    _jl_glpk__check_data(data)
+    check_data(data)
     @glpk_ccall sdf_close_file Void (Ptr{Void},) pointer(data)
 end
 
 function read_cnfsat(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_readable(filename)
+    check_prob(prob)
+    check_file_is_readable(filename)
     ret = @glpk_ccall read_cnfsat Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error reading CNF file"))
@@ -2479,13 +2470,13 @@ function read_cnfsat(prob::Prob, filename::String)
 end
 
 function check_cnfsat(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall check_cnfsat Int32 (Ptr{Void},) prob.p
 end
 
 function write_cnfsat(prob::Prob, filename::String)
-    _jl_glpk__check_prob(prob)
-    _jl_glpk__check_file_is_writable(filename)
+    check_prob(prob)
+    check_file_is_writable(filename)
     ret = @glpk_ccall write_cnfsat Int32 (Ptr{Void}, Ptr{Uint8}) prob.p bytestring(filename)
     if ret != 0
         throw(Error("Error writing CNF file"))
@@ -2494,12 +2485,12 @@ function write_cnfsat(prob::Prob, filename::String)
 end
 
 function minisat1(prob::Prob)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     @glpk_ccall minisat1 Int32 (Ptr{Void},) prob.p
 end
 
 function intfeas1(prob::Prob, use_bound::Integer, obj_bound::Integer)
-    _jl_glpk__check_prob(prob)
+    check_prob(prob)
     # TODO : more checks:
     #   1) columns must be GLPK.BV od GLPK.FX
     #   2) constraints and objj coeffs must be integer

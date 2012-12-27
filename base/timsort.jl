@@ -13,7 +13,7 @@ typealias Run Range1{Int}
 const MIN_GALLOP = 7
 
 type MergeState
-    runs::Array{Run}
+    runs::Vector{Run}
     min_gallop::Int
 end
 MergeState() = MergeState(Run[], MIN_GALLOP)
@@ -45,16 +45,16 @@ for (suffix, lt, args) in (("",    (a,b)->:(isless($a,$b)), ()),
     timsort! = symbol("timsort$(suffix)!")
     timsort_perm = symbol("timsort_perm$(suffix)")
     timsort_perm! = symbol("timsort_perm$(suffix)!")
-    next_run = symbol("_jl_next_run$suffix")
-    merge_collapse = symbol("_jl_merge_collapse$suffix")
-    merge = symbol("_jl_merge$suffix")
-    merge_lo = symbol("_jl_merge_lo$suffix")
-    merge_hi = symbol("_jl_merge_hi$suffix")
+    next_run = symbol("next_run$suffix")
+    merge_collapse = symbol("merge_collapse$suffix")
+    merge = symbol("merge$suffix")
+    merge_lo = symbol("merge_lo$suffix")
+    merge_hi = symbol("merge_hi$suffix")
 
-    gallop_last = symbol("_jl_gallop_last$suffix")
-    gallop_first = symbol("_jl_gallop_first$suffix")
-    rgallop_last = symbol("_jl_rgallop_last$suffix")
-    rgallop_first = symbol("_jl_rgallop_first$suffix")
+    gallop_last = symbol("gallop_last$suffix")
+    gallop_first = symbol("gallop_first$suffix")
+    rgallop_last = symbol("rgallop_last$suffix")
+    rgallop_first = symbol("rgallop_first$suffix")
 @eval begin
 
 # Galloping binary search starting at left

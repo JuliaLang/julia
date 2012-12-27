@@ -501,3 +501,10 @@ end
 @test_fails NewEntity(Transform, Transform, Body, Body)
 @test isa(NewEntity(Transform, Transform), (Transform, Transform))
 @test_fails NewEntity(Transform, Transform, Body, Body)
+
+# issue #1826
+let
+    a = (1,2)
+    a,b = a
+    @test a==1 && b==2
+end

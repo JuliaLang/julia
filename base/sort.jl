@@ -82,27 +82,27 @@ export
 import Base.sort, Base.issorted, Base.sort, Base.sort!, Base.sortperm, Base.slt_int,
        Base.unbox, Base.sle_int, Base.length
 
-_jl_fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox(Float32,x),unbox(Float32,y))
-_jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox(Float64,x),unbox(Float64,y))
-_jl_fp_pos_le(x::Float32, y::Float32) = sle_int(unbox(Float32,x),unbox(Float32,y))
-_jl_fp_pos_le(x::Float64, y::Float64) = sle_int(unbox(Float64,x),unbox(Float64,y))
+fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox(Float32,x),unbox(Float32,y))
+fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox(Float64,x),unbox(Float64,y))
+fp_pos_le(x::Float32, y::Float32) = sle_int(unbox(Float32,x),unbox(Float32,y))
+fp_pos_le(x::Float64, y::Float64) = sle_int(unbox(Float64,x),unbox(Float64,y))
 
-_jl_fp_neg_lt(x::Float32, y::Float32) = slt_int(unbox(Float32,y),unbox(Float32,x))
-_jl_fp_neg_lt(x::Float64, y::Float64) = slt_int(unbox(Float64,y),unbox(Float64,x))
-_jl_fp_neg_le(x::Float32, y::Float32) = sle_int(unbox(Float32,y),unbox(Float32,x))
-_jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox(Float64,y),unbox(Float64,x))
+fp_neg_lt(x::Float32, y::Float32) = slt_int(unbox(Float32,y),unbox(Float32,x))
+fp_neg_lt(x::Float64, y::Float64) = slt_int(unbox(Float64,y),unbox(Float64,x))
+fp_neg_le(x::Float32, y::Float32) = sle_int(unbox(Float32,y),unbox(Float32,x))
+fp_neg_le(x::Float64, y::Float64) = sle_int(unbox(Float64,y),unbox(Float64,x))
 
 ## internal sorting functionality ##
 
-include("$JULIA_HOME/../share/julia/base/timsort.jl")
+include("timsort.jl")
 
 for (suffix, lt, args) in (("",    (a,b)->:(isless($a,$b)), ()),
                            ("_r",  (a,b)->:(isless($b,$a)), ()),
                            ("",    (a,b)->:(lt($a,$b)), (:(lt::Function),)),
                            ("_by", (a,b)->:(isless(by($a),by($b))), (:(by::Function),)),
                            ## special sorting for floating-point arrays ##
-                           ("_fp_pos", (a,b)->:(_jl_fp_pos_lt($a,$b)), ()),
-                           ("_fp_neg", (a,b)->:(_jl_fp_neg_lt($a,$b)), ()))
+                           ("_fp_pos", (a,b)->:(fp_pos_lt($a,$b)), ()),
+                           ("_fp_neg", (a,b)->:(fp_neg_lt($a,$b)), ()))
     insertionsort = symbol("insertionsort$(suffix)")
     insertionsort! = symbol("insertionsort$(suffix)!")
     insertionsort_perm = symbol("insertionsort_perm$(suffix)")
@@ -115,9 +115,9 @@ for (suffix, lt, args) in (("",    (a,b)->:(isless($a,$b)), ()),
     mergesort! = symbol("mergesort$(suffix)!")
     mergesort_perm = symbol("mergesort_perm$(suffix)")
     mergesort_perm! = symbol("mergesort_perm$(suffix)!")
-    pivot_middle = symbol("_jl_pivot_middle$(suffix)")
+    pivot_middle = symbol("pivot_middle$(suffix)")
     issorted = symbol("issorted$(suffix)")
-    _jl_quickselect = symbol("_jl_quickselect$(suffix)")
+    quickselect = symbol("quickselect$(suffix)")
     select = symbol("select$(suffix)")
     select! = symbol("select$(suffix)!")
     search_sorted = symbol("search_sorted$(suffix)")
@@ -194,7 +194,7 @@ function ($quicksort!)($(args...), a::AbstractVector, lo::Int, hi::Int)
         # pivot = (a[lo]+a[hi])/2                                               # 1.14x
           pivot = a[(lo+hi)>>>1]                                                # 1.15x
         # pivot = (a[lo]+a[hi]+a[(lo+hi)>>>1])/3                                # 1.16x
-        # pivot = _jl_pivot_middle($(args...), a[lo], a[hi], a[(lo+hi)>>>1])    # 1.23x
+        # pivot = pivot_middle($(args...), a[lo], a[hi], a[(lo+hi)>>>1])    # 1.23x
         # pivot = a[randival(lo,hi)]                                            # 1.28x
         while i <= j
             while $(lt(:(a[i]), :pivot)); i += 1; end
@@ -325,7 +325,7 @@ function ($issorted)($(args...), v::AbstractVector)
   return true
 end
 
-function ($_jl_quickselect)($(args...), a::AbstractArray, k::Int, lo::Int, hi::Int)
+function ($quickselect)($(args...), a::AbstractArray, k::Int, lo::Int, hi::Int)
     if k < lo || k > hi; error("k is out of bounds"); end
 
     while true
@@ -360,8 +360,8 @@ function ($_jl_quickselect)($(args...), a::AbstractArray, k::Int, lo::Int, hi::I
 
 end
 
-($select!)($(args...), a::AbstractArray, k::Int) = ($_jl_quickselect)($(args...), a, k, 1, length(a))
-($select)($(args...), a::AbstractArray, k::Int) = ($_jl_quickselect)($(args...), copy(a), k, 1, length(a))
+($select!)($(args...), a::AbstractArray, k::Int) = ($quickselect)($(args...), a, k, 1, length(a))
+($select)($(args...), a::AbstractArray, k::Int) = ($quickselect)($(args...), copy(a), k, 1, length(a))
 
 ($search_sorted)($(args...), a::Vector, x) = ($search_sorted_first)($(args...), a, x, 1, length(a))
 
@@ -376,7 +376,7 @@ function ($search_sorted_last)($(args...), a::Vector, x, lo::Int, hi::Int)
     hi = hi+1
     while lo < hi-1
         i = (lo+hi)>>>1
-        if isless(x,a[i])
+        if $(lt(:(x), :(a[i])))
             hi = i
         else
             lo = i
@@ -396,7 +396,7 @@ function ($search_sorted_first)($(args...), a::Vector, x, lo::Int, hi::Int)
     hi = hi+1
     while lo < hi-1
         i = (lo+hi)>>>1
-        if isless(a[i],x)
+        if $(lt(:(a[i]), :(x)))
             lo = i
         else
             hi = i
@@ -409,6 +409,20 @@ end
 ($sortperm!){T}($(args...), a::AbstractVector{T}, args2...) = ($mergesort_perm!)($(args...), a, args2...)
 
 end; end # @eval / for
+
+search_sorted_last_r(a::Ranges, x::Real) = search_sorted_last(a, x)
+search_sorted_first_r(a::Ranges, x::Real) = search_sorted_first(a, x)
+search_sorted_r(a::Ranges, x::Real) = search_sorted(a, x)
+search_sorted(a::Ranges, x::Real) = search_sorted_first(a, x)
+
+search_sorted_last(a::Ranges, x::Real) =
+    max(min(int(fld(x - a[1], step(a))) + 1, length(a)), 0)
+
+function search_sorted_first(a::Ranges, x::Real)
+    n = x - a[1]
+    s = step(a)
+    max(min(int(fld(n, s)) + (rem(n, s) != 0), length(a)), 0) + 1
+end
 
 ## external sorting functions ##
 
@@ -423,7 +437,7 @@ sort_by!{T}(by::Function, a::AbstractVector{T}) =
     mergesort_by!(by, a, 1, length(a), Array(T,length(a)))
 
 # push NaNs to the end of a, returning # of non-NaNs
-function _jl_nans_to_end{T<:FloatingPoint}(a::AbstractVector{T})
+function nans_to_end{T<:FloatingPoint}(a::AbstractVector{T})
     n = length(a)
     if n <= 1
         return n
@@ -450,12 +464,12 @@ function _jl_nans_to_end{T<:FloatingPoint}(a::AbstractVector{T})
 end
 
 function sort!{T<:FloatingPoint}(a::AbstractVector{T})
-    n = _jl_nans_to_end(a)
+    n = nans_to_end(a)
     i, j = 1, n
     while true
         # TODO: faster positive negative int check?
-        while i <= j && _jl_fp_pos_lt(a[i],zero(T)); i += 1; end
-        while i <= j && _jl_fp_pos_le(zero(T),a[j]); j -= 1; end
+        while i <= j && fp_pos_lt(a[i],zero(T)); i += 1; end
+        while i <= j && fp_pos_le(zero(T),a[j]); j -= 1; end
         if i <= j
             a[i], a[j] = a[j], a[i]
             i += 1
