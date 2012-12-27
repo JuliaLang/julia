@@ -17,7 +17,9 @@ type Regex
         end
         re = PCRE.compile(pat, opts & PCRE.COMPILE_MASK)
         ex = study ? PCRE.study(re) : C_NULL
-        new(pat, opts, re, ex)
+        re = new(pat, opts, re, ex)
+        ex != C_NULL && finalizer(re,re->PCRE.free_study(re.extra))
+        return re
     end
 end
 
