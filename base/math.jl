@@ -515,6 +515,8 @@ digamma(x::Real) = digamma(float64(x))
 
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
+@vectorize_2arg Number beta
+@vectorize_2arg Number lbeta
 
 const eta_coeffs =
     [.99999999999999999997,
