@@ -250,7 +250,7 @@ airybiprime(z) = airy(3,z)
 airy(k::Number, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
 airy(k::Number, x::Real) = airy(k, float(x))
 airy(k::Number, z::Complex64) = complex64(airy(k, complex128(z)))
-airy(k::Number, z::Complex) = airy(int(k), complex128(z))
+airy(k::Number, z::Complex) = airy(convert(Int,k), complex128(z))
 @vectorize_2arg Number airy
 
 let
