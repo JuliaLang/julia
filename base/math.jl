@@ -235,16 +235,23 @@ end
 end
 
 airy(z) = airy(0,z)
+@vectorize_1arg Number airy
 airyprime(z) = airy(1,z)
+@vectorize_1arg Number airyprime
 airyai(z) = airy(0,z)
+@vectorize_1arg Number airyai
 airyaiprime(z) = airy(1,z)
+@vectorize_1arg Number airyaiprime
 airybi(z) = airy(2,z)
+@vectorize_1arg Number airybi
 airybiprime(z) = airy(3,z)
+@vectorize_1arg Number airybiprime
 
-airy(k, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
-airy(k, x::Real) = airy(k, float(x))
-airy(k, z::Complex64) = complex64(airy(k, complex128(z)))
-airy(k, z::Complex) = airy(k, complex128(z))
+airy(k::Number, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
+airy(k::Number, x::Real) = airy(k, float(x))
+airy(k::Number, z::Complex64) = complex64(airy(k, complex128(z)))
+airy(k::Number, z::Complex) = airy(int(k), complex128(z))
+@vectorize_2arg Number airy
 
 let
     const cy::Array{Float64,1} = Array(Float64,2)
