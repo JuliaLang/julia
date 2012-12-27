@@ -1226,3 +1226,4 @@ end
 bsxfun(f, a, b) = f(a, b)
 bsxfun(f, a::AbstractArray, b) = f(a, b)
 bsxfun(f, a, b::AbstractArray) = f(a, b)
+bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)

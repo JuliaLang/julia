@@ -1767,13 +1767,39 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"erf",E"erf(x)
 
-   Compute the error function of \"x\"
+   Compute the error function of \"x\", defined by
+   \\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt for arbitrary complex
+   \"x\".
 
 "),
 
 (E"Mathematical Functions",E"Base",E"erfc",E"erfc(x)
 
-   Compute the complementary error function of \"x\"
+   Compute the complementary error function of \"x\", defined by 1 -
+   \\operatorname{erf}(x).
+
+"),
+
+(E"Mathematical Functions",E"Base",E"erfcx",E"erfcx(x)
+
+   Compute the scaled complementary error function of \"x\", defined
+   by e^{x^2} \\operatorname{erfc}(x).  Note also that
+   \\operatorname{erfcx}(-ix) computes the Faddeeva function w(x).
+
+"),
+
+(E"Mathematical Functions",E"Base",E"erfi",E"erfi(x)
+
+   Compute the imaginary error function of \"x\", defined by -i
+   \\operatorname{erf}(ix).
+
+"),
+
+(E"Mathematical Functions",E"Base",E"dawson",E"dawson(x)
+
+   Compute the Dawson function (scaled imaginary error function) of
+   \"x\", defined by \\frac{\\sqrt{\\pi}}{2} e^{-x^2}
+   \\operatorname{erfi}(x).
 
 "),
 
@@ -2508,6 +2534,13 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"bsxfun",E"bsxfun(fn, A, B[, C...])
+
+   Apply binary function \"fn\" to two or more arrays, with singleton
+   dimensions expanded.
+
+"),
+
 (E"Arrays",E"Base",E"ref",E"ref(A, ind)
 
    Returns a subset of \"A\" as specified by \"ind\", which may be an
@@ -2817,15 +2850,16 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"diag",E"diag(M)
+(E"Linear Algebra",E"Base",E"diag",E"diag(M[, k])
 
-   The diagonal of a matrix, as a vector
+   The \"k\"-th diagonal of a matrix, as a vector
 
 "),
 
-(E"Linear Algebra",E"Base",E"diagm",E"diagm(v)
+(E"Linear Algebra",E"Base",E"diagm",E"diagm(v[, k])
 
-   Construct a diagonal matrix from a vector
+   Construct a diagonal matrix and place \"v\" on the \"k\"-th
+   diagonal
 
 "),
 
@@ -2978,9 +3012,74 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"std",E"std(v)
+(E"Statistics",E"Base",E"std",E"std(v[, corrected])
 
-   Compute the standard deviation of a vector \"v\"
+   Compute the sample standard deviation of a vector \"v\". If the
+   optional argument \"corrected\" is either left unspecified or is
+   explicitly set to the default value of \"true\", then the algorithm
+   will return an estimator of the generative distribution's standard
+   deviation under the assumption that each entry of \"v\" is an IID
+   draw from that generative distribution. This computation is
+   equivalent to calculating \"sqrt(sum((v .- mean(v)).^2) /
+   (length(v) - 1))\" and involves an implicit correction term
+   sometimes called the Bessel correction which insures that the
+   estimator of the variance is unbiased. If, instead, the optional
+   argument \"corrected\" is set to \"false\", then the algorithm will
+   produce the equivalent of \"sqrt(sum((v .- mean(v)).^2) /
+   length(v))\", which is the empirical standard deviation of the
+   sample.
+
+"),
+
+(E"Statistics",E"Base",E"std",E"std(v, m[, corrected])
+
+   Compute the sample standard deviation of a vector \"v\" with known
+   mean \"m\". If the optional argument \"corrected\" is either left
+   unspecified or is explicitly set to the default value of \"true\",
+   then the algorithm will return an estimator of the generative
+   distribution's standard deviation under the assumption that each
+   entry of \"v\" is an IID draw from that generative distribution.
+   This computation is equivalent to calculating \"sqrt(sum((v .-
+   m).^2) / (length(v) - 1))\" and involves an implicit correction
+   term sometimes called the Bessel correction which insures that the
+   estimator of the variance is unbiased. If, instead, the optional
+   argument \"corrected\" is set to \"false\", then the algorithm will
+   produce the equivalent of \"sqrt(sum((v .- m).^2) / length(v))\",
+   which is the empirical standard deviation of the sample.
+
+"),
+
+(E"Statistics",E"Base",E"var",E"var(v[, corrected])
+
+   Compute the sample variance of a vector \"v\". If the optional
+   argument \"corrected\" is either left unspecified or is explicitly
+   set to the default value of \"true\", then the algorithm will
+   return an unbiased estimator of the generative distribution's
+   variance under the assumption that each entry of \"v\" is an IID
+   draw from that generative distribution. This computation is
+   equivalent to calculating \"sum((v .- mean(v)).^2) / (length(v) -
+   1)\" and involves an implicit correction term sometimes called the
+   Bessel correction. If, instead, the optional argument \"corrected\"
+   is set to \"false\", then the algorithm will produce the equivalent
+   of \"sum((v .- mean(v)).^2) / length(v)\", which is the empirical
+   variance of the sample.
+
+"),
+
+(E"Statistics",E"Base",E"var",E"var(v, m[, corrected])
+
+   Compute the sample variance of a vector \"v\" with known mean
+   \"m\". If the optional argument \"corrected\" is either left
+   unspecified or is explicitly set to the default value of \"true\",
+   then the algorithm will return an unbiased estimator of the
+   generative distribution's variance under the assumption that each
+   entry of \"v\" is an IID draw from that generative distribution.
+   This computation is equivalent to calculating \"sum((v .- m)).^2) /
+   (length(v) - 1)\" and involves an implicit correction term
+   sometimes called the Bessel correction. If, instead, the optional
+   argument \"corrected\" is set to \"false\", then the algorithm will
+   produce the equivalent of \"sum((v .- m)).^2) / length(v)\", which
+   is the empirical variance of the sample.
 
 "),
 
@@ -3000,6 +3099,186 @@ airyaiprime(x)
 
    Compute the histogram of \"v\" using a vector \"e\" as the edges
    for the bins
+
+"),
+
+(E"Statistics",E"Base",E"weighted_mean",E"weighted_mean(v, w)
+
+   Compute the weighted mean of \"v\" using a vector of weights \"w\"
+
+"),
+
+(E"Statistics",E"Base",E"mad",E"mad(v, m)
+
+   Compute the median absolute deviation from the entries of a vector
+   \"v\" relative to a known median \"m\". The calculation involves an
+   adjustment factor of 1.4826 required to insure that the estimator
+   is consistent for normally distributed data.
+
+"),
+
+(E"Statistics",E"Base",E"mad",E"mad(v)
+
+   Compute the median absolute deviation from the entries of a vector
+   \"v\" relative to the median of \"v\". The calculation involves an
+   adjustment factor of 1.4826 required to insure that the estimator
+   is consistent for normally distributed data.
+
+"),
+
+(E"Statistics",E"Base",E"skewness",E"skewness(v, m)
+
+   Compute the sample skewness of a vector \"v\" relative to a known
+   mean \"m\". Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"skewness",E"skewness(v)
+
+   Compute the sample skewness of a vector \"v\" relative to the
+   sample mean. Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v, m)
+
+   Compute the sample kurtosis of a vector \"v\" relative to a known
+   mean \"m\". Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v)
+
+   Compute the sample kurtosis of a vector \"v\" relative to the
+   sample mean. Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"quantile",E"quantile(v, p)
+
+   Compute the quantiles of a vector \"v\" at a specified set of
+   probability values \"p\".
+
+"),
+
+(E"Statistics",E"Base",E"quantile",E"quantile(v)
+
+   Compute the quantiles of a vector \"v\" at the probability values
+   \"[.0, .2, .4, .6, .8, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"quartile",E"quartile(v)
+
+   Compute the quartiles of a vector \"v\" at the probability values
+   \"[.0, .25, .5, .75, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"quintile",E"quintile(v)
+
+   Compute the quintiles of a vector \"v\" at the probability values
+   \"[.0, .2, .4, .6, .8, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"decile",E"decile(v)
+
+   Compute the deciles of a vector \"v\" at the probability values
+   \"[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"iqr",E"iqr(v)
+
+   Compute the interquantile range of a vector \"v\" at the
+   probability values \"[.25, .75]\".
+
+"),
+
+(E"Statistics",E"Base",E"tiedrank",E"tiedrank(v)
+
+   Compute the ranks of the entries of vector \"v\". Ties are resolved
+   by taking the average rank over all tied values.
+
+"),
+
+(E"Statistics",E"Base",E"cov_pearson",E"cov_pearson(v1, v2)
+
+   Compute the Pearson covariance between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cov_spearman",E"cov_spearman(v)
+
+   Compute the Spearman covariance between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cov",E"cov(v)
+
+   Compute the Pearson covariance between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cor_pearson",E"cor_pearson(v)
+
+   Compute the Pearson correlation between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cor_spearman",E"cor_spearman(v)
+
+   Compute the Spearman correlation between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cor",E"cor(v)
+
+   Compute the Pearson correlation between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"autocor",E"autocor(v, l)
+
+   Compute the Pearson autocorrelation of a vector \"v\" with itself
+   at lag \"l\".
+
+"),
+
+(E"Statistics",E"Base",E"autocor",E"autocor(v)
+
+   Compute the Pearson autocorrelation of a vector \"v\" with itself
+   at lag \"1\".
+
+"),
+
+(E"Statistics",E"Base",E"dist",E"dist(m)
+
+   Compute the distance matrix between all of the rows of \"m\".
+
+"),
+
+(E"Statistics",E"Base",E"rle",E"rle(v)
+
+   Compute a run-length encoding representation of a vector \"v\".
+
+"),
+
+(E"Statistics",E"Base",E"inverse_rle",E"inverse_rle(vals, lens)
+
+   Compute a vector from its run-length vector representation as
+   values \"vals\" and run lengths \"lens\".
 
 "),
 
