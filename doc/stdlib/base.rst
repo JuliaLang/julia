@@ -1533,6 +1533,10 @@ Mathematical operators and functions
 
 All mathematical operations and functions are supported for arrays
 
+.. function:: bsxfun(fn, A, B[, C...])
+
+   Apply binary function ``fn`` to two or more arrays, with singleton dimensions expanded.
+
 Indexing, Assignment, and Concatenation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

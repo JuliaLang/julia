@@ -172,9 +172,9 @@ the sorted array.  These are shown in the table below.
 Functions
 ---------
 
---------------
+----------------------
 General Sort Functions
---------------
+----------------------
 .. function:: sort(v)
 
    Sort a vector in ascending order, according to ``isless``.
