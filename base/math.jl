@@ -636,11 +636,13 @@ end
 eta(x::Integer) = eta(float64(x))
 eta(x::Real)    = oftype(x,eta(float64(x)))
 eta(z::Complex) = oftype(z,eta(complex128(z)))
+@vectorize_1arg Number eta
 
 function zeta(z::Number)
     zz = 2^z
     eta(z) * zz/(zz-2)
 end
+@vectorize_1arg Number zeta
 
 const Faddeeva_tmp = Array(Float64,2)
 
