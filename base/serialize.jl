@@ -437,21 +437,3 @@ function deserialize(s, t::CompositeKind)
         return x
     end
 end
-
-# custom serialize & deserialize for Regex objects
-
-function serialize(s, re::Regex)
-    serialize_type(s, Regex)
-    write(s, uint32(length(re.pattern.data)))
-    write(s, re.pattern.data)
-    write(s, re.options)
-    write(s, re.extra != C_NULL)
-end
-
-function deserialize(s, ::Type{Regex})
-    len     = read(s, Uint32)
-    pattern = bytestring(read(s,Array(Uint8,len)))
-    options = read(s, Int32)
-    study   = read(s, Bool)
-    Regex(pattern, options, study)
-end

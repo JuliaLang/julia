@@ -8,22 +8,19 @@ type Regex
     pattern::ByteString
     options::Int32
     regex::Array{Uint8}
-    extra::Ptr{Void}
 
-    function Regex(pat::String, opts::Integer, study::Bool)
-        pat = bytestring(pat); opts = int32(opts)
+    function Regex(pattern::String, options::Integer)
+        pattern = bytestring(pattern)
+        options = int32(options)
         if (opts & ~PCRE.OPTIONS_MASK) != 0
             error("invalid regex option(s)")
         end
-        re = PCRE.compile(pat, opts & PCRE.COMPILE_MASK)
-        ex = study ? PCRE.study(re) : C_NULL
-        re = new(pat, opts, re, ex)
-        ex != C_NULL && finalizer(re,re->PCRE.free_study(re.extra))
-        return re
+        regex = PCRE.compile(pattern, options & PCRE.COMPILE_MASK)
+        new(pattern, options, regex)
     end
 end
 
-function Regex(pattern::String, flags::String, study::Bool)
+function Regex(pattern::String, flags::String)
     options = DEFAULT_OPTS
     for f in flags
         options |= f=='i' ? PCRE.CASELESS  :
@@ -32,12 +29,9 @@ function Regex(pattern::String, flags::String, study::Bool)
                    f=='x' ? PCRE.EXTENDED  :
                    error("unknown regex flag: $f")
     end
-    Regex(pattern, options, study)
+    Regex(pattern, options)
 end
-Regex(p::String, o::Integer) = Regex(p, o, false)
-Regex(p::String, f::String)  = Regex(p, f, false)
-Regex(p::String, s::Bool)    = Regex(p, DEFAULT_OPTS, s)
-Regex(p::String)             = Regex(p, DEFAULT_OPTS, false)
+Regex(pattern::String) = Regex(pattern, DEFAULT_OPTS)
 
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
@@ -88,14 +82,14 @@ function show(io, m::RegexMatch)
 end
 
 ismatch(r::Regex, s::String, o::Integer) =
-    PCRE.exec(r.regex, r.extra, bytestring(s), 0, o, false)
+    PCRE.exec(r.regex, C_NULL, bytestring(s), 0, o, false)
 ismatch(r::Regex, s::String) = ismatch(r, s, r.options & PCRE.EXECUTE_MASK)
 
 contains(s::String, r::Regex, opts::Integer) = ismatch(r,s,opts)
 contains(s::String, r::Regex)                = ismatch(r,s)
 
 function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
-    m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
+    m, n = PCRE.exec(re.regex, C_NULL, str, idx-1, opts, true)
     if isempty(m); return nothing; end
     mat = str[m[1]+1:m[2]]
     cap = Union(Nothing,ByteString)[
@@ -113,7 +107,7 @@ function search(str::ByteString, re::Regex, idx::Integer)
         return idx == len+2 ? (0,0) : error(BoundsError)
     end
     opts = re.options & PCRE.EXECUTE_MASK
-    m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
+    m, n = PCRE.exec(re.regex, C_NULL, str, idx-1, opts, true)
     isempty(m) ? (0,0) : (m[1]+1,m[2]+1)
 end
 search(s::String, r::Regex, idx::Integer) = error("regex search is only available for bytestrings; use bytestring(s) to convert")
