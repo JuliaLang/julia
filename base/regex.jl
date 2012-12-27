@@ -6,13 +6,13 @@ const DEFAULT_OPTS = PCRE.UTF8
 
 type Regex
     pattern::ByteString
-    options::Int32
+    options::Uint32
     regex::Array{Uint8}
 
     function Regex(pattern::String, options::Integer)
         pattern = bytestring(pattern)
-        options = int32(options)
-        if (opts & ~PCRE.OPTIONS_MASK) != 0
+        options = uint32(options)
+        if (options & ~PCRE.OPTIONS_MASK) != 0
             error("invalid regex option(s)")
         end
         regex = PCRE.compile(pattern, options & PCRE.COMPILE_MASK)
