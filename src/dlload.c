@@ -20,7 +20,7 @@ static char *extensions[] = { "", ".dylib" };
 static char *extensions[] = { ".dll" };
 #define N_EXTENSIONS 1
 #else
-static char *extensions[] = { ".so", "" };
+static char *extensions[] = { ".so.1", ".so", "" };
 #define N_EXTENSIONS 2
 #endif
 
