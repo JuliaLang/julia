@@ -1,8 +1,12 @@
 include Versions.make
 
-## optional packages ##
+## optional packages and options #
+LLVM_ASSERTIONS = 0
 # set to 1 to get clang and compiler-rt
 BUILD_LLVM_CLANG = 0
+# set to 1 to get lldb (does not work with llvm3.1 and earlier)
+# see http://lldb.llvm.org/build.html for dependancies
+BUILD_LLDB = 0
 
 ## high-level setup ##
 
@@ -97,12 +101,21 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(BUILD): $(DIRS)
 
 ## LLVM ##
+ifeq ($(BUILD_LLDB), 1)
+BUILD_LLVM_CLANG = 1
+# because it's a build requirement
+endif
+ifeq ($(LLVM_ASSERTIONS), 1)
+LLVM_BUILDDIR = Release+Asserts
+else
+LLVM_BUILDDIR = Release
+endif
 
 LLVM_OBJ_TARGET = $(BUILD)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 ifeq ($(OS),WINNT)
-	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/bin/LLVM-$(LLVM_VER).$(SHLIB_EXT)
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/LLVM-$(LLVM_VER).$(SHLIB_EXT)
 else
-	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 endif
 
 compile-llvm: $(LLVM_OBJ_SOURCE)
@@ -143,6 +156,11 @@ endif
 $(LLVM_TAR):
 	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
 
+ifeq ($(BUILD_LLDB), 1)
+llvm-$(LLVM_VER)/tools/lldb:
+llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER)/tools/lldb
+endif
+
 llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR)
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $(LLVM_TAR)
@@ -153,6 +171,14 @@ endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
 	tar -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
+endif
+ifeq ($(BUILD_LLDB), 1)
+	([ ! -d llvm-$(LLVM_VER)/tools/lldb ] && \
+		(cd llvm-$(LLVM_VER)/tools && \
+		git clone http://llvm.org/git/lldb.git)) || \
+	([ -d llvm-$(LLVM_VER)/tools/lldb ] && \
+		(cd llvm-$(LLVM_VER)/tools/lldb && \
+		git pull))
 endif
 	touch $@
 
@@ -170,11 +196,26 @@ ifeq ($(ARCH), ppc64)
   LLVM_CXX += -mminimal-toc
 endif
 
+LLVM_FLAGS = --prefix=$(abspath $(BUILD)) --disable-threads --enable-optimized --disable-profiling --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(LLVM_CXX)"
+LLVM_MFLAGS =
+ifeq ($(LLVM_ASSERTIONS), 1)
+LLVM_FLAGS += --enable-assertions
+else
+LLVM_FLAGS += --disable-assertions
+endif
+ifeq ($(BUILD_LLDB),1)
+ifeq ($(USE_CLANG),1)
+LLVM_FLAGS += --enable-cxx11
+else
+LLVM_MFLAGS += CXXFLAGS=-std=c++0x
+endif
+endif
+
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	./configure --prefix=$(abspath $(BUILD)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(LLVM_CXX)" && \
-	$(MAKE)
+	./configure $(LLVM_FLAGS) && \
+	$(MAKE) $(LLVM_MFLAGS)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER) install

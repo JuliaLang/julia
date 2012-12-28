@@ -2185,7 +2185,7 @@ System
 
    Get the IP address of the local machine, as a string of the form "x.x.x.x".
 
-.. function:: cwd()
+.. function:: pwd()
 
    Get the current working directory.
 

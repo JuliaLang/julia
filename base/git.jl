@@ -20,7 +20,7 @@ branch() = readchomp(`git rev-parse --symbolic-full-name --abbrev-ref HEAD`)
 head() = readchomp(`git rev-parse HEAD`)
 
 function each_tagged_version()
-    git_dir = abs_path(dir())
+    git_dir = abspath(dir())
     @task for line in each_line(`git --git-dir=$git_dir show-ref --tags`)
         m = match(r"^([0-9a-f]{40}) refs/tags/(v\S+)$", line)
         if m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2])
@@ -48,7 +48,7 @@ function each_submodule(f::Function, recursive::Bool, dir::ByteString)
         end
     end
 end
-each_submodule(f::Function, r::Bool) = each_submodule(f, r, cwd())
+each_submodule(f::Function, r::Bool) = each_submodule(f, r, pwd())
 
 function read_config(file::String)
     cfg = Dict()

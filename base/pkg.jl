@@ -244,7 +244,7 @@ function clone(url::String)
     tmpdir = mktempdir()
     run(`git clone $url $tmpdir`)
     cd(tmpdir) do
-        gitdir = abs_path(readchomp(`git rev-parse --git-dir`))
+        gitdir = abspath(readchomp(`git rev-parse --git-dir`))
         Git.each_submodule(false) do name, path, sha1
             cd(path) do
                 run(`git fetch-pack $gitdir $sha1`)
@@ -481,7 +481,7 @@ version(pkg::String, ver::VersionNumber) = cd_pkgdir() do
         end
     end
     if isfile(file_path(pkg, "REQUIRE"))
-        file_copy(
+        cp(
             file_path(pkg, "REQUIRE"),
             file_path("METADATA", pkg, "versions", string(ver), "requires"))
     end
@@ -539,11 +539,11 @@ with the correct remote name for your repository."
                 cd(package_name) do
                     run(`git init`)
                     run(`git commit --allow-empty -m "Initial empty commit"`)
-                    file_create("LICENSE.md") # Should insert MIT content
-                    file_create("README.md")
-                    file_create("REQUIRE")
+                    touch("LICENSE.md") # Should insert MIT content
+                    touch("README.md")
+                    touch("REQUIRE")
                     mkdir("src")
-                    file_create(file_path("src", strcat(package_name, ".jl")))
+                    touch(file_path("src", strcat(package_name, ".jl")))
                     mkdir("test")
                     run(`git add --all`)
                     run(`git commit -m "Scaffold for Julia package $(package_name)"`)
