@@ -97,8 +97,10 @@ function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
     off = [ m[2i+1]::Int32+1 for i=1:n ]
     RegexMatch(mat, cap, m[1]+1, off)
 end
-match(r::Regex, s::String, i::Integer, o::Integer) =
+function match(r::Regex, s::String, i::Integer, o::Integer)
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
+    match(r, bytestring(s), i, o)
+end
 match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE.EXECUTE_MASK)
 match(r::Regex, s::String) = match(r, s, start(s))
 
