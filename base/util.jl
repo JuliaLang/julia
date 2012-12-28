@@ -443,6 +443,99 @@ function help(x)
     end
 end
 
+## Alternative help
+
+# Things copied from the upcoming metaprogramming module, plus some new ones
+is_expr_head(ex::Expr, s::Symbol) = ex.head == s
+is_expr_head(nonex, s::Symbol) = false
+
+function funcsym(ex::Expr)
+    tmp = ex.args[1]
+    if is_expr_head(tmp, :curly)
+        tmp = tmp.args[1]
+    end
+    return tmp
+end
+
+function funcsym_replace(ex::Expr, newsym::Symbol)
+    exout = copy(ex)
+    tmp = exout.args[1]
+    if is_expr_head(tmp, :curly)
+        exout.args[1].args[1] = newsym
+    else
+        exout.args[1] = newsym
+    end
+    return exout
+end
+funcsym_replace(ex::Expr, newname::ASCIIString) = funcsym_replace(ex, symbol(newname))
+
+
+# The next items are the core help functionality.
+# I called the lookup function "helpdoc" just to ease testing
+# without borking any current functionality; presumably this would be
+# integrated in some way.
+
+_doc_dict = Dict()
+
+macro doc(funcdec, helpstring)
+    fsym = funcsym(funcdec)
+    docsym = symbol("_doc_"*string(fsym))
+    docdec = funcsym_replace(funcdec, docsym)
+    # Get the argument signature by building the function
+    # This is surely the wrong way to do it!
+    eval(expr(:(=), Any[docdec, :(println($helpstring))]))
+    docfun = eval(docsym)
+    mt = methods(docfun)
+    d = mt.defs
+    while !isequal(d.next, ())
+        d = d.next
+    end
+    #
+    # NOTE: I'm not certain that it's always the last item in the method table;
+    # I could add a whole "store the method table before building the new version,
+    # and then find the new item" but this seems like throwing good effort after bad.
+    # So, let's just pretend it happened to find the right method
+    #
+    # Add the signature and help string to the dictionary
+    if !has(_doc_dict, docsym)
+        _doc_dict[docsym] = (Any[d.sig], ByteString[helpstring])
+    else
+        p = _doc_dict[docsym]
+        push(p[1], d.sig)
+        push(p[2], helpstring)
+    end
+end
+
+function helpdoc(f::Function, args...)
+    mt = methods(f) # to get the name of the function
+    fsym = mt.name
+    docsym = symbol("_doc_"*string(fsym))
+    if !has(_doc_dict, docsym)
+        error("No helpdoc available for ", fsym)
+    end
+    p = _doc_dict[docsym]
+    println("Help for ", fsym, ":")
+    helpstrings = p[2]
+    if isempty(args)
+        # Print all the help strings
+        for i = 1:length(helpstrings)
+            println(helpstrings[i])
+        end
+    else
+        # If arguments are not types, convert them
+        argtypes = map(a->(isa(a,Type) ? a : typeof(a)), args)
+        # Print the help string for any intersecting set of arguments
+        sigs = p[1]
+        helpstrings = p[2]
+        for i = 1:length(sigs)
+            argi = tintersect(sigs[i][1:length(argtypes)], argtypes)
+            if !isequal(argi, None)
+                println(helpstrings[i])
+            end
+        end
+    end
+end
+
 # misc
 
 times(f::Function, n::Int) = for i=1:n f() end

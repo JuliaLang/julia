@@ -1086,6 +1086,7 @@ export
     edit,
     methods,
     help,
+    helpdoc,
     less,
     names,
     module_name,
@@ -1362,4 +1363,5 @@ export
     @vectorize_2arg,
     @show,
     @printf,
-    @sprintf
+    @sprintf,
+    @doc
