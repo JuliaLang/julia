@@ -96,3 +96,53 @@ function <=(l::Set, r::Set)
 end
 
 unique(C) = elements(add_each(Set{eltype(C)}(), C))
+
+
+# set operators for vectors
+# to do set stuff with vectors, turn the B vector into a set, then 
+# iterate over the a vector, creating a set to remove dupes.
+# This is moderately efficient, preserves order, and removes dupes.
+function intersect{T}(a::Vector{T}, b::Vector)
+    bset = Set(b...)
+    aset = Set()
+    ret = T[]
+    for a_elem in a 
+        if has(bset, a_elem) && !has(aset, a_elem)
+            push(ret, a_elem)
+            add(aset, a_elem)
+        end
+    end
+    ret
+end
+function union{T,U}(a::Vector{T}, b::Vector{U})
+    TUtype = promote_type(T, U)
+    ret = Array(TUtype,0)
+    seen = Set{TUtype}()
+    for a_elem in a
+        if !has(seen, a_elem)
+            push(ret, a_elem)
+            add(seen, a_elem)
+        end
+    end
+    for b_elem in b
+        if !has(seen, b_elem)
+            push(ret, b_elem)
+            add(seen, b_elem)
+        end
+    end
+    ret
+end
+function setdiff{T}(a::Vector{T}, b::Vector)
+    bset = Set(b...)
+    ret = T[]
+    seen = Set{T}()
+    for a_elem in a
+        if !has(seen, a_elem) && !has(bset, a_elem)
+            push(ret, a_elem)
+            add(seen, a_elem)
+        end
+    end
+    ret
+end
+
+
