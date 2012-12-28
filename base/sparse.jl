@@ -654,7 +654,7 @@ end # macro
 # Reductions
 
 # TODO: Should the results of sparse reductions be sparse?
-function areduce{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region::Dimspec, v0)
+function areduce{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
     if region == 1
 
         S = Array(Tv, 1, A.n)
@@ -702,20 +702,20 @@ function areduce{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region::Dimspec,
 end
 
 max{T}(A::SparseMatrixCSC{T}) = areduce(max,A,(1,2),typemin(T))
-max{T}(A::SparseMatrixCSC{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T))
+max{T}(A::SparseMatrixCSC{T}, b::(), region) = areduce(max,A,region,typemin(T))
 
 min{T}(A::SparseMatrixCSC{T}) = areduce(min,A,(1,2),typemax(T))
-min{T}(A::SparseMatrixCSC{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T))
+min{T}(A::SparseMatrixCSC{T}, b::(), region) = areduce(min,A,region,typemax(T))
 
 sum{T}(A::SparseMatrixCSC{T}) = areduce(+,A,(1,2),zero(T))
-sum{T}(A::SparseMatrixCSC{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
+sum{T}(A::SparseMatrixCSC{T}, region)  = areduce(+,A,region,zero(T))
 
 prod{T}(A::SparseMatrixCSC{T}) = areduce(*,A,(1,2),one(T))
-prod{T}(A::SparseMatrixCSC{T}, region::Dimspec) = areduce(*,A,region,one(T))
+prod{T}(A::SparseMatrixCSC{T}, region) = areduce(*,A,region,one(T))
 
-#all(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(all,A,region,true)
-#any(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(any,A,region,false)
-#sum(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(+,A,region,0,Int)
+#all(A::SparseMatrixCSC{Bool}, region) = areduce(all,A,region,true)
+#any(A::SparseMatrixCSC{Bool}, region) = areduce(any,A,region,false)
+#sum(A::SparseMatrixCSC{Bool}, region) = areduce(+,A,region,0,Int)
 #sum(A::SparseMatrixCSC{Bool}) = nnz(A)
 
 ## ref

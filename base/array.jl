@@ -1270,7 +1270,7 @@ indmin(a::Array) = findmin(a)[2]
 
 reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 : size(A,i)))
 
-areduce(f::Function, A, region::Dimspec, v0) =
+areduce(f::Function, A, region, v0) =
     areduce(f, A, region, v0, similar(A, reduced_dims(A, region)))
 
 # TODO:
@@ -1314,7 +1314,7 @@ function gen_areduce_func(n, f)
 end
 
 global areduce
-function areduce(f::Function, A, region::Dimspec, v0, R)
+function areduce(f::Function, A, region, v0, R)
     ndimsA = ndims(A)
 
     if is(areduce_cache,nothing)
@@ -1347,19 +1347,19 @@ function areduce(f::Function, A, region::Dimspec, v0, R)
 end
 end
 
-max{T}(A::AbstractArray{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T))
-min{T}(A::AbstractArray{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T))
-sum{T}(A::AbstractArray{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
-prod{T}(A::AbstractArray{T}, region::Dimspec) = areduce(*,A,region,one(T))
+max{T}(A::AbstractArray{T}, b::(), region) = areduce(max,A,region,typemin(T))
+min{T}(A::AbstractArray{T}, b::(), region) = areduce(min,A,region,typemax(T))
+sum{T}(A::AbstractArray{T}, region)  = areduce(+,A,region,zero(T))
+prod{T}(A::AbstractArray{T}, region) = areduce(*,A,region,one(T))
 
-all(A::AbstractArray{Bool}, region::Dimspec) = areduce(all,A,region,true)
-any(A::AbstractArray{Bool}, region::Dimspec) = areduce(any,A,region,false)
-sum(A::AbstractArray{Bool}, region::Dimspec) = areduce(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
+all(A::AbstractArray{Bool}, region) = areduce(all,A,region,true)
+any(A::AbstractArray{Bool}, region) = areduce(any,A,region,false)
+sum(A::AbstractArray{Bool}, region) = areduce(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
 sum(A::AbstractArray{Bool}) = count(A)
 sum(A::StridedArray{Bool})  = count(A)
 prod(A::AbstractArray{Bool}) =
     error("use all() instead of prod() for boolean arrays")
-prod(A::AbstractArray{Bool}, region::Dimspec) =
+prod(A::AbstractArray{Bool}, region) =
     error("use all() instead of prod() for boolean arrays")
 
 function sum{T}(A::StridedArray{T})

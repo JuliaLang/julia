@@ -6,7 +6,6 @@ typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 
 typealias Indices{T<:Integer} Union(Integer, AbstractVector{T})
-typealias Dimspec Union(Int,Dims)
 
 typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
 
