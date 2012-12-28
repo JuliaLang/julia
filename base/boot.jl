@@ -142,7 +142,7 @@ export
     # object model functions
     apply, arraylen, arrayref, arrayset, arraysize, fieldtype, getfield,
     setfield, yieldto, throw, tuple, tuplelen, tupleref, is, ===, isdefined,
-    convert_default, convert_tuple, include,
+    convert_default, convert_tuple,
     # type reflection
     subtype, typeassert, typeof, apply_type, isa,
     # method reflection

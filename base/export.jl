@@ -1100,8 +1100,10 @@ export
 # loading source files
     evalfile,
     find_in_path,
+    include,
     include_string,
-    load,
+    load,  # deprecated
+    reload,
     require,
     julia_pkgdir,
     

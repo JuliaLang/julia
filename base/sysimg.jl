@@ -3,6 +3,8 @@ baremodule Base
 eval(x) = Core.eval(Base,x)
 eval(m,x) = Core.eval(m,x)
 
+include = Core.include
+
 include("export.jl")
 
 if false
@@ -149,6 +151,8 @@ include("linalg_sparse.jl")
 include("fftw.jl")
 include("dsp.jl")
 using DSP
+
+include = include_from_node1
 
 # prime method cache with some things we know we'll need right after startup
 compile_hint(cwd, ())
