@@ -235,16 +235,23 @@ end
 end
 
 airy(z) = airy(0,z)
+@vectorize_1arg Number airy
 airyprime(z) = airy(1,z)
+@vectorize_1arg Number airyprime
 airyai(z) = airy(0,z)
+@vectorize_1arg Number airyai
 airyaiprime(z) = airy(1,z)
+@vectorize_1arg Number airyaiprime
 airybi(z) = airy(2,z)
+@vectorize_1arg Number airybi
 airybiprime(z) = airy(3,z)
+@vectorize_1arg Number airybiprime
 
-airy(k, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
-airy(k, x::Real) = airy(k, float(x))
-airy(k, z::Complex64) = complex64(airy(k, complex128(z)))
-airy(k, z::Complex) = airy(k, complex128(z))
+airy(k::Number, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
+airy(k::Number, x::Real) = airy(k, float(x))
+airy(k::Number, z::Complex64) = complex64(airy(k, complex128(z)))
+airy(k::Number, z::Complex) = airy(convert(Int,k), complex128(z))
+@vectorize_2arg Number airy
 
 let
     const cy::Array{Float64,1} = Array(Float64,2)
@@ -362,10 +369,12 @@ besselh(nu, z) = besselh(nu, 1, z)
 besselh(nu::Real, k::Integer, z::Complex64) = complex64(besselh(float64(nu), k, complex128(z)))
 besselh(nu::Real, k::Integer, z::Complex) = besselh(float64(nu), k, complex128(z))
 besselh(nu::Real, k::Integer, x::Real) = besselh(float64(nu), k, complex128(x))
+@vectorize_2arg Number besselh
 
 besseli(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
 besseli(nu::Real, z::Complex) = besseli(float64(nu), complex128(z))
 besseli(nu::Real, x::Real) = besseli(float64(nu), complex128(x))
+@vectorize_2arg Number besseli
 
 function besselj(nu::FloatingPoint, x::FloatingPoint)
     ans = besselj(float64(nu), complex128(x))
@@ -376,17 +385,24 @@ besselj(nu::Real, z::Complex64) = complex64(besselj(float64(nu), complex128(z)))
 besselj(nu::Real, z::Complex) = besselj(float64(nu), complex128(z))
 besselj(nu::Integer, x::Real) = besselj(nu, float(x))
 besselj(nu::Real, x::Real) = besselj(float(nu), float(x))
+@vectorize_2arg Number besselj
 
 besselk(nu::Real, z::Complex64) = complex64(besselk(float64(nu), complex128(z)))
 besselk(nu::Real, z::Complex) = besselk(float64(nu), complex128(z))
 besselk(nu::Real, x::Real) = besselk(float64(nu), complex128(x))
+@vectorize_2arg Number besselk
 
 bessely(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
 bessely(nu::Real, z::Complex) = bessely(float64(nu), complex128(z))
 bessely(nu::Real, x::Real) = bessely(float64(nu), complex128(x))
+@vectorize_2arg Number bessely
 
 hankelh1(nu, z) = besselh(nu, 1, z)
+@vectorize_2arg Number hankelh1
+
 hankelh2(nu, z) = besselh(nu, 2, z)
+@vectorize_2arg Number hankelh2
+
 
 function angle_restrict_symm(theta)
     P1 = 4 * 7.8539812564849853515625e-01
@@ -620,11 +636,13 @@ end
 eta(x::Integer) = eta(float64(x))
 eta(x::Real)    = oftype(x,eta(float64(x)))
 eta(z::Complex) = oftype(z,eta(complex128(z)))
+@vectorize_1arg Number eta
 
 function zeta(z::Number)
     zz = 2^z
     eta(z) * zz/(zz-2)
 end
+@vectorize_1arg Number zeta
 
 const Faddeeva_tmp = Array(Float64,2)
 
