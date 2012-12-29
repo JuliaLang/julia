@@ -5,7 +5,7 @@
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 
-typealias Indices{T<:Integer} Union(Integer, AbstractVector{T})
+typealias Indices{T<:Real} Union(Integer, AbstractVector{T})
 
 typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
 
@@ -65,13 +65,13 @@ function check_bounds(sz::Int, I::AbstractVector{Bool})
     end
 end
 
-function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
+function check_bounds{T <: Real}(sz::Int, I::Ranges{T})
     if min(I) < 1 || max(I) > sz
         throw(BoundsError())
     end
 end
 
-function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
+function check_bounds{T <: Real}(sz::Int, I::AbstractVector{T})
     for i in I
         if i < 1 || i > sz
             throw(BoundsError())
