@@ -11,8 +11,10 @@ showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
 macro show(exs...)
     blk = expr(:block)
     for ex in exs
-        push(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),repr($(esc(ex))))))
+        push(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),
+                                 repr(begin value=$(esc(ex)) end))))
     end
+    if !isempty(exs); push(blk.args, :value); end
     return blk
 end
 
