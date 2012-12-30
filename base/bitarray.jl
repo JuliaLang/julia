@@ -291,7 +291,7 @@ let ref_cache = nothing
         X = BitArray(ref_shape(I0, I...))
         nI = 1 + length(I)
 
-        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : x), I[1:nI-1])
+        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : indices(x)), I[1:nI-1])
 
         f0 = first(I0)
         l0 = length(I0)
