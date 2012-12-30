@@ -402,46 +402,23 @@ end
 readall(s::GZipStream) = readall(s, Z_BIG_BUFSIZE)
 
 # TODO: Create a c-wrapper based on gzreadline
-function readuntil(s::GZipStream, delim)
-    if delim == '\n'
-        return readline(s)
-    else
-        buf = memio(GZ_LINE_BUFSIZE, false)
-        c = read(s, Char)
-        print(buf, c)
-        while c != delim && !eof(s)
-            try
-                c = read(s, Char)
-                print(buf, c)
-            catch e
-                if !isa(e, EOFError)
-                    throw(e)
-                end
-            end
-        end
-        check_eof(s)
-        takebuf_string(buf)
-    end
-end
-
-
-function readline(s::GZipStream)
+function readuntil(s::GZipStream, c::Uint8)
     buf = Array(Uint8, GZ_LINE_BUFSIZE)
     pos = 1
 
     if gzgets(s, buf) == C_NULL      # Throws an exception on error
-        return ""
+        return buf[1:0]
     end
 
     while(true)
         # since gzgets didn't return C_NULL, there must be a \0 in the buffer
         eos = memchr(buf, '\0', pos)
-        if eos == 1 || buf[eos-1] == '\n'
-            return bytestring(buf[1:eos-1])
+        if eos == 1 || buf[eos-1] == c
+            return buf[1:eos-1]
         end
 
         # If we're at the end of the file, return the string
-        if eof(s)  return bytestring(buf[1:eos-1])  end
+        if eof(s)  return buf[1:eos-1]  end
 
         # Otherwise, append to the end of the previous buffer
 
@@ -454,7 +431,7 @@ function readline(s::GZipStream)
         if gzgets(s, pointer(buf)+pos-1, GZ_LINE_BUFSIZE) == C_NULL
             # eof(s); remove extra buffer space
             grow(buf, -GZ_LINE_BUFSIZE)
-            return bytestring(buf)
+            return buf
         end
     end
 end

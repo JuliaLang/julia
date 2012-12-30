@@ -122,7 +122,12 @@ function read(s::IO, ::Type{Char})
     char(c)
 end
 
-function readuntil(s::IO, delim)
+function readuntil(s::IO, delim::Char)
+    if delim < 0x80
+        data = readuntil(s, uint8(delim))
+        enc = byte_string_classify(data)
+        return (enc==1) ? ASCIIString(data) : UTF8String(data)
+    end
     out = memio()
     while !eof(s)
         c = read(s, Char)
@@ -132,6 +137,18 @@ function readuntil(s::IO, delim)
         end
     end
     takebuf_string(out)
+end
+
+function readuntil{T}(s::IO, delim::T)
+    out = T[]
+    while !eof(s)
+        c = read(s, T)
+        push(out, c)
+        if c == delim
+            break
+        end
+    end
+    out
 end
 
 readline(s::IO) = readuntil(s, '\n')
@@ -395,9 +412,8 @@ end
 
 write(x) = write(OUTPUT_STREAM::IOStream, x)
 
-function readuntil(s::IOStream, delim)
-    # TODO: faster versions that avoid the encoding check
-    ccall(:jl_readuntil, ByteString, (Ptr{Void}, Uint8), s.ios, delim)
+function readuntil(s::IOStream, delim::Uint8)
+    ccall(:jl_readuntil, Array{Uint8,1}, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
 function readall(s::IOStream)
