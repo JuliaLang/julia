@@ -64,7 +64,7 @@ function peakflops(n)
     a = rand(n,n)
     t = @elapsed a*a
     t = @elapsed a*a
-    floprate = (2.0*n^3/t)
+    floprate = (2.0*float64(n)^3/t)
     println("The peak flop rate is ", floprate*1e-9, " gigaflops")
     floprate
 end
@@ -248,8 +248,16 @@ function include_from_node1(path)
 end
 
 function reload_path(path)
+    had = has(package_list, path)
     package_list[path] = time()
-    eval(Main, :(Base.include_from_node1($path)))
+    try
+        eval(Main, :(Base.include_from_node1($path)))
+    catch e
+        if !had
+            del(package_list, path)
+        end
+        rethrow(e)
+    end
     nothing
 end
 
