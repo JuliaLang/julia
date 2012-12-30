@@ -279,10 +279,10 @@ function ref(B::BitArray, I::Real...)
 end
 
 # note: we can gain some performance if the first dimension is a range;
-# TODO: extend to I:Indices... (i.e. not necessarily contiguous)
+# TODO: extend to I:Union(Real,AbstractArray)... (i.e. not necessarily contiguous)
 let ref_cache = nothing
     global ref
-    function ref(B::BitArray, I0::Range1{Int}, I::Union(Real,AbstractArray)...)
+    function ref(B::BitArray, I0::Range1{Int}, I::Union(Real,Range1{Int})...)
         # the < should become a != once
         # the stricter indexing behaviour is enforced
         if ndims(B) < 1 + length(I)
