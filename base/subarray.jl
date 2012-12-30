@@ -188,7 +188,7 @@ function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
     ref(s.parent, t)
 end
 
-function ref(s::SubArray, I...)
+function ref(s::SubArray, I::Union(Real,AbstractArray)...)
     I = indices(I)
     n = ndims(s.parent)
     newindexes = Array(Any, n)
@@ -251,7 +251,7 @@ function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
     assign(s.parent, v, t)
 end
 
-function assign(s::SubArray, v, I...)
+function assign(s::SubArray, v, I::Union(Real,AbstractArray)...)
     I = indices(I)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)

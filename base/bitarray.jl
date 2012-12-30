@@ -282,7 +282,7 @@ end
 # TODO: extend to I:Indices... (i.e. not necessarily contiguous)
 let ref_cache = nothing
     global ref
-    function ref(B::BitArray, I0::Range1{Int}, I...)
+    function ref(B::BitArray, I0::Range1{Int}, I::Union(Real,AbstractArray)...)
         # the < should become a != once
         # the stricter indexing behaviour is enforced
         if ndims(B) < 1 + length(I)
@@ -291,7 +291,7 @@ let ref_cache = nothing
         X = BitArray(ref_shape(I0, I...))
         nI = 1 + length(I)
 
-        I = map(x->(isa(x,Integer) ? (x:x) : x), I[1:nI-1])
+        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : x), I[1:nI-1])
 
         f0 = first(I0)
         l0 = length(I0)
@@ -359,7 +359,7 @@ end
 
 let ref_cache = nothing
     global ref
-    function ref(B::BitArray, I...)
+    function ref(B::BitArray, I::Union(Real,AbstractArray)...)
         I = indices(I)
         X = BitArray(ref_shape(I...))
 
@@ -397,6 +397,7 @@ ref(B::BitArray, I::AbstractArray{Bool}) = ref_bool_1d(B, I)
 ref(B::BitMatrix, I::Real, J::AbstractVector{Bool}) = B[I, find(J)]
 ref(B::BitMatrix, I::AbstractVector{Bool}, J::Real) = B[find(I), J]
 ref(B::BitMatrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = B[find(I), find(J)]
+ref(B::BitMatrix, I::Range1{Int}, J::AbstractVector{Bool}) = B[I, find(J)]
 ref{T<:Real}(B::BitMatrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = B[I, find(J)]
 ref{T<:Real}(B::BitMatrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = B[find(I), J]
 
@@ -545,7 +546,7 @@ end
 
 let assign_cache = nothing
     global assign
-    function assign(B::BitArray, X::AbstractArray, I...)
+    function assign(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
         I = indices(I)
         nel = 1
         for idx in I
@@ -582,7 +583,7 @@ end
 
 let assign_cache = nothing
     global assign
-    function assign(B::BitArray, x, I...)
+    function assign(B::BitArray, x, I::Union(Real,AbstractArray)...)
         I = indices(I)
         if is(assign_cache,nothing)
             assign_cache = Dict()

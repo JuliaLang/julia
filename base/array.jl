@@ -264,7 +264,7 @@ end
 
 # note: this is also useful for Ranges
 function ref{T<:Real}(A::AbstractArray, I::AbstractVector{T})
-    return [ A[i] for i in I ]
+    return [ A[i] for i in indices(I) ]
 end
 
 # 2d indexing
@@ -300,13 +300,14 @@ function ref(A::Array, I::Range1{Int}, J::AbstractVector{Int})
     return X
 end
 
-ref{T<:Real}(A::Array, I::AbstractVector{T}, j::Real) = [ A[i,j] for i=I ]
-ref{T<:Real}(A::Array, I::Real, J::AbstractVector{T}) = [ A[i,j] for i=I,j=J ]
+ref{T<:Real}(A::Array, I::AbstractVector{T}, j::Real) = [ A[i,j] for i=indices(I) ]
+ref{T<:Real}(A::Array, I::Real, J::AbstractVector{T}) = [ A[i,j] for i=I,j=indices(J) ]
 
 # This next is a 2d specialization of the algorithm used for general
 # multidimensional indexing
 function ref{T<:Real}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
     check_bounds(A, I, J)
+    I = indices(I); J = indices(J)
     X = similar(A, ref_shape(I, J))
     storeind = 1
     for j = J
@@ -321,7 +322,7 @@ end
 # Multidimensional indexing
 let ref_cache = nothing
 global ref
-function ref(A::Array, I...)
+function ref(A::Array, I::Union(Real,AbstractArray)...)
     check_bounds(A, I...)
     I = indices(I)
     X = similar(A, ref_shape(I...))
@@ -524,7 +525,7 @@ end
 
 let assign_cache = nothing, assign_scalar_cache = nothing
 global assign
-function assign(A::Array, x, I...)
+function assign(A::Array, x, I::Union(Real,AbstractArray)...)
     check_bounds(A, I...)
     I = indices(I)
     if !isa(x,AbstractArray)

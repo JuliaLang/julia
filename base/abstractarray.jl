@@ -49,7 +49,8 @@ function trailingsize(A, n)
 end
 
 ## Bounds checking ##
-function check_bounds(sz::Int, I::Integer)
+function check_bounds(sz::Int, I::Real)
+    I = to_index(I)
     if I < 1 || I > sz
         throw(BoundsError())
     end
@@ -67,8 +68,9 @@ function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
     end
 end
 
-function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
+function check_bounds{T <: Real}(sz::Int, I::AbstractVector{T})
     for i in I
+        i = to_index(i)
         if i < 1 || i > sz
             throw(BoundsError())
         end
@@ -95,7 +97,7 @@ function check_bounds(A::AbstractArray, I, J)
     check_bounds(sz, J)
 end
 
-function check_bounds(A::AbstractArray, I...)
+function check_bounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
     n = length(I)
     if n > 0
         for dim = 1:(n-1)
@@ -415,10 +417,10 @@ end
 function gen_array_index_map(cache, genbody, ranges, exargnames, exargs...)
     N = length(ranges)
     if !has(cache,N)
-        dimargnames = {gensym() for i=1:N}#{ symbol(string("_d",i)) for i=1:N }
-        loopvars = {gensym() for i=1:N}#{ symbol(string("_l",i)) for i=1:N }
-        offsetvars = {gensym() for i=1:N}#{ symbol(string("_offs",i)) for i=1:N }
-        stridevars = {gensym() for i=1:N}#{ symbol(string("_stri",i)) for i=1:N }
+        dimargnames = { symbol(string("_d",i)) for i=1:N }
+        loopvars = { symbol(string("_l",i)) for i=1:N }
+        offsetvars = { symbol(string("_offs",i)) for i=1:N }
+        stridevars = { symbol(string("_stri",i)) for i=1:N }
         linearind = :_li
         body = genbody(linearind)
         fexpr = quote
@@ -1050,8 +1052,9 @@ function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
     return t
 end
 
-indices(I) = to_index(I)
-indices(I::Tuple) = map(to_index, I)
+indices(I) = I
+indices(I::AbstractArray{Bool,1}) = find(I)
+indices(I::Tuple) = map(indices, I)
 
 ## iteration utilities ##
 
