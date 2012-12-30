@@ -5,10 +5,6 @@
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 
-typealias Indices{T<:Integer} Union(Integer, AbstractVector{T})
-
-typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
-
 ## Basic functions ##
 
 size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
@@ -79,26 +75,18 @@ function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
     end
 end
 
-function check_bounds(A::AbstractVector, I::AbstractVector{Bool})
-    if !isequal(size(A), size(I)) throw(BoundsError()) end
-end
-
-function check_bounds(A::AbstractArray, I::AbstractVector{Bool})
-    if !isequal(size(A), size(I)) throw(BoundsError()) end
-end
-
 function check_bounds(A::AbstractArray, I::AbstractArray{Bool})
     if !isequal(size(A), size(I)) throw(BoundsError()) end
 end
 
-check_bounds(A::AbstractVector, I::Indices) = check_bounds(length(A), I)
+check_bounds(A::AbstractArray, I) = check_bounds(length(A), I)
 
-function check_bounds(A::AbstractMatrix, I::Indices, J::Indices)
+function check_bounds(A::AbstractMatrix, I, J)
     check_bounds(size(A,1), I)
     check_bounds(size(A,2), J)
 end
 
-function check_bounds(A::AbstractArray, I::Indices, J::Indices)
+function check_bounds(A::AbstractArray, I, J)
     check_bounds(size(A,1), I)
     sz = size(A,2)
     for i = 3:ndims(A)
@@ -107,7 +95,7 @@ function check_bounds(A::AbstractArray, I::Indices, J::Indices)
     check_bounds(sz, J)
 end
 
-function check_bounds(A::AbstractArray, I::Indices...)
+function check_bounds(A::AbstractArray, I...)
     n = length(I)
     if n > 0
         for dim = 1:(n-1)
@@ -427,10 +415,10 @@ end
 function gen_array_index_map(cache, genbody, ranges, exargnames, exargs...)
     N = length(ranges)
     if !has(cache,N)
-        dimargnames = { symbol(string("_d",i)) for i=1:N }
-        loopvars = { symbol(string("_l",i)) for i=1:N }
-        offsetvars = { symbol(string("_offs",i)) for i=1:N }
-        stridevars = { symbol(string("_stri",i)) for i=1:N }
+        dimargnames = {gensym() for i=1:N}#{ symbol(string("_d",i)) for i=1:N }
+        loopvars = {gensym() for i=1:N}#{ symbol(string("_l",i)) for i=1:N }
+        offsetvars = {gensym() for i=1:N}#{ symbol(string("_offs",i)) for i=1:N }
+        stridevars = {gensym() for i=1:N}#{ symbol(string("_stri",i)) for i=1:N }
         linearind = :_li
         body = genbody(linearind)
         fexpr = quote
@@ -453,11 +441,7 @@ end
 
 ## Indexing: ref ##
 
-ref(t::AbstractArray, i::Integer) = error("indexing not defined for ", typeof(t))
-ref(t::AbstractArray, i::Real) = ref(t, to_index(i))
-ref(t::AbstractArray, i::Real, j::Real) = ref(t, to_index(i), to_index(j))
-ref(t::AbstractArray, i::Real, j::Real, k::Real) = ref(t, to_index(i), to_index(j), to_index(k))
-ref(t::AbstractArray, r::Real...) = ref(t,map(to_index,r)...)
+ref(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
@@ -507,15 +491,9 @@ end
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
-assign(t::AbstractArray, x, i::Integer) =
+assign(t::AbstractArray, x, i::Real) =
     error("assign not defined for ",typeof(t))
 assign(t::AbstractArray, x) = throw(MethodError(assign, (t, x)))
-
-assign(t::AbstractArray, x, i::Real)          = assign(t, x, to_index(i))
-assign(t::AbstractArray, x, i::Real, j::Real) = assign(t, x, to_index(i),to_index(j))
-assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
-    assign(t, x, to_index(i),to_index(j),to_index(k))
-assign(t::AbstractArray, x, r::Real...)       = assign(t, x, map(to_index,r)...)
 
 ## Concatenation ##
 
@@ -1072,9 +1050,8 @@ function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
     return t
 end
 
-indices(I::Indices) = I
-indices(I::AbstractVector{Bool}) = find(I)
-indices(I::(Indices...)) = map(indices, I)
+indices(I) = to_index(I)
+indices(I::Tuple) = map(to_index, I)
 
 ## iteration utilities ##
 

@@ -46,7 +46,6 @@ export
     IOStream,
     IOString,
     ImaginaryUnit,
-    Indices,
     IntSet,
     LocalProcess,
     Location,
@@ -665,7 +664,6 @@ export
     findfirst,
     ref_shape,
     assign_shape_check,
-    indices,
     make_loop_nest,
     check_bounds, 
 
