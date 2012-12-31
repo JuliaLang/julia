@@ -80,6 +80,7 @@ square(x::Number) = x*x
 # type specific math functions
 
 const libm = Base.libm_name
+const openlibm_extras = "libopenlibm-extras"
 
 for f in (:cbrt, :sin, :cos, :tan, :sinh, :cosh, :tanh, :asin, :acos, :atan, 
           :asinh, :acosh, :atanh, :log, :log2, :log10, :exp, :erf, :erfc, :lgamma, :sqrt, :exp2)
@@ -192,18 +193,18 @@ modf(x) = rem(x,one(x)), trunc(x)
 
 # special functions
 
-besselj0(x::Float64) = ccall((:j0,libm),  Float64, (Float64,), x)
-besselj0(x::Float32) = ccall((:j0f,libm), Float32, (Float32,), x)
+besselj0(x::Float64) = ccall((:j0,openlibm_extras),  Float64, (Float64,), x)
+besselj0(x::Float32) = ccall((:j0f,openlibm_extras), Float32, (Float32,), x)
 @vectorize_1arg Real besselj0
-besselj1(x::Float64) = ccall((:j1,libm),  Float64, (Float64,), x)
-besselj1(x::Float32) = ccall((:j1f,libm), Float32, (Float32,), x)
+besselj1(x::Float64) = ccall((:j1,openlibm_extras),  Float64, (Float64,), x)
+besselj1(x::Float32) = ccall((:j1f,openlibm_extras), Float32, (Float32,), x)
 @vectorize_1arg Real besselj1
 
-bessely0(x::Float64) = ccall((:y0,libm),  Float64, (Float64,), x)
-bessely0(x::Float32) = ccall((:y0f,libm), Float32, (Float32,), x)
+bessely0(x::Float64) = ccall((:y0,openlibm_extras),  Float64, (Float64,), x)
+bessely0(x::Float32) = ccall((:y0f,openlibm_extras), Float32, (Float32,), x)
 @vectorize_1arg Real bessely0
-bessely1(x::Float64) = ccall((:y1,libm),  Float64, (Float64,), x)
-bessely1(x::Float32) = ccall((:y1f,libm), Float32, (Float32,), x)
+bessely1(x::Float64) = ccall((:y1,openlibm_extras),  Float64, (Float64,), x)
+bessely1(x::Float32) = ccall((:y1f,openlibm_extras), Float32, (Float32,), x)
 @vectorize_1arg Real bessely1
 
 let
@@ -213,7 +214,7 @@ global airy
 function airy(k::Int, z::Complex128)
     id = int32(k==1 || k==3)
     if k == 0 || k == 1
-        ccall((:zairy_,libm), Void,
+        ccall((:zairy_,openlibm_extras), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
               &real(z), &imag(z),
@@ -222,7 +223,7 @@ function airy(k::Int, z::Complex128)
               pointer(ae,1), pointer(ae,2))
         return complex(ai[1],ai[2])
     elseif k == 2 || k == 3
-        ccall((:zbiry_,libm), Void,
+        ccall((:zbiry_,openlibm_extras), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
               &real(z), &imag(z),
@@ -261,7 +262,7 @@ let
     const wrk::Array{Float64,1} = Array(Float64,2)
 
     function _besselh(nu::Float64, k::Integer, z::Complex128)
-        ccall((:zbesh_,libm), Void,
+        ccall((:zbesh_,openlibm_extras), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
               &real(z), &imag(z), &nu, &1, &k, &1,
@@ -271,7 +272,7 @@ let
     end
 
     function _besseli(nu::Float64, z::Complex128)
-        ccall((:zbesi_,libm), Void,
+        ccall((:zbesi_,openlibm_extras), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
               &real(z), &imag(z), &nu, &1, &1,
@@ -281,7 +282,7 @@ let
     end
 
     function _besselj(nu::Float64, z::Complex128)
-        ccall((:zbesj_,libm), Void,
+        ccall((:zbesj_,openlibm_extras), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
               &real(z), &imag(z), &nu, &1, &1,
@@ -291,7 +292,7 @@ let
     end
 
     function _besselk(nu::Float64, z::Complex128)
-        ccall((:zbesk_,libm), Void,
+        ccall((:zbesk_,openlibm_extras), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
               &real(z), &imag(z), &nu, &1, &1,
@@ -301,7 +302,7 @@ let
     end
 
     function _bessely(nu::Float64, z::Complex128)
-        ccall((:zbesy_,libm), Void,
+        ccall((:zbesy_,openlibm_extras), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
@@ -649,7 +650,7 @@ end
 const Faddeeva_tmp = Array(Float64,2)
 
 # wrappers for complex Faddeeva functions; these will get a lot simpler,
-# and can call openlibm directly, once ccall supports C99 complex types.
+# and can call openopenlibm_extras directly, once ccall supports C99 complex types.
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
@@ -667,8 +668,8 @@ end
 for f in (:erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
-        ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),libm), Float64, (Float64,), x)
-        ($fname)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),libm), Float64, (Float64,), float64(x)))
+        ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),openlibm_extras), Float64, (Float64,), x)
+        ($fname)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),openlibm_extras), Float64, (Float64,), float64(x)))
         ($fname)(x::Real) = ($fname)(float(x))
         @vectorize_1arg Number $fname
     end
