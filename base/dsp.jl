@@ -76,7 +76,8 @@ end
 function conv{T}(u::Vector{T}, v::Vector{T})
     n = size(u,1)+size(v,1)-1
     u, v = [u;zeros(T,size(v,1)-1)], [v;zeros(T,size(u,1)-1)]
-    y = ifft(fft(u).*fft(v))
+    p = plan_fft(u)
+    y = ifft(p(u).*p(v))
     if T <: Real
         return real(y)
     end
@@ -90,7 +91,7 @@ function conv2{T}(y::Vector{T}, x::Vector{T}, A::Matrix{T})
     B[1:size(A,1),1:size(A,2)] = A
     y = fft([y;zeros(T,m-length(y))])
     x = fft([x;zeros(T,n-length(x))])
-    C = ifft2(fft2(B) .* (y * x.'))
+    C = ifft!(fft!(B) .* (y * x.'))
     if T <: Real
         return real(C)
     end
@@ -103,7 +104,8 @@ function conv2{T}(A::Matrix{T}, B::Matrix{T})
     Bt = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
     At[1:sa[1], 1:sa[2]] = A
     Bt[1:sb[1], 1:sb[2]] = B
-    C = ifft2(fft2(At).*fft2(Bt))
+    p = plan_fft!(At)
+    C = ifft!(p(At).*p(Bt))
     if T <: Real
         return real(C)
     end
