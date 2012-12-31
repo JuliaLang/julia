@@ -430,8 +430,7 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
-	cp openlibm/libopenlibm-extras.$(SHLIB_EXT) $(BUILD)/lib
-install-openlibm: $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+install-openlibm: $(OPENLIBM_OBJ_TARGET) 
 
 clean-openlibm:
 	-$(MAKE) -C openlibm distclean
