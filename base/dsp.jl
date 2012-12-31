@@ -4,8 +4,9 @@ using Base.FFTW
 
 export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        # the rest are defined imported from FFTW:
-       bfft, bfftn, brfft, brfftn, fft, fft2, fft3, fftn,
-       ifft, ifft2, ifft3, ifftn, irfft, irfftn, rfft, rfftn
+       fft, bfft, ifft, rfft, brfft, irfft,
+       plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
+       fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
 function filt(b,a,x)
     if a[1]==0
