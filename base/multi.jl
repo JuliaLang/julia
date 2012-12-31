@@ -173,12 +173,6 @@ end
 type LocalProcess
 end
 
-type Location
-    host::String
-    port::Int16
-    Location(h,p::Integer) = new(h,int16(p))
-end
-
 type ProcessGroup
     myid::Int
     workers::Array{Any,1}
@@ -195,7 +189,7 @@ end
 
 function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     n = length(w)
-    locs = map(x->Location(x.host,x.port), w)
+    locs = map(x->(x.host,x.port), w)
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
     newlocs = [PGRP.locs, locs]
@@ -220,7 +214,7 @@ function join_pgroup(myid, locs, sockets)
     w[myid] = LocalProcess()
     handler = fd->message_handler(fd, sockets)
     for i = 2:(myid-1)
-        w[i] = Worker(locs[i].host, locs[i].port)
+        w[i] = Worker(locs[i][1], locs[i][2])
         w[i].id = i
         sockets[w[i].fd] = w[i].socket
         add_fd_handler(w[i].fd, handler)
