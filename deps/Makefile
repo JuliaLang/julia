@@ -464,14 +464,14 @@ distclean-openlibm-extras: clean-openlibm-extras
 
 
 # Wrapper for openlibm/Faddeeva since ccall doesn't support C99 complex:
-$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBM_OBJ_TARGET)
+$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBMEXT_OBJ_TARGET)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm-extras
 	$(INSTALL_NAME_CMD)libFaddeeva_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 
 clean-Faddeeva-wrapper:
-	-rm -f $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+	-rm -f $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 distclean-Faddeeva-wrapper: clean-Faddeeva-wrapper
 
 ## Rmath ##
