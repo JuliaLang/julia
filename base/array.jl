@@ -1709,3 +1709,51 @@ function permute(A::StridedArray, perm)
     return P
 end
 end # let
+
+# set-like operators for vectors
+# These are moderately efficient, preserve order, and remove dupes.
+
+# unique_all is like intersect. 
+# algorithm: do intersect first, then iterate through the first
+# vector and produce only those in the set
+function unique_all(vs...)
+    args_type = promote_type([eltype(v) for v in vs]...)
+    ret = Array(args_type,0)
+    all_elems = intersect([Set(v...) for v in vs]...)
+    for v_elem in vs[1]
+        if has(all_elems, v_elem)
+            push!(ret, v_elem)
+        end
+    end
+    ret
+end
+# unique_any is like union
+function unique_any(vs...)
+    args_type = promote_type([eltype(v) for v in vs]...)
+    ret = Array(args_type,0)
+    seen = Set()
+    for v in vs
+        for v_elem in v
+            if !has(seen, v_elem)
+                push!(ret, v_elem)
+                add(seen, v_elem)
+            end
+        end
+    end
+    ret
+end
+# unique_diff is like setdiff -- only accepts two args
+function unique_diff(a, b)
+    args_type = promote_type(eltype(a), eltype(b))
+    bset = Set(b...)
+    ret = Array(args_type,0)
+    seen = Set()
+    for a_elem in a
+        if !has(seen, a_elem) && !has(bset, a_elem)
+            push!(ret, a_elem)
+            add(seen, a_elem)
+        end
+    end
+    ret
+end
+
