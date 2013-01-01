@@ -1,5 +1,12 @@
 ## linalg.jl: Some generic Linear Algebra definitions
 
+function scale!{T<:Number}(X::StridedArray{T}, s::Real)
+    # FIXME: could use BLAS in more cases
+    for i in 1:numel(X)
+        X[i] *= s;
+    end
+end
+
 cross(a::Vector, b::Vector) =
     [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
@@ -34,7 +41,7 @@ function norm{T}(x::AbstractVector{T}, p::Number)
         absx = abs(x)
         dx = max(absx)
         if dx != zero(T)
-            BLAS.scal!(absx, 1/dx)
+            scale!(absx, 1/dx)
             return dx * (sum(absx.^p).^(1/p))
         else
             return sum(absx.^p).^(1/p)

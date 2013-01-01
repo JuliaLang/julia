@@ -720,6 +720,8 @@ export
     randsym,
     rank,
     rref,
+    scale,
+    scale!,
     solve,
     svd,
     svdvals,
