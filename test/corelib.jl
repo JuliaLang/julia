@@ -301,23 +301,6 @@ for (operator, name) in ((|, union), (&, intersect), (-, setdiff))
     end
 end
 
-# # union, intersect, and setdiff for vectors
-# @test isequal(union([1, 2], [3, 4]), [1,2,3,4])
-# @test isequal(union([1, 3], [3, 4]), [1,3,4])
-# @test isequal(union([1, 3, 3], [3]), [1,3])
-# @test isequal(union(["cat", "dog"], ["dog", "mouse"]), ["cat", "dog", "mouse"])
-# @test isequal(union([1, 2, 3], [3.0, 4.0]), [1.0, 2.0, 3.0, 4.0])
-# @test isequal(intersect([1, 2], [3, 4]), [])
-# @test isequal(intersect([1, 3], [3, 4]), [3])
-# @test isequal(intersect([5,3,1,1], [1,3]), [3,1])
-# @test isequal(intersect([5,3,1,1], ["cat"]), [])
-# @test isequal(intersect([1.,2.], [2,3]), [2.])
-# @test isequal(setdiff([1,3,5], [1,5]), [3])
-# @test isequal(setdiff([1,3,5], [2,6]), [1,3,5])
-# @test isequal(setdiff([1,3,5], [1,1]), [3,5])
-# @test isequal(setdiff([1,3,5], ["cat"]), [1,3,5])
-# @test isequal(setdiff([1.,2.], [2,3]), [1.])
-
 # add_each
 s = Set(1,3,5,7)
 add_each(s,(2,3,4,5))
