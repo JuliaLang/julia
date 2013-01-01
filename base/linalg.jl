@@ -87,7 +87,7 @@ function cond(a::AbstractMatrix, p)
     else
         try
             return norm(a, p) * norm(inv(a), p)
-        catch SingularException
+        catch LapackException
             return Inf
         end
     end
