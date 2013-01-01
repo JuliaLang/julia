@@ -277,3 +277,29 @@ begin
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
 
 end
+
+# set-like operations
+@test isequal(unique_any([1,2,3], [4,3,4]), [1,2,3,4])
+@test isequal(unique_any(['e','c','a'], ['b','a','d']), ['e','c','a','b','d'])
+@test isequal(unique_any([1,2,3], [4,3], [5]), [1,2,3,4,5])
+@test isequal(unique_any([1,2,3]), [1,2,3])
+@test isequal(unique_any([1,2,3], Int64[]), [1,2,3])
+@test isequal(unique_any([1,2,3], Float64[]), [1.0,2,3])
+@test isequal(unique_any(Int64[], [1,2,3]), [1,2,3])
+@test isequal(unique_any(Int64[]), Int64[])
+@test isequal(unique_all([1,2,3], [4,3,4]), [3])
+@test isequal(unique_all(['e','c','a'], ['b','a','d']), ['a'])
+@test isequal(unique_all([1,2,3], [3,1], [2,1,3]), [1,3])
+@test isequal(unique_all([1,2,3]), [1,2,3])
+@test isequal(unique_all([1,2,3], Int64[]), Int64[])
+@test isequal(unique_all([1,2,3], Float64[]), Float64[])
+@test isequal(unique_all(Int64[], [1,2,3]), Int64[])
+@test isequal(unique_all(Int64[]), Int64[])
+@test isequal(unique_diff([1,2,3,4], [2,5,4]), [1,3])
+@test isequal(unique_diff([1,2,3,4], [7,8,9]), [1,2,3,4])
+@test isequal(unique_diff([1,2,3,4], Int64[]), [1,2,3,4])
+@test isequal(unique_diff([1,2,3,4], [1,2,3,4,5]), Int64[])
+
+
+
+
