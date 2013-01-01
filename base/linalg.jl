@@ -79,7 +79,13 @@ trace(A::AbstractMatrix) = sum(diag(A))
 
 #det(a::AbstractMatrix)
 inv(a::AbstractMatrix) = a \ one(a)
-cond(a::AbstractMatrix) = (s = svdvals(a); max(s) / min(s))
+
+function cond(a::AbstractMatrix)
+    s = svdvals(a)
+    condno = max(s) / min(s)
+    # Return Inf if condno is NaN (input is all zeros)
+    isnan(condno) ? Inf : condno
+end
 
 function cond(a::AbstractMatrix, p) 
     if p == 2 
