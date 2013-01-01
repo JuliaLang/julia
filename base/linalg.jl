@@ -100,8 +100,8 @@ function cond(a::AbstractMatrix, p)
     else
         try
             return norm(a, p) * norm(inv(a), p)
-        catch LapackException
-            return Inf
+        catch e
+            isa(e,LapackException) ? (return Inf) : rethrow(e)
         end
     end
 end
