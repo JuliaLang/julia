@@ -23,7 +23,7 @@ diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
 
 #diagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
 
-function norm(x::AbstractVector, p::Number)
+function norm{T}(x::AbstractVector{T}, p::Number)
     if length(x) == 0
         return zero(eltype(x))
     elseif p == Inf
@@ -31,11 +31,18 @@ function norm(x::AbstractVector, p::Number)
     elseif p == -Inf
         return min(abs(x))
     else
-        return sum(abs(x).^p).^(1/p)
+        absx = abs(x)
+        dx = max(absx)
+        if dx != zero(T)
+            BLAS.scal!(absx, 1/dx)
+            return dx * (sum(absx.^p).^(1/p))
+        else
+            return sum(absx.^p).^(1/p)
+        end
     end
 end
 
-norm(x::AbstractVector) = sqrt(real(dot(x,x)))
+norm(x::AbstractVector) = norm(x, 2)
 
 function norm(A::AbstractMatrix, p)
     m, n = size(A)
@@ -49,8 +56,8 @@ function norm(A::AbstractMatrix, p)
         return max(svdvals(A))
     elseif p == Inf
         return max(sum(abs(A),2))
-    elseif p == "fro"
-        return sqrt(sum(diag(A'*A)))
+    elseif p == :fro
+        return norm(reshape(A, numel(A)))
     else
         error("invalid parameter to matrix norm")
     end
