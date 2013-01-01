@@ -72,8 +72,19 @@ trace(A::AbstractMatrix) = sum(diag(A))
 
 #det(a::AbstractMatrix)
 inv(a::AbstractMatrix) = a \ one(a)
-cond(a::AbstractMatrix, p) = norm(a, p) * norm(inv(a), p)
-cond(a::AbstractMatrix) = cond(a, 2)
+cond(a::AbstractMatrix) = (s = svdvals(a); max(s) / min(s))
+
+function cond(a::AbstractMatrix, p) 
+    if p == 2 
+        return cond(a)
+    else
+        try
+            return norm(a, p) * norm(inv(a), p)
+        catch SingularException
+            return Inf
+        end
+    end
+end
 
 #issym(A::AbstractMatrix)
 #ishermitian(A::AbstractMatrix)
