@@ -404,8 +404,9 @@ scale!(X::Array{Complex128}, s::Float64) = (ccall(("dscal_",Base.libblas_name), 
 function scale!{T<:Number}(X::StridedArray{T}, s::Float64)
     # FIXME: could use BLAS in more cases
     for i in 1:numel(X)
-        x[i] *= s;
+        X[i] *= s;
     end
+    return X
 end
 
 # Normalized ifft inverse transforms:

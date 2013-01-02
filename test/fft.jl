@@ -7,6 +7,10 @@ m4 = [16.    2     3    13;
     9     7     6    12;
     4    14    15     1]
 
+b = rand(17,14)
+b[3:6,9:12] = m4
+sm4 = slice(b,3:6,9:12)
+
 pm4 = plan_fft(m4,1)
 
 fft_m4 = fft(m4,1)
@@ -32,6 +36,13 @@ pfft!d2_m4 = complex(m4); plan_fft!(pfft!d2_m4,2)(pfft!d2_m4)
 pifft!_fft_m4 = fft(m4,1); plan_ifft!(pifft!_fft_m4,1)(pifft!_fft_m4)
 pfft!n_m4 = complex(m4); plan_fft!(pfft!n_m4)(pfft!n_m4)
 pifft!n_fftn_m4 = fft(m4); plan_ifft!(pifft!n_fftn_m4)(pifft!n_fftn_m4)
+
+sfftn_m4 = fft(sm4)
+psfftn_m4 = plan_fft(sm4)(sm4)
+sfft!n_b = complex128(b)
+sfft!n_m4 = slice(sfft!n_b,3:6,9:12); fft!(sfft!n_m4)
+psfft!n_b = complex128(b)
+psfft!n_m4 = slice(psfft!n_b,3:6,9:12); plan_fft!(psfft!n_m4)(psfft!n_m4)
 
 true_fft_m4 = [
     34.            34.            34.            34.;
@@ -75,7 +86,17 @@ for i = 1:length(m4)
     @assert_approx_eq pifft!_fft_m4[i] m4[i]
     @assert_approx_eq pfft!n_m4[i] true_fftn_m4[i]
     @assert_approx_eq pifft!n_fftn_m4[i] m4[i]
+
+    @assert_approx_eq sfftn_m4[i] true_fftn_m4[i]
+    @assert_approx_eq sfft!n_m4[i] true_fftn_m4[i]
+    @assert_approx_eq psfftn_m4[i] true_fftn_m4[i]
+    @assert_approx_eq psfft!n_m4[i] true_fftn_m4[i]
 end
+
+ifft!(sfft!n_m4)
+plan_ifft!(psfft!n_m4)(psfft!n_m4)
+@test norm(sfft!n_m4 - m4) < 1e-8
+@test norm(psfft!n_m4 - m4) < 1e-8
 
 m3d = float32(reshape(1:5*3*2, 5, 3, 2))
 ifft3_fft3_m3d = ifft(fft(m3d))
@@ -129,6 +150,9 @@ prfft_m4 = plan_rfft(m4,1)(m4)
 prfftd2_m4 = plan_rfft(m4,2)(m4)
 prfftn_m4 = plan_rfft(m4)(m4)
 
+srfftn_m4 = rfft(sm4)
+psrfftn_m4 = plan_rfft(sm4)(sm4)
+
 for i = 1:3, j = 1:4
     @assert_approx_eq rfft_m4[i,j] true_fft_m4[i,j]
     @assert_approx_eq rfftd2_m4[j,i] true_fftd2_m4[j,i]
@@ -137,6 +161,9 @@ for i = 1:3, j = 1:4
     @assert_approx_eq prfft_m4[i,j] true_fft_m4[i,j]
     @assert_approx_eq prfftd2_m4[j,i] true_fftd2_m4[j,i]
     @assert_approx_eq prfftn_m4[i,j] true_fftn_m4[i,j]
+
+    @assert_approx_eq srfftn_m4[i,j] true_fftn_m4[i,j]
+    @assert_approx_eq psrfftn_m4[i,j] true_fftn_m4[i,j]
 end
 
 irfft_rfft_m4 = irfft(rfft_m4,size(m4,1),1)
