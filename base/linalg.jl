@@ -109,10 +109,48 @@ function cond(a::AbstractMatrix, p)
     end
 end
 
-#issym(A::AbstractMatrix)
-#ishermitian(A::AbstractMatrix)
-#istriu(A::AbstractMatrix)
-#istril(A::AbstractMatrix)
+function issym(A::AbstractMatrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:(n-1), j = (i+1):n
+        if A[i,j] != A[j,i]
+            return false
+        end
+    end
+    return true
+end
+
+function ishermitian(A::AbstractMatrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:n, j = i:n
+        if A[i,j] != conj(A[j,i])
+            return false
+        end
+    end
+    return true
+end
+
+function istriu(A::AbstractMatrix)
+    m, n = size(A)
+    for j = 1:min(n,m-1), i = j+1:m
+        if A[i,j] != 0
+            return false
+        end
+    end
+    return true
+end
+
+function istril(A::AbstractMatrix)
+    m, n = size(A)
+    for j = 2:n, i = 1:min(j-1,m)
+        if A[i,j] != 0
+            return false
+        end
+    end
+    return true
+end
+
 
 function linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T})
     [ones(T, size(X,1)) X] \ y

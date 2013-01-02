@@ -1,44 +1,4 @@
-function issym(A::Matrix)
-    m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:(n-1), j = (i+1):n
-        if A[i,j] != A[j,i]
-            return false
-        end
-    end
-    return true
-end
-
-function ishermitian(A::Matrix)
-    m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:n, j = i:n
-        if A[i,j] != conj(A[j,i])
-            return false
-        end
-    end
-    return true
-end
-
-function istriu(A::Matrix)
-    m, n = size(A)
-    for j = 1:min(n,m-1), i = j+1:m
-        if A[i,j] != 0
-            return false
-        end
-    end
-    return true
-end
-
-function istril(A::Matrix)
-    m, n = size(A)
-    for j = 2:n, i = 1:min(j-1,m)
-        if A[i,j] != 0
-            return false
-        end
-    end
-    return true
-end
+# Linear algebra functions for dense matrices in column major format
 
 scale!(X::Array{Float32}, s::Real) = BLAS.scal!(numel(X), float32(s), X, 1)
 

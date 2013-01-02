@@ -72,9 +72,6 @@ for (fname, elty) in ((:dscal_,:Float64),    (:sscal_,:Float32),
     end
 end
 
-scal!(A::Array, DA) = scal!(length(A), DA, A, 1)
-scal(A::Array, DA)  = scal(length(A), DA, A, 1)
-
 # ccall is unable to return complex values (Issue #85)
 #@blas_dot :zdotc_ Complex128
 #@blas_dot :cdotc_ Complex64
