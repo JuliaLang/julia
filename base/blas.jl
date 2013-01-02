@@ -72,6 +72,9 @@ for (fname, elty) in ((:dscal_,:Float64),    (:sscal_,:Float32),
     end
 end
 
+scal!(A::Array, DA) = scal!(length(A), DA, A, 1)
+scal(A::Array, DA)  = scal(length(A), DA, A, 1)
+
 # ccall is unable to return complex values (Issue #85)
 #@blas_dot :zdotc_ Complex128
 #@blas_dot :cdotc_ Complex64
@@ -99,6 +102,8 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
+
+nrm2(A::Array) = nrm2(length(A), A, 1)
 
 # SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
 # DY <- DA*DX + DY

@@ -3282,69 +3282,27 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"fft",E"fft(A, dim)
+(E"Signal Processing",E"Base",E"fft",E"fft(A, dims)
 
-   One dimensional FFT if input is a \"Vector\". For n-d cases,
-   compute fft of vectors along dimension \"dim\". Most efficient if
-   \"size(A, dim)\" is a product of small primes; see \"nextprod()\".
-
-"),
-
-(E"Signal Processing",E"Base",E"fft2",E"fft2()
-
-   2d FFT
+   Multidimensional FFT.  The optional \"dims\" argument specifies
+   an iterable subset of zero or more dimensions of \"A\" to transform.
+   Most efficient if the size of the transformed dimensions are
+   products of small primes; see \"nextprod()\" and \"plan_fft()\".
 
 "),
 
-(E"Signal Processing",E"Base",E"fft3",E"fft3()
-
-   3d FFT
-
-"),
-
-(E"Signal Processing",E"Base",E"fftn",E"fftn()
-
-   N-d FFT
-
-"),
-
-(E"Signal Processing",E"Base",E"ifft",E"ifft(A, dim)
+(E"Signal Processing",E"Base",E"ifft",E"ifft(A, dimd)
 
    Inverse FFT. Same arguments as \"fft\".
 
 "),
 
-(E"Signal Processing",E"Base",E"ifft2",E"ifft2()
+(E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dims])
 
-   Inverse 2d FFT
-
-"),
-
-(E"Signal Processing",E"Base",E"ifft3",E"ifft3()
-
-   Inverse 3d FFT
-
-"),
-
-(E"Signal Processing",E"Base",E"ifftn",E"ifftn()
-
-   Inverse N-d FFT
-
-"),
-
-(E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dim])
-
-   One-dimensional FFT of real array A along dimension dim. If A has
-   size \"(..., n_dim, ...)\", the result has size \"(...,
-   floor(n_dim/2)+1, ...)\". The \"dim\" argument is optional and
-   defaults to 1.
-
-"),
-
-(E"Signal Processing",E"Base",E"rfftn",E"rfftn(A)
-
-   N-d FFT of real array A. If A has size \"(n_1, ..., n_d)\", the
-   result has size \"(floor(n_1/2)+1, ..., n_d)\".
+   Multidimensional FFT of real array A. If A has size \"(n_1, ..., n_d)\",
+   the result has size \"(floor(n_1/2)+1, ..., n_d)\".  Optional \"dims\"
+   argument specifies an iterable subset of dimensions to transform (the
+   \"dims[1]\" dimension is then the halved one.)
 
 "),
 

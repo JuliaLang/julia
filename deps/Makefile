@@ -12,6 +12,15 @@ BUILD_LLDB = 0
 
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
+CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
+ifneq ($(HOST),)
+CONFIG_GUESS := $(shell ./config.guess)
+CONFIGURE_COMMON += --host=$(HOST) --build=$(CONFIG_GUESS)
+endif
+
+#autoconf configure-driven scripts: llvm readline pcre arpack fftw clp unwind lighttpd gmp glpk patchelf
+#custom configure-driven script: zlib nginx
+#custom Makefile rules: openlibm Faddeeva-wrapper rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -86,6 +95,13 @@ STAGE2_DEPS += suitesparse
 #STAGE2_DEPS += lapack
 #endif
 
+#Platform specific flags
+
+ifeq ($(OS), WINNT)
+LIBTOOL_CCLD = CCLD="$(CC) -no-undefined -avoid-version"
+AUTOTOOLS_PATH_CORRECT = -cp -f $(USRBIN)/$(@F) $(USR)/$(JL_LIBDIR)/$(@F)
+endif
+
 ## Common build target prefixes
 
 LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
@@ -110,9 +126,9 @@ BUILD_LLVM_CLANG = 1
 # because it's a build requirement
 endif
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_BUILDDIR = Release+Asserts
+LLVM_BUILDDIR = build/Release+Asserts
 else
-LLVM_BUILDDIR = Release
+LLVM_BUILDDIR = build/Release
 endif
 
 LLVM_OBJ_TARGET = $(BUILD)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
@@ -195,12 +211,7 @@ llvm_python_workaround:
 	mkdir -p llvm-$(LLVM_VER)/python2_path && \
 	ln -s /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 
-LLVM_CXX = $(CXX)
-ifeq ($(ARCH), ppc64)
-  LLVM_CXX += -mminimal-toc
-endif
-
-LLVM_FLAGS = --prefix=$(abspath $(BUILD)) --disable-threads --enable-optimized --disable-profiling --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(LLVM_CXX)"
+LLVM_FLAGS =  --disable-threads --enable-optimized --disable-profiling --enable-shared --enable-targets=host --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions
@@ -214,20 +225,32 @@ else
 LLVM_MFLAGS += CXXFLAGS=-std=c++0x
 endif
 endif
+ifeq ($(ARCH), ppc64)
+  LLVM_FLAGS += CXXFLAGS=-mminimal-toc
+endif
+
+ifeq (exists, $(shell [ -e llvm-$(LLVM_VER)/config.log ] && echo exists ))
+# temporary hack to force rebuild of llvm if it was previously configured
+# in the source directory
+llvm-$(LLVM_VER)/configure: FORCE_LLVM_RECONFIGURE
+FORCE_LLVM_RECONFIGURE:
+	rm -rf llvm-$(LLVM_VER)
+endif
 
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
+	mkdir -p build && cd build && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	./configure $(LLVM_FLAGS) && \
+	../configure $(CONFIGURE_COMMON) $(LLVM_FLAGS) && \
 	$(MAKE) $(LLVM_MFLAGS)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) -C llvm-$(LLVM_VER) install
+	$(MAKE) -C llvm-$(LLVM_VER)/build install
 	$(INSTALL_NAME_CMD)libLLVM-$(LLVM_VER).$(SHLIB_EXT) $(BUILD)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 	touch $@
 
 clean-llvm:
-	-$(MAKE) -C llvm-$(LLVM_VER) clean
+	-$(MAKE) -C llvm-$(LLVM_VER)/build clean
 	-rm -f $(BUILD)/bin/llvm-config
 distclean-llvm:
 	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
@@ -260,7 +283,8 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) $(READLINE_OPTS) CC="$(CC)" CXX="$(CXX)" && \
+	chmod a+x ./configure && \
+	./configure $(CONFIGURE_COMMON) $(READLINE_OPTS) && \
 	$(MAKE) $(READLINE_CFLAGS)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
@@ -290,7 +314,7 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) --enable-shared --enable-static --with-curses CC="$(CC)" CXX="$(CXX)" && \
+	./configure $(CONFIGURE_COMMON) --enable-shared --enable-static --with-curses && \
 	$(MAKE)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
@@ -315,6 +339,10 @@ distclean-readline:
 endif
 
 ## LIBUV
+uname_S=$(OS)
+ifeq ($(uname_S),WINNT)
+uname_S=MINGW
+endif
 
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
 UV_OBJ_SOURCE = libuv/libuv.a
@@ -329,9 +357,9 @@ $(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 $(UV_OBJ_SOURCE): libuv/Makefile
 ifneq ($(OS), WINNT)
-	$(MAKE) libuv.${SHLIB_EXT} -C libuv CC="$(CC)"
+	$(MAKE) libuv.${SHLIB_EXT} -C libuv CC="$(CC)" AR="$(AR)" uname_S=$(uname_S)
 endif
-	$(MAKE) libuv.a -C libuv CC="$(CC)"
+	$(MAKE) libuv.a -C libuv CC="$(CC)" AR="$(AR)" uname_S=$(uname_S)
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(BUILD)/include
 	cp $(UV_OBJ_SOURCE) $(BUILD)/lib/
@@ -339,7 +367,7 @@ $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 install-uv: $(UV_OBJ_TARGET)
 
 clean-uv:
-	-$(MAKE) -C libuv clean
+	-$(MAKE) -C libuv clean uname_S=$(uname_S)
 	-rm -rf $(BUILD)/lib/libuv.a $(BUILD)/include/uv.h $(BUILD)/include/uv-private
 distclean-uv: clean-uv
 
@@ -357,13 +385,13 @@ pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	touch $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) --enable-utf --enable-unicode-properties --enable-jit CC="$(CC)" CXX="$(CXX)"
+	./configure $(CONFIGURE_COMMON) --enable-utf --enable-unicode-properties --enable-jit
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
-	$(MAKE) -C pcre-$(PCRE_VER) install
+	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libpcre.dylib $@
 ifeq ($(OS),WINNT)
 	-rm $(BUILD)/lib/libpcre.dll
-	mv $(BUILD)/bin/libpcre-1.dll $(BUILD)/lib/libpcre.dll
+	mv $(BUILD)/bin/libpcre.dll $(BUILD)/lib/libpcre.dll
 endif
 	touch $@
 
@@ -412,6 +440,8 @@ distclean-double-conversion:
 
 ifeq ($(OS), WINNT) #needs more advanced detection once 64bit build is possible
 OPENLIBM_FLAGS = ARCH=i386
+else
+OPENLIBM_FLAGS = ARCH="$(ARCH)"
 endif
 
 OPENLIBM_OBJ_TARGET = $(BUILD)/lib/libopenlibm.$(SHLIB_EXT)
@@ -426,7 +456,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
 $(OPENLIBM_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
 endif
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
-	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
@@ -499,7 +529,9 @@ distclean-rmath: clean-rmath
 LIBRANDOM_OBJ_TARGET = $(BUILD)/lib/librandom.$(SHLIB_EXT)
 LIBRANDOM_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
 
-LIBRANDOM_CFLAGS = $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES
+LIBRANDOM_CFLAGS = $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing \
+				   --param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 \
+				   -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES
 ifeq ($(ARCH), x86_64)
 LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
 endif
@@ -537,13 +569,22 @@ else
 OPENBLAS_OBJ_SOURCE = 
 endif
 
-OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH)
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH)
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
 endif
 
 ifeq ($(USE_LIB64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1
+endif
+
+ifneq ($(BUILD_OS),$(OS))
+OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 
+ifeq ($(ARCH),i686)
+OPENBLAS_BUILD_OPTS += BINARY=32
+else
+$(error "unknown arch for openblas cross-compile")
+endif
 endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
@@ -622,7 +663,7 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 	cd arpack-ng_$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(BUILD)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77="$(FC)" MPIF77="$(FC)" CC="$(CC)" CXX="$(CXX)" FFLAGS="$(ARPACK_FFLAGS)"
+	./configure $(CONFIGURE_COMMON) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
 	touch $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(BUILD)/lib
 	cd arpack-ng_$(ARPACK_VER) && \
@@ -671,8 +712,8 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(abspath $(BUILD)) $(FFTW_CONFIG) --enable-avx --enable-single CC="$(CC)" CXX="$(CXX)" || \
-	./configure --prefix=$(abspath $(BUILD)) $(FFTW_CONFIG) --enable-single CC="$(CC)" CXX="$(CXX)" && \
+	(./configure $(CONFIGURE_COMMON) $(FFTW_CONFIG) --enable-avx --enable-single || \
+	  ./configure $(CONFIGURE_COMMON) $(FFTW_CONFIG) --enable-single) && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
@@ -697,8 +738,8 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
-	./configure --prefix=$(abspath $(BUILD)) $(FFTW_CONFIG) --enable-avx CC="$(CC)" CXX="$(CXX)" || \
-	./configure --prefix=$(abspath $(BUILD)) $(FFTW_CONFIG) CC="$(CC)" CXX="$(CXX)" && \
+	(./configure $(CONFIGURE_COMMON) $(FFTW_CONFIG) --enable-avx || \
+	  ./configure $(CONFIGURE_COMMON) $(FFTW_CONFIG)) && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
@@ -742,7 +783,9 @@ endif
 
 SUITE_SPARSE_LIB = -lm
 ifneq ($(OS), Darwin)
+ifneq ($(OS), WINNT)
   SUITE_SPARSE_LIB += -lrt
+endif
 endif
 
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
@@ -756,7 +799,9 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)" UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
+	  INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)" \
+	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
@@ -818,7 +863,7 @@ clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
 	touch $@
 clp-$(CLP_VER)/config.status: clp-$(CLP_VER)/configure
 	cd clp-$(CLP_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)"
+	./configure $(CONFIGURE_COMMON) MPIF77="$(FC)" MPICXX="$(CXX)" MPICC="$(CC)"
 $(CLP_OBJ_TARGET): clp-$(CLP_VER)/config.status
 	$(MAKE) -C clp-$(CLP_VER) install
 	touch $@
@@ -851,7 +896,7 @@ libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
 libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
-	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(LIBUNWIND_CFLAGS)" --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)"
+	cd libunwind-$(UNWIND_VER) && ./configure $(CONFIGURE_COMMON) CFLAGS="$(LIBUNWIND_CFLAGS)"
 
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
 	cd libunwind-$(UNWIND_VER) && $(MAKE)
@@ -887,7 +932,7 @@ lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
 lighttpd-$(LIGHTTPD_VER)/config.status: lighttpd-$(LIGHTTPD_VER)/configure
 	mkdir -p $(BUILD)/lib/lighttpd && \
 	cd lighttpd-$(LIGHTTPD_VER) && \
-	./configure --prefix=$(BUILD) --libdir=$(BUILD)/lib/lighttpd --without-pcre --without-zlib --without-bzip2 CC="$(CC)" CXX="$(CXX)"
+	./configure $(CONFIGURE_COMMON) --libdir=$(BUILD)/lib/lighttpd --without-pcre --without-zlib --without-bzip2
 $(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
 	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
 	$(INSTALL_NAME_CMD)lighttpd/liblightcomp.$(SHLIB_EXT) $(BUILD)/lib/lighttpd/liblightcomp.$(SHLIB_EXT)
@@ -918,11 +963,13 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)"
+	./configure $(CONFIGURE_COMMON) --enable-shared --disable-static
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
-	$(MAKE) -C gmp-$(GMP_VER)
-	$(MAKE) -C gmp-$(GMP_VER) check
-	$(MAKE) -C gmp-$(GMP_VER) install
+	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
+ifeq ($(OS),$(BUILD_OS))
+	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) check
+endif
+	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libgmp.dylib $@
 	touch $@
 
@@ -971,9 +1018,9 @@ glpk-$(GLPK_VER)/configure: glpk-$(GLPK_VER).tar.gz
 	touch $@
 glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 	cd glpk-$(GLPK_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)"
+	./configure $(CONFIGURE_COMMON)
 $(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
-	$(MAKE) -C glpk-$(GLPK_VER) install
+	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libglpk.dylib $@
 	touch $@
 
@@ -1011,7 +1058,12 @@ ifeq ($(USE_SYSTEM_ZLIB), 1)
 ZLIB_OBJ_TARGET =
 else
 ZLIB_OBJ_TARGET = $(BUILD)/lib/libz.$(SHLIB_EXT)
-ZLIB_CFLAGS = CFLAGS="$(CFLAGS) -D_FILE_OFFSET_BITS=64"
+ZLIB_CONFIGFLAGS = CFLAGS="-O3 $(CFLAGS) -D_FILE_OFFSET_BITS=64"
+ifneq ($(OS),$(BUILD_OS))
+ZLIB_CONFIGFLAGS += CHOST=$(HOST)
+else
+ZLIB_CONFIGFLAGS += CC="$(CC)"
+endif
 endif
 
 compile-zlib: install-zlib
@@ -1023,13 +1075,22 @@ zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
 	tar zxf $<
 	touch $@
 zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
+ifeq ($(OS), WINNT)
 	cd zlib-$(ZLIB_VER) && \
-	CC="$(CC)" $(ZLIB_CFLAGS) ./configure --prefix=$(abspath $(BUILD))
+	cp win32/Makefile.gcc Makefile
+else
+	cd zlib-$(ZLIB_VER) && \
+	$(ZLIB_CONFIGFLAGS) ./configure --prefix=$(abspath $(BUILD)) #not an autoconf script
+endif
 	touch $@
 $(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
-	$(MAKE) -C zlib-$(ZLIB_VER)
-	$(MAKE) -C zlib-$(ZLIB_VER) check
-	$(MAKE) -C zlib-$(ZLIB_VER) install
+	$(MAKE) -C zlib-$(ZLIB_VER) PREFIX=$(CROSS_COMPILE)
+ifeq ($(OS), WINNT)
+	cp zlib-$(ZLIB_VER)/zlib1.dll $@
+else
+	$(MAKE) -C zlib-$(ZLIB_VER) check PREFIX=$(CROSS_COMPILE)
+	$(MAKE) -C zlib-$(ZLIB_VER) install PREFIX=$(CROSS_COMPILE)
+endif
 	$(INSTALL_NAME_CMD)libz.dylib $@
 	touch $@
 
@@ -1081,7 +1142,7 @@ patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.bz2
 	touch $@
 patchelf-$(PATCHELF_VER)/config.status: patchelf-$(PATCHELF_VER)/configure
 	cd patchelf-$(PATCHELF_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)"
+	./configure $(CONFIGURE_COMMON)
 $(PATCHELF_TARGET): patchelf-$(PATCHELF_VER)/config.status
 	$(MAKE) -C patchelf-$(PATCHELF_VER) install
 	touch $@

@@ -1,5 +1,13 @@
 ## linalg.jl: Some generic Linear Algebra definitions
 
+function scale!{T<:Number}(X::StridedArray{T}, s::Real)
+    # FIXME: could use BLAS in more cases
+    for i in 1:numel(X)
+        X[i] *= s;
+    end
+    return X
+end
+
 cross(a::Vector, b::Vector) =
     [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
@@ -23,7 +31,7 @@ diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
 
 #diagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
 
-function norm(x::AbstractVector, p::Number)
+function norm{T}(x::AbstractVector{T}, p::Number)
     if length(x) == 0
         return zero(eltype(x))
     elseif p == Inf
@@ -31,11 +39,18 @@ function norm(x::AbstractVector, p::Number)
     elseif p == -Inf
         return min(abs(x))
     else
-        return sum(abs(x).^p).^(1/p)
+        absx = abs(x)
+        dx = max(absx)
+        if dx != zero(T)
+            scale!(absx, 1/dx)
+            return dx * (sum(absx.^p).^(1/p))
+        else
+            return sum(absx.^p).^(1/p)
+        end
     end
 end
 
-norm(x::AbstractVector) = sqrt(real(dot(x,x)))
+norm(x::AbstractVector) = norm(x, 2)
 
 function norm(A::AbstractMatrix, p)
     m, n = size(A)
@@ -49,8 +64,8 @@ function norm(A::AbstractMatrix, p)
         return max(svdvals(A))
     elseif p == Inf
         return max(sum(abs(A),2))
-    elseif p == "fro"
-        return sqrt(sum(diag(A'*A)))
+    elseif p == :fro
+        return norm(reshape(A, numel(A)))
     else
         error("invalid parameter to matrix norm")
     end
@@ -72,8 +87,25 @@ trace(A::AbstractMatrix) = sum(diag(A))
 
 #det(a::AbstractMatrix)
 inv(a::AbstractMatrix) = a \ one(a)
-cond(a::AbstractMatrix, p) = norm(a, p) * norm(inv(a), p)
-cond(a::AbstractMatrix) = cond(a, 2)
+
+function cond(a::AbstractMatrix)
+    s = svdvals(a)
+    condno = max(s) / min(s)
+    # Return Inf if condno is NaN (input is all zeros)
+    isnan(condno) ? Inf : condno
+end
+
+function cond(a::AbstractMatrix, p) 
+    if p == 2 
+        return cond(a)
+    else
+        try
+            return norm(a, p) * norm(inv(a), p)
+        catch e
+            isa(e,LapackException) ? (return Inf) : rethrow(e)
+        end
+    end
+end
 
 #issym(A::AbstractMatrix)
 #ishermitian(A::AbstractMatrix)

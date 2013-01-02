@@ -1241,7 +1241,7 @@ function nonzeros{T}(A::StridedArray{T})
     return V
 end
 
-function findmax(a::Array)
+function findmax(a::StridedArray)
     m = typemin(eltype(a))
     mi = 0
     for i=1:length(a)
@@ -1253,7 +1253,7 @@ function findmax(a::Array)
     return (m, mi)
 end
 
-function findmin(a::Array)
+function findmin(a::StridedArray)
     m = typemax(eltype(a))
     mi = 0
     for i=1:length(a)
@@ -1264,8 +1264,8 @@ function findmin(a::Array)
     end
     return (m, mi)
 end
-indmax(a::Array) = findmax(a)[2]
-indmin(a::Array) = findmin(a)[2]
+indmax(a::StridedArray) = findmax(a)[2]
+indmin(a::StridedArray) = findmin(a)[2]
 
 ## Reductions ##
 

@@ -69,6 +69,8 @@ ifeq ($(shell uname),MINGW32_NT-6.1)
 	-for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
 		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
 	done
+else
+	@echo 'Warning: system libraries "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" not included in install'
 endif
 endif
 

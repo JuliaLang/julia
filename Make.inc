@@ -1,5 +1,8 @@
 # -*- mode: makefile-gmake -*-
 
+# include twice to pickup user definitions
+-include $(JULIAHOME)/Make.user 
+
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
@@ -17,8 +20,26 @@ JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
 JL_LIBDIR = lib/$(MULTIARCH)/
 endif
 
+# Cross-compile
+#HOST = i686-w64-mingw32
+
+ifeq ($(HOST),)
+CROSS_COMPILE=
+else
+ifeq ($(HOST),i686-w64-mingw32)
+override OS = WINNT
+override ARCH = i686
+#override OPENBLAS_DYNAMIC_ARCH = 1
+override CROSS_COMPILE=$(HOST)-
+export WINEPATH := $(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g');$(WINEPATH)
+else
+$(error "unknown HOST variable set")
+endif
+endif
+
 # Figure out OS and architecture
-OS = $(shell uname)
+BUILD_OS = $(shell uname)
+OS = $(BUILD_OS)
 ARCH = $(shell uname -m)
 
 # Use 64-bit libraries by default on 64-bit architectures
@@ -48,9 +69,6 @@ USE_COPY_STACKS = 1
 
 # Compiler specific stuff
 
-FC = gfortran
-JFFLAGS = -O2 $(fPIC)
-
 ifeq ($(CC), clang)
 USEGCC = 0
 USECLANG = 1
@@ -71,8 +89,8 @@ endif
 endif
 
 ifeq ($(USEGCC),1)
-CC = gcc
-CXX = g++
+CC = $(CROSS_COMPILE)gcc
+CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
@@ -83,8 +101,8 @@ endif
 endif
 
 ifeq ($(USECLANG),1)
-CC = clang
-CXX = clang++
+CC = $(CROSS_COMPILE)clang
+CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
@@ -95,6 +113,14 @@ CXX += -mmacosx-version-min=10.6
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
+
+FC = $(CROSS_COMPILE)gfortran
+JFFLAGS = -O2 $(fPIC)
+CPP = $(CC) -E
+AR := $(CROSS_COMPILE)ar
+AS := $(CROSS_COMPILE)as
+LD := $(CROSS_COMPILE)ld
+RANLIB := $(CROSS_COMPILE)ranlib
 
 # if not absolute, then relative to JULIA_HOME
 JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
@@ -289,7 +315,7 @@ $$(abspath $(1)):
 	@mkdir -p $$@
 endef
 
-ifeq ($(OS), WINNT)
+ifeq ($(BUILD_OS), WINNT)
 define mingw_to_dos
 $(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1))))
 endef
