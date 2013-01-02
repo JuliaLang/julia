@@ -1755,9 +1755,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the rank of a matrix
 
-.. function:: cond(M)
+.. function:: norm(A, [p])
 
-   Matrix condition number
+   Compute the p-norm of a vector or a matrix. ``p`` is 2 by default, if not provided. The Frobenius norm of a matrix can be computed with ``norm(A, :fro)``.
+
+.. function:: cond(M, [p])
+
+   Matrix condition number, computed using the p-norm. ``p`` is 2 by default, if not provided.
 
 .. function:: trace(M)
 
