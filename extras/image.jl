@@ -734,7 +734,7 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         halfx = int((n-length(x)-1)/2)
         xp[halfx+1:halfx+length(x)] = x
         x = fft(xp)
-        C = fftshift(ifft2(fft2(B) .* (y * x.')))
+        C = fftshift(ifft(fft(B) .* (y * x.')))
         if T <: Real
             C = real(C)
         end
@@ -749,7 +749,7 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         halfb2 = ifloor((size(Bt,2)-sb[2])/2)
         At[halfa1+1:halfa1+sa[1], halfa2+1:halfa2+sa[2]] = A
         Bt[halfb1+1:halfb1+sb[1], halfb2+1:halfb2+sb[2]] = filter
-        C = fftshift(ifft2(fft2(At).*fft2(Bt)))
+        C = fftshift(ifft(fft(At).*fft(Bt)))
         if T <: Real
             C = real(C)
         end

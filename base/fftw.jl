@@ -1,7 +1,8 @@
 module FFTW
 
-export bfft, bfftn, brfft, brfftn, fft, fft2, fft3, fftn,
-       ifft, ifft2, ifft3, ifftn, irfft, irfftn, rfft, rfftn
+export fft, bfft, ifft, rfft, brfft, irfft,
+       plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
+       fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
 ## FFT: Implement fft by calling fftw.
 
@@ -13,7 +14,7 @@ const libfftwf = "libfftw3f_threads"
 const FORWARD = int32(-1)
 const BACKWARD = int32(1)
 
-## FFTW Flags from fftw3.h
+## _jl_FFTW Flags from fftw3.h
 
 const MEASURE         = uint32(0)
 const DESTROY_INPUT   = uint32(1 << 0)
@@ -23,6 +24,7 @@ const EXHAUSTIVE      = uint32(1 << 3)   # NO_EXHAUSTIVE is default
 const PRESERVE_INPUT  = uint32(1 << 4)   # cancels DESTROY_INPUT
 const PATIENT         = uint32(1 << 5)   # IMPATIENT is default
 const ESTIMATE        = uint32(1 << 6)
+const WISDOM_ONLY     = uint32(1 << 21)
 
 ## R2R transform kinds
 
@@ -42,19 +44,44 @@ const RODFT11 = int32(10)
 
 # Wisdom
 
-function import_64bit_wisdom(filename::String)
-    stat = ccall((:fftw_import_wisdom_from_filename,libfftw),
-        Int32, (Ptr{Uint8},), bytestring(filename))
-    if stat == 0
-        error("failed to import wisdom from $filename")
+# Import and export wisdom to/from a single file for all precisions,
+# which is more user-friendly than requiring the user to call a
+# separate routine depending on the fp precision of the plans.  This
+# requires a bit of trickness since we have to (a) use the libc file
+# I/O routines with fftw_export_wisdom_to_file/import_wisdom_from_file
+# (b) we need 256 bytes of space padding between the wisdoms to work
+# around FFTW's internal file i/o buffering [see the BUFSZ constant in
+# FFTW's api/import-wisdom-from-file.c file].
+
+function export_wisdom(fname::String)
+    f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}),
+              bytestring(fname), bytestring("w"))
+    if f == C_NULL
+        error("could not open wisdom file $fname")
     end
+    ccall((:fftw_export_wisdom_to_file,libfftw), Void, (Ptr{Void},), f)
+    ccall(:fputs, Int32, (Ptr{Uint8},Ptr{Void}), bytestring(" "^256), f)
+    ccall((:fftwf_export_wisdom_to_file,libfftwf), Void, (Ptr{Void},), f)
+    ccall(:fclose, Void, (Ptr{Void},), f)
 end
 
-function import_32bit_wisdom(filename::String)
-    stat = ccall((:fftwf_import_wisdom_from_filename,libfftwf),
-        Int32, (Ptr{Uint8},), bytestring(filename))
-    if stat == 0
-        error("failed to import wisdom from $filename")
+function import_wisdom(fname::String)
+    f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}),
+              bytestring(fname), bytestring("r"))
+    if f == C_NULL
+        error("could not open wisdom file $fname")
+    end
+    if ccall((:fftw_import_wisdom_from_file,libfftw),Int32,(Ptr{Void},),f)==0||
+       ccall((:fftwf_import_wisdom_from_file,libfftwf),Int32,(Ptr{Void},),f)==0
+        error("failed to import wisdom from $fname")
+    end
+    ccall(:fclose, Void, (Ptr{Void},), f)
+end
+
+function import_system_wisdom()
+    if ccall((:fftw_import_system_wisdom,libfftw), Int32, ()) == 0 ||
+       ccall((:fftwf_import_system_wisdom,libfftwf), Int32, ()) == 0
+        error("failed to import system wisdom")
     end
 end
 
@@ -69,10 +96,13 @@ let initialized = false
     global num_threads
     function num_threads(nthreads::Integer)
         if !initialized
+            # must re-initialize FFTW if any FFTW routines have been called
+            ccall((:fftw_cleanup,libfftw), Void, ())
+            ccall((:fftwf_cleanup,libfftwf), Void, ())
             stat = ccall((:fftw_init_threads,libfftw), Int32, ())
             statf = ccall((:fftwf_init_threads,libfftwf), Int32, ())
             if stat == 0 || statf == 0
-                error("could not initialize fft threads")
+                error("could not initialize FFTW threads")
             end
             initialized = true
         end
@@ -89,6 +119,30 @@ execute(precision::Union(Type{Float64}, Type{Complex128}), plan) =
 execute(precision::Union(Type{Float32}, Type{Complex64}), plan) =
     ccall((:fftwf_execute,libfftwf), Void, (Ptr{Void},), plan)
 
+execute(plan, X::StridedArray{Complex128}, Y::StridedArray{Complex128}) =
+    ccall((:fftw_execute_dft,libfftw), Void, 
+          (Ptr{Void},Ptr{Complex128},Ptr{Complex128}), plan, X, Y)
+
+execute(plan, X::StridedArray{Complex64}, Y::StridedArray{Complex64}) =
+    ccall((:fftwf_execute_dft,libfftwf), Void, 
+          (Ptr{Void},Ptr{Complex64},Ptr{Complex64}), plan, X, Y)
+
+execute(plan, X::StridedArray{Float64}, Y::StridedArray{Complex128}) =
+    ccall((:fftw_execute_dft_r2c,libfftw), Void, 
+          (Ptr{Void},Ptr{Float64},Ptr{Complex128}), plan, X, Y)
+
+execute(plan, X::StridedArray{Float32}, Y::StridedArray{Complex64}) =
+    ccall((:fftwf_execute_dft_r2c,libfftwf), Void, 
+          (Ptr{Void},Ptr{Float32},Ptr{Complex64}), plan, X, Y)
+
+execute(plan, X::StridedArray{Complex128}, Y::StridedArray{Float64}) =
+    ccall((:fftw_execute_dft_c2r,libfftw), Void, 
+          (Ptr{Void},Ptr{Float64},Ptr{Complex128}), plan, X, Y)
+
+execute(plan, X::StridedArray{Complex64}, Y::StridedArray{Float32}) =
+    ccall((:fftwf_execute_dft_c2r,libfftwf), Void, 
+          (Ptr{Void},Ptr{Float32},Ptr{Complex64}), plan, X, Y)
+
 # Destroy plan
 
 destroy_plan(precision::Union(Type{Float64}, Type{Complex128}), plan) =
@@ -97,222 +151,486 @@ destroy_plan(precision::Union(Type{Float64}, Type{Complex128}), plan) =
 destroy_plan(precision::Union(Type{Float32}, Type{Complex64}), plan) =
     ccall((:fftwf_destroy_plan,libfftwf), Void, (Ptr{Void},), plan)
 
-# Create nd plan
+# Planner timelimits
 
-for (libname, fname_complex, fname_r2c, fname_c2r, T_in, T_out) in
-    ((:libfftw,"fftw_plan_dft","fftw_plan_dft_r2c","fftw_plan_dft_c2r",:Float64,:Complex128),
-     (:libfftwf,"fftwf_plan_dft","fftwf_plan_dft_r2c","fftwf_plan_dft_c2r",:Float32,:Complex64))
-    @eval begin
-        function plan_dft(X::Array{$T_out}, Y::Array{$T_out}, direction::Integer)
-            ccall(($fname_complex,$libname),
-                  Ptr{Void},
-                  (Int32, Ptr{Int32}, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
-                  ndims(X), int32(reverse([size(X)...])), X, Y, direction, ESTIMATE)
-        end
-        function plan_dft(X::Array{$T_in}, Y::Array{$T_out})
-            ccall(($fname_r2c,$libname),
-                  Ptr{Void},
-                  (Int32, Ptr{Int32}, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
-                  ndims(X), int32(reverse([size(X)...])), X, Y, ESTIMATE)
-        end
-        function plan_dft(X::Array{$T_out}, Y::Array{$T_in})
-            ccall(($fname_c2r,$libname),
-                  Ptr{Void},
-                  (Int32, Ptr{Int32}, Ptr{$T_out}, Ptr{$T_in}, Uint32),
-                  ndims(Y), int32(reverse([size(Y)...])), X, Y, ESTIMATE)
-        end
+const NO_TIMELIMIT = -1.0 # from fftw3.h
+
+set_timelimit(precision::Union(Type{Float64}, Type{Complex128}),seconds) =
+    ccall((:fftw_set_timelimit,libfftw), Void, (Float64,), seconds)
+
+set_timelimit(precision::Union(Type{Float32}, Type{Complex64}),seconds) =
+    ccall((:fftwf_set_timelimit,libfftwf), Void, (Float64,), seconds)
+
+# Array alignment mod 16:
+#   FFTW plans may depend on the alignment of the array mod 16 bytes,
+#   i.e. the address mod 16 of the first element of the array, in order
+#   to exploit SIMD operations.  Julia arrays are, by default, aligned
+#   to 16-byte boundaries (address mod 16 == 0), but this may not be
+#   true for data imported from external C code, or for SubArrays.
+#   Use the undocumented routine fftw_alignment_of to determine the 
+#   alignment of a given pointer modulo whatever FFTW needs.
+
+alignment_of{T<:Union(Complex128,Float64)}(A::StridedArray{T}) = 
+   ccall((:fftw_alignment_of, libfftw), Int32, (Ptr{T},), A)
+
+alignment_of{T<:Union(Complex64,Float32)}(A::StridedArray{T}) = 
+   ccall((:fftwf_alignment_of, libfftwf), Int32, (Ptr{T},), A)
+
+# Plan (low-level)
+
+# low-level storage of the FFTW plan, along with the information
+# needed to determine whether it is applicable.   We need to put
+# this into a type to support a finalizer on the fftw_plan.
+type Plan{T<:Union(Float64, Complex128, Float32, Complex64)}
+    plan::Ptr{Void}
+    sz::Dims # size of array on which plan operates (Int tuple)
+    istride::Dims # strides of input
+    ialign::Int32 # alignment mod 16 of input
+    function Plan(plan::Ptr{Void}, sz::Dims, istride::Dims, ialign::Int32)
+        p = new(plan,sz,istride,ialign)
+        finalizer(p, p -> destroy_plan(T, p.plan))
+        return p
+    end
+end
+Plan{T<:Union(Float64, Complex128, Float32, Complex64)}(plan::Ptr{Void}, X::StridedArray{T}) = Plan{T}(plan, size(X), strides(X), alignment_of(X))
+
+# Check whether a Plan is applicable to a given input array, and
+# throw an informative error if not:
+function assert_applicable{T<:Union(Float64, Complex128, Float32, Complex64)}(p::Plan{T}, X::StridedArray{T})
+    if size(X) != p.sz
+        throw(ArgumentError("FFTW plan applied to wrong-size array"))
+    elseif strides(X) != p.istride
+        throw(ArgumentError("FFTW plan applied to wrong-strides array"))
+    elseif alignment_of(X) != p.ialign
+        throw(ArgumentError("FFTW plan applied to array with wrong memory alignment"))
     end
 end
 
-# Guru plans
+# NOTE ON GC (garbage collection):
+#    The Plan has a finalizer so that gc will destroy the plan,
+#    which is necessary for gc to work with plan_fft.  However,
+#    even when we are creating a single-use Plan [e.g. for fftn(x)],
+#    we intentionally do NOT call destroy_plan explicitly, and instead
+#    wait for garbage collection.  The reason is that, in the common
+#    case where the user calls fft(x) a second time soon afterwards,
+#    if destroy_plan has not yet been called then FFTW will internally
+#    re-use the table of trigonometric constants from the first plan.
 
-for (libname, fname_complex, fname_r2c, fname_c2r, T_in, T_out) in
-    ((:libfftw,"fftw_plan_guru64_dft","fftw_plan_guru64_dft_r2c","fftw_plan_guru64_dft_c2r",:Float64,:Complex128),
-     (:libfftwf,"fftwf_plan_guru64_dft","fftwf_plan_guru64_dft_r2c","fftwf_plan_guru64_dft_c2r",:Float32,:Complex64))
-    @eval begin
-        function plan_guru_dft(dims::Array{Int,2}, howmany::Array{Int,2},
-            X::Array{$T_out}, Y::Array{$T_out}, direction::Int32)
-            ccall(($fname_complex,$libname),
-                  Ptr{Void},
-                  (Int32, Ptr{Int}, Int32, Ptr{Int},
-                   Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32),
-                  size(dims,2), dims, size(howmany,2), howmany,
-                  X, Y, direction, ESTIMATE)
-        end
-        function plan_guru_dft(dims::Array{Int,2}, howmany::Array{Int,2},
-            X::Array{$T_in}, Y::Array{$T_out})
-            ccall(($fname_r2c,$libname),
-                  Ptr{Void},
-                  (Int32, Ptr{Int}, Int32, Ptr{Int},
-                   Ptr{$T_in}, Ptr{$T_out}, Uint32),
-                  size(dims,2), dims, size(howmany,2), howmany,
-                  X, Y, ESTIMATE)
-        end
-        function plan_guru_dft(dims::Array{Int,2}, howmany::Array{Int,2},
-            X::Array{$T_out}, Y::Array{$T_in})
-            ccall(($fname_c2r,$libname),
-                  Ptr{Void},
-                  (Int32, Ptr{Int}, Int32, Ptr{Int},
-                   Ptr{$T_out}, Ptr{$T_in}, Uint32),
-                  size(dims,2), dims, size(howmany,2), howmany,
-                  X, Y, ESTIMATE)
-        end
-    end
+# Compute dims and howmany for FFTW guru planner
+function dims_howmany(X::StridedArray, Y::StridedArray, 
+                      sz::Array{Int,1}, region)
+    reg = [region...]
+    ist = [strides(X)...]
+    ost = [strides(Y)...]
+    dims = [sz[reg] ist[reg] ost[reg]]'
+    oreg = [1:ndims(X)]
+    oreg[reg] = 0
+    oreg = filter(d -> d > 0, oreg)
+    howmany = [sz[oreg] ist[oreg] ost[oreg]]'
+    return (dims, howmany)
 end
 
-# fftn/ifftn
+# low-level Plan creation (for internal use in FFTW module)
 
-for (fname,direction) in ((:fftn,:FORWARD),(:bfftn,:BACKWARD))
+for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
+                         (:Float32,:Complex64,"fftwf",libfftwf))
+
+    @eval function Plan(X::StridedArray{$Tc}, Y::StridedArray{$Tc},
+                        region, direction::Integer,
+                        flags::Unsigned, timelimit::Real)
+        set_timelimit($Tr, timelimit)
+        (dims, howmany) = dims_howmany(X, Y, [size(X)...], region)
+        plan = ccall(($(string(fftw,"_plan_guru64_dft")),$lib),
+                     Ptr{Void},
+                     (Int32, Ptr{Int}, Int32, Ptr{Int},
+                      Ptr{$Tc}, Ptr{$Tc}, Int32, Uint32),
+                     size(dims,2), dims, size(howmany,2), howmany,
+                     X, Y, direction, flags)
+        set_timelimit($Tr, NO_TIMELIMIT)
+        if plan == C_NULL # shouldn't normally happen
+            error("FFTW could not create plan")
+        end
+        return Plan(plan, X)
+    end
+
+    @eval function Plan(X::StridedArray{$Tr}, Y::StridedArray{$Tc},
+                        region, flags::Unsigned, timelimit::Real)
+        region = circshift([region...],-1) # FFTW halves last dim
+        set_timelimit($Tr, timelimit)
+        (dims, howmany) = dims_howmany(X, Y, [size(X)...], region)
+        plan = ccall(($(string(fftw,"_plan_guru64_dft_r2c")),$lib),
+                     Ptr{Void},
+                     (Int32, Ptr{Int}, Int32, Ptr{Int},
+                      Ptr{$Tr}, Ptr{$Tc}, Uint32),
+                     size(dims,2), dims, size(howmany,2), howmany,
+                     X, Y, flags)
+        set_timelimit($Tr, NO_TIMELIMIT)
+        if plan == C_NULL # shouldn't normally happen
+            error("FFTW could not create plan")
+        end
+        return Plan(plan, X)
+    end
+
+    @eval function Plan(X::StridedArray{$Tc}, Y::StridedArray{$Tr},
+                        region, flags::Unsigned, timelimit::Real)
+        region = circshift([region...],-1) # FFTW halves last dim
+        set_timelimit($Tr, timelimit)
+        (dims, howmany) = dims_howmany(X, Y, [size(Y)...], region)
+        plan = ccall(($(string(fftw,"_plan_guru64_dft_c2r")),$lib),
+                     Ptr{Void},
+                     (Int32, Ptr{Int}, Int32, Ptr{Int},
+                      Ptr{$Tc}, Ptr{$Tr}, Uint32),
+                     size(dims,2), dims, size(howmany,2), howmany,
+                     X, Y, flags)
+        set_timelimit($Tr, NO_TIMELIMIT)
+        if plan == C_NULL # shouldn't normally happen
+            error("FFTW could not create plan")
+        end
+        return Plan(plan, X)
+    end
+
+end
+
+# Convert arrays of numeric types to FFTW-supported packed complex-float types
+# (FIXME: is there a way to use the Julia promotion rules more cleverly here?)
+complexfloat{T<:Union(Complex128,Complex64)}(X::StridedArray{T}) = X
+complexfloat{T<:Union(Float64,Float32)}(X::StridedArray{T}) = complex(X)
+complexfloat{T<:Real}(X::StridedArray{T}) = complex128(X)
+complexfloat{T<:Complex}(X::StridedArray{T}) = complex128(X)
+
+# In the Julia interface, a "plan" is just a function that executes
+# an efficient FFT of fixed size/strides/alignment.  For each FFT function
+# (fft, bfft, ifft, rfft, ...), we have at least two interfaces:
+#
+#   fft(x [, region]) - FFT of x, creating and destroying a plan,
+#                       optionally acting only on a subset of the dimensions
+#   p = plan_fft(x, [, region [, flags [, timelimit]]]) 
+#       -- returns a function p(x) that performs efficient FFTs
+#          of a given size (on given dimensions) with variants 
+#          to specify the FFTW planner flags (default is ESTIMATE) and 
+#          timelimit (default: NO_TIMELIMIT).
+#
+# along with in-place variants fft! and plan_fft! if feasible.
+
+for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
+    f! = symbol(string(f,"!"))
+    plan_f = symbol(string("plan_",f))
+    plan_f! = symbol(string("plan_",f,"!"))
     @eval begin
-        function ($fname){T<:Union(Complex128,Complex64)}(X::Array{T})
+        function $f{T<:Union(Complex128,Complex64)}(X::StridedArray{T}, region)
             Y = similar(X, T)
-            plan = plan_dft(X, Y, $direction)
-            execute(T, plan)
-            destroy_plan(T, plan)
+            p = Plan(X, Y, region, $direction, ESTIMATE, NO_TIMELIMIT)
+            execute(T, p.plan)
+            # do not destroy_plan ... see above note on gc
             return Y
         end
 
-        function ($fname){T<:Union(Float64,Float32)}(X::Array{T})
-            Y = complex(X) # in-place transform
-            plan = plan_dft(Y, Y, $direction)
-            execute(T, plan)
-            destroy_plan(T, plan)
-            return Y
+        # in-place version
+        function $f!{T<:Union(Complex128,Complex64)}(X::StridedArray{T},region)
+            p = Plan(X, X, region, $direction, ESTIMATE, NO_TIMELIMIT)
+            execute(T, p.plan)
+            # do not destroy_plan ... see above note on gc
+            return X
         end
-    end
-end
+        
+        function $f{T<:Number}(X::StridedArray{T}, region)
+            Y = complexfloat(X) # in-place transform
+            return $f!(Y, region)
+        end
 
-ifftn(X) = bfftn(X)./length(X)
-
-# Convenience functions
-
-fft2{T}(X::Matrix{T}) = fftn(X)
-fft3{T}(X::Array{T,3}) = fftn(X)
-ifft2{T}(X::Matrix{T}) = ifftn(X)
-ifft3{T}(X::Array{T,3}) = ifftn(X)
-
-# Compute fft and ifft of slices of arrays
-
-fft(X) = fft(X, 1)
-ifft(X) = ifft(X, 1)
-ifft(X,dim) = bfft(X,dim)./size(X,dim)
-
-for (fname,direction) in ((:fft,:FORWARD),(:bfft,:BACKWARD))
-    @eval begin
-        function ($fname){T<:Union(Complex128,Complex64)}(X::Array{T}, dim::Int)
-            s = [size(X)...]
-            strides = [ prod(s[1:i-1]) for i=1:length(s) ]
-            dims = [s[dim],strides[dim],strides[dim]]''
-            del(s, dim)
-            del(strides, dim)
-            howmany = [s strides strides]'
+        function $plan_f{T<:Union(Complex128,Complex64)}(X::StridedArray{T},
+                                                         region, 
+                                                         flags::Unsigned,
+                                                         tlim::Real)
             Y = similar(X, T)
-            plan = plan_guru_dft(dims, howmany, X, Y, $direction)
-            execute(T, plan)
-            destroy_plan(T, plan)
-            return Y
+            p = Plan(X, Y, region, $direction, flags, tlim)
+            return Z::StridedArray{T} -> begin
+                assert_applicable(p, Z)
+                W = similar(Z, T)
+                execute(p.plan, Z, W)
+                return W
+            end
+        end
+        
+        function $plan_f{T<:Number}(X::StridedArray{T}, region, 
+                                    flags::Unsigned, tlim::Real)
+            Y = complexfloat(X) # in-place transform
+            p = Plan(Y, Y, region, $direction, flags, tlim)
+            return Z::StridedArray{T} -> begin
+                W = complexfloat(Z) # in-place transform
+                assert_applicable(p, W)
+                execute(p.plan, W, W)
+                return W
+            end
+        end
+        
+        function $plan_f!{T<:Union(Complex128,Complex64)}(X::StridedArray{T},
+                                                          region,
+                                                          flags::Unsigned,
+                                                          tlim::Real)
+            p = Plan(X, X, region, $direction, flags, tlim)
+            return Z::StridedArray{T} -> begin
+                assert_applicable(p, Z)
+                execute(p.plan, Z, Z)
+                return Z
+            end
         end
 
-        function ($fname){T<:Union(Float64,Float32)}(X::Array{T}, dim::Int)
-            s = [size(X)...]
-            strides = [ prod(s[1:i-1]) for i=1:length(s) ]
-            n = s[dim]
-            dims = [n,strides[dim],strides[dim]]''
-            del(s, dim)
-            del(strides, dim)
-            howmany = [s strides strides]'
-            Y = complex(X) # in-place transform
-            plan = plan_guru_dft(dims, howmany, Y, Y, $direction)
-            execute(T, plan)
-            destroy_plan(T, plan)
-            return Y
+        $f(X::StridedArray) = $f(X, 1:ndims(X))
+        $f!(X::StridedArray) = $f!(X, 1:ndims(X))
+    end
+    for pf in (plan_f, plan_f!)
+        @eval begin
+            $pf{T<:Number}(X::StridedArray{T}, region, flags::Unsigned) =
+                $pf(X, region, flags, NO_TIMELIMIT)
+            $pf{T<:Number}(X::StridedArray{T}, region) =
+                $pf(X, region, ESTIMATE, NO_TIMELIMIT)
+            $pf{T<:Number}(X::StridedArray{T}) =
+                $pf(X, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
         end
     end
 end
 
-# rfft/rfftn
+# Normalization for ifft
 
-rfft(X) = rfft(X, 1)
+normalization(X::StridedArray, region) = 1 / prod([size(X)...][[region...]])
+normalization(X::StridedArray) = 1 / length(X)
+
+# Normalized ifft inverse transforms:
+
+for (f,fb) in ((:ifft,:bfft), (:ifft!,:bfft!))
+    pf = symbol(string("plan_", f))
+    pfb = symbol(string("plan_", fb))
+    @eval begin
+        $f(X, region) = scale!($fb(X, region), normalization(X, region))
+        $f(X) = scale!($fb(X), normalization(X))
+
+        function $pf(X, region, flags, tlim) 
+            nrm = normalization(X, region)
+            p = $pfb(X, region, flags, tlim)
+            return Z -> scale!(p(Z), nrm)
+        end
+        $pf(X, region, flags) = $pf(X, region, flags, NO_TIMELIMIT)
+        $pf(X, region) = $pf(X, region, ESTIMATE, NO_TIMELIMIT)
+        function $pf(X) 
+            nrm = normalization(X)
+            p = $pfb(X)
+            return Z -> scale!(p(Z), nrm)
+        end
+    end
+end
+
+# rfft/brfft and planned variants.  No in-place version for now.
+
 for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     @eval begin
-        function rfftn(X::Array{$Tr})
+        function rfft(X::StridedArray{$Tr}, region)
+            d1 = region[1]
             osize = [size(X)...]
-            osize[1] = ifloor(osize[1]/2) + 1
+            osize[d1] = ifloor(osize[d1]/2) + 1
             Y = Array($Tc, osize...)
-            plan = plan_dft(X, Y)
-            execute($Tr, plan)
-            destroy_plan($Tr, plan)
+            p = Plan(X, Y, region, ESTIMATE, NO_TIMELIMIT)
+            execute($Tr, p.plan)
+            # do not destroy_plan ... see above note on gc
             return Y
         end
 
-        function rfft(X::Array{$Tr}, dim::Int)
-            isize = [size(X)...]
+        function rfft{T<:Real}(X::StridedArray{T}, region)
+            Xr = float(X)
+            return rfft(Xr, region)
+        end
+
+        function plan_rfft(X::StridedArray{$Tr}, region,
+                           flags::Unsigned, tlim::Real)
+            d1 = region[1]
             osize = [size(X)...]
-            osize[dim] = ifloor(osize[dim]/2) + 1
-            istrides = [ prod(isize[1:i-1]) for i=1:length(isize) ]
-            ostrides = [ prod(osize[1:i-1]) for i=1:length(osize) ]
+            osize[d1] = ifloor(osize[d1]/2) + 1
             Y = Array($Tc, osize...)
-            dims = [isize[dim],istrides[dim],ostrides[dim]]''
-            del(isize, dim)
-            del(istrides, dim)
-            del(ostrides, dim)
-            howmany = [isize istrides ostrides]'
-            plan = plan_guru_dft(dims, howmany, X, Y)
-            execute($Tr, plan)
-            destroy_plan($Tr, plan)
+            p = Plan(X, Y, region, flags, tlim)
+            return Z::StridedArray{$Tr} -> begin
+                assert_applicable(p, Z)
+                W = Array($Tc, osize...)
+                execute(p.plan, Z, W)
+                return W
+            end
+        end
+
+        # FFTW currently doesn't support PRESERVE_INPUT for
+        # multidimensional out-of-place c2r transforms, so
+        # we have to handle 1d and >1d cases separately.  Ugh.
+
+        function brfft(X::StridedArray{$Tc}, d::Integer, region::Integer)
+            osize = [size(X)...]
+            @assert osize[region] == ifloor(d/2) + 1
+            osize[region] = d
+            Y = Array($Tr, osize...)
+            p = Plan(X, Y, region, ESTIMATE | PRESERVE_INPUT, NO_TIMELIMIT)
+            execute($Tr, p.plan)
+            # do not destroy_plan ... see above note on gc
             return Y
         end
 
-        function brfftn(X::Array{$Tc}, d::Int)
+        # variant that destroys input X
+        function brfftd(X::StridedArray{$Tc}, d::Integer, region) 
+            d1 = region[1]
             osize = [size(X)...]
-            @assert osize[1] == ifloor(d/2) + 1
-            osize[1] = d
+            @assert osize[d1] == ifloor(d/2) + 1
+            osize[d1] = d
             Y = Array($Tr, osize...)
-            plan = plan_dft(X, Y)
-            execute($Tr, plan)
-            destroy_plan($Tr, plan)
+            p = Plan(X, Y, region, ESTIMATE, NO_TIMELIMIT)
+            execute($Tr, p.plan)
+            # do not destroy_plan ... see above note on gc
             return Y
         end
 
-        function brfft(X::Array{$Tc}, d::Int, dim::Int)
-            isize = [size(X)...]
-            osize = [size(X)...]
-            @assert osize[dim] == ifloor(d/2) + 1
-            osize[dim] = d
-            istrides = [ prod(isize[1:i-1]) for i=1:length(isize) ]
-            ostrides = [ prod(osize[1:i-1]) for i=1:length(osize) ]
-            Y = Array($Tr, osize...)
-            dims = [osize[dim],istrides[dim],ostrides[dim]]''
-            del(osize, dim)
-            del(istrides, dim)
-            del(ostrides, dim)
-            howmany = [osize istrides ostrides]'
-            plan = plan_guru_dft(dims, howmany, X, Y)
-            execute($Tr, plan)
-            destroy_plan($Tr, plan)
-            return Y
+        function brfft(X::StridedArray{$Tc}, d::Integer, region) 
+            if length(region) == 1
+                return brfft(X, d, convert(Int, region[1]))
+            end
+            X = copy(X) # TODO: work in-place instead?
+            return brfftd(X, d, region)
         end
+
+        function brfft{T<:Number}(X::StridedArray{T}, d::Integer, region)
+            Xc = complexfloat(X)
+            return brfftd(Xc, d, region)
+        end
+
+        function plan_brfft(X::StridedArray{$Tc}, d::Integer, region::Integer,
+                            flags::Unsigned, tlim::Real)
+            osize = [size(X)...]
+            @assert osize[region] == ifloor(d/2) + 1
+            osize[region] = d
+            Y = Array($Tr, osize...)
+            p = Plan(X, Y, region, flags | PRESERVE_INPUT, tlim)
+            return Z::StridedArray{$Tc} -> begin
+                assert_applicable(p, Z)
+                W = Array($Tr, osize...)
+                execute(p.plan, Z, W)
+                return W
+            end
+        end
+
+        function plan_brfft(X::StridedArray{$Tc}, d::Integer, region,
+                            flags::Unsigned, tlim::Real)
+            if length(region) == 1
+                return plan_brfft(X, d, convert(Int, region[1]), flags, tlim)
+            end
+            d1 = region[1]
+            osize = [size(X)...]
+            @assert osize[d1] == ifloor(d/2) + 1
+            osize[d1] = d
+            Y = Array($Tr, osize...)
+            X = copy(X)
+            p = Plan(X, Y, region, flags, tlim)
+            return Z::StridedArray{$Tc} -> begin
+                assert_applicable(p, Z)
+                Z = copy(Z)
+                W = Array($Tr, osize...)
+                execute(p.plan, Z, W)
+                return W
+            end
+        end
+
+        rfft(X::StridedArray) = rfft(X, 1:ndims(X))
+        brfft(X::StridedArray,d) = brfft(X, d, 1:ndims(X))
+
+        plan_rfft(X::StridedArray, region, flags) =
+            plan_rfft(X, region, flags, NO_TIMELIMIT)
+        plan_rfft(X::StridedArray, region) =
+            plan_rfft(X, region, ESTIMATE, NO_TIMELIMIT)
+        plan_rfft(X::StridedArray) =
+            plan_rfft(X, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
+
+        plan_brfft(X::StridedArray, d,  region, flags) =
+            plan_brfft(X, d, region, flags, NO_TIMELIMIT)
+        plan_brfft(X::StridedArray, d,  region) =
+            plan_brfft(X, d, region, ESTIMATE, NO_TIMELIMIT)
+        plan_brfft(X::StridedArray, d) =
+            plan_brfft(X, d, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
     end
 end
 
-brfft(X,d) = brfft(X,d,1)
-irfft(X,d) = irfft(X,d,1)
-irfft(X,d,dim) = brfft(X,d,dim)./d
-irfftn(X,d) = (Y=brfftn(X,d); Y./length(Y))
+# Normalized rfft inverse transforms:
 
-# Transpose
+function irfft(X, d, region)
+    Y = brfft(X, d, region)
+    return scale!(Y, normalization(Y, region))
+end
+
+function irfft(X, d)
+    Y = brfft(X, d)
+    return scale!(Y, normalization(Y))
+end
+
+function plan_irfft(X::StridedArray, d::Integer, region, flags, tlim)
+    p = plan_brfft(X, d, region, flags, tlim)
+    d1 = region[1]
+    osize = [size(X)...]
+    osize[d1] = d
+    nrm = 1 / prod(osize[[region...]])
+    return Z -> scale!(p(Z), nrm)
+end
+
+plan_irfft(X, d, region, flags) = plan_irfft(X, d, region, flags, NO_TIMELIMIT)
+plan_irfft(X, d, region) = plan_irfft(X, d, region, ESTIMATE, NO_TIMELIMIT)
+plan_irfft(X, d) = plan_irfft(X, d, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
+
+# A DFT is unambiguously defined as just the identity operation for scalars
+fft(x::Number) = x
+ifft(x::Number) = x
+bfft(x::Number) = x
+rfft(x::Real) = x
+irfft(x::Number, d::Integer) = d == 1 ? real(x) : throw(BoundsError())
+brfft(x::Number, d::Integer) = d == 1 ? real(x) : throw(BoundsError())
+fft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
+ifft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
+bfft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
+fft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
+rfft(x::Real, dims) = dims[1] == 1 ? x : throw(BoundsError())
+irfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
+brfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
+
+plan_fft(x::Number) = x -> x
+plan_ifft(x::Number) = x -> x
+plan_bfft(x::Number) = x -> x
+plan_rfft(x::Real) = x -> x
+plan_irfft(x::Number, d::Integer) = (irfft(x,d); x -> real(x))
+plan_brfft(x::Number, d::Integer) = (brfft(x,d); x -> real(x))
+
+plan_fft(x::Number, dims) = (fft(x,dims); x -> x)
+plan_ifft(x::Number, dims) = (ifft(x,dims); x -> x)
+plan_bfft(x::Number, dims) = (bfft(x,dims); x -> x)
+plan_rfft(x::Real, dims) = (rfft(x,dims); x -> x)
+plan_irfft(x::Number, d::Integer, dims) = (irfft(x,d,dims); x -> real(x))
+plan_brfft(x::Number, d::Integer, dims) = (brfft(x,d,dims); x -> real(x))
+
+plan_fft(x::Number, dims, flags) = plan_fft(x, dims)
+plan_ifft(x::Number, dims, flags) = plan_ifft(x, dims)
+plan_bfft(x::Number, dims, flags) = plan_bfft(x, dims)
+plan_rfft(x::Real, dims, flags) = plan_rfft(x, dims)
+plan_irfft(x::Number, d::Integer, dims, flags) = plan_irfft(x, d, dims)
+plan_brfft(x::Number, d::Integer, dims, flags) = plan_brfft(x, d, dims)
+
+plan_fft(x::Number, dims, flags, tlim) = plan_fft(x, dims)
+plan_ifft(x::Number, dims, flags, tlim) = plan_ifft(x, dims)
+plan_bfft(x::Number, dims, flags, tlim) = plan_bfft(x, dims)
+plan_rfft(x::Real, dims, flags, tlim) = plan_rfft(x, dims)
+plan_irfft(x::Number, d::Integer, dims, flags, tlim) = plan_irfft(x, d, dims)
+plan_brfft(x::Number, d::Integer, dims, flags, tlim) = plan_brfft(x, d, dims)
+
 # NOTE: Using MEASURE and PATIENT zeros out the input the 
 # first time it is used for a particular size. Use ESTIMATE
 
-for (libname, fname, elty) in ((:libfftw ,"fftw_plan_guru_r2r",:Float64),
-                               (:libfftwf,"fftwf_plan_guru_r2r",:Float32))
+for (libname, fname, elty) in ((:libfftw ,"fftw_plan_guru64_r2r",:Float64),
+                               (:libfftwf,"fftwf_plan_guru64_r2r",:Float32))
     @eval begin
         function transpose(X::Matrix{$elty})
             P = similar(X)
             (n1, n2) = size(X)
             plan = ccall(($fname,$libname), Ptr{Void},
-                         (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Uint32),
-                         0, C_NULL, 2, int32([n1,n2,1,n2,1,n1]), X, P, [HC2R], ESTIMATE | PRESERVE_INPUT)
+                         (Int32, Ptr{Int}, Int32, Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Uint32),
+                         0, C_NULL, 2, [n1,n2,1,n2,1,n1], X, P, [HC2R], ESTIMATE | PRESERVE_INPUT)
             execute($elty, plan)
             destroy_plan($elty, plan)
             return P
@@ -320,15 +638,15 @@ for (libname, fname, elty) in ((:libfftw ,"fftw_plan_guru_r2r",:Float64),
     end
 end
 
-for (libname, fname, celty) in ((:libfftw ,"fftw_plan_guru_dft",:Complex128),
-                                (:libfftwf,"fftwf_plan_guru_dft",:Complex64))
+for (libname, fname, celty) in ((:libfftw ,"fftw_plan_guru64_dft",:Complex128),
+                                (:libfftwf,"fftwf_plan_guru64_dft",:Complex64))
     @eval begin
         function transpose(X::Matrix{$celty})
             P = similar(X)
             (n1, n2) = size(X)
             plan = ccall(($fname,$libname), Ptr{Void},
-                         (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$celty}, Ptr{$celty}, Int32, Uint32),
-                         0, C_NULL, 2, int32([n1,n2,1,n2,1,n1]), X, P, FORWARD, ESTIMATE | PRESERVE_INPUT)
+                         (Int32, Ptr{Int}, Int32, Ptr{Int}, Ptr{$celty}, Ptr{$celty}, Int32, Uint32),
+                         0, C_NULL, 2, [n1,n2,1,n2,1,n1], X, P, FORWARD, ESTIMATE | PRESERVE_INPUT)
             execute($celty, plan)
             destroy_plan($celty, plan)
             return P
