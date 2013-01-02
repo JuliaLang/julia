@@ -55,6 +55,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -66,7 +67,7 @@
 #include "dsfmt-2.2/dSFMT.c"
 #endif
 
-typedef long randmtzig_idx_type;
+typedef ptrdiff_t randmtzig_idx_type;
 typedef signed char randmtzig_int8_t;
 typedef unsigned char randmtzig_uint8_t;
 typedef short randmtzig_int16_t;

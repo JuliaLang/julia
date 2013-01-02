@@ -1,9 +1,9 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-const _jl_color_normal = "\033[0m"
+const color_normal = "\033[0m"
 
-function _jl_answer_color()
+function answer_color()
     c = get(ENV, "JL_ANSWER_COLOR", "")
     return c == "black"   ? "\033[1m\033[30m" :
            c == "red"     ? "\033[1m\033[31m" :
@@ -12,12 +12,11 @@ function _jl_answer_color()
            c == "magenta" ? "\033[1m\033[35m" :
            c == "cyan"    ? "\033[1m\033[36m" :
            c == "white"   ? "\033[1m\033[37m" :
-           c == "normal"  ? _jl_color_normal  :
+           c == "normal"  ? color_normal  :
            "\033[1m\033[34m"
 end
 
-
-_jl_banner() = print(_jl_have_color ? _jl_banner_color : _jl_banner_plain)
+banner() = print(have_color ? banner_color : banner_plain)
 
 
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
@@ -29,7 +28,7 @@ function repl_callback(ast::ANY, show_value)
     global _repl_enough_stdin = true
     stop_reading(STDIN) 
     STDIN.readcb = false
-    put(_jl_repl_channel, (ast, show_value))
+    put(repl_channel, (ast, show_value))
 end
 
 # called to show a REPL result
@@ -64,13 +63,12 @@ function add_backtrace(e, bt)
     end
 end
 
-function _jl_eval_user_input(ast::ANY, show_value)
+function eval_user_input(ast::ANY, show_value)
     iserr, lasterr, bt = false, (), nothing
     while true
         try
-            ccall(:restore_signals, Void, ())
-            if _jl_have_color
-                print(_jl_color_normal)
+            if have_color
+                print(color_normal)
             end
             if iserr
                 show(add_backtrace(lasterr,bt))
@@ -80,8 +78,8 @@ function _jl_eval_user_input(ast::ANY, show_value)
                 value = eval(Main,ast)
                 global ans = value
                 if !is(value,nothing) && show_value
-                    if _jl_have_color
-                        print(_jl_answer_color())
+                    if have_color
+                        print(answer_color())
                     end
                     try repl_show(value)
                     catch err
@@ -126,28 +124,31 @@ function readBuffer(stream::TTY, nread)
 end
 
 function run_repl()
-    global const _jl_repl_channel = RemoteRef()
+    global const repl_channel = RemoteRef()
 
-    if _jl_have_color
+    if have_color
         ccall(:jl_enable_color, Void, ())
     end
     atexit() do
-        if _jl_have_color
-            print(_jl_color_normal)
+        if have_color
+            print(color_normal)
         end
         println()
     end
+
+    # install Ctrl-C interrupt handler (InterruptException)
+    ccall(:jl_install_sigint_handler, Void, ())
 
     while true
         ccall(:repl_callback_enable, Void, ())
         global _repl_enough_stdin = false
         start_reading(STDIN, readBuffer)
-        (ast, show_value) = take(_jl_repl_channel)
+        (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
             break
         end
-        _jl_eval_user_input(ast, show_value!=0)
+        eval_user_input(ast, show_value!=0)
     end
 end
 
@@ -173,8 +174,6 @@ end
 
 function process_options(args::Array{Any,1})
     global ARGS
-    # install Ctrl-C interrupt handler (InterruptException)
-    ccall(:jl_install_sigint_handler, Void, ())
     quiet = false
     repl = true
     startup = true
@@ -242,16 +241,16 @@ function process_options(args::Array{Any,1})
     return (quiet,repl,startup)
 end
 
-const _jl_roottask = current_task()
-const _jl_roottask_wi = WorkItem(_jl_roottask)
+const roottask = current_task()
+const roottask_wi = WorkItem(roottask)
 
-_jl_is_interactive = false
-isinteractive() = (_jl_is_interactive::Bool)
+is_interactive = false
+isinteractive() = (is_interactive::Bool)
 
-@unix_only julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
+@unix_only julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
 @windows_only begin
     const JULIA_USER_DATA_DIR = string(ENV["AppData"],"/julia")
-    julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(JULIA_USER_DATA_DIR,"/packages")))
+    julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(JULIA_USER_DATA_DIR,"/packages")))
 end
 
 function _start()
@@ -281,17 +280,17 @@ function _start()
             push(PGRP.locs,Location("",0))
             PGRP.np = 1
             # make scheduler aware of current (root) task
-            enq_work(_jl_roottask_wi)
+            enq_work(roottask_wi)
             yield()
         end
 
         global const LOAD_PATH = ByteString[
             ".",
             julia_pkgdir(),
-            abs_path("$JULIA_HOME/../share/julia"),
-            abs_path("$JULIA_HOME/../share/julia/base"),
-            abs_path("$JULIA_HOME/../share/julia/extras"),
-            abs_path("$JULIA_HOME/../share/julia/ui"),
+            abspath("$JULIA_HOME/../share/julia"),
+            abspath("$JULIA_HOME/../share/julia/base"),
+            abspath("$JULIA_HOME/../share/julia/extras"),
+            abspath("$JULIA_HOME/../share/julia/ui"),
         ]
 
         (quiet,repl,startup) = process_options(ARGS)
@@ -301,12 +300,12 @@ function _start()
                 try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             end
 
-            @unix_only global _jl_have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
+            @unix_only global have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
                                     success(`tput setaf 0`)
             @windows_only global _jl_have_color = true
-            global _jl_is_interactive = true
+            global is_interactive = true
             if !quiet
-                _jl_banner()
+                banner()
             end
             run_repl()
         end
@@ -318,12 +317,12 @@ function _start()
     exit(0) #HACK: always exit using jl_exit
 end
 
-const _jl_atexit_hooks = {}
+const atexit_hooks = {}
 
-atexit(f::Function) = (enqueue(_jl_atexit_hooks, f); nothing)
+atexit(f::Function) = (enqueue(atexit_hooks, f); nothing)
 
 function _atexit()
-    for f in _jl_atexit_hooks
+    for f in atexit_hooks
         try
             f()
         catch err

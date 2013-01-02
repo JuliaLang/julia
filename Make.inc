@@ -1,13 +1,13 @@
 # -*- mode: makefile-gmake -*-
 
+# include twice to pickup user definitions
+-include $(JULIAHOME)/Make.user 
+
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
-USR = $(JULIAHOME)/usr
-USRBIN = $(USR)/bin
-USRINC = $(USR)/include
-LLVMROOT = $(USR)
-BUILD = $(USR)
+LLVMROOT = $(BUILD)
+BUILD = $(JULIAHOME)/usr
 
 # List of "private" libraries, e.g. ones that get installed to lib/julia
 JL_PRIVATE_LIBS = Rmath openlibm julia-release suitesparse_wrapper tk_wrapper gmp_wrapper glpk_wrapper random
@@ -24,8 +24,32 @@ JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
 JL_LIBDIR = lib/$(MULTIARCH)/
 endif
 
-OS = $(shell uname)
+# Cross-compile
+#HOST = i686-w64-mingw32
+
+ifeq ($(HOST),)
+CROSS_COMPILE=
+else
+ifeq ($(HOST),i686-w64-mingw32)
+override OS = WINNT
+override ARCH = i686
+#override OPENBLAS_DYNAMIC_ARCH = 1
+override CROSS_COMPILE=$(HOST)-
+export WINEPATH := $(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g');$(WINEPATH)
+else
+$(error "unknown HOST variable set")
+endif
+endif
+
+# Figure out OS and architecture
+BUILD_OS = $(shell uname)
+OS = $(BUILD_OS)
 ARCH = $(shell uname -m)
+
+# Use 64-bit libraries by default on 64-bit architectures
+ifeq ($(ARCH), x86_64)
+USE_LIB64 = 1
+endif
 
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
@@ -53,9 +77,6 @@ USE_COPY_STACKS = 1
 
 # Compiler specific stuff
 
-FC = gfortran
-JFFLAGS = -O2 $(fPIC)
-
 ifeq ($(CC), clang)
 USEGCC = 0
 USECLANG = 1
@@ -76,8 +97,8 @@ endif
 endif
 
 ifeq ($(USEGCC),1)
-CC = gcc
-CXX = g++
+CC = $(CROSS_COMPILE)gcc
+CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
@@ -88,8 +109,8 @@ endif
 endif
 
 ifeq ($(USECLANG),1)
-CC = clang
-CXX = clang++
+CC = $(CROSS_COMPILE)clang
+CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
@@ -100,6 +121,14 @@ CXX += -mmacosx-version-min=10.6
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
+
+FC = $(CROSS_COMPILE)gfortran
+JFFLAGS = -O2 $(fPIC)
+CPP = $(CC) -E
+AR := $(CROSS_COMPILE)ar
+AS := $(CROSS_COMPILE)as
+LD := $(CROSS_COMPILE)ld
+RANLIB := $(CROSS_COMPILE)ranlib
 
 # if not absolute, then relative to JULIA_HOME
 JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
@@ -149,7 +178,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
-LIBUNWIND=$(USR)/lib/libunwind-generic.a $(USR)/lib/libunwind.a
+LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
@@ -161,19 +190,19 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline 
 else
-READLINE = $(USR)/lib/libreadline.a
+READLINE = $(BUILD)/lib/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
 READLINE += -lncurses
 else
-READLINE += $(USR)/lib/libhistory.a
+READLINE += $(BUILD)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG = pcre-config
 else
-PCRE_CONFIG = $(USRBIN)/pcre-config
+PCRE_CONFIG = $(BUILD)/bin/pcre-config
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)
@@ -185,7 +214,7 @@ LIBBLAS = -lblas
 LIBBLASNAME = libblas
 endif
 else
-LIBBLAS = -L$(USR)/lib -lopenblas
+LIBBLAS = -L$(BUILD)/lib -lopenblas
 LIBBLASNAME = libopenblas
 endif
 
@@ -307,7 +336,7 @@ $$(abspath $(1)):
 	@mkdir -p $$@
 endef
 
-ifeq ($(OS), WINNT)
+ifeq ($(BUILD_OS), WINNT)
 define mingw_to_dos
 $(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1))))
 endef

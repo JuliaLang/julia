@@ -31,9 +31,9 @@ default: release
 HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
 
 %.o: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(DEBUGFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 release debug: libsupport.a
 

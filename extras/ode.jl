@@ -28,7 +28,7 @@
 # Adapted from Cleve Moler's textbook
 # http://www.mathworks.com/moler/ncm/ode23tx.m
 
-load("poly")
+require("poly")
 
 function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
 

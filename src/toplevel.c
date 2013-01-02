@@ -88,7 +88,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             // remove non-exported macros
-            if (b->name->name[0]=='@' && !b->exportp)
+            if (b->name->name[0]=='@' && !b->exportp && b->owner==newm)
                 b->value = NULL;
             // error for unassigned exports
             /*

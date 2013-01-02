@@ -3,26 +3,26 @@
 #include <glpk.h>
 
 #define generate_accessors(str, field, type) \
-    extern void _jl_glpkw__ ## str ## _set_ ## field(void * v, type val) \
+    extern void jl_glpkw__ ## str ## _set_ ## field(void * v, type val) \
     { \
         glp_ ## str * s = (glp_ ## str *) v; \
         s->field = val; \
     } \
     \
-    extern type _jl_glpkw__ ## str ## _get_ ## field(void * v) \
+    extern type jl_glpkw__ ## str ## _get_ ## field(void * v) \
     { \
         glp_ ## str * s = (glp_ ## str *) v; \
         return s->field; \
     }
 
-extern void* _jl_glpkw__smcp_init()
+extern void* jl_glpkw__smcp_init()
 {
     glp_smcp * smcp = calloc(1, sizeof(glp_smcp));
     glp_init_smcp(smcp);
     return (void*) smcp;
 }
 
-extern void _jl_glpkw__smcp_delete(void* smcp)
+extern void jl_glpkw__smcp_delete(void* smcp)
 {
     free((glp_smcp*) smcp);
 }
@@ -44,14 +44,14 @@ generate_accessors(smcp, presolve, int);
 
 
 
-extern void* _jl_glpkw__iptcp_init()
+extern void* jl_glpkw__iptcp_init()
 {
     glp_iptcp * iptcp = calloc(1, sizeof(glp_iptcp));
     glp_init_iptcp(iptcp);
     return (void*) iptcp;
 }
 
-extern void _jl_glpkw__iptcp_delete(void* iptcp)
+extern void jl_glpkw__iptcp_delete(void* iptcp)
 {
     free((glp_iptcp*) iptcp);
 }
@@ -61,14 +61,14 @@ generate_accessors(iptcp, ord_alg, int);
 
 
 
-extern void* _jl_glpkw__iocp_init()
+extern void* jl_glpkw__iocp_init()
 {
     glp_iocp * iocp = calloc(1, sizeof(glp_iocp));
     glp_init_iocp(iocp);
     return (void*) iocp;
 }
 
-extern void _jl_glpkw__iocp_delete(void* iocp)
+extern void jl_glpkw__iocp_delete(void* iocp)
 {
     free((glp_iocp*) iocp);
 }
@@ -96,13 +96,13 @@ generate_accessors(iocp, binarize, int);
 
 
 
-extern void* _jl_glpkw__bfcp_init()
+extern void* jl_glpkw__bfcp_init()
 {
     glp_bfcp * bfcp = calloc(1, sizeof(glp_bfcp));
     return (void*) bfcp;
 }
 
-extern void _jl_glpkw__bfcp_delete(void* bfcp)
+extern void jl_glpkw__bfcp_delete(void* bfcp)
 {
     free((glp_bfcp*) bfcp);
 }

@@ -473,6 +473,7 @@ static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
         name = t;
     }
 
+    if (!name) goto symtab_get_matches_exit;
     plen = strlen(name);
 
     while (tree != NULL) {

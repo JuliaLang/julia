@@ -59,7 +59,7 @@ tests(filenames) = tests(filenames, test_printer_raw)
 
 function _tests_task(filenames)
     for fn = filenames
-        load(fn)
+        require(fn)
     end
 end
 

@@ -142,7 +142,6 @@
     jl_ios_eof;
     jl_ios_fd;
     jl_ios_size;
-    jl_is_builtin;
     jl_is_const;
     jl_is_leaf_type;
     jl_is_rest_arg;

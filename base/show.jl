@@ -8,12 +8,12 @@ show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::Stream, x)
 showcompact(io, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::Stream, x)
 
-macro show(ex)
-    quote
-        print($(sprint(show_unquoted, ex)*"\t= "))
-        show($(esc(ex)))
-        println()
+macro show(exs...)
+    blk = expr(:block)
+    for ex in exs
+        push(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),repr($(esc(ex))))))
     end
+    return blk
 end
 
 show(io, s::Symbol) = show_indented(io, s)
@@ -136,9 +136,9 @@ function show_indented(io::IO, sym::Symbol, indent::Int)
     end
 end
 function default_show_quoted(io::IO, ex, indent::Int)
-    print(io, ":( ")
+    print(io, ":(")
     show_unquoted(io, ex, indent + indent_width)
-    print(io, " )")
+    print(io, ")")
 end
 
 ## AST printing helpers ##
@@ -157,8 +157,8 @@ function show_expr_type(io::IO, ty)
     end
 end
 
-show_linenumber(io::IO, line)       = print(io,"\t#  line ",line,':')
-show_linenumber(io::IO, line, file) = print(io,"\t#  ",file,", line ",line,':')
+show_linenumber(io::IO, line)       = print(io," # line ",line,':')
+show_linenumber(io::IO, line, file) = print(io," # ",file,", line ",line,':')
 
 # show a block, e g if/for/etc
 function show_block(io::IO, head, args::Vector, body, indent::Int)
@@ -227,13 +227,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif has(_expr_parens, head)               # :tuple/:vcat/:cell1d
         op, cl = _expr_parens[head]
         print(io, op)
-        show_list(io, args, ", ", indent)
+        show_list(io, args, ",", indent)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
         print(io, cl)
     elseif has(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         op, cl = _expr_calls[head]
         show_unquoted(io, args[1], indent)
-        show_enclosed_list(io, op, args[2:end], ", ", cl, indent)
+        show_enclosed_list(io, op, args[2:end], ",", cl, indent)
     elseif is(head, :comparison) && nargs >= 3 && (nargs&1==1)
         show_enclosed_list(io, '(', args, "", ')', indent)
     elseif is(head, :(...)) && nargs == 1
@@ -242,7 +242,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif (nargs == 1 && contains((:return, :abstract, :const), head)) ||
                           contains((:local,  :global), head)
         print(io, head, ' ')
-        show_list(io, args, ", ", indent)
+        show_list(io, args, ",", indent)
     elseif is(head, :macrocall) && nargs >= 1
         show_list(io, args, ' ', indent)
     elseif is(head, :typealias) && nargs == 2
@@ -341,28 +341,28 @@ end
 function show(io, bt::BackTrace)
     show(io, bt.e)
     t = bt.trace
-    # we may not declare :_jl_eval_user_input
+    # we may not declare :eval_user_input
     # directly so that we get a compile error
     # in case its name changes in the future
-    const _jl_eval_function = try
-            symbol(string(_jl_eval_user_input))
+    const eval_function = try
+            symbol(string(eval_user_input))
         catch
             :(:) #for when client.jl is not yet defined
         end
     for i = 1:3:length(t)
         if i == 1 && t[i] == :error; continue; end
-        if t[i] == _jl_eval_function; break; end
+        if t[i] == eval_function; break; end
         print(io, "\n")
         lno = t[i+2]
         print(io, " in ", t[i], " at ", t[i+1])
         if lno >= 1
             try
-                print(io, ":", lno)
+            print(io, ":", lno)
             catch
                 print('?') #for when dec is not yet defined
-            end
         end
     end
+end
 end
 
 function show(io, m::Method)
@@ -468,10 +468,10 @@ function idump(fn::Function, io::IO, x::CompositeKind, n::Int, indent)
     end
 end
 
-# _jl_dumptype is for displaying abstract type hierarchies like Jameson
+# dumptype is for displaying abstract type hierarchies like Jameson
 # Nash's wiki page: https://github.com/JuliaLang/julia/wiki/Types-Hierarchy
 
-function _jl_dumptype(io::Stream, x::Type, n::Int, indent)
+function dumptype(io::Stream, x::Type, n::Int, indent)
     # based on Jameson Nash's examples/typetree.jl
     println(io, x)
     if n == 0   # too deeply nested
@@ -502,7 +502,7 @@ function _jl_dumptype(io::Stream, x::Type, n::Int, indent)
                         println(io, indent, "  ", s, " = ", t.name)
                     elseif t != Any 
                         print(io, indent, "  ")
-                        _jl_dumptype(io, t, n - 1, strcat(indent, "  "))
+                        dumptype(io, t, n - 1, strcat(indent, "  "))
                     end
                 end
             end
@@ -512,8 +512,8 @@ end
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-idump(fn::Function, io::Stream, x::AbstractKind) = _jl_dumptype(io, x, 5, "")
-idump(fn::Function, io::Stream, x::AbstractKind, n::Int) = _jl_dumptype(io, x, n, "")
+idump(fn::Function, io::Stream, x::AbstractKind) = dumptype(io, x, 5, "")
+idump(fn::Function, io::Stream, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
 
 # defaults:
 idump(fn::Function, io::Stream, x) = idump(idump, io, x, 5, "")  # default is 5 levels
@@ -547,11 +547,11 @@ function dump(io::IO, x::Dict, n::Int, indent)
 end
 
 # More generic representation for common types:
-dump(io::IO, x::AbstractKind, n::Int, indent) = println(io, x.name)
-dump(io::IO, x::AbstractKind) = _jl_dumptype(io, x, 5, "")
-dump(io::IO, x::AbstractKind, n::Int) = _jl_dumptype(io, x, n, "")
-dump(io::IO, x::BitsKind, n::Int, indent) = println(io, x.name)
-dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
+dump(io::IOStream, x::AbstractKind, n::Int, indent) = println(io, x.name)
+dump(io::IOStream, x::AbstractKind) = dumptype(io, x, 5, "")
+dump(io::IOStream, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
+dump(io::IOStream, x::BitsKind, n::Int, indent) = println(io, x.name)
+dump(io::IOStream, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
 showall(x) = showall(OUTPUT_STREAM::Stream, x)
@@ -584,8 +584,8 @@ function alignment(x::Rational)
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
 
-const _jl_undef_ref_str = "#undef"
-const _jl_undef_ref_alignment = (3,3)
+const undef_ref_str = "#undef"
+const undef_ref_alignment = (3,3)
 
 function alignment(
     X::AbstractMatrix,
@@ -599,7 +599,7 @@ function alignment(
             if isassigned(X,i,j)
                 aij = alignment(X[i,j])
             else
-                aij = _jl_undef_ref_alignment
+                aij = undef_ref_alignment
             end
             l = max(l, aij[1])
             r = max(r, aij[2])
@@ -629,8 +629,8 @@ function print_matrix_row(io,
             a = alignment(x)
             sx = sprint(showcompact, x)
         else
-            a = _jl_undef_ref_alignment
-            sx = _jl_undef_ref_str
+            a = undef_ref_alignment
+            sx = undef_ref_str
         end
         l = repeat(" ", A[k][1]-a[1])
         r = repeat(" ", A[k][2]-a[2])
@@ -798,7 +798,7 @@ function show{T}(io, x::AbstractArray{T,0})
     if isassigned(x)
         sx = sprint(showcompact, x[])
     else
-        sx = _jl_undef_ref_str
+        sx = undef_ref_str
     end
     print(io, sx)
 end
@@ -854,7 +854,7 @@ summary(a::BitArray) =
 
 # (following functions not exported - mainly intended for debug)
 
-function _jl_print_bit_chunk(io::IO, c::Uint64, l::Integer)
+function print_bit_chunk(io::IO, c::Uint64, l::Integer)
     for s = 0 : l - 1
         d = (c >>> s) & 1
         print(io, "01"[d + 1])
@@ -864,21 +864,21 @@ function _jl_print_bit_chunk(io::IO, c::Uint64, l::Integer)
     end
 end
 
-_jl_print_bit_chunk(io::IO, c::Uint64) = _jl_print_bit_chunk(io, c, 64)
+print_bit_chunk(io::IO, c::Uint64) = print_bit_chunk(io, c, 64)
 
-_jl_print_bit_chunk(c::Uint64, l::Integer) = _jl_print_bit_chunk(stdout_stream, c, l)
-_jl_print_bit_chunk(c::Uint64) = _jl_print_bit_chunk(stdout_stream, c)
+print_bit_chunk(c::Uint64, l::Integer) = print_bit_chunk(stdout_stream, c, l)
+print_bit_chunk(c::Uint64) = print_bit_chunk(stdout_stream, c)
 
 function bitshow(io::IO, B::BitArray)
     if length(B) == 0
         return
     end
     for i = 1 : length(B.chunks) - 1
-        _jl_print_bit_chunk(io, B.chunks[i])
+        print_bit_chunk(io, B.chunks[i])
         print(io, ": ")
     end
     l = (@_mod64 (length(B)-1)) + 1
-    _jl_print_bit_chunk(io, B.chunks[end], l)
+    print_bit_chunk(io, B.chunks[end], l)
 end
 bitshow(B::BitArray) = bitshow(stdout_stream, B)
 

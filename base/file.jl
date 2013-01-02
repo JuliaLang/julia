@@ -80,7 +80,7 @@ end
 const fullfile = file_path
 
 # Test for an absolute path
-function isrooted(path::String)
+function isabspath(path::String)
     # Check whether it begins with the os_separator. On Windows, matches
     # \\servername syntax, so this is a relevant check for everyone
     m = match(Regex(strcat("^", os_separator_match.pattern)), path)
@@ -107,15 +107,15 @@ end
     error("~user tilde expansion not yet implemented")
 end
 
-# Get the absolute path to a file. Uses file system for cwd() when
+# Get the absolute path to a file. Uses file system for pwd() when
 # needed, the rest is all string manipulation. In particular, it
 # doesn't check whether the file exists.
 function abs_path_split(fname::String)
     fname = tilde_expand(fname)
-    if isrooted(fname)
+    if isabspath(fname)
         comp = split(fname, os_separator_match)
     else
-        comp = [split(cwd(), os_separator_match), split(fname, os_separator_match)]
+        comp = [split(pwd(), os_separator_match), split(fname, os_separator_match)]
     end
     n = length(comp)
     pmask = trues(n)
@@ -143,7 +143,7 @@ function abs_path_split(fname::String)
     end
     return comp
 end
-function abs_path(fname::String)
+function abspath(fname::String)
     comp = abs_path_split(fname)
     return join(comp, os_separator)
 end
@@ -184,7 +184,7 @@ end
 end
 # get and set current directory
 
-function cwd()
+function pwd()
     b = Array(Uint8,1024)
     @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
     @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
@@ -248,33 +248,12 @@ ls() = run(`ls -l`)
 ls(args::Cmd) = run(`ls -l $args`)
 ls(args::String...) = run(`ls -l $args`)
 
-function path_expand(path::String)
-  chomp(readlines(`bash -c "echo $path"`)[1])
-end
+path_expand(path::String) = chomp(readlines(`bash -c "echo $path"`)[1])
 
-function file_copy(source::String, destination::String)
-  run(`cp $source $destination`)
-end
-
-function file_create(filename::String)
-  run(`touch $filename`)
-end
-
-function file_remove(filename::String)
-    @unix_only begin 
-		ret = ccall(:unlink, Int32, (Ptr{Uint8},), bytestring(filename))
-	    system_error(:unlink, ret != 0)
-	end
-	@windows_only begin
-		ret = ccall(:DeleteFileA, stdcall, Int32, (Ptr{Uint8},), bytestring(filename))
-		system_error(:unlink, ret == 0)
-	end 
-end
-
-function path_rename(old_pathname::String, new_pathname::String)
-    ret = ccall(:rename, Int32, (Ptr{Uint8},Ptr{Uint8}), bytestring(old_pathname), bytestring(new_pathname))
-    system_error(:rename, ret != 0)
-end
+rm(path::String) = run(`rm $path`)
+cp(src::String, dst::String) = run(`cp $src $dst`)
+mv(src::String, dst::String) = run(`mv $src $dst`)
+touch(path::String) = run(`touch $path`)
 
 # Obtain a temporary filename.
 function tempname()

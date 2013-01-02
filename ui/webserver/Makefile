@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-LIBS = -lpthread $(USR)/$(JL_LIBDIR)/libuv.a 
+LIBS = -lpthread $(BUILD)/$(JL_LIBDIR)/libuv.a 
 ifeq ($(OS), Linux)
 LIBS += -lrt 
 endif
@@ -14,17 +14,16 @@ LIBS += -lWs2_32 -lIphlpapi -lpsapi
 endif
 
 ifeq ($(OS),Darwin)
-LIBS += -framework CoreServices
+LIBS += -framework ApplicationServices
 endif
 
-WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
+WEBSERVER_SRCS = webserver.o server.o jsoncpp.o
 
-%.o: %.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
-%.do: %.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+%.o: %.cpp *.h
+	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@
+%.do: %.cpp *.h
+	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
-	
 ifeq ($(OS),WINNT)
 LAUNCH_SCRIPT = launch-julia-webserver.bat
 $(USRBIN)/$(LAUNCH_SCRIPT): ${JULIAHOME}/contrib/windows/*.bat
@@ -34,19 +33,22 @@ LAUNCH_SCRIPT = launch-julia-webserver
 $(USRBIN)/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
 	cp $< $@
 endif 
-	
-julia-release julia-debug: %: $(USRBIN)/%-webserver $(USRBIN)/$(LAUNCH_SCRIPT)
+
+julia-release julia-debug: %: $(BUILD)/bin/%-webserver $(BUILD)/bin/$(LAUNCH_SCRIPT)
 
 release debug:
 	$(MAKE) julia-$@
 
-$(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS) server.h
-	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+$(BUILD)/bin/julia-release-webserver: $(WEBSERVER_SRCS)
+	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
-$(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS) server.h
-	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
-	
+$(BUILD)/bin/julia-debug-webserver: $(WEBSERVER_SRCS)
+	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+
+$(BUILD)/bin/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
+	cp $< $@
+
 clean:
 	rm -f *.o *.do
-	rm -f $(USRBIN)/julia-*-webserver
-	rm -f $(USRBIN)/*.bat
+	rm -f $(BUILD)/bin/julia-*-webserver
+	rm -f $(BUILD)/bin/*.bat

@@ -104,7 +104,7 @@ type Worker
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
         new(bytestring(host), uint16(port), sock, IOString(), {}, {}, id, false)
-end
+        end
 Worker(host::String, port::Integer, sock::TcpSocket) = Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
     Worker(host, port,
@@ -178,12 +178,6 @@ end
 type LocalProcess
 end
 
-type Location
-    host::String
-    port::Int16
-    Location(h,p::Integer) = new(h,int16(p))
-end
-
 type ProcessGroup
     myid::Int
     workers::Array{Any,1}
@@ -201,7 +195,7 @@ const PGRP = ProcessGroup(0, {}, {})
 
 function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     n = length(w)
-    locs = map(x->Location(x.host,x.port), w)
+    locs = map(x->(x.host,x.port), w)
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
     newlocs = [PGRP.locs, locs]
@@ -245,8 +239,7 @@ function worker_id_from_socket(s)
 end
 
 # establish a Worker connection for processes that connected to us
-function _jl_identify_socket(otherid, sock)
-    global PGRP
+function identify_socket(otherid, sock)
     i = otherid
     #locs = PGRP.locs
     @assert i > PGRP.myid
@@ -263,7 +256,7 @@ end
 
 ## remote refs and core messages: do, call, fetch, wait, ref, put ##
 
-const _jl_client_refs = WeakKeyDict()
+const client_refs = WeakKeyDict()
 
 type RemoteRef
     where::Int
@@ -273,11 +266,11 @@ type RemoteRef
 
     function RemoteRef(w, wh, id)
         r = new(w,wh,id)
-        found = key(_jl_client_refs, r, false)
+        found = key(client_refs, r, false)
         if !is(found,false)
             return found
         end
-        _jl_client_refs[r] = true
+        client_refs[r] = true
         finalizer(r, send_del_client)
         r
     end
@@ -420,7 +413,7 @@ function deserialize(s, t::Type{RemoteRef})
     if where == myid()
         add_client(rr2id(rr), myid())
     end
-    # call ctor to make sure this rr gets added to the _jl_client_refs table
+    # call ctor to make sure this rr gets added to the client_refs table
     RemoteRef(where, rr.whence, rr.id)
 end
 
@@ -726,10 +719,10 @@ function deliver_result(sock::Stream, msg, oid, value)
     end
 end
 
-const _jl_empty_cell_ = {}
+const empty_cell_ = {}
 function deliver_result(sock::(), msg, oid, value)
     # restart task that's waiting on oid
-    jobs = get(Waiting, oid, _jl_empty_cell_)
+    jobs = get(Waiting, oid, empty_cell_)
     for i = 1:length(jobs)
         j = jobs[i]
         if j[1]==msg
@@ -740,7 +733,7 @@ function deliver_result(sock::(), msg, oid, value)
             break
         end
     end
-    if isempty(jobs) && !is(jobs,_jl_empty_cell_)
+    if isempty(jobs) && !is(jobs,empty_cell_)
         del(Waiting, oid)
     end
     nothing
@@ -790,22 +783,21 @@ end
 
 type DisconnectException <: Exception end
 
-function create_message_handler_loop(this::AsyncStream) #returns immediately
+function create_message_handler_loop(sock::AsyncStream) #returns immediately
     enq_work(@task begin
         global PGRP
         #println("message_handler_loop")
-        refs = (PGRP::ProcessGroup).refs
-        start_reading(this)
-        wait_connected(this)
+        start_reading(sock)
+        wait_connected(sock)
         if PGRP.np == 0
                 # first connection; get process group info from client
-                PGRP.myid = deserialize(this)
-                PGRP.locs = locs = deserialize(this)
+                PGRP.myid = deserialize(sock)
+                PGRP.locs = locs = deserialize(sock)
                 #print("\nLocation: ",locs,"\nId:",PGRP.myid,"\n")
                 # joining existing process group
                 PGRP.np = length(PGRP.locs)
                 PGRP.workers = w = cell(PGRP.np)
-                w[1] = Worker("", 0, this, 1)
+                w[1] = Worker("", 0, sock, 1)
                 for i = 2:(PGRP.myid-1)
                     w[i] = Worker(locs[i].host, locs[i].port)
                     w[i].id = i
@@ -820,53 +812,53 @@ function create_message_handler_loop(this::AsyncStream) #returns immediately
         #println("loop")
         while true
             #try
-                msg = deserialize(this)
+                msg = deserialize(sock)
                 #println("got msg: ",msg)
             # handle message
             if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
-                    id = deserialize(this)
-                    f = deserialize(this)
-                    args = deserialize(this)
+                    id = deserialize(sock)
+                    f = deserialize(sock)
+                    args = deserialize(sock)
                 #print("$(myid()) got call $id\n")
                 wi = schedule_call(id, f, args)
                 if is(msg, :call_fetch)
-                        wi.notify = (this, :call_fetch, id, wi.notify)
+                        wi.notify = (sock, :call_fetch, id, wi.notify)
                 elseif is(msg, :call_wait)
-                        wi.notify = (this, :wait, id, wi.notify)
+                        wi.notify = (sock, :wait, id, wi.notify)
                 end
             elseif is(msg, :do)
-                    f = deserialize(this)
-                    args = deserialize(this)
+                    f = deserialize(sock)
+                    args = deserialize(sock)
                     #print("got args: $args\n")
                 let func=f, ar=args
                     enq_work(WorkItem(()->apply(func, ar)))
                 end
             elseif is(msg, :result)
                 # used to deliver result of wait or fetch
-                mkind = deserialize(this)
-                oid = deserialize(this)
-                val = deserialize(this)
+                mkind = deserialize(sock)
+                oid = deserialize(sock)
+                val = deserialize(sock)
                 deliver_result((), mkind, oid, val)
             elseif is(msg, :identify_socket)
-                    otherid = deserialize(this)
-                    _jl_identify_socket(otherid, this)
+                    otherid = deserialize(sock)
+                    identify_socket(otherid, sock)
             else
                 # the synchronization messages
-                    oid = deserialize(this)::(Int,Int)
+                    oid = deserialize(sock)::(Int,Int)
                 wi = lookup_ref(oid)
                 if wi.done
-                        deliver_result(this, msg, oid, work_result(wi))
+                        deliver_result(sock, msg, oid, work_result(wi))
                 else
                     # add to WorkItem's notify list
                     # TODO: should store the worker here, not the socket,
                     # so we don't need to look up the worker later
-                        wi.notify = (this, msg, oid, wi.notify)
+                        wi.notify = (sock, msg, oid, wi.notify)
                 end
             end
             #catch e
             #    if isa(e,EOFError)
                 #print("eof. $(myid()) exiting\n")
-            #        stop_reading(this)
+            #        stop_reading(sock)
             #        # TODO: remove machine from group
             #        throw(DisconnectException())
             #    else
@@ -918,7 +910,7 @@ function start_remote_workers(machines, cmds, tunnel)
     for i=1:n
         outs[i],pps[i] = read_from(cmds[i])
         outs[i].line_buffered = true
-    end
+            end
     for i=1:n
         local hostname::String, port::Int16
         stream = outs[i]
@@ -952,7 +944,7 @@ function start_remote_workers(machines, cmds, tunnel)
                     catch err
                         println("\tError parsing reply from worker $(wrker.id):\t",err)
                         return false
-        end
+    end
                 end
                 true
             end)
@@ -970,17 +962,17 @@ function parse_connection_info(str)
     end
 end
 
-_jl_tunnel_port = 9201
+tunnel_port = 9201
 # establish an SSH tunnel to a remote worker
 # returns P such that localhost:P connects to host:port
 ssh_tunnel(host, port) = ssh_tunnel(ENV["USER"], host, port)
 function ssh_tunnel(user, host, port)
-    global _jl_tunnel_port
-    localp = _jl_tunnel_port::Int
+    global tunnel_port
+    localp = tunnel_port::Int
     while !success(`ssh -f -o ExitOnForwardFailure=yes $(user)@$host -L $localp:$host:$port -N`)
         localp += 1
     end
-    _jl_tunnel_port = localp+1
+    tunnel_port = localp+1
     localp
 end
 
@@ -1418,7 +1410,7 @@ function event_loop(isclient)
             elseif isclient && isa(err,InterruptException)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
-                interrupt_waiting_task(_jl_roottask_wi,err)
+                interrupt_waiting_task(roottask_wi,err)
             end
             iserr, lasterr = true, add_backtrace(err,bt)
         end

@@ -1,5 +1,7 @@
 ## subarrays ##
 
+typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
+
 type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
@@ -186,10 +188,10 @@ function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
     ref(s.parent, t)
 end
 
-function ref(s::SubArray, I::Indices...)
+function ref(s::SubArray, I::Union(Real,AbstractArray)...)
     I = indices(I)
     n = ndims(s.parent)
-    newindexes = Array(Indices, n)
+    newindexes = Array(Any, n)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
@@ -249,7 +251,7 @@ function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
     assign(s.parent, v, t)
 end
 
-function assign(s::SubArray, v, I::Indices...)
+function assign(s::SubArray, v, I::Union(Real,AbstractArray)...)
     I = indices(I)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)

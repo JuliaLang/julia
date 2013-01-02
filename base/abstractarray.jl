@@ -5,11 +5,6 @@
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 
-typealias Indices{T<:Integer} Union(Integer, AbstractVector{T})
-typealias Dimspec Union(Int,Dims)
-
-typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
-
 ## Basic functions ##
 
 size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
@@ -54,7 +49,8 @@ function trailingsize(A, n)
 end
 
 ## Bounds checking ##
-function check_bounds(sz::Int, I::Integer)
+function check_bounds(sz::Int, I::Real)
+    I = to_index(I)
     if I < 1 || I > sz
         throw(BoundsError())
     end
@@ -72,34 +68,27 @@ function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
     end
 end
 
-function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
+function check_bounds{T <: Real}(sz::Int, I::AbstractVector{T})
     for i in I
+        i = to_index(i)
         if i < 1 || i > sz
             throw(BoundsError())
         end
     end
 end
 
-function check_bounds(A::AbstractVector, I::AbstractVector{Bool})
-    if !isequal(size(A), size(I)) throw(BoundsError()) end
-end
-
-function check_bounds(A::AbstractArray, I::AbstractVector{Bool})
-    if !isequal(size(A), size(I)) throw(BoundsError()) end
-end
-
 function check_bounds(A::AbstractArray, I::AbstractArray{Bool})
     if !isequal(size(A), size(I)) throw(BoundsError()) end
 end
 
-check_bounds(A::AbstractVector, I::Indices) = check_bounds(length(A), I)
+check_bounds(A::AbstractArray, I) = check_bounds(length(A), I)
 
-function check_bounds(A::AbstractMatrix, I::Indices, J::Indices)
+function check_bounds(A::AbstractMatrix, I, J)
     check_bounds(size(A,1), I)
     check_bounds(size(A,2), J)
 end
 
-function check_bounds(A::AbstractArray, I::Indices, J::Indices)
+function check_bounds(A::AbstractArray, I, J)
     check_bounds(size(A,1), I)
     sz = size(A,2)
     for i = 3:ndims(A)
@@ -108,7 +97,7 @@ function check_bounds(A::AbstractArray, I::Indices, J::Indices)
     check_bounds(sz, J)
 end
 
-function check_bounds(A::AbstractArray, I::Indices...)
+function check_bounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
     n = length(I)
     if n > 0
         for dim = 1:(n-1)
@@ -454,11 +443,7 @@ end
 
 ## Indexing: ref ##
 
-ref(t::AbstractArray, i::Integer) = error("indexing not defined for ", typeof(t))
-ref(t::AbstractArray, i::Real) = ref(t, to_index(i))
-ref(t::AbstractArray, i::Real, j::Real) = ref(t, to_index(i), to_index(j))
-ref(t::AbstractArray, i::Real, j::Real, k::Real) = ref(t, to_index(i), to_index(j), to_index(k))
-ref(t::AbstractArray, r::Real...) = ref(t,map(to_index,r)...)
+ref(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
@@ -508,15 +493,9 @@ end
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
-assign(t::AbstractArray, x, i::Integer) =
+assign(t::AbstractArray, x, i::Real) =
     error("assign not defined for ",typeof(t))
 assign(t::AbstractArray, x) = throw(MethodError(assign, (t, x)))
-
-assign(t::AbstractArray, x, i::Real)          = assign(t, x, to_index(i))
-assign(t::AbstractArray, x, i::Real, j::Real) = assign(t, x, to_index(i),to_index(j))
-assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
-    assign(t, x, to_index(i),to_index(j),to_index(k))
-assign(t::AbstractArray, x, r::Real...)       = assign(t, x, map(to_index,r)...)
 
 ## Concatenation ##
 
@@ -799,7 +778,7 @@ function hvcat{T<:Number}(rows::(Int...), xs::T...)
     a
 end
 
-function _jl_hvcat_fill(a, xs)
+function hvcat_fill(a, xs)
     k = 1
     nr, nc = size(a)
     for i=1:nr
@@ -824,7 +803,7 @@ function hvcat(rows::(Int...), xs::Number...)
     for i=2:length(xs)
         T = promote_type(T,typeof(xs[i]))
     end
-    _jl_hvcat_fill(Array(T, nr, nc), xs)
+    hvcat_fill(Array(T, nr, nc), xs)
 end
 
 ## Reductions and scans ##
@@ -1073,11 +1052,39 @@ function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
     return t
 end
 
-indices(I::Indices) = I
-indices(I::AbstractVector{Bool}) = find(I)
-indices(I::(Indices...)) = map(indices, I)
+indices(I) = I
+indices(I::AbstractArray{Bool,1}) = find(I)
+indices(I::Tuple) = map(indices, I)
 
 ## iteration utilities ##
+
+# TODO: something sensible should happen when each_col et. al. are used with a
+# pure function argument
+function each_col!(f::Function, a::AbstractMatrix)
+    m = size(a,1)
+    for i = 1:m:numel(a)
+        f(sub(a, i:(i+m-1)))
+    end
+    return a
+end
+
+function each_row!(f::Function, a::AbstractMatrix)
+    m = size(a,1)
+    for i = 1:m
+        f(sub(a, i:m:numel(a)))
+    end
+    return a
+end
+
+function each_vec!(f::Function, a::AbstractMatrix, dim::Integer)
+    if dim == 1; return each_col!(f,a); end
+    if dim == 2; return each_row!(f,a); end
+    error("invalid matrix dimensions: ", dim)
+end
+
+each_col(f::Function, a::AbstractMatrix) = each_col!(f,copy(a))
+each_row(f::Function, a::AbstractMatrix) = each_row!(f,copy(a))
+each_vec(f::Function, a::AbstractMatrix, d::Integer) = each_vec!(f,copy(a),d)
 
 # slow, but useful
 function cartesian_map(body, t::(Int...), it...)
@@ -1198,3 +1205,4 @@ end
 bsxfun(f, a, b) = f(a, b)
 bsxfun(f, a::AbstractArray, b) = f(a, b)
 bsxfun(f, a, b::AbstractArray) = f(a, b)
+bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)

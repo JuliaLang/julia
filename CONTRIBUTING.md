@@ -18,7 +18,7 @@ Julia now has a [package manager](https://github.com/JuliaLang/METADATA.jl). Mos
 
 The Julia team uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests.
 
-You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" or "RFC:" as appropriate to indicate that the work is incomplete, so that it is not accidentally merged.
+You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
 
 Before submitting, make sure that all tests pass by running `make testall`. Add your own tests for the new functionality in `test/`. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git). Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a `Good to merge` message.
 

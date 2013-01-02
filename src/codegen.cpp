@@ -82,9 +82,6 @@ static Type *T_pfloat32;
 static Type *T_float64;
 static Type *T_pfloat64;
 static Type *T_void;
-#ifdef JL_GC_MARKSWEEP
-static Type *T_gcframe;
-#endif
 
 // constants
 static Value *V_null;
@@ -321,7 +318,7 @@ typedef struct {
     Value *envArg;
     Value *argArray;
     Value *argCount;
-    AllocaInst *argTemp;
+    Instruction *argTemp;
     int argDepth;
     int maxDepth;
     int argSpaceOffs;
@@ -409,10 +406,10 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
                     {
                         size_t i;
                         size_t n = jl_array_dim0(e->args);
-                        jl_value_t **v = (jl_value_t**)alloca(n*sizeof(jl_value_t*));
+                        jl_value_t **v;
+                        JL_GC_PUSHARGS(v, n);
                         memset(v, 0, n*sizeof(jl_value_t*));
                         v[0] = f;
-                        JL_GC_PUSHARGS(v, n);
                         for (i = 1; i < n; i++) {
                             v[i] = static_eval(jl_exprarg(e,i),ctx,sparams);
                             if (v[i] == NULL) {
@@ -436,9 +433,9 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
                     size_t i;
                     size_t n = jl_array_dim0(e->args)-1;
                     if (n==0) return (jl_value_t*)jl_null;
-                    jl_value_t **v = (jl_value_t**)alloca(n*sizeof(jl_value_t*));
-                    memset(v, 0, n*sizeof(jl_value_t*));
+                    jl_value_t **v;
                     JL_GC_PUSHARGS(v, n);
+                    memset(v, 0, n*sizeof(jl_value_t*));
                     for (i = 0; i < n; i++) {
                         v[i] = static_eval(jl_exprarg(e,i+1),ctx,sparams);
                         if (v[i] == NULL) {
@@ -2047,26 +2044,22 @@ static Function *emit_function(jl_lambda_info_t *lam)
     ctx.argDepth = 0;
     ctx.maxDepth = 0;
 #ifdef JL_GC_MARKSWEEP
-    AllocaInst *gcframe = NULL;
+    Instruction *gcframe = NULL;
     Instruction *argSpaceInits = NULL;
     StoreInst *storeFrameSize = NULL;
 #endif
     if (n_roots > 0) {
-        ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
-                                           ConstantInt::get(T_int32, n_roots));
 #ifdef JL_GC_MARKSWEEP
         // allocate gc frame
-        gcframe = builder.CreateAlloca(T_gcframe, 0);
-        builder.CreateStore(builder.CreateBitCast(ctx.argTemp,
-                                                  PointerType::get(jl_ppvalue_llvmt,0)),
-                            builder.CreateConstGEP2_32(gcframe, 0, 0));
+        ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
+                                           ConstantInt::get(T_int32,n_roots+2));
+        gcframe = (Instruction*)ctx.argTemp;
+        ctx.argTemp = (Instruction*)builder.CreateConstGEP1_32(ctx.argTemp, 2);
         storeFrameSize =
-            builder.CreateStore(ConstantInt::get(T_size, n_roots),
-                                builder.CreateConstGEP2_32(gcframe, 0, 1));
-        builder.CreateStore(ConstantInt::get(T_int32, 0),
-                            builder.CreateConstGEP2_32(gcframe, 0, 2));
+            builder.CreateStore(ConstantInt::get(T_size, n_roots<<1),
+                                builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_psize));
         builder.CreateStore(builder.CreateLoad(jlpgcstack_var, false),
-                            builder.CreateConstGEP2_32(gcframe, 0, 3));
+                            builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
         builder.CreateStore(gcframe, jlpgcstack_var, false);
         // initialize local variable stack roots to null
         for(i=0; i < (size_t)ctx.argSpaceOffs; i++) {
@@ -2074,6 +2067,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
             builder.CreateStore(V_null, varSlot);
         }
         argSpaceInits = &b0->back();
+#else
+        ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
+                                           ConstantInt::get(T_int32, n_roots));
 #endif
     }
     else {
@@ -2291,7 +2287,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #ifdef JL_GC_MARKSWEEP
             // JL_GC_POP();
             if (n_roots > 0) {
-                builder.CreateStore(builder.CreateLoad(builder.CreateConstGEP2_32(gcframe, 0, 3), false),
+                builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(builder.CreateConstGEP1_32(gcframe, 1), false), jl_ppvalue_llvmt),
                                     jlpgcstack_var);
             }
 #endif
@@ -2316,18 +2312,18 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
     // step 16. fix up size of stack root list (just a code simplification)
     if (n_roots > 0) {
-        BasicBlock::iterator bbi(ctx.argTemp);
-        AllocaInst *newArgTemp =
+        BasicBlock::iterator bbi(gcframe);
+        AllocaInst *newgcframe =
             new AllocaInst(jl_pvalue_llvmt,
                            ConstantInt::get(T_int32, ctx.argSpaceOffs +
-                                                     ctx.maxDepth));
+                                                     ctx.maxDepth + 2));
         ReplaceInstWithInst(ctx.argTemp->getParent()->getInstList(), bbi,
-                            newArgTemp);
+                            newgcframe);
 
         BasicBlock::iterator bbi2(storeFrameSize);
         StoreInst *newFrameSize =
-            new StoreInst(ConstantInt::get(T_size, ctx.argSpaceOffs +
-                                                   ctx.maxDepth),
+            new StoreInst(ConstantInt::get(T_size, (ctx.argSpaceOffs +
+                                                    ctx.maxDepth)<<1),
                           storeFrameSize->getPointerOperand());
         ReplaceInstWithInst(storeFrameSize->getParent()->getInstList(), bbi2,
                             newFrameSize);
@@ -2337,8 +2333,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
         for(i=0; i < (size_t)ctx.maxDepth; i++) {
             Instruction *argTempi =
-                GetElementPtrInst::Create(newArgTemp,
-                                          ConstantInt::get(T_int32, i+ctx.argSpaceOffs));
+                GetElementPtrInst::Create(newgcframe,
+                                          ConstantInt::get(T_int32, i+ctx.argSpaceOffs+2));
             instList.insertAfter(after, argTempi);
             after = new StoreInst(V_null, argTempi);
             instList.insertAfter(argTempi, after);
@@ -2423,17 +2419,8 @@ static void init_julia_llvm_env(Module *m)
     jl_fptr_llvmt = PointerType::get(jl_func_sig, 0);
 
 #ifdef JL_GC_MARKSWEEP
-    StructType *gcfst = StructType::create(getGlobalContext(), "jl_gcframe_t");
-    Type *gcframeStructElts[4] = {
-        PointerType::get(jl_ppvalue_llvmt,0),
-        T_size,
-        T_int32,
-        PointerType::getUnqual(gcfst) };
-    gcfst->setBody(ArrayRef<Type*>(gcframeStructElts, 4));
-    T_gcframe = gcfst;
-
     jlpgcstack_var =
-        new GlobalVariable(*jl_Module, PointerType::get(T_gcframe,0),
+        new GlobalVariable(*jl_Module, jl_ppvalue_llvmt,
                            true, GlobalVariable::ExternalLinkage,
                            NULL, "jl_pgcstack");
     jl_ExecutionEngine->addGlobalMapping(jlpgcstack_var, (void*)&jl_pgcstack);
