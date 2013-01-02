@@ -2883,9 +2883,19 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"cond",E"cond(M)
+(E"Linear Algebra",E"Base",E"norm",E"norm(A[, p])
 
-   Matrix condition number
+   Compute the p-norm of a vector or a matrix. \"p\" is \"2\" by
+   default, if not provided. If \"A\" is a matrix, valid values for
+   \"p\" are \"1\", \"2\", \"Inf\", or \":fro\" (Frobenius norm).
+
+"),
+
+(E"Linear Algebra",E"Base",E"cond",E"cond(M[, p])
+
+   Matrix condition number, computed using the p-norm. \"p\" is 2 by
+   default, if not provided. Valid values for \"p\" are \"1\", \"2\",
+   \"Inf\", or \":fro\" (Frobenius norm).
 
 "),
 
@@ -3282,27 +3292,127 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"fft",E"fft(A, dims)
+(E"Signal Processing",E"",E"fft(A [, dims]), fft!",E"fft(A [, dims]), fft!
 
-   Multidimensional FFT.  The optional \"dims\" argument specifies
-   an iterable subset of zero or more dimensions of \"A\" to transform.
-   Most efficient if the size of the transformed dimensions are
-   products of small primes; see \"nextprod()\" and \"plan_fft()\".
+   Performs a multidimensional FFT of the array \"A\".  The optional
+   \"dims\" argument specifies an iterable subset of dimensions (e.g.
+   an integer, range, tuple, or array) to transform along.  Most
+   efficient if the size of \"A\" along the transformed dimensions is
+   a product of small primes; see \"nextprod()\".  See also
+   \"plan_fft()\" for even greater efficiency.
+
+   \"fft!()\" is the same as \"fft()\", but operates in-place on
+   \"A\", which must be an array of complex floating-point numbers.
+
+   A one-dimensional FFT computes the one-dimensional discrete Fourier
+   transform (DFT) as defined by \\operatorname{DFT}[k] =
+   \\sum_{n=1}^{\\operatorname{length}(A)} \\exp\\left(-i\\frac{2\\pi
+   (n-1)(k-1)}{\\operatorname{length}(A)} \\right) A[n].  A
+   multidimensional FFT simply performs this operation along each
+   transformed dimension of \"A\".
 
 "),
 
-(E"Signal Processing",E"Base",E"ifft",E"ifft(A, dimd)
+(E"Signal Processing",E"",E"ifft(A [, dims]), ifft!, bfft, bfft!",E"ifft(A [, dims]), ifft!, bfft, bfft!
 
-   Inverse FFT. Same arguments as \"fft\".
+   Multidimensional inverse FFT.
+
+   \"ifft()\" and \"ifft!()\" have the same arguments as \"fft()\" and
+   \"fft!()\", respectively.
+
+   \"bfft()\" and \"bfft!()\" are similar to \"ifft()\" and
+   \"ifft!()\", respectively, but compute an unnormalized inverse
+   (backward) transform, which must be divided by the product of the
+   sizes of the transformed dimensions in order to obtain the inverse.
+   (These are slightly more efficient than \"ifft()\" and \"ifft!()\"
+   because they omit a scaling step, which in some applications can be
+   combined with other camputational steps elsewhere.)
+
+   A one-dimensional backward FFT computes \\operatorname{BDFT}[k] =
+   \\sum_{n=1}^{\\operatorname{length}(A)} \\exp\\left(+i\\frac{2\\pi
+   (n-1)(k-1)}{\\operatorname{length}(A)} \\right) A[n].  A
+   multidimensional backward FFT simply performs this operation along
+   each transformed dimension of \"A\".  The inverse FFT computes the
+   same thing divided by the product of the transformed dimensions.
+
+"),
+
+(E"Signal Processing",E"",E"plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!",E"plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!
+
+   Pre-plan an optimized FFT along given dimensions (\"dims\") of
+   arrays matching the shape and type of \"A\".  (The first two
+   arguments have the same meaning as for \"fft()\".)  Returns a
+   function \"plan(A)\" that computes \"fft(A, dims)\" quickly.
+
+   The \"flags\" argument is a bitwise-or of FFTW planner flags,
+   defaulting to \"FFTW.ESTIMATE\".  e.g. passing \"FFTW.MEASURE\" or
+   \"FFTW.PATIENT\" will instead spend several seconds (or more)
+   benchmarking different possible FFT algorithms and picking the
+   fastest one; see the FFTW manual for more information on planner
+   flags.  The optional \"timelimit\" argument specifies a rough upper
+   bound on the allowed planning time, in seconds. Passing
+   \"FFTW.MEASURE\" or \"FFTW.PATIENT\" may cause the input array
+   \"A\" to be overwritten with zeros during plan creation.
+
+   \"plan_fft!()\" is the same as \"plan_fft()\" but creates a plan
+   that operates in-place on its argument (which must be an array of
+   complex floating-point numbers).  \"plan_ifft()\" and so on are
+   similar but produce plans that perform the equivalent of the
+   inverse transforms \"ifft()\" and so on.
 
 "),
 
 (E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dims])
 
-   Multidimensional FFT of real array A. If A has size \"(n_1, ..., n_d)\",
-   the result has size \"(floor(n_1/2)+1, ..., n_d)\".  Optional \"dims\"
-   argument specifies an iterable subset of dimensions to transform (the
-   \"dims[1]\" dimension is then the halved one.)
+   Multidimensional FFT of a real array A, exploiting the fact that
+   the transform has conjugate symmetry in order to save roughly half
+   the computational time and storage costs compared with \"fft()\".
+   If \"A\" has size \"(n_1, ..., n_d)\", the result has size
+   \"(floor(n_1/2)+1, ..., n_d)\".
+
+   The optional \"dims\" argument specifies an iterable subset of one
+   or more dimensions of \"A\" to transform, similar to \"fft()\".
+   Instead of (roughly) halving the first dimension of \"A\" in the
+   result, the \"dims[1]\" dimension is (roughly) halved in the same
+   way.
+
+"),
+
+(E"Signal Processing",E"",E"irfft(A, d [, dims]), brfft",E"irfft(A, d [, dims]), brfft
+
+   Inverse of \"rfft()\": for a complex array \"A\", gives the
+   corresponding real array whose FFT yields \"A\" in the first half.
+   As for \"rfft()\", \"dims\" is an optional subset of dimensions to
+   transform, defaulting to \"1:ndims(A)\".
+
+   \"d\" is the length of the transformed real array along the
+   \"dims[1]\" dimension, which must satisfy \"d ==
+   floor(size(A,dims[1])/2)+1\". (This parameter cannot be inferred
+   from \"size(A)\" due to the possibility of rounding by the
+   \"floor\" function here.)
+
+   \"brfft()\" is similar but computes an unnormalized inverse
+   transform (similar to \"bfft()\"), which must be divided by the
+   product of the sizes of the transformed dimensions (of the real
+   output array) in order to obtain the inverse transform.
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_rfft",E"plan_rfft(A[, dims[, flags[, timelimit]]])
+
+   Pre-plan an optimized real-input FFT, similar to \"plan_fft()\"
+   except for \"rfft()\" instead of \"fft()\".  The first two
+   arguments, and the size of the transformed result, are the same as
+   for \"rfft()\".
+
+"),
+
+(E"Signal Processing",E"",E"plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft",E"plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+
+   Pre-plan an optimized inverse real-input FFT, similar to
+   \"plan_rfft()\" except for \"irfft()\" and \"brfft()\",
+   respectively.  The first three arguments have the same meaning as
+   for \"irfft()\".
 
 "),
 
@@ -3574,7 +3684,7 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"cwd",E"cwd()
+(E"System",E"Base",E"pwd",E"pwd()
 
    Get the current working directory.
 
