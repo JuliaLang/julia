@@ -74,6 +74,10 @@ function norm(A::AbstractMatrix, p)
 end
 
 norm(A::AbstractMatrix) = norm(A, 2)
+
+norm(x::Number) = abs(x)
+norm(x::Number, p) = abs(x)
+
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)
     m,n = size(A)
@@ -81,8 +85,10 @@ function rank(A::AbstractMatrix)
     sv = svdvals(A)
     sum(sv .> max(size(A,1),size(A,2))*eps(sv[1]))
 end
+rank(x::Number) = x == 0 ? 0 : 1
 
 trace(A::AbstractMatrix) = sum(diag(A))
+trace(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
@@ -109,6 +115,9 @@ function cond(a::AbstractMatrix, p)
     end
 end
 
+cond(x::Number) = x == 0 ? Inf : 1
+cond(x::Number, p) = cond(x)
+
 function issym(A::AbstractMatrix)
     m, n = size(A)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end
@@ -120,6 +129,8 @@ function issym(A::AbstractMatrix)
     return true
 end
 
+issym(x::Number) = true
+
 function ishermitian(A::AbstractMatrix)
     m, n = size(A)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end
@@ -130,6 +141,8 @@ function ishermitian(A::AbstractMatrix)
     end
     return true
 end
+
+ishermitian(x::Number) = isreal(x)
 
 function istriu(A::AbstractMatrix)
     m, n = size(A)
@@ -151,6 +164,8 @@ function istril(A::AbstractMatrix)
     return true
 end
 
+istriu(x::Number) = true
+istril(x::Number) = true
 
 function linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T})
     [ones(T, size(X,1)) X] \ y
