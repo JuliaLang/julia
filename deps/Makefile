@@ -225,6 +225,14 @@ ifeq ($(ARCH), ppc64)
   LLVM_FLAGS += CXXFLAGS=-mminimal-toc
 endif
 
+ifeq (exists, $(shell [ -e llvm-$(LLVM_VER)/config.log ] && echo exists ))
+# temporary hack to force rebuild of llvm if it was previously configured
+# in the source directory
+llvm-$(LLVM_VER)/configure: FORCE_LLVM_RECONFIGURE
+FORCE_LLVM_RECONFIGURE:
+	rm -rf llvm-$(LLVM_VER)
+endif
+
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build && cd build && \
