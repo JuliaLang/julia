@@ -51,7 +51,7 @@ function norm{T}(x::AbstractVector{T}, p::Number)
         end
     end
 end
-
+norm{T<:Integer}(x::AbstractVector{T}, p::Number) = norm(float(x), p)
 norm(x::AbstractVector) = norm(x, 2)
 
 function norm(A::AbstractMatrix, p)
