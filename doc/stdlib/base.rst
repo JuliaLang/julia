@@ -2086,6 +2086,65 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
    three arguments have the same meaning as for :func:`irfft`.
 
+.. function:: dct(A [, dims]), dct!, idct, idct!
+
+   Performs a multidimensional type-II discrete cosine transform (DCT)
+   of the array ``A``, using the unitary normalization of the DCT.
+   The optional ``dims`` argument specifies an iterable subset of
+   dimensions (e.g. an integer, range, tuple, or array) to transform
+   along.  Most efficient if the size of ``A`` along the transformed
+   dimensions is a product of small primes; see :func:`nextprod`.  See
+   also :func:`plan_dct` for even greater efficiency.
+
+   The :func:`dct!` is the same, except that it operates in-place
+   on ``A``, which must be an array of real or complex floating-point
+   values. 
+
+   Similarly, :func:`idct(A [, dims])` and :func:`idct!` compute
+   the inverse DCT (technically, a type-III DCT with the unitary
+   normalization).
+
+.. function:: plan_dct(A [, dims [, flags [, timelimit]]]), plan_dct!, plan_idct, plan_idct!
+
+   Pre-plan an optimized discrete cosine transform (DCT), similar to
+   :func:`plan_fft` except producint a function that computes
+   :func:`dct`, :func:`dct!`, :func:`idct`, and :func:`idct!`
+   respectively.  The first two arguments have the same meaning as for
+   :func:`dct`.
+
+.. function:: FFTW.r2r(A, kind [, dims]), FFTW.r2r!
+
+   Performs a multidimensional real-input/real-output (r2r) transform
+   of type ``kind`` of the array ``A``, as defined in the FFTW manual.
+   ``kind`` specifies either a discrete cosine transform of various types
+   (``FFTW.REDFT00``, ``FFTW.REDFT01``,``FFTW.REDFT10``, or
+   ``FFTW.REDFT11``), a discrete sine transform of various types 
+   (``FFTW.RODFT00``, ``FFTW.RODFT01``, ``FFTW.RODFT10``, or
+   ``FFTW.RODFT11``), a real-input DFT with halfcomplex-format output
+   (``FFTW.R2HC`` and its inverse ``FFTW.HC2R``), or a discrete
+   Hartley transform (``FFTW.DHT``).  The ``kind`` argument may be
+   an array or tuple in order to specify different transform types
+   along the different dimensions of ``A``; ``kind[end]`` is used
+   for any unspecified dimensions.  See the FFTW manual for precise
+   definitions of these transform types, at `<http://www.fftw.org/doc>`.
+
+   The optional ``dims``argument specifies an iterable subset of
+   dimensions (e.g. an integer, range, tuple, or array) to transform
+   along.  ``kind[i]`` is then the transform type for ``dims[i]``,
+   with ``kind[end]`` being used for ``i > length(kind)``.
+
+   See also :func:`FFTW.plan_r2r` to pre-plan optimized r2r transforms.
+
+   :func:`FFTW.r2r!` is the same as :func:`FFTW.r2r`, but operates
+   in-place on ``A``, which must be an array of real or complex 
+   floating-point numbers.
+
+.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
+
+   Pre-plan an optimized r2r transform, similar to :func:`plan_fft`
+   except that the transforms (and the first three arguments)
+   correspond to :func:`FFTW.r2r` and :func:`FFTW.r2r!`, respectively.
+
 .. function:: fftshift(x)
 
    Swap the first and second halves of each dimension of ``x``.

@@ -1,8 +1,10 @@
 module DSP
 
 using Base.FFTW
+import Base.FFTW.normalization
 
 export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
+       dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!,
        # the rest are defined imported from FFTW:
        fft, bfft, ifft, rfft, brfft, irfft,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
@@ -137,5 +139,109 @@ function ifftshift(x,dim)
     s[dim] = -div(size(x,dim),2)
     circshift(x, s)
 end
+
+# Discrete cosine and sine transforms via FFTW's r2r transforms;
+# we follow the Matlab convention and adopt a unitary normalization here.
+# Unlike Matlab we compute the multidimensional trnasform by default,
+# similar to the Julia fft functions.
+
+fftwcopy{T<:fftwNumber}(X::StridedArray{T}) = copy(X)
+fftwcopy{T<:Real}(X::StridedArray{T}) = float(X)
+fftwcopy{T<:Complex}(X::StridedArray{T}) = complex128(X)
+
+for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number), 
+                         (:dct!, :r2r!, :X, :fftwNumber))
+    plan_f = symbol(string("plan_",f))
+    plan_fr2r = symbol(string("plan_",fr2r))
+    fi = symbol(string("i",f))
+    plan_fi = symbol(string("plan_",fi))
+    Ycopy = Y == :X ? :0 : :(Y = fftwcopy(X))
+    @eval begin
+        function $f{T<:$Tx}(X::StridedArray{T}, region)
+            $Y = $fr2r(X, REDFT10, region)
+            scale!($Y, sqrt(0.5^length(region) * normalization(X,region)))
+            sqrthalf = sqrt(0.5)
+            r = map(n -> 1:n, [size(X)...])
+            for d in region
+                rd = copy(r);
+                rd[d] = 1:1
+                $Y[rd...] *= sqrthalf
+            end
+            return $Y
+        end
+
+        function $plan_f{T<:$Tx}(X::StridedArray{T}, region,
+                                 flags::Unsigned, timelimit::Real)
+            p = $plan_fr2r(X, REDFT10, region, flags, timelimit)
+            sqrthalf = sqrt(0.5)
+            r = map(n -> 1:n, [size(X)...])
+            nrm = sqrt(0.5^length(region) * normalization(X,region))
+            return X::StridedArray{T} -> begin
+                $Y = p(X)
+                scale!($Y, nrm)
+                for d in region
+                    rd = copy(r);
+                    rd[d] = 1:1
+                    $Y[rd...] *= sqrthalf
+                end
+                return $Y
+            end
+        end
+
+        function $fi{T<:$Tx}(X::StridedArray{T}, region)
+            $Ycopy
+            scale!($Y, sqrt(0.5^length(region) * normalization(X, region)))
+            sqrt2 = sqrt(2)
+            r = map(n -> 1:n, [size(X)...])
+            for d in region
+                rd = copy(r);
+                rd[d] = 1:1
+                $Y[rd...] *= sqrt2
+            end
+            return r2r!($Y, REDFT01, region)
+        end
+
+        function $plan_fi{T<:$Tx}(X::StridedArray{T}, region,
+                                 flags::Unsigned, timelimit::Real)
+            p = $plan_fr2r(X, REDFT01, region, flags, timelimit)
+            sqrt2 = sqrt(2)
+            r = map(n -> 1:n, [size(X)...])
+            nrm = sqrt(0.5^length(region) * normalization(X,region))
+            return X::StridedArray{T} -> begin
+                $Ycopy
+                scale!($Y, nrm)
+                for d in region
+                    rd = copy(r);
+                    rd[d] = 1:1
+                    $Y[rd...] *= sqrt2
+                end
+                return p($Y)
+            end
+        end
+
+    end
+    for (g,plan_g) in ((f,plan_f), (fi, plan_fi))
+        @eval begin
+            $g{T<:$Tx}(X::StridedArray{T}) = $g(X, 1:ndims(X))
+            
+            $plan_g{T<:$Tx}(X::StridedArray{T}, region, flags::Unsigned) =
+              $plan_g(X, region, flags, NO_TIMELIMIT)
+            $plan_g{T<:$Tx}(X::StridedArray{T}, region) =
+              $plan_g(X, region, ESTIMATE, NO_TIMELIMIT)
+            $plan_g{T<:$Tx}(X::StridedArray{T}) =
+              $plan_g(X, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
+        end
+    end
+end
+
+# DCT of scalar is just the identity:
+dct(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())x
+idct(x::Number, dims) = dct(x, dims)
+dct(x::Number) = x
+idct(x::Number) = x
+plan_dct(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? y::Number -> y : throw(BoundsError())
+plan_idct(x::Number, dims) = plan_dct(x, dims)
+plan_dct(x::Number) = y::Number -> y
+plan_idct(x::Number) = y::Number -> y
 
 end # module
