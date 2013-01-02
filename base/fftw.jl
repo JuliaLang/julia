@@ -459,7 +459,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
         # multidimensional out-of-place c2r transforms, so
         # we have to handle 1d and >1d cases separately.  Ugh.
 
-        function brfft(X::StridedArray{$Tc}, d::Int, region::Integer)
+        function brfft(X::StridedArray{$Tc}, d::Integer, region::Integer)
             osize = [size(X)...]
             @assert osize[region] == ifloor(d/2) + 1
             osize[region] = d
@@ -471,7 +471,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
         end
 
         # variant that destroys input X
-        function brfftd(X::StridedArray{$Tc}, d::Int, region) 
+        function brfftd(X::StridedArray{$Tc}, d::Integer, region) 
             d1 = region[1]
             osize = [size(X)...]
             @assert osize[d1] == ifloor(d/2) + 1
@@ -483,7 +483,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             return Y
         end
 
-        function brfft(X::StridedArray{$Tc}, d::Int, region) 
+        function brfft(X::StridedArray{$Tc}, d::Integer, region) 
             if length(region) == 1
                 return brfft(X, d, convert(Int, region[1]))
             end
@@ -491,12 +491,12 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             return brfftd(X, d, region)
         end
 
-        function brfft{T<:Number}(X::StridedArray{T}, d::Int, region)
+        function brfft{T<:Number}(X::StridedArray{T}, d::Integer, region)
             Xc = complexfloat(X)
             return brfftd(Xc, d, region)
         end
 
-        function plan_brfft(X::StridedArray{$Tc}, d::Int, region::Integer,
+        function plan_brfft(X::StridedArray{$Tc}, d::Integer, region::Integer,
                             flags::Unsigned, tlim::Real)
             osize = [size(X)...]
             @assert osize[region] == ifloor(d/2) + 1
@@ -511,7 +511,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             end
         end
 
-        function plan_brfft(X::StridedArray{$Tc}, d::Int, region,
+        function plan_brfft(X::StridedArray{$Tc}, d::Integer, region,
                             flags::Unsigned, tlim::Real)
             if length(region) == 1
                 return plan_brfft(X, d, convert(Int, region[1]), flags, tlim)
@@ -563,7 +563,7 @@ function irfft(X, d)
     return scale!(Y, normalization(Y))
 end
 
-function plan_irfft(X::StridedArray, d::Int, region, flags, tlim)
+function plan_irfft(X::StridedArray, d::Integer, region, flags, tlim)
     p = plan_brfft(X, d, region, flags, tlim)
     d1 = region[1]
     osize = [size(X)...]
