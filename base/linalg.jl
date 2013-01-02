@@ -35,21 +35,22 @@ diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
 
 function norm{T}(x::AbstractVector{T}, p::Number)
     if length(x) == 0
-        return zero(eltype(x))
+        a = zero(eltype(x))
     elseif p == Inf
-        return max(abs(x))
+        a = max(abs(x))
     elseif p == -Inf
-        return min(abs(x))
+        a = min(abs(x))
     else
         absx = abs(x)
         dx = max(absx)
         if dx != zero(T)
             scale!(absx, 1/dx)
-            return dx * (sum(absx.^p).^(1/p))
+            a = dx * (sum(absx.^p).^(1/p))
         else
-            return sum(absx.^p).^(1/p)
+            a = sum(absx.^p).^(1/p)
         end
     end
+    return float(a)
 end
 norm{T<:Integer}(x::AbstractVector{T}, p::Number) = norm(float(x), p)
 norm(x::AbstractVector) = norm(x, 2)
@@ -57,20 +58,21 @@ norm(x::AbstractVector) = norm(x, 2)
 function norm(A::AbstractMatrix, p)
     m, n = size(A)
     if m == 0 || n == 0
-        return zero(eltype(A))
+        a = zero(eltype(A))
     elseif m == 1 || n == 1
-        return norm(reshape(A, numel(A)), p)
+        a = norm(reshape(A, numel(A)), p)
     elseif p == 1
-        return max(sum(abs(A),1))
+        a = max(sum(abs(A),1))
     elseif p == 2
-        return max(svdvals(A))
+        a = max(svdvals(A))
     elseif p == Inf
-        return max(sum(abs(A),2))
+        a = max(sum(abs(A),2))
     elseif p == :fro
-        return norm(reshape(A, numel(A)))
+        a = norm(reshape(A, numel(A)))
     else
         error("invalid parameter to matrix norm")
     end
+    return float(a)
 end
 
 norm(A::AbstractMatrix) = norm(A, 2)
@@ -96,26 +98,7 @@ trace(x::Number) = x
 #det(a::AbstractMatrix)
 inv(a::AbstractMatrix) = a \ one(a)
 
-function cond(a::AbstractMatrix)
-    s = svdvals(a)
-    condno = max(s) / min(s)
-    # Return Inf if condno is NaN (input is all zeros)
-    isnan(condno) ? Inf : condno
-end
-
-function cond(a::AbstractMatrix, p) 
-    if p == 2 
-        return cond(a)
-    else
-        try
-            return norm(a, p) * norm(inv(a), p)
-        catch e
-            isa(e,LAPACK.SingularException) ? (return Inf) : rethrow(e)
-        end
-    end
-end
-
-cond(x::Number) = x == 0 ? Inf : 1
+cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
 function issym(A::AbstractMatrix)
