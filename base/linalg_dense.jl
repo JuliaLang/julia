@@ -19,6 +19,8 @@ isposdef{T<:BlasFloat}(A::Matrix{T}) = isposdef!(copy(A))
 isposdef{T<:Number}(A::Matrix{T}, upper::Bool) = isposdef!(float64(A), upper)
 isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
 
+isposdef(x::Number) = isreal(x) && x > 0
+
 norm{T<:BlasFloat}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
 
 function norm{T<:BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
@@ -137,6 +139,8 @@ end
 
 diagm(v) = diagm(v, 0)
 
+diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
+
 function trace{T}(A::Matrix{T})
     t = zero(T)
     for i=1:min(size(A))
@@ -164,6 +168,12 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     end
     R
 end
+
+kron(a::Number, b::Number) = a * b
+kron(a::Vector, b::Number) = a * b
+kron(a::Number, b::Vector) = a * b
+kron(a::Matrix, b::Number) = a * b
+kron(a::Number, b::Matrix) = a * b
 
 function randsym(n)
     a = randn(n,n)
@@ -234,6 +244,8 @@ function rref{T}(A::Matrix{T})
     end
     return U
 end
+
+rref(x::Number) = one(x)
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
@@ -377,6 +389,7 @@ end
 # Matrix exponential
 expm{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}) = expm!(copy(A))
 expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float(A))
+expm(x::Number) = exp(x)
 
 ## Matrix factorizations and decompositions
 
@@ -451,6 +464,7 @@ chold{T<:Number}(A::Matrix{T}) = chold(A, true)
 
 ## Matlab (and R) compatible
 chol{T<:Number}(A::Matrix{T}) = factors(chold(A))
+chol(x::Number) = isreal(x) && x >= 0 ? sqrt(x) : error("argument not positive-definite")
 
 type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
@@ -537,6 +551,7 @@ lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
 
 ## Matlab-compatible
 lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
+lu(x::Number) = (one(x), x)
 
 function det{T}(lu::LUDense{T})
     m, n = size(lu)
@@ -550,6 +565,8 @@ function det(A::Matrix)
     if istriu(A) | istril(A); return prod(diag(A)); end
     return det(lud(A))
 end
+
+det(x::Number) = x
 
 function (\){T<:BlasFloat}(lu::LUDense{T}, B::StridedVecOrMat{T})
     if lu.info > 0; throw(LAPACK.SingularException(info)); end
@@ -585,6 +602,7 @@ function factors{T<:BlasFloat}(qrd::QRDense{T})
 end
 
 qr{T<:Number}(x::StridedMatrix{T}) = factors(qrd(x))
+qr(x::Number) = (one(x), x)
 
 ## Multiplication by Q from the QR decomposition
 (*){T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T}) =
@@ -688,8 +706,9 @@ function eig{T<:BlasFloat}(A::StridedMatrix{T}, vecs::Bool)
 end
 
 eig{T<:Integer}(x::StridedMatrix{T}, vecs::Bool) = eig(float64(x), vecs)
-eig(x::StridedMatrix) = eig(x, true)
-eigvals(x::StridedMatrix) = eig(x, false)
+eig(x::Number, vecs::Bool) = vecs ? (x, one(x)) : x
+eig(x) = eig(x, true)
+eigvals(x) = eig(x, false)
 
 # This is the svd based on the LAPACK GESVD, which is slower, but takes
 # lesser memory. It should be made available through a keyword argument
@@ -721,8 +740,9 @@ function svd{T<:BlasFloat}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
 end
 
 svd{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svd(float64(x),vecs,thin)
-svd(A::StridedMatrix) = svd(A,true,false)
-svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
+svd(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
+svd(A) = svd(A,true,false)
+svd(A, thin::Bool) = svd(A,true,thin)
 svdvals(A) = svd(A,false,true)[2]
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
@@ -776,6 +796,7 @@ function pinv{T<:BlasFloat}(A::StridedMatrix{T})
 end
 pinv{T<:Integer}(A::StridedMatrix{T}) = pinv(float(A))
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
+pinv(x::Number) = one(x)/x
 
 ## Basis for null space
 function null{T<:BlasFloat}(A::StridedMatrix{T})

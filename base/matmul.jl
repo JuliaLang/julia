@@ -60,6 +60,8 @@ function dot(x::Vector, y::Vector)
     s
 end
 
+dot(x::Number, y::Number) = conj(x) * y
+
 # Matrix-vector multiplication
 
 function (*){T<:BlasFloat}(A::StridedMatrix{T},
