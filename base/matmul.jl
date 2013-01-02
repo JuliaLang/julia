@@ -213,6 +213,7 @@ function gemv{T<:BlasFloat}(y::StridedVector{T},
 
     if nA != length(x); error("*: argument shapes do not match"); end
     if mA != length(y); error("*: output size is incorrect"); end
+    if mA == 0; return zeros(T, 0); end
 
     BLAS.gemv!(tA, one(T), A, x, zero(T), y)
 end

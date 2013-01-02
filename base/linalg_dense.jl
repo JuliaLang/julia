@@ -801,9 +801,10 @@ pinv(x::Number) = one(x)/x
 ## Basis for null space
 function null{T<:BlasFloat}(A::StridedMatrix{T})
     m,n = size(A)
-    if m >= n; return zeros(T, n, 0); end;
-    u,s,vt = svd(A)
-    vt[m+1:,:]'
+    _,s,vt = svd(A)
+    if m == 0; return eye(T, n); end
+    indstart = sum(s .> max(m,n)*max(s)*eps(eltype(s))) + 1
+    vt[indstart:,:]'
 end
 null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
 null(a::StridedVector) = null(reshape(a, length(a), 1))
