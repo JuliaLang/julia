@@ -576,7 +576,49 @@ plan_irfft(X, d, region, flags) = plan_irfft(X, d, region, flags, NO_TIMELIMIT)
 plan_irfft(X, d, region) = plan_irfft(X, d, region, ESTIMATE, NO_TIMELIMIT)
 plan_irfft(X, d) = plan_irfft(X, d, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
 
-# Transpose
+# A DFT is unambiguously defined as just the identity operation for scalars
+fft(x::Number) = x
+ifft(x::Number) = x
+bfft(x::Number) = x
+rfft(x::Real) = x
+irfft(x::Number, d::Integer) = d == 1 ? real(x) : throw(BoundsError())
+brfft(x::Number, d::Integer) = d == 1 ? real(x) : throw(BoundsError())
+fft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
+ifft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
+bfft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
+fft(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
+rfft(x::Real, dims) = dims[1] == 1 ? x : throw(BoundsError())
+irfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
+brfft(x::Number, d::Integer, dims) = d == 1 && dims[1] == 1 ? real(x) : throw(BoundsError())
+
+plan_fft(x::Number) = x -> x
+plan_ifft(x::Number) = x -> x
+plan_bfft(x::Number) = x -> x
+plan_rfft(x::Real) = x -> x
+plan_irfft(x::Number, d::Integer) = (irfft(x,d); x -> real(x))
+plan_brfft(x::Number, d::Integer) = (brfft(x,d); x -> real(x))
+
+plan_fft(x::Number, dims) = (fft(x,dims); x -> x)
+plan_ifft(x::Number, dims) = (ifft(x,dims); x -> x)
+plan_bfft(x::Number, dims) = (bfft(x,dims); x -> x)
+plan_rfft(x::Real, dims) = (rfft(x,dims); x -> x)
+plan_irfft(x::Number, d::Integer, dims) = (irfft(x,d,dims); x -> real(x))
+plan_brfft(x::Number, d::Integer, dims) = (brfft(x,d,dims); x -> real(x))
+
+plan_fft(x::Number, dims, flags) = plan_fft(x, dims)
+plan_ifft(x::Number, dims, flags) = plan_ifft(x, dims)
+plan_bfft(x::Number, dims, flags) = plan_bfft(x, dims)
+plan_rfft(x::Real, dims, flags) = plan_rfft(x, dims)
+plan_irfft(x::Number, d::Integer, dims, flags) = plan_irfft(x, d, dims)
+plan_brfft(x::Number, d::Integer, dims, flags) = plan_brfft(x, d, dims)
+
+plan_fft(x::Number, dims, flags, tlim) = plan_fft(x, dims)
+plan_ifft(x::Number, dims, flags, tlim) = plan_ifft(x, dims)
+plan_bfft(x::Number, dims, flags, tlim) = plan_bfft(x, dims)
+plan_rfft(x::Real, dims, flags, tlim) = plan_rfft(x, dims)
+plan_irfft(x::Number, d::Integer, dims, flags, tlim) = plan_irfft(x, d, dims)
+plan_brfft(x::Number, d::Integer, dims, flags, tlim) = plan_brfft(x, d, dims)
+
 # NOTE: Using MEASURE and PATIENT zeros out the input the 
 # first time it is used for a particular size. Use ESTIMATE
 
