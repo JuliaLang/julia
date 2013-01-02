@@ -1092,7 +1092,7 @@ end
 
 ## find ##
 
-function nnz(a::StridedArray)
+function nnz(a)
     n = 0
     for i = 1:numel(a)
         n += bool(a[i]) ? 1 : 0
@@ -1101,7 +1101,7 @@ function nnz(a::StridedArray)
 end
 
 # returns the index of the first non-zero element, or 0 if all zeros
-function findfirst(A::StridedArray)
+function findfirst(A)
     for i = 1:length(A)
         if A[i] != 0
             return i
@@ -1111,7 +1111,7 @@ function findfirst(A::StridedArray)
 end
 
 # returns the index of the first matching element
-function findfirst(A::StridedArray, v)
+function findfirst(A, v)
     for i = 1:length(A)
         if A[i] == v
             return i
@@ -1121,7 +1121,7 @@ function findfirst(A::StridedArray, v)
 end
 
 # returns the index of the first element for which the function returns true
-function findfirst(testf::Function, A::StridedArray)
+function findfirst(testf::Function, A)
     for i = 1:length(A)
         if testf(A[i])
             return i
@@ -1156,6 +1156,10 @@ function find(A::StridedArray)
     end
     return I
 end
+
+find(x::Number) = x == 0 ? Array(Int,0) : [1]
+find(x::Bool) = x ? [1] : Array(Int,0)
+find(testf::Function, x) = find(testf(x))
 
 findn(A::StridedVector) = find(A)
 
@@ -1241,7 +1245,9 @@ function nonzeros{T}(A::StridedArray{T})
     return V
 end
 
-function findmax(a::StridedArray)
+nonzeros(x::Number) = x == 0 ? Array(typeof(x),0) : [x]
+
+function findmax(a)
     m = typemin(eltype(a))
     mi = 0
     for i=1:length(a)
@@ -1253,7 +1259,7 @@ function findmax(a::StridedArray)
     return (m, mi)
 end
 
-function findmin(a::StridedArray)
+function findmin(a)
     m = typemax(eltype(a))
     mi = 0
     for i=1:length(a)
@@ -1264,8 +1270,9 @@ function findmin(a::StridedArray)
     end
     return (m, mi)
 end
-indmax(a::StridedArray) = findmax(a)[2]
-indmin(a::StridedArray) = findmin(a)[2]
+
+indmax(a) = findmax(a)[2]
+indmin(a) = findmin(a)[2]
 
 ## Reductions ##
 
