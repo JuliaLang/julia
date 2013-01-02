@@ -592,14 +592,14 @@ function det(A::Matrix)
 end
 
 function (\){T<:BlasFloat}(lu::LUDense{T}, B::StridedVecOrMat{T})
-    if lu.info > 0; error("Singular system"); end
+    if lu.info > 0; throw(LAPACK.SingularException(info)); end
     LAPACK.getrs!('N', lu.lu, lu.ipiv, copy(B))
 end
 
 function inv{T<:BlasFloat}(lu::LUDense{T})
     m, n = size(lu.lu)
     if m != n; error("inv only defined for square matrices"); end
-    if lu.info > 0; return error("Singular system"); end
+    if lu.info > 0; return throw(LAPACK.SingularException(info)); end
     LAPACK.getri!(copy(lu.lu), lu.ipiv)
 end
 
@@ -638,7 +638,7 @@ Ac_mul_B{T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T}) =
 function (\){T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T})
     n   = length(A.tau)
     ans, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
-    if info > 0; error("Singular system"); end
+    if info > 0; throw(LAPACK.SingularException(info)); end
     return ans
 end
 
@@ -679,7 +679,7 @@ qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
 function (\){T<:BlasFloat}(A::QRPDense{T}, B::StridedVecOrMat{T})
     n = length(A.tau)
     x, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
-    if info > 0; error("Singular system"); end
+    if info > 0; throw(LAPACK.SingularException(info)); end
     isa(B, Vector) ? x[invperm(A.jpvt)] : x[:,invperm(A.jpvt)]
 end
 
@@ -773,21 +773,21 @@ function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     if m == n # Square
         if istriu(A) 
             ans, info = LAPACK.trtrs!('U', 'N', 'N', Acopy, X)
-            if info > 0; error("Singular system"); end
+            if info > 0; throw(LAPACK.SingularException(info)); end
             return ans
         end
         if istril(A) 
             ans, info = LAPACK.trtrs!('L', 'N', 'N', Acopy, X) 
-            if info > 0; error("Singular system"); end
+            if info > 0; throw(LAPACK.SingularException(info)); end
             return ans
         end
         if ishermitian(A) 
             ans, _, _, info = LAPACK.sysv!('U', Acopy, X)
-            if info > 0; error("Singular system"); end
+            if info > 0; throw(LAPACK.SingularException(info)); end
             return ans
         end
         ans, _, _, info = LAPACK.gesv!(Acopy, X)
-        if info > 0; error("Singular system"); end
+        if info > 0; throw(LAPACK.SingularException(info)); end
         return ans
     end
     LAPACK.gelsd!(Acopy, X)[1]

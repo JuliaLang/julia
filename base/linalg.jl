@@ -8,6 +8,8 @@ function scale!{T<:Number}(X::StridedArray{T}, s::Real)
     return X
 end
 
+scale(X, s) = scale!(copy(X), s)
+
 cross(a::Vector, b::Vector) =
     [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
@@ -102,7 +104,7 @@ function cond(a::AbstractMatrix, p)
         try
             return norm(a, p) * norm(inv(a), p)
         catch e
-            isa(e,LapackException) ? (return Inf) : rethrow(e)
+            isa(e,LAPACK.SingularException) ? (return Inf) : rethrow(e)
         end
     end
 end

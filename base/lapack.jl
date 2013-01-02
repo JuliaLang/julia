@@ -12,6 +12,10 @@ type LapackException <: Exception
     info::BlasInt
 end
 
+type SingularException <: Exception
+    info::BlasInt
+end
+
 type LapackDimMisMatch <: Exception
     name::ASCIIString
 end
