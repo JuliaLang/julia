@@ -25,7 +25,7 @@ endif
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
+STAGE1_DEPS = uv openlibm-extras random rmath double-conversion glpk
 STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -41,6 +41,10 @@ WGET = $(abspath .)/jldownload
 WGET_DASH_O = $(WGET)
 
 ## USE_SYSTEM_LIBS options
+
+ifeq ($(USE_SYSTEM_LIBM), 0)
+STAGE1_DEPS += openlibm
+endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
 STAGE1_DEPS += llvm
@@ -456,22 +460,48 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
-install-openlibm: $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+install-openlibm: $(OPENLIBM_OBJ_TARGET) 
 
 clean-openlibm:
 	-$(MAKE) -C openlibm distclean
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm      
 
+# openlibm-extras
+
+OPENLIBMEXT_OBJ_TARGET = $(BUILD)/lib/libopenlibm-extras.$(SHLIB_EXT)
+OPENLIBMEXT_OBJ_SOURCE = openlibm/libopenlibm-extras.$(SHLIB_EXT)
+
+openlibm-extras/Makefile:
+	(cd .. && git submodule init && git submodule update)
+ifeq (exists, $(shell [ -d openlibm/.git ] && echo exists ))
+$(OPENLIBMEXT_OBJ_SOURCE): openlibm/.git/HEAD
+endif
+ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
+$(OPENLIBMEXT_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
+endif
+$(OPENLIBMEXT_OBJ_SOURCE): openlibm/Makefile.extras
+	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+$(OPENLIBMEXT_OBJ_TARGET): $(OPENLIBMEXT_OBJ_SOURCE) | $(BUILD)/lib
+	cp $< $@
+	$(INSTALL_NAME_CMD)libopenlibm-extras.$(SHLIB_EXT) $@
+install-openlibm-extras: $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+
+clean-openlibm-extras:
+	-$(MAKE) -C openlibm -f Makefile.extras distclean
+	-rm $(OPENLIBMEXT_OBJ_TARGET)
+distclean-openlibm-extras: clean-openlibm-extras
+
+
 # Wrapper for openlibm/Faddeeva since ccall doesn't support C99 complex:
-$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBM_OBJ_TARGET)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm
+$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBMEXT_OBJ_TARGET)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm-extras
 	$(INSTALL_NAME_CMD)libFaddeeva_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 
 clean-Faddeeva-wrapper:
-	-rm -f $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+	-rm -f $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 distclean-Faddeeva-wrapper: clean-Faddeeva-wrapper
 
 ## Rmath ##
