@@ -440,25 +440,32 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
     }
 }
 
-DLLEXPORT jl_value_t *jl_get_backtrace()
+DLLEXPORT jl_value_t *jl_parse_backtrace(size_t n, ptrint_t *data)
 {
+    ios_printf(JL_STDERR, "n = %d\n", n);
     jl_array_t *a = jl_alloc_cell_1d(0);
     JL_GC_PUSH(&a);
-    for(size_t i=0; i < bt_size; i++) {
-        push_frame_info_from_ip(a, (size_t)bt_data[i]);
+    for(size_t i=0; i < n; i++) {
+	ios_printf(JL_STDERR, "  data[i] = %lx\n", data[i]);
+        push_frame_info_from_ip(a, (size_t)data[i]);
     }
     JL_GC_POP();
     return (jl_value_t*)a;
 }
 
+DLLEXPORT jl_value_t *jl_get_backtrace()
+{
+    return jl_parse_backtrace(bt_size, bt_data);
+}
+
 #if defined(__APPLE__)
 // stacktrace using execinfo
-static void record_backtrace(void)
+void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
 {
-    bt_size = backtrace((void**)bt_data, MAX_BT_SIZE);
+    *bt_size_p = backtrace((void**)bt_data, MAX_BT_SIZE);
 }
 #elif defined(__WIN32__)
-static void record_backtrace(void)
+void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
 {
     /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
 #if defined(__MINGW_H)
@@ -472,11 +479,11 @@ static void record_backtrace(void)
             FreeLibrary(kernel32);
             kernel32 = NULL;
             func = NULL;
-            bt_size = 0;
+            *bt_size_p = 0;
             return;
         }
         else {
-            bt_size = func(0, MAX_BT_SIZE, bt_data, NULL);
+            *bt_size_p = func(0, MAX_BT_SIZE, bt_data, NULL);
         }
     }
     else {
@@ -485,12 +492,12 @@ static void record_backtrace(void)
     }
     FreeLibrary(kernel32);
 #else
-    bt_size = RtlCaptureStackBackTrace(0, MAX_BT_SIZE, bt_data, NULL);
+    *bt_size_p = RtlCaptureStackBackTrace(0, MAX_BT_SIZE, bt_data, NULL);
 #endif
 }
 #else
 // stacktrace using libunwind
-static void record_backtrace(void)
+void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
 {
     unw_cursor_t cursor; unw_context_t uc;
     unw_word_t ip;
@@ -510,9 +517,14 @@ static void record_backtrace(void)
             ios_printf(ios_stdout, "in %s at %s:%d\n", func_name, file_name, line_num);
         */
     }
-    bt_size = n;
+    *bt_size_p = n;
 }
 #endif
+
+static void record_backtrace(void)
+{
+    rec_backtrace(&bt_size, bt_data);
+}
 
 // yield to exception handler
 static void throw_internal(jl_value_t *e)
