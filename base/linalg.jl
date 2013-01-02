@@ -5,6 +5,7 @@ function scale!{T<:Number}(X::StridedArray{T}, s::Real)
     for i in 1:numel(X)
         X[i] *= s;
     end
+    return X
 end
 
 cross(a::Vector, b::Vector) =

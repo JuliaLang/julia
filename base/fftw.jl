@@ -391,23 +391,10 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
     end
 end
 
-# Normalization and in-place scaling for ifft
+# Normalization for ifft
 
 normalization(X::StridedArray, region) = 1 / prod([size(X)...][[region...]])
 normalization(X::StridedArray) = 1 / length(X)
-
-scale!(X::Array{Float32}, s::Float64) = BLAS.scal!(numel(X), float32(s), X, 1)
-scale!(X::Array{Float64}, s::Float64) = BLAS.scal!(numel(X), s, X, 1)
-scale!(X::Array{Complex64}, s::Float64) = (ccall(("sscal_",Base.libblas_name), Void, (Ptr{Base.BlasInt}, Ptr{Float32}, Ptr{Complex64}, Ptr{Base.BlasInt}), &(2*numel(X)), &float32(s), X, &1); X)
-scale!(X::Array{Complex128}, s::Float64) = (ccall(("dscal_",Base.libblas_name), Void, (Ptr{Base.BlasInt}, Ptr{Float64}, Ptr{Complex128}, Ptr{Base.BlasInt}), &(2*numel(X)), &s, X, &1); X)
-
-function scale!{T<:Number}(X::StridedArray{T}, s::Float64)
-    # FIXME: could use BLAS in more cases
-    for i in 1:numel(X)
-        X[i] *= s;
-    end
-    return X
-end
 
 # Normalized ifft inverse transforms:
 
