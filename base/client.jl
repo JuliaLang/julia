@@ -277,7 +277,7 @@ function _start()
             PGRP.myid = 1
             assert(PGRP.np == 0)
             push(PGRP.workers,LocalProcess())
-            push(PGRP.locs,Location("",0))
+            push(PGRP.locs,("",0))
             PGRP.np = 1
             # make scheduler aware of current (root) task
             enq_work(roottask_wi)

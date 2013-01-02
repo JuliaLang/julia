@@ -216,20 +216,19 @@ type IOStream <: Stream
     ios::Array{Uint8,1}
     name::String
 
-    IOStream(name::String, buf::Array{Uint8,1}) = new(buf, name)
-
-    # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
-    # in the case where we takebuf it.
-    function IOStream(name::String, finalize::Bool)
-        buf = zeros(Uint8,sizeof_ios_t)
-        x = new(pointer(buf), buf, name)
-        if finalize
-            finalizer(x, close)
-        end
-        return x
-    end
-    IOStream(name::String) = IOStream(name, true)
+    IOStream(name::String, buf::Array{Uint8,1}) = new(pointer(buf), buf, name)
 end
+# TODO: delay adding finalizer, e.g. for memio with a small buffer, or
+# in the case where we takebuf it.
+function IOStream(name::String, finalize::Bool)
+    buf = zeros(Uint8,sizeof_ios_t)
+    x = IOStream(name, buf)
+    if finalize
+        finalizer(x, close)
+    end
+    return x
+end
+IOStream(name::String) = IOStream(name, true)
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
 show(io, s::IOStream) = print(io, "IOStream(", s.name, ")")

@@ -167,14 +167,14 @@ static int exec_program(void)
                     else break;
                 }
                 if (jl_typeof(e) == (jl_type_t*)jl_errorexception_type) {
-                    ios_printf(ios_stderr, "error during bootstrap: %s\n",
+                    jl_printf(JL_STDERR, "error during bootstrap: %s\n",
                                jl_string_data(jl_fieldref(e,0)));
                 }
                 else {
-                    ios_printf(ios_stderr, "error during bootstrap\n");
+                    jl_printf(JL_STDERR, "error during bootstrap\n");
                 }
             }
-            ios_printf(ios_stderr, "\n");
+            jl_printf(JL_STDERR, "\n");
             JL_EH_POP();
             return 1;
         }
@@ -275,7 +275,7 @@ int true_main(int argc, char *argv[])
     JL_TRY {
         if (iserr) {
             //jl_show(jl_exception_in_transit);# What if the error was in show?
-            ios_printf(ios_stdout, "\n\n");
+            jl_printf(JL_STDERR, "\n\n");
             iserr = 0;
         }
     uv_run(jl_global_event_loop());

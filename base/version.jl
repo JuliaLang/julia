@@ -210,7 +210,7 @@ let
                 #println(err) # not a useful error msg currently
             else
                 error(err)
-end
+            end
         end
     end
 end

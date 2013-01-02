@@ -104,14 +104,13 @@ type Worker
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
         new(bytestring(host), uint16(port), sock, IOString(), {}, {}, id, false)
-        end
-Worker(host::String, port::Integer, sock::TcpSocket) = Worker(host, port, sock, 0)
+end
+Worker(host::String, port::Integer, sock::TcpSocket) =
+    Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
-    Worker(host, port,
-        connect_to_host(host,uint16(port)))
+    Worker(host, port, connect_to_host(host,uint16(port)))
 Worker(host::String, port::Integer, tunneluser::String) = 
-    Worker(host, port,
-       connect_to_host("localhost",
+    Worker(host, port, connect_to_host("localhost",
            ssh_tunnel(tunnel_user, host, uint16(port))))
 
 function send_msg_now(w::Worker, kind, args...)

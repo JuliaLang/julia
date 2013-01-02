@@ -451,6 +451,21 @@ DLLEXPORT jl_value_t *jl_get_backtrace()
     return (jl_value_t*)a;
 }
 
+DLLEXPORT void gdbprint(ptrint_t ip) {
+    char *func_name;
+    int line_num;
+    const char *file_name;
+    getFunctionInfo(&func_name, &line_num, &file_name, ip);
+    if (func_name != NULL)
+       ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+}
+
+DLLEXPORT void gdbbacktrace() {
+    backtrace((void**)bt_data, MAX_BT_SIZE);
+    for(size_t i=0; i < bt_size; i++)
+        gdbprint(bt_data[i]);
+}
+
 #if defined(__APPLE__)
 // stacktrace using execinfo
 static void record_backtrace(void)
@@ -488,45 +503,6 @@ static void record_backtrace(void)
     bt_size = RtlCaptureStackBackTrace(0, MAX_BT_SIZE, bt_data, NULL);
 #endif
 }
-// DLLEXPORT void gdb_backtrace(void)
-// {
-    // void *array[1024];
-    // size_t ip;
-    // size_t *p;
-    // unsigned short num;
-
-    // /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
-    // #if defined(__MINGW_H)
-    // HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
-
-    // if(kernel32 != NULL){
-        // typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
-        // CaptureStackBackTraceType func = (CaptureStackBackTraceType) GetProcAddress( kernel32, "RtlCaptureStackBackTrace" );
-
-        // if(func==NULL){
-            // FreeLibrary(kernel32);
-            // kernel32 = NULL;
-            // func = NULL;
-			// JL_PUTS("Failed to find RtlCaptureStackBackTrace",JL_STDERR);
-			// return;
-        // }else
-        // {
-            // num = func( 0, 1023, array, NULL );
-        // }
-    // } else {
-        // JL_PUTS("Failed to load kernel32.dll",JL_STDERR);
-        // return;
-    // }
-    // FreeLibrary(kernel32);
-    // #else
-    // num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
-    // #endif
-
-    // p = (size_t*)array;
-    // while ((ip = *(p++)) != 0 && (num--)>0) {
-        // gdb_print_function_info(ip);
-    // }
-// }
 #else
 // stacktrace using libunwind
 static void record_backtrace(void)
@@ -551,19 +527,6 @@ static void record_backtrace(void)
     }
     bt_size = n;
 }
-//DLLEXPORT void gdb_backtrace(void) {
-//  unw_cursor_t cursor; unw_context_t uc;
-//    unw_word_t ip;
-//    jl_array_t *a;
-//    size_t n=0;    
-//    unw_getcontext(&uc);
-//    unw_init_local(&cursor, &uc);
-//    while (unw_step(&cursor) && n < 10000) { 
-//        unw_get_reg(&cursor, UNW_REG_IP, &ip);
-//        gdb_print_function_info(ip);
-//        n++;
-//    }
-//}
 #endif
 
 // yield to exception handler

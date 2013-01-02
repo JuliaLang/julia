@@ -46,13 +46,11 @@ extern "C" {
 #define XX(hook) static jl_function_t *JULIA_HOOK(hook) = 0;
 JL_CB_TYPES(XX)
 #undef XX
-static jl_type_t* jl_method_error = 0;
 DLLEXPORT void jl_get_uv_hooks() {
 	if (JULIA_HOOK(close)) return; // only do this once
 #define XX(hook) JULIA_HOOK(hook) = JULIA_HOOK_(jl_base_module, hook);
 	JL_CB_TYPES(XX)
 #undef XX
-	jl_method_error = (jl_type_t*)jl_get_global(jl_base_module, jl_symbol("MethodError"));
 }
 #undef JL_CB_TYPES
 
@@ -69,13 +67,13 @@ int base_module_conflict = 0; //set to 1 if Base is getting redefined since it m
             /* jl_puts(#hook " original succeeded\n",jl_uv_stderr); */ \
         } \
         JL_CATCH { \
-            if (jl_typeof(jl_exception_in_transit) == jl_method_error) { \
+            if (jl_typeof(jl_exception_in_transit) == (jl_type_t*)jl_methoderror_type) { \
                 /* jl_puts("\n" #hook " being retried with new Base bindings --> ",jl_uv_stderr); */ \
                 jl_function_t *cb_func = JULIA_HOOK_((jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base")), hook); \
                 ret = jl_callback_call(cb_func,args); \
                 /* jl_puts(#hook " succeeded\n",jl_uv_stderr); */ \
             } else { \
-                jl_throw(jl_exception_in_transit); \
+                jl_rethrow(); \
             } \
         } \
     }
@@ -84,14 +82,14 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 {
     if(val != 0)
         count += 1;
-    jl_value_t **argv = alloca((count)*sizeof(jl_value_t*));
-    jl_value_t *v;
+    jl_value_t **argv;
+    JL_GC_PUSHARGS(argv,count);
     memset(argv, 0, count*sizeof(jl_value_t*));
+    jl_value_t *v;
     va_list argp;
     va_start(argp,count);
     int i;
     argv[0]=val;
-    JL_GC_PUSHARGS(argv,count);
     for(i=((val==0)?0:1); i<count; ++i) {
         switch(va_arg(argp,int)) {
         case CB_PTR:
