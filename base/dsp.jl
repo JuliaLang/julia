@@ -224,9 +224,9 @@ for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
         @eval begin
             $g{T<:$Tx}(X::StridedArray{T}) = $g(X, 1:ndims(X))
             
-            $plan_g{T<:$Tx}(X::StridedArray{T}, region, flags::Unsigned) =
+            $plan_g(X, region, flags::Unsigned) =
               $plan_g(X, region, flags, NO_TIMELIMIT)
-            $plan_g{T<:$Tx}(X::StridedArray{T}, region) =
+            $plan_g(X, region) =
               $plan_g(X, region, ESTIMATE, NO_TIMELIMIT)
             $plan_g{T<:$Tx}(X::StridedArray{T}) =
               $plan_g(X, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
@@ -239,8 +239,8 @@ dct(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError
 idct(x::Number, dims) = dct(x, dims)
 dct(x::Number) = x
 idct(x::Number) = x
-plan_dct(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? y::Number -> y : throw(BoundsError())
-plan_idct(x::Number, dims) = plan_dct(x, dims)
+plan_dct(x::Number, dims, flags, tlim) = length(dims) == 0 || dims[1] == 1 ? y::Number -> y : throw(BoundsError())
+plan_idct(x::Number, dims, flags, tlim) = plan_dct(x, dims)
 plan_dct(x::Number) = y::Number -> y
 plan_idct(x::Number) = y::Number -> y
 
