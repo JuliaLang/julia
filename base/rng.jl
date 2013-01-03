@@ -90,12 +90,11 @@ end
 srand(n::Integer) = srand(make_seed(n))
 
 function make_seed(n::Integer)
-    n = n < 0 ? ~n : n
     seed = Uint32[]
     while true
         push(seed, n & 0xffffffff)
         n >>= 32
-        if n == 0
+        if n == 0 || ~n == 0
             return seed
         end
     end
