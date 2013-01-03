@@ -150,7 +150,7 @@ function process_options(args::Array{Any,1})
         if args[i]=="-q" || args[i]=="--quiet"
             quiet = true
         elseif args[i]=="--worker"
-            start_worker()
+            start_worker(args[i+1])
             # doesn't return
         elseif args[i]=="-e"
             # TODO: support long options
