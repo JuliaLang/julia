@@ -963,7 +963,7 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure $(CONFIGURE_COMMON) --enable-shared --disable-static
+	./configure --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)"
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
 ifeq ($(OS),$(BUILD_OS))
