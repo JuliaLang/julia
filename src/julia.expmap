@@ -65,8 +65,6 @@
     jl_defines_or_exports_p;
     jl_box_int32;
     jl_box_int64;
-    jl_buf_mutex_lock;
-    jl_buf_mutex_unlock;
     jl_callback;
     jl_clear_input;
     jl_close_uv;
@@ -192,6 +190,7 @@
     jl_ast_rettype;
     jl_print_int64;
     jl_print_symbol;
+    jl_printf;
     jl_process_events;
     jl_process_exited;
     jl_process_exit_status;

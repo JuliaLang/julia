@@ -147,12 +147,10 @@ end
 function send_msg_(w::Worker, kind, args, now::Bool)
     #println("Sending msg $kind")
     buf = w.sendbuf
-    #ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios) #TODO: JWN: why is this commented out's
     serialize(buf, kind)
     for arg in args
         serialize(buf, arg)
     end
-    #ccall(:jl_buf_mutex_unlock, Void, (Ptr{Void},), buf.ios)
 
     if !now && w.gcflag
         flush_gc_msgs(w)

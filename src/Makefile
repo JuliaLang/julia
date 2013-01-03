@@ -15,7 +15,10 @@ FLAGS = \
 	-I$(shell $(LLVM_CONFIG) --includedir) \
 	-I$(JULIAHOME)/deps/libuv/include -I$(JULIAHOME)/usr/include
 
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(BUILD)/lib $(BUILD)/lib/libuv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --ldflags) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(BUILD)/lib $(BUILD)/lib/libuv.a $(shell $(LLVM_CONFIG) --libs) $(OSLIBS)
+ifeq ($(OS),WINNT)
+LIBS += -ldbghelp
+endif
 
 ifneq ($(MAKECMDGOALS),debug)
 TARGET =
@@ -54,11 +57,11 @@ HEADERS = julia.h $(wildcard support/*.h) $(JULIAHOME)/deps/libuv/include/uv.h
 ast.o ast.do: julia_flisp.boot.inc flisp/*.h
 
 julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp.a
-	$(QUIET_FLISP) flisp/flisp ./bin2hex.scm < $< > $@
+	$(QUIET_FLISP) ./flisp/flisp ./bin2hex.scm < $< > $@
 
 julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp.a
-	$(QUIET_FLISP) flisp/flisp ./mk_julia_flisp_boot.scm
+	$(QUIET_FLISP) ./flisp/flisp ./mk_julia_flisp_boot.scm
 
 codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp
 builtins.o builtins.do: table.c
@@ -70,7 +73,7 @@ flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
 $(BUILD)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -shared -o $@ $(LIBS) $(LDFLAGS)
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(LIBS)
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
@@ -84,7 +87,7 @@ else
 endif
 
 $(BUILD)/$(JL_LIBDIR)/libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) $(LIBS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(SONAME)
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(LIBS) $(SONAME)
 	$(INSTALL_NAME_CMD)libjulia-release.$(SHLIB_EXT) $@
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@

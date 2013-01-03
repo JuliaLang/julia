@@ -255,6 +255,10 @@ end
 
 function _start()
     # set up standard streams
+
+    @windows_only if !has(ENV,"HOME")
+        ENV["HOME"] = ENV["APPDATA"]*"\\julia"
+    end
     reinit_stdio()
     librandom_init()
 
@@ -296,13 +300,16 @@ function _start()
         (quiet,repl,startup) = process_options(ARGS)
 
         if repl
+            for var in ENV
+                println(var)
+            end
             if startup
                 try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             end
 
             @unix_only global have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
                                     success(`tput setaf 0`)
-            @windows_only global _jl_have_color = true
+            @windows_only global have_color = true
             global is_interactive = true
             if !quiet
                 banner()

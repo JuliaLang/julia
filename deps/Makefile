@@ -692,7 +692,7 @@ endif
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(BUILD)/lib
 ifeq ($(OS),WINNT)
 	cd arpack-ng_$(ARPACK_VER) && \
-	$(FC) -shared $(ARPACK_OPTS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o $@ &&
+	$(FC) -shared $(ARPACK_OPTS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o $@ && \
 	cp libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 else
 	cd arpack-ng_$(ARPACK_VER) && \
@@ -730,7 +730,7 @@ ifneq ($(ARCH), ppc64)
   FFTW_CONFIG += --enable-sse2
 endif
 ifeq ($(OS),WINNT)
-	FFTW_CONFIG += --with-our-malloc --with-combined-threads LIBS=-lpthread
+	FFTW_CONFIG += --with-our-malloc --with-combined-threads
 endif
 
 fftw-$(FFTW_VER).tar.gz:

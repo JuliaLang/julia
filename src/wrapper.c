@@ -1,3 +1,5 @@
+#define WINVER                 _WIN32_WINNT
+#define _WIN32_WINDOWS         _WIN32_WINNT
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -7,11 +9,7 @@
 
 #ifdef __WIN32__
 #include <w32api.h>
-
-#define WINVER                  WindowsVista
-#define _WIN32_WINDOWS          WindowsVista
-#define _WIN32_WINNT            WindowsVista
-#include <Ws2tcpip.h>
+#include <ws2tcpip.h>
 #include <malloc.h>
 #else
 #include "errno.h"
@@ -299,6 +297,7 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
 }
 
 #ifdef __WIN32__
+#include <time.h>
 DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm)
 {
     auto struct tm *tmp = localtime(t); //localtime is reentrant on windows

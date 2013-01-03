@@ -35,7 +35,7 @@ override OS = WINNT
 override ARCH = i686
 #override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(HOST)-
-export WINEPATH := $(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g');$(WINEPATH)
+export WINEPATH := $(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g') #including $(WINEPATH) seems to fail more often than not
 else
 $(error "unknown HOST variable set")
 endif
@@ -66,7 +66,7 @@ endif
 
 ifeq ($(OS), WINNT)
 fPIC = 
-PATH := ${PATH}:${JULIAHOME}/usr/lib:${JULIAHOME}/usr/lib/julia
+PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia
 else
 fPIC = -fPIC
 endif
@@ -300,7 +300,10 @@ JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lpthread $(NO_WHOLE_ARCHIVE) -lPsapi -lkernel32 -lWs2_32 -lIphlpapi
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lmsvcr100
+JCFLAGS += -D_WIN32_WINNT=0x0600
+JCXXFLAGS += -D_WIN32_WINNT=0x0600
+LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
 endif
 
 # MKL

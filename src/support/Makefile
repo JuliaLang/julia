@@ -39,7 +39,7 @@ release debug: libsupport.a
 
 libsupport.a: $(XOBJS)
 	rm -rf $@
-	$(QUIET_LINK) ar -rcs $@ $^
+	$(QUIET_LINK) $(AR) -rcs $@ $^
 
 clean:
 	rm -f *.o
