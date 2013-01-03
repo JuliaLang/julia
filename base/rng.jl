@@ -93,9 +93,10 @@ function srand(seed::Vector{Uint32})
     dsfmt_gv_init_by_array(seed)
 end
 
-srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
+srand(seed::Vector{Int32}) = srand(uint32(seed))
+srand(seed::Vector{Int64}) = srand(int32(seed))
 srand(seed::Int32) = srand(uint32(seed))
-srand(seed::Int64) = srand(uint64(seed))
+srand(seed::Int64) = srand(int32(seed))
 
 function srand(filename::String, n::Integer)
     open(filename) do io
