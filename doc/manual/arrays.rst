@@ -271,6 +271,41 @@ one of the inputs is a scalar.
     ``sqrt``, ``cbrt``, ``erf``, ``erfc``, ``gamma``, ``lgamma``,
     ``real``, ``conj``, ``clamp``
 
+Broadcasting
+------------
+
+It is sometimes useful to perform element-by-element binary operations
+on arrays of different sizes, such as adding a vector to each column
+of a matrix.  An inefficient way to do this would be to replicate the
+vector to the size of the matrix::
+
+    julia> a = rand(2,1); A = rand(2,3);
+
+    julia> repmat(a,1,3)+A
+    2x3 Float64 Array:
+     0.848333  1.66714  1.3262 
+     1.26743   1.77988  1.13859
+
+This is wasteful when dimensions get large, so Julia offers the
+Matlab-inspired ``bsxfun``, which expands singleton dimensions in
+array arguments to match the corresponding dimension in the other
+array without using extra memory, and applies the given binary
+function::
+
+    julia> bsxfun(+, a, A)
+    2x3 Float64 Array:
+     0.848333  1.66714  1.3262 
+     1.26743   1.77988  1.13859
+
+    julia> b = rand(1,2)
+    1x2 Float64 Array:
+     0.629799  0.754948
+
+    julia> bsxfun(+, a, b)
+    2x2 Float64 Array:
+     1.31849  1.44364
+     1.56107  1.68622
+
 Implementation
 --------------
 

@@ -18,10 +18,10 @@ srand(1776)  # get more consistent times
 
 require("$JULIA_HOME/../../examples/list.jl")
 
-function listn1n2(n1::Int64,n2::Int64)
-    l1 = Nil{Int64}()
+function listn1n2(n1::Int,n2::Int)
+    l1 = Nil{Int}()
     for i=n2:-1:n1
-        l1 = Cons{Int64}(i,l1)
+        l1 = Cons{Int}(i,l1)
     end
     l1
 end
@@ -109,7 +109,7 @@ end
 
 @timeit parse() "splitline"
 
-file_remove("random.csv")
+rm("random.csv")
 
 load("json")
 

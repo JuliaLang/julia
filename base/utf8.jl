@@ -7,13 +7,13 @@
 
 ## basic UTF-8 decoding & iteration ##
 
-const _jl_utf8_offset = [
+const utf8_offset = [
     0x00000000, 0x00003080,
     0x000e2080, 0x03c82080,
     0xfa082080, 0x82082080,
 ]
 
-const _jl_utf8_trailing = [
+const utf8_trailing = [
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -39,13 +39,13 @@ function ref(s::UTF8String, i::Int)
         while 0 < j && !is_utf8_start(d[j])
             j -= 1
         end
-        if 0 < j && i <= j+_jl_utf8_trailing[d[j]+1] <= length(d)
+        if 0 < j && i <= j+utf8_trailing[d[j]+1] <= length(d)
             # b is a continuation byte of a valid UTF-8 character
             error("invalid UTF-8 character index")
         end
         return '\ufffd'
     end
-    trailing = _jl_utf8_trailing[b+1]
+    trailing = utf8_trailing[b+1]
     if length(d) < i + trailing
         return '\ufffd'
     end
@@ -55,12 +55,12 @@ function ref(s::UTF8String, i::Int)
         c += d[i]
         i += 1
     end
-    c -= _jl_utf8_offset[trailing+1]
+    c -= utf8_offset[trailing+1]
     char(c)
 end
 
 # this is a trick to allow inlining and tuple elision
-next(s::UTF8String, i::Int) = (s[i], i+1+_jl_utf8_trailing[s.data[i]+1])
+next(s::UTF8String, i::Int) = (s[i], i+1+utf8_trailing[s.data[i]+1])
 
 function first_utf8_byte(c::Char)
     c < 0x80    ? uint8(c)            :

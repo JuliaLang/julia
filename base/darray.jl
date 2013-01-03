@@ -174,7 +174,7 @@ function localize_copy(src::SubDArray, dest::DArray)
 end
 
 # piece numbers covered by a subarray
-function _jl_sub_da_pieces(s::SubDArray)
+function sub_da_pieces(s::SubDArray)
     dd = s.parent.distdim
     sdi = s.indexes[dd]
     if isa(sdi,Integer)
@@ -189,10 +189,10 @@ function _jl_sub_da_pieces(s::SubDArray)
     return lo:hi
 end
 
-procs(s::SubDArray) = s.parent.pmap[_jl_sub_da_pieces(s)]
+procs(s::SubDArray) = s.parent.pmap[sub_da_pieces(s)]
 
 function dist(s::SubDArray)
-    pcs = _jl_sub_da_pieces(s)
+    pcs = sub_da_pieces(s)
     sizes = [ length(pieceindex(s, p)) for p = pcs ]
     cumsum([1, sizes])
 end
@@ -347,12 +347,12 @@ function distribute{T}(a::Array{T}, distdim)
     # create a remotely-visible reference to the array
     rr = RemoteRef()
     put(rr, a)
-    darray((T,lsz,da)->_jl_distribute_one(T,lsz,da,distdim,owner,rr),
+    darray((T,lsz,da)->distribute_one(T,lsz,da,distdim,owner,rr),
            T, size(a), distdim)
 end
 
 # fetch one processor's piece of an array being distributed
-function _jl_distribute_one(T, lsz, da, distdim, owner, orig_array)
+function distribute_one(T, lsz, da, distdim, owner, orig_array)
     if prod(lsz)==0
         return Array(T, lsz)
     end
@@ -391,7 +391,7 @@ function changedist{T}(A::DArray{T}, to_dist)
     return darray((T,sz,da)->A[myindexes(da)...], T, size(A), to_dist, A.pmap)
 end
 
-function _jl_da_reshape(T, sz, da, A)
+function da_reshape(T, sz, da, A)
     mi = myindexes(da)
     i0s = map(first, mi)
     i1s = map(last, mi)
@@ -405,7 +405,7 @@ function reshape(A::DArray, dims::Dims)
     if prod(dims) != numel(A)
         error("reshape: invalid dimensions")
     end
-    darray((T,sz,da)->_jl_da_reshape(T,sz,da,A),
+    darray((T,sz,da)->da_reshape(T,sz,da,A),
            eltype(A), dims, maxdim(dims), A.pmap)
 end
 
@@ -473,7 +473,7 @@ ref(d::DArray, I::Int...) = ref_elt(d, I)
 
 ref(d::DArray) = d
 
-function _jl_da_sub(d::DArray, I::Range1{Int}...)
+function da_sub(d::DArray, I::Range1{Int}...)
     offs = d.dist[d.localpiece]-1
     J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
                                                 I[i]))
@@ -495,9 +495,9 @@ function ref{T}(d::DArray{T}, I::Range1{Int}...)
         K = [ i==d.distdim ? (dist[p]:(dist[p+1]-1)) : I[i] for i=1:ndims(d) ]
         if np == 1
             # use remote_call_fetch if we only need to communicate with 1 proc
-            deps[p] = remote_call_fetch(d.pmap[pmap[p]], _jl_da_sub, d, K...)
+            deps[p] = remote_call_fetch(d.pmap[pmap[p]], da_sub, d, K...)
         else
-            deps[p] = remote_call(d.pmap[pmap[p]], _jl_da_sub, d, K...)
+            deps[p] = remote_call(d.pmap[pmap[p]], da_sub, d, K...)
         end
     end
     for p = 1:np
@@ -690,7 +690,7 @@ assign(d::DArray, v, I::Union(Int,AbstractVector{Int})...) =
 
 ## matrix multiply ##
 
-function _jl_node_multiply2{T}(A::AbstractArray{T}, B, sz)
+function node_multiply2{T}(A::AbstractArray{T}, B, sz)
     locl = Array(T, sz)
     if !isempty(locl)
         Bdata = localize(B)
@@ -710,16 +710,16 @@ function _jl_node_multiply2{T}(A::AbstractArray{T}, B, sz)
 end
 
 function (*){T}(A::DArray{T,2,1}, B::DArray{T,2,2})
-    darray((T,sz,da)->_jl_node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
+    darray((T,sz,da)->node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
            B.pmap)
 end
 
 function (*){T}(A::DArray{T,2}, B::DArray{T,2,2})
-    darray((T,sz,da)->_jl_node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
+    darray((T,sz,da)->node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
            B.pmap)
 end
 
-function _jl_node_multiply1{T}(A::AbstractArray{T}, B, sz)
+function node_multiply1{T}(A::AbstractArray{T}, B, sz)
     locl = Array(T, sz)
     if !isempty(locl)
         Adata = localize(A)
@@ -739,7 +739,7 @@ function _jl_node_multiply1{T}(A::AbstractArray{T}, B, sz)
 end
 
 function (*){T}(A::DArray{T,2,1}, B::DArray{T,2})
-    darray((T,sz,da)->_jl_node_multiply1(A,B,sz), T, (size(A,1),size(B,2)), 1,
+    darray((T,sz,da)->node_multiply1(A,B,sz), T, (size(A,1),size(B,2)), 1,
            A.pmap)
 end
 
@@ -880,7 +880,7 @@ prod(d::DArray) = reduce(*, d)
 min(d::DArray) = reduce(min, d)
 max(d::DArray) = reduce(max, d)
 
-areduce(f::Function, d::DArray, r::Dimspec, v0, T::Type) = error("not yet implemented")
+areduce(f::Function, d::DArray, r, v0, T::Type) = error("not yet implemented")
 cumsum(d::DArray) = error("not yet implemented")
 cumprod(d::DArray) = error("not yet implemented")
 

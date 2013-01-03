@@ -1767,13 +1767,39 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"erf",E"erf(x)
 
-   Compute the error function of \"x\"
+   Compute the error function of \"x\", defined by
+   \\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt for arbitrary complex
+   \"x\".
 
 "),
 
 (E"Mathematical Functions",E"Base",E"erfc",E"erfc(x)
 
-   Compute the complementary error function of \"x\"
+   Compute the complementary error function of \"x\", defined by 1 -
+   \\operatorname{erf}(x).
+
+"),
+
+(E"Mathematical Functions",E"Base",E"erfcx",E"erfcx(x)
+
+   Compute the scaled complementary error function of \"x\", defined
+   by e^{x^2} \\operatorname{erfc}(x).  Note also that
+   \\operatorname{erfcx}(-ix) computes the Faddeeva function w(x).
+
+"),
+
+(E"Mathematical Functions",E"Base",E"erfi",E"erfi(x)
+
+   Compute the imaginary error function of \"x\", defined by -i
+   \\operatorname{erf}(ix).
+
+"),
+
+(E"Mathematical Functions",E"Base",E"dawson",E"dawson(x)
+
+   Compute the Dawson function (scaled imaginary error function) of
+   \"x\", defined by \\frac{\\sqrt{\\pi}}{2} e^{-x^2}
+   \\operatorname{erfi}(x).
 
 "),
 
@@ -2508,6 +2534,13 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"bsxfun",E"bsxfun(fn, A, B[, C...])
+
+   Apply binary function \"fn\" to two or more arrays, with singleton
+   dimensions expanded.
+
+"),
+
 (E"Arrays",E"Base",E"ref",E"ref(A, ind)
 
    Returns a subset of \"A\" as specified by \"ind\", which may be an
@@ -2817,15 +2850,16 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"diag",E"diag(M)
+(E"Linear Algebra",E"Base",E"diag",E"diag(M[, k])
 
-   The diagonal of a matrix, as a vector
+   The \"k\"-th diagonal of a matrix, as a vector
 
 "),
 
-(E"Linear Algebra",E"Base",E"diagm",E"diagm(v)
+(E"Linear Algebra",E"Base",E"diagm",E"diagm(v[, k])
 
-   Construct a diagonal matrix from a vector
+   Construct a diagonal matrix and place \"v\" on the \"k\"-th
+   diagonal
 
 "),
 
@@ -2849,9 +2883,19 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"cond",E"cond(M)
+(E"Linear Algebra",E"Base",E"norm",E"norm(A[, p])
 
-   Matrix condition number
+   Compute the p-norm of a vector or a matrix. \"p\" is \"2\" by
+   default, if not provided. If \"A\" is a matrix, valid values for
+   \"p\" are \"1\", \"2\", \"Inf\", or \":fro\" (Frobenius norm).
+
+"),
+
+(E"Linear Algebra",E"Base",E"cond",E"cond(M[, p])
+
+   Matrix condition number, computed using the p-norm. \"p\" is 2 by
+   default, if not provided. Valid values for \"p\" are \"1\", \"2\",
+   \"Inf\", or \":fro\" (Frobenius norm).
 
 "),
 
@@ -2978,9 +3022,74 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"std",E"std(v)
+(E"Statistics",E"Base",E"std",E"std(v[, corrected])
 
-   Compute the standard deviation of a vector \"v\"
+   Compute the sample standard deviation of a vector \"v\". If the
+   optional argument \"corrected\" is either left unspecified or is
+   explicitly set to the default value of \"true\", then the algorithm
+   will return an estimator of the generative distribution's standard
+   deviation under the assumption that each entry of \"v\" is an IID
+   draw from that generative distribution. This computation is
+   equivalent to calculating \"sqrt(sum((v .- mean(v)).^2) /
+   (length(v) - 1))\" and involves an implicit correction term
+   sometimes called the Bessel correction which insures that the
+   estimator of the variance is unbiased. If, instead, the optional
+   argument \"corrected\" is set to \"false\", then the algorithm will
+   produce the equivalent of \"sqrt(sum((v .- mean(v)).^2) /
+   length(v))\", which is the empirical standard deviation of the
+   sample.
+
+"),
+
+(E"Statistics",E"Base",E"std",E"std(v, m[, corrected])
+
+   Compute the sample standard deviation of a vector \"v\" with known
+   mean \"m\". If the optional argument \"corrected\" is either left
+   unspecified or is explicitly set to the default value of \"true\",
+   then the algorithm will return an estimator of the generative
+   distribution's standard deviation under the assumption that each
+   entry of \"v\" is an IID draw from that generative distribution.
+   This computation is equivalent to calculating \"sqrt(sum((v .-
+   m).^2) / (length(v) - 1))\" and involves an implicit correction
+   term sometimes called the Bessel correction which insures that the
+   estimator of the variance is unbiased. If, instead, the optional
+   argument \"corrected\" is set to \"false\", then the algorithm will
+   produce the equivalent of \"sqrt(sum((v .- m).^2) / length(v))\",
+   which is the empirical standard deviation of the sample.
+
+"),
+
+(E"Statistics",E"Base",E"var",E"var(v[, corrected])
+
+   Compute the sample variance of a vector \"v\". If the optional
+   argument \"corrected\" is either left unspecified or is explicitly
+   set to the default value of \"true\", then the algorithm will
+   return an unbiased estimator of the generative distribution's
+   variance under the assumption that each entry of \"v\" is an IID
+   draw from that generative distribution. This computation is
+   equivalent to calculating \"sum((v .- mean(v)).^2) / (length(v) -
+   1)\" and involves an implicit correction term sometimes called the
+   Bessel correction. If, instead, the optional argument \"corrected\"
+   is set to \"false\", then the algorithm will produce the equivalent
+   of \"sum((v .- mean(v)).^2) / length(v)\", which is the empirical
+   variance of the sample.
+
+"),
+
+(E"Statistics",E"Base",E"var",E"var(v, m[, corrected])
+
+   Compute the sample variance of a vector \"v\" with known mean
+   \"m\". If the optional argument \"corrected\" is either left
+   unspecified or is explicitly set to the default value of \"true\",
+   then the algorithm will return an unbiased estimator of the
+   generative distribution's variance under the assumption that each
+   entry of \"v\" is an IID draw from that generative distribution.
+   This computation is equivalent to calculating \"sum((v .- m)).^2) /
+   (length(v) - 1)\" and involves an implicit correction term
+   sometimes called the Bessel correction. If, instead, the optional
+   argument \"corrected\" is set to \"false\", then the algorithm will
+   produce the equivalent of \"sum((v .- m)).^2) / length(v)\", which
+   is the empirical variance of the sample.
 
 "),
 
@@ -3003,69 +3112,307 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"fft",E"fft(A, dim)
+(E"Statistics",E"Base",E"weighted_mean",E"weighted_mean(v, w)
 
-   One dimensional FFT if input is a \"Vector\". For n-d cases,
-   compute fft of vectors along dimension \"dim\". Most efficient if
-   \"size(A, dim)\" is a product of small primes; see \"nextprod()\".
+   Compute the weighted mean of \"v\" using a vector of weights \"w\"
 
 "),
 
-(E"Signal Processing",E"Base",E"fft2",E"fft2()
+(E"Statistics",E"Base",E"mad",E"mad(v, m)
 
-   2d FFT
-
-"),
-
-(E"Signal Processing",E"Base",E"fft3",E"fft3()
-
-   3d FFT
+   Compute the median absolute deviation from the entries of a vector
+   \"v\" relative to a known median \"m\". The calculation involves an
+   adjustment factor of 1.4826 required to insure that the estimator
+   is consistent for normally distributed data.
 
 "),
 
-(E"Signal Processing",E"Base",E"fftn",E"fftn()
+(E"Statistics",E"Base",E"mad",E"mad(v)
 
-   N-d FFT
-
-"),
-
-(E"Signal Processing",E"Base",E"ifft",E"ifft(A, dim)
-
-   Inverse FFT. Same arguments as \"fft\".
+   Compute the median absolute deviation from the entries of a vector
+   \"v\" relative to the median of \"v\". The calculation involves an
+   adjustment factor of 1.4826 required to insure that the estimator
+   is consistent for normally distributed data.
 
 "),
 
-(E"Signal Processing",E"Base",E"ifft2",E"ifft2()
+(E"Statistics",E"Base",E"skewness",E"skewness(v, m)
 
-   Inverse 2d FFT
-
-"),
-
-(E"Signal Processing",E"Base",E"ifft3",E"ifft3()
-
-   Inverse 3d FFT
+   Compute the sample skewness of a vector \"v\" relative to a known
+   mean \"m\". Uses a maximum likelihood estimator which can be
+   biased.
 
 "),
 
-(E"Signal Processing",E"Base",E"ifftn",E"ifftn()
+(E"Statistics",E"Base",E"skewness",E"skewness(v)
 
-   Inverse N-d FFT
-
-"),
-
-(E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dim])
-
-   One-dimensional FFT of real array A along dimension dim. If A has
-   size \"(..., n_dim, ...)\", the result has size \"(...,
-   floor(n_dim/2)+1, ...)\". The \"dim\" argument is optional and
-   defaults to 1.
+   Compute the sample skewness of a vector \"v\" relative to the
+   sample mean. Uses a maximum likelihood estimator which can be
+   biased.
 
 "),
 
-(E"Signal Processing",E"Base",E"rfftn",E"rfftn(A)
+(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v, m)
 
-   N-d FFT of real array A. If A has size \"(n_1, ..., n_d)\", the
-   result has size \"(floor(n_1/2)+1, ..., n_d)\".
+   Compute the sample kurtosis of a vector \"v\" relative to a known
+   mean \"m\". Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v)
+
+   Compute the sample kurtosis of a vector \"v\" relative to the
+   sample mean. Uses a maximum likelihood estimator which can be
+   biased.
+
+"),
+
+(E"Statistics",E"Base",E"quantile",E"quantile(v, p)
+
+   Compute the quantiles of a vector \"v\" at a specified set of
+   probability values \"p\".
+
+"),
+
+(E"Statistics",E"Base",E"quantile",E"quantile(v)
+
+   Compute the quantiles of a vector \"v\" at the probability values
+   \"[.0, .2, .4, .6, .8, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"quartile",E"quartile(v)
+
+   Compute the quartiles of a vector \"v\" at the probability values
+   \"[.0, .25, .5, .75, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"quintile",E"quintile(v)
+
+   Compute the quintiles of a vector \"v\" at the probability values
+   \"[.0, .2, .4, .6, .8, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"decile",E"decile(v)
+
+   Compute the deciles of a vector \"v\" at the probability values
+   \"[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]\".
+
+"),
+
+(E"Statistics",E"Base",E"iqr",E"iqr(v)
+
+   Compute the interquantile range of a vector \"v\" at the
+   probability values \"[.25, .75]\".
+
+"),
+
+(E"Statistics",E"Base",E"tiedrank",E"tiedrank(v)
+
+   Compute the ranks of the entries of vector \"v\". Ties are resolved
+   by taking the average rank over all tied values.
+
+"),
+
+(E"Statistics",E"Base",E"cov_pearson",E"cov_pearson(v1, v2)
+
+   Compute the Pearson covariance between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cov_spearman",E"cov_spearman(v)
+
+   Compute the Spearman covariance between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cov",E"cov(v)
+
+   Compute the Pearson covariance between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cor_pearson",E"cor_pearson(v)
+
+   Compute the Pearson correlation between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cor_spearman",E"cor_spearman(v)
+
+   Compute the Spearman correlation between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"cor",E"cor(v)
+
+   Compute the Pearson correlation between two vectors \"v1\" and
+   \"v2\".
+
+"),
+
+(E"Statistics",E"Base",E"autocor",E"autocor(v, l)
+
+   Compute the Pearson autocorrelation of a vector \"v\" with itself
+   at lag \"l\".
+
+"),
+
+(E"Statistics",E"Base",E"autocor",E"autocor(v)
+
+   Compute the Pearson autocorrelation of a vector \"v\" with itself
+   at lag \"1\".
+
+"),
+
+(E"Statistics",E"Base",E"dist",E"dist(m)
+
+   Compute the distance matrix between all of the rows of \"m\".
+
+"),
+
+(E"Statistics",E"Base",E"rle",E"rle(v)
+
+   Compute a run-length encoding representation of a vector \"v\".
+
+"),
+
+(E"Statistics",E"Base",E"inverse_rle",E"inverse_rle(vals, lens)
+
+   Compute a vector from its run-length vector representation as
+   values \"vals\" and run lengths \"lens\".
+
+"),
+
+(E"Signal Processing",E"",E"fft(A [, dims]), fft!",E"fft(A [, dims]), fft!
+
+   Performs a multidimensional FFT of the array \"A\".  The optional
+   \"dims\" argument specifies an iterable subset of dimensions (e.g.
+   an integer, range, tuple, or array) to transform along.  Most
+   efficient if the size of \"A\" along the transformed dimensions is
+   a product of small primes; see \"nextprod()\".  See also
+   \"plan_fft()\" for even greater efficiency.
+
+   \"fft!()\" is the same as \"fft()\", but operates in-place on
+   \"A\", which must be an array of complex floating-point numbers.
+
+   A one-dimensional FFT computes the one-dimensional discrete Fourier
+   transform (DFT) as defined by \\operatorname{DFT}[k] =
+   \\sum_{n=1}^{\\operatorname{length}(A)} \\exp\\left(-i\\frac{2\\pi
+   (n-1)(k-1)}{\\operatorname{length}(A)} \\right) A[n].  A
+   multidimensional FFT simply performs this operation along each
+   transformed dimension of \"A\".
+
+"),
+
+(E"Signal Processing",E"",E"ifft(A [, dims]), ifft!, bfft, bfft!",E"ifft(A [, dims]), ifft!, bfft, bfft!
+
+   Multidimensional inverse FFT.
+
+   \"ifft()\" and \"ifft!()\" have the same arguments as \"fft()\" and
+   \"fft!()\", respectively.
+
+   \"bfft()\" and \"bfft!()\" are similar to \"ifft()\" and
+   \"ifft!()\", respectively, but compute an unnormalized inverse
+   (backward) transform, which must be divided by the product of the
+   sizes of the transformed dimensions in order to obtain the inverse.
+   (These are slightly more efficient than \"ifft()\" and \"ifft!()\"
+   because they omit a scaling step, which in some applications can be
+   combined with other camputational steps elsewhere.)
+
+   A one-dimensional backward FFT computes \\operatorname{BDFT}[k] =
+   \\sum_{n=1}^{\\operatorname{length}(A)} \\exp\\left(+i\\frac{2\\pi
+   (n-1)(k-1)}{\\operatorname{length}(A)} \\right) A[n].  A
+   multidimensional backward FFT simply performs this operation along
+   each transformed dimension of \"A\".  The inverse FFT computes the
+   same thing divided by the product of the transformed dimensions.
+
+"),
+
+(E"Signal Processing",E"",E"plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!",E"plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!
+
+   Pre-plan an optimized FFT along given dimensions (\"dims\") of
+   arrays matching the shape and type of \"A\".  (The first two
+   arguments have the same meaning as for \"fft()\".)  Returns a
+   function \"plan(A)\" that computes \"fft(A, dims)\" quickly.
+
+   The \"flags\" argument is a bitwise-or of FFTW planner flags,
+   defaulting to \"FFTW.ESTIMATE\".  e.g. passing \"FFTW.MEASURE\" or
+   \"FFTW.PATIENT\" will instead spend several seconds (or more)
+   benchmarking different possible FFT algorithms and picking the
+   fastest one; see the FFTW manual for more information on planner
+   flags.  The optional \"timelimit\" argument specifies a rough upper
+   bound on the allowed planning time, in seconds. Passing
+   \"FFTW.MEASURE\" or \"FFTW.PATIENT\" may cause the input array
+   \"A\" to be overwritten with zeros during plan creation.
+
+   \"plan_fft!()\" is the same as \"plan_fft()\" but creates a plan
+   that operates in-place on its argument (which must be an array of
+   complex floating-point numbers).  \"plan_ifft()\" and so on are
+   similar but produce plans that perform the equivalent of the
+   inverse transforms \"ifft()\" and so on.
+
+"),
+
+(E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dims])
+
+   Multidimensional FFT of a real array A, exploiting the fact that
+   the transform has conjugate symmetry in order to save roughly half
+   the computational time and storage costs compared with \"fft()\".
+   If \"A\" has size \"(n_1, ..., n_d)\", the result has size
+   \"(floor(n_1/2)+1, ..., n_d)\".
+
+   The optional \"dims\" argument specifies an iterable subset of one
+   or more dimensions of \"A\" to transform, similar to \"fft()\".
+   Instead of (roughly) halving the first dimension of \"A\" in the
+   result, the \"dims[1]\" dimension is (roughly) halved in the same
+   way.
+
+"),
+
+(E"Signal Processing",E"",E"irfft(A, d [, dims]), brfft",E"irfft(A, d [, dims]), brfft
+
+   Inverse of \"rfft()\": for a complex array \"A\", gives the
+   corresponding real array whose FFT yields \"A\" in the first half.
+   As for \"rfft()\", \"dims\" is an optional subset of dimensions to
+   transform, defaulting to \"1:ndims(A)\".
+
+   \"d\" is the length of the transformed real array along the
+   \"dims[1]\" dimension, which must satisfy \"d ==
+   floor(size(A,dims[1])/2)+1\". (This parameter cannot be inferred
+   from \"size(A)\" due to the possibility of rounding by the
+   \"floor\" function here.)
+
+   \"brfft()\" is similar but computes an unnormalized inverse
+   transform (similar to \"bfft()\"), which must be divided by the
+   product of the sizes of the transformed dimensions (of the real
+   output array) in order to obtain the inverse transform.
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_rfft",E"plan_rfft(A[, dims[, flags[, timelimit]]])
+
+   Pre-plan an optimized real-input FFT, similar to \"plan_fft()\"
+   except for \"rfft()\" instead of \"fft()\".  The first two
+   arguments, and the size of the transformed result, are the same as
+   for \"rfft()\".
+
+"),
+
+(E"Signal Processing",E"",E"plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft",E"plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+
+   Pre-plan an optimized inverse real-input FFT, similar to
+   \"plan_rfft()\" except for \"irfft()\" and \"brfft()\",
+   respectively.  The first three arguments have the same meaning as
+   for \"irfft()\".
 
 "),
 
@@ -3337,7 +3684,7 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"cwd",E"cwd()
+(E"System",E"Base",E"pwd",E"pwd()
 
    Get the current working directory.
 

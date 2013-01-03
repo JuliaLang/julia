@@ -16,15 +16,15 @@ end
     #C = falses(nA, nB)
     #if mA != mB; error("*: argument shapes do not match"); end
     #if mA == 0; return C; end
-    #col_ch = _jl_num_bit_chunks(mA)
+    #col_ch = num_bit_chunks(mA)
     ## TODO: avoid using aux chunks and copy (?)
     #aux_chunksA = zeros(Uint64, col_ch)
     #aux_chunksB = [zeros(Uint64, col_ch) for j=1:nB]
     #for j = 1:nB
-        #_jl_copy_chunks(aux_chunksB[j], 1, B.chunks, (j-1)*mA+1, mA)
+        #copy_chunks(aux_chunksB[j], 1, B.chunks, (j-1)*mA+1, mA)
     #end
     #for i = 1:nA
-        #_jl_copy_chunks(aux_chunksA, 1, A.chunks, (i-1)*mA+1, mA)
+        #copy_chunks(aux_chunksA, 1, A.chunks, (i-1)*mA+1, mA)
         #for j = 1:nB
             #for k = 1:col_ch
                 ## TODO: improve
@@ -42,7 +42,7 @@ function triu(B::BitMatrix, k::Int)
     A = falses(m,n)
     for i = max(k+1,1):n
         j = clamp((i - 1) * m + 1, 1, i * m)
-        _jl_copy_chunks(A.chunks, j, B.chunks, j, min(i-k, m))
+        copy_chunks(A.chunks, j, B.chunks, j, min(i-k, m))
     end
     return A
 end
@@ -53,7 +53,7 @@ function tril(B::BitMatrix, k::Int)
     A = falses(m, n)
     for i = 1:min(n, m+k)
         j = clamp((i - 1) * m + i - k, 1, i * m)
-        _jl_copy_chunks(A.chunks, j, B.chunks, j, max(m-i+k+1, 0))
+        copy_chunks(A.chunks, j, B.chunks, j, max(m-i+k+1, 0))
     end
     return A
 end
@@ -127,7 +127,7 @@ function kron(a::BitVector, b::BitVector)
     zS = zero(S)
     for j = 1:n
         if b[j] != zS
-            _jl_copy_chunks(R.chunks, (j-1)*m+1, a.chunks, 1, m)
+            copy_chunks(R.chunks, (j-1)*m+1, a.chunks, 1, m)
         end
     end
     return R
@@ -160,10 +160,10 @@ end
 
 ishermitian(A::BitMatrix) = issym(A)
 
-function _jl_nonzero_chunks(chunks::Vector{Uint64}, pos0::Int, pos1::Int)
+function nonzero_chunks(chunks::Vector{Uint64}, pos0::Int, pos1::Int)
 
-    k0, l0 = _jl_get_chunks_id(pos0)
-    k1, l1 = _jl_get_chunks_id(pos1)
+    k0, l0 = get_chunks_id(pos0)
+    k1, l1 = get_chunks_id(pos1)
 
     delta_k = k1 - k0
 
@@ -201,7 +201,7 @@ function istriu(A::BitMatrix)
     m, n = size(A)
     for j = 1:min(n,m-1)
         stride = (j-1)*m
-        if _jl_nonzero_chunks(A.chunks, stride+j+1, stride+m)
+        if nonzero_chunks(A.chunks, stride+j+1, stride+m)
             return false
         end
     end
@@ -215,7 +215,7 @@ function istril(A::BitMatrix)
     end
     for j = 2:n
         stride = (j-1)*m
-        if _jl_nonzero_chunks(A.chunks, stride+1, stride+min(j-1,m))
+        if nonzero_chunks(A.chunks, stride+1, stride+min(j-1,m))
             return false
         end
     end

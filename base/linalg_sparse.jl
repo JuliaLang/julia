@@ -108,7 +108,7 @@ end
 
 ## triu, tril
 
-function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Int)
+function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     m,n = size(S)
     colptr = Array(Ti, n+1)
     nnz = 0
@@ -139,7 +139,7 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Int)
 end
 triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer) = triu(S, int(k))
 
-function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Int)
+function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     m,n = size(S)
     colptr = Array(Ti, n+1)
     nnz = 0
@@ -175,7 +175,7 @@ tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer) = tril(S, int(k))
 
 ## diff
 
-function _jl_sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     m,n = size(S)
     if m <= 1
         return SparseMatrixCSC{Tv,Ti}(0, n, ones(n+1), Ti[], Tv[])
@@ -219,7 +219,7 @@ function _jl_sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return SparseMatrixCSC{Tv,Ti}(m-1, n, colptr, rowval, nzval)
 end
 
-function _jl_sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
+function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
 
     m,n = size(a)
     colptr = Array(Ti, max(n,1))
@@ -313,9 +313,9 @@ end
 
 function diff(a::SparseMatrixCSC, dim::Integer)
     if dim == 1
-        _jl_sparse_diff1(a)
+        sparse_diff1(a)
     else
-        _jl_sparse_diff2(a)
+        sparse_diff2(a)
     end
 end
 
