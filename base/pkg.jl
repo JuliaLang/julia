@@ -161,6 +161,15 @@ end
 required() = cd_pkgdir() do
     parse_requires("REQUIRE")
 end
+required(pkg::String) = cd_pkgdir() do
+    req = required()
+    for vset in req
+        if isequal(vset.package, pkg)
+            return vset.versions
+        end
+    end
+    return nothing
+end
 
 installed() = cd_pkgdir() do
     h = Dict{String,Union(VersionNumber,String)}()
@@ -171,6 +180,11 @@ installed() = cd_pkgdir() do
     end
     return h
 end
+installed(pkg::String) = cd_pkgdir() do
+    get(installed(), pkg, nothing)
+end
+
+
 
 # update packages from requirements
 
