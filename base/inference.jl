@@ -118,6 +118,7 @@ t_func[fpiseq32] = (2, 2, cmp_tfunc)
 t_func[fpiseq64] = (2, 2, cmp_tfunc)
 t_func[fpislt32] = (2, 2, cmp_tfunc)
 t_func[fpislt64] = (2, 2, cmp_tfunc)
+t_func[nan_dom_err] = (2, 2, (a, b)->a)
 t_func[eval(Core,:ccall)] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
