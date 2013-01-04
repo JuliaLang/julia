@@ -519,4 +519,11 @@ let
     x[m1(end)] += 3
     @test x == [2,4,9,8]
     @test tst == 2
+
+    # issue #1886
+    X = [1:4]
+    r = Array(Range1{Int64},1)
+    r[1] = 2:3
+    X[r...] *= 2
+    @test X == [1,4,6,4]
 end

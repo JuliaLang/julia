@@ -90,7 +90,8 @@
 
 (define (expand-update-operator op lhs rhs)
   (if (and (pair? lhs) (eq? (car lhs) 'ref))
-      (let* ((ex (pattern-expand patterns lhs))
+      ;; expand indexing inside op= first, to remove "end" and ":"
+      (let* ((ex (apply-patterns patterns lhs))
 	     (stmts (butlast (cdr ex)))
 	     (refex (last    (cdr ex)))
 	     (nuref `(ref ,(caddr refex) ,@(cdddr refex))))
