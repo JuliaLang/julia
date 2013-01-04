@@ -1,10 +1,3 @@
-import Base.convert, Base.promote_rule, Base.+, Base.-, Base.*, Base./
-import Base.isnan, Base.isinf, Base.^, Base.cmp, Base.sqrt
-import Base.==, Base.<=, Base.>=, Base.<, Base.>, Base.string, Base.show
-import Base.showcompact
-
-require("bigint")
-
 type BigFloat <: FloatingPoint
     mpf::Ptr{Void}
 

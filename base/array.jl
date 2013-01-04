@@ -1158,7 +1158,6 @@ function find(A::StridedArray)
 end
 
 find(x::Number) = x == 0 ? Array(Int,0) : [1]
-find(x::Bool) = x ? [1] : Array(Int,0)
 find(testf::Function, x) = find(testf(x))
 
 findn(A::StridedVector) = find(A)

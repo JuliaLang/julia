@@ -13,9 +13,9 @@ BUILD_LLDB = 0
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
-ifneq ($(HOST),)
+ifneq ($(XC_HOST),)
 CONFIG_GUESS := $(shell ./config.guess)
-CONFIGURE_COMMON += --host=$(HOST) --build=$(CONFIG_GUESS)
+CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
 endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw clp unwind lighttpd gmp glpk patchelf
@@ -963,7 +963,7 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure $(CONFIGURE_COMMON) --enable-shared --disable-static
+	./configure --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)"
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
 ifeq ($(OS),$(BUILD_OS))
@@ -1060,7 +1060,7 @@ else
 ZLIB_OBJ_TARGET = $(BUILD)/lib/libz.$(SHLIB_EXT)
 ZLIB_CONFIGFLAGS = CFLAGS="-O3 $(CFLAGS) -D_FILE_OFFSET_BITS=64"
 ifneq ($(OS),$(BUILD_OS))
-ZLIB_CONFIGFLAGS += CHOST=$(HOST)
+ZLIB_CONFIGFLAGS += CHOST=$(XC_HOST)
 else
 ZLIB_CONFIGFLAGS += CC="$(CC)"
 endif
