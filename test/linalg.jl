@@ -326,7 +326,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
 end
 
 # LAPACK tests
-srand(112)
 Ainit = randn(5,5)
 for elty in (Float32, Float64, Complex64, Complex128)
         # syevr!
