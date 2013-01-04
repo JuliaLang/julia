@@ -163,7 +163,7 @@ for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
             sqrthalf = sqrt(0.5)
             r = map(n -> 1:n, [size(X)...])
             for d in region
-                rd = copy(r);
+                rd = copy(r)
                 rd[d] = 1:1
                 $Y[rd...] *= sqrthalf
             end
@@ -180,7 +180,7 @@ for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
                 $Y = p(X)
                 scale!($Y, nrm)
                 for d in region
-                    rd = copy(r);
+                    rd = copy(r)
                     rd[d] = 1:1
                     $Y[rd...] *= sqrthalf
                 end
@@ -194,7 +194,7 @@ for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
             sqrt2 = sqrt(2)
             r = map(n -> 1:n, [size(X)...])
             for d in region
-                rd = copy(r);
+                rd = copy(r)
                 rd[d] = 1:1
                 $Y[rd...] *= sqrt2
             end
@@ -211,7 +211,7 @@ for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
                 $Ycopy
                 scale!($Y, nrm)
                 for d in region
-                    rd = copy(r);
+                    rd = copy(r)
                     rd[d] = 1:1
                     $Y[rd...] *= sqrt2
                 end
