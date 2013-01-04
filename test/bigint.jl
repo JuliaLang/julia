@@ -1,4 +1,4 @@
-cd(()->require("gmp"),"..")
+require("gmp")
 
 using GMP
 
