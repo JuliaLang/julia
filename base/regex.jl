@@ -2,35 +2,27 @@
 
 include("pcre.jl")
 
+const DEFAULT_OPTS = PCRE.UTF8
+
 type Regex
     pattern::ByteString
-    options::Int32
+    options::Uint32
     regex::Array{Uint8}
-    extra::Ptr{Void}
 
-    function Regex(pat::String, opts::Integer, study::Bool)
-        pat = bytestring(pat); opts = int32(opts)
-        if (opts & ~PCRE.OPTIONS_MASK) != 0
+    function Regex(pattern::String, options::Integer)
+        pattern = bytestring(pattern)
+        options = uint32(options)
+        if (options & ~PCRE.OPTIONS_MASK) != 0
             error("invalid regex option(s)")
         end
-        re = PCRE.compile(pat, opts & PCRE.COMPILE_MASK)
-        ex = study ? PCRE.study(re) : C_NULL
-        new(pat, opts, re, ex)
+        regex = PCRE.compile(pattern, options & PCRE.COMPILE_MASK)
+        new(pattern, options, regex)
     end
 end
-Regex(p::String, s::Bool)    = Regex(p, 0, s)
-Regex(p::String, o::Integer) = Regex(p, o, false)
-Regex(p::String)             = Regex(p, 0, false)
 
-copy(r::Regex) = r
-
-# TODO: make sure thing are escaped in a way PCRE
-# likes so that Julia all the Julia string quoting
-# constructs are correctly handled.
-
-macro r_str(pattern, flags...)
-    options = PCRE.UTF8
-    for fx in flags, f in fx
+function Regex(pattern::String, flags::String)
+    options = DEFAULT_OPTS
+    for f in flags
         options |= f=='i' ? PCRE.CASELESS  :
                    f=='m' ? PCRE.MULTILINE :
                    f=='s' ? PCRE.DOTALL    :
@@ -39,10 +31,15 @@ macro r_str(pattern, flags...)
     end
     Regex(pattern, options)
 end
+Regex(pattern::String) = Regex(pattern, DEFAULT_OPTS)
+
+macro r_str(pattern, flags...) Regex(pattern, flags...) end
+
+copy(r::Regex) = r
 
 function show(io, re::Regex)
     imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
-    if (re.options & ~imsx) == PCRE.UTF8
+    if (re.options & ~imsx) == DEFAULT_OPTS
         print(io, 'r')
         print_quoted_literal(io, re.pattern)
         if (re.options & PCRE.CASELESS ) != 0; print(io, 'i'); end
@@ -85,14 +82,14 @@ function show(io, m::RegexMatch)
 end
 
 ismatch(r::Regex, s::String, o::Integer) =
-    PCRE.exec(r.regex, r.extra, bytestring(s), 0, o, false)
+    PCRE.exec(r.regex, C_NULL, bytestring(s), 0, o, false)
 ismatch(r::Regex, s::String) = ismatch(r, s, r.options & PCRE.EXECUTE_MASK)
 
 contains(s::String, r::Regex, opts::Integer) = ismatch(r,s,opts)
 contains(s::String, r::Regex)                = ismatch(r,s)
 
 function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
-    m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
+    m, n = PCRE.exec(re.regex, C_NULL, str, idx-1, opts, true)
     if isempty(m); return nothing; end
     mat = str[m[1]+1:m[2]]
     cap = Union(Nothing,ByteString)[
@@ -100,7 +97,10 @@ function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
     off = [ m[2i+1]::Int32+1 for i=1:n ]
     RegexMatch(mat, cap, m[1]+1, off)
 end
-match(r::Regex, s::String, i::Integer, o::Integer) = match(r, bytestring(s), i, o)
+function match(r::Regex, s::String, i::Integer, o::Integer)
+    error("regex matching is only available for bytestrings; use bytestring(s) to convert")
+    match(r, bytestring(s), i, o)
+end
 match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE.EXECUTE_MASK)
 match(r::Regex, s::String) = match(r, s, start(s))
 
@@ -110,10 +110,11 @@ function search(str::ByteString, re::Regex, idx::Integer)
         return idx == len+2 ? (0,0) : error(BoundsError)
     end
     opts = re.options & PCRE.EXECUTE_MASK
-    m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
+    m, n = PCRE.exec(re.regex, C_NULL, str, idx-1, opts, true)
     isempty(m) ? (0,0) : (m[1]+1,m[2]+1)
 end
-search(s::String, r::Regex, idx::Integer) = error("regex search is only available for bytestrings; use bytestring(s) to convert")
+search(s::String, r::Regex, idx::Integer) =
+    error("regex search is only available for bytestrings; use bytestring(s) to convert")
 search(s::String, r::Regex) = search(s,r,start(s))
 
 type RegexMatchIterator

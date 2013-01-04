@@ -1,8 +1,9 @@
-cd("../extras") do
-require("bigfloat")
+cd(()->require("gmp"),"..")
 
-a=BigFloat("12.34567890121")
-b=BigFloat("12.34567890122")
+using GMP
+
+a = BigFloat("12.34567890121")
+b = BigFloat("12.34567890122")
 
 @test typeof(a+0.00000000001) == BigFloat
 @test abs(a+0.00000000001 - b) < 0.00000000001
@@ -29,5 +30,3 @@ d = BigFloat("-24.69135780242")
 @test string(d) == "-24.69135780242"
 
 @test abs((BigFloat(3)/BigFloat(2)) - BigFloat(1.5)) < 0.00000000001
-
-end # cd

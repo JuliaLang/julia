@@ -682,8 +682,9 @@ unescape_string(s::String) = sprint(length(s), print_unescaped, s)
 
 ## checking UTF-8 & ACSII validity ##
 
-byte_string_classify(s::ByteString) =
-    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int), s.data, length(s))
+byte_string_classify(data::Array{Uint8,1}) =
+    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int), data, length(data))
+byte_string_classify(s::ByteString) = byte_string_classify(s.data)
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
@@ -696,7 +697,7 @@ check_utf8 (s::ByteString) = is_valid_utf8(s)  ? s : error("invalid UTF-8 sequen
 
 ## string interpolation parsing ##
 
-function _jl_interp_parse(s::String, unescape::Function, printer::Function)
+function interp_parse(s::String, unescape::Function, printer::Function)
     sx = {}
     i = j = start(s)
     while !done(s,j)
@@ -730,26 +731,26 @@ function _jl_interp_parse(s::String, unescape::Function, printer::Function)
         expr(:call, :sprint, printer, sx...)
 end
 
-_jl_interp_parse(s::String, u::Function) = _jl_interp_parse(s, u, print)
-_jl_interp_parse(s::String) = _jl_interp_parse(s, x->check_utf8(unescape_string(x)))
+interp_parse(s::String, u::Function) = interp_parse(s, u, print)
+interp_parse(s::String) = interp_parse(s, x->check_utf8(unescape_string(x)))
 
-function _jl_interp_parse_bytes(s::String)
+function interp_parse_bytes(s::String)
     writer(io,x...) = for w=x; write(io,w); end
-    _jl_interp_parse(s, unescape_string, writer)
+    interp_parse(s, unescape_string, writer)
 end
 
 ## core string macros ##
 
-macro   str(s); _jl_interp_parse(s); end
-macro S_str(s); _jl_interp_parse(s); end
-macro I_str(s); _jl_interp_parse(s, x->unescape_chars(x,"\"")); end
+macro   str(s); interp_parse(s); end
+macro S_str(s); interp_parse(s); end
+macro I_str(s); interp_parse(s, x->unescape_chars(x,"\"")); end
 macro E_str(s); check_utf8(unescape_string(s)); end
-macro B_str(s); _jl_interp_parse_bytes(s); end
-macro b_str(s); ex = _jl_interp_parse_bytes(s); :(($ex).data); end
+macro B_str(s); interp_parse_bytes(s); end
+macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
 
 ## shell-like command parsing ##
 
-function _jl_shell_parse(raw::String, interp::Bool)
+function shell_parse(raw::String, interp::Bool)
 
     s = strip(raw)
     in_single_quotes = false
@@ -840,10 +841,10 @@ function _jl_shell_parse(raw::String, interp::Bool)
     end
     expr(:tuple,exprs)
 end
-_jl_shell_parse(s::String) = _jl_shell_parse(s,true)
+shell_parse(s::String) = shell_parse(s,true)
 
 function shell_split(s::String)
-    parsed = _jl_shell_parse(s,false)
+    parsed = shell_parse(s,false)
     args = String[]
     for arg in parsed
        push(args, string(arg...))
@@ -1054,6 +1055,16 @@ end
 chomp(s::ByteString) =
     (length(s) < 1 || s.data[end]   != 0x0a) ? s :
     (length(s) < 2 || s.data[end-1] != 0x0d) ? s[1:end-1] : s[1:end-2]
+
+# NOTE: use with caution -- breaks the immutable string convention!
+function chomp!(s::ByteString)
+    if length(s) >= 1 && s.data[end] == 0x0a
+        n = (length(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
+        ccall(:jl_array_del_end, Void, (Any, Uint), s.data, n)
+    end
+    return s
+end
+chomp!(s::String) = chomp(s) # copying fallback for other string types
 
 function lstrip(s::String)
     i = start(s)

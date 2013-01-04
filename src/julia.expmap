@@ -121,7 +121,6 @@
     jl_ios_eof;
     jl_ios_fd;
     jl_ios_size;
-    jl_is_builtin;
     jl_is_const;
     jl_is_leaf_type;
     jl_is_rest_arg;
@@ -157,6 +156,7 @@
     jl_pchar_to_string;
     jl_pgcstack;
     jl_prepare_ast;
+    jl_ast_rettype;
     jl_print_int64;
     jl_print_symbol;
     jl_process_exited;

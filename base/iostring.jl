@@ -196,11 +196,10 @@ function memchr(buf::IOString, delim)
     q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Int32),p,delim,nb_available(buf))
     nb = (q == C_NULL ? 0 : q-p+1)
 end
-function readuntil(io::IOString, delim)
+function readuntil(io::IOString, delim::Uint8)
     nb = memchr(io, delim)
     if nb == 0
         nb = nb_available(io)
     end
-    readbytes(io,nb)
+    read(io, Array(Uint8, nb))
 end
-

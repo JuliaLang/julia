@@ -9,23 +9,23 @@ DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/ju
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,extras base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
-MAKEs = $(MAKE)
+QUIET_MAKE =
 ifeq ($(USE_QUIET), 1)
-MAKEs += -s
+QUIET_MAKE = -s
 endif
 
 debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
-	@$(MAKEs) julia-$@
+	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
-	$(MAKEs) LD_LIBRARY_PATH=$(BUILD)/lib JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
+	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
 
 julia-debug julia-release:
 	@-git submodule update
-	@$(MAKEs) -C deps
-	@$(MAKEs) -C src lib$@
-	@$(MAKEs) -C base
-	@$(MAKEs) -C extras
-	@$(MAKEs) -C ui $@
+	@$(MAKE) $(QUIET_MAKE) -C deps
+	@$(MAKE) $(QUIET_MAKE) -C src lib$@
+	@$(MAKE) $(QUIET_MAKE) -C base
+	@$(MAKE) $(QUIET_MAKE) -C extras
+	@$(MAKE) $(QUIET_MAKE) -C ui $@
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
 
 $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
@@ -42,8 +42,9 @@ JL_LIBS = julia-release julia-debug
 # private libraries, that are installed in $(PREFIX)/lib/julia
 JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
                   fftw3f_threads glpk glpk_wrapper gmp gmp_wrapper grisu \
-                  history openlibm pcre random readline Rmath spqr \
-                  suitesparse_wrapper tk_wrapper umfpack z openblas
+                  history Faddeeva_wrapper openlibm openlibm-extras pcre \
+		  random readline Rmath spqr suitesparse_wrapper \
+		  tk_wrapper umfpack z openblas
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
@@ -68,6 +69,8 @@ ifeq ($(shell uname),MINGW32_NT-6.1)
 	-for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
 		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
 	done
+else
+	@echo 'Warning: system libraries "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" not included in install'
 endif
 endif
 
@@ -89,12 +92,12 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C extras clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
-	@$(MAKE) -C test/unicode clean
 	@for buildtype in "release" "debug" ; do \
 		for repltype in "basic" "readline"; do \
 			rm -f julia-$${buildtype}-$${repltype}; \
 		done \
 	done
+	@rm -f julia
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/$(JL_PRIVATE_LIBDIR)
 
@@ -107,10 +110,15 @@ cleanall: clean
 	test testall test-* clean cleanall
 
 test: release
-	@$(MAKEs) -C test default
+	@$(MAKE) $(QUIET_MAKE) -C test default
 
 testall: release
-	@$(MAKEs) -C test all
+	@$(MAKE) $(QUIET_MAKE) -C test all
 
 test-%: release
-	@$(MAKEs) -C test $*
+	@$(MAKE) $(QUIET_MAKE) -C test $*
+
+webrepl:
+	make -C deps install-lighttpd
+	make -C ui/webserver
+	cd $(BUILD)/share/julia && ln -sf ../../../ui/website .

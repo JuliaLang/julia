@@ -268,13 +268,14 @@ DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL) {
-        //jl_errorf("cannot redefine constant %s", b->name->name);
-        JL_PRINTF(JL_STDERR, "Warning: redefinition of constant %s ignored.\n",
-                   b->name->name);
+        if (!jl_egal(rhs, b->value) &&
+            (jl_typeof(rhs) != jl_typeof(b->value) ||
+             jl_is_type(rhs) || jl_is_function(rhs) || jl_is_module(rhs))) {
+            jl_errorf("invalid redefinition of constant %s", b->name->name);
+        }
+        JL_PRINTF(JL_STDERR,"Warning: redefining constant %s\n",b->name->name);
     }
-    else {
-        b->value = rhs;
-    }
+    b->value = rhs;
 }
 
 void jl_declare_constant(jl_binding_t *b)
@@ -309,7 +310,7 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all)
             if (b->exportp || (b->owner == m && (all || m == jl_main_module))) {
                 jl_array_grow_end(a, 1);
                 //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
-                jl_cellset(a, a->length-1, (jl_value_t*)b->name);
+                jl_cellset(a, jl_array_dim0(a)-1, (jl_value_t*)b->name);
             }
         }
     }

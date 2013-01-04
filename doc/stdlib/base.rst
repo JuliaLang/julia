@@ -304,7 +304,7 @@ Associative Collections
 
 ``ObjectIdDict`` is a special hash table where the keys are always object identities. ``WeakKeyDict`` is a hash table implementation where the keys are weak references to objects, and thus may be garbage collected even when referenced in a hash table.
 
-Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``. Use of curly brackets will create a ``Dict`` of type ``Dict{Any,Any}``. Use of square brackets will attempt to infer type information from the keys and values (i.e. ``["A"=>1, "B"=>2] creates a ``Dict{ASCIIString, Int64}``). To explicitly specify types use the syntax: ``(KeyType=>ValueType)[...]``. For example, ``(ASCIIString=>Int32)["A"=>1, "B"=>2]``.
+Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``. Use of curly brackets will create a ``Dict`` of type ``Dict{Any,Any}``. Use of square brackets will attempt to infer type information from the keys and values (i.e. ``["A"=>1, "B"=>2]`` creates a ``Dict{ASCIIString, Int64}``). To explicitly specify types use the syntax: ``(KeyType=>ValueType)[...]``. For example, ``(ASCIIString=>Int32)["A"=>1, "B"=>2]``.
 
 As with arrays, ``Dicts`` may be created with comprehensions. For example,
 ``{i => f(i) for i = 1:10}``.
@@ -489,6 +489,14 @@ Strings
 .. function:: search(string, chars, [start])
 
    Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a tuple with 2 integers: the index of the match and the first valid index past the match (or an index beyond the end of the string if the match is at the end); it returns ``(0,0)`` if no match was found, and ``(start,start)`` if ``chars`` is empty.
+
+.. function:: replace(string, pat, r[, n])
+
+   Search for the given pattern ``pat``, and replace each occurance with ``r``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
+
+.. function:: replace(string, pat, f[, n])
+
+   Search for the given pattern ``pat``, and replace each occurance with ``f(pat)``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
 
 .. function:: split(string, [chars, [limit,] [include_empty]])
 
@@ -1016,11 +1024,31 @@ Mathematical Functions
 
 .. function:: erf(x)
 
-   Compute the error function of ``x``
+   Compute the error function of ``x``, defined by
+   :math:`\frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} dt`
+   for arbitrary complex ``x``.
 
 .. function:: erfc(x)
 
-   Compute the complementary error function of ``x``
+   Compute the complementary error function of ``x``,
+   defined by :math:`1 - \operatorname{erf}(x)`.
+
+.. function:: erfcx(x)
+
+   Compute the scaled complementary error function of ``x``,
+   defined by :math:`e^{x^2} \operatorname{erfc}(x)`.  Note
+   also that :math:`\operatorname{erfcx}(-ix)` computes the
+   Faddeeva function :math:`w(x)`.
+
+.. function:: erfi(x)
+
+   Compute the imaginary error function of ``x``,
+   defined by :math:`-i \operatorname{erf}(ix)`.
+
+.. function:: dawson(x)
+
+   Compute the Dawson function (scaled imaginary error function) of ``x``,
+   defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
 
 .. function:: real(z)
 
@@ -1505,6 +1533,10 @@ Mathematical operators and functions
 
 All mathematical operations and functions are supported for arrays
 
+.. function:: bsxfun(fn, A, B[, C...])
+
+   Apply binary function ``fn`` to two or more arrays, with singleton dimensions expanded.
+
 Indexing, Assignment, and Concatenation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1703,13 +1735,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Lower triangle of a matrix
 
-.. function:: diag(M)
+.. function:: diag(M, [k])
 
-   The diagonal of a matrix, as a vector
+   The ``k``-th diagonal of a matrix, as a vector
 
-.. function:: diagm(v)
+.. function:: diagm(v, [k])
 
-   Construct a diagonal matrix from a vector
+   Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
 
 .. function:: Tridiagonal(dl, d, du)
 
@@ -1723,9 +1755,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the rank of a matrix
 
-.. function:: cond(M)
+.. function:: norm(A, [p])
 
-   Matrix condition number
+   Compute the p-norm of a vector or a matrix. ``p`` is ``2`` by default, if not provided. If ``A`` is a matrix, valid values for ``p`` are ``1``, ``2``, ``Inf``, or ``:fro`` (Frobenius norm).
+
+.. function:: cond(M, [p])
+
+   Matrix condition number, computed using the p-norm. ``p`` is 2 by default, if not provided. Valid values for ``p`` are ``1``, ``2``, ``Inf``, or ``:fro`` (Frobenius norm).
 
 .. function:: trace(M)
 
@@ -1766,38 +1802,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 Combinatorics
 -------------
 
-.. function:: sort(v)
-
-   Sort a vector in ascending order, according to ``isless``.
-
-.. function:: sort!(v)
-
-   In-place sort
-
-.. function:: sortr(v)
-
-   Sort a vector in descending order
-
-.. function:: sortr!(v)
-
-   In-place descending-order sort
-
-.. function:: sort(a, dim)
-
-   Sort an array along the given dimension
-
-.. function:: sort(lessthan, a, [dim])
-
-   Sort with a custom comparison function
-
-.. function:: sortperm(v) -> s,p
-
-   Sort a vector in ascending order, also constructing the permutation that sorts the vector
-
-.. function:: issorted(v)
-
-   Test whether a vector is in ascending sorted order
-
 .. function:: nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
@@ -1809,6 +1813,14 @@ Combinatorics
 .. function:: randperm(n)
 
    Construct a random permutation of the given length
+
+.. function:: invperm(v)
+
+   Return the inverse permtation of v
+
+.. function:: isperm(v)
+
+   Returns true if v is a valid permutation
 
 .. function:: randcycle(n)
 
@@ -1830,14 +1842,6 @@ Combinatorics
 
    Reverse vector ``v`` in-place
 
-.. function:: select(v, k)
-
-   Find the element in position ``k`` in the sorted vector ``v`` without sorting
-
-.. function:: select!(v, k)
-
-   In-place version of ``select``
-
 Statistics
 ----------
 
@@ -1845,9 +1849,21 @@ Statistics
 
    Compute the mean of whole array ``v``, or optionally along dimension ``dim``
 
-.. function:: std(v)
+.. function:: std(v, [corrected])
 
-   Compute the standard deviation of a vector ``v``
+   Compute the sample standard deviation of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- mean(v)).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- mean(v)).^2) / length(v))``, which is the empirical standard deviation of the sample.
+
+.. function:: std(v, m, [corrected])
+
+   Compute the sample standard deviation of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- m).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- m).^2) / length(v))``, which is the empirical standard deviation of the sample.
+
+.. function:: var(v, [corrected])
+
+   Compute the sample variance of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- mean(v)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- mean(v)).^2) / length(v)``, which is the empirical variance of the sample.
+
+.. function:: var(v, m, [corrected])
+
+   Compute the sample variance of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- m)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- m)).^2) / length(v)``, which is the empirical variance of the sample.
 
 .. function:: median(v)
 
@@ -1861,52 +1877,214 @@ Statistics
 
    Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
 
+.. function:: weighted_mean(v, w)
+
+   Compute the weighted mean of ``v`` using a vector of weights ``w``
+
+.. function:: mad(v, m)
+
+   Compute the median absolute deviation from the entries of a vector ``v`` relative to a known median ``m``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
+
+.. function:: mad(v)
+
+   Compute the median absolute deviation from the entries of a vector ``v`` relative to the median of ``v``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
+
+.. function:: skewness(v, m)
+
+   Compute the sample skewness of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: skewness(v)
+
+   Compute the sample skewness of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: kurtosis(v, m)
+
+   Compute the sample kurtosis of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: kurtosis(v)
+
+   Compute the sample kurtosis of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
+
+.. function:: quantile(v, p)
+
+   Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``.
+
+.. function:: quantile(v)
+
+   Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+
+.. function:: quartile(v)
+
+   Compute the quartiles of a vector ``v`` at the probability values ``[.0, .25, .5, .75, 1.0]``.
+
+.. function:: quintile(v)
+
+   Compute the quintiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+
+.. function:: decile(v)
+
+   Compute the deciles of a vector ``v`` at the probability values ``[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]``.
+
+.. function:: iqr(v)
+
+   Compute the interquantile range of a vector ``v`` at the probability values ``[.25, .75]``.
+
+.. function:: tiedrank(v)
+
+   Compute the ranks of the entries of vector ``v``. Ties are resolved by taking the average rank over all tied values.
+
+.. function:: cov_pearson(v1, v2)
+
+   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
+
+.. function:: cov_spearman(v)
+
+   Compute the Spearman covariance between two vectors ``v1`` and ``v2``.
+
+.. function:: cov(v)
+
+   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
+
+.. function:: cor_pearson(v)
+
+   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
+
+.. function:: cor_spearman(v)
+
+   Compute the Spearman correlation between two vectors ``v1`` and ``v2``.
+
+.. function:: cor(v)
+
+   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
+
+.. function:: autocor(v, l)
+
+   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``l``.
+
+.. function:: autocor(v)
+
+   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``1``.
+
+.. function:: dist(m)
+
+   Compute the distance matrix between all of the rows of ``m``.
+
+.. function:: rle(v)
+
+   Compute a run-length encoding representation of a vector ``v``.
+
+.. function:: inverse_rle(vals, lens)
+
+   Compute a vector from its run-length vector representation as values ``vals`` and run lengths ``lens``.
+
 Signal Processing
 -----------------
 
 FFT functions in Julia are largely implemented by calling functions from `FFTW <http://www.fftw.org>`_
 
-.. function:: fft(A, dim)
+.. function:: fft(A [, dims]), fft!
 
-   One dimensional FFT if input is a ``Vector``. For n-d cases, compute fft of vectors along dimension ``dim``. Most efficient if ``size(A, dim)`` is a product of small primes; see :func:`nextprod`.
+   Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
+   argument specifies an iterable subset of dimensions (e.g. an integer,
+   range, tuple, or array) to transform along.  Most efficient if the
+   size of ``A`` along the transformed dimensions is a product of small
+   primes; see :func:`nextprod`.  See also :func:`plan_fft` for even
+   greater efficiency.
 
-.. function:: fft2
+   :func:`fft!` is the same as :func:`fft`, but operates in-place on ``A``,
+   which must be an array of complex floating-point numbers.
 
-   2d FFT
+   A one-dimensional FFT computes the one-dimensional discrete Fourier
+   transform (DFT) as defined by :math:`\operatorname{DFT}[k] = \sum_{n=1}^{\operatorname{length}(A)} \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n]`.  A multidimensional FFT simply performs this operation
+   along each transformed dimension of ``A``.
 
-.. function:: fft3
+.. function:: ifft(A [, dims]), ifft!, bfft, bfft!
 
-   3d FFT
+   Multidimensional inverse FFT. 
 
-.. function:: fftn
+   :func:`ifft` and :func:`ifft!` have the same arguments as
+   :func:`fft` and :func:`fft!`, respectively.
 
-   N-d FFT
+   :func:`bfft` and :func:`bfft!` are similar to :func:`ifft` and 
+   :func:`ifft!`, respectively, but compute an unnormalized inverse
+   (backward) transform, which must be divided by the product of the sizes of
+   the transformed dimensions in order to obtain the inverse.  (These
+   are slightly more efficient than :func:`ifft` and :func:`ifft!`
+   because they omit a scaling step, which in some applications can
+   be combined with other camputational steps elsewhere.)
 
-.. function:: ifft(A, dim)
+   A one-dimensional backward FFT computes
+   :math:`\operatorname{BDFT}[k] =
+   \sum_{n=1}^{\operatorname{length}(A)} \exp\left(+i\frac{2\pi
+   (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n]`.  A
+   multidimensional backward FFT simply performs this operation along
+   each transformed dimension of ``A``.  The inverse FFT computes
+   the same thing divided by the product of the transformed dimensions.
 
-   Inverse FFT. Same arguments as ``fft``.
+.. function:: plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!
 
-.. function:: ifft2
+   Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
+   matching the shape and type of ``A``.  (The first two arguments have
+   the same meaning as for :func:`fft`.)  Returns a function ``plan(A)``
+   that computes ``fft(A, dims)`` quickly.
 
-   Inverse 2d FFT
+   The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting
+   to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT``
+   will instead spend several seconds (or more) benchmarking different
+   possible FFT algorithms and picking the fastest one; see the FFTW manual
+   for more information on planner flags.  The optional ``timelimit`` argument
+   specifies a rough upper bound on the allowed planning time, in seconds.
+   Passing ``FFTW.MEASURE`` or ``FFTW.PATIENT`` may cause the input array ``A``
+   to be overwritten with zeros during plan creation.
 
-.. function:: ifft3
+   :func:`plan_fft!` is the same as :func:`plan_fft` but creates a plan
+   that operates in-place on its argument (which must be an array of
+   complex floating-point numbers).  :func:`plan_ifft` and so on
+   are similar but produce plans that perform the equivalent of
+   the inverse transforms :func:`ifft` and so on.
 
-   Inverse 3d FFT
+.. function:: rfft(A [, dims])
 
-.. function:: ifftn
-
-   Inverse N-d FFT
-
-.. function:: rfft(A, [dim])
-
-   One-dimensional FFT of real array A along dimension dim. If A has size
-   ``(..., n_dim, ...)``, the result has size ``(..., floor(n_dim/2)+1, ...)``. The ``dim`` argument is optional and defaults to 1.
-
-.. function:: rfftn(A)
-
-   N-d FFT of real array A. If A has size ``(n_1, ..., n_d)``, the result has size
+   Multidimensional FFT of a real array A, exploiting the fact that
+   the transform has conjugate symmetry in order to save roughly half
+   the computational time and storage costs compared with :func:`fft`.
+   If ``A`` has size ``(n_1, ..., n_d)``, the result has size
    ``(floor(n_1/2)+1, ..., n_d)``.
+
+   The optional ``dims`` argument specifies an iterable subset of one or
+   more dimensions of ``A`` to transform, similar to :func:`fft`.  Instead
+   of (roughly) halving the first dimension of ``A`` in the result, the
+   ``dims[1]`` dimension is (roughly) halved in the same way.
+
+.. function:: irfft(A, d [, dims]), brfft
+
+   Inverse of :func:`rfft`: for a complex array ``A``, gives the
+   corresponding real array whose FFT yields ``A`` in the first half.
+   As for :func:`rfft`, ``dims`` is an optional subset of dimensions
+   to transform, defaulting to ``1:ndims(A)``.
+
+   ``d`` is the length of the transformed real array along the ``dims[1]``
+   dimension, which must satisfy ``d == floor(size(A,dims[1])/2)+1``.
+   (This parameter cannot be inferred from ``size(A)`` due to the 
+   possibility of rounding by the ``floor`` function here.)
+
+   :func:`brfft` is similar but computes an unnormalized inverse transform
+   (similar to :func:`bfft`), which must be divided by the product
+   of the sizes of the transformed dimensions (of the real output array)
+   in order to obtain the inverse transform.
+
+.. function:: plan_rfft(A [, dims [, flags [, timelimit]]])
+
+   Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
+   except for :func:`rfft` instead of :func:`fft`.  The first two
+   arguments, and the size of the transformed result, are the same as
+   for :func:`rfft`.
+
+.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+
+   Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
+   except for :func:`irfft` and :func:`brfft`, respectively.  The first
+   three arguments have the same meaning as for :func:`irfft`.
 
 .. function:: fftshift(x)
 
@@ -2073,7 +2251,7 @@ System
 
    Get the IP address of the local machine, as a string of the form "x.x.x.x".
 
-.. function:: cwd()
+.. function:: pwd()
 
    Get the current working directory.
 

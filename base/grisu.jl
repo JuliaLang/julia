@@ -47,11 +47,15 @@ function grisu_sig(x::Real, n::Integer)
 end
 
 function _show(io, x::FloatingPoint, mode::Int32, n::Int)
-    if isnan(x); return write(io, isa(x,Float32) ? "NaN32" : "NaN"); end
-    if x < 0 write(io,'-') end
-    if isinf(x); return write(io, isa(x,Float32) ? "Inf32" : "Inf"); end
+    if isnan(x) return write(io, isa(x,Float32) ? "NaN32" : "NaN") end
+    if isinf(x)
+        if x < 0 write(io,'-') end
+        write(io, isa(x,Float32) ? "Inf32" : "Inf")
+        return
+    end
     @grisu_ccall x mode n
     pdigits = pointer(DIGITS)
+    neg = NEG[1]
     len = LEN[1]
     pt  = POINT[1]
     if mode == PRECISION
@@ -59,6 +63,7 @@ function _show(io, x::FloatingPoint, mode::Int32, n::Int)
             len -= 1
         end
     end
+    if neg write(io,'-') end
     if pt <= -4 || pt > 6 # .00001 to 100000.
         # => #.#######e###
         write(io, pdigits, 1)

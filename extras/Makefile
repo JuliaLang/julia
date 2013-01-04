@@ -20,4 +20,4 @@ webrepl_msgtypes_h.jl: ../ui/webserver/message_types.h
 	$(QUIET_PERL) $(CC) -E -Dnotdefined $^ > $@
 
 clean:
-	rm -f glpk_h.jl julia_message_types_h.jl
+	rm -f glpk_h.jl webrepl_msgtypes_h.jl

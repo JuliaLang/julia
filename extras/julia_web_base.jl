@@ -16,7 +16,7 @@
 # [message_type::number, arg0::string, arg1::string, ...]
 
 # import the message types
-load("webrepl_msgtypes_h")
+include(find_in_path("webrepl_msgtypes_h"))
 
 ###########################################
 # set up the socket connection
@@ -91,7 +91,7 @@ end
 ###########################################
 
 # load the special functions available to the web repl
-load("julia_web")
+include(find_in_path("julia_web"))
 
 ###########################################
 # input event handler
@@ -200,11 +200,11 @@ function __eval_exprs(__parsed_exprs)
 end
 
 # print version info
-println("Julia ", Base._jl_version_string)
-println(Base._jl_commit_string, "\n")
+println("Julia ", Base.version_string)
+println(Base.commit_string, "\n")
 
 # work around bug displaying "\n "
-#print("  ",replace(Base._jl_banner_plain, "\n", "\n  "))
+#print("  ",replace(Base.banner_plain, "\n", "\n  "))
 
 ###########################################
 # wait forever while asynchronous processing happens

@@ -33,12 +33,18 @@ Here's a simple example of actually running an external program::
 
     julia> run(`echo hello`)
     hello
-    true
 
-The ``hello`` is the output of the ``echo`` command, while the ``true``
-is the return value of the command, indicating that it succeeded. (These
-are colored differently by the interactive session if your terminal
-supports color.)
+The ``hello`` is the output of the ``echo`` command, sent to stdout. 
+The run method itself returns ``Nothing``, and throws an ``ErrorException``
+if the external command fails to run successfully. 
+
+If you want to read the output of the external command, the ``readall`` method can be used instead. 
+
+    julia> a=readall(`echo hello`)
+    "hello\n"
+
+    julia> (chomp(a)) == "hello"
+    true
 
 .. _man-command-interpolation:
 

@@ -277,3 +277,5 @@ begin
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
 
 end
+
+@test (1:5)[[true,false,true,false,true]] == [1,3,5]

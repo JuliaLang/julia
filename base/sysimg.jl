@@ -3,6 +3,8 @@ baremodule Base
 eval(x) = Core.eval(Base,x)
 eval(m,x) = Core.eval(m,x)
 
+include = Core.include
+
 include("export.jl")
 
 if false
@@ -96,6 +98,7 @@ include("serialize.jl")
 include("multi.jl")
 
 # system & environment
+include("build_h.jl")
 include("osutils.jl")
 include("libc.jl")
 include("env.jl")
@@ -120,6 +123,7 @@ using RNG
 
 # Combinatorics
 include("sort.jl")
+using Sort
 include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
@@ -134,7 +138,6 @@ include("datafmt.jl")
 include("deepcopy.jl")
 
 # linear algebra
-include("build_h.jl")
 include("blas.jl")
 include("lapack.jl")
 include("matmul.jl")
@@ -149,8 +152,10 @@ include("fftw.jl")
 include("dsp.jl")
 using DSP
 
+include = include_from_node1
+
 # prime method cache with some things we know we'll need right after startup
-compile_hint(cwd, ())
+compile_hint(pwd, ())
 compile_hint(fdio, (Int32,))
 compile_hint(ProcessGroup, (Int, Array{Any,1}, Array{Any,1}))
 compile_hint(select_read, (FDSet, Float64))
@@ -222,7 +227,7 @@ compile_hint(hash, (Int,))
 compile_hint(isequal, (Symbol, Symbol))
 compile_hint(isequal, (Bool, Bool))
 compile_hint(WaitFor, (Symbol, RemoteRef))
-compile_hint(_jl_answer_color, ())
+compile_hint(answer_color, ())
 compile_hint(get, (EnvHash, ASCIIString, ASCIIString))
 compile_hint(notify_empty, (WorkItem,))
 compile_hint(rr2id, (RemoteRef,))
@@ -235,7 +240,7 @@ compile_hint(assign, (Dict{Any,Any}, WorkItem, (Int,Int)))
 compile_hint(isequal, ((Int,Int),(Int,Int)))
 compile_hint(isequal, (Int,Int))
 compile_hint(RemoteRef, (Int, Int, Int))
-compile_hint(_jl_eval_user_input, (Expr, Bool))
+compile_hint(eval_user_input, (Expr, Bool))
 compile_hint(print, (Float64,))
 compile_hint(a2t, (Array{Any,1},))
 compile_hint(flush, (IOStream,))
@@ -261,8 +266,8 @@ compile_hint(CallStack, (Expr, Module, (Nothing,), EmptyCallStack))
 compile_hint(convert, (Type{Module}, Module))
 compile_hint(effect_free, (Expr,))
 compile_hint(effect_free, (TopNode,))
-compile_hint(abs_path, (ASCIIString,))
-compile_hint(isrooted, (ASCIIString,))
+compile_hint(abspath, (ASCIIString,))
+compile_hint(isabspath, (ASCIIString,))
 compile_hint(split, (ASCIIString,))
 compile_hint(split, (ASCIIString, ASCIIString, Int, Bool))
 compile_hint(split, (ASCIIString, Regex, Int, Bool))
@@ -275,7 +280,7 @@ compile_hint(ref, (BitArray{1}, Int,))
 compile_hint(assign, (BitArray{1}, Bool, Int,))
 compile_hint(fill!, (BitArray{1}, Bool))
 compile_hint(nnz, (BitArray{1},))
-compile_hint(_jl_get_chunks_id, (Int,))
+compile_hint(get_chunks_id, (Int,))
 compile_hint(occurs_more, (Uint8, Function, Int))
 compile_hint(abstract_eval_arg, (Uint8, ObjectIdDict, StaticVarInfo))
 compile_hint(occurs_outside_tupleref, (Function, Symbol, StaticVarInfo, Int))

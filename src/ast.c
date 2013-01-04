@@ -45,10 +45,10 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     if (nargs < 1)
         argcount("invoke-julia-macro", nargs, 1);
     jl_function_t *f = NULL;
-    jl_value_t **margs = alloca(nargs * sizeof(jl_value_t*));
+    jl_value_t **margs;
+    JL_GC_PUSHARGS(margs, nargs);
     int i;
     for(i=0; i < nargs; i++) margs[i] = NULL;
-    JL_GC_PUSHARGS(margs, nargs);
     for(i=1; i < nargs; i++) margs[i] = scm_to_julia(args[i]);
     jl_value_t *result;
 
@@ -562,10 +562,6 @@ jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 // get array of var info records for captured vars
 jl_array_t *jl_lam_capt(jl_expr_t *l)
 {
-    if (jl_is_tuple(l)) {
-        // in compressed form
-        return (jl_array_t*)jl_tupleref(l, 3);
-    }
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
@@ -622,7 +618,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
         /*
         if (sp == jl_null && li->ast &&
-            jl_lam_capt((jl_expr_t*)li->ast)->length == 0)
+            jl_array_len(jl_lam_capt((jl_expr_t*)li->ast)) == 0)
             return expr;
         */
         // TODO: avoid if above condition is true and decls have already
@@ -647,18 +643,38 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         jl_expr_t *e = (jl_expr_t*)expr;
         jl_expr_t *ne = jl_exprn(e->head, jl_array_len(e->args));
         JL_GC_PUSH(&ne);
-        size_t i;
         if (e->head == lambda_sym) {
             jl_exprarg(ne, 0) = copy_ast(jl_exprarg(e,0), sp, 0);
             jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 0);
             jl_exprarg(ne, 2) = copy_ast(jl_exprarg(e,2), sp, 1);
         }
         else {
-            for(i=0; i < jl_array_len(e->args); i++)
+            for(size_t i=0; i < jl_array_len(e->args); i++)
                 jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp, 1);
         }
         JL_GC_POP();
         return (jl_value_t*)ne;
+    }
+    return expr;
+}
+
+static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
+{
+    if (jl_is_symbol(expr) || jl_is_lambda_info(expr)) {
+        return copy_ast(expr, sp, do_sp);
+    }
+    else if (jl_is_expr(expr)) {
+        jl_expr_t *e = (jl_expr_t*)expr;
+        if (e->head == lambda_sym) {
+            jl_exprarg(e, 0) = dont_copy_ast(jl_exprarg(e,0), sp, 0);
+            jl_exprarg(e, 1) = dont_copy_ast(jl_exprarg(e,1), sp, 0);
+            jl_exprarg(e, 2) = dont_copy_ast(jl_exprarg(e,2), sp, 1);
+        }
+        else {
+            for(size_t i=0; i < jl_array_len(e->args); i++)
+                jl_exprarg(e, i) = dont_copy_ast(jl_exprarg(e,i), sp, 1);
+        }
+        return (jl_value_t*)e;
     }
     return expr;
 }
@@ -699,14 +715,17 @@ DLLEXPORT
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
 {
     jl_tuple_t *spenv = NULL;
-    jl_value_t *l_ast = li->ast;
-    if (l_ast == NULL) return NULL;
-    jl_value_t *ast = l_ast;
+    jl_value_t *ast = li->ast;
+    if (ast == NULL) return NULL;
     JL_GC_PUSH(&spenv, &ast);
-    if (jl_is_tuple(ast))
-        ast = jl_uncompress_ast((jl_tuple_t*)ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
-    ast = copy_ast(ast, sparams, 1);
+    if (!jl_is_expr(ast)) {
+        ast = jl_uncompress_ast(li, ast);
+        ast = dont_copy_ast(ast, sparams, 1);
+    }
+    else {
+        ast = copy_ast(ast, sparams, 1);
+    }
     jl_module_t *last_m = jl_current_module;
     JL_TRY {
         jl_current_module = li->module;

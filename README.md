@@ -20,7 +20,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Resources"/>
 
 - **Homepage:** <http://julialang.org>
-- **Binaries:** <https://github.com/JuliaLang/julia/downloads>
+- **Binaries:** <http://code.google.com/p/julialang/downloads/list>
 - **Packages:** <https://github.com/JuliaLang/METADATA.jl>
 - **Mailing lists:** <http://julialang.org/mailing_lists>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
@@ -202,11 +202,6 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 ## Binary Installation
 
 Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](https://github.com/JuliaLang/julia/downloads).
-To install from source, download the appropriate tarball and untar it somewhere.
-For example, if you are on an OS X (Darwin) x86/64 system, do the following:
-
-    wget https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz
-    tar zxvf julia-c4865bd18d-Darwin-i386.tar.gz
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere (in the current shell session):
 
@@ -219,7 +214,8 @@ Now you should be able to run julia like this:
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
-An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available.
+An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available. Julia has also been added to [Debian](http://packages.debian.org/sid/julia). On OS X, julia is available through [homebrew](http://mxcl.github.com/homebrew/).
+
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
@@ -242,7 +238,7 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
 Julia has a web REPL with very preliminary graphics capabilities. The web REPL is currently a showcase to try out new ideas. The web REPL is social - multiple people signing in with a common session name can collaborate within a session.
 
-1. Do `make -C deps install-lighttpd` to download and build the webserver.
+1. Do `make webrepl` to build the julia webserver.
 2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
 3. Point your browser to `http://localhost:2000/`.
 4. Try `plot(cumsum(randn(1000)))` and other things.

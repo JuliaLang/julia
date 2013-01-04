@@ -793,7 +793,8 @@
 	;; (a, b, ...) = (x, y, ...)
 	(tuple-to-assignments lhss x)
 	;; (a, b, ...) = other
-	(let* ((xx  (if (symbol? x) x (gensy)))
+	(let* ((xx  (if (and (symbol? x) (not (memq x lhss)))
+			x (gensy)))
 	       (ini (if (eq? x xx) '() `((= ,xx ,x))))
 	       (st  (gensy)))
 	  `(block

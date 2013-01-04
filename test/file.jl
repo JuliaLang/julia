@@ -18,7 +18,7 @@ end
 # (Or fix up the code to support such operations on Windows!)
 dir_name = mktempdir()
 filename = file_path(dir_name, "afile.txt")
-file_create(filename)
+touch(filename)
 
 #######################################################################
 # This section tests some of the features of the stat-based file info #
@@ -42,7 +42,7 @@ run(`chmod +w $filename`)
 
 # rename file
 newfilename = file_path(dir_name, "bfile.txt")
-path_rename(filename, newfilename)
+mv(filename, newfilename)
 @test ispath(filename) == false
 @test isfile(newfilename) == true
 filename = newfilename
@@ -66,7 +66,7 @@ filename = newfilename
 ############
 # Clean up #
 ############
-file_remove(filename)
+rm(filename)
 rmdir(dir_name)
 @test ispath(filename) == false
 @test ispath(dir_name) == false
