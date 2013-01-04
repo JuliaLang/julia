@@ -522,7 +522,7 @@ let
 
     # issue #1886
     X = [1:4]
-    r = Array(Range1{Int64},1)
+    r = Array(Range1{Int},1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
