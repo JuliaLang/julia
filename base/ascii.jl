@@ -41,9 +41,7 @@ function uppercase(s::ASCIIString)
         if 'a' <= s[i] <= 'z'
             t = ASCIIString(copy(s.data))
             while i <= length(t)
-                if 'a' <= t[i] <= 'z'
-                    t.data[i] -= 32
-                end
+                    t.data[i] = uppercase(t.data[i])
                 i += 1
             end
             return t
@@ -56,9 +54,7 @@ function lowercase(s::ASCIIString)
         if 'A' <= s[i] <= 'Z'
             t = ASCIIString(copy(s.data))
             while i <= length(t)
-                if 'A' <= t[i] <= 'Z'
-                    t.data[i] += 32
-                end
+                    t.data[i] += lowercase(t.data[i])
                 i += 1
             end
             return t
