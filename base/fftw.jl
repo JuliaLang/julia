@@ -2,7 +2,14 @@ module FFTW
 
 export fft, bfft, ifft, rfft, brfft, irfft,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
-       fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
+       fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!,
+       r2r, r2r!, plan_r2r, plan_r2r!,
+       export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
+       MEASURE, DESTROY_INPUT, UNALIGNED, CONSERVE_MEMORY, EXHAUSTIVE,
+       PRESERVE_INPUT, PATIENT, ESTIMATE, WISDOM_ONLY, NO_TIMELIMIT,
+       R2HC, HC2R, DHT, REDFT00, REDFT01, REDFT10, REDFT11,
+       RODFT00, RODFT01, RODFT10, RODFT11,
+       fftwNumber, fftwReal, fftwComplex
 
 ## FFT: Implement fft by calling fftw.
 
@@ -39,6 +46,16 @@ const RODFT00 = int32(7)
 const RODFT01 = int32(8)
 const RODFT10 = int32(9)
 const RODFT11 = int32(10)
+
+# FFTW floating-point types:
+
+typealias fftwNumber Union(Float64,Float32,Complex128,Complex64)
+typealias fftwReal Union(Float64,Float32)
+typealias fftwComplex Union(Complex128,Complex64)
+typealias fftwDouble Union(Float64,Complex128)
+typealias fftwSingle Union(Float32,Complex64)
+typealias fftwTypeDouble Union(Type{Float64},Type{Complex128})
+typealias fftwTypeSingle Union(Type{Float32},Type{Complex64})
 
 ## Julia wrappers around FFTW functions
 
@@ -93,8 +110,8 @@ end
 # Threads
 
 let initialized = false
-    global num_threads
-    function num_threads(nthreads::Integer)
+    global set_num_threads
+    function set_num_threads(nthreads::Integer)
         if !initialized
             # must re-initialize FFTW if any FFTW routines have been called
             ccall((:fftw_cleanup,libfftw), Void, ())
@@ -113,10 +130,10 @@ end
 
 # Execute
 
-execute(precision::Union(Type{Float64}, Type{Complex128}), plan) =
+execute(precision::fftwTypeDouble, plan) =
     ccall((:fftw_execute,libfftw), Void, (Ptr{Void},), plan)
 
-execute(precision::Union(Type{Float32}, Type{Complex64}), plan) =
+execute(precision::fftwTypeSingle, plan) =
     ccall((:fftwf_execute,libfftwf), Void, (Ptr{Void},), plan)
 
 execute(plan, X::StridedArray{Complex128}, Y::StridedArray{Complex128}) =
@@ -137,28 +154,36 @@ execute(plan, X::StridedArray{Float32}, Y::StridedArray{Complex64}) =
 
 execute(plan, X::StridedArray{Complex128}, Y::StridedArray{Float64}) =
     ccall((:fftw_execute_dft_c2r,libfftw), Void, 
-          (Ptr{Void},Ptr{Float64},Ptr{Complex128}), plan, X, Y)
+          (Ptr{Void},Ptr{Complex128},Ptr{Float64}), plan, X, Y)
 
 execute(plan, X::StridedArray{Complex64}, Y::StridedArray{Float32}) =
     ccall((:fftwf_execute_dft_c2r,libfftwf), Void, 
-          (Ptr{Void},Ptr{Float32},Ptr{Complex64}), plan, X, Y)
+          (Ptr{Void},Ptr{Complex64},Ptr{Float32}), plan, X, Y)
+
+execute_r2r{T<:fftwDouble}(plan, X::StridedArray{T}, Y::StridedArray{T}) =
+    ccall((:fftw_execute_r2r,libfftw), Void, 
+          (Ptr{Void},Ptr{T},Ptr{T}), plan, X, Y)
+
+execute_r2r{T<:fftwSingle}(plan, X::StridedArray{T}, Y::StridedArray{T}) =
+    ccall((:fftwf_execute_r2r,libfftwf), Void, 
+          (Ptr{Void},Ptr{T},Ptr{T}), plan, X, Y)
 
 # Destroy plan
 
-destroy_plan(precision::Union(Type{Float64}, Type{Complex128}), plan) =
+destroy_plan(precision::fftwTypeDouble, plan) =
     ccall((:fftw_destroy_plan,libfftw), Void, (Ptr{Void},), plan)
 
-destroy_plan(precision::Union(Type{Float32}, Type{Complex64}), plan) =
+destroy_plan(precision::fftwTypeSingle, plan) =
     ccall((:fftwf_destroy_plan,libfftwf), Void, (Ptr{Void},), plan)
 
 # Planner timelimits
 
 const NO_TIMELIMIT = -1.0 # from fftw3.h
 
-set_timelimit(precision::Union(Type{Float64}, Type{Complex128}),seconds) =
+set_timelimit(precision::fftwTypeDouble,seconds) =
     ccall((:fftw_set_timelimit,libfftw), Void, (Float64,), seconds)
 
-set_timelimit(precision::Union(Type{Float32}, Type{Complex64}),seconds) =
+set_timelimit(precision::fftwTypeSingle,seconds) =
     ccall((:fftwf_set_timelimit,libfftwf), Void, (Float64,), seconds)
 
 # Array alignment mod 16:
@@ -170,10 +195,10 @@ set_timelimit(precision::Union(Type{Float32}, Type{Complex64}),seconds) =
 #   Use the undocumented routine fftw_alignment_of to determine the 
 #   alignment of a given pointer modulo whatever FFTW needs.
 
-alignment_of{T<:Union(Complex128,Float64)}(A::StridedArray{T}) = 
+alignment_of{T<:fftwDouble}(A::StridedArray{T}) = 
    ccall((:fftw_alignment_of, libfftw), Int32, (Ptr{T},), A)
 
-alignment_of{T<:Union(Complex64,Float32)}(A::StridedArray{T}) = 
+alignment_of{T<:fftwSingle}(A::StridedArray{T}) = 
    ccall((:fftwf_alignment_of, libfftwf), Int32, (Ptr{T},), A)
 
 # Plan (low-level)
@@ -181,7 +206,7 @@ alignment_of{T<:Union(Complex64,Float32)}(A::StridedArray{T}) =
 # low-level storage of the FFTW plan, along with the information
 # needed to determine whether it is applicable.   We need to put
 # this into a type to support a finalizer on the fftw_plan.
-type Plan{T<:Union(Float64, Complex128, Float32, Complex64)}
+type Plan{T<:fftwNumber}
     plan::Ptr{Void}
     sz::Dims # size of array on which plan operates (Int tuple)
     istride::Dims # strides of input
@@ -192,11 +217,11 @@ type Plan{T<:Union(Float64, Complex128, Float32, Complex64)}
         return p
     end
 end
-Plan{T<:Union(Float64, Complex128, Float32, Complex64)}(plan::Ptr{Void}, X::StridedArray{T}) = Plan{T}(plan, size(X), strides(X), alignment_of(X))
+Plan{T<:fftwNumber}(plan::Ptr{Void}, X::StridedArray{T}) = Plan{T}(plan, size(X), strides(X), alignment_of(X))
 
 # Check whether a Plan is applicable to a given input array, and
 # throw an informative error if not:
-function assert_applicable{T<:Union(Float64, Complex128, Float32, Complex64)}(p::Plan{T}, X::StridedArray{T})
+function assert_applicable{T<:fftwNumber}(p::Plan{T}, X::StridedArray{T})
     if size(X) != p.sz
         throw(ArgumentError("FFTW plan applied to wrong-size array"))
     elseif strides(X) != p.istride
@@ -230,6 +255,31 @@ function dims_howmany(X::StridedArray, Y::StridedArray,
     return (dims, howmany)
 end
 
+# check & convert kinds into int32 array with same length as region
+function fix_kinds(region, kinds)
+    if length(kinds) != length(region)
+        if length(kinds) > length(region)
+            throw(ArgumentError("too many transform kinds"))
+        else
+            if length(kinds) == 0
+                throw(ArgumentError("must supply a transform kind"))
+            end
+            k = Array(Int32, length(region))
+            k[1:length(kinds)] = [kinds...]
+            k[length(kinds)+1:end] = kinds[end]
+            kinds = k
+        end
+    else
+        kinds = int32([kinds...])
+    end
+    for i = 1:length(kinds)
+        if kinds[i] < 0 || kinds[i] > 10
+            throw(ArgumentError("invalid transform kind"))
+        end
+    end
+    return kinds
+end
+
 # low-level Plan creation (for internal use in FFTW module)
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
@@ -239,7 +289,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                         region, direction::Integer,
                         flags::Unsigned, timelimit::Real)
         set_timelimit($Tr, timelimit)
-        (dims, howmany) = dims_howmany(X, Y, [size(X)...], region)
+        dims, howmany = dims_howmany(X, Y, [size(X)...], region)
         plan = ccall(($(string(fftw,"_plan_guru64_dft")),$lib),
                      Ptr{Void},
                      (Int32, Ptr{Int}, Int32, Ptr{Int},
@@ -247,8 +297,8 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                      size(dims,2), dims, size(howmany,2), howmany,
                      X, Y, direction, flags)
         set_timelimit($Tr, NO_TIMELIMIT)
-        if plan == C_NULL # shouldn't normally happen
-            error("FFTW could not create plan")
+        if plan == C_NULL
+            error("FFTW could not create plan") # shouldn't normally happen
         end
         return Plan(plan, X)
     end
@@ -257,7 +307,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                         region, flags::Unsigned, timelimit::Real)
         region = circshift([region...],-1) # FFTW halves last dim
         set_timelimit($Tr, timelimit)
-        (dims, howmany) = dims_howmany(X, Y, [size(X)...], region)
+        dims, howmany = dims_howmany(X, Y, [size(X)...], region)
         plan = ccall(($(string(fftw,"_plan_guru64_dft_r2c")),$lib),
                      Ptr{Void},
                      (Int32, Ptr{Int}, Int32, Ptr{Int},
@@ -265,8 +315,8 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                      size(dims,2), dims, size(howmany,2), howmany,
                      X, Y, flags)
         set_timelimit($Tr, NO_TIMELIMIT)
-        if plan == C_NULL # shouldn't normally happen
-            error("FFTW could not create plan")
+        if plan == C_NULL
+            error("FFTW could not create plan") # shouldn't normally happen
         end
         return Plan(plan, X)
     end
@@ -275,7 +325,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                         region, flags::Unsigned, timelimit::Real)
         region = circshift([region...],-1) # FFTW halves last dim
         set_timelimit($Tr, timelimit)
-        (dims, howmany) = dims_howmany(X, Y, [size(Y)...], region)
+        dims, howmany = dims_howmany(X, Y, [size(Y)...], region)
         plan = ccall(($(string(fftw,"_plan_guru64_dft_c2r")),$lib),
                      Ptr{Void},
                      (Int32, Ptr{Int}, Int32, Ptr{Int},
@@ -283,8 +333,50 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                      size(dims,2), dims, size(howmany,2), howmany,
                      X, Y, flags)
         set_timelimit($Tr, NO_TIMELIMIT)
-        if plan == C_NULL # shouldn't normally happen
-            error("FFTW could not create plan")
+        if plan == C_NULL
+            error("FFTW could not create plan") # shouldn't normally happen
+        end
+        return Plan(plan, X)
+    end
+
+    @eval function Plan_r2r(X::StridedArray{$Tr}, Y::StridedArray{$Tr},
+                            region, kinds,
+                            flags::Unsigned, timelimit::Real)
+        kinds = fix_kinds(region, kinds)
+        set_timelimit($Tr, timelimit)
+        dims, howmany = dims_howmany(X, Y, [size(X)...], region)
+        plan = ccall(($(string(fftw,"_plan_guru64_r2r")),$lib),
+                     Ptr{Void},
+                     (Int32, Ptr{Int}, Int32, Ptr{Int},
+                      Ptr{$Tr}, Ptr{$Tr}, Ptr{Int32}, Uint32),
+                     size(dims,2), dims, size(howmany,2), howmany,
+                     X, Y, kinds, flags)
+        set_timelimit($Tr, NO_TIMELIMIT)
+        if plan == C_NULL
+            error("FFTW could not create plan") # shouldn't normally happen
+        end
+        return Plan(plan, X)
+    end
+
+    # support r2r transforms of complex = transforms of real & imag parts
+    @eval function Plan_r2r(X::StridedArray{$Tc}, Y::StridedArray{$Tc},
+                            region, kinds,
+                            flags::Unsigned, timelimit::Real)
+        kinds = fix_kinds(region, kinds)
+        set_timelimit($Tr, timelimit)
+        dims, howmany = dims_howmany(X, Y, [size(X)...], region)
+        dims[2:3, 1:size(dims,2)] *= 2
+        howmany[2:3, 1:size(howmany,2)] *= 2
+        howmany = [howmany [2,1,1]] # append loop over real/imag parts
+        plan = ccall(($(string(fftw,"_plan_guru64_r2r")),$lib),
+                     Ptr{Void},
+                     (Int32, Ptr{Int}, Int32, Ptr{Int},
+                      Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Uint32),
+                     size(dims,2), dims, size(howmany,2), howmany,
+                     X, Y, kinds, flags)
+        set_timelimit($Tr, NO_TIMELIMIT)
+        if plan == C_NULL
+            error("FFTW could not create plan") # shouldn't normally happen
         end
         return Plan(plan, X)
     end
@@ -293,8 +385,8 @@ end
 
 # Convert arrays of numeric types to FFTW-supported packed complex-float types
 # (FIXME: is there a way to use the Julia promotion rules more cleverly here?)
-complexfloat{T<:Union(Complex128,Complex64)}(X::StridedArray{T}) = X
-complexfloat{T<:Union(Float64,Float32)}(X::StridedArray{T}) = complex(X)
+complexfloat{T<:fftwComplex}(X::StridedArray{T}) = X
+complexfloat{T<:fftwReal}(X::StridedArray{T}) = complex(X)
 complexfloat{T<:Real}(X::StridedArray{T}) = complex128(X)
 complexfloat{T<:Complex}(X::StridedArray{T}) = complex128(X)
 
@@ -317,7 +409,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
     plan_f = symbol(string("plan_",f))
     plan_f! = symbol(string("plan_",f,"!"))
     @eval begin
-        function $f{T<:Union(Complex128,Complex64)}(X::StridedArray{T}, region)
+        function $f{T<:fftwComplex}(X::StridedArray{T}, region)
             Y = similar(X, T)
             p = Plan(X, Y, region, $direction, ESTIMATE, NO_TIMELIMIT)
             execute(T, p.plan)
@@ -326,7 +418,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
         end
 
         # in-place version
-        function $f!{T<:Union(Complex128,Complex64)}(X::StridedArray{T},region)
+        function $f!{T<:fftwComplex}(X::StridedArray{T},region)
             p = Plan(X, X, region, $direction, ESTIMATE, NO_TIMELIMIT)
             execute(T, p.plan)
             # do not destroy_plan ... see above note on gc
@@ -338,7 +430,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
             return $f!(Y, region)
         end
 
-        function $plan_f{T<:Union(Complex128,Complex64)}(X::StridedArray{T},
+        function $plan_f{T<:fftwComplex}(X::StridedArray{T},
                                                          region, 
                                                          flags::Unsigned,
                                                          tlim::Real)
@@ -364,7 +456,7 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
             end
         end
         
-        function $plan_f!{T<:Union(Complex128,Complex64)}(X::StridedArray{T},
+        function $plan_f!{T<:fftwComplex}(X::StridedArray{T},
                                                           region,
                                                           flags::Unsigned,
                                                           tlim::Real)
@@ -619,8 +711,75 @@ plan_rfft(x::Real, dims, flags, tlim) = plan_rfft(x, dims)
 plan_irfft(x::Number, d::Integer, dims, flags, tlim) = plan_irfft(x, d, dims)
 plan_brfft(x::Number, d::Integer, dims, flags, tlim) = plan_brfft(x, d, dims)
 
-# NOTE: Using MEASURE and PATIENT zeros out the input the 
-# first time it is used for a particular size. Use ESTIMATE
+# FFTW r2r transforms (low-level interface)
+
+function r2r{T<:fftwNumber}(X::StridedArray{T}, kinds, region)
+    Y = similar(X, T)
+    p = Plan_r2r(X, Y, region, kinds, ESTIMATE, NO_TIMELIMIT)
+    execute(T, p.plan)
+    # do not destroy_plan ... see above note on gc
+    return Y
+end
+
+function r2r!{T<:fftwNumber}(X::StridedArray{T}, kinds, region)
+    p = Plan_r2r(X, X, region, kinds, ESTIMATE, NO_TIMELIMIT)
+    execute(T, p.plan)
+    # do not destroy_plan ... see above note on gc
+    return X
+end
+
+r2r{T<:Real}(X::StridedArray{T}, kinds, region) = r2r!(float(X), kinds, region)
+r2r{T<:Complex}(X::StridedArray{T}, kinds, region) = r2r!(complexfloat(X), kinds, region)
+
+for f in (:r2r, :r2r!)
+    @eval $f(X, kinds) = $f(X, kinds, 1:ndims(X))
+end
+
+function plan_r2r{T<:fftwNumber}(
+    X::StridedArray{T}, kinds, region, flags::Unsigned, tlim::Real)
+    Y = similar(X, T)
+    p = Plan_r2r(X, Y, region, kinds, flags, tlim)
+    return Z::StridedArray{T} -> begin
+        assert_applicable(p, Z)
+        W = similar(Z, T)
+        execute_r2r(p.plan, Z, W)
+        return W
+    end
+end
+
+function plan_r2r{T<:Number}(X::StridedArray{T}, kinds, region,
+                             flags::Unsigned, tlim::Real)
+    Y = T<:Complex ? complexfloat(X) : float(X)
+    p = Plan_r2r(Y, Y, region, kinds, flags, tlim)
+    return Z::StridedArray{T} -> begin
+        W = T<:Complex ? complexfloat(Z) : float(Z)
+        execute_r2r(p.plan, W, W)
+        return W
+    end
+end
+
+function plan_r2r!{T<:fftwNumber}(
+    X::StridedArray{T}, kinds,region,flags::Unsigned, tlim::Real)
+    p = Plan_r2r(X, X, region, kinds, flags, tlim)
+    return Z::StridedArray{T} -> begin
+        assert_applicable(p, Z)
+        execute_r2r(p.plan, Z, Z)
+        return Z
+    end
+end
+
+for f in (:plan_r2r, :plan_r2r!)
+    @eval begin
+        $f(X, kinds, region, flags) = $f(X, kinds, region, flags, NO_TIMELIMIT)
+        $f(X, kinds, region) = $f(X, kinds, region, ESTIMATE, NO_TIMELIMIT)
+        $f(X, kinds) = $f(X, kinds, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
+    end
+end
+
+# FFTW-based transpose routines
+#   TODO: implement in-place transpose! routine (this is supported by FFTW)
+#   TODO: fftw/fftwf can transpose matrices of any type, provided that the
+#         element size is a multiple of sizeof(double) or sizeof(float).
 
 for (libname, fname, elty) in ((:libfftw ,"fftw_plan_guru64_r2r",:Float64),
                                (:libfftwf,"fftwf_plan_guru64_r2r",:Float32))
