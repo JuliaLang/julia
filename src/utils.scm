@@ -36,6 +36,16 @@
 	   (any (lambda (x) (contains p x))
 		expr))))
 
+(define (butlast lst)
+  (if (or (null? lst) (null? (cdr lst)))
+      '()
+      (cons (car lst) (butlast (cdr lst)))))
+
+(define (last lst)
+  (if (null? (cdr lst))
+      (car lst)
+      (last (cdr lst))))
+
 (define *gensyms* '())
 (define *current-gensyms* '())
 (define *gensy-counter* 1)
