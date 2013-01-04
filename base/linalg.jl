@@ -142,7 +142,7 @@ function ishermitian(A::AbstractMatrix)
     return true
 end
 
-ishermitian(x::Number) = isreal(x)
+ishermitian(x::Number) = (x == conj(x))
 
 function istriu(A::AbstractMatrix)
     m, n = size(A)
