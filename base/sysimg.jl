@@ -104,6 +104,7 @@ include("libc.jl")
 include("env.jl")
 include("errno_h.jl")
 include("file.jl")
+include("path.jl")
 include("stat.jl")
 
 # front end

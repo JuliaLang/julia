@@ -1,15 +1,3 @@
-## paths
-
-@unix_only begin
-    @test split_extension(".bashrc") == (".bashrc","")
-    @test split_extension("/dir/.bashrc") == ("/dir/.bashrc","")
-    @test split_extension("a.b/a") == ("a.b/a","")
-    @test split_extension("a/a.b.c") == ("a/a.b",".c")
-
-    @test split_path("a/b/c") == ["a","b","c"]
-    @test split_path("a//b/c") == ["a","b","c"]
-end
-
 #############################################
 # Create some temporary files & directories #
 #############################################
@@ -17,7 +5,7 @@ end
 # If so, create the directories and files manually, and comment out this section
 # (Or fix up the code to support such operations on Windows!)
 dir = mktempdir()
-file = file_path(dir, "afile.txt")
+file = joinpath(dir, "afile.txt")
 touch(file)
 
 #######################################################################
@@ -41,7 +29,7 @@ run(`chmod +w $file`)
 @test mtime(file) >= mtime(dir)
 
 # rename file
-newfilename = file_path(dir, "bfile.txt")
+newfilename = joinpath(dir, "bfile.txt")
 mv(file, newfilename)
 @test ispath(file) == false
 @test isfile(newfilename) == true

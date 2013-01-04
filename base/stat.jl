@@ -108,3 +108,6 @@ filemode(path::String) = stat(path).mode
 filesize(path::String) = stat(path).size
    mtime(path::String) = stat(path).mtime
    ctime(path::String) = stat(path).ctime
+
+samefile(a::Stat, b::Stat) = a.device==b.device && a.inode==b.inode
+samefile(a::String, b::String) = samefile(stat(a),stat(b))
