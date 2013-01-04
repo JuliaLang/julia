@@ -8,8 +8,6 @@ function scale!{T<:Number}(X::StridedArray{T}, s::Real)
     return X
 end
 
-scale(X, s) = scale!(copy(X), s)
-
 cross(a::Vector, b::Vector) =
     [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 

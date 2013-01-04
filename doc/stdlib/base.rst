@@ -1438,6 +1438,10 @@ Basic functions
 
    Counts the number of nonzero values in A
 
+.. function:: scale!(A, k)
+
+   Scale the contents of an array A with k (in-place)
+
 .. function:: stride(A, k)
 
    Returns the distance in memory (in number of elements) between adjacent elements in dimension k
