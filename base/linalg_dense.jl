@@ -809,6 +809,22 @@ end
 null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
 null(a::StridedVector) = null(reshape(a, length(a), 1))
 
+function cond(A::StridedMatrix, p) 
+    if p == 2
+        v = svdvals(A)
+        maxv = max(v)
+        cnd = maxv == 0.0 ? Inf : maxv / min(v)
+    elseif p == 1 || p == Inf
+        m, n = size(A)
+        if m != n; error("Use 2-norm for non-square matrices"); end
+        cnd = 1 / LAPACK.gecon!(p == 1 ? '1' : 'I', lud(A).lu, norm(A, p))
+    else
+        error("Norm type must be 1, 2 or Inf")
+    end
+    return cnd
+end
+cond(A::StridedMatrix) = cond(A, 2)
+
 #### Specialized matrix types ####
 
 ## Symmetric tridiagonal matrices
