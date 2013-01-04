@@ -1,2 +1,2 @@
-load("default")
-load("extra")
+include("default.jl")
+include("extra.jl")

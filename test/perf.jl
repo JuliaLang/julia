@@ -1,1 +1,1 @@
-with_output_to_string(@thunk load("perf/perf"))
+with_output_to_string(@thunk include("perf/perf.jl"))
