@@ -131,11 +131,12 @@ else
 LLVM_BUILDDIR = build/Release
 endif
 
-LLVM_OBJ_TARGET = $(BUILD)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+LLVM_LIB_FILE = libLLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
+LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 ifeq ($(OS),WINNT)
-	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/LLVM-$(LLVM_VER).$(SHLIB_EXT)
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/LLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
 else
-	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/$(LLVM_LIB_FILE)
 endif
 
 compile-llvm: $(LLVM_OBJ_SOURCE)
@@ -246,7 +247,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build install
-	$(INSTALL_NAME_CMD)libLLVM-$(LLVM_VER).$(SHLIB_EXT) $(BUILD)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)$(LLVM_LIB_FILE) $(BUILD)/lib/$(LLVM_LIB_FILE)
 	touch $@
 
 clean-llvm:
