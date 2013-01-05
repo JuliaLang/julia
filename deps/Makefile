@@ -13,9 +13,9 @@ BUILD_LLDB = 0
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
-ifneq ($(HOST),)
+ifneq ($(XC_HOST),)
 CONFIG_GUESS := $(shell ./config.guess)
-CONFIGURE_COMMON += --host=$(HOST) --build=$(CONFIG_GUESS)
+CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
 endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw clp unwind lighttpd gmp glpk patchelf
@@ -25,7 +25,7 @@ endif
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
+STAGE1_DEPS = uv openlibm-extras random rmath double-conversion glpk
 STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -41,6 +41,10 @@ WGET = $(abspath .)/jldownload
 WGET_DASH_O = $(WGET)
 
 ## USE_SYSTEM_LIBS options
+
+ifeq ($(USE_SYSTEM_LIBM), 0)
+STAGE1_DEPS += openlibm
+endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
 STAGE1_DEPS += llvm
@@ -127,11 +131,12 @@ else
 LLVM_BUILDDIR = build/Release
 endif
 
-LLVM_OBJ_TARGET = $(BUILD)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+LLVM_LIB_FILE = libLLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
+LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 ifeq ($(OS),WINNT)
-	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/LLVM-$(LLVM_VER).$(SHLIB_EXT)
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/LLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
 else
-	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/$(LLVM_LIB_FILE)
 endif
 
 compile-llvm: $(LLVM_OBJ_SOURCE)
@@ -237,6 +242,14 @@ ifeq ($(ARCH), ppc64)
   LLVM_FLAGS += CXXFLAGS=-mminimal-toc
 endif
 
+ifeq (exists, $(shell [ -e llvm-$(LLVM_VER)/config.log ] && echo exists ))
+# temporary hack to force rebuild of llvm if it was previously configured
+# in the source directory
+llvm-$(LLVM_VER)/configure: FORCE_LLVM_RECONFIGURE
+FORCE_LLVM_RECONFIGURE:
+	rm -rf llvm-$(LLVM_VER)
+endif
+
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build && cd build && \
@@ -246,7 +259,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build install
-	$(INSTALL_NAME_CMD)libLLVM-$(LLVM_VER).$(SHLIB_EXT) $(BUILD)/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)$(LLVM_LIB_FILE) $(BUILD)/lib/$(LLVM_LIB_FILE)
 	touch $@
 
 clean-llvm:
@@ -460,22 +473,48 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
-install-openlibm: $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+install-openlibm: $(OPENLIBM_OBJ_TARGET) 
 
 clean-openlibm:
 	-$(MAKE) -C openlibm distclean
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm      
 
+# openlibm-extras
+
+OPENLIBMEXT_OBJ_TARGET = $(BUILD)/lib/libopenlibm-extras.$(SHLIB_EXT)
+OPENLIBMEXT_OBJ_SOURCE = openlibm/libopenlibm-extras.$(SHLIB_EXT)
+
+openlibm-extras/Makefile:
+	(cd .. && git submodule init && git submodule update)
+ifeq (exists, $(shell [ -d openlibm/.git ] && echo exists ))
+$(OPENLIBMEXT_OBJ_SOURCE): openlibm/.git/HEAD
+endif
+ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
+$(OPENLIBMEXT_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
+endif
+$(OPENLIBMEXT_OBJ_SOURCE): openlibm/Makefile.extras
+	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+$(OPENLIBMEXT_OBJ_TARGET): $(OPENLIBMEXT_OBJ_SOURCE) | $(BUILD)/lib
+	cp $< $@
+	$(INSTALL_NAME_CMD)libopenlibm-extras.$(SHLIB_EXT) $@
+install-openlibm-extras: $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+
+clean-openlibm-extras:
+	-$(MAKE) -C openlibm -f Makefile.extras distclean
+	-rm $(OPENLIBMEXT_OBJ_TARGET)
+distclean-openlibm-extras: clean-openlibm-extras
+
+
 # Wrapper for openlibm/Faddeeva since ccall doesn't support C99 complex:
-$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBM_OBJ_TARGET)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm
+$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBMEXT_OBJ_TARGET)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm-extras
 	$(INSTALL_NAME_CMD)libFaddeeva_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 
 clean-Faddeeva-wrapper:
-	-rm -f $(OPENLIBM_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
+	-rm -f $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 distclean-Faddeeva-wrapper: clean-Faddeeva-wrapper
 
 ## Rmath ##
@@ -1032,7 +1071,7 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure $(CONFIGURE_COMMON) --enable-shared --disable-static
+	./configure --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)"
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
 ifeq ($(OS),$(BUILD_OS))
@@ -1131,7 +1170,7 @@ else
 ZLIB_OBJ_TARGET = $(BUILD)/lib/libz.$(SHLIB_EXT)
 ZLIB_CONFIGFLAGS = CFLAGS="-O3 $(CFLAGS) -D_FILE_OFFSET_BITS=64"
 ifneq ($(OS),$(BUILD_OS))
-ZLIB_CONFIGFLAGS += CHOST=$(HOST)
+ZLIB_CONFIGFLAGS += CHOST=$(XC_HOST)
 else
 ZLIB_CONFIGFLAGS += CC="$(CC)"
 endif

@@ -149,7 +149,9 @@ The "declaration" behavior only occurs in specific contexts::
     x::Int8 = 10   # as the left-hand side of an assignment
 
 In value contexts, such as ``f(x::Int8)``, the ``::`` is a type
-assertion again and not a declaration.
+assertion again and not a declaration. Note that these declarations
+cannot be used in global scope currently, in the REPL, since julia
+does not yet have constant-type globals.
 
 .. _man-abstract-types:
 

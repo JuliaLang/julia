@@ -82,19 +82,22 @@ end
 
 ## srand()
 
-function srand(seed::Uint32)
-    global RANDOM_SEED = seed
-    dsfmt_gv_init_gen_rand(seed)
-end
-
 function srand(seed::Vector{Uint32})
     global RANDOM_SEED = seed
     dsfmt_gv_init_by_array(seed)
 end
+srand(n::Integer) = srand(make_seed(n))
 
-srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
-srand(seed::Int32) = srand(uint32(seed))
-srand(seed::Int64) = srand(uint64(seed))
+function make_seed(n::Integer)
+    seed = Uint32[]
+    while true
+        push(seed, n & 0xffffffff)
+        n >>= 32
+        if n == 0 || ~n == 0
+            return seed
+        end
+    end
+end
 
 function srand(filename::String, n::Integer)
     open(filename) do io
@@ -121,7 +124,6 @@ rand(r::Rng, dims::Int...) = rand(r, dims)
 ## random integers
 
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
-
 dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
 
 randi(::Type{Uint32})  = dsfmt_randui32()

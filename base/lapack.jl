@@ -12,6 +12,10 @@ type LapackException <: Exception
     info::BlasInt
 end
 
+type SingularException <: Exception
+    info::BlasInt
+end
+
 type LapackDimMisMatch <: Exception
     name::ASCIIString
 end
@@ -1515,4 +1519,75 @@ for (syevr, elty, relty) in
 end
 syevr!(A::StridedMatrix, Z::StridedMatrix) = syevr!('V', 'A', 'U', A, 0.0, 0.0, 0, 0, Z, -1.0)
 syevr!{T}(A::StridedMatrix{T}) = syevr!('N', 'A', 'U', A, 0.0, 0.0, 0, 0, zeros(T,0,0), -1.0)
+
+# Estimate condition number
+for (gecon, elty) in
+    ((:dgecon_,:Float64),
+     (:sgecon_,:Float32))
+    @eval begin
+        function gecon!(normtype::BlasChar, A::StridedMatrix{$elty}, anorm::$elty)
+#                   SUBROUTINE DGECON( NORM, N, A, LDA, ANORM, RCOND, WORK, IWORK,
+#      $                   INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          NORM
+#       INTEGER            INFO, LDA, N
+#       DOUBLE PRECISION   ANORM, RCOND
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IWORK( * )
+#       DOUBLE PRECISION   A( LDA, * ), WORK( * )
+            chkstride1(A)
+            n = size(A, 2)
+            lda = max(1, size(A, 1))
+            rcond = Array($elty, 1)
+            work = Array($elty, 4n)
+            iwork = Array(BlasInt, n)
+            info = Array(BlasInt, 1)
+            ccall(($(string(gecon)),liblapack), Void,
+                (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{BlasInt}),
+                &normtype, &n, A, &lda,
+                &anorm, rcond, work, iwork,
+                info)
+            if info[1] != 0 throw(LapackException(info[1])) end
+            return rcond[1]
+        end
+    end
+end
+for (gecon, elty, relty) in
+    ((:zgecon_,:Complex128,:Float64),
+     (:cgecon_,:Complex64,:Float32))
+    @eval begin
+        function gecon!(normtype::BlasChar, A::StridedMatrix{$elty}, anorm::$relty)
+            chkstride1(A)
+#       SUBROUTINE ZGECON( NORM, N, A, LDA, ANORM, RCOND, WORK, RWORK,
+#      $                   INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          NORM
+#       INTEGER            INFO, LDA, N
+#       DOUBLE PRECISION   ANORM, RCOND
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   RWORK( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * )
+            chkstride1(A)
+            n = size(A, 2)
+            lda = max(1, size(A, 1))
+            rcond = Array($relty, 1)
+            work = Array($elty, 2n)
+            rwork = Array(BlasInt, 2n)
+            info = Array(BlasInt, 1)
+            ccall(($(string(gecon)),liblapack), Void,
+                (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                    Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty},
+                    Ptr{BlasInt}),
+                &normtype, &n, A, &lda, 
+                &anorm, rcond, work, rwork,
+                info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            return rcond[1]
+        end
+    end
+end
 end # module

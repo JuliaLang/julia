@@ -3,17 +3,19 @@
 
 const color_normal = "\033[0m"
 
+text_colors = {:black   => "\033[1m\033[30m",
+               :red     => "\033[1m\033[31m",
+               :green   => "\033[1m\033[32m",
+               :yellow  => "\033[1m\033[33m",
+               :blue    => "\033[1m\033[34m",
+               :magenta => "\033[1m\033[35m",
+               :cyan    => "\033[1m\033[36m",
+               :white   => "\033[1m\033[37m"
+               :normal  => color_normal}
+
 function answer_color()
-    c = get(ENV, "JL_ANSWER_COLOR", "")
-    return c == "black"   ? "\033[1m\033[30m" :
-           c == "red"     ? "\033[1m\033[31m" :
-           c == "green"   ? "\033[1m\033[32m" :
-           c == "yellow"  ? "\033[1m\033[33m" :
-           c == "magenta" ? "\033[1m\033[35m" :
-           c == "cyan"    ? "\033[1m\033[36m" :
-           c == "white"   ? "\033[1m\033[37m" :
-           c == "normal"  ? color_normal  :
-           "\033[1m\033[34m"
+    c = symbol(get(ENV, "JL_ANSWER_COLOR", ""))
+    return get(text_colors, c, "\033[1m\033[34m")
 end
 
 banner() = print(have_color ? banner_color : banner_plain)
@@ -185,7 +187,7 @@ function process_options(args::Array{Any,1})
         if args[i]=="-q" || args[i]=="--quiet"
             quiet = true
         elseif args[i]=="--worker"
-            start_worker()
+            start_worker(args[i+1])
             # doesn't return
         elseif args[i]=="-e"
             # TODO: support long options
@@ -338,3 +340,18 @@ function _atexit()
         end
     end
 end
+
+# Have colors passed as simple symbols: :black, :red, ...
+function print_with_color(msg::String, color::Symbol)
+    if have_color
+        default = color_normal
+        printed_color = get(text_colors, color, default)
+        print(OUTPUT_STREAM, printed_color, msg, default)
+    else
+        print(OUTPUT_STREAM, msg)
+    end
+end
+
+# Use colors to print messages and warnings in the REPL
+info(msg::String) = print_with_color(strcat("MESSAGE: ", msg, "\n"), :green)
+warn(msg::String) = print_with_color(strcat("WARNING: ", msg, "\n"), :red)

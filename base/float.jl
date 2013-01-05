@@ -70,7 +70,7 @@ iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround64(unbox(Float64,x)))
 # TODO: Int128
 
 # this is needed very early because it is used by Range and colon
-floor(x::Float64) = ccall((:floor,:libopenlibm), Float64, (Float64,), x)
+floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
 
 iceil(x::FloatingPoint)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
 ifloor(x::FloatingPoint) = itrunc(floor(x)) # TOOD: fast primitive for ifloor

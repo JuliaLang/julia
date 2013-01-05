@@ -12,6 +12,7 @@ runtests("iostring")
 runtests("arrayops")
 runtests("linalg")
 runtests("fft")
+runtests("dct")
 runtests("sparse")
 runtests("bitarray")
 

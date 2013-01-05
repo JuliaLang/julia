@@ -60,6 +60,8 @@ function dot(x::Vector, y::Vector)
     s
 end
 
+dot(x::Number, y::Number) = conj(x) * y
+
 # Matrix-vector multiplication
 
 function (*){T<:BlasFloat}(A::StridedMatrix{T},
@@ -211,6 +213,7 @@ function gemv{T<:BlasFloat}(y::StridedVector{T},
 
     if nA != length(x); error("*: argument shapes do not match"); end
     if mA != length(y); error("*: output size is incorrect"); end
+    if mA == 0; return zeros(T, 0); end
 
     BLAS.gemv!(tA, one(T), A, x, zero(T), y)
 end
@@ -319,11 +322,7 @@ end
 (*){T,S}(A::StridedMatrix{T}, B::StridedVector{S}) = generic_matvecmul('N', A, B)
 
 function generic_matvecmul{T,S}(tA, A::StridedMatrix{T}, B::StridedVector{S})
-    if tA == 'N'
-        C = Array(promote_type(T,S), size(A, 1))
-    else
-        C = Array(promote_type(T,S), size(A, 2))
-    end
+    C = Array(promote_type(T,S), size(A, tA=='N' ? 1 : 2))
     generic_matvecmul(C, tA, A, B)
 end
 
@@ -552,9 +551,7 @@ end
 
 # multiply 2x2 matrices
 function matmul2x2{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
-    R = promote_type(T,S)
-    C = Array(R, 2, 2)
-    matmul2x2(C, tA, tB, A, B)
+    matmul2x2(Array(promote_type(T,S), 2, 2), tA, tB, A, B)
 end
 
 function matmul2x2{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
@@ -583,9 +580,7 @@ end
 
 # Multiply 3x3 matrices
 function matmul3x3{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
-    R = promote_type(T,S)
-    C = Array(R, 3, 3)
-    matmul3x3(C, tA, tB, A, B)
+    matmul3x3(Array(promote_type(T,S), 3, 3), tA, tB, A, B)
 end
 
 function matmul3x3{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})

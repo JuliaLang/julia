@@ -28,6 +28,8 @@ copysign(x::Signed, y::Real)    = copysign(x, -oftype(x,signbit(y)))
 abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
+~(n::Integer) = -n-1
+
 ## number-theoretic functions ##
 
 function gcd{T<:Integer}(a::T, b::T)

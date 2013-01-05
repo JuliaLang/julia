@@ -83,10 +83,21 @@
 		   e)
 	      (reverse a)))))
 
-(define (expand-update-operator op lhs rhs)
+(define (expand-update-operator- op lhs rhs)
   (let ((e (remove-argument-side-effects lhs)))
     `(block ,@(cdr e)
 	    (= ,(car e) (call ,op ,(car e) ,rhs)))))
+
+(define (expand-update-operator op lhs rhs)
+  (if (and (pair? lhs) (eq? (car lhs) 'ref))
+      ;; expand indexing inside op= first, to remove "end" and ":"
+      (let* ((ex (apply-patterns patterns lhs))
+	     (stmts (butlast (cdr ex)))
+	     (refex (last    (cdr ex)))
+	     (nuref `(ref ,(caddr refex) ,@(cdddr refex))))
+	`(block ,@stmts
+		,(expand-update-operator- op nuref rhs)))
+      (expand-update-operator- op lhs rhs)))
 
 ; (a > b > c) => (call & (call > a b) (call > b c))
 (define (expand-compare-chain e)
@@ -1011,7 +1022,7 @@
 						`(call (top next) ,coll ,state))
 		       ,body))))))
 
-   ; update operators
+   ;; update operators
    (pattern-lambda (+= a b)     (expand-update-operator '+ a b))
    (pattern-lambda (-= a b)     (expand-update-operator '- a b))
    (pattern-lambda (*= a b)     (expand-update-operator '* a b))
@@ -1099,75 +1110,7 @@
 			 (error "ccall argument types must be a tuple; try (T,)"))
 		     (lower-ccall name RT (cdr argtypes) args)))
 
-   )) ; patterns
-
-;; Comprehensions
-
-(define (lower-nd-comprehension atype expr ranges)
-  (let ((result    (gensy))
-	(ri        (gensy))
-	(oneresult (gensy)))
-    ;; evaluate one expression to figure out type and size
-    ;; compute just one value by inserting a break inside loops
-    (define (evaluate-one ranges)
-      (if (null? ranges)
-	  `(= ,oneresult ,expr)
-	  (if (eq? (car ranges) `:)
-	      (evaluate-one (cdr ranges))
-	      `(for ,(car ranges)
-		    (block ,(evaluate-one (cdr ranges))
-			   (break)) ))))
-
-    ;; compute the dimensions of the result
-    (define (compute-dims ranges oneresult-dim)
-      (if (null? ranges)
-	  (list)
-	  (if (eq? (car ranges) `:)
-	      (cons `(call (top size) ,oneresult ,oneresult-dim)
-		    (compute-dims (cdr ranges) (+ oneresult-dim 1)))
-	      (cons `(call (top length) ,(caddr (car ranges)))
-		    (compute-dims (cdr ranges) oneresult-dim)) )))
-
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges iters oneresult-dim)
-      (if (null? ranges)
-	  (if (null? iters)
-	      `(block (call (top assign) ,result ,expr ,ri)
-		      (+= ,ri 1))
-	      `(block (call (top assign) ,result (ref ,expr ,@(reverse iters)) ,ri)
-		      (+= ,ri 1)) )
-	  (if (eq? (car ranges) `:)
-	      (let ((i (gensy)))
-		`(for (= ,i (: 1 (call (top size) ,oneresult ,oneresult-dim)))
-		      ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
-	      `(for ,(car ranges)
-		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
-
-    (define (get-eltype)
-      (if (null? atype)
-	`((call (top eltype) ,oneresult))
-	`(,atype)))
-
-    ;; Evaluate the comprehension
-    `(scope-block
-      (block
-       (= ,oneresult (tuple))
-       ,(evaluate-one ranges)
-       (= ,result (call (top Array) ,@(get-eltype)
-			,@(compute-dims ranges 1)))
-       (= ,ri 1)
-       ,(construct-loops (reverse ranges) (list) 1)
-       ,result ))))
-
-(define (lhs-vars e)
-  (cond ((symbol? e) (list e))
-	((and (pair? e) (eq? (car e) 'tuple))
-	 (apply append (map lhs-vars (cdr e))))
-	(else '())))
-
-(define lower-comprehensions
-  (pattern-set
-
+   ;; comprehensions
    (pattern-lambda
     (comprehension expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
@@ -1315,8 +1258,69 @@
 	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result)))))))
 
-)) ;; lower-comprehensions
+   )) ; patterns
 
+(define (lower-nd-comprehension atype expr ranges)
+  (let ((result    (gensy))
+	(ri        (gensy))
+	(oneresult (gensy)))
+    ;; evaluate one expression to figure out type and size
+    ;; compute just one value by inserting a break inside loops
+    (define (evaluate-one ranges)
+      (if (null? ranges)
+	  `(= ,oneresult ,expr)
+	  (if (eq? (car ranges) `:)
+	      (evaluate-one (cdr ranges))
+	      `(for ,(car ranges)
+		    (block ,(evaluate-one (cdr ranges))
+			   (break)) ))))
+
+    ;; compute the dimensions of the result
+    (define (compute-dims ranges oneresult-dim)
+      (if (null? ranges)
+	  (list)
+	  (if (eq? (car ranges) `:)
+	      (cons `(call (top size) ,oneresult ,oneresult-dim)
+		    (compute-dims (cdr ranges) (+ oneresult-dim 1)))
+	      (cons `(call (top length) ,(caddr (car ranges)))
+		    (compute-dims (cdr ranges) oneresult-dim)) )))
+
+    ;; construct loops to cycle over all dimensions of an n-d comprehension
+    (define (construct-loops ranges iters oneresult-dim)
+      (if (null? ranges)
+	  (if (null? iters)
+	      `(block (call (top assign) ,result ,expr ,ri)
+		      (+= ,ri 1))
+	      `(block (call (top assign) ,result (ref ,expr ,@(reverse iters)) ,ri)
+		      (+= ,ri 1)) )
+	  (if (eq? (car ranges) `:)
+	      (let ((i (gensy)))
+		`(for (= ,i (: 1 (call (top size) ,oneresult ,oneresult-dim)))
+		      ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
+	      `(for ,(car ranges)
+		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
+
+    (define (get-eltype)
+      (if (null? atype)
+	`((call (top eltype) ,oneresult))
+	`(,atype)))
+
+    ;; Evaluate the comprehension
+    `(scope-block
+      (block
+       (= ,oneresult (tuple))
+       ,(evaluate-one ranges)
+       (= ,result (call (top Array) ,@(get-eltype)
+			,@(compute-dims ranges 1)))
+       (= ,ri 1)
+       ,(construct-loops (reverse ranges) (list) 1)
+       ,result ))))
+
+(define (lhs-vars e)
+  (cond ((symbol? e) (list e))
+	((and (pair? e) (eq? (car e) 'tuple))
+	 (apply append (map lhs-vars (cdr e))))
+	(else '())))
 
 ; (op (op a b) c) => (a b c) etc.
 (define (flatten-op op e)
@@ -2230,8 +2234,7 @@ So far only the second case can actually occur.
 (define (julia-expand01 ex)
   (to-LFF
    (pattern-expand patterns
-    (pattern-expand lower-comprehensions
-     (pattern-expand binding-form-patterns ex)))))
+    (pattern-expand binding-form-patterns ex))))
 
 (define (julia-expand0 ex)
   (let ((e (julia-expand-macros ex)))

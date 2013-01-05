@@ -11,16 +11,23 @@
 #include "llvm/Intrinsics.h"
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 2 
+#include "llvm/DebugInfo.h"
+#include "llvm/DIBuilder.h"
+#include "llvm/IRBuilder.h"
+#define LLVM32
+#else
 #include "llvm/Analysis/DebugInfo.h"
 #include "llvm/Analysis/DIBuilder.h"
 #include "llvm/Target/TargetData.h"
+#include "llvm/Support/IRBuilder.h"
+#endif
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
 #include "llvm/Transforms/Vectorize.h"
 #endif
-#include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/DynamicLibrary.h"
@@ -2488,7 +2495,11 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_int32, args2, false),
                          Function::ExternalLinkage, "sigsetjmp", jl_Module);
         //Intrinsic::getDeclaration(jl_Module, Intrinsic::eh_sjlj_setjmp);
+#ifdef LLVM32
+    setjmp_func->addFnAttr(Attributes::ReturnsTwice);
+#else
     setjmp_func->addFnAttr(Attribute::ReturnsTwice);
+#endif
     jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&jl_setjmp_f);
 
     std::vector<Type*> te_args(0);
@@ -2616,15 +2627,16 @@ static void init_julia_llvm_env(Module *m)
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
+#ifndef LLVM32
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
-    
+#endif
     // list of passes from vmkit
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
     FPM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
     
-    //FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     FPM->add(createScalarReplAggregatesPass()); // Break up aggregate allocas
-    //FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     FPM->add(createJumpThreadingPass());        // Thread jumps.
     FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     //FPM->add(createInstructionCombiningPass()); // Combine silly seq's

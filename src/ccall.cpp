@@ -520,7 +520,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     ctx->argDepth = last_depth;
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
+#ifdef LLVM32        
+        ctx->f->addFnAttr(Attributes::StackProtectReq);
+#else
         ctx->f->addFnAttr(Attribute::StackProtectReq);
+#endif
     }
 
     JL_GC_POP();

@@ -16,6 +16,7 @@ file_constants.jl: ../src/file_constants.h
 
 build_h.jl: ../Make.inc ../src/os_detect.h
 	$(QUIET_PERL) $(CC) -E -P -DJULIA ../src/os_detect.h | grep OS_NAME > $@
+	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
 	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
 	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 ifeq ($(USE_LIB64), 1)

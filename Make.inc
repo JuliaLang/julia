@@ -8,11 +8,6 @@ JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
 LLVMROOT = $(BUILD)
 BUILD = $(JULIAHOME)/usr
-
-# List of "private" libraries, e.g. ones that get installed to lib/julia
-JL_PRIVATE_LIBS = Rmath openlibm julia-release suitesparse_wrapper tk_wrapper gmp_wrapper glpk_wrapper random
-JL_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads fftw3f_threads glpk gmp grisu history $(OPENBLASNAME) pcre readline spqr umfpack z
-
 # Directories where said libraries get installed to
 JL_PRIVATE_LIBDIR = lib/julia
 JL_LIBDIR = lib
@@ -25,19 +20,19 @@ JL_LIBDIR = lib/$(MULTIARCH)/
 endif
 
 # Cross-compile
-#HOST = i686-w64-mingw32
+#XC_HOST = i686-w64-mingw32
 
-ifeq ($(HOST),)
+ifeq ($(XC_HOST),)
 CROSS_COMPILE=
 else
-ifeq ($(HOST),i686-w64-mingw32)
+ifeq ($(XC_HOST),i686-w64-mingw32)
 override OS = WINNT
 override ARCH = i686
 #override OPENBLAS_DYNAMIC_ARCH = 1
-override CROSS_COMPILE=$(HOST)-
-export WINEPATH := $(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g') #including $(WINEPATH) seems to fail more often than not
+override CROSS_COMPILE=$(XC_HOST)-
+export WINEPATH := $(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g');$(WINEPATH)
 else
-$(error "unknown HOST variable set")
+$(error "unknown XC_HOST variable set")
 endif
 endif
 
@@ -145,6 +140,7 @@ USE_SYSTEM_LIGHTTPD=0
 USE_SYSTEM_LIBUNWIND=0
 USE_SYSTEM_READLINE=0
 USE_SYSTEM_PCRE=0
+USE_SYSTEM_LIBM=0
 USE_SYSTEM_BLAS=0
 USE_SYSTEM_LAPACK=0
 USE_SYSTEM_FFTW=0
@@ -152,24 +148,9 @@ USE_SYSTEM_GMP=0
 USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_GLPK=0
+USE_SYSTEM_LIGHTTPD=0
 USE_SYSTEM_NGINX=0
 USE_SYSTEM_ZLIB=0
-
-ifeq ($(USE_DEBIAN), 1)
-USE_SYSTEM_LLVM=1
-USE_SYSTEM_LIGHTTPD=1
-USE_SYSTEM_LIBUNWIND=1
-USE_SYSTEM_READLINE=1
-USE_SYSTEM_PCRE=1
-USE_SYSTEM_BLAS=1
-USE_SYSTEM_LAPACK=1
-USE_SYSTEM_FFTW=1
-USE_SYSTEM_GMP=1
-USE_SYSTEM_ARPACK=1
-USE_SYSTEM_SUITESPARSE=1
-USE_SYSTEM_GLPK=1
-USE_SYSTEM_ZLIB=1
-endif
 
 -include $(JULIAHOME)/Make.user
 
@@ -229,6 +210,14 @@ endif
 else
 LIBLAPACK = $(LIBBLAS)
 LIBLAPACKNAME = $(LIBBLASNAME)
+endif
+
+ifeq ($(USE_SYSTEM_LIBM), 1)
+LIBM = -lm
+LIBMNAME = libm
+else
+LIBM = -lopenlibm
+LIBMNAME = libopenlibm
 endif
 
 # OS specific stuff

@@ -22,20 +22,30 @@ function cd_pkgdir(f::Function)
     cd(f,dir)
 end
 
+function print_pkg_status(pkg::String, path::String)
+    if !isdir(path)
+      error("Package repository $path doesn't exist")
+    end
+
+    cd(path) do
+        head = Git.head()
+        ver = Git.attached() ? Git.branch() : cd("..") do
+            Metadata.version(pkg,head)
+        end
+        dirty = Git.dirty() ? " (dirty)" : ""
+        println("$(rpad(pkg,16)) $ver$dirty")
+    end
+end
+
 # show the status packages in the repo
 
 status() = cd_pkgdir() do
     Git.each_submodule(false) do pkg, path, sha1
-        cd(path) do
-            head = Git.head()
-            ver = Git.attached() ? Git.branch() : cd("..") do
-                Metadata.version(pkg,head)
-            end
-            dirty = Git.dirty() ? " (dirty)" : ""
-            println("$(rpad(pkg,16)) $ver$dirty")
-        end
+        print_pkg_status(pkg, path)
     end
 end
+
+status(pkg::String) = print_pkg_status(pkg, "$(julia_pkgdir())/$pkg")
 
 # create a new empty packge repository
 
