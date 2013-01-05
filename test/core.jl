@@ -552,3 +552,17 @@ let
     f1628() = I1628((Integer,Int))
     @test isa(f1628(), I1628{(AbstractKind,BitsKind)})
 end
+
+let
+    fT{T}(x::T) = T
+    @test fT(Any) === AbstractKind
+    @test fT(Int) === BitsKind
+    @test fT(Type{Any}) === AbstractKind
+    @test fT(Type{Int}) === AbstractKind
+
+    ff{T}(x::Type{T}) = T
+    @test ff(Type{Any}) === Type{Any}
+    @test ff(Type{Int}) === Type{Int}
+    @test ff(Any) === Any
+    @test ff(Int) === Int
+end
