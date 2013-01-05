@@ -155,47 +155,51 @@ Ac_mul_Bt{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) 
 
 # Supporting functions for matrix multiplication
 
-function symmetrize!(A::StridedMatrix, upper::Bool)
+function symmetrize!(A::StridedMatrix, UL::BlasChar)
     m, n = size(A)
     if m != n error("symmetrize: Matrix must be square") end
-    if upper
+    if UL == 'U'
         for i = 1:(n-1)
             for j = (i+1):n
                 A[j,i] = A[i,j]
             end
         end
-    else
+    elseif UL == 'L'
         for i = 1:(n-1)
             for j = (i+1):n
                  A[i,j] = A[j,i]
             end
         end
+    else
+        error("Second argument UL should be 'U' or 'L'")
     end
     return A
 end
 
-symmetrize!(A) = symmetrize!(A, true)
+symmetrize!(A) = symmetrize!(A, 'U')
 
-function symmetrize_conj!(A::StridedMatrix, upper::Bool)
+function symmetrize_conj!(A::StridedMatrix, UL::BlasChar)
     m, n = size(A)
     if m != n error("symmetrize: Matrix must be square") end
-    if upper
+    if UL == 'U'
         for i = 1:(n-1)
             for j = (i+1):n
                 A[j,i] = conj(A[i,j])
             end
         end
-    else
+    elseif UL == 'L'
         for i = 1:(n-1)
             for j = (i+1):n
                  A[i,j] = conj(A[j,i])
             end
         end
+    else
+        error("Second argument UL should be 'U' or 'L'")
     end
     return A
 end
 
-symmetrize_conj!(A) = symmetrize_conj!(A, true)
+symmetrize_conj!(A) = symmetrize_conj!(A, 'U')
 
 function gemv{T<:BlasFloat}(y::StridedVector{T},
                              tA,
