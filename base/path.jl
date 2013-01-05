@@ -102,7 +102,7 @@ abspath(path::String) = normpath(isabspath(path) ? path : joinpath(pwd(),path))
 
 function realpath(path::String)
     p = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), path, C_NULL)
-    system_error(:realpath, p != C_NULL)
+    system_error(:realpath, p == C_NULL)
     s = bytestring(p)
     c_free(p)
     return s
