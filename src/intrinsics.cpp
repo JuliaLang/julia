@@ -39,6 +39,7 @@ namespace JL_I {
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
         checked_fptoui32, checked_fptosi32, checked_fptoui64, checked_fptosi64,
+        nan_dom_err,
         // c interface
         ccall,
     };
@@ -936,6 +937,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         raise_exception_unless(emit_eqfui64(x, v), jlinexacterr_var, ctx);
         return v;
     }
+    HANDLE(nan_dom_err,2) {
+        // nan_dom_err(f, x) throw DomainError if isnan(f)&&!isnan(x)
+        Value *f = FP(x); x = FP(y);
+        raise_exception_unless(builder.CreateOr(builder.CreateFCmpORD(f,f),
+                                                builder.CreateFCmpUNO(x,x)),
+                               jldomerr_var, ctx);
+        return f;
+    }
 
     HANDLE(abs_float,1)
     {
@@ -1075,5 +1084,6 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_smul); ADD_I(checked_umul);
     ADD_I(checked_fptosi32); ADD_I(checked_fptoui32);
     ADD_I(checked_fptosi64); ADD_I(checked_fptoui64);
+    ADD_I(nan_dom_err);
     ADD_I(ccall);
 }

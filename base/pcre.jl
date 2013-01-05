@@ -92,6 +92,9 @@ function study(regex::Array{Uint8}, options::Integer)
 end
 study(re::Array{Uint8}) = study(re, int32(0))
 
+free_study(extra::Ptr{Void}) =
+    ccall((:pcre_free_study, :libpcre), Void, (Ptr{Void},), extra)
+
 function exec(regex::Array{Uint8}, extra::Ptr{Void},
               str::ByteString, offset::Integer, options::Integer, cap::Bool)
     if offset < 0 || length(str) < offset

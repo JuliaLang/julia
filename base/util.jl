@@ -64,7 +64,7 @@ function peakflops(n)
     a = rand(n,n)
     t = @elapsed a*a
     t = @elapsed a*a
-    floprate = (2.0*n^3/t)
+    floprate = (2.0*float64(n)^3/t)
     println("The peak flop rate is ", floprate*1e-9, " gigaflops")
     floprate
 end
@@ -173,27 +173,7 @@ end
 methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
                              t.env)
 
-
 # require
-# Store list of files and their load time
-package_list = (ByteString=>Float64)[]
-require(fname::String) = require(bytestring(fname))
-require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
-function require(name::ByteString)
-    path = find_in_path(name)
-    if !has(package_list,path)
-        load_now(name)
-    else
-        # Determine whether the file has been modified since it was last loaded
-        if mtime(path) > package_list[path]
-            load_now(name)
-        end
-    end
-end
-
-# remote/parallel load
-
-include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
 
 function is_file_readable(path)
     s = stat(bytestring(path))
@@ -201,8 +181,8 @@ function is_file_readable(path)
 end
 
 function find_in_path(name::String)
-    name[1] == '/' && return realpath(name)
-    isfile(name) && return realpath(name)
+    name[1] == '/' && return abspath(name)
+    isfile(name) && return abspath(name)
     base = name
     if ends_with(name,".jl")
         base = match(r"^(.*)\.jl$",name).captures[1]
@@ -211,67 +191,80 @@ function find_in_path(name::String)
     end
     for prefix in LOAD_PATH
         path = strcat(prefix,"/",base,"/src/",name)
-        is_file_readable(path) && return realpath(path)
+        is_file_readable(path) && return abspath(path)
         path = strcat(prefix,"/",name)
-        is_file_readable(path) && return realpath(path)
+        is_file_readable(path) && return abspath(path)
     end
-    return realpath(name)
+    return abspath(name)
 end
 
-begin
-local in_load = false
-local in_remote_load = false
-local load_dict = {}
-global load_now, remote_load
-
-load_now(fname::String) = load_now(bytestring(fname))
-function load_now(fname::ByteString)
-    if in_load
-        path = find_in_path(fname)
-        push(load_dict, fname)
-        f = open(path)
-        push(load_dict, readall(f))
-        close(f)
-        include(path)
-        package_list[path] = time()
-        return
-    elseif in_remote_load
-        for i=1:2:length(load_dict)
-            if load_dict[i] == fname
-                return include_string(load_dict[i+1])
-            end
-        end
+function find_in_node1_path(name)
+    if myid()==1
+        return find_in_path(name)
     else
-        in_load = true
-        try
-            load_now(fname)
-            for p = 1:nprocs()
-                if p != myid()
-                    remote_do(p, remote_load, load_dict)
-                end
-            end
-        finally
-            load_dict = {}
-            in_load = false
-        end
+        return remote_call_fetch(1, find_in_path, name)
     end
 end
 
-function remote_load(dict)
-    load_dict = dict
-    in_remote_load = true
+# Store list of files and their load time
+package_list = (ByteString=>Float64)[]
+require(fname::String) = require(bytestring(fname))
+require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
+function require(name::ByteString)
+    if myid() == 1
+        @sync begin
+            for p = 2:nprocs()
+                @spawnat p require(name)
+            end
+        end
+    end
+    path = find_in_node1_path(name)
+    if !has(package_list,path)
+        reload_path(path)
+    end
+end
+
+function reload(name::String)
+    if myid() == 1
+        @sync begin
+            for p = 2:nprocs()
+                @spawnat p reload(name)
+            end
+        end
+    end
+    reload_path(find_in_node1_path(name))
+end
+
+# remote/parallel load
+
+include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
+
+function include_from_node1(path)
+    if myid()==1
+        Core.include(path)
+    else
+        include_string(remote_call_fetch(1, readall, path))
+    end
+end
+
+function reload_path(path)
+    had = has(package_list, path)
+    package_list[path] = time()
     try
-        load_now(dict[1])
-    finally
-        in_remote_load = false
+        eval(Main, :(Base.include_from_node1($path)))
+    catch e
+        if !had
+            del(package_list, path)
+        end
+        rethrow(e)
     end
     nothing
 end
-end
 
-const load = load_now
+# deprecated
+const load = require
 
-evalfile(fname::String) = eval(Main,parse(readall(fname))[1])
+evalfile(fname::String) = eval(Main, parse(readall(fname))[1])
 
 # help
 

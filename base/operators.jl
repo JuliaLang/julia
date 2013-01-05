@@ -211,8 +211,10 @@ function assign_shape_check(X::AbstractArray, I...)
     end
 end
 
-# convert Real to integer index
+# convert to integer index
+to_index(i)       = i
 to_index(i::Real) = convert(Int, i)
+to_index(i::Int)  = i
 
 # vectorization
 

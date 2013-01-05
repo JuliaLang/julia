@@ -260,29 +260,29 @@ end
 # 0d bitarray
 ref(B::BitArray{0}) = B[1]
 
-ref(B::BitArray, i0::Integer, i1::Integer) = B[i0 + size(B,1)*(i1-1)]
-ref(B::BitArray, i0::Integer, i1::Integer, i2::Integer) =
-    B[i0 + size(B,1)*((i1-1) + size(B,2)*(i2-1))]
-ref(B::BitArray, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    B[i0 + size(B,1)*((i1-1) + size(B,2)*((i2-1) + size(B,3)*(i3-1)))]
+ref(B::BitArray, i0::Real, i1::Real) = B[to_index(i0) + size(B,1)*(to_index(i1)-1)]
+ref(B::BitArray, i0::Real, i1::Real, i2::Real) =
+    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*(to_index(i2)-1))]
+ref(B::BitArray, i0::Real, i1::Real, i2::Real, i3::Real) =
+    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*((to_index(i2)-1) + size(B,3)*(to_index(i3)-1)))]
 
-#       ref(::BitArray, ::Integer) is shadowed (?)
-function ref(B::BitArray, I::Integer...)
+#       ref(::BitArray, ::Real) is shadowed (?)
+function ref(B::BitArray, I::Real...)
     ndims = length(I)
-    index = I[1]
+    index = to_index(I[1])
     stride = 1
     for k=2:ndims
         stride *= size(B, k - 1)
-        index += (I[k] - 1) * stride
+        index += (to_index(I[k]) - 1) * stride
     end
     return B[index]
 end
 
 # note: we can gain some performance if the first dimension is a range;
-# TODO: extend to I:Indices... (i.e. not necessarily contiguous)
+# TODO: extend to I:Union(Real,AbstractArray)... (i.e. not necessarily contiguous)
 let ref_cache = nothing
     global ref
-    function ref(B::BitArray, I0::Range1{Int}, I::Union(Integer, Range1{Int})...)
+    function ref(B::BitArray, I0::Range1{Int}, I::Union(Real,Range1{Int})...)
         # the < should become a != once
         # the stricter indexing behaviour is enforced
         if ndims(B) < 1 + length(I)
@@ -291,7 +291,7 @@ let ref_cache = nothing
         X = BitArray(ref_shape(I0, I...))
         nI = 1 + length(I)
 
-        I = map(x->(isa(x,Integer) ? (x:x) : x), I[1:nI-1])
+        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : indices(x)), I[1:nI-1])
 
         f0 = first(I0)
         l0 = length(I0)
@@ -347,7 +347,7 @@ end
 
 # note: the Range1{Int} case is still handled by the version above
 #       (which is fine)
-function ref{T<:Integer}(B::BitArray, I::AbstractVector{T})
+function ref{T<:Real}(B::BitArray, I::AbstractVector{T})
     X = BitArray(length(I))
     ind = 1
     for i in I
@@ -359,7 +359,7 @@ end
 
 let ref_cache = nothing
     global ref
-    function ref(B::BitArray, I::Indices...)
+    function ref(B::BitArray, I::Union(Real,AbstractArray)...)
         I = indices(I)
         X = BitArray(ref_shape(I...))
 
@@ -394,15 +394,17 @@ ref(B::BitVector, I::AbstractArray{Bool}) = ref_bool_1d(B, I)
 ref(B::BitArray, I::AbstractVector{Bool}) = ref_bool_1d(B, I)
 ref(B::BitArray, I::AbstractArray{Bool}) = ref_bool_1d(B, I)
 
-ref(B::BitMatrix, I::Integer, J::AbstractVector{Bool}) = B[I, find(J)]
-ref(B::BitMatrix, I::AbstractVector{Bool}, J::Integer) = B[find(I), J]
+ref(B::BitMatrix, I::Real, J::AbstractVector{Bool}) = B[I, find(J)]
+ref(B::BitMatrix, I::AbstractVector{Bool}, J::Real) = B[find(I), J]
 ref(B::BitMatrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = B[find(I), find(J)]
-ref{T<:Integer}(B::BitMatrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = B[I, find(J)]
-ref{T<:Integer}(B::BitMatrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = B[find(I), J]
+ref(B::BitMatrix, I::Range1{Int}, J::AbstractVector{Bool}) = B[I, find(J)]
+ref{T<:Real}(B::BitMatrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = B[I, find(J)]
+ref{T<:Real}(B::BitMatrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = B[find(I), J]
 
 ## Indexing: assign ##
 
-function assign(B::BitArray, x, i::Integer)
+function assign(B::BitArray, x, i::Real)
+    i = to_index(i)
     if i < 1 || i > length(B)
         throw(BoundsError())
     end
@@ -417,21 +419,21 @@ function assign(B::BitArray, x, i::Integer)
     return B
 end
 
-assign(B::BitArray, x, i0::Integer, i1::Integer) =
-    B[i0 + size(B,1)*(i1-1)] = x
+assign(B::BitArray, x, i0::Real, i1::Real) =
+    B[to_index(i0) + size(B,1)*(to_index(i1)-1)] = x
 
-assign(B::BitArray, x, i0::Integer, i1::Integer, i2::Integer) =
-    B[i0 + size(B,1)*((i1-1) + size(B,2)*(i2-1))] = x
+assign(B::BitArray, x, i0::Real, i1::Real, i2::Real) =
+    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*(to_index(i2)-1))] = x
 
-assign(B::BitArray, x, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    B[i0 + size(B,1)*((i1-1) + size(B,2)*((i2-1) + size(B,3)*(i3-1)))] = x
+assign(B::BitArray, x, i0::Real, i1::Real, i2::Real, i3::Real) =
+    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*((to_index(i2)-1) + size(B,3)*(to_index(i3)-1)))] = x
 
-function assign(B::BitArray, x, I0::Integer, I::Integer...)
-    index = I0
+function assign(B::BitArray, x, I0::Real, I::Real...)
+    index = to_index(I0)
     stride = 1
     for k = 1:length(I)
         stride = stride * size(B, k)
-        index += (I[k] - 1) * stride
+        index += (to_index(I[k]) - 1) * stride
     end
     B[index] = x
     return B
@@ -511,7 +513,7 @@ function assign(B::BitArray, X::BitArray, I0::Range1{Int}, I::Union(Integer, Ran
     assign_array2bitarray_ranges(B, X, I0, I...)
 end
 
-function assign{T<:Integer}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
+function assign{T<:Real}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
     if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
     for i in I
@@ -521,33 +523,32 @@ function assign{T<:Integer}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
     return B
 end
 
-function assign(B::BitArray, X::AbstractArray, i0::Integer)
+function assign(B::BitArray, X::AbstractArray, i0::Real)
     if length(X) != 1
         error("argument dimensions must match")
     end
-    return B[i0] = X[1]
+    return assign(B, X[1], i0)
 end
 
-function assign(B::BitArray, X::AbstractArray, i0::Integer, i1::Integer)
+function assign(B::BitArray, X::AbstractArray, i0::Real, i1::Real)
     if length(X) != 1
         error("argument dimensions must match")
     end
-    return B[i0, i1] = X[1]
+    return assign(B, X[1], i0, i1)
 end
 
-function assign(B::BitArray, X::AbstractArray, I0::Integer, I::Integer...)
+function assign(B::BitArray, X::AbstractArray, I0::Real, I::Real...)
     if length(X) != 1
         error("argument dimensions must match")
     end
-    return B[I0, I...] = X[1]
+    return assign(B, X[1], i0, I...)
 end
 
 let assign_cache = nothing
     global assign
-    function assign(B::BitArray, X::AbstractArray, I0::Indices, I::Indices...)
-        I0 = indices(I0)
+    function assign(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
         I = indices(I)
-        nel = length(I0)
+        nel = 1
         for idx in I
             nel *= length(idx)
         end
@@ -555,11 +556,8 @@ let assign_cache = nothing
             error("argument dimensions must match")
         end
         if ndims(X) > 1
-            if size(X,1) != length(I0)
-                error("argument dimensions must match")
-            end
             for i = 1:length(I)
-                if size(X,i+1) != length(I[i])
+                if size(X,i) != length(I[i])
                     error("argument dimensions must match")
                 end
             end
@@ -569,14 +567,14 @@ let assign_cache = nothing
         end
         gen_cartesian_map(assign_cache,
             ivars->:(B[$(ivars...)] = X[refind]; refind += 1),
-            tuple(I0, I...),
+            I,
             (:B, :X, :refind),
             B, X, 1)
         return B
     end
 end
 
-function assign{T<:Integer}(B::BitArray, x, I::AbstractVector{T})
+function assign{T<:Real}(B::BitArray, x, I::AbstractVector{T})
     for i in I
         B[i] = x
     end
@@ -585,14 +583,13 @@ end
 
 let assign_cache = nothing
     global assign
-    function assign(B::BitArray, x, I0::Indices, I::Indices...)
-        I0 = indices(I0)
+    function assign(B::BitArray, x, I::Union(Real,AbstractArray)...)
         I = indices(I)
         if is(assign_cache,nothing)
             assign_cache = Dict()
         end
         gen_cartesian_map(assign_cache, ivars->:(B[$(ivars...)] = x),
-            tuple(I0, I...),
+            I,
             (:B, :x),
             B, x)
         return B
@@ -628,16 +625,16 @@ assign(A::BitArray, X::AbstractArray, I::AbstractArray{Bool}) = assign_bool_vect
 assign(A::BitArray, x, I::AbstractVector{Bool}) = assign_bool_scalar_1d(A, x, I)
 assign(A::BitArray, x, I::AbstractArray{Bool}) = assign_bool_scalar_1d(A, x, I)
 
-assign(A::BitMatrix, x::AbstractArray, I::Integer, J::AbstractVector{Bool}) =
+assign(A::BitMatrix, x::AbstractArray, I::Real, J::AbstractVector{Bool}) =
     (A[I,find(J)] = x)
 
-assign(A::BitMatrix, x, I::Integer, J::AbstractVector{Bool}) =
+assign(A::BitMatrix, x, I::Real, J::AbstractVector{Bool}) =
     (A[I,find(J)] = x)
 
-assign(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::Integer) =
+assign(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::Real) =
     (A[find(I),J] = x)
 
-assign(A::BitMatrix, x, I::AbstractVector{Bool}, J::Integer) =
+assign(A::BitMatrix, x, I::AbstractVector{Bool}, J::Real) =
     (A[find(I),J] = x)
 
 assign(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
@@ -649,13 +646,13 @@ assign(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
 assign{T<:Integer}(A::BitMatrix, x::AbstractArray, I::AbstractVector{T}, J::AbstractVector{Bool}) =
     (A[I,find(J)] = x)
 
-assign{T<:Integer}(A::BitMatrix, x, I::AbstractVector{T}, J::AbstractVector{Bool}) =
+assign{T<:Real}(A::BitMatrix, x, I::AbstractVector{T}, J::AbstractVector{Bool}) =
     (A[I,find(J)] = x)
 
-assign{T<:Integer}(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{T}) =
+assign{T<:Real}(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{T}) =
     (A[find(I),J] = x)
 
-assign{T<:Integer}(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{T}) =
+assign{T<:Real}(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{T}) =
     (A[find(I),J] = x)
 
 ## Dequeue functionality ##
@@ -1400,7 +1397,7 @@ nonzeros(B::BitArray) = trues(nnz(B))
 
 ## Reductions ##
 
-sum(A::BitArray, region::Dimspec) = areduce(+,A,region,0,Array(Int,reduced_dims(A,region)))
+sum(A::BitArray, region) = areduce(+,A,region,0,Array(Int,reduced_dims(A,region)))
 
 sum(B::BitArray) = nnz(B)
 

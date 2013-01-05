@@ -682,8 +682,9 @@ unescape_string(s::String) = sprint(length(s), print_unescaped, s)
 
 ## checking UTF-8 & ACSII validity ##
 
-byte_string_classify(s::ByteString) =
-    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int), s.data, length(s))
+byte_string_classify(data::Array{Uint8,1}) =
+    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int), data, length(data))
+byte_string_classify(s::ByteString) = byte_string_classify(s.data)
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8

@@ -100,6 +100,8 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
     end
 end
 
+nrm2(A::Array) = nrm2(length(A), A, 1)
+
 # SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
 # DY <- DA*DX + DY
 #*     .. Scalar Arguments ..

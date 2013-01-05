@@ -27,6 +27,6 @@ str2 = CharString(
 
 # Cleanup unicode data
 for encoding in ["UTF-32BE", "UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
-    file_remove( file_path(unicodedir,encoding*".unicode"))
+    rm( file_path(unicodedir,encoding*".unicode"))
 end
 rmdir(unicodedir)

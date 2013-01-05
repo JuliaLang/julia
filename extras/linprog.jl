@@ -416,18 +416,37 @@ function linprog__setup_prob{T<:Real, P<:Union(GLPK.Param, Nothing)}(f::Vector{T
     if has_lb && has_ub
         for c = 1 : n
             #println("  c=$c lb=$(lb[c]) ub=$(ub[c])")
-            bounds_type = (lb[c] != ub[c] ? GLPK.DB : GLPK.FX)
+            local bounds_type
+            if lb[c] == ub[c]
+                bounds_type = GLPK.FX
+            else
+                if isinf(lb[c])
+                    if isinf(ub[c])
+                        bounds_type = GLPK.FR
+                    else
+                        bounds_type = GLPK.UP
+                    end
+                else
+                    if isinf(ub[c])
+                        bounds_type = GLPK.LO
+                    else
+                        bounds_type = GLPK.DB
+                    end
+                end
+            end
             GLPK.set_col_bnds(lp, c, bounds_type, lb[c], ub[c])
         end
     elseif has_lb
         for c = 1 : n
             #println("  c=$c lb=$(lb[c])")
-            GLPK.set_col_bnds(lp, c, GLPK.LO, lb[c], 0.0)
+            bounds_type = isinf(lb[c]) ? GLPK.FR : GLPK.LO
+            GLPK.set_col_bnds(lp, c, bounds_type, lb[c], 0.0)
         end
     elseif has_ub
         for c = 1 : n
             #println("  c=$c ub=$(ub[c])")
-            GLPK.set_col_bnds(lp, c, GLPK.UP, 0.0, ub[c])
+            bounds_type = isinf(ub[c]) ? GLPK.FR : GLPK.UP
+            GLPK.set_col_bnds(lp, c, bounds_type, 0.0, ub[c])
         end
     end
 

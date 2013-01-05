@@ -54,7 +54,6 @@ methods(f::Union(Function,CompositeKind),t,lim) = ccall(:jl_matching_methods, An
 
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
-isbuiltin(f) = ccall(:jl_is_builtin, Int32, (Any,), f) != 0
 isgeneric(f) = (isa(f,Function)||isa(f,CompositeKind)) && isa(f.env,MethodTable)
 isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 
@@ -119,6 +118,7 @@ t_func[fpiseq32] = (2, 2, cmp_tfunc)
 t_func[fpiseq64] = (2, 2, cmp_tfunc)
 t_func[fpislt32] = (2, 2, cmp_tfunc)
 t_func[fpislt64] = (2, 2, cmp_tfunc)
+t_func[nan_dom_err] = (2, 2, (a, b)->a)
 t_func[eval(Core,:ccall)] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
@@ -558,86 +558,82 @@ function invoke_tfunc(f, types, argtypes)
 end
 
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
-    if isbuiltin(f)
-        if is(f,apply) && length(fargs)>0
-            af = isconstantfunc(fargs[1], sv)
-            if !is(af,false)
-                aargtypes = argtypes[2:]
-                if allp(x->isa(x,Tuple), aargtypes) &&
-                   !anyp(isvatuple, aargtypes[1:(length(aargtypes)-1)])
-                    e.head = :call1
-                    # apply with known func with known tuple types
-                    # can be collapsed to a call to the applied func
-                    at = length(aargtypes) > 0 ?
-                         limit_tuple_type(apply(tuple,aargtypes...)) : ()
-                    return abstract_call(_ieval(af), (), at, vtypes, sv, ())
-                end
-                af = _ieval(af)
-                if is(af,tuple) && length(fargs)==2
-                    # tuple(xs...)
-                    aat = aargtypes[1]
-                    if aat <: AbstractArray
-                        # tuple(array...)
-                        # TODO: > 1 array of the same type
-                        tn = AbstractArray.name
-                        while isa(aat, AbstractKind) || isa(aat, BitsKind) ||
-                            isa(aat, CompositeKind)
-                            if is(aat.name, tn)
-                                et = aat.parameters[1]
-                                if !isa(et,TypeVar)
-                                    return (et...)
-                                end
+    if is(f,apply) && length(fargs)>0
+        af = isconstantfunc(fargs[1], sv)
+        if !is(af,false)
+            aargtypes = argtypes[2:]
+            if allp(x->isa(x,Tuple), aargtypes) &&
+                !anyp(isvatuple, aargtypes[1:(length(aargtypes)-1)])
+                e.head = :call1
+                # apply with known func with known tuple types
+                # can be collapsed to a call to the applied func
+                at = length(aargtypes) > 0 ?
+                     limit_tuple_type(apply(tuple,aargtypes...)) : ()
+                return abstract_call(_ieval(af), (), at, vtypes, sv, ())
+            end
+            af = _ieval(af)
+            if is(af,tuple) && length(fargs)==2
+                # tuple(xs...)
+                aat = aargtypes[1]
+                if aat <: AbstractArray
+                    # tuple(array...)
+                    # TODO: > 1 array of the same type
+                    tn = AbstractArray.name
+                    while isa(aat, AbstractKind) || isa(aat, BitsKind) ||
+                        isa(aat, CompositeKind)
+                        if is(aat.name, tn)
+                            et = aat.parameters[1]
+                            if !isa(et,TypeVar)
+                                return (et...)
                             end
-                            if is(aat, Any)
-                                break
-                            end
-                            aat = aat.super
                         end
-                    end
-                    return Tuple
-                end
-            else
-                ft = abstract_eval(fargs[1], vtypes, sv)
-                if isType(ft)
-                    # TODO: improve abstract_call_constructor
-                    st = ft.parameters[1]
-                    if isa(st,TypeVar) && isa(st.ub,CompositeKind)
-                        return st.ub
-                    end
-                    if isa(st,CompositeKind)
-                        return st
+                        if is(aat, Any)
+                            break
+                        end
+                        aat = aat.super
                     end
                 end
+                return Tuple
             end
-        end
-        if is(f,invoke) && length(fargs)>1
-            af = isconstantfunc(fargs[1], sv)
-            if !is(af,false) && (af=_ieval(af);isgeneric(af))
-                sig = argtypes[2]
-                if isa(sig,Tuple) && allp(isType, sig)
-                    sig = map(t->t.parameters[1], sig)
-                    return invoke_tfunc(af, sig, argtypes[3:])
+        else
+            ft = abstract_eval(fargs[1], vtypes, sv)
+            if isType(ft)
+                # TODO: improve abstract_call_constructor
+                st = ft.parameters[1]
+                if isa(st,TypeVar) && isa(st.ub,CompositeKind)
+                    return st.ub
+                end
+                if isa(st,CompositeKind)
+                    return st
                 end
             end
         end
-        if !is(f,apply) && isa(e,Expr) && (isa(f,Function) || isa(f,IntrinsicFunction))
-            e.head = :call1
-        end
-        if is(f,getfield)
-            val = isconstantref(e, sv)
-            if !is(val,false)
-                return abstract_eval_constant(_ieval(val))
-            end
-        end
-        rt = builtin_tfunction(f, fargs, argtypes)
-        #print("=> ", rt, "\n")
-        return rt
-    elseif isgeneric(f)
-        return abstract_call_gf(f, fargs, argtypes, e)
-    else
-        #print("=> ", Any, "\n")
-        return Any
     end
+    if isgeneric(f)
+        return abstract_call_gf(f, fargs, argtypes, e)
+    end
+    if is(f,invoke) && length(fargs)>1
+        af = isconstantfunc(fargs[1], sv)
+        if !is(af,false) && (af=_ieval(af);isgeneric(af))
+            sig = argtypes[2]
+            if isa(sig,Tuple) && allp(isType, sig)
+                sig = map(t->t.parameters[1], sig)
+                return invoke_tfunc(af, sig, argtypes[3:])
+            end
+        end
+    end
+    if !is(f,apply) && isa(e,Expr) && (isa(f,Function) || isa(f,IntrinsicFunction))
+        e.head = :call1
+    end
+    if is(f,getfield)
+        val = isconstantref(e, sv)
+        if !is(val,false)
+            return abstract_eval_constant(_ieval(val))
+        end
+    end
+    rt = builtin_tfunction(f, fargs, argtypes)
+    #print("=> ", rt, "\n")
+    return rt
 end
 
 function abstract_eval_arg(a, vtypes, sv)
@@ -1586,8 +1582,10 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if is(ast,())
         return NF
     end
+    needcopy = true
     if !isa(ast,Expr)
         ast = ccall(:jl_uncompress_ast, Any, (Any,Any), meth[3], ast)
+        needcopy = false
     end
     ast = ast::Expr
     for vi in ast.args[2][2]
@@ -1644,7 +1642,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
 
     # ok, substitute argument expressions for argument names in the body
     spnames = { sp[i].name for i=1:2:length(sp) }
-    expr = astcopy(expr)
+    if needcopy; expr = astcopy(expr); end
     mfrom = meth[3].module; mto = (inference_stack::CallStack).mod
     if !is(mfrom, mto)
         expr = resolve_globals(expr, mfrom, mto, args, spnames)

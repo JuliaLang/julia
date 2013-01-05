@@ -95,6 +95,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
         # Complex vector rhs
         x = a\complex(b)
         @assert_approx_eq a*x complex(b)
+
+        # Test cond
+        @assert_approx_eq_eps cond(a, 1) 4.837320054554436e+02 0.01
+        @assert_approx_eq_eps cond(a, 2) 1.960057871514615e+02 0.01
+        @assert_approx_eq_eps cond(a, Inf) 3.757017682707787e+02 0.01
+        @assert_approx_eq_eps cond(a[:,1:5]) 10.233059337453463 0.01
 end
 a = [ones(20) 1:20 1:20]
 b = reshape(eye(8, 5), 20, 2)
@@ -115,7 +121,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         # symmetric, positive definite
         @assert_approx_eq inv(convert(Matrix{elty}, [6. 2; 2 1])) convert(Matrix{elty}, [0.5 -1; -1 3])
         # symmetric, negative definite
-        @assert_approx_eq inv(convert(Matrix{elty}, [1. 2; 2 1])) convert(Matrix{elty}, [-1. 2; 2 -1]/3)
+        @assert_approx_eq inv(convert(Matrix{elty}, [1. 2; 2 1])) convert(Matrix{elty}, [-1. 2; 2 -1]/3)               
 end
 
 ## Test Julia fallbacks to BLAS routines
@@ -326,7 +332,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
 end
 
 # LAPACK tests
-srand(112)
 Ainit = randn(5,5)
 for elty in (Float32, Float64, Complex64, Complex128)
         # syevr!

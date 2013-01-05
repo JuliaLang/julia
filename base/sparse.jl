@@ -246,7 +246,9 @@ sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, int(m), int(n), |)
 
 sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), int(m), int(n), combine)
 
-# Based on http://www.cise.ufl.edu/research/sparse/cholmod/CHOLMOD/Core/cholmod_triplet.c
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.4: Triplet form
+# http://www.cise.ufl.edu/research/sparse/CSparse/
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
                                 V::AbstractVector{Tv},
                                 nrow::Integer, ncol::Integer, combine::Function)
@@ -447,7 +449,9 @@ end
 
 ## Transpose
 
-# Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.5: Transpose
+# http://www.cise.ufl.edu/research/sparse/CSparse/
 function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
     nnzS = nnz(S)
@@ -650,7 +654,7 @@ end # macro
 # Reductions
 
 # TODO: Should the results of sparse reductions be sparse?
-function areduce{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region::Dimspec, v0)
+function areduce{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
     if region == 1
 
         S = Array(Tv, 1, A.n)
@@ -698,20 +702,20 @@ function areduce{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region::Dimspec,
 end
 
 max{T}(A::SparseMatrixCSC{T}) = areduce(max,A,(1,2),typemin(T))
-max{T}(A::SparseMatrixCSC{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T))
+max{T}(A::SparseMatrixCSC{T}, b::(), region) = areduce(max,A,region,typemin(T))
 
 min{T}(A::SparseMatrixCSC{T}) = areduce(min,A,(1,2),typemax(T))
-min{T}(A::SparseMatrixCSC{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T))
+min{T}(A::SparseMatrixCSC{T}, b::(), region) = areduce(min,A,region,typemax(T))
 
 sum{T}(A::SparseMatrixCSC{T}) = areduce(+,A,(1,2),zero(T))
-sum{T}(A::SparseMatrixCSC{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
+sum{T}(A::SparseMatrixCSC{T}, region)  = areduce(+,A,region,zero(T))
 
 prod{T}(A::SparseMatrixCSC{T}) = areduce(*,A,(1,2),one(T))
-prod{T}(A::SparseMatrixCSC{T}, region::Dimspec) = areduce(*,A,region,one(T))
+prod{T}(A::SparseMatrixCSC{T}, region) = areduce(*,A,region,one(T))
 
-#all(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(all,A,region,true)
-#any(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(any,A,region,false)
-#sum(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(+,A,region,0,Int)
+#all(A::SparseMatrixCSC{Bool}, region) = areduce(all,A,region,true)
+#any(A::SparseMatrixCSC{Bool}, region) = areduce(any,A,region,false)
+#sum(A::SparseMatrixCSC{Bool}, region) = areduce(+,A,region,0,Int)
 #sum(A::SparseMatrixCSC{Bool}) = nnz(A)
 
 ## ref
@@ -1385,7 +1389,9 @@ function expandptr{T<:Integer}(V::Vector{T})
     res
 end
 
-# Based on the function cs_fkeep from the CSparse library
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.7: Removing entries from a matrix
+# http://www.cise.ufl.edu/research/sparse/CSparse/
 function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     nzorig = nnz(A)
     nz = 1

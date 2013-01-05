@@ -3,6 +3,8 @@ baremodule Base
 eval(x) = Core.eval(Base,x)
 eval(m,x) = Core.eval(m,x)
 
+include = Core.include
+
 include("export.jl")
 
 if false
@@ -150,8 +152,10 @@ include("fftw.jl")
 include("dsp.jl")
 using DSP
 
+include = include_from_node1
+
 # prime method cache with some things we know we'll need right after startup
-compile_hint(cwd, ())
+compile_hint(pwd, ())
 compile_hint(fdio, (Int32,))
 compile_hint(ProcessGroup, (Int, Array{Any,1}, Array{Any,1}))
 compile_hint(select_read, (FDSet, Float64))
@@ -262,8 +266,8 @@ compile_hint(CallStack, (Expr, Module, (Nothing,), EmptyCallStack))
 compile_hint(convert, (Type{Module}, Module))
 compile_hint(effect_free, (Expr,))
 compile_hint(effect_free, (TopNode,))
-compile_hint(abs_path, (ASCIIString,))
-compile_hint(isrooted, (ASCIIString,))
+compile_hint(abspath, (ASCIIString,))
+compile_hint(isabspath, (ASCIIString,))
 compile_hint(split, (ASCIIString,))
 compile_hint(split, (ASCIIString, ASCIIString, Int, Bool))
 compile_hint(split, (ASCIIString, Regex, Int, Bool))
@@ -281,7 +285,6 @@ compile_hint(occurs_more, (Uint8, Function, Int))
 compile_hint(abstract_eval_arg, (Uint8, ObjectIdDict, StaticVarInfo))
 compile_hint(occurs_outside_tupleref, (Function, Symbol, StaticVarInfo, Int))
 compile_hint(search, (ASCIIString, Regex, Int))
-compile_hint(astcopy, (Uint8,))
 compile_hint(assign, (Vector{Uint8}, Uint8, Int))
 
 # invoke type inference, running the existing inference code on the new
