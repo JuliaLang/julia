@@ -933,7 +933,10 @@ export
     unescape_chars,
     unescape_string,
     base,
-    
+    print_with_color,
+    info,
+    warn,
+
 # statistics and random numbers
     autocor,
     betarnd,
