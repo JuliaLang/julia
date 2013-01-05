@@ -2634,9 +2634,9 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
     FPM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
     
-    //FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     FPM->add(createScalarReplAggregatesPass()); // Break up aggregate allocas
-    //FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     FPM->add(createJumpThreadingPass());        // Thread jumps.
     FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     //FPM->add(createInstructionCombiningPass()); // Combine silly seq's
