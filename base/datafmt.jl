@@ -186,5 +186,5 @@ function dlmwrite(fname::String, a::Matrix, dlm::Char)
     end
 end
 
-dlmwrite(io, a) = dlmwrite(io, a, ',')
+dlmwrite(io, a) = dlmwrite(io, a, '\t')
 csvwrite(io, a) = dlmwrite(io, a, ',')
