@@ -16,36 +16,36 @@ end
 # This first section may not run for non-UNIX people.
 # If so, create the directories and files manually, and comment out this section
 # (Or fix up the code to support such operations on Windows!)
-dir_name = mktempdir()
-filename = file_path(dir_name, "afile.txt")
-touch(filename)
+dir = mktempdir()
+file = file_path(dir, "afile.txt")
+touch(file)
 
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
-@test isdir(dir_name) == true
-@test isfile(dir_name) == false
-@test islink(dir_name) == false
-@test isdir(filename) == false
-@test isfile(filename) == true
-@test islink(filename) == false
-@test isreadable(filename) == true
-@test iswriteable(filename) == true
+@test isdir(dir) == true
+@test isfile(dir) == false
+@test islink(dir) == false
+@test isdir(file) == false
+@test isfile(file) == true
+@test islink(file) == false
+@test isreadable(file) == true
+@test iswriteable(file) == true
 # Here's something else that might be UNIX-specific?
-run(`chmod -w $filename`)
-@test iswriteable(filename) == false
-run(`chmod +w $filename`)
-@test isexecutable(filename) == false
-@test filesize(filename) == 0
-@test filesize(dir_name) > 0
-@test mtime(filename) >= mtime(dir_name)
+run(`chmod -w $file`)
+@test iswriteable(file) == false
+run(`chmod +w $file`)
+@test isexecutable(file) == false
+@test filesize(file) == 0
+@test filesize(dir) > 0
+@test mtime(file) >= mtime(dir)
 
 # rename file
-newfilename = file_path(dir_name, "bfile.txt")
-mv(filename, newfilename)
-@test ispath(filename) == false
+newfilename = file_path(dir, "bfile.txt")
+mv(file, newfilename)
+@test ispath(file) == false
 @test isfile(newfilename) == true
-filename = newfilename
+file = newfilename
 
 #######################################################################
 # This section tests temporary file and directory creation.           #
@@ -57,16 +57,16 @@ filename = newfilename
 # path = tempname()
 # @test ispath(path) == false
 
-# (filename, f) = mktemp()
+# (file, f) = mktemp()
 # print(f, "Here is some text")
 # close(f)
-# @test isfile(filename) == true
-# @test readall(filename) == "Here is some text"
+# @test isfile(file) == true
+# @test readall(file) == "Here is some text"
 
 ############
 # Clean up #
 ############
-rm(filename)
-rmdir(dir_name)
-@test ispath(filename) == false
-@test ispath(dir_name) == false
+rm(file)
+rmdir(dir)
+@test ispath(file) == false
+@test ispath(dir) == false
