@@ -10,7 +10,7 @@ export
     RNG,
     Math,
     Sort,
-    
+
 # Types
     AbstractMatrix,
     AbstractSparseMatrix,
@@ -104,7 +104,7 @@ export
     LDLTTridiagonal,
     QRDense,
     QRPDense,
-    
+
 # Exceptions
     ArgumentError,
     BackTrace,
@@ -116,7 +116,7 @@ export
     ParseError,
     SystemError,
     TypeError,
-    
+
 # Global constants and variables
     ARGS,
     C_NULL,
@@ -142,7 +142,7 @@ export
     e,
     im,
     pi,
-    
+
 # Unix error codes
     E2BIG,
     EACCES,
@@ -187,7 +187,7 @@ export
     EIO,
     EISCONN,
     EISDIR,
-    EISNAM,    
+    EISNAM,
     EKEYEXPIRED,
     EKEYREJECTED,
     EKEYREVOKED,
@@ -275,7 +275,7 @@ export
     EUSERS,
     EXDEV,
     EXFULL,
-    
+
 # Operators
     !,
     !=,
@@ -338,7 +338,7 @@ export
     At_mul_Bt,
     At_rdiv_B,
     At_rdiv_Bt,
-    
+
 # scalar math
     abs,
     abs2,
@@ -522,28 +522,28 @@ export
     typemin,
 
 #specfun
-    airy, 
-    airyai, 
-    airyprime, 
-    airyaiprime, 
-    airybi, 
+    airy,
+    airyai,
+    airyprime,
+    airyaiprime,
+    airybi,
     airybiprime,
-    besselj0, 
-    besselj1, 
-    besselj, 
-    bessely0, 
-    bessely1, 
+    besselj0,
+    besselj1,
+    besselj,
+    bessely0,
+    bessely1,
     bessely,
-    hankelh1, 
-    hankelh2, 
-    besseli, 
-    besselk, 
+    hankelh1,
+    hankelh2,
+    besseli,
+    besselk,
     besselh,
-    beta, 
-    lbeta, 
-    eta, 
+    beta,
+    lbeta,
+    eta,
     zeta,
-    
+
 # arrays
     amap,
     areduce,
@@ -662,7 +662,7 @@ export
     ref_shape,
     assign_shape_check,
     make_loop_nest,
-    check_bounds, 
+    check_bounds,
 
 # sort routines
     insertionsort,
@@ -824,7 +824,7 @@ export
     push,
     filter,
     filter!,
-    
+
 # strings and text output
     ascii,
     begins_with,
@@ -1025,7 +1025,7 @@ export
     enumerate,
     zip,
     times,
-    
+
 # object identity and equality
     copy,
     deepcopy,
@@ -1036,14 +1036,14 @@ export
     object_id,
     sizeof,
     isimmutable,
-    
+
 # tasks
     consume,
     current_task,
     istaskdone,
     produce,
     tls,
-    
+
 # time
     sleep,
     strftime,
@@ -1053,14 +1053,14 @@ export
     time_ns,
     toc,
     toq,
-    
+
 # errors
     assert,
     error,
     rethrow,
     backtrace,
     system_error,
-    
+
 # types
     convert,
     isleaftype,
@@ -1070,7 +1070,7 @@ export
     promote_type,
     super,
     tintersect,
-    
+
 # syntax
     expand,
     macroexpand,
@@ -1081,7 +1081,7 @@ export
     parse_input_line,
     parseatom,
     symbol,
-    
+
 # help and reflection
     ans,
     apropos,
@@ -1099,7 +1099,7 @@ export
     isinteractive,
     disassemble,
     finfer,
-    
+
 # loading source files
     evalfile,
     find_in_path,
@@ -1109,7 +1109,7 @@ export
     reload,
     require,
     julia_pkgdir,
-    
+
 # RTS internals
     compile_hint,
     finalizer,
@@ -1118,7 +1118,7 @@ export
     gc_enable,
     isconst,
     isgeneric,
-    
+
 # misc
     exit,
     quit,
@@ -1185,7 +1185,7 @@ export
     truncate,
     with_output_to_string,
     write,
-    
+
 # multiprocessing
     addprocs_local,
     addprocs_sge,
@@ -1212,7 +1212,7 @@ export
     spawnat,
     spawnlocal,
     take,
-    
+
 # distributed arrays
     defaultdist,
     distribute,
@@ -1221,7 +1221,7 @@ export
     localize,
     myindexes,
     procs,
-    
+
 # paths and file names
     basename,
     fullfile,
@@ -1277,8 +1277,8 @@ export
     isexecutable,
     uperm,
     gperm,
-    operm, 
-    
+    operm,
+
 # external processes
     cmd_stdin_stream,
     cmd_stdout_stream,
@@ -1311,7 +1311,7 @@ export
     wait,
     wait_nohang,
     write_to,
-    
+
 # C interface
     c_free,
     dlopen,
@@ -1328,7 +1328,7 @@ export
     unsafe_ref,
     unsafe_assign,
     unsetenv,
-    
+
 # Macros
     @v_str,
     @unexpected,
