@@ -10,7 +10,7 @@ text_colors = {:black   => "\033[1m\033[30m",
                :blue    => "\033[1m\033[34m",
                :magenta => "\033[1m\033[35m",
                :cyan    => "\033[1m\033[36m",
-               :white   => "\033[1m\033[37m"
+               :white   => "\033[1m\033[37m",
                :normal  => color_normal}
 
 function answer_color()
