@@ -561,11 +561,37 @@ static long meet_tuple_lengths(long bv, long vv, int *bot)
     return vv;
 }
 
+// convert a type to the value it would have if assigned to a static parameter
+// in covariant context.
+// example: (Type{Int},) => (BitsKind,)
+// calling f{T}(x::T) as f((Int,)) should give T == (BitsKind,), but we
+// might temporarily represent this type as (Type{Int},) for more precision.
+static jl_value_t *type_to_static_parameter_value(jl_value_t *t)
+{
+    if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
+        return jl_full_type(jl_tparam0(t));
+    if (jl_is_tuple(t)) {
+        size_t l = jl_tuple_len(t);
+        jl_tuple_t *nt = jl_alloc_tuple(l);
+        JL_GC_PUSH(&nt);
+        for(size_t i=0; i < l; i++) {
+            jl_tupleset(nt, i, type_to_static_parameter_value(jl_tupleref(t,i)));
+        }
+        JL_GC_POP();
+        return (jl_value_t*)nt;
+    }
+    return t;
+}
+
 static int match_intersection_mode = 0;
 
 static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                                      cenv_t *penv, cenv_t *eqc, variance_t var)
 {
+    if (var == covariant) {
+        // matching T to Type{S} in covariant context
+        b = type_to_static_parameter_value(b);
+    }
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
         if (!a->bound) return b;
     }

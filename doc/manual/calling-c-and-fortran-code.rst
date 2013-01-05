@@ -117,7 +117,7 @@ machine's hostname::
     function gethostname()
       hostname = Array(Uint8, 128)
       ccall( (:gethostname, "libc"), Int32,
-            (Ptr{Uint8}, Ulong),
+            (Ptr{Uint8}, Uint),
             hostname, length(hostname))
       return bytestring(convert(Ptr{Uint8}, hostname))
     end

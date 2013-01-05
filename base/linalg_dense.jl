@@ -10,16 +10,15 @@ scale!(X::Array{Complex128}, s::Real) = (ccall(("dscal_",Base.libblas_name), Voi
 
 #Test whether a matrix is positive-definite
 
-isposdef!{T<:BlasFloat}(A::Matrix{T}, upper::Bool) =
-    LAPACK.potrf!(upper ? 'U' : 'L', A)[2] == 0
-isposdef!{T<:BlasFloat}(A::Matrix{T}) = ishermitian(A) && isposdef!(A, true)
+isposdef!{T<:BlasFloat}(A::Matrix{T}, upper::Bool) = ishermitian(A) && LAPACK.potrf!(upper ? 'U' : 'L', A)[2] == 0
+isposdef!(A::Matrix) = isposdef!(A, true)
 
 isposdef{T<:BlasFloat}(A::Matrix{T}, upper::Bool) = isposdef!(copy(A), upper)
 isposdef{T<:BlasFloat}(A::Matrix{T}) = isposdef!(copy(A))
 isposdef{T<:Number}(A::Matrix{T}, upper::Bool) = isposdef!(float64(A), upper)
 isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
 
-isposdef(x::Number) = isreal(x) && x > 0
+isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 norm{T<:BlasFloat}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
 
@@ -463,8 +462,9 @@ chold{T<:Number}(A::Matrix{T}, upper::Bool) = chold(float64(A), upper)
 chold{T<:Number}(A::Matrix{T}) = chold(A, true)
 
 ## Matlab (and R) compatible
-chol{T<:Number}(A::Matrix{T}) = factors(chold(A))
-chol(x::Number) = isreal(x) && x >= 0 ? sqrt(x) : error("argument not positive-definite")
+chol(A::Matrix, upper) = factors(chold(A, upper))
+chol(A::Matrix) = chol(A, true)
+chol(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
 
 type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
@@ -551,7 +551,7 @@ lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
 
 ## Matlab-compatible
 lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
-lu(x::Number) = (one(x), x)
+lu(x::Number) = (one(x), x, [1])
 
 function det{T}(lu::LUDense{T})
     m, n = size(lu)
