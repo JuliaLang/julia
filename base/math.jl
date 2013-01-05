@@ -148,13 +148,13 @@ min(x::Float32, y::Float32) = ccall((:fminf,libm), Float32, (Float32,Float32), x
 @vectorize_2arg Real min
 
 function ilogb(x::Float64)
-    if x==0 || isnan(x)
+    if x==0 || !isfinite(x)
         throw(DomainError())
     end
     int(ccall((:ilogb,libm), Int32, (Float64,), x))
 end
 function ilogb(x::Float32)
-    if x==0 || isnan(x)
+    if x==0 || !isfinite(x)
         throw(DomainError())
     end
     int(ccall((:ilogbf,libm), Int32, (Float32,), x))
