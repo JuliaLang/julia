@@ -266,11 +266,12 @@ static inline int is_btv(jl_value_t *v)
     return jl_is_typevar(v) && ((jl_tvar_t*)v)->bound;
 }
 
-static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
+static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow,
+                    int ordered)
 {
     if (!allow && var == val)
         return;
-    if (val < var && is_btv(val) && is_btv(var)) {
+    if (!ordered && val < var && is_btv(val) && is_btv(var)) {
         jl_value_t *temp = val;
         val = var;
         var = temp;
@@ -289,7 +290,12 @@ static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
 
 static void extend(jl_value_t *var, jl_value_t *val, cenv_t *soln)
 {
-    extend_(var, val, soln, 0);
+    extend_(var, val, soln, 0, 0);
+}
+
+static void extend_ordered(jl_value_t *var, jl_value_t *val, cenv_t *soln)
+{
+    extend_(var, val, soln, 0, 1);
 }
 
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
@@ -1208,7 +1214,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         // bind type vars to themselves if they were not matched explicitly
         // during type intersection.
         if (e >= env0)
-            extend_(tv, tv, &eqc, 1);
+            extend_(tv, tv, &eqc, 1, 0);
     }
 
     *penv = jl_alloc_tuple_uninit(eqc.n);
@@ -2082,7 +2088,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                 return jl_false;
             }
         }
-        extend(parent, child, env);
+        extend_ordered(parent, child, env);
         return jl_true;
     }
 
