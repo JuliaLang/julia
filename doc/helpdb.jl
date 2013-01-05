@@ -2388,6 +2388,12 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"scale!",E"scale!(A, k)
+
+   Scale the contents of an array A with k (in-place)
+
+"),
+
 (E"Arrays",E"Base",E"stride",E"stride(A, k)
 
    Returns the distance in memory (in number of elements) between
@@ -3413,6 +3419,73 @@ airyaiprime(x)
    \"plan_rfft()\" except for \"irfft()\" and \"brfft()\",
    respectively.  The first three arguments have the same meaning as
    for \"irfft()\".
+
+"),
+
+(E"Signal Processing",E"",E"dct(A [, dims]), dct!, idct, idct!",E"dct(A [, dims]), dct!, idct, idct!
+
+   Performs a multidimensional type-II discrete cosine transform (DCT)
+   of the array \"A\", using the unitary normalization of the DCT. The
+   optional \"dims\" argument specifies an iterable subset of
+   dimensions (e.g. an integer, range, tuple, or array) to transform
+   along.  Most efficient if the size of \"A\" along the transformed
+   dimensions is a product of small primes; see \"nextprod()\".  See
+   also \"plan_dct()\" for even greater efficiency.
+
+   The \"dct!()\" is the same, except that it operates in-place on
+   \"A\", which must be an array of real or complex floating-point
+   values.
+
+   Similarly, \"idct(A [, dims])()\" and \"idct!()\" compute the
+   inverse DCT (technically, a type-III DCT with the unitary
+   normalization).
+
+"),
+
+(E"Signal Processing",E"",E"plan_dct(A [, dims [, flags [, timelimit]]]), plan_dct!, plan_idct, plan_idct!",E"plan_dct(A [, dims [, flags [, timelimit]]]), plan_dct!, plan_idct, plan_idct!
+
+   Pre-plan an optimized discrete cosine transform (DCT), similar to
+   \"plan_fft()\" except producint a function that computes \"dct()\",
+   \"dct!()\", \"idct()\", and \"idct!()\" respectively.  The first
+   two arguments have the same meaning as for \"dct()\".
+
+"),
+
+(E"Signal Processing",E"",E"FFTW.r2r(A, kind [, dims]), FFTW.r2r!",E"FFTW.r2r(A, kind [, dims]), FFTW.r2r!
+
+   Performs a multidimensional real-input/real-output (r2r) transform
+   of type \"kind\" of the array \"A\", as defined in the FFTW manual.
+   \"kind\" specifies either a discrete cosine transform of various
+   types (\"FFTW.REDFT00\", \"FFTW.REDFT01\",``FFTW.REDFT10``, or
+   \"FFTW.REDFT11\"), a discrete sine transform of various types
+   (\"FFTW.RODFT00\", \"FFTW.RODFT01\", \"FFTW.RODFT10\", or
+   \"FFTW.RODFT11\"), a real-input DFT with halfcomplex-format output
+   (\"FFTW.R2HC\" and its inverse \"FFTW.HC2R\"), or a discrete
+   Hartley transform (\"FFTW.DHT\").  The \"kind\" argument may be an
+   array or tuple in order to specify different transform types along
+   the different dimensions of \"A\"; \"kind[end]\" is used for any
+   unspecified dimensions.  See the FFTW manual for precise
+   definitions of these transform types, at
+   *<http://www.fftw.org/doc>*.
+
+   The optional \"dims``argument specifies an iterable subset of
+   dimensions (e.g. an integer, range, tuple, or array) to transform
+   along.  ``kind[i]\" is then the transform type for \"dims[i]\",
+   with \"kind[end]\" being used for \"i > length(kind)\".
+
+   See also \"FFTW.plan_r2r()\" to pre-plan optimized r2r transforms.
+
+   \"FFTW.r2r!()\" is the same as \"FFTW.r2r()\", but operates in-
+   place on \"A\", which must be an array of real or complex floating-
+   point numbers.
+
+"),
+
+(E"Signal Processing",E"",E"FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!",E"FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
+
+   Pre-plan an optimized r2r transform, similar to \"plan_fft()\"
+   except that the transforms (and the first three arguments)
+   correspond to \"FFTW.r2r()\" and \"FFTW.r2r!()\", respectively.
 
 "),
 
