@@ -539,3 +539,16 @@ let
     @test g1632(1, 2) == 2
     @test g1632(:a, 2) == 1
 end
+
+# issue #1628
+type I1628{X}
+    x::X
+end
+let
+    # here the potential problem is that the run-time value of static
+    # parameter X in the I1628 constructor is (AbstractKind,BitsKind),
+    # but type inference will track it more accurately as
+    # (Type{Integer}, Type{Int}).
+    f1628() = I1628((Integer,Int))
+    @test isa(f1628(), I1628{(AbstractKind,BitsKind)})
+end
