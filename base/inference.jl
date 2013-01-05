@@ -1582,8 +1582,10 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if is(ast,())
         return NF
     end
+    needcopy = true
     if !isa(ast,Expr)
         ast = ccall(:jl_uncompress_ast, Any, (Any,Any), meth[3], ast)
+        needcopy = false
     end
     ast = ast::Expr
     for vi in ast.args[2][2]
@@ -1640,7 +1642,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
 
     # ok, substitute argument expressions for argument names in the body
     spnames = { sp[i].name for i=1:2:length(sp) }
-    expr = astcopy(expr)
+    if needcopy; expr = astcopy(expr); end
     mfrom = meth[3].module; mto = (inference_stack::CallStack).mod
     if !is(mfrom, mto)
         expr = resolve_globals(expr, mfrom, mto, args, spnames)

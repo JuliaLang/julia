@@ -285,7 +285,6 @@ compile_hint(occurs_more, (Uint8, Function, Int))
 compile_hint(abstract_eval_arg, (Uint8, ObjectIdDict, StaticVarInfo))
 compile_hint(occurs_outside_tupleref, (Function, Symbol, StaticVarInfo, Int))
 compile_hint(search, (ASCIIString, Regex, Int))
-compile_hint(astcopy, (Uint8,))
 compile_hint(assign, (Vector{Uint8}, Uint8, Int))
 
 # invoke type inference, running the existing inference code on the new
