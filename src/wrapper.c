@@ -384,12 +384,16 @@ static char chars[] = {
 };
 
 static void jl_free_buffer(uv_write_t* req, int status) {
+    if(req->data) {
+        free(req->data);
+    }
 	free(req);
 }
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream) {
     if(stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
+        uvw->data=0;
         uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
         int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
 		return err ? 0 : 1;
@@ -405,7 +409,10 @@ DLLEXPORT int jl_write(uv_stream_t *stream, char *str, size_t n) {
         return 0;
     if(stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
-        uv_buf_t buf[]  = {{.base = str,.len=n}};
+        char *data = malloc(n);
+        memcpy(data,str,n);
+        uv_buf_t buf[]  = {{.base = data,.len=n}};
+        uvw->data = data;
         int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
 		return err ? 0 : n;
     } else {
