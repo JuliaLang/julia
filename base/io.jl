@@ -29,15 +29,19 @@ write(s::IO, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
 if ENDIAN_BOM == 0x01020304
     function write(s, x::Integer)
+        nb = 0
         for n = sizeof(x):-1:1
-            write(s, uint8((x>>>((n-1)<<3))))
+            nb += write(s, uint8((x>>>((n-1)<<3))))
         end
+        nb
     end
 else
     function write(s, x::Integer)
+        nb = 0
         for n = 1:sizeof(x)
-            write(s, uint8((x>>>((n-1)<<3))))
+            nb += write(s, uint8((x>>>((n-1)<<3))))
         end
+        nb
     end
 end
 
@@ -46,9 +50,11 @@ write(s::IO, x::Float32) = write(s, box(Int32,unbox(Float32,x)))
 write(s::IO, x::Float64) = write(s, box(Int64,unbox(Float64,x)))
 
 function write(s::IO, a::AbstractArray)
+    nb = 0
     for i = 1:numel(a)
-        write(s, a[i])
+        nb += write(s, a[i])
     end
+    nb
 end
 
 function write(s::IO, c::Char)
