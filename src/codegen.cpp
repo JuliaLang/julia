@@ -2705,6 +2705,9 @@ extern "C" void jl_init_codegen(void)
 #ifdef __MINGW32__
     options.StackAlignmentOverride = 16;
 #endif
+#ifdef __APPLE__
+    options.JITExceptionHandling = 1;
+#endif
     jl_ExecutionEngine = EngineBuilder(jl_Module)
         .setEngineKind(EngineKind::JIT)
         .setTargetOptions(options)
