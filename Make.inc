@@ -216,6 +216,10 @@ LIBM = -lopenlibm
 LIBMNAME = libopenlibm
 endif
 
+ifeq ($(USE_MKL), 1)
+  USE_LIB64 = 0
+endif
+
 # OS specific stuff
 
 # install_name_tool
