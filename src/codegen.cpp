@@ -1929,12 +1929,12 @@ static Function *emit_function(jl_lambda_info_t *lam)
     // try to avoid conflicts in the global symbol table
     funcName = "julia_" + funcName;
 
+    jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
     if (specsig) {
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             fsig.push_back(julia_type_to_llvm(jl_tupleref(lam->specTypes,i)));
         }
-        jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
                              Function::ExternalLinkage, funcName, jl_Module);
@@ -1950,6 +1950,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
             lam->functionObject = (void*)f;
         }
     }
+    if (jlrettype == (jl_value_t*)jl_bottom_type)
+        f->setDoesNotReturn();
 
     ctx.f = f;
 
