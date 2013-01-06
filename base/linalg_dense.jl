@@ -10,8 +10,8 @@ scale!(X::Array{Complex128}, s::Real) = (ccall(("dscal_",Base.libblas_name), Voi
 
 #Test whether a matrix is positive-definite
 
-isposdef!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = ishermitian(A) && LAPACK.potrf!(UL, A)[2] == 0
-isposdef!(A::Matrix) = isposdef!(A, 'U')
+isposdef!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = LAPACK.potrf!(UL, A)[2] == 0
+isposdef!(A::Matrix) = ishermitian(A) && isposdef!(A, 'U')
 
 isposdef{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = isposdef!(copy(A), UL)
 isposdef{T<:BlasFloat}(A::Matrix{T}) = isposdef!(copy(A))
@@ -480,7 +480,6 @@ type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
     tol::Real
     function CholeskyDensePivoted(A::Matrix{T}, UL::BlasChar, tol::Real)
         A, piv, rank, info = LAPACK.pstrf!(UL, A, tol)
-        if info != 0 error("Matrix A not positive-definite") end
         if UL == 'U'
             new(triu!(A), UL, piv, rank, tol)
         elseif UL == 'L'
@@ -496,17 +495,29 @@ size(C::CholeskyDensePivoted,d::Integer) = size(C.LR,d)
 
 factors(C::CholeskyDensePivoted) = C.LR, C.piv
 
-\{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedVecOrMat{T}) =
+function \{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedVector{T})
+    if C.rank < size(C.LR, 1) error("Matrix is not positive-definite") end
     LAPACK.potrs!(C.UL, C.LR, copy(B)[C.piv])[invperm(C.piv)]
+end
+function \{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedMatrix{T})
+    if C.rank < size(C.LR, 1) error("Matrix is not positive-definite") end
+    LAPACK.potrs!(C.UL, C.LR, copy(B)[C.piv,:])[invperm(C.piv),:]
+end
 
 rank(C::CholeskyDensePivoted) = C.rank
 
-det(C::CholeskyDensePivoted) = prod(abs2(diag(C.LR)))
+function det{T}(C::CholeskyDensePivoted{T})
+    if C.rank < size(C.LR, 1) 
+        return real(zero(T))
+    else 
+        return prod(abs2(diag(C.LR)))
+    end
+end
     
 function inv(C::CholeskyDensePivoted)
     if C.rank < size(C.LR, 1) error("Matrix singular") end
     Ci, info = LAPACK.potri!(C.UL, copy(C.LR))
-    if info != 0 error("Matrix singular") end
+    if info != 0 error("Matrix is singular") end
     ipiv = invperm(C.piv)
     (symmetrize!(Ci, C.UL))[ipiv, ipiv]
 end
