@@ -371,11 +371,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     bool haspointers = false;
     bool isVa = false;
     size_t nargt = jl_tuple_len(tt);
-#ifdef LLVM32
     std::vector<AttributeWithIndex> attrs;
-#else
-    AttributeSet as;
-#endif
+
     for(i=0; i < nargt; i++) {
         jl_value_t *tti = jl_tupleref(tt,i);
         if (jl_is_seq_type(tti)) {
@@ -399,10 +396,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 attrs.push_back(AttributeWithIndex::get(getGlobalContext(), i+1,
                                                         ArrayRef<Attributes::AttrVal>(&av, 1)));
 #else
+                Attribute::AttrConst av;
                 if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
-                    as = as.addAttr(getGlobalContext(), i+1, Attribute::SExt);
+                    av = Attribute::SExt;
                 else
-                    as = as.addAttr(getGlobalContext(), i+1, Attribute::ZExt);
+                    av = Attribute::ZExt;
+                attrs.push_back(AttributeWithIndex::get(i+1, av));
 #endif
             }
         }
@@ -556,12 +555,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                        ArrayRef<Value*>(&argvals[0],(nargs-3)/2));
     if (cc != CallingConv::C)
         ((CallInst*)result)->setCallingConv(cc);
+
 #ifdef LLVM32
     ((CallInst*)result)->setAttributes(AttrListPtr::get(getGlobalContext(), ArrayRef<AttributeWithIndex>(attrs)));
 #else
-    ((CallInst*)result)->setAttributes(as);
+    ((CallInst*)result)->setAttributes(AttrListPtr::get(attrs.data(),attrs.size()));
 #endif
-
     // restore temp argument area stack pointer
     if (haspointers) {
         assert(saveloc != NULL);
