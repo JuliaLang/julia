@@ -13,4 +13,3 @@ runtests("image")
 runtests("gzip")
 
 runtests("perf")
-runtests("ccall")

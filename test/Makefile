@@ -10,7 +10,7 @@ random math functional bigint bigfloat combinatorics \
 statistics glpk linprog poly file Rmath remote zlib image \
 iostring gzip ccall
 
-$(TESTS) :: libccalltest.$(SHLIB_EXT)
+$(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
 
 perf:
