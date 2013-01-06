@@ -371,7 +371,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     bool haspointers = false;
     bool isVa = false;
     size_t nargt = jl_tuple_len(tt);
+#ifdef LLVM32
     std::vector<AttributeWithIndex> attrs;
+#else
+    AttributeSet as;
+#endif
     for(i=0; i < nargt; i++) {
         jl_value_t *tti = jl_tupleref(tt,i);
         if (jl_is_seq_type(tti)) {
@@ -386,6 +390,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 if (jl_signed_type == NULL) {
                     jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
                 }
+#ifdef LLVM32
                 Attributes::AttrVal av;
                 if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
                     av = Attributes::SExt;
@@ -393,6 +398,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     av = Attributes::ZExt;
                 attrs.push_back(AttributeWithIndex::get(getGlobalContext(), i+1,
                                                         ArrayRef<Attributes::AttrVal>(&av, 1)));
+#else
+                if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
+                    as = as.addAttr(getGlobalContext(), i+1, Attribute::SExt);
+                else
+                    as = as.addAttr(getGlobalContext(), i+1, Attribute::ZExt);
+#endif
             }
         }
         Type *t = julia_type_to_llvm(tti);
@@ -545,7 +556,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                        ArrayRef<Value*>(&argvals[0],(nargs-3)/2));
     if (cc != CallingConv::C)
         ((CallInst*)result)->setCallingConv(cc);
+#ifdef LLVM32
     ((CallInst*)result)->setAttributes(AttrListPtr::get(getGlobalContext(), ArrayRef<AttributeWithIndex>(attrs)));
+#else
+    ((CallInst*)result)->setAttributes(as);
+#endif
 
     // restore temp argument area stack pointer
     if (haspointers) {
