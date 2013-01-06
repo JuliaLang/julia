@@ -16,7 +16,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq a*(capd\(a'*b)) b          # least squares soln for square a
         @assert_approx_eq det(capd) det(apd)
 
-        l     = factors(chold(apd, false))      # lower Cholesky factor
+        l     = factors(chold(apd, 'L'))      # lower Cholesky factor
         @assert_approx_eq l*l' apd
 
         cpapd = cholpd(apd)                     # pivoted Choleksy decomposition
