@@ -8,9 +8,9 @@ core numbers strings unicode corelib hashing remote \
 arrayops linalg fft dct sparse bitarray suitesparse arpack \
 random math functional bigint bigfloat combinatorics \
 statistics glpk linprog poly file Rmath remote zlib image \
-iostring gzip
+iostring gzip ccall
 
-$(TESTS) :: libccall.$(SHLIB_EXT) ccall
+$(TESTS) :: libccalltest.$(SHLIB_EXT)
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
 
 perf:
@@ -25,13 +25,12 @@ benchmark:
 
 clean:
 	@$(MAKE) -C perf $@
-	-rm -f libccall.${SHLIB_EXT} ccall
+	-rm -f libccalltest.${SHLIB_EXT} ccalltest
 
 .PHONY: $(TESTS) perf benchmark clean
 
-libccall.$(SHLIB_EXT): ccall.c
-	    $(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -shared -o $@ $(LDFLAGS) -DCC=$(CC)
+libccalltest.$(SHLIB_EXT): ccalltest.c
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -fPIC -shared -o $@ $(LDFLAGS) -DCC=$(CC)
 
-ccall: ccall.c
+ccalltest: ccalltest.c
 	$(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -o $@ $(LDFLAGS) -DCC=$(CC)
-
