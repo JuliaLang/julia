@@ -508,3 +508,22 @@ let
     a,b = a
     @test a==1 && b==2
 end
+
+# issue #1876
+let
+    tst = 1
+    m1(i) = (tst+=1;i-1)
+    x = [1:4]
+    x[1:end] *= 2
+    @test x == [2:2:8]
+    x[m1(end)] += 3
+    @test x == [2,4,9,8]
+    @test tst == 2
+
+    # issue #1886
+    X = [1:4]
+    r = Array(Range1{Int64},1)
+    r[1] = 2:3
+    X[r...] *= 2
+    @test X == [1,4,6,4]
+end

@@ -1,4 +1,6 @@
-require("lru")
+include(find_in_path("lru"))
+
+import Base.isequal, Base.length, Base.ref
 
 bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
 

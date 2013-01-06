@@ -34,7 +34,6 @@ ctranspose(x::Number) = conj(x)
 inv(x::Number) = one(x)/x
 angle(z::Real) = atan2(zero(z), z)
 
-# TODO: should we really treat numbers as iterable?
 start(a::Real) = a
 next(a::Real, i) = (a, a+1)
 done(a::Real, i) = (i > a)

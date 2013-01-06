@@ -1,44 +1,12 @@
-function issym(A::Matrix)
-    m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:(n-1), j = (i+1):n
-        if A[i,j] != A[j,i]
-            return false
-        end
-    end
-    return true
-end
+# Linear algebra functions for dense matrices in column major format
 
-function ishermitian(A::Matrix)
-    m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:n, j = i:n
-        if A[i,j] != conj(A[j,i])
-            return false
-        end
-    end
-    return true
-end
+scale!(X::Array{Float32}, s::Real) = BLAS.scal!(numel(X), float32(s), X, 1)
 
-function istriu(A::Matrix)
-    m, n = size(A)
-    for j = 1:min(n,m-1), i = j+1:m
-        if A[i,j] != 0
-            return false
-        end
-    end
-    return true
-end
+scale!(X::Array{Float64}, s::Real) = BLAS.scal!(numel(X), float64(s), X, 1)
 
-function istril(A::Matrix)
-    m, n = size(A)
-    for j = 2:n, i = 1:min(j-1,m)
-        if A[i,j] != 0
-            return false
-        end
-    end
-    return true
-end
+scale!(X::Array{Complex64}, s::Real) = (ccall(("sscal_",Base.libblas_name), Void, (Ptr{Base.BlasInt}, Ptr{Float32}, Ptr{Complex64}, Ptr{Base.BlasInt}), &(2*numel(X)), &s, X, &1); X)
+
+scale!(X::Array{Complex128}, s::Real) = (ccall(("dscal_",Base.libblas_name), Void, (Ptr{Base.BlasInt}, Ptr{Float64}, Ptr{Complex128}, Ptr{Base.BlasInt}), &(2*numel(X)), &s, X, &1); X)
 
 #Test whether a matrix is positive-definite
 
@@ -50,6 +18,8 @@ isposdef{T<:BlasFloat}(A::Matrix{T}, upper::Bool) = isposdef!(copy(A), upper)
 isposdef{T<:BlasFloat}(A::Matrix{T}) = isposdef!(copy(A))
 isposdef{T<:Number}(A::Matrix{T}, upper::Bool) = isposdef!(float64(A), upper)
 isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
+
+isposdef(x::Number) = isreal(x) && x > 0
 
 norm{T<:BlasFloat}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
 
@@ -169,6 +139,8 @@ end
 
 diagm(v) = diagm(v, 0)
 
+diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
+
 function trace{T}(A::Matrix{T})
     t = zero(T)
     for i=1:min(size(A))
@@ -196,6 +168,12 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     end
     R
 end
+
+kron(a::Number, b::Number) = a * b
+kron(a::Vector, b::Number) = a * b
+kron(a::Number, b::Vector) = a * b
+kron(a::Matrix, b::Number) = a * b
+kron(a::Number, b::Matrix) = a * b
 
 function randsym(n)
     a = randn(n,n)
@@ -235,7 +213,7 @@ end
 
 function rref{T}(A::Matrix{T})
     nr, nc = size(A)
-    U = copy_to(similar(A,Float64), A)
+    U = copy_to(similar(A, T <: Complex ? Complex128 : Float64), A)
     e = eps(norm(U,Inf))
     i = j = 1
     while i <= nr && j <= nc
@@ -266,6 +244,8 @@ function rref{T}(A::Matrix{T})
     end
     return U
 end
+
+rref(x::Number) = one(x)
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
@@ -409,6 +389,7 @@ end
 # Matrix exponential
 expm{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}) = expm!(copy(A))
 expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float(A))
+expm(x::Number) = exp(x)
 
 ## Matrix factorizations and decompositions
 
@@ -483,6 +464,7 @@ chold{T<:Number}(A::Matrix{T}) = chold(A, true)
 
 ## Matlab (and R) compatible
 chol{T<:Number}(A::Matrix{T}) = factors(chold(A))
+chol(x::Number) = isreal(x) && x >= 0 ? sqrt(x) : error("argument not positive-definite")
 
 type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
@@ -569,6 +551,7 @@ lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
 
 ## Matlab-compatible
 lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
+lu(x::Number) = (one(x), x)
 
 function det{T}(lu::LUDense{T})
     m, n = size(lu)
@@ -583,15 +566,17 @@ function det(A::Matrix)
     return det(lud(A))
 end
 
+det(x::Number) = x
+
 function (\){T<:BlasFloat}(lu::LUDense{T}, B::StridedVecOrMat{T})
-    if lu.info > 0; error("Singular system"); end
+    if lu.info > 0; throw(LAPACK.SingularException(info)); end
     LAPACK.getrs!('N', lu.lu, lu.ipiv, copy(B))
 end
 
 function inv{T<:BlasFloat}(lu::LUDense{T})
     m, n = size(lu.lu)
     if m != n; error("inv only defined for square matrices"); end
-    if lu.info > 0; return error("Singular system"); end
+    if lu.info > 0; return throw(LAPACK.SingularException(info)); end
     LAPACK.getri!(copy(lu.lu), lu.ipiv)
 end
 
@@ -617,6 +602,7 @@ function factors{T<:BlasFloat}(qrd::QRDense{T})
 end
 
 qr{T<:Number}(x::StridedMatrix{T}) = factors(qrd(x))
+qr(x::Number) = (one(x), x)
 
 ## Multiplication by Q from the QR decomposition
 (*){T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T}) =
@@ -630,7 +616,7 @@ Ac_mul_B{T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T}) =
 function (\){T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T})
     n   = length(A.tau)
     ans, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
-    if info > 0; error("Singular system"); end
+    if info > 0; throw(LAPACK.SingularException(info)); end
     return ans
 end
 
@@ -671,7 +657,7 @@ qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
 function (\){T<:BlasFloat}(A::QRPDense{T}, B::StridedVecOrMat{T})
     n = length(A.tau)
     x, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
-    if info > 0; error("Singular system"); end
+    if info > 0; throw(LAPACK.SingularException(info)); end
     isa(B, Vector) ? x[invperm(A.jpvt)] : x[:,invperm(A.jpvt)]
 end
 
@@ -720,8 +706,9 @@ function eig{T<:BlasFloat}(A::StridedMatrix{T}, vecs::Bool)
 end
 
 eig{T<:Integer}(x::StridedMatrix{T}, vecs::Bool) = eig(float64(x), vecs)
-eig(x::StridedMatrix) = eig(x, true)
-eigvals(x::StridedMatrix) = eig(x, false)
+eig(x::Number, vecs::Bool) = vecs ? (x, one(x)) : x
+eig(x) = eig(x, true)
+eigvals(x) = eig(x, false)
 
 # This is the svd based on the LAPACK GESVD, which is slower, but takes
 # lesser memory. It should be made available through a keyword argument
@@ -753,8 +740,9 @@ function svd{T<:BlasFloat}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
 end
 
 svd{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svd(float64(x),vecs,thin)
-svd(A::StridedMatrix) = svd(A,true,false)
-svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
+svd(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
+svd(A) = svd(A,true,false)
+svd(A, thin::Bool) = svd(A,true,thin)
 svdvals(A) = svd(A,false,true)[2]
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
@@ -765,21 +753,21 @@ function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     if m == n # Square
         if istriu(A) 
             ans, info = LAPACK.trtrs!('U', 'N', 'N', Acopy, X)
-            if info > 0; error("Singular system"); end
+            if info > 0; throw(LAPACK.SingularException(info)); end
             return ans
         end
         if istril(A) 
             ans, info = LAPACK.trtrs!('L', 'N', 'N', Acopy, X) 
-            if info > 0; error("Singular system"); end
+            if info > 0; throw(LAPACK.SingularException(info)); end
             return ans
         end
         if ishermitian(A) 
             ans, _, _, info = LAPACK.sysv!('U', Acopy, X)
-            if info > 0; error("Singular system"); end
+            if info > 0; throw(LAPACK.SingularException(info)); end
             return ans
         end
         ans, _, _, info = LAPACK.gesv!(Acopy, X)
-        if info > 0; error("Singular system"); end
+        if info > 0; throw(LAPACK.SingularException(info)); end
         return ans
     end
     LAPACK.gelsd!(Acopy, X)[1]
@@ -808,16 +796,34 @@ function pinv{T<:BlasFloat}(A::StridedMatrix{T})
 end
 pinv{T<:Integer}(A::StridedMatrix{T}) = pinv(float(A))
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
+pinv(x::Number) = one(x)/x
 
 ## Basis for null space
 function null{T<:BlasFloat}(A::StridedMatrix{T})
     m,n = size(A)
-    if m >= n; return zeros(T, n, 0); end;
-    u,s,vt = svd(A)
-    vt[m+1:,:]'
+    _,s,vt = svd(A)
+    if m == 0; return eye(T, n); end
+    indstart = sum(s .> max(m,n)*max(s)*eps(eltype(s))) + 1
+    vt[indstart:,:]'
 end
 null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
 null(a::StridedVector) = null(reshape(a, length(a), 1))
+
+function cond(A::StridedMatrix, p) 
+    if p == 2
+        v = svdvals(A)
+        maxv = max(v)
+        cnd = maxv == 0.0 ? Inf : maxv / min(v)
+    elseif p == 1 || p == Inf
+        m, n = size(A)
+        if m != n; error("Use 2-norm for non-square matrices"); end
+        cnd = 1 / LAPACK.gecon!(p == 1 ? '1' : 'I', lud(A).lu, norm(A, p))
+    else
+        error("Norm type must be 1, 2 or Inf")
+    end
+    return cnd
+end
+cond(A::StridedMatrix) = cond(A, 2)
 
 #### Specialized matrix types ####
 

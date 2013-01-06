@@ -1,8 +1,9 @@
-cd("../extras") do
-require("bigint")
+cd(()->require("gmp"),"..")
 
-a=BigInt("123456789012345678901234567890")
-b=BigInt("123456789012345678901234567891")
+using GMP
+
+a = BigInt("123456789012345678901234567890")
+b = BigInt("123456789012345678901234567891")
 
 @test typeof(a+1) == BigInt
 @test a+1 == b
@@ -48,5 +49,3 @@ ee = typemax(Int64)
 @test factorial(BigInt(40)) == BigInt("815915283247897734345611269596115894272000000000")
 @test binomial(BigInt(-53), 42) == BigInt("959509335087854414441273718")
 @test binomial(BigInt(113), BigInt(42)) == BigInt("18672199984318438125634054194360")
-
-end # cd

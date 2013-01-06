@@ -876,17 +876,18 @@ end
 
 # the entry point for julia worker processes. does not return.
 # argument is descriptor to write listening port # to.
-start_worker() = start_worker(1)
-function start_worker(wrfd)
+start_worker(mode :: String) = start_worker(mode, 1)
+function start_worker(mode :: String, wrfd)
     port = [int16(9009)]
     sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), port)
     if sockfd == -1
         error("could not bind socket")
     end
     io = fdio(wrfd)
+    host = mode == "local" ? "localhost" : getipaddr()
     write(io, "julia_worker:")    # print header
     write(io, "$(dec(port[1]))#") # print port
-    write(io, getipaddr())        # print hostname
+    write(io, host)               # print hostname
     write(io, '\n')
     flush(io)
     # close stdin; workers will not use it
@@ -974,11 +975,11 @@ function ssh_tunnel(user, host, port)
 end
 
 function worker_ssh_cmd(host)
-    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker remote\""`
 end
 
 #function worker_ssh_cmd(host, key)
-#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker remote\""`
 #end
 
 function addprocs_ssh(machines)
@@ -1003,7 +1004,7 @@ end
 #    add_workers(PGRP, start_remote_workers(machines, map(x->worker_ssh_cmd(x[1],x[2]), cmdargs)))
 #end
 
-worker_local_cmd() = `$JULIA_HOME/julia-release-basic --worker`
+worker_local_cmd() = `$JULIA_HOME/julia-release-basic --worker local`
 
 addprocs_local(np::Integer) =
     add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
@@ -1015,7 +1016,7 @@ function start_sge_workers(n)
     sgedir = "$home/../../SGE"
     run(`mkdir -p $sgedir`)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
-    `echo $home/julia-release-basic --worker` | qsub_cmd
+    `echo $home/julia-release-basic --worker remote` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
