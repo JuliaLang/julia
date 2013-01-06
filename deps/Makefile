@@ -228,6 +228,7 @@ endif
 endif
 ifeq ($(ARCH), ppc64)
   LLVM_FLAGS += CXXFLAGS=-mminimal-toc
+  LLVM_MFLAGS += CXXFLAGS=-mminimal-toc
 endif
 
 ifeq (exists, $(shell [ -e llvm-$(LLVM_VER)/config.log ] && echo exists ))
