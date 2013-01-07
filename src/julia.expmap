@@ -251,9 +251,9 @@
     profile_init;
     profile_start_timer;
     profile_stop_timer;
-    get_profile_data;
-    get_profile_data_len;
-    clear_profile_data;
+    profile_get_data;
+    profile_len_data;
+    profile_clear_data;
   local:
     *;
 };
