@@ -442,11 +442,9 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
 
 DLLEXPORT jl_value_t *jl_parse_backtrace(size_t n, ptrint_t *data)
 {
-    ios_printf(JL_STDERR, "n = %d\n", n);
     jl_array_t *a = jl_alloc_cell_1d(0);
     JL_GC_PUSH(&a);
     for(size_t i=0; i < n; i++) {
-	ios_printf(JL_STDERR, "  data[i] = %lx\n", data[i]);
         push_frame_info_from_ip(a, (size_t)data[i]);
     }
     JL_GC_POP();
@@ -460,12 +458,12 @@ DLLEXPORT jl_value_t *jl_get_backtrace()
 
 #if defined(__APPLE__)
 // stacktrace using execinfo
-void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
+size_t rec_backtrace(ptrint_t *bt_data, size_t maxsize)
 {
-    *bt_size_p = backtrace((void**)bt_data, MAX_BT_SIZE);
+    return backtrace((void**)(bt_data, maxsize);
 }
 #elif defined(__WIN32__)
-void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
+size_t rec_backtrace(ptrint_t *bt_data, size_t maxsize)
 {
     /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
 #if defined(__MINGW_H)
@@ -479,11 +477,10 @@ void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
             FreeLibrary(kernel32);
             kernel32 = NULL;
             func = NULL;
-            *bt_size_p = 0;
-            return;
+	    return (size_t) 0;
         }
         else {
-            *bt_size_p = func(0, MAX_BT_SIZE, bt_data, NULL);
+            return func(0, maxsize, bt_data, NULL);
         }
     }
     else {
@@ -492,12 +489,12 @@ void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
     }
     FreeLibrary(kernel32);
 #else
-    *bt_size_p = RtlCaptureStackBackTrace(0, MAX_BT_SIZE, bt_data, NULL);
+    return RtlCaptureStackBackTrace(0, maxsize, bt_data, NULL);
 #endif
 }
 #else
 // stacktrace using libunwind
-void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
+size_t rec_backtrace(ptrint_t *bt_data, size_t maxsize)
 {
     unw_cursor_t cursor; unw_context_t uc;
     unw_word_t ip;
@@ -505,7 +502,7 @@ void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
     
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
-    while (unw_step(&cursor) && n < MAX_BT_SIZE) {
+    while (unw_step(&cursor) && n < maxsize) {
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
         bt_data[n++] = ip;
         /*
@@ -517,13 +514,13 @@ void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data)
             ios_printf(ios_stdout, "in %s at %s:%d\n", func_name, file_name, line_num);
         */
     }
-    *bt_size_p = n;
+    return n;
 }
 #endif
 
 static void record_backtrace(void)
 {
-    rec_backtrace(&bt_size, bt_data);
+    bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
 }
 
 // yield to exception handler

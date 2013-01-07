@@ -4,69 +4,74 @@
 #include <string.h>
 #include "julia.h"
 
-#if defined(__APPLE__) || defined(__WIN32__)
-#define MAX_BT_SIZE 1023
-#else
-#define MAX_BT_SIZE 80000
-#endif
-
-extern void rec_backtrace(size_t *bt_size_p, ptrint_t *bt_data);
+extern size_t rec_backtrace(ptrint_t *bt_data, size_t maxsize);
 
 static timer_t timerprof;
-static struct sigevent sigprof;
 static struct itimerspec itsprof;
 
-static ptrint_t bt_data_prof[MAX_BT_SIZE+1];
-static size_t bt_size_prof = 0;
-static int bt_skip = 0;
+static ptrint_t* bt_data_prof = NULL;
+static size_t bt_size_max = 0;
+static size_t bt_size_cur = 0;
 static uint64_t nsecprof;
 
-jl_array_t *profdata;
-
-void profile_bt(union sigval v)
+// The handler function, called whenever the profiling timer elapses
+static void profile_bt(int signal, siginfo_t *si, void *uc)
 {
-  size_t i; //,j;  
-  
-  // Get backtrace data
-  rec_backtrace(&bt_size_prof, bt_data_prof);
-  // Copy backtrace data to buffer
-  int n = (bt_size_prof - bt_skip)*sizeof(ptrint_t);
-  if (n > 0) {
-    i = jl_array_len(profdata);
-//     for (j = 0; j < n/sizeof(ptrint_t); j++)
-//       ios_printf(JL_STDERR, "%llx ", bt_data_prof[j]);
-//     ios_printf(JL_STDERR, "\n");
-    jl_array_grow_end(profdata, n+sizeof(ptrint_t));
-    memcpy(profdata->data+i, (const void*) bt_data_prof, n);
-    memset(profdata->data+i+n, 0, sizeof(ptrint_t));  // mark end
+  if (si->si_value.sival_ptr == &timerprof && bt_size_cur < bt_size_max) {
+    // Get backtrace data
+    bt_size_cur += rec_backtrace(bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1);
+    // Mark the end of this block with 0
+    bt_data_prof[bt_size_cur] = 0;
+    bt_size_cur++;
+    // Re-arm the  timer
+    if (bt_size_cur < bt_size_max) {
+      itsprof.it_value.tv_nsec = nsecprof;
+      timer_settime(timerprof, 0, &itsprof, NULL);
+    }
   }
-  // Re-arm the  timer
-  itsprof.it_value.tv_nsec = nsecprof;
-  timer_settime(timerprof, 0, &itsprof, NULL);
 }
 
-DLLEXPORT void profile_init(uint64_t nsec, int skip)
+DLLEXPORT void profile_init(size_t maxsize, uint64_t nsec)
 {
+  if (bt_data_prof != NULL)
+    free(bt_data_prof);
+  bt_data_prof = (ptrint_t*) malloc(maxsize*sizeof(ptrint_t));
+  if (bt_data_prof == NULL && maxsize > 0)
+    jl_errorf("Could not allocate space for %d profiling samples", maxsize);
+  bt_size_max = maxsize;
   nsecprof = nsec;
-  bt_skip = skip;
-  
-  profdata = jl_alloc_array_1d(jl_array_uint8_type, 0);
-  jl_gc_preserve((jl_value_t*) profdata);
 }
 
 DLLEXPORT void profile_start_timer(void)
 {
-  sigprof.sigev_notify = SIGEV_THREAD;
-  sigprof.sigev_signo = 1;
-  sigprof.sigev_notify_function = profile_bt;
-  sigprof.sigev_notify_attributes = NULL;
+  struct sigevent sigprof;
+  struct sigaction sa;
+  
+  // Establish the signal handler
+  memset(&sa, 0, sizeof(struct sigaction));
+  sa.sa_flags = SA_SIGINFO;
+  sa.sa_sigaction = profile_bt;
+  sigemptyset(&sa.sa_mask);
+  if (sigaction(SIGUSR1, &sa, NULL) == -1)
+    jl_error("Cannot specify signal action for profiling");
+
+  // Establish the signal event
+  memset(&sigprof, 0, sizeof(struct sigevent));
+  sigprof.sigev_notify = SIGEV_SIGNAL;
+  sigprof.sigev_signo = SIGUSR1;
+  sigprof.sigev_value.sival_ptr = &timerprof;
+//   sigprof.sigev_notify_function = profile_bt;
+//   sigprof.sigev_notify_attributes = NULL;
+  if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1)
+    jl_error("Cannot create the timer for profiling");
+
+  // Start the timer
   itsprof.it_value.tv_sec = 0;
   itsprof.it_interval.tv_sec = 0;       // make it fire once
   itsprof.it_interval.tv_nsec = 0;
-  
-  timer_create(CLOCK_REALTIME, &sigprof, &timerprof);
   itsprof.it_value.tv_nsec = nsecprof;
-  timer_settime(timerprof, 0, &itsprof, NULL);
+  if (timer_settime(timerprof, 0, &itsprof, NULL) == -1)
+    jl_error("Cannot start the timer for profiling");
 }
 
 DLLEXPORT void profile_stop_timer(void)
@@ -76,17 +81,17 @@ DLLEXPORT void profile_stop_timer(void)
 
 DLLEXPORT uint8_t* get_profile_data(void)
 {
-  return profdata->data;
+  if (bt_size_cur == bt_size_max)
+    ios_printf(JL_STDERR, "Warning: profile buffer is full, profiling may have stopped before your program completed. Consider initializing with a larger buffer and re-running.");
+  return (uint8_t*) bt_data_prof;
 }
 
-DLLEXPORT int get_profile_data_len(void)
+DLLEXPORT size_t get_profile_data_len(void)
 {
-  return jl_array_len(profdata)/sizeof(ptrint_t);
+  return bt_size_cur;
 }
 
 DLLEXPORT void clear_profile_data(void)
 {
-  size_t n;
-  n = jl_array_len(profdata);
-  jl_array_del_end(profdata, n);
+  bt_size_cur = 0;
 }
