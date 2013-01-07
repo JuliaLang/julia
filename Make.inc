@@ -28,9 +28,9 @@ else
 ifeq ($(XC_HOST),i686-w64-mingw32)
 override OS = WINNT
 override ARCH = i686
-#override OPENBLAS_DYNAMIC_ARCH = 1
+override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
-export WINEPATH := $(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g');$(WINEPATH)
+export WINEPATH := $(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g')
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -289,7 +289,7 @@ JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lmsvcr100
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
 LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
