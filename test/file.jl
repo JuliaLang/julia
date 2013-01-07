@@ -29,11 +29,11 @@ run(`chmod +w $file`)
 @test mtime(file) >= mtime(dir)
 
 # rename file
-newfilename = joinpath(dir, "bfile.txt")
-mv(file, newfilename)
+newfile = joinpath(dir, "bfile.txt")
+mv(file, newfile)
 @test ispath(file) == false
-@test isfile(newfilename) == true
-file = newfilename
+@test isfile(newfile) == true
+file = newfile
 
 #######################################################################
 # This section tests temporary file and directory creation.           #
