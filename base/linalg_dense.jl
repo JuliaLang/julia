@@ -4,22 +4,21 @@ scale!(X::Array{Float32}, s::Real) = BLAS.scal!(numel(X), float32(s), X, 1)
 
 scale!(X::Array{Float64}, s::Real) = BLAS.scal!(numel(X), float64(s), X, 1)
 
-scale!(X::Array{Complex64}, s::Real) = (ccall(("sscal_",Base.libblas_name), Void, (Ptr{Base.BlasInt}, Ptr{Float32}, Ptr{Complex64}, Ptr{Base.BlasInt}), &(2*numel(X)), &s, X, &1); X)
+scale!(X::Array{Complex64}, s::Real) = (ccall(("sscal_",Base.libblas_name), Void, (Ptr{BlasInt}, Ptr{Float32}, Ptr{Complex64}, Ptr{BlasInt}), &(2*numel(X)), &s, X, &1); X)
 
-scale!(X::Array{Complex128}, s::Real) = (ccall(("dscal_",Base.libblas_name), Void, (Ptr{Base.BlasInt}, Ptr{Float64}, Ptr{Complex128}, Ptr{Base.BlasInt}), &(2*numel(X)), &s, X, &1); X)
+scale!(X::Array{Complex128}, s::Real) = (ccall(("dscal_",Base.libblas_name), Void, (Ptr{BlasInt}, Ptr{Float64}, Ptr{Complex128}, Ptr{BlasInt}), &(2*numel(X)), &s, X, &1); X)
 
 #Test whether a matrix is positive-definite
 
-isposdef!{T<:BlasFloat}(A::Matrix{T}, upper::Bool) =
-    LAPACK.potrf!(upper ? 'U' : 'L', A)[2] == 0
-isposdef!{T<:BlasFloat}(A::Matrix{T}) = ishermitian(A) && isposdef!(A, true)
+isposdef!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = LAPACK.potrf!(UL, A)[2] == 0
+isposdef!(A::Matrix) = ishermitian(A) && isposdef!(A, 'U')
 
-isposdef{T<:BlasFloat}(A::Matrix{T}, upper::Bool) = isposdef!(copy(A), upper)
+isposdef{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = isposdef!(copy(A), UL)
 isposdef{T<:BlasFloat}(A::Matrix{T}) = isposdef!(copy(A))
-isposdef{T<:Number}(A::Matrix{T}, upper::Bool) = isposdef!(float64(A), upper)
+isposdef{T<:Number}(A::Matrix{T}, UL::BlasChar) = isposdef!(float64(A), UL)
 isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
 
-isposdef(x::Number) = isreal(x) && x > 0
+isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 norm{T<:BlasFloat}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
 
@@ -401,36 +400,42 @@ abstract Factorization{T}
 type BunchKaufman{T<:BlasFloat} <: Factorization{T}
     LD::Matrix{T}
     ipiv::Vector{BlasInt}
-    upper::Bool
-    function BunchKaufman(A::Matrix{T}, upper::Bool)
-        LD, ipiv = LAPACK.sytrf!(upper ? 'U' : 'L' , copy(A))
-        new(LD, ipiv, upper)
+    UL::BlasChar
+    function BunchKaufman(A::Matrix{T}, UL::BlasChar)
+        LD, ipiv = LAPACK.sytrf!(UL , copy(A))
+        new(LD, ipiv, UL)
     end
 end
 
-BunchKaufman{T<:BlasFloat}(A::StridedMatrix{T}, upper::Bool) = BunchKaufman{T}(A, upper)
-BunchKaufman{T<:Real}(A::StridedMatrix{T}, upper::Bool) = BunchKaufman(float64(A), upper)
-BunchKaufman{T<:Number}(A::StridedMatrix{T}) = BunchKaufman(A, true)
+BunchKaufman{T<:BlasFloat}(A::StridedMatrix{T}, UL::BlasChar) = BunchKaufman{T}(A, UL)
+BunchKaufman{T<:Real}(A::StridedMatrix{T}, UL::BlasChar) = BunchKaufman(float64(A), UL)
+BunchKaufman{T<:Number}(A::StridedMatrix{T}) = BunchKaufman(A, 'U')
 
 size(B::BunchKaufman) = size(B.LD)
 size(B::BunchKaufman,d::Integer) = size(B.LD,d)
 ## need to work out how to extract the factors.
-#factors(B::BunchKaufman) = LAPACK.syconv!(B.upper ? 'U' : 'L', copy(B.LD), B.ipiv)
+#factors(B::BunchKaufman) = LAPACK.syconv!(B.UL, copy(B.LD), B.ipiv)
 
 function inv(B::BunchKaufman)
-    symmetrize!(LAPACK.sytri!(B.upper ? 'U' : 'L', copy(B.LD), B.ipiv), B.upper)
+    symmetrize!(LAPACK.sytri!(B.UL, copy(B.LD), B.ipiv), B.UL)
 end
 
 \{T<:BlasFloat}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) =
-    LAPACK.sytrs!(B.upper ? 'U' : 'L', B.LD, B.ipiv, copy(R))
+    LAPACK.sytrs!(B.UL, B.LD, B.ipiv, copy(R))
     
 type CholeskyDense{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
-    upper::Bool
-    function CholeskyDense(A::Matrix{T}, upper::Bool)
-        A, info = LAPACK.potrf!(upper ? 'U' : 'L' , A)
+    UL::BlasChar
+    function CholeskyDense(A::Matrix{T}, UL::BlasChar)
+        A, info = LAPACK.potrf!(UL, A)
         if info != 0 error("Matrix A not positive-definite") end
-        new(upper? triu!(A) : tril!(A), upper)
+        if UL == 'U'
+            new(triu!(A), UL)
+        elseif UL == 'L'
+            new(tril!(A), UL)
+        else
+            error("Second argument UL should be 'U' or 'L'")
+        end
     end
 end
 
@@ -440,7 +445,7 @@ size(C::CholeskyDense,d::Integer) = size(C.LR,d)
 factors(C::CholeskyDense) = C.LR
 
 \{T<:BlasFloat}(C::CholeskyDense{T}, B::StridedVecOrMat{T}) =
-    LAPACK.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B))
+    LAPACK.potrs!(C.UL, C.LR, copy(B))
 
 function det{T}(C::CholeskyDense{T})
     ff = C.LR
@@ -450,32 +455,38 @@ function det{T}(C::CholeskyDense{T})
 end
     
 function inv(C::CholeskyDense)
-    Ci, info = LAPACK.potri!(C.upper ? 'U' : 'L', copy(C.LR))
+    Ci, info = LAPACK.potri!(C.UL, copy(C.LR))
     if info != 0 error("Matrix singular") end 
-    symmetrize!(Ci, C.upper)
+    symmetrize!(Ci, C.UL)
 end
 
 ## Should these functions check that the matrix is Hermitian?
-chold!{T<:BlasFloat}(A::Matrix{T}, upper::Bool) = CholeskyDense{T}(A, upper)
-chold!{T<:BlasFloat}(A::Matrix{T}) = chold!(A, true)
-chold{T<:BlasFloat}(A::Matrix{T}, upper::Bool) = chold!(copy(A), upper)
-chold{T<:Number}(A::Matrix{T}, upper::Bool) = chold(float64(A), upper)
-chold{T<:Number}(A::Matrix{T}) = chold(A, true)
+chold!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = CholeskyDense{T}(A, UL)
+chold!{T<:BlasFloat}(A::Matrix{T}) = chold!(A, 'U')
+chold{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = chold!(copy(A), UL)
+chold{T<:Number}(A::Matrix{T}, UL::BlasChar) = chold(float64(A), UL)
+chold{T<:Number}(A::Matrix{T}) = chold(A, 'U')
 
 ## Matlab (and R) compatible
-chol{T<:Number}(A::Matrix{T}) = factors(chold(A))
-chol(x::Number) = isreal(x) && x >= 0 ? sqrt(x) : error("argument not positive-definite")
+chol(A::Matrix, UL::BlasChar) = factors(chold(A, UL))
+chol(A::Matrix) = chol(A, 'U')
+chol(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
 
 type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
-    upper::Bool
+    UL::BlasChar
     piv::Vector{BlasInt}
     rank::BlasInt
     tol::Real
-    function CholeskyDensePivoted(A::Matrix{T}, upper::Bool, tol::Real)
-        A, piv, rank, info = LAPACK.pstrf!(upper ? 'U' : 'L' , A, tol)
-        if info != 0 error("Matrix A not positive-definite") end
-        new(upper? triu!(A) : tril!(A), upper, piv, rank, tol)
+    function CholeskyDensePivoted(A::Matrix{T}, UL::BlasChar, tol::Real)
+        A, piv, rank, info = LAPACK.pstrf!(UL, A, tol)
+        if UL == 'U'
+            new(triu!(A), UL, piv, rank, tol)
+        elseif UL == 'L'
+            new(tril!(A), UL, piv, rank, tol)
+        else
+            error("Second argument UL should be 'U' or 'L'")
+        end
     end
 end
 
@@ -484,34 +495,46 @@ size(C::CholeskyDensePivoted,d::Integer) = size(C.LR,d)
 
 factors(C::CholeskyDensePivoted) = C.LR, C.piv
 
-\{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedVecOrMat{T}) =
-    LAPACK.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B)[C.piv])[invperm(C.piv)]
+function \{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedVector{T})
+    if C.rank < size(C.LR, 1) error("Matrix is not positive-definite") end
+    LAPACK.potrs!(C.UL, C.LR, copy(B)[C.piv])[invperm(C.piv)]
+end
+function \{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedMatrix{T})
+    if C.rank < size(C.LR, 1) error("Matrix is not positive-definite") end
+    LAPACK.potrs!(C.UL, C.LR, copy(B)[C.piv,:])[invperm(C.piv),:]
+end
 
 rank(C::CholeskyDensePivoted) = C.rank
 
-det(C::CholeskyDensePivoted) = prod(abs2(diag(C.LR)))
+function det{T}(C::CholeskyDensePivoted{T})
+    if C.rank < size(C.LR, 1) 
+        return real(zero(T))
+    else 
+        return prod(abs2(diag(C.LR)))
+    end
+end
     
 function inv(C::CholeskyDensePivoted)
     if C.rank < size(C.LR, 1) error("Matrix singular") end
-    Ci, info = LAPACK.potri!(C.upper ? 'U' : 'L', copy(C.LR))
-    if info != 0 error("Matrix singular") end
+    Ci, info = LAPACK.potri!(C.UL, copy(C.LR))
+    if info != 0 error("Matrix is singular") end
     ipiv = invperm(C.piv)
-    (symmetrize!(Ci, C.upper))[ipiv, ipiv]
+    (symmetrize!(Ci, C.UL))[ipiv, ipiv]
 end
 
 ## Should these functions check that the matrix is Hermitian?
-cholpd!{T<:BlasFloat}(A::Matrix{T}, upper::Bool, tol::Real) = CholeskyDensePivoted{T}(A, upper, tol)
-cholpd!{T<:BlasFloat}(A::Matrix{T}, upper::Bool) = cholpd!(A, upper, -1.)
-cholpd!{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpd!(A, true, tol)
-cholpd!{T<:BlasFloat}(A::Matrix{T}) = cholpd!(A, true, -1.)
-cholpd{T<:Number}(A::Matrix{T}, upper::Bool, tol::Real) = cholpd(float64(A), upper, tol)
-cholpd{T<:Number}(A::Matrix{T}, upper::Bool) = cholpd(float64(A), upper, -1.)
+cholpd!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = CholeskyDensePivoted{T}(A, UL, tol)
+cholpd!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpd!(A, UL, -1.)
+cholpd!{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpd!(A, 'U', tol)
+cholpd!{T<:BlasFloat}(A::Matrix{T}) = cholpd!(A, 'U', -1.)
+cholpd{T<:Number}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpd(float64(A), UL, tol)
+cholpd{T<:Number}(A::Matrix{T}, UL::BlasChar) = cholpd(float64(A), UL, -1.)
 cholpd{T<:Number}(A::Matrix{T}, tol::Real) = cholpd(float64(A), true, tol)
-cholpd{T<:Number}(A::Matrix{T}) = cholpd(float64(A), true, -1.)
-cholpd{T<:BlasFloat}(A::Matrix{T}, upper::Bool, tol::Real) = cholpd!(copy(A), upper, tol)
-cholpd{T<:BlasFloat}(A::Matrix{T}, upper::Bool) = cholpd!(copy(A), upper, -1.)
-cholpd{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpd!(copy(A), true, tol)
-cholpd{T<:BlasFloat}(A::Matrix{T}) = cholpd!(copy(A), true, -1.)
+cholpd{T<:Number}(A::Matrix{T}) = cholpd(float64(A), 'U', -1.)
+cholpd{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpd!(copy(A), UL, tol)
+cholpd{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpd!(copy(A), UL, -1.)
+cholpd{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpd!(copy(A), 'U', tol)
+cholpd{T<:BlasFloat}(A::Matrix{T}) = cholpd!(copy(A), 'U', -1.)
 
 type LUDense{T} <: Factorization{T}
     lu::Matrix{T}
@@ -551,7 +574,7 @@ lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
 
 ## Matlab-compatible
 lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
-lu(x::Number) = (one(x), x)
+lu(x::Number) = (one(x), x, [1])
 
 function det{T}(lu::LUDense{T})
     m, n = size(lu)

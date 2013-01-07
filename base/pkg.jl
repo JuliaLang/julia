@@ -319,7 +319,7 @@ end
 # set package remote in METADATA
 
 get_origin(pkg::String, remote::String) = cd_pkgdir() do
-    for line in each_line(`git --git-dir=$(file_path(pkg,".git")) remote -v`)
+    for line in each_line(`git --git-dir=$(joinpath(pkg,".git")) remote -v`)
         m = match(r"^(\S*)\s*(\S*)\s*\(fetch\)", line)
         if m != nothing && m.captures[1] == remote
             return m.captures[2]
@@ -330,7 +330,7 @@ end
 get_origin(pkg::String) = get_origin(pkg, "origin")
 
 set_origin(pkg::String, url::String) = cd_pkgdir() do
-    cd(file_path("METADATA", pkg)) do
+    cd(joinpath("METADATA", pkg)) do
         open("url", "w") do io
             println(io, url)
         end
@@ -469,8 +469,8 @@ version(pkg::String, ver::VersionNumber) = cd_pkgdir() do
             error("The latest version of package $(pkg) is $(string(ver)). You must specify a later version.")
         end
     else
-        if !isdir(file_path("METADATA", pkg))
-            mkdir(file_path("METADATA", pkg))
+        if !isdir(joinpath("METADATA", pkg))
+            mkdir(joinpath("METADATA", pkg))
         end
     end
     sha1 = ""
@@ -480,20 +480,20 @@ version(pkg::String, ver::VersionNumber) = cd_pkgdir() do
             run(`git tag $(string(ver)) HEAD`)
         end
     end
-    cd(file_path("METADATA", pkg)) do
+    cd(joinpath("METADATA", pkg)) do
         if !isdir("hashes") mkdir("hashes") end
         if !isdir("versions") mkdir("versions") end
         cd("versions") do
             if !isdir(string(ver)) mkdir(string(ver)) end
-            open(file_path(string(ver), "sha1"), "w") do io
+            open(joinpath(string(ver), "sha1"), "w") do io
                 println(io, sha1)
             end
         end
     end
-    if isfile(file_path(pkg, "REQUIRE"))
+    if isfile(joinpath(pkg, "REQUIRE"))
         cp(
-            file_path(pkg, "REQUIRE"),
-            file_path("METADATA", pkg, "versions", string(ver), "requires"))
+            joinpath(pkg, "REQUIRE"),
+            joinpath("METADATA", pkg, "versions", string(ver), "requires"))
     end
     Metadata.gen_hashes(pkg)
 end
@@ -515,14 +515,14 @@ function major(pkg)
     version(pkg, VersionNumber(lver.major+1))
 end
 
-function new(package_name::String)
-    newpath = file_path(julia_pkgdir(), package_name)
+function new(pkg::String)
+    newpath = joinpath(julia_pkgdir(), pkg)
     cd_pkgdir() do
-        if isdir(package_name)
+        if isdir(pkg)
             # This is an existing package that we assume is ready to go
-            version(package_name, v"0.0.0")
+            version(pkg, v"0.0.0")
             try
-                pkg_origin(package_name, "origin")
+                pkg_origin(pkg, "origin")
             catch
                 error("
 Your package in
@@ -532,7 +532,7 @@ Your package in
 is almost ready. But the default remote, \"origin\", does not exist in
 this repository's configuration. To finish the process, run
 
-    > Pkg.pkg_origin(", package_name, ", remotename)
+    > Pkg.pkg_origin(", pkg, ", remotename)
 
 with the correct remote name for your repository."
                 )
@@ -540,26 +540,26 @@ with the correct remote name for your repository."
         else
             # Create a skeleton package that can be easily filled in
             try
-                mkdir(package_name)
+                mkdir(pkg)
             catch
-                error("Unable to create directory for new package: $(package_name)")
+                error("Unable to create directory for new package: $pkg")
             end
             try
                 sha1 = ""
-                cd(package_name) do
+                cd(pkg) do
                     run(`git init`)
                     run(`git commit --allow-empty -m "Initial empty commit"`)
                     touch("LICENSE.md") # Should insert MIT content
                     touch("README.md")
                     touch("REQUIRE")
                     mkdir("src")
-                    touch(file_path("src", strcat(package_name, ".jl")))
+                    touch(joinpath("src", strcat(pkg, ".jl")))
                     mkdir("test")
                     run(`git add --all`)
-                    run(`git commit -m "Scaffold for Julia package $(package_name)"`)
+                    run(`git commit -m "Scaffold for Julia package $pkg"`)
                     sha1 = readchomp(`git rev-parse HEAD`)
                 end
-                version(package_name, v"0.0.0")
+                version(pkg, v"0.0.0")
             catch
                 error("Unable to initialize contents of new package")
             end
@@ -572,8 +572,8 @@ You have created a new package in
 When the package is ready to submit, push it to a public repository, set it as
 the remote \"origin\", then run:
 
-  > Pkg.pkg_origin($(package_name))
-  > Pkg.patch($(package_name))
+  > Pkg.pkg_origin($(pkg))
+  > Pkg.patch($(pkg))
 
 to prepare METADATA with the details for your package."
                 )
@@ -582,17 +582,11 @@ to prepare METADATA with the details for your package."
 end
 
 # Remove local traces of a package (broken due to a bad .new(), for instance)
-obliterate(package_name::String) = cd_pkgdir() do
-    run(`rm -rf $(package_name) $(file_path("METADATA", package_name))`)
+obliterate(pkg::String) = cd_pkgdir() do
+    run(`rm -rf $(pkg) $(joinpath("METADATA", pkg))`)
 end
 
 # If a package contains data, make it easy to find its location
-function package_directory(package_name::String)
-  if has(ENV, "JULIA_PKGDIR")
-    return file_path(ENV["JULIA_PKGDIR"], package_name)
-  else
-    return path_expand(file_path("~/.julia", package_name))
-  end
-end
+package_directory(pkg::String) = joinpath(julia_pkgdir(), pkg)
 
 end # module

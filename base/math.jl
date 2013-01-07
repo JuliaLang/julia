@@ -21,6 +21,8 @@ import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
        Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.max, Base.min,
        Base.ceil, Base.floor, Base.trunc, Base.round, Base.^
 
+import Intrinsics.nan_dom_err
+
 # non-type specific math functions
 
 clamp(x::Real, lo::Real, hi::Real) = (x > hi ? hi : (x < lo ? lo : x))
@@ -82,8 +84,8 @@ square(x::Number) = x*x
 const libm = Base.libm_name
 const openlibm_extras = "libopenlibm-extras"
 
-for f in (:cbrt, :sin, :cos, :tan, :sinh, :cosh, :tanh, :asin, :acos, :atan, 
-          :asinh, :acosh, :atanh, :log, :log2, :log10, :exp, :erf, :erfc, :lgamma, :sqrt, :exp2)
+# functions with no domain error
+for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -92,7 +94,18 @@ for f in (:cbrt, :sin, :cos, :tan, :sinh, :cosh, :tanh, :asin, :acos, :atan,
     end
 end
 
-for f in (:log1p, :logb, :expm1, :ceil, :trunc, :round, :significand) # :rint, :nearbyint
+# functions that return NaN on non-NaN argument for domain error
+for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
+          :lgamma, :sqrt, :log1p)
+    @eval begin
+        ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
+        ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
+        ($f)(x::Real) = ($f)(float(x))
+        @vectorize_1arg Number $f
+    end
+end
+
+for f in (:logb, :expm1, :ceil, :trunc, :round, :significand) # :rint, :nearbyint
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -118,7 +131,7 @@ for f in (:atan2, :hypot)
     end
 end
 
-gamma(x::Float64) = ccall((:tgamma,libm),  Float64, (Float64,), x)
+gamma(x::Float64) = nan_dom_err(ccall((:tgamma,libm),  Float64, (Float64,), x), x)
 gamma(x::Float32) = float32(gamma(float64(x)))
 gamma(x::Real) = gamma(float(x))
 @vectorize_1arg Number gamma
@@ -135,13 +148,13 @@ min(x::Float32, y::Float32) = ccall((:fminf,libm), Float32, (Float32,Float32), x
 @vectorize_2arg Real min
 
 function ilogb(x::Float64)
-    if x==0 || isnan(x)
+    if x==0 || !isfinite(x)
         throw(DomainError())
     end
     int(ccall((:ilogb,libm), Int32, (Float64,), x))
 end
 function ilogb(x::Float32)
-    if x==0 || isnan(x)
+    if x==0 || !isfinite(x)
         throw(DomainError())
     end
     int(ccall((:ilogbf,libm), Int32, (Float32,), x))

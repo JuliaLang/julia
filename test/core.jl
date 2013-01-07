@@ -522,8 +522,47 @@ let
 
     # issue #1886
     X = [1:4]
-    r = Array(Range1{Int64},1)
+    r = Array(Range1{Int},1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
+end
+
+# issue #1632
+let
+    f1632{R,S}(::R, ::S) = 1
+    f1632{T}(  ::T, ::T) = 2
+    @test f1632(1, 2) == 2
+    @test f1632(:a, 2) == 1
+    g1632{T}(  ::T, ::T) = 2
+    g1632{R,S}(::R, ::S) = 1
+    @test g1632(1, 2) == 2
+    @test g1632(:a, 2) == 1
+end
+
+# issue #1628
+type I1628{X}
+    x::X
+end
+let
+    # here the potential problem is that the run-time value of static
+    # parameter X in the I1628 constructor is (AbstractKind,BitsKind),
+    # but type inference will track it more accurately as
+    # (Type{Integer}, Type{Int}).
+    f1628() = I1628((Integer,Int))
+    @test isa(f1628(), I1628{(AbstractKind,BitsKind)})
+end
+
+let
+    fT{T}(x::T) = T
+    @test fT(Any) === AbstractKind
+    @test fT(Int) === BitsKind
+    @test fT(Type{Any}) === AbstractKind
+    @test fT(Type{Int}) === AbstractKind
+
+    ff{T}(x::Type{T}) = T
+    @test ff(Type{Any}) === Type{Any}
+    @test ff(Type{Int}) === Type{Int}
+    @test ff(Any) === Any
+    @test ff(Int) === Int
 end

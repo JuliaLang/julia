@@ -12,9 +12,7 @@
 #include <errno.h>
 #include "julia.h"
 #include "builtin_proto.h"
-#if defined(__APPLE__)
-#include <execinfo.h>
-#elif defined(__WIN32__)
+#if defined(__WIN32__)
 #include <Winbase.h>
 #include <malloc.h>
 #else
@@ -413,11 +411,7 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
-#if defined(__APPLE__) || defined(__WIN32__)
-#define MAX_BT_SIZE 1023
-#else
 #define MAX_BT_SIZE 80000
-#endif
 
 static ptrint_t bt_data[MAX_BT_SIZE+1];
 static size_t bt_size = 0;
@@ -456,13 +450,7 @@ DLLEXPORT jl_value_t *jl_get_backtrace()
     return jl_parse_backtrace(bt_size, bt_data);
 }
 
-#if defined(__APPLE__)
-// stacktrace using execinfo
-size_t rec_backtrace(ptrint_t *bt_data, size_t maxsize)
-{
-    return backtrace((void**)(bt_data, maxsize);
-}
-#elif defined(__WIN32__)
+#if defined(__WIN32__)
 size_t rec_backtrace(ptrint_t *bt_data, size_t maxsize)
 {
     /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
