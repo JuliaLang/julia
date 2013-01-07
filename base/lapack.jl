@@ -469,7 +469,13 @@ for (gelsd, elty) in ((:dgelsd_, Float64),
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
             LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B,1) != m; throw(LAPACK.LapackDimMisMatch("gelsd!")); end
+            if size(B, 1) != m; throw(LAPACK.LapackDimMisMatch("gelsd!")); end
+            if size(B, 1) < n
+                newB = Array($elty, n, size(B, 2))
+                newB[1:size(B, 1), :] = B
+            else
+                newB = B
+            end
             s     = Array($elty, min(m, n))
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
@@ -483,7 +489,7 @@ for (gelsd, elty) in ((:dgelsd_, Float64),
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &size(B,2), A, &max(1,stride(A,2)),
-                      B, &max(1,stride(B,2)), s, &rcond, rnk, work, &lwork, iwork, info)
+                      newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, iwork, info)
                 if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -491,7 +497,7 @@ for (gelsd, elty) in ((:dgelsd_, Float64),
                     iwork = Array(BlasInt, iwork[1])
                 end
             end
-            isa(B, Vector) ? B[1:n] : B[1:n,:], rnk[1]
+            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
         end
         gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
     end
@@ -513,6 +519,12 @@ for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
             LAPACK.chkstride1(A, B)
             m, n  = size(A)
             if size(B,1) != m; throw(LAPACK.LapackDimMisMatch("gelsd!")); end
+            if size(B, 1) < n
+                newB = Array($elty, n, size(B, 2))
+                newB[1:size(B, 1), :] = B
+            else
+                newB = B
+            end
             s     = Array($elty, min(m, n))
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
@@ -527,7 +539,7 @@ for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
                        Ptr{$relty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &size(B,2), A, &max(1,stride(A,2)),
-                      B, &max(1,stride(B,2)), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
+                      newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
                 if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -536,7 +548,7 @@ for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
                     iwork = Array(BlasInt, iwork[1])
                 end
             end
-            isa(B, Vector) ? B[1:n] : B[1:n,:], rnk[1]
+            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
         end
         gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
     end
