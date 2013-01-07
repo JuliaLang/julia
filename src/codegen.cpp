@@ -2331,6 +2331,24 @@ static Function *emit_function(jl_lambda_info_t *lam)
     if (n_roots > 0) {
         if (ctx.argSpaceOffs + ctx.maxDepth == 0) {
             // 0 roots; remove gc frame entirely
+	    // replace instruction uses with Undef first to avoid LLVM assertion failures
+	    BasicBlock::iterator bbi = first_gcframe_inst;
+	    while (1) {
+	        Instruction &iii = *bbi;
+	        iii.replaceAllUsesWith(UndefValue::get(iii.getType()));
+		if (bbi == last_gcframe_inst) break;
+	        bbi++;
+	    }
+            for(size_t i=0; i < gc_frame_pops.size(); i++) {
+                Instruction *pop = gc_frame_pops[i];
+                BasicBlock::iterator pi(pop);
+                for(size_t j=0; j < 4; j++) {
+		    Instruction &iii = *pi;
+		    iii.replaceAllUsesWith(UndefValue::get(iii.getType()));
+		    pi++;
+                }
+            }
+
             BasicBlock::InstListType &il = gcframe->getParent()->getInstList();
             il.erase(first_gcframe_inst, last_gcframe_inst);
             // erase() erases up *to* the end point; erase last inst too
