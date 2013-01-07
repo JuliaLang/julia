@@ -24,7 +24,7 @@ release debug:
 ifeq ($(OS),WINNT)
 $(BUILD)/bin/julia.bat: ${JULIAHOME}/contrib/windows/*.bat
 	cp ${JULIAHOME}/contrib/windows/*.bat ${BUILD}/bin
-release debug: $(BUILD)/bin/julia.bat
+julia-release julia-debug: $(BUILD)/bin/julia.bat
 endif 
 
 julia-release-basic: $(BUILD)/bin/julia-release-basic

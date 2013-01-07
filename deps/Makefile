@@ -99,7 +99,7 @@ STAGE2_DEPS += suitesparse
 
 ifeq ($(OS), WINNT)
 LIBTOOL_CCLD = CCLD="$(CC) -no-undefined -avoid-version"
-AUTOTOOLS_PATH_CORRECT = -cp -f $(USRBIN)/$(@F) $(USR)/$(JL_LIBDIR)/$(@F)
+AUTOTOOLS_PATH_CORRECT = -cp -f $(BUILD)/bin/$(@F) $(BUILD)/lib/$(@F)
 endif
 
 ## Common build target prefixes
@@ -150,7 +150,7 @@ endif
 
 LLVM_DIR = $(subst -release,,llvm-$(LLVM_VER)-$(LLVM_TYPE))
 
-LLVM_FLAGS = --prefix=$(abspath $(USR)) --disable-threads  --disable-profiling --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS)
+LLVM_FLAGS = --disable-threads --disable-profiling --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs
 
 ifeq ($(LLVM_TYPE), debug)
 LLVM_FLAGS += --enable-assertions --disable-optimized
@@ -630,7 +630,7 @@ distclean-openblas:
 # configure script will search for the best match
 # (gcc 4.7, gcc, clang,ICC/microsoft/others)
 ATLAS_OBJ_SOURCE = atlas/build/lib/libsatlas.$(SHLIB_EXT)
-ATLAS_FLAGS = --shared --prefix=$(USR) --cc=gcc -t 0 \
+ATLAS_FLAGS = --shared --prefix=$(BUILD) --cc=gcc -t 0 \
 	--with-netlib-lapack-tarfile=$(JULIAHOME)/deps/lapack-$(LAPACK_VER).tgz
 ifeq ($(OS), WINNT)
 ATLAS_FLAGS += -b 32 
@@ -644,7 +644,7 @@ endif
 
 
 build-atlas: $(ATLAS_OBJ_SOURCE)
-install-atlas: $(USRLIB)/libsatlas.$(SHLIB_EXT)
+install-atlas: $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
 
 atlas/configure:
 	git clone git://github.com/vtjnash/atlas-3.10.0.git atlas
@@ -658,9 +658,9 @@ atlas/build/Make.top: atlas/configure lapack-$(LAPACK_VER).tgz
 $(ATLAS_OBJ_SOURCE): atlas/build/Make.top
 	$(MAKE) -C atlas/build -j1
 endif
-$(USRLIB)/libsatlas.$(SHLIB_EXT): $(ATLAS_OBJ_SOURCE) | $(USRLIB)
-	cp -f atlas/build/lib/libsatlas.$(SHLIB_EXT) $(USRLIB)
-	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $(USRLIB)/libsatlas.$(SHLIB_EXT)
+$(BUILD)/lib/libsatlas.$(SHLIB_EXT): $(ATLAS_OBJ_SOURCE)
+	cp -f atlas/build/lib/libsatlas.$(SHLIB_EXT) $(BUILD)/lib
+	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
 
 clean-atlas:
 	rm -rf atlas/build
@@ -1020,7 +1020,7 @@ distclean-lighttpd:
 ## NGINX ##
 
 ifeq ($(USE_SYSTEM_NGINX), 0)
-NGINX_OBJ_TARGET = $(USR)/sbin/nginx
+NGINX_OBJ_TARGET = $(BUILD)/sbin/nginx
 else
 NGINX_OBJ_TARGET =
 endif
@@ -1028,10 +1028,10 @@ endif
 ifeq ($(OS), WINNT)
 NGINX_FLAGS += \
 	--with-cc-opt="-D_NO_OLDNAMES -UWIN32 -Wno-error" \
-	--with-ld-opt="-L'$(USR)/$(JL_LIBDIR)' -lpcre"
+	--with-ld-opt="-L'$(BUILD)/lib' -lpcre"
 else
 NGINX_FLAGS += \
-	--with-ld-opt="-L'$(USR)/$(JL_LIBDIR) -lpcre -Wl,-rpath,'$(USR)/$(JL_LIBDIR)' $(RPATH)"
+	--with-ld-opt="-L'$(BUILD)/lib -lpcre -Wl,-rpath,'$(BUILD)/lib' $(RPATH)"
 endif
 
 compile-nginx: install-nginx
@@ -1048,7 +1048,7 @@ ifeq ($(OS), WINNT)
 	-cp '/c/Program Files/Microsoft SDKs/Windows/'*/Lib/AdvAPI32.Lib '/c/Program Files (x86)/Microsoft SDKs/Windows/'*/Lib/AdvAPI32.Lib nginx
 	-cp '/c/Program Files/Microsoft SDKs/Windows/'*/Lib/WS2_32.Lib '/c/Program Files (x86)/Microsoft SDKs/Windows/'*/Lib/WS2_32.Lib nginx
 endif
-	$(MAKE) -C nginx install DESTDIR="$(abspath $(USRBIN))/"
+	$(MAKE) -C nginx install DESTDIR="$(abspath $(BUILD)/bin)/"
 	touch $@
 
 clean-nginx:
@@ -1074,7 +1074,7 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) --host=$(XC_HOST) NM="$(NM)" FC="$(FC)" AR="$(AR)" CC="$(CC)" CXX="$(CXX)"
+	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
 ifeq ($(OS),$(BUILD_OS))
@@ -1082,7 +1082,6 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libgmp.dylib $@
-	$(AUTOTOOLS_PATH_CORRECT)
 	touch $@
 
 clean-gmp:
