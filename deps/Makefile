@@ -457,6 +457,8 @@ else
 OPENLIBM_FLAGS = ARCH="$(ARCH)"
 endif
 
+OPENLIBM_FLAGS += CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+
 OPENLIBM_OBJ_TARGET = $(BUILD)/lib/libopenlibm.$(SHLIB_EXT)
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
@@ -469,7 +471,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
 $(OPENLIBM_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
 endif
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
-	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+	$(MAKE) -C openlibm $(OPENLIBM_FLAGS)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
@@ -494,7 +496,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
 $(OPENLIBMEXT_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
 endif
 $(OPENLIBMEXT_OBJ_SOURCE): openlibm/Makefile.extras
-	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS)
 $(OPENLIBMEXT_OBJ_TARGET): $(OPENLIBMEXT_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm-extras.$(SHLIB_EXT) $@
@@ -1071,7 +1073,7 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)"
+	./configure --prefix=$(abspath $(BUILD)) --host=$(XC_HOST) NM="$(NM)" FC="$(FC)" AR="$(AR)" CC="$(CC)" CXX="$(CXX)"
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
 ifeq ($(OS),$(BUILD_OS))
