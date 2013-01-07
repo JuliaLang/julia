@@ -12,7 +12,7 @@ sprofile_stop_timer() = ccall(:profile_stop_timer, Void, ())
 sprofile_get() = pointer_to_array(
     convert(Ptr{Uint}, ccall(:profile_get_data, Ptr{Uint8}, ())), (convert(Int, ccall(:profile_len_data, Int32, ())),))
 
-sprofile_clear() = ccall(:clear_profile_data, Void, ())
+sprofile_clear() = ccall(:profile_clear_data, Void, ())
 
 # A simple linecount parser
 function sprofile_flat()
