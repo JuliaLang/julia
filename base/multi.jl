@@ -554,7 +554,7 @@ fetch(x::ANY) = x
 # writing to an uninitialized ref
 function put_ref(rid, val::ANY)
     wi = lookup_ref(rid)
-    if wi.done
+    while wi.done
         wi.notify = ((), :take, rid, wi.notify)
         yield(WaitFor(:take, RemoteRef(myid(), rid[1], rid[2])))
     end
@@ -575,7 +575,7 @@ end
 
 function take_ref(rid)
     wi = lookup_ref(rid)
-    if !wi.done
+    while !wi.done
         wait(RemoteRef(myid(), rid[1], rid[2]))
     end
     val = wi.result

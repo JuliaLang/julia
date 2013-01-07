@@ -11,6 +11,7 @@
 #include "llvm/Intrinsics.h"
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
+#include "llvm/Attributes.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 2 
 #include "llvm/DebugInfo.h"
 #include "llvm/DIBuilder.h"
@@ -1333,7 +1334,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
 
         // call
         Value *myargs;
-        if (ctx->argTemp != NULL) {
+        if (ctx->argTemp != NULL && nargs > 0) {
             myargs = builder.CreateGEP(ctx->argTemp,
                                        ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
         }
@@ -1928,12 +1929,12 @@ static Function *emit_function(jl_lambda_info_t *lam)
     // try to avoid conflicts in the global symbol table
     funcName = "julia_" + funcName;
 
+    jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
     if (specsig) {
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             fsig.push_back(julia_type_to_llvm(jl_tupleref(lam->specTypes,i)));
         }
-        jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
                              Function::ExternalLinkage, funcName, jl_Module);
@@ -1949,6 +1950,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
             lam->functionObject = (void*)f;
         }
     }
+    if (jlrettype == (jl_value_t*)jl_bottom_type)
+        f->setDoesNotReturn();
 
     ctx.f = f;
 
@@ -2055,19 +2058,23 @@ static Function *emit_function(jl_lambda_info_t *lam)
     Instruction *argSpaceInits = NULL;
     StoreInst *storeFrameSize = NULL;
 #endif
+    BasicBlock::iterator first_gcframe_inst;
+    BasicBlock::iterator last_gcframe_inst;
     if (n_roots > 0) {
 #ifdef JL_GC_MARKSWEEP
         // allocate gc frame
         ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
                                            ConstantInt::get(T_int32,n_roots+2));
         gcframe = (Instruction*)ctx.argTemp;
+        first_gcframe_inst = BasicBlock::iterator(gcframe);
         ctx.argTemp = (Instruction*)builder.CreateConstGEP1_32(ctx.argTemp, 2);
         storeFrameSize =
             builder.CreateStore(ConstantInt::get(T_size, n_roots<<1),
                                 builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_psize));
         builder.CreateStore(builder.CreateLoad(jlpgcstack_var, false),
                             builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
-        builder.CreateStore(gcframe, jlpgcstack_var, false);
+        Instruction *linst=builder.CreateStore(gcframe, jlpgcstack_var, false);
+        last_gcframe_inst = BasicBlock::iterator(linst);
         // initialize local variable stack roots to null
         for(i=0; i < (size_t)ctx.argSpaceOffs; i++) {
             Value *varSlot = builder.CreateConstGEP1_32(ctx.argTemp,i);
@@ -2257,6 +2264,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     }
 
     // step 15. compile body statements
+    std::vector<Instruction*> gc_frame_pops;
     bool prevlabel = false;
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -2294,7 +2302,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #ifdef JL_GC_MARKSWEEP
             // JL_GC_POP();
             if (n_roots > 0) {
-                builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(builder.CreateConstGEP1_32(gcframe, 1), false), jl_ppvalue_llvmt),
+                Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
+                gc_frame_pops.push_back(gcpop);
+                builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
                                     jlpgcstack_var);
             }
 #endif
@@ -2319,32 +2329,67 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
     // step 16. fix up size of stack root list (just a code simplification)
     if (n_roots > 0) {
-        BasicBlock::iterator bbi(gcframe);
-        AllocaInst *newgcframe =
-            new AllocaInst(jl_pvalue_llvmt,
-                           ConstantInt::get(T_int32, ctx.argSpaceOffs +
-                                                     ctx.maxDepth + 2));
-        ReplaceInstWithInst(ctx.argTemp->getParent()->getInstList(), bbi,
-                            newgcframe);
+        if (ctx.argSpaceOffs + ctx.maxDepth == 0) {
+            // 0 roots; remove gc frame entirely
+            // replace instruction uses with Undef first to avoid LLVM assertion failures
+            BasicBlock::iterator bbi = first_gcframe_inst;
+            while (1) {
+                Instruction &iii = *bbi;
+                iii.replaceAllUsesWith(UndefValue::get(iii.getType()));
+                if (bbi == last_gcframe_inst) break;
+                bbi++;
+            }
+            for(size_t i=0; i < gc_frame_pops.size(); i++) {
+                Instruction *pop = gc_frame_pops[i];
+                BasicBlock::iterator pi(pop);
+                for(size_t j=0; j < 4; j++) {
+                    Instruction &iii = *pi;
+                    iii.replaceAllUsesWith(UndefValue::get(iii.getType()));
+                    pi++;
+                }
+            }
 
-        BasicBlock::iterator bbi2(storeFrameSize);
-        StoreInst *newFrameSize =
-            new StoreInst(ConstantInt::get(T_size, (ctx.argSpaceOffs +
-                                                    ctx.maxDepth)<<1),
-                          storeFrameSize->getPointerOperand());
-        ReplaceInstWithInst(storeFrameSize->getParent()->getInstList(), bbi2,
-                            newFrameSize);
-
-        BasicBlock::InstListType &instList = argSpaceInits->getParent()->getInstList();
-        Instruction *after = argSpaceInits;
-
-        for(i=0; i < (size_t)ctx.maxDepth; i++) {
-            Instruction *argTempi =
-                GetElementPtrInst::Create(newgcframe,
-                                          ConstantInt::get(T_int32, i+ctx.argSpaceOffs+2));
-            instList.insertAfter(after, argTempi);
-            after = new StoreInst(V_null, argTempi);
-            instList.insertAfter(argTempi, after);
+            BasicBlock::InstListType &il = gcframe->getParent()->getInstList();
+            il.erase(first_gcframe_inst, last_gcframe_inst);
+            // erase() erases up *to* the end point; erase last inst too
+            il.erase(last_gcframe_inst);
+            for(size_t i=0; i < gc_frame_pops.size(); i++) {
+                Instruction *pop = gc_frame_pops[i];
+                BasicBlock::InstListType &il2 = pop->getParent()->getInstList();
+                BasicBlock::iterator pi(pop);
+                for(size_t j=0; j < 4; j++) {
+                    pi = il2.erase(pi);
+                }
+            }
+        }
+        else {
+            BasicBlock::iterator bbi(gcframe);
+            AllocaInst *newgcframe =
+                new AllocaInst(jl_pvalue_llvmt,
+                               ConstantInt::get(T_int32, (ctx.argSpaceOffs +
+                                                          ctx.maxDepth + 2)));
+            ReplaceInstWithInst(ctx.argTemp->getParent()->getInstList(), bbi,
+                                newgcframe);
+            
+            BasicBlock::iterator bbi2(storeFrameSize);
+            StoreInst *newFrameSize =
+                new StoreInst(ConstantInt::get(T_size, (ctx.argSpaceOffs +
+                                                        ctx.maxDepth)<<1),
+                              storeFrameSize->getPointerOperand());
+            ReplaceInstWithInst(storeFrameSize->getParent()->getInstList(), bbi2,
+                                newFrameSize);
+            
+            BasicBlock::InstListType &instList = argSpaceInits->getParent()->getInstList();
+            Instruction *after = argSpaceInits;
+            
+            for(i=0; i < (size_t)ctx.maxDepth; i++) {
+                Instruction *argTempi =
+                    GetElementPtrInst::Create(newgcframe,
+                                              ConstantInt::get(T_int32, i+ctx.argSpaceOffs+2));
+                instList.insertAfter(after, argTempi);
+                after = new StoreInst(V_null, argTempi);
+                instList.insertAfter(argTempi, after);
+            }
         }
     }
 
@@ -2705,6 +2750,9 @@ extern "C" void jl_init_codegen(void)
     options.NoFramePointerElimNonLeaf = true;
 #ifdef __MINGW32__
     options.StackAlignmentOverride = 16;
+#endif
+#ifdef __APPLE__
+    options.JITExceptionHandling = 1;
 #endif
     jl_ExecutionEngine = EngineBuilder(jl_Module)
         .setEngineKind(EngineKind::JIT)

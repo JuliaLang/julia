@@ -14,6 +14,8 @@
 *.dll
 *.do
 *.o
+*.dylib
+*.dSYM
 
 *.out
 
