@@ -302,9 +302,6 @@ function _start()
         (quiet,repl,startup) = process_options(ARGS)
 
         if repl
-            for var in ENV
-                println(var)
-            end
             if startup
                 try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             end
