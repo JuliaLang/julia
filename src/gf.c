@@ -597,7 +597,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 }
             }
         }
-        else if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt))) {
+        else if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt)) &&
+                 (decl_i==NULL || !jl_has_typevars(decl_i))) {
             /*
               actual argument was Type{...}, we computed its type as
               Type{Type{...}}. we must avoid unbounded nesting here, so
@@ -618,7 +619,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             }
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
         }
-        else if (jl_is_type_type(elt) && very_general_type(decl_i)) {
+        else if (jl_is_type_type(elt) && very_general_type(decl_i) &&
+                 !jl_has_typevars(decl_i)) {
             /*
               here's a fairly complex heuristic: if this argument slot's
               declared type is Any, and no definition overlaps with Type

@@ -16,7 +16,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq a*(capd\(a'*b)) b          # least squares soln for square a
         @assert_approx_eq det(capd) det(apd)
 
-        l     = factors(chold(apd, false))      # lower Cholesky factor
+        l     = factors(chold(apd, 'L'))      # lower Cholesky factor
         @assert_approx_eq l*l' apd
 
         cpapd = cholpd(apd)                     # pivoted Choleksy decomposition
@@ -117,6 +117,9 @@ for elty in (Float32, Float64, Complex64, Complex128)
     
         x = a\b                            # Rank deficient
         @assert_approx_eq det((a*x-b)'*(a*x-b)) convert(elty, 4.437969924812031)
+
+        x = convert(Matrix{elty}, [1 0 0; 0 1 -1]) \ convert(Vector{elty}, [1,1]) # Underdetermined minimum norm
+        @assert_approx_eq x convert(Vector{elty}, [1, 0.5, -0.5])
 
         # symmetric, positive definite
         @assert_approx_eq inv(convert(Matrix{elty}, [6. 2; 2 1])) convert(Matrix{elty}, [0.5 -1; -1 3])

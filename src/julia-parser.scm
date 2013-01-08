@@ -518,6 +518,10 @@
 			(if (closing-token? (peek-token s))
 			    ':  ; missing last argument
 			    (parse-expr s))))
+		   (if (and (not (ts:space? s))
+			    (or (eq? argument '<) (eq? argument '>)))
+		       (error (string ': argument " found instead of "
+				      argument ':)))
 		   (if first?
 		       (loop (list t ex argument) #f)
 		       (loop (append ex (list argument)) #t)))))

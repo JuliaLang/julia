@@ -220,9 +220,9 @@ end
 unicode_gz_file = "$tmp/unicode_test.gz"
 
 # Use perl to generate UTF-32BE unicode data a la unicode.jl, then convert to UTF-32LE, UTF-8 via iconv
-UTF32BE_path = file_path(tmp,"UTF32BE.unicode")
-UTF32LE_path = file_path(tmp,"UTF32LE.unicode")
-UTF8_path = file_path(tmp,"UTF8.unicode")
+UTF32BE_path = joinpath(tmp,"UTF32BE.unicode")
+UTF32LE_path = joinpath(tmp,"UTF32LE.unicode")
+UTF8_path = joinpath(tmp,"UTF8.unicode")
 run(`perl -e 'print pack "N*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' ` > UTF32BE_path )
 run(`iconv -f UTF-32BE -t UTF-32LE $UTF32BE_path` > UTF32LE_path )
 run(`iconv -f UTF-32BE -t UTF-8 $UTF32BE_path` > UTF8_path )

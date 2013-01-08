@@ -37,7 +37,7 @@ macro stat_call(sym,arg)
     quote
         fill!(stat_buf,0)
         r = ccall($(expr(:quote,sym)), Int32, (Ptr{Uint8},Ptr{Uint8}), $arg, stat_buf)
-        system_error("stat", r!=0 && errno()!=ENOENT)
+        system_error(:stat, r!=0 && errno()!=ENOENT)
         st = Stat(stat_buf)
         if ispath(st) != (r==0)
             error("WTF: stat returned zero type for a valid path!?")
@@ -108,3 +108,6 @@ filemode(path::String) = stat(path).mode
 filesize(path::String) = stat(path).size
    mtime(path::String) = stat(path).mtime
    ctime(path::String) = stat(path).ctime
+
+samefile(a::Stat, b::Stat) = a.device==b.device && a.inode==b.inode
+samefile(a::String, b::String) = samefile(stat(a),stat(b))

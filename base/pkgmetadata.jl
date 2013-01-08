@@ -50,16 +50,16 @@ each_package() = @task begin
     for line in each_line(`ls -1 METADATA`)
         line = chomp(line)
         # stat() chokes if we try to check if the subdirectory of a non-directory exists
-        if isdir(file_path("METADATA", line)) && isdir(file_path("METADATA", line, "versions"))
+        if isdir(joinpath("METADATA", line)) && isdir(joinpath("METADATA", line, "versions"))
             produce(line)
         end
     end
 end
 
 each_tagged_version(pkg::String) = @task begin
-    for line in each_line(`ls -1 $(file_path("METADATA", pkg, "versions"))`)
+    for line in each_line(`ls -1 $(joinpath("METADATA", pkg, "versions"))`)
         line = chomp(line)
-        if isdir(file_path("METADATA", pkg, "versions", line)) && ismatch(Base.VERSION_REGEX, line)
+        if isdir(joinpath("METADATA", pkg, "versions", line)) && ismatch(Base.VERSION_REGEX, line)
             ver = convert(VersionNumber,line)
             dir = "METADATA/$pkg/versions/$(line)"
             if isfile("$dir/sha1")
