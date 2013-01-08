@@ -1520,6 +1520,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     else if (jl_is_quotenode(expr)) {
         jl_value_t *jv = jl_fieldref(expr,0);
+        if (jl_is_bits_type(jl_typeof(jv))) {
+            return emit_expr(jv, ctx, isboxed, valuepos);
+        }
         assert(jl_is_symbol(jv));
         return literal_pointer_val(jv);
     }

@@ -155,7 +155,7 @@ for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
     plan_fr2r = symbol(string("plan_",fr2r))
     fi = symbol(string("i",f))
     plan_fi = symbol(string("plan_",fi))
-    Ycopy = Y == :X ? :0 : :(Y = fftwcopy(X))
+    Ycopy = Y == :X ? 0 : :(Y = fftwcopy(X))
     @eval begin
         function $f{T<:$Tx}(X::StridedArray{T}, region)
             $Y = $fr2r(X, REDFT10, region)
