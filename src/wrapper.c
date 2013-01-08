@@ -626,13 +626,13 @@ DLLEXPORT int jl_last_system_errno(uv_loop_t *loop)
 }
 
 
-DLLEXPORT int jl_uv_strerror(int a, int b)
+DLLEXPORT const char *jl_uv_strerror(int a, int b)
 {
     uv_err_t err = {a,b};
     return uv_strerror(err);
 }
 
-DLLEXPORT int jl_uv_err_name(int a, int b)
+DLLEXPORT const char *jl_uv_err_name(int a, int b)
 {
     uv_err_t err = {a,b};
     return uv_err_name(err);
