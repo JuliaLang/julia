@@ -151,7 +151,6 @@
     jl_load;
     jl_load_dynamic_library;
     jl_load_file_string;
-    jl_load_progress_setmax;
     jl_loaderror_type;
     jl_load_file_string;
     jl_lstat;

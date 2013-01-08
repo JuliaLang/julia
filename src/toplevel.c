@@ -376,15 +376,11 @@ void jl_parse_eval_all(char *fname)
 
 int asprintf(char **strp, const char *fmt, ...);
 
-static int jl_load_progress_max = 0;
-static int jl_load_progress_i = 0;
-DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl_load_progress_i = 0; }
 void jl_load(const char *fname)
 {
-    if (jl_load_progress_max > 0) {
-        jl_load_progress_i++;
+    if (jl_current_module == jl_base_module) {
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
-        jl_printf(JL_STDOUT, "\e[0G\e[2K%0.1f%% %s", (double)jl_load_progress_i / jl_load_progress_max * 100, fname);
+        jl_printf(JL_STDOUT, "\e[0G\e[2K %s", fname);
     }
     char *fpath = (char*)fname;
     uv_statbuf_t stbuf;

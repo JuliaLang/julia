@@ -1,32 +1,5 @@
 baremodule Base
 
-import Intrinsics.ccall
-cconvert(T, x) = convert_default(T,x,cconvert)
-ccall(:putchar, Void, (Char,), 'B')
-ccall(:putchar, Void, (Char,), 'u')
-ccall(:putchar, Void, (Char,), 'i')
-ccall(:putchar, Void, (Char,), 'l')
-ccall(:putchar, Void, (Char,), 'd')
-ccall(:putchar, Void, (Char,), 'i')
-ccall(:putchar, Void, (Char,), 'n')
-ccall(:putchar, Void, (Char,), 'g')
-ccall(:putchar, Void, (Char,), ' ')
-ccall(:putchar, Void, (Char,), 's')
-ccall(:putchar, Void, (Char,), 'y')
-ccall(:putchar, Void, (Char,), 's')
-ccall(:putchar, Void, (Char,), 't')
-ccall(:putchar, Void, (Char,), 'e')
-ccall(:putchar, Void, (Char,), 'm')
-ccall(:putchar, Void, (Char,), ' ')
-ccall(:putchar, Void, (Char,), 'i')
-ccall(:putchar, Void, (Char,), 'm')
-ccall(:putchar, Void, (Char,), 'a')
-ccall(:putchar, Void, (Char,), 'g')
-ccall(:putchar, Void, (Char,), 'e')
-ccall(:putchar, Void, (Char,), ':')
-ccall(:putchar, Void, (Char,), '\n')
-ccall(:jl_load_progress_setmax, Void, (Int,), 77)    
-
 eval(x) = Core.eval(Base,x)
 eval(m,x) = Core.eval(m,x)
 
@@ -182,7 +155,6 @@ include("dsp.jl")
 using DSP
 
 include = include_from_node1
-ccall(:jl_load_progress_setmax, Void, (Int,), 0)
 println()
 
 # prime method cache with some things we know we'll need right after startup
