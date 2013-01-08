@@ -211,7 +211,8 @@ ifeq ($(BUILD_LLDB), 1)
 		git clone http://llvm.org/git/lldb.git)) || \
 	([ -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		(cd llvm-$(LLVM_VER)/tools/lldb && \
-		git pull))
+		git fetch))
+	cd llvm-$(LLVM_VER)/tools/lldb && git checkout origin/release_32
 endif
 	touch $@
 
@@ -232,7 +233,7 @@ else
 LLVM_FLAGS += --disable-assertions
 endif
 ifeq ($(BUILD_LLDB),1)
-ifeq ($(USE_CLANG),1)
+ifeq ($(USECLANG),1)
 LLVM_FLAGS += --enable-cxx11
 else
 LLVM_MFLAGS += CXXFLAGS=-std=c++0x
@@ -1225,10 +1226,13 @@ ifeq ($(OS), Darwin)
     TKW_LIB += -L/usr/local/lib
   endif
   TKW_INC += -I/opt/X11/include -I/usr/X11/include
+  TKW_LIB += -Wl,-U,_jl_pgcstack -Wl,-U,_jl_cstr_to_string -Wl,-U,_jl_enter_handler \
+      -Wl,-U,_jl_defer_signal -Wl,-U,_jl_current_task -Wl,-U,_jl_ascii_string_type \
+      -Wl,-U,_jl_utf8_string_type -Wl,-U,_jl_signal_pending 
 else
   TKW_INC += -I/usr/include/tcl
 endif
-TKW_LIB += -ltcl8.5 -ltk8.5 -L$(BUILD)/lib/ -ljulia-release
+TKW_LIB += -ltcl8.5 -ltk8.5 -L$(BUILD)/lib/
 
 $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
