@@ -1065,6 +1065,8 @@ else
 GMP_OBJ_TARGET = 
 endif
 
+GMP_OBJ_SOURCE = gmp-$(GMP_VER)/.libs/libgmp.$(SHLIB_EXT)
+
 compile-gmp: install-gmp
 install-gmp: $(GMP_OBJ_TARGET)
 
@@ -1076,11 +1078,12 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
 	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
-$(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
+$(GMP_OBJ_SOURCE): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) check
 endif
+$(GMP_OBJ_TARGET): $(GMP_OBJ_SOURCE)
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libgmp.dylib $@
 	touch $@
