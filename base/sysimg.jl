@@ -25,7 +25,7 @@ ccall(:putchar, Void, (Char,), 'g')
 ccall(:putchar, Void, (Char,), 'e')
 ccall(:putchar, Void, (Char,), ':')
 ccall(:putchar, Void, (Char,), '\n')
-ccall(:jl_load_progress_setmax, Void, (Int,), 76)    
+ccall(:jl_load_progress_setmax, Void, (Int,), 77)    
 
 eval(x) = Core.eval(Base,x)
 eval(m,x) = Core.eval(m,x)
