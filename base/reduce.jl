@@ -78,6 +78,10 @@ function prod(itr)
     return v
 end
 
+function mean(itr)
+    return sum(itr) / numel(itr)
+end
+
 function reduce(op::Function, v0, itr)
     v = v0
     if is(op,max)
