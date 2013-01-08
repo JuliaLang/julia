@@ -81,7 +81,7 @@ include("io.jl")
 include("iostring.jl")
 include("stream.jl")
 include("process.jl")
-include("FS.jl")
+include("fs.jl")
 using FS
 include("char.jl")
 include("ascii.jl")
