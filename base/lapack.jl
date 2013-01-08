@@ -75,7 +75,8 @@ for (gbtrf, gbtrs, elty) in
             if m != n || m != size(B,1) throw(LapackDimMisMatch("gbtrs!")) end
             ccall(($(string(gbtrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
-                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},   Ptr{BlasInt},
+                   Ptr{BlasInt}),
                   &trans, &n, &kl, &ku, &size(B,2), AB, &stride(AB,2), ipiv,
                   B, &stride(B,2), info)
             if info[1] != 0 throw(LapackException(info[1])) end
