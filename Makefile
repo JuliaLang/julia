@@ -82,6 +82,7 @@ else
 	done
 endif
 endif
+	echo `cat VERSION` +`git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > $(PREFIX)/VERSION
 
 dist: 
 	rm -fr julia-*.tar.gz julia-$(JULIA_COMMIT)
@@ -90,7 +91,11 @@ dist:
 ifeq ($(OS), Darwin)
 	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
+ifeq ($(OS), WINNT)
+	zip -r -9 julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).zip julia-$(JULIA_COMMIT)
+else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
+endif
 	rm -fr julia-$(JULIA_COMMIT)
 
 h2j: $(BUILD)/$(JL_LIBDIR)/libLLVM*.a $(BUILD)/$(JL_LIBDIR)/libclang*.a src/h2j.cpp

@@ -13,7 +13,7 @@
 #include "julia.h"
 #include "builtin_proto.h"
 #if defined(__WIN32__)
-#include <Winbase.h>
+#include <winbase.h>
 #include <malloc.h>
 #else
 // This gives unwind only local unwinding options ==> faster code
