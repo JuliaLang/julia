@@ -620,24 +620,6 @@ DLLEXPORT int jl_last_errno(uv_loop_t *loop)
     return (uv_last_error(loop)).code;
 }
 
-DLLEXPORT int jl_last_system_errno(uv_loop_t *loop)
-{
-    return (uv_last_error(loop)).sys_errno_;
-}
-
-
-DLLEXPORT const char *jl_uv_strerror(int a, int b)
-{
-    uv_err_t err = {a,b};
-    return uv_strerror(err);
-}
-
-DLLEXPORT const char *jl_uv_err_name(int a, int b)
-{
-    uv_err_t err = {a,b};
-    return uv_err_name(err);
-}
-
 DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
 {
     return ios->buf;
