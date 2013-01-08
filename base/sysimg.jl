@@ -80,6 +80,8 @@ include("inference.jl")
 include("io.jl")
 include("iostring.jl")
 include("stream.jl")
+include("process.jl")
+include("fs.jl")
 using FS
 include("char.jl")
 include("ascii.jl")
@@ -155,7 +157,7 @@ include("dsp.jl")
 using DSP
 
 include = include_from_node1
-println()
+print("\e[0G\e[2K")
 
 # prime method cache with some things we know we'll need right after startup
 compile_hint(pwd, ())
