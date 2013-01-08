@@ -19,8 +19,7 @@ test_compressed = "$tmp/gzip.jl.gz"
 
 test_gunzip = true
 try
-    # TODO: Update for Windows
-    run(`which $gunzip` > "/dev/null")
+    run(`which $gunzip` > SpawnNullStream())
 catch
     test_gunzip = false
 end
@@ -223,9 +222,9 @@ unicode_gz_file = "$tmp/unicode_test.gz"
 UTF32BE_path = joinpath(tmp,"UTF32BE.unicode")
 UTF32LE_path = joinpath(tmp,"UTF32LE.unicode")
 UTF8_path = joinpath(tmp,"UTF8.unicode")
-run(`perl -e 'print pack "N*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' ` > UTF32BE_path )
-run(`iconv -f UTF-32BE -t UTF-32LE $UTF32BE_path` > UTF32LE_path )
-run(`iconv -f UTF-32BE -t UTF-8 $UTF32BE_path` > UTF8_path )
+run(`perl -e 'print pack "N*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' ` | `tee $UTF32BE_path` > SpawnNullStream() )
+run(`iconv -f UTF-32BE -t UTF-32LE $UTF32BE_path` | `tee $UTF32LE_path` > SpawnNullStream())
+run(`iconv -f UTF-32BE -t UTF-8 $UTF32BE_path` | `tee $UTF8_path` > SpawnNullStream())
 
 str1 = CharString(reinterpret(Char, read(open(UTF32LE_path), Uint32, 1112065)[2:]));
 str2 = UTF8String(read(open(UTF8_path), Uint8, 4382595)[4:]);
