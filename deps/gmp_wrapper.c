@@ -88,6 +88,10 @@ extern void jl_mpz_lshift(mpz_t* rop, mpz_t* base, unsigned long int count) {
   mpz_mul_2exp(*rop, *base, count);
 }
 
+extern void jl_mpz_rshift(mpz_t* rop, mpz_t* base, unsigned long int count) {
+  mpz_div_2exp(*rop, *base, count);
+}
+
 extern void jl_mpz_pow_ui(mpz_t* rop, mpz_t* base, unsigned long int exp) {
   mpz_pow_ui(*rop, *base, exp);
 }

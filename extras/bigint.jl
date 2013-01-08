@@ -105,6 +105,14 @@ end
 <<(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x<<uint(c)
 <<(x::BigInt, c::Integer) = c<0 ? throw(DomainError()) : x<<uint(c)
 
+function >>(x::BigInt, c::Uint)
+    z = BigInt_init()
+    ccall((:jl_mpz_rshift, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, c)
+    BigInt(z)
+end
+>>(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x>>uint(c)
+>>(x::BigInt, c::Integer) = c<0 ? throw(DomainError()) : x>>uint(c)
+
 function div(x::BigInt, y::BigInt)
     z = BigInt_init()
     ccall((:jl_mpz_div, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
