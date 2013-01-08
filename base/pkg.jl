@@ -50,10 +50,9 @@ status(pkg::String) = print_pkg_status(pkg, "$(julia_pkgdir())/$pkg")
 # create a new empty packge repository
 
 function init(meta::String)
+    if is_initialized() return end
+
     dir = julia_pkgdir()
-    if isdir(dir)
-        error("Package directory $dir already exists.")
-    end
     try
         run(`mkdir -p $dir`)
         cd(dir) do
@@ -83,6 +82,8 @@ function init(meta::String)
     end
 end
 init() = init(DEFAULT_META)
+
+is_initialized() = isdir(julia_pkgdir())
 
 # get/set the origin url for package repo
 
