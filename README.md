@@ -41,8 +41,9 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 - **GNU/Linux**
 - **Darwin/OS X**
 - **FreeBSD**
+- **Windows**
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. [Julia has been ported to Windows](https://github.com/loladiro/julia) as well, and Windows support will be merged into the julia mainline once it stabilizes.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. 
 
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
