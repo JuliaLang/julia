@@ -6,6 +6,7 @@ SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
 PAPER         =
 BUILDDIR      = _build
+JULIA         = ../julia
 
 # Internal variables.
 PAPEROPT_a4     = -D latex_paper_size=a4
@@ -19,7 +20,7 @@ JQUERYURL = http://code.jquery.com/jquery-latest.js
 WGET = $(abspath ../deps)/jldownload
 
 .PHONY: help clean clean-jquery cleanall get-jquery html dirhtml singlehtml pickle json htmlhelp qthelp devhelp \
-	epub latex latexpdf text man changes linkcheck doctest gettext
+	epub latex latexpdf text man changes linkcheck doctest gettext listpkg
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
@@ -43,6 +44,7 @@ help:
 	@echo "  changes    to make an overview of all changed/added/deprecated items"
 	@echo "  linkcheck  to check all external links for integrity"
 	@echo "  doctest    to run all doctests embedded in the documentation (if enabled)"
+	@echo "  listpkg    to recreate the list of available packages"
 
 clean:
 	-rm -rf $(BUILDDIR)/*
@@ -172,3 +174,6 @@ doctest:
 helpdb.jl: stdlib/*.rst sphinx/jlhelp.py sphinx/julia.py
 	$(SPHINXBUILD) -b jlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/jlhelp
 	mv $(BUILDDIR)/jlhelp/jlhelp.jl helpdb.jl
+
+listpkg: 
+	$(JULIA) listpkg.jl
