@@ -1113,9 +1113,9 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
-DLLEXPORT void jl_throw(jl_value_t *e);
-DLLEXPORT void jl_rethrow();
-DLLEXPORT void jl_rethrow_other(jl_value_t *e);
+DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
+DLLEXPORT void NORETURN jl_rethrow();
+DLLEXPORT void NORETURN jl_rethrow_other(jl_value_t *e);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);

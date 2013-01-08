@@ -503,7 +503,8 @@ static void record_backtrace(void)
 #endif
 
 //for looking up functions from gdb:
-DLLEXPORT void gdblookup(ptrint_t ip) {
+DLLEXPORT void gdblookup(ptrint_t ip)
+{
     char *func_name;
     int line_num;
     const char *file_name;
@@ -512,14 +513,15 @@ DLLEXPORT void gdblookup(ptrint_t ip) {
        ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
 }
 
-DLLEXPORT void gdbbacktrace() {
+DLLEXPORT void gdbbacktrace()
+{
     record_backtrace();
     for(size_t i=0; i < bt_size; i++)
         gdblookup(bt_data[i]);
 }
 
 // yield to exception handler
-static void throw_internal(jl_value_t *e)
+static void NORETURN throw_internal(jl_value_t *e)
 {
     jl_exception_in_transit = e;
     if (jl_current_task->eh != NULL) {

@@ -661,18 +661,6 @@ void install_event_handler(char *prompt, rl_vcpfunc_t *func)
     rl_callback_handler_install(prompt, func);
 }
 
-void parseAndExecute(char *str)
-{
-    if (!str || ios_eof(ios_stdin)) {
-        jl_printf(jl_uv_stdout, "\n");
-        return;
-    }
-    jl_value_t *ast = jl_parse_input_line(str);
-    jl_value_t *value = jl_toplevel_eval(ast);
-    jl_show_any(value);
-    jl_printf(jl_uv_stdout, "\n\n");
-}
-
 void repl_callback_enable()
 {
     callback_en = 1;
