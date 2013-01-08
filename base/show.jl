@@ -11,10 +11,10 @@ showcompact(x)     = showcompact(OUTPUT_STREAM::Stream, x)
 macro show(exs...)
     blk = expr(:block)
     for ex in exs
-        push(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),
+        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),
                                  repr(begin value=$(esc(ex)) end))))
     end
-    if !isempty(exs); push(blk.args, :value); end
+    if !isempty(exs); push!(blk.args, :value); end
     return blk
 end
 
@@ -606,15 +606,15 @@ function alignment(
             l = max(l, aij[1])
             r = max(r, aij[2])
         end
-        push(a, (l, r))
+        push!(a, (l, r))
         if length(a) > 1 && sum(map(sum,a)) + sep*length(a) >= cols_if_complete
-            pop(a)
+            pop!(a)
             break
         end
     end
     if 1 < length(a) < size(X,2)
         while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
-            pop(a)
+            pop!(a)
         end
     end
     return a

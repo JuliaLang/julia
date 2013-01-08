@@ -761,11 +761,10 @@ export
 
 # dequeues
     append!,
-    grow,
-    insert,
-    shift,
-    unshift,
-    enqueue,
+    grow!,
+    insert!,
+    shift!,
+    unshift!,
 
 # collections
     add,
@@ -784,8 +783,8 @@ export
     contains_is,
     count,
     countp,
-    del,
-    del_all,
+    delete!,
+    empty!,
     del_each,
     elements,
     eltype,
@@ -820,8 +819,8 @@ export
     values,
     valtype,
     xor!,
-    pop,
-    push,
+    pop!,
+    push!,
     filter,
     filter!,
 

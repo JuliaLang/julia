@@ -125,13 +125,13 @@ function flush_gc_msgs(w::Worker)
     w.gcflag = false
     msgs = w.add_msgs
     if !isempty(msgs)
-        del_all(w.add_msgs)
+        empty!(w.add_msgs)
         remote_do(w, add_clients, msgs...)
     end
 
     msgs = w.del_msgs
     if !isempty(msgs)
-        del_all(w.del_msgs)
+        empty!(w.del_msgs)
         #print("sending delete of $msgs\n")
         remote_do(w, del_clients, msgs...)
     end
@@ -197,7 +197,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     # has the full list of address:port
     newlocs = [PGRP.locs, locs]
     for i=1:n
-        push(PGRP.workers, w[i])
+        push!(PGRP.workers, w[i])
         w[i].id = PGRP.np+i
         send_msg_now(w[i], w[i].id, newlocs)
         create_message_handler_loop(w[i].socket)
@@ -242,7 +242,7 @@ function identify_socket(otherid, sock)
     @assert i > PGRP.myid
     d = i-length(PGRP.workers)
     if d > 0
-        grow(PGRP.workers, d)
+        grow!(PGRP.workers, d)
         PGRP.workers[(end-d+1):end] = nothing
         PGRP.np += d
     end
@@ -347,9 +347,9 @@ end
 
 function del_client(id, client)
     wi = lookup_ref(id)
-    del(wi.clientset, client)
+    delete!(wi.clientset, client)
     if isempty(wi.clientset)
-        del((PGRP::ProcessGroup).refs, id)
+        delete!((PGRP::ProcessGroup).refs, id)
         #print("$(myid()) collected $id\n")
     end
     nothing
@@ -366,7 +366,7 @@ function send_del_client(rr::RemoteRef)
         del_client(rr2id(rr), myid())
     else
         w = worker_from_id(rr.where)
-        push(w.del_msgs, (rr2id(rr), myid()))
+        push!(w.del_msgs, (rr2id(rr), myid()))
         w.gcflag = true
     end
 end
@@ -391,7 +391,7 @@ function send_add_client(rr::RemoteRef, i)
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        push(w.add_msgs, (rr2id(rr), i))
+        push!(w.add_msgs, (rr2id(rr), i))
         w.gcflag = true
     end
 end
@@ -623,7 +623,7 @@ end
 
 function enq_work(wi::WorkItem)
     global Workqueue,multi_cb_handles
-    enqueue(Workqueue, wi)
+    unshift!(Workqueue, wi)
     queueAsync(multi_cb_handles.work_cb)
 end
 
@@ -631,7 +631,7 @@ enq_work(f::Function) = enq_work(WorkItem(f))
 enq_work(t::Task) = enq_work(WorkItem(t))
 
 function perform_work()
-    job = pop(Workqueue)
+    job = pop!(Workqueue)
     perform_work(job)
 end
 
@@ -678,7 +678,7 @@ function perform_work(job::WorkItem)
             if P.consumers === nothing
                 P.consumers = {job}
             else
-                enqueue(P.consumers, job)
+                unshift!(P.consumers, job)
             end
         else
             # add to waiting set to wait on a sync event
@@ -690,7 +690,7 @@ function perform_work(job::WorkItem)
             if isequal(waiters,false)
                 Waiting[oid] = {waitinfo}
             else
-                push(waiters, waitinfo)
+                push!(waiters, waitinfo)
             end
         end
     elseif job.task.runnable
@@ -726,12 +726,12 @@ function deliver_result(sock::(), msg, oid, value)
             job = j[2]
             job.argument = value
             enq_work(job)
-            del(jobs, i)
+            delete!(jobs, i)
             break
         end
     end
     if isempty(jobs) && !is(jobs,empty_cell_)
-        del(Waiting, oid)
+        delete!(Waiting, oid)
     end
     nothing
 end
@@ -750,7 +750,7 @@ function notify_done(job::WorkItem, take)
                 if is(msg,:call_fetch)
                     # can delete the ref right away since we know it is
                     # unreferenced by the client
-                    del((PGRP::ProcessGroup).refs, oid)
+                    delete!((PGRP::ProcessGroup).refs, oid)
                 end
             end
         else
@@ -1082,7 +1082,7 @@ end
 function sync_add(r)
     spawns = get(tls(), :SPAWNS, ())
     if !is(spawns,())
-        push(spawns[1], r)
+        push!(spawns[1], r)
     end
     r
 end
@@ -1120,7 +1120,7 @@ function find_vars(e, lst)
         if !isdefined(e) || isconst(e)
             # exclude global constants
         else
-            push(lst, e)
+            push!(lst, e)
         end
     elseif isa(e,Expr)
         for x in e.args
@@ -1151,7 +1151,7 @@ function spawnlocal(thunk)
     wi = WorkItem(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
     add(wi.clientset, rid[1])
-    push(Workqueue, wi)   # add to the *front* of the queue, work first
+    push!(Workqueue, wi)   # add to the *front* of the queue, work first
     queueAsync(multi_cb_handles.work_cb)
     yield()
     rr

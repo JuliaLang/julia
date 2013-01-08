@@ -1116,7 +1116,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         pc = choose(W)
         while true
             #print(pc,": ",s[pc],"\n")
-            del(W, pc)
+            delete!(W, pc)
             if is(handler_at[pc],())
                 handler_at[pc] = cur_hand
             else
@@ -1241,9 +1241,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         if is(def.tfunc,())
             def.tfunc = {}
         end
-        push(def.tfunc::Array{Any,1}, atypes)
-        push(def.tfunc::Array{Any,1}, fulltree)
-        push(def.tfunc::Array{Any,1}, rec)
+        push!(def.tfunc::Array{Any,1}, atypes)
+        push!(def.tfunc::Array{Any,1}, fulltree)
+        push!(def.tfunc::Array{Any,1}, rec)
     else
         def.tfunc[tfunc_idx] = fulltree
         def.tfunc[tfunc_idx+1] = rec
@@ -1321,7 +1321,7 @@ end
 eval_annotate(s, vtypes, sv, decls, clo) = s
 
 function eval_annotate(l::LambdaStaticData, vtypes, sv, decls, clo)
-    push(clo, l)
+    push!(clo, l)
     l
 end
 
@@ -1496,7 +1496,7 @@ function without_linenums(a::Array{Any,1})
     for x in a
         if (isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)
         else
-            push(l, x)
+            push!(l, x)
         end
     end
     l
@@ -1631,10 +1631,10 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
                 if occ > 1
                     vnew = unique_name(enclosing_ast)
                     add_variable(enclosing_ast, vnew, aeitype)
-                    push(stmts, Expr(:(=), {vnew, aei}, Any))
+                    push!(stmts, Expr(:(=), {vnew, aei}, Any))
                     argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
                 elseif !isType(aeitype) && !effect_free(aei)
-                    push(stmts, aei)
+                    push!(stmts, aei)
                 end
             end
         end
@@ -1695,7 +1695,7 @@ function inlining_pass(e::Expr, sv, ast)
                 if isa(res[2],Array)
                     sts = res[2]::Array{Any,1}
                     for j = 1:length(sts)
-                        insert(eargs, i, sts[j])
+                        insert!(eargs, i, sts[j])
                         i += 1
                     end
                 end
@@ -1796,8 +1796,8 @@ function add_variable(ast, name, typ)
     vinf = {name,typ,2}
     locllist = ast.args[2][1]::Array{Any,1}
     vinflist = ast.args[2][2]::Array{Any,1}
-    push(locllist, name)
-    push(vinflist, vinf)
+    push!(locllist, name)
+    push!(vinflist, vinf)
 end
 
 const some_names = {:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6,
@@ -1847,7 +1847,7 @@ function find_sa_vars(ast)
     for vi in ast.args[2][2]
         if (vi[3]&1)!=0
             # remove captured vars
-            del(av, vi[1])
+            delete!(av, vi[1])
         end
     end
     av
@@ -1905,7 +1905,7 @@ function tuple_elim_pass(ast::Expr)
                 continue
             end
 
-            del(body, i)  # remove tuple allocation
+            delete!(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
             vals = cell(nv)
             n_ins = 0
@@ -1918,7 +1918,7 @@ function tuple_elim_pass(ast::Expr)
                     tmpv = unique_name(ast)
                     tmp = Expr(:(=), {tmpv,tupelt}, Any)
                     add_variable(ast, tmpv, elty)
-                    insert(body, i+n_ins, tmp)
+                    insert!(body, i+n_ins, tmp)
                     vals[j] = SymbolNode(tmpv, elty)
                     n_ins += 1
                 end

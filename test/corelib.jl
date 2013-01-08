@@ -63,7 +63,7 @@ for i=1:10000
     @test (h[i] == i+1)
 end
 for i=1:2:10000
-    del(h, i)
+    delete!(h, i)
 end
 for i=1:2:10000
     h[i] = i+1
@@ -72,7 +72,7 @@ for i=1:10000
     @test (h[i] == i+1)
 end
 for i=1:10000
-    del(h, i)
+    delete!(h, i)
 end
 @test isempty(h)
 h[77] = 100
@@ -81,7 +81,7 @@ for i=1:10000
     h[i] = i+1
 end
 for i=1:2:10000
-    del(h, i)
+    delete!(h, i)
 end
 for i=10001:20000
     h[i] = i+1
@@ -136,7 +136,7 @@ begin
             add(s, x)
             @test has(s, x)                 # check that x can be found
         else
-            del(s, xs[-id])
+            delete!(s, xs[-id])
         end
     end
 end
@@ -172,7 +172,7 @@ end
 d3 = copy(d2)
 d4 = copy(d2)
 # Removing an item gives different dict
-del(d1, data_in[randi(length(data_in))][1])
+delete!(d1, data_in[randi(length(data_in))][1])
 @test !isequal(d1, d2)
 # Changing a value gives different dict
 d3[data_in[randi(length(data_in))][1]] = randstring(3)
@@ -224,9 +224,9 @@ for i in 1:1000
     @test (length(s) == i)
 end
 
-# del, has, contains
+# delete!, has, contains
 for i in 1:2:1000
-    del(s, i)
+    delete!(s, i)
 end
 for i in 1:2:1000
     @test !has(s, i)
@@ -257,7 +257,7 @@ s = Set(1,2,3)
 @test length(s) == 3
 add(s,2)
 @test length(s) == 3
-del(s,2)
+delete!(s,2)
 @test length(s) == 2
 
 # get
@@ -346,11 +346,11 @@ for data_in in ((7,8,4,5),
     end
 end
 
-# pop
+# pop!
 origs = Set(1,2,3,"apple")
 s = copy(origs)
 for i in 1:numel(origs)
-    el = pop(s)
+    el = pop!(s)
     @test !has(s, el)
     @test has(origs, el)
 end

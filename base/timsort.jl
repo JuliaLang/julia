@@ -202,16 +202,16 @@ function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, for
 
         if length(a) < length(c)
             ($merge)($(args...), v,a,b,state)
-            pop(state.runs)
-            pop(state.runs)
-            pop(state.runs)
-            push(state.runs, first(a):last(b))
-            push(state.runs, c)
+            pop!(state.runs)
+            pop!(state.runs)
+            pop!(state.runs)
+            push!(state.runs, first(a):last(b))
+            push!(state.runs, c)
         else
             ($merge)($(args...), v,b,c,state)
-            pop(state.runs)
-            pop(state.runs)
-            push(state.runs, first(b):last(c))
+            pop!(state.runs)
+            pop!(state.runs)
+            push!(state.runs, first(b):last(c))
         end
     end
 
@@ -220,9 +220,9 @@ function ($merge_collapse)($(args...), v::AbstractVector, state::MergeState, for
 
         if length(a) <= length(b) || force
             ($merge)($(args...), v,a,b,state)
-            pop(state.runs)
-            pop(state.runs)
-            push(state.runs, first(a):last(b))
+            pop!(state.runs)
+            pop!(state.runs)
+            push!(state.runs, first(a):last(b))
         end
     end
 
@@ -243,16 +243,16 @@ function ($merge_collapse)($(args...), v::AbstractVector, p::AbstractVector{Int}
 
         if length(a) < length(c)
             ($merge)($(args...), v,p,a,b,state)
-            pop(state.runs)
-            pop(state.runs)
-            pop(state.runs)
-            push(state.runs, first(a):last(b))
-            push(state.runs, c)
+            pop!(state.runs)
+            pop!(state.runs)
+            pop!(state.runs)
+            push!(state.runs, first(a):last(b))
+            push!(state.runs, c)
         else
             ($merge)($(args...), v,p,b,c,state)
-            pop(state.runs)
-            pop(state.runs)
-            push(state.runs, first(b):last(c))
+            pop!(state.runs)
+            pop!(state.runs)
+            push!(state.runs, first(b):last(c))
         end
     end
 
@@ -261,9 +261,9 @@ function ($merge_collapse)($(args...), v::AbstractVector, p::AbstractVector{Int}
 
         if length(a) <= length(b) || force
             ($merge)($(args...), v,p,a,b,state)
-            pop(state.runs)
-            pop(state.runs)
-            push(state.runs, first(a):last(b))
+            pop!(state.runs)
+            pop!(state.runs)
+            push!(state.runs, first(a):last(b))
         end
     end
 
@@ -734,7 +734,7 @@ function ($timsort!)($(args...), v::AbstractVector, lo::Int, hi::Int)
         end
 
         # Push this run onto the queue and merge if needed
-        push(state.runs, run_range)
+        push!(state.runs, run_range)
         i = i+count
         ($merge_collapse)($(args...), v, state, false)
     end
@@ -775,7 +775,7 @@ function ($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int},
         end
 
         # Push this run onto the queue and merge if needed
-        push(state.runs, run_range)
+        push!(state.runs, run_range)
         i = i+count
         ($merge_collapse)($(args...), v, p, state, false)
     end

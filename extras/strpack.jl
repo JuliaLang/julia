@@ -181,7 +181,7 @@ function struct_parse(s::String)
             end
         end
         i += length(m.match)
-        push(t, (elemtype, dims, name))
+        push!(t, (elemtype, dims, name))
     end
     (endianness, t)
 end
@@ -201,7 +201,7 @@ function gen_typelist(types::Array)
                 :(($fn)::($typ))
             end
         end
-        push(xprs, xpr)
+        push!(xprs, xpr)
     end
     xprs         
 end
@@ -221,9 +221,9 @@ end
 function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Symbol, strategy::Symbol)
     xprs, rvars = {}, {}
     @gensym pad
-    push(xprs, :($offset = 0))
+    push!(xprs, :($offset = 0))
     for (typ, dims) in types
-        push(xprs, quote
+        push!(xprs, quote
             $pad = pad_next($offset, $typ, $strategy)
             if $pad > 0
                 Base.skip($stream, $pad)
@@ -232,8 +232,8 @@ function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Sy
             $offset += sizeof($typ)*prod($dims)
         end)
         rvar = gensym()
-        push(rvars, rvar)
-        push(xprs, if isa(typ, CompositeKind)
+        push!(rvars, rvar)
+        push!(xprs, if isa(typ, CompositeKind)
             :($rvar = unpack($stream, $typ))
         elseif dims == 1
             :($rvar = ($convert)(Base.read($stream, $typ)))
@@ -264,7 +264,7 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
     elnum = 0
     for (typ, dims) in types
         elnum += 1
-        push(xprs, quote
+        push!(xprs, quote
             $pad = pad_next($offset, $typ, $strategy)
             if $pad > 0
                 Base.write($stream, fill(uint8(0), $pad))
@@ -272,7 +272,7 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
             end
             $offset += sizeof($typ)*prod($dims)
         end)
-        push(xprs, if isa(typ, CompositeKind)
+        push!(xprs, if isa(typ, CompositeKind)
             :(pack($stream, getfield($struct, ($fieldnames)[$elnum])))
         elseif dims == 1
             :(Base.write($stream, ($convert)(getfield($struct, ($fieldnames)[$elnum]))))
@@ -465,15 +465,15 @@ function pad(s::Struct, strategy::DataAlign)
     for (typ, dims) in s.types
         fix = pad_next(offset, typ, strategy)
         if fix > 0
-            push(newtypes, (PadByte, fix))
+            push!(newtypes, (PadByte, fix))
             offset += fix
         end
-        push(newtypes, (typ, dims))
+        push!(newtypes, (typ, dims))
         offset += sizeof(typ) * prod(dims)
     end
     fix = pad_next(offset, s, strategy)
     if fix > 0
-        push(newtypes, (PadByte, fix))
+        push!(newtypes, (PadByte, fix))
     end
     newtypes
 end

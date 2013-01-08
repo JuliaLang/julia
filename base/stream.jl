@@ -160,10 +160,10 @@ function tasknotify(waittasks::Vector{WaitTask}, args...)
             work.argument = args
             enq_work(work)
         else
-            push(newwts,wt)
+            push!(newwts,wt)
         end
     end
-    grow(waittasks,length(newwts)-length(waittasks))
+    grow!(waittasks,length(newwts)-length(waittasks))
     waittasks[:] = newwts
 end
 
@@ -193,7 +193,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                             a = a[1]
                         end
                         if $(esc(filter_fcn))(a)
-                            push(getfield(a,$(expr(:quote,notify))),tw)
+                            push!(getfield(a,$(expr(:quote,notify))),tw)
                         end
                     end
                 else
@@ -201,7 +201,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                     if isa(a,Tuple)
                         a = a[1]
                     end
-                    push(getfield(a,$(expr(:quote,notify))),tw)
+                    push!(getfield(a,$(expr(:quote,notify))),tw)
                 end
                 ct.runnable = false
                 args = yield()
@@ -212,7 +212,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                         end
                         a = getfield(a,$(expr(:quote,notify)))
                         i = findfirst(a, tw)
-                        if i > 0 del(a, i) end
+                        if i > 0 delete!(a, i) end
                     end
                 else
                     a = x
@@ -221,7 +221,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                     end
                     a = getfield(a,$(expr(:quote,notify)))
                     i = findfirst(a, tw)
-                    if i > 0 del(a, i) end
+                    if i > 0 delete!(a, i) end
                 end
                 if isa(args,InterruptException)
                     error(args)
@@ -253,7 +253,7 @@ function wait_accept(server::TcpSocket)
     ct = current_task()
     tw = WaitTask(ct)
     while true
-        push(server.connectnotify,tw)
+        push!(server.connectnotify,tw)
         ct.runnable = false
         args = yield()
         if isa(args,InterruptException)

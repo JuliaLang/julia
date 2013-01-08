@@ -27,7 +27,7 @@ function produce(v)
         Q = q::Array{Any,1}
         if !isempty(Q)
             # make a task waiting for us runnable again
-            enq_work(pop(Q))
+            enq_work(pop!(Q))
         end
     end
     yieldto(ct.last, v)
@@ -50,7 +50,7 @@ function consume(P::Task)
         if !is(q, nothing)
             Q = q::Array{Any,1}
             while !isempty(Q)
-                enq_work(pop(Q))
+                enq_work(pop!(Q))
             end
         end
     end

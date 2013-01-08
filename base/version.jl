@@ -175,15 +175,15 @@ let
                 ctim = int(readall(proc.out.buffer))
                 if commit != tagged
                     # 1250998746: ctime of first commit (Sat Aug 23 3:39:06 2009 UTC)
-                    push(VERSION.build, ctim - 1250998746)
-                    push(VERSION.build, "r$(commit[1:4])")
+                    push!(VERSION.build, ctim - 1250998746)
+                    push!(VERSION.build, "r$(commit[1:4])")
                 end
                 ps = spawn(`git diff --quiet HEAD`)
                 ps.closecb = function(proc)
                     clean = if success(proc)
                         ""
                     elseif proc.exit_code == 1 && proc.term_signal == 0
-                        push(VERSION.build, "dirty")
+                        push!(VERSION.build, "dirty")
                         "*" 
                     else
                         #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")

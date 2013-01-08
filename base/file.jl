@@ -96,7 +96,7 @@ function GetTempPath()
   if lentemppath >= length(temppath) || lentemppath == 0
       error("GetTempPath failed")
 end
-  grow(temppath,lentemppath-length(temppath))
+  grow!(temppath,lentemppath-length(temppath))
   return convert(ASCIIString,temppath)
 end
 GetTempFileName(uunique::Uint32) = GetTempFileName(GetTempPath(), uunique)
@@ -107,7 +107,7 @@ function GetTempFileName(temppath::String,uunique::Uint32)
   if uunique == 0 || lentname <= 0
       error("GetTempFileName failed")
   end
-  grow(tname,lentname-length(tname))
+  grow!(tname,lentname-length(tname))
   return convert(ASCIIString, tname)
 end
 function mktemp()
@@ -184,7 +184,7 @@ function readdir(path::String)
   for i = 1:file_count
     entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Ptr{Uint8}, 
                              (Ptr{Uint8}, Int), uv_readdir_req, offset))
-    push(entries, entry)
+    push!(entries, entry)
     offset += length(entry) + 1   # offset to the next entry
   end
 

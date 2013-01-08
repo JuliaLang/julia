@@ -5,7 +5,7 @@ using Iterators
 function buildvec(f)
     v = Any[]
     for i = f
-        push(v, i)
+        push!(v, i)
     end
     return v
 end

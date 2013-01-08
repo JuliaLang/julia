@@ -17,7 +17,7 @@ function resize(s::IntSet, top::Integer)
         lim = ((top+31) & -32)>>>5
         olsz = length(s.bits)
         if olsz < lim
-            grow(s.bits, lim-olsz)
+            grow!(s.bits, lim-olsz)
             fill = s.fill1s ? uint32(-1) : uint32(0)
             for i=(olsz+1):lim; s.bits[i] = fill; end
         end
@@ -46,7 +46,7 @@ function add_each(s::IntSet, ns)
     return s
 end
 
-function del(s::IntSet, n::Integer)
+function delete!(s::IntSet, n::Integer)
     if n >= s.limit
         if s.fill1s
             lim = int(n + div(n,2))
@@ -61,14 +61,14 @@ end
 
 function del_each(s::IntSet, ns)
     for n in ns
-        del(s, n)
+        delete!(s, n)
     end
     return s
 end
 
 setdiff(a::IntSet, b::IntSet) = del_each(copy(a),b)
 
-function del_all(s::IntSet)
+function empty!(s::IntSet)
     s.bits[:] = 0
     return s
 end
@@ -90,7 +90,7 @@ function toggle_each(s::IntSet, ns)
 end
 
 function copy_to(to::IntSet, from::IntSet)
-    del_all(to)
+    empty!(to)
     union!(to, from)
 end
 
@@ -124,9 +124,9 @@ function choose(s::IntSet)
     return n
 end
 
-function pop(s::IntSet)
+function pop!(s::IntSet)
     n = choose(s)
-    del(s, n)
+    delete!(s, n)
     n
 end
 

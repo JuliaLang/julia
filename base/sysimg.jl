@@ -157,6 +157,9 @@ include("fftw.jl")
 include("dsp.jl")
 using DSP
 
+# deprecated functions
+include("deprecated.jl")
+
 include = include_from_node1
 print("\e[0G\e[2K")
 
@@ -202,9 +205,9 @@ compile_hint(ht_keyindex, (Dict{Any,Any}, Int32))
 compile_hint(perform_work, (WorkItem,))
 compile_hint(notify_done, (WorkItem,))
 compile_hint(work_result, (WorkItem,))
-compile_hint(enqueue, (Array{WorkItem,1}, WorkItem))
+compile_hint(unshift!, (Array{WorkItem,1}, WorkItem))
 compile_hint(enq_work, (WorkItem,))
-compile_hint(pop, (Array{WorkItem,1},))
+compile_hint(pop!, (Array{WorkItem,1},))
 compile_hint(string, (Int,))
 compile_hint(parse_int, (Type{Int}, ASCIIString, Int))
 compile_hint(repeat, (ASCIIString, Int))

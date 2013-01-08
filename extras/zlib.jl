@@ -57,7 +57,7 @@ function compress(source::Array{Uint8}, level::Int32)
     nb = compress_to_buffer(source, dest, level)
 
     # Shrink the buffer to the actual compressed size
-    return grow(dest, nb-length(dest))
+    return grow!(dest, nb-length(dest))
 end
 compress(source::Array{Uint8}, level::Integer) = compress(source, int32(level))
 compress(source::Array{Uint8}) = compress(source, Z_DEFAULT_COMPRESSION)
@@ -108,12 +108,12 @@ function uncompress(source::Array{Uint8}, uncompressed_size::Int)
             # Z_BUF_ERROR: resize buf, try again
             # Note: resizing by powers of 2 seems to be more efficient at allocating memory
             uncompressed_size = nextpow2(uncompressed_size*2)
-            grow(dest, uncompressed_size-length(dest))
+            grow!(dest, uncompressed_size-length(dest))
         end
     end
 
     # Shrink the buffer to the actual uncompressed size
-    return grow(dest, sz-length(dest))
+    return grow!(dest, sz-length(dest))
 end
 uncompress(source::Array{Uint8}) = uncompress(source, nextpow2(length(source)<<1))
 

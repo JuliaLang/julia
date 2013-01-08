@@ -1,6 +1,8 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
+have_color = false # default can be altered
+
 const color_normal = "\033[0m"
 
 text_colors = {:black   => "\033[1m\033[30m",
@@ -282,8 +284,8 @@ function _start()
             global PGRP;
             PGRP.myid = 1
             assert(PGRP.np == 0)
-            push(PGRP.workers,LocalProcess())
-            push(PGRP.locs,("",0))
+            push!(PGRP.workers,LocalProcess())
+            push!(PGRP.locs,("",0))
             PGRP.np = 1
             # make scheduler aware of current (root) task
             enq_work(roottask_wi)
@@ -325,7 +327,7 @@ end
 
 const atexit_hooks = {}
 
-atexit(f::Function) = (enqueue(atexit_hooks, f); nothing)
+atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
 
 function _atexit()
     for f in atexit_hooks

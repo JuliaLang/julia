@@ -122,7 +122,7 @@ end
 function add(pkgs::Union(String,VersionSet)...)
     pkgs_ = VersionSet[]
     for pkg in pkgs
-        Base.push(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
+        Base.push!(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
     end
     add(pkgs_)
 end
@@ -199,7 +199,7 @@ function _resolve()
                 append!(reqs,parse_requires("$path/REQUIRE"))
                 if isfile("$path/VERSION")
                     ver = convert(VersionNumber,readchomp("$path/VERSION"))
-                    Base.push(reqs,VersionSet(pkg,[ver]))
+                    Base.push!(reqs,VersionSet(pkg,[ver]))
                 end
             end
         end
@@ -473,7 +473,7 @@ end
 latest_version(pkg::String) = cd_pkgdir() do
     vers = VersionNumber[]
     for (ver, _) in Metadata.each_tagged_version(pkg)
-        Base.push(vers, ver)
+        Base.push!(vers, ver)
     end
     max(vers)
 end

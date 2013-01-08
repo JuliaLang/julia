@@ -78,7 +78,7 @@ function truncate(io::IOString, n::Integer)
     if n > io.maxsize || n < 0 error("truncate failed") end
     nadd = n - length(io.data)
     if nadd > 0
-        grow(io.data, nadd)
+        grow!(io.data, nadd)
     end
     io.data[io.size+1:end] = 0
     io.size = n
@@ -111,14 +111,14 @@ function ensureroom(io::IOString, nshort::Int)
     n = min(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
     ngrow = n - length(io.data)
     if ngrow > 0
-        grow(io.data, ngrow)
+        grow!(io.data, ngrow)
     end
     return io
 end
 eof(io::IOString) = (io.ptr-1 == io.size)
 function close(io::IOString)
     if io.writable
-        grow(io.data, -length(io.data))
+        grow!(io.data, -length(io.data))
     else
         io.data = Uint8[]
     end
@@ -144,7 +144,7 @@ function takebuf_array(io::IOString)
         else
             data = copy(data)
         end
-        grow(data,io.size-length(data))
+        grow!(data,io.size-length(data))
     else
         nbytes = nb_available(io)
         a = Array(Uint8, nbytes)

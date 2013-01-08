@@ -92,7 +92,7 @@ function make_seed(n::Integer)
     n < 0 && throw(DomainError())
     seed = Uint32[]
     while true
-        push(seed, n & 0xffffffff)
+        push!(seed, n & 0xffffffff)
         n >>= 32
         if n == 0
             return seed

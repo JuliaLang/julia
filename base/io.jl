@@ -144,7 +144,7 @@ function readuntil{T}(s::IO, delim::T)
     out = T[]
     while !eof(s)
         c = read(s, T)
-        push(out, c)
+        push!(out, c)
         if c == delim
             break
         end
@@ -192,7 +192,7 @@ function readlines(s, fx::Function...)
         for f in fx
           l = f(l)
         end
-        push(a, l)
+        push!(a, l)
     end
     return a
 end
@@ -458,7 +458,7 @@ function has(s::FDSet, i::Integer)
     return false
 end
 
-function del(s::FDSet, i::Integer)
+function delete!(s::FDSet, i::Integer)
     if 0 <= i < sizeof_fd_set*8
         ccall(:jl_fd_clr, Void, (Ptr{Void}, Int32), s.data, i)
         if i == s.nfds-1
@@ -471,7 +471,7 @@ function del(s::FDSet, i::Integer)
     return s
 end
 
-function del_all(s::FDSet)
+function empty!(s::FDSet)
     ccall(:jl_fd_zero, Void, (Ptr{Void},), s.data)
     s.nfds = 0
     return s

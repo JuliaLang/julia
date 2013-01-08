@@ -259,12 +259,12 @@ function partitions{T}(s::AbstractVector{T})
     # convert from restricted growth string a[1:n] to set of sets
     temp = [ Array(T,0) for k = 1:n ]
     for k = 1:n
-      push(temp[a[k]+1], s[k])
+      push!(temp[a[k]+1], s[k])
     end
     result = Array(Array{T,1},0)
     for arr in temp
       if !isempty(arr)
-        push(result, arr)
+        push!(result, arr)
       end
     end
     #produce(a[1:n]) # this is the string representing set assignment

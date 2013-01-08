@@ -192,7 +192,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     pp.handle=_jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
         in,out,err)
     if pc != false
-        push(pc.processes, pp)
+        push!(pc.processes, pp)
     end
     if(close_in)
         close_pipe_sync(in)
@@ -388,7 +388,7 @@ function pipeline_error(procs::ProcessChain)
     failed = Process[]
     for p = procs.processes
         if !success(p) && !p.cmd.ignorestatus
-            push(failed, p)
+            push!(failed, p)
         end
     end
     if numel(failed)==0 return true end
@@ -477,7 +477,7 @@ function arg_gen(head)
     if applicable(start,head)
         vals = ByteString[]
         for x in head
-            push(vals,string(x))
+            push!(vals,string(x))
         end
         return vals
     else
@@ -490,7 +490,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = ByteString[]
     for h = head, t = tail
-        push(vals,bytestring(strcat(h,t)))
+        push!(vals,bytestring(strcat(h,t)))
     end
     vals
 end
@@ -517,7 +517,7 @@ wait_exit(x::ProcessChain) = wait_exit(x.processes)
 function wait_read(x::AsyncStream)
     ct = current_task()
     tw = WaitTask(ct)
-    push(x.readnotify,tw)
+    push!(x.readnotify,tw)
     ct.runnable = false
     yield()
 end
