@@ -82,6 +82,7 @@ include("iostring.jl")
 include("stream.jl")
 include("process.jl")
 include("fs.jl")
+ccall(:jl_get_uv_hooks, Void, ())
 using FS
 include("char.jl")
 include("ascii.jl")

@@ -622,5 +622,3 @@ function connect_to_host(host::ByteString,port::Uint16) #TODO: handle errors
     wait_connected(sock)
     return sock
 end
-
-ccall(:jl_get_uv_hooks, Void, ())
