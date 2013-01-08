@@ -5,6 +5,13 @@
 `ArgParse <https://github.com/carlobaldassi/ArgParse.jl>`_
 __________________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Carlo Baldassi
+
+
   Current Version: ``0.0.0``
 
   Package for parsing command-line arguments to Julia programs. 
@@ -19,6 +26,12 @@ __________________________________________________________
 `Cairo <https://github.com/JuliaLang/Cairo.jl>`_
 ________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: The Julia Language
+
   Current Version: ``0.0.0``
 
   Bindings to the Cairo graphics library. 
@@ -31,6 +44,12 @@ ________________________________________________
 
 `Calculus <https://github.com/johnmyleswhite/Calculus.jl>`_
 ___________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
 
   Current Version: ``0.0.0``
 
@@ -45,6 +64,12 @@ ___________________________________________________________
 `Calendar <https://github.com/nolta/Calendar.jl>`_
 __________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Mike Nolta
+
   Current Version: ``0.0.0``
 
   Calendar time package for Julia 
@@ -57,6 +82,12 @@ __________________________________________________
 
 `Clustering <https://github.com/johnmyleswhite/Clustering.jl>`_
 _______________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
 
   Current Version: ``0.0.0``
 
@@ -71,6 +102,12 @@ _______________________________________________________________
 `Color <https://github.com/JuliaLang/Color.jl>`_
 ________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: The Julia Language
+
   Current Version: ``0.0.0``
 
   Basic color manipulation utilities. 
@@ -83,6 +120,12 @@ ________________________________________________
 
 `Compose <https://github.com/dcjones/Compose.jl>`_
 __________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Daniel Jones
 
   Current Version: ``0.0.0``
 
@@ -97,6 +140,12 @@ __________________________________________________
 `DataFrames <https://github.com/HarlanH/DataFrames.jl>`_
 ________________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/9f1a68b9e623be5da422b44e733fa8bc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Harlan Harris
+
   Current Version: ``0.0.0``
 
   library for working with tabular data in Julia 
@@ -109,6 +158,12 @@ ________________________________________________________
 
 `Debug <https://github.com/toivoh/Debug.jl>`_
 _____________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/8d3d3934c39b52f48c35a0cc536edae7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: toivoh
 
   Current Version: ``0.0.0``
 
@@ -123,6 +178,12 @@ _____________________________________________
 `Distributions <https://github.com/JuliaStats/Distributions.jl>`_
 _________________________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: JuliaStats
+
   Current Version: ``0.0.0``
 
   A Julia package for probability distributions and associated funtions. 
@@ -135,6 +196,12 @@ _________________________________________________________________
 
 `Example <https://github.com/JuliaLang/Example.jl>`_
 ____________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: The Julia Language
 
   Current Version: ``0.0.0``
 
@@ -149,6 +216,12 @@ ____________________________________________________
 `FITSIO <https://github.com/nolta/FITSIO.jl>`_
 ______________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Mike Nolta
+
   Current Version: ``0.0.0``
 
   FITS file package for Julia 
@@ -161,6 +234,12 @@ ______________________________________________
 
 `FileFind <https://github.com/johnmyleswhite/FileFind.jl>`_
 ___________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
 
   Current Version: ``0.0.0``
 
@@ -175,6 +254,12 @@ ___________________________________________________________
 `GLU <https://github.com/rennis250/GLU.jl>`_
 ____________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/3753123303ea2852accbce22339f67b4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Robert Ennis
+
   Current Version: ``0.0.0``
 
   Julia interface to GLU 
@@ -187,6 +272,12 @@ ____________________________________________
 
 `GLUT <https://github.com/rennis250/GLUT.jl>`_
 ______________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/3753123303ea2852accbce22339f67b4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Robert Ennis
 
   Current Version: ``0.0.0``
 
@@ -202,6 +293,12 @@ ______________________________________________
 
 `Gadfly <https://github.com/dcjones/Gadfly.jl>`_
 ________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Daniel Jones
 
   Current Version: ``0.0.0``
 
@@ -219,6 +316,12 @@ ________________________________________________
 `GetC <https://github.com/rennis250/GetC.jl>`_
 ______________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/3753123303ea2852accbce22339f67b4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Robert Ennis
+
   Current Version: ``0.0.0``
 
   Minimal implementation of Jasper's Julia FFI 
@@ -231,6 +334,12 @@ ______________________________________________
 
 `Graphs <https://github.com/johnmyleswhite/Graphs.jl>`_
 _______________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
 
   Current Version: ``0.0.0``
 
@@ -245,6 +354,12 @@ _______________________________________________________
 `Grid <https://github.com/timholy/Grid.jl>`_
 ____________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tim Holy
+
   Current Version: ``0.0.0``
 
   Grid operations for the Julia language 
@@ -257,6 +372,12 @@ ____________________________________________
 
 `HDF5 <https://github.com/timholy/HDF5.jl>`_
 ____________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tim Holy
 
   Current Version: ``0.0.0``
 
@@ -271,6 +392,12 @@ ____________________________________________
 `HTTP <https://github.com/dirk/HTTP.jl>`_
 _________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/d9c8c5a29b60871d14846a382d50626a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Dirk Gadsden
+
   Current Version: ``0.0.0``
 
   HTTP library (server, client, parser) for the Julia language 
@@ -283,6 +410,12 @@ _________________________________________
 
 `HypothesisTests <https://github.com/simonster/HypothesisTests.jl>`_
 ____________________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Simon Kornblith
 
   Current Version: ``0.0.0``
 
@@ -297,6 +430,12 @@ ____________________________________________________________________
 `ICU <https://github.com/nolta/ICU.jl>`_
 ________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Mike Nolta
+
   Current Version: ``0.0.0``
 
   Julia wrapper for the International Components for Unicode (ICU) library 
@@ -309,6 +448,12 @@ ________________________________________
 
 `IniFile <https://github.com/JuliaLang/IniFile.jl>`_
 ____________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: The Julia Language
 
   Current Version: ``0.0.0``
 
@@ -323,6 +468,12 @@ ____________________________________________________
 `Iterators <https://github.com/JuliaLang/Iterators.jl>`_
 ________________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: The Julia Language
+
   Current Version: ``0.0.0``
 
   Common functional iterator patterns. 
@@ -335,6 +486,12 @@ ________________________________________________________
 
 `Ito <https://github.com/aviks/Ito.jl>`_
 ________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Avik Sengupta
 
   Current Version: ``0.0.0``
 
@@ -352,6 +509,12 @@ ________________________________________
 `JSON <https://github.com/aviks/JSON.jl>`_
 __________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Avik Sengupta
+
   Current Version: ``0.0.0``
 
   JSON parsing and printing 
@@ -364,6 +527,12 @@ __________________________________________
 
 `Languages <https://github.com/johnmyleswhite/Languages.jl>`_
 _____________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
 
   Current Version: ``0.0.0``
 
@@ -378,6 +547,12 @@ _____________________________________________________________
 `Loss <https://github.com/johnmyleswhite/Loss.jl>`_
 ___________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+
   Current Version: ``0.0.0``
 
   Loss functions 
@@ -390,6 +565,12 @@ ___________________________________________________
 
 `MAT <https://github.com/simonster/MAT.jl>`_
 ____________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Simon Kornblith
 
   Current Version: ``0.0.0``
 
@@ -404,6 +585,12 @@ ____________________________________________
 `MCMC <https://github.com/doobwa/MCMC.jl>`_
 ___________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/1a4672a0ae94c24f02517dea26097f58?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Chris DuBois
+
   Current Version: ``0.0.0``
 
   MCMC tools for Julia 
@@ -416,6 +603,12 @@ ___________________________________________
 
 `Mongrel2 <https://github.com/aviks/Mongrel2.jl>`_
 __________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Avik Sengupta
 
   Current Version: ``0.0.0``
 
@@ -431,6 +624,12 @@ __________________________________________________
 `NHST <https://github.com/johnmyleswhite/NHST.jl>`_
 ___________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+
   Current Version: ``0.0.0``
 
   Null hypothesis significance tests 
@@ -443,6 +642,12 @@ ___________________________________________________
 
 `Named <https://github.com/HarlanH/Named.jl>`_
 ______________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/9f1a68b9e623be5da422b44e733fa8bc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Harlan Harris
 
   Current Version: ``0.0.0``
 
@@ -457,6 +662,12 @@ ______________________________________________
 `OpenGL <https://github.com/rennis250/OpenGL.jl>`_
 __________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/3753123303ea2852accbce22339f67b4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Robert Ennis
+
   Current Version: ``0.0.0``
 
   Julia interface to OpenGL 
@@ -469,6 +680,12 @@ __________________________________________________
 
 `Optim <https://github.com/johnmyleswhite/Optim.jl>`_
 _____________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
 
   Current Version: ``0.0.0``
 
@@ -487,6 +704,12 @@ _____________________________________________________
 `Options <https://github.com/JuliaLang/Options.jl>`_
 ____________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: The Julia Language
+
   Current Version: ``0.0.0``
 
   A framework for providing optional arguments to functions. 
@@ -499,6 +722,12 @@ ____________________________________________________
 
 `PLX <https://github.com/simonster/PLX.jl>`_
 ____________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Simon Kornblith
 
   Current Version: ``0.0.0``
 
@@ -513,6 +742,12 @@ ____________________________________________
 `PatternDispatch <https://github.com/toivoh/PatternDispatch.jl>`_
 _________________________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/8d3d3934c39b52f48c35a0cc536edae7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: toivoh
+
   Current Version: ``0.0.0``
 
   Method dispatch based on pattern matching for Julia 
@@ -525,6 +760,12 @@ _________________________________________________________________
 
 `ProjectTemplate <https://github.com/johnmyleswhite/ProjectTemplate.jl>`_
 _________________________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
 
   Current Version: ``0.0.0``
 
@@ -540,6 +781,12 @@ _________________________________________________________________________
 `RDatasets <https://github.com/johnmyleswhite/RDatasets.jl>`_
 _____________________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+
   Current Version: ``0.0.0``
 
   Julia package for loading many of the data sets available in R 
@@ -553,6 +800,12 @@ _____________________________________________________________
 `Rif <https://github.com/lgautier/Rif.jl>`_
 ___________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/8e5422a173711c086b685140dbc498fe?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Laurent Gautier
+
   Current Version: ``0.0.0``
 
   Julia-to-R interface 
@@ -565,6 +818,12 @@ ___________________________________________
 
 `SDL <https://github.com/rennis250/SDL.jl>`_
 ____________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/3753123303ea2852accbce22339f67b4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Robert Ennis
 
   Current Version: ``0.0.0``
 
@@ -581,6 +840,12 @@ ____________________________________________
 `Sims <https://github.com/tshort/Sims.jl>`_
 ___________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/903acb22f47a901577ee48d3962d5858?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tom Short
+
   Current Version: ``0.0.0``
 
   Experiments with non-causal, equation-based modeling in Julia 
@@ -594,6 +859,12 @@ ___________________________________________
 `Sound <https://github.com/JuliaLang/Sound.jl>`_
 ________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: The Julia Language
+
   Current Version: ``0.0.0``
 
   Reading and writing from WAV files (should probably be named WAV). 
@@ -606,6 +877,12 @@ ________________________________________________
 
 `TextAnalysis <https://github.com/johnmyleswhite/TextAnalysis.jl>`_
 ___________________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
 
   Current Version: ``0.0.0``
 
@@ -622,6 +899,12 @@ ___________________________________________________________________
 `TextWrap <https://github.com/carlobaldassi/TextWrap.jl>`_
 __________________________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Carlo Baldassi
+
   Current Version: ``0.0.0``
 
   Package for wrapping text into paragraphs. 
@@ -634,6 +917,12 @@ __________________________________________________________
 
 `Tk <https://github.com/JuliaLang/Tk.jl>`_
 __________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: The Julia Language
 
   Current Version: ``0.0.0``
 
@@ -648,6 +937,12 @@ __________________________________________
 `Trie <https://github.com/JuliaLang/Trie.jl>`_
 ______________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: The Julia Language
+
   Current Version: ``0.0.0``
 
   Implementation of the trie data structure. 
@@ -661,6 +956,12 @@ ______________________________________________
 `UTF16 <https://github.com/nolta/UTF16.jl>`_
 ____________________________________________
 
+  .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Mike Nolta
+
   Current Version: ``0.0.0``
 
   UTF16 string type for Julia 
@@ -673,6 +974,12 @@ ____________________________________________
 
 `Winston <https://github.com/nolta/Winston.jl>`_
 ________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Mike Nolta
 
   Current Version: ``0.0.0``
 
@@ -689,6 +996,12 @@ ________________________________________________
 
 `ZMQ <https://github.com/aviks/ZMQ.jl>`_
 ________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Avik Sengupta
 
   Current Version: ``0.0.0``
 

@@ -54,6 +54,7 @@ function gen_listpkg()
 		end
 		print(io, "`$(pkg) <$(html_url)>`_\n"); 
 		print(io, "_"^(length("`$(pkg) <$(html_url)>`_")) * "\n\n")
+		print(io, "  .. image:: $(avatar)\n     :height: 80px\n     :width: 80px\n     :align: right\n     :alt: $(fullname)\n")
 		print(io, "  Current Version: ``$(maxv.version)``\n\n"); 
 		print(io, "  $(desc) \n\n")
 		print(io, "  Maintainer: `$(fullname) <$user_url>`_\n\n") 
