@@ -1,5 +1,19 @@
-mean(v::AbstractArray) = sum(v)/numel(v)
+function mean(iterable)
+    state = start(iterable)
+    if done(iterable, state)
+        error("mean of empty collection undefined: $(repr(iterable))")
+    end
+    count = 1
+    total, state = next(iterable, state)
+    while !done(iterable, state)
+        value, state = next(iterable, state)
+        total += value
+        count += 1
+    end
+    return total/count
+end
 mean(v::AbstractArray, dim::Int) = sum(v,dim)/size(v,dim)
+
 weighted_mean(v::AbstractArray, w::AbstractArray) = sum(v.*w)/sum(w)
 
 function median(v::AbstractArray)
