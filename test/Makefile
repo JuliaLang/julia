@@ -1,4 +1,4 @@
-JULIAHOME = ..
+JULIAHOME = $(abspath ..)
 include ../Make.inc
 
 default all extra unicode gzip::
@@ -8,7 +8,7 @@ core numbers strings unicode corelib hashing remote \
 arrayops linalg fft dct sparse bitarray suitesparse arpack \
 random math functional bigint bigfloat combinatorics \
 statistics glpk linprog poly file Rmath remote zlib image \
-iostring gzip ccall
+iostring gzip integers spawn ccall
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@

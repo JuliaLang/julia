@@ -10,7 +10,8 @@ text_colors = {:black   => "\033[1m\033[30m",
                :blue    => "\033[1m\033[34m",
                :magenta => "\033[1m\033[35m",
                :cyan    => "\033[1m\033[36m",
-               :white   => "\033[1m\033[37m"}
+               :white   => "\033[1m\033[37m",
+               :normal  => color_normal}
 
 function answer_color()
     c = symbol(get(ENV, "JL_ANSWER_COLOR", ""))
@@ -19,9 +20,16 @@ end
 
 banner() = print(have_color ? banner_color : banner_plain)
 
+
+exit(n) = ccall(:jl_exit, Void, (Int32,), n)
+exit() = exit(0)
+quit() = exit()
+
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
-    del_fd_handler(STDIN.fd)
+    global _repl_enough_stdin = true
+    stop_reading(STDIN) 
+    STDIN.readcb = false
     put(repl_channel, (ast, show_value))
 end
 
@@ -84,11 +92,37 @@ function eval_user_input(ast::ANY, show_value)
             end
             break
         catch err
+            if iserr
+                println("SYSTEM ERROR: show(lasterr) caused an error")
+            end
             iserr, lasterr = true, err
             bt = backtrace()
         end
     end
     println()
+end
+
+function readBuffer(stream::TTY, nread)
+    global _repl_enough_stdin::Bool    
+    while !_repl_enough_stdin && nb_available(stream.buffer) > 0
+        nread = int(memchr(stream.buffer,'\n')) # never more than one line or readline explodes :O
+        nread2 = int(memchr(stream.buffer,'\r'))
+        if nread == 0
+            if nread2 == 0
+                nread = nb_available(stream.buffer)
+            else
+                nread = nread2
+            end
+        else
+            if nread2 != 0 && nread2 < nread
+                nread = nread2
+            end
+        end
+        ptr = pointer(stream.buffer.data,stream.buffer.ptr)
+        skip(stream.buffer,nread)
+        ccall(:jl_readBuffer,Void,(Ptr{Void},Int32),ptr,nread)
+    end
+    return false
 end
 
 function run_repl()
@@ -104,12 +138,13 @@ function run_repl()
         println()
     end
 
-    # ctrl-C interrupt for interactive use
+    # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
 
     while true
         ccall(:repl_callback_enable, Void, ())
-        add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
+        global _repl_enough_stdin = false
+        start_reading(STDIN, readBuffer)
         (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
@@ -214,35 +249,45 @@ const roottask_wi = WorkItem(roottask)
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
-julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
+@unix_only julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
+@windows_only begin
+    const JULIA_USER_DATA_DIR = string(ENV["AppData"],"/julia")
+    julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(JULIA_USER_DATA_DIR,"/packages")))
+end
 
 function _start()
     # set up standard streams
-    global const stdout_stream = make_stdout_stream()
-    global const stdin_stream = make_stdin_stream()
-    global const stderr_stream = make_stderr_stream()
-    global OUTPUT_STREAM = stdout_stream
 
+    @windows_only if !has(ENV,"HOME")
+        ENV["HOME"] = ENV["APPDATA"]*"\\julia"
+    end
+    reinit_stdio()
     librandom_init()
+
+    @windows_only if(!isdir(JULIA_USER_DATA_DIR))
+        mkdir(JULIA_USER_DATA_DIR)
+    end
 
     # set CPU core count
     global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
 
-    atexit(()->flush(stdout_stream))
+    #atexit(()->flush(stdout_stream))
     try
-        ccall(:jl_start_io_thread, Void, ())
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
 
         if !anyp(a->(a=="--worker"), ARGS)
             # start in "head node" mode
             global const Scheduler = Task(()->event_loop(true), 1024*1024)
-            global PGRP = ProcessGroup(1, {LocalProcess()}, {("",0)})
+            global PGRP;
+            PGRP.myid = 1
+            assert(PGRP.np == 0)
+            push(PGRP.workers,LocalProcess())
+            push(PGRP.locs,("",0))
+            PGRP.np = 1
             # make scheduler aware of current (root) task
             enq_work(roottask_wi)
             yield()
-        else
-            global PGRP = ProcessGroup(0, {}, {})
         end
 
         global const LOAD_PATH = ByteString[
@@ -261,19 +306,21 @@ function _start()
                 try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             end
 
-            global have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
+            @unix_only global have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
                                     success(`tput setaf 0`)
+            @windows_only global have_color = true
             global is_interactive = true
             if !quiet
                 banner()
             end
             run_repl()
         end
-    catch e
-        show(add_backtrace(e,backtrace()))
+    catch err
+        show(add_backtrace(err,backtrace()))
         println()
         exit(1)
     end
+    exit(0) #HACK: always exit using jl_exit
 end
 
 const atexit_hooks = {}
@@ -284,8 +331,8 @@ function _atexit()
     for f in atexit_hooks
         try
             f()
-        catch e
-            show(e)
+        catch err
+            show(err)
             println()
         end
     end

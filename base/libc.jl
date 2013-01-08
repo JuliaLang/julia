@@ -1,7 +1,8 @@
 ## time-related functions ##
 
 # TODO: check for usleep errors?
-sleep(s::Real) = ccall(:usleep, Int32, (Uint32,), uint32(iround(s*1e6)))
+@unix_only sleep(s::Real) = ccall(:usleep, Int32, (Uint32,), uint32(iround(s*1e6)))
+@windows_only sleep(s::Real) = (ccall(:Sleep, stdcall, Void, (Uint32,), uint32(iround(s*1e3))); return int32(0))
 
 strftime(t) = strftime("%c", t)
 function strftime(fmt::ByteString, t)
@@ -29,8 +30,8 @@ end
 
 ## process-related functions ##
 
-getpid() = int(ccall(:getpid, Int32, ()))
-system(cmd::String) = int(ccall(:system, Int32, (Ptr{Uint8},), cmd))
+getpid() = ccall(:jl_getpid, Uint32, ())
+system(cmd::String) = ccall(:system, Int32, (Ptr{Uint8},), cmd)
 
 ## network functions ##
 
@@ -53,3 +54,4 @@ tmpnam() = bytestring(ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8},), C_NULL))
 ## Memory related ##
 
 c_free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
+c_malloc(size::Int32) = ccall(:malloc, Ptr{Void}, (Int32,), size)

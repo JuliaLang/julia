@@ -5,7 +5,6 @@
 #include <sys/stat.h>
 
 #ifdef _WIN32
-#  define _WIN32_WINNT 0x0501
 #  include <windows.h>
 #  include <direct.h>
 #else
@@ -118,7 +117,32 @@ void *jl_dlsym(uv_lib_t *handle, char *symbol)
     void *ptr;
     int  error = uv_dlsym(handle, symbol, &ptr);
     if (error != 0) {
-        JL_PRINTF(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror(handle));
+        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror(handle));
     }
     return ptr;
 }
+
+#ifdef __WIN32__
+//Look for symbols in win32 libraries
+void *jl_dlsym_win32(char *f_name)
+{
+    void *fptr = jl_dlsym_e(jl_exe_handle, f_name);
+    if(!fptr) {
+        fptr = jl_dlsym_e(jl_dl_handle, f_name);
+        if (!fptr) {
+            fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
+            if (!fptr) {
+                fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
+                if (!fptr) {
+                    fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
+                    if (!fptr) {
+                        fptr = jl_dlsym(jl_winsock_handle, f_name);
+                    }
+                }
+            }
+        }
+    }
+    return fptr;
+}
+
+#endif

@@ -456,7 +456,7 @@ jl_value_t *jl_parse_next()
         value_t a = car_(c);
         if (isfixnum(a)) {
             jl_lineno = numval(a);
-            //ios_printf(ios_stderr, "  on line %d\n", jl_lineno);
+            //jl_printf(JL_STDERR, "  on line %d\n", jl_lineno);
             return scm_to_julia(cdr_(c));
         }
     }

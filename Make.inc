@@ -8,7 +8,6 @@ JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
 LLVMROOT = $(BUILD)
 BUILD = $(JULIAHOME)/usr
-
 # Directories where said libraries get installed to
 JL_PRIVATE_LIBDIR = lib/julia
 JL_LIBDIR = lib
@@ -29,9 +28,9 @@ else
 ifeq ($(XC_HOST),i686-w64-mingw32)
 override OS = WINNT
 override ARCH = i686
-#override OPENBLAS_DYNAMIC_ARCH = 1
+override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
-export WINEPATH := $(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g');$(WINEPATH)
+export WINEPATH := $(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g')
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -50,8 +49,11 @@ endif
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
 
+# ATLAS must have been previously built with "make -C deps build-atlas",
+# or installed to usr/lib/libatlas from some another source (built as
+# a shared library, for your platform, single threaded)
 USE_ATLAS = 0
-ATLAS_LIBDIR = /path/to/atlas/build/lib
+ATLAS_LIBDIR = ${USRLIB}
 
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
@@ -59,6 +61,7 @@ endif
 
 ifeq ($(OS), WINNT)
 fPIC = 
+PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia
 else
 fPIC = -fPIC
 endif
@@ -146,6 +149,7 @@ USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_GLPK=0
 USE_SYSTEM_LIGHTTPD=0
+USE_SYSTEM_NGINX=0
 USE_SYSTEM_ZLIB=0
 
 -include $(JULIAHOME)/Make.user
@@ -278,12 +282,21 @@ OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/
 endif
 
 ifeq ($(OS), Darwin)
+INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
+INSTALL_NAME_CHANGE_CMD = install_name_tool -change
+RPATH = -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)'
+SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices
+WHOLE_ARCHIVE = -Xlinker -all_load
+NO_WHOLE_ARCHIVE =
 JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lpthread $(NO_WHOLE_ARCHIVE) -lPsapi -lkernel32 -lWs2_32 -lIphlpapi
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi
+JCFLAGS += -D_WIN32_WINNT=0x0600
+JCXXFLAGS += -D_WIN32_WINNT=0x0600
+LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
 endif
 
 # MKL

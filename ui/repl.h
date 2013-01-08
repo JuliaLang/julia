@@ -32,5 +32,8 @@ extern char *ios_readline(ios_t *s);
 DLLEXPORT extern void repl_callback_enable();
 DLLEXPORT extern void jl_enable_color();
 DLLEXPORT extern void jl_stdin_callback();
+DLLEXPORT extern void jl_readBuffer(char *base, ssize_t nread);
+extern void parseAndExecute(char *str);
+DLLEXPORT extern void jl_clear_input(void);
 
 #endif // JL_REPL_H

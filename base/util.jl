@@ -94,8 +94,8 @@ function whicht(f, types)
             d = f.env.defs
             while !is(d,())
                 if is(d.func.code, lsd)
-                    print(stdout_stream, f.env.name)
-                    show(stdout_stream, d); println(stdout_stream)
+                    print(OUTPUT_STREAM, f.env.name)
+                    show(OUTPUT_STREAM, d); println(OUTPUT_STREAM)
                     return
                 end
                 d = d.next
@@ -112,13 +112,13 @@ function edit(file::String, line::Int)
     issrc = file[end-2:end] == ".jl"
     if issrc
         if file[1]!='/' && !is_file_readable(file)
-            file2 = "$JULIA_HOME/base/$file"
+            file2 = "$JULIA_HOME/../lib/julia/base/$file"
             if is_file_readable(file2)
                 file = file2
             end
         end
         if editor == "emacs"
-            jmode = "$JULIA_HOME/contrib/julia-mode.el"
+            jmode = "$JULIA_HOME/../../contrib/julia-mode.el"
             run(`emacs $file --eval "(progn
                                      (require 'julia-mode \"$jmode\")
                                      (julia-mode)
@@ -324,6 +324,7 @@ function init_help()
         end
     end
 end
+
 
 function help()
     init_help()

@@ -537,12 +537,16 @@ DLLEXPORT int jl_strtof(char *str, float *out)
 
 jl_value_t *jl_stdout_obj()
 {
-    return jl_get_global(jl_base_module, jl_symbol("stdout_stream"));
+    jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
+    if (stdout_obj != NULL) return stdout_obj;
+    return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
 }
 
 jl_value_t *jl_stderr_obj()
 {
-    return jl_get_global(jl_base_module, jl_symbol("stderr_stream"));
+    jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
+    if (stderr_obj != NULL) return stderr_obj;
+    return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
 }
 
 static jl_function_t *jl_show_gf=NULL;
@@ -567,7 +571,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
 // comma_one prints a comma for 1 element, e.g. "(x,)"
 void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_one)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(st);
+    JL_STREAM *s = ((JL_STREAM**)st)[1];
     JL_PUTC(opn, s);
     size_t i, n=jl_tuple_len(t);
     for(i=0; i < n; i++) {
@@ -590,7 +594,7 @@ static void show_function(JL_STREAM *s, jl_value_t *v)
 
 static void show_type(jl_value_t *st, jl_value_t *t)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(st);
+    uv_stream_t *s =((uv_stream_t**)st)[1];
     if (jl_is_union_type(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
             JL_WRITE(s, "None", 4);
@@ -622,7 +626,7 @@ static void show_type(jl_value_t *st, jl_value_t *t)
 
 DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(str);
+    uv_stream_t *s = ((uv_stream_t**)str)[1];
     // fallback for printing some other builtin types
     if (jl_is_tuple(v)) {
         jl_show_tuple(str, (jl_tuple_t*)v, '(', ')', 1);
@@ -664,7 +668,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
             char *data = (char*)jl_bits_data(v);
             JL_PUTS("0x", s);
             for(int i=nb-1; i >= 0; --i)
-                ios_printf(s, "%02hhx", data[i]);
+                jl_printf(s, "%02hhx", data[i]);
         }
         JL_PUTC(')', s);
     }
@@ -723,7 +727,7 @@ JL_CALLABLE(jl_f_typevar)
     JL_TYPECHK(typevar, symbol, args[0]);
     if (jl_boundp(jl_current_module, (jl_sym_t*)args[0]) &&
         jl_is_type(jl_get_global(jl_current_module, (jl_sym_t*)args[0]))) {
-        ios_printf(JL_STDERR, "Warning: type parameter name %s shadows an identifier.\n", ((jl_sym_t*)args[0])->name);
+        jl_printf(JL_STDERR, "Warning: type parameter name %s shadows an identifier.\n", ((jl_sym_t*)args[0])->name);
     }
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;

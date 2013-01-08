@@ -7,6 +7,7 @@
 /dist
 
 /julia
+/julia-*
 /h2j
 
 *.exe

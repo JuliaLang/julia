@@ -192,7 +192,7 @@ end
 
 @windows_only begin
     function win32_SystemFunction036!(a::Array{Uint32})
-        ccall((:SystemFunction036,:Advapi32),stdcall,Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
+        ccall((:SystemFunction036,:Advapi32),stdcall,Uint8,(Ptr{Void},Uint32),a,length(a)*sizeof(eltype(a)))
     end
 end
 

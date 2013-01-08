@@ -66,7 +66,7 @@ end
 # Higher-level functions
 # Determine a stream's read/write mode, and return prot & flags
 # appropriate for mmap
-function mmap_stream_settings(s::IOStream)
+function mmap_stream_settings(s::IO)
     const PROT_READ::Int32 = 1
     const PROT_WRITE::Int32 = 2
     const MAP_SHARED::Int32 = 1
@@ -88,7 +88,7 @@ function mmap_stream_settings(s::IOStream)
 end
 
 # Mmapped-array constructor
-function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO, offset::FileOffset)
     prot, flags, iswrite = mmap_stream_settings(s)
     len = prod(dims)*sizeof(T)
     if iswrite
@@ -100,7 +100,7 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::Fi
     finalizer(A,x->munmap(pmap,len+delta))
     return A
 end
-mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream) = mmap_array(T, dims, s, position(s))
+mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO) = mmap_array(T, dims, s, position(s))
 msync{T}(A::Array{T}, flags::Int) = msync(pointer(A), prod(size(A))*sizeof(T), flags)
 msync{T}(A::Array{T}) = msync(A,MS_SYNC)
 

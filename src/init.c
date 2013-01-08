@@ -21,9 +21,23 @@
 #include <stdio.h>
 #ifdef __WIN32__
 # define WIN32_LEAN_AND_MEAN
+// Copied from MINGW_FLOAT_H which may not be found due to a colision with the builtin gcc float.h
+// eventually we can probably integrate this into OpenLibm.
+void __cdecl __MINGW_NOTHROW _fpreset (void);
+void __cdecl __MINGW_NOTHROW fpreset (void);
+#define _FPE_INVALID        0x81
+#define _FPE_DENORMAL       0x82
+#define _FPE_ZERODIVIDE     0x83
+#define _FPE_OVERFLOW       0x84
+#define _FPE_UNDERFLOW      0x85
+#define _FPE_INEXACT        0x86
+#define _FPE_UNEMULATED     0x87
+#define _FPE_SQRTNEG        0x88
+#define _FPE_STACKOVERFLOW  0x8a
+#define _FPE_STACKUNDERFLOW 0x8b
+#define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 # include <windows.h>
 #endif
-
 #if defined(__linux__)
 //#define _GNU_SOURCE
 #include <sched.h>   // for setting CPU affinity
@@ -49,18 +63,38 @@ static void jl_find_stack_bottom(void)
     jl_stack_lo = jl_stack_hi - stack_size;
 }
 
-#ifndef __WIN32__
+#ifdef __WIN32__
+void fpe_handler(int arg,int num)
+#else
 void fpe_handler(int arg)
+#endif
 {
     (void)arg;
+#ifndef __WIN32__
     sigset_t sset;
     sigemptyset(&sset);
     sigaddset(&sset, SIGFPE);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
-
+#else
+    fpreset();
+    switch(num) {
+        case _FPE_INVALID:
+        case _FPE_OVERFLOW:
+        case _FPE_UNDERFLOW:
+        default:
+        jl_errorf("Unexpected FPE Error");
+        break;
+        case _FPE_ZERODIVIDE:
+#endif
     jl_throw(jl_divbyzero_exception);
+#ifdef __WIN32__
+        break;
+    }
+#endif
 }
 
+
+#ifndef __WIN32__
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
@@ -85,59 +119,236 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     }
 }
 
+#endif
+
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
-void restore_signals()
-{
+#ifdef __WIN32__
+volatile HANDLE hMainThread;
+void restore_signals() {
+    SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
+}
+void win_raise_sigint() {
+    jl_throw(jl_interrupt_exception);
+}
+BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
+{   
+    int sig;
+    //windows signals use different numbers from unix
+    switch(wsig){
+        case CTRL_C_EVENT: sig = SIGINT; break;
+        //case CTRL_BREAK_EVENT: sig = SIGTERM; break;
+        // etc.
+        default: sig = SIGTERM; break;
+    }
+    if (jl_defer_signal) {
+        jl_signal_pending = sig;
+    } else {
+        jl_signal_pending = 0;
+        SuspendThread(hMainThread);
+        CONTEXT ctxThread;
+        memset(&ctxThread,0,sizeof(CONTEXT));
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        if (!GetThreadContext(hMainThread, &ctxThread)) {
+            //error
+            printf("error: GetThreadContext failed\n");
+            return 0;
+        }
+        ctxThread.Eip = (DWORD)&win_raise_sigint; //on win64, use .Rip = (DWORD64)...
+        if (!SetThreadContext(hMainThread,&ctxThread)) {
+            printf("error: SetThreadContext failed\n");
+            //error
+            return 0;
+        }
+        if ((DWORD)-1 == ResumeThread (hMainThread)) {
+            printf("error: ResumeThread failed\n");
+            //error
+            return 0;
+        }
+    }
+    return 1;
+}
+#else   
+void restore_signals() {
     sigset_t sset;
     sigemptyset(&sset);
     sigprocmask(SIG_SETMASK, &sset, 0);
 }
-
 void sigint_handler(int sig, siginfo_t *info, void *context)
-{
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGINT);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
-
+{   
     if (jl_defer_signal) {
         jl_signal_pending = sig;
-    }
-    else {
+    } else {
         jl_signal_pending = 0;
         jl_throw(jl_interrupt_exception);
     }
 }
 #endif
 
-void jl_atexit_hook()
-{
+struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
+struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
+static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status) {
+    if (status == 0) uv_close((uv_handle_t*)req->handle,NULL); //doesn't appear to be necessary...
+    free(req);
+}
+static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
+    struct uv_shutdown_queue *queue = arg;
+    struct uv_shutdown_queue_item *item = malloc(sizeof(struct uv_shutdown_queue_item));
+    item->h = handle;
+    item->next = NULL;
+    if (queue->last) queue->last->next = item;
+    if (!queue->first) queue->first = item;
+    queue->last = item;
+}
+void jl_atexit_hook() {
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {
             jl_apply((jl_function_t*)f, NULL, 0);
         }
     }
+    uv_loop_t* loop = jl_global_event_loop();
+    struct uv_shutdown_queue queue = {NULL, NULL};
+    uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
+    struct uv_shutdown_queue_item *item = queue.first;
+    while (item) {
+        uv_handle_t *handle = item->h;
+        switch(handle->type) {
+            case UV_TTY:
+            case UV_UDP:
+//#ifndef __WIN32__ // unix only supports shutdown on TCP and NAMED_PIPE
+// but uv_shutdown doesn't seem to be particularly reliable, so we'll avoid it in general
+                uv_close(handle,NULL);
+                break;
+//#endif
+            case UV_TCP:
+            case UV_NAMED_PIPE:
+                if (uv_is_writable((uv_stream_t*)handle)) { // uv_shutdown returns an error if not writable
+                    uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
+                    int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
+                    if (err != 0) { printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
+                } else {
+                    uv_close(handle,NULL);
+                }
+                break;
+            case UV_POLL:
+            case UV_TIMER:
+            case UV_PREPARE:
+            case UV_CHECK:
+            case UV_IDLE:
+            case UV_ASYNC:
+            case UV_SIGNAL:
+            case UV_PROCESS:
+            case UV_FS_EVENT:
+            case UV_FS_POLL:
+                uv_close(handle,NULL); //do we want to use jl_close_uv?
+                break;
+            case UV_HANDLE:
+            case UV_STREAM:
+            case UV_UNKNOWN_HANDLE:
+            case UV_HANDLE_TYPE_MAX:
+            case UV_RAW_FD:
+            case UV_RAW_HANDLE:
+            default:
+                assert(0);
+        }
+        item = item->next;
+    }
+    uv_run(loop); //let libuv spin until everything has finished closing
 }
 
 void jl_get_builtin_hooks(void);
 
 uv_lib_t *jl_dl_handle;
+#ifdef __WIN32__
+uv_lib_t _jl_ntdll_handle;
+uv_lib_t _jl_exe_handle;
+uv_lib_t _jl_kernel32_handle;
+uv_lib_t _jl_crtdll_handle;
+uv_lib_t _jl_winsock_handle;
+
+uv_lib_t *jl_ntdll_handle=&_jl_ntdll_handle;
+uv_lib_t *jl_exe_handle=&_jl_exe_handle;
+uv_lib_t *jl_kernel32_handle=&_jl_kernel32_handle;
+uv_lib_t *jl_crtdll_handle=&_jl_crtdll_handle;
+uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
+#endif
+uv_loop_t *jl_io_loop;
 
 #ifdef COPY_STACKS
 void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where);
 extern jl_jmp_buf * volatile jl_jmp_target;
 #endif
 
+#ifdef __WIN32__
+static long chachedPagesize = 0;
+long getPageSize (void) {
+    if (!chachedPagesize) {
+        SYSTEM_INFO systemInfo;
+        GetSystemInfo (&systemInfo);
+        chachedPagesize = systemInfo.dwPageSize;
+    }
+    return chachedPagesize;
+}
+#else
+long getPageSize (void) {
+    return sysconf(_SC_PAGESIZE);
+}
+#endif
+
+void *init_stdio_handle(uv_file fd,int readable)
+{
+    void *handle;
+    uv_handle_type type = uv_guess_handle(fd);
+    switch(type)
+    {
+        case UV_TTY:
+            handle = malloc(sizeof(uv_tty_t));
+            uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable);
+            ((uv_tty_t*)handle)->data=0;
+            uv_tty_set_mode((void*)handle,1); //raw stdio
+            break;
+        case UV_NAMED_PIPE:
+        case UV_FILE:
+            ios_printf(ios_stdout,"Using pipes/files as STDIO is not yet supported. Proceed with caution!\n");
+            ios_printf(ios_stderr,"Using pipes/files as STDIO is not yet supported. Proceed with caution!\n");
+            handle = malloc(sizeof(uv_pipe_t));
+            uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle,(readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE));
+            uv_pipe_open((uv_pipe_t*)handle,fd);
+            ((uv_pipe_t*)handle)->data=0;
+            break;
+        case UV_TCP:
+        case UV_UDP:
+        default:
+            handle=NULL;
+            jl_errorf("This type of handle for stdio is not yet supported (%d)!\n",type);
+            break;
+    }
+    return handle;
+}
+
+void init_stdio()
+{   //order must be 2,1,0
+    JL_STDERR = init_stdio_handle(2,0);
+    JL_STDOUT = init_stdio_handle(1,0);
+    JL_STDIN = init_stdio_handle(0,1);
+}
+
 void julia_init(char *imageFile)
 {
-    (void)uv_default_loop();
-    restore_signals(); //XXX: this needs to be early in load process
-    jl_page_size = sysconf(_SC_PAGESIZE);
+    jl_page_size = getPageSize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
+#ifdef __WIN32__
+    uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
+    uv_dlopen("Kernel32.dll",jl_kernel32_handle);
+    uv_dlopen("msvcrt.dll",jl_crtdll_handle);
+    uv_dlopen("Ws2_32.dll",jl_winsock_handle);
+    _jl_exe_handle.handle = GetModuleHandleA(NULL);
+#endif
+    jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
+    init_stdio();
 
 #if defined(__linux__)
     int ncores = jl_cpu_cores();
@@ -243,9 +454,15 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
+#else
+    if( signal( SIGFPE, (void (__cdecl *)(int)) fpe_handler ) == SIG_ERR )
+     {
+        JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n" );
+        jl_exit(1);
+     }
 #endif
 
-    atexit(jl_atexit_hook);
+    //atexit(jl_atexit_hook);
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
@@ -255,9 +472,9 @@ void julia_init(char *imageFile)
 DLLEXPORT void jl_install_sigint_handler()
 {
 #ifdef __WIN32__
-	DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
-		GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
-		TRUE, DUPLICATE_SAME_ACCESS );
+    DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
+        GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
+        TRUE, DUPLICATE_SAME_ACCESS );
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 #else
     struct sigaction act;

@@ -23,22 +23,14 @@ include(find_in_path("webrepl_msgtypes_h"))
 ###########################################
 
 # open a socket on any port
-__ports = [int16(4444)]
-__sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), __ports)
-if __sockfd == -1
-    # couldn't open the socket
-    println("could not open server socket on port 4444.")
-    exit()
-end
+(port,sock) = Base.open_any_tcp_port(4444,false)
 
 # print the socket number so the server knows what it is
-println(__ports[1])
+println(STDOUT,int16(port))
 
 # wait for the server to connect to the socket
-__connectfd = ccall(:accept, Int32, (Int32, Ptr{Void}, Ptr{Void}), __sockfd, C_NULL, C_NULL)
-
-# create an io object from the file descriptor
-__io = fdio(__connectfd)
+__io = Base.wait_accept(sock)
+Base.start_reading(__io)
 
 ###########################################
 # protocol implementation
@@ -71,7 +63,7 @@ function __write_message(msg)
         write(__io, uint32(length(arg)))
         write(__io, arg)
     end
-    flush(__io)
+    #flush(__io)
 end
 
 # print a message (useful for debugging)
@@ -171,7 +163,7 @@ function __socket_callback(fd)
 end
 
 # event handler for socket input
-add_fd_handler(__connectfd, __socket_callback)
+enq_work(@task while true __socket_callback(__io) end)
 
 web_show(user_id, ans) =
     __Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(repl_show, ans)})

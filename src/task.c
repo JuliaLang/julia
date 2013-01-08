@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <sys/mman.h>
+//#include <sys/mman.h>
 #include <signal.h>
 #include <libgen.h>
 #include <unistd.h>
@@ -13,7 +13,7 @@
 #include "julia.h"
 #include "builtin_proto.h"
 #if defined(__WIN32__)
-#include <Winbase.h>
+#include <winbase.h>
 #include <malloc.h>
 #else
 // This gives unwind only local unwinding options ==> faster code
@@ -204,7 +204,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     /*
       making task switching interrupt-safe is going to be challenging.
       we need JL_SIGATOMIC_BEGIN in jl_enter_handler, and then
-      JL_SIGATOMIC_END after every JL_TRY setjmp that returns zero.
+      JL_SIGATOMIC_END after every JL_TRY sigsetjmp that returns zero.
       also protect jl_eh_restore_state.
       then we need JL_SIGATOMIC_BEGIN at the top of this function (ctx_switch).
       the JL_SIGATOMIC_END at the end of this function handles the case
@@ -501,6 +501,22 @@ static void record_backtrace(void)
     bt_size = n;
 }
 #endif
+
+//for looking up functions from gdb:
+DLLEXPORT void gdblookup(ptrint_t ip) {
+    char *func_name;
+    int line_num;
+    const char *file_name;
+    getFunctionInfo(&func_name, &line_num, &file_name, ip);
+    if (func_name != NULL)
+       ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+}
+
+DLLEXPORT void gdbbacktrace() {
+    record_backtrace();
+    for(size_t i=0; i < bt_size; i++)
+        gdblookup(bt_data[i]);
+}
 
 // yield to exception handler
 static void throw_internal(jl_value_t *e)

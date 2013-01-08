@@ -23,3 +23,7 @@ runtests("functional")
 runtests("bigint")
 runtests("combinatorics")
 runtests("statistics")
+
+# io, etc.
+runtests("iostring")
+runtests("spawn")

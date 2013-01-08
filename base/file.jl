@@ -2,7 +2,8 @@
 
 function pwd()
     b = Array(Uint8,1024)
-    p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
+    @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
+    @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
     system_error(:getcwd, p == C_NULL)
     bytestring(p)
 end
@@ -11,6 +12,8 @@ cd(dir::String) = system_error(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == 
 cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
+
+@unix_only begin
 function cd(f::Function, dir::String)
     fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
     system_error(:open, fd == -1)
@@ -21,17 +24,36 @@ function cd(f::Function, dir::String)
         system_error(:fchdir, ccall(:fchdir,Int32,(Int32,),fd) != 0)
     end
 end
+end
+
+@windows_only begin
+function cd(f::Function, dir::String)
+    old = cwd()
+    try
+        cd(dir)
+        retval = f()
+        cd(old)
+        retval
+    catch err
+        cd(old)
+        rethrow(err)
+    end
+end
+end
+
 cd(f::Function) = cd(f, ENV["HOME"])
 
 function mkdir(path::String, mode::Unsigned)
-    ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    @windows_only ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), bytestring(path))
     system_error(:mkdir, ret != 0)
 end
 mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o", mode, "?")
 mkdir(path::String) = mkdir(path, 0o777)
 
 function rmdir(path::String)
-    ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
+    @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
+    @windows_only ret = ccall(:_rmdir, Int32, (Ptr{Uint8},), bytestring(path))
     system_error(:rmdir, ret != 0)
 end
 
@@ -48,11 +70,10 @@ mv(src::String, dst::String) = run(`mv $src $dst`)
 touch(path::String) = run(`touch $path`)
 
 # Obtain a temporary filename.
-const tempnam = (OS_NAME == :Windows) ? :_tempnam : :tempnam
-
 function tempname()
   d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-  p = ccall(tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+  @unix_only p = ccall(:tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+  @windows_only p = ccall(:_tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
   s = bytestring(p)
   c_free(p)
   s
@@ -68,8 +89,31 @@ tempdir() = dirname(tempname())
   return (b, fdio(p, true))
 end
 
-@windows_only function mktemp()
-  error("not yet implemented")
+@windows_only begin 
+function GetTempPath()
+  temppath = Array(Uint8,261)
+  lentemppath = ccall(:GetTempPathA,stdcall,Uint32,(Uint32,Ptr{Uint8}),length(temppath),temppath)
+  if lentemppath >= length(temppath) || lentemppath == 0
+      error("GetTempPath failed")
+end
+  grow(temppath,lentemppath-length(temppath))
+  return convert(ASCIIString,temppath)
+end
+GetTempFileName(uunique::Uint32) = GetTempFileName(GetTempPath(), uunique)
+function GetTempFileName(temppath::String,uunique::Uint32)
+  tname = Array(Uint8,261)
+  uunique = ccall(:GetTempFileNameA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32,Ptr{Uint8}),temppath,"julia",uunique,tname)
+  lentname = findfirst(tname,0)-1
+  if uunique == 0 || lentname <= 0
+      error("GetTempFileName failed")
+  end
+  grow(tname,lentname-length(tname))
+  return convert(ASCIIString, tname)
+end
+function mktemp()
+  filename = GetTempFileName(uint32(0))
+  return (filename, open(filename,"r+"))
+end
 end
 
 # Create and return the name of a temporary directory
@@ -80,7 +124,16 @@ end
 end
 
 @windows_only function mktempdir()
-  error("not yet implemented")
+  seed = randi(Uint32)
+  while true
+      filename = GetTempFileName(seed)
+      ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), filename)
+      if ret == 0
+          return filename
+end
+      system_error(:mktempdir, errno()!=EEXIST)
+      seed += 1
+  end
 end
 
 downloadcmd = nothing

@@ -97,7 +97,7 @@ function countlines(filename::String, eol::Char)
         countlines(io, eol)
     end
 end
-function countlines(io::IOStream, eol::Char)
+function countlines(io::Stream, eol::Char)
     if !iswascii(eol)
         error("countlines: only ASCII line terminators supported")
     end

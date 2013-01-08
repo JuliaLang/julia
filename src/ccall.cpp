@@ -305,24 +305,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
 #ifdef __WIN32__
-            fptr = jl_dlsym_e(jl_dl_handle, f_name);
-            if (!fptr) {
-                //TODO: when one of these succeeds, store the f_lib name (and clear fptr)
-                fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
-                if (!fptr) {
-                    fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
-                    if (!fptr) {
-                        fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
-                        if (!fptr) {
-                            fptr = jl_dlsym(jl_winsock_handle, f_name);
-                        }
-                    }
-                }
-            }
-            else {
-                // available in process symbol table
-                fptr = NULL;
-            }
+         //TODO: store the f_lib name instead of fptr
+        fptr = jl_dlsym_win32(f_name);
 #else
             // will look in process symbol table
 #endif

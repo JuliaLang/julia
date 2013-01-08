@@ -15,7 +15,7 @@ dirty(paths) = !success(`git diff --quiet HEAD -- $paths`)
 staged(paths) = !success(`git diff --quiet --cached -- $paths`)
 unstaged(paths) = !success(`git diff --quiet -- $paths`)
 
-attached() = success(`git symbolic-ref -q HEAD` > "/dev/null")
+attached() = success(`git symbolic-ref -q HEAD` > SpawnNullStream())
 branch() = readchomp(`git rev-parse --symbolic-full-name --abbrev-ref HEAD`)
 head() = readchomp(`git rev-parse HEAD`)
 

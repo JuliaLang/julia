@@ -997,7 +997,7 @@ static int is_va_tuple(jl_tuple_t *t)
     return (jl_tuple_len(t)>0 && jl_is_seq_type(jl_tupleref(t,jl_tuple_len(t)-1)));
 }
 
-static void print_func_loc(ios_t *s, jl_lambda_info_t *li);
+static void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 /*
   warn about ambiguous method priorities
@@ -1042,16 +1042,15 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         }
         char *n = fname->name;
         jl_value_t *errstream = jl_stderr_obj();
-        ios_t *s = JL_STDERR;
-        ios_printf(s, "Warning: New definition %s", n);
+        JL_STREAM *s = JL_STDERR;
+        JL_PRINTF(s, "Warning: New definition %s", n);
         jl_show(errstream, (jl_value_t*)type);
-        print_func_loc(s, linfo);
-        ios_printf(s, " is ambiguous with %s", n);
+        JL_PRINTF(s, " is ambiguous with %s", n);
         jl_show(errstream, (jl_value_t*)sig);
         print_func_loc(s, oldmeth->func->linfo);
-        ios_printf(s, ".\n         Make sure %s", n);
+        JL_PRINTF(s, ".\n         Make sure %s", n);
         jl_show(errstream, isect);
-        ios_printf(s, " is defined first.\n");
+        JL_PRINTF(s, " is defined first.\n");
     done_chk_amb:
         JL_GC_POP();
     }
@@ -1089,14 +1088,14 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                  method->linfo->module != jl_base_module)) {
                 jl_module_t *newmod = method->linfo->module;
                 jl_value_t *errstream = jl_stderr_obj();
-                ios_t *s = JL_STDERR;
-                ios_printf(s, "Warning: Method definition %s", method->linfo->name->name);
+                JL_STREAM *s = JL_STDERR;
+                JL_PRINTF(s, "Warning: Method definition %s", method->linfo->name->name);
                 jl_show(errstream, (jl_value_t*)type);
-                ios_printf(s, " in module %s", l->func->linfo->module->name->name);
+                JL_PRINTF(s, " in module %s", l->func->linfo->module->name->name);
                 print_func_loc(s, l->func->linfo);
-                ios_printf(s, " overwritten in module %s", newmod->name->name);
+                JL_PRINTF(s, " overwritten in module %s", newmod->name->name);
                 print_func_loc(s, method->linfo);
-                ios_printf(s, ".\n");
+                JL_PRINTF(s, ".\n");
             }
             JL_SIGATOMIC_BEGIN();
             l->sig = type;
@@ -1458,7 +1457,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
     return jl_apply(mfunc, args, nargs);
 }
 
-static void print_func_loc(ios_t *s, jl_lambda_info_t *li)
+static void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
 {
     long lno = li->line;
     if (lno > 0) {
@@ -1469,7 +1468,7 @@ static void print_func_loc(ios_t *s, jl_lambda_info_t *li)
 
 static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(outstr);
+    JL_STREAM *s = (JL_STREAM*)jl_iostr_data(outstr);
     while (ml != JL_NULL) {
         JL_PRINTF(s, "%s", name);
         if (ml->tvars != jl_null) {

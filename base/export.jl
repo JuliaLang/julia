@@ -1362,3 +1362,24 @@ export
     @show,
     @printf,
     @sprintf
+
+export
+#libuv branch stuff
+    accept,
+    listen,
+    bind,
+    AsyncStream,
+    Buffer,
+    IOString,
+    PipeString,
+    SpawnNullStream,
+    Stream, 
+    TcpSocket,
+    jl_alloca,
+    systmpdir,
+    open_any_tcp_port,
+    connect_to_host,
+    spawn_nostdin,
+    start_reading,
+    stop_reading
+

@@ -41,7 +41,7 @@ namespace JL_I {
         checked_fptoui32, checked_fptosi32, checked_fptoui64, checked_fptosi64,
         nan_dom_err,
         // c interface
-        ccall,
+        ccall, jl_alloca
     };
 };
 
@@ -994,6 +994,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *tmp = builder.CreateAShr(fy, ConstantInt::get(intt,((IntegerType*)intt)->getBitWidth()-1));
         return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
     }
+    HANDLE(jl_alloca,1) {
+        return builder.CreateAlloca(IntegerType::get(jl_LLVMContext, 8),JL_INT(x));
+    }
     default:
         assert(false);
     }
@@ -1086,4 +1089,5 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_fptosi64); ADD_I(checked_fptoui64);
     ADD_I(nan_dom_err);
     ADD_I(ccall);
+    ADD_I(jl_alloca);
 }

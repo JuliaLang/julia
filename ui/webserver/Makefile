@@ -19,15 +19,10 @@ endif
 
 WEBSERVER_SRCS = webserver.o server.o jsoncpp.o
 
-%.o: %.cpp
+%.o: %.cpp *.h
 	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@
-%.do: %.cpp
+%.do: %.cpp *.h
 	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@
-
-LAUNCH_SCRIPT = launch-julia-webserver
-ifeq ($(OS),WINNT)
-LAUNCH_SCRIPT = launch-julia-webserver.bat
-endif 
 
 julia-release julia-debug: %: $(BUILD)/bin/%-webserver $(BUILD)/bin/$(LAUNCH_SCRIPT)
 
@@ -40,9 +35,15 @@ $(BUILD)/bin/julia-release-webserver: $(WEBSERVER_SRCS)
 $(BUILD)/bin/julia-debug-webserver: $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
+ifeq ($(OS),WINNT)
+LAUNCH_SCRIPT = launch-julia-webserver.bat
+else
+LAUNCH_SCRIPT = launch-julia-webserver
+endif
 $(BUILD)/bin/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
 	cp $< $@
 
 clean:
 	rm -f *.o *.do
 	rm -f $(BUILD)/bin/julia-*-webserver
+	rm -f $(BUILD)/bin/*.bat

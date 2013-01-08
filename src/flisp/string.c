@@ -46,7 +46,10 @@ value_t fl_string_count(value_t *args, u_int32_t nargs)
     return size_wrap(u8_charnum(str+start, stop-start));
 }
 
+#ifdef __WIN32__
 extern int wcwidth(wchar_t c);
+#endif
+
 
 value_t fl_string_width(value_t *args, u_int32_t nargs)
 {

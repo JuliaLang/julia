@@ -13,8 +13,15 @@ export fft, bfft, ifft, rfft, brfft, irfft,
 
 ## FFT: Implement fft by calling fftw.
 
+@unix_only begin
 const libfftw = "libfftw3_threads"
 const libfftwf = "libfftw3f_threads"
+end
+
+@windows_only begin
+const libfftw = "libfftw3"
+const libfftwf = "libfftw3f"
+end
 
 ## Direction of FFT
 

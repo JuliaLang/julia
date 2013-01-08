@@ -77,7 +77,6 @@ end
     win32_SystemFunction036!(a)
     srand(a)
 end
-
     randmtzig_create_ziggurat_tables()
 end
 

@@ -99,7 +99,7 @@ STAGE2_DEPS += suitesparse
 
 ifeq ($(OS), WINNT)
 LIBTOOL_CCLD = CCLD="$(CC) -no-undefined -avoid-version"
-AUTOTOOLS_PATH_CORRECT = -cp -f $(USRBIN)/$(@F) $(USR)/$(JL_LIBDIR)/$(@F)
+AUTOTOOLS_PATH_CORRECT = -cp -f $(BUILD)/bin/$(@F) $(BUILD)/lib/$(@F)
 endif
 
 ## Common build target prefixes
@@ -148,6 +148,18 @@ else
 LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
 endif
 
+LLVM_DIR = $(subst -release,,llvm-$(LLVM_VER)-$(LLVM_TYPE))
+
+LLVM_FLAGS = --disable-threads --disable-profiling --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs
+
+ifeq ($(LLVM_TYPE), debug)
+LLVM_FLAGS += --enable-assertions --disable-optimized
+ifeq ($(OS), WINNT)
+LLVM_FLAGS += --disable-embed-stdcxx
+endif
+else
+LLVM_FLAGS += --disable-assertions --enable-optimized
+endif
 ifneq ($(BUILD_LLVM_CLANG), 1)
 LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
@@ -446,6 +458,8 @@ else
 OPENLIBM_FLAGS = ARCH="$(ARCH)"
 endif
 
+OPENLIBM_FLAGS += CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+
 OPENLIBM_OBJ_TARGET = $(BUILD)/lib/libopenlibm.$(SHLIB_EXT)
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
@@ -458,7 +472,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
 $(OPENLIBM_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
 endif
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
-	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+	$(MAKE) -C openlibm $(OPENLIBM_FLAGS)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
@@ -483,7 +497,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
 $(OPENLIBMEXT_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
 endif
 $(OPENLIBMEXT_OBJ_SOURCE): openlibm/Makefile.extras
-	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS)
 $(OPENLIBMEXT_OBJ_TARGET): $(OPENLIBMEXT_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm-extras.$(SHLIB_EXT) $@
@@ -610,6 +624,49 @@ clean-openblas:
 distclean-openblas:
 	-rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
 
+## ATLAS (currently 3.10.0) ##
+# no threading, with full lapack, shared library
+# should always be compiled with (a real) gcc, it's
+# configure script will search for the best match
+# (gcc 4.7, gcc, clang,ICC/microsoft/others)
+ATLAS_OBJ_SOURCE = atlas/build/lib/libsatlas.$(SHLIB_EXT)
+ATLAS_FLAGS = --shared --prefix=$(BUILD) --cc=gcc -t 0 \
+	--with-netlib-lapack-tarfile=$(JULIAHOME)/deps/lapack-$(LAPACK_VER).tgz
+ifeq ($(OS), WINNT)
+ATLAS_FLAGS += -b 32 
+endif
+
+#force backwards compatibility (pick any 1)
+#ATLAS_FLAGS += -V 192 -A 13  # requires SSE2 (P4 & later)
+#ATLAS_FLAGS += -V 128 -A 12 # requires SSE1 (P3 & later)
+#ATLAS_FLAGS += -V -1 -A 11 # any x87 (PentiumPro or Athlon & later)
+#ATLAS_FLAGS += -A 25  # requires Corei132 (Corei232 doesn't have definition yet)
+
+
+build-atlas: $(ATLAS_OBJ_SOURCE)
+install-atlas: $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
+
+atlas/configure:
+	git clone git://github.com/vtjnash/atlas-3.10.0.git atlas
+ifeq "$(MAKECMDGOALS)" "build-atlas"
+# only allow building atlas as the sole target (without -jN)
+# since it internally handles parallelism, for tuning timing accuracy
+atlas/build/Make.top: atlas/configure lapack-$(LAPACK_VER).tgz
+	cd atlas && \
+	(test -d build || mkdir build) && cd build && \
+	../configure $(ATLAS_FLAGS)
+$(ATLAS_OBJ_SOURCE): atlas/build/Make.top
+	$(MAKE) -C atlas/build -j1
+endif
+$(BUILD)/lib/libsatlas.$(SHLIB_EXT): $(ATLAS_OBJ_SOURCE)
+	cp -f atlas/build/lib/libsatlas.$(SHLIB_EXT) $(BUILD)/lib
+	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
+
+clean-atlas:
+	rm -rf atlas/build
+distclean-atlas: clean-atlas
+	#rm -rf atlas
+
 ## LAPACK ##
 
 ifeq ($(USE_SYSTEM_LAPACK), 0)
@@ -654,6 +711,8 @@ endif
 ARPACK_OBJ_TARGET = $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
+ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
+
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
@@ -664,10 +723,20 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	tar zxf $< 
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
+ifeq ($(OS),WINNT)
+	cd arpack-ng_$(ARPACK_VER) && \
+	rm -f UTIL/second_NONE.f
+else
 	cd arpack-ng_$(ARPACK_VER) && \
 	./configure $(CONFIGURE_COMMON) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
+endif
 	touch $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(BUILD)/lib
+ifeq ($(OS),WINNT)
+	cd arpack-ng_$(ARPACK_VER) && \
+	$(FC) -shared $(ARPACK_OPTS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o $@ && \
+	cp libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
+else
 	cd arpack-ng_$(ARPACK_VER) && \
 	$(MAKE) install F77="$(FC)" MPIF77="$(FC)"
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
@@ -675,6 +744,7 @@ ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libarpack.so* ; do \
 		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
+endif
 endif
 	touch $@
 
@@ -947,6 +1017,45 @@ clean-lighttpd:
 distclean-lighttpd:
 	-rm -rf lighttpd-$(LIGHTTPD_VER).tar.gz lighttpd-$(LIGHTTPD_VER)
 
+## NGINX ##
+
+ifeq ($(USE_SYSTEM_NGINX), 0)
+NGINX_OBJ_TARGET = $(BUILD)/sbin/nginx
+else
+NGINX_OBJ_TARGET =
+endif
+
+ifeq ($(OS), WINNT)
+NGINX_FLAGS += \
+	--with-cc-opt="-D_NO_OLDNAMES -UWIN32 -Wno-error" \
+	--with-ld-opt="-L'$(BUILD)/lib' -lpcre"
+else
+NGINX_FLAGS += \
+	--with-ld-opt="-L'$(BUILD)/lib -lpcre -Wl,-rpath,'$(BUILD)/lib' $(RPATH)"
+endif
+
+compile-nginx: install-nginx
+install-nginx: $(NGINX_OBJ_TARGET)
+
+nginx/auto/configure: | compile-pcre
+	(cd .. && git submodule update --init)
+	touch $@
+nginx/Makefile: nginx/auto/configure
+	cd nginx && \
+	./auto/configure --without-http_gzip_module --without-http_rewrite_module $(NGINX_FLAGS) --with-debug --prefix=".."
+$(NGINX_OBJ_TARGET): nginx/Makefile
+ifeq ($(OS), WINNT)
+	-cp '/c/Program Files/Microsoft SDKs/Windows/'*/Lib/AdvAPI32.Lib '/c/Program Files (x86)/Microsoft SDKs/Windows/'*/Lib/AdvAPI32.Lib nginx
+	-cp '/c/Program Files/Microsoft SDKs/Windows/'*/Lib/WS2_32.Lib '/c/Program Files (x86)/Microsoft SDKs/Windows/'*/Lib/WS2_32.Lib nginx
+endif
+	$(MAKE) -C nginx install DESTDIR="$(abspath $(BUILD)/bin)/"
+	touch $@
+
+clean-nginx:
+	-$(MAKE) -C nginx clean
+distclean-nginx:
+	-rm -rf nginx
+
 ## GMP ##
 
 ifeq ($(USE_SYSTEM_GMP), 0)
@@ -965,7 +1074,7 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure --prefix=$(abspath $(BUILD)) CC="$(CC)" CXX="$(CXX)" --enable-shared --disable-static
+	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
 ifeq ($(OS),$(BUILD_OS))
@@ -1024,6 +1133,7 @@ glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 $(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libglpk.dylib $@
+	$(AUTOTOOLS_PATH_CORRECT)
 	touch $@
 
 clean-glpk:

@@ -17,6 +17,7 @@
 #include <ctype.h>
 #include <math.h>
 #include "julia.h"
+#include <sys/stat.h>
 #include "builtin_proto.h"
 
 DLLEXPORT char *julia_home = NULL;
@@ -27,6 +28,7 @@ jl_module_t *jl_old_base_module = NULL;
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
+extern int base_module_conflict;
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
     assert(ex->head == module_sym);
@@ -49,6 +51,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_old_base_module = jl_base_module;
         // pick up Base module during bootstrap
         jl_base_module = newm;
+    } else {
+        base_module_conflict = 1;
     }
     // export all modules from Main
     if (parent_module == jl_main_module)
@@ -335,7 +339,7 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 // repeatedly call jl_parse_next and eval everything
 void jl_parse_eval_all(char *fname)
 {
-    //ios_printf(ios_stderr, "***** loading %s\n", fname);
+    //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
     jl_lineno=0;
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
@@ -372,11 +376,19 @@ void jl_parse_eval_all(char *fname)
 
 int asprintf(char **strp, const char *fmt, ...);
 
+static int jl_load_progress_max = 0;
+static int jl_load_progress_i = 0;
+DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl_load_progress_i = 0; }
 void jl_load(const char *fname)
 {
+    if (jl_load_progress_max > 0) {
+        jl_load_progress_i++;
+        //This deliberatly uses ios, because stdio initialization has been moved to Julia
+        jl_printf(JL_STDOUT, "\e[0G\e[2K%0.1f%% %s", (double)jl_load_progress_i / jl_load_progress_max * 100, fname);
+    }
     char *fpath = (char*)fname;
-    struct stat stbuf;
-    if (jl_stat(fpath, (char*)&stbuf) != 0) {
+    uv_statbuf_t stbuf;
+    if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fpath);
     }
     jl_start_parsing_file(fpath);

@@ -4,8 +4,8 @@ print(io::IO, x) = show(io, x)
 print(io::IO, xs...) = for x in xs print(io, x) end
 println(io::IO, xs...) = print(io, xs..., '\n')
 
-print(xs...)   = print(OUTPUT_STREAM::IOStream, xs...)
-println(xs...) = println(OUTPUT_STREAM::IOStream, xs...)
+print(xs...)   = print(OUTPUT_STREAM, xs...)
+println(xs...) = println(OUTPUT_STREAM, xs...)
 
 ## core string functions ##
 
@@ -29,7 +29,7 @@ string(s::String) = s
 string(xs...) = print_to_string(xs...)
 
 bytestring() = ""
-bytestring(s::Array{Uint8,1}) = utf8(s)
+bytestring(s::Array{Uint8,1}) = bytestring(pointer(s),length(s))
 bytestring(s::String) = print_to_string(s)
 
 function bytestring(p::Ptr{Uint8})

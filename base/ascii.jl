@@ -69,7 +69,7 @@ end
 
 ## outputing ASCII strings ##
 
-print(io::IO, s::ASCIIString) = (write(io, s.data);nothing)
+print(io::IO, s::ASCIIString) = (write(io, s);nothing)
 write(io::IO, s::ASCIIString) = write(io, s.data)
 
 ## transcoding to ASCII ##

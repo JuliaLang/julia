@@ -139,6 +139,8 @@ var indent_str = "    ";
 // how long we delay in ms before polling the server again
 var poll_interval = 300;
 
+// how long before we drop a request and try anew
+
 // keep track of whether we are waiting for a message (and don't send more if we are)
 var waiting_for_response = false;
 
@@ -393,7 +395,21 @@ function process_outbox() {
             waiting_for_response = true;
 
             // send the messages
-            $.post("/repl.scgi", {"request": $.toJSON(outbox_queue)}, callback, "json");
+			$.ajax({
+				type: "POST",
+				url: "/repl.scgi",
+				data: {"request": $.toJSON(outbox_queue)},
+				dataType: "json",
+				timeout: 500, // in milliseconds
+				success: callback,
+				error: function(request, status, err) {
+				    //TODO: proper error handling
+					if(status == "timeout") {
+						waiting_for_response = false;
+						setTimeout(poll,poll_interval);
+					}
+				}
+		});
         }
 
         // we sent all the messages at once so clear the outbox

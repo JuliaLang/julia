@@ -19,7 +19,7 @@ LLT = $(LLTDIR)/libsupport.a $(BUILD)/lib/libuv.a
 FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) -fvisibility=hidden
 LIBFILES = $(LLT)
-LIBS = $(LIBFILES) -lm -lpthread
+LIBS = $(LIBFILES) -lm
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
@@ -47,19 +47,19 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 
 $(LIBTARGET)-debug.a: $(DOBJS)
 	rm -rf $@
-	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
+	$(QUIET_LINK) $(AR) -rcs $@ $(DOBJS)
 	ln -sf $@ $(LIBTARGET).a
 
 $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
-	$(QUIET_LINK) ar -rcs $@ $(OBJS)
+	$(QUIET_LINK) $(AR) -rcs $@ $(OBJS)
 
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	$(QUIET_CC) $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	$(QUIET_CC) $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS)
 	./$(EXENAME)-debug unittest.lsp
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	$(QUIET_CC) $(CC) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	$(QUIET_CC) $(CC) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS)
 	./$(EXENAME) unittest.lsp
 
 clean:

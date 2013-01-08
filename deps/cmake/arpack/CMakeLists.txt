@@ -106,5 +106,5 @@ prefixlist(arpackutil_STAT_SRCS "${arpackutil_DIR}")
 
 ########### next target ###############
 add_library(arpack SHARED ${arpacksrc_STAT_SRCS} ${arpackutil_STAT_SRCS})
-target_link_libraries(arpack ${LAPACK_TARGET} ${BLAS_LIBRARIES})
+target_link_libraries(arpack ${LapackLIB} ${BLAS_LIBRARIES})
 set_target_properties(arpack PROPERTIES VERSION 2.0.0 SOVERSION 2)

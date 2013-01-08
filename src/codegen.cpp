@@ -2737,6 +2737,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
 #endif
+    //llvm::JITEmitDebugInfoToDisk = true;
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
 #ifdef __MINGW32__
