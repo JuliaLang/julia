@@ -1381,5 +1381,8 @@ export
     connect_to_host,
     spawn_nostdin,
     start_reading,
-    stop_reading
+    stop_reading,
+    globalEventLoop,
+    uv_error,
+    UVError
 
