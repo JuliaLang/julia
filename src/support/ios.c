@@ -781,7 +781,11 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     int flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
-    fd = open(fname, flags, S_IRUSR|S_IWUSR/*|S_IRGRP|S_IROTH 644*/); //jwn
+    fd = open(fname, flags, S_IRUSR | S_IWUSR /* 600 */
+#ifndef __WIN32__
+	      | S_IRGRP | S_IROTH /* 644 */
+#endif
+	      );
     if (fd == -1)
         goto open_file_err;
     s = ios_fd(s, fd, 1, 1);
