@@ -19,7 +19,7 @@ LLT = $(LLTDIR)/libsupport.a $(BUILD)/lib/libuv.a
 FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) -fvisibility=hidden
 LIBFILES = $(LLT)
-LIBS = $(LIBFILES) -lm
+LIBS = $(LIBFILES) -lm -lpthread
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
