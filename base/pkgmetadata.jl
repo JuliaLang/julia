@@ -181,10 +181,12 @@ function resolve(reqs::Vector{VersionSet})
         W[r,rem(i-1,n)+1] = -1
         W[r,div(i-1,n)+1] = G[i]
     end
-    mipopts = GLPK.IntoptParam()
+    #mipopts = GLPK.IntoptParam()
+    mipopts = GLPK.SimplexParam()
     mipopts["msg_lev"] = GLPK.MSG_ERR
     mipopts["presolve"] = GLPK.ON
-    _, ws, flag, _ = mixintprog(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,nothing,mipopts)
+    #_, ws, flag, _ = mixintprog(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,nothing,mipopts)
+    _, ws, flag = linprog_simplex(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,mipopts)
     if flag != 0
         msg = sprint(print_linprog_flag, flag)
         error("resolve() failed: $msg.")
@@ -198,12 +200,14 @@ function resolve(reqs::Vector{VersionSet})
           -ones(Int,length(reqs))
           zeros(Int,length(deps)) ]
 
-    _, xs, flag, _ = mixintprog(w,[V;R;D],b,nothing,nothing,z,u,nothing,mipopts)
+    #_, xs, flag, _ = mixintprog(w,[V;R;D],b,nothing,nothing,z,u,nothing,mipopts)
+    _, xs, flag = linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u,mipopts)
     if flag != 0
         msg = sprint(print_linprog_flag, flag)
         error("resolve() failed: $msg.")
     end
-    x = bool(xs)
+    #x = bool(xs)
+    x = xs .> 0.5
     h = (String=>ASCIIString)[]
     for v in vers[x]
         h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")
