@@ -144,6 +144,7 @@ function takebuf_array(io::IOString)
         else
             data = copy(data)
         end
+        grow(data,io.size-length(data))
     else
         nbytes = nb_available(io)
         a = Array(Uint8, nbytes)
