@@ -189,13 +189,9 @@ dlmwrite(io, a) = dlmwrite(io, a, '\t')
 
 # String buffering
 const NULLSET = Set()
-let extract_cache = memio(500, false)
+let extract_cache = IOString()
     global extract_string
     function extract_string(this, left::Int, right::Int, omitlist::Set)
-        if right - left > length(extract_cache.ios)
-            extract_cache_size = right - left
-            extract_cache = memio(extract_cache_size,false)
-        end
         seek(extract_cache, 0)
         if length(this) >= 1
             while isvalid(this, right) && right > left && this[right] == ' '
