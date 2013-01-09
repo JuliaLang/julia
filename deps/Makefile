@@ -557,7 +557,7 @@ install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 RMATH_OBJ_TARGET = $(BUILD)/lib/libRmath.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 
-$(RMATH_OBJ_SOURCE): Rmath/src/Makefile
+$(RMATH_OBJ_SOURCE): Rmath/src/Makefile $(LIBRANDOM_OBJ_TARGET)
 	cd Rmath/src && \
 	$(MAKE) CC="$(CC)" && \
 	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
@@ -1084,14 +1084,14 @@ endif
 
 libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
-libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
+libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
 	touch $@
-libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/Makefile
-	cd libunwind-$(UNWIND_VER) && 
+libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
+	cd libunwind-$(UNWIND_VER) && \
 	./configure $(CONFIGURE_COMMON) CFLAGS="$(LIBUNWIND_CFLAGS)"
 	touch $@
-$(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
+$(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/config.status
 	$(MAKE) -C libunwind-$(UNWIND_VER)
 	touch $@
 libunwind-$(UNWIND_VER)/checked: $(LIBUNWIND_TARGET_SOURCE)
