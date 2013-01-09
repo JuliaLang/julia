@@ -71,8 +71,10 @@ ifneq ($(OS), WINNT)
 endif
 	# Copy in all .jl sources as well
 	-cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
+	-cp $(BUILD)/etc/nginx.conf $(PREFIX)/etc/
 ifeq ($(OS), WINNT)
-	-cp contrib/windows/* $(PREFIX)
+	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
+	-cp -R $(BUILD)/sbin $(PREFIX)
 ifeq ($(shell uname),MINGW32_NT-6.1)
 	-for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
 		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
