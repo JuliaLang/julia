@@ -26,5 +26,6 @@
 *.user
 *.orig
 *.swp
+*.kate-swp
 
 /usr

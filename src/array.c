@@ -286,7 +286,7 @@ jl_array_t *jl_alloc_array_3d(jl_type_t *atype, size_t nr, size_t nc, size_t z)
     return _new_array(atype, 3, &d[0]);
 }
 
-jl_array_t *jl_pchar_to_array(char *str, size_t len)
+jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len);
     memcpy(a->data, str, len);
@@ -304,7 +304,7 @@ jl_value_t *jl_array_to_string(jl_array_t *a)
     return s;
 }
 
-jl_value_t *jl_pchar_to_string(char *str, size_t len)
+jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
     jl_array_t *a = jl_pchar_to_array(str, len);
     JL_GC_PUSH(&a);
@@ -313,7 +313,7 @@ jl_value_t *jl_pchar_to_string(char *str, size_t len)
     return s;
 }
 
-jl_value_t *jl_cstr_to_string(char *str)
+jl_value_t *jl_cstr_to_string(const char *str)
 {
     return jl_pchar_to_string(str, strlen(str));
 }
