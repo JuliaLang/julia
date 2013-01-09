@@ -1097,9 +1097,6 @@ install-clp: $(CLP_OBJ_TARGET)
 LIBUNWIND_TARGET_OBJ = $(BUILD)/lib/libunwind.a
 LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
-ifeq ($(ARCH), ppc64)
-LIBUNWIND_CFLAGS += -m64
-endif
 
 libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
@@ -1108,7 +1105,7 @@ libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	touch $@
 libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
 	cd libunwind-$(UNWIND_VER) && \
-	./configure $(CONFIGURE_COMMON) CFLAGS="$(LIBUNWIND_CFLAGS)"
+	./configure $(CONFIGURE_COMMON) CFLAGS="$(LIBUNWIND_CFLAGS)" --disable-shared
 	touch $@
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/config.status
 	$(MAKE) -C libunwind-$(UNWIND_VER)
@@ -1121,6 +1118,10 @@ endif
 #todo: libunwind tests known to fail
 $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
 	$(MAKE) install -C libunwind-$(UNWIND_VER)
+ifeq ($(ARCH), ppc64)
+	# workaround for configure script bug
+	mv $(BUILD)/lib64/libunwind*.a $(BUILD)/lib/
+endif
 
 clean-unwind:
 	-$(MAKE) -C libunwind-$(UNWIND_VER) clean
