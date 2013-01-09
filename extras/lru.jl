@@ -90,7 +90,7 @@ function ref(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
     delete!(lru.q, idx)
-    enqueue!(lru.q, item)
+    unshift!(lru.q, item)
     item.v
 end
 
@@ -104,7 +104,7 @@ function assign(lru::LRU, v, key)
         item = CacheItem(key, v)
         lru.ht[key] = item
     end
-    enqueue!(lru.q, item)
+    unshift!(lru.q, item)
 end
 
 # Eviction
