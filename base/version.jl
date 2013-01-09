@@ -209,7 +209,7 @@ let
                 println("Warning: git failed in version.jl")
                 #println(err) # not a useful error msg currently
             else
-                error(err)
+                rethrow(err)
             end
         end
     end

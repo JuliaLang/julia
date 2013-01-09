@@ -3,11 +3,27 @@
 module FS
 using Base
 
+const S_IRUSR = 0o400
+const S_IWUSR = 0o200
+const S_IXUSR = 0o100
+const S_IRWXU = S_IRUSR+S_IWUSR+S_IXUSR
+const S_IRGRP = 0o040
+const S_IWGRP = 0o020
+const S_IXGRP = 0o010
+const S_IRWXG = S_IRGRP+S_IWGRP+S_IXGRP
+const S_IROTH = 0o004
+const S_IWOTH = 0o002
+const S_IXOTH = 0o001
+const S_IRWXO = S_IROTH+S_IWOTH+S_IXOTH
+
 export File, open, close, unlink, write,
     JL_O_WRONLY, JL_O_RDONLY, JL_O_RDWR, JL_O_APPEND, JL_O_CREAT, JL_O_EXCL,
-    JL_O_TRUNC, JL_O_TEMPORARY, JL_O_SHORT_LIVED, JL_O_SEQUENTIAL, JL_O_RANDOM
+    JL_O_TRUNC, JL_O_TEMPORARY, JL_O_SHORT_LIVED, JL_O_SEQUENTIAL, JL_O_RANDOM,
+    S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU, S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
+    S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 #import Base.show, Base.open, Base.close, Base.write
+import Base.uvtype, Base.uvhandle
 
 include("file_constants.jl")
 
@@ -27,19 +43,22 @@ type AsyncFile <: AbstractFile
     open::Bool
 end
 
+uvtype(::File) = Base.UV_RAW_FD
+uvhandle(file::File) = file.handle
+
 _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 
-function open(f::File,flags::Integer)
+function open(f::File,flags::Integer,mode::Integer)
     req = Base.Intrinsics.box(Ptr{Void},Intrinsics.jl_alloca(Base.Intrinsics.unbox(Int32,_sizeof_uv_fs_t)))
     ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Int32,Int32,Ptr{Void}),
-                         globalEventLoop(),req,bytestring(f.path),flags,0,C_NULL)
+                         globalEventLoop(),req,bytestring(f.path),flags,mode,C_NULL)
     uv_error(:open)
     f.handle = _uv_fs_result(req)
     f.open = true
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
     f
 end
-open(f::String,flags::Integer) = open(File(f),flags)
+open(f::String,flags,mode) = open(File(f),flags,mode)
 
 function close(f::File)
     if(!f.open)

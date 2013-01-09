@@ -81,9 +81,11 @@ const STDIN_NO  = 0
 const STDOUT_NO = 1
 const STDERR_NO = 2
 
-type StreamRedirect <: AbstractCmd
+typealias Redirectable Union(UVStream,FS.File)
+
+type CmdRedirect <: AbstractCmd
         cmd::AbstractCmd
-        stream::UVStream
+        handle::Redirectable
         stream_no::Int
 end
 
@@ -92,9 +94,13 @@ ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cm
 
 (&)(left::AbstractCmd,right::AbstractCmd) = AndCmds(left,right)
 (|)(src::AbstractCmd,dest::AbstractCmd) = OrCmds(src,dest)
-(<)(left::AbstractCmd,right::UVStream) = StreamRedirect(left,right,STDIN_NO)
-(>)(left::AbstractCmd,right::UVStream) = StreamRedirect(left,right,STDOUT_NO)
+(<)(left::AbstractCmd,right::Redirectable) = CmdRedirect(left,right,STDIN_NO)
+(>)(left::AbstractCmd,right::Redirectable) = CmdRedirect(left,right,STDOUT_NO)
+(<)(left::AbstractCmd,right::String) = left < FS.open(right,JL_O_RDONLY)
+(>)(left::AbstractCmd,right::String) = left > FS.open(right,JL_O_WRONLY|JL_O_CREAT,S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 
+typealias RawOrBoxedHandle Union(UVHandle,UVStream,FS.File)
+typealias StdIOSet (RawOrBoxedHandle, RawOrBoxedHandle, RawOrBoxedHandle)
 
 type Process
     cmd::Cmd
@@ -136,13 +142,17 @@ type SpawnNullStream <: AsyncStream end
 const null_handle = SpawnNullStream()
 SpawnNullStream() = null_handle
 copy(::SpawnNullStream) = null_handle
-handle(::SpawnNullStream) = C_NULL
+uvhandle(::SpawnNullStream) = C_NULL
+uvhandle(x::Ptr) = x
+uvtype(::Ptr) = UV_STREAM
 
 function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
-        in::Ptr{Void}, out::Ptr{Void}, err::Ptr{Void})
+        in, out, err)
     return ccall(:jl_spawn, Ptr{Void},
-        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Process, Ptr{Void}, Ptr{Void}, Ptr{Void}),
-         cmd,        argv,            loop,      pp,       in,        out,       err)
+        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Process, Int32,
+         Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void}),
+         cmd,        argv,            loop,      pp,      uvtype(in),
+         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err))
 end
 
 function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::Int32)
@@ -161,31 +171,26 @@ end
 function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
     loop = globalEventLoop()
     close_in,close_out,close_err = false,false,false
+    pp = Process(cmd,C_NULL,stdios[1],stdios[2],stdios[3]);
+    in,out,err=stdios
     if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
         in = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #in = c_malloc(_sizeof_uv_pipe)
         link_pipe(in,false,stdios[1],true)
         close_in = true
-    else
-        in = handle(stdios[1])
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
         out = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #out = c_malloc(_sizeof_uv_pipe)
         link_pipe(stdios[2],false,out,true)
         close_out = true
-    else
-        out = handle(stdios[2])
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
         err = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #err = c_malloc(_sizof_uv_pipe)
         link_pipe(stdios[3],false,err,true)
         close_err = true
-    else
-        err = handle(stdios[3])
     end
-    pp = Process(cmd,C_NULL,stdios[1],stdios[2],stdios[3]);
     ptrs = _jl_pre_exec(cmd.exec)
     pp.exitcb = exitcb
     pp.closecb = closecb
@@ -209,10 +214,10 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     pp
 end
 
-function spawn(pc::ProcessChainOrNot,redirect::StreamRedirect,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
-        spawn(pc,redirect.cmd,(redirect.stream_no==STDIN_NO ?redirect.stream:stdios[1],
-                                                   redirect.stream_no==STDOUT_NO?redirect.stream:stdios[2],
-                                                   redirect.stream_no==STDERR_NO?redirect.stream:stdios[3]),exitcb,closecb)
+function spawn(pc::ProcessChainOrNot,redirect::CmdRedirect,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
+        spawn(pc,redirect.cmd,(redirect.stream_no==STDIN_NO ?redirect.handle:stdios[1],
+                                                   redirect.stream_no==STDOUT_NO?redirect.handle:stdios[2],
+                                                   redirect.stream_no==STDERR_NO?redirect.handle:stdios[3]),exitcb,closecb)
 end
 
 function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
@@ -242,29 +247,24 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
         pc = ProcessChain(stdios)
     end
     close_in,close_out,close_err = false,false,false
+    in,out,err = stdios
     if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
         in = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #in = c_malloc(_sizeof_uv_pipe)
         link_pipe(in,false,stdios[1],true)
         close_in = true
-    else
-        in = handle(stdios[1])
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
         out = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #out = c_malloc(_sizeof_uv_pipe)
         link_pipe(stdios[2],false,out,true)
         close_out = true
-    else
-        out = handle(stdios[2])
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
         err = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
         #err = c_malloc(_sizof_uv_pipe)
         link_pipe(stdios[3],false,err,true)
         close_err = true
-    else
-        err = handle(stdios[3])
     end
     spawn(pc, cmds.a, (in,out,err), exitcb, closecb)
     spawn(pc, cmds.b, (in,out,err), exitcb, closecb)

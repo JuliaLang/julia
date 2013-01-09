@@ -1,4 +1,5 @@
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
+include("uv_constants.jl")
 
 ## types ##
 
@@ -16,8 +17,6 @@ abstract AsyncStream <: Stream
 
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
-typealias RawOrBoxedHandle Union(UVHandle,UVStream)
-typealias StdIOSet (RawOrBoxedHandle, RawOrBoxedHandle, RawOrBoxedHandle)
 
 const _sizeof_uv_pipe = ccall(:jl_sizeof_uv_pipe_t,Int32,())
 
@@ -93,6 +92,9 @@ type UdpSocket <: Socket
         this
     end
 end
+
+uvtype(::AsyncStream) = UV_STREAM
+uvhandle(stream::AsyncStream) = stream.handle
 
 show(io,sock::UdpSocket) = print(io,"TcpSocket(",sock.open?"connected,":"disconnected,",nb_available(sock.buffer)," bytes waiting)")
 
