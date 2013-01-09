@@ -29,7 +29,7 @@ STAGE1_DEPS = uv openlibm-extras random rmath double-conversion glpk
 STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
-ifeq ($(USE_SYSTEM_UNWIND), 0)
+ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
 STAGE1_DEPS += unwind
 else ifeq ($(OS), FreeBSD)
@@ -709,7 +709,7 @@ clean-atlas:
 	rm -rf atlas/build
 distclean-atlas: clean-atlas
 	rm -rf atlas
-	
+
 get-atlas: atlas/configure
 configure-atlas: atlas/build/Make.top
 compile-atlas: $(ATLAS_OBJ_SOURCE)
@@ -836,10 +836,10 @@ install-arpack: $(ARPACK_OBJ_TARGET)
 
 ## FFTW ##
 
-FFTW_SINGLE_SRC_TARGET = fftw-$(FFTW_VER)-single/.libs/libfftw3f.3.$(SHLIB_EXT)
-FFTW_DOUBLE_SRC_TARGET = fftw-$(FFTW_VER)-double/.libs/libfftw3f.3.$(SHLIB_EXT)
-FFTW_SINGLE_OBJ_TARGET = $(BUILD)/lib/libfftw3f.3.$(SHLIB_EXT)
-FFTW_DOUBLE_OBJ_TARGET = $(BUILD)/lib/libfftw3.3.$(SHLIB_EXT)
+FFTW_SINGLE_SRC_TARGET = fftw-$(FFTW_VER)-single/.libs/libfftw3f.$(SHLIB_EXT)
+FFTW_DOUBLE_SRC_TARGET = fftw-$(FFTW_VER)-double/.libs/libfftw3f.$(SHLIB_EXT)
+FFTW_SINGLE_OBJ_TARGET = $(BUILD)/lib/libfftw3f.$(SHLIB_EXT)
+FFTW_DOUBLE_OBJ_TARGET = $(BUILD)/lib/libfftw3.$(SHLIB_EXT)
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-threads
 ifneq ($(ARCH), ppc64)
@@ -1025,7 +1025,7 @@ $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
 clean-suitesparse-wrapper:
 	-rm -f $(SUITESPARSE_OBJ_TARGET) $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT)
 distclean-suitesparse-wrapper: clean-suitesparse-wrapper
-	
+
 get-suitesparse-wrapper:
 configure-suitesparse-wrapper:
 compile-suitesparse-wrapper:
@@ -1234,7 +1234,7 @@ install-gmp-wrapper: $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT)
 
 ## GLPK ##
 
-GLPK_SRC_TARGET = glpk-$(GLPK_VER)/src/.libs/libglpk.dylib
+GLPK_SRC_TARGET = glpk-$(GLPK_VER)/src/.libs/libglpk.$(SHLIB_EXT)
 GLPK_OBJ_TARGET = $(BUILD)/lib/libglpk.$(SHLIB_EXT)
 
 glpk-$(GLPK_VER).tar.gz:
@@ -1345,7 +1345,7 @@ clean-zlib:
 	-rm -f $(ZLIB_OBJ_TARGET)
 distclean-zlib:
 	-rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
-	
+
 get-zlib: zlib-$(ZLIB_VER).tar.gz
 configure-zlib: zlib-$(ZLIB_VER)/config.status
 compile-zlib: $(ZLIB_SRC_TARGET)
