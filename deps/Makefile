@@ -111,11 +111,15 @@ endif
 LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
 
 default: $(BUILD) install
+get: $(addprefix get-, $(LIBS))
+configure: $(addprefix configure-, $(LIBS))
 compile: $(addprefix compile-, $(LIBS))
+check: $(addprefix check-, $(LIBS))
 install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-clp get-unwind get-nginx get-gmp get-glpk get-zlib get-patchelf
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -384,10 +388,10 @@ clean-uv:
 	-rm -rf $(BUILD)/lib/libuv.a $(BUILD)/include/uv.h $(BUILD)/include/uv-private
 distclean-uv: clean-uv
 
-get-libuv: libuv/Makefile
-configure-libuv: get-libuv
-compile-libuv: $(UV_OBJ_SOURCE)
-check-libuv: libuv/checked
+get-uv: libuv/Makefile
+configure-uv: get-uv
+compile-uv: $(UV_OBJ_SOURCE)
+check-uv: libuv/checked
 install-uv: $(UV_OBJ_TARGET)
 
 
