@@ -1,7 +1,11 @@
 # -*- mode: makefile-gmake -*-
 
 # include twice to pickup user definitions
--include $(JULIAHOME)/Make.user 
+ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
+include $(JULIAHOME)/Make.user 
+endif
+
+.SUFFIXES:
 
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
@@ -153,7 +157,9 @@ USE_SYSTEM_LIGHTTPD=0
 USE_SYSTEM_NGINX=0
 USE_SYSTEM_ZLIB=0
 
--include $(JULIAHOME)/Make.user
+ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
+include $(JULIAHOME)/Make.user
+endif
 
 # ===========================================================================
 

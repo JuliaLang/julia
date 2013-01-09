@@ -13,6 +13,7 @@
 /libunwind-*
 /lighttpd-*
 /llvm-*
+/nginx-*
 /openblas-*
 /patchelf-*
 /pcre-*
