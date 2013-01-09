@@ -629,8 +629,6 @@ extern jl_value_t * volatile jl_task_arg_in_transit;
 double clock_now(void);
 #endif
 
-#include "julia.h"
-
 static void gc_mark_uv_handle(uv_handle_t *handle, void *arg)
 {
     if(handle->data) {
