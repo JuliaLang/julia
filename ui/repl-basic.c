@@ -18,7 +18,7 @@ DLLEXPORT void jl_enable_color(void)
     prompt_string = jl_prompt_color;
 }
 
-void jl_prep_terminal (int meta_flag)
+void jl_prep_terminal(int meta_flag)
 {   //order must be 2,1,0
     uv_tty_set_mode((uv_tty_t*)JL_STDERR,1);
     uv_tty_set_mode((uv_tty_t*)JL_STDOUT,1);
@@ -26,7 +26,7 @@ void jl_prep_terminal (int meta_flag)
 }
 
 /* Restore the terminal's normal settings and modes. */
-void jl_deprep_terminal ()
+void jl_deprep_terminal()
 {   //order must be 0,1,2
     uv_tty_set_mode((uv_tty_t*)JL_STDIN,0);
     uv_tty_set_mode((uv_tty_t*)JL_STDOUT,0);
@@ -55,7 +55,8 @@ void repl_callback_enable()
     jl_prep_terminal(1);
 }
 
-static void stdin_buf_pushc(char c) {
+static void stdin_buf_pushc(char c)
+{
     if (stdin_buf_len >= stdin_buf_maxlen) {
         stdin_buf_maxlen *= 2;
         stdin_buf = realloc(stdin_buf, stdin_buf_maxlen);
@@ -81,7 +82,7 @@ void jl_readBuffer(char* base, ssize_t nread)
     char *start = base;
     int esc = 0;
     int newline = 0;
-    while(*start != 0 && nread > 0) {
+    while (*start != 0 && nread > 0) {
         if (*start < 32 || *start == 127) {
             switch (*start) {
             case '\n':
@@ -92,7 +93,7 @@ void jl_readBuffer(char* base, ssize_t nread)
                 break;
             case '\x03':
                 jl_write(jl_uv_stdout, "^C\n", 3);
-				jl_clear_input();
+                jl_clear_input();
                 break;
             case '\x04':
                 raise(SIGTERM);
@@ -112,17 +113,21 @@ void jl_readBuffer(char* base, ssize_t nread)
                     jl_write(jl_uv_stdout,"\b \b",3);
                 }
             }
-        } else if (esc == 1) {
+        }
+        else if (esc == 1) {
             if (*start == '[') {
                 esc = 2;
-            } else {
+            }
+            else {
                 esc = 0;
             }
-        } else if (esc == 2) {
+        }
+        else if (esc == 2) {
             // for now, we just block all 3 character ctrl signals that I know about
             // this misses delete ^[[3~ and possibly others?
             esc = 0;
-        } else {
+        }
+        else {
             jl_putc(*start, jl_uv_stdout);
             stdin_buf_pushc(*start);
         }
@@ -139,4 +144,3 @@ void jl_clear_input(void)
     jl_printf(jl_uv_stdout, "\n");
     repl_callback_enable();
 }
-
