@@ -252,10 +252,25 @@ function _resolve()
                 Git.autoconfig_pushurl()
             end
             run(`git add -- $pkg`)
+            _postinstall(pkg)
         end
     end
 end
 resolve() = cd(_resolve,julia_pkgdir())
+
+function _postinstall(pkg)
+	@eval module ($(symbol(randstring(20))))
+              p=$pkg
+              try 
+                pf="$(julia_pkgdir())/"*$(pkg)*"/src/postinstall.jl"
+		if isfile(pf)
+                   include(pf)
+                end
+	      catch e
+                  print("Error running postinstall script. Package is still installed. Use Pkg.rm(...) to remove.\n\n$e")
+	      end
+       end
+end
 
 # clone a new package repo from a URL
 
