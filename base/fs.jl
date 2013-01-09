@@ -59,12 +59,13 @@ function open(f::File,flags::Integer,mode::Integer)
     f
 end
 open(f::String,flags,mode) = open(File(f),flags,mode)
+open(f::String,flags) = open(f,flags,0)
 
 function close(f::File)
     if(!f.open)
         error("File is already closed")
     end
-    req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    req = Intrinsics.box(Ptr{Void},Intrinsics.jl_alloca(Intrinsics.unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Void}),
                          globalEventLoop(),req,f.handle,C_NULL)
     uv_error(err)
