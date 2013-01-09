@@ -704,18 +704,18 @@ function interp_parse(s::String, unescape::Function, printer::Function)
         c, k = next(s,j)
         if c == '$'
             if !isempty(s[i:j-1])
-                push(sx, unescape(s[i:j-1]))
+                push!(sx, unescape(s[i:j-1]))
             end
             ex, j = parseatom(s,k)
             if isa(ex,Expr) && is(ex.head,:continue)
                 throw(ParseError("incomplete expression"))
             end
-            push(sx, esc(ex))
+            push!(sx, esc(ex))
             i = j
         elseif c == '\\' && !done(s,k)
             if s[k] == '$'
                 if !isempty(s[i:j-1])
-                    push(sx, unescape(s[i:j-1]))
+                    push!(sx, unescape(s[i:j-1]))
                 end
                 i = k
             end
@@ -725,7 +725,7 @@ function interp_parse(s::String, unescape::Function, printer::Function)
         end
     end
     if !isempty(s[i:])
-        push(sx, unescape(s[i:j-1]))
+        push!(sx, unescape(s[i:j-1]))
     end
     length(sx) == 1 && isa(sx[1],ByteString) ? sx[1] :
         expr(:call, :sprint, printer, sx...)
@@ -763,12 +763,12 @@ function shell_parse(raw::String, interp::Bool)
 
     function update_arg(x)
         if !isa(x,String) || !isempty(x)
-            push(arg, x)
+            push!(arg, x)
         end
     end
     function append_arg()
         if isempty(arg); arg = {"",}; end
-        push(args, arg)
+        push!(args, arg)
         arg = {}
     end
 
@@ -837,7 +837,7 @@ function shell_parse(raw::String, interp::Bool)
     # construct an expression
     exprs = {}
     for arg in args
-        push(exprs, expr(:tuple, arg))
+        push!(exprs, expr(:tuple, arg))
     end
     expr(:tuple,exprs)
 end
@@ -847,7 +847,7 @@ function shell_split(s::String)
     parsed = shell_parse(s,false)
     args = String[]
     for arg in parsed
-       push(args, string(arg...))
+       push!(args, string(arg...))
     end
     args
 end
@@ -955,7 +955,7 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     while 0 < j <= n && length(strs) != limit-1
         if i < k
             if keep_empty || i < j
-                push(strs, str[i:j-1])
+                push!(strs, str[i:j-1])
             end
             i = k
         end
@@ -963,7 +963,7 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
         j, k = search(str,splitter,k)
     end
     if keep_empty || !done(str,i)
-        push(strs, str[i:])
+        push!(strs, str[i:])
     end
     return strs
 end

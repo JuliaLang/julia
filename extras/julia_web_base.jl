@@ -50,7 +50,7 @@ function __read_message()
     for i=1:num_args
         arg_length = read(__io, Uint32)
         arg = ASCIIString(read(__io, Uint8, arg_length))
-        push(args, arg)
+        push!(args, arg)
     end
     return __Message(msg_type, args)
 end

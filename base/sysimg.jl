@@ -80,7 +80,10 @@ include("inference.jl")
 include("io.jl")
 include("iostring.jl")
 include("stream.jl")
+include("fs.jl")
 using FS
+include("process.jl")
+ccall(:jl_get_uv_hooks, Void, ())
 include("char.jl")
 include("ascii.jl")
 include("utf8.jl")
@@ -154,8 +157,11 @@ include("fftw.jl")
 include("dsp.jl")
 using DSP
 
+# deprecated functions
+include("deprecated.jl")
+
 include = include_from_node1
-println()
+print("\e[0G\e[2K")
 
 # prime method cache with some things we know we'll need right after startup
 compile_hint(pwd, ())
@@ -199,9 +205,9 @@ compile_hint(ht_keyindex, (Dict{Any,Any}, Int32))
 compile_hint(perform_work, (WorkItem,))
 compile_hint(notify_done, (WorkItem,))
 compile_hint(work_result, (WorkItem,))
-compile_hint(enqueue, (Array{WorkItem,1}, WorkItem))
+compile_hint(unshift!, (Array{WorkItem,1}, WorkItem))
 compile_hint(enq_work, (WorkItem,))
-compile_hint(pop, (Array{WorkItem,1},))
+compile_hint(pop!, (Array{WorkItem,1},))
 compile_hint(string, (Int,))
 compile_hint(parse_int, (Type{Int}, ASCIIString, Int))
 compile_hint(repeat, (ASCIIString, Int))

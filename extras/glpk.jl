@@ -2073,8 +2073,8 @@ function eval_tab_row(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Fl
 
     check_var_is_basic(prob, k)
 
-    grow(ind, k_max - length(ind))
-    grow(val, k_max - length(val))
+    grow!(ind, k_max - length(ind))
+    grow!(val, k_max - length(val))
 
     off32 = sizeof(Int32)
     off64 = sizeof(Float64)
@@ -2083,8 +2083,8 @@ function eval_tab_row(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Fl
 
     len = @glpk_ccall eval_tab_row Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p k ind32p val64p
 
-    del(ind, len+1:length(ind))
-    del(val, len+1:length(val))
+    delete!(ind, len+1:length(ind))
+    delete!(val, len+1:length(val))
 
     return len
 end
@@ -2113,8 +2113,8 @@ function eval_tab_row(prob::Prob, k::Integer)
 
     len = @glpk_ccall eval_tab_row Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p k ind32p val64p
 
-    del(ind, len+1:length(ind))
-    del(val, len+1:length(val))
+    delete!(ind, len+1:length(ind))
+    delete!(val, len+1:length(val))
 
     return ind, val
 end
@@ -2134,8 +2134,8 @@ function eval_tab_col(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Fl
 
     check_var_is_non_basic(prob, k)
 
-    grow(ind, k_max - length(ind))
-    grow(val, k_max - length(val))
+    grow!(ind, k_max - length(ind))
+    grow!(val, k_max - length(val))
 
     off32 = sizeof(Int32)
     off64 = sizeof(Float64)
@@ -2144,8 +2144,8 @@ function eval_tab_col(prob::Prob, k::Integer, ind::Vector{Int32}, val::Vector{Fl
 
     len = @glpk_ccall eval_tab_col Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p k ind32p val64p
 
-    del(ind, len+1:length(ind))
-    del(val, len+1:length(val))
+    delete!(ind, len+1:length(ind))
+    delete!(val, len+1:length(val))
 
     return len
 end
@@ -2175,8 +2175,8 @@ function eval_tab_col(prob::Prob, k::Integer)
 
     len = @glpk_ccall eval_tab_col Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p k ind32p val64p
 
-    del(ind, len+1:length(ind))
-    del(val, len+1:length(val))
+    delete!(ind, len+1:length(ind))
+    delete!(val, len+1:length(val))
 
     return ind, val
 end
@@ -2189,8 +2189,8 @@ function transform_row(prob::Prob, len::Integer, ind::Vector{Int32}, val::Vector
 
     cols = @glpk_ccall get_num_cols Int32 (Ptr{Void},) prob.p
 
-    grow(ind, cols - length(ind))
-    grow(val, cols - length(val))
+    grow!(ind, cols - length(ind))
+    grow!(val, cols - length(val))
 
     off32 = sizeof(Int32)
     off64 = sizeof(Float64)
@@ -2199,8 +2199,8 @@ function transform_row(prob::Prob, len::Integer, ind::Vector{Int32}, val::Vector
 
     len1 = @glpk_ccall transform_row Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p len ind32p val64p
 
-    del(ind, len1+1:length(ind))
-    del(val, len1+1:length(val))
+    delete!(ind, len1+1:length(ind))
+    delete!(val, len1+1:length(val))
 
     return len1
 end
@@ -2218,8 +2218,8 @@ function transform_col(prob::Prob, len::Integer, ind::Vector{Int32}, val::Vector
 
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) prob.p
 
-    grow(ind, rows - length(ind))
-    grow(val, rows - length(val))
+    grow!(ind, rows - length(ind))
+    grow!(val, rows - length(val))
 
     off32 = sizeof(Int32)
     off64 = sizeof(Float64)
@@ -2228,8 +2228,8 @@ function transform_col(prob::Prob, len::Integer, ind::Vector{Int32}, val::Vector
 
     len1 = @glpk_ccall transform_col Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) prob.p len ind32p val64p
 
-    del(ind, len1+1:length(ind))
-    del(val, len1+1:length(val))
+    delete!(ind, len1+1:length(ind))
+    delete!(val, len1+1:length(val))
 
     return len1
 end

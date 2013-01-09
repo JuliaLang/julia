@@ -254,7 +254,7 @@ function reload_path(path)
         eval(Main, :(Base.include_from_node1($path)))
     catch e
         if !had
-            del(package_list, path)
+            delete!(package_list, path)
         end
         rethrow(e)
     end
@@ -297,7 +297,7 @@ function init_help()
         help_function_dict = Dict()
         for (cat,mod,func,desc) in helpdb
             if !has(help_category_dict, cat)
-                push(help_category_list, cat)
+                push!(help_category_list, cat)
                 help_category_dict[cat] = {}
             end
             if !isempty(mod)
@@ -310,16 +310,16 @@ function init_help()
             else
                 mfunc = func
             end
-            push(help_category_dict[cat], mfunc)
+            push!(help_category_dict[cat], mfunc)
             if !has(help_function_dict, mfunc)
                 help_function_dict[mfunc] = {}
             end
-            push(help_function_dict[mfunc], desc)
+            push!(help_function_dict[mfunc], desc)
             if !has(help_module_dict, func)
                 help_module_dict[func] = {}
             end
             if !contains(help_module_dict[func], mod)
-                push(help_module_dict[func], mod)
+                push!(help_module_dict[func], mod)
             end
         end
     end

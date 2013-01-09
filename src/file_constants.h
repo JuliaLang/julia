@@ -3,7 +3,7 @@
 #include <fcntl.h>
 const JL_DUMMY = 0
 const JL_O_WRONLY      = O_WRONLY
-const jl_O_RDONLY      = O_RDONLY
+const JL_O_RDONLY      = O_RDONLY
 const JL_O_RDWR        = O_RDWR
 const JL_O_APPEND      = O_APPEND
 const JL_O_CREAT       = O_CREAT

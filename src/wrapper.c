@@ -257,9 +257,9 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog)
 #endif
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
                                  jl_value_t *julia_struct,
-                                 uv_pipe_t *stdin_pipe,
-                                 uv_pipe_t *stdout_pipe,
-                                 uv_pipe_t *stderr_pipe)
+                                 uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
+                                 uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
+                                 uv_handle_type stderr_type,uv_pipe_t *stderr_pipe)
 {
 #ifdef __APPLE__
     char **environ = *_NSGetEnviron();
@@ -279,11 +279,11 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
     opts.flags = 0;
     opts.stdio = stdio;
     opts.stdio_count = 3;
-    stdio[0].type = UV_STREAM;
+    stdio[0].type = stdin_type;
     stdio[0].data.stream = (uv_stream_t*)(stdin_pipe);
-    stdio[1].type = UV_STREAM;
+    stdio[1].type = stdout_type;
     stdio[1].data.stream = (uv_stream_t*)(stdout_pipe);
-    stdio[2].type = UV_STREAM;
+    stdio[2].type = stderr_type;
     stdio[2].data.stream = (uv_stream_t*)(stderr_pipe);
     //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
     opts.exit_cb = &jl_return_spawn;
@@ -618,6 +618,24 @@ DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr *addr)
 DLLEXPORT int jl_last_errno(uv_loop_t *loop)
 {
     return (uv_last_error(loop)).code;
+}
+
+DLLEXPORT int jl_last_system_errno(uv_loop_t *loop)
+{
+    return (uv_last_error(loop)).sys_errno_;
+}
+
+
+DLLEXPORT const char *jl_uv_strerror(int a, int b)
+{
+    uv_err_t err = {a,b};
+    return uv_strerror(err);
+}
+
+DLLEXPORT const char *jl_uv_err_name(int a, int b)
+{
+    uv_err_t err = {a,b};
+    return uv_err_name(err);
 }
 
 DLLEXPORT char *jl_ios_buf_base(ios_t *ios)

@@ -97,8 +97,8 @@ b1 = BitArray()
 i1 = Bool[]
 for m = 1 : v1
     x = randbool()
-    push(b1, x)
-    push(i1, x)
+    push!(b1, x)
+    push!(i1, x)
     @test isequal(bitunpack(b1), i1)
 end
 
@@ -115,8 +115,8 @@ end
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for m = 1 : v1
-    jb = pop(b1)
-    ji = pop(i1)
+    jb = pop!(b1)
+    ji = pop!(i1)
     @test jb == ji
     @test isequal(bitunpack(b1), i1)
 end
@@ -127,8 +127,8 @@ b1 = BitArray()
 i1 = Bool[]
 for m = 1 : v1
     x = randbool()
-    enqueue(b1, x)
-    enqueue(i1, x)
+    unshift!(b1, x)
+    unshift!(i1, x)
     @test isequal(bitunpack(b1), i1)
 end
 
@@ -136,8 +136,8 @@ end
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for m = 1 : v1
-    jb = shift(b1)
-    ji = shift(i1)
+    jb = shift!(b1)
+    ji = shift!(i1)
     @test jb == ji
     @test isequal(bitunpack(b1), i1)
 end
@@ -148,8 +148,8 @@ i1 = bitunpack(b1)
 for m = 1 : v1
     j = randi(m)
     x = randbool()
-    insert(b1, j, x)
-    insert(i1, j, x)
+    insert!(b1, j, x)
+    insert!(i1, j, x)
     @test isequal(bitunpack(b1), i1)
 end
 
@@ -157,8 +157,8 @@ b1 = randbool(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     x = randi(2) - 1
-    insert(b1, j, x)
-    insert(i1, j, x)
+    insert!(b1, j, x)
+    insert!(i1, j, x)
     @test isequal(bitunpack(b1), i1)
 end
 
@@ -166,8 +166,8 @@ b1 = randbool(v1)
 i1 = bitunpack(b1)
 for m = v1 : -1 : 1
     j = randi(m)
-    del(b1, j)
-    del(i1, j)
+    delete!(b1, j)
+    delete!(i1, j)
     @test isequal(bitunpack(b1), i1)
 end
 @test length(b1) == 0
@@ -175,8 +175,8 @@ end
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
-    del(b1, j)
-    del(i1, j)
+    delete!(b1, j)
+    delete!(i1, j)
     @test isequal(bitunpack(b1), i1)
 end
 
@@ -186,16 +186,16 @@ for m1 = 1 : v1
     for m2 = m1 : v1
         b2 = copy(b1)
         i2 = copy(i1)
-        del(b2, m1:m2)
-        del(i2, m1:m2)
+        delete!(b2, m1:m2)
+        delete!(i2, m1:m2)
         @test isequal(bitunpack(b2), i2)
     end
 end
 
 b1 = randbool(v1)
 i1 = bitunpack(b1)
-del_all(b1)
-del_all(i1)
+empty!(b1)
+empty!(i1)
 @test isequal(bitunpack(b1), i1)
 
 timesofar("dequeue")

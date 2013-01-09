@@ -50,10 +50,9 @@ status(pkg::String) = print_pkg_status(pkg, "$(julia_pkgdir())/$pkg")
 # create a new empty packge repository
 
 function init(meta::String)
+    if is_initialized() return end
+
     dir = julia_pkgdir()
-    if isdir(dir)
-        error("Package directory $dir already exists.")
-    end
     try
         run(`mkdir -p $dir`)
         cd(dir) do
@@ -83,6 +82,8 @@ function init(meta::String)
     end
 end
 init() = init(DEFAULT_META)
+
+is_initialized() = isdir(julia_pkgdir())
 
 # get/set the origin url for package repo
 
@@ -121,7 +122,7 @@ end
 function add(pkgs::Union(String,VersionSet)...)
     pkgs_ = VersionSet[]
     for pkg in pkgs
-        Base.push(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
+        Base.push!(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
     end
     add(pkgs_)
 end
@@ -161,6 +162,15 @@ end
 required() = cd_pkgdir() do
     parse_requires("REQUIRE")
 end
+required(pkg::String) = cd_pkgdir() do
+    req = required()
+    for vset in req
+        if isequal(vset.package, pkg)
+            return vset.versions
+        end
+    end
+    return nothing
+end
 
 installed() = cd_pkgdir() do
     h = Dict{String,Union(VersionNumber,String)}()
@@ -171,6 +181,11 @@ installed() = cd_pkgdir() do
     end
     return h
 end
+installed(pkg::String) = cd_pkgdir() do
+    get(installed(), pkg, nothing)
+end
+
+
 
 # update packages from requirements
 
@@ -184,7 +199,7 @@ function _resolve()
                 append!(reqs,parse_requires("$path/REQUIRE"))
                 if isfile("$path/VERSION")
                     ver = convert(VersionNumber,readchomp("$path/VERSION"))
-                    Base.push(reqs,VersionSet(pkg,[ver]))
+                    Base.push!(reqs,VersionSet(pkg,[ver]))
                 end
             end
         end
@@ -458,7 +473,7 @@ end
 latest_version(pkg::String) = cd_pkgdir() do
     vers = VersionNumber[]
     for (ver, _) in Metadata.each_tagged_version(pkg)
-        Base.push(vers, ver)
+        Base.push!(vers, ver)
     end
     max(vers)
 end

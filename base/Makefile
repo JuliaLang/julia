@@ -3,7 +3,7 @@ include ../Make.inc
 
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
-all: pcre_h.jl errno_h.jl build_h.jl file_constants.jl
+all: pcre_h.jl errno_h.jl build_h.jl file_constants.jl uv_constants.jl
 
 pcre_h.jl:
 	$(QUIET_PERL) $(CPP) -dM $(shell $(PCRE_CONFIG) --prefix)/include/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = uint32($$2)"' | sort > $@
@@ -13,6 +13,9 @@ errno_h.jl:
 
 file_constants.jl: ../src/file_constants.h
 	$(QUIET_PERL) ${CC} -E -P -DJULIA ../src/file_constants.h | perl -nle 'print "$$1" if /^(\s*const\s+[A-z_]+\s+=\s+[0-9A-z_]+\s*)$$/' > $@
+
+uv_constants.jl: ../src/uv_constants.h
+	$(QUIET_PERL) ${CC} -E -P -I"../deps/libuv/include" -DJULIA ../src/uv_constants.h | tail -n 5 > $@
 
 build_h.jl: ../Make.inc ../src/os_detect.h
 	$(QUIET_PERL) $(CC) -E -P -DJULIA ../src/os_detect.h | grep OS_NAME > $@

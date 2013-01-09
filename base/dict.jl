@@ -80,7 +80,7 @@ merge(d::Associative, others::Associative...) = merge!(copy(d), others...)
 function filter!(f::Function, d::Associative)
     for (k,v) in d
         if !f(k,v)
-            del(d,k)
+            delete!(d,k)
         end
     end
     return d
@@ -131,10 +131,10 @@ end
 get(t::ObjectIdDict, key::ANY, default::ANY) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-del(t::ObjectIdDict, key::ANY) =
+delete!(t::ObjectIdDict, key::ANY) =
     (ccall(:jl_eqtable_del, Int32, (Any, Any), t.ht, key); t)
 
-del_all(t::ObjectIdDict) = (t.ht = cell(length(t.ht)); t)
+empty!(t::ObjectIdDict) = (t.ht = cell(length(t.ht)); t)
 
 start(t::ObjectIdDict) = 0
 done(t::ObjectIdDict, i) = is(next(t,i),())
@@ -329,7 +329,7 @@ function resize(d::Dict, newsz)
     rehash(d, newsz)
 end
 
-function del_all{K,V}(h::Dict{K,V})
+function empty!{K,V}(h::Dict{K,V})
     fill!(h.slots, 0x0)
     sz = length(h.slots)
     h.keys = Array(K, sz)
@@ -444,7 +444,7 @@ function key{K,V}(h::Dict{K,V}, key, deflt)
     return (index<0) ? deflt : h.keys[index]::K
 end
 
-function del(h::Dict, key)
+function delete!(h::Dict, key)
     index = ht_keyindex(h, key)
     if index > 0
         h.slots[index] = 0x2
@@ -490,7 +490,7 @@ end
 
 function add_weak_key(t::Dict, k, v)
     if is(t.deleter, identity)
-        t.deleter = x->del(t, x)
+        t.deleter = x->delete!(t, x)
     end
     t[WeakRef(k)] = v
     # TODO: it might be better to avoid the finalizer, allow
@@ -502,7 +502,7 @@ end
 
 function add_weak_value(t::Dict, k, v)
     t[k] = WeakRef(v)
-    finalizer(v, x->del(t, k))
+    finalizer(v, x->delete!(t, k))
     return t
 end
 
@@ -524,8 +524,8 @@ function key{K}(wkh::WeakKeyDict{K}, kk, deflt)
 end
 
 get{K}(wkh::WeakKeyDict{K}, key, deflt) = get(wkh.ht, key, deflt)
-del{K}(wkh::WeakKeyDict{K}, key) = del(wkh.ht, key)
-del_all(wkh::WeakKeyDict)  = (del_all(wkh.ht); wkh)
+delete!{K}(wkh::WeakKeyDict{K}, key) = delete!(wkh.ht, key)
+empty!(wkh::WeakKeyDict)  = (empty!(wkh.ht); wkh)
 has{K}(wkh::WeakKeyDict{K}, key) = has(wkh.ht, key)
 ref{K}(wkh::WeakKeyDict{K}, key) = ref(wkh.ht, key)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)

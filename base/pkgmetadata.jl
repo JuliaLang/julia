@@ -72,7 +72,7 @@ end
 function packages()
     pkgs = String[]
     for pkg in each_package()
-        push(pkgs,pkg)
+        push!(pkgs,pkg)
     end
     sort!(pkgs)
 end
@@ -94,7 +94,7 @@ function versions(pkgs)
     vers = Version[]
     for pkg in pkgs
         for (ver,dir) in each_tagged_version(pkg)
-            push(vers,Version(pkg,ver))
+            push!(vers,Version(pkg,ver))
         end
     end
     sort!(vers)
@@ -130,13 +130,13 @@ function parse_requires(file::String)
             if ismatch(r"^\s*(?:#|$)", line) continue end
             line = replace(line, r"#.*$", "")
             fields = split(line)
-            pkg = shift(fields)
+            pkg = shift!(fields)
             vers = [ convert(VersionNumber,x) for x=fields ]
             if !issorted(vers)
                 error("invalid requires entry for $pkg in $file: $vers")
             end
             # TODO: merge version sets instead of appending?
-            push(reqs,VersionSet(pkg,vers))
+            push!(reqs,VersionSet(pkg,vers))
         end
     end
     sort!(reqs)
@@ -153,7 +153,7 @@ function dependencies(pkgs,vers)
                     if !contains(pkgs,d.package)
                         error("Unknown dependency for $pkg: $(d.package)")
                     end
-                    push(deps,(v,d))
+                    push!(deps,(v,d))
                 end
             end
         end

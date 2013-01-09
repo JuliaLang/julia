@@ -73,7 +73,7 @@ function normpath(path::String)
         clean = true
         for j = 1:length(parts)-1
             if parts[j] != ".." && parts[j+1] == ".."
-                del(parts, j:j+1)
+                delete!(parts, j:j+1)
                 clean = false
                 break
             end
@@ -82,10 +82,10 @@ function normpath(path::String)
     end
     if isabs
         while isabs && !isempty(parts) && parts[1] == ".."
-            shift(parts)
+            shift!(parts)
         end
     elseif isempty(parts)
-        push(parts, ".")
+        push!(parts, ".")
     end
     path = join(parts, path_separator)
     if isabs

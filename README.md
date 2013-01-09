@@ -204,7 +204,7 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](https://github.com/JuliaLang/julia/downloads).
+Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://code.google.com/p/julialang/downloads/list).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere (in the current shell session):
 

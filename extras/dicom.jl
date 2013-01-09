@@ -103,7 +103,7 @@ function sequence_item(st, evr, sz)
         if isequal(elt.tag, (0xFFFE,0xE00D))
             break
         end
-        push(item, elt)
+        push!(item, elt)
     end
     return item
 end
@@ -127,7 +127,7 @@ function sequence_parse(st, evr, sz)
         if grp != 0xFFFE || elt != 0xE000
             error("dicom error: expected item tag in sequence")
         end
-        push(sq, sequence_item(st, evr, itemlen))
+        push!(sq, sequence_item(st, evr, itemlen))
         if itemlen != 0xffffffff
             sz -= itemlen
         end
@@ -185,7 +185,7 @@ function pixeldata_parse(st, sz, vr, dcm)
                 error("dicom error: expected item tag in encapsulated pixel data")
             end
             if is(dtype,Uint16); xr = div(xr,2); end
-            push(data, read(st, Array(dtype, xr)))
+            push!(data, read(st, Array(dtype, xr)))
         end
     end
     return data
@@ -226,7 +226,7 @@ function string_parse(st, sz, maxlen, spaces)
     while position(st) < endpos
         c = !first||spaces ? read(st,Char) : skip_spaces(st)
         if c == '\\'
-            push(data, "")
+            push!(data, "")
             first = true
         else
             data[end] = string(data[end],c)  # TODO: inefficient
@@ -383,7 +383,7 @@ function dcm_parse(st)
         if is(fld,false)
             return data
         else
-            push(data, fld)
+            push!(data, fld)
         end
         # look for transfer syntax UID
         if fld.tag == (0x0002,0x0010)

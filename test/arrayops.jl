@@ -87,11 +87,11 @@ B[4,[2,3]] = 7
 
 ## arrays as dequeues
 l = {1,2,3}
-push(l,8)
+push!(l,8)
 @test l[1]==1 && l[2]==2 && l[3]==3 && l[4]==8
-v = pop(l)
+v = pop!(l)
 @test v == 8
-v = pop(l)
+v = pop!(l)
 @test v == 3
 @test length(l)==2
 

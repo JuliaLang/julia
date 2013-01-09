@@ -91,26 +91,26 @@ function insert_profile_block(fblock::Expr, tlast, tnow, timers, counters, tags,
     for i = 1:length(fblock.args)
         if isa(fblock.args[i],LineNumberNode) || is_expr_head(fblock.args[i], :line)
             # This is a line expression, so no counters/timers required
-            push(fblocknewargs,fblock.args[i])
+            push!(fblocknewargs,fblock.args[i])
              # ...but keep track of the line # for use during reporting
             lasttag = fblock.args[i]
         elseif descend && is_cf_expr(fblock.args[i])
             # This is a control-flow statement, it requires special
             # handling (recursive)
             cfnew, indx = insert_profile_cf(fblock.args[i], tlast, tnow, timers, counters, tags, indx, retsym)
-            push(fblocknewargs, cfnew)
+            push!(fblocknewargs, cfnew)
         else
             # This is an "ordinary" statement
             saveret = rettest(fblock, i)
-            push(tags,lasttag)
+            push!(tags,lasttag)
             if saveret
                 if is_expr_head(fblock.args[i], :return)
-                    push(fblocknewargs, :($retsym = $(fblock.args[i].args[1])))
+                    push!(fblocknewargs, :($retsym = $(fblock.args[i].args[1])))
                 else
-                    push(fblocknewargs, :($retsym = $(fblock.args[i])))
+                    push!(fblocknewargs, :($retsym = $(fblock.args[i])))
                 end
             else
-                push(fblocknewargs, fblock.args[i])
+                push!(fblocknewargs, fblock.args[i])
             end
             # This next line inserts timing statements between two
             # lines of code, equivalent to:
@@ -121,7 +121,7 @@ function insert_profile_block(fblock::Expr, tlast, tnow, timers, counters, tags,
             append!(fblocknewargs,{:($tnow = time_ns()), :(($timers)[($indx)] += $tnow - $tlast), :(($counters)[($indx)] += 1), :($tlast = time_ns())})
             indx += 1
             if saveret
-                push(fblocknewargs, :(return $retsym))
+                push!(fblocknewargs, :(return $retsym))
             end
         end
     end
@@ -204,19 +204,19 @@ function profile_parse(ex::Expr)
             for i = 1:length(ex.args)
                 if isfuncexpr(ex.args[i])
                     # Insert "global" statement for each function
-                    push(coreargs,expr(:global,funcsym(ex.args[i])))
+                    push!(coreargs,expr(:global,funcsym(ex.args[i])))
                     # Insert function-call counters
                     newfuncexpr, indx = insert_profile_function(ex.args[i], tlast, tnow, timers, counters, tags, indx, retsym)
-                    push(coreargs, newfuncexpr)
+                    push!(coreargs, newfuncexpr)
                 else
-                    push(coreargs,ex.args[i])
+                    push!(coreargs,ex.args[i])
                 end
             end
         elseif isfuncexpr(ex)
             # This is a single function declaration
-            push(coreargs,expr(:global,funcsym(ex)))
+            push!(coreargs,expr(:global,funcsym(ex)))
             newfuncexpr, indx = insert_profile_function(ex, tlast, tnow, timers, counters, tags, indx, retsym)
-            push(coreargs, newfuncexpr)
+            push!(coreargs, newfuncexpr)
         else
             error("Could not parse expression")
         end
@@ -224,11 +224,11 @@ function profile_parse(ex::Expr)
         # Insert reporting function
         # Because we're using a gensym for the function name, we can't
         # quote the whole thing
-        push(coreargs, expr(:global, funcreport))
-        push(coreargs, expr(:function, {expr(:call, {funcreport}), expr(:block,{:(return $timers, $counters)})}))
+        push!(coreargs, expr(:global, funcreport))
+        push!(coreargs, expr(:function, {expr(:call, {funcreport}), expr(:block,{:(return $timers, $counters)})}))
         # Insert clearing function
-        push(coreargs, expr(:global, funcclear))
-        push(coreargs, expr(:function, {expr(:call, {funcclear}), expr(:block,{:(fill!($timers,0)), :(fill!($counters,0))})}))
+        push!(coreargs, expr(:global, funcclear))
+        push!(coreargs, expr(:function, {expr(:call, {funcclear}), expr(:block,{:(fill!($timers,0)), :(fill!($counters,0))})}))
         # Put all this inside a let block
         excore = expr(:block,coreargs)
         exlet = expr(:let,{expr(:block,excore), :($timers = zeros(Uint64, $n_lines)), :($counters = zeros(Uint64, $n_lines))})
@@ -244,20 +244,20 @@ function funcnoop()
 end
 
 function profile_parse_all()
-    del_all(PROFILE_REPORTS)
-    del_all(PROFILE_CLEARS)
-    del_all(PROFILE_TAGS)
+    empty!(PROFILE_REPORTS)
+    empty!(PROFILE_CLEARS)
+    empty!(PROFILE_TAGS)
     retargs = {}
     for i = 1:length(PROFILE_EXPR)
         newblock, tags, funcreport, funcclear = profile_parse(PROFILE_EXPR[i])
         retargs = vcat(retargs, newblock.args)
         if !isempty(tags)
-            push(PROFILE_TAGS, tags)
-            push(PROFILE_REPORTS, esc(funcreport))
-            push(PROFILE_CLEARS, esc(funcclear))
+            push!(PROFILE_TAGS, tags)
+            push!(PROFILE_REPORTS, esc(funcreport))
+            push!(PROFILE_CLEARS, esc(funcclear))
         end
     end
-    push(retargs,:(return nothing))
+    push!(retargs,:(return nothing))
     return esc(expr(:block,retargs))
 end
 
@@ -266,7 +266,7 @@ function profile_report()
     ret = gensym()
     exret[1] = :($ret = {})
     for i = 1:length(PROFILE_REPORTS)
-        exret[i+1] = :(push($ret,$(expr(:call,{PROFILE_REPORTS[i]}))))
+        exret[i+1] = :(push!($ret,$(expr(:call,{PROFILE_REPORTS[i]}))))
     end
     exret[end] = :(profile_print($ret))
     return expr(:block,exret)
@@ -333,12 +333,12 @@ macro profile(ex)
         end
         return profile_parse_all()
     elseif isa(ex,Expr)
-        push(PROFILE_EXPR,ex)
+        push!(PROFILE_EXPR,ex)
         exret, tags, funcreport, funcclear = profile_parse(ex)
         if !isempty(tags)
-            push(PROFILE_TAGS, tags)
-            push(PROFILE_REPORTS, esc(funcreport))
-            push(PROFILE_CLEARS, esc(funcclear))
+            push!(PROFILE_TAGS, tags)
+            push!(PROFILE_REPORTS, esc(funcreport))
+            push!(PROFILE_CLEARS, esc(funcclear))
         end
         return exret
     end

@@ -32,9 +32,9 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
                 if isa(i[j], Int)
                     newfirst += (i[j]-1)*pstride
                 else
-                    push(newdims, length(i[j]))
+                    push!(newdims, length(i[j]))
                     #may want to return error if step(i[j]) <= 0
-                    push(newstrides, isa(i[j],Range1) ? pstride :
+                    push!(newstrides, isa(i[j],Range1) ? pstride :
                          pstride * step(i[j]))
                     newfirst += (first(i[j])-1)*pstride
                 end

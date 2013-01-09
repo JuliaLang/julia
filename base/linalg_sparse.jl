@@ -72,8 +72,8 @@ function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     x  = zeros(Tv, mA)
     for i in 1:nB
         if ip + mA - 1 > nnzC
-            rowvalC = grow(rowvalC, max(nnzC,mA))
-            nzvalC = grow(nzvalC, max(nnzC,mA))
+            rowvalC = grow!(rowvalC, max(nnzC,mA))
+            nzvalC = grow!(nzvalC, max(nnzC,mA))
             nnzC = length(nzvalC)
         end
         colptrC[i] = ip
@@ -99,8 +99,8 @@ function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     end
     colptrC[nB+1] = ip
 
-    rowvalC = del(rowvalC, colptrC[end]:length(rowvalC))
-    nzvalC = del(nzvalC, colptrC[end]:length(nzvalC))
+    rowvalC = delete!(rowvalC, colptrC[end]:length(rowvalC))
+    nzvalC = delete!(nzvalC, colptrC[end]:length(nzvalC))
 
     # The Gustavson algorithm does not guarantee the product to have sorted row indices.
     return ((SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC).').')
@@ -214,8 +214,8 @@ function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
         end
         colptr[col+1] = numnz+1
     end
-    del(rowval, numnz+1:length(rowval))
-    del(nzval, numnz+1:length(nzval))
+    delete!(rowval, numnz+1:length(rowval))
+    delete!(nzval, numnz+1:length(nzval))
     return SparseMatrixCSC{Tv,Ti}(m-1, n, colptr, rowval, nzval)
 end
 
@@ -306,8 +306,8 @@ function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
 
         colptr[col+1] = ptrS
     end
-    del(rowval, ptrS:length(rowval))
-    del(nzval, ptrS:length(nzval))
+    delete!(rowval, ptrS:length(rowval))
+    delete!(nzval, ptrS:length(nzval))
     return SparseMatrixCSC{Tv,Ti}(m, n-1, colptr, rowval, nzval)
 end
 

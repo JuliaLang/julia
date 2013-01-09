@@ -20,22 +20,22 @@ contains(s::Set, x) = has(s, x)
 get(s::Set, x, deflt) = get(s.hash, x, false)
 
 add(s::Set, x) = (s.hash[x] = true; s)
-del(s::Set, x) = (del(s.hash, x); s)
+delete!(s::Set, x) = (delete!(s.hash, x); s)
 
 add_each(s::Set, xs) = (for x=xs; add(s,x); end; s)
-del_each(s::Set, xs) = (for x=xs; del(s,x); end; s)
+del_each(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 
 similar{T}(s::Set{T}) = Set{T}()
 copy(s::Set) = add_each(similar(s), s)
 
-del_all{T}(s::Set{T}) = (del_all(s.hash); s)
+empty!{T}(s::Set{T}) = (empty!(s.hash); s)
 
 start(s::Set)       = start(s.hash)
 done(s::Set, state) = done(s.hash, state)
 # NOTE: manually optimized to take advantage of Dict representation
 next(s::Set, i)     = (s.hash.keys[i], skip_deleted(s.hash,i+1))
 
-pop(s::Set) = (val = s.hash.keys[start(s.hash)]; del(s.hash, val); val)
+pop!(s::Set) = (val = s.hash.keys[start(s.hash)]; delete!(s.hash, val); val)
 
 union() = Set()
 union(s::Set) = copy(s)
@@ -62,7 +62,7 @@ function intersect(s::Set, sets::Set...)
     for x in s
         for t in sets
             if !has(t,x)
-                del(i,x)
+                delete!(i,x)
             end
         end
     end
@@ -73,7 +73,7 @@ function setdiff(a::Set, b::Set)
     d = copy(a)
     for x in b
         if has(d, x)
-            del(d, x)
+            delete!(d, x)
         end
     end
     d

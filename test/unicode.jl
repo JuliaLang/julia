@@ -4,12 +4,12 @@ unicodedir = mktempdir()
 # Use perl to generate the primary data
 primary_encoding = "UTF-32BE"
 primary_path = joinpath(unicodedir, primary_encoding*".unicode")
-run(`perl -e 'print pack "N*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' ` | `tee $primary_path` > SpawnNullStream() )
+run(`perl -e 'print pack "N*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' ` | primary_path )
 
 # Use iconv to generate the other data
 for encoding in ["UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
     output_path = joinpath(unicodedir, encoding*".unicode")
-    run(`iconv -f $primary_encoding -t $encoding $primary_path` | `tee $output_path` > SpawnNullStream())
+    run(`iconv -f $primary_encoding -t $encoding $primary_path` | output_path)
 end
 
 str1 = CharString(reinterpret(Char, read(open(joinpath(unicodedir,"UTF-32LE.unicode")), Uint32, 1112065)[2:]))

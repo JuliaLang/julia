@@ -20,6 +20,9 @@ FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) -fvisibility=hidden
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES) -lm
+ifneq ($(OS),WINNT)
+LIBS += -lpthread
+endif
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)

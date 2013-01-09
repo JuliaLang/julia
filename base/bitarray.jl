@@ -657,7 +657,7 @@ assign{T<:Real}(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{T}) 
 
 ## Dequeue functionality ##
 
-function push(B::BitVector, item)
+function push!(B::BitVector, item)
     # convert first so we don't grow the bitarray if the assignment won't work
     item = convert(Bool, item)
 
@@ -693,13 +693,13 @@ end
 append!(B::BitVector, items::AbstractVector{Bool}) = append!(B, bitpack(items))
 append!(A::Vector{Bool}, items::BitVector) = append!(A, bitunpack(items))
 
-function grow(B::BitVector, n::Integer)
+function grow!(B::BitVector, n::Integer)
     n0 = length(B)
     if n < -n0
         throw(BoundsError())
     end
     if n < 0
-        return del(B, n0+n+1:n0)
+        return delete!(B, n0+n+1:n0)
     end
     k0 = length(B.chunks)
     k1 = num_bit_chunks(n0 + int(n))
@@ -711,9 +711,9 @@ function grow(B::BitVector, n::Integer)
     return B
 end
 
-function pop(B::BitVector)
+function pop!(B::BitVector)
     if isempty(B)
-        error("pop: BitArray is empty")
+        error("pop!: BitArray is empty")
     end
     item = B[end]
     B[end] = false
@@ -727,7 +727,7 @@ function pop(B::BitVector)
     return item
 end
 
-function enqueue(B::BitVector, item)
+function unshift!(B::BitVector, item)
     item = convert(Bool, item)
 
     l = @_mod64 length(B)
@@ -747,9 +747,9 @@ function enqueue(B::BitVector, item)
     return B
 end
 
-function shift(B::BitVector)
+function shift!(B::BitVector)
     if isempty(B)
-        error("shift: BitArray is empty")
+        error("shift!: BitArray is empty")
     end
     item = B[1]
 
@@ -768,7 +768,7 @@ function shift(B::BitVector)
     return item
 end
 
-function insert(B::BitVector, i::Integer, item)
+function insert!(B::BitVector, i::Integer, item)
     if i < 1
         throw(BoundsError())
     end
@@ -799,7 +799,7 @@ function insert(B::BitVector, i::Integer, item)
     B[i] = item
 end
 
-function del(B::BitVector, i::Integer)
+function delete!(B::BitVector, i::Integer)
     n = length(B)
     if !(1 <= i <= n)
         throw(BoundsError())
@@ -833,7 +833,7 @@ function del(B::BitVector, i::Integer)
     return B
 end
 
-function del(B::BitVector, r::Range1{Int})
+function delete!(B::BitVector, r::Range1{Int})
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -863,7 +863,7 @@ function del(B::BitVector, r::Range1{Int})
     return B
 end
 
-function del_all(B::BitVector)
+function empty!(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))
     B.dims[1] = 0
     return B
@@ -1585,7 +1585,7 @@ function permute(B::BitArray, perm)
     P = similar(B, dimsP)
     ranges = ntuple(ndimsB, i->(colon(1,dimsP[i])))
     while length(stridenames) < ndimsB
-        push(stridenames, gensym())
+        push!(stridenames, gensym())
     end
 
     #calculates all the strides

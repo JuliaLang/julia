@@ -10,9 +10,9 @@ macro enum(T,syms...)
         $(esc(:show))(io::IO, x::($T)) = $sh
     end
     for (i,sym) in enumerate(syms)
-        push(blk.args, :(const $(esc(sym)) = box($T,unbox(Int,$(i-1)))))
+        push!(blk.args, :(const $(esc(sym)) = box($T,unbox(Int,$(i-1)))))
     end
-    push(blk.args, :nothing)
+    push!(blk.args, :nothing)
     blk.head = :toplevel
     return blk
 end

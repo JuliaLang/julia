@@ -19,7 +19,7 @@
 import Base.isempty, Base.numel, Base.length, Base.sizeof
 import Base.start, Base.next, Base.done
 import Base.has, Base.get
-import Base.assign, Base.ref, Base.del, Base.del_all
+import Base.assign, Base.ref, Base.delete!, Base.empty!
 import Base.show
 
 abstract LRU{K,V} <: Associative{K,V}
@@ -65,9 +65,9 @@ has(lru::LRU, key) = has(lru.ht, key)
 
 get(lru::LRU, key, default) = has(lru, key) ? lru[key] : default
 
-function del_all(lru::LRU)
-    del_all(lru.ht)
-    del_all(lru.q)
+function empty!(lru::LRU)
+    empty!(lru.ht)
+    empty!(lru.q)
 end
 
 
@@ -89,8 +89,8 @@ end
 function ref(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
-    del(lru.q, idx)
-    enqueue(lru.q, item)
+    delete!(lru.q, idx)
+    enqueue!(lru.q, item)
     item.v
 end
 
@@ -99,12 +99,12 @@ function assign(lru::LRU, v, key)
         item = lru.ht[key]
         idx = locate(lru.q, item)
         item.v = v
-        del(lru.q, idx)
+        delete!(lru.q, idx)
     else
         item = CacheItem(key, v)
         lru.ht[key] = item
     end
-    enqueue(lru.q, item)
+    enqueue!(lru.q, item)
 end
 
 # Eviction
@@ -112,16 +112,16 @@ function assign{V,K}(lru::BoundedLRU, v::V, key::K)
     invoke(assign, (LRU, V, K), lru, v, key)
     nrm = length(lru) - lru.maxsize
     for i in 1:nrm
-        rm = pop(lru.q)
-        del(lru.ht, rm.k)
+        rm = pop!(lru.q)
+        delete!(lru.ht, rm.k)
     end
 end
 
 ## associative ##
 
-function del(lru::LRU, key)
+function delete!(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
-    del(lru.ht, key)
-    del(lru.q, idx)
+    delete!(lru.ht, key)
+    delete!(lru.q, idx)
 end

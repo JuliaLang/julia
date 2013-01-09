@@ -49,11 +49,12 @@ endif
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
 
-# ATLAS must have been previously built with "make -C deps build-atlas",
+# ATLAS must have been previously built with "make -C deps build-atlas" (without -jN),
 # or installed to usr/lib/libatlas from some another source (built as
 # a shared library, for your platform, single threaded)
 USE_ATLAS = 0
-ATLAS_LIBDIR = ${USRLIB}
+ATLAS_LIBDIR = $(BUILD)/lib
+#or ATLAS_LIBDIR = /path/to/system/atlas/lib
 
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT

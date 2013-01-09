@@ -613,7 +613,7 @@ assign{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = as
 
 ## Dequeue functionality ##
 
-function push{T}(a::Array{T,1}, item)
+function push!{T}(a::Array{T,1}, item)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
@@ -624,7 +624,7 @@ function push{T}(a::Array{T,1}, item)
     return a
 end
 
-function push(a::Array{Any,1}, item::ANY)
+function push!(a::Array{Any,1}, item::ANY)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
     arrayset(a, item, length(a))
     return a
@@ -640,7 +640,7 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
     return a
 end
 
-function grow(a::Vector, n::Integer)
+function grow!(a::Vector, n::Integer)
     if n > 0
         ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     else
@@ -652,16 +652,16 @@ function grow(a::Vector, n::Integer)
     return a
 end
 
-function pop(a::Vector)
+function pop!(a::Vector)
     if isempty(a)
-        error("pop: array is empty")
+        error("pop!: array is empty")
     end
     item = a[end]
     ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
     return item
 end
 
-function enqueue{T}(a::Array{T,1}, item)
+function unshift!{T}(a::Array{T,1}, item)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
@@ -670,18 +670,17 @@ function enqueue{T}(a::Array{T,1}, item)
     a[1] = item
     return a
 end
-const unshift = enqueue
 
-function shift(a::Vector)
+function shift!(a::Vector)
     if isempty(a)
-        error("shift: array is empty")
+        error("shift!: array is empty")
     end
     item = a[1]
     ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
     return item
 end
 
-function insert{T}(a::Array{T,1}, i::Integer, item)
+function insert!{T}(a::Array{T,1}, i::Integer, item)
     if i < 1
         throw(BoundsError())
     end
@@ -703,7 +702,7 @@ function insert{T}(a::Array{T,1}, i::Integer, item)
     a[i] = item
 end
 
-function del(a::Vector, i::Integer)
+function delete!(a::Vector, i::Integer)
     n = length(a)
     if !(1 <= i <= n)
         throw(BoundsError())
@@ -722,7 +721,7 @@ function del(a::Vector, i::Integer)
     return a
 end
 
-function del{T<:Integer}(a::Vector, r::Range1{T})
+function delete!{T<:Integer}(a::Vector, r::Range1{T})
     n = length(a)
     f = first(r)
     l = last(r)
@@ -747,7 +746,7 @@ function del{T<:Integer}(a::Vector, r::Range1{T})
     return a
 end
 
-function del_all(a::Vector)
+function empty!(a::Vector)
     ccall(:jl_array_del_end, Void, (Any, Uint), a, length(a))
     return a
 end
@@ -1136,7 +1135,7 @@ function find(testf::Function, A::StridedArray)
     tmpI = Array(Int, 0)
     for i = 1:length(A)
         if testf(A[i])
-            push(tmpI, i)
+            push!(tmpI, i)
         end
     end
     I = Array(Int, length(tmpI))
@@ -1635,7 +1634,7 @@ function permute(A::StridedArray, perm)
     P = similar(A, dimsP)
     ranges = ntuple(ndimsA, i->(1:dimsP[i]))
     while length(stridenames) < ndimsA
-        push(stridenames, gensym())
+        push!(stridenames, gensym())
     end
 
     #calculates all the strides

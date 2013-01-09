@@ -26,6 +26,11 @@ import Intrinsics.nan_dom_err
 # non-type specific math functions
 
 clamp(x::Real, lo::Real, hi::Real) = (x > hi ? hi : (x < lo ? lo : x))
+clamp{T<:Real}(x::AbstractArray{T,1}, lo::Real, hi::Real) = [clamp(xx, lo, hi) for xx in x]
+clamp{T<:Real}(x::AbstractArray{T,2}, lo::Real, hi::Real) =
+    [clamp(x[i,j], lo, hi) for i in 1:size(x,1), j in 1:size(x,2)]
+clamp{T<:Real}(x::AbstractArray{T}, lo::Real, hi::Real) =
+    reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
 sinc(x::Number) = x==0 ? one(x)  : (pix=pi*x; oftype(x,sin(pix)/pix))
 cosc(x::Number) = x==0 ? zero(x) : (pix=pi*x; oftype(x,cos(pix)/x-sin(pix)/(pix*x)))
