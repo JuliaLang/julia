@@ -429,6 +429,10 @@ function idump(fn::Function, io::IO, x, n::Int, indent)
         println(io, x)
     end
 end
+function idump(fn::Function, io::IO, x::Module, n::Int, indent)
+    print(io, Module, " ")
+    println(io, x)
+end
 function idump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
     println("Array($(eltype(x)),$(size(x)))")
     if n > 0
@@ -473,7 +477,7 @@ end
 # dumptype is for displaying abstract type hierarchies like Jameson
 # Nash's wiki page: https://github.com/JuliaLang/julia/wiki/Types-Hierarchy
 
-function dumptype(io::Stream, x::Type, n::Int, indent)
+function dumptype(io::Stream, x, n::Int, indent)
     # based on Jameson Nash's examples/typetree.jl
     println(io, x)
     if n == 0   # too deeply nested
