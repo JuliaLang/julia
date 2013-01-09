@@ -58,7 +58,6 @@ colon(start::Real, stop::Real) = colon(promote(start, stop)...)
 similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
 
 length(r::Ranges) = r.len
-const numel = length
 size(r::Ranges) = (r.len,)
 isempty(r::Ranges) = r.len==0
 first(r::Ranges) = r.start

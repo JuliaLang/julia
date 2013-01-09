@@ -435,7 +435,7 @@ for (gels, gesv, getrs, getri, elty) in
         function getri!(A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
             m, n    = size(A)
-            if m != n || n != numel(ipiv) error("getri!: dimension mismatch") end
+            if m != n || n != length(ipiv) error("getri!: dimension mismatch") end
             lda     = stride(A, 2)
             info    = Array(BlasInt, 1)
             lwork   = -1

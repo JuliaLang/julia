@@ -16,7 +16,7 @@
 # collections, the difference in performance is small, and this implmentation
 # is simpler and easier to understand.
 
-import Base.isempty, Base.numel, Base.length, Base.sizeof
+import Base.isempty, Base.length, Base.sizeof
 import Base.start, Base.next, Base.done
 import Base.has, Base.get
 import Base.assign, Base.ref, Base.delete!, Base.empty!
@@ -54,7 +54,6 @@ BoundedLRU() = BoundedLRU{Any, Any}()
 ## collections ##
 
 isempty(lru::LRU) = isempty(lru.q)
-numel(lru::LRU) = numel(lru.q)
 length(lru::LRU) = length(lru.q)
 has(lru::LRU, key) = has(lru.ht, key)
 

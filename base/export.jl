@@ -805,7 +805,6 @@ export
     mapreduce,
     merge,
     merge!,
-    numel,
     pairs,
     reduce,
     ref,

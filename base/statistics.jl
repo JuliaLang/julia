@@ -34,7 +34,7 @@ function var(v::AbstractVector, m::Number, corrected::Bool)
     return dot(x, x) / (n - (corrected ? 1 : 0))
 end
 var(v::AbstractVector, m::Number) = var(v, m, true)
-var(v::AbstractArray, m::Number, corrected::Bool) = var(reshape(v, numel(v)), m, corrected)
+var(v::AbstractArray, m::Number, corrected::Bool) = var(reshape(v, length(v)), m, corrected)
 var(v::AbstractArray, m::Number) = var(v, m, true)
 function var(v::Ranges, m::Number, corrected::Bool)
     f = first(v) - m
@@ -61,7 +61,7 @@ function var(v::Ranges, corrected::Bool)
     return abs2(s) * (l + 1) * (corrected ? l : (l - 1)) / 12
 end
 var(v::AbstractVector, corrected::Bool) = var(v, mean(v), corrected)
-var(v::AbstractArray, corrected::Bool) = var(reshape(v, numel(v)), corrected)
+var(v::AbstractArray, corrected::Bool) = var(reshape(v, length(v)), corrected)
 var(v::AbstractArray) = var(v, true)
 
 ## standard deviation with known mean
@@ -223,7 +223,7 @@ end
 
 # pearson covariance between two vectors, with known means
 function cov_pearson1(x::AbstractArray, y::AbstractArray, mx::Number, my::Number, corrected::Bool)
-    n = numel(x)
+    n = length(x)
     if n == 0 || (n == 1 && corrected)
         return NaN
     end
@@ -234,7 +234,7 @@ end
 
 # pearson covariance between two vectors
 function cov_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
-    if numel(x) != numel(y) 
+    if length(x) != length(y) 
         error("cov_pearson: incompatible dimensions")
     end
 
@@ -317,7 +317,7 @@ const cov = cov_pearson
 
 # pearson correlation between two vectors
 function cor_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
-    if numel(x) != numel(y)
+    if length(x) != length(y)
         error("cor_pearson: incompatible dimensions")
     end
 

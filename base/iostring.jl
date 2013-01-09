@@ -35,7 +35,7 @@ IOString(maxsize::Int) = (x=IOString(Array(Uint8,maxsize),true,true,maxsize); x.
 function read{T}(from::IOString, a::Array{T})
     if !from.readable error("read failed") end
     if isa(T, BitsKind)
-        nb = numel(a)*sizeof(T)
+        nb = length(a)*sizeof(T)
         if nb > nb_available(from)
             throw(EOFError())
         end
@@ -177,7 +177,7 @@ function write_sub{T}(to::IOString, a::Array{T}, offs, nel)
     nb
 end
 
-write(to::IOString, a::Array) = write_sub(to, a, 1, numel(a))
+write(to::IOString, a::Array) = write_sub(to, a, 1, length(a))
 
 function write(to::IOString, a::Uint8)
     if !to.writable error("write failed") end

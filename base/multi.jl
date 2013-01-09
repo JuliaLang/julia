@@ -995,8 +995,8 @@ end
 #function addprocs_ssh(machines, keys)
 #    if !(isa(keys, Array)) && isa(machines,Array)
 #        key = keys
-#        keys = [ key for x = 1:numel(machines)]
-#        cmdargs = { {machines[x],keys[x]} for x = 1:numel(machines)}
+#        keys = [ key for x = 1:length(machines)]
+#        cmdargs = { {machines[x],keys[x]} for x = 1:length(machines)}
 #    else
 #        cmdargs = {{machines,keys}}
 #    end #if/else

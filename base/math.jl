@@ -184,7 +184,7 @@ begin
     function frexp(A::Array{Float64})
         f = similar(A)
         e = Array(Int, size(A))
-        for i = 1:numel(A)
+        for i = 1:length(A)
             f[i] = ccall((:frexp,libm), Float64, (Float64, Ptr{Int32}), A[i], exp)
             e[i] = exp[1]
         end
@@ -193,7 +193,7 @@ begin
     function frexp(A::Array{Float32})
         f = similar(A)
         e = Array(Int, size(A))
-        for i = 1:numel(A)
+        for i = 1:length(A)
             f[i] = ccall((:frexpf,libm), Float32, (Float32, Ptr{Int32}), A[i], exp)
             e[i] = exp[1]
         end

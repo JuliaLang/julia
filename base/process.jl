@@ -394,8 +394,8 @@ function pipeline_error(procs::ProcessChain)
             push!(failed, p)
         end
     end
-    if numel(failed)==0 return true end
-    if numel(failed)==1 pipeline_error(failed[1]) end
+    if length(failed)==0 return true end
+    if length(failed)==1 pipeline_error(failed[1]) end
     msg = "failed processes:"
     for proc in failed
         msg = string(msg,"\n  ",proc," [",proc.exit_code,"]")

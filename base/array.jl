@@ -15,12 +15,12 @@ size(a::Array) = arraysize(a)
 size(a::Array, d) = arraysize(a, d)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 length(a::Array) = arraylen(a)
-sizeof(a::Array) = sizeof(eltype(a)) * numel(a)
+sizeof(a::Array) = sizeof(eltype(a)) * length(a)
 
 function stride(a::Array, i::Integer)
     s = 1
     if i > ndims(a)
-        return numel(a)
+        return length(a)
     end
     for n=1:(i-1)
         s *= size(a, n)
@@ -36,7 +36,7 @@ isassigned(a::Array, i::Int...) = isdefined(a, i...)
 ## copy ##
 
 function copy_to{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
-    if so+N-1 > numel(src) || dsto+N-1 > numel(dest) || dsto < 1 || so < 1
+    if so+N-1 > length(src) || dsto+N-1 > length(dest) || dsto < 1 || so < 1
         throw(BoundsError())
     end
     copy_to_unsafe(dest, dsto, src, so, N)
@@ -54,7 +54,7 @@ function copy_to_unsafe{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
     return dest
 end
 
-copy_to{T}(dest::Array{T}, src::Array{T}) = copy_to(dest, 1, src, 1, numel(src))
+copy_to{T}(dest::Array{T}, src::Array{T}) = copy_to(dest, 1, src, 1, length(src))
 
 function copy_to{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
@@ -103,7 +103,7 @@ function copy_to_transpose{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Ran
 end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
-    nel = int(div(numel(a)*sizeof(S),sizeof(T)))
+    nel = int(div(length(a)*sizeof(S),sizeof(T)))
     ccall(:jl_reshape_array, Array{T,1}, (Any, Any, Any), Array{T,1}, a, (nel,))
 end
 
@@ -115,7 +115,7 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
 end
 
 function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
-    nel = div(numel(a)*sizeof(S),sizeof(T))
+    nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
         error("reinterpret: invalid dimensions")
     end
@@ -124,7 +124,7 @@ end
 reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 
 function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
-    if prod(dims) != numel(a)
+    if prod(dims) != length(a)
         error("reshape: invalid dimensions")
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
@@ -170,7 +170,7 @@ function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
     if isa(T,BitsKind) && convert(T,x) == 0
         ccall(:memset, Ptr{T}, (Ptr{T}, Int32, Int32), a,0,length(a)*sizeof(T))
     else
-        for i = 1:numel(a)
+        for i = 1:length(a)
             a[i] = x
         end
     end
@@ -346,7 +346,7 @@ function ref_bool_1d(A::Array, I::AbstractArray{Bool})
     n = sum(I)
     out = similar(A, n)
     c = 1
-    for i = 1:numel(I)
+    for i = 1:length(I)
         if I[i]
             out[c] = A[i]
             c += 1
@@ -576,7 +576,7 @@ end
 
 function assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
     check_bounds(A, I)
-    for i = 1:numel(I)
+    for i = 1:length(I)
         if I[i]
             A[i] = x
         end
@@ -587,7 +587,7 @@ end
 function assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
     check_bounds(A, I)
     c = 1
-    for i = 1:numel(I)
+    for i = 1:length(I)
         if I[i]
             A[i] = X[c]
             c += 1
@@ -754,7 +754,7 @@ end
 ## Unary operators ##
 
 function conj!{T<:Number}(A::StridedArray{T})
-    for i=1:numel(A)
+    for i=1:length(A)
         A[i] = conj(A[i])
     end
     return A
@@ -764,7 +764,7 @@ for f in (:-, :~, :conj, :sign)
     @eval begin
         function ($f)(A::StridedArray)
             F = similar(A)
-            for i=1:numel(A)
+            for i=1:length(A)
                 F[i] = ($f)(A[i])
             end
             return F
@@ -772,14 +772,14 @@ for f in (:-, :~, :conj, :sign)
     end
 end
 
-(-)(A::StridedArray{Bool}) = reshape([ -A[i] for i=1:numel(A) ], size(A))
+(-)(A::StridedArray{Bool}) = reshape([ -A[i] for i=1:length(A) ], size(A))
 
 for f in (:real, :imag)
     @eval begin
         function ($f){T}(A::StridedArray{T})
             S = typeof(($f)(zero(T)))
             F = similar(A, S)
-            for i=1:numel(A)
+            for i=1:length(A)
                 F[i] = ($f)(A[i])
             end
             return F
@@ -789,7 +789,7 @@ end
 
 function !(A::StridedArray{Bool})
     F = similar(A)
-    for i=1:numel(A)
+    for i=1:length(A)
         F[i] = !A[i]
     end
     return F
@@ -799,17 +799,17 @@ end
 
 # ^ is difficult, since negative exponents give a different type
 
-./(x::Array, y::Array ) = reshape( [ x[i] ./ y[i] for i=1:numel(x) ], size(x) )
-./(x::Number,y::Array ) = reshape( [ x    ./ y[i] for i=1:numel(y) ], size(y) )
-./(x::Array, y::Number) = reshape( [ x[i] ./ y    for i=1:numel(x) ], size(x) )
+./(x::Array, y::Array ) = reshape( [ x[i] ./ y[i] for i=1:length(x) ], size(x) )
+./(x::Number,y::Array ) = reshape( [ x    ./ y[i] for i=1:length(y) ], size(y) )
+./(x::Array, y::Number) = reshape( [ x[i] ./ y    for i=1:length(x) ], size(x) )
 
-.^(x::Array, y::Array ) = reshape( [ x[i] ^ y[i] for i=1:numel(x) ], size(x) )
-.^(x::Number,y::Array ) = reshape( [ x    ^ y[i] for i=1:numel(y) ], size(y) )
-.^(x::Array, y::Number) = reshape( [ x[i] ^ y    for i=1:numel(x) ], size(x) )
+.^(x::Array, y::Array ) = reshape( [ x[i] ^ y[i] for i=1:length(x) ], size(x) )
+.^(x::Number,y::Array ) = reshape( [ x    ^ y[i] for i=1:length(y) ], size(y) )
+.^(x::Array, y::Number) = reshape( [ x[i] ^ y    for i=1:length(x) ], size(x) )
 
 function .^{S<:Integer,T<:Integer}(A::Array{S}, B::Array{T})
     F = Array(Float64, promote_shape(size(A), size(B)))
-    for i=1:numel(A)
+    for i=1:length(A)
         F[i] = float64(A[i])^float64(B[i])
     end
     return F
@@ -817,14 +817,14 @@ end
 
 function .^{T<:Integer}(A::Integer, B::Array{T})
     F = similar(B, Float64)
-    for i=1:numel(B)
+    for i=1:length(B)
         F[i] = float64(A)^float64(B[i])
     end
     return F
 end
 
 function power_array_int_body{T}(F::Array{T}, A, B)
-    for i=1:numel(A)
+    for i=1:length(A)
         F[i] = A[i]^convert(T,B)
     end
     return F
@@ -839,21 +839,21 @@ for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
     @eval begin
         function ($f){S,T}(A::StridedArray{S}, B::StridedArray{T})
             F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
-            for i=1:numel(A)
+            for i=1:length(A)
                 F[i] = ($f)(A[i], B[i])
             end
             return F
         end
         function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_type(typeof(A),T))
-            for i=1:numel(B)
+            for i=1:length(B)
                 F[i] = ($f)(A, B[i])
             end
             return F
         end
         function ($f){T}(A::StridedArray{T}, B::Number)
             F = similar(A, promote_type(T,typeof(B)))
-            for i=1:numel(A)
+            for i=1:length(A)
                 F[i] = ($f)(A[i], B)
             end
             return F
@@ -884,14 +884,14 @@ end
 for f in (:+, :-, :div)
     @eval begin
         function ($f)(x::Bool, y::StridedArray{Bool})
-            reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
+            reshape([ ($f)(x, y[i]) for i=1:length(y) ], size(y))
         end
         function ($f)(x::StridedArray{Bool}, y::Bool)
-            reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
+            reshape([ ($f)(x[i], y) for i=1:length(x) ], size(x))
         end
         function ($f)(x::StridedArray{Bool}, y::StridedArray{Bool})
             shp = promote_shape(size(x),size(y))
-            reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
+            reshape([ ($f)(x[i], y[i]) for i=1:length(x) ], shp)
         end
     end
 end
@@ -900,7 +900,7 @@ end
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
     F = similar(A, typeof(complex(zero(S),zero(T))))
-    for i=1:numel(A)
+    for i=1:length(A)
         F[i] = complex(A[i], B[i])
     end
     return F
@@ -908,7 +908,7 @@ end
 
 function complex{T<:Real}(A::Real, B::Array{T})
     F = similar(B, typeof(complex(A,zero(T))))
-    for i=1:numel(B)
+    for i=1:length(B)
         F[i] = complex(A, B[i])
     end
     return F
@@ -916,7 +916,7 @@ end
 
 function complex{T<:Real}(A::Array{T}, B::Real)
     F = similar(A, typeof(complex(zero(T),B)))
-    for i=1:numel(A)
+    for i=1:length(A)
         F[i] = complex(A[i], B)
     end
     return F
@@ -937,7 +937,7 @@ function slicedim(A::Array, d::Integer, i::Integer)
     d_out = tuple(leading..., 1, d_in[(d+1):end]...)
 
     M = prod(leading)
-    N = numel(A)
+    N = length(A)
     stride = M * d_in[d]
 
     B = similar(A, d_out)
@@ -986,7 +986,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
     d_in = size(A)
     leading = d_in[1:(d-1)]
     M = prod(leading)
-    N = numel(A)
+    N = length(A)
     stride = M * sd
 
     if M==1
@@ -1093,7 +1093,7 @@ end
 
 function nnz(a)
     n = 0
-    for i = 1:numel(a)
+    for i = 1:length(a)
         n += bool(a[i]) ? 1 : 0
     end
     return n
@@ -1373,7 +1373,7 @@ function sum{T}(A::StridedArray{T})
         return zero(T)
     end
     v = A[1]
-    for i=2:numel(A)
+    for i=2:length(A)
         v += A[i]
     end
     v
@@ -1463,7 +1463,7 @@ function prod{T}(A::StridedArray{T})
         return one(T)
     end
     v = A[1]
-    for i=2:numel(A)
+    for i=2:length(A)
         v *= A[i]
     end
     v
@@ -1471,7 +1471,7 @@ end
 
 function min{T<:Integer}(A::StridedArray{T})
     v = typemax(T)
-    for i=1:numel(A)
+    for i=1:length(A)
         x = A[i]
         if x < v
             v = x
@@ -1482,7 +1482,7 @@ end
 
 function max{T<:Integer}(A::StridedArray{T})
     v = typemin(T)
-    for i=1:numel(A)
+    for i=1:length(A)
         x = A[i]
         if x > v
             v = x
@@ -1519,14 +1519,14 @@ end
 
 ## 1 argument
 function map_to(f, dest::StridedArray, A::StridedArray)
-    for i=1:numel(A)
+    for i=1:length(A)
         dest[i] = f(A[i])
     end
     return dest
 end
 function map_to2(f, first, dest::StridedArray, A::StridedArray)
     dest[1] = first
-    for i=2:numel(A)
+    for i=2:length(A)
         dest[i] = f(A[i])
     end
     return dest
@@ -1541,14 +1541,14 @@ end
 
 ## 2 argument
 function map_to(f, dest::StridedArray, A::StridedArray, B::StridedArray)
-    for i=1:numel(A)
+    for i=1:length(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
 end
 function map_to2(f, first, dest::StridedArray, A::StridedArray, B::StridedArray)
     dest[1] = first
-    for i=2:numel(A)
+    for i=2:length(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
@@ -1566,7 +1566,7 @@ end
 
 ## N argument
 function map_to(f, dest::StridedArray, As::StridedArray...)
-    n = numel(As[1])
+    n = length(As[1])
     i = 1
     ith = a->a[i]
     for i=1:n
@@ -1575,7 +1575,7 @@ function map_to(f, dest::StridedArray, As::StridedArray...)
     return dest
 end
 function map_to2(f, first, dest::StridedArray, As::StridedArray...)
-    n = numel(As[1])
+    n = length(As[1])
     i = 1
     ith = a->a[i]
     dest[1] = first
@@ -1606,7 +1606,7 @@ end
 ## Transpose ##
 
 function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
-    if numel(A) > 50000
+    if length(A) > 50000
         return FFTW.transpose(reshape(A, size(A, 2), size(A, 1)))
     else
         return [ A[j,i] for i=1:size(A,2), j=1:size(A,1) ]
@@ -1656,7 +1656,7 @@ function permute(A::StridedArray, perm)
         len = length(ivars)
         counts = { symbol(string("count",i)) for i=1:len}
         toReturn = cell(len+1,2)
-        for i = 1:numel(toReturn)
+        for i = 1:length(toReturn)
             toReturn[i] = nothing
         end
 

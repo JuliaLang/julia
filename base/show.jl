@@ -53,7 +53,7 @@ function show_delim_array(io, itr, op, delim, cl, delim_one)
     if !done(itr,state)
 	while true
 	    x, state = next(itr,state)
-            multiline = isa(x,AbstractArray) && ndims(x)>1 && numel(x)>0
+            multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
             if newline
                 if multiline; println(io); end
             end

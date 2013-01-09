@@ -97,7 +97,7 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
     if sizeof(T) != sizeof(Tv)
         error("SparseMatrixCSC reinterpret is only supported for element types of the same size")
     end
-    if prod(dims) != numel(a)
+    if prod(dims) != length(a)
         error("reinterpret: invalid dimensions")
     end
     mS,nS = dims
@@ -113,7 +113,7 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
 end
 
 function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
-    if prod(dims) != numel(a)
+    if prod(dims) != length(a)
         error("reshape: invalid dimensions")
     end
     mS,nS = dims
@@ -172,7 +172,7 @@ function dense{Tv}(S::SparseMatrixCSC{Tv})
 end
 
 function sparse(a::Vector)
-    n = numel(a)
+    n = length(a)
     I = find(a)
     J = ones(Int, n)
     V = nonzeros(a)

@@ -493,12 +493,12 @@ macro in_place_matrix_op(out_of_place, args...)
         function ($in_place)($(args...), a::AbstractMatrix, dim::Int)
             m = size(a,1)
             if dim == 1
-                for i = 1:m:numel(a)
+                for i = 1:m:length(a)
                     ($in_place)($(args...), sub(a, i:(i+m-1)))
                 end
             elseif dim == 2
                 for i = 1:m
-                    ($in_place)($(args...), sub(a, i:m:numel(a)))
+                    ($in_place)($(args...), sub(a, i:m:length(a)))
                 end
             end
             return a
@@ -542,7 +542,7 @@ function sort(a::AbstractArray, dim::Int)
     X = similar(a)
     n = size(a,dim)
     if dim == 1
-        for i = 1:n:numel(a)
+        for i = 1:n:length(a)
             this_slice = i:(i+n-1)
             X[this_slice] = sort(sub(a, this_slice))
         end

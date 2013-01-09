@@ -2,7 +2,7 @@
 
 function scale!{T<:Number}(X::StridedArray{T}, s::Real)
     # FIXME: could use BLAS in more cases
-    for i in 1:numel(X)
+    for i in 1:length(X)
         X[i] *= s;
     end
     return X
@@ -58,7 +58,7 @@ function norm(A::AbstractMatrix, p)
     if m == 0 || n == 0
         a = zero(eltype(A))
     elseif m == 1 || n == 1
-        a = norm(reshape(A, numel(A)), p)
+        a = norm(reshape(A, length(A)), p)
     elseif p == 1
         a = max(sum(abs(A),1))
     elseif p == 2
@@ -66,7 +66,7 @@ function norm(A::AbstractMatrix, p)
     elseif p == Inf
         a = max(sum(abs(A),2))
     elseif p == :fro
-        a = norm(reshape(A, numel(A)))
+        a = norm(reshape(A, length(A)))
     else
         error("invalid parameter to matrix norm")
     end

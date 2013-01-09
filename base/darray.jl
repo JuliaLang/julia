@@ -402,7 +402,7 @@ function da_reshape(T, sz, da, A)
 end
 
 function reshape(A::DArray, dims::Dims)
-    if prod(dims) != numel(A)
+    if prod(dims) != length(A)
         error("reshape: invalid dimensions")
     end
     darray((T,sz,da)->da_reshape(T,sz,da,A),

@@ -328,7 +328,7 @@ function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
         error("Input should be nx1 or 1xn")
     end
 
-    n = numel(v)
+    n = length(v)
     numnz = nnz(v)
     colptr = Array(Ti, n+1)
     rowval = Array(Ti, numnz)
@@ -374,7 +374,7 @@ function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
         end
     end
 
-    n = numel(v)
+    n = length(v)
     numnz = nnz(v)
     colptr = Array(Int, n+1)
     rowval = Array(Int, numnz)

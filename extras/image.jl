@@ -393,8 +393,8 @@ end
 
 function lut(pal::Vector, a)
     out = similar(a, eltype(pal))
-    n = numel(pal)
-    for i=1:numel(a)
+    n = length(pal)
+    for i=1:length(a)
         out[i] = pal[clamp(a[i], 1, n)]
     end
     out
@@ -406,7 +406,7 @@ function indexedcolor(data, pal)
 end
 
 function indexedcolor(data, pal, w, l)
-    n = numel(pal)-1
+    n = length(pal)-1
     if n == 0
         return fill(pal[1], size(data))
     end
@@ -644,7 +644,7 @@ function ssd{T}(A::Array{T}, B::Array{T})
 end
 
 # normalized by Array size
-ssdn{T}(A::Array{T}, B::Array{T}) = ssd(A, B)/numel(A)
+ssdn{T}(A::Array{T}, B::Array{T}) = ssd(A, B)/length(A)
 
 # sum of absolute differences
 function sad{T}(A::Array{T}, B::Array{T})
@@ -652,7 +652,7 @@ function sad{T}(A::Array{T}, B::Array{T})
 end
 
 # normalized by Array size
-sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/numel(A)
+sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/length(A)
 
 # normalized cross correlation
 function ncc{T}(A::Array{T}, B::Array{T})

@@ -163,7 +163,7 @@ end
 function randival!{T<:Integer}(lo, hi, A::Array{T})
     lo = convert(T,lo)
     hi = convert(T,hi)
-    for i = 1:numel(A)
+    for i = 1:length(A)
         A[i] = randival(lo, hi)
     end
     return A
@@ -194,7 +194,7 @@ randbool() = ((dsfmt_randui32() & 1) == 1)
 randbool!(B::BitArray) = rand!(B)
 
 function randbool!(A::Array)
-    for i = 1:numel(A)
+    for i = 1:length(A)
         A[i] = randbool()
     end
     return A
@@ -246,10 +246,10 @@ function randg!(a::Real, A::Array{Float64})
     if a <= 0. error("shape parameter a must be > 0") end
     d = (a <= 1. ? a + 1 : a) - 1.0/3.0
     c = 1.0/sqrt(9.0d)
-    for i in 1:numel(A) A[i] = randg2(d, c) end
+    for i in 1:length(A) A[i] = randg2(d, c) end
     if a <= 1.
         ainv = 1./a
-        for i in 1:numel(A) A[i] *= rand()^ainv end
+        for i in 1:length(A) A[i] *= rand()^ainv end
     end
     A
 end
@@ -268,14 +268,14 @@ randg(a::Real, dims::Int...) = randg(a, dims)
 
 function randchi2!(df::Real, A::Array{Float64})
     if df == 1
-        for i in 1:numel(A)
+        for i in 1:length(A)
             A[i] = randn()^2
             end
         return A
     end
     d = df >= 2 ? df/2. - 1.0/3.0 : error("require degrees of freedom df >= 2")
     c = 1.0/sqrt(9.0d)
-    for i in 1:numel(A) A[i] = 2.randg2(d,c) end
+    for i in 1:length(A) A[i] = 2.randg2(d,c) end
     A
 end
 
@@ -290,7 +290,7 @@ function randbeta!(alpha::Real, beta::Real, A::Array{Float64})
     c1 = 1.0/sqrt(9.0d1)
     d2 = beta >= 1 ? beta - 1.0/3.0 : error("require beta >= 1")
     c2 = 1.0/sqrt(9.0d2)
-    for i in 1:numel(A)
+    for i in 1:length(A)
        u = randg2(d1,c1)
        A[i] = u/(u + randg2(d2,c2))
     end

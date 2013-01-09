@@ -3,7 +3,7 @@ require("extras/Rmath")
 srand(124)
 
 function allEq(target::Vector{Float64}, current::Vector{Float64}, tolerance::Float64)
-    @test numel(target) == numel(current)
+    @test length(target) == length(current)
     if all(target == current)
         return true
     end

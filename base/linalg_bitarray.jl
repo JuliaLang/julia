@@ -103,7 +103,7 @@ function diagm(v::Union(BitVector,BitMatrix))
         end
     end
 
-    n = numel(v)
+    n = length(v)
     a = falses(n, n)
     for i=1:n
         a[i,i] = v[i]

@@ -343,7 +343,7 @@ end
 # Mimics read(s::IOStream, a::Array{T})
 function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,
                        Int128,Uint128,Float32,Float64,Complex64,Complex128)}(s::GZipStream, a::Array{T})
-    nb = numel(a)*sizeof(T)
+    nb = length(a)*sizeof(T)
     # Note: this will overflow and succeed without warning if nb > 4GB
     ret = ccall((:gzread, _zlib), Int32,
                 (Ptr{Void}, Ptr{Void}, Uint32), s.gz_file, a, nb)
@@ -440,7 +440,7 @@ write(s::GZipStream, b::Uint8) = gzputc(s, b)
 
 function write{T}(s::GZipStream, a::Array{T})
     if isa(T,BitsKind)
-        return gzwrite(s, pointer(a), numel(a)*sizeof(T))
+        return gzwrite(s, pointer(a), length(a)*sizeof(T))
     else
         invoke(write, (Any, Array), s, a)
     end

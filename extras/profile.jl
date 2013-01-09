@@ -151,7 +151,7 @@ end
 #   - The final statement of a function should be returned, even if there
 #     is no explicit return statement
 #   - Functions can be defined in "short-form" (e.g.,
-#     "isempty(x) = numel(x)==0"), and the return value for these
+#     "isempty(x) = length(x)==0"), and the return value for these
 #     needs to be managed, too
 function insert_profile_function(ex::Expr, tlast, tnow, timers, counters, tags, indx::Int, retsym)
     fblock = ex.args[2]

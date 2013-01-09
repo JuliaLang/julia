@@ -121,11 +121,11 @@ similar{T}(a::AbstractArray{T}, dims::Int...) = similar(a, T, dims)
 similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
 
 function reshape(a::AbstractArray, dims::Dims)
-    if prod(dims) != numel(a)
+    if prod(dims) != length(a)
         error("reshape: invalid dimensions")
     end
     b = similar(a, dims)
-    for i=1:numel(a)
+    for i=1:length(a)
         b[i] = a[i]
     end
     return b
@@ -145,7 +145,7 @@ function squeeze(A::AbstractArray)
 end
 
 function fill!(A::AbstractArray, x)
-    for i = 1:numel(A)
+    for i = 1:length(A)
         A[i] = x
     end
     return A
@@ -168,8 +168,8 @@ zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
 start(a::AbstractArray) = 1
 next(a::AbstractArray,i) = (a[i],i+1)
-done(a::AbstractArray,i) = (i > numel(a))
-isempty(a::AbstractArray) = (numel(a) == 0)
+done(a::AbstractArray,i) = (i > length(a))
+isempty(a::AbstractArray) = (length(a) == 0)
 
 ## Conversions ##
 
@@ -551,7 +551,7 @@ function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
     if dense
         for k=1:nargs
             Ak = A[k]
-            n = numel(Ak)
+            n = length(Ak)
             copy_to(B, pos, Ak, 1, n)
             pos += n
         end
@@ -812,7 +812,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
         return false
     end
-    for i = 1:numel(A)
+    for i = 1:length(A)
         if !isequal(A[i], B[i])
             return false
         end
@@ -821,7 +821,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
 end
 
 function cmp(A::AbstractArray, B::AbstractArray)
-    nA, nB = numel(A), numel(B)
+    nA, nB = length(A), length(B)
     for i = 1:min(nA, nB)
         a, b = A[i], B[i]
         if !isequal(a, b)
@@ -837,7 +837,7 @@ function (==)(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
         return false
     end
-    for i = 1:numel(A)
+    for i = 1:length(A)
         if !(A[i]==B[i])
             return false
         end
@@ -849,7 +849,7 @@ function (!=)(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
         return true
     end
-    for i = 1:numel(A)
+    for i = 1:length(A)
         if A[i]!=B[i]
             return true
         end
@@ -1055,7 +1055,7 @@ indices(I::Tuple) = map(indices, I)
 # pure function argument
 function each_col!(f::Function, a::AbstractMatrix)
     m = size(a,1)
-    for i = 1:m:numel(a)
+    for i = 1:m:length(a)
         f(sub(a, i:(i+m-1)))
     end
     return a
@@ -1064,7 +1064,7 @@ end
 function each_row!(f::Function, a::AbstractMatrix)
     m = size(a,1)
     for i = 1:m
-        f(sub(a, i:m:numel(a)))
+        f(sub(a, i:m:length(a)))
     end
     return a
 end
@@ -1153,9 +1153,9 @@ function bsxfun(f, a::AbstractArray, b::AbstractArray)
     if isempty(range)
         return f(a, b)
     end
-    if numel(a) == 1
+    if length(a) == 1
         return f(a[1], b)
-    elseif numel(b) == 1
+    elseif length(b) == 1
         return f(a, b[1])
     end
     c = Array(promote_type(eltype(a),eltype(b)), shp...)
@@ -1180,12 +1180,12 @@ function bsxfun(f, a::AbstractArray, b::AbstractArray)
             end
         end
         if xb
-            aa = a[aidxs...]; if numel(aa)==1; aa=aa[1]; end
+            aa = a[aidxs...]; if length(aa)==1; aa=aa[1]; end
         else
             aa = a
         end
         if xa
-            bb = b[bidxs...]; if numel(bb)==1; bb=bb[1]; end
+            bb = b[bidxs...]; if length(bb)==1; bb=bb[1]; end
         else
             bb = b
         end

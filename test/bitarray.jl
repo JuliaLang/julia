@@ -43,7 +43,6 @@ timesofar("conversions")
 
 @check_bit_operation length Int (b1,)
 @check_bit_operation ndims Int (b1,)
-@check_bit_operation numel Int (b1,)
 @check_bit_operation size (Int...) (b1,)
 
 @test isequal(bitunpack(trues(n1, n2)), ones(Bool, n1, n2))

@@ -435,7 +435,7 @@ function cholmod_dense{T}(B::VecOrMat{T})
     ccall((:jl_cholmod_dense, libsuitesparse_wrapper),
           Ptr{Void},
           (Ptr{Void}, BlasInt, BlasInt, BlasInt, BlasInt, Ptr{T}, Ptr{Void}, BlasInt, Int),
-          cd, m, n, numel(B), m, B, C_NULL, xtype, dtype
+          cd, m, n, length(B), m, B, C_NULL, xtype, dtype
           )
 
     return cd

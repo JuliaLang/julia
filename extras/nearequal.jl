@@ -40,7 +40,7 @@ for fun in (:isapprox, :isapproxn)
                 error("Arrays must have the same sizes (first is $(size(X)), second is $(size(Y))).")
             end
             Z = similar(X, Bool)
-            for i in 1:numel(X)
+            for i in 1:length(X)
                 Z[i] = ($fun)(X[i], Y[i])
             end
             Z

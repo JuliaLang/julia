@@ -436,8 +436,8 @@ function copy_to{T<:BlasFloat}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
 end
 
 function copy_to{T<:BlasFloat}(dest::Array{T}, src::Array{T})
-    n = numel(src)
-    if n > numel(dest); throw(BoundsError()); end
+    n = length(src)
+    if n > length(dest); throw(BoundsError()); end
     copy_to(pointer(dest), pointer(src), n)
     return dest
 end

@@ -18,7 +18,7 @@ end
 
 function reldiff{T<:Real}(current::AbstractArray{T}, target::AbstractArray{T})
     @test all(size(current) == size(target))
-    max([reldiff(current[i], target[i]) for i in 1:numel(target)])
+    max([reldiff(current[i], target[i]) for i in 1:length(target)])
 end
 
 ## Test wavread and wavwrite

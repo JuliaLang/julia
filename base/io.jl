@@ -47,7 +47,7 @@ write(s::IO, x::Float32) = write(s, box(Int32,unbox(Float32,x)))
 write(s::IO, x::Float64) = write(s, box(Int64,unbox(Float64,x)))
 
 function write(s::IO, a::AbstractArray)
-    for i = 1:numel(a)
+    for i = 1:length(a)
         write(s, a[i])
     end
 end
@@ -98,7 +98,7 @@ read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
 read{T}(s::IO, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
 
 function read{T}(s::IO, a::Array{T})
-    for i = 1:numel(a)
+    for i = 1:length(a)
         a[i] = read(s, T)
     end
     return a
@@ -318,7 +318,7 @@ write(s::IOStream, c::Char) = ccall(:jl_pututf8, Int32, (Ptr{Void}, Char), s.ios
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
-              s.ios, a, numel(a)*sizeof(T))
+              s.ios, a, length(a)*sizeof(T))
     else
         invoke(write, (IO, Array), s, a)
     end
@@ -354,7 +354,7 @@ end
 
 function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        nb = numel(a)*sizeof(T)
+        nb = length(a)*sizeof(T)
         if ccall(:ios_readall, Uint,
                  (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
             throw(EOFError())

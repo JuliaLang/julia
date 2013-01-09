@@ -18,3 +18,5 @@ end
 @deprecate  insert   insert!
 @deprecate  del      delete!
 @deprecate  del_all  empty!
+
+@deprecate  numel    length

@@ -349,7 +349,7 @@ end
 # pop!
 origs = Set(1,2,3,"apple")
 s = copy(origs)
-for i in 1:numel(origs)
+for i in 1:length(origs)
     el = pop!(s)
     @test !has(s, el)
     @test has(origs, el)

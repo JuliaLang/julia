@@ -91,10 +91,10 @@ end
 
 function serialize_array_data(s, a)
     elty = eltype(a)
-    if elty === Bool && numel(a)>0
+    if elty === Bool && length(a)>0
         last = a[1]
         count = 1
-        for i = 2:numel(a)
+        for i = 2:length(a)
             if a[i] != last || count == 127
                 write(s, uint8((uint8(last)<<7) | count))
                 last = a[i]
@@ -117,7 +117,7 @@ function serialize(s, a::Array)
     if isa(elty,BitsKind)
         serialize_array_data(s, a)
     else
-        for i = 1:numel(a)
+        for i = 1:length(a)
             if isdefined(a, i)
                 serialize(s, a[i])
             else
@@ -366,7 +366,7 @@ function deserialize(s, ::Type{Array})
         end
     end
     A = Array(elty, dims)
-    for i = 1:numel(A)
+    for i = 1:length(A)
         tag = int32(read(s, Uint8))
         if tag==0 || !is(deser_tag[tag], UndefRefTag)
             A[i] = handle_deserialize(s, tag)

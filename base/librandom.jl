@@ -101,7 +101,7 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
     @eval begin
 
         function ($genrand_fill_name)(s::DSFMT_state, A::Array{Float64})
-            n = numel(A)
+            n = length(A)
             if n <= dsfmt_min_array_size
                 for i = 1:n
                     A[i] = rand()
@@ -119,7 +119,7 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
         end
         
         function ($gv_genrand_fill_name)(A::Array{Float64})
-            n = numel(A)
+            n = length(A)
             if n <= dsfmt_min_array_size
                 for i = 1:n
                     A[i] = rand()
@@ -170,7 +170,7 @@ function randmtzig_fill_randn!(A)
     ccall((:randmtzig_fill_randn,:librandom),
           Void,
           (Ptr{Float64}, Int), 
-          A, numel(A))
+          A, length(A))
     return A
 end
 
@@ -184,7 +184,7 @@ function randmtzig_fill_exprnd!(A)
     ccall((:randmtzig_fill_exprnd,:librandom),
           Void,
           (Ptr{Float64}, Int), 
-          A, numel(A))
+          A, length(A))
     return A
 end
 

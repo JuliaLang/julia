@@ -519,7 +519,7 @@ end
 
 function read{T}(this::AsyncStream, a::Array{T})
     if isa(T, BitsKind)
-        nb = numel(a)*sizeof(T)
+        nb = length(a)*sizeof(T)
         buf = this.buffer
         assert(buf.seekable == false)
         assert(buf.maxsize >= nb)
@@ -564,7 +564,7 @@ write(s::AsyncStream, b::Uint8) =
     ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s))
 write(s::AsyncStream, c::Char) =
     ccall(:jl_pututf8, Int32, (Ptr{Void},Char), handle(s), c)
-write{T<:BitsKind}(s::AsyncStream, a::Array{T}) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),handle(s), a, uint(numel(a)*sizeof(T)))
+write{T<:BitsKind}(s::AsyncStream, a::Array{T}) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),handle(s), a, uint(length(a)*sizeof(T)))
 write(s::AsyncStream, p::Ptr, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),handle(s), p, uint(nb))
 _write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),handle(s),p,uint(nb))
 

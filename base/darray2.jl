@@ -171,7 +171,7 @@ function convert{S,T,N}(::Type{Array{S,N}}, s::SubDArray{T,N})
 end
 
 function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
-    if prod(d) != numel(A)
+    if prod(d) != length(A)
         error("reshape: invalid dimensions")
     end
     DArray(d) do I
@@ -183,7 +183,7 @@ function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
         nr = size(B,1)
         sztail = size(B)[2:]
 
-        for i=1:div(numel(B),nr)
+        for i=1:div(length(B),nr)
             i2 = ind2sub(sztail, i)
             globalidx = [ I[j][i2[j-1]] for j=2:nd ]
             
