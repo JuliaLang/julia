@@ -557,7 +557,7 @@ install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 RMATH_OBJ_TARGET = $(BUILD)/lib/libRmath.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 
-$(RMATH_OBJ_SOURCE): Rmath/src/Makefile
+$(RMATH_OBJ_SOURCE): Rmath/src/Makefile install-random
 	cd Rmath/src && \
 	$(MAKE) CC="$(CC)" && \
 	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
