@@ -5,6 +5,17 @@
 @test median([1,3,2]) == 2.0
 @test median([1,3,2,4]) == 2.5
 
+@test median([0.0,Inf]) == Inf
+@test median([0.0,-Inf]) == -Inf
+@test median([0.,Inf,-Inf]) == 0.0
+@test median([1.,-1.,Inf,-Inf]) == 0.0
+@test isnan(median([-Inf,Inf]))
+
+@test_fails median([])
+@test_fails median([NaN])
+@test_fails median([0.0,NaN])
+@test_fails median([NaN,0.0])
+
 @test mean([1,2,3]) == 2.
 @test var([1,2,3]) == 1.
 @test std([1,2,3]) == 1.

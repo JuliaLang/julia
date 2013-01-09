@@ -16,15 +16,13 @@ mean(v::AbstractArray, dim::Int) = sum(v,dim)/size(v,dim)
 
 weighted_mean(v::AbstractArray, w::AbstractArray) = sum(v.*w)/sum(w)
 
-function median(v::AbstractArray)
-    n = numel(v)
-    if isodd(n)
-        return float(select(v, div(n+1, 2)))
-    else
-        vs = sort(v)
-        return (vs[div(n, 2)] + vs[div(n, 2) + 1]) / 2
-    end
+function median!{T<:Real}(v::AbstractVector{T})
+    isempty(v) && error("median of an empty array is undefined")
+    sort!(v) # TODO: do something more efficient, e.g. select but detect NaNs
+    isnan(v[end]) && error("median is undefined in presence of NaNs")
+    isodd(length(v)) ? float(v[div(end+1,2)]) : (v[div(end,2)]+v[div(end,2)+1])/2
 end
+median{T<:Real}(v::AbstractArray{T}) = median!(copy(v))
 
 ## variance with known mean
 function var(v::AbstractVector, m::Number, corrected::Bool)
