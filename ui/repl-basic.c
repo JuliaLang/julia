@@ -8,6 +8,13 @@ char *stdin_buf = NULL;
 unsigned long stdin_buf_len = 0;
 unsigned long stdin_buf_maxlen = 128;
 
+void repl_print(const char *buf, size_t n)
+{
+    if(jl_uv_stdin->type == UV_TTY) {
+       jl_write(jl_uv_stdin, buf, n);
+    }
+}
+
 void init_repl_environment(int argc, char *argv[])
 {
     stdin_buf = malloc(stdin_buf_maxlen);
@@ -92,7 +99,7 @@ void jl_readBuffer(char* base, ssize_t nread)
                 newline = 1;
                 break;
             case '\x03':
-                jl_write(jl_uv_stdout, "^C\n", 3);
+                repl_print("^C\n", 3);
                 jl_clear_input();
                 break;
             case '\x04':
@@ -110,7 +117,7 @@ void jl_readBuffer(char* base, ssize_t nread)
             case '\b':
                 if (stdin_buf_len > 0 && stdin_buf[stdin_buf_len-1] != '\n') {
                     stdin_buf_len--;
-                    jl_write(jl_uv_stdout,"\b \b",3);
+                    repl_print("\b \b",3);
                 }
             }
         }
@@ -128,7 +135,8 @@ void jl_readBuffer(char* base, ssize_t nread)
             esc = 0;
         }
         else {
-            jl_putc(*start, jl_uv_stdout);
+            if(jl_uv_stdin->type == UV_TTY)
+                jl_putc(*start, jl_uv_stdin);
             stdin_buf_pushc(*start);
         }
         start++;
@@ -141,6 +149,6 @@ void jl_clear_input(void)
 {
     stdin_buf_len = 0;
     stdin_buf[0] = 0;
-    jl_printf(jl_uv_stdout, "\n");
+    repl_print("\n",1);
     repl_callback_enable();
 }
