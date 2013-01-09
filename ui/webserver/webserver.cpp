@@ -6,7 +6,6 @@
 #include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
-#include <pthread.h>
 #include <signal.h>
 #include <assert.h>
 #include <stdio.h>

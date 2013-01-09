@@ -21,6 +21,7 @@ debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $
 
 julia-debug julia-release:
 	@-git submodule update
+	@-cd deps/nginx && git fetch -a
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
 	@$(MAKE) $(QUIET_MAKE) -C base
@@ -52,7 +53,7 @@ JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
 		  tk_wrapper umfpack z openblas
 
 PREFIX ?= julia-$(JULIA_COMMIT)
-install: release
+install: release webrepl
 	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
@@ -98,9 +99,6 @@ else
 endif
 	rm -fr julia-$(JULIA_COMMIT)
 
-h2j: $(BUILD)/$(JL_LIBDIR)/libLLVM*.a $(BUILD)/$(JL_LIBDIR)/libclang*.a src/h2j.cpp
-	$(QUIET_CC) g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@
-
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
 	@$(MAKE) -C extras clean
@@ -134,6 +132,12 @@ test-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
 
 webrepl:
-	make -C deps install-lighttpd
-	make -C ui/webserver
+	@$(MAKE) -C deps install-nginx
+	@$(MAKE) -C ui/webserver
+
+tk:
+	@$(MAKE) -C deps install-tk-wrapper
+ifneq ($(OS),WINNT)
+install: tk
+endif
 

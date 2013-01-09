@@ -249,9 +249,11 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build/config.status | $(llvm_python_workaro
 	$(MAKE) $(LLVM_MFLAGS)
 	touch $@
 llvm-$(LLVM_VER)/build/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
+ifeq ($(OS),$(BUILD_OS))
 	cd llvm-$(LLVM_VER)/build && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) $(LLVM_MFLAGS) check 
+endif
 	echo 1 > $@
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
@@ -375,7 +377,9 @@ endif
 	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
 	touch $@
 libuv/checked: $(LIBUV_OBJ_SOURCE)
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) test $(LIBUV_MAKE_FLAGS)
+endif
 	echo 1 > $@
 #todo: libuv tests are really slow
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
@@ -410,12 +414,15 @@ pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	./configure $(CONFIGURE_COMMON) --enable-utf --enable-unicode-properties --enable-jit
 	touch $@
 $(PCRE_SRC_TARGET): pcre-$(PCRE_VER)/config.status
-	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD) install
+	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD)
 	touch $@
 pcre-$(PCRE_VER)/checked: $(PCRE_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C pcre-$(PCRE_VER) check
+endif
 	echo 1 > $@
 $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre-$(PCRE_VER)/checked
+	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libpcre.dylib $@
 ifeq ($(OS),WINNT)
 	-rm $(BUILD)/lib/libpcre.dll
@@ -794,7 +801,7 @@ endif
 $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/config.status
 ifeq ($(OS),WINNT)
 	cd arpack-ng_$(ARPACK_VER) && \
-	$(FC) -shared $(ARPACK_OPTS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o $@ && \
+	$(FC) -shared $(ARPACK_OPTS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT)
 else
 	cd arpack-ng_$(ARPACK_VER) && \
 	$(MAKE) $(ARPACK_ARGS)
@@ -835,11 +842,17 @@ install-arpack: $(ARPACK_OBJ_TARGET)
 
 
 ## FFTW ##
-
+ifeq ($(OS),WINNT)
+FFTW_SINGLE_SRC_TARGET = fftw-$(FFTW_VER)-single/.libs/libfftw3f-3.$(SHLIB_EXT)
+FFTW_DOUBLE_SRC_TARGET = fftw-$(FFTW_VER)-double/.libs/libfftw3f-3.$(SHLIB_EXT)
+FFTW_SINGLE_OBJ_TARGET = $(BUILD)/lib/libfftw3f.$(SHLIB_EXT)
+FFTW_DOUBLE_OBJ_TARGET = $(BUILD)/lib/libfftw3.$(SHLIB_EXT)
+else
 FFTW_SINGLE_SRC_TARGET = fftw-$(FFTW_VER)-single/.libs/libfftw3f.$(SHLIB_EXT)
 FFTW_DOUBLE_SRC_TARGET = fftw-$(FFTW_VER)-double/.libs/libfftw3f.$(SHLIB_EXT)
 FFTW_SINGLE_OBJ_TARGET = $(BUILD)/lib/libfftw3f.$(SHLIB_EXT)
 FFTW_DOUBLE_OBJ_TARGET = $(BUILD)/lib/libfftw3.$(SHLIB_EXT)
+endif
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-threads
 ifneq ($(ARCH), ppc64)
@@ -865,7 +878,9 @@ fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 $(FFTW_SINGLE_SRC_TARGET): fftw-$(FFTW_VER)-single/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-single
 fftw-$(FFTW_VER)-single/checked: $(FFTW_SINGLE_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C fftw-$(FFTW_VER)-single check
+endif
 	echo 1 > $@
 $(FFTW_SINGLE_OBJ_TARGET): $(FFTW_SINGLE_SRC_TARGET) fftw-$(FFTW_VER)-single/checked
 	$(MAKE) -C fftw-$(FFTW_VER)-single install
@@ -898,7 +913,9 @@ $(FFTW_DOUBLE_SRC_TARGET): fftw-$(FFTW_VER)-double/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-double
 	touch $@
 fftw-$(FFTW_VER)-double/checked: $(FFTW_DOUBLE_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C fftw-$(FFTW_VER)-double check
+endif
 	echo 1 > $@
 $(FFTW_DOUBLE_OBJ_TARGET): $(FFTW_DOUBLE_SRC_TARGET) fftw-$(FFTW_VER)-double/checked
 	$(MAKE) -C fftw-$(FFTW_VER)-double install
@@ -1054,7 +1071,9 @@ $(CLP_OBJ_SOURCE): clp-$(CLP_VER)/config.status
 	$(MAKE) -C clp-$(CLP_VER)
 	touch $@
 clp-$(CLP_VER)/checked: $(CLP_OBJ_SOURCE)
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C clp-$(CLP_VER) test
+endif
 	echo 1 > $@
 $(CLP_OBJ_TARGET): $(CLP_OBJ_SOURCE) clp-$(CLP_VER)/checked
 	$(MAKE) -C clp-$(CLP_VER) install
@@ -1095,7 +1114,9 @@ $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/config.status
 	$(MAKE) -C libunwind-$(UNWIND_VER)
 	touch $@
 libunwind-$(UNWIND_VER)/checked: $(LIBUNWIND_TARGET_SOURCE)
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C libunwind-$(UNWIND_VER) check
+endif
 	echo 1 > $@
 #todo: libunwind tests known to fail
 $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
@@ -1155,7 +1176,7 @@ $(NGINX_SRC_TARGET):
 $(NGINX_OBJ_TARGET): $(NGINX_SRC_TARGET)
 	unzip $<
 	touch $@
-$(BUILD)/sbin/nginx.exe: $(NGINX_SRC_TARGET)
+$(BUILD)/sbin/nginx.exe: $(NGINX_OBJ_TARGET)
 	mkdir -p $(BUILD)/sbin
 	cp -a nginx-$(NGINX_VER)/* $(BUILD)/sbin
 	touch $@
@@ -1249,7 +1270,9 @@ glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 $(GLPK_SRC_TARGET): glpk-$(GLPK_VER)/config.status
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD)
 glpk-$(GLPK_VER)/checked: $(GLPK_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) check
+endif
 	echo 1 > $@
 $(GLPK_OBJ_TARGET): $(GLPK_SRC_TARGET) glpk-$(GLPK_VER)/checked
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) install
@@ -1298,7 +1321,11 @@ install-glpk: $(GLPK_OBJ_TARGET) $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT)
 
 ## ZLIB ##
 
+ifeq ($(OS),WINNT)
+ZLIB_SRC_TARGET = zlib-$(ZLIB_VER)/zlib1.$(SHLIB_EXT)
+else
 ZLIB_SRC_TARGET = zlib-$(ZLIB_VER)/libz.$(SHLIB_EXT)
+endif
 ZLIB_OBJ_TARGET = $(BUILD)/lib/libz.$(SHLIB_EXT)
 ZLIB_CONFIGFLAGS = CFLAGS="-O3 $(CFLAGS) -D_FILE_OFFSET_BITS=64"
 ifneq ($(OS),$(BUILD_OS))
@@ -1306,9 +1333,6 @@ ZLIB_CONFIGFLAGS += CHOST=$(XC_HOST)
 else
 ZLIB_CONFIGFLAGS += CC="$(CC)"
 endif
-
-compile-zlib: install-zlib
-install-zlib: $(ZLIB_OBJ_TARGET)
 
 zlib-$(ZLIB_VER).tar.gz:
 	$(WGET) http://zlib.net/$@
@@ -1326,6 +1350,7 @@ endif
 	touch $@
 $(ZLIB_SRC_TARGET): zlib-$(ZLIB_VER)/config.status
 	$(MAKE) -C zlib-$(ZLIB_VER) PREFIX=$(CROSS_COMPILE)
+	touch $@
 zlib-$(ZLIB_VER)/checked: $(ZLIB_SRC_TARGET)
 ifneq ($(OS), WINNT)
 	$(MAKE) -C zlib-$(ZLIB_VER) check PREFIX=$(CROSS_COMPILE)
@@ -1411,7 +1436,9 @@ $(PATCHELF_SOURCE): patchelf-$(PATCHELF_VER)/config.status
 	$(MAKE) -C patchelf-$(PATCHELF_VER)
 	touch $@
 patchelf-$(PATCHELF_VER)/checked: $(PATCHELF_SOURCE)
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C patchelf-$(PATCHELF_VER) check
+endif
 	echo 1 > $@
 $(PATCHELF_TARGET): $(PATCHELF_SOURCE) patchelf-$(PATCHELF_VER)/checked
 	$(MAKE) -C patchelf-$(PATCHELF_VER) install

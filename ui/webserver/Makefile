@@ -4,13 +4,13 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-LIBS = -lpthread $(BUILD)/$(JL_LIBDIR)/libuv.a 
+LIBS = $(BUILD)/$(JL_LIBDIR)/libuv.a 
 ifeq ($(OS), Linux)
-LIBS += -lrt 
+LIBS += -lpthread -lrt 
 endif
 
 ifeq ($(OS),WINNT)
-LIBS += -lWs2_32 -lIphlpapi -lpsapi
+LIBS += -lws2_32 -liphlpapi -lpsapi
 endif
 
 ifeq ($(OS),Darwin)
@@ -24,7 +24,7 @@ WEBSERVER_SRCS = webserver.o server.o jsoncpp.o
 %.do: %.cpp *.h
 	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
-julia-release julia-debug: %: $(BUILD)/bin/%-webserver $(BUILD)/bin/$(LAUNCH_SCRIPT)
+julia-release julia-debug: %: $(BUILD)/bin/%-webserver $(BUILD)/bin/$(LAUNCH_SCRIPT) $(BUILD)/etc/nginx.conf
 
 release debug:
 	$(MAKE) julia-$@
@@ -42,6 +42,14 @@ LAUNCH_SCRIPT = launch-julia-webserver
 endif
 $(BUILD)/bin/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
 	cp $< $@
+
+$(BUILD)/etc/nginx.conf: nginx*.conf
+ifeq ($(OS),WINNT)
+	cp nginx-win.conf $@
+else
+	cp nginx.conf $@
+endif
+
 
 clean:
 	rm -f *.o *.do
