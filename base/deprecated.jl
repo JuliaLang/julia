@@ -20,3 +20,4 @@ end
 @deprecate  del_all  empty!
 
 @deprecate  numel    length
+@deprecate  idump    xdump

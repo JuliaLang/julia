@@ -396,9 +396,9 @@ function show(io, mt::MethodTable)
     end
 end
 
-# dump & idump - structured tree representation like R's str()
+# dump & xdump - structured tree representation like R's str()
 # - dump is for the user-facing structure
-# - idump is for the internal structure
+# - xdump is for the internal structure
 #
 # x is the object
 # n is the depth of traversal in nested types (5 is the default)
@@ -410,9 +410,9 @@ end
 # n > 0, dump each component. Limit to the first 10 entries. When
 # dumping components, decrement n, and add two spaces to indent.
 #
-# Package writers should not overload idump.
+# Package writers should not overload xdump.
 
-function idump(fn::Function, io::IO, x, n::Int, indent)
+function xdump(fn::Function, io::IO, x, n::Int, indent)
     T = typeof(x)
     print(io, T, " ")
     if isa(T, CompositeKind)
@@ -429,11 +429,11 @@ function idump(fn::Function, io::IO, x, n::Int, indent)
         println(io, x)
     end
 end
-function idump(fn::Function, io::IO, x::Module, n::Int, indent)
+function xdump(fn::Function, io::IO, x::Module, n::Int, indent)
     print(io, Module, " ")
     println(io, x)
 end
-function idump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
+function xdump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
     println("Array($(eltype(x)),$(size(x)))")
     if n > 0
         for i in 1:(length(x) <= 10 ? length(x) : 5)
@@ -449,20 +449,20 @@ function idump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
         end
     end
 end
-idump(fn::Function, io::IO, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
-idump(fn::Function, io::IO, x::Function, n::Int, indent) = println(io, x)
-idump(fn::Function, io::IO, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x)
+xdump(fn::Function, io::IO, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
+xdump(fn::Function, io::IO, x::Function, n::Int, indent) = println(io, x)
+xdump(fn::Function, io::IO, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x)
 
 # Types
-idump(fn::Function, io::IO, x::UnionKind, n::Int, indent) = println(io, x)
-function idump(fn::Function, io::IO, x::CompositeKind, n::Int, indent)
+xdump(fn::Function, io::IO, x::UnionKind, n::Int, indent) = println(io, x)
+function xdump(fn::Function, io::IO, x::CompositeKind, n::Int, indent)
     println(io, x, "::", typeof(x), " ", " <: ", super(x))
     if n > 0
         for idx in 1:min(10,length(x.names))
             if x.names[idx] != symbol("")    # prevents segfault if symbol is blank
                 print(io, indent, "  ", x.names[idx], "::")
                 if isa(x.types[idx], CompositeKind) 
-                    idump(fn, io, x.types[idx], n - 1, strcat(indent, "  "))
+                    xdump(fn, io, x.types[idx], n - 1, strcat(indent, "  "))
                 else
                     println(x.types[idx])
                 end
@@ -518,15 +518,15 @@ end
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-idump(fn::Function, io::Stream, x::AbstractKind) = dumptype(io, x, 5, "")
-idump(fn::Function, io::Stream, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
+xdump(fn::Function, io::Stream, x::AbstractKind) = dumptype(io, x, 5, "")
+xdump(fn::Function, io::Stream, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
 
 # defaults:
-idump(fn::Function, io::Stream, x) = idump(idump, io, x, 5, "")  # default is 5 levels
-idump(fn::Function, io::Stream, x, n::Int) = idump(idump, io, x, n, "")
-idump(fn::Function, args...) = idump(fn, OUTPUT_STREAM::Stream, args...)
-idump(io::Stream, args...) = idump(idump, io, args...)
-idump(args...) = idump(idump, OUTPUT_STREAM::Stream, args...)
+xdump(fn::Function, io::Stream, x) = xdump(xdump, io, x, 5, "")  # default is 5 levels
+xdump(fn::Function, io::Stream, x, n::Int) = xdump(xdump, io, x, n, "")
+xdump(fn::Function, args...) = xdump(fn, OUTPUT_STREAM::Stream, args...)
+xdump(io::Stream, args...) = xdump(xdump, io, args...)
+xdump(args...) = xdump(xdump, OUTPUT_STREAM::Stream, args...)
 
 
 # Here are methods specifically for dump:
@@ -534,7 +534,7 @@ dump(io::IO, x, n::Int) = dump(io, x, n, "")
 dump(io::IO, x) = dump(io, x, 5, "")  # default is 5 levels
 dump(args...) = dump(OUTPUT_STREAM::Stream, args...)
 dump(io::IO, x::String, n::Int, indent) = println(io, typeof(x), " \"", x, "\"")
-dump(io::IO, x, n::Int, indent) = idump(dump, io, x, n, indent)
+dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
 
 function dump(io::IO, x::Dict, n::Int, indent)
     println(typeof(x), " len ", length(x))

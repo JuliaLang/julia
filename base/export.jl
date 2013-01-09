@@ -897,7 +897,7 @@ export
     float64_isvalid,
     fprintf,
     hex,
-    idump,
+    xdump,
     is_hex_digit,
     ndigits,
     ndigits0z,
