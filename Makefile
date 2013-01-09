@@ -40,7 +40,7 @@ $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl $(BUILD)/share/julia/hel
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
 run-julia:
-	winedbg --gdb $(JULIA_EXECUTABLE)
+	$(JULIA_EXECUTABLE)
 
 # public libraries, that are installed in $(PREFIX)/lib
 JL_LIBS = julia-release julia-debug
@@ -85,7 +85,8 @@ else
 	done
 endif
 endif
-	echo `cat VERSION` +`git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > $(PREFIX)/VERSION
+	cp $(JULIAHOME)/VERSION $(PREFIX)/share/julia/VERSION
+	echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > $(PREFIX)/share/julia/COMMIT
 
 dist: 
 	rm -fr julia-*.tar.gz julia-$(JULIA_COMMIT)

@@ -67,8 +67,10 @@ endif
 ifeq ($(OS), WINNT)
 fPIC = 
 PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia
+EXE = .exe
 else
 fPIC = -fPIC
+EXE =
 endif
 
 DEFAULT_REPL = readline
@@ -362,8 +364,8 @@ $$(abspath $(2)/$(1)): | $$(abspath $(2))
 endef
 endif
 
-JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)
-JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-release-$(DEFAULT_REPL)
+JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)$(EXE)
+JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-release-$(DEFAULT_REPL)$(EXE)
 
 ifeq ($(OS), WINNT)
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)

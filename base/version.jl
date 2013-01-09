@@ -137,11 +137,19 @@ end
 
 if(isfile("$JULIA_HOME/../../VERSION"))
 const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
-elseif(isfile("$JULIA_HOME/../VERSION"))
-	const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../VERSION"))
+elseif(isfile("$JULIA_HOME/../share/julia/VERSION"))
+	const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../share/julia/VERSION"))
 else
 	const VERSION = convert(VersionNumber,"0.0.0")
 end
+if(isfile("$JULIA_HOME/../../COMMIT"))
+    const VERSION_COMMIT = ""
+    const commit_string = readchomp("$JULIA_HOME/../../COMMIT")
+elseif(isfile("JULIA_HOME/../share/julia/COMMIT"))
+    const VERSION_COMMIT = ""
+    const commit_string = readchomp("$JULIA_HOME/../share/julia/COMMIT")
+else
+
 let
     expected = ErrorException("error: don't copy this code, for breaking out of uv_run during boot-strapping only")
     acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
@@ -213,6 +221,7 @@ let
             end
         end
     end
+end
 end
 begin
 const version_string = "Version $VERSION"

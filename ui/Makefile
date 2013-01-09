@@ -27,19 +27,19 @@ $(BUILD)/bin/julia.bat: ${JULIAHOME}/contrib/windows/*.bat
 julia-release julia-debug: $(BUILD)/bin/julia.bat
 endif 
 
-julia-release-basic: $(BUILD)/bin/julia-release-basic
-julia-debug-basic: $(BUILD)/bin/julia-debug-basic
-julia-release-readline: $(BUILD)/bin/julia-release-readline
-julia-debug-readline: $(BUILD)/bin/julia-debug-readline
+julia-release-basic: $(BUILD)/bin/julia-release-basic$(EXE)
+julia-debug-basic: $(BUILD)/bin/julia-debug-basic$(EXE)
+julia-release-readline: $(BUILD)/bin/julia-release-readline$(EXE)
+julia-debug-readline: $(BUILD)/bin/julia-debug-readline$(EXE)
 
-$(BUILD)/bin/julia-release-basic: repl.o repl-basic.o
+$(BUILD)/bin/julia-release-basic$(EXE): repl.o repl-basic.o
 	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release
-$(BUILD)/bin/julia-debug-basic: repl.do repl-basic.do
+$(BUILD)/bin/julia-debug-basic$(EXE): repl.do repl-basic.do
 	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug
 
-$(BUILD)/bin/julia-release-readline: repl.o repl-readline.o
+$(BUILD)/bin/julia-release-readline$(EXE): repl.o repl-readline.o
 	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release
-$(BUILD)/bin/julia-debug-readline: repl.do repl-readline.do
+$(BUILD)/bin/julia-debug-readline$(EXE): repl.do repl-readline.do
 	$(QUIET_LINK) $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug
 
 clean: | $(CLEAN_TARGETS)

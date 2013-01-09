@@ -24,15 +24,15 @@ WEBSERVER_SRCS = webserver.o server.o jsoncpp.o
 %.do: %.cpp *.h
 	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
-julia-release julia-debug: %: $(BUILD)/bin/%-webserver $(BUILD)/bin/$(LAUNCH_SCRIPT) $(BUILD)/etc/nginx.conf
+julia-release julia-debug: %: $(BUILD)/bin/%-webserver$(EXE) $(BUILD)/bin/$(LAUNCH_SCRIPT) $(BUILD)/etc/nginx.conf
 
 release debug:
 	$(MAKE) julia-$@
 
-$(BUILD)/bin/julia-release-webserver: $(WEBSERVER_SRCS)
+$(BUILD)/bin/julia-release-webserver$(EXE): $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
-$(BUILD)/bin/julia-debug-webserver: $(WEBSERVER_SRCS)
+$(BUILD)/bin/julia-debug-webserver$(EXE): $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
 ifeq ($(OS),WINNT)
