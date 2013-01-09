@@ -312,7 +312,7 @@ memio() = memio(0, true)
 
 ## low-level calls ##
 
-write(s::IOStream, b::Uint8) = ccall(:jl_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
+write(s::IOStream, b::Uint8) = ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, s.ios)
 write(s::IOStream, c::Char) = ccall(:jl_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
 
 function write{T}(s::IOStream, a::Array{T})

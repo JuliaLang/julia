@@ -30,7 +30,7 @@ end
 
 ## process-related functions ##
 
-getpid() = ccall(:jl_getpid, Uint32, ())
+getpid() = ccall(:jl_getpid, Int32, ())
 system(cmd::String) = ccall(:system, Int32, (Ptr{Uint8},), cmd)
 
 ## network functions ##

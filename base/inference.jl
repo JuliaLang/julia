@@ -52,7 +52,7 @@ tintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 methods(f::Union(Function,CompositeKind),t) = methods(f,t,-1)::Array{Any,1}
 methods(f::Union(Function,CompositeKind),t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
-typeseq(a,b) = subtype(a,b)&&subtype(b,a)
+typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
 
 isgeneric(f) = (isa(f,Function)||isa(f,CompositeKind)) && isa(f.env,MethodTable)
 isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0

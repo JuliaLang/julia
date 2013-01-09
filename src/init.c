@@ -465,11 +465,10 @@ void julia_init(char *imageFile)
         jl_exit(1);
     }
 #else
-    if( signal( SIGFPE, (void (__cdecl *)(int)) fpe_handler ) == SIG_ERR )
-     {
-        JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n" );
+    if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n");
         jl_exit(1);
-     }
+    }
 #endif
 
     //atexit(jl_atexit_hook);
