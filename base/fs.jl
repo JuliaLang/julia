@@ -50,9 +50,9 @@ _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 
 function open(f::File,flags::Integer,mode::Integer)
     req = Base.Intrinsics.box(Ptr{Void},Intrinsics.jl_alloca(Base.Intrinsics.unbox(Int32,_sizeof_uv_fs_t)))
-    ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Int32,Int32,Ptr{Void}),
+    ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Int32,Int32,Ptr{Void}),
                          globalEventLoop(),req,bytestring(f.path),flags,mode,C_NULL)
-    uv_error(:open)
+    uv_error(:open,ret==-1)
     f.handle = _uv_fs_result(req)
     f.open = true
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)

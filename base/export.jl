@@ -1383,5 +1383,6 @@ export
     stop_reading,
     globalEventLoop,
     uv_error,
-    UVError
+    UVError,
+    kill
 
