@@ -796,7 +796,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 PGRP.workers = w = cell(PGRP.np)
                 w[1] = Worker("", 0, sock, 1)
                 for i = 2:(PGRP.myid-1)
-                    w[i] = Worker(locs[i].host, locs[i].port)
+                    w[i] = Worker(locs[i][1], locs[i][2])
                     w[i].id = i
                     create_message_handler_loop(w[i].socket)
                     send_msg_now(w[i], :identify_socket, PGRP.myid)
