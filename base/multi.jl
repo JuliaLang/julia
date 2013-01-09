@@ -1395,7 +1395,7 @@ function event_loop(isclient)
                 show(lasterr)
                 iserr, lasterr = false, ()
             else
-                run_event_loop();
+                run_event_loop()
             end
         catch err
             bt = backtrace()

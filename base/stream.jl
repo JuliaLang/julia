@@ -176,7 +176,7 @@ wait_readline_filter(w::AsyncStream, args...) = w.open && (memchr(w.buffer,'\n')
 
 macro waitfilter(fcn,notify,filter_fcn,types)
     quote
-        function $(esc(filter_fcn))(x::Vector{$(esc(types))}, args...)
+        function $(esc(filter_fcn))(x::Vector, args...)
             for a=x
                 if $(esc(filter_fcn))(a, args...)
                     return true
@@ -184,7 +184,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
             end
             return false
         end
-        function $(esc(fcn))(x::Union($(esc(types)),Vector{$(esc(types))}))
+        function $(esc(fcn))(x::Union($(esc(types)),Vector))
             ct = current_task()
             tw = WaitTask(ct, $(esc(filter_fcn)), x)
             args = ()
@@ -238,7 +238,7 @@ end
 @waitfilter wait_connected connectnotify wait_connect_filter AsyncStream
 @waitfilter wait_readable readnotify wait_readable_filter AsyncStream
 @waitfilter wait_readline readnotify wait_readline_filter AsyncStream
-@waitfilter wait_readnb readnotify wait_readnb_filter Union(AsyncStream,Int)
+@waitfilter wait_readnb readnotify wait_readnb_filter (AsyncStream,Int)
 
 wait_readnb(a::AsyncStream,b::Int) = wait_readnb((a,b))
 function wait_accept(server::TcpSocket)
