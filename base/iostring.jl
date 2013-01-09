@@ -158,14 +158,17 @@ function takebuf_array(io::IOString)
 end
 takebuf_string(io::IOString) = bytestring(takebuf_array(io))
 
-function write{T}(to::IOString, a::Array{T})
-    if !to.writable error("write failed") end
+function write_sub{T}(to::IOString, a::Array{T}, offs, nel)
+    if !to.writable; error("write failed") end
+    if offs+nel-1 > length(a) || offs < 1 || nel < 0
+        throw(BoundsError())
+    end
     if isa(T, BitsKind)
-        nb = numel(a)*sizeof(T)
+        nb = nel*sizeof(T)
         ensureroom(to, nb)
         ptr = (to.append ? to.size+1 : to.ptr)
         nb = min(nb, length(to.data) - ptr + 1)
-        ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Int), pointer(to.data,ptr), a, nb)
+        ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Int), pointer(to.data,ptr), pointer(a,offs), nb)
         to.size = max(to.size, ptr - 1 + nb)
         if !to.append; to.ptr += nb; end
     else
@@ -173,6 +176,8 @@ function write{T}(to::IOString, a::Array{T})
     end
     nb
 end
+
+write(to::IOString, a::Array) = write_sub(to, a, 1, numel(a))
 
 function write(to::IOString, a::Uint8)
     if !to.writable error("write failed") end

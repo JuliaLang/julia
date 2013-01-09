@@ -339,6 +339,8 @@ SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offs
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
 SubString(s::String, i::Integer) = SubString(s, i, length(s))
 
+write{T<:ByteString}(to::IOString, s::SubString{T}) = write_sub(to, s.string.data, s.offset+1, s.length)
+
 function next(s::SubString, i::Int)
     if i < 1 || i > s.length
         error(BoundsError)
@@ -980,10 +982,11 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     rstr = ""
     i = a = start(str)
     j, k = search(str,pattern,i)
+    out = IOString()
     while j != 0
         if i == a || i < k
-            rstr = RopeString(rstr,SubString(str,i,j-1))
-            rstr = RopeString(rstr,string(repl(SubString(str,j,k-1))))
+            write(out, SubString(str,i,j-1))
+            write(out, string(repl(SubString(str,j,k-1))))
             i = k
         end
         if k <= j; k = nextind(str,j) end
@@ -991,8 +994,8 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
         if n == limit break end
         n += 1
     end
-    rstr = RopeString(rstr,SubString(str,i))
-    bytestring(rstr)
+    write(out, SubString(str,i))
+    takebuf_string(out)
 end
 replace(s::String, pat, f::Function, n::Integer) = replace(bytestring(s), pat, f, n)
 replace(s::String, pat, r, n::Integer) = replace(s, pat, x->r, n)
