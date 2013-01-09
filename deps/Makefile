@@ -1084,14 +1084,14 @@ endif
 
 libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
-libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
+libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
 	touch $@
-libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/Makefile
-	cd libunwind-$(UNWIND_VER) && 
+libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
+	cd libunwind-$(UNWIND_VER) && \
 	./configure $(CONFIGURE_COMMON) CFLAGS="$(LIBUNWIND_CFLAGS)"
 	touch $@
-$(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
+$(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/config.status
 	$(MAKE) -C libunwind-$(UNWIND_VER)
 	touch $@
 libunwind-$(UNWIND_VER)/checked: $(LIBUNWIND_TARGET_SOURCE)
