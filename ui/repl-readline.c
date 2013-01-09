@@ -41,7 +41,8 @@ DLLEXPORT void jl_enable_color(void)
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
 
-static void init_history(void) {
+static void init_history(void)
+{
     using_history();
     if (disable_history) return;
 #ifndef __WIN32__
@@ -85,9 +86,11 @@ static void init_history(void) {
                 free_history_entry(history_rem(i+1));
             }
         }
-    } else if (errno == ENOENT) {
+    }
+    else if (errno == ENOENT) {
         write_history(history_file);
-    } else {
+    }
+    else {
         jl_printf(jl_uv_stderr, "history file error: %s\n", strerror(errno));
         exit(1);
     }
@@ -96,7 +99,8 @@ static void init_history(void) {
 static int last_hist_is_temp = 0;
 static int last_hist_offset = -1;
 
-static void add_history_temporary(char *input) {
+static void add_history_temporary(char *input)
+{
     if (!input || !*input) return;
     if (last_hist_is_temp) {
         history_rem(history_length);
@@ -107,7 +111,8 @@ static void add_history_temporary(char *input) {
     last_hist_is_temp = 1;
 }
 
-static void add_history_permanent(char *input) {
+static void add_history_permanent(char *input)
+{
     if (!input || !*input) return;
     if (last_hist_is_temp) {
         history_rem(history_length);
@@ -122,14 +127,16 @@ static void add_history_permanent(char *input) {
         append_history(1, history_file);
 }
 
-static int line_start(int point) {
+static int line_start(int point)
+{
     if (!point) return 0;
     int i = point-1;
     for (; i; i--) if (rl_line_buffer[i] == '\n') return i+1;
     return rl_line_buffer[i] == '\n' ? 1 : 0;
 }
 
-static int line_end(int point) {
+static int line_end(int point)
+{
     char *nl = strchr(rl_line_buffer + point, '\n');
     if (!nl) return rl_end;
     return nl - rl_line_buffer;
@@ -138,7 +145,8 @@ static int line_end(int point) {
 static int strip_initial_spaces = 0;
 static int spaces_suppressed = 0;
 
-static void reset_indent(void) {
+static void reset_indent(void)
+{
     strip_initial_spaces = 0;
     spaces_suppressed = 0;
 }
@@ -149,7 +157,8 @@ static int jl_word_char(uint32_t wc)
     return strchr(rl_completer_word_break_characters, wc) == NULL;
 }
 
-static int newline_callback(int count, int key) {
+static int newline_callback(int count, int key)
+{
     if (!rl_point) return 0;
     spaces_suppressed = 0;
     rl_insert_text("\n");
@@ -159,7 +168,8 @@ static int newline_callback(int count, int key) {
     return 0;
 }
 
-static int return_callback(int count, int key) {
+static int return_callback(int count, int key)
+{
     static int consecutive_returns = 0;
     if (rl_point > prompt_length && rl_point == rl_end &&
         rl_line_buffer[rl_point-prompt_length-1] == '\n')
@@ -181,7 +191,8 @@ static int return_callback(int count, int key) {
     return 0;
 }
 
-static int suppress_space(void) {
+static int suppress_space(void)
+{
     int i;
     for (i = line_start(rl_point); i < rl_point; i++)
         if (rl_line_buffer[i] != ' ') return 0;
@@ -189,14 +200,16 @@ static int suppress_space(void) {
     return 0;
 }
 
-static int space_callback(int count, int key) {
+static int space_callback(int count, int key)
+{
     if (!rl_point) strip_initial_spaces++;
     else if (suppress_space()) spaces_suppressed++;
     else rl_insert_text(" ");
     return 0;
 }
 
-static int tab_callback(int count, int key) {
+static int tab_callback(int count, int key)
+{
     if (!rl_point) {
         strip_initial_spaces += tab_width;
         return 0;
@@ -224,7 +237,8 @@ static int tab_callback(int count, int key) {
     return 0;
 }
 
-static int line_start_callback(int count, int key) {
+static int line_start_callback(int count, int key)
+{
     reset_indent();
     int start = line_start(rl_point);
     int flush_left = rl_point == 0 || rl_point == start + prompt_length;
@@ -232,7 +246,8 @@ static int line_start_callback(int count, int key) {
     return 0;
 }
 
-static int line_end_callback(int count, int key) {
+static int line_end_callback(int count, int key)
+{
     reset_indent();
     int end = line_end(rl_point);
     int flush_right = rl_point == end;
@@ -240,7 +255,8 @@ static int line_end_callback(int count, int key) {
     return 0;
 }
 
-static int line_kill_callback(int count, int key) {
+static int line_kill_callback(int count, int key)
+{
     reset_indent();
     int end = line_end(rl_point);
     int flush_right = rl_point == end;
@@ -250,7 +266,8 @@ static int line_kill_callback(int count, int key) {
     return 0;
 }
 
-static int backspace_callback(int count, int key) {
+static int backspace_callback(int count, int key)
+{
     reset_indent();
     if (!rl_point) return 0;
 
@@ -274,7 +291,8 @@ finish:
     return 0;
 }
 
-static int delete_callback(int count, int key) {
+static int delete_callback(int count, int key)
+{
     reset_indent();
     int j = rl_point;
     do {
@@ -285,7 +303,8 @@ static int delete_callback(int count, int key) {
     return 0;
 }
 
-static int left_callback(int count, int key) {
+static int left_callback(int count, int key)
+{
     reset_indent();
     if (rl_point > 0) {
         int i = line_start(rl_point);
@@ -296,7 +315,8 @@ static int left_callback(int count, int key) {
     return 0;
 }
 
-static int right_callback(int count, int key) {
+static int right_callback(int count, int key)
+{
     reset_indent();
     do {
         rl_point += (rl_line_buffer[rl_point] == '\n') ? prompt_length+1 : 1;
@@ -305,7 +325,8 @@ static int right_callback(int count, int key) {
     return 0;
 }
 
-static int up_callback(int count, int key) {
+static int up_callback(int count, int key)
+{
     reset_indent();
     int i = line_start(rl_point);
     if (i > 0) {
@@ -321,7 +342,8 @@ static int up_callback(int count, int key) {
     return 0;
 }
 
-static int down_callback(int count, int key) {
+static int down_callback(int count, int key)
+{
     reset_indent();
     int j = line_end(rl_point);
     if (j < rl_end) {
@@ -340,9 +362,10 @@ static int down_callback(int count, int key) {
     }
 }
 
-static int sigint_callback(int count, int key) {
+static int sigint_callback(int count, int key)
+{
     jl_write(jl_uv_stdout, "^C\n", 3);
-	jl_clear_input();
+    jl_clear_input();
     return 0;
 }
 
@@ -685,7 +708,8 @@ void restart(void)
     rl_on_new_line();
 }
 
-DLLEXPORT void jl_clear_input(void) {
+DLLEXPORT void jl_clear_input(void)
+{
     //todo: how to do this better / the correct way / ???
     //move the cursor to a clean line:
     char *p = rl_line_buffer;
@@ -707,4 +731,3 @@ DLLEXPORT void jl_clear_input(void) {
     jl_write(jl_uv_stdout, "\e[4C", 4); //hack: try to fix cursor location
 #endif
 }
-

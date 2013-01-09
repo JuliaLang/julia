@@ -78,21 +78,20 @@ void fpe_handler(int arg)
 #else
     fpreset();
     switch(num) {
-        case _FPE_INVALID:
-        case _FPE_OVERFLOW:
-        case _FPE_UNDERFLOW:
-        default:
+    case _FPE_INVALID:
+    case _FPE_OVERFLOW:
+    case _FPE_UNDERFLOW:
+    default:
         jl_errorf("Unexpected FPE Error");
         break;
-        case _FPE_ZERODIVIDE:
+    case _FPE_ZERODIVIDE:
 #endif
-    jl_throw(jl_divbyzero_exception);
+        jl_throw(jl_divbyzero_exception);
 #ifdef __WIN32__
         break;
     }
 #endif
 }
-
 
 #ifndef __WIN32__
 void segv_handler(int sig, siginfo_t *info, void *context)
@@ -126,17 +125,19 @@ volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef __WIN32__
 volatile HANDLE hMainThread;
-void restore_signals() {
+void restore_signals()
+{
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
 }
-void win_raise_sigint() {
+void win_raise_sigint()
+{
     jl_throw(jl_interrupt_exception);
 }
 BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {   
     int sig;
     //windows signals use different numbers from unix
-    switch(wsig){
+    switch(wsig) {
         case CTRL_C_EVENT: sig = SIGINT; break;
         //case CTRL_BREAK_EVENT: sig = SIGTERM; break;
         // etc.
@@ -144,7 +145,8 @@ BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __
     }
     if (jl_defer_signal) {
         jl_signal_pending = sig;
-    } else {
+    }
+    else {
         jl_signal_pending = 0;
         SuspendThread(hMainThread);
         CONTEXT ctxThread;
@@ -169,17 +171,19 @@ BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __
     }
     return 1;
 }
-#else   
-void restore_signals() {
+#else
+void restore_signals()
+{
     sigset_t sset;
     sigemptyset(&sset);
     sigprocmask(SIG_SETMASK, &sset, 0);
 }
 void sigint_handler(int sig, siginfo_t *info, void *context)
-{   
+{
     if (jl_defer_signal) {
         jl_signal_pending = sig;
-    } else {
+    }
+    else {
         jl_signal_pending = 0;
         jl_throw(jl_interrupt_exception);
     }
@@ -188,11 +192,13 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
-static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status) {
+static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status)
+{
     if (status == 0) uv_close((uv_handle_t*)req->handle,NULL); //doesn't appear to be necessary...
     free(req);
 }
-static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
+static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
+{
     struct uv_shutdown_queue *queue = arg;
     struct uv_shutdown_queue_item *item = malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
@@ -201,7 +207,8 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
     if (!queue->first) queue->first = item;
     queue->last = item;
 }
-void jl_atexit_hook() {
+void jl_atexit_hook()
+{
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {
@@ -228,7 +235,8 @@ void jl_atexit_hook() {
                     uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
                     int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
                     if (err != 0) { printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
-                } else {
+                }
+                else {
                     uv_close(handle,NULL);
                 }
                 break;
@@ -283,7 +291,8 @@ extern jl_jmp_buf * volatile jl_jmp_target;
 
 #ifdef __WIN32__
 static long chachedPagesize = 0;
-long getPageSize (void) {
+long getPageSize (void)
+{
     if (!chachedPagesize) {
         SYSTEM_INFO systemInfo;
         GetSystemInfo (&systemInfo);
@@ -292,7 +301,8 @@ long getPageSize (void) {
     return chachedPagesize;
 }
 #else
-long getPageSize (void) {
+long getPageSize (void)
+{
     return sysconf(_SC_PAGESIZE);
 }
 #endif
