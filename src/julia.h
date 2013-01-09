@@ -720,11 +720,13 @@ void *jl_unbox_voidpointer(jl_value_t *v);
 
 #ifdef __LP64__
 #define jl_box_long(x)   jl_box_int64(x)
+#define jl_box_ulong(x)   jl_box_uint64(x)
 #define jl_unbox_long(x) jl_unbox_int64(x)
 #define jl_is_long(x)    jl_is_int64(x)
 #define jl_long_type     jl_int64_type
 #else
 #define jl_box_long(x)   jl_box_int32(x)
+#define jl_box_ulong(x)   jl_box_uint32(x)
 #define jl_unbox_long(x) jl_unbox_int32(x)
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
@@ -752,9 +754,9 @@ DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
 DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc);
 DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_type_t *atype, size_t nr, size_t nc,
                                         size_t z);
-DLLEXPORT jl_array_t *jl_pchar_to_array(char *str, size_t len);
-DLLEXPORT jl_value_t *jl_pchar_to_string(char *str, size_t len);
-DLLEXPORT jl_value_t *jl_cstr_to_string(char *str);
+DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len);
+DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len);
+DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str);
 DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n);
 DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
@@ -1128,6 +1130,8 @@ DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
+
+DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
 
 #define JL_STREAM uv_stream_t
 #define JL_STDOUT jl_uv_stdout
