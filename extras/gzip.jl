@@ -69,7 +69,6 @@ export
   Z_DEFAULT_BUFSIZE,
   Z_BIG_BUFSIZE
 
-#load("zlib_h")
 include("$JULIA_HOME/../share/julia/extras/zlib_h.jl")
 
 # Expected line length for strings

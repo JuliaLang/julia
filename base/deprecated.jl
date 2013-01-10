@@ -19,5 +19,6 @@ end
 @deprecate  del      delete!
 @deprecate  del_all  empty!
 
+@deprecate  load     require
 @deprecate  numel    length
 @deprecate  idump    xdump
