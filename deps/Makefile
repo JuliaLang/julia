@@ -235,19 +235,19 @@ ifeq ($(BUILD_LLDB), 1)
 		git fetch))
 	cd llvm-$(LLVM_VER)/tools/lldb && git checkout origin/release_32
 endif
-	touch $@
+	touch -c $@
 
 llvm-$(LLVM_VER)/build/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround)
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build && cd build && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	../configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
-	touch $@
+	touch -c $@
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build/config.status | $(llvm_python_workaround)
 	cd llvm-$(LLVM_VER)/build && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) $(LLVM_MFLAGS)
-	touch $@
+	touch -c $@
 llvm-$(LLVM_VER)/build/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd llvm-$(LLVM_VER)/build && \
@@ -259,7 +259,7 @@ $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build install
 	$(INSTALL_NAME_CMD)$(LLVM_LIB_FILE) $(BUILD)/lib/$(LLVM_LIB_FILE)
-	touch $@
+	touch -c $@
 
 clean-llvm:
 	-$(MAKE) -C llvm-$(LLVM_VER)/build clean
@@ -286,13 +286,14 @@ READLINE_OPTS = --disable-shared --enable-static --with-curses
 READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
 readline-$(READLINE_VER).tar.gz:
 	$(WGET_DASH_O) $@ $(READLINE_URL)
+	touch -c $@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	mkdir readline-$(READLINE_VER)
 	tar -C readline-$(READLINE_VER) --strip-components 1 -xf $<
-	touch $@
+	touch -c $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE) readline-$(READLINE_VER)/checked
 	$(MAKE) -C readline-$(READLINE_VER) $(READLINE_CFLAGS) install
-	touch $@
+	touch -c $@
 else
 READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
 READLINE_OPTS = --enable-shared --enable-static --with-curses
@@ -303,13 +304,14 @@ readline-$(READLINE_VER).tar.gz:
 	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-003
 	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-004
 	$(WGET) http://ftp.gnu.org/gnu/readline/$@
+	touch -c $@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-001
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-002
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-003
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-004
-	touch $@
+	touch -c $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE) readline-$(READLINE_VER)/checked
 	$(MAKE) -C readline-$(READLINE_VER) install
 	chmod +w $(BUILD)/lib/libreadline.* $(BUILD)/lib/libhistory.*
@@ -321,18 +323,18 @@ else ifeq ($(OS), Linux)
 		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
-	touch $@
+	touch -c $@
 endif
 
 readline-$(READLINE_VER)/config.status: readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
 	chmod a+x ./configure && \
 	./configure $(CONFIGURE_COMMON) $(READLINE_OPTS)a
-	touch $@
+	touch -c $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/config.status
 	cd readline-$(READLINE_VER) && \
 	$(MAKE) $(READLINE_CFLAGS)
-	touch $@
+	touch -c $@
 readline-$(READLINE_VER)/checked: $(READLINE_OBJ_SOURCE)
 	cd readline-$(READLINE_VER) && \
 	$(MAKE) check $(READLINE_CFLAGS)
@@ -375,7 +377,7 @@ ifneq ($(OS), WINNT)
 	$(MAKE) libuv.${SHLIB_EXT} $(LIBUV_MAKE_FLAGS)
 endif
 	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
-	touch $@
+	touch -c $@
 libuv/checked: $(LIBUV_OBJ_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) test $(LIBUV_MAKE_FLAGS)
@@ -408,14 +410,14 @@ pcre-$(PCRE_VER).tar.bz2:
 	$(WGET) ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
 pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	tar jxf $<
-	touch $@
+	touch -c $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
 	./configure $(CONFIGURE_COMMON) --enable-utf --enable-unicode-properties --enable-jit
-	touch $@
+	touch -c $@
 $(PCRE_SRC_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD)
-	touch $@
+	touch -c $@
 pcre-$(PCRE_VER)/checked: $(PCRE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C pcre-$(PCRE_VER) check
@@ -428,7 +430,7 @@ ifeq ($(OS),WINNT)
 	-rm $(BUILD)/lib/libpcre.dll
 	mv $(BUILD)/bin/libpcre.dll $(BUILD)/lib/libpcre.dll
 endif
-	touch $@
+	touch -c $@
 
 clean-pcre:
 	-$(MAKE) -C pcre-$(PCRE_VER) clean
@@ -449,10 +451,11 @@ GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
 
 double-conversion-$(GRISU_VER).tar.gz:
 	$(WGET) http://double-conversion.googlecode.com/files/double-conversion-$(GRISU_VER).tar.gz
+	touch -c $@
 double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	mkdir -p double-conversion-$(GRISU_VER) && \
 	tar -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
-	touch $@
+	touch -c $@
 double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
 	cd double-conversion-$(GRISU_VER) && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
@@ -509,10 +512,10 @@ $(OPENLIBMEXT_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
 endif
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS)
-	touch $@
+	touch -c $@
 $(OPENLIBMEXT_OBJ_SOURCE): openlibm/Makefile.extras
 	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS)
-	touch $@
+	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
@@ -546,7 +549,7 @@ install-openlibm-extras: $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrap
 $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBMEXT_OBJ_TARGET)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm-extras
 	$(INSTALL_NAME_CMD)libFaddeeva_wrapper.$(SHLIB_EXT) $@
-	touch $@
+	touch -c $@
 
 clean-Faddeeva-wrapper:
 	-rm -f $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
@@ -597,13 +600,13 @@ endif
 
 random/dsfmt-$(DSFMT_VER).tar.gz:
 	$(WGET_DASH_O) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
-	touch $@
+	touch -c $@
 random/dsfmt-$(DSFMT_VER)/config.status: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
-	touch $@
+	echo 1 > $@
 $(LIBRANDOM_OBJ_SOURCE): random/jl_random.c random/randmtzig.c random/dsfmt-$(DSFMT_VER)/config.status
 	cd random && \
 	$(CC) $(CPPFLAGS) $(LIBRANDOM_CFLAGS) $(LDFLAGS) jl_random.c -o librandom.$(SHLIB_EXT) && \
@@ -652,10 +655,10 @@ openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
-	touch $@
+	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS)
-	touch $@
+	touch -c $@
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(BUILD)/lib
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(BUILD)/lib
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(BUILD)/lib/libopenblas.$(SHLIB_EXT)
@@ -700,10 +703,10 @@ atlas/build/Make.top: atlas/configure lapack-$(LAPACK_VER).tgz
 	cd atlas && \
 	(test -d build || mkdir build) && cd build && \
 	../configure $(ATLAS_FLAGS)
-	touch $@
+	touch -c $@
 $(ATLAS_OBJ_SOURCE): atlas/build/Make.top
 	$(MAKE) -C atlas/build -j1
-	touch $@
+	touch -c $@
 else
 $(ATLAS_OBJ_SOURCE):
 	$(error cannot build atlas in parallel with anything else)
@@ -738,7 +741,7 @@ lapack-$(LAPACK_VER).tgz:
 	$(WGET) http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
-	touch $@
+	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
 lapack-$(LAPACK_VER)/INSTALL/dlamch.o: $(OPENBLAS_OBJ_TARGET)
 endif
@@ -746,7 +749,7 @@ lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
 	$(MAKE) lapacklib NOOPT="-O0 $(fPIC)" OPTS="$(FFLAGS) $(JFFLAGS)" FORTRAN="$(FC)" LOADER="$(FC)"
-	touch $@
+	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(LAPACK_OBJ_SOURCE): $(OPENBLAS_OBJ_TARGET)
 endif
@@ -782,10 +785,10 @@ ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
 
 arpack-ng_$(ARPACK_VER).tar.gz:
 	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng_$(ARPACK_VER).tar.gz
-	touch $@
+	touch -c $@
 arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	tar zxf $< 
-	touch $@
+	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
 arpack-ng_$(ARPACK_VER)/config.status: $(OPENBLAS_OBJ_TARGET)
 endif
@@ -793,11 +796,12 @@ arpack-ng_$(ARPACK_VER)/config.status: arpack-ng_$(ARPACK_VER)/configure
 ifeq ($(OS),WINNT)
 	cd arpack-ng_$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f
+	echo 1 > $@
 else
 	cd arpack-ng_$(ARPACK_VER) && \
 	./configure $(CONFIGURE_COMMON) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
 endif
-	touch $@
+	touch -c $@
 $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/config.status
 ifeq ($(OS),WINNT)
 	cd arpack-ng_$(ARPACK_VER) && \
@@ -806,6 +810,7 @@ else
 	cd arpack-ng_$(ARPACK_VER) && \
 	$(MAKE) $(ARPACK_ARGS)
 endif
+	touch -c $@
 arpack-ng_$(ARPACK_VER)/checked:
 ifneq ($(OS),WINNT)
 	cd arpack-ng_$(ARPACK_VER) && \
@@ -826,7 +831,7 @@ ifeq ($(OS), Linux)
 	done
 endif
 endif
-	touch $@
+	touch -c $@
 
 clean-arpack:
 	-$(MAKE) -C arpack-ng_$(ARPACK_VER) clean
@@ -868,13 +873,13 @@ fftw-$(FFTW_VER).tar.gz:
 fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-single && \
 	tar -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
-	touch $@
+	touch -c $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
 	(./configure $(CONFIGURE_COMMON) $(FFTW_CONFIG) --enable-avx --enable-single || \
 	  ./configure $(CONFIGURE_COMMON) $(FFTW_CONFIG) --enable-single) && \
 	$(MAKE) clean
-	touch $@
+	touch -c $@
 $(FFTW_SINGLE_SRC_TARGET): fftw-$(FFTW_VER)-single/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-single
 fftw-$(FFTW_VER)-single/checked: $(FFTW_SINGLE_SRC_TARGET)
@@ -884,7 +889,7 @@ endif
 	echo 1 > $@
 $(FFTW_SINGLE_OBJ_TARGET): $(FFTW_SINGLE_SRC_TARGET) fftw-$(FFTW_VER)-single/checked
 	$(MAKE) -C fftw-$(FFTW_VER)-single install
-	touch $@
+	touch -c $@
 ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3f.dylib $(BUILD)/lib/libfftw3f.dylib
 	$(INSTALL_NAME_CMD)libfftw3f_threads.$(SHLIB_EXT) $(BUILD)/lib/libfftw3f_threads.$(SHLIB_EXT)
@@ -897,21 +902,21 @@ else ifeq ($(OS), Linux)
 		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
-	touch $@
+	touch -c $@
 
 fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-double && \
 	tar -C fftw-$(FFTW_VER)-double --strip-components 1 -xf $<
-	touch $@
+	touch -c $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
 	(./configure $(CONFIGURE_COMMON) $(FFTW_CONFIG) --enable-avx || \
 	  ./configure $(CONFIGURE_COMMON) $(FFTW_CONFIG)) && \
 	$(MAKE) clean
-	touch $@
+	touch -c $@
 $(FFTW_DOUBLE_SRC_TARGET): fftw-$(FFTW_VER)-double/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-double
-	touch $@
+	touch -c $@
 fftw-$(FFTW_VER)-double/checked: $(FFTW_DOUBLE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C fftw-$(FFTW_VER)-double check
@@ -931,7 +936,7 @@ else ifeq ($(OS), Linux)
 		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
-	touch $@
+	touch -c $@
 
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
@@ -984,7 +989,7 @@ SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
-	touch $@
+	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_TARGET)
 endif
@@ -994,7 +999,7 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	$(MAKE) CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
-	touch $@
+	touch -c $@
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
@@ -1037,7 +1042,7 @@ endif
 $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT) $(SUITESPARSE_LIB)
 	$(INSTALL_NAME_CMD)libsuitesparse_wrapper.$(SHLIB_EXT) $@
-	touch $@
+	touch -c $@
 
 clean-suitesparse-wrapper:
 	-rm -f $(SUITESPARSE_OBJ_TARGET) $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -1062,14 +1067,14 @@ clp-$(CLP_VER).tar.gz:
 clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
 	mkdir -p clp-$(CLP_VER)
 	tar -C clp-$(CLP_VER) --strip-components 1 -zxf $<
-	touch $@
+	touch -c $@
 clp-$(CLP_VER)/config.status: clp-$(CLP_VER)/configure
 	cd clp-$(CLP_VER) && \
 	./configure $(CONFIGURE_COMMON) MPIF77="$(FC)" MPICXX="$(CXX)" MPICC="$(CC)"
-	touch $@
+	touch -c $@
 $(CLP_OBJ_SOURCE): clp-$(CLP_VER)/config.status
 	$(MAKE) -C clp-$(CLP_VER)
-	touch $@
+	touch -c $@
 clp-$(CLP_VER)/checked: $(CLP_OBJ_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C clp-$(CLP_VER) test
@@ -1077,7 +1082,7 @@ endif
 	echo 1 > $@
 $(CLP_OBJ_TARGET): $(CLP_OBJ_SOURCE) clp-$(CLP_VER)/checked
 	$(MAKE) -C clp-$(CLP_VER) install
-	touch $@
+	touch -c $@
 
 clean-clp:
 	-$(MAKE) -C clp-$(CLP_VER) clean
@@ -1102,14 +1107,14 @@ libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
 libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
-	touch $@
+	touch -c $@
 libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
 	cd libunwind-$(UNWIND_VER) && \
 	./configure $(CONFIGURE_COMMON) CFLAGS="$(LIBUNWIND_CFLAGS)" --disable-shared
-	touch $@
+	touch -c $@
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/config.status
 	$(MAKE) -C libunwind-$(UNWIND_VER)
-	touch $@
+	touch -c $@
 libunwind-$(UNWIND_VER)/checked: $(LIBUNWIND_TARGET_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C libunwind-$(UNWIND_VER) check
@@ -1146,17 +1151,17 @@ NGINX_FLAGS = --with-ld-opt="-L'$(BUILD)/lib' -lpcre -Wl,-rpath,'$(BUILD)/lib' $
 
 nginx/auto/configure: | compile-pcre
 	(cd .. && git submodule update --init)
-	touch $@
+	touch -c $@
 nginx/config.status: nginx/auto/configure
 	cd nginx && \
 	./auto/configure --without-http_gzip_module --without-http_rewrite_module $(NGINX_FLAGS) --with-debug --prefix=".."
-	touch $@
+	echo 1 > $@
 $(NGINX_SRC_TARGET): nginx/config.status
 	$(MAKE) -C nginx
-	touch $@
+	touch -c $@
 $(NGINX_OBJ_TARGET): $(NGINX_SRC_TARGET)
 	$(MAKE) -C nginx install DESTDIR="$(abspath $(BUILD)/bin)/"
-	touch $@
+	touch -c $@
 
 clean-nginx:
 	-$(MAKE) -C nginx clean
@@ -1176,11 +1181,11 @@ $(NGINX_SRC_TARGET):
 	$(WGET) http://nginx.org/download/$@
 $(NGINX_OBJ_TARGET): $(NGINX_SRC_TARGET)
 	unzip $<
-	touch $@
+	touch -c $@
 $(BUILD)/sbin/nginx.exe: $(NGINX_OBJ_TARGET)
 	mkdir -p $(BUILD)/sbin
 	cp -a nginx-$(NGINX_VER)/* $(BUILD)/sbin
-	touch $@
+	touch -c $@
 get-nginx: $(NGINX_SRC_TARGET)
 configure-nginx: get-nginx
 compile-nginx: $(NGINX_OBJ_TARGET)
@@ -1198,11 +1203,11 @@ gmp-$(GMP_VER).tar.bz2:
 	$(WGET) ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	tar jxf $<
-	touch $@
+	touch -c $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
 	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
-	touch $@
+	touch -c $@
 $(GMP_SRC_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
 gmp-$(GMP_VER)/checked: $(GMP_SRC_TARGET)
@@ -1213,7 +1218,7 @@ endif
 $(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) gmp-$(GMP_VER)/checked
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libgmp.dylib $@
-	touch $@
+	touch -c $@
 
 clean-gmp:
 	-$(MAKE) -C gmp-$(GMP_VER) clean
@@ -1241,7 +1246,7 @@ endif
 $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c | $(BUILD)/lib
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMPW_INC) gmp_wrapper.c -o $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT) $(RPATH_ORIGIN) $(GMPW_LIB)
 	$(INSTALL_NAME_CMD)libgmp_wrapper.$(SHLIB_EXT) $@
-	touch $@
+	touch -c $@
 
 clean-gmp-wrapper:
 	-rm -f $(GMP_OBJ_TARGET) $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT)
@@ -1263,11 +1268,11 @@ glpk-$(GLPK_VER).tar.gz:
 	$(WGET) http://ftp.gnu.org/gnu/glpk/$@
 glpk-$(GLPK_VER)/configure: glpk-$(GLPK_VER).tar.gz
 	tar zxf $<
-	touch $@
+	touch -c $@
 glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 	cd glpk-$(GLPK_VER) && \
 	./configure $(CONFIGURE_COMMON)
-	touch $@
+	touch -c $@
 $(GLPK_SRC_TARGET): glpk-$(GLPK_VER)/config.status
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD)
 glpk-$(GLPK_VER)/checked: $(GLPK_SRC_TARGET)
@@ -1279,7 +1284,7 @@ $(GLPK_OBJ_TARGET): $(GLPK_SRC_TARGET) glpk-$(GLPK_VER)/checked
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libglpk.dylib $@
 	$(AUTOTOOLS_PATH_CORRECT)
-	touch $@
+	touch -c $@
 
 clean-glpk:
 	-$(MAKE) -C glpk-$(GLPK_VER) uninstall || true
@@ -1307,7 +1312,7 @@ endif
 $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT) $(RPATH_ORIGIN)
 	$(INSTALL_NAME_CMD)libglpk_wrapper.$(SHLIB_EXT) $@
-	touch $@
+	touch -c $@
 
 clean-glpk-wrapper:
 	-rm -f $(GLPK_OBJ_TARGET) $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT)
@@ -1339,19 +1344,20 @@ zlib-$(ZLIB_VER).tar.gz:
 	$(WGET) http://zlib.net/$@
 zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
 	tar zxf $<
-	touch $@
+	touch -c $@
 zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
 ifeq ($(OS), WINNT)
 	cd zlib-$(ZLIB_VER) && \
 	cp win32/Makefile.gcc Makefile
+	echo 1 > $@
 else
 	cd zlib-$(ZLIB_VER) && \
 	$(ZLIB_CONFIGFLAGS) ./configure --prefix=$(abspath $(BUILD)) #not an autoconf script
 endif
-	touch $@
+	touch -c $@
 $(ZLIB_SRC_TARGET): zlib-$(ZLIB_VER)/config.status
 	$(MAKE) -C zlib-$(ZLIB_VER) PREFIX=$(CROSS_COMPILE)
-	touch $@
+	touch -c $@
 zlib-$(ZLIB_VER)/checked: $(ZLIB_SRC_TARGET)
 ifneq ($(OS), WINNT)
 	$(MAKE) -C zlib-$(ZLIB_VER) check PREFIX=$(CROSS_COMPILE)
@@ -1364,7 +1370,7 @@ else
 	$(MAKE) -C zlib-$(ZLIB_VER) install PREFIX=$(CROSS_COMPILE)
 endif
 	$(INSTALL_NAME_CMD)libz.dylib $@
-	touch $@
+	touch -c $@
 
 clean-zlib:
 	-$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) clean
@@ -1403,7 +1409,7 @@ TKW_LIB += -ltcl8.5 -ltk8.5 -L$(BUILD)/lib/
 $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libtk_wrapper.$(SHLIB_EXT) $@
-	touch $@
+	touch -c $@
 
 clean-tk-wrapper:
 	-rm -f $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
@@ -1428,14 +1434,14 @@ patchelf-$(PATCHELF_VER).tar.bz2:
 	$(WGET) http://hydra.nixos.org/build/1524660/download/2/$@
 patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.bz2
 	tar jxf $<
-	touch $@
+	touch -c $@
 patchelf-$(PATCHELF_VER)/config.status: patchelf-$(PATCHELF_VER)/configure
 	cd patchelf-$(PATCHELF_VER) && \
 	./configure $(CONFIGURE_COMMON)
-	touch $@
+	touch -c $@
 $(PATCHELF_SOURCE): patchelf-$(PATCHELF_VER)/config.status
 	$(MAKE) -C patchelf-$(PATCHELF_VER)
-	touch $@
+	touch -c $@
 patchelf-$(PATCHELF_VER)/checked: $(PATCHELF_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C patchelf-$(PATCHELF_VER) check
@@ -1443,7 +1449,7 @@ endif
 	echo 1 > $@
 $(PATCHELF_TARGET): $(PATCHELF_SOURCE) patchelf-$(PATCHELF_VER)/checked
 	$(MAKE) -C patchelf-$(PATCHELF_VER) install
-	touch $@
+	touch -c $@
 
 clean-patchelf:
 	-$(MAKE) -C patchelf-$(PATCHELF_VER) clean

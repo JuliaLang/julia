@@ -20,8 +20,9 @@ debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib:$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
 
 julia-debug julia-release:
+	@-git submodule init --quiet
+	@-cd deps/nginx && git fetch -a --quiet
 	@-git submodule update
-	@-cd deps/nginx && git fetch -a
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
 	@$(MAKE) $(QUIET_MAKE) -C base
