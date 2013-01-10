@@ -285,24 +285,8 @@ randchi2(df::Real, dims::Int...) = randchi2(df, dims)
 
 const chi2rnd = randchi2 # alias chi2rnd
 
-function randbeta!(alpha::Real, beta::Real, A::Array{Float64})
-    d1 = alpha >= 1 ? alpha - 1.0/3.0 : error("require alpha >= 1")
-    c1 = 1.0/sqrt(9.0d1)
-    d2 = beta >= 1 ? beta - 1.0/3.0 : error("require beta >= 1")
-    c2 = 1.0/sqrt(9.0d2)
-    for i in 1:length(A)
-       u = randg2(d1,c1)
-       A[i] = u/(u + randg2(d2,c2))
-    end
-    A
-end
-
-randbeta(alpha::Real, beta::Real) = (u=randg(alpha); u/(u + randg(beta)))
-
-function randbeta(alpha::Real, beta::Real, dims::Dims)
-    randbeta!(alpha, beta, Array(Float64, dims))
-end
-
+randbeta(alpha::Real, beta::Real) = (u = randg(alpha); u / (u + randg(beta)))
+randbeta(alpha::Real, beta::Real, dims::Dims) = (u = randg(alpha, dims); u ./ (u + randg(beta, dims)))
 randbeta(alpha::Real, beta::Real, dims::Int...) = randbeta(alpha, beta, dims)
 
 const betarnd = randbeta
