@@ -1444,7 +1444,8 @@ $(PATCHELF_SOURCE): patchelf-$(PATCHELF_VER)/config.status
 	touch -c $@
 patchelf-$(PATCHELF_VER)/checked: $(PATCHELF_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C patchelf-$(PATCHELF_VER) check
+	# disabled due to bug in v0.6
+	#$(MAKE) -C patchelf-$(PATCHELF_VER) check
 endif
 	echo 1 > $@
 $(PATCHELF_TARGET): $(PATCHELF_SOURCE) patchelf-$(PATCHELF_VER)/checked
