@@ -805,9 +805,6 @@ DLLEXPORT int jl_idle_start(uv_idle_t *idle);
 DLLEXPORT int jl_idle_stop(uv_idle_t *idle);
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream);
-DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
-int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
-int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 
