@@ -107,7 +107,7 @@ end
 which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 
 edit(file::String) = edit(file, 1)
-function edit(file::String, line::Int)
+function edit(file::String, line::Integer)
     editor = get(ENV, "JULIA_EDITOR", "emacs")
     issrc = file[end-2:end] == ".jl"
     if issrc
@@ -149,7 +149,7 @@ function edit(file::String, line::Int)
 end
 edit(file::String) = edit(file, 1)
 
-function less(file::String, line::Int)
+function less(file::String, line::Integer)
     pager = get(ENV, "PAGER", "less")
     run(`$pager +$(line)g $file`)
 end
