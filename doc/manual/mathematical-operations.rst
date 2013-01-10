@@ -37,9 +37,7 @@ are supported on all primitive integer types:
    shift <http://en.wikipedia.org/wiki/Arithmetic_shift>`_ right.
 -  ``x << y`` — logical/arithmetic shift left.
 
-Here are some simple examples using arithmetic operators:
-
-::
+Here are some simple examples using arithmetic operators::
 
     julia> 1 + 2 + 3
     6
@@ -57,9 +55,7 @@ Julia's promotion system makes arithmetic operations on mixtures of
 argument types "just work" naturally and automatically. See :ref:`man-conversion-and-promotion` for details of the
 promotion system.
 
-Here are some examples with bitwise operators:
-
-::
+Here are some examples with bitwise operators::
 
     julia> ~123
     -124
@@ -82,9 +78,7 @@ Here are some examples with bitwise operators:
 Every binary arithmetic and bitwise operator also has an updating
 version that assigns the result of the operation back into its left
 operand. For example, the updating form of ``+`` is the ``+=`` operator.
-Writing ``x += 3`` is equivalent to writing ``x = x + 3``:
-
-::
+Writing ``x += 3`` is equivalent to writing ``x = x + 3``::
 
       julia> x = 1
       1
@@ -96,9 +90,7 @@ Writing ``x += 3`` is equivalent to writing ``x = x + 3``:
       4
 
 The updating versions of all the binary arithmetic and bitwise operators
-are:
-
-::
+are::
 
     +=  -=  *=  /=  &=  |=  $=  >>>=  >>=  <<=
 
@@ -118,9 +110,7 @@ types:
 -  ``>`` — greater than.
 -  ``>=`` — greater than or equal to.
 
-Here are some simple examples:
-
-::
+Here are some simple examples::
 
     julia> 1 == 1
     true
@@ -167,9 +157,7 @@ standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_:
 -  ``NaN`` is not equal to, less than, or greater than anything,
    including itself.
 
-The last point is potentially suprprising and thus worth noting:
-
-::
+The last point is potentially suprprising and thus worth noting::
 
     julia> NaN == NaN
     false
@@ -186,9 +174,7 @@ The last point is potentially suprprising and thus worth noting:
 For situations where one wants to compare floating-point values so that
 ``NaN`` equals ``NaN``, such as hash key comparisons, the function
 ``isequal`` is also provided, which considers ``NaN``\ s to be equal to
-each other:
-
-::
+each other::
 
     julia> isequal(NaN,NaN)
     true
@@ -199,9 +185,7 @@ that Julia does them correctly.
 
 Unlike most languages, with the `notable exception of
 Python <http://en.wikipedia.org/wiki/Python_syntax_and_semantics#Comparison_operators>`_,
-comparisons can be arbitrarily chained:
-
-::
+comparisons can be arbitrarily chained::
 
     julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5
     true
@@ -212,9 +196,7 @@ work on arrays. For example, ``0 < A < 1`` gives a boolean array whose
 entries are true where the corresponding elements of ``A`` are between 0
 and 1.
 
-Note the evaluation behavior of chained comparisons:
-
-::
+Note the evaluation behavior of chained comparisons::
 
     v(x) = (println(x); x)
 
@@ -296,9 +278,7 @@ erfc <http://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-
 and
 `hypot <http://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/>`_.
 
-All the standard trigonometric functions are also defined:
-
-::
+All the standard trigonometric functions are also defined::
 
     sin    cos    tan    cot    sec    csc
     sinh   cosh   tanh   coth   sech   csch
@@ -323,9 +303,7 @@ other systems, whereas in the latter case, the ``^`` operator form is
 canonical and the spelled-out ``pow`` form is retained for
 compatibility. Like arithmetic and bitwise operators, ``%`` and ``^``
 also have updating forms. As with other operators, ``x %= y`` means
-``x = x % y`` and ``x ^= y`` means ``x = x^y``:
-
-::
+``x = x % y`` and ``x ^= y`` means ``x = x^y``::
 
     julia> x = 2; x ^= 5; x
     32

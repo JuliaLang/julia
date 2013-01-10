@@ -1,20 +1,64 @@
 # -*- mode: makefile-gmake -*-
 
+# include twice to pickup user definitions
+ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
+include $(JULIAHOME)/Make.user 
+endif
+
+.SUFFIXES:
+
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
-USR = $(JULIAHOME)/usr
-USRLIB = $(USR)/lib
-USRBIN = $(USR)/bin
-USRINC = $(USR)/include
-LLVMROOT = $(USR)
-BUILD = $(USR)
+LLVMROOT = $(BUILD)
+BUILD = $(JULIAHOME)/usr
+# Directories where said libraries get installed to
+JL_PRIVATE_LIBDIR = lib/julia
+JL_LIBDIR = lib
 
-OS = $(shell uname)
+# If we're on debian, default to arch-dependent library dirs
+ifeq ($(MULTIARCH_INSTALL), 1)
+MULTIARCH = $(shell gcc -print-multiarch)
+JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
+JL_LIBDIR = lib/$(MULTIARCH)/
+endif
+
+# Cross-compile
+#XC_HOST = i686-w64-mingw32
+
+ifeq ($(XC_HOST),)
+CROSS_COMPILE=
+else
+ifeq ($(XC_HOST),i686-w64-mingw32)
+override OS = WINNT
+override ARCH = i686
+override OPENBLAS_DYNAMIC_ARCH = 1
+override CROSS_COMPILE=$(XC_HOST)-
+export WINEPATH := $(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g')
+else
+$(error "unknown XC_HOST variable set")
+endif
+endif
+
+# Figure out OS and architecture
+BUILD_OS = $(shell uname)
+OS = $(BUILD_OS)
 ARCH = $(shell uname -m)
+
+# Use 64-bit libraries by default on 64-bit architectures
+ifeq ($(ARCH), x86_64)
+USE_LIB64 = 1
+endif
 
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
+
+# ATLAS must have been previously built with "make -C deps build-atlas" (without -jN),
+# or installed to usr/lib/libatlas from some another source (built as
+# a shared library, for your platform, single threaded)
+USE_ATLAS = 0
+ATLAS_LIBDIR = $(BUILD)/lib
+#or ATLAS_LIBDIR = /path/to/system/atlas/lib
 
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
@@ -22,8 +66,11 @@ endif
 
 ifeq ($(OS), WINNT)
 fPIC = 
+PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia
+EXE = .exe
 else
 fPIC = -fPIC
+EXE =
 endif
 
 DEFAULT_REPL = readline
@@ -32,11 +79,13 @@ USE_COPY_STACKS = 1
 
 # Compiler specific stuff
 
-FC = gfortran
-JFFLAGS = -O2 $(fPIC)
-
+ifeq ($(CC), clang)
+USEGCC = 0
+USECLANG = 1
+else
 USEGCC = 1
 USECLANG = 0
+endif
 
 ifeq ($(OS), Darwin)
 OSVER = $(shell uname -r | cut -b 1-2)
@@ -50,17 +99,20 @@ endif
 endif
 
 ifeq ($(USEGCC),1)
-CC = gcc
-CXX = g++
+CC = $(CROSS_COMPILE)gcc
+CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
-SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
+SHIPFLAGS = -O3 -DNDEBUG -falign-functions
+ifneq ($(ARCH), ppc64)
+  SHIPFLAGS += -momit-leaf-frame-pointer
+endif
 endif
 
 ifeq ($(USECLANG),1)
-CC = clang
-CXX = clang++
+CC = $(CROSS_COMPILE)clang
+CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
@@ -72,8 +124,16 @@ JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
+FC = $(CROSS_COMPILE)gfortran
+JFFLAGS = -O2 $(fPIC)
+CPP = $(CC) -E
+AR := $(CROSS_COMPILE)ar
+AS := $(CROSS_COMPILE)as
+LD := $(CROSS_COMPILE)ld
+RANLIB := $(CROSS_COMPILE)ranlib
+
 # if not absolute, then relative to JULIA_HOME
-JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../lib/julia/sys.ji"'
+JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
 
 # OPENBLAS build options
 OPENBLAS_DYNAMIC_ARCH=0
@@ -87,6 +147,7 @@ USE_SYSTEM_LIGHTTPD=0
 USE_SYSTEM_LIBUNWIND=0
 USE_SYSTEM_READLINE=0
 USE_SYSTEM_PCRE=0
+USE_SYSTEM_LIBM=0
 USE_SYSTEM_BLAS=0
 USE_SYSTEM_LAPACK=0
 USE_SYSTEM_FFTW=0
@@ -94,31 +155,20 @@ USE_SYSTEM_GMP=0
 USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_GLPK=0
+USE_SYSTEM_LIGHTTPD=0
 USE_SYSTEM_NGINX=0
+USE_SYSTEM_ZLIB=0
 
-ifeq ($(USE_DEBIAN), 1)
-USE_SYSTEM_LLVM=1
-USE_SYSTEM_LIGHTTPD=1
-USE_SYSTEM_LIBUNWIND=1
-USE_SYSTEM_READLINE=1
-USE_SYSTEM_PCRE=1
-USE_SYSTEM_BLAS=1
-USE_SYSTEM_LAPACK=1
-USE_SYSTEM_FFTW=1
-USE_SYSTEM_GMP=1
-USE_SYSTEM_ARPACK=1
-USE_SYSTEM_SUITESPARSE=1
-USE_SYSTEM_GLPK=1
+ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
+include $(JULIAHOME)/Make.user
 endif
-
--include $(JULIAHOME)/Make.user
 
 # ===========================================================================
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
-LIBUNWIND=$(USRLIB)/libunwind-generic.a $(USRLIB)/libunwind.a
+LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
@@ -130,19 +180,19 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline 
 else
-READLINE = $(USR)/lib/libreadline.a
+READLINE = $(BUILD)/lib/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
 READLINE += -lncurses
 else
-READLINE += $(USR)/lib/libhistory.a
+READLINE += $(BUILD)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG = pcre-config
 else
-PCRE_CONFIG = $(USR)/bin/pcre-config
+PCRE_CONFIG = $(BUILD)/bin/pcre-config
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)
@@ -154,13 +204,8 @@ LIBBLAS = -lblas
 LIBBLASNAME = libblas
 endif
 else
-ifeq ($(OS), WINNT)
-LIBBLAS = $(USRLIB)/libopenblas-r0.2.2.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
-LIBBLASNAME = libopenblas-r0.2.2
-else
-LIBBLAS = -L$(USRLIB) -lopenblas
+LIBBLAS = -L$(BUILD)/lib -lopenblas
 LIBBLASNAME = libopenblas
-endif
 endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 1)
@@ -176,40 +221,71 @@ LIBLAPACK = $(LIBBLAS)
 LIBLAPACKNAME = $(LIBBLASNAME)
 endif
 
+ifeq ($(USE_SYSTEM_LIBM), 1)
+LIBM = -lm
+LIBMNAME = libm
+else
+LIBM = -lopenlibm
+LIBMNAME = libopenlibm
+endif
+
+ifeq ($(USE_MKL), 1)
+  USE_LIB64 = 0
+endif
+
 # OS specific stuff
 
-# must end with a / and have no trailing spaces
-INSTALL_NAME_ID_DIR = @executable_path/../lib/
-
-RPATH = 
-RPATH_ORIGIN = 
-
-ifeq ($(OS), WINNT)
-SHELL_EXT = bat
+# install_name_tool
+ifeq ($(OS), Darwin)
+  # must end with a / and have no trailing spaces
+  INSTALL_NAME_ID_DIR = @rpath/
+  INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
+  INSTALL_NAME_CHANGE_CMD = install_name_tool -change
 else
-SHELL_EXT = sh
+  INSTALL_NAME_ID_DIR =
+  INSTALL_NAME_CMD = true -ignore 
+  INSTALL_NAME_CHANGE_CMD = true -ignore 
+endif
+
+# shared library runtime paths
+ifeq ($(OS), WINNT)
+  RPATH =
+  RPATH_ORIGIN =
+else ifeq ($(OS), Darwin)
+  RPATH = -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)'
+  RPATH_ORIGIN =
+else
+  RPATH = -Wl,-rpath,'$$ORIGIN/../$(JL_PRIVATE_LIBDIR)' -Wl,-rpath,'$$ORIGIN/../$(JL_LIBDIR)' -Wl,-z,origin
+  RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
+endif
+
+# file extensions
+ifeq ($(OS), WINNT)
+  SHLIB_EXT = dll
+  SHELL_EXT = bat
+else ifeq ($(OS), Darwin)
+  SHLIB_EXT = dylib
+  SHELL_EXT = sh
+else
+  SHLIB_EXT = so
+  SHELL_EXT = sh
+endif
+
+# --whole-archive
+ifeq ($(OS), Darwin)
+  WHOLE_ARCHIVE = -Xlinker -all_load
+  NO_WHOLE_ARCHIVE =
+else
+  WHOLE_ARCHIVE = -Wl,--whole-archive
+  NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), Linux)
-INSTALL_NAME_CMD = true -ignore
-INSTALL_NAME_CHANGE_CMD = true -ignore
-SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/../lib'
-RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
-WHOLE_ARCHIVE = -Wl,--whole-archive
-NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 JLDFLAGS = -Wl,-Bdynamic
 endif
 
 ifeq ($(OS), FreeBSD)
-INSTALL_NAME_CMD = true -ignore
-INSTALL_NAME_CHANGE_CMD = true -ignore
-SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-z,origin
-RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
-WHOLE_ARCHIVE = -Wl,--whole-archive
-NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 JLDFLAGS = -Wl,-Bdynamic
 OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
@@ -217,21 +293,19 @@ endif
 ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
-RPATH = -Wl,-rpath,$(BUILD)/lib
+RPATH = -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)'
 SHLIB_EXT = dylib
-OSLIBS += -ldl -Wl,-w -framework ApplicationServices
+OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices
 WHOLE_ARCHIVE = -Xlinker -all_load
 NO_WHOLE_ARCHIVE =
 JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-INSTALL_NAME_CMD = true -ignore
-INSTALL_NAME_CHANGE_CMD = true -ignore
-SHLIB_EXT = dll
-WHOLE_ARCHIVE = -Wl,--whole-archive
-NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lpthread $(NO_WHOLE_ARCHIVE) -lPsapi -lkernel32 -lWs2_32 -lIphlpapi
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi
+JCFLAGS += -D_WIN32_WINNT=0x0600
+JCXXFLAGS += -D_WIN32_WINNT=0x0600
+LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
 endif
 
 # MKL
@@ -250,6 +324,15 @@ ifneq ($(strip $(MKLLIB)),)
 endif
 endif
 
+ifeq ($(USE_ATLAS), 1)
+USE_SYSTEM_BLAS = 1
+USE_SYSTEM_LAPACK = 1
+LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas
+LIBLAPACK = $(LIBBLAS)
+LIBBLASNAME = libsatlas
+LIBLAPACKNAME = $(LIBBLASNAME)
+endif
+
 # Make tricks
 
 define dir_target
@@ -258,7 +341,7 @@ $$(abspath $(1)):
 	@mkdir -p $$@
 endef
 
-ifeq ($(OS), WINNT)
+ifeq ($(BUILD_OS), WINNT)
 define mingw_to_dos
 $(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1))))
 endef
@@ -281,8 +364,8 @@ $$(abspath $(2)/$(1)): | $$(abspath $(2))
 endef
 endif
 
-JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)
-JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-release-$(DEFAULT_REPL)
+JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)$(EXE)
+JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-release-$(DEFAULT_REPL)$(EXE)
 
 ifeq ($(OS), WINNT)
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
@@ -292,8 +375,9 @@ endif
 
 
 # Colors for make
-
+ifndef USE_QUIET
 USE_QUIET = 1
+endif
 ifeq ($(USE_QUIET), 1)
 
 CCCOLOR="\033[34m"

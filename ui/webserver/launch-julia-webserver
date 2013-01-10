@@ -2,6 +2,19 @@
 cd $(dirname $0)
 test -x ../sbin/lighttpd || { echo "Install lighttpd with \"make -C deps install-lighttpd\" " && exit 0; }
 
+
+for CANDIDATE in "../lib/lighttpd" "../lib"
+do
+    if [ -d "$CANDIDATE" ]; then
+        MODULE_DIRECTORY="$CANDIDATE"
+        break
+    fi
+done
+
+if [ -z $MODULE_DIRECTORY ]; then
+    echo "Could not find module directory."; exit 0
+fi
+
 echo "Connect to http://localhost:2000/ for the web REPL."
-../sbin/lighttpd -D -f ../etc/lighttpd.conf -m ../lib &
+../sbin/lighttpd -D -f ../etc/lighttpd.conf -m $MODULE_DIRECTORY &
 ./julia-release-webserver -p 2001 

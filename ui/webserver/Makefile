@@ -4,42 +4,54 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-LIBS = -lpthread $(USRLIB)/uv.a 
+LIBS = $(BUILD)/$(JL_LIBDIR)/libuv.a 
 ifeq ($(OS), Linux)
-LIBS += -lrt 
+LIBS += -lpthread -lrt 
 endif
 
 ifeq ($(OS),WINNT)
-LIBS += -lWs2_32 -lIphlpapi -lpsapi
+LIBS += -lws2_32 -liphlpapi -lpsapi
 endif
 
-WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
+ifeq ($(OS),Darwin)
+LIBS += -framework ApplicationServices
+endif
 
-%.o: %.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
-%.do: %.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+WEBSERVER_SRCS = webserver.o server.o jsoncpp.o
 
-	
-LAUNCH_SCRIPT = launch-julia-webserver
-ifeq ($(OS),WINNT)
-LAUNCH_SCRIPT = launch-julia-webserver.bat
-endif 
-	
-julia-release julia-debug: %: $(USRBIN)/%-webserver $(USRBIN)/$(LAUNCH_SCRIPT)
+%.o: %.cpp *.h
+	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@
+%.do: %.cpp *.h
+	$(QUIET_CC)$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@
+
+julia-release julia-debug: %: $(BUILD)/bin/%-webserver$(EXE) $(BUILD)/bin/$(LAUNCH_SCRIPT) $(BUILD)/etc/nginx.conf
 
 release debug:
 	$(MAKE) julia-$@
 
-$(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS)
-	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+$(BUILD)/bin/julia-release-webserver$(EXE): $(WEBSERVER_SRCS)
+	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
-$(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS)
-	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
-	
-$(USRBIN)/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
+$(BUILD)/bin/julia-debug-webserver$(EXE): $(WEBSERVER_SRCS)
+	$(QUIET_LINK) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(LDFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+
+ifeq ($(OS),WINNT)
+LAUNCH_SCRIPT = launch-julia-webserver.bat
+else
+LAUNCH_SCRIPT = launch-julia-webserver
+endif
+$(BUILD)/bin/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
 	cp $< $@
+
+$(BUILD)/etc/nginx.conf: nginx*.conf
+ifeq ($(OS),WINNT)
+	cp nginx-win.conf $@
+else
+	cp nginx.conf $@
+endif
+
 
 clean:
 	rm -f *.o *.do
-	rm -f $(USRBIN)/julia-*-webserver
+	rm -f $(BUILD)/bin/julia-*-webserver
+	rm -f $(BUILD)/bin/*.bat

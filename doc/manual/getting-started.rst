@@ -8,9 +8,7 @@ The latest version of Julia can be downloaded and installed by following
 the instructions on the `main GitHub
 page <https://github.com/JuliaLang/julia#readme>`_. The easiest way to
 learn and experiment with Julia is by starting an interactive session
-(also known as a read-eval-print loop or "repl"):
-
-::
+(also known as a read-eval-print loop or "repl")::
 
     $ julia
                    _
@@ -28,7 +26,7 @@ learn and experiment with Julia is by starting an interactive session
     julia> ans
     3
 
-    julia> load("file.jl")
+    julia> load("file")
 
 To exit the interactive session, type ``^D`` — the control key together
 with the ``d`` key. When run in interactive mode, ``julia`` displays a
@@ -41,9 +39,7 @@ last evaluated expression whether it is shown or not. The ``load``
 function reads and evaluates the contents of the given file.
 
 To run code in a file non-interactively, you can give it as the first
-argument to the julia command:
-
-::
+argument to the julia command::
 
     $ julia script.jl arg1 arg2...
 
@@ -52,17 +48,13 @@ are taken as command-line arguments to the program ``script.jl``, passed
 in the global constant ``ARGS``. ``ARGS`` is also set when script code
 is given using the ``-e`` option on the command line (see the ``julia``
 help output below). For example, to just print the arguments given to a
-script, you could do this:
-
-::
+script, you could do this::
 
     $ julia -e 'for x in ARGS; println(x); end' foo bar
     foo
     bar
 
-Or you could put that code into a script and run it:
-
-::
+Or you could put that code into a script and run it::
 
     $ echo 'for x in ARGS; println(x); end' > script.jl
     $ julia script.jl foo bar
@@ -70,9 +62,7 @@ Or you could put that code into a script and run it:
     bar
 
 There are various ways to run Julia code and provide options, similar to
-those available for the ``perl`` and ``ruby`` programs:
-
-::
+those available for the ``perl`` and ``ruby`` programs::
 
     julia [options] [program] [args...]
      -v --version             Display version information
@@ -108,9 +98,8 @@ differences that may trip up Julia users accustomed to MATLAB®:
    ``return (a, b)`` and ``(a, b) = f(x)``.
 -  Values are passed and assigned by reference. If a function modifies
    an array, the changes will be visible in the caller.
--  Use n for nx1: The number of arguments to an array constructor equals
-   the number of dimensions of the result. In particular, ``rand(n)``
-   makes a 1-dimensional array.
+-  Julia has 1-dimensional arrays. Column vectors are of size ``N``, not
+   ``Nx1``. For example, ``rand(N)`` makes a 1-dimensional array.
 -  Concatenating scalars and arrays with the syntax ``[x,y,z]``
    concatenates in the first dimension ("vertically"). For the second
    dimension ("horizontally"), use spaces as in ``[x y z]``. To
@@ -141,4 +130,5 @@ differences that may trip up Julia users accustomed to MATLAB®:
 -  If ``A`` and ``B`` are arrays, ``A == B`` doesn't return an array of
    booleans. Use ``A .== B`` instead. Likewise for the other boolean
    operators, ``<``, ``>``, ``!=``, etc.
-
+-  The elements of a collection can be passed as arguments to a function
+   using ``...``, as in ``xs=[1,2]; f(xs...)``.

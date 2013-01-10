@@ -112,3 +112,9 @@ __MSG_OUTPUT_PLOT = uint8(10) # {type, ...} create a plot, the format of the dat
 #else
 __MSG_OUTPUT_GET_USER = uint8(11) # {user_name, user_id} response to MSG_GET_USER
 #endif
+
+#ifndef notdefined
+#define MSG_OUTPUT_HTML 12
+#else
+__MSG_OUTPUT_HTML = uint8(12) # {html} raw html
+#endif

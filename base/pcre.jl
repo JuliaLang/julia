@@ -1,14 +1,10 @@
 ## low-level pcre interface ##
 
-libpcre = dlopen("libpcre")
-
 module PCRE
-import Base.*
-global info, compile, study, exec
 
 include("pcre_h.jl")
 
-const VERSION = bytestring(ccall(dlsym(Base.libpcre, :pcre_version), Ptr{Uint8}, ()))
+const VERSION = bytestring(ccall((:pcre_version, :libpcre), Ptr{Uint8}, ()))
 
 # supported options for different use cases
 
@@ -53,7 +49,7 @@ function info{T}(
     extra::Ptr{Void}, what::Integer, ::Type{T}
 )
     buf = Array(Uint8,sizeof(T))
-    ret = ccall(dlsym(Base.libpcre, :pcre_fullinfo), Int32,
+    ret = ccall((:pcre_fullinfo, :libpcre), Int32,
                 (Ptr{Void}, Ptr{Void}, Int32, Ptr{Uint8}),
                 regex, extra, what, buf)
     if ret != 0
@@ -61,7 +57,7 @@ function info{T}(
               ret == ERROR_NULL      ? "NULL regex object" :
               ret == ERROR_BADMAGIC  ? "invalid regex object" :
               ret == ERROR_BADOPTION ? "invalid option flags" :
-                                            "unknown error")
+                                       "unknown error $ret")
     end
     reinterpret(T,buf)[1]
 end
@@ -69,7 +65,7 @@ end
 function compile(pattern::String, options::Integer)
     errstr = Array(Ptr{Uint8},1)
     erroff = Array(Int32,1)
-    re_ptr = (()->ccall(dlsym(Base.libpcre, :pcre_compile), Ptr{Void},
+    re_ptr = (()->ccall((:pcre_compile, :libpcre), Ptr{Void},
                         (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
                         pattern, options, errstr, erroff, C_NULL))()
     if re_ptr == C_NULL
@@ -86,9 +82,9 @@ end
 function study(regex::Array{Uint8}, options::Integer)
     # NOTE: options should always be zero in current PCRE
     errstr = Array(Ptr{Uint8},1)
-    extra = (()->ccall(dlsym(Base.libpcre, :pcre_study), Ptr{Void},
-                       (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
-                       regex, options, errstr))()
+    extra = ccall((:pcre_study, :libpcre), Ptr{Void},
+                  (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
+                  regex, options, errstr)
     if errstr[1] != C_NULL
         error("study: $(errstr[1])")
     end
@@ -96,14 +92,17 @@ function study(regex::Array{Uint8}, options::Integer)
 end
 study(re::Array{Uint8}) = study(re, int32(0))
 
+free_study(extra::Ptr{Void}) =
+    ccall((:pcre_free_study, :libpcre), Void, (Ptr{Void},), extra)
+
 function exec(regex::Array{Uint8}, extra::Ptr{Void},
-                   str::ByteString, offset::Integer, options::Integer, cap::Bool)
+              str::ByteString, offset::Integer, options::Integer, cap::Bool)
     if offset < 0 || length(str) < offset
-        error("index out of range")
+        error(BoundsError)
     end
     ncap = info(regex, extra, INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3(ncap+1))
-    n = ccall(dlsym(Base.libpcre, :pcre_exec), Int32,
+    n = ccall((:pcre_exec, :libpcre), Int32,
               (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
               regex, extra, str, length(str),

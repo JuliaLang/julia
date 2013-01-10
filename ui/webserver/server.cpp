@@ -209,7 +209,7 @@ namespace scgi
 
 #define PASS_ON(f) stream->read_cb = &f;    \
                 uv_buf_t buf2;              \
-    buf2.base=pos;                          \
+    buf2.base=const_cast<char*>(pos);       \
     buf2.len=buf.len-nread-(pos-buf.base);  \
     f(stream,nread-(pos-buf.base),buf2);
 

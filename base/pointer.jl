@@ -31,11 +31,18 @@ function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool)
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
           Array{T,N}, p, dims, own)
 end
+unsafe_ref(p::Ptr,i::Integer) = pointerref(p, int(i))
+unsafe_ref(p::Ptr) = unsafe_ref(p, 1)
+unsafe_assign(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, int(i))
+unsafe_assign{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T, x), int(i))
+unsafe_assign{T}(p::Ptr{T}, x) = unsafe_assign(p, convert(T,x), 1)
 
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)
 
-@eval sizeof(::Type{Ptr}) = $div(WORD_SIZE,8)
+@eval sizeof(::Type{Ptr}) = $(div(WORD_SIZE,8))
+@eval sizeof{T}(::Type{Ptr{T}}) = $(div(WORD_SIZE,8))
+eltype{T}(::Ptr{T}) = T
 
 ## limited pointer arithmetic & comparison ##
 

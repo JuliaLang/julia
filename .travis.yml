@@ -1,0 +1,19 @@
+language: cpp
+compiler: 
+    - clang
+    - gcc
+notifications:
+    email: false
+before_install:
+    - BUILDOPTS="LLVM_CONFIG=llvm-config-3.1 USE_QUIET=0"; for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK LIGHTTPD GMP PCRE LIBUNWIND READLINE GLPK; do export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1"; done
+    - sudo apt-get update -qq -y
+    - sudo apt-get install zlib1g-dev
+    - sudo add-apt-repository ppa:staticfloat/julia-deps -y
+    - sudo apt-get update -qq -y
+    - sudo apt-get install gfortran llvm-3.1-dev libsuitesparse-dev libncurses5-dev libopenblas-dev libarpack2-dev libfftw3-dev libpcre3-dev libglpk-dev lighttpd libgmp-dev libunwind7-dev libreadline-dev -y
+script:
+    - make $BUILDOPTS PREFIX=/tmp/julia install
+    - cd .. && mv julia julia2
+    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia runtests.jl all
+    - cd - && mv julia2 julia
+    - echo "Ready for packaging..."

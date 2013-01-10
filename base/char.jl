@@ -42,20 +42,10 @@ promote_rule(::Type{Char}, ::Type{Uint128}) = Uint128
 
 ## character operations & comparisons ##
 
--(x::Char) = -int(x)
-+(x::Char, y::Char) = int(x) + int(y)
--(x::Char, y::Char) = int(x) - int(y)
-*(x::Char, y::Char) = int(x) * int(y)
-
-div(x::Char, y::Char) = div(int(x), int(y))
-fld(x::Char, y::Char) = div(int(x), int(y))
-rem(x::Char, y::Char) = rem(int(x), int(y))
-mod(x::Char, y::Char) = rem(int(x), int(y))
-
-~(x::Char)            = ~uint32(x)
-(&)(x::Char, y::Char) = uint32(x) & uint32(y)
-|(x::Char, y::Char)   = uint32(x) | uint32(y)
-($)(x::Char, y::Char) = uint32(x) $ uint32(y)
+-(x::Char, y::Char) = int(x)-int(y)
++(x::Char, y::Char) = char(int(x)+int(y)) # TODO: delete me
++(x::Char, y::Int ) = char(int(x)+y)
++(x::Int , y::Char) = y+x
 
 <<(x::Char, y::Int32)  = uint32(x) << y
 >>(x::Char, y::Int32)  = uint32(x) >>> y
@@ -84,5 +74,5 @@ for f = (:iswalnum, :iswalpha, :iswblank, :iswcntrl, :iswdigit,
          # these are BSD-only
          #:iswhexnumber, :iswideogram, :iswnumber, :iswphonogram, :iswrune, :iswspecial, 
          )
-    @eval ($f)(c::Char) = bool(ccall($expr(:quote,f), Int32, (Char,), c))
+    @eval ($f)(c::Char) = bool(ccall($(expr(:quote,f)), Int32, (Char,), c))
 end

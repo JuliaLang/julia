@@ -58,7 +58,6 @@ colon(start::Real, stop::Real) = colon(promote(start, stop)...)
 similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
 
 length(r::Ranges) = r.len
-const numel = length
 size(r::Ranges) = (r.len,)
 isempty(r::Ranges) = r.len==0
 first(r::Ranges) = r.start
@@ -108,6 +107,12 @@ isequal(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
 # TODO: isless?
 
 intersect(r::Range1, s::Range1) = max(r.start,s.start):min(last(r),last(s))
+
+intersect{T<:Integer}(i::Integer, r::Range1{T}) =
+    i < first(r) ? (first(r):i) :
+    i > last(r)  ? (i:last(r))  : (i:i)
+
+intersect{T<:Integer}(r::Range1{T}, i::Integer) = intersect(i, r)
 
 # TODO: general intersect?
 function intersect(r::Range1, s::Range)

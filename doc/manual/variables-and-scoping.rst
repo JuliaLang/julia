@@ -53,9 +53,7 @@ current scope are as follows:
    by any enclosing scope, before or *after* the current line of code.
 
 In the following example, there is only one ``x`` assigned both inside
-and outside a loop:
-
-::
+and outside a loop::
 
     function foo(n)
       x = 0
@@ -69,9 +67,7 @@ and outside a loop:
     10
 
 In the next example, the loop has a separate ``x`` and the function
-always returns zero:
-
-::
+always returns zero::
 
     function foo(n)
       x = 0
@@ -87,9 +83,7 @@ always returns zero:
 
 In this example, an ``x`` exists only inside the loop, and the function
 encounters an undefined variable error on its last line (unless there is
-a global variable ``x``):
-
-::
+a global variable ``x``)::
 
     function foo(n)
       for i = 1:n
@@ -114,9 +108,7 @@ global variables should be the exception rather than the rule,
 especially assigning new values to them.
 
 One last example shows that an outer assignment introducing ``x`` need
-not come before an inner usage:
-
-::
+not come before an inner usage::
 
     function foo(n)
       f = y -> n + x + y
@@ -134,9 +126,7 @@ functions to be defined in whatever order is intuitive and convenient,
 rather than forcing bottom up ordering or requiring forward
 declarations, both of which one typically sees in C programs. As an
 example, here is an inefficient, mutually recursive way to test if
-positive integers are even or odd:
-
-::
+positive integers are even or odd::
 
     even(n) = n == 0 ? true  :  odd(n-1)
     odd(n)  = n == 0 ? false : even(n-1)
@@ -158,9 +148,7 @@ declarations is necessary, and definitions can be ordered arbitrarily.
 At the interactive prompt, variable scope works the same way as anywhere
 else. The prompt behaves as if there is scope block wrapped around
 everything you type, except that this scope block is identified with the
-global scope. This is especially apparent in the case of assignments:
-
-::
+global scope. This is especially apparent in the case of assignments::
 
     julia> for i = 1:1; y = 10; end
 
@@ -189,9 +177,7 @@ variable bindings each time they run. An assignment modifies an existing
 value location, and ``let`` creates new locations. This difference is
 usually not important, and is only detectable in the case of variables
 that outlive their scope via closures. The ``let`` syntax accepts a
-comma-separated series of assignments and variable names:
-
-::
+comma-separated series of assignments and variable names::
 
     let var1 = value1, var2, var3 = value3
         code
@@ -201,9 +187,7 @@ Unlike local variable assignments, the assignments do not occur in
 order. Rather, all assignment right-hand sides are evaluated in the
 scope outside the ``let``, then the ``let`` variables are assigned
 "simultaneously". In this way, ``let`` operates like a function call.
-Indeed, the following code:
-
-::
+Indeed, the following code::
 
     let a = b, c = d
       body
@@ -212,9 +196,7 @@ Indeed, the following code:
 is equivalent to ``((a,c)->body)(b, d)``. Therefore it makes sense to
 write something like ``let x = x`` since the two ``x`` variables are
 distinct and have separate storage. Here is an example where the
-behavior of ``let`` is needed:
-
-::
+behavior of ``let`` is needed::
 
     Fs = cell(2);
     for i = 1:2
@@ -230,9 +212,7 @@ behavior of ``let`` is needed:
 Here we create and store two closures that return variable ``i``.
 However, it is always the same variable ``i``, so the two closures
 behave identically. We can use ``let`` to create a new binding for
-``i``:
-
-::
+``i``::
 
     Fs = cell(2);
     for i = 1:2
@@ -249,9 +229,7 @@ behave identically. We can use ``let`` to create a new binding for
 
 Since the ``begin`` construct does not introduce a new block, it can be
 useful to use the zero-argument ``let`` to just introduce a new scope
-block without creating any new bindings:
-
-::
+block without creating any new bindings::
 
     julia> begin
              local x = 1
@@ -281,9 +259,7 @@ Constants
 
 A common use of variables is giving names to specific, unchanging
 values. Such variables are only assigned once. This intent can be
-conveyed to the compiler using the ``const`` keyword:
-
-::
+conveyed to the compiler using the ``const`` keyword::
 
     const e  = 2.71828182845904523536
     const pi = 3.14159265358979323846

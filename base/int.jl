@@ -1,6 +1,6 @@
 ## integer conversions ##
 
-convert(::Type{Int8}, x::Bool   ) = box(Int8,unbox(Bool,x))
+convert(::Type{Int8}, x::Bool   ) = box(Int8,zext_int(Int8,unbox(Bool,x)))
 convert(::Type{Int8}, x::Uint8  ) = box(Int8,unbox(Uint8,x))
 convert(::Type{Int8}, x::Int16  ) = box(Int8,trunc8(unbox(Int16,x)))
 convert(::Type{Int8}, x::Uint16 ) = box(Int8,trunc8(unbox(Uint16,x)))
@@ -14,7 +14,7 @@ convert(::Type{Int8}, x::Uint128) = box(Int8,trunc8(unbox(Uint128,x)))
 convert(::Type{Int8}, x::Float32) = box(Int8,trunc8(checked_fptosi32(unbox(Float32,x))))
 convert(::Type{Int8}, x::Float64) = box(Int8,trunc8(checked_fptosi64(unbox(Float64,x))))
 
-convert(::Type{Uint8}, x::Bool   ) = box(Uint8,unbox(Bool,x))
+convert(::Type{Uint8}, x::Bool   ) = box(Uint8,zext_int(Int8,unbox(Bool,x)))
 convert(::Type{Uint8}, x::Int8   ) = box(Uint8,unbox(Uint8,x))
 convert(::Type{Uint8}, x::Int16  ) = box(Uint8,trunc8(unbox(Int16,x)))
 convert(::Type{Uint8}, x::Uint16 ) = box(Uint8,trunc8(unbox(Uint16,x)))
@@ -544,7 +544,7 @@ typemin(::Type{Int32 }) = int32(-2147483648)
 typemax(::Type{Int32 }) = int32(2147483647)
 typemin(::Type{Uint32}) = uint32(0)
 typemax(::Type{Uint32}) = uint32(4294967295)
-@eval typemin(::Type{Int64 }) = $(-9223372036854775807-int64(1))
+typemin(::Type{Int64 }) = -9223372036854775808
 typemax(::Type{Int64 }) = 9223372036854775807
 typemin(::Type{Uint64}) = uint64(0)
 typemax(::Type{Uint64}) = 0xffffffffffffffff
@@ -571,14 +571,14 @@ sizeof(::Type{Uint128}) = 16
 # requires int arithmetic defined, for the loops to work
 
 for f in (:int, :int8, :int16, :int32, :signed, :integer)
-    @eval ($f)(x::Float) = ($f)(iround(x))
+    @eval ($f)(x::FloatingPoint) = ($f)(iround(x))
 end
 
 for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
               (:int64,:Int64), (:uint64,:Uint64),
               (:int128,:Int128), (:uint128,:Uint128),
               (:unsigned,:Uint), (:uint,:Uint))
-    @eval ($f)(x::Float) = iround($t,x)
+    @eval ($f)(x::FloatingPoint) = iround($t,x)
 end
 
 ## wide multiplication, Int128 multiply and divide ##

@@ -1,3 +1,5 @@
+import Base.length, Base.map, Base.show
+
 abstract List{T}
 
 type Nil{T} <: List{T}

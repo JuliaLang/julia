@@ -23,17 +23,13 @@ index variable name. Since Julia allows numeric literals to be
 :ref:`juxtaposed with identifiers as
 coefficients <man-numeric-literal-coefficients>`,
 this binding suffices to provide convenient syntax for complex numbers,
-similar to the traditional mathematical notation:
-
-::
+similar to the traditional mathematical notation::
 
     julia> 1 + 2im
     1 + 2im
 
 You can perform all the standard arithmetic operations with complex
-numbers:
-
-::
+numbers::
 
     julia> (1 + 2im)*(2 - 3im)
     8 + 1im
@@ -66,9 +62,7 @@ numbers:
     0.20689655172413793 + 0.5172413793103449im
 
 The promotion mechanism ensures that combinations of operands of
-different types just work:
-
-::
+different types just work::
 
     julia> 2(1 - 1im)
     2 - 2im
@@ -100,9 +94,7 @@ different types just work:
 Note that ``3/4im == 3/(4*im) == -(3/4*im)``, since a literal
 coefficient binds more tightly than division.
 
-Standard functions to manipulate complex values are provided:
-
-::
+Standard functions to manipulate complex values are provided::
 
     julia> real(1 + 2im)
     1
@@ -123,9 +115,7 @@ As is common, the absolute value of a complex number is its distance
 from zero. The ``abs2`` function gives the square of the absolute value,
 and is of particular use for complex numbers, where it avoids taking a
 square root. The full gamut of other mathematical functions are also
-defined for complex numbers:
-
-::
+defined for complex numbers::
 
     julia> sqrt(im)
     0.7071067811865476 + 0.7071067811865475im
@@ -145,9 +135,7 @@ defined for complex numbers:
 Note that mathematical functions always return real values when applied
 to real numbers and complex values when applied to complex numbers.
 Thus, ``sqrt``, for example, behaves differently when applied to ``-1``
-versus ``-1 + 0im`` even though ``-1 == -1 + 0im``:
-
-::
+versus ``-1 + 0im`` even though ``-1 == -1 + 0im``::
 
     julia> sqrt(-1)
     NaN
@@ -157,27 +145,21 @@ versus ``-1 + 0im`` even though ``-1 == -1 + 0im``:
 
 If you need to construct a complex number using variables, the literal
 numeric coefficient notation will not work, although explicitly writing
-the multiplication operation will:
-
-::
+the multiplication operation will::
 
     julia> a = 1; b = 2; a + b*im
     1 + 2im
 
 Constructing complex numbers from variable values like this, however, is
 not recommended. Use the ``complex`` function to construct a complex
-value directly from its real and imaginary parts instead:
-
-::
+value directly from its real and imaginary parts instead::
 
     julia> complex(a,b)
     1 + 2im
 
 This construction is preferred for variable arguments because it is more
 efficient than the multiplication and addition construct, but also
-because certain values of ``b`` can yield unexpected results:
-
-::
+because certain values of ``b`` can yield unexpected results::
 
     julia> 1 + Inf*im
     NaN + Inf*im
@@ -188,9 +170,7 @@ because certain values of ``b`` can yield unexpected results:
 These results are natural and unavoidable consequences of the
 interaction between the rules of complex multiplication and IEEE-754
 floating-point arithmetic. Using the ``complex`` function to construct
-complex values directly, however, gives more intuitive results:
-
-::
+complex values directly, however, gives more intuitive results::
 
     julia> complex(1,Inf)
     complex(1.0,Inf)
@@ -208,17 +188,13 @@ Rational Numbers
 ----------------
 
 Julia has a rational number type to represent exact ratios of integers.
-Rationals are constructed using the ``//`` operator:
-
-::
+Rationals are constructed using the ``//`` operator::
 
     julia> 2//3
     2//3
 
 If the numerator and denominator of a rational have common factors, they
-are reduced to lowest terms such that the denominator is non-negative:
-
-::
+are reduced to lowest terms such that the denominator is non-negative::
 
     julia> 6//9
     2//3
@@ -235,9 +211,7 @@ are reduced to lowest terms such that the denominator is non-negative:
 This normalized form for a ratio of integers is unique, so equality of
 rational values can be tested by checking for equality of the numerator
 and denominator. The standardized numerator and denominator of a
-rational value can be extracted using the ``num`` and ``den`` functions:
-
-::
+rational value can be extracted using the ``num`` and ``den`` functions::
 
     julia> num(2//3)
     2
@@ -247,9 +221,7 @@ rational value can be extracted using the ``num`` and ``den`` functions:
 
 Direct comparison of the numerator and denominator is generally not
 necessary, since the standard arithmetic and comparison operations are
-defined for rational values:
-
-::
+defined for rational values::
 
     julia> 2//3 == 6//9
     true
@@ -275,25 +247,19 @@ defined for rational values:
     julia> 6//5 / 10//7
     21//25
 
-Rationals can be easily converted to floating-point numbers:
-
-::
+Rationals can be easily converted to floating-point numbers::
 
     julia> float(3//4)
     0.75
 
 Conversion from rational to floating-point respects the following
 identity for any integral values of ``a`` and ``b``, with the exception
-of the case ``a == 0`` and ``b == 0``:
-
-::
+of the case ``a == 0`` and ``b == 0``::
 
     julia> isequal(float(a//b), a/b)
     true
 
-Constructing infinite rational values is acceptable:
-
-::
+Constructing infinite rational values is acceptable::
 
     julia> 5//0
     Inf
@@ -304,17 +270,13 @@ Constructing infinite rational values is acceptable:
     julia> typeof(ans)
     Rational{Int64}
 
-Trying to construct a NaN rational value, however, is not:
-
-::
+Trying to construct a NaN rational value, however, is not::
 
     julia> 0//0
     invalid rational: 0//0
 
 As usual, the promotion system makes interactions with other numeric
-types effortless:
-
-::
+types effortless::
 
     julia> 3//5 + 1
     8//5

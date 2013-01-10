@@ -1,19 +1,21 @@
-_PROFILE_LINES = 1
-_PROFILE_DESCEND = 2
-_PROFILE_STATE = _PROFILE_LINES | _PROFILE_DESCEND    # state is a bitfield
+module Profile
 
-# Record of expressions to parse according to the current _PROFILE_STATE
-_PROFILE_EXPR = {}
+PROFILE_LINES = 1
+PROFILE_DESCEND = 2
+PROFILE_STATE = PROFILE_LINES | PROFILE_DESCEND    # state is a bitfield
+
+# Record of expressions to parse according to the current PROFILE_STATE
+PROFILE_EXPR = {}
 
 # To avoid the performance penalty of global variables, we design the
 # macro to create local variables through a "let" block that shares
 # the timing and count data with "reporting" and "clearing" functions.
-_PROFILE_REPORTS = {}  # list of reporting functions
-_PROFILE_CLEARS = {}   # list of clearing functions
-_PROFILE_TAGS = {}     # line #s for all timing variables
+PROFILE_REPORTS = {}  # list of reporting functions
+PROFILE_CLEARS = {}   # list of clearing functions
+PROFILE_TAGS = {}     # line #s for all timing variables
 
 # Profile calibration, to compensate for the overhead of calling time()
-_PROFILE_CALIB = 0
+PROFILE_CALIB = 0
 # Do it inside a let block, just like in real profiling, in case of
 # extra overhead
 let # tlast::Uint64 = 0x0, tnow::Uint64 = 0x0
@@ -28,7 +30,7 @@ function profile_calib(n_iter)
     return trec
 end
 end
-_PROFILE_CALIB = min(profile_calib(100))
+PROFILE_CALIB = min(profile_calib(100))
 
 # Utilities
 # Generic expression type testing
@@ -79,47 +81,47 @@ end
 # and evaluates to true if the return value of Expr needs to be saved
 # before inserting profiling statements.
 function insert_profile_block(fblock::Expr, tlast, tnow, timers, counters, tags, indx::Int, retsym, rettest)
-    global _PROFILE_STATE, _PROFILE_DESCEND
+    global PROFILE_STATE, PROFILE_DESCEND
     if fblock.head != :block
         println(fblock)
         error("expression is not a block")
     end
-    descend = _PROFILE_STATE & _PROFILE_DESCEND > 0
+    descend = PROFILE_STATE & PROFILE_DESCEND > 0
     fblocknewargs = {}
     for i = 1:length(fblock.args)
         if isa(fblock.args[i],LineNumberNode) || is_expr_head(fblock.args[i], :line)
             # This is a line expression, so no counters/timers required
-            push(fblocknewargs,fblock.args[i])
+            push!(fblocknewargs,fblock.args[i])
              # ...but keep track of the line # for use during reporting
             lasttag = fblock.args[i]
         elseif descend && is_cf_expr(fblock.args[i])
             # This is a control-flow statement, it requires special
             # handling (recursive)
             cfnew, indx = insert_profile_cf(fblock.args[i], tlast, tnow, timers, counters, tags, indx, retsym)
-            push(fblocknewargs, cfnew)
+            push!(fblocknewargs, cfnew)
         else
             # This is an "ordinary" statement
             saveret = rettest(fblock, i)
-            push(tags,lasttag)
+            push!(tags,lasttag)
             if saveret
                 if is_expr_head(fblock.args[i], :return)
-                    push(fblocknewargs, :($retsym = $fblock.args[i].args[1]))
+                    push!(fblocknewargs, :($retsym = $(fblock.args[i].args[1])))
                 else
-                    push(fblocknewargs, :($retsym = $fblock.args[i]))
+                    push!(fblocknewargs, :($retsym = $(fblock.args[i])))
                 end
             else
-                push(fblocknewargs, fblock.args[i])
+                push!(fblocknewargs, fblock.args[i])
             end
             # This next line inserts timing statements between two
             # lines of code, equivalent to:
-            #   timehr(_PROFILE_USE_CLOCK, tnow)  # end time of prev
+            #   timehr(PROFILE_USE_CLOCK, tnow)  # end time of prev
             #   timers[indx] += timehr_diff(tlast, tnow)
             #   counters[indx] += 1
-            #   timehr(_PROFILE_USE_CLOCK, tlast) # start time for next
+            #   timehr(PROFILE_USE_CLOCK, tlast) # start time for next
             append!(fblocknewargs,{:($tnow = time_ns()), :(($timers)[($indx)] += $tnow - $tlast), :(($counters)[($indx)] += 1), :($tlast = time_ns())})
             indx += 1
             if saveret
-                push(fblocknewargs, :(return $retsym))
+                push!(fblocknewargs, :(return $retsym))
             end
         end
     end
@@ -149,7 +151,7 @@ end
 #   - The final statement of a function should be returned, even if there
 #     is no explicit return statement
 #   - Functions can be defined in "short-form" (e.g.,
-#     "isempty(x) = numel(x)==0"), and the return value for these
+#     "isempty(x) = length(x)==0"), and the return value for these
 #     needs to be managed, too
 function insert_profile_function(ex::Expr, tlast, tnow, timers, counters, tags, indx::Int, retsym)
     fblock = ex.args[2]
@@ -180,7 +182,7 @@ function insert_profile_function(ex::Expr, tlast, tnow, timers, counters, tags, 
 end
 
 function profile_parse(ex::Expr)
-    if _PROFILE_STATE & _PROFILE_LINES > 0
+    if PROFILE_STATE & PROFILE_LINES > 0
         # Create the "let" variables for timing and counting
         tlast = gensym()
         tnow = gensym()
@@ -202,19 +204,19 @@ function profile_parse(ex::Expr)
             for i = 1:length(ex.args)
                 if isfuncexpr(ex.args[i])
                     # Insert "global" statement for each function
-                    push(coreargs,expr(:global,funcsym(ex.args[i])))
+                    push!(coreargs,expr(:global,funcsym(ex.args[i])))
                     # Insert function-call counters
                     newfuncexpr, indx = insert_profile_function(ex.args[i], tlast, tnow, timers, counters, tags, indx, retsym)
-                    push(coreargs, newfuncexpr)
+                    push!(coreargs, newfuncexpr)
                 else
-                    push(coreargs,ex.args[i])
+                    push!(coreargs,ex.args[i])
                 end
             end
         elseif isfuncexpr(ex)
             # This is a single function declaration
-            push(coreargs,expr(:global,funcsym(ex)))
+            push!(coreargs,expr(:global,funcsym(ex)))
             newfuncexpr, indx = insert_profile_function(ex, tlast, tnow, timers, counters, tags, indx, retsym)
-            push(coreargs, newfuncexpr)
+            push!(coreargs, newfuncexpr)
         else
             error("Could not parse expression")
         end
@@ -222,15 +224,17 @@ function profile_parse(ex::Expr)
         # Insert reporting function
         # Because we're using a gensym for the function name, we can't
         # quote the whole thing
-        push(coreargs, expr(:global, funcreport))
-        push(coreargs, expr(:function, {expr(:call, {funcreport}), expr(:block,{:(return $timers, $counters)})}))
+        push!(coreargs, expr(:global, funcreport))
+        push!(coreargs, expr(:function, {expr(:call, {funcreport}), expr(:block,{:(return $timers, $counters)})}))
         # Insert clearing function
-        push(coreargs, expr(:global, funcclear))
-        push(coreargs, expr(:function, {expr(:call, {funcclear}), expr(:block,{:(fill!($timers,0)), :(fill!($counters,0))})}))
+        push!(coreargs, expr(:global, funcclear))
+        push!(coreargs, expr(:function, {expr(:call, {funcclear}), expr(:block,{:(fill!($timers,0)), :(fill!($counters,0))})}))
         # Put all this inside a let block
         excore = expr(:block,coreargs)
         exlet = expr(:let,{expr(:block,excore), :($timers = zeros(Uint64, $n_lines)), :($counters = zeros(Uint64, $n_lines))})
-        return exlet, tags, funcreport, funcclear
+        # Export the reporting and clearing functions, in case we're inside a module
+        exret = expr(:toplevel, {esc(exlet), expr(:export, {esc(funcclear), esc(funcreport)})})
+        return exret, tags, funcreport, funcclear
     else
         return ex ,{}, :funcnoop, :funcnoop
     end
@@ -240,69 +244,85 @@ function funcnoop()
 end
 
 function profile_parse_all()
-    del_all(_PROFILE_REPORTS)
-    del_all(_PROFILE_CLEARS)
-    del_all(_PROFILE_TAGS)
+    empty!(PROFILE_REPORTS)
+    empty!(PROFILE_CLEARS)
+    empty!(PROFILE_TAGS)
     retargs = {}
-    for i = 1:length(_PROFILE_EXPR)
-        newblock, tags, funcreport, funcclear = profile_parse(_PROFILE_EXPR[i])
+    for i = 1:length(PROFILE_EXPR)
+        newblock, tags, funcreport, funcclear = profile_parse(PROFILE_EXPR[i])
         retargs = vcat(retargs, newblock.args)
         if !isempty(tags)
-            push(_PROFILE_TAGS, tags)
-            push(_PROFILE_REPORTS, funcreport)
-            push(_PROFILE_CLEARS, funcclear)
+            push!(PROFILE_TAGS, tags)
+            push!(PROFILE_REPORTS, esc(funcreport))
+            push!(PROFILE_CLEARS, esc(funcclear))
         end
     end
-    push(retargs,:(return nothing))
-    return expr(:block,retargs)
+    push!(retargs,:(return nothing))
+    return esc(expr(:block,retargs))
 end
 
 function profile_report()
-    exret = cell(length(_PROFILE_REPORTS)+2)
+    exret = cell(length(PROFILE_REPORTS)+2)
     ret = gensym()
     exret[1] = :($ret = {})
-    for i = 1:length(_PROFILE_REPORTS)
-        exret[i+1] = :(push($ret,$expr(:call,{_PROFILE_REPORTS[i]})))
+    for i = 1:length(PROFILE_REPORTS)
+        exret[i+1] = :(push!($ret,$(expr(:call,{PROFILE_REPORTS[i]}))))
     end
     exret[end] = :(profile_print($ret))
     return expr(:block,exret)
 end
 
+compensated_time(t, c) = t >= c*PROFILE_CALIB ? t-c*PROFILE_CALIB : 0
+show_unquoted(linex::Expr) = show_linenumber(linex.args...)
+show_unquoted(lnn::LineNumberNode) = show_linenumber(lnn.line)
+show_linenumber(line)       = strcat("\t#  line ",line)
+show_linenumber(line, file) = strcat("\t#  ",file,", line ",line)
+
 function profile_print(tc)
+    # Compute total elapsed time
+    ttotal = 0.0
     for i = 1:length(tc)
         timers = tc[i][1]
-        ttotal = float64(sum(timers))
+        counters = tc[i][2]
+        for j = 1:length(counters)
+            comp_time = compensated_time(timers[j], counters[j])
+            ttotal += comp_time
+        end
+    end
+    # Display output
+    for i = 1:length(tc)
+        timers = tc[i][1]
         counters = tc[i][2]
         println("   count  time(%)  time(s)")
         for j = 1:length(counters)
             if counters[j] != 0
-                calib_time = timers[j] - counters[j]*_PROFILE_CALIB
+                comp_time = compensated_time(timers[j], counters[j])
                 @printf("%8d    %5.2f  %f %s\n", counters[j],
-                        100*(calib_time/ttotal),
-                        calib_time*1e-9,
-                        _PROFILE_TAGS[i][j])
+                        100*(comp_time/ttotal),
+                        comp_time*1e-9,
+                        show_unquoted(PROFILE_TAGS[i][j]))
             end
         end
     end
 end
 
 function profile_clear()
-    exret = cell(length(_PROFILE_CLEARS)+1)
-    for i = 1:length(_PROFILE_CLEARS)
-        exret[i] = expr(:call,{_PROFILE_CLEARS[i]})
+    exret = cell(length(PROFILE_CLEARS)+1)
+    for i = 1:length(PROFILE_CLEARS)
+        exret[i] = expr(:call,{PROFILE_CLEARS[i]})
     end
     exret[end] = :(return nothing)
     return expr(:block,exret)
 end
 
 macro profile(ex)
-    global _PROFILE_STATE
+    global PROFILE_STATE
     if isa(ex,Symbol)
         # State changes
         if ex == :off
-            _PROFILE_STATE = 0
+            PROFILE_STATE = 0
         elseif ex == :on
-            _PROFILE_STATE = _PROFILE_LINES
+            PROFILE_STATE = PROFILE_LINES
         elseif ex == :reset
         elseif ex == :report
             return profile_report()
@@ -313,14 +333,17 @@ macro profile(ex)
         end
         return profile_parse_all()
     elseif isa(ex,Expr)
-        push(_PROFILE_EXPR,ex)
+        push!(PROFILE_EXPR,ex)
         exret, tags, funcreport, funcclear = profile_parse(ex)
         if !isempty(tags)
-            push(_PROFILE_TAGS, tags)
-            push(_PROFILE_REPORTS, funcreport)
-            push(_PROFILE_CLEARS, funcclear)
+            push!(PROFILE_TAGS, tags)
+            push!(PROFILE_REPORTS, esc(funcreport))
+            push!(PROFILE_CLEARS, esc(funcclear))
         end
         return exret
     end
 end
 
+export @profile
+
+end # module Profile

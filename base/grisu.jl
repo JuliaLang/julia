@@ -1,9 +1,8 @@
-libgrisu = dlopen("libgrisu")
-
 module Grisu
-import Base.*
 export print_shortest
 export @grisu_ccall, NEG, DIGITS, BUFLEN, LEN, POINT
+
+import Base.show, Base.showcompact
 
 const NEG    = Array(Bool,1)
 const DIGITS = Array(Uint8,309+17)
@@ -13,10 +12,10 @@ const POINT  = Array(Int32,1)
 
 macro grisu_ccall(value, mode, ndigits)
     quote
-        ccall(dlsym(Base.libgrisu, :grisu), Void,
+        ccall((:grisu, :libgrisu), Void,
               (Float64, Int32, Int32, Ptr{Uint8}, Int32,
                Ptr{Bool}, Ptr{Int32}, Ptr{Int32}),
-              $esc(value), $esc(mode), $esc(ndigits),
+              $(esc(value)), $(esc(mode)), $(esc(ndigits)),
               DIGITS, BUFLEN, NEG, LEN, POINT)
     end
 end
@@ -27,7 +26,6 @@ const FIXED           = int32(2) # fixed number of trailing decimal points
 const PRECISION       = int32(3) # fixed precision regardless of magnitude
 
 # wrapper for the core grisu function, primarily for debugging
-global grisu, grisu_fix, grisu_sig
 function grisu(x::Float64, mode::Integer, ndigits::Integer)
     if !isfinite(x); error("non-finite value: $x"); end
     if ndigits < 0; error("negative digits requested"); end
@@ -48,9 +46,13 @@ function grisu_sig(x::Real, n::Integer)
     grisu(float64(x), PRECISION, int32(n))
 end
 
-function _show(io, x::Float, mode::Int32, n::Int)
-    if isnan(x); return write(io, "NaN"); end
-    if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
+function _show(io, x::FloatingPoint, mode::Int32, n::Int)
+    if isnan(x) return write(io, isa(x,Float32) ? "NaN32" : "NaN") end
+    if isinf(x)
+        if x < 0 write(io,'-') end
+        write(io, isa(x,Float32) ? "Inf32" : "Inf")
+        return
+    end
     @grisu_ccall x mode n
     pdigits = pointer(DIGITS)
     neg = NEG[1]
@@ -61,9 +63,7 @@ function _show(io, x::Float, mode::Int32, n::Int)
             len -= 1
         end
     end
-    if neg
-        write(io, '-')
-    end
+    if neg write(io,'-') end
     if pt <= -4 || pt > 6 # .00001 to 100000.
         # => #.#######e###
         write(io, pdigits, 1)
@@ -73,8 +73,9 @@ function _show(io, x::Float, mode::Int32, n::Int)
         else
             write(io, '0')
         end
-        write(io, 'e')
+        write(io, isa(x,Float32) ? 'f' : 'e')
         write(io, dec(pt-1))
+        return
     elseif pt <= 0
         # => 0.00########
         write(io, "0.")
@@ -96,12 +97,13 @@ function _show(io, x::Float, mode::Int32, n::Int)
         write(io, '.')
         write(io, pdigits+pt, len-pt)
     end
+    if isa(x,Float32) write(io, "f0") end
     nothing
 end
 
 show(io, x::Float64) = _show(io, x, SHORTEST, 0)
 show(io, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0)
-showcompact(io, x::Float) = _show(io, x, PRECISION, 6)
+showcompact(io, x::FloatingPoint) = _show(io, x, PRECISION, 6)
 
 # normal:
 #   0 < pt < len        ####.####           len+1
@@ -112,24 +114,22 @@ showcompact(io, x::Float) = _show(io, x, PRECISION, 6)
 #   pt <= 0             ########e-###       len+k+2
 #   0 < pt              ########e###        len+k+1
 
-function _print_shortest(io, x::Float, dot::Bool, mode::Int32)
-    if isnan(x); return write(io, "NaN"); end
-    if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
+function _print_shortest(io, x::FloatingPoint, dot::Bool, mode::Int32)
+    if isnan(x); return write(io, isa(x,Float32) ? "NaN32" : "NaN"); end
+    if x < 0 write(io,'-') end
+    if isinf(x); return write(io, isa(x,Float32) ? "Inf32" : "Inf"); end
     @grisu_ccall x mode 0
     pdigits = pointer(DIGITS)
-    neg = NEG[1]
     len = LEN[1]
     pt  = POINT[1]
-    if neg
-        write(io, '-')
-    end
     e = pt-len
     k = -9<=e<=9 ? 1 : 2
     if -pt > k+1 || e+dot > k+1
         # => ########e###
         write(io, pdigits+0, len)
-        write(io, 'e')
+        write(io, isa(x,Float32) ? 'f' : 'e')
         write(io, dec(e))
+        return
     elseif pt <= 0
         # => .000########
         write(io, '.')
@@ -153,12 +153,12 @@ function _print_shortest(io, x::Float, dot::Bool, mode::Int32)
         write(io, '.')
         write(io, pdigits+pt, len-pt)
     end
+    if isa(x,Float32) write(io, "f0") end
     nothing
 end
 
 print_shortest(io, x::Float64, dot::Bool) = _print_shortest(io, x, dot, SHORTEST)
 print_shortest(io, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST_SINGLE)
-print_shortest(io, x::Union(Float,Integer)) = print_shortest(io, float(x), false)
+print_shortest(io, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
 
 end # module
-import Base.Grisu.print_shortest

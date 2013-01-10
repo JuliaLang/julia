@@ -28,10 +28,10 @@ else
     exit 1
 fi
 
-if [ -x $WGET ]; then
-    GETURL="$WGET $WGET_OPTS"
-elif [ -x $CURL ]; then
+if [ -x $CURL ]; then
     GETURL="$CURL $CURL_OPTS"
+elif [ -x $WGET ]; then
+    GETURL="$WGET $WGET_OPTS"
 elif [ -x $FETCH ]; then
     GETURL="$FETCH $FETCH_OPTS"
 else

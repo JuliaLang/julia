@@ -1,4 +1,4 @@
-function _jl_add_method(gf, an, at, body)
+function add_method(gf, an, at, body)
     argexs = { expr(symbol("::"), an[i], at[i]) for i=1:length(an) }
     def = quote
         let __F__=($gf)
@@ -32,7 +32,7 @@ macro staged(fdef)
                 ($argtypes) = typeof(tuple($(argnames...)))
                 if !method_exists($gengf, $argtypes)
                     ($genbody) = apply(($expander), ($argtypes))
-                    _jl_add_method($gengf, {$(qargnames...)},
+                    add_method($gengf, {$(qargnames...)},
                                    $argtypes, $genbody)
                 end
                 return ($gengf)($(argnames...))
@@ -50,7 +50,7 @@ end
     end
     for i = 1:length(dims)
         ex = quote
-            for ($names[i]) in dims[$i]
+            for $(names[i]) in dims[$i]
                 $ex
             end
         end

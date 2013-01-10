@@ -5,10 +5,12 @@
       (_)     | (_) (_)    |   A fresh approach to technical computing
        _ _   _| |_  __ _   |
       | | | | | | |/ _` |  |          http://julialang.org
-      | | |_| | | | (_| |  |       julia-dev@googlegroups.com
+      | | |_| | | | (_| |  |       julia-users@googlegroups.com
      _/ |\__'_|_|_|\__'_|  |           #julia on freenode
     |__/                   |
 
+
+[![Build Status](https://travis-ci.org/JuliaLang/julia.png?branch=master)](https://travis-ci.org/JuliaLang/julia)
 
 <a name="The-Julia-Language"/>
 ## The Julia Language
@@ -20,18 +22,28 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Resources"/>
 
 - **Homepage:** <http://julialang.org>
-- **Mailing list:** <http://groups.google.com/group/julia-dev/>
+- **Binaries:** <http://code.google.com/p/julialang/downloads/list>
+- **Packages:** <https://github.com/JuliaLang/METADATA.jl>
+- **Mailing lists:** <http://julialang.org/mailing_lists>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Documentation:** <http://julialang.org/manual/>
 
+The mailing list for developer discussion is
+<http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
+of messages is higher, and the discussions tend to be more esoteric. New
+developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the julia codebase.
+
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
 
-- **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
-- **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit).
-- **FreeBSD:** x86/64 (64-bit); x86 (32-bit).
+- **GNU/Linux**
+- **Darwin/OS X**
+- **FreeBSD**
+- **Windows**
+
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. 
 
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
@@ -69,17 +81,19 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 #### Linux
 
-GCC version 4.6 is the minimum required to build julia.
+GCC version 4.6 or later is recommended to build julia.
 
 If the build fails trying to compile OpenBLAS, set OPENBLAS_TARGET_ARCH to BARCELONA on AMD, or NEHALEM on Intel CPUs in Make.inc and build again.
 
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
-On Ubuntu systems, You may also need to install the package `libncurses5-dev`.
+On Ubuntu systems, you may also need to install the package `libncurses5-dev`.
+
+On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build julia.
 
 #### OS X
 
-Download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), if necessary. It is essential that you use a 64-bit gfortran.
+It is essential to use a 64-bit gfortran. Download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/), if necessary. The HPC gfortran requires gcc to function properly.
 
 If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
 
@@ -109,7 +123,7 @@ To rebuild a pre-built Julia source install with MKL support, delete from `deps/
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc, g++][gcc]**           — compiling and linking C, C++ (Need at least v4.6)
+- **[gcc, g++][gcc]**           — compiling and linking C, C++
 - **[clang][clang]**            — clang is the default compiler on OS X (Need at least v3.1, Xcode 4.3.3 on OS X)
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
 - **[git]**                     — contributions and version control.
@@ -123,8 +137,9 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.1.
 - **[FemtoLisp]**           — packaged with julia source, and used to implement the compiler front-end.
 - **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
-- **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
-- **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
+- **[libuv]**               — portable, high-performance event-based I/O library
+- **[OpenLibm]**            — a portable libm library containing elementary math functions.
+- **[DSFMT]**               — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
 - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)      – OpenBLAS & LAPACK may be replaced by Intel's MKL library.
@@ -149,9 +164,9 @@ Julia uses the following external libraries, which are automatically downloaded 
 [curl]:         http://curl.haxx.se/
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
-[fdlibm]:       http://www.netlib.org/fdlibm/readme
-[MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
-[OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
+[OpenLibm]:     https://github.com/JuliaLang/openlibm
+[DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
+[OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       http://www.netlib.org/lapack/
 [MKL]:          http://software.intel.com/en-us/articles/intel-mkl/
 [SuiteSparse]:  http://www.cise.ufl.edu/research/sparse/SuiteSparse/
@@ -167,6 +182,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [double-conversion]: http://double-conversion.googlecode.com/
 [GLPK]:         http://www.gnu.org/software/glpk/
 [Rmath]:        http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
+[libuv]:        https://github.com/JuliaLang/libuv
 
 If you already have one or more of these packages installed on your system, it is possible to pass `USE_SYSTEM_...=1` to `make` to prevent Julia from compiling duplicates of these libraries. The complete list of possible flags can be found in Make.inc (or pass `USE_DEBIAN=1` to make if you have all build dependencies and want the minimal Julia build). Please be aware that this proceedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
@@ -188,12 +204,7 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](https://github.com/JuliaLang/julia/downloads).
-To install from source, download the appropriate tarball and untar it somewhere.
-For example, if you are on an OS X (Darwin) x86/64 system, do the following:
-
-    wget https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz
-    tar zxvf julia-c4865bd18d-Darwin-i386.tar.gz
+Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://code.google.com/p/julialang/downloads/list).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere (in the current shell session):
 
@@ -206,17 +217,18 @@ Now you should be able to run julia like this:
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
-An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available.
+An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available. Julia has also been added to [Debian](http://packages.debian.org/sid/julia). On OS X, julia is available through [homebrew](http://mxcl.github.com/homebrew/).
+
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
 
-Currently, [julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, and Textmate.
+Currently, [julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, Textmate, Notepad++, and Kate.
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.
-These bindings allow custom readline handlers to trap and correctly deal with these key sequences; other programs will continue behave normally with these bindings.
-The first binding makes backspacing through text in the interactive session behave more intuitively.
+These bindings allow custom readline handlers to trap and correctly deal with these key sequences; other programs will continue to behave normally with these bindings.
+The first binding makes backspacing through text at the prompt behave more intuitively.
 The second binding allows `Shift-Enter` to insert a newline without evaluating the current expression, even when the current expression is complete.
 (Pressing an unmodified `Enter` inserts a newline if the current expression is incomplete, evaluates the expression if it is complete, or shows an error if the syntax is irrecoverably invalid.)
 
@@ -229,7 +241,7 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
 Julia has a web REPL with very preliminary graphics capabilities. The web REPL is currently a showcase to try out new ideas. The web REPL is social - multiple people signing in with a common session name can collaborate within a session.
 
-1. Do `make -C deps install-lighttpd` to download and build the webserver.
+1. Do `make webrepl` to build the julia webserver.
 2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
 3. Point your browser to `http://localhost:2000/`.
 4. Try `plot(cumsum(randn(1000)))` and other things.

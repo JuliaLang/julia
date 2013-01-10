@@ -20,6 +20,8 @@ static jl_array_t *_new_array(jl_type_t *atype,
     jl_array_t *a;
 
     for(i=0; i < ndims; i++) {
+        if ((long)dims[i] < 0)
+            jl_error("invalid Array dimension size");
         nel *= dims[i];
     }
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
@@ -40,7 +42,8 @@ static jl_array_t *_new_array(jl_type_t *atype,
 
     int ndimwords = jl_array_ndimwords(ndims);
     if (tot <= ARRAY_INLINE_NBYTES) {
-        a = allocobj((sizeof(jl_array_t)+tot+ndimwords*sizeof(size_t)+15)&-16);
+        size_t tsz = tot>sizeof(size_t) ? tot-sizeof(size_t) : tot;
+        a = allocobj((sizeof(jl_array_t)+tsz+ndimwords*sizeof(size_t)+15)&-16);
         a->type = atype;
         a->ismalloc = 0;
         data = (&a->_space[0] + ndimwords*sizeof(size_t));
@@ -108,14 +111,15 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
             // since the buffer might be used from C in a way that it's
             // assumed not to move. for now, just copy the data (note this
             // case only happens for sizes <= ARRAY_INLINE_NBYTES)
-            jl_mallocptr_t *mp = array_new_buffer(data, data->length);
-            memcpy(mp->ptr, data->data, data->length * data->elsize);
+            size_t datalen = jl_array_len(data);
+            jl_mallocptr_t *mp = array_new_buffer(data, datalen);
+            memcpy(mp->ptr, data->data, datalen * data->elsize);
             a->data = mp->ptr;
             jl_array_data_owner(a) = (jl_value_t*)mp;
             a->ismalloc = 1;
             //data->data = mp->ptr;
             //data->offset = 0;
-            //data->maxsize = data->length;
+            //data->maxsize = datalen;
             //jl_array_data_owner(data) = (jl_value_t*)mp;
         }
         else {
@@ -150,6 +154,8 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
         size_t l=1;
         for(i=0; i < ndims; i++) {
             adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+            if ((long)adims[i] < 0)
+                jl_error("invalid Array dimension size");
             l *= adims[i];
         }
         a->length = l;
@@ -280,7 +286,7 @@ jl_array_t *jl_alloc_array_3d(jl_type_t *atype, size_t nr, size_t nc, size_t z)
     return _new_array(atype, 3, &d[0]);
 }
 
-jl_array_t *jl_pchar_to_array(char *str, size_t len)
+jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len);
     memcpy(a->data, str, len);
@@ -290,7 +296,7 @@ jl_array_t *jl_pchar_to_array(char *str, size_t len)
 jl_value_t *jl_array_to_string(jl_array_t *a)
 {
     // TODO: check type of array?
-    jl_struct_type_t* string_type = u8_isvalid(a->data, a->length) == 1 ? // ASCII
+    jl_struct_type_t* string_type = u8_isvalid(a->data, jl_array_len(a)) == 1 ? // ASCII
         jl_ascii_string_type : jl_utf8_string_type;
     jl_value_t *s = alloc_2w();
     s->type = (jl_type_t*)string_type;
@@ -298,7 +304,7 @@ jl_value_t *jl_array_to_string(jl_array_t *a)
     return s;
 }
 
-jl_value_t *jl_pchar_to_string(char *str, size_t len)
+jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
     jl_array_t *a = jl_pchar_to_array(str, len);
     JL_GC_PUSH(&a);
@@ -307,7 +313,7 @@ jl_value_t *jl_pchar_to_string(char *str, size_t len)
     return s;
 }
 
-jl_value_t *jl_cstr_to_string(char *str)
+jl_value_t *jl_cstr_to_string(const char *str)
 {
     return jl_pchar_to_string(str, strlen(str));
 }
@@ -323,7 +329,7 @@ JL_CALLABLE(jl_f_arraylen)
 {
     JL_NARGS(arraylen, 1, 1);
     JL_TYPECHK(arraylen, array, args[0]);
-    return jl_box_long(((jl_array_t*)args[0])->length);
+    return jl_box_long(jl_array_len((jl_array_t*)args[0]));
 }
 
 JL_CALLABLE(jl_f_arraysize)
@@ -363,26 +369,55 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     else {
         elt = ((jl_value_t**)a->data)[i];
         if (elt == NULL) {
-            jl_raise(jl_undefref_exception);
+            jl_throw(jl_undefref_exception);
         }
     }
     return elt;
 }
 
+static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
+                             char *fname)
+{
+    size_t i=0;
+    size_t k, stride=1;
+    size_t nd = jl_array_ndims(a);
+    for(k=0; k < nidxs; k++) {
+        if (!jl_is_long(args[k]))
+            jl_type_error(fname, (jl_value_t*)jl_long_type, args[k]);
+        size_t ii = jl_unbox_long(args[k])-1;
+        i += ii * stride;
+        size_t d = k>=nd ? 1 : jl_array_dim(a, k);
+        if (k < nidxs-1 && ii >= d)
+            jl_throw(jl_bounds_exception);
+        stride *= d;
+    }
+    for(; k < nd; k++)
+        stride *= jl_array_dim(a, k);
+    if (i >= stride)
+        jl_throw(jl_bounds_exception);
+    return i;
+}
+
 JL_CALLABLE(jl_f_arrayref)
 {
-    JL_NARGS(arrayref, 2, 2);
+    JL_NARGSV(arrayref, 2);
     JL_TYPECHK(arrayref, array, args[0]);
-    JL_TYPECHK(arrayref, long, args[1]);
     jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = jl_unbox_long(args[1])-1;
-    if (i >= a->length) {
-        jl_errorf("ref array[%d]: index out of range", i+1);
-    }
+    size_t i = array_nd_index(a, &args[1], nargs-1, "arrayref");
     return jl_arrayref(a, i);
 }
 
-void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
+int jl_array_isdefined(jl_value_t **args, int nargs)
+{
+    assert(jl_is_array(args[0]));
+    jl_array_t *a = (jl_array_t*)args[0];
+    size_t i = array_nd_index(a, &args[1], nargs-1, "isdefined");
+    if (a->ptrarray)
+        return ((jl_value_t**)jl_array_data(a))[i] != NULL;
+    return 1;
+}
+
+void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
 {
     jl_value_t *el_type = jl_tparam0(jl_typeof(a));
     if (el_type != (jl_value_t*)jl_any_type) {
@@ -399,16 +434,21 @@ void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
 
 JL_CALLABLE(jl_f_arrayset)
 {
-    JL_NARGS(arrayset, 3, 3);
+    JL_NARGSV(arrayset, 3);
     JL_TYPECHK(arrayset, array, args[0]);
-    JL_TYPECHK(arrayset, long, args[1]);
-    jl_array_t *b = (jl_array_t*)args[0];
-    size_t i = jl_unbox_long(args[1])-1;
-    if (i >= b->length) {
-        jl_errorf("assign array[%d]: index out of range", i+1);
-    }
-    jl_arrayset(b, i, args[2]);
+    jl_array_t *a = (jl_array_t*)args[0];
+    size_t i = array_nd_index(a, &args[2], nargs-2, "arrayset");
+    jl_arrayset(a, args[1], i);
     return args[0];
+}
+
+void jl_arrayunset(jl_array_t *a, size_t i)
+{
+    if (i >= jl_array_len(a))
+        jl_throw(jl_bounds_exception);
+    char *ptail = (char*)a->data + i*a->elsize;
+    if (a->ptrarray)
+        memset(ptail, 0, a->elsize);
 }
 
 static jl_mallocptr_t *array_new_buffer(jl_array_t *a, size_t newlen)
@@ -428,7 +468,7 @@ static jl_mallocptr_t *array_new_buffer(jl_array_t *a, size_t newlen)
 void jl_array_grow_end(jl_array_t *a, size_t inc)
 {
     // optimized for the case of only growing and shrinking at the end
-    size_t alen = a->length;
+    size_t alen = jl_array_len(a);
     if ((alen + inc) > a->maxsize - a->offset) {
         size_t newlen = a->maxsize==0 ? (inc<4?4:inc) : a->maxsize*2;
         while ((alen + inc) > newlen - a->offset)
@@ -453,8 +493,12 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
 void jl_array_del_end(jl_array_t *a, size_t dec)
 {
     if (dec > a->length)
-        jl_error("array_del_end: index out of range");
-    memset((char*)a->data + (a->length-dec)*a->elsize, 0, dec*a->elsize);
+        jl_throw(jl_bounds_exception);
+    char *ptail = (char*)a->data + (a->length-dec)*a->elsize;
+    if (a->ptrarray)
+        memset(ptail, 0, dec*a->elsize);
+    else
+        ptail[0] = 0;
     a->length -= dec; a->nrows -= dec;
 }
 
@@ -502,7 +546,7 @@ void jl_array_del_beg(jl_array_t *a, size_t dec)
     if (dec == 0)
         return;
     if (dec > a->length)
-        jl_error("array_del_beg: index out of range");
+        jl_throw(jl_bounds_exception);
     size_t es = a->elsize;
     size_t nb = dec*es;
     memset(a->data, 0, nb);
@@ -535,5 +579,5 @@ void jl_cell_1d_push(jl_array_t *a, jl_value_t *item)
 {
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 1);
-    jl_cellset(a, a->length-1, item);
+    jl_cellset(a, jl_array_dim(a,0)-1, item);
 }

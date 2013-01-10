@@ -11,7 +11,7 @@ from sphinx.util.console import bold, purple, darkgreen, term_width_line
 
 def jl_escape(text):
     # XXX: crude & fragile
-    return text.replace('"',"'").replace('\\',r'\\')
+    return text.replace('\\',r'\\').replace('"',"\\\"")
 
 class JuliaHelpTranslator(TextTranslator):
 
@@ -35,6 +35,11 @@ class JuliaHelpTranslator(TextTranslator):
         self.in_desc = True
         self.new_state(0)
 
+    def visit_desc_signature(self, node):
+        self._current_module = node.attributes.get('module', None)
+        self._current_class = node.attributes.get('class', None)
+        TextTranslator.visit_desc_signature(self, node)
+
     def visit_desc_name(self, node):
         self._desc_name = node.astext()
         TextTranslator.visit_desc_name(self, node)
@@ -43,9 +48,20 @@ class JuliaHelpTranslator(TextTranslator):
         if node.attributes['objtype'] == 'attribute':
             return
         self.add_text('"),\n', escape=False)
-        self.end_state(first='(E"%s",E"%s",E"' % ( \
-            jl_escape(self._current_title), \
-            jl_escape(self._desc_name)))
+        category = self._current_title.split('---')[0].strip()
+        if self._current_module is not None:
+            module = self._current_module
+            if module != 'Base':
+                category = module
+        else:
+            module = ''
+        name = self._desc_name
+        if self._current_class:
+            name = self._current_class
+        self.end_state(first='(E"%s",E"%s",E"%s",E"' % ( \
+            jl_escape(category), \
+            jl_escape(module), \
+            jl_escape(name)))
         self.in_desc = False
 
 class JuliaHelpWriter(TextWriter):

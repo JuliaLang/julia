@@ -62,25 +62,26 @@ dimension sizes passed as a variable number of arguments.
 6.  ``falses(dims...)`` — a ``Bool`` array with all values ``false``
 7.  ``reshape(A, dims...)`` — an array with the same data as the given
     array, but with different dimensions.
-8.  ``copy(A)`` — copy ``A``
-9.  ``similar(A, element_type, dims...)`` — an uninitialized array of
+8.  ``copy(A)``  — copy ``A``
+9.  ``deepcopy(A)`` — copy ``A``, recursively copying its elements
+10. ``similar(A, element_type, dims...)`` — an uninitialized array of
     the same type as the given array (dense, sparse, etc.), but with the
     specified element type and dimensions. The second and third
     arguments are both optional, defaulting to the element type and
     dimensions of ``A`` if omitted.
-10. ``reinterpret(type, A)`` — an array with the same binary data as the
+11. ``reinterpret(type, A)`` — an array with the same binary data as the
     given array, but with the specified element type.
-11. ``rand(dims)`` — random array with ``Float64`` uniformly distributed
+12. ``rand(dims)`` — random array with ``Float64`` uniformly distributed
     values in [0,1)
-12. ``randf(dims)`` — random array with ``Float32`` uniformly
+13. ``randf(dims)`` — random array with ``Float32`` uniformly
     distributed values in [0,1)
-13. ``randn(dims)`` — random array with ``Float64`` normally distributed
+14. ``randn(dims)`` — random array with ``Float64`` normally distributed
     random values with a mean of 0 and standard deviation of 1
-14. ``eye(n)`` — n-by-n identity matrix
-15. ``eye(m, n)`` — m-by-n identity matrix
-16. ``linspace(start, stop, n)`` — a vector of ``n`` linearly-spaced
+15. ``eye(n)`` — n-by-n identity matrix
+16. ``eye(m, n)`` — m-by-n identity matrix
+17. ``linspace(start, stop, n)`` — a vector of ``n`` linearly-spaced
     elements from ``start`` to ``stop``.
-17. ``fill!(A, x)`` — fill the array ``A`` with value ``x``
+18. ``fill!(A, x)`` — fill the array ``A`` with value ``x``
 
 The last function, ``fill!``, is different in that it modifies an
 existing array instead of constructing a new one. As a convention,
@@ -93,9 +94,7 @@ Comprehensions
 
 Comprehensions provide a general and powerful way to construct arrays.
 Comprehension syntax is similar to set construction notation in
-mathematics:
-
-::
+mathematics::
 
     A = [ F(x,y,...) for x=rx, y=ry, ... ]
 
@@ -113,24 +112,52 @@ and its left and right neighbour along a 1-d grid.
 
 ::
 
-    julia> const x = rand(10)
-    [0.6017125321472665,0.55317268439850298,0.83375372173664064,0.20371170284589835,0.50800458572940888,0.52963052092498386,0.33042233578025493,0.49411133447814293,0.29570938193206264,0.81897111867503525]
+    julia> const x = rand(8)
+    8-element Float64 Array:
+     0.276455
+     0.614847
+     0.0601373
+     0.896024
+     0.646236
+     0.143959
+     0.0462343
+     0.730987
 
-    julia> [ 0.5*x[i-1] + x[i] + 0.5*x[i+1] for i=2:length(x)-1 ]
-    [1.27090581134045655,1.21219591535884108,0.8745908565789231,0.87467569761484998,0.94884398167981576,0.84229326348181832,0.80717719333430171,0.95225060850865173]
+    julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
+    6-element Float64 Array:
+     0.391572
+     0.407786
+     0.624605
+     0.583114
+     0.245097
+     0.241854
 
 NOTE: In the above example, ``x`` is declared as constant because type
 inference in Julia does not work as well on non-constant global
 variables.
+
+The resulting array type is inferred from the expression; in order to control
+the type explicitly, the type can be prepended to the comprehension. For example,
+in the above example we could have avoided declaring ``x`` as constant, and ensured
+that the result is of type ``Float64`` by writing::
+
+    Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
+
+Using curly brackets instead of square brackets is a shortand notation for an
+array of type ``Any``::
+
+    julia> { i/2 for i = 1:3 }
+    3-element Any Array:
+     0.5
+     1.0
+     1.5
 
 .. _man-array-indexing:
 
 Indexing
 --------
 
-The general syntax for indexing into an n-dimensional array A is:
-
-::
+The general syntax for indexing into an n-dimensional array A is::
 
     X = A[I_1, I_2, ..., I_n]
 
@@ -145,15 +172,11 @@ The result X has the dimensions
 ``(i_1, i_2, ..., i_n)`` of X containing the value
 ``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
 
-Indexing syntax is equivalent to a call to ``ref``:
-
-::
+Indexing syntax is equivalent to a call to ``ref``::
 
     X = ref(A, I_1, I_2, ..., I_n)
 
-Example:
-
-::
+Example::
 
     julia> x = reshape(1:16, 4, 4)
     4x4 Int64 Array
@@ -170,9 +193,7 @@ Example:
 Assignment
 ----------
 
-The general syntax for assigning values in an n-dimensional array A is:
-
-::
+The general syntax for assigning values in an n-dimensional array A is::
 
     A[I_1, I_2, ..., I_n] = X
 
@@ -186,15 +207,11 @@ The size of X should be ``(size(I_1), size(I_2), ..., size(I_n))``, and
 the value in location ``(i_1, i_2, ..., i_n)`` of A is overwritten with
 the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
 
-Index assignment syntax is equivalent to a call to ``assign``:
-
-::
+Index assignment syntax is equivalent to a call to ``assign``::
 
       A = assign(A, X, I_1, I_2, ..., I_n)
 
-Example:
-
-::
+Example::
 
     julia> x = reshape(1:9, 3, 3)
     3x3 Int64 Array
@@ -254,6 +271,41 @@ one of the inputs is a scalar.
     ``sqrt``, ``cbrt``, ``erf``, ``erfc``, ``gamma``, ``lgamma``,
     ``real``, ``conj``, ``clamp``
 
+Broadcasting
+------------
+
+It is sometimes useful to perform element-by-element binary operations
+on arrays of different sizes, such as adding a vector to each column
+of a matrix.  An inefficient way to do this would be to replicate the
+vector to the size of the matrix::
+
+    julia> a = rand(2,1); A = rand(2,3);
+
+    julia> repmat(a,1,3)+A
+    2x3 Float64 Array:
+     0.848333  1.66714  1.3262 
+     1.26743   1.77988  1.13859
+
+This is wasteful when dimensions get large, so Julia offers the
+Matlab-inspired ``bsxfun``, which expands singleton dimensions in
+array arguments to match the corresponding dimension in the other
+array without using extra memory, and applies the given binary
+function::
+
+    julia> bsxfun(+, a, A)
+    2x3 Float64 Array:
+     0.848333  1.66714  1.3262 
+     1.26743   1.77988  1.13859
+
+    julia> b = rand(1,2)
+    1x2 Float64 Array:
+     0.629799  0.754948
+
+    julia> bsxfun(+, a, b)
+    2x2 Float64 Array:
+     1.31849  1.44364
+     1.56107  1.68622
+
 Implementation
 --------------
 
@@ -303,7 +355,7 @@ stride parameters.
     0.34377272170384798 0.12998312467801409
     0.75207724893767547 0.48974544536835718
 
-    julia> (q,r,p) = qr(b);
+    julia> (q,r) = qr(b);
 
     julia> q
     4x2 Float64 Array
@@ -316,7 +368,3 @@ stride parameters.
     2x2 Float64 Array
     -1.00091806276211814 -0.65508286752651457
     0.0 0.70738744643074303
-
-    julia> p
-    [2,1]
-

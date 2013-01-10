@@ -14,6 +14,8 @@ isequal(x,y) = is(x,y)
 > (x,y) = y < x
 <=(x,y) = !(y < x)
 >=(x,y) = (y <= x)
+.> (x,y) = y.<x
+.>=(x,y) = y.<=x
 
 # these definitions allow Number types to implement
 # == and < instead of isequal and isless, which is more idiomatic:
@@ -52,20 +54,20 @@ for op = (:+, :*, :&, :|, :$, :min, :max)
     end
 end
 
-\(x,y) = y/x
+\(x::Number,y::Number) = y/x
 
 # .<op> defaults to <op>
-./(x,y) = x/y
-.\(x,y) = y./x
-.*(x,y) = x*y
-.^(x,y) = x^y
+./(x::Number,y::Number) = x/y
+.\(x::Number,y::Number) = y./x
+.*(x::Number,y::Number) = x*y
+.^(x::Number,y::Number) = x^y
+.+(x,y) = x+y
+.-(x,y) = x-y
 
-.==(x,y) = x==y
-.!=(x,y) = x!=y
-.< (x,y) = x<y
-.> (x,y) = y.<x
-.<=(x,y) = x<=y
-.>=(x,y) = y.<=x
+.==(x::Number,y::Number) = x==y
+.!=(x::Number,y::Number) = x!=y
+.< (x::Real,y::Real) = x<y
+.<=(x::Real,y::Real) = x<=y
 
 # core << >> and >>> takes Int32 as second arg
 <<(x,y::Integer)  = x << convert(Int32,y)
@@ -178,7 +180,7 @@ end
 function ref_shape(I...)
     n = length(I)
     while n > 0 && isa(I[n],Real); n-=1; end
-    ntuple(n, i->length(I[i]))
+    tuple([length(I[i]) for i=1:n]...)
 end
 
 ref_shape(i::Real) = ()
@@ -209,8 +211,10 @@ function assign_shape_check(X::AbstractArray, I...)
     end
 end
 
-# convert Real to integer index
+# convert to integer index
+to_index(i)       = i
 to_index(i::Real) = convert(Int, i)
+to_index(i::Int)  = i
 
 # vectorization
 
@@ -224,7 +228,7 @@ macro vectorize_1arg(S,f)
             [ ($f)(x[i,j]) for i=1:size(x,1), j=1:size(x,2) ]
         end
         function ($f){$T<:$S}(x::AbstractArray{$T})
-            reshape([ ($f)(x[i]) for i=1:numel(x) ], size(x))
+            reshape([ ($f)(x[i]) for i=1:length(x) ], size(x))
         end
     end
 end
@@ -233,15 +237,15 @@ macro vectorize_2arg(S,f)
     S = esc(S); f = esc(f); T1 = esc(:T1); T2 = esc(:T2)
     quote
         function ($f){$T1<:$S, $T2<:$S}(x::($T1), y::AbstractArray{$T2})
-            reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
+            reshape([ ($f)(x, y[i]) for i=1:length(y) ], size(y))
         end
         function ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::($T2))
-            reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
+            reshape([ ($f)(x[i], y) for i=1:length(x) ], size(x))
         end
 
         function ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::AbstractArray{$T2})
             shp = promote_shape(size(x),size(y))
-            reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
+            reshape([ ($f)(x[i], y[i]) for i=1:length(x) ], shp)
         end
     end
 end

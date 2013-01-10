@@ -11,13 +11,13 @@ function solve(x::Int, y::Int, n::Int, d::Array{Vector{Int}})
     for py = 1:y
       if !hitsany([px, py], d)
         s = solve(x, y, n-1, addqueen(d, [px, py]))
-        if s != None
+        if !isequal(s, None)
           return s
         end
       end
     end
   end
-  None
+  return None
 end
 
 solve(x, y, n) = solve(x, y, n, Array(Vector{Int}, 0))

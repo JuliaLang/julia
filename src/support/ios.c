@@ -63,8 +63,7 @@ static int _fd_available(long fd)
 
 static int _enonfatal(int err)
 {
-    return (err == EAGAIN || err == EINPROGRESS || err == EINTR ||
-            err == EWOULDBLOCK);
+    return (err == EAGAIN ||/* err == EINPROGRESS ||*/ err == EINTR /*|| err == EWOULDBLOCK*/); //jwn
 }
 
 #define SLEEP_TIME 5//ms
@@ -107,7 +106,7 @@ static int _os_read_all(long fd, void *buf, size_t n, size_t *nread)
     return 0;
 }
 
-static int _os_write(long fd, void *buf, size_t n, size_t *nwritten)
+static int _os_write(long fd, const void *buf, size_t n, size_t *nwritten)
 {
     ssize_t r;
 
@@ -126,7 +125,7 @@ static int _os_write(long fd, void *buf, size_t n, size_t *nwritten)
     return 0;
 }
 
-int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten)
+int _os_write_all(long fd, const void *buf, size_t n, size_t *nwritten)
 {
     size_t wrote;
 
@@ -185,7 +184,7 @@ static char *_buf_realloc(ios_t *s, size_t sz)
 
 // write a block of data into the buffer at the current position, resizing
 // if necessary. returns # written.
-static size_t _write_grow(ios_t *s, char *data, size_t n)
+static size_t _write_grow(ios_t *s, const char *data, size_t n)
 {
     size_t amt;
     size_t newsize;
@@ -347,7 +346,7 @@ DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src)
     return nwr;
 }
 
-size_t ios_write(ios_t *s, char *data, size_t n)
+size_t ios_write(ios_t *s, const char *data, size_t n)
 {
     if (s->readonly) return 0;
     if (n == 0) return 0;
@@ -434,6 +433,7 @@ off_t ios_seek_end(ios_t *s)
         off_t fdpos = lseek(s->fd, 0, SEEK_END);
         if (fdpos == (off_t)-1)
             return fdpos;
+        s->fpos = fdpos;
         s->bpos = s->size = 0;
     }
     return 0;
@@ -496,24 +496,33 @@ off_t ios_pos(ios_t *s)
     return fdpos;
 }
 
-size_t ios_trunc(ios_t *s, size_t size)
+int ios_trunc(ios_t *s, size_t size)
 {
     if (s->bm == bm_mem) {
         if (size == s->size)
-            return s->size;
+            return 0;
         if (size < s->size) {
             if (s->bpos > size)
                 s->bpos = size;
         }
         else {
             if (_buf_realloc(s, size)==NULL)
-                return s->size;
+                return 0;
         }
         s->size = size;
-        return size;
+        return 0;
     }
-    //todo
-    return 0;
+    else {
+        ios_flush(s);
+        if (s->state == bst_rd) {
+            off_t p = ios_pos(s);
+            if (size < p + (s->size - s->bpos))
+                s->size -= (p + (s->size - s->bpos) - size);
+        }
+        if (ftruncate(s->fd, size)==0)
+            return 0;
+    }
+    return 1;
 }
 
 int ios_eof(ios_t *s)
@@ -759,7 +768,6 @@ static void _ios_init(ios_t *s)
     s->_eof = 0;
     s->rereadable = 0;
     s->readonly = 0;
-    s->mutex_initialized = 0;
 }
 
 /* stream object initializers. we do no allocation. */
@@ -773,7 +781,11 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     int flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
-    fd = open(fname, flags, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH/*644*/);
+    fd = open(fname, flags, S_IRUSR | S_IWUSR /* 600 */
+#ifndef __WIN32__
+	      | S_IRGRP | S_IROTH /* 644 */
+#endif
+	      );
     if (fd == -1)
         goto open_file_err;
     s = ios_fd(s, fd, 1, 1);

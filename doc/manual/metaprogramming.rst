@@ -27,9 +27,7 @@ Expressions and Eval
 Julia code is represented as a syntax tree built out of Julia data
 structures of type ``Expr``. This makes it easy to construct and
 manipulate Julia code from within Julia, without generating or parsing
-source text. Here is the definition of the ``Expr`` type:
-
-::
+source text. Here is the definition of the ``Expr`` type::
 
     type Expr
       head::Symbol
@@ -49,9 +47,7 @@ strings) that makes it easy to create expression objects without
 explicitly constructing ``Expr`` objects. There are two forms: a short
 form for inline expressions using ``:`` followed by a single expression,
 and a long form for blocks of code, enclosed in ``quote ... end``. Here
-is an example of the short form used to quote an arithmetic expression:
-
-::
+is an example of the short form used to quote an arithmetic expression::
 
     julia> ex = :(a+b*c+1)
     +(a,*(b,c),1)
@@ -86,9 +82,7 @@ constructed by Julia code can easily have arbitrary run-time values
 without literal forms as args. In this specific example, ``+`` and ``a``
 are symbols, ``*(b,c)`` is a subexpression, and ``1`` is a literal
 64-bit signed integer. Here's an example of the longer expression
-quoting form:
-
-::
+quoting form::
 
     julia> quote
          x = 1
@@ -103,9 +97,7 @@ quoting form:
     end
 
 When the argument to ``:`` is just a symbol, a ``Symbol`` object results
-instead of an ``Expr``:
-
-::
+instead of an ``Expr``::
 
     julia> :foo
     foo
@@ -122,9 +114,7 @@ Eval and Interpolation
 
 Given an expression object, one can cause Julia to evaluate (execute) it
 at the *top level* scope — i.e. in effect like loading from a file or
-typing at the interactive prompt — using the ``eval`` function:
-
-::
+typing at the interactive prompt — using the ``eval`` function::
 
     julia> :(1 + 2)
     +(1,2)
@@ -145,9 +135,7 @@ typing at the interactive prompt — using the ``eval`` function:
 
 Expressions passed to ``eval`` are not limited to returning values
 — they can also have side-effects that alter the state of the top-level
-evaluation environment:
-
-::
+evaluation environment::
 
     julia> ex = :(x = 1)
     x = 1
@@ -167,9 +155,7 @@ assigned to the top-level variable ``x``.
 Since expressions are just ``Expr`` objects which can be constructed
 programmatically and then evaluated, one can, from within Julia code,
 dynamically generate arbitrary code which can then be run using
-``eval``. Here is a simple example:
-
-::
+``eval``. Here is a simple example::
 
     julia> a = 1;
 
@@ -202,9 +188,7 @@ tedious and ugly. Since the Julia parser is already excellent at
 producing expression objects, Julia allows "splicing" or interpolation
 of expression objects, prefixed with ``$``, into quoted expressions,
 written using normal syntax. The above example can be written more
-clearly and concisely using interpolation:
-
-::
+clearly and concisely using interpolation::
 
     julia> a = 1;
     1
@@ -229,9 +213,7 @@ languages, this requires an extra build step, and a separate program to
 generate the repetitive code. In Julia, expression interpolation and
 eval allow such code generation to take place in the normal course of
 program execution. For example, the following code defines a series of
-operators on three arguments in terms of their 2-argument forms:
-
-::
+operators on three arguments in terms of their 2-argument forms::
 
     for op = (:+, :*, :&, :|, :$)
       eval(quote
@@ -241,9 +223,7 @@ operators on three arguments in terms of their 2-argument forms:
 
 In this manner, Julia acts as its own preprocessor, and allows code
 generation from inside the language. The above code could be written
-slightly more tersely using the ``:`` prefix quoting form:
-
-::
+slightly more tersely using the ``:`` prefix quoting form::
 
     for op = (:+, :*, :&, :|, :$)
       eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
@@ -251,9 +231,7 @@ slightly more tersely using the ``:`` prefix quoting form:
 
 This sort of in-language code generation, however, using the
 ``eval(quote(...))`` pattern, is common enough that Julia comes with a
-macro to abbreviate this pattern:
-
-::
+macro to abbreviate this pattern::
 
     for op = (:+, :*, :&, :|, :$)
       @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
@@ -261,21 +239,17 @@ macro to abbreviate this pattern:
 
 The ``@eval`` macro rewrites this call to be precisely equivalent to the
 above longer versions. For longer blocks of generated code, the
-expression argument given to ``@eval`` can be a block:
-
-::
+expression argument given to ``@eval`` can be a block::
 
     @eval begin
       # multiple lines
     end
 
 Interpolating into an unquoted expression is not supported and will
-cause a compile-time error:
-
-::
+cause a compile-time error::
 
     julia> $a + b
-    not supported
+    unsupported or misplaced expression $
 
 .. _man-macros:
 
@@ -287,9 +261,7 @@ compile time: they allow the programmer to automatically generate
 expressions by transforming zero or more argument expressions into a
 single result expression, which then takes the place of the macro call
 in the final syntax tree. Macros are invoked with the following general
-syntax:
-
-::
+syntax::
 
     @name expr1 expr2 ...
 
@@ -297,29 +269,21 @@ Note the distinguishing ``@`` before the macro name and the lack of
 commas between the argument expressions. Before the program runs, this
 statement will be replaced with the result of calling an expander
 function for ``name`` on the expression arguments. Expanders are defined
-with the ``macro`` keyword:
-
-::
+with the ``macro`` keyword::
 
     macro name(expr1, expr2, ...)
         ...
     end
 
-Here, for example, is very nearly the definition of Julia's ``@assert``
+Here, for example, is the definition of Julia's ``@assert``
 macro (see
-`error.jl <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_
-for the actual definition, which allows ``@assert`` to work on booleans
-arrays as well):
-
-::
+`error.jl <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_)::
 
     macro assert(ex)
-        :($ex ? nothing : error("Assertion failed: ", $string(ex)))
+        :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
     end
 
-This macro can be used like this:
-
-::
+This macro can be used like this::
 
     julia> @assert 1==1.0
 
@@ -349,17 +313,19 @@ Hygiene
 ~~~~~~~
 
 An issue that arises in more complex macros is that of
-`hygiene <http://en.wikipedia.org/wiki/Hygienic_macro>`_. In short, one
-needs to ensure that variables introduced and used by macros do not
+`hygiene <http://en.wikipedia.org/wiki/Hygienic_macro>`_. In short, Julia
+must ensure that variables introduced and used by macros do not
 accidentally clash with the variables used in code interpolated into
-those macros. To demonstrate the problem before providing the solution,
+those macros. Another concern arises from the fact that a macro may be called
+in a different module from where it was defined. In this case we need to
+ensure that all global variables are resolved to the correct module.
+
+To demonstrate these issues,
 let us consider writing a ``@time`` macro that takes an expression as
 its argument, records the time, evaluates the expression, records the
 time again, prints the difference between the before and after times,
-and then has the value of the expression as its final value. A naïve
-attempt to write this macro might look like this:
-
-::
+and then has the value of the expression as its final value.
+The macro might look like this::
 
     macro time(ex)
       quote
@@ -371,107 +337,67 @@ attempt to write this macro might look like this:
       end
     end
 
-At first blush, this appears to work correctly:
+Here, we want ``t0``, ``t1``, and ``val`` to be private temporary variables,
+and we want ``time`` to refer to the ``time`` function in the standard library,
+not to any ``time`` variable the user might have (the same applies to
+``println``). Imagine the problems that could occur if the user expression
+``ex`` also contained assignments to a variable called ``t0``, or defined
+its own ``time`` variable. We might get errors, or mysteriously incorrect
+behavior.
 
-::
+Julia's macro expander solves these problems in the following way. First,
+variables within a macro result are classified as either local or global.
+A variable is considered local if it is assigned to (and not declared
+global), declared local, or used as a function argument name. Otherwise,
+it is considered global. Local variables are then renamed to be unique
+(using the ``gensym`` function, which generates new symbols), and global
+variables are resolved within the macro definition environment. Therefore
+both of the above concerns are handled; the macro's locals will not conflict
+with any user variables, and ``time`` and ``println`` will refer to the
+standard library definitions.
 
-    julia> @time begin
-             local t = 0
-             for i = 1:10000000
-               t += i
-             end
-             t
-           end
-    elapsed time: 1.1377708911895752 seconds
-    50000005000000
+One problem remains however. Consider the following use of this macro::
 
-Suppose, however, that we change the expression passed to ``@time``
-slightly:
+    module MyModule
+    import Base.@time
 
-::
+    time() = ... # compute something
 
-    julia> @time begin
-             local t0 = 0
-             for i = 1:10000000
-               t0 += i
-             end
-             t0
-           end
-    syntax error: local t0 declared twice
-
-What happened? The trouble is that after macro expansion, the above
-expression becomes equivalent to:
-
-::
-
-    begin
-      local t0 = time()
-      local val = begin
-        local t0 = 0
-        for i = 1:100000000
-          t0 += i
-        end
-        t0
-      end
-      local t1 = time()
-      println("elapsed time: ", t1-t0, " seconds")
-      val
+    @time time()
     end
 
-Declaring a local variable twice in the same scope is illegal, and since
-``begin`` blocks do *not* introduce a new scope block (see :ref:`man-variables-and-scoping`), this code is invalid. The
-root problem is that the naïve ``@time`` macro implementation is
-unhygienic: it is possible for the interpolated code to accidentally use
-variables that clash with the variables used by the macro's code.
-
-To address the macro hygiene problem, Julia provides the ``gensym``
-function, which generates unique symbols that are guaranteed not to
-clash with any other symbols. Called with no arguments, ``gensym``
-returns a single unique symbol:
-
-::
-
-    julia> s = gensym()
-    #1007
-
-Since it is common to need more than one unique symbol when generating a
-block of code in a macro, if you call ``gensym`` with an integer
-argument, it returns a tuple of that many unique symbols, which can
-easily be captured using tuple destructuring:
-
-::
-
-    julia> s1, s2 = gensym(2)
-    (#1009,#1010)
-
-    julia> s1
-    #1009
-
-    julia> s2
-    #1010
-
-The ``gensym`` function can be used to define the ``@time`` macro
-correctly, avoiding potential variable name clashes:
-
-::
+Here the user expression ``ex`` is a call to ``time``, but not the same
+``time`` function that the macro uses. It clearly refers to ``MyModule.time``.
+Therefore we must arrange for the code in ``ex`` to be resolved in the
+macro call environment. This is done by "escaping" the expression with
+the ``esc`` function::
 
     macro time(ex)
-      t0, val, t1 = gensym(3)
-      quote
-        local $t0 = time()
-        local $val = $ex
-        local $t1 = time()
-        println("elapsed time: ", $t1-$t0, " seconds")
-        $val
-      end
+        ...
+        local val = $(esc(ex))
+        ...
     end
 
-The call to ``gensym(3)`` generates three unique names for variables to
-use inside of the generated code block. With this definition, both of
-the above uses of ``@time`` work identically — the behavior of the code
-no longer depends in any way upon the names of variables in the given
-expression, since they are guaranteed not to collide with the names of
-variables used in code generated by the macro.
+An expression wrapped in this manner is left alone by the macro expander
+and simply pasted into the output verbatim. Therefore it will be
+resolved in the macro call environment.
+
+This escaping mechanism can be used to "violate" hygiene when necessary,
+in order to introduce or manipulate user variables. For example, the
+following macro sets ``x`` to zero in the call environment::
+
+    macro zerox()
+      esc(:(x = 0))
+    end
+
+    function foo()
+      x = 1
+      @zerox
+      x  # is zero
+    end
+
+This kind of manipulation of variables should be used judiciously, but
+is occasionally quite handy.
 
 Non-Standard String Literals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -492,9 +418,7 @@ Perhaps surprisingly, these behaviors are not hard-coded into the Julia
 parser or compiler. Instead, they are custom behaviors provided by a
 general mechanism that anyone can use: prefixed string literals are
 parsed as calls to specially-named macros. For example, the regular
-expression macros is just the following:
-
-::
+expression macros is just the following::
 
     macro r_str(p)
       Regex(p)
@@ -505,9 +429,7 @@ literal ``r"^\s*(?:#|$)"`` should be passed to the ``@r_str`` macro and
 the result of that expansion should be placed in the syntax tree where
 the string literal occurs. In other words, the expression
 ``r"^\s*(?:#|$)"`` is equivalent to placing the following object
-directly into the syntax tree:
-
-::
+directly into the syntax tree::
 
     Regex("^\\s*(?:#|\$)")
 
@@ -515,9 +437,7 @@ Not only is the string literal form shorter and far more convenient, but
 it is also more efficient: since the regular expression is compiled and
 the ``Regex`` object is actually created *when the code is compiled*,
 the compilation occurs only once, rather than every time the code is
-executed. Consider if the regular expression occurs in a loop:
-
-::
+executed. Consider if the regular expression occurs in a loop::
 
     for line = lines
       m = match(r"^\s*(?:#|$)", line)
@@ -532,9 +452,7 @@ Since the regular expression ``r"^\s*(?:#|$)"`` is compiled and inserted
 into the syntax tree when this code is parsed, the expression is only
 compiled once instead of each time the loop is executed. In order to
 accomplish this without macros, one would have to write this loop like
-this:
-
-::
+this::
 
     re = Regex("^\\s*(?:#|\$)")
     for line = lines
@@ -565,9 +483,7 @@ powerful. Not only are Julia's non-standard literals implemented using
 it, but also the command literal syntax (```echo "Hello, $person"```)
 and regular string interpolation are implemented using it. These two
 powerful facilities are implemented with the following innocuous-looking
-pair of macros:
-
-::
+pair of macros::
 
     macro cmd(str)
       :(cmd_gen($shell_parse(str)))

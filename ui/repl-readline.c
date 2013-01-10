@@ -21,6 +21,7 @@
 
 extern int asprintf(char **strp, const char *fmt, ...);
 
+#define USE_READLINE_STATIC
 #include <readline/readline.h>
 #include <readline/history.h>
 
@@ -40,12 +41,19 @@ DLLEXPORT void jl_enable_color(void)
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
 
-static void init_history(void) {
+static void init_history(void)
+{
     using_history();
+    if (disable_history) return;
+#ifndef __WIN32__
     char *home = getenv("HOME");
     if (!home) return;
-    if (disable_history) return;
     asprintf(&history_file, "%s/.julia_history", home);
+#else
+    char *home = getenv("AppData");
+    if (!home) return;
+    asprintf(&history_file, "%s/julia/history", home);
+#endif
     struct stat stat_info;
     if (!stat(history_file, &stat_info)) {
         read_history(history_file);
@@ -70,14 +78,20 @@ static void init_history(void) {
             char *p = strchr(first->line, '\0');
             for (k = i+1; k < j; k++) {
                 *p = '\n';
+                #ifndef __WIN32__
                 p = stpcpy(p+1, history_get(i+1)->line);
+                #else
+                p = strcpy(p+1, history_get(i+1)->line);
+                #endif
                 free_history_entry(history_rem(i+1));
             }
         }
-    } else if (errno == ENOENT) {
+    }
+    else if (errno == ENOENT) {
         write_history(history_file);
-    } else {
-        ios_printf(ios_stderr, "history file error: %s\n", strerror(errno));
+    }
+    else {
+        jl_printf(jl_uv_stderr, "history file error: %s\n", strerror(errno));
         exit(1);
     }
 }
@@ -85,7 +99,8 @@ static void init_history(void) {
 static int last_hist_is_temp = 0;
 static int last_hist_offset = -1;
 
-static void add_history_temporary(char *input) {
+static void add_history_temporary(char *input)
+{
     if (!input || !*input) return;
     if (last_hist_is_temp) {
         history_rem(history_length);
@@ -96,7 +111,8 @@ static void add_history_temporary(char *input) {
     last_hist_is_temp = 1;
 }
 
-static void add_history_permanent(char *input) {
+static void add_history_permanent(char *input)
+{
     if (!input || !*input) return;
     if (last_hist_is_temp) {
         history_rem(history_length);
@@ -111,14 +127,16 @@ static void add_history_permanent(char *input) {
         append_history(1, history_file);
 }
 
-static int line_start(int point) {
+static int line_start(int point)
+{
     if (!point) return 0;
     int i = point-1;
     for (; i; i--) if (rl_line_buffer[i] == '\n') return i+1;
     return rl_line_buffer[i] == '\n' ? 1 : 0;
 }
 
-static int line_end(int point) {
+static int line_end(int point)
+{
     char *nl = strchr(rl_line_buffer + point, '\n');
     if (!nl) return rl_end;
     return nl - rl_line_buffer;
@@ -127,7 +145,8 @@ static int line_end(int point) {
 static int strip_initial_spaces = 0;
 static int spaces_suppressed = 0;
 
-static void reset_indent(void) {
+static void reset_indent(void)
+{
     strip_initial_spaces = 0;
     spaces_suppressed = 0;
 }
@@ -138,7 +157,8 @@ static int jl_word_char(uint32_t wc)
     return strchr(rl_completer_word_break_characters, wc) == NULL;
 }
 
-static int newline_callback(int count, int key) {
+static int newline_callback(int count, int key)
+{
     if (!rl_point) return 0;
     spaces_suppressed = 0;
     rl_insert_text("\n");
@@ -148,7 +168,8 @@ static int newline_callback(int count, int key) {
     return 0;
 }
 
-static int return_callback(int count, int key) {
+static int return_callback(int count, int key)
+{
     static int consecutive_returns = 0;
     if (rl_point > prompt_length && rl_point == rl_end &&
         rl_line_buffer[rl_point-prompt_length-1] == '\n')
@@ -170,7 +191,8 @@ static int return_callback(int count, int key) {
     return 0;
 }
 
-static int suppress_space(void) {
+static int suppress_space(void)
+{
     int i;
     for (i = line_start(rl_point); i < rl_point; i++)
         if (rl_line_buffer[i] != ' ') return 0;
@@ -178,14 +200,16 @@ static int suppress_space(void) {
     return 0;
 }
 
-static int space_callback(int count, int key) {
+static int space_callback(int count, int key)
+{
     if (!rl_point) strip_initial_spaces++;
     else if (suppress_space()) spaces_suppressed++;
     else rl_insert_text(" ");
     return 0;
 }
 
-static int tab_callback(int count, int key) {
+static int tab_callback(int count, int key)
+{
     if (!rl_point) {
         strip_initial_spaces += tab_width;
         return 0;
@@ -213,7 +237,8 @@ static int tab_callback(int count, int key) {
     return 0;
 }
 
-static int line_start_callback(int count, int key) {
+static int line_start_callback(int count, int key)
+{
     reset_indent();
     int start = line_start(rl_point);
     int flush_left = rl_point == 0 || rl_point == start + prompt_length;
@@ -221,7 +246,8 @@ static int line_start_callback(int count, int key) {
     return 0;
 }
 
-static int line_end_callback(int count, int key) {
+static int line_end_callback(int count, int key)
+{
     reset_indent();
     int end = line_end(rl_point);
     int flush_right = rl_point == end;
@@ -229,7 +255,8 @@ static int line_end_callback(int count, int key) {
     return 0;
 }
 
-static int line_kill_callback(int count, int key) {
+static int line_kill_callback(int count, int key)
+{
     reset_indent();
     int end = line_end(rl_point);
     int flush_right = rl_point == end;
@@ -239,7 +266,8 @@ static int line_kill_callback(int count, int key) {
     return 0;
 }
 
-static int backspace_callback(int count, int key) {
+static int backspace_callback(int count, int key)
+{
     reset_indent();
     if (!rl_point) return 0;
 
@@ -263,7 +291,8 @@ finish:
     return 0;
 }
 
-static int delete_callback(int count, int key) {
+static int delete_callback(int count, int key)
+{
     reset_indent();
     int j = rl_point;
     do {
@@ -274,7 +303,8 @@ static int delete_callback(int count, int key) {
     return 0;
 }
 
-static int left_callback(int count, int key) {
+static int left_callback(int count, int key)
+{
     reset_indent();
     if (rl_point > 0) {
         int i = line_start(rl_point);
@@ -285,7 +315,8 @@ static int left_callback(int count, int key) {
     return 0;
 }
 
-static int right_callback(int count, int key) {
+static int right_callback(int count, int key)
+{
     reset_indent();
     do {
         rl_point += (rl_line_buffer[rl_point] == '\n') ? prompt_length+1 : 1;
@@ -294,7 +325,8 @@ static int right_callback(int count, int key) {
     return 0;
 }
 
-static int up_callback(int count, int key) {
+static int up_callback(int count, int key)
+{
     reset_indent();
     int i = line_start(rl_point);
     if (i > 0) {
@@ -310,7 +342,8 @@ static int up_callback(int count, int key) {
     return 0;
 }
 
-static int down_callback(int count, int key) {
+static int down_callback(int count, int key)
+{
     reset_indent();
     int j = line_end(rl_point);
     if (j < rl_end) {
@@ -329,6 +362,13 @@ static int down_callback(int count, int key) {
     }
 }
 
+static int sigint_callback(int count, int key)
+{
+    jl_write(jl_uv_stdout, "^C\n", 3);
+    jl_clear_input();
+    return 0;
+}
+
 static int callback_en=0;
 
 void jl_input_line_callback(char *input)
@@ -337,18 +377,23 @@ void jl_input_line_callback(char *input)
     if (!input || ios_eof(ios_stdin)) {
         end = 1;
         rl_ast = NULL;
+    } else if (!rl_ast) {
+        // In vi mode, it's possible for this function to be called w/o a
+        // previous call to return_callback.
+        rl_ast = jl_parse_input_line(rl_line_buffer);
     }
 
     if (rl_ast != NULL) {
         doprint = !ends_with_semicolon(input);
         add_history_permanent(input);
-        ios_putc('\n', ios_stdout);
+        jl_putc('\n', jl_uv_stdout);
         free(input);
     }
 
     callback_en = 0;
     rl_callback_handler_remove();
     handle_input(rl_ast, end, doprint);
+    rl_ast = NULL;
 }
 
 char *read_expr(char *prompt)
@@ -366,46 +411,115 @@ static int common_prefix(const char *s1, const char *s2)
 }
 
 static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
+                          jl_module_t *module, const char *str,
                           const char *prefix, int plen)
 {
     do {
         if (common_prefix(prefix, tree->name) == plen &&
-            jl_boundp(jl_base_module, tree)) {
-            ios_puts(tree->name, result);
+            (module ? jl_defines_or_exports_p(module, tree) : jl_boundp(jl_current_module, tree))) {
+            ios_puts(str, result);
+            ios_puts(tree->name + plen, result);
             ios_putc('\n', result);
             (*pcount)++;
         }
         if (tree->left)
-            symtab_search(tree->left, pcount, result, prefix, plen);
+            symtab_search(tree->left, pcount, result, module, str, prefix, plen);
         tree = tree->right;
     } while (tree != NULL);
 }
+
+static jl_module_t *
+find_submodule_named(jl_module_t *module, const char *name)
+{
+    jl_sym_t *s = jl_symbol_lookup(name);
+    if (!s) return NULL;
+
+    jl_binding_t *b = jl_get_binding(module, s);
+    if (!b) return NULL;
+
+    return (jl_is_module(b->value)) ? (jl_module_t *)b->value : NULL;
+}
+
+static char *strtok_saveptr;
+
+#if defined(_WIN32) && !defined(__MINGW_H)
+#define strtok_r(s,d,p) strtok_s(s,d,p)
+#elif defined(__MINGW_H)
+char *strtok_r(char *str, const char *delim, char **save)
+{
+    char *res, *last;
+
+    if( !save )
+        return strtok(str, delim);
+    if( !str && !(str = *save) )
+        return NULL;
+    last = str + strlen(str);
+    if( (*save = res = strtok(str, delim)) )
+    {
+        *save += strlen(res);
+        if( *save < last )
+            (*save)++;
+        else
+            *save = NULL;
+    }
+    return res;
+}
+#endif
 
 static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
 {
     int x, plen, count=0;
     ios_t ans;
 
-    plen = strlen(str);
+    // given str "X.Y.a", set module := X.Y and name := "a"
+    jl_module_t *module = NULL;
+    char *name = NULL, *strcopy = strdup(str);
+    for (char *s=strcopy, *r;; s=NULL) {
+        char *t = strtok_r(s, ".", &r);
+        if (!t) {
+            if (str[strlen(str)-1] == '.') {
+                // this case is "Module."
+                if (name) {
+                    if (!module) module = jl_current_module;
+                    module = find_submodule_named(module, name);
+                    if (!module) goto symtab_get_matches_exit;
+                }
+                name = "";
+            }
+            break;
+        }
+        if (name) {
+            if (!module) module = jl_current_module;
+            module = find_submodule_named(module, name);
+            if (!module) goto symtab_get_matches_exit;
+        }
+        name = t;
+    }
+
+    if (!name) goto symtab_get_matches_exit;
+    plen = strlen(name);
 
     while (tree != NULL) {
-        x = common_prefix(str, tree->name);
+        x = common_prefix(name, tree->name);
         if (x == plen) {
             ios_mem(&ans, 0);
-            symtab_search(tree, &count, &ans, str, plen);
+            symtab_search(tree, &count, &ans, module, str, name, plen);
             size_t nb;
             *answer = ios_takebuf(&ans, &nb);
-            return count;
+            break;
         }
         else {
-            x = strcmp(str, tree->name);
+            x = strcmp(name, tree->name);
             if (x < 0)
                 tree = tree->left;
             else
                 tree = tree->right;
         }
     }
-    return 0;
+
+symtab_get_matches_exit:
+    free(strcopy);
+    return count;
 }
 
 int tab_complete(const char *line, char **answer, int *plen)
@@ -423,8 +537,6 @@ int tab_complete(const char *line, char **answer, int *plen)
 
     return symtab_get_matches(jl_get_root_symbol(), &line[len], answer);
 }
-
-static char *strtok_saveptr;
 
 static char *do_completions(const char *ch, int c)
 {
@@ -456,7 +568,7 @@ static char **julia_completion(const char *text, int start, int end)
 {
     return rl_completion_matches(text, do_completions);
 }
-
+#ifndef __WIN32__
 void sigtstp_handler(int arg)
 {
     rl_cleanup_after_signal();
@@ -477,6 +589,7 @@ void sigcont_handler(int arg)
     if (callback_en)
         rl_forced_update_display();
 }
+#endif
 
 static void init_rl(void)
 {
@@ -495,15 +608,51 @@ static void init_rl(void)
         rl_bind_key_in_map('\005',     line_end_callback,   keymaps[i]);
         rl_bind_key_in_map('\002',     left_callback,       keymaps[i]);
         rl_bind_key_in_map('\006',     right_callback,      keymaps[i]);
+        rl_bind_keyseq_in_map("\e[1~", line_start_callback, keymaps[i]);
+        rl_bind_keyseq_in_map("\e[4~", line_end_callback,   keymaps[i]);
+        rl_bind_keyseq_in_map("\e[3~", delete_callback,     keymaps[i]);
         rl_bind_keyseq_in_map("\e[A",  up_callback,         keymaps[i]);
         rl_bind_keyseq_in_map("\e[B",  down_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[C",  right_callback,      keymaps[i]);
         rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
+        rl_bind_keyseq_in_map("\\C-C", sigint_callback,     keymaps[i]);
     }
-
+#ifndef __WIN32__
     signal(SIGTSTP, sigtstp_handler);
     signal(SIGCONT, sigcont_handler);
+#endif
+}
+
+extern int _rl_echoing_p;
+
+void jl_prep_terminal (int meta_flag)
+{   //order must be 2,1,0
+#ifndef __WIN32__
+    struct termios beforeRl_err = ((uv_tty_t*)jl_uv_stderr)->orig_termios;
+    struct termios beforeRl_out = ((uv_tty_t*)jl_uv_stdout)->orig_termios;
+    struct termios beforeRl_in = ((uv_tty_t*)jl_uv_stdin)->orig_termios;
+#endif
+    //terminal is prepped by libuv
+    rl_prep_terminal(1);
+    _rl_echoing_p=1;
+    uv_tty_set_mode((uv_tty_t*)JL_STDERR,1);
+    uv_tty_set_mode((uv_tty_t*)JL_STDOUT,1);
+    uv_tty_set_mode((uv_tty_t*)JL_STDIN,1);
+#ifndef __WIN32__
+    ((uv_tty_t*)jl_uv_stderr)->orig_termios=beforeRl_err;
+    ((uv_tty_t*)jl_uv_stdout)->orig_termios=beforeRl_out;
+    ((uv_tty_t*)jl_uv_stdin)->orig_termios=beforeRl_in;
+#endif
+}
+
+/* Restore the terminal's normal settings and modes. */
+void jl_deprep_terminal ()
+{   //order must be 0,1,2
+    rl_deprep_terminal();
+    uv_tty_set_mode((uv_tty_t*)JL_STDIN,0);
+    uv_tty_set_mode((uv_tty_t*)JL_STDOUT,0);
+    uv_tty_set_mode((uv_tty_t*)JL_STDERR,0);
 }
 
 void init_repl_environment(int argc, char *argv[])
@@ -518,10 +667,21 @@ void init_repl_environment(int argc, char *argv[])
         }
     }
 
+#ifdef __WIN32__
+    rl_outstream=(void*)jl_uv_stdout;
+#endif
+    rl_prep_terminal(1);
+    rl_prep_term_function=&jl_prep_terminal;
+    rl_deprep_term_function=&jl_deprep_terminal;
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
     init_history();
     rl_startup_hook = (Function*)init_rl;
+}
+
+void install_event_handler(char *prompt, rl_vcpfunc_t *func)
+{
+    rl_callback_handler_install(prompt, func);
 }
 
 void repl_callback_enable()
@@ -530,8 +690,44 @@ void repl_callback_enable()
     rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
-void jl_stdin_callback(void)
+#include "uv.h"
+
+void jl_readBuffer(char *base, ssize_t nread)
 {
-    if (callback_en)
-        rl_callback_read_char();
+    char *start = base;
+    while(*start != 0 && nread > 0) {
+        rl_stuff_char(*start);
+        start++;
+        nread--;
+    }
+    rl_callback_read_char();
+}
+
+void restart(void)
+{
+    rl_on_new_line();
+}
+
+DLLEXPORT void jl_clear_input(void)
+{
+    //todo: how to do this better / the correct way / ???
+    //move the cursor to a clean line:
+    char *p = rl_line_buffer;
+    int i;
+    for (i = 0; *p != '\0'; p++, i++) {
+        if (i >= rl_point && *p == '\n') {
+            jl_putc('\n', jl_uv_stdout);
+        }
+    }
+    jl_putc('\n', jl_uv_stdout);
+    //reset state:
+    rl_reset_line_state();
+    reset_indent();
+    rl_initialize();
+    //and redisplay prompt:
+    rl_forced_update_display();
+    rl_on_new_line_with_prompt();
+#ifdef __WIN32__
+    jl_write(jl_uv_stdout, "\e[4C", 4); //hack: try to fix cursor location
+#endif
 }

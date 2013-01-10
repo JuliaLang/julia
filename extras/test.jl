@@ -9,7 +9,7 @@ type TestResult
     group
     expr_str::String
     succeed::Bool # good outcome == true
-    elapsed::Float
+    elapsed::FloatingPoint
     exception_thrown::Exception
     operation
     arg1
@@ -59,7 +59,7 @@ tests(filenames) = tests(filenames, test_printer_raw)
 
 function _tests_task(filenames)
     for fn = filenames
-        load(fn)
+        require(fn)
     end
 end
 
@@ -70,7 +70,7 @@ function test_printer_raw(hdl::Task)
             print(".")
         else
             println("")
-            dump(t)
+            dump(stdout_stream, t)
             println("")
         end
     end
@@ -99,13 +99,13 @@ end
 # that does the real work
 macro test(ex)
     quote
-        $_test(expr(:quote, ex), true)
+        $(_test(expr(:quote, ex), true))
     end
 end
 
 macro testfails(ex)
     quote
-        $_test(expr(:quote, ex), false)
+        $(_test(expr(:quote, ex), false))
     end
 end
 

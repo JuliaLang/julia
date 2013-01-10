@@ -1,7 +1,7 @@
 # test file to test testing
 # run this with julia -L extras/test.jl -e "tests(\"test/test_test.jl\")"
-require("nearequal.jl")
-require("test.jl")
+require("nearequal")
+require("test")
 
 test_context("Testing test tests")
 # setup goes here
@@ -31,7 +31,7 @@ test_group("exception tests")
 @testfails throws_exception(complex(1,2) > 0, SystemError) 
 
 test_group("printing tests")
-@test sprint(show, :(1+2)) == "+(1,2)"
+@test sprint(show, :(1+2)) == ":( +(1, 2) )"
 @test prints(print_joined, ([1,2,3], " : "), "1 : 2 : 3") # prints is a helper
 @testfails prints(print_joined, ([1,2,3], " ! "), "1 : 2 : 3")
 

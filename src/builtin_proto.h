@@ -14,7 +14,7 @@ JL_CALLABLE(jl_f_isa);
 JL_CALLABLE(jl_f_typeassert);
 JL_CALLABLE(jl_f_apply);
 JL_CALLABLE(jl_f_top_eval);
-JL_CALLABLE(jl_f_isbound);
+JL_CALLABLE(jl_f_isdefined);
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_tupleref);
 JL_CALLABLE(jl_f_tuplelen);
@@ -40,5 +40,6 @@ JL_CALLABLE(jl_unprotect_stack);
 JL_CALLABLE(jl_f_task);
 JL_CALLABLE(jl_f_yieldto);
 JL_CALLABLE(jl_f_ctor_trampoline);
+JL_CALLABLE(jl_f_make_callback);
 
 #endif

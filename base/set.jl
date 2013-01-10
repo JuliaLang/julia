@@ -1,7 +1,7 @@
 type Set{T}
     hash::Dict{T,Bool}
 
-    Set() = new(Dict{T,Bool}())
+    Set() = new((T=>Bool)[])
     Set(x...) = add_each(new(Dict{T,Bool}(length(x))), x)
 end
 Set() = Set{Any}()
@@ -16,23 +16,26 @@ elements(s::Set) = keys(s.hash)
 eltype{T}(s::Set{T}) = T
 
 has(s::Set, x) = has(s.hash, x)
+contains(s::Set, x) = has(s, x)
 get(s::Set, x, deflt) = get(s.hash, x, false)
 
 add(s::Set, x) = (s.hash[x] = true; s)
-del(s::Set, x) = (del(s.hash, x); s)
+delete!(s::Set, x) = (delete!(s.hash, x); s)
 
 add_each(s::Set, xs) = (for x=xs; add(s,x); end; s)
-del_each(s::Set, xs) = (for x=xs; del(s,x); end; s)
+del_each(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 
 similar{T}(s::Set{T}) = Set{T}()
 copy(s::Set) = add_each(similar(s), s)
 
-del_all{T}(s::Set{T}) = (del_all(s.hash); s)
+empty!{T}(s::Set{T}) = (empty!(s.hash); s)
 
 start(s::Set)       = start(s.hash)
 done(s::Set, state) = done(s.hash, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.hash.keys[i], skip_deleted(s.hash.keys,i+1))
+next(s::Set, i)     = (s.hash.keys[i], skip_deleted(s.hash,i+1))
+
+pop!(s::Set) = (val = s.hash.keys[start(s.hash)]; delete!(s.hash, val); val)
 
 union() = Set()
 union(s::Set) = copy(s)
@@ -59,15 +62,36 @@ function intersect(s::Set, sets::Set...)
     for x in s
         for t in sets
             if !has(t,x)
-                del(i,x)
+                delete!(i,x)
             end
         end
     end
     return i
 end
 
-setdiff(a::Set, b::Set) = del_each(copy(a),b)
+function setdiff(a::Set, b::Set)
+    d = copy(a)
+    for x in b
+        if has(d, x)
+            delete!(d, x)
+        end
+    end
+    d
+end
 
 |(s::Set...) = union(s...)
 (&)(s::Set...) = intersect(s...)
 -(a::Set, b::Set) = setdiff(a,b)
+
+isequal(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
+isless(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
+function <=(l::Set, r::Set)
+    for elt in l
+        if !has(r, elt)
+            return false
+        end
+    end
+    return true
+end
+
+unique(C) = elements(add_each(Set{eltype(C)}(), C))

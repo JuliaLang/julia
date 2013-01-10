@@ -1,6 +1,5 @@
 module Printf
-import Base.*
-import Base.Grisu.*
+using Base.Grisu
 export @printf, @sprintf
 
 ### printf formatter generation ###
@@ -10,7 +9,7 @@ function _gen(s::String)
     blk = expr(:block, :(local neg, pt, len, exp))
     for x in _parse(s)
         if isa(x,String)
-            push(blk.args, :(write(out, $(strlen(x)==1 ? x[1] : x))))
+            push!(blk.args, :(write(out, $(strlen(x)==1 ? x[1] : x))))
         else
             c = lc(x[end])
             f = c=='f' ? _gen_f :
@@ -21,11 +20,11 @@ function _gen(s::String)
                 c=='p' ? _gen_p :
                          _gen_d
             arg, ex = f(x...)
-            push(args, arg)
-            push(blk.args, ex)
+            push!(args, arg)
+            push!(blk.args, ex)
         end
     end
-    push(blk.args, :nothing)
+    push!(blk.args, :nothing)
     return args, blk
 end
 
@@ -38,18 +37,18 @@ function _parse(s::String)
     while !done(s,j)
         c, k = next(s,j)
         if c == '%'
-            isempty(s[i:j-1]) || push(list, s[i:j-1])
+            isempty(s[i:j-1]) || push!(list, s[i:j-1])
             flags, width, precision, conversion, k = _parse1(s,k)
             contains(flags,'\'') && error("printf format flag ' not yet supported")
             conversion == 'a'    && error("printf feature %a not yet supported")
             conversion == 'n'    && error("printf feature %n not supported")
-            push(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
+            push!(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
             i = j = k
         else
             j = k
         end
     end
-    isempty(s[i:]) || push(list, s[i:])
+    isempty(s[i:]) || push!(list, s[i:])
     # coalesce adjacent strings
     i = 1
     while i < length(list)
@@ -61,7 +60,7 @@ function _parse(s::String)
                 end
                 list[i] *= list[j]
             end
-            del(list,i+1:j)
+            delete!(list,i+1:j)
         end
         i += 1
     end
@@ -139,9 +138,9 @@ function _special_handler(flags::ASCIIString, width::Int)
     pos = contains(flags,'+') ? "+" :
           contains(flags,' ') ? " " : ""
     abn = quote
-        isnan($x) ? $(bytestring(pad("NaN", width))) :
-         $x < 0   ? $(bytestring(pad("-Inf", width))) :
-                    $(bytestring(pad("$(pos)Inf", width)))
+        isnan($x) ? $(pad("NaN", width)) :
+         $x < 0   ? $(pad("-Inf", width)) :
+                    $(pad("$(pos)Inf", width))
     end
     ex = :(isfinite($x) ? $blk : write(out, $abn))
     x, ex, blk
@@ -228,18 +227,18 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     prefix = ""
     if lc(c)=='o'
         f = contains(flags,'#') ? :_int_0ct : :_int_oct
-        push(blk.args, :(($f)($x)))
+        push!(blk.args, :(($f)($x)))
     elseif c=='x'
         if contains(flags,'#'); prefix = "0x"; end
-        push(blk.args, :(_int_hex($x)))
+        push!(blk.args, :(_int_hex($x)))
     elseif c=='X'
         if contains(flags,'#'); prefix = "0X"; end
-        push(blk.args, :(_int_HEX($x)))
+        push!(blk.args, :(_int_HEX($x)))
     else
-        push(blk.args, :(_int_dec($x)))
+        push!(blk.args, :(_int_dec($x)))
     end
-    push(blk.args, :(neg = NEG[1]))
-    push(blk.args, :(pt  = POINT[1]))
+    push!(blk.args, :(neg = NEG[1]))
+    push!(blk.args, :(pt  = POINT[1]))
     # calculate padding
     width -= strlen(prefix)
     space_pad = width > max(1,precision) && contains(flags,'-') ||
@@ -261,29 +260,29 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # print space padding
     if padding != nothing && !contains(flags,'-')
-        push(blk.args, _pad(width-precision, padding, ' '))
+        push!(blk.args, _pad(width-precision, padding, ' '))
     end
     # print sign
-    contains(flags,'+') ? push(blk.args, :(write(out, neg?'-':'+'))) :
-    contains(flags,' ') ? push(blk.args, :(write(out, neg?'-':' '))) :
-                          push(blk.args, :(neg && write(out, '-')))
+    contains(flags,'+') ? push!(blk.args, :(write(out, neg?'-':'+'))) :
+    contains(flags,' ') ? push!(blk.args, :(write(out, neg?'-':' '))) :
+                          push!(blk.args, :(neg && write(out, '-')))
     # print prefix
     for ch in prefix
-        push(blk.args, :(write(out, $ch)))
+        push!(blk.args, :(write(out, $ch)))
     end
     # print zero padding & leading zeros
     if space_pad && precision > 1
-        push(blk.args, _pad(precision-1, :($precision-pt), '0'))
+        push!(blk.args, _pad(precision-1, :($precision-pt), '0'))
     elseif !space_pad && width > 1
         zeros = contains(flags,'+') || contains(flags,' ') ?
             :($(width-1)-pt) : :($width-neg-pt)
-        push(blk.args, _pad(width-1, zeros, '0'))
+        push!(blk.args, _pad(width-1, zeros, '0'))
     end
     # print integer
-    push(blk.args, :(write(out, pointer(DIGITS), pt)))
+    push!(blk.args, :(write(out, pointer(DIGITS), pt)))
     # print padding
     if padding != nothing && contains(flags,'-')
-        push(blk.args, _pad(width-precision, padding, ' '))
+        push!(blk.args, _pad(width-precision, padding, ' '))
     end
     # return arg, expr
     :(($x)::Real), ex
@@ -303,10 +302,10 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = _special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    push(blk.args, :(_fix_dec($x,$precision)))
-    push(blk.args, :(neg = NEG[1]))
-    push(blk.args, :(pt  = POINT[1]))
-    push(blk.args, :(len = LEN[1]))
+    push!(blk.args, :(_fix_dec($x,$precision)))
+    push!(blk.args, :(neg = NEG[1]))
+    push!(blk.args, :(pt  = POINT[1]))
+    push!(blk.args, :(len = LEN[1]))
     # calculate padding
     padding = nothing
     if precision > 0 || contains(flags,'#')
@@ -324,27 +323,27 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # print space padding
     if padding != nothing && !contains(flags,'-') && !contains(flags,'0')
-        push(blk.args, _pad(width-1, padding, ' '))
+        push!(blk.args, _pad(width-1, padding, ' '))
     end
     # print sign
-    contains(flags,'+') ? push(blk.args, :(write(out, neg?'-':'+'))) :
-    contains(flags,' ') ? push(blk.args, :(write(out, neg?'-':' '))) :
-                          push(blk.args, :(neg && write(out, '-')))
+    contains(flags,'+') ? push!(blk.args, :(write(out, neg?'-':'+'))) :
+    contains(flags,' ') ? push!(blk.args, :(write(out, neg?'-':' '))) :
+                          push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding != nothing && !contains(flags,'-') && contains(flags,'0')
-        push(blk.args, _pad(width-1, padding, '0'))
+        push!(blk.args, _pad(width-1, padding, '0'))
     end
     # print digits
     if precision > 0
-        push(blk.args, :(_print_fixed(out,$precision)))
+        push!(blk.args, :(_print_fixed(out,$precision)))
     else
-        push(blk.args, :(write(out, pointer(DIGITS), len)))
-        push(blk.args, :(while pt >= (len+=1) write(out,'0') end))
-        contains(flags,'#') && push(blk.args, :(write(out, '.')))
+        push!(blk.args, :(write(out, pointer(DIGITS), len)))
+        push!(blk.args, :(while pt >= (len+=1) write(out,'0') end))
+        contains(flags,'#') && push!(blk.args, :(write(out, '.')))
     end
     # print space padding
     if padding != nothing && contains(flags,'-')
-        push(blk.args, _pad(width-1, padding, ' '))
+        push!(blk.args, _pad(width-1, padding, ' '))
     end
     # return arg, expr
     :(($x)::Real), ex
@@ -366,9 +365,9 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # interpret the number
     if precision < 0; precision = 6; end
     ndigits = min(precision+1,BUFLEN-1)
-    push(blk.args, :(_ini_dec($x,$ndigits)))
-    push(blk.args, :(neg = NEG[1]))
-    push(blk.args, :(exp = POINT[1]-1))
+    push!(blk.args, :(_ini_dec($x,$ndigits)))
+    push!(blk.args, :(neg = NEG[1]))
+    push!(blk.args, :(exp = POINT[1]-1))
     expmark = c=='E' ? "E" : "e"
     if precision==0 && contains(flags,'#')
         expmark = strcat(".",expmark)
@@ -389,33 +388,33 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # print space padding
     if padding != nothing && !contains(flags,'-') && !contains(flags,'0')
-        push(blk.args, _pad(width, padding, ' '))
+        push!(blk.args, _pad(width, padding, ' '))
     end
     # print sign
-    contains(flags,'+') ? push(blk.args, :(write(out, neg?'-':'+'))) :
-    contains(flags,' ') ? push(blk.args, :(write(out, neg?'-':' '))) :
-                          push(blk.args, :(neg && write(out, '-')))
+    contains(flags,'+') ? push!(blk.args, :(write(out, neg?'-':'+'))) :
+    contains(flags,' ') ? push!(blk.args, :(write(out, neg?'-':' '))) :
+                          push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding != nothing && !contains(flags,'-') && contains(flags,'0')
-        push(blk.args, _pad(width, padding, '0'))
+        push!(blk.args, _pad(width, padding, '0'))
     end
     # print digits
-    push(blk.args, :(write(out, DIGITS[1])))
+    push!(blk.args, :(write(out, DIGITS[1])))
     if precision > 0
-        push(blk.args, :(write(out, '.')))
-        push(blk.args, :(write(out, pointer(DIGITS)+1, $(ndigits-1))))
+        push!(blk.args, :(write(out, '.')))
+        push!(blk.args, :(write(out, pointer(DIGITS)+1, $(ndigits-1))))
         if ndigits < precision+1
             n = precision+1-ndigits
-            push(blk.args, _pad(n, n, '0'))
+            push!(blk.args, _pad(n, n, '0'))
         end
     end
     for ch in expmark
-        push(blk.args, :(write(out, $ch)))
+        push!(blk.args, :(write(out, $ch)))
     end
-    push(blk.args, :(_print_exp(out, exp)))
+    push!(blk.args, :(_print_exp(out, exp)))
     # print space padding
     if padding != nothing && contains(flags,'-')
-        push(blk.args, _pad(width, padding, ' '))
+        push!(blk.args, _pad(width, padding, ' '))
     end
     # return arg, expr
     :(($x)::Real), ex
@@ -433,11 +432,11 @@ function _gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     blk = expr(:block, :($x = char($x)))
     if width > 1 && !contains(flags,'-')
         p = contains(flags,'0') ? '0' : ' '
-        push(blk.args, _pad(width-1, :($width-charwidth($x)), p))
+        push!(blk.args, _pad(width-1, :($width-charwidth($x)), p))
     end
-    push(blk.args, :(write(out, $x)))
+    push!(blk.args, :(write(out, $x)))
     if width > 1 && contains(flags,'-')
-        push(blk.args, _pad(width-1, :($width-charwidth($x)), ' '))
+        push!(blk.args, _pad(width-1, :($width-charwidth($x)), ' '))
     end
     :(($x)::Integer), blk
 end
@@ -454,22 +453,22 @@ function _gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
     blk = expr(:block)
     if width > 0
         if !contains(flags,'#')
-            push(blk.args, :($x = string($x)))
+            push!(blk.args, :($x = string($x)))
         else
-            push(blk.args, :($x = repr($x)))
+            push!(blk.args, :($x = repr($x)))
         end
         if !contains(flags,'-')
-            push(blk.args, _pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, _pad(width, :($width-strwidth($x)), ' '))
         end
-        push(blk.args, :(write(out, $x)))
+        push!(blk.args, :(write(out, $x)))
         if contains(flags,'-')
-            push(blk.args, _pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, _pad(width, :($width-strwidth($x)), ' '))
         end
     else
         if !contains(flags,'#')
-            push(blk.args, :(print(out, $x)))
+            push!(blk.args, :(print(out, $x)))
         else
-            push(blk.args, :(show(out, $x)))
+            push!(blk.args, :(show(out, $x)))
         end
     end
     :(($x)::Any), blk
@@ -486,13 +485,13 @@ function _gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     ptrwidth = WORD_SIZE>>2
     width -= ptrwidth+2
     if width > 0 && !contains(flags,'-')
-        push(blk.args, _pad(width, width, ' '))
+        push!(blk.args, _pad(width, width, ' '))
     end
-    push(blk.args, :(write(out, '0')))
-    push(blk.args, :(write(out, 'x')))
-    push(blk.args, :(write(out, bytestring(hex(unsigned($x), $ptrwidth)))))
+    push!(blk.args, :(write(out, '0')))
+    push!(blk.args, :(write(out, 'x')))
+    push!(blk.args, :(write(out, bytestring(hex(unsigned($x), $ptrwidth)))))
     if width > 0 && contains(flags,'-')
-        push(blk.args, _pad(width, width, ' '))
+        push!(blk.args, _pad(width, width, ' '))
     end
     :(($x)::Ptr), blk
 end
@@ -501,7 +500,7 @@ end
 
 macro _handle_zero()
     quote
-        if $esc(:x) == 0
+        if $(esc(:x)) == 0
             POINT[1] = 1
             DIGITS[1] = '0'
             return
@@ -580,9 +579,9 @@ _int_HEX(x::Unsigned) = (NEG[1]=false; _decode_HEX(x))
 
 macro _handle_negative()
     quote
-        if $esc(:x) < 0
+        if $(esc(:x)) < 0
             NEG[1] = true
-            $esc(:x) = -($esc(:x))
+            $(esc(:x)) = -$(esc(:x))
         else
             NEG[1] = false
         end
@@ -601,7 +600,7 @@ _int_dec(x::Real) = _int_dec(float(x))
 _int_hex(x::Real) = _int_hex(integer(x)) # TODO: real float decoding.
 _int_HEX(x::Real) = _int_HEX(integer(x)) # TODO: real float decoding.
 
-function _int_dec(x::Float)
+function _int_dec(x::FloatingPoint)
     if x == 0.0
         NEG[1] = false
         POINT[1] = 1
@@ -630,7 +629,7 @@ end
 _fix_dec(x::Integer, n::Int) = (_int_dec(x); LEN[1]=POINT[1])
 _fix_dec(x::Real, n::Int) = _fix_dec(float(x),n)
 
-function _fix_dec(x::Float, n::Int)
+function _fix_dec(x::FloatingPoint, n::Int)
     if n > BUFLEN-1; n = BUFLEN-1; end
     @grisu_ccall x Grisu.FIXED n
     if LEN[1] == 0
@@ -680,7 +679,7 @@ end
 _ini_dec(x::Integer, n::Int) = (@_handle_negative; _ini_dec(unsigned(x),n))
 _ini_dec(x::Real, n::Int) = _ini_dec(float(x),n)
 
-function _ini_dec(x::Float, n::Int)
+function _ini_dec(x::FloatingPoint, n::Int)
     if x == 0.0
         POINT[1] = 1
         NEG[1] = signbit(x)
@@ -742,7 +741,7 @@ end
 _sig_dec(x::Integer, n::Int) = (@_handle_negative; _sig_dec(unsigned(x),n))
 _sig_dec(x::Real, n::Int) = _sig_dec(float(x),n)
 
-function _sig_dec(x::Float, n::Int)
+function _sig_dec(x::FloatingPoint, n::Int)
     @grisu_ccall x Grisu.PRECISION n
     if x == 0.0; return; end
     while DIGITS[n] == '0'
@@ -784,7 +783,7 @@ macro printf(args...)
     end
     for i = length(args):-1:1
         var = sym_args[i].args[1]
-        unshift(blk.args, :($var = $esc(args[i])))
+        unshift!(blk.args, :($var = $(esc(args[i]))))
     end
     blk
 end
@@ -794,4 +793,3 @@ macro sprintf(args...)
 end
 
 end # module
-import Base.Printf.*

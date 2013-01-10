@@ -16,9 +16,9 @@ gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
 macro gensym(names...)
     blk = expr(:block)
     for name in names
-        push(blk.args, :($esc(name) = gensym($(string(name)))))
+        push!(blk.args, :($(esc(name)) = gensym($(string(name)))))
     end
-    push(blk.args, :nothing)
+    push!(blk.args, :nothing)
     return blk
 end
 
@@ -60,5 +60,5 @@ macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
 ## misc syntax ##
 
 macro eval(x)
-    :(eval($expr(:quote,x)))
+    :($(esc(:eval))($(expr(:quote,x))))
 end

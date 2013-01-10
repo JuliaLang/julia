@@ -29,38 +29,33 @@ DLLEXPORT void jl_lisp_prompt(void)
 
 value_t fl_defined_julia_global(value_t *args, uint32_t nargs)
 {
+    // tells whether a var is defined in and *by* the current module
     argcount("defined-julia-global", nargs, 1);
     (void)tosymbol(args[0], "defined-julia-global");
     if (jl_current_module == NULL)
         return FL_F;
-    char *name = symbol_name(args[0]);
-    return jl_boundp(jl_current_module, jl_symbol(name)) ? FL_T : FL_F;
+    jl_sym_t *var = jl_symbol(symbol_name(args[0]));
+    jl_binding_t *b =
+        (jl_binding_t*)ptrhash_get(&jl_current_module->bindings, var);
+    return (b != HT_NOTFOUND && b->owner==jl_current_module) ? FL_T : FL_F;
 }
 
 value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 {
     if (nargs < 1)
         argcount("invoke-julia-macro", nargs, 1);
-    (void)tosymbol(args[0], "invoke-julia-macro");
-    jl_sym_t *name = jl_symbol(symbol_name(args[0]));
-    jl_function_t *f = jl_get_expander(jl_current_module, name);
-    if (f == NULL)
-        return FL_F;
+    jl_function_t *f = NULL;
     jl_value_t **margs;
-    int na = nargs-1;
-    if (na > 0)
-        margs = alloca(na * sizeof(jl_value_t*));
-    else
-        margs = NULL;
+    JL_GC_PUSHARGS(margs, nargs);
     int i;
-    for(i=0; i < na; i++) margs[i] = NULL;
-    JL_GC_PUSHARGS(margs, na);
-    for(i=0; i < na; i++) margs[i] = scm_to_julia(args[i+1]);
+    for(i=0; i < nargs; i++) margs[i] = NULL;
+    for(i=1; i < nargs; i++) margs[i] = scm_to_julia(args[i]);
     jl_value_t *result;
 
     JL_TRY {
-        jl_register_toplevel_eh();
-        result = jl_apply(f, margs, na);
+        margs[0] = scm_to_julia(args[0]);
+        f = (jl_function_t*)jl_toplevel_eval(margs[0]);
+        result = jl_apply(f, &margs[1], nargs-1);
     }
     JL_CATCH {
         JL_GC_POP();
@@ -167,7 +162,16 @@ static jl_value_t *scm_to_julia(value_t e)
     int en = jl_gc_is_enabled();
     jl_gc_disable();
 #endif
-    jl_value_t *v = scm_to_julia_(e);
+    jl_value_t *v;
+    JL_TRY {
+        v = scm_to_julia_(e);
+    }
+    JL_CATCH {
+        // if expression cannot be converted, replace with error expr
+        jl_expr_t *ex = jl_exprn(error_sym, 1);
+        jl_cellset(ex->args, 0, jl_cstr_to_string("invalid AST"));
+        v = (jl_value_t*)ex;
+    }
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
@@ -182,6 +186,8 @@ static jl_value_t *scm_to_julia_(value_t e)
             switch (nt) {
             case T_DOUBLE:
                 return (jl_value_t*)jl_box_float64(*(double*)cp_data((cprim_t*)ptr(e)));
+            case T_FLOAT:
+                return (jl_value_t*)jl_box_float32(*(float*)cp_data((cprim_t*)ptr(e)));
             case T_INT64:
                 return (jl_value_t*)jl_box_int64(*(int64_t*)cp_data((cprim_t*)ptr(e)));
             case T_UINT8:
@@ -244,7 +250,7 @@ static jl_value_t *scm_to_julia_(value_t e)
             /* tree node types:
                goto  gotoifnot  label  return
                lambda  call  =  quote
-               null  top  isbound  method
+               null  top  method
                body  file new
                line  enter  leave
             */
@@ -439,7 +445,9 @@ void jl_stop_parsing()
     fl_applyn(0, symbol_value(symbol("jl-parser-close-stream")));
 }
 
-jl_value_t *jl_parse_next(int *plineno)
+extern int jl_lineno;
+
+jl_value_t *jl_parse_next()
 {
     value_t c = fl_applyn(0, symbol_value(symbol("jl-parser-next")));
     if (c == FL_F)
@@ -447,8 +455,8 @@ jl_value_t *jl_parse_next(int *plineno)
     if (iscons(c)) {
         value_t a = car_(c);
         if (isfixnum(a)) {
-            *plineno = numval(a);
-            //ios_printf(ios_stderr, "  on line %d\n", *plineno);
+            jl_lineno = numval(a);
+            //jl_printf(JL_STDERR, "  on line %d\n", jl_lineno);
             return scm_to_julia(cdr_(c));
         }
     }
@@ -554,10 +562,6 @@ jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 // get array of var info records for captured vars
 jl_array_t *jl_lam_capt(jl_expr_t *l)
 {
-    if (jl_is_tuple(l)) {
-        // in compressed form
-        return (jl_array_t*)jl_tupleref(l, 3);
-    }
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
@@ -614,7 +618,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
         /*
         if (sp == jl_null && li->ast &&
-            jl_lam_capt((jl_expr_t*)li->ast)->length == 0)
+            jl_array_len(jl_lam_capt((jl_expr_t*)li->ast)) == 0)
             return expr;
         */
         // TODO: avoid if above condition is true and decls have already
@@ -639,18 +643,38 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         jl_expr_t *e = (jl_expr_t*)expr;
         jl_expr_t *ne = jl_exprn(e->head, jl_array_len(e->args));
         JL_GC_PUSH(&ne);
-        size_t i;
         if (e->head == lambda_sym) {
             jl_exprarg(ne, 0) = copy_ast(jl_exprarg(e,0), sp, 0);
             jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 0);
             jl_exprarg(ne, 2) = copy_ast(jl_exprarg(e,2), sp, 1);
         }
         else {
-            for(i=0; i < jl_array_len(e->args); i++)
+            for(size_t i=0; i < jl_array_len(e->args); i++)
                 jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp, 1);
         }
         JL_GC_POP();
         return (jl_value_t*)ne;
+    }
+    return expr;
+}
+
+static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
+{
+    if (jl_is_symbol(expr) || jl_is_lambda_info(expr)) {
+        return copy_ast(expr, sp, do_sp);
+    }
+    else if (jl_is_expr(expr)) {
+        jl_expr_t *e = (jl_expr_t*)expr;
+        if (e->head == lambda_sym) {
+            jl_exprarg(e, 0) = dont_copy_ast(jl_exprarg(e,0), sp, 0);
+            jl_exprarg(e, 1) = dont_copy_ast(jl_exprarg(e,1), sp, 0);
+            jl_exprarg(e, 2) = dont_copy_ast(jl_exprarg(e,2), sp, 1);
+        }
+        else {
+            for(size_t i=0; i < jl_array_len(e->args); i++)
+                jl_exprarg(e, i) = dont_copy_ast(jl_exprarg(e,i), sp, 1);
+        }
+        return (jl_value_t*)e;
     }
     return expr;
 }
@@ -691,16 +715,28 @@ DLLEXPORT
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
 {
     jl_tuple_t *spenv = NULL;
-    jl_value_t *l_ast = li->ast;
-    if (l_ast == NULL) return NULL;
-    jl_value_t *ast = l_ast;
+    jl_value_t *ast = li->ast;
+    if (ast == NULL) return NULL;
     JL_GC_PUSH(&spenv, &ast);
-    if (jl_is_tuple(ast))
-        ast = jl_uncompress_ast((jl_tuple_t*)ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
-    ast = copy_ast(ast, sparams, 1);
-    eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
-    eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
+    if (!jl_is_expr(ast)) {
+        ast = jl_uncompress_ast(li, ast);
+        ast = dont_copy_ast(ast, sparams, 1);
+    }
+    else {
+        ast = copy_ast(ast, sparams, 1);
+    }
+    jl_module_t *last_m = jl_current_module;
+    JL_TRY {
+        jl_current_module = li->module;
+        eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
+        eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
+    }
+    JL_CATCH {
+        jl_current_module = last_m;
+        jl_rethrow();
+    }
+    jl_current_module = last_m;
     JL_GC_POP();
     return ast;
 }

@@ -3,6 +3,9 @@
 #todo: division
 #todo: sparse polynomials?
 
+import Base.length, Base.ref, Base.assign, Base.copy, Base.zero, Base.one
+import Base.show, Base.*, Base./, Base.-, Base.+, Base.==
+
 type Polynomial{T<:Number}
     a::Vector{T}
     nzfirst::Int #for effiencicy, track the first non-zero index

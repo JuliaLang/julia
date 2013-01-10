@@ -3,14 +3,20 @@
 length(t::Tuple) = tuplelen(t)
 size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension")
 ref(t::Tuple, i::Int) = tupleref(t, i)
-ref(t::Tuple, i::Integer) = tupleref(t, int(i))
-ref(t::Tuple, r::Ranges) = ntuple(length(r), i->t[r[i]])
+ref(t::Tuple, i::Real) = tupleref(t, convert(Int, i))
+ref(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
+ref(t::Tuple, b::AbstractArray{Bool}) = ref(t,find(b))
 
 ## iterating ##
 
 start(t::Tuple) = 1
-done(t::Tuple, i) = (length(t) < i)
-next(t::Tuple, i) = (t[i], i+1)
+done(t::Tuple, i::Int) = (length(t) < i)
+next(t::Tuple, i::Int) = (t[i], i+1)
+
+# this allows partial evaluation of bounded sequences of next() calls on tuples,
+# while reducing to plain next() for arbitrary iterables.
+indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
+indexed_next(I, i, state) = next(I, state)
 
 ## mapping ##
 
@@ -30,7 +36,7 @@ map(f, t::(Any,))               = (f(t[1]),)
 map(f, t::(Any, Any))           = (f(t[1]), f(t[2]))
 map(f, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
 map(f, t::(Any, Any, Any, Any)) = (f(t[1]), f(t[2]), f(t[3]), f(t[4]))
-map(f, t::Tuple)                = ntuple(length(t), i->f(t[i]))
+map(f, t::Tuple)                = tuple([f(ti) for ti in t]...)
 # 2 argument function
 map(f, t::(),        s::())        = ()
 map(f, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
@@ -40,7 +46,7 @@ map(f, t::(Any,Any,Any), s::(Any,Any,Any)) =
 map(f, t::(Any,Any,Any,Any), s::(Any,Any,Any,Any)) =
     (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]), f(t[4],s[4]))
 # n argument function
-map(f, ts::Tuple...) = ntuple(length_checked_equal(ts...), n->f(map(t->t[n],ts)...))
+map(f, ts::Tuple...) = tuple([f(map(t->t[n],ts)...) for n=1:length_checked_equal(ts...)]...)
 
 function length_checked_equal(args...) 
     n = length(args[1])
@@ -82,4 +88,4 @@ end
 isempty(x::()) = true
 isempty(x::Tuple) = false
 
-reverse(x::Tuple) = (n=length(x); ntuple(n, k->x[n-k+1]))
+reverse(x::Tuple) = (n=length(x); tuple([x[n-k+1] for k=1:n]...))

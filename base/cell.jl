@@ -2,7 +2,7 @@ function cell_1d(xs::ANY...)
     n = length(xs)
     a = Array(Any,n)
     for i=1:n
-        arrayset(a,i,xs[i])
+        arrayset(a,xs[i],i)
     end
     a
 end
@@ -10,7 +10,7 @@ end
 function cell_2d(nr, nc, xs::ANY...)
     a = Array(Any,nr,nc)
     for i=1:(nr*nc)
-        arrayset(a,i,xs[i])
+        arrayset(a,xs[i],i)
     end
     a
 end

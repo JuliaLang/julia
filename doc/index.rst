@@ -8,6 +8,7 @@
 
    manual/index
    stdlib/index
+   packages/packagelist
 
 Indices and tables
 ==================

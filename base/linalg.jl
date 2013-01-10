@@ -1,26 +1,22 @@
-## linalg.jl: Basic Linear Algebra interface specifications ##
-#
-# This file mostly contains commented functions which are supposed
-# to be defined in type-specific linalg_<type>.jl files.
-#
-# It defines functions in cases where sufficiently few assumptions about
-# storage can be made.
+## linalg.jl: Some generic Linear Algebra definitions
 
-#Ac_mul_B(x::AbstractVector, y::AbstractVector)
-#At_mul_B{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T})
+function scale!{T<:Number}(X::StridedArray{T}, s::Real)
+    # FIXME: could use BLAS in more cases
+    for i in 1:length(X)
+        X[i] *= s;
+    end
+    return X
+end
 
-#dot(x::AbstractVector, y::AbstractVector)
-
-#cross(a::AbstractVector, b::AbstractVector)
-
-#(*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
-#(*){T,S}(A::AbstractVector{S}, B::AbstractMatrix{T})
-#(*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+cross(a::Vector, b::Vector) =
+    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
 triu(M::AbstractMatrix) = triu(M,0)
 tril(M::AbstractMatrix) = tril(M,0)
 #triu{T}(M::AbstractMatrix{T}, k::Integer)
 #tril{T}(M::AbstractMatrix{T}, k::Integer)
+triu!(M::AbstractMatrix) = triu!(M,0)
+tril!(M::AbstractMatrix) = tril!(M,0)
 
 #diff(a::AbstractVector)
 #diff(a::AbstractMatrix, dim::Integer)
@@ -35,68 +31,131 @@ diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
 
 #diagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
 
-function norm(x::AbstractVector, p::Number)
-    if p == Inf
-        return max(abs(x))
+function norm{T}(x::AbstractVector{T}, p::Number)
+    if length(x) == 0
+        a = zero(eltype(x))
+    elseif p == Inf
+        a = max(abs(x))
     elseif p == -Inf
-        return min(abs(x))
+        a = min(abs(x))
     else
-        return sum(abs(x).^p).^(1/p)
+        absx = abs(x)
+        dx = max(absx)
+        if dx != zero(T)
+            scale!(absx, 1/dx)
+            a = dx * (sum(absx.^p).^(1/p))
+        else
+            a = sum(absx.^p).^(1/p)
+        end
     end
+    return float(a)
 end
-
-norm(x::AbstractVector) = sqrt(real(dot(x,x)))
+norm{T<:Integer}(x::AbstractVector{T}, p::Number) = norm(float(x), p)
+norm(x::AbstractVector) = norm(x, 2)
 
 function norm(A::AbstractMatrix, p)
-    if size(A,1) == 1 || size(A,2) == 1
-        return norm(reshape(A, numel(A)), p)
+    m, n = size(A)
+    if m == 0 || n == 0
+        a = zero(eltype(A))
+    elseif m == 1 || n == 1
+        a = norm(reshape(A, length(A)), p)
     elseif p == 1
-        return max(sum(abs(A),1))
+        a = max(sum(abs(A),1))
     elseif p == 2
-        return max(svd(A)[2])
+        a = max(svdvals(A))
     elseif p == Inf
-        max(sum(abs(A),2))
-    elseif p == "fro"
-        return sqrt(sum(diag(A'*A)))
+        a = max(sum(abs(A),2))
+    elseif p == :fro
+        a = norm(reshape(A, length(A)))
     else
         error("invalid parameter to matrix norm")
     end
+    return float(a)
 end
 
 norm(A::AbstractMatrix) = norm(A, 2)
+
+norm(x::Number) = abs(x)
+norm(x::Number, p) = abs(x)
+
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)
+    m,n = size(A)
+    if m == 0 || n == 0; return 0; end
     sv = svdvals(A)
     sum(sv .> max(size(A,1),size(A,2))*eps(sv[1]))
 end
+rank(x::Number) = x == 0 ? 0 : 1
 
 trace(A::AbstractMatrix) = sum(diag(A))
+trace(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
 
 #det(a::AbstractMatrix)
 inv(a::AbstractMatrix) = a \ one(a)
-cond(a::AbstractMatrix, p) = norm(a, p) * norm(inv(a), p)
-cond(a::AbstractMatrix) = cond(a, 2)
 
-#issym(A::AbstractMatrix)
-#ishermitian(A::AbstractMatrix)
-#istriu(A::AbstractMatrix)
-#istril(A::AbstractMatrix)
+cond(x::Number) = x == 0 ? Inf : 1.0
+cond(x::Number, p) = cond(x)
 
-function linreg(x::AbstractVector, y::AbstractVector)
-    M = [ones(length(x)) x]
-    Mt = M'
-    ((Mt*M)\Mt)*y
+function issym(A::AbstractMatrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:(n-1), j = (i+1):n
+        if A[i,j] != A[j,i]
+            return false
+        end
+    end
+    return true
+end
+
+issym(x::Number) = true
+
+function ishermitian(A::AbstractMatrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:n, j = i:n
+        if A[i,j] != conj(A[j,i])
+            return false
+        end
+    end
+    return true
+end
+
+ishermitian(x::Number) = (x == conj(x))
+
+function istriu(A::AbstractMatrix)
+    m, n = size(A)
+    for j = 1:min(n,m-1), i = j+1:m
+        if A[i,j] != 0
+            return false
+        end
+    end
+    return true
+end
+
+function istril(A::AbstractMatrix)
+    m, n = size(A)
+    for j = 2:n, i = 1:min(j-1,m)
+        if A[i,j] != 0
+            return false
+        end
+    end
+    return true
+end
+
+istriu(x::Number) = true
+istril(x::Number) = true
+
+function linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T})
+    [ones(T, size(X,1)) X] \ y
 end
 
 # weighted least squares
 function linreg(x::AbstractVector, y::AbstractVector, w::AbstractVector)
     w = sqrt(w)
-    M = [w w.*x]
-    Mt = M'
-    ((Mt*M)\Mt)*(w.*y)
+    [w w.*x] \ (w.*y)
 end
 
 # multiply by diagonal matrix as vector

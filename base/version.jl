@@ -88,19 +88,19 @@ end
 
 macro v_str(v); convert(VersionNumber, v); end
 
-_jl_ident_cmp(a::Int, b::Int) = cmp(a,b)
-_jl_ident_cmp(a::Int, b::ASCIIString) = isempty(b) ? +1 : -1
-_jl_ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
-_jl_ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
+ident_cmp(a::Int, b::Int) = cmp(a,b)
+ident_cmp(a::Int, b::ASCIIString) = isempty(b) ? +1 : -1
+ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
+ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
 
-function _jl_ident_cmp(A::Vector{Union(Int,ASCIIString)},
+function ident_cmp(A::Vector{Union(Int,ASCIIString)},
                        B::Vector{Union(Int,ASCIIString)})
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)
        a,i = next(A,i)
        b,j = next(B,j)
-       c = _jl_ident_cmp(a,b)
+       c = ident_cmp(a,b)
        (c != 0) && return c
     end
     done(A,i) && !done(B,j) ? -1 :
@@ -111,8 +111,8 @@ function isequal(a::VersionNumber, b::VersionNumber)
     (a.major != b.major) && return false
     (a.minor != b.minor) && return false
     (a.patch != b.patch) && return false
-    (_jl_ident_cmp(a.prerelease,b.prerelease) != 0) && return false
-    (_jl_ident_cmp(a.build,b.build) != 0) && return false
+    (ident_cmp(a.prerelease,b.prerelease) != 0) && return false
+    (ident_cmp(a.build,b.build) != 0) && return false
     return true
 end
 
@@ -125,49 +125,114 @@ function isless(a::VersionNumber, b::VersionNumber)
     (a.patch > b.patch) && return false
     (!isempty(a.prerelease) && isempty(b.prerelease)) && return true
     (isempty(a.prerelease) && !isempty(b.prerelease)) && return false
-    c = _jl_ident_cmp(a.prerelease,b.prerelease)
+    c = ident_cmp(a.prerelease,b.prerelease)
     (c < 0) && return true
     (c > 0) && return false
-    c = _jl_ident_cmp(a.build,b.build)
+    c = ident_cmp(a.build,b.build)
     (c < 0) && return true
     return false
 end
 
 ## julia version info
 
+if(isfile("$JULIA_HOME/../../VERSION"))
 const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
-try
-    ver = string(VERSION)
-    commit = readchomp(`git rev-parse HEAD`)
-    tagged = try readchomp(`git rev-parse --verify --quiet v$ver`)
-             catch "doesn't reference a commit"; end
-    ctim = int(readall(`git log -1 --pretty=format:%ct`))
-    if commit != tagged
-        # 1250998746: ctime of first commit (Sat Aug 23 3:39:06 2009 UTC)
-        push(VERSION.build, ctim - 1250998746)
-        push(VERSION.build, "r$(commit[1:4])")
-    end
-    clean = success(`git diff --quiet HEAD`)
-    if !clean; push(VERSION.build, "dirty"); end
-    clean = clean ? "" : "*"
-    isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
-    global const _jl_commit_string = "Commit $(commit[1:10]) ($isotime)$clean"
-    global const VERSION_COMMIT = commit[1:10]
-catch
-    global const _jl_commit_string = ""
-    global const VERSION_COMMIT = ""
+elseif(isfile("$JULIA_HOME/../share/julia/VERSION"))
+	const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../share/julia/VERSION"))
+else
+	const VERSION = convert(VersionNumber,"0.0.0")
 end
+if(isfile("$JULIA_HOME/../../COMMIT"))
+    const VERSION_COMMIT = ""
+    const commit_string = readchomp("$JULIA_HOME/../../COMMIT")
+elseif(isfile("JULIA_HOME/../share/julia/COMMIT"))
+    const VERSION_COMMIT = ""
+    const commit_string = readchomp("$JULIA_HOME/../share/julia/COMMIT")
+else
 
+let
+    expected = ErrorException("error: don't copy this code, for breaking out of uv_run during boot-strapping only")
+    acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
+                                              # this point in the bootstrapping, conflicts between old and new
+                                              # defintions for write, TTY, ASCIIString, and STDOUT make it fail
+    ver = string(VERSION)
+    (outver,ps) = read_from(`git rev-parse HEAD`)
+    ps.closecb = function(proc)
+        if !success(proc)
+            #acceptable.msg = "failed process: $proc [$(proc.exit_code)]"
+            error(acceptable)
+        end
+        commit = readchomp(proc.out.buffer)
+        (outtag,ps) = read_from(`git rev-parse --verify --quiet v$ver`)
+        ps.closecb = function(proc)
+            tagged = if success(proc)
+                readchomp(proc.out.buffer)
+            elseif proc.exit_code == 1 && proc.term_signal == 0
+                "doesn't reference a commit"
+            else
+                #acceptable.msg = "failed process: $proc [$(proc.exit_code)]"
+                error(acceptable)
+            end
+            tagged = success(proc) ? readchomp(proc.out.buffer) : "doesn't reference a commit"
+            (outctim,ps) = read_from(`git log -1 --pretty=format:%ct`)
+            ps.closecb = function(proc)
+                if !success(proc)
+                    #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
+                    error(acceptable)
+                end
+                ctim = int(readall(proc.out.buffer))
+                if commit != tagged
+                    # 1250998746: ctime of first commit (Sat Aug 23 3:39:06 2009 UTC)
+                    push!(VERSION.build, ctim - 1250998746)
+                    push!(VERSION.build, "r$(commit[1:4])")
+                end
+                ps = spawn(`git diff --quiet HEAD`)
+                ps.closecb = function(proc)
+                    clean = if success(proc)
+                        ""
+                    elseif proc.exit_code == 1 && proc.term_signal == 0
+                        push!(VERSION.build, "dirty")
+                        "*" 
+                    else
+                        #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
+                        error(acceptable)
+                    end
+                    isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
+                    global const commit_string = "Commit $(commit[1:10]) ($isotime)$clean"
+                    global const VERSION_COMMIT = commit[1:10]
+                    error(expected)
+                end
+            end
+        end
+    end
+    try
+        run_event_loop() # equivalent to wait_exit() on a more sane version of the previous
+                         # block of code, but Scheduler doesn't exist during bootstrapping
+                         # so we do what we must, but don't do this in user-land code or you'll regret it
+    catch err
+        if err != expected
+            global const commit_string = ""
+            global const VERSION_COMMIT = ""
+            if err == acceptable
+                println("Warning: git failed in version.jl")
+                #println(err) # not a useful error msg currently
+            else
+                rethrow(err)
+            end
+        end
+    end
+end
+end
 begin
-const _jl_version_string = "Version $VERSION"
-const _jl_banner_plain =
+const version_string = "Version $VERSION"
+const banner_plain =
 I"               _
-   _       _ _(_)_     |
-  (_)     | (_) (_)    |
-   _ _   _| |_  __ _   |  A fresh approach to technical computing
+   _       _ _(_)_     |  A fresh approach to technical computing
+  (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
+   _ _   _| |_  __ _   |  Type \"help()\" to list help topics
   | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  $_jl_version_string
- _/ |\__'_|_|_|\__'_|  |  $_jl_commit_string
+  | | |_| | | | (_| |  |  $version_string
+ _/ |\__'_|_|_|\__'_|  |  $commit_string
 |__/                   |
 
 "
@@ -177,14 +242,14 @@ local d1 = "\033[34m" # first dot
 local d2 = "\033[31m" # second dot
 local d3 = "\033[32m" # third dot
 local d4 = "\033[35m" # fourth dot
-const _jl_banner_color =
+const banner_color =
 "\033[1m               $(d3)_
-   $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
-  $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-   $(jl)_ _   _| |_  __ _$(tx)   |  A fresh approach to technical computing
+   $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
+  $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
+   $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" to list help topics
   $(jl)| | | | | | |/ _` |$(tx)  |
-  $(jl)| | |_| | | | (_| |$(tx)  |  $_jl_version_string
- $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $_jl_commit_string
+  $(jl)| | |_| | | | (_| |$(tx)  |  $version_string
+ $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $commit_string
 $(jl)|__/$(tx)                   |
 
 \033[0m"

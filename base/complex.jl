@@ -14,7 +14,7 @@ imag(x::Real) = zero(x)
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
 
-function _jl_show(io, z::Complex, compact::Bool)
+function complex_show(io, z::Complex, compact::Bool)
     r, i = reim(z)
     if isnan(r) || isfinite(i)
         compact ? showcompact(io,r) : show(io,r)
@@ -26,7 +26,7 @@ function _jl_show(io, z::Complex, compact::Bool)
         end
         compact ? showcompact(io, i) : show(io, i)
         if !(isa(i,Integer) || isa(i,Rational) ||
-             isa(i,Float) && isfinite(i))
+             isa(i,FloatingPoint) && isfinite(i))
             print(io, "*")
         end
         print(io, "im")
@@ -34,8 +34,11 @@ function _jl_show(io, z::Complex, compact::Bool)
         print(io, "complex(",r,",",i,")")
     end
 end
-show(io, z::Complex) = _jl_show(io, z, false)
-showcompact(io, z::Complex) = _jl_show(io, z, true)
+show(io, z::Complex) = complex_show(io, z, false)
+showcompact(io, z::Complex) = complex_show(io, z, true)
+
+convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
+                                           throw(InexactError()))
 
 ## packed complex float types ##
 
@@ -117,10 +120,10 @@ sizeof(::Type{Complex64}) = 8
 
 complex(x::Float64, y::Float64) = complex128(x, y)
 complex(x::Float32, y::Float32) = complex64(x, y)
-complex(x::Float, y::Float) = complex(promote(x,y)...)
-complex(x::Float, y::Real) = complex(promote(x,y)...)
-complex(x::Real, y::Float) = complex(promote(x,y)...)
-complex(x::Float) = complex(x, zero(x))
+complex(x::FloatingPoint, y::FloatingPoint) = complex(promote(x,y)...)
+complex(x::FloatingPoint, y::Real) = complex(promote(x,y)...)
+complex(x::Real, y::FloatingPoint) = complex(promote(x,y)...)
+complex(x::FloatingPoint) = complex(x, zero(x))
 
 
 ## complex with arbitrary component type ##
@@ -251,15 +254,14 @@ end
 function sqrt(z::Complex)
     rz = float(real(z))
     iz = float(imag(z))
-    T = promote_type(typeof(rz),typeof(z))
-    r = sqrt(0.5*(hypot(rz,iz)+abs(rz)))
+    r = sqrt((hypot(rz,iz)+abs(rz))/2)
     if r == 0
-        return convert(T,complex(0.0, iz))
+        return complex(zero(iz), iz)
     end
     if rz >= 0
-        return convert(T,complex(r, 0.5*iz/r))
+        return complex(r, iz/r/2)
     end
-    return convert(T,complex(0.5*abs(iz)/r, iz >= 0 ? r : -r))
+    return complex(abs(iz)/r/2, iz >= 0 ? r : -r)
 end
 
 cis(theta::Real) = complex(cos(theta),sin(theta))
@@ -274,7 +276,7 @@ function sin(z::Complex)
     u = exp(imag(z))
     v = 1/u
     rz = real(z)
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     complex(u*sin(rz), v*cos(rz))
 end
@@ -283,7 +285,7 @@ function cos(z::Complex)
     u = exp(imag(z))
     v = 1/u
     rz = real(z)
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     complex(u*cos(rz), -v*sin(rz))
 end
@@ -293,20 +295,20 @@ function log(z::Complex)
     ai = abs(imag(z))
     if ar < ai
         r = ar/ai
-        re = log(ai) + 0.5*log1p(r*r)
+        re = log(ai) + log1p(r*r)/2
     else
         if ar == 0
             re = -inv(ar)
         else
             r = ai/ar
-            re = log(ar) + 0.5*log1p(r*r)
+            re = log(ar) + log1p(r*r)/2
         end
     end
     complex(re, atan2(imag(z), real(z)))
 end
 
-log10(z::Complex) = log(z)/2.302585092994046
-log2(z::Complex) = log(z)/0.6931471805599453
+log10(z::Complex) = log(z)/oftype(real(z),2.302585092994046)
+log2(z::Complex) = log(z)/oftype(real(z),0.6931471805599453)
 
 function exp(z::Complex)
     er = exp(real(z))
@@ -379,7 +381,7 @@ end
 function tan(z::Complex)
     u = exp(imag(z))
     v = 1/u
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     sinre = sin(real(z))
     cosre = cos(real(z))
@@ -412,14 +414,14 @@ function atan(z::Complex)
     yp1 = 1+imag(z)
     m1ysq = m1y*m1y
     yp1sq = yp1*yp1
-    complex(0.5(atan2(real(z),m1y) - atan2(-real(z),yp1)),
-            0.25*log((yp1sq + xsq)/(xsq + m1ysq)))
+    complex((atan2(real(z),m1y) - atan2(-real(z),yp1))/2,
+            log((yp1sq + xsq)/(xsq + m1ysq))/4)
 end
 
 function sinh(z::Complex)
     u = exp(real(z))
     v = 1/u
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     complex(v*cos(imag(z)), u*sin(imag(z)))
 end
@@ -427,7 +429,7 @@ end
 function cosh(z::Complex)
     u = exp(real(z))
     v = 1/u
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     complex(u*cos(imag(z)), v*sin(imag(z)))
 end
@@ -436,7 +438,7 @@ function tanh(z::Complex)
     cosim = cos(imag(z))
     u = exp(real(z))
     v = 1/u
-    u = 0.5(u+v)
+    u = (u+v)/2
     v = u-v
     d = cosim*cosim + v*v
     complex(u*v/d, sin(imag(z))*cosim/d)

@@ -102,9 +102,15 @@
 						</dict>
 					</dict>
 					<key>end</key>
-					<string>\)</string>
-					<key>name</key>
-					<string>meta.function.call.julia</string>
+					<string>\)(('|(\.'))*\.?')?</string>
+					<key>endCaptures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.operator.transposed-func.julia</string>
+						</dict>
+					</dict>
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -155,7 +161,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(Range1?|NDRange|Tuple|Real|Vector|Array|AbstractArray|ObjectIdDict|Dict|WeakKeyDict|EnvHash|LineIterator|String|IntSet|FDSet|Set|Task|ASCIIString|UTF8String|Bool|Int(8|16|32|64)?|Uint(8|16|32|64)?|Float(32|64)?|Complex(64|128)?)\b</string>
+					<string>\b(Any|Function|None|Range1?|NDRange|Tuple|Real|Vector|Array|AbstractArray|ObjectIdDict|Dict|WeakKeyDict|EnvHash|LineIterator|String|IntSet|FDSet|Set|Task|ASCIIString|UTF8String|Bool|Int(8|16|32|64)?|Uint(8|16|32|64)?|Float(32|64)?|Complex(64|128)|true|false?)\b</string>
 					<key>name</key>
 					<string>support.type.julia</string>
 				</dict>
@@ -179,13 +185,13 @@
 				</dict>
 				<dict>
 					<key>match</key>
-					<string>\b(?:if|else|elseif|while|for|begin|let|end|do|try|catch|return|break|continue)\b</string>
+					<string>\b(?:if|else|elseif|while|for|in|begin|let|end|do|try|catch|return|break|continue)\b</string>
 					<key>name</key>
 					<string>keyword.control.julia</string>
 				</dict>
 				<dict>
 					<key>match</key>
-					<string>\b(?:global|local|const|export|import)\b</string>
+					<string>\b(?:global|local|const|export|import|using)\b</string>
 					<key>name</key>
 					<string>storage.modifier.variable.julia</string>
 				</dict>
@@ -294,32 +300,42 @@
 						</dict>
 					</dict>
 					<key>match</key>
-					<string>(\w+)([.']*')</string>
+					<string>(\w+)(('|(\.'))*\.?')</string>
 				</dict>
 				<dict>
 					<key>begin</key>
-					<string>(\[)</string>
-					<key>beginCaptures</key>
-					<dict>
-						<key>1</key>
-						<dict>
-							<key>name</key>
-							<string>keyword.bracket.julia</string>
-						</dict>
-					</dict>
+					<string>\[</string>
 					<key>end</key>
-					<string>(\])([.']*')</string>
+					<string>\)((?:'|(?:\.'))*\.?')</string>
 					<key>endCaptures</key>
 					<dict>
 						<key>1</key>
 						<dict>
 							<key>name</key>
-							<string>keyword.bracket.julia</string>
+							<string>keyword.operator.transposed-matrix.julia</string>
 						</dict>
-						<key>2</key>
+					</dict>
+					<key>name</key>
+					<string>test</string>
+					<key>patterns</key>
+					<array>
+						<dict>
+							<key>include</key>
+							<string>$self</string>
+						</dict>
+					</array>
+				</dict>
+				<dict>
+					<key>begin</key>
+					<string>\(</string>
+					<key>end</key>
+					<string>\)(('|(\.'))*\.?')</string>
+					<key>endCaptures</key>
+					<dict>
+						<key>1</key>
 						<dict>
 							<key>name</key>
-							<string>keyword.operator.transposed-matrix.julia</string>
+							<string>keyword.operator.transposed-parens.julia</string>
 						</dict>
 					</dict>
 					<key>patterns</key>

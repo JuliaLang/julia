@@ -35,7 +35,7 @@ end
 macro time(ex)
     quote
         local t0 = time()
-        local val = $esc(ex)
+        local val = $(esc(ex))
         local t1 = time()
         println("elapsed time: ", t1-t0, " seconds")
         val
@@ -46,19 +46,30 @@ end
 macro elapsed(ex)
     quote
         local t0 = time()
-        local val = $esc(ex)
+        local val = $(esc(ex))
         time()-t0
     end
 end
 
-function peakflops()
-    a = rand(2000,2000)
+# print nothing, return value & elapsed time
+macro timed(ex)
+    quote
+        local t0 = time()
+        local val = $(esc(ex))
+        val, time()-t0
+    end
+end
+
+function peakflops(n)
+    a = rand(n,n)
     t = @elapsed a*a
     t = @elapsed a*a
-    floprate = (2*2000.0^3/t)
+    floprate = (2.0*float64(n)^3/t)
     println("The peak flop rate is ", floprate*1e-9, " gigaflops")
     floprate
 end
+
+peakflops() = peakflops(2000)
 
 # source files, editing, function reflection
 
@@ -68,7 +79,7 @@ function function_loc(f::Function, types)
             lsd = m[3]::LambdaStaticData
             ln = lsd.line
             if ln > 0
-                return (string(lsd.file), ln)
+                return (find_in_path(string(lsd.file)), ln)
             end
         end
     end
@@ -83,8 +94,8 @@ function whicht(f, types)
             d = f.env.defs
             while !is(d,())
                 if is(d.func.code, lsd)
-                    print(stdout_stream, f.env.name)
-                    show(stdout_stream, d); println(stdout_stream)
+                    print(OUTPUT_STREAM, f.env.name)
+                    show(OUTPUT_STREAM, d); println(OUTPUT_STREAM)
                     return
                 end
                 d = d.next
@@ -101,13 +112,13 @@ function edit(file::String, line::Int)
     issrc = file[end-2:end] == ".jl"
     if issrc
         if file[1]!='/' && !is_file_readable(file)
-            file2 = "$JULIA_HOME/base/$file"
+            file2 = "$JULIA_HOME/../lib/julia/base/$file"
             if is_file_readable(file2)
                 file = file2
             end
         end
         if editor == "emacs"
-            jmode = "$JULIA_HOME/contrib/julia-mode.el"
+            jmode = "$JULIA_HOME/../../contrib/julia-mode.el"
             run(`emacs $file --eval "(progn
                                      (require 'julia-mode \"$jmode\")
                                      (julia-mode)
@@ -159,159 +170,176 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::CompositeKind) = methods(t,Tuple)
-
+methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
+                             t.env)
 
 # require
+
+function is_file_readable(path)
+    s = stat(bytestring(path))
+    return isfile(s) && isreadable(s)
+end
+
+function find_in_path(name::String)
+    name[1] == '/' && return abspath(name)
+    isfile(name) && return abspath(name)
+    base = name
+    if ends_with(name,".jl")
+        base = match(r"^(.*)\.jl$",name).captures[1]
+    else
+        name = strcat(base,".jl")
+    end
+    for prefix in LOAD_PATH
+        path = strcat(prefix,"/",base,"/src/",name)
+        is_file_readable(path) && return abspath(path)
+        path = strcat(prefix,"/",name)
+        is_file_readable(path) && return abspath(path)
+    end
+    return abspath(name)
+end
+
+function find_in_node1_path(name)
+    if myid()==1
+        return find_in_path(name)
+    else
+        return remote_call_fetch(1, find_in_path, name)
+    end
+end
+
 # Store list of files and their load time
-global _jl_package_list = Dict{ByteString,Float64}()
+package_list = (ByteString=>Float64)[]
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 function require(name::ByteString)
-    path = find_in_path(name)
-    if !has(_jl_package_list,path)
-        load(name)
-    else
-        # Determine whether the file has been modified since it was last loaded
-        if mtime(path) > _jl_package_list[path]
-            load(name)
+    if myid() == 1
+        @sync begin
+            for p = 2:nprocs()
+                @spawnat p require(name)
+            end
         end
     end
+    path = find_in_node1_path(name)
+    if !has(package_list,path)
+        reload_path(path)
+    end
+end
+
+function reload(name::String)
+    if myid() == 1
+        @sync begin
+            for p = 2:nprocs()
+                @spawnat p reload(name)
+            end
+        end
+    end
+    reload_path(find_in_node1_path(name))
 end
 
 # remote/parallel load
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
 
-function is_file_readable(path)
-    local f
-    try
-        f = open(bytestring(path))
-    catch
-        return false
-    end
-    close(f)
-    return true
-end
-
-function find_in_path(fname)
-    if fname[1] == '/'
-        return real_path(fname)
-    end
-    for pfx in LOAD_PATH
-        if pfx != "" && pfx[end] != '/'
-            pfxd = strcat(pfx,"/",fname)
-        else
-            pfxd = strcat(pfx,fname)
-        end
-        if is_file_readable(pfxd)
-            return real_path(pfxd)
-        end
-    end
-    return real_path(fname)
-end
-
-begin
-local in_load = false
-local in_remote_load = false
-local load_dict = {}
-global load, remote_load
-
-load(fname::String) = load(bytestring(fname))
-load(f::String, fs::String...) = (load(f); for x in fs load(x); end)
-function load(fname::ByteString)
-    if in_load
-        path = find_in_path(fname)
-        _jl_package_list[path] = time()
-        push(load_dict, fname)
-        f = open(path)
-        push(load_dict, readall(f))
-        close(f)
-        include(path)
-        return
-    elseif in_remote_load
-        for i=1:2:length(load_dict)
-            if load_dict[i] == fname
-                return include_string(load_dict[i+1])
-            end
-        end
+function include_from_node1(path)
+    if myid()==1
+        Core.include(path)
     else
-        in_load = true
-        iserr, err = false, ()
-        try
-            load(fname)
-            for p = 1:nprocs()
-                if p != myid()
-                    remote_do(p, remote_load, load_dict)
-                end
-            end
-        catch e
-            iserr, err = true, e
-        end
-        load_dict = {}
-        in_load = false
-        if iserr throw(err); end
+        include_string(remote_call_fetch(1, readall, path))
     end
 end
 
-function remote_load(dict)
-    load_dict = dict
-    in_remote_load = true
+function reload_path(path)
+    had = has(package_list, path)
+    package_list[path] = time()
     try
-        load(dict[1])
+        eval(Main, :(Base.include_from_node1($path)))
     catch e
-        in_remote_load = false
-        throw(e)
+        if !had
+            delete!(package_list, path)
+        end
+        rethrow(e)
     end
-    in_remote_load = false
     nothing
 end
-end
 
-evalfile(fname::String) = eval(parse(readall(fname))[1])
+# deprecated
+const load = require
+
+evalfile(fname::String) = eval(Main, parse(readall(fname))[1])
 
 # help
 
-_jl_help_category_list = nothing
-_jl_help_category_dict = nothing
-_jl_help_function_dict = nothing
+help_category_list = nothing
+help_category_dict = nothing
+help_module_dict = nothing
+help_function_dict = nothing
 
-function _jl_init_help()
-    global _jl_help_category_list, _jl_help_category_dict, _jl_help_function_dict
-    if _jl_help_category_dict == nothing
+function decor_help_desc(func::String, mfunc::String, desc::String)
+    sd = split(desc, '\n')
+    for i = 1:length(sd)
+        if begins_with(sd[i], func)
+            sd[i] = mfunc * sd[i][length(func)+1:end]
+        else
+            break
+        end
+    end
+    return join(sd, '\n')
+end
+
+function init_help()
+    global help_category_list, help_category_dict,
+           help_module_dict, help_function_dict
+    if help_category_dict == nothing
         println("Loading help data...")
-        helpdb = evalfile("$JULIA_HOME/../lib/julia/helpdb.jl")
-        _jl_help_category_list = {}
-        _jl_help_category_dict = Dict()
-        _jl_help_function_dict = Dict()
-        for (cat,func,desc) in helpdb
-            if !has(_jl_help_category_dict, cat)
-                push(_jl_help_category_list, cat)
-                _jl_help_category_dict[cat] = {}
+        helpdb = evalfile("$JULIA_HOME/../share/julia/helpdb.jl")
+        help_category_list = {}
+        help_category_dict = Dict()
+        help_module_dict = Dict()
+        help_function_dict = Dict()
+        for (cat,mod,func,desc) in helpdb
+            if !has(help_category_dict, cat)
+                push!(help_category_list, cat)
+                help_category_dict[cat] = {}
             end
-            push(_jl_help_category_dict[cat], func)
-            if !has(_jl_help_function_dict, func)
-                _jl_help_function_dict[func] = {}
+            if !isempty(mod)
+                if begins_with(func, '@')
+                    mfunc = "@" * mod * "." * func[2:]
+                else
+                    mfunc = mod * "." * func
+                end
+                desc = decor_help_desc(func, mfunc, desc)
+            else
+                mfunc = func
             end
-            push(_jl_help_function_dict[func], desc)
+            push!(help_category_dict[cat], mfunc)
+            if !has(help_function_dict, mfunc)
+                help_function_dict[mfunc] = {}
+            end
+            push!(help_function_dict[mfunc], desc)
+            if !has(help_module_dict, func)
+                help_module_dict[func] = {}
+            end
+            if !contains(help_module_dict[func], mod)
+                push!(help_module_dict[func], mod)
+            end
         end
     end
 end
 
+
 function help()
-    _jl_init_help()
+    init_help()
     print(
 " Welcome to Julia. The full manual is available at
 
-    http://julialang.org/manual/
+    http://docs.julialang.org
 
  To get help on a function, try help(function). To search all help text,
  try apropos(\"string\"). To see available functions, try help(category),
  for one of the following categories:
 
 ")
-    for cat = _jl_help_category_list
-        if !isempty(_jl_help_category_dict[cat])
+    for cat = help_category_list
+        if !isempty(help_category_dict[cat])
             print("  ")
             show(cat); println()
         end
@@ -319,19 +347,19 @@ function help()
 end
 
 function help(cat::String)
-    _jl_init_help()
-    if !has(_jl_help_category_dict, cat)
+    init_help()
+    if !has(help_category_dict, cat)
         # if it's not a category, try another named thing
         return help_for(cat)
     end
     println("Help is available for the following items:")
-    for func = _jl_help_category_dict[cat]
+    for func = help_category_dict[cat]
         print(func, " ")
     end
     println()
 end
 
-function _jl_print_help_entries(entries)
+function print_help_entries(entries)
     first = true
     for desc in entries
         if !first
@@ -344,10 +372,33 @@ end
 
 help_for(s::String) = help_for(s, 0)
 function help_for(fname::String, obj)
-    _jl_init_help()
-    if has(_jl_help_function_dict, fname)
-        _jl_print_help_entries(_jl_help_function_dict[fname])
+    init_help()
+    found = false
+    if contains(fname, '.')
+        if has(help_function_dict, fname)
+            print_help_entries(help_function_dict[fname])
+            found = true
+        end
     else
+        macrocall = ""
+        if begins_with(fname, '@')
+            sfname = fname[2:]
+            macrocall = "@"
+        else
+            sfname = fname
+        end
+        if has(help_module_dict, fname)
+            allmods = help_module_dict[fname]
+            alldesc = {}
+            for mod in allmods
+                mod_prefix = isempty(mod) ? "" : mod * "."
+                append!(alldesc, help_function_dict[macrocall * mod_prefix * sfname])
+            end
+            print_help_entries(alldesc)
+            found = true
+        end
+    end
+    if !found
         if isgeneric(obj)
             repl_show(obj); println()
         else
@@ -357,23 +408,24 @@ function help_for(fname::String, obj)
 end
 
 function apropos(txt::String)
-    _jl_init_help()
+    init_help()
     n = 0
     r = Regex("\\Q$txt", PCRE.CASELESS)
-    first = true
-    for (cat, _) in _jl_help_category_dict
+    for (cat, _) in help_category_dict
         if ismatch(r, cat)
             println("Category: \"$cat\"")
-            first = false
         end
     end
-    for (func, entries) in _jl_help_function_dict
+    for (func, entries) in help_function_dict
         if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
-            if !first
-                println()
+            for desc in entries
+                nl = search(desc,'\n')
+                if nl[1] != 0
+                    println(desc[1:(nl[1]-1)])
+                else
+                    println(desc)
+                end
             end
-            _jl_print_help_entries(entries)
-            first = false
             n+=1
         end
     end

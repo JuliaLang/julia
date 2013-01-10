@@ -1,29 +1,38 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-@unix_only _jl_repl = _jl_lib
-@windows_only _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
+have_color = false # default can be altered
 
-const _jl_color_normal = "\033[0m"
+const color_normal = "\033[0m"
 
-function _jl_answer_color()
-    c = get(ENV, "JL_ANSWER_COLOR", "")
-    return c == "black"   ? "\033[1m\033[30m" :
-           c == "red"     ? "\033[1m\033[31m" :
-           c == "green"   ? "\033[1m\033[32m" :
-           c == "yellow"  ? "\033[1m\033[33m" :
-           c == "magenta" ? "\033[1m\033[35m" :
-           c == "cyan"    ? "\033[1m\033[36m" :
-           c == "white"   ? "\033[1m\033[37m" :
-           "\033[1m\033[34m"
+text_colors = {:black   => "\033[1m\033[30m",
+               :red     => "\033[1m\033[31m",
+               :green   => "\033[1m\033[32m",
+               :yellow  => "\033[1m\033[33m",
+               :blue    => "\033[1m\033[34m",
+               :magenta => "\033[1m\033[35m",
+               :cyan    => "\033[1m\033[36m",
+               :white   => "\033[1m\033[37m",
+               :normal  => color_normal}
+
+function answer_color()
+    c = symbol(get(ENV, "JL_ANSWER_COLOR", ""))
+    return get(text_colors, c, "\033[1m\033[34m")
 end
 
-_jl_banner() = print(_jl_have_color ? _jl_banner_color : _jl_banner_plain)
+banner() = print(have_color ? banner_color : banner_plain)
+
+
+exit(n) = ccall(:jl_exit, Void, (Int32,), n)
+exit() = exit(0)
+quit() = exit()
 
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
-    del_fd_handler(STDIN.fd)
-    put(_jl_repl_channel, (ast, show_value))
+    global _repl_enough_stdin = true
+    stop_reading(STDIN) 
+    STDIN.readcb = false
+    put(repl_channel, (ast, show_value))
 end
 
 # called to show a REPL result
@@ -45,24 +54,36 @@ function repl_show(io, v::ANY)
     end
 end
 
-function _jl_eval_user_input(ast::ANY, show_value)
-    iserr, lasterr = false, ()
+function add_backtrace(e, bt)
+    if isa(e,LoadError)
+        if isa(e.error,LoadError)
+            add_backtrace(e.error,bt)
+        else
+            e.error = BackTrace(e.error, bt)
+            e
+        end
+    else
+        BackTrace(e, bt)
+    end
+end
+
+function eval_user_input(ast::ANY, show_value)
+    iserr, lasterr, bt = false, (), nothing
     while true
         try
-            ccall(:jl_register_toplevel_eh, Void, ())
-            if _jl_have_color
-                print(_jl_color_normal)
+            if have_color
+                print(color_normal)
             end
             if iserr
-                show(lasterr)
+                show(add_backtrace(lasterr,bt))
                 println()
                 iserr, lasterr = false, ()
             else
-                value = eval(ast)
+                value = eval(Main,ast)
                 global ans = value
                 if !is(value,nothing) && show_value
-                    if _jl_have_color
-                        print(_jl_answer_color())
+                    if have_color
+                        print(answer_color())
                     end
                     try repl_show(value)
                     catch err
@@ -73,37 +94,65 @@ function _jl_eval_user_input(ast::ANY, show_value)
             end
             break
         catch err
+            if iserr
+                println("SYSTEM ERROR: show(lasterr) caused an error")
+            end
             iserr, lasterr = true, err
+            bt = backtrace()
         end
     end
     println()
 end
 
-function run_repl()
-    global const _jl_repl_channel = RemoteRef()
+function readBuffer(stream::TTY, nread)
+    global _repl_enough_stdin::Bool    
+    while !_repl_enough_stdin && nb_available(stream.buffer) > 0
+        nread = int(memchr(stream.buffer,'\n')) # never more than one line or readline explodes :O
+        nread2 = int(memchr(stream.buffer,'\r'))
+        if nread == 0
+            if nread2 == 0
+                nread = nb_available(stream.buffer)
+            else
+                nread = nread2
+            end
+        else
+            if nread2 != 0 && nread2 < nread
+                nread = nread2
+            end
+        end
+        ptr = pointer(stream.buffer.data,stream.buffer.ptr)
+        skip(stream.buffer,nread)
+        ccall(:jl_readBuffer,Void,(Ptr{Void},Int32),ptr,nread)
+    end
+    return false
+end
 
-    if _jl_have_color
+function run_repl()
+    global const repl_channel = RemoteRef()
+
+    if have_color
         ccall(:jl_enable_color, Void, ())
     end
     atexit() do
-        if _jl_have_color
-            print(_jl_color_normal)
+        if have_color
+            print(color_normal)
         end
         println()
     end
 
-    # ctrl-C interrupt for interactive use
+    # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
 
     while true
         ccall(:repl_callback_enable, Void, ())
-        add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
-        (ast, show_value) = take(_jl_repl_channel)
+        global _repl_enough_stdin = false
+        start_reading(STDIN, readBuffer)
+        (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
             break
         end
-        _jl_eval_user_input(ast, show_value!=0)
+        eval_user_input(ast, show_value!=0)
     end
 end
 
@@ -120,12 +169,20 @@ function parse_input_line(s::String)
     ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
 end
 
+# try to include() a file, ignoring if not found
+function try_include(f::String)
+    if is_file_readable(f)
+        include(f)
+    end
+end
+
 function process_options(args::Array{Any,1})
     global ARGS
     quiet = false
     repl = true
+    startup = true
     if has(ENV, "JL_POST_BOOT")
-        eval(parse_input_line(ENV["JL_POST_BOOT"]))
+        eval(Main,parse_input_line(ENV["JL_POST_BOOT"]))
     end
     i = 1
     while i <= length(args)
@@ -139,18 +196,18 @@ function process_options(args::Array{Any,1})
             repl = false
             i+=1
             ARGS = args[i+1:end]
-            eval(parse_input_line(args[i]))
+            eval(Main,parse_input_line(args[i]))
             break
         elseif args[i]=="-E"
             repl = false
             i+=1
             ARGS = args[i+1:end]
-            show(eval(parse_input_line(args[i])))
+            show(eval(Main,parse_input_line(args[i])))
             println()
             break
         elseif args[i]=="-P"
             i+=1
-            eval(parse_input_line(args[i]))
+            eval(Main,parse_input_line(args[i]))
         elseif args[i]=="-L"
             i+=1
             load(args[i])
@@ -167,91 +224,133 @@ function process_options(args::Array{Any,1})
             exit(0)
         elseif args[i]=="--no-history"
             # see repl-readline.c
+        elseif args[i] == "-f" || args[i] == "--no-startup"
+            startup = false
+        elseif args[i] == "-F"
+            # load juliarc now before processing any more options
+            try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
+            startup = false
         elseif args[i][1]!='-'
             # program
             repl = false
             # remove julia's arguments
             ARGS = args[i+1:end]
-            load(args[i])
+            include(args[i])
             break
         else
             error("unknown option: ", args[i])
         end
         i += 1
     end
-    return (quiet,repl)
+    return (quiet,repl,startup)
 end
 
-const _jl_roottask = current_task()
-const _jl_roottask_wi = WorkItem(_jl_roottask)
+const roottask = current_task()
+const roottask_wi = WorkItem(roottask)
 
-_jl_is_interactive = false
-isinteractive() = (_jl_is_interactive::Bool)
+is_interactive = false
+isinteractive() = (is_interactive::Bool)
+
+@unix_only julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
+@windows_only begin
+    const JULIA_USER_DATA_DIR = string(ENV["AppData"],"/julia")
+    julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(JULIA_USER_DATA_DIR,"/packages")))
+end
 
 function _start()
     # set up standard streams
-    global const stdout_stream = make_stdout_stream()
-    global const stdin_stream = make_stdin_stream()
-    global const stderr_stream = make_stderr_stream()
-    global OUTPUT_STREAM = stdout_stream
+
+    @windows_only if !has(ENV,"HOME")
+        ENV["HOME"] = ENV["APPDATA"]*"\\julia"
+    end
+    reinit_stdio()
+    librandom_init()
+
+    @windows_only if(!isdir(JULIA_USER_DATA_DIR))
+        mkdir(JULIA_USER_DATA_DIR)
+    end
 
     # set CPU core count
     global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
 
-    _jl_librandom_init()
-
-    atexit(()->flush(stdout_stream))
+    #atexit(()->flush(stdout_stream))
     try
-        ccall(:jl_register_toplevel_eh, Void, ())
-        ccall(:jl_start_io_thread, Void, ())
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
 
         if !anyp(a->(a=="--worker"), ARGS)
             # start in "head node" mode
             global const Scheduler = Task(()->event_loop(true), 1024*1024)
-            global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
+            global PGRP;
+            PGRP.myid = 1
+            assert(PGRP.np == 0)
+            push!(PGRP.workers,LocalProcess())
+            push!(PGRP.locs,("",0))
+            PGRP.np = 1
             # make scheduler aware of current (root) task
-            enq_work(_jl_roottask_wi)
+            enq_work(roottask_wi)
             yield()
-        else
-            global PGRP = ProcessGroup(0, {}, {})
         end
 
-        global const LOAD_PATH = String["", "$JULIA_HOME/../lib/julia/extras/", "$JULIA_HOME/../lib/julia/ui/"]
+        global const LOAD_PATH = ByteString[
+            ".",
+            julia_pkgdir(),
+            abspath("$JULIA_HOME/../share/julia"),
+            abspath("$JULIA_HOME/../share/julia/base"),
+            abspath("$JULIA_HOME/../share/julia/extras"),
+            abspath("$JULIA_HOME/../share/julia/ui"),
+        ]
 
-        # Load customized startup
-        try include(strcat(cwd(),"/startup.jl")) end
-        try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+        (quiet,repl,startup) = process_options(ARGS)
 
-        (quiet,repl) = process_options(ARGS)
         if repl
-            global _jl_have_color = success(`tput setaf 0`) ||
-                                    begins_with(get(ENV,"TERM",""),"xterm")
-            global _jl_is_interactive = true
+            if startup
+                try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
+            end
+
+            @unix_only global have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
+                                    success(`tput setaf 0`)
+            @windows_only global have_color = true
+            global is_interactive = true
             if !quiet
-                _jl_banner()
+                banner()
             end
             run_repl()
         end
-    catch e
-        show(e)
+    catch err
+        show(add_backtrace(err,backtrace()))
         println()
         exit(1)
     end
+    exit(0) #HACK: always exit using jl_exit
 end
 
-const _jl_atexit_hooks = {}
+const atexit_hooks = {}
 
-atexit(f::Function) = (enqueue(_jl_atexit_hooks, f); nothing)
+atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
 
 function _atexit()
-    for f in _jl_atexit_hooks
+    for f in atexit_hooks
         try
             f()
-        catch e
-            show(e)
+        catch err
+            show(err)
             println()
         end
     end
 end
+
+# Have colors passed as simple symbols: :black, :red, ...
+function print_with_color(msg::String, color::Symbol)
+    if have_color
+        default = color_normal
+        printed_color = get(text_colors, color, default)
+        print(OUTPUT_STREAM, printed_color, msg, default)
+    else
+        print(OUTPUT_STREAM, msg)
+    end
+end
+
+# Use colors to print messages and warnings in the REPL
+info(msg::String) = print_with_color(strcat("MESSAGE: ", msg, "\n"), :green)
+warn(msg::String) = print_with_color(strcat("WARNING: ", msg, "\n"), :red)

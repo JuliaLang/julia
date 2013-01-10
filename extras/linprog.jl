@@ -3,14 +3,28 @@
 ## for optimization and constraint satisfaction problems
 ##
 
-require("glpk.jl")
+require("glpk")
+
+module LinProgGLPK
+
+import GLPK
+
+export
+    linprog,
+    linprog_interior,
+    linprog_simplex,
+    linprog_exact,
+    mixintprog,
+    print_linprog_flag
+
+typealias VecOrNothing GLPK.VecOrNothing
 
 # General notes: the interface is provided as a collection of
 # high-level functions which use the glpk library.
 # Most functions have almost same interface
 # as matlab's linprog, e.g.:
 #
-# (z, x, flag) = linprog(f, A, b, Aeq, beq, params)
+# (z, x, flag) = linprog(f, A, b, Aeq, beq, lb, ub, params)
 #
 # There's a function for each solving method:
 #   linprog_interior
@@ -27,11 +41,13 @@ require("glpk.jl")
 # where the vector x is subject to these constraints:
 #
 #   A * x <= b
-#   Aeq * x == b
+#   Aeq * x == beq
 #   lb <= x <= ub
 #
 # The return flag is 0 in case of success, and follows
-# the glpk library convention otherwise.
+# the glpk library convention otherwise. It can be printed as
+# a human-readable error message with the print_linprog_flag()
+# function.
 # In case of failure, z and x are set to nothing, otherwise
 # they will hold the solution found
 #
@@ -48,19 +64,19 @@ typealias MatOrNothing Union(Matrix, SparseMatrixCSC, Vector{None}, Nothing)
 # Linear Programming, Interior point method (default)
 #{{{
 
-function linprog_interior{T<:Real,P<:Union(GLPInteriorParam,Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
+function linprog_interior{T<:Real,P<:Union(GLPK.InteriorParam,Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
         Aeq::SparseOrFullMat{T}, beq::Vector{T}, lb::Vector{T}, ub::Vector{T}, params::P)
 
-    lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
+    lp, n = linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
 
-    ret = glp_interior(lp, params)
+    ret = GLPK.interior(lp, params)
     #println("ret=$ret")
 
     if ret == 0
-        z = glp_ipt_obj_val(lp)
+        z = GLPK.ipt_obj_val(lp)
         x = zeros(Float64, n)
         for c = 1 : n
-            x[c] = glp_ipt_col_prim(lp, c)
+            x[c] = GLPK.ipt_col_prim(lp, c)
         end
         return (z, x, ret)
     else
@@ -68,15 +84,15 @@ function linprog_interior{T<:Real,P<:Union(GLPInteriorParam,Nothing)}(f::Vector{
         return (nothing, nothing, ret)
     end
 end
-function linprog_interior{T<:Real,P<:Union(GLPInteriorParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+function linprog_interior{T<:Real,P<:Union(GLPK.InteriorParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
         Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing, ub::VecOrNothing, params::P)
 
-    cA = _jl_linprog__convert_matornothing(T, A)
-    cb = _jl_linprog__convert_vecornothing(T, b)
-    cAeq = _jl_linprog__convert_matornothing(T, Aeq)
-    cbeq = _jl_linprog__convert_vecornothing(T, beq)
-    clb = _jl_linprog__convert_vecornothing(T, lb)
-    cub = _jl_linprog__convert_vecornothing(T, ub)
+    cA = linprog__convert_matornothing(T, A)
+    cb = linprog__convert_vecornothing(T, b)
+    cAeq = linprog__convert_matornothing(T, Aeq)
+    cbeq = linprog__convert_vecornothing(T, beq)
+    clb = linprog__convert_vecornothing(T, lb)
+    cub = linprog__convert_vecornothing(T, ub)
     return linprog_interior(f, cA, cb, cAeq, cbeq, clb, cub, params)
 
 end
@@ -98,19 +114,19 @@ linprog = linprog_interior
 
 # Linear Programming, Simplex Method
 #{{{
-function linprog_simplex{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
+function linprog_simplex{T<:Real,P<:Union(GLPK.SimplexParam,Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
         Aeq::SparseOrFullMat{T}, beq::Vector{T}, lb::Vector{T}, ub::Vector{T}, params::P)
 
-    lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
+    lp, n = linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
 
-    ret = glp_simplex(lp, params)
+    ret = GLPK.simplex(lp, params)
     #println("ret=$ret")
 
     if ret == 0
-        z = glp_get_obj_val(lp)
+        z = GLPK.get_obj_val(lp)
         x = zeros(Float64, n)
         for c = 1 : n
-            x[c] = glp_get_col_prim(lp, c)
+            x[c] = GLPK.get_col_prim(lp, c)
         end
         return (z, x, ret)
     else
@@ -118,15 +134,15 @@ function linprog_simplex{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}
         return (nothing, nothing, ret)
     end
 end
-function linprog_simplex{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+function linprog_simplex{T<:Real,P<:Union(GLPK.SimplexParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
         Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing, ub::VecOrNothing, params::P)
 
-    cA = _jl_linprog__convert_matornothing(T, A)
-    cb = _jl_linprog__convert_vecornothing(T, b)
-    cAeq = _jl_linprog__convert_matornothing(T, Aeq)
-    cbeq = _jl_linprog__convert_vecornothing(T, beq)
-    clb = _jl_linprog__convert_vecornothing(T, lb)
-    cub = _jl_linprog__convert_vecornothing(T, ub)
+    cA = linprog__convert_matornothing(T, A)
+    cb = linprog__convert_vecornothing(T, b)
+    cAeq = linprog__convert_matornothing(T, Aeq)
+    cbeq = linprog__convert_vecornothing(T, beq)
+    clb = linprog__convert_vecornothing(T, lb)
+    cub = linprog__convert_vecornothing(T, ub)
     return linprog_simplex(f, cA, cb, cAeq, cbeq, clb, cub, params)
 
 end
@@ -148,27 +164,27 @@ linprog_simplex{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
 #{{{
 
 # Notes:
-#  * uses glp_simplex as a preliminary step
+#  * uses GLPK.simplex as a preliminary step
 #  * the exact step only accepts the "it_lim" and "tm_lim" options,
 #    which means no message suppression is possible
 
-function linprog_exact{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
+function linprog_exact{T<:Real,P<:Union(GLPK.SimplexParam,Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
         Aeq::SparseOrFullMat{T}, beq::Vector{T}, lb::Vector{T}, ub::Vector{T}, params::P)
 
-    lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
+    lp, n = linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
 
-    ret = glp_simplex(lp, params)
+    ret = GLPK.simplex(lp, params)
     if ret != 0
         # throw exception here ?
         return (nothing, nothing, ret)
     end
 
-    ret = glp_exact(lp, params)
+    ret = GLPK.exact(lp, params)
     if ret == 0
-        z = glp_get_obj_val(lp)
+        z = GLPK.get_obj_val(lp)
         x = zeros(Float64, n)
         for c = 1 : n
-            x[c] = glp_get_col_prim(lp, c)
+            x[c] = GLPK.get_col_prim(lp, c)
         end
         return (z, x, ret)
     else
@@ -176,15 +192,15 @@ function linprog_exact{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}, 
         return (nothing, nothing, ret)
     end
 end
-function linprog_exact{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+function linprog_exact{T<:Real,P<:Union(GLPK.SimplexParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
         Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing, ub::VecOrNothing, params::P)
 
-    cA = _jl_linprog__convert_matornothing(T, A)
-    cb = _jl_linprog__convert_vecornothing(T, b)
-    cAeq = _jl_linprog__convert_matornothing(T, Aeq)
-    cbeq = _jl_linprog__convert_vecornothing(T, beq)
-    clb = _jl_linprog__convert_vecornothing(T, lb)
-    cub = _jl_linprog__convert_vecornothing(T, ub)
+    cA = linprog__convert_matornothing(T, A)
+    cb = linprog__convert_vecornothing(T, b)
+    cAeq = linprog__convert_matornothing(T, Aeq)
+    cbeq = linprog__convert_vecornothing(T, beq)
+    clb = linprog__convert_vecornothing(T, lb)
+    cub = linprog__convert_vecornothing(T, ub)
     return linprog_exact(f, cA, cb, cAeq, cbeq, clb, cub, params)
 
 end
@@ -212,35 +228,38 @@ linprog_exact{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
 #
 #    (z, x, flag, ps_flag) = mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, param, ps_param)
 #
+#  * the col_kind vector contains one entry per variable in x, each with value
+#        GLPK.CV (continuous variable), GLPK.IV (integer variable), or
+#        GLPK.BV (binary variable)
 #  * if the col_kind vector is not provided, all variables default to integer
-#  * if the "presolve" options is set to GLP_OFF, then it uses linear programming
+#  * if the "presolve" options is set to GLPK.OFF, then it uses linear programming
 #    for presolving, via the simplex point method with parameters ps_param (if ps_param is nothing
 #    or not given, uses the defaults)
 
-function mixintprog{T<:Real,Ti<:Integer,P<:Union(GLPIntoptParam,Nothing),Px<:Union(GLPSimplexParam,Nothing)}(
+function mixintprog{T<:Real,Ti<:Integer,P<:Union(GLPK.IntoptParam,Nothing),Px<:Union(GLPK.SimplexParam,Nothing)}(
         f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T}, Aeq::SparseOrFullMat{T}, beq::Vector{T},
         lb::Vector{T}, ub::Vector{T}, col_kind::Vector{Ti}, params::P, params_presolve::Px)
 
-    lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
-    _jl_mixintprog_set_col_kind(lp, n, col_kind)
+    lp, n = linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
+    mixintprog_set_col_kind(lp, n, col_kind)
 
-    if params == nothing || pointer(params) == C_NULL || params["presolve"] != GLP_ON
-        ret_ps = glp_simplex(lp, params_presolve)
+    if params == nothing || pointer(params) == C_NULL || params["presolve"] != GLPK.ON
+        ret_ps = GLPK.simplex(lp, params_presolve)
         if ret_ps != 0
             # throw exception here ?
-            # XXX GLP_ESTOP ??
-            return (nothing, nothing, GLP_ESTOP, ret_ps)
+            # XXX GLPK.ESTOP ??
+            return (nothing, nothing, GLPK.ESTOP, ret_ps)
         end
     else
         ret_ps = 0
     end
 
-    ret = glp_intopt(lp, params)
+    ret = GLPK.intopt(lp, params)
     if ret == 0
-        z = glp_mip_obj_val(lp)
+        z = GLPK.mip_obj_val(lp)
         x = zeros(Float64, n)
         for c = 1 : n
-            x[c] = glp_mip_col_val(lp, c)
+            x[c] = GLPK.mip_col_val(lp, c)
         end
         return (z, x, ret, ret_ps)
     else
@@ -248,17 +267,17 @@ function mixintprog{T<:Real,Ti<:Integer,P<:Union(GLPIntoptParam,Nothing),Px<:Uni
         return (nothing, nothing, ret, ret_ps)
     end
 end
-function mixintprog{T<:Real,P<:Union(GLPIntoptParam,Nothing),Px<:Union(GLPSimplexParam,Nothing)}(
+function mixintprog{T<:Real,P<:Union(GLPK.IntoptParam,Nothing),Px<:Union(GLPK.SimplexParam,Nothing)}(
         f::Vector{T}, A::MatOrNothing, b::VecOrNothing, Aeq::MatOrNothing, beq::VecOrNothing,
         lb::VecOrNothing, ub::VecOrNothing, col_kind::VecOrNothing, params::P, params_presolve::Px)
 
-    cA = _jl_linprog__convert_matornothing(T, A)
-    cb = _jl_linprog__convert_vecornothing(T, b)
-    cAeq = _jl_linprog__convert_matornothing(T, Aeq)
-    cbeq = _jl_linprog__convert_vecornothing(T, beq)
-    clb = _jl_linprog__convert_vecornothing(T, lb)
-    cub = _jl_linprog__convert_vecornothing(T, ub)
-    ccol_kind = _jl_linprog__convert_vecornothing(Int32, col_kind)
+    cA = linprog__convert_matornothing(T, A)
+    cb = linprog__convert_vecornothing(T, b)
+    cAeq = linprog__convert_matornothing(T, Aeq)
+    cbeq = linprog__convert_vecornothing(T, beq)
+    clb = linprog__convert_vecornothing(T, lb)
+    cub = linprog__convert_vecornothing(T, ub)
+    ccol_kind = linprog__convert_vecornothing(Int32, col_kind)
     return mixintprog(f, cA, cb, cAeq, cbeq, clb, cub, ccol_kind, params, params_presolve)
 
 end
@@ -280,15 +299,50 @@ mixintprog{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
         ub::VecOrNothing, col_kind::VecOrNothing) =
         mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, nothing, nothing)
 
-mixintprog{T<:Real,P<:Union(GLPIntoptParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+mixintprog{T<:Real,P<:Union(GLPK.IntoptParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
         Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing,
         ub::VecOrNothing, col_kind::VecOrNothing, params::P) =
         mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, params, nothing)
 #}}}
 
+# Output flags readout
+#{{{
+let msg_map = [
+    0 => "success",
+    GLPK.EBOUND => "incurrect bounds",
+    GLPK.EROOT => "no optimal basis given",
+    GLPK.ENOPFS => "no primal fasible LP solution",
+    GLPK.ENODFS => "no dual feasible LP solution",
+    GLPK.EFAIL => "solver failure",
+    GLPK.EMIPGAP => "mixed integer programming tolerance reached",
+    GLPK.ETMLIM => "time limit exceeded",
+    GLPK.ESTOP => "terminated by application",
+    GLPK.ENOCVG => "very slow convergence, or divergence",
+    GLPK.ETMLIM => "iterations limit exceeded",
+    GLPK.EINSTAB => "numberical instability",
+    GLPK.EBADB => "invalid base",
+    GLPK.ESING => "singular matrix",
+    GLPK.ECOND => "ill-conditioned matrix",
+    GLPK.EOBJLL => "lower limit reached",
+    GLPK.EOBJUL => "upper limit reached",
+    GLPK.EDATA => "invalid data format",
+    GLPK.ERANGE => "integer overflow"
+    ]
+
+    global print_linprog_flag
+    function print_linprog_flag(io::IO, flag::Int32)
+        if has(msg_map, flag)
+            print(io, msg_map[flag])
+        else
+            error("unknown GLPK flag")
+        end
+    end
+end
+#}}}
+
 ## Common auxiliary functions
 #{{{
-function _jl_linprog__convert_vecornothing{T}(::Type{T}, a::VecOrNothing)
+function linprog__convert_vecornothing{T}(::Type{T}, a::VecOrNothing)
     if isequal(a, nothing) || isa(a, Array{None})
         return T[]
     elseif T <: Integer
@@ -302,7 +356,7 @@ function _jl_linprog__convert_vecornothing{T}(::Type{T}, a::VecOrNothing)
     end
     return convert(Array{T}, a)
 end
-function _jl_linprog__convert_matornothing{T}(::Type{T}, a::MatOrNothing)
+function linprog__convert_matornothing{T}(::Type{T}, a::MatOrNothing)
     if isequal(a, nothing) || isa(a, Array{None})
         return Array(T, 0, 0)
     elseif T <: Integer
@@ -321,59 +375,78 @@ function _jl_linprog__convert_matornothing{T}(::Type{T}, a::MatOrNothing)
     end
 end
 
-function _jl_linprog__setup_prob{T<:Real, P<:Union(GLPParam, Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
+function linprog__setup_prob{T<:Real, P<:Union(GLPK.Param, Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
         Aeq::SparseOrFullMat{T}, beq::Vector{T}, lb::Vector{T}, ub::Vector{T}, params::P)
 
-    lp = GLPProb()
-    glp_set_obj_dir(lp, GLP_MIN)
+    lp = GLPK.Prob()
+    GLPK.set_obj_dir(lp, GLPK.MIN)
 
     n = size(f, 1)
 
-    m = _jl_linprog__check_A_b(A, b, n)
-    meq = _jl_linprog__check_A_b(Aeq, beq, n)
+    m = linprog__check_A_b(A, b, n)
+    meq = linprog__check_A_b(Aeq, beq, n)
 
-    has_lb, has_ub = _jl_linprog__check_lb_ub(lb, ub, n)
+    has_lb, has_ub = linprog__check_lb_ub(lb, ub, n)
 
     #println("n=$n m=$m meq=$meq has_lb=$has_lb ub=$has_ub")
 
     if m > 0
-        glp_add_rows(lp, m)
+        GLPK.add_rows(lp, m)
         for r = 1 : m
             #println("  r=$r b=$(b[r])")
-            glp_set_row_bnds(lp, r, GLP_UP, 0.0, b[r])
+            GLPK.set_row_bnds(lp, r, GLPK.UP, 0.0, b[r])
         end
     end
     if meq > 0
-        glp_add_rows(lp, meq)
+        GLPK.add_rows(lp, meq)
         for r = 1 : meq
             r0 = r + m
             #println("  r=$r r0=$r0 beq=$(beq[r])")
-            glp_set_row_bnds(lp, r0, GLP_FX, beq[r], beq[r])
+            GLPK.set_row_bnds(lp, r0, GLPK.FX, beq[r], beq[r])
         end
     end
 
-    glp_add_cols(lp, n)
+    GLPK.add_cols(lp, n)
 
     for c = 1 : n
-        glp_set_obj_coef(lp, c, f[c])
+        GLPK.set_obj_coef(lp, c, f[c])
         #println("  c=$c f=$(f[c])")
     end
 
     if has_lb && has_ub
         for c = 1 : n
             #println("  c=$c lb=$(lb[c]) ub=$(ub[c])")
-            bounds_type = (lb[c] != ub[c] ? GLP_DB : GLP_FX)
-            glp_set_col_bnds(lp, c, bounds_type, lb[c], ub[c])
+            local bounds_type
+            if lb[c] == ub[c]
+                bounds_type = GLPK.FX
+            else
+                if isinf(lb[c])
+                    if isinf(ub[c])
+                        bounds_type = GLPK.FR
+                    else
+                        bounds_type = GLPK.UP
+                    end
+                else
+                    if isinf(ub[c])
+                        bounds_type = GLPK.LO
+                    else
+                        bounds_type = GLPK.DB
+                    end
+                end
+            end
+            GLPK.set_col_bnds(lp, c, bounds_type, lb[c], ub[c])
         end
     elseif has_lb
         for c = 1 : n
             #println("  c=$c lb=$(lb[c])")
-            glp_set_col_bnds(lp, c, GLP_LO, lb[c], 0.0)
+            bounds_type = isinf(lb[c]) ? GLPK.FR : GLPK.LO
+            GLPK.set_col_bnds(lp, c, bounds_type, lb[c], 0.0)
         end
     elseif has_ub
         for c = 1 : n
             #println("  c=$c ub=$(ub[c])")
-            glp_set_col_bnds(lp, c, GLP_UP, 0.0, ub[c])
+            bounds_type = isinf(ub[c]) ? GLPK.FR : GLPK.UP
+            GLPK.set_col_bnds(lp, c, bounds_type, 0.0, ub[c])
         end
     end
 
@@ -384,17 +457,17 @@ function _jl_linprog__setup_prob{T<:Real, P<:Union(GLPParam, Nothing)}(f::Vector
     elseif (m == 0) && (meq > 0 && issparse(Aeq))
         (ia, ja, ar) = findn_nzs(Aeq)
     else
-        (ia, ja, ar) = _jl_linprog__dense_matrices_to_glp_format(m, meq, n, A, Aeq)
+        (ia, ja, ar) = linprog__dense_matrices_to_glpk_format(m, meq, n, A, Aeq)
     end
     #println("ia=$ia")
     #println("ja=$ja")
     #println("ar=$ar")
 
-    glp_load_matrix(lp, ia, ja, ar)
+    GLPK.load_matrix(lp, ia, ja, ar)
     return (lp, n)
 end
 
-function _jl_linprog__check_A_b{T}(A::SparseOrFullMat{T}, b::Vector{T}, n::Int)
+function linprog__check_A_b{T}(A::SparseOrFullMat{T}, b::Vector{T}, n::Int)
     m = 0
     if !isempty(A)
         if size(A, 2) != n
@@ -415,7 +488,7 @@ function _jl_linprog__check_A_b{T}(A::SparseOrFullMat{T}, b::Vector{T}, n::Int)
     return m
 end
 
-function _jl_linprog__check_lb_ub{T}(lb::Vector{T}, ub::Vector{T}, n::Int)
+function linprog__check_lb_ub{T}(lb::Vector{T}, ub::Vector{T}, n::Int)
     has_lb = false
     has_ub = false
     if !isempty(lb)
@@ -433,7 +506,7 @@ function _jl_linprog__check_lb_ub{T}(lb::Vector{T}, ub::Vector{T}, n::Int)
     return (has_lb, has_ub)
 end
 
-function _jl_linprog__dense_matrices_to_glp_format(m, meq, n, A, Aeq)
+function linprog__dense_matrices_to_glpk_format(m, meq, n, A, Aeq)
     l = (m + meq) * n
 
     ia = zeros(Int32, l)
@@ -461,10 +534,10 @@ function _jl_linprog__dense_matrices_to_glp_format(m, meq, n, A, Aeq)
     return (ia, ja, ar)
 end
 
-function _jl_mixintprog_set_col_kind{Ti<:Integer}(lp::GLPProb, n::Int, col_kind::Vector{Ti})
+function mixintprog_set_col_kind{Ti<:Integer}(lp::GLPK.Prob, n::Int, col_kind::Vector{Ti})
     if isempty(col_kind)
         for i = 1 : n
-            glp_set_col_kind(lp, i, GLP_IV)
+            GLPK.set_col_kind(lp, i, GLPK.IV)
         end
         return
     end
@@ -472,8 +545,10 @@ function _jl_mixintprog_set_col_kind{Ti<:Integer}(lp::GLPProb, n::Int, col_kind:
         error("wrong col_kind vector size")
     end
     for i = 1 : n
-        glp_set_col_kind(lp, i, col_kind[i])
+        GLPK.set_col_kind(lp, i, col_kind[i])
     end
 end
 
 #}}}
+
+end # module

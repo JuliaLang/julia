@@ -140,7 +140,7 @@ function fshow{TP<:SIPrefix, TU<:UnitBase}(io, q::Quantity{TP, TU})
 end
 
 # Functions and dictionaries for parsing
-_unit_string_dict = Dict{String, Tuple}()
+_unit_string_dict = (String=>Tuple)[]
 
 function _unit_gen_func_multiplicative(table)
     for (t, r, to_r, s, ps, ls, fs) in table

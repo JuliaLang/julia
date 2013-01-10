@@ -17,14 +17,14 @@ them. The following are Julia's primitive numeric types:
 
 -  **Integer types:**
 
-   -  ``Int8`` — signed 8-bit integers ranging from −2^7 to 2^7 − 1.
-   -  ``Uint8`` — unsigned 8-bit integers ranging from 0 to 2^8 − 1.
-   -  ``Int16`` — signed 16-bit integers ranging from −2^15 to 2^15 − 1.
-   -  ``Uint16`` — unsigned 16-bit integers ranging from 0 to 2^16 − 1.
-   -  ``Int32`` — signed 32-bit integers ranging from −2^31 to 2^31 − 1.
-   -  ``Uint32`` — unsigned 32-bit integers ranging from 0 to 2^32 − 1.
-   -  ``Int64`` — signed 64-bit integers ranging from −2^63 to 2^63 − 1.
-   -  ``Uint64`` — unsigned 64-bit integers ranging from 0 to 2^64 − 1.
+   -  ``Int8`` — signed 8-bit integers ranging from -2^7 to 2^7 - 1.
+   -  ``Uint8`` — unsigned 8-bit integers ranging from 0 to 2^8 - 1.
+   -  ``Int16`` — signed 16-bit integers ranging from -2^15 to 2^15 - 1.
+   -  ``Uint16`` — unsigned 16-bit integers ranging from 0 to 2^16 - 1.
+   -  ``Int32`` — signed 32-bit integers ranging from -2^31 to 2^31 - 1.
+   -  ``Uint32`` — unsigned 32-bit integers ranging from 0 to 2^32 - 1.
+   -  ``Int64`` — signed 64-bit integers ranging from -2^63 to 2^63 - 1.
+   -  ``Uint64`` — unsigned 64-bit integers ranging from 0 to 2^64 - 1.
    -  ``Bool`` — either ``true`` or ``false``, which correspond
       numerically to 1 and 0.
    -  ``Char`` — a 32-bit numeric type representing a `Unicode
@@ -48,9 +48,7 @@ as built-in types.
 Integers
 --------
 
-Literal integers are represented in the standard manner:
-
-::
+Literal integers are represented in the standard manner::
 
     julia> 1
     1
@@ -59,9 +57,7 @@ Literal integers are represented in the standard manner:
     1234
 
 The default type for an integer literal depends on whether the target
-system has a 32-bit architecture or a 64-bit architecture:
-
-::
+system has a 32-bit architecture or a 64-bit architecture::
 
     # 32-bit system:
     julia> typeof(1)
@@ -71,9 +67,7 @@ system has a 32-bit architecture or a 64-bit architecture:
     julia> typeof(1)
     Int64
 
-The type ``Int`` is an alias for the system-native integer type:
-
-::
+The type ``Int`` is an alias for the system-native integer type::
 
     # 32-bit system:
     julia> Int
@@ -84,9 +78,7 @@ The type ``Int`` is an alias for the system-native integer type:
     Int64
 
 Similarly, ``Uint`` is an alias for the system-native unsigned integer
-type:
-
-::
+type::
 
     # 32-bit system:
     julia> Uint
@@ -98,9 +90,7 @@ type:
 
 Larger integer literals that cannot be represented using only 32 bits
 but can be represented in 64 bits always create 64-bit integers,
-regardless of the system type:
-
-::
+regardless of the system type::
 
     # 32-bit or 64-bit system:
     julia> typeof(3000000000)
@@ -109,9 +99,7 @@ regardless of the system type:
 Unsigned integers are input and output using the ``0x`` prefix and
 hexadecimal (base 16) digits ``0-9a-f`` (you can also use ``A-F`` for
 input). The size of the unsigned value is determined by the number of
-hex digits used:
-
-::
+hex digits used::
 
     julia> 0x1
     0x01
@@ -142,10 +130,16 @@ hex literals for integer values, one typically is using them to
 represent a fixed numeric byte sequence, rather than just an integer
 value.
 
-The minimum and maximum representable values of primitive numeric types
-such as integers are given by the ``typemin`` and ``typemax`` functions:
+Binary and octal literals are also supported::
 
-::
+    julia> 0b10
+    0x02
+
+    julia> 0o10
+    0x08
+
+The minimum and maximum representable values of primitive numeric types
+such as integers are given by the ``typemin`` and ``typemax`` functions::
 
     julia> (typemin(Int32), typemax(Int32))
     (-2147483648,2147483647)
@@ -171,9 +165,7 @@ but should be easy enough to understand for people with some programming experie
 Floating-Point Numbers
 ----------------------
 
-Literal floating-point numbers are represented in the standard formats:
-
-::
+Literal floating-point numbers are represented in the standard formats::
 
     julia> 1.0
     1.0
@@ -197,9 +189,7 @@ Literal floating-point numbers are represented in the standard formats:
     0.00025
 
 The above results are all ``Float64`` values. There is no literal format
-for ``Float32``, but you can convert values to ``Float32`` easily:
-
-::
+for ``Float32``, but you can convert values to ``Float32`` easily::
 
     julia> float32(-1.5)
     -1.5
@@ -221,9 +211,7 @@ For further discussion of how these non-finite floating-point values are
 ordered with respect to each other and other floats, see
 :ref:`man-numeric-comparisons`. By the
 `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_, these
-floating-point values are the results of certain arithmetic operations:
-
-::
+floating-point values are the results of certain arithmetic operations::
 
     julia> 1/0
     Inf
@@ -253,9 +241,7 @@ floating-point values are the results of certain arithmetic operations:
     NaN
 
 The ``typemin`` and ``typemax`` functions also apply to floating-point
-types:
-
-::
+types::
 
     julia> (typemin(Float32),typemax(Float32))
     (-Inf,Inf)
@@ -267,10 +253,8 @@ Note that ``Float32`` values ``NaN``, ``Inf`` and ``-Inf`` are shown
 identically to their ``Float64`` counterparts.
 
 Floating-point types also support the ``eps`` function, which gives the
-distance between ``1.0`` and the next largest representable
-floating-point value:
-
-::
+distance between ``1.0`` and the next larger representable
+floating-point value::
 
     julia> eps(Float32)
     1.192092896e-07
@@ -284,9 +268,7 @@ floating-point value as an argument, and gives the absolute difference
 between that value and the next representable floating point value. That
 is, ``eps(x)`` yields a value of the same type as ``x`` such that
 ``x + eps(x)`` is the next representable floating-point value larger
-than ``x``:
-
-::
+than ``x``::
 
     julia> eps(1.0)
     2.22044604925031308e-16
@@ -300,7 +282,7 @@ than ``x``:
     julia> eps(0.0)
     4.94065645841246544e-324
 
-As you can see, the distance to the next largest representable
+As you can see, the distance to the next larger representable
 floating-point value is smaller for smaller values and larger for larger
 values. In other words, the representable floating-point numbers are
 densest in the real number line near zero, and grow sparser
@@ -347,9 +329,7 @@ Numeric Literal Coefficients
 
 To make common numeric formulas and expressions clearer, Julia allows
 variables to be immediately preceded by a numeric literal, implying
-multiplication. This makes writing polynomial expressions much cleaner:
-
-::
+multiplication. This makes writing polynomial expressions much cleaner::
 
     julia> x = 3
     3
@@ -360,34 +340,30 @@ multiplication. This makes writing polynomial expressions much cleaner:
     julia> 1.5x^2 - .5x + 1
     13.0
 
-It also makes writing exponential functions more elegant:
-
-::
+It also makes writing exponential functions more elegant::
 
     julia> 2^2x
     64
 
-You can also use numeric literals as coefficients to parenthesized
-expressions:
+The precedence of numeric literal coefficients is the same as that of unary
+operators such as negation. So ``2^3x`` is parsed as ``2^(3x)``, and
+``2x^3`` is parsed as ``2*(x^3)``.
 
-::
+You can also use numeric literals as coefficients to parenthesized
+expressions::
 
     julia> 2(x-1)^2 - 3(x-1) + 1
     3
 
 Additionally, parenthesized expressions can be used as coefficients to
-variables, implying multiplication of the expression by the variable:
-
-::
+variables, implying multiplication of the expression by the variable::
 
     julia> (x-1)x
     6
 
 Neither juxtaposition of two parenthesized expressions, nor placing a
 variable before a parenthesized expression, however, can be used to
-imply multiplication:
-
-::
+imply multiplication::
 
     julia> (x-1)(x+1)
     type error: apply: expected Function, got Int64

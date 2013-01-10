@@ -1,0 +1,4 @@
+--langdef=julia
+--langmap=julia:.jl
+--regex-julia=/^[ \t]*function[ \t]+([^ \t({[]+).*$/\1/f,function/
+--regex-julia=/^[ \t]*(([^@#$ \t({[]+)|\(([^@#$ \t({[]+)\)|\((\$)\))[ \t]*(\{.*\})?[ \t]*\([^#]*\)[ \t]*=([^=].*$|$)/\2\3\4/f,function/
