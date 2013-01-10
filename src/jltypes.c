@@ -1726,7 +1726,8 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->linfo = NULL;
             nst->ctor_factory = st->ctor_factory;
             nst->instance = NULL;
-            nst->uid = 0;
+            nst->uid = 0;    
+            nst->struct_decl = NULL;
             nst->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)st->super, env,n,stack);
             jl_tuple_t *ftypes = st->types;
             if (ftypes != NULL) {
@@ -2371,6 +2372,7 @@ void jl_init_types(void)
     jl_tag_kind->ctor_factory = NULL;
     jl_tag_kind->instance = NULL;
     jl_tag_kind->uid = jl_assign_type_uid();
+    jl_tag_kind->struct_decl = NULL;
 
     jl_struct_kind->name = jl_new_typename(jl_symbol("CompositeKind"));
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
@@ -2392,6 +2394,7 @@ void jl_init_types(void)
     jl_struct_kind->ctor_factory = NULL;
     jl_struct_kind->instance = NULL;
     jl_struct_kind->uid = jl_assign_type_uid();
+    jl_struct_kind->struct_decl = NULL;
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
@@ -2408,6 +2411,7 @@ void jl_init_types(void)
     jl_typename_type->linfo = NULL;
     jl_typename_type->ctor_factory = NULL;
     jl_typename_type->instance = NULL;
+    jl_typename_type->struct_decl = NULL;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
     jl_sym_type->name->primary = (jl_value_t*)jl_sym_type;
@@ -2421,6 +2425,7 @@ void jl_init_types(void)
     jl_sym_type->ctor_factory = NULL;
     jl_sym_type->instance = NULL;
     jl_sym_type->uid = jl_assign_type_uid();
+    jl_sym_type->struct_decl = NULL;
 
     // now they can be used to create the remaining base kinds and types
     jl_union_kind = jl_new_struct_type(jl_symbol("UnionKind"),

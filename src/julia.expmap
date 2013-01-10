@@ -274,6 +274,7 @@
     jl_uv_*;
     jl_wrap_raw_dl_handle;
     jl_write;
+    jl_value_ptr;
     jl_zero_denormals;
     julia_free;
     julia_home;

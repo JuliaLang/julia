@@ -240,7 +240,13 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         jv = boxed(jv);
     }
     else if (jl_is_cpointer_type(jt)) {
+        assert(ty->isPointerTy());
         jl_value_t *aty = expr_type(argex, ctx);
+        if (jl_is_struct_type(jl_tparam0(jt))) {
+            if (!jl_is_struct_type(aty))
+                emit_typecheck(emit_typeof(jv), (jl_value_t*)jl_struct_kind, "ccall: pointer &argument not a valid struct-like type", ctx);
+            return builder.CreateBitCast(emit_nthptr_addr(jv, 1), ty); // skip type tag field
+        }
         if (jl_is_array_type(aty) &&
             (jl_tparam0(jt) == jl_tparam0(aty) ||
              jl_tparam0(jt) == (jl_value_t*)jl_bottom_type)) {
@@ -254,8 +260,12 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                                        literal_pointer_val(jl_tparam0(jt)), jv,
                                        ConstantInt::get(T_int32, argn),
                                        ConstantInt::get(T_int32, (int)addressOf));
-        assert(ty->isPointerTy());
         return builder.CreateBitCast(p, ty);
+    }
+    else if (ty->isStructTy()) {
+        assert (jl_is_struct_type(jt) && (Type*)((jl_struct_type_t*)jt)->struct_decl == ty);
+        Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, 1), PointerType::get(ty,0));
+        return builder.CreateLoad(pjv, false);
     }
     // TODO: error for & with non-pointer argument type
     assert(jl_is_bits_type(jt));
@@ -286,7 +296,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Value *arg1 = emit_unboxed(args[1], ctx);
         if (!jl_is_cpointer_type(ptr_ty)) {
             emit_typecheck(arg1, (jl_value_t*)jl_voidpointer_type,
-                           "ccall: function argument not a pointer or valid constant", ctx);
+                           "ccall: function argument not a pointer or valid constant expression", ctx);
         }
         jl_ptr = emit_unbox(T_size, T_psize, arg1);
     }
@@ -398,7 +408,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #endif
             }
         }
-        Type *t = julia_type_to_llvm(tti);
+        Type *t = julia_type_to_llvm(tti, true);
         if (t == NULL) {
             JL_GC_POP();
             return literal_pointer_val(jl_nothing);
@@ -440,6 +450,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         JL_GC_POP();
         return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),lrt),
                                rt);
+    }
+    if (fptr == &jl_value_ptr) {
+        Value *ary = emit_expr(args[4], ctx);
+        JL_GC_POP();
+        return mark_julia_type(builder.CreateBitCast(ary,lrt),rt);
     }
 
     // see if there are & arguments
@@ -518,7 +533,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             jargty = jl_tupleref(tt,ai);
         }
         Value *arg;
-        if (largty == jl_pvalue_llvmt) {
+        if (largty == jl_pvalue_llvmt ||
+                largty->isStructTy() ||
+                (addressOf && largty->isPointerTy() &&
+                 largty->getContainedType(0)->isStructTy())) {
             arg = emit_expr(argi, ctx, true);
         }
         else {
