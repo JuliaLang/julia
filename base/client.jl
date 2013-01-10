@@ -210,7 +210,7 @@ function process_options(args::Array{Any,1})
             eval(Main,parse_input_line(args[i]))
         elseif args[i]=="-L"
             i+=1
-            load(args[i])
+            require(args[i])
         elseif args[i]=="-p"
             i+=1
             np = int32(args[i])

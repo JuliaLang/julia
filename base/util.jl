@@ -261,9 +261,6 @@ function reload_path(path)
     nothing
 end
 
-# deprecated
-const load = require
-
 evalfile(fname::String) = eval(Main, parse(readall(fname))[1])
 
 # help

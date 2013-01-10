@@ -1111,7 +1111,6 @@ export
     find_in_path,
     include,
     include_string,
-    load,  # deprecated
     reload,
     require,
     julia_pkgdir,
