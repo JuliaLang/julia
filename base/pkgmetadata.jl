@@ -6,7 +6,7 @@ using LinProgGLPK
 
 import Git
 import GLPK
-import Base.isequal, Base.isless, Base.contains
+import Base.isequal, Base.isless, Base.contains, Base.hash
 
 export parse_requires, Version, VersionSet
 
@@ -101,6 +101,8 @@ function versions(pkgs)
 end
 versions() = versions(packages())
 
+hash(v::Version) = hash([v.(n) for n in Version.names])
+
 type VersionSet
     package::ByteString
     versions::Vector{VersionNumber}
@@ -113,6 +115,9 @@ type VersionSet
     end
 end
 VersionSet(pkg::ByteString) = VersionSet(pkg, VersionNumber[])
+
+isequal(a::VersionSet, b::VersionSet) =
+    a.package == b.package && a.versions == b.versions
 isless(a::VersionSet, b::VersionSet) = a.package < b.package
 
 function contains(s::VersionSet, v::Version)
@@ -122,6 +127,8 @@ function contains(s::VersionSet, v::Version)
     end
     return isempty(s.versions)
 end
+
+hash(s::VersionSet) = hash([s.(n) for n in VersionSet.names])
 
 function parse_requires(file::String)
     reqs = VersionSet[]

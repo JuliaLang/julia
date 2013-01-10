@@ -39,18 +39,13 @@ type ReqsStruct
         vers = versions(pkgs)
         deps = dependencies(pkgs,vers)
 
-        #sort!(deps)
-        #println("DEPS:")
-        #for d in deps
-            #println("$(d[1].package) v$(d[1].version) <- $(d[2].package) $(d[2].versions)")
-        #end
-        #println()
-
         np = length(pkgs)
 
         return new(reqs, pkgs, vers, deps, np)
     end
 end
+
+typealias VersionWeight Int
 
 # Auxiliary structure to map data from ReqsStruct into
 # internal representation and vice versa
@@ -76,44 +71,241 @@ type PkgStruct
     #                then
     #                  pdict[p] = p0
     #                  pvers[p0][v0] = vn
-    vdict::Dict{ASCIIString,(Int,Int)}
+    vdict::Dict{Version,(Int,Int)}
 
-    function PkgStruct(reqsstruct::ReqsStruct)
+    vweight::Vector{Vector{VersionWeight}}
 
-        pkgs = reqsstruct.pkgs
-        vers = reqsstruct.vers
-        np = reqsstruct.np
+    PkgStruct(spp::Vector{Int}, pdict::Dict{String,Int},
+              pvers::Vector{Vector{VersionNumber}},
+              vdict::Dict{Version,(Int,Int)},
+              vweight::Vector{Vector{VersionWeight}}) =
+        new(spp, pdict, pvers, vdict, vweight)
+end
 
-        spp = ones(Int, np)
-        pdict = [ pkgs[i] => i for i = 1:np ]
-        pvers = [ VersionNumber[] for i = 1:np ]
+function PkgStruct(reqsstruct::ReqsStruct)
 
-        for v in vers
-            vp = v.package
-            vv = v.version
-            j = pdict[vp]
-            spp[j] += 1
-            push!(pvers[j], vv)
+    pkgs = reqsstruct.pkgs
+    vers = reqsstruct.vers
+    np = reqsstruct.np
+
+    pdict = [ pkgs[i] => i for i = 1:np ]
+
+    spp, pvers = gen_pvers(np, pdict, vers)
+    vdict = gen_vdict(pdict, pvers, vers)
+
+    vweight = [ [ v0-1 for v0 = 1:spp[p0] ] for p0 = 1:np ]
+
+    return PkgStruct(spp, pdict, pvers, vdict, vweight)
+end
+
+function gen_pvers(np, pdict, vers)
+    spp = ones(Int, np)
+
+    pvers = [ VersionNumber[] for i = 1:np ]
+
+    for v in vers
+        vp = v.package
+        vv = v.version
+        j = pdict[vp]
+        spp[j] += 1
+        push!(pvers[j], vv)
+    end
+    for j = 1:np
+        sort!(pvers[j])
+    end
+
+    return spp, pvers
+end
+
+function gen_vdict(pdict, pvers, vers)
+
+    vdict = (Version=>(Int,Int))[]
+    for v in vers
+        vp = v.package
+        vv = v.version
+        j = pdict[vp]
+        for i in 1:length(pvers[j])
+            if pvers[j][i] == vv
+                vdict[v] = (j, i)
+                break
+            end
         end
-        for j = 1:np
-            sort!(pvers[j])
-        end
+    end
+    return vdict
+end
 
-        vdict = (ASCIIString=>(Int,Int))[]
-        for v in vers
-            vp = v.package
-            vv = v.version
-            j = pdict[vp]
-            for i in 1:length(pvers[j])
-                if pvers[j][i] == vv
-                    vdict[string(v)] = (j, i)
-                    break
-                end
+function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
+
+    np = reqsstruct.np
+    reqs = reqsstruct.reqs
+    pkgs = reqsstruct.pkgs
+    vers = reqsstruct.vers
+    deps = reqsstruct.deps
+    spp = pkgstruct.spp
+    pdict = pkgstruct.pdict
+    pvers = pkgstruct.pvers
+    vdict = pkgstruct.vdict
+    vweight = pkgstruct.vweight
+
+    vmask = [ [ BitVector() for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
+
+    function contains_any(vs::VersionSet, first::VersionNumber)
+        vvs = vs.versions
+        return isempty(vvs) || (length(vvs) == 1 && vvs[1] == first)
+    end
+
+    function parse_reqs(vs_vec)
+        for r in vs_vec
+            p = r.package
+            p0 = pdict[p]
+            @assert spp[p0] >= 2
+            if spp[p0] == 2 || contains_any(r, pvers[p0][1])
+                continue
+            end
+
+            pvers0 = pvers[p0]
+
+            vmask0 = vmask[p0]
+            for vm in vmask0
+                grow!(vm, 1)
+            end
+
+            for v0 = 1:spp[p0]-1
+                v = pvers0[v0]
+                vm = vmask0[v0]
+                vm[end] = contains(r, Version(p, v))
+            end
+        end
+    end
+
+    parse_reqs(reqs)
+
+    pdeps = [ [ Set{VersionSet}() for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
+    for d in deps
+        p0, v0 = vdict[d[1]]
+        p1 = pdict[d[2].package]
+        if contains_any(d[2], pvers[p1][1])
+            dd = VersionSet(d[2].package)
+        else
+            dd = d[2]
+        end
+        add(pdeps[p0][v0], dd)
+    end
+
+    alldeps = VersionSet[]
+    for p0 = 1:np
+        pdeps0 = [ elements(s) for s in pdeps[p0] ]
+        uniqdepssets = Vector{VersionSet}[] # Using a Vector is faster than Set here
+        for dd in pdeps0
+            if !contains(uniqdepssets, dd)
+                push!(uniqdepssets, dd)
             end
         end
 
-        return new(spp, pdict, pvers, vdict)
+        for dd in uniqdepssets, v in dd
+            push!(alldeps, v)
+        end
+
+        @assert spp[p0] >= 2
+        if spp[p0] == 2
+            continue
+        end
+
+        ff = falses(length(uniqdepssets))
+        vmask0 = vmask[p0]
+        vmind_base = length(vmask0[1])
+        for vm in vmask0
+            append!(vm, ff)
+        end
+
+        for v0 = 1:spp[p0]-1
+            vmind = findfirst(uniqdepssets, pdeps0[v0])
+            @assert vmind >= 0
+            vmind += vmind_base
+            vm = vmask0[v0]
+            vm[vmind] = true
+        end
     end
+
+    parse_reqs(alldeps)
+
+    pruned_vers_id = Array(Vector{Int}, np)
+    for p0 = 1:np
+        vmask0 = vmask[p0]
+        chunks = [ Base.get_chunks(vm) for vm in vmask0 ]
+        chunks_uniq = unique(chunks)
+        ncu = length(chunks_uniq)
+        id_list = [ Int[] for c0 = 1:ncu ]
+        for v0 = 1:spp[p0]-1
+            chunk = chunks[v0]
+            c0 = findfirst(chunks_uniq, chunk)
+            push!(id_list[c0], v0)
+        end
+        pruned_vers_id[p0] = sort!([ c[end] for c in id_list ])
+    end
+
+    new_pvers = [ pvers[p0][pruned_vers_id[p0]] for p0 = 1:np ]
+
+    new_vers = Version[]
+    for p0 = 1:np
+        p = pkgs[p0]
+        for v in new_pvers[p0]
+            push!(new_vers, Version(p, v))
+        end
+    end
+
+    new_deps = Array((Version,VersionSet), 0)
+
+    for d0 = 1:length(deps)
+        d = deps[d0]
+        p0, v0 = vdict[d[1]]
+        if !contains(pruned_vers_id[p0], v0)
+            continue
+        end
+
+        p = d[2].package
+        p1 = pdict[p]
+        vs = d[2].versions
+        new_vs_v = VersionNumber[]
+        for v in vs
+            nv1 = 1
+            nv = new_pvers[p1][nv1]
+            while nv < v
+                nv1 += 1
+                nv = new_pvers[p1][nv1]
+            end
+            push!(new_vs_v, nv)
+        end
+        push!(new_deps, (d[1], VersionSet(p, new_vs_v)))
+    end
+
+    reqsstruct.vers = new_vers
+    reqsstruct.deps = new_deps
+
+    new_spp, new_pvers = gen_pvers(np, pdict, new_vers)
+    new_vdict = gen_vdict(pdict, new_pvers, new_vers)
+
+    new_vweight = [ Array(VersionWeight,new_spp[p0]) for p0 = 1:np ]
+    for p0 = 1:np
+        vweight0 = vweight[p0]
+        new_vweight0 = new_vweight[p0]
+        pversid0 = pruned_vers_id[p0]
+        for v0 = 1:length(pversid0)
+            new_vweight0[v0] = vweight0[pversid0[v0]]
+        end
+        new_vweight0[end] = vweight0[end]
+    end
+
+    pkgstruct.spp = new_spp
+    pkgstruct.pvers = new_pvers
+    pkgstruct.vdict = new_vdict
+    pkgstruct.vweight = new_vweight
+
+    #println("pruning stats:")
+    #println("  before: vers=$(length(vers)) deps=$(length(deps))")
+    #println("  after: vers=$(length(new_vers)) deps=$(length(new_deps))")
+
+    return reqsstruct, pkgstruct
 end
 
 # FieldValue is a numeric type which helps dealing with
@@ -256,7 +448,7 @@ type Graph
         adjdict = [ (Int=>Int)[] for i = 1:np ]
 
         for d in deps
-            p0, v0 = vdict[string(d[1])]
+            p0, v0 = vdict[d[1]]
             vs = d[2]
             p1 = pdict[vs.package]
 
@@ -349,6 +541,7 @@ type Messages
         spp = pkgstruct.spp
         pvers = pkgstruct.pvers
         vdict = pkgstruct.vdict
+        vweight = pkgstruct.vweight
 
         function noise(p0::Int, v0::Int)
             s = pkgs[p0] * string(v0 == spp[p0] ? "UNINST" : pvers[p0][v0])
@@ -357,7 +550,7 @@ type Messages
 
         # external fields: there are 2 terms, a noise to break potential symmetries
         #                  and one to favor newest versions over older, and no-version over all
-        fld = [ [ FieldValue(0,0,v0-1,0,noise(p0,v0)) for v0 = 1:spp[p0] ] for p0 = 1:np]
+        fld = [ [ FieldValue(0,0,vweight[p0][v0],0,noise(p0,v0)) for v0 = 1:spp[p0] ] for p0 = 1:np]
 
         # enforce requirements as infinite external fields over the desired
         # version ranges
@@ -366,7 +559,7 @@ type Messages
 
         for r in reqs, v in vers
             if contains(r, v)
-                p0, v0 = vdict[string(v)]
+                p0, v0 = vdict[v]
                 reqps[p0] = true
                 reqmsk[p0][v0] = true
             end
@@ -381,7 +574,7 @@ type Messages
                         # the state is one of those explicitly requested:
                         # favor it at a higer level than normal (upgrade
                         # FieldValue from l2 to l1)
-                        fld[p0][v0] += FieldValue(0,v0-1,-v0+1)
+                        fld[p0][v0] += FieldValue(0,vweight[p0][v0],-vweight[p0][v0])
                     end
                 end
             end
@@ -551,6 +744,7 @@ end
 # polarized packages by adding extra infinite fields on every state
 # but the maximum
 function decimate(n::Int, graph::Graph, msgs::Messages)
+    #println("DECIMATING $n NODES")
     fld = msgs.fld
     decimated = msgs.decimated
     fldorder = Sort.sortperm_by(secondmax, fld)[2]
@@ -666,7 +860,7 @@ function verify_sol(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{In
 
     # verify dependencies
     for d in deps
-        p0, v0 = vdict[string(d[1])]
+        p0, v0 = vdict[d[1]]
         if sol[p0] == v0
             vs = d[2]
             p = vs.package
@@ -717,7 +911,7 @@ function verify_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Ve
         # check if the higher version has a depencency which
         # would be violated by the state of the remaining packages
         for d in deps
-            p0b, v0 = vdict[string(d[1])]
+            p0b, v0 = vdict[d[1]]
             if p0 != p0b || v0 != s0+1
                 # we're looking for the depencencies of the
                 # higher version
@@ -753,7 +947,7 @@ function verify_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Ve
                 # depend on this one
                 continue
             end
-            p1, v1 = vdict[string(d[1])]
+            p1, v1 = vdict[d[1]]
             if sol[p1] != v1
                 # we're looking for the dependencies
                 # of the (other) installed packages)
@@ -786,6 +980,9 @@ function resolve(reqs)
 
     # init structures
     pkgstruct = PkgStruct(reqsstruct)
+
+    prune_versions!(reqsstruct, pkgstruct)
+
     graph = Graph(reqsstruct, pkgstruct)
     msgs = Messages(reqsstruct, pkgstruct, graph)
 
