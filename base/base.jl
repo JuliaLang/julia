@@ -8,6 +8,7 @@ convert(T, x)               = convert_default(T, x, convert)
 convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 
 ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
+ptr_arg_convert(::Type{Ptr{Void}}, x) = x
 
 # conversion used by ccall
 cconvert(T, x) = convert(T, x)
