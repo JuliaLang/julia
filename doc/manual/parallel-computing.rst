@@ -198,7 +198,7 @@ following function in ``count_heads.jl``::
     function count_heads(n)
         c::Int = 0
         for i=1:n
-            c += randbit()
+            c += randbool()
         end
         c
     end
@@ -232,7 +232,7 @@ we can use a *parallel for loop*, which can be written in Julia like
 this::
 
     nheads = @parallel (+) for i=1:200000000
-      randbit()
+      randbool()
     end
 
 This construct implements the pattern of assigning iterations to

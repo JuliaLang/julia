@@ -2306,12 +2306,6 @@ airyaiprime(x)
 
 "),
 
-(E"Random Numbers",E"Base",E"randbit",E"randbit()
-
-   Generate \"1\" or \"0\" at random
-
-"),
-
 (E"Random Numbers",E"Base",E"randbool",E"randbool()
 
    Generate a random boolean value

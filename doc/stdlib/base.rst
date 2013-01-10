@@ -1380,10 +1380,6 @@ Random numbers are generated in Julia by calling functions from the `Mersenne Tw
 
    Generate an array of random integers in the interval from ``a`` to ``b`` inclusive. The first argument is a tuple.
 
-.. function:: randbit
-
-   Generate ``1`` or ``0`` at random
-
 .. function:: randbool
 
    Generate a random boolean value
