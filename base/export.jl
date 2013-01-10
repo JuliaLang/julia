@@ -1015,7 +1015,14 @@ export
     rfft,
     plan_rfft,
     xcorr,
-    dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!,
+    dct,
+    idct,
+    dct!,
+    idct!,
+    plan_dct,
+    plan_idct,
+    plan_dct!,
+    plan_idct!,
 
 # iteration
     start,
