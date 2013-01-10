@@ -1127,12 +1127,10 @@ export
     tty_rows,
 
 # I/O and events
-    add_fd_handler,
     close,
     countlines,
     csvread,
     csvwrite,
-    del_fd_handler,
     deserialize,
     dlmread,
     dlmwrite,
