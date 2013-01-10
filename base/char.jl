@@ -46,6 +46,7 @@ promote_rule(::Type{Char}, ::Type{Uint128}) = Uint128
 +(x::Char, y::Char) = char(int(x)+int(y)) # TODO: delete me
 +(x::Char, y::Int ) = char(int(x)+y)
 +(x::Int , y::Char) = y+x
+-(x::Char, y::Int ) = char(int(x)-y)
 
 <<(x::Char, y::Int32)  = uint32(x) << y
 >>(x::Char, y::Int32)  = uint32(x) >>> y
