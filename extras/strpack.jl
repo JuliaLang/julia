@@ -510,7 +510,7 @@ show_struct_layout(s::Struct, strategy::DataAlign) = show_struct_layout(s, strat
 show_struct_layout(s::Struct, strategy::DataAlign, width) = show_struct_layout(s, strategy, width, 10)
 
 ## Native layout ##
-const libLLVM = dlopen("libLLVM-3.1")
+const libLLVM = dlopen("libLLVM-3.2svn")
 const LLVMAlign = dlsym(libLLVM, :LLVMPreferredAlignmentOfType)
 macro llvmalign(tsym)
     quote
