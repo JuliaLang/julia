@@ -544,7 +544,7 @@ DLLEXPORT void getlocalip(char *buf, size_t len)
             buf[len]=0;
 #endif
 
-            if (strcmp(buf,"127.0.0.1"))
+            if (strcmp(buf,"127.0.0.1")) //TODO: use (ifa.internal == false)
                 break;
             //printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer);
         }

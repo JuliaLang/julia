@@ -60,13 +60,13 @@ static Value *literal_pointer_val(void *p)
 
 // --- mapping between julia and llvm types ---
 
-static Type *julia_type_to_llvm(jl_value_t *jt)
+static Type *julia_type_to_llvm(jl_value_t *jt, bool exact_struct=false)
 {
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
     if (jt == (jl_value_t*)jl_float32_type) return T_float32;
     if (jt == (jl_value_t*)jl_float64_type) return T_float64;
     if (jl_is_cpointer_type(jt)) {
-        Type *lt = julia_type_to_llvm(jl_tparam0(jt));
+        Type *lt = julia_type_to_llvm(jl_tparam0(jt), exact_struct);
         if (lt == NULL)
             return NULL;
         if (lt == T_void)
@@ -82,6 +82,24 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
         else          return Type::getIntNTy(getGlobalContext(), nb);
     }
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
+    if (exact_struct && jl_is_struct_type(jt)) {
+        jl_struct_type_t *jst = (jl_struct_type_t*)jt;
+        if (jst->struct_decl == NULL) {
+            size_t ntypes = jl_tuple_len(jst->types);
+            std::vector<Type *> latypes(0);
+            size_t i;
+            for(i = 0; i < ntypes; i++) {
+                jl_value_t *ty = jl_tupleref(jst->types, i);
+                Type *lty = julia_type_to_llvm(ty);
+                //if (isa<StructType>(lty))
+                //    jl_error("Structs cannot contain other Structs directly");
+                latypes.push_back(lty);
+            }
+            jst->struct_decl = (void*)StructType::create(latypes, jst->name->name->name);
+        }
+        Type *t = (Type*)jst->struct_decl;
+        return t;
+    }
     return jl_pvalue_llvmt;
 }
 
