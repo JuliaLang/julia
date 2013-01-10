@@ -409,42 +409,43 @@ autocor(v::AbstractVector) = autocor(v, 1)
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
-function quantile(v::AbstractVector, qs::AbstractVector)
+function quantile!(v::AbstractVector, q::AbstractVector)
+    isempty(v) && error("quantile: empty data array")
+    isempty(q) && error("quantile: empty quantile array")
+
     # make sure the quantiles are in [0,1]
-    bqs = _bound_quantiles(qs)
+    q = bound_quantiles(q)
 
-    lx = length(v)
-    lqs = length(bqs)
+    lv = length(v)
+    lq = length(q)
 
-    if lx > 0 && lqs > 0
-        index = 1 + (lx-1) * bqs
-        lo = ifloor(index)
-        hi = iceil(index)
-        sortedV = sort(v)
-        i = index .> lo
-        ret = float(sortedV[lo])
-        i = [1:length(i)][i]
-        h = (index - lo)[i]
-        ret[i] = (1-h) .* ret[i] + h .* sortedV[hi[i]]
-    else
-        ret = zeros(lqs) * NaN
-    end
-
-    ret
+    index = 1 + (lv-1)*q
+    lo = ifloor(index)
+    hi = iceil(index)
+    sort!(v)
+    isnan(v[end]) && error("quantiles are undefined in presence of NaNs")
+    i = find(index .> lo)
+    r = float(v[lo])
+    h = (index-lo)[i]
+    r[i] = (1-h).*r[i] + h.*v[hi[i]]
+    return r
 end
-quantile(v::AbstractVector, q::Number) = quantile(v, [q])[1]
-quantile(v::AbstractVector) = quantile(v, [.0, .25, .5, .75, 1.0])
-quartile(v::AbstractVector) = quantile(v, [.25, .5, .75])
-quintile(v::AbstractVector) = quantile(v, [.2, .4, .6, .8])
-decile(v::AbstractVector) = quantile(v, [.1, .2, .3, .4, .5, .6, .7, .8, .9])
-iqr(v::AbstractVector) = quantile(v, [0.25, 0.75])
+quantile(v::AbstractVector, qs::AbstractVector) = quantile!(copy(v),qs)
+quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
 
-function _bound_quantiles(qs::AbstractVector)
-    epsilon = 100 * eps()
-    if (any(qs .< -epsilon) || any(qs .> 1 + epsilon))
+  quantile(v::AbstractVector) = quantile(v,[.0,.25,.5,.75,1.0])
+percentile(v::AbstractVector) = quantile(v,[1:99]/100)
+  quartile(v::AbstractVector) = quantile(v,[.25,.5,.75])
+  quintile(v::AbstractVector) = quantile(v,[.2,.4,.6,.8])
+    decile(v::AbstractVector) = quantile(v,[.1,.2,.3,.4,.5,.6,.7,.8,.9])
+       iqr(v::AbstractVector) = quantile(v,[0.25,0.75])
+
+function bound_quantiles(qs::AbstractVector)
+    epsilon = 100*eps()
+    if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
         error("quantiles out of [0,1] range!")
     end
-    [min(1, max(0, q)) for q = qs]
+    [min(1,max(0,q)) for q = qs]
 end
 
 ## run-length encoding

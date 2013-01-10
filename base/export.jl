@@ -956,6 +956,7 @@ export
     mad,
     mean,
     median,
+    percentile,
     quantile,
     quartile,
     quintile,

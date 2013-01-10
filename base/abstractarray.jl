@@ -161,6 +161,7 @@ function copy_to(dest::AbstractArray, src)
 end
 
 copy(a::AbstractArray) = copy_to(similar(a), a)
+copy(a::AbstractArray{None}) = a # cannot be assigned into so is immutable
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
