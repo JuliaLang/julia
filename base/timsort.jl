@@ -7,6 +7,8 @@
 #
 # @kmsquire
 
+type TimSort <: SortingAlgorithm end
+export TimSort
 
 typealias Run Range1{Int}
 
@@ -36,15 +38,14 @@ merge_compute_minrun(N::Int) = merge_compute_minrun(N, 6)
 # Macro to create different versions of the sort function,
 # cribbed from sort.jl
 for (suffix, lt, args) in (("",    (a,b)->:(isless($a,$b)), ()),
-                           ("_r",  (a,b)->:(isless($b,$a)), ()),
+                           ("r",   (a,b)->:(isless($b,$a)), ()),
                            ("",    (a,b)->:(lt($a,$b)), (:(lt::Function),)),
-                           ("_by", (a,b)->:(isless(by($a),by($b))), (:(by::Function),)))
-    insertionsort! = symbol("insertionsort$(suffix)!")
-    insertionsort_perm! = symbol("insertionsort_perm$(suffix)!")
-    timsort = symbol("timsort$(suffix)")
-    timsort! = symbol("timsort$(suffix)!")
-    timsort_perm = symbol("timsort_perm$(suffix)")
-    timsort_perm! = symbol("timsort_perm$(suffix)!")
+                           ("by",  (a,b)->:(isless(by($a),by($b))), (:(by::Function),)))
+    _sort = symbol("sort$(suffix)")
+    _sort! = symbol("sort$(suffix)!")
+    _sortperm = symbol("sortperm$(suffix)")
+    _sortperm! = symbol("sortperm$(suffix)!")
+    timsort_args = tuple(expr(symbol("::"), expr(:curly, :Type, :TimSort)), args...)
     next_run = symbol("next_run$suffix")
     merge_collapse = symbol("merge_collapse$suffix")
     merge = symbol("merge$suffix")
@@ -712,7 +713,7 @@ end
 
 
 # Timsort function
-function ($timsort!)($(args...), v::AbstractVector, lo::Int, hi::Int)
+function ($_sort!)($(timsort_args...), v::AbstractVector, lo::Int, hi::Int)
     # Initialization
     minrun = merge_compute_minrun(hi-lo+1)
     state = MergeState()
@@ -725,7 +726,7 @@ function ($timsort!)($(args...), v::AbstractVector, lo::Int, hi::Int)
             # Make a run of length minrun
             count = min(minrun, hi-i+1)
             run_range = i:i+count-1
-            ($insertionsort!)($(args...), v, i, i+count-1)
+            ($_sort!)(InsertionSort, $(args...), v, i, i+count-1)
         else
             if !issorted(run_range)
                 run_range = last(run_range):first(run_range)
@@ -747,12 +748,12 @@ function ($timsort!)($(args...), v::AbstractVector, lo::Int, hi::Int)
     v
 end
 
-($timsort!)($(args...), v::AbstractVector) = ($timsort!)($(args...), v, 1, length(v))
-($timsort)($(args...), v::AbstractVector, args2...) = ($timsort!)($(args...), copy(v), args2...)
+($_sort!)($(timsort_args...), v::AbstractVector) = ($_sort!)(TimSort, $(args...), v, 1, length(v))
+($_sort)($(timsort_args...), v::AbstractVector, args2...) = ($_sort!)(TimSort, $(args...), copy(v), args2...)
 
 
 # Timsort function which permutes an auxilliary array mirroring the sort
-function ($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
+function ($_sortperm!)($(timsort_args...), v::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
     # Initialization
     minrun = merge_compute_minrun(hi-lo+1)
     state = MergeState()
@@ -765,7 +766,7 @@ function ($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int},
             # Make a run of length minrun
             count = min(minrun, hi-i+1)
             run_range = i:i+count-1
-            ($insertionsort_perm!)($(args...), v, p, i, i+count-1)
+            ($_sortperm!)(InsertionSort, $(args...), v, p, i, i+count-1)
         else
             if !issorted(run_range)
                 run_range = last(run_range):first(run_range)
@@ -788,11 +789,12 @@ function ($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int},
     v, p
 end
 
-($timsort_perm!)($(args...), v::AbstractVector, p::AbstractVector{Int}) = 
-    ($timsort_perm!)($(args...), v, p, 1, length(v))
-($timsort_perm!)($(args...), v::AbstractVector) = 
-    ($timsort_perm!)($(args...), v, [1:length(v)])
-($timsort_perm)($(args...), v::AbstractVector, args2...) = 
-    ($timsort_perm!)($(args...), copy(v), args2...)
+($_sortperm!)($(timsort_args...), v::AbstractVector, p::AbstractVector{Int}) = 
+    ($_sortperm!)(TimSort, $(args...), v, p, 1, length(v))
+($_sortperm!)($(timsort_args...), v::AbstractVector) = 
+    ($_sortperm!)(TimSort, $(args...), v, [1:length(v)])
+($_sortperm)($(timsort_args...), v::AbstractVector, args2...) = 
+    ($_sortperm!)(TimSort, $(args...), copy(v), args2...)
 
-end; end # quote; macro
+end; end # quote; for
+
