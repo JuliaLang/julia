@@ -1124,7 +1124,7 @@ DLLEXPORT void jl_free2(void *p, void *hint);
 
 DLLEXPORT int jl_cpu_cores(void);
 
-DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
+DLLEXPORT int jl_write(uv_stream_t *stream, const char *str, size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 

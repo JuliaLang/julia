@@ -414,7 +414,7 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
     }
 }
 
-DLLEXPORT int jl_write(uv_stream_t *stream, char *str, size_t n)
+DLLEXPORT int jl_write(uv_stream_t *stream, const char *str, size_t n)
 {
 //TODO: BAD!! Needed because Julia can't yet detect null stdio
     if (stream == 0)
