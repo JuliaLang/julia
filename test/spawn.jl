@@ -24,9 +24,9 @@ out = readall(`echo hello` & `echo world`)
 @test run(`echo stdio passthrough OK`)
 
 prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
-@test run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` | prefixer("A",2) & prefixer("B",2))
+@test run(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` | prefixer("A",2) & prefixer("B",2))
 
-@test run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
+@test run(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |
     prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |
     prefixer("A",2) & prefixer("B",2))
 
