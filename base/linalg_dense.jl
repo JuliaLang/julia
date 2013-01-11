@@ -773,7 +773,7 @@ svdt(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(
 
 function svd(x::StridedMatrix,vecs,thin) 
     (u, s, vt) = svdt(x,vecs,thin)
-    return (u, s, vt.')
+    return (u, s, vt')
 end
 
 svd(A) = svd(A,true,false)
