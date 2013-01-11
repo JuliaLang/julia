@@ -442,11 +442,11 @@ appropriate action.
 
 The ``error`` function is used to indicate that an unexpected condition
 has occurred which should interrupt the normal flow of control. The
-built in ``sqrt`` function returns ``NaN`` if applied to a negative real
+built in ``sqrt`` function returns ``DomainError()`` if applied to a negative real
 value::
 
     julia> sqrt(-1)
-    NaN
+    DomainError()
 
 Suppose we want to stop execution immediately if the square root of a
 negative number is taken. To do this, we can define a fussy version of
@@ -563,7 +563,7 @@ pass any value back to an enclosing ``try``-``catch``::
            end
     Hello, world.
 
-This example is contrived, of course — the power of the
+This example is contrived, of course — the power of the
 ``try``-``catch`` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of
 calling functions. There are situations where no error has occurred, but

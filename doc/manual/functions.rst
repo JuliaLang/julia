@@ -184,7 +184,10 @@ which applies a function to each value of an array and returns a new
 array containing the resulting values::
 
     julia> map(round, [1.2,3.5,1.7])
-    [1.0,4.0,2.0]
+    3-element Float64 Array:
+     1.0
+     4.0
+     2.0
 
 This is fine if a named function effecting the transform one wants
 already exists to pass as the first argument to ``map``. Often, however,
@@ -193,7 +196,10 @@ anonymous function construct allows easy creation of a single-use
 function object without needing a name::
 
     julia> map(x -> x^2 + 2x - 1, [1,3,-1])
-    [2,14,-2]
+    3-element Int64 Array:
+     2
+     14
+     -2
 
 An anonymous function accepting multiple arguments can be written using
 the syntax ``(x,y,z)->2x+y-z``. A zero-argument anonymous function is
@@ -302,13 +308,19 @@ Furthermore, the iterable object spliced into a function call need not
 be a tuple::
 
     julia> x = [3,4]
-    [3,4]
+    2-element Int64 Array:
+     3
+     4
 
     julia> bar(1,2,x...)
     (1,2,(3,4))
 
     julia> x = [1,2,3,4]
-    [1,2,3,4]
+    4-element Int64 Array:
+     1
+     2
+     3
+     4
 
     julia> bar(x...)
     (1,2,(3,4))
@@ -319,13 +331,18 @@ function (although it often is)::
     baz(a,b) = a + b
 
     julia> args = [1,2]
-    [1,2]
+    2-element Int64 Array:
+     1
+     2
 
     julia> baz(args...)
     3
 
     julia> args = [1,2,3]
-    [1,2,3]
+    3-element Int64 Array:
+     1
+     2
+     3
 
     julia> baz(args...)
     no method baz(Int64,Int64,Int64)
