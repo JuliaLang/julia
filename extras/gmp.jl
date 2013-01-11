@@ -31,7 +31,7 @@ import
     Base.sqrt,
     Base.string
 
-include(find_in_path("extras/bigint.jl"))
-include(find_in_path("extras/bigfloat.jl"))
+include("bigint.jl")
+include("bigfloat.jl")
 
 end # module
