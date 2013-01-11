@@ -4,18 +4,18 @@ time() = ccall(:clock_now, Float64, ())
 
 function tic()
     t0 = time()
-    tls(:TIMERS, (t0, get(tls(), :TIMERS, ())))
+    task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
     return t0
 end
 
 function toq()
     t1 = time()
-    timers = get(tls(), :TIMERS, ())
+    timers = get(task_local_storage(), :TIMERS, ())
     if is(timers,())
         error("toc() without tic()")
     end
     t0 = timers[1]
-    tls(:TIMERS, timers[2])
+    task_local_storage(:TIMERS, timers[2])
     t1-t0
 end
 
@@ -239,17 +239,35 @@ end
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
 
+source_path() = get(task_local_storage(), :SOURCE_PATH, "")
+
 function include_from_node1(path)
-    if myid()==1
-        Core.include(path)
-    else
-        include_string(remote_call_fetch(1, readall, path))
+    tls = task_local_storage()
+    prev = get(tls, :SOURCE_PATH, nothing)
+    path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
+    tls[:SOURCE_PATH] = path
+    try
+        if myid()==1
+            Core.include(path)
+        else
+            include_string(remote_call_fetch(1, readall, path))
+        end
+    finally
+        if prev == nothing
+            delete!(tls, :SOURCE_PATH)
+        else
+            tls[:SOURCE_PATH] = prev
+        end
     end
+    nothing
 end
 
 function reload_path(path)
+    tls = task_local_storage()
     had = has(package_list, path)
     package_list[path] = time()
+    prev = get(tls, :SOURCE_PATH, nothing)
+    delete!(tls, :SOURCE_PATH)
     try
         eval(Main, :(Base.include_from_node1($path)))
     catch e
@@ -257,6 +275,10 @@ function reload_path(path)
             delete!(package_list, path)
         end
         rethrow(e)
+    finally
+        if prev != nothing
+            tls[:SOURCE_PATH] = prev
+        end
     end
     nothing
 end

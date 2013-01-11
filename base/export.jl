@@ -1048,7 +1048,7 @@ export
     current_task,
     istaskdone,
     produce,
-    tls,
+    task_local_storage,
 
 # time
     sleep,

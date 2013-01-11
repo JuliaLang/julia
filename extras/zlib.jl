@@ -43,7 +43,7 @@ export
 #   Z_BIG_BUFSIZE,
 #   ZFileOffset
 
-include(find_in_path("zlib_h"))
+include("zlib_h.jl")
 
 # zlib functions
 
