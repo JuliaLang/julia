@@ -187,7 +187,9 @@ int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 
 extern int jl_in_inference;
 
-static jl_module_t *eval_import_path(jl_array_t *args)
+static jl_value_t *require_func=NULL;
+
+static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
 {
     // in A.B.C, first find a binding for A in the chain of module scopes
     // following parent links. then evaluate the rest of the path from there.
@@ -202,8 +204,20 @@ static jl_module_t *eval_import_path(jl_array_t *args)
             m = (jl_module_t*)mb->value;
             break;
         }
-        if (m == jl_main_module)
+        if (m == jl_main_module) {
+            if (!retrying) {
+                if (require_func == NULL && jl_base_module != NULL)
+                    require_func = jl_get_global(jl_base_module, jl_symbol("require"));
+                if (require_func != NULL) {
+                    jl_value_t *str = jl_cstr_to_string(var->name);
+                    JL_GC_PUSH(&str);
+                    jl_apply((jl_function_t*)require_func, &str, 1);
+                    JL_GC_POP();
+                    return eval_import_path_(args, 1);
+                }
+            }
             jl_errorf("in module path: %s not defined", var->name);
+        }
         m = m->parent;
     }
 
@@ -215,6 +229,11 @@ static jl_module_t *eval_import_path(jl_array_t *args)
             jl_errorf("invalid import statement");
     }
     return m;
+}
+
+static jl_module_t *eval_import_path(jl_array_t *args)
+{
+    return eval_import_path_(args, 0);
 }
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
