@@ -88,10 +88,10 @@ end
 
 # things to set state
 function test_context(context::String)
-    tls(:context, context)
+    task_local_storage(:context, context)
 end
 function test_group(group::String)
-    tls(:group, group)
+    task_local_storage(:group, group)
 end
 
 
@@ -112,8 +112,8 @@ end
 function _test(ex::Expr, expect_succeed::Bool)
     local tr = TestResult()
     try
-        tr.context = tls(:context)
-        tr.group = tls(:group)
+        tr.context = task_local_storage(:context)
+        tr.group = task_local_storage(:group)
     catch x
         # not running in a context -- oh well!
     end
