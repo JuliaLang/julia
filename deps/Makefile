@@ -135,7 +135,7 @@ BUILD_LLVM_CLANG = 1
 endif
 
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_BUILDDIR = build/Debug+Asserts
+LLVM_BUILDDIR = build/Release+Asserts
 else
 LLVM_BUILDDIR = build/Release
 endif
@@ -170,7 +170,7 @@ endif
 LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-targets=host --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_FLAGS += --enable-assertions --disable-optimized
+LLVM_FLAGS += --enable-assertions --enable-optimized
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --disable-embed-stdcxx
 endif
