@@ -158,9 +158,12 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
     jl_value_t *jvt = (jl_value_t*)jl_typeof(v);
     if (addressof) {
         if (jvt == jt) {
-            assert(jl_is_bits_type(jt));
-            size_t osz = jl_bitstype_nbits(jt)/8;
-            return alloc_temp_arg_copy(jl_bits_data(v), osz);
+            if (jl_is_bits_type(jt)) {
+                size_t osz = jl_bitstype_nbits(jt)/8;
+                return alloc_temp_arg_copy(jl_bits_data(v), osz);
+            } else if (jl_is_struct_type(jt)) {
+                return v + 1;
+            }
         }
         goto value_to_pointer_error;
     }
@@ -242,11 +245,6 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
     else if (jl_is_cpointer_type(jt)) {
         assert(ty->isPointerTy());
         jl_value_t *aty = expr_type(argex, ctx);
-        if (jl_is_struct_type(jl_tparam0(jt))) {
-            if (!jl_is_struct_type(aty))
-                emit_typecheck(emit_typeof(jv), (jl_value_t*)jl_struct_kind, "ccall: pointer &argument not a valid struct-like type", ctx);
-            return builder.CreateBitCast(emit_nthptr_addr(jv, 1), ty); // skip type tag field
-        }
         if (jl_is_array_type(aty) &&
             (jl_tparam0(jt) == jl_tparam0(aty) ||
              jl_tparam0(jt) == (jl_value_t*)jl_bottom_type)) {
@@ -256,14 +254,28 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         if (aty == (jl_value_t*)jl_ascii_string_type || aty == (jl_value_t*)jl_utf8_string_type) {
             return builder.CreateBitCast(emit_arrayptr(emit_nthptr(jv,1)), ty);
         }
+        if (jl_is_struct_type(aty) && jl_is_leaf_type(aty)) {
+            return builder.CreateBitCast(emit_nthptr_addr(jv, 1), ty); // skip type tag field
+        }
         Value *p = builder.CreateCall4(value_to_pointer_func,
                                        literal_pointer_val(jl_tparam0(jt)), jv,
                                        ConstantInt::get(T_int32, argn),
                                        ConstantInt::get(T_int32, (int)addressOf));
         return builder.CreateBitCast(p, ty);
     }
-    else if (ty->isStructTy()) {
-        assert (jl_is_struct_type(jt) && (Type*)((jl_struct_type_t*)jt)->struct_decl == ty);
+    else if (jl_is_struct_type(jt)) {
+        assert (ty->isStructTy() && (Type*)((jl_struct_type_t*)jt)->struct_decl == ty);
+        jl_value_t *aty = expr_type(argex, ctx);
+        if (aty != jt) {
+            std::stringstream msg;
+            msg << "ccall argument ";
+            msg << argn;
+            emit_typecheck(jv, jt, msg.str(), ctx);
+        }
+        //TODO: check instead that prefix matches
+        //if (!jl_is_struct_type(aty))
+        //    emit_typecheck(emit_typeof(jv), (jl_value_t*)jl_struct_kind, "ccall: Struct argument called with something that isn't a CompositeKind", ctx);
+        // //safe thing would be to also check that jl_typeof(aty)->size > sizeof(ty) here and/or at runtime
         Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, 1), PointerType::get(ty,0));
         return builder.CreateLoad(pjv, false);
     }
@@ -408,7 +420,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #endif
             }
         }
-        Type *t = julia_type_to_llvm(tti, true);
+        Type *t = julia_struct_to_llvm(tti);
         if (t == NULL) {
             JL_GC_POP();
             return literal_pointer_val(jl_nothing);
@@ -534,9 +546,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         Value *arg;
         if (largty == jl_pvalue_llvmt ||
-                largty->isStructTy() ||
-                (addressOf && largty->isPointerTy() &&
-                 largty->getContainedType(0)->isStructTy())) {
+                largty->isStructTy()) {
             arg = emit_expr(argi, ctx, true);
         }
         else {
