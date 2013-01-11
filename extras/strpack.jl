@@ -510,17 +510,15 @@ show_struct_layout(s::Struct, strategy::DataAlign) = show_struct_layout(s, strat
 show_struct_layout(s::Struct, strategy::DataAlign, width) = show_struct_layout(s, strategy, width, 10)
 
 ## Native layout ##
-const libLLVM = dlopen("libLLVM-3.2svn")
-const LLVMAlign = dlsym(libLLVM, :LLVMPreferredAlignmentOfType)
 macro llvmalign(tsym)
     quote
-        int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                  ccall(dlsym(libLLVM, $tsym), Ptr, ())))
+        int(ccall(:LLVMPreferredAlignmentOfType, Uint, (Ptr, Ptr),
+                  tgtdata, ccall($tsym, Ptr, ())))
     end
 end
 
 align_native = align_table(align_default, let
-    tgtdata = ccall(dlsym(libLLVM, :LLVMCreateTargetData), Ptr, (String,), "")
+    tgtdata = ccall(:LLVMCreateTargetData, Ptr, (String,), "")
 
     int8align = @llvmalign :LLVMInt8Type
     int16align = @llvmalign :LLVMInt16Type
@@ -529,7 +527,7 @@ align_native = align_table(align_default, let
     float32align = @llvmalign :LLVMFloatType
     float64align = @llvmalign :LLVMDoubleType
 
-    ccall(dlsym(libLLVM, :LLVMDisposeTargetData), Void, (Ptr,), tgtdata)
+    ccall(:LLVMDisposeTargetData, Void, (Ptr,), tgtdata)
 
     [
      Int8 => int8align,
