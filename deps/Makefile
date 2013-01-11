@@ -25,7 +25,7 @@ endif
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm-extras random rmath double-conversion glpk
+STAGE1_DEPS = uv openlibm-extras random rmath double-conversion
 STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -81,6 +81,10 @@ endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
+endif
+
+ifeq ($(USE_SYSTEM_GLPK), 0)
+STAGE1_DEPS += glpk
 endif
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
@@ -1278,6 +1282,7 @@ glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 	touch -c $@
 $(GLPK_SRC_TARGET): glpk-$(GLPK_VER)/config.status
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD)
+	touch -c $@
 glpk-$(GLPK_VER)/checked: $(GLPK_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) check
@@ -1293,7 +1298,7 @@ clean-glpk:
 	-$(MAKE) -C glpk-$(GLPK_VER) uninstall || true
 	-$(MAKE) -C glpk-$(GLPK_VER) clean
 distclean-glpk: clean-glpk
-	-rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
+	-rm -rf glpk-$(GLPK_VER).tar.gz glpk-$(GLPK_VER)
 
 get-glpk: glpk-$(GLPK_VER).tar.gz
 configure-glpk: glpk-$(GLPK_VER)/config.status
