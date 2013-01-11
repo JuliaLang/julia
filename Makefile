@@ -21,7 +21,6 @@ debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $
 
 julia-debug julia-release:
 	@-git submodule init --quiet
-	@-cd deps/nginx && git fetch -a --quiet
 	@-git submodule update
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
