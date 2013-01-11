@@ -246,15 +246,18 @@ function include_from_node1(path)
     prev = get(tls, :SOURCE_PATH, nothing)
     path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
     tls[:SOURCE_PATH] = path
-    if myid()==1
-        Core.include(path)
-    else
-        include_string(remote_call_fetch(1, readall, path))
-    end
-    if prev == nothing
-        delete!(tls, :SOURCE_PATH)
-    else
-        tls[:SOURCE_PATH] = prev
+    try
+        if myid()==1
+            Core.include(path)
+        else
+            include_string(remote_call_fetch(1, readall, path))
+        end
+    finally
+        if prev == nothing
+            delete!(tls, :SOURCE_PATH)
+        else
+            tls[:SOURCE_PATH] = prev
+        end
     end
     nothing
 end
