@@ -5,11 +5,6 @@ module PkgResolve
 # Use max-sum algorithm to resolve packages dependencies
 #
 
-# TODO:
-#     contradictory requirements/dependecies should be handled
-#     more nicely, e.g. triggering an analysis of what went wrong
-
-
 import Metadata.Version, Metadata.VersionSet,
        Metadata.packages, Metadata.versions, Metadata.dependencies
 
@@ -19,12 +14,34 @@ import Base.<, Base.<=, Base.==, Base.-, Base.+,
 
 export resolve
 
+type UnsatError <: Exception
+end
+
 # Some parameters to drive the decimation process
-const nondec_iterations = 6 # number of initial iterations before starting
-                            # decimation
-const dec_interval = 3      # number of iterations between decimations
-const dec_fraction = 0.05   # fraction of nodes to decimate at every decimation
-                            # step
+type ResolveParams
+    nondec_iterations # number of initial iterations before starting
+                      # decimation
+    dec_interval # number of iterations between decimations
+    dec_fraction # fraction of nodes to decimate at every decimation
+                 # step
+
+    function ResolveParams()
+        if !has(ENV, "JULIA_PKGRESOLVE_ACCURACY")
+            accuracy = 1
+        else
+            try
+                accuracy = int(ENV["JULIA_PKGRESOLVE_ACCURACY"])
+                @assert accuracy >= 1
+            catch
+                error("error: JULIA_PKGRESOLVE_ACCURACY is not an integer greater than 0")
+            end
+        end
+        nondec_iterations = accuracy * 6
+        dec_interval = accuracy * 3
+        dec_fraction = 0.05 / accuracy
+        return new(nondec_iterations, dec_interval, dec_fraction)
+    end
+end
 
 # Fetch all data and keep it in a single structure
 type ReqsStruct
@@ -158,7 +175,6 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         for r in vs_vec
             p = r.package
             p0 = pdict[p]
-            @assert spp[p0] >= 2
             if spp[p0] == 2 || contains_any(r, pvers[p0][1])
                 continue
             end
@@ -206,7 +222,6 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
             push!(alldeps, v)
         end
 
-        @assert spp[p0] >= 2
         if spp[p0] == 2
             continue
         end
@@ -396,7 +411,7 @@ function secondmax(v::Vector{FieldValue})
             m2 = a
         end
     end
-    return m2
+    return m2 - m
 end
 
 # Graph holds the graph structure onto which max-sum is run, in
@@ -523,7 +538,7 @@ type Messages
 
     # overall fields: for each package p0,
     #                 fld[p0] is a vector of length spp[p0]
-    #                 fields are normalized (i.e. the max is always 0)
+    #                 fields are not normalized
     fld::Vector{Vector{FieldValue}}
 
     # keep track of which variables have been decimated
@@ -658,8 +673,9 @@ function update(p0::Int, graph::Graph, msgs::Messages)
                 m = newmsg[v1]
             end
         end
-        @assert validmax(m) # TODO: failure here is the result of contradictory requirements,
-                            #       we should throw an exception
+        if !validmax(m)
+            throw(UnsatError())
+        end
 
         # normalize the new message
         for v1 = 1:spp1
@@ -672,19 +688,8 @@ function update(p0::Int, graph::Graph, msgs::Messages)
 
         # update the field of p1
         fld1 = fld[p1]
-        m = FieldValue(-1)
         for v1 = 1:spp1
             fld1[v1] += newmsg[v1] - oldmsg[v1]
-            if fld1[v1] > m
-                m = fld1[v1]
-            end
-        end
-        @assert validmax(m) # TODO: failure here is the result of contradictory requirements,
-                            #       we should throw an exception
-
-        # normalize the field
-        for v1 = 1:spp1
-            fld1[v1] -= m
         end
 
         # put the newly computed message in place
@@ -706,7 +711,7 @@ function shuffleperm(graph::Graph)
         perm[j], perm[k] = perm[k], perm[j]
         step += isodd(j) ? 1 : k
     end
-    @assert isperm(perm)
+    #@assert isperm(perm)
 end
 end
 
@@ -769,12 +774,13 @@ function break_ties(msgs::Messages)
     for p0 = 1:length(fld)
         fld0 = fld[p0]
         z = 0
+        m = typemin(FieldValue)
         for v0 = 1:length(fld0)
-            if fld0[v0] == zero(FieldValue)
+            if fld0[v0] > m
+                m = fld0[v0]
+                z = 1
+            elseif fld0[v0] == m
                 z += 1
-                if z > 1
-                    break
-                end
             end
         end
         if z > 1
@@ -790,27 +796,42 @@ end
 # (occasionally calling decimate())
 function converge(graph::Graph, msgs::Messages)
 
+    params = ResolveParams()
+
     it = 0
     shuffleperminit()
-    while true
-        it += 1
-        maxdiff = iterate(graph, msgs)
-        #println("it = $it maxdiff = $maxdiff")
+    try
+        while true
+            it += 1
+            maxdiff = iterate(graph, msgs)
+            #println("it = $it maxdiff = $maxdiff")
 
-        if maxdiff == zero(FieldValue)
-            if break_ties(msgs)
-                break
-            else
-                continue
+            if maxdiff == zero(FieldValue)
+                if break_ties(msgs)
+                    break
+                else
+                    continue
+                end
+            end
+            if it >= params.nondec_iterations &&
+               (it - params.nondec_iterations) % params.dec_interval == 0
+                numdec = clamp(ifloor(params.dec_fraction * graph.np),  1, msgs.num_nondecimated)
+                decimate(numdec, graph, msgs)
+                if msgs.num_nondecimated == 0
+                    break
+                end
             end
         end
-        if it >= nondec_iterations && (it - nondec_iterations) % dec_interval == 0
-            numdec = clamp(ifloor(dec_fraction * graph.np),  1, msgs.num_nondecimated)
-            decimate(numdec, graph, msgs)
-            if msgs.num_nondecimated == 0
-                break
+    catch err
+        println(typeof(err))
+        if isa(err, UnsatError)
+            msg = "Unsatisfiable package requirements detected"
+            if msgs.num_nondecimated != graph.np
+                msg *= "\n  (you may try increasing the value of the\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
             end
+            error(msg)
         end
+        rethrow(err)
     end
 
     return getsolution(msgs)
