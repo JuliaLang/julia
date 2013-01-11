@@ -1144,10 +1144,9 @@ install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 ## NGINX ##
 
-NGINX_OBJ_TARGET = $(BUILD)/sbin/nginx
-NGINX_SRC_TARGET = nginx/bin/nginx
-
 ifneq ($(OS), WINNT)
+NGINX_OBJ_TARGET = $(BUILD)/sbin/nginx
+NGINX_SRC_TARGET = nginx/objs/nginx
 NGINX_FLAGS = --with-ld-opt="-L'$(BUILD)/lib' -lpcre -Wl,-rpath,'$(BUILD)/lib' $(RPATH)"
 
 nginx/auto/configure: | compile-pcre
@@ -1172,7 +1171,7 @@ distclean-nginx:
 get-nginx: nginx/auto/configure
 configure-nginx: nginx/config.status
 compile-nginx: $(NGINX_SRC_TARGET)
-check-nginx: 
+check-nginx: $(NGINX_SRC_TARGET)
 install-nginx: $(NGINX_OBJ_TARGET)
 else
 NGINX_VER=1.2.6
