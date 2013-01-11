@@ -239,15 +239,30 @@ end
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
 
+source_path() = get(task_local_storage(), :SOURCE_PATH, "")
+
 function include_from_node1(path)
+    tls = task_local_storage()
+    prev = get(tls, :SOURCE_PATH, nothing)
+    path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
+    tls[:SOURCE_PATH] = path
     if myid()==1
         Core.include(path)
     else
         include_string(remote_call_fetch(1, readall, path))
     end
+    if prev == nothing
+        delete!(tls, :SOURCE_PATH)
+    else
+        tls[:SOURCE_PATH] = prev
+    end
+    nothing
 end
 
 function reload_path(path)
+    tls = task_local_storage()
+    prev = get(tls, :SOURCE_PATH, nothing)
+    delete!(tls, :SOURCE_PATH)
     had = has(package_list, path)
     package_list[path] = time()
     try
@@ -257,6 +272,9 @@ function reload_path(path)
             delete!(package_list, path)
         end
         rethrow(e)
+    end
+    if prev != nothing
+        tls[:SOURCE_PATH] = prev
     end
     nothing
 end

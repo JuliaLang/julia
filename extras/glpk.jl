@@ -171,7 +171,7 @@ import Base.pointer, Base.assign, Base.ref
 
 ## Shared library interface setup
 #{{{
-include("$JULIA_HOME/../share/julia/extras/glpk_h.jl")
+include("glpk_h.jl")
 
 macro glpk_ccall(f, args...)
     :(ccall(($"glp_$(f)", :libglpk), $(args...)))
