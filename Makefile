@@ -137,7 +137,7 @@ test-%: release
 
 webrepl: all
 	@$(MAKE) $(QUIET_MAKE) -C deps install-nginx
-	@$(MAKE) $(QUIET_MAKE) -C ui/webserver julia-release
+	@$(MAKE) -C ui/webserver julia-release
 
 tk:
 	@$(MAKE) -C deps install-tk-wrapper
