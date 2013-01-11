@@ -4,18 +4,18 @@ time() = ccall(:clock_now, Float64, ())
 
 function tic()
     t0 = time()
-    tls(:TIMERS, (t0, get(tls(), :TIMERS, ())))
+    task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
     return t0
 end
 
 function toq()
     t1 = time()
-    timers = get(tls(), :TIMERS, ())
+    timers = get(task_local_storage(), :TIMERS, ())
     if is(timers,())
         error("toc() without tic()")
     end
     t0 = timers[1]
-    tls(:TIMERS, timers[2])
+    task_local_storage(:TIMERS, timers[2])
     t1-t0
 end
 
