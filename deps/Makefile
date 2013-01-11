@@ -295,6 +295,9 @@ $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE) readline-$(READLINE_VER)/checked
 	$(MAKE) -C readline-$(READLINE_VER) $(READLINE_CFLAGS) install
 	touch -c $@
 else
+ifneq ($(OS),Darwin)
+READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(SHLIB_EXT).$(READLINE_VER)
+endif
 READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
 READLINE_OPTS = --enable-shared --enable-static --with-curses
 READLINE_CFLAGS = 
@@ -779,7 +782,7 @@ ARPACK_FFLAGS = -fdefault-integer-8
 endif
 
 ARPACK_OBJ_TARGET = $(BUILD)/lib/libarpack.$(SHLIB_EXT)
-ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
+ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/.libs/libarpack.$(SHLIB_EXT)
 ARPACK_ARGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
 
@@ -1108,7 +1111,7 @@ libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	touch -c $@
 libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
 	cd libunwind-$(UNWIND_VER) && \
-	./configure $(CONFIGURE_COMMON) CFLAGS="$(LIBUNWIND_CFLAGS)" --disable-shared
+	./configure $(CONFIGURE_COMMON) CFLAGS="$(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo
 	touch -c $@
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/config.status
 	$(MAKE) -C libunwind-$(UNWIND_VER)
@@ -1347,12 +1350,11 @@ zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
 ifeq ($(OS), WINNT)
 	cd zlib-$(ZLIB_VER) && \
 	cp win32/Makefile.gcc Makefile
-	echo 1 > $@
 else
 	cd zlib-$(ZLIB_VER) && \
 	$(ZLIB_CONFIGFLAGS) ./configure --prefix=$(abspath $(BUILD)) #not an autoconf script
 endif
-	touch -c $@
+	echo 1 > $@
 $(ZLIB_SRC_TARGET): zlib-$(ZLIB_VER)/config.status
 	$(MAKE) -C zlib-$(ZLIB_VER) PREFIX=$(CROSS_COMPILE)
 	touch -c $@
