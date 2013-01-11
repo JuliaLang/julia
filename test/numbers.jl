@@ -502,8 +502,11 @@ end
 for x=int64(2)^53-2:int64(2)^53+5,
     y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
     u = uint64(x)
-    @test y == float64(itrunc(y))
-    # println("x=$x; y=float64($(itrunc(y)));")
+    if WORD_SIZE == 64
+        @test y == float64(itrunc(y))
+    else
+        @test y == float64(int64(trunc(y)))
+    end
 
     @test (x==y)==(y==x)
     @test (x!=y)==!(x==y)
@@ -1017,14 +1020,16 @@ end
 
 for x = 2^53-10:2^53+10
     y = float64(x)
-    i = itrunc(y)
+    i = WORD_SIZE == 64 ? itrunc(y) : int64(trunc(y))
     @test int64(trunc(y)) == i
     @test int64(round(y)) == i
     @test int64(floor(y)) == i
     @test int64(ceil(y))  == i
-    @test iround(y)       == i
-    @test ifloor(y)       == i
-    @test iceil(y)        == i
+    if WORD_SIZE == 64
+        @test iround(y)       == i
+        @test ifloor(y)       == i
+        @test iceil(y)        == i
+    end
 end
 
 for x = 2^24-10:2^24+10

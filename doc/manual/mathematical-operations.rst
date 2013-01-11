@@ -145,7 +145,7 @@ Here are some simple examples::
     julia> 3 < -0.5
     false
 
-Integers are compared in the standard manner — by comparison of bits.
+Integers are compared in the standard manner — by comparison of bits.
 Floating-point numbers are compared according to the `IEEE 754
 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_:
 
@@ -226,9 +226,11 @@ such definitions make sense.
 -  ``round(x)`` — round ``x`` to the nearest integer.
 -  ``iround(x)`` — round ``x`` to the nearest integer, giving an
    integer-typed result.
--  ``floor(x)`` — round ``x`` towards ``-Inf``.
+-  ``floor(x)`` — round ``x`` towards ``-Inf``.
+-  ``ifloor(x)`` — round ``x`` towards ``-Inf``, giving an integer-typed result.
 -  ``ceil(x)`` — round ``x`` towards ``+Inf``.
--  ``trunc(x)`` — round ``x`` towards zero.
+-  ``iceil(x)`` — round ``x`` towards ``+Inf``, giving an integer-typed result. 
+-  ``trunc(x)`` — round ``x`` towards zero.
 -  ``itrunc(x)`` — round ``x`` towards zero, giving an integer-typed
    result.
 -  ``div(x,y)`` — truncated division; quotient rounded towards zero.
@@ -251,12 +253,12 @@ such definitions make sense.
    of ``x*y``.
 -  ``sqrt(x)`` — the square root of ``x``.
 -  ``cbrt(x)`` — the cube root of ``x``.
--  ``hypot(x,y)`` — accurate ``sqrt(x^2 + y^2)`` for all values of ``x``
+-  ``hypot(x,y)`` — accurate ``sqrt(x^2 + y^2)`` for all values of ``x``
    and ``y``.
--  ``pow(x,y)`` — ``x`` raised to the exponent ``y``.
+-  ``pow(x,y)`` — ``x`` raised to the exponent ``y``.
 -  ``exp(x)`` — the natural exponential function at ``x``.
 -  ``expm1(x)`` — accurate ``exp(x)-1`` for ``x`` near zero.
--  ``ldexp(x,n)`` — ``x*2^n`` computed efficiently for integer values of
+-  ``ldexp(x,n)`` — ``x*2^n`` computed efficiently for integer values of
    ``n``.
 -  ``log(x)`` — the natural logarithm of ``x``.
 -  ``log(b,x)`` — the base ``b`` logarithm of ``x``.
@@ -267,9 +269,9 @@ such definitions make sense.
 -  ``erf(x)`` — the `error
    function <http://en.wikipedia.org/wiki/Error_function>`_ at ``x``.
 -  ``erfc(x)`` — accurate ``1-erf(x)`` for large ``x``.
--  ``gamma(x)`` — the `gamma
+-  ``gamma(x)`` — the `gamma
    function <http://en.wikipedia.org/wiki/Gamma_function>`_ at ``x``.
--  ``lgamma(x)`` — accurate ``log(gamma(x))`` for large ``x``.
+-  ``lgamma(x)`` — accurate ``log(gamma(x))`` for large ``x``.
 
 For an overview of why functions like ``hypot``, ``expm1``, ``log1p``,
 and ``erfc`` are necessary and useful, see John D. Cook's excellent pair
@@ -289,7 +291,9 @@ These are all single-argument functions, with the exception of
 `atan2 <http://en.wikipedia.org/wiki/Atan2>`_, which gives the angle
 in `radians <http://en.wikipedia.org/wiki/Radian>`_ between the *x*-axis
 and the point specified by its arguments, interpreted as *x* and *y*
-coordinates.
+coordinates. In order to compute trigonometric functions with degrees
+instead of radians, suffix the function with ``d``. For example, ``sind(x)``
+computes the sine of ``x`` where ``x`` is specified in degrees.
 
 For notational convenience, there are equivalent operator forms for the
 ``rem`` and ``pow`` functions:
@@ -310,11 +314,4 @@ also have updating forms. As with other operators, ``x %= y`` means
 
     julia> x = 7; x %= 4; x
     3
-
-.. raw:: html
-
-   <!-- ### Exercises
-
-   - Find at least three ways to compute 2 to the power of 4. [Answer](answer_power2)
-   - In addition to `isequal`, Julia contains `isless`. By experimentation, summarize the rules that `isless` follows. [Answer](answer_isless) -->
 
