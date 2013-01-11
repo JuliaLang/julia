@@ -92,18 +92,7 @@ valtype{K,V}(a::Associative{K, V}) = V
 
 # some support functions
 
-function _tablesz(i::Integer)
-    if i < 16
-        return 16
-    end
-    if i&(i-1) == 0
-        return i
-    end
-    while (i&(i-1) != 0)
-        i = i&(i-1)
-    end
-    return i<<1
-end
+_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 
 function ref(t::Associative, key)
     v = get(t, key, secret_table_token)
