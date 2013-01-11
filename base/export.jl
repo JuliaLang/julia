@@ -722,6 +722,7 @@ export
     scale!,
     solve,
     svd,
+    svdt,
     svdvals,
     sdd,
     sddvals,
