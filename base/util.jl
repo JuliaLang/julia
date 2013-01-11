@@ -239,9 +239,21 @@ end
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
 
+include_stack = ByteString[]
+
+function rinclude(path)
+    global include_stack
+    i = max(1, findlast(isabspath, include_stack))
+    fn = joinpath(include_stack[i:end]..., path)
+    push!(include_stack, dirname(path))
+    Core.include(fn)
+    pop!(include_stack)
+    nothing
+end
+
 function include_from_node1(path)
     if myid()==1
-        Core.include(path)
+        rinclude(path)
     else
         include_string(remote_call_fetch(1, readall, path))
     end

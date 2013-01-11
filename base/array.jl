@@ -1129,6 +1129,15 @@ function findfirst(testf::Function, A)
     return 0
 end
 
+function findlast(testf::Function, A)
+    for i = length(A):-1:1
+        if testf(A[i])
+            return i
+        end
+    end
+    return 0
+end
+
 function find(testf::Function, A::StridedArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
