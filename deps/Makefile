@@ -562,30 +562,6 @@ check-Faddeeva-wrapper: compile-Faddeeva-wrapper
 install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
 
 
-## Rmath ##
-
-RMATH_OBJ_TARGET = $(BUILD)/lib/libRmath.$(SHLIB_EXT)
-RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
-
-$(RMATH_OBJ_SOURCE): Rmath/src/Makefile $(LIBRANDOM_OBJ_TARGET)
-	cd Rmath/src && \
-	$(MAKE) CC="$(CC)" && \
-	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
-$(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
-	cp $< $@
-
-clean-rmath:
-	-cd Rmath/src && $(MAKE) clean
-	-rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
-distclean-rmath: clean-rmath
-
-get-rmath: $(RMATH_OBJ_SOURCE)
-configure-rmath: get-rmath
-compile-rmath: $(RMATH_OBJ_SOURCE)
-check-rmath: compile-rmath
-install-rmath: $(RMATH_OBJ_TARGET)
-
-
 ## LIBRANDOM ##
 
 LIBRANDOM_OBJ_TARGET = $(BUILD)/lib/librandom.$(SHLIB_EXT)
@@ -624,6 +600,30 @@ configure-random: random/dsfmt-$(DSFMT_VER)/config.status
 compile-random: $(LIBRANDOM_OBJ_SOURCE)
 check-random: compile-random
 install-random: $(LIBRANDOM_OBJ_TARGET)
+
+
+## Rmath ##
+
+RMATH_OBJ_TARGET = $(BUILD)/lib/libRmath.$(SHLIB_EXT)
+RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
+
+$(RMATH_OBJ_SOURCE): Rmath/src/Makefile $(LIBRANDOM_OBJ_TARGET)
+	cd Rmath/src && \
+	$(MAKE) CC="$(CC)" && \
+	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
+$(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
+	cp $< $@
+
+clean-rmath:
+	-cd Rmath/src && $(MAKE) clean
+	-rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
+distclean-rmath: clean-rmath
+
+get-rmath: $(RMATH_OBJ_SOURCE)
+configure-rmath: get-rmath
+compile-rmath: $(RMATH_OBJ_SOURCE)
+check-rmath: compile-rmath
+install-rmath: $(RMATH_OBJ_TARGET)
 
 
 ## OpenBLAS ##
@@ -811,7 +811,7 @@ else
 	$(MAKE) $(ARPACK_ARGS)
 endif
 	touch -c $@
-arpack-ng_$(ARPACK_VER)/checked:
+arpack-ng_$(ARPACK_VER)/checked: $(ARPACK_OBJ_SOURCE)
 ifneq ($(OS),WINNT)
 	cd arpack-ng_$(ARPACK_VER) && \
 	$(MAKE) check $(ARPACK_ARGS)
