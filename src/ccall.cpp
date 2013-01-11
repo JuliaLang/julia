@@ -52,7 +52,7 @@ extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
 
-static void *add_library_sym(char *name, char *lib)
+static void *add_library_sym(char *name, char *lib, char *ob_name)
 {
     void *hnd;
     if (lib == NULL) {
@@ -70,17 +70,22 @@ static void *add_library_sym(char *name, char *lib)
     }
     // add a symbol->address mapping for the JIT
     void *sval = jl_dlsym_e((uv_lib_t*)hnd, name);
+
     if (lib != NULL && hnd != jl_dl_handle) {
-        void *exist = sys::DynamicLibrary::SearchForAddressOfSymbol(name);
-        if (exist != NULL && exist != sval &&
-            // openlibm conflicts with libm, and lots of our libraries
-            // (including LLVM) link to libm. fortunately AddSymbol() is
-            // able to resolve these in favor of openlibm, but this could
-            // be an issue in the future (TODO).
-            strcmp(lib,"libopenlibm")) {
-            ios_printf(ios_stderr, "Warning: Possible conflict in library symbol %s\n", name);
+        void *exist = sys::DynamicLibrary::SearchForAddressOfSymbol(ob_name);
+        if (exist != NULL && exist != sval) {
+            //ios_printf(ios_stderr, "Warning: Possible conflict in library symbol %s\n", ob_name);
+            size_t len_name = strlen(ob_name);
+            size_t len_lib = strlen(lib);
+            ob_name[len_name] = '~'; // ob_name += "~lib\0"
+            memcpy(ob_name+len_name+1, lib, len_lib+1);
+            exist = sys::DynamicLibrary::SearchForAddressOfSymbol(ob_name);
+            if (exist != NULL && exist != sval) {
+                ios_printf(ios_stderr, "Warning: Possible conflict in library symbol %s\n", ob_name);
+            }
         }
-        sys::DynamicLibrary::AddSymbol(name, sval);
+        //printf("adding ccall symbol %s\n", ob_name);
+        sys::DynamicLibrary::AddSymbol(ob_name, sval);
     }
     return sval;
 }
@@ -456,8 +461,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     else {
         void *symaddr;
+        size_t len_name = strlen(f_name);
+        size_t len_lib = (f_lib ? strlen(f_lib) : 0);
+        char *ob_name = (char*)alloca(len_name + len_lib + 2);
+        memcpy(ob_name, f_name, len_name+1); // ob_name = "name"
         if (f_lib != NULL)
-            symaddr = add_library_sym(f_name, f_lib);
+            symaddr = add_library_sym(f_name, f_lib, ob_name);
         else
             symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(f_name);
         if (symaddr == NULL) {
@@ -472,7 +481,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             emit_error(msg.str(), ctx);
             return literal_pointer_val(jl_nothing);
         }
-        llvmf = jl_Module->getOrInsertFunction(f_name, functype);
+        llvmf = jl_Module->getOrInsertFunction(ob_name, functype);
     }
 
     // save temp argument area stack pointer
