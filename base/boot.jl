@@ -109,7 +109,7 @@
 # type Task
 #     parent::Task
 #     last::Task
-#     tls::Any
+#     storage::Any
 #     consumers
 #     done::Bool
 #     runnable::Bool

@@ -69,7 +69,7 @@ export
   Z_DEFAULT_BUFSIZE,
   Z_BIG_BUFSIZE
 
-include("$JULIA_HOME/../share/julia/extras/zlib_h.jl")
+include("zlib_h.jl")
 
 # Expected line length for strings
 const GZ_LINE_BUFSIZE = 256

@@ -1,4 +1,4 @@
-include(find_in_path("lru"))
+include("lru.jl")
 
 import Base.isequal, Base.length, Base.ref
 

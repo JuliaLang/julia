@@ -703,17 +703,23 @@ jl_function_t *jl_unprotect_stack_func;
 void jl_init_tasks(void *stack, size_t ssize)
 {
     _probe_arch();
-    jl_task_type = jl_new_struct_type(jl_symbol("Task"), jl_any_type,
+    jl_task_type = jl_new_struct_type(jl_symbol("Task"),
+                                      jl_any_type,
                                       jl_null,
-                                      jl_tuple(6, jl_symbol("parent"),
+                                      jl_tuple(6,
+                                               jl_symbol("parent"),
                                                jl_symbol("last"),
-                                               jl_symbol("tls"),
+                                               jl_symbol("storage"),
                                                jl_symbol("consumers"),
                                                jl_symbol("done"),
                                                jl_symbol("runnable")),
-                                      jl_tuple(6, jl_any_type, jl_any_type,
-                                               jl_any_type, jl_any_type,
-                                               jl_bool_type, jl_bool_type));
+                                      jl_tuple(6,
+                                               jl_any_type,
+                                               jl_any_type,
+                                               jl_any_type,
+                                               jl_any_type,
+                                               jl_bool_type,
+                                               jl_bool_type));
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;
 

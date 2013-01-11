@@ -646,7 +646,7 @@ function perform_work(job::WorkItem)
             result = is(arg,()) ? yieldto(job.task) : yieldto(job.task, arg)
         else
             job.task = Task(job.thunk)
-            job.task.tls = nothing
+            job.task.storage = nothing
             result = yieldto(job.task)
         end
     catch err
@@ -1056,15 +1056,15 @@ addprocs_sge(n) = add_workers(PGRP, start_sge_workers(n))
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
-sync_begin() = tls(:SPAWNS, ({}, get(tls(), :SPAWNS, ())))
+sync_begin() = task_local_storage(:SPAWNS, ({}, get(task_local_storage(), :SPAWNS, ())))
 
 function sync_end()
-    spawns = get(tls(), :SPAWNS, ())
+    spawns = get(task_local_storage(), :SPAWNS, ())
     if is(spawns,())
         error("sync_end() without sync_begin()")
     end
     refs = spawns[1]
-    tls(:SPAWNS, spawns[2])
+    task_local_storage(:SPAWNS, spawns[2])
     for r in refs
         wait(r)
     end
@@ -1080,7 +1080,7 @@ macro sync(block)
 end
 
 function sync_add(r)
-    spawns = get(tls(), :SPAWNS, ())
+    spawns = get(task_local_storage(), :SPAWNS, ())
     if !is(spawns,())
         push!(spawns[1], r)
     end
