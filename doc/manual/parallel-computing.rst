@@ -568,37 +568,3 @@ the same processor. However, no locking is required, since the threads
 are scheduled cooperatively and not preemptively. This means context
 switches only occur at well-defined points (during the ``fetch``
 operation).
-
-Adding Processors
------------------
-
-.. raw:: html
-
-   <!-- ## Exercises
-
-   - Sum the numbers from 1 to one million in two threads using `@spawn`. [Answer](answer_sumspawn.md)
-
-   - Sum the numbers from 1 to one million using a `parallel for` loop. [Answer](answer_sumparfor.md)
-
-   - Suppose you have a `d`-by-`N` matrix `X`, containing the coordinates of `N` points in `d` dimensions. You are given the function `nnx` below to compute the nearest neighbor of point indexed by `ithis`, excluding `ithis` itself. Write a function called `nearestneighbor` with the following syntax: `inn, d2nn = nearestneighbor(X)`, where `inn[i]` is the nearest-neighbor of point `i` (excluding `i` itself) and `d2nn[i]` is the square-distance between points `i` and `inn[i]`. Use a `DArray` to divide the output variables among multiple processors (do not worry about this for the input `X`). Make sure the two returned variables are ordinary vectors. [Answer](answer_nn.md)
-
-           function nnx{T}(X::Matrix{T},ithis::Int)
-               x = X[:,ithis]
-               d2min::T = typemax(T)  # start with Inf (a sentinel value)
-               imin::Int = 0
-               for i = 1:size(X,2)
-                   if i == ithis
-                       continue  # exclude itself
-                   end
-                   d2::T = 0    # compute the square distance
-                   for idim = 1:size(X,1)
-                       d2 += (X[idim,i] - x[idim])^2
-                   end
-                   if d2 < d2min   # test whether this is the best yet
-                       d2min = d2
-                       imin = i
-                   end
-               end
-               imin, d2min
-           end -->
-

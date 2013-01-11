@@ -81,9 +81,10 @@ easily::
     120
 
     julia> typeof(ans)
-    Int32
+    Int64
 
-You can convert an integer value back to a ``Char`` just as easily::
+On 32-bit architectures, ``typeof(ans)`` will be Int32. You can convert an integer 
+value back to a ``Char`` just as easily::
 
     julia> char(120)
     'x'
@@ -225,10 +226,10 @@ a normal value::
 Using an index less than 1 or greater than ``end`` raises an error::
 
     julia> str[0]
-    in next: arrayref: index out of range
+    BoundsError()
 
     julia> str[end+1]
-    in next: arrayref: index out of range
+    BoundsError()
 
 You can also extract a substring using range indexing::
 
@@ -572,20 +573,23 @@ error::
     syntax error: invalid UTF-8 sequence
 
 Also observe the significant distinction between ``\xff`` and ``\uff``:
-the former escape sequence encodes the *byte 255*, whereas the latter
+the former escape sequence encodes the *byte 255*, whereas the latter
 escape sequence represents the *code point 255*, which is encoded as two
 bytes in UTF-8::
 
     julia> b"\xff"
-    [255]
+    1-element Uint8 Array:
+     0xff
 
     julia> b"\uff"
-    [195,191]
+    2-element Uint8 Array:
+     0xc3
+     0xbf
 
 In character literals, this distinction is glossed over and ``\xff`` is
 allowed to represent the code point 255, because characters *always*
 represent code points. In strings, however, ``\x`` escapes always
-represent bytes, not code points, whereas ``\u`` and ``\U`` escapes
+represent bytes, not code points, whereas ``\u`` and ``\U`` escapes
 always represent code points, which are encoded in one or more bytes.
 For code points less than ``\u80``, it happens that the the UTF-8
 encoding of each code point is just the single byte produced by the
@@ -701,13 +705,19 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "acd"
 
     julia> m.captures
-    ("a","c","d")
+    3-element Union(UTF8String,ASCIIString,Nothing) Array:
+     "a"
+     "c"
+     "d"
 
     julia> m.offset
     1
 
     julia> m.offsets
-    [1,2,3]
+    3-element Int64 Array:
+     1
+     2
+     3
 
     julia> m = match(r"(a|b)(c)?(d)", "ad")
     RegexMatch("ad", 1="a", 2=nothing, 3="d")
@@ -716,21 +726,24 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "ad"
 
     julia> m.captures
-    ("a",nothing,"d")
+    3-element Union(UTF8String,ASCIIString,Nothing) Array:
+     "a"
+     nothing
+     "d"
 
     julia> m.offset
     1
 
     julia> m.offsets
-    [1,0,2]
+    3-element Int64 Array:
+     1
+     0
+     2
 
 It is convenient to have captures returned as a tuple so that one can
 use tuple destructuring syntax to bind them to local variables::
 
-    julia> first, second, third = m.captures
-    ("a",nothing,"d")
-
-    julia> first
+    julia> first, second, third = m.captures; first
     "a"
 
 You can modify the behavior of regular expressions by some combination of
@@ -774,9 +787,3 @@ For example, the following regex has all three flags turned on::
 
     julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
     RegexMatch("angry,\nBad world")
-
-.. raw:: html
-
-   <!-- ### Exercises
-   - Given an ASCIIString `s`, print it in reverse order. [Answer](answer_reverse.md)
-   - Write a function to generate a random string consisting of the letters A-Z, a-z, and the numbers 0-9. [Answer](answer_randstring.md) -->
