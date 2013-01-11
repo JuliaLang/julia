@@ -37,6 +37,8 @@ cosc(x::Number) = x==0 ? zero(x) : (pix=pi*x; oftype(x,cos(pix)/x-sin(pix)/(pix*
 
 radians2degrees(z::Real) = oftype(z, (180/pi) * z)
 degrees2radians(z::Real) = oftype(z, (pi/180) * z)
+radians2degrees(z::Integer) = oftype(float(z), (180/pi) * z)
+degrees2radians(z::Integer) = oftype(float(z), (pi/180) * z)
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
                   (:sech, :cosh), (:csch, :sinh), (:coth, :tanh))
