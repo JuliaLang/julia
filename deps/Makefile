@@ -1261,8 +1261,12 @@ install-gmp-wrapper: $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT)
 
 ## GLPK ##
 
+ifeq ($(USE_SYSTEM_GLPK), 1)
+GLPK_OBJ_TARGET =
+else
 GLPK_SRC_TARGET = glpk-$(GLPK_VER)/src/.libs/libglpk.$(SHLIB_EXT)
 GLPK_OBJ_TARGET = $(BUILD)/lib/libglpk.$(SHLIB_EXT)
+endif
 
 glpk-$(GLPK_VER).tar.gz:
 	$(WGET) http://ftp.gnu.org/gnu/glpk/$@
@@ -1290,7 +1294,7 @@ clean-glpk:
 	-$(MAKE) -C glpk-$(GLPK_VER) uninstall || true
 	-$(MAKE) -C glpk-$(GLPK_VER) clean
 distclean-glpk: clean-glpk
-	-rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
+	-rm -rf glpk-$(GLPK_VER).tar.gz glpk-$(GLPK_VER)
 
 get-glpk: glpk-$(GLPK_VER).tar.gz
 configure-glpk: glpk-$(GLPK_VER)/config.status
