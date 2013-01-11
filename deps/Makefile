@@ -981,8 +981,11 @@ endif
 SUITE_SPARSE_LIB = -lm
 ifneq ($(OS), Darwin)
 ifneq ($(OS), WINNT)
-  SUITE_SPARSE_LIB += -lrt
+SUITE_SPARSE_LIB += -lrt
 endif
+endif
+ifneq ($(OS), WINNT)
+SUITE_SPARSE_LIB += -Wl,-rpath,'$(BUILD)/lib'
 endif
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
