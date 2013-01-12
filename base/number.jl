@@ -11,7 +11,6 @@ integer_valued(x::Integer) = true
 
 isbool(x::Number) = false
 isbool(x::Bool) = true
-const islogical = isbool
 
 size(x::Number) = ()
 eltype(x::Number) = typeof(x)

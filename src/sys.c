@@ -22,38 +22,6 @@
 #include <xmmintrin.h>
 #endif
 
-// --- io and select ---
-
-DLLEXPORT int jl_sizeof_fd_set(void) { return sizeof(fd_set); }
-
-DLLEXPORT int jl_sizeof_timeval(void) { return sizeof(struct timeval); }
-
-DLLEXPORT void jl_set_timeval(struct timeval *tv, double tout)
-{
-    tv->tv_sec = (int)tout;
-    tv->tv_usec = (int)((tout-(int)tout)*1.0e6);
-}
-
-DLLEXPORT void jl_fd_clr(fd_set *set, int fd)
-{
-    FD_CLR(fd, set);
-}
-
-DLLEXPORT int jl_fd_isset(fd_set *set, int fd)
-{
-    return FD_ISSET(fd, set);
-}
-
-DLLEXPORT void jl_fd_set(fd_set *set, int fd)
-{
-    FD_SET(fd, set);
-}
-
-DLLEXPORT void jl_fd_zero(fd_set *set)
-{
-    FD_ZERO(set);
-}
-
 DLLEXPORT uint32_t jl_getutf8(ios_t *s)
 {
     uint32_t wc=0;

@@ -11,7 +11,8 @@ when your code is used together with somebody else's. Within a module, you
 can control which names from other modules are visible (via importing),
 and specify which of your names are intended to be public (via exporting).
 
-The following example illustrates the major features of modules::
+The following example demonstrates the major features of modules. It is 
+not meant to be run, but is shown for illustrative purposes::
 
     module MyModule
     using Lib
@@ -29,20 +30,18 @@ The following example illustrates the major features of modules::
     show(io, a::MyType) = print(io, "MyType $(a.x)")
     end
 
-Note that the style is not
-to indent the body of the module, since that would typically lead to
-whole files being indented.
+Note that the style is not to indent the body of the module, since
+that would typically lead to whole files being indented.
 
-This module defines a type ``MyType``, and two functions. Function ``foo``
-and type ``MyType`` are
-exported, and so will be available for importing into other modules.
-Function ``bar`` is private to ``MyModule``.
+This module defines a type ``MyType``, and two functions. Function
+``foo`` and type ``MyType`` are exported, and so will be available for
+importing into other modules.  Function ``bar`` is private to
+``MyModule``.
 
-The statement ``using Lib`` means that a module called ``Lib``
-will be available for resolving names
-as needed. When a global variable is encountered that has no definition in
-the current module, the system will search for it in ``Lib`` and import it
-if it is found there.
+The statement ``using Lib`` means that a module called ``Lib`` will be
+available for resolving names as needed. When a global variable is
+encountered that has no definition in the current module, the system
+will search for it in ``Lib`` and import it if it is found there.
 This means that all uses of that global within the current module will
 resolve to the definition of that variable in ``Lib``.
 
@@ -93,9 +92,8 @@ Standard modules
 There are three important standard modules: Main, Core, and Base.
 
 Main is the top-level module, and Julia starts with Main set as the
-current module.
-Variables defined at the prompt go in Main, and ``whos()`` lists variables
-in Main.
+current module.  Variables defined at the prompt go in Main, and
+``whos()`` lists variables in Main.
 
 Core contains all identifiers considered "built in" to the language, i.e.
 part of the core language and not libraries. Every module implicitly
@@ -132,9 +130,8 @@ If a name is qualified (e.g. ``Base.sin``), then it can be accessed even if
 it is not exported. This is often useful when debugging.
 
 Macros must be exported if they are intended to be used outside their
-defining module.
-Macro names are written with ``@`` in import and export statements, e.g.
-``import Mod.@mac``.
+defining module.  Macro names are written with ``@`` in import and
+export statements, e.g.  ``import Mod.@mac``.
 
 The syntax ``M.x = y`` does not work to assign a global in another module;
 global assignment is always module-local.

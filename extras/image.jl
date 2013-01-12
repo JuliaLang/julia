@@ -710,7 +710,7 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         error("wrong border treatment")
     end
     # check if separable
-    U, S, V = svd(filter)
+    U, S, V = svdt(filter)
     separable = true;
     for i = 2:length(S)
         # assumption that <10^-7 \approx 0

@@ -21,7 +21,6 @@ debug release: | $(DIRS) $(BUILD)/share/julia/extras $(BUILD)/share/julia/base $
 
 julia-debug julia-release:
 	@-git submodule init --quiet
-	@-cd deps/nginx && git fetch -a --quiet
 	@-git submodule update
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
@@ -136,9 +135,9 @@ testall: release
 test-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
 
-webrepl:
-	@$(MAKE) -C deps install-nginx
-	@$(MAKE) -C ui/webserver
+webrepl: all
+	@$(MAKE) $(QUIET_MAKE) -C deps install-nginx
+	@$(MAKE) -C ui/webserver julia-release
 
 tk:
 	@$(MAKE) -C deps install-tk-wrapper

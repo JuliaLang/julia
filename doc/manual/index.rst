@@ -32,5 +32,4 @@
    parallel-computing
    calling-c-and-fortran-code
    performance-tips
-   potential-features
 

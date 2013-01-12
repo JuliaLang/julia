@@ -1051,19 +1051,8 @@ void sigint_handler(int sig, siginfo_t *info, void *context) {
 #endif
     
     // clean up
-    for (size_t i = 0; i < julia_session_list.size(); i++)
-    {
-        // close the pipes
-        uv_close((uv_handle_t*)(julia_session_list[i]->julia_in),&pipes_done);
-        uv_close((uv_handle_t*)(julia_session_list[i]->julia_out),&pipes_done);
-        uv_close((uv_handle_t*)(julia_session_list[i]->julia_err),&pipes_done);
-
-        // kill the julia process
-        uv_process_kill(julia_session_list[i]->proc, 9);
-        //run_event_loop(julia_session_list[i]);
-
-        //uv_loop_delete((julia_session_list[i])->event_loop);
-        // delete the session
+    for (size_t i = 0; i < julia_session_list.size(); i++) {
+        cleanup_session(julia_session_list[i]);
         delete julia_session_list[i];
     }
 

@@ -797,17 +797,26 @@ end
 
 ## Binary arithmetic operators ##
 
+promote_array_type{Scalar, Arry}(::Type{Scalar}, ::Type{Arry}) = promote_type(Scalar, Arry)
+promote_array_type{S<:Real, A<:Real}(::Type{S}, ::Type{A}) = A
+promote_array_type{S<:Complex, A<:Complex}(::Type{S}, ::Type{A}) = A
+promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
+promote_array_type{S<:Real, A<:Integer}(::Type{S}, ::Type{A}) = promote_type(S, A)
+
+./{T<:Integer,S<:Integer}(x::StridedArray{T}, y::StridedArray{S}) =
+    reshape( [ x[i] ./ y[i] for i=1:length(x) ], size(x) )
+./{T<:Integer}(x::Integer, y::StridedArray{T}) =
+    reshape( [ x    ./ y[i] for i=1:length(y) ], size(y) )
+./{T<:Integer}(x::StridedArray{T}, y::Integer) =
+    reshape( [ x[i] ./ y    for i=1:length(x) ], size(x) )
+
 # ^ is difficult, since negative exponents give a different type
 
-./(x::Array, y::Array ) = reshape( [ x[i] ./ y[i] for i=1:length(x) ], size(x) )
-./(x::Number,y::Array ) = reshape( [ x    ./ y[i] for i=1:length(y) ], size(y) )
-./(x::Array, y::Number) = reshape( [ x[i] ./ y    for i=1:length(x) ], size(x) )
+.^(x::StridedArray, y::StridedArray ) = reshape( [ x[i] ^ y[i] for i=1:length(x) ], size(x) )
+.^(x::Number,       y::StridedArray ) = reshape( [ x    ^ y[i] for i=1:length(y) ], size(y) )
+.^(x::StridedArray, y::Number       ) = reshape( [ x[i] ^ y    for i=1:length(x) ], size(x) )
 
-.^(x::Array, y::Array ) = reshape( [ x[i] ^ y[i] for i=1:length(x) ], size(x) )
-.^(x::Number,y::Array ) = reshape( [ x    ^ y[i] for i=1:length(y) ], size(y) )
-.^(x::Array, y::Number) = reshape( [ x[i] ^ y    for i=1:length(x) ], size(x) )
-
-function .^{S<:Integer,T<:Integer}(A::Array{S}, B::Array{T})
+function .^{S<:Integer,T<:Integer}(A::StridedArray{S}, B::StridedArray{T})
     F = Array(Float64, promote_shape(size(A), size(B)))
     for i=1:length(A)
         F[i] = float64(A[i])^float64(B[i])
@@ -815,7 +824,7 @@ function .^{S<:Integer,T<:Integer}(A::Array{S}, B::Array{T})
     return F
 end
 
-function .^{T<:Integer}(A::Integer, B::Array{T})
+function .^{T<:Integer}(A::Integer, B::StridedArray{T})
     F = similar(B, Float64)
     for i=1:length(B)
         F[i] = float64(A)^float64(B[i])
@@ -823,19 +832,19 @@ function .^{T<:Integer}(A::Integer, B::Array{T})
     return F
 end
 
-function power_array_int_body{T}(F::Array{T}, A, B)
+function power_array_int_body{T}(F::StridedArray{T}, A, B)
     for i=1:length(A)
         F[i] = A[i]^convert(T,B)
     end
     return F
 end
 
-function .^{T<:Integer}(A::Array{T}, B::Integer)
+function .^{T<:Integer}(A::StridedArray{T}, B::Integer)
     F = similar(A, B < 0 ? Float64 : promote_type(T,typeof(B)))
     power_array_int_body(F, A, B)
 end
 
-for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
+for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
     @eval begin
         function ($f){S,T}(A::StridedArray{S}, B::StridedArray{T})
             F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
@@ -845,14 +854,14 @@ for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
             return F
         end
         function ($f){T}(A::Number, B::StridedArray{T})
-            F = similar(B, promote_type(typeof(A),T))
+            F = similar(B, promote_array_type(typeof(A),T))
             for i=1:length(B)
                 F[i] = ($f)(A, B[i])
             end
             return F
         end
         function ($f){T}(A::StridedArray{T}, B::Number)
-            F = similar(A, promote_type(T,typeof(B)))
+            F = similar(A, promote_array_type(typeof(B),T))
             for i=1:length(A)
                 F[i] = ($f)(A[i], B)
             end

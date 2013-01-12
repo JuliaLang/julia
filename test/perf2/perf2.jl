@@ -30,12 +30,12 @@ end
 gc()
 
 # issue #1211
-load("ziggurat")
+include("ziggurat.jl")
 a = Array(Float64, 1000000)
 @timeit randn_zig!(a) "randn_zig"
 
 # issue #950
-load("gk")
+include("gk.jl")
 @timeit gk(350,[0.1]) "gk      "
 
 # issue #942
@@ -51,24 +51,24 @@ x = 1:600000;
 @timeit sparse(x,x,x) "sparserang"
 
 # issue #445
-load("stockcorr")
+include("stockcorr.jl")
 @timeit stockcorr() "stockcorr"
 
-load("bench_eu")
+include("bench_eu.jl")
 @timeit bench_eu_vec(10000) "bench_eu_vec"
 @timeit bench_eu_devec(10000) "bench_eu_devec"
 
 # issue #1163
-load("actor_centrality")
+include("actor_centrality.jl")
 @timeit1 actor_centrality() "actorgraph"
 
 # issue #1168
-load("laplace")
+include("laplace.jl")
 @timeit1 laplace_vec() "laplace_vec"
 @timeit laplace_devec() "laplace_devec"
 
 # issue #1169
-load("go_benchmark")
+include("go_benchmark.jl")
 @timeit1 benchmark(10) "go_benchmark"
 
 function cmp_with_func(x::Vector, f::Function)
@@ -97,7 +97,7 @@ d = randn(len)
 @timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectoriz"
 
 open("random.csv","w") do io
-    csvwrite(io, rand(100000,4))
+    writecsv(io, rand(100000,4))
 end
 
 function parse()
@@ -111,7 +111,7 @@ end
 
 rm("random.csv")
 
-load("json")
+include("json.jl")
 
 _json_data = "{\"web-app\": {
   \"servlet\": [   

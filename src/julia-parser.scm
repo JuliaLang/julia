@@ -993,7 +993,7 @@
        (if (not (every symbol? es))
 	   (error "invalid export statement"))
        `(export ,@es)))
-    ((import using)
+    ((import using importall)
      (let ((imports (parse-comma-separated s (lambda (s)
 					       (parse-import s word)))))
        (if (length= imports 1)

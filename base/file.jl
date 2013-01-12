@@ -28,7 +28,7 @@ end
 
 @windows_only begin
 function cd(f::Function, dir::String)
-    old = cwd()
+    old = pwd()
     try
         cd(dir)
         retval = f()

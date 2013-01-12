@@ -7,9 +7,9 @@ export librandom_init, srand,
        randn, randn!,
        randi, randi!, randival, randival!,
        randg, randg!,
-       randexp, randexp!, exprnd,
-       randchi2, randchi2!, chi2rnd,
-       randbeta, randbeta!, betarnd,
+       randexp, randexp!,
+       randchi2, randchi2!,
+       randbeta, randbeta!,
        randbool, randbool!,
        Rng, Rng_MT
 
@@ -217,8 +217,6 @@ randexp!(A::Array{Float64}) = randmtzig_fill_exprnd!(A)
 randexp(dims::Dims) = randexp!(Array(Float64, dims))
 randexp(dims::Int...) = randexp(dims)
 
-const exprnd = randexp
-
 ## randg()
 
 # A simple method for generating gamma variables - Marsaglia and Tsang (2000)
@@ -283,12 +281,8 @@ randchi2(df::Real) = df == 1 ? randn()^2 : 2.randg(df/2.)
 randchi2(df::Real, dims::Dims) = randchi2!(df, Array(Float64, dims))
 randchi2(df::Real, dims::Int...) = randchi2(df, dims)
 
-const chi2rnd = randchi2 # alias chi2rnd
-
 randbeta(alpha::Real, beta::Real) = (u = randg(alpha); u / (u + randg(beta)))
 randbeta(alpha::Real, beta::Real, dims::Dims) = (u = randg(alpha, dims); u ./ (u + randg(beta, dims)))
 randbeta(alpha::Real, beta::Real, dims::Int...) = randbeta(alpha, beta, dims)
-
-const betarnd = randbeta
 
 end # module

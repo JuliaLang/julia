@@ -12,10 +12,10 @@ library is implemented almost completely in Julia itself, and derives
 its performance from the compiler, just like any other code written in
 Julia.
 
-An array is a collection of objects stored in a multi-dimensional grid.
-In the most general case, an array may contain objects of type ``Any``.
-For most computational purposes, arrays should contain objects of a more
-specific type, such as ``Float64`` or ``Int32``.
+An array is a collection of objects stored in a multi-dimensional
+grid.  In the most general case, an array may contain objects of type
+``Any``.  For most computational purposes, arrays should contain
+objects of a more specific type, such as ``Float64`` or ``Int32``.
 
 In general, unlike many other technical computing languages, Julia does
 not expect programs to be written in a vectorized style for performance.
@@ -239,7 +239,7 @@ syntax:
 
 Concatenation operators may also be used for concatenating arrays:
 
-1. ``[A B C...]`` — calls ``hcat``
+1. ``[A B C ...]`` — calls ``hcat``
 2. ``[A, B, C, ...]`` — calls ``vcat``
 3. ``[A B; C D; ...]`` — calls ``hvcat``
 
@@ -346,25 +346,29 @@ stride parameters.
 
 ::
 
-    julia> a = rand(10,10);
-
-    julia> b = sub(a, 2:2:8,2:2:4)
-    4x2 SubArray of 10x10 Float64 Array
-    0.48291296659328276 0.31639301252254248
-    0.11191852765878418 0.80311033863988501
-    0.34377272170384798 0.12998312467801409
-    0.75207724893767547 0.48974544536835718
-
+    julia> a = rand(10,10)
+    10x10 Float64 Array:
+     0.362525  0.811086    0.418914  0.463756  …  0.0378657  0.369678  0.734343 
+     0.827145  0.856471    0.620181  0.300975     0.105997   0.207935  0.111068 
+     0.232279  0.0015412   0.906766  0.202353     0.803316   0.843412  0.584969 
+     0.775187  0.922005    0.773319  0.756691     0.0328393  0.407879  0.181678 
+     0.749682  0.888188    0.404268  0.401692     0.50875    0.589153  0.448658 
+     0.16149   0.00695726  0.311006  0.124033  …  0.953573   0.822758  0.0124734
+     0.898647  0.421168    0.5257    0.136804     0.548698   0.414837  0.55708  
+     0.906457  0.823346    0.684319  0.981971     0.014441   0.182403  0.0725621
+     0.769292  0.7239      0.730801  0.840325     0.905064   0.097663  0.489379 
+     0.636039  0.682543    0.378586  0.858242     0.508523   0.75396   0.505509 
+    
     julia> (q,r) = qr(b);
-
+    
     julia> q
-    4x2 Float64 Array
-    -0.31610281030340204 0.38994108897230212
-    -0.80237370921615103 -0.5848318975546335
-    -0.12986390146593485 0.36571345172816944
-    -0.48929624071011685 0.61005841520202764
-
+    4x2 Float64 Array:
+     -0.234671   -0.902037
+     -0.0949767  -0.238058
+     -0.486365   -0.10859 
+     -0.836277    0.343315
+    
     julia> r
-    2x2 Float64 Array
-    -1.00091806276211814 -0.65508286752651457
-    0.0 0.70738744643074303
+    2x2 Float64 Array:
+     -1.14325  -1.16149 
+      0.0      -0.556627

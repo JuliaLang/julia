@@ -22,3 +22,14 @@ end
 @deprecate  load     require
 @deprecate  numel    length
 @deprecate  idump    xdump
+@deprecate  cwd      pwd
+
+# aliases
+@deprecate  chi2rnd  randchi2
+@deprecate  betarnd  randbeta
+@deprecate  exprnd   randexp
+@deprecate  islogical isbool
+@deprecate  csvread  readcsv
+@deprecate  dlmread  readdlm
+@deprecate  csvwrite writecsv
+@deprecate  dlmwrite writedlm
