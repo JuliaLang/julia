@@ -11,7 +11,6 @@ __________________________________________________________
      :align: right
      :alt: Carlo Baldassi
 
-
   Current Version: ``0.0.0``
 
   Package for parsing command-line arguments to Julia programs. 
@@ -251,6 +250,26 @@ ___________________________________________________________
 
       None
 
+`GLM <https://github.com/JuliaStats/GLM.jl>`_
+_____________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: JuliaStats
+
+  Current Version: ``0.0.0``
+
+  Generalized linear models in Julia 
+
+  Maintainer: `JuliaStats <https://github.com/JuliaStats>`_
+
+  Dependencies::
+
+      DataFrames     Any Version
+      Distributions  Any Version
+
 `GLU <https://github.com/rennis250/GLU.jl>`_
 ____________________________________________
 
@@ -305,6 +324,8 @@ ________________________________________________
   Crafty statistical graphics for Julia. 
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
+
+  More Info: `<http://dcjones.github.com/Gadfly.jl/doc>`_ 
 
   Dependencies::
 
@@ -525,6 +546,26 @@ __________________________________________
 
       None
 
+`LM <https://github.com/JuliaStats/LM.jl>`_
+___________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: JuliaStats
+
+  Current Version: ``0.0.0``
+
+  Linear models in Julia 
+
+  Maintainer: `JuliaStats <https://github.com/JuliaStats>`_
+
+  Dependencies::
+
+      DataFrames     Any Version
+      Distributions  Any Version
+
 `Languages <https://github.com/johnmyleswhite/Languages.jl>`_
 _____________________________________________________________
 
@@ -659,6 +700,25 @@ ______________________________________________
 
       None
 
+`ODBC <https://github.com/karbarcca/ODBC>`_
+___________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/1214b9051c4ae96c1ca5c5e6cc25716e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jacob Quinn
+
+  Current Version: ``0.0.0``
+
+  A low-level ODBC interface for the Julia programming language 
+
+  Maintainer: `Jacob Quinn <https://github.com/karbarcca>`_
+
+  Dependencies::
+
+      None
+
 `OpenGL <https://github.com/rennis250/OpenGL.jl>`_
 __________________________________________________
 
@@ -753,6 +813,25 @@ _________________________________________________________________
   Method dispatch based on pattern matching for Julia 
 
   Maintainer: `toivoh <https://github.com/toivoh>`_
+
+  Dependencies::
+
+      None
+
+`Profile <https://github.com/timholy/Profile.jl>`_
+__________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tim Holy
+
+  Current Version: ``0.0.0``
+
+  Profilers for Julia 
+
+  Maintainer: `Tim Holy <https://github.com/timholy>`_
 
   Dependencies::
 
@@ -915,6 +994,27 @@ __________________________________________________________
 
       Options        Any Version
 
+`Thyme <https://github.com/milktrader/Thyme.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: milktrader
+
+  Current Version: ``0.0.0``
+
+  Julia code for importing and transforming time-series data  
+
+  Maintainer: `milktrader <https://github.com/milktrader>`_
+
+  Dependencies::
+
+      Calendar       Any Version
+      DataFrames     Any Version
+      UTF16          Any Version
+
 `Tk <https://github.com/JuliaLang/Tk.jl>`_
 __________________________________________
 
@@ -1012,4 +1112,23 @@ ________________________________________
   Dependencies::
 
       None
+
+`kNN <https://github.com/johnmyleswhite/kNN.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+
+  Current Version: ``0.0.0``
+
+  The k-nearest neighbors algorithm in Julia 
+
+  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
+
+  Dependencies::
+
+      DataFrames     Any Version
 

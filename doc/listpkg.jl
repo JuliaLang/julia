@@ -45,7 +45,9 @@ function gen_listpkg()
 			gh_repo=JSON.parse(readall(download_file(gh_repo_url)))
 			#print("processing $gh_user_url")
 			gh_user=JSON.parse(readall(download_file(gh_user_url)))
+			#Sometimes name is missing, sometimes it is null in the JSON
 			fullname = get(gh_user, "name", user)
+			if fullname == nothing; fullname = user; end
 			avatar = gh_user["avatar_url"]
 			user_url = gh_user["html_url"]
 			desc = get(gh_repo, "description", "No description provided")
@@ -54,7 +56,7 @@ function gen_listpkg()
 		end
 		print(io, "`$(pkg) <$(html_url)>`_\n"); 
 		print(io, "_"^(length("`$(pkg) <$(html_url)>`_")) * "\n\n")
-		print(io, "  .. image:: $(avatar)\n     :height: 80px\n     :width: 80px\n     :align: right\n     :alt: $(fullname)\n")
+		print(io, "  .. image:: $(avatar)\n     :height: 80px\n     :width: 80px\n     :align: right\n     :alt: $(fullname)\n\n")
 		print(io, "  Current Version: ``$(maxv.version)``\n\n"); 
 		print(io, "  $(desc) \n\n")
 		print(io, "  Maintainer: `$(fullname) <$user_url>`_\n\n") 
