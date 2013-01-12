@@ -30,7 +30,11 @@
 # define BVOFFS 4
 #endif
 
+#ifdef __LP64__
 #define GC_PAGE_SZ (1536*sizeof(void*))//bytes
+#else
+#define GC_PAGE_SZ (2048*sizeof(void*))//bytes
+#endif
 
 typedef struct _gcpage_t {
     char data[GC_PAGE_SZ];
@@ -220,20 +224,20 @@ static int szclass(size_t sz)
 }
 
 #ifdef __LP64__
-#define malloc_a16(sz) malloc(sz)
+#define malloc_a16(sz) malloc(((sz)+15)&-16)
 #else
 #if defined(WIN32)
 // TODO - use _aligned_malloc, which requires _aligned_free
-#define malloc_a16(sz) malloc(sz)
+#define malloc_a16(sz) malloc(((sz)+15)&-16)
 
 #elif defined(__APPLE__)
-#define malloc_a16(sz) malloc(sz)
+#define malloc_a16(sz) malloc(((sz)+15)&-16)
 
 #else
 static inline void *malloc_a16(size_t sz)
 {
     void *ptr;
-    if (posix_memalign(&ptr, 16, sz))
+    if (posix_memalign(&ptr, 16, (sz+15)&-16))
         return NULL;
     return ptr;
 }
@@ -245,12 +249,12 @@ static void *alloc_big(size_t sz)
     if (allocd_bytes > collect_interval) {
         jl_gc_collect();
     }
-    sz = (sz+3) & -4;
     size_t offs = BVOFFS*sizeof(void*);
-    if (sz + offs < offs)  // overflow in adding offs, size was "negative"
+    if (sz+offs+15 < offs+15)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
-    bigval_t *v = (bigval_t*)malloc_a16(sz + offs);
-    allocd_bytes += (sz+offs);
+    size_t allocsz = (sz+offs+15) & -16;
+    bigval_t *v = (bigval_t*)malloc_a16(allocsz);
+    allocd_bytes += allocsz;
     if (v == NULL)
         jl_throw(jl_memory_exception);
     v->sz = sz;
@@ -304,7 +308,7 @@ jl_mallocptr_t *jl_gc_managed_malloc(size_t sz)
     if (allocd_bytes > collect_interval) {
         jl_gc_collect();
     }
-    sz = (sz+3) & -4;
+    sz = (sz+15) & -16;
     void *b = malloc_a16(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
