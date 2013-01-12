@@ -22,6 +22,7 @@ end
 @deprecate  load     require
 @deprecate  numel    length
 @deprecate  idump    xdump
+@deprecate  cwd      pwd
 
 # aliases
 @deprecate  chi2rnd  randchi2
