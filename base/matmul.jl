@@ -64,8 +64,7 @@ dot(x::Number, y::Number) = conj(x) * y
 
 # Matrix-vector multiplication
 
-function (*){T<:BlasFloat}(A::StridedMatrix{T},
-                            X::StridedVector{T})
+function (*){T<:BlasFloat}(A::StridedMatrix{T}, X::StridedVector{T})
     Y = similar(A, size(A,1))
     gemv(Y, 'N', A, X)
 end
