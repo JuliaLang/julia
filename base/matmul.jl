@@ -64,8 +64,7 @@ dot(x::Number, y::Number) = conj(x) * y
 
 # Matrix-vector multiplication
 
-function (*){T<:BlasFloat}(A::StridedMatrix{T},
-                            X::StridedVector{T})
+function (*){T<:BlasFloat}(A::StridedMatrix{T}, X::StridedVector{T})
     Y = similar(A, size(A,1))
     gemv(Y, 'N', A, X)
 end
@@ -225,7 +224,7 @@ function gemv{T<:BlasFloat}(y::StridedVector{T},
 
     if nA != length(x); error("*: argument shapes do not match"); end
     if mA != length(y); error("*: output size is incorrect"); end
-    if mA == 0; return zeros(T, 0); end
+    if mA == 0; return y; end
 
     BLAS.gemv!(tA, one(T), A, x, zero(T), y)
 end
@@ -288,7 +287,7 @@ function gemm_wrapper{T<:BlasFloat}(C::StridedMatrix{T}, tA, tB,
 
     if nA != mB; error("*: argument shapes do not match"); end
 
-    if mA == 0 || nA == 0 || nB == 0; return zeros(T, mA, nB); end
+    if mA == 0 || nA == 0 || nB == 0; return C; end
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2(C,tA,tB,A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3(C,tA,tB,A,B); end
 
