@@ -17,7 +17,12 @@ const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 function cd_pkgdir(f::Function)
     dir = julia_pkgdir()
     if !isdir(dir)
-        error("Package directory $dir doesn't exist; run Pkg.init() to create it.")
+        if has(ENV,"JULIA_PKGDIR")
+            error("Package directory $dir doesn't exist; run Pkg.init() to create it.")
+        else
+            warn("Initializing default package repository $dir.")
+            init()
+        end
     end
     cd(f,dir)
 end
@@ -50,9 +55,8 @@ status(pkg::String) = print_pkg_status(pkg, "$(julia_pkgdir())/$pkg")
 # create a new empty packge repository
 
 function init(meta::String)
-    if is_initialized() return end
-
     dir = julia_pkgdir()
+    isdir(dir) && error("Package directory $dir already exists.")
     try
         run(`mkdir -p $dir`)
         cd(dir) do
@@ -82,8 +86,6 @@ function init(meta::String)
     end
 end
 init() = init(DEFAULT_META)
-
-is_initialized() = isdir(julia_pkgdir())
 
 # get/set the origin url for package repo
 
