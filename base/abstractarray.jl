@@ -15,6 +15,7 @@ ndims{T,n}(::AbstractArray{T,n}) = n
 ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
 length(t::AbstractArray) = prod(size(t))
+endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
 
