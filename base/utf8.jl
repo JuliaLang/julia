@@ -28,8 +28,8 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 
 ## required core functionality ##
 
-length(s::UTF8String) = length(s.data)
-strlen(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
+endof(s::UTF8String) = thisind(s,length(s.data))
+length(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
 
 function ref(s::UTF8String, i::Int)
     d = s.data
@@ -94,7 +94,7 @@ strcat(a::ByteString, b::ByteString, c::ByteString...) =
     UTF8String([a.data,b.data,map(s->s.data,c)...])
 
 transform_to_utf8(s::String, f::Function) =
-    sprint(length(s), io->for c in s; write(io,f(c)::Char); end)
+    sprint(endof(s), io->for c in s; write(io,f(c)::Char); end)
 
 uppercase(s::UTF8String) = transform_to_utf8(s, uppercase)
 lowercase(s::UTF8String) = transform_to_utf8(s, lowercase)

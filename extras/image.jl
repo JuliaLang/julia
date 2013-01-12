@@ -197,7 +197,7 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
     sz = size(data)
     szv = vcat(sz...)
     n_dims = length(sz)
-    if strlen(arrayi_order) != n_dims
+    if length(arrayi_order) != n_dims
         error("storage order string must have a length equal to the number of dimensions in the array")
     end
     # Enforce uniqueness of each array coordinate name
