@@ -113,6 +113,7 @@ function copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64}, 
     return
 end
 
+get_chunks(B::BitArray) = B.chunks
 
 ## similar, fill, copy_to etc ##
 
