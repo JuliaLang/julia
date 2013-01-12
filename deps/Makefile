@@ -27,7 +27,7 @@ unexport CONFIG_SITE
 
 STAGE1_DEPS = uv openlibm-extras random rmath double-conversion
 STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
-STAGE3_DEPS = suitesparse-wrapper
+STAGE3_DEPS = glpk-wrapper suitesparse-wrapper
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
@@ -1330,7 +1330,7 @@ get-glpk-wrapper:
 configure-glpk-wrapper:
 compile-glpk-wrapper:
 check-glpk-wrapper:
-install-glpk: $(GLPK_OBJ_TARGET) $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT)
+install-glpk-wrapper: $(GLPK_OBJ_TARGET) $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT)
 
 
 ## ZLIB ##
