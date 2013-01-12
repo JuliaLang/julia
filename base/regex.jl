@@ -105,7 +105,7 @@ match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE.EXECUTE
 match(r::Regex, s::String) = match(r, s, start(s))
 
 function search(str::ByteString, re::Regex, idx::Integer)
-    len = length(str)
+    len = length(str.data)
     if idx >= len+2
         return idx == len+2 ? (0,0) : error(BoundsError)
     end

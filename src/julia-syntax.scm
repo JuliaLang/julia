@@ -116,7 +116,7 @@
   (if (null? tuples)
       (if last
 	  (if (= n 1)
-	      `(call (top length) ,a)
+	      `(call (top endof) ,a)
 	      `(call (top trailingsize) ,a ,n))
 	      #;`(call (top div)
 		     (call (top length) ,a)

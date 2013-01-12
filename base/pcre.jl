@@ -97,7 +97,7 @@ free_study(extra::Ptr{Void}) =
 
 function exec(regex::Array{Uint8}, extra::Ptr{Void},
               str::ByteString, offset::Integer, options::Integer, cap::Bool)
-    if offset < 0 || length(str) < offset
+    if offset < 0 || length(str.data) < offset
         error(BoundsError)
     end
     ncap = info(regex, extra, INFO_CAPTURECOUNT, Int32)
@@ -105,7 +105,7 @@ function exec(regex::Array{Uint8}, extra::Ptr{Void},
     n = ccall((:pcre_exec, :libpcre), Int32,
               (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
-              regex, extra, str, length(str),
+              regex, extra, str, length(str.data),
               offset, options, ovec, length(ovec))
     if n < -1
         error("exec: error $n")

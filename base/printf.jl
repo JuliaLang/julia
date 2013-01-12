@@ -9,7 +9,7 @@ function _gen(s::String)
     blk = expr(:block, :(local neg, pt, len, exp))
     for x in _parse(s)
         if isa(x,String)
-            push!(blk.args, :(write(out, $(strlen(x)==1 ? x[1] : x))))
+            push!(blk.args, :(write(out, $(length(x)==1 ? x[1] : x))))
         else
             c = lc(x[end])
             f = c=='f' ? _gen_f :
@@ -240,7 +240,7 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push!(blk.args, :(neg = NEG[1]))
     push!(blk.args, :(pt  = POINT[1]))
     # calculate padding
-    width -= strlen(prefix)
+    width -= length(prefix)
     space_pad = width > max(1,precision) && contains(flags,'-') ||
                 precision < 0 && width > 1 && !contains(flags,'0') ||
                 precision >= 0 && width > precision
@@ -374,7 +374,7 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # calculate padding
     padding = nothing
-    width -= precision+strlen(expmark)+(precision>0)+4
+    width -= precision+length(expmark)+(precision>0)+4
     # 4 = leading + expsign + 2 exp digits
     if contains(flags,'+') || contains(flags,' ')
         width -= 1 # for the sign indicator

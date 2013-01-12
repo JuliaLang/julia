@@ -571,23 +571,23 @@ function showall{T}(io, a::AbstractArray{T,1})
     show_comma_array(io, a, opn, cls)
 end
 
-alignment(x::Any) = (0, strlen(sprint(showcompact, x)))
-alignment(x::Number) = (strlen(sprint(showcompact, x)), 0)
-alignment(x::Integer) = (strlen(sprint(showcompact, x)), 0)
+alignment(x::Any) = (0, length(sprint(showcompact, x)))
+alignment(x::Number) = (length(sprint(showcompact, x)), 0)
+alignment(x::Integer) = (length(sprint(showcompact, x)), 0)
 function alignment(x::Real)
     m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(showcompact, x))
-    m == nothing ? (strlen(sprint(showcompact, x)), 0) :
-                   (strlen(m.captures[1]), strlen(m.captures[2]))
+    m == nothing ? (length(sprint(showcompact, x)), 0) :
+                   (length(m.captures[1]), length(m.captures[2]))
 end
 function alignment(x::Complex)
     m = match(r"^(.*,)(.*)$", sprint(showcompact, x))
-    m == nothing ? (strlen(sprint(showcompact, x)), 0) :
-                   (strlen(m.captures[1]), strlen(m.captures[2]))
+    m == nothing ? (length(sprint(showcompact, x)), 0) :
+                   (length(m.captures[1]), length(m.captures[2]))
 end
 function alignment(x::Rational)
     m = match(r"^(.*?/)(/.*)$", sprint(showcompact, x))
-    m == nothing ? (strlen(sprint(showcompact, x)), 0) :
-                   (strlen(m.captures[1]), strlen(m.captures[2]))
+    m == nothing ? (length(sprint(showcompact, x)), 0) :
+                   (length(m.captures[1]), length(m.captures[2]))
 end
 
 const undef_ref_str = "#undef"
@@ -651,8 +651,8 @@ function print_matrix_vdots(io,
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m
-            l = repeat(" ", max(0, A[k][1]-strlen(vdots)))
-            r = repeat(" ", max(0, w-strlen(vdots)-strlen(l)))
+            l = repeat(" ", max(0, A[k][1]-length(vdots)))
+            r = repeat(" ", max(0, w-length(vdots)-length(l)))
             print(io, l, vdots, r)
         else
             print(io, repeat(" ", w))
@@ -667,11 +667,11 @@ function print_matrix(io,
     hdots::String, vdots::String, ddots::String,
     hmod::Integer, vmod::Integer
 )
-    cols -= strlen(pre) + strlen(post)
-    presp = repeat(" ", strlen(pre))
+    cols -= length(pre) + length(post)
+    presp = repeat(" ", length(pre))
     postsp = ""
     @assert strwidth(hdots) == strwidth(ddots)
-    ss = strlen(sep)
+    ss = length(sep)
     m, n = size(X)
     if m <= rows # rows fit
         A = alignment(X,1:m,1:n,cols,cols,ss)
@@ -683,14 +683,14 @@ function print_matrix(io,
                 if i != m; println(io, ); end
             end
         else # rows fit, cols don't
-            c = div(cols-strlen(hdots)+1,2)+1
+            c = div(cols-length(hdots)+1,2)+1
             R = reverse(alignment(X,1:m,n:-1:1,c,c,ss))
-            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - strlen(hdots)
+            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - length(hdots)
             L = alignment(X,1:m,1:n,c,c,ss)
             for i = 1:m
                 print(io, i == 1 ? pre : presp)
                 print_matrix_row(io, X,L,i,1:length(L),sep)
-                print(io, i % hmod == 1 ? hdots : repeat(" ", strlen(hdots)))
+                print(io, i % hmod == 1 ? hdots : repeat(" ", length(hdots)))
                 print_matrix_row(io, X,R,i,n-length(R)+1:n,sep)
                 print(io, i == m ? post : postsp)
                 if i != m; println(io, ); end
@@ -713,15 +713,15 @@ function print_matrix(io,
                 end
             end
         else # neither rows nor cols fit
-            c = div(cols-strlen(hdots)+1,2)+1
+            c = div(cols-length(hdots)+1,2)+1
             R = reverse(alignment(X,I,n:-1:1,c,c,ss))
-            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - strlen(hdots)
+            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - length(hdots)
             L = alignment(X,I,1:n,c,c,ss)
             r = mod((length(R)-n+1),vmod)
             for i in I
                 print(io, i == 1 ? pre : presp)
                 print_matrix_row(io, X,L,i,1:length(L),sep)
-                print(io, i % hmod == 1 ? hdots : repeat(" ", strlen(hdots)))
+                print(io, i % hmod == 1 ? hdots : repeat(" ", length(hdots)))
                 print_matrix_row(io, X,R,i,n-length(R)+1:n,sep)
                 print(io, i == m ? post : postsp)
                 if i != I[end]; println(io, ); end
