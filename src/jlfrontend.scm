@@ -94,7 +94,8 @@
 
 (define (expand-toplevel-expr- e)
   (let ((ex (expand-toplevel-expr-- e)))
-    (cond ((simple-assignment? ex)  (cadr ex))
+    (cond ((contains (lambda (x) (equal? x '(top ccall))) ex) ex)
+          ((simple-assignment? ex)  (cadr ex))
 	  ((and (length= ex 2) (eq? (car ex) 'body)
 		(not (lambda-ex? (cadadr ex))))
 	   ;; (body (return x)) => x
