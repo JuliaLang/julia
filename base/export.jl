@@ -38,7 +38,6 @@ export
     FileDes,
     FileOffset,
     Filter,
-    GenericString,
     IO,
     IOStream,
     IOString,
