@@ -121,14 +121,15 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
 }
 
 DLLEXPORT
-int jl_eqtable_del(jl_array_t *h, void *key)
+jl_value_t *jl_eqtable_del(jl_array_t *h, void *key, jl_value_t *deflt)
 {
     void **bp = jl_table_peek_bp(h, key);
     if (bp != NULL) {
+        jl_value_t *val = *bp;
         *bp = NULL;
-        return 1;
+        return val;
     }
-    return 0;
+    return deflt;
 }
 
 DLLEXPORT
