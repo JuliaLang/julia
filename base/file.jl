@@ -8,6 +8,10 @@ function pwd()
     bytestring(p)
 end
 
+@windows_only begin
+cwd() = pwd()
+end
+
 cd(dir::String) = system_error(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
 cd() = cd(ENV["HOME"])
 
