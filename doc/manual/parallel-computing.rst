@@ -48,29 +48,33 @@ equal the number of CPU cores on the machine.
     $ ./julia -p 2
 
     julia> r = remote_call(2, rand, 2, 2)
-    RemoteRef(2,1,0)
-
-    julia> s = remote_call(2, +, 1, r)
-    RemoteRef(2,1,1)
+    RemoteRef(2,1,5)
 
     julia> fetch(r)
-    0.10824216411304866 0.13798233877923116
-    0.12376292706355074 0.18750497916607167
+    2x2 Float64 Array:
+     0.60401   0.501111
+     0.174572  0.157411
+
+    julia> s = @spawnat 2 1+fetch(r)
+    RemoteRef(2,1,7)
 
     julia> fetch(s)
-    1.10824216411304866 1.13798233877923116
-    1.12376292706355074 1.18750497916607167
+    2x2 Float64 Array:
+     1.60401  1.50111
+     1.17457  1.15741
 
-The first argument to ``remote_call`` is the index of the processor that
-will do the work. Most parallel programming in Julia does not reference
-specific processors or the number of processors available, but
-``remote_call`` is considered a low-level interface providing finer
-control. The second argument to ``remote_call`` is the function to call,
-and the remaining arguments will be passed to this function. As you can
-see, in the first line we asked processor 2 to construct a 2-by-2 random
-matrix, and in the second line we asked it to add 1 to it. The result of
-both calculations is available in the two remote references, ``r`` and
-``s``.
+The first argument to ``remote_call`` is the index of the processor
+that will do the work. Most parallel programming in Julia does not
+reference specific processors or the number of processors available,
+but ``remote_call`` is considered a low-level interface providing
+finer control. The second argument to ``remote_call`` is the function
+to call, and the remaining arguments will be passed to this
+function. As you can see, in the first line we asked processor 2 to
+construct a 2-by-2 random matrix, and in the second line we asked it
+to add 1 to it. The result of both calculations is available in the
+two remote references, ``r`` and ``s``. The ``@spawnat`` macro
+evaluates the expression in the second argument on the processor
+specified by the first argument.
 
 Occasionally you might want a remotely-computed value immediately. This
 typically happens when you read from a remote object to obtain data
@@ -287,218 +291,219 @@ a large amount of work. In contrast, ``@parallel for`` can handle
 situations where each iteration is tiny, perhaps merely summing two
 numbers.
 
-Distributed Arrays
-------------------
+..
+   Distributed Arrays
+   ------------------
 
-Large computations are often organized around large arrays of data. In
-these cases, a particularly natural way to obtain parallelism is to
-distribute arrays among several processors. This combines the memory
-resources of multiple machines, allowing use of arrays too large to fit
-on one machine. Each processor operates on the part of the array it
-owns, providing a ready answer to the question of how a program should
-be divided among machines.
+   Large computations are often organized around large arrays of data. In
+   these cases, a particularly natural way to obtain parallelism is to
+   distribute arrays among several processors. This combines the memory
+   resources of multiple machines, allowing use of arrays too large to fit
+   on one machine. Each processor operates on the part of the array it
+   owns, providing a ready answer to the question of how a program should
+   be divided among machines.
 
-A distributed array (or, more generally, a *global object*) is logically
-a single array, but pieces of it are stored on different processors.
-This means whole-array operations such as matrix multiply, scalar\*array
-multiplication, etc. use the same syntax as with local arrays, and the
-parallelism is invisible. In some cases it is possible to obtain useful
-parallelism just by changing a local array to a distributed array.
+   A distributed array (or, more generally, a *global object*) is logically
+   a single array, but pieces of it are stored on different processors.
+   This means whole-array operations such as matrix multiply, scalar\*array
+   multiplication, etc. use the same syntax as with local arrays, and the
+   parallelism is invisible. In some cases it is possible to obtain useful
+   parallelism just by changing a local array to a distributed array.
 
-Julia distributed arrays are implemented by the ``DArray`` type. A
-``DArray`` has an element type and dimensions just like an ``Array``,
-but it also needs an additional property: the dimension along which data
-is distributed. There are many possible ways to distribute data among
-processors, but at this time Julia keeps things simple and only allows
-distributing along a single dimension. For example, if a 2-d ``DArray``
-is distributed in dimension 1, it means each processor holds a certain
-range of rows. If it is distributed in dimension 2, each processor holds
-a certain range of columns.
+   Julia distributed arrays are implemented by the ``DArray`` type. A
+   ``DArray`` has an element type and dimensions just like an ``Array``,
+   but it also needs an additional property: the dimension along which data
+   is distributed. There are many possible ways to distribute data among
+   processors, but at this time Julia keeps things simple and only allows
+   distributing along a single dimension. For example, if a 2-d ``DArray``
+   is distributed in dimension 1, it means each processor holds a certain
+   range of rows. If it is distributed in dimension 2, each processor holds
+   a certain range of columns.
 
-Common kinds of arrays can be constructed with functions beginning with
-``d``::
+   Common kinds of arrays can be constructed with functions beginning with
+   ``d``::
 
-    dzeros(100,100,10)
-    dones(100,100,10)
-    drand(100,100,10)
-    drandn(100,100,10)
-    dcell(100,100,10)
-    dfill(x, 100,100,10)
+       dzeros(100,100,10)
+       dones(100,100,10)
+       drand(100,100,10)
+       drandn(100,100,10)
+       dcell(100,100,10)
+       dfill(x, 100,100,10)
 
-In the last case, each element will be initialized to the specified
-value ``x``. These functions automatically pick a distributed dimension
-for you. To specify the distributed dimension, other forms are
-available::
+   In the last case, each element will be initialized to the specified
+   value ``x``. These functions automatically pick a distributed dimension
+   for you. To specify the distributed dimension, other forms are
+   available::
 
-    drand((100,100,10), 3)
-    dzeros(Int64, (100,100), 2)
-    dzeros((100,100), 2, [7, 8])
+       drand((100,100,10), 3)
+       dzeros(Int64, (100,100), 2)
+       dzeros((100,100), 2, [7, 8])
 
-In the ``drand`` call, we specified that the array should be distributed
-across dimension 3. In the first ``dzeros`` call, we specified an
-element type as well as the distributed dimension. In the second
-``dzeros`` call, we also specified which processors should be used to
-store the data. When dividing data among a large number of processors,
-one often sees diminishing returns in performance. Placing ``DArray``\ s
-on a subset of processors allows multiple ``DArray`` computations to
-happen at once, with a higher ratio of work to communication on each
-processor.
+   In the ``drand`` call, we specified that the array should be distributed
+   across dimension 3. In the first ``dzeros`` call, we specified an
+   element type as well as the distributed dimension. In the second
+   ``dzeros`` call, we also specified which processors should be used to
+   store the data. When dividing data among a large number of processors,
+   one often sees diminishing returns in performance. Placing ``DArray``\ s
+   on a subset of processors allows multiple ``DArray`` computations to
+   happen at once, with a higher ratio of work to communication on each
+   processor.
 
-``distribute(a::Array, dim)`` can be used to convert a local array to a
-distributed array, optionally specifying the distributed dimension.
-``localize(a::DArray)`` can be used to obtain the locally-stored portion
-of a ``DArray``. ``owner(a::DArray, index)`` gives the id of the
-processor storing the given index in the distributed dimension.
-``myindexes(a::DArray)`` gives a tuple of the indexes owned by the local
-processor. ``convert(Array, a::DArray)`` brings all the data to one
-node.
+   ``distribute(a::Array, dim)`` can be used to convert a local array to a
+   distributed array, optionally specifying the distributed dimension.
+   ``localize(a::DArray)`` can be used to obtain the locally-stored portion
+   of a ``DArray``. ``owner(a::DArray, index)`` gives the id of the
+   processor storing the given index in the distributed dimension.
+   ``myindexes(a::DArray)`` gives a tuple of the indexes owned by the local
+   processor. ``convert(Array, a::DArray)`` brings all the data to one
+   node.
 
-A ``DArray`` can be stored on a subset of the available processors.
-Three properties fully describe the distribution of ``DArray`` ``d``.
-``d.pmap[i]`` gives the processor id that owns piece number ``i`` of the
-array. Piece ``i`` consists of indexes ``d.dist[i]`` through
-``d.dist[i+1]-1``. ``distdim(d)`` gives the distributed dimension. For
-convenience, ``d.localpiece`` gives the number of the piece owned by the
-local processor (this could also be determined by searching ``d.pmap``).
-The array ``d.pmap`` is also available as ``procs(d)``.
+   A ``DArray`` can be stored on a subset of the available processors.
+   Three properties fully describe the distribution of ``DArray`` ``d``.
+   ``d.pmap[i]`` gives the processor id that owns piece number ``i`` of the
+   array. Piece ``i`` consists of indexes ``d.dist[i]`` through
+   ``d.dist[i+1]-1``. ``distdim(d)`` gives the distributed dimension. For
+   convenience, ``d.localpiece`` gives the number of the piece owned by the
+   local processor (this could also be determined by searching ``d.pmap``).
+   The array ``d.pmap`` is also available as ``procs(d)``.
 
-Indexing a ``DArray`` (square brackets) gathers all of the referenced
-data to a local ``Array`` object.
+   Indexing a ``DArray`` (square brackets) gathers all of the referenced
+   data to a local ``Array`` object.
 
-Indexing a ``DArray`` with the ``sub`` function creates a "virtual"
-sub-array that leaves all of the data in place. This should be used
-where possible, especially for indexing operations that refer to large
-pieces of the original array.
+   Indexing a ``DArray`` with the ``sub`` function creates a "virtual"
+   sub-array that leaves all of the data in place. This should be used
+   where possible, especially for indexing operations that refer to large
+   pieces of the original array.
 
-``sub`` itself, naturally, does no communication and so is very
-efficient. However, this does not mean it should be viewed as an
-optimization in all cases. Many situations require explicitly moving
-data to the local processor in order to do a fast serial operation. For
-example, functions like matrix multiply perform many accesses to their
-input data, so it is better to have all the data available locally up
-front.
+   ``sub`` itself, naturally, does no communication and so is very
+   efficient. However, this does not mean it should be viewed as an
+   optimization in all cases. Many situations require explicitly moving
+   data to the local processor in order to do a fast serial operation. For
+   example, functions like matrix multiply perform many accesses to their
+   input data, so it is better to have all the data available locally up
+   front.
 
-Constructing Distributed Arrays
--------------------------------
+   Constructing Distributed Arrays
+   -------------------------------
 
-The primitive ``DArray`` constructor is the function ``darray``, which
-has the following somewhat elaborate signature::
+   The primitive ``DArray`` constructor is the function ``darray``, which
+   has the following somewhat elaborate signature::
 
-    darray(init, type, dims, distdim, procs, dist)
+       darray(init, type, dims, distdim, procs, dist)
 
-``init`` is a function of three arguments that will run on each
-processor, and should return an ``Array`` holding the local data for the
-current processor. Its arguments are ``(T,d,da)`` where ``T`` is the
-element type, ``d`` is the dimensions of the needed local piece, and
-``da`` is the new ``DArray`` being constructed (though, of course, it is
-not fully initialized).
+   ``init`` is a function of three arguments that will run on each
+   processor, and should return an ``Array`` holding the local data for the
+   current processor. Its arguments are ``(T,d,da)`` where ``T`` is the
+   element type, ``d`` is the dimensions of the needed local piece, and
+   ``da`` is the new ``DArray`` being constructed (though, of course, it is
+   not fully initialized).
 
-``type`` is the element type.
+   ``type`` is the element type.
 
-``dims`` is the dimensions of the entire ``DArray``.
+   ``dims`` is the dimensions of the entire ``DArray``.
 
-``distdim`` is the dimension to distribute in.
+   ``distdim`` is the dimension to distribute in.
 
-``procs`` is a vector of processor ids to use.
+   ``procs`` is a vector of processor ids to use.
 
-``dist`` is a vector giving the first index of each contiguous
-distributed piece, such that the nth piece consists of indexes
-``dist[n]`` through ``dist[n+1]-1``. If you have a vector ``v`` of the
-sizes of the pieces, ``dist`` can be computed as ``cumsum([1,v])``.
+   ``dist`` is a vector giving the first index of each contiguous
+   distributed piece, such that the nth piece consists of indexes
+   ``dist[n]`` through ``dist[n+1]-1``. If you have a vector ``v`` of the
+   sizes of the pieces, ``dist`` can be computed as ``cumsum([1,v])``.
 
-The last three arguments are optional, and defaults will be used if they
-are omitted. The first argument, the ``init`` function, can also be
-omitted, in which case an uninitialized ``DArray`` is constructed.
+   The last three arguments are optional, and defaults will be used if they
+   are omitted. The first argument, the ``init`` function, can also be
+   omitted, in which case an uninitialized ``DArray`` is constructed.
 
-As an example, here is how to turn the local array constructor ``rand``
-into a distributed array constructor::
+   As an example, here is how to turn the local array constructor ``rand``
+   into a distributed array constructor::
 
-    drand(args...) = darray((T,d,da)->rand(d), Float64, args...)
+       drand(args...) = darray((T,d,da)->rand(d), Float64, args...)
 
-In this case the ``init`` function only needs to call ``rand`` with the
-dimensions of the local piece it is creating. ``drand`` accepts the same
-trailing arguments as ``darray``. ``darray`` also has definitions that
-allow functions like ``drand`` to accept the same arguments as their
-local counterparts, so calls like ``drand(m,n)`` will also work.
+   In this case the ``init`` function only needs to call ``rand`` with the
+   dimensions of the local piece it is creating. ``drand`` accepts the same
+   trailing arguments as ``darray``. ``darray`` also has definitions that
+   allow functions like ``drand`` to accept the same arguments as their
+   local counterparts, so calls like ``drand(m,n)`` will also work.
 
-The ``changedist`` function, which changes the distribution of a
-``DArray``, can be implemented with one call to ``darray`` where the
-``init`` function uses indexing to gather data from the existing array::
+   The ``changedist`` function, which changes the distribution of a
+   ``DArray``, can be implemented with one call to ``darray`` where the
+   ``init`` function uses indexing to gather data from the existing array::
 
-    function changedist(A::DArray, to_dist)
-        return darray((T,sz,da)->A[myindexes(da)...],
-                      eltype(A), size(A), to_dist, procs(A))
-    end
+       function changedist(A::DArray, to_dist)
+	   return darray((T,sz,da)->A[myindexes(da)...],
+			 eltype(A), size(A), to_dist, procs(A))
+       end
 
-It is particularly easy to construct a ``DArray`` where each block is a
-function of a block in an existing ``DArray``. This is done with the
-form ``darray(f, A)``. For example, the unary minus function can be
-implemented as::
+   It is particularly easy to construct a ``DArray`` where each block is a
+   function of a block in an existing ``DArray``. This is done with the
+   form ``darray(f, A)``. For example, the unary minus function can be
+   implemented as::
 
-    -(A::DArray) = darray(-, A)
+       -(A::DArray) = darray(-, A)
 
-Distributed Array Computations
-------------------------------
+   Distributed Array Computations
+   ------------------------------
 
-Whole-array operations (e.g. elementwise operators) are a convenient way
-to use distributed arrays, but they are not always sufficient. To handle
-more complex problems, tasks can be spawned to operate on parts of a
-``DArray`` and write the results to another ``DArray``. For example,
-here is how you could apply a function ``f`` to each 2-d slice of a 3-d
-``DArray``::
+   Whole-array operations (e.g. elementwise operators) are a convenient way
+   to use distributed arrays, but they are not always sufficient. To handle
+   more complex problems, tasks can be spawned to operate on parts of a
+   ``DArray`` and write the results to another ``DArray``. For example,
+   here is how you could apply a function ``f`` to each 2-d slice of a 3-d
+   ``DArray``::
 
-    function compute_something(A::DArray)
-        B = darray(eltype(A), size(A), 3)
-        for i = 1:size(A,3)
-            @spawnat owner(B,i) B[:,:,i] = f(A[:,:,i])
-        end
-        B
-    end
+       function compute_something(A::DArray)
+	   B = darray(eltype(A), size(A), 3)
+	   for i = 1:size(A,3)
+	       @spawnat owner(B,i) B[:,:,i] = f(A[:,:,i])
+	   end
+	   B
+       end
 
-We used ``@spawnat`` to place each operation near the memory it writes
-to.
+   We used ``@spawnat`` to place each operation near the memory it writes
+   to.
 
-This code works in some sense, but trouble stems from the fact that it
-performs writes asynchronously. In other words, we don't know when the
-result data will be written to the array and become ready for further
-processing. This is known as a "race condition", one of the famous
-pitfalls of parallel programming. Some form of synchronization is
-necessary to wait for the result. As we saw above, ``@spawn`` returns a
-remote reference that can be used to wait for its computation. We could
-use that feature to wait for specific blocks of work to complete::
+   This code works in some sense, but trouble stems from the fact that it
+   performs writes asynchronously. In other words, we don't know when the
+   result data will be written to the array and become ready for further
+   processing. This is known as a "race condition", one of the famous
+   pitfalls of parallel programming. Some form of synchronization is
+   necessary to wait for the result. As we saw above, ``@spawn`` returns a
+   remote reference that can be used to wait for its computation. We could
+   use that feature to wait for specific blocks of work to complete::
 
-    function compute_something(A::DArray)
-        B = darray(eltype(A), size(A), 3)
-        deps = cell(size(A,3))
-        for i = 1:size(A,3)
-            deps[i] = @spawnat owner(B,i) B[:,:,i] = f(A[:,:,i])
-        end
-        (B, deps)
-    end
+       function compute_something(A::DArray)
+	   B = darray(eltype(A), size(A), 3)
+	   deps = cell(size(A,3))
+	   for i = 1:size(A,3)
+	       deps[i] = @spawnat owner(B,i) B[:,:,i] = f(A[:,:,i])
+	   end
+	   (B, deps)
+       end
 
-Now a function that needs to access slice ``i`` can perform
-``wait(deps[i])`` first to make sure the data is available.
+   Now a function that needs to access slice ``i`` can perform
+   ``wait(deps[i])`` first to make sure the data is available.
 
-Another option is to use a ``@sync`` block, as follows::
+   Another option is to use a ``@sync`` block, as follows::
 
-    function compute_something(A::DArray)
-        B = darray(eltype(A), size(A), 3)
-        @sync begin
-            for i = 1:size(A,3)
-                @spawnat owner(B,i) B[:,:,i] = f(A[:,:,i])
-            end
-        end
-        B
-    end
+       function compute_something(A::DArray)
+	   B = darray(eltype(A), size(A), 3)
+	   @sync begin
+	       for i = 1:size(A,3)
+		   @spawnat owner(B,i) B[:,:,i] = f(A[:,:,i])
+	       end
+	   end
+	   B
+       end
 
-``@sync`` waits for all spawns performed within it to complete. This
-makes our ``compute_something`` function easy to use, at the price of
-giving up some parallelism (since calls to it cannot overlap with
-subsequent operations).
+   ``@sync`` waits for all spawns performed within it to complete. This
+   makes our ``compute_something`` function easy to use, at the price of
+   giving up some parallelism (since calls to it cannot overlap with
+   subsequent operations).
 
-Still another option is to use the initial, un-synchronized version of
-the code, and place a ``@sync`` block around a larger set of operations
-in the function calling this one.
+   Still another option is to use the initial, un-synchronized version of
+   the code, and place a ``@sync`` block around a larger set of operations
+   in the function calling this one.
 
 Synchronization With Remote References
 --------------------------------------
