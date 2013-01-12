@@ -113,7 +113,7 @@ that module.
 
 If these definitions are not wanted, modules can be defined using the
 keyword ``baremodule`` instead. In terms of ``baremodule``, a standard
-``module`` looks like this:
+``module`` looks like this::
 
     baremodule Mod
     using Base
