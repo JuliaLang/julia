@@ -1847,7 +1847,7 @@ function find_sa_vars(ast)
     for vi in ast.args[2][2]
         if (vi[3]&1)!=0
             # remove captured vars
-            delete!(av, vi[1])
+            delete!(av, vi[1], nothing)
         end
     end
     av

@@ -99,8 +99,8 @@ function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     end
     colptrC[nB+1] = ip
 
-    rowvalC = delete!(rowvalC, colptrC[end]:length(rowvalC))
-    nzvalC = delete!(nzvalC, colptrC[end]:length(nzvalC))
+    delete!(rowvalC, colptrC[end]:length(rowvalC))
+    delete!(nzvalC, colptrC[end]:length(nzvalC))
 
     # The Gustavson algorithm does not guarantee the product to have sorted row indices.
     return ((SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC).').')
