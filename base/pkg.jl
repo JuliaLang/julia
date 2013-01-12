@@ -1,5 +1,6 @@
 require("git")
 require("pkgmetadata")
+require("pkgresolve")
 
 module Pkg
 #
@@ -7,6 +8,7 @@ module Pkg
 #
 
 using Metadata
+using PkgResolve
 
 import Git
 
@@ -207,7 +209,7 @@ function _resolve()
         end
     end
     sort!(reqs)
-    want = Metadata.resolve(reqs)
+    want = PkgResolve.resolve(reqs)
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
         if has(have,pkg)
