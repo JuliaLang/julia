@@ -341,16 +341,18 @@ function _atexit()
 end
 
 # Have colors passed as simple symbols: :black, :red, ...
-function print_with_color(msg::String, color::Symbol)
+function print_with_color(io::IO, msg::String, color::Symbol)
     if have_color
         default = color_normal
         printed_color = get(text_colors, color, default)
-        print(OUTPUT_STREAM, printed_color, msg, default)
+        print(io, printed_color, msg, default)
     else
-        print(OUTPUT_STREAM, msg)
+        print(io, msg)
     end
 end
 
+print_with_color(msg::String, color::Symbol) = print_with_color(OUTPUT_STREAM, msg, color)
+
 # Use colors to print messages and warnings in the REPL
 info(msg::String) = print_with_color(strcat("MESSAGE: ", msg, "\n"), :green)
-warn(msg::String) = print_with_color(strcat("WARNING: ", msg, "\n"), :red)
+warn(msg::String) = print_with_color(stderr_stream, strcat("WARNING: ", msg, "\n"), :red)
