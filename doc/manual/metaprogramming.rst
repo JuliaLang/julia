@@ -62,7 +62,11 @@ is an example of the short form used to quote an arithmetic expression::
     Symbol
 
     julia> ex.args
-    {+,a,*(b,c),1}
+    4-element Any Array:
+      +        
+      a        
+      :(*(b,c))
+     1         
 
     julia> typeof(ex.args[1])
     Symbol
@@ -160,7 +164,7 @@ dynamically generate arbitrary code which can then be run using
     julia> a = 1;
 
     julia> ex = Expr(:call, {:+,a,:b}, Any)
-    +(1,b)
+    :(+(1,b))
 
     julia> a = 0; b = 2;
 
@@ -194,7 +198,7 @@ clearly and concisely using interpolation::
     1
 
     julia> ex = :($a + b)
-    +(1,b)
+    :(+(1,b))
 
 This syntax is automatically rewritten to the form above where we
 explicitly called ``Expr``. The use of ``$`` for expression

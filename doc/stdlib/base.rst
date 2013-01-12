@@ -1719,9 +1719,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the eigenvalues of ``A``.
 
-.. function:: svd(A) -> U, S, V'
+.. function:: svd(A) -> U, S, V
 
-   Compute the SVD of A
+   Compute the SVD of A, returning ``U``, ``S``, and ``V`` such that ``A = U*S*V'``.
+
+.. function:: svdt(A) -> U, S, Vt
+
+   Compute the SVD of A, returning ``U``, ``S``, and ``Vt`` such that ``A = U*S*Vt``.
 
 .. function:: svdvals(A)
 

@@ -69,7 +69,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         d,v   = eig(a)                          # non-symmetric eigen decomposition
         for i in 1:size(a,2) @assert_approx_eq a*v[:,i] d[i]*v[:,i] end
     
-        u,s,vt = svd(a)                         # singular value decomposition
+        u,s,vt = svdt(a)                        # singular value decomposition
         @assert_approx_eq u*diagmm(s,vt) a
     
         x = a \ b

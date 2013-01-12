@@ -200,42 +200,52 @@ Julia language. Core operations typically have dozens of methods::
 
     julia> +
     Methods for generic function +
-    +(Int8,Int8)
-    +(Int16,Int16)
-    +(Int32,Int32)
-    +(Int64,Int64)
-    +(Uint8,Uint8)
-    +(Uint16,Uint16)
-    +(Uint32,Uint32)
-    +(Uint64,Uint64)
-    +(Float32,Float32)
-    +(Float64,Float64)
-    +(Char,Char)
-    +(Int,Ptr{T})
-    +(Rational{T<:Int},Rational{T<:Int})
-    +(Real,Range{T<:Real})
-    +(Real,Range1{T<:Real})
-    +(Union(Range{T<:Real},Range1{T<:Real}),Real)
-    +(Union(Range{T<:Real},Range1{T<:Real}),Union(Range{T<:Real},Range1{T<:Real}))
-    +(Ptr{T},Int)
-    +()
-    +(Complex,Complex)
-    +(T<:Number,T<:Number)
-    +(Number,)
-    +(Number,Number)
-    +(AbstractArray{T<:Number,N},)
-    +(SparseMatrixCSC{T1},SparseMatrixCSC{T2})
-    +(SparseMatrixCSC{T},Union(Array{T,N},Number))
-    +(Number,DArray{T,N,distdim})
-    +(Number,AbstractArray{T,N})
-    +(Union(Array{T,N},Number),SparseMatrixCSC{T})
-    +(AbstractArray{S,N},AbstractArray{T,N})
-    +(DArray{T,N,distdim},Number)
-    +(AbstractArray{T,N},Number)
-    +(Any,Any,Any)
-    +(Any,Any,Any,Any)
-    +(Any,Any,Any,Any,Any)
-    +(Any,Any,Any,Any...)
+    +(Real,Range{T<:Real}) at range.jl:136
+    +(Real,Range1{T<:Real}) at range.jl:137
+    +(Ranges{T<:Real},Real) at range.jl:138
+    +(Ranges{T<:Real},Ranges{T<:Real}) at range.jl:150
+    +(Bool,) at bool.jl:45
+    +(Bool,Bool) at bool.jl:48
+    +(Int64,Int64) at int.jl:224
+    +(Int128,Int128) at int.jl:226
+    +(Union(Array{Bool,N},SubArray{Bool,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Union(Array{Bool,N},SubArray{Bool,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:902
+    +{T<:Signed}(T<:Signed,T<:Signed) at int.jl:207
+    +(Uint64,Uint64) at int.jl:225
+    +(Uint128,Uint128) at int.jl:227
+    +{T<:Unsigned}(T<:Unsigned,T<:Unsigned) at int.jl:211
+    +(Float32,Float32) at float.jl:113
+    +(Float64,Float64) at float.jl:114
+    +(Complex{T<:Real},Complex{T<:Real}) at complex.jl:207
+    +(Rational{T<:Integer},Rational{T<:Integer}) at rational.jl:101
+    +(Bool,Union(Array{Bool,N},SubArray{Bool,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:896
+    +(Union(Array{Bool,N},SubArray{Bool,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Bool) at array.jl:899
+    +(Char,Char) at char.jl:46
+    +(Char,Int64) at char.jl:47
+    +(Int64,Char) at char.jl:48
+    +{T<:Number}(T<:Number,T<:Number) at promotion.jl:68
+    +(Number,Number) at promotion.jl:40
+    +() at operators.jl:30
+    +(Number,) at operators.jl:36
+    +(Any,Any,Any) at operators.jl:44
+    +(Any,Any,Any,Any) at operators.jl:45
+    +(Any,Any,Any,Any,Any) at operators.jl:46
+    +(Any,Any,Any,Any...) at operators.jl:48
+    +{T}(Ptr{T},Integer) at pointer.jl:52
+    +(Integer,Ptr{T}) at pointer.jl:54
+    +{T<:Number}(AbstractArray{T<:Number,N},) at abstractarray.jl:232
+    +{S,T}(Union(Array{S,N},SubArray{S,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Union(Array{T,N},SubArray{T,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:850
+    +{T}(Number,Union(Array{T,N},SubArray{T,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:857
+    +{T}(Union(Array{T,N},SubArray{T,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Number) at array.jl:864
+    +{S,T<:Real}(Union(Array{S,N},SubArray{S,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Ranges{T<:Real}) at array.jl:872
+    +{S<:Real,T}(Ranges{S<:Real},Union(Array{T,N},SubArray{T,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:881
+    +(BitArray{N},BitArray{N}) at bitarray.jl:922
+    +(BitArray{N},Number) at bitarray.jl:923
+    +(Number,BitArray{N}) at bitarray.jl:924
+    +(BitArray{N},AbstractArray{T,N}) at bitarray.jl:986
+    +(AbstractArray{T,N},BitArray{N}) at bitarray.jl:987
+    +{Tv,Ti}(SparseMatrixCSC{Tv,Ti},SparseMatrixCSC{Tv,Ti}) at sparse.jl:536
+    +(SparseMatrixCSC{Tv,Ti<:Integer},Union(Array{T,N},Number)) at sparse.jl:626
+    +(Union(Array{T,N},Number),SparseMatrixCSC{Tv,Ti<:Integer}) at sparse.jl:627
 
 Multiple dispatch together with the flexible parametric type system give
 Julia its ability to abstractly express high-level algorithms decoupled
@@ -336,7 +346,11 @@ signature::
     julia> myappend{T}(v::Vector{T}, x::T) = [v..., x]
 
     julia> myappend([1,2,3],4)
-    [1,2,3,4]
+    4-element Int64 Array:
+    1
+    2
+    3
+    4
 
     julia> myappend([1,2,3],2.5)
     no method myappend(Array{Int64,1},Float64)

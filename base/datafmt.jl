@@ -19,7 +19,7 @@ function dlm_readrow(io::IO, dlm, eol::Char)
 end
 
 # all strings
-function dlmread(a, io, dlm, nr, nc, row, eol)
+function readdlm(a, io, dlm, nr, nc, row, eol)
     for i=1:nr
         a[i,:] = row
         if i < nr
@@ -30,7 +30,7 @@ function dlmread(a, io, dlm, nr, nc, row, eol)
 end
 
 # all numeric, with NaN for invalid data
-function dlmread{T<:Number}(a::Array{T}, io, dlm, nr, nc, row, eol)
+function readdlm{T<:Number}(a::Array{T}, io, dlm, nr, nc, row, eol)
     tmp = Array(Float64,1)
     for i=1:nr
         for j=1:nc
@@ -47,9 +47,9 @@ function dlmread{T<:Number}(a::Array{T}, io, dlm, nr, nc, row, eol)
 end
 
 # float64 or string
-dlmread(a::Array{Any}, io, dlm, nr, nc, row, eol) =
-    dlmread(a, io, dlm, nr, nc, row, eol, 1, 1)
-function dlmread(a::Array{Any}, io, dlm, nr, nc, row, eol, i0, j0)
+readdlm(a::Array{Any}, io, dlm, nr, nc, row, eol) =
+    readdlm(a, io, dlm, nr, nc, row, eol, 1, 1)
+function readdlm(a::Array{Any}, io, dlm, nr, nc, row, eol, i0, j0)
     tmp = Array(Float64,1)
     j = j0
     for i=i0:nr
@@ -71,14 +71,14 @@ function dlmread(a::Array{Any}, io, dlm, nr, nc, row, eol, i0, j0)
 end
 
 # float64 or cell depending on data
-function dlmread_auto(a, io, dlm, nr, nc, row, eol)
+function readdlm_auto(a, io, dlm, nr, nc, row, eol)
     tmp = Array(Float64, 1)
     for i=1:nr
         for j=1:nc
             el = row[j]
             if !float64_isvalid(el, tmp)
                 a = convert(Array{Any,2}, a)
-                dlmread(a, io, dlm, nr, nc, row, eol, i, j)
+                readdlm(a, io, dlm, nr, nc, row, eol, i, j)
                 return a
             else
                 a[i,j] = tmp[1]
@@ -121,9 +121,9 @@ function countlines(io::Stream, eol::Char)
     nl
 end
 
-function dlmread_setup(fname::String, dlm, eol)
+function readdlm_setup(fname::String, dlm, eol)
     if length(dlm) == 0
-        error("dlmread: no separator characters specified")
+        error("readdlm: no separator characters specified")
     end
     nr = countlines(fname,eol)
     io = open(fname)
@@ -132,34 +132,34 @@ function dlmread_setup(fname::String, dlm, eol)
     return (io, nr, nc, row)
 end
 
-dlmread(fname::String, T::Type) = dlmread(fname, invalid_dlm, T, '\n')
+readdlm(fname::String, T::Type) = readdlm(fname, invalid_dlm, T, '\n')
 
-dlmread(fname::String, dlm, T::Type) = dlmread(fname, dlm, T, '\n')
+readdlm(fname::String, dlm, T::Type) = readdlm(fname, dlm, T, '\n')
 
-function dlmread(fname::String, dlm, T::Type, eol::Char)
-    (io, nr, nc, row) = dlmread_setup(fname, dlm, eol)
+function readdlm(fname::String, dlm, T::Type, eol::Char)
+    (io, nr, nc, row) = readdlm_setup(fname, dlm, eol)
     a = Array(T, nr, nc)
-    dlmread(a, io, dlm, nr, nc, row, eol)
+    readdlm(a, io, dlm, nr, nc, row, eol)
     close(io)
     return a
 end
 
-dlmread(fname::String) = dlmread(fname, invalid_dlm, '\n')
-dlmread(fname::String, dlm) = dlmread(fname, dlm, '\n')
+readdlm(fname::String) = readdlm(fname, invalid_dlm, '\n')
+readdlm(fname::String, dlm) = readdlm(fname, dlm, '\n')
 
-function dlmread(fname::String, dlm, eol::Char)
-    (io, nr, nc, row) = dlmread_setup(fname, dlm, eol)
+function readdlm(fname::String, dlm, eol::Char)
+    (io, nr, nc, row) = readdlm_setup(fname, dlm, eol)
     a = Array(Float64, nr, nc)
-    a = dlmread_auto(a, io, dlm, nr, nc, row, eol)
+    a = readdlm_auto(a, io, dlm, nr, nc, row, eol)
     close(io)
     return a
 end
 
-csvread(io)          = dlmread(io, ',')
-csvread(io, T::Type) = dlmread(io, ',', T)
+readcsv(io)          = readdlm(io, ',')
+readcsv(io, T::Type) = readdlm(io, ',', T)
 
 # todo: keyword argument for # of digits to print
-function dlmwrite(io, a::Matrix, dlm::Char)
+function writedlm(io, a::Matrix, dlm::Char)
     nr, nc = size(a)
     for i = 1:nr
         for j = 1:nc
@@ -178,13 +178,13 @@ function dlmwrite(io, a::Matrix, dlm::Char)
     nothing
 end
 
-dlmwrite(io, a::Vector, dlm::Char) = dlmwrite(io, reshape(a,length(a),1), dlm)
+writedlm(io, a::Vector, dlm::Char) = writedlm(io, reshape(a,length(a),1), dlm)
 
-function dlmwrite(fname::String, a::Matrix, dlm::Char)
+function writedlm(fname::String, a::Matrix, dlm::Char)
     open(fname, "w") do io
-        dlmwrite(io, a, dlm)
+        writedlm(io, a, dlm)
     end
 end
 
-dlmwrite(io, a) = dlmwrite(io, a, '\t')
-csvwrite(io, a) = dlmwrite(io, a, ',')
+writedlm(io, a) = writedlm(io, a, '\t')
+writecsv(io, a) = writedlm(io, a, ',')

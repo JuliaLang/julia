@@ -752,7 +752,10 @@ eigvals(x) = eig(x, false)
 # svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
 # svdvals(A) = svd(A,false,true)[2]
 
-function svd{T<:BlasFloat}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
+svdt(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
+svd(x::Number,vecs::Bool,thin::Bool) = svdt(x, vecs, thin)
+
+function svdt{T<:BlasFloat}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
     m,n = size(A)
     if m == 0 || n == 0
         if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
@@ -762,11 +765,22 @@ function svd{T<:BlasFloat}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
     LAPACK.gesdd!('N', copy(A))
 end
 
-svd{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svd(float64(x),vecs,thin)
-svd(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
+svdt{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svdt(float64(x),vecs,thin)
+svdt(A) = svdt(A,true,false)
+svdt(A, thin::Bool) = svdt(A,true,thin)
+
+svdt(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
+
+function svd(x::StridedMatrix,vecs,thin) 
+    (u, s, vt) = svdt(x,vecs,thin)
+    return (u, s, vt')
+end
+
 svd(A) = svd(A,true,false)
 svd(A, thin::Bool) = svd(A,true,thin)
+
 svdvals(A) = svd(A,false,true)[2]
+
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     Acopy = copy(A)

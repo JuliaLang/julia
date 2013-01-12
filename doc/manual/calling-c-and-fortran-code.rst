@@ -54,7 +54,9 @@ As a complete but simple example, the following calls the ``clock``
 function from the standard C library::
 
     julia> t = ccall( (:clock, "libc"), Int32, ())
-    5380445
+
+    julia> t
+    3910445
 
     julia> typeof(ans)
     Int32
@@ -65,10 +67,9 @@ example, to call the ``getenv`` function to get a pointer to the value
 of an environment variable, one makes a call like this::
 
     julia> path = ccall( (:getenv, "libc"), Ptr{Uint8}, (Ptr{Uint8},), "SHELL")
-    Ptr{Uint8} @0x00007fff5fbfd670
 
     julia> bytestring(path)
-    "/bin/zsh"
+    "/bin/bash"
 
 Note that the argument type tuple must be written as ``(Ptr{Uint8},)``,
 rather than ``(Ptr{Uint8})``. This is because ``(Ptr{Uint8})`` is just
@@ -106,7 +107,7 @@ throws an exception clearly indicating the problem if the caller tries
 to get a non-existent environment variable::
 
     julia> getenv("SHELL")
-    "/bin/zsh"
+    "/bin/bash"
 
     julia> getenv("FOOBAR")
     getenv: undefined variable: FOOBAR
@@ -232,7 +233,7 @@ A C function declared to return ``void`` will give ``nothing`` in Julia.
 -  ``wchar_t`` ⟺ ``Char``
 
 *Note:* Although ``wchar_t`` is technically system-dependent, on all the
-systems we currently support (UNIX), it is a 32 bits.
+systems we currently support (UNIX), it is 32-bit.
 
 C functions that take an arguments of the type ``char**`` can be called
 by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, C
@@ -265,7 +266,7 @@ similar functions.
 Indirect calls
 --------------
 
-The first argument to ``call`` can also be an expression evaluated at
+The first argument to ``ccall`` can also be an expression evaluated at
 run time. In this case, the expression must evaluate to a ``Ptr``,
 which will be used as the address of the native function to call. This
 behavior occurs when the first ``ccall`` argument contains references
@@ -274,4 +275,4 @@ to non-constants, such as local variables or function arguments.
 C++
 ---
 
-Limited support for C++ is provided by the :mod:`cpp.jl` module.
+Limited support for C++ is provided by the :mod:`cpp.jl` module in extras.

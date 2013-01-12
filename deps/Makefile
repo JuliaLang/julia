@@ -25,7 +25,7 @@ endif
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm-extras random rmath double-conversion glpk
+STAGE1_DEPS = uv openlibm-extras random rmath double-conversion
 STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -81,6 +81,10 @@ endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
+endif
+
+ifeq ($(USE_SYSTEM_GLPK), 0)
+STAGE1_DEPS += glpk
 endif
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
@@ -981,8 +985,11 @@ endif
 SUITE_SPARSE_LIB = -lm
 ifneq ($(OS), Darwin)
 ifneq ($(OS), WINNT)
-  SUITE_SPARSE_LIB += -lrt
+SUITE_SPARSE_LIB += -lrt
 endif
+endif
+ifneq ($(OS), WINNT)
+SUITE_SPARSE_LIB += -Wl,-rpath,'$(BUILD)/lib'
 endif
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
@@ -1144,10 +1151,9 @@ install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 ## NGINX ##
 
-NGINX_OBJ_TARGET = $(BUILD)/sbin/nginx
-NGINX_SRC_TARGET = nginx/bin/nginx
-
 ifneq ($(OS), WINNT)
+NGINX_OBJ_TARGET = $(BUILD)/sbin/nginx
+NGINX_SRC_TARGET = nginx/objs/nginx
 NGINX_FLAGS = --with-ld-opt="-L'$(BUILD)/lib' -lpcre -Wl,-rpath,'$(BUILD)/lib' $(RPATH)"
 
 nginx/auto/configure: | compile-pcre
@@ -1172,7 +1178,7 @@ distclean-nginx:
 get-nginx: nginx/auto/configure
 configure-nginx: nginx/config.status
 compile-nginx: $(NGINX_SRC_TARGET)
-check-nginx: 
+check-nginx: $(NGINX_SRC_TARGET)
 install-nginx: $(NGINX_OBJ_TARGET)
 else
 NGINX_VER=1.2.6
@@ -1276,6 +1282,7 @@ glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 	touch -c $@
 $(GLPK_SRC_TARGET): glpk-$(GLPK_VER)/config.status
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD)
+	touch -c $@
 glpk-$(GLPK_VER)/checked: $(GLPK_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) check
@@ -1291,7 +1298,7 @@ clean-glpk:
 	-$(MAKE) -C glpk-$(GLPK_VER) uninstall || true
 	-$(MAKE) -C glpk-$(GLPK_VER) clean
 distclean-glpk: clean-glpk
-	-rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
+	-rm -rf glpk-$(GLPK_VER).tar.gz glpk-$(GLPK_VER)
 
 get-glpk: glpk-$(GLPK_VER).tar.gz
 configure-glpk: glpk-$(GLPK_VER)/config.status
