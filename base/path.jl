@@ -1,18 +1,18 @@
 @unix_only begin
-    const path_separator       = "/"
-    const path_separator_regex = r"/+"
-    const path_absolute_regex  = r"^/"
-    const path_dir_splitter    = r"^(.*?)(/+)([^/]*)$"
-    const path_ext_splitter    = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
+    const path_separator    = "/"
+    const path_separator_re = r"/+"
+    const path_absolute_re  = r"^/"
+    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
+    const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
 end
 @windows_only begin
-    const path_separator       = "\\"
-    const path_separator_regex = r"[/\\]+"
-    const path_absolute_regex  = r"^(?:\w+:)?[/\\]"
-    const path_dir_splitter    = r"^(.*?)([/\\]+)([^/\\]*)$"
-    const path_ext_splitter    = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
+    const path_separator    = "\\"
+    const path_separator_re = r"[/\\]+"
+    const path_absolute_re  = r"^(?:\w+:)?[/\\]"
+    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
+    const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::String)
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
@@ -38,16 +38,16 @@ function splitext(path::String)
     a*m.captures[1], m.captures[2]
 end
 
-isabspath(path::String) = ismatch(path_absolute_regex, path)
+isabspath(path::String) = ismatch(path_absolute_re, path)
 
 function pathsep(paths::String...)
     for path in paths
-        m = match(path_separator_regex, path)
+        m = match(path_separator_re, path)
         m != nothing && return m.match[1]
     end
     return path_separator
 end
-isendsep(a::String) = ismatch(path_separator_regex, a[thisind(a,end):end])
+isendsep(a::String) = ismatch(path_separator_re, a[thisind(a,end):end])
 
 joinpath(a::String) = a
 joinpath(a::String, b::String, c::String...) = joinpath(joinpath(a,b), c...)
@@ -66,7 +66,7 @@ end
 function normpath(path::String)
     isabs = isabspath(path)
     drive, path = splitdrive(path)
-    parts = split(path, path_separator_regex)
+    parts = split(path, path_separator_re)
     # isdir = ismatch(r"^\.{0,2}$", parts[end])
     parts = filter(x->!isempty(x) && x!=".", parts)
     while true
