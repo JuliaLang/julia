@@ -18,6 +18,7 @@ eltype{T<:Number}(::Type{T}) = T
 ndims(x::Number) = 0
 ndims{T<:Number}(::Type{T}) = 0
 length(x::Number) = 1
+endof(x::Number) = 1
 ref(x::Number) = x
 ref(x::Number, i::Integer) = i == 1 ? x : throw(BoundsError())
 ref(x::Number, i::Real) = ref(x, to_index(i))
