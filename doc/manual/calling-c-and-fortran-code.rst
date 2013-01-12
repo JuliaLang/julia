@@ -54,9 +54,10 @@ As a complete but simple example, the following calls the ``clock``
 function from the standard C library::
 
     julia> t = ccall( (:clock, "libc"), Int32, ())
+    2292761
 
     julia> t
-    3910445
+    2292761
 
     julia> typeof(ans)
     Int32
@@ -67,6 +68,7 @@ example, to call the ``getenv`` function to get a pointer to the value
 of an environment variable, one makes a call like this::
 
     julia> path = ccall( (:getenv, "libc"), Ptr{Uint8}, (Ptr{Uint8},), "SHELL")
+    Ptr{Uint8} @0x00007fff5fbffc45
 
     julia> bytestring(path)
     "/bin/bash"
