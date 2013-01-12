@@ -33,6 +33,7 @@ Here's a simple example of actually running an external program::
 
     julia> run(`echo hello`)
     hello
+    true
 
 The ``hello`` is the output of the ``echo`` command, sent to stdout. 
 The run method itself returns ``Nothing``, and throws an ``ErrorException``
@@ -98,7 +99,10 @@ escaped. But what if you *want* to interpolate multiple words? In that
 case, just use an array (or any other iterable container)::
 
     julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
-    ["/etc/passwd","/Volumes/External HD/data.csv"]
+    2-element ASCIIString Array:
+     "/etc/passwd"                  
+     "/Volumes/External HD/data.csv"
+
 
     julia> `grep foo $files`
     `grep foo /etc/passwd '/Volumes/External HD/data.csv'`
@@ -107,7 +111,10 @@ If you interpolate an array as part of a shell word, Julia emulates the
 shell's ``{a,b,c}`` argument generation::
 
     julia> names = ["foo","bar","baz"]
-    ["foo","bar","baz"]
+    3-element ASCIIString Array:
+     "foo"
+     "bar"
+     "baz"
 
     julia> `grep xylophone $names.txt`
     `grep xylophone foo.txt bar.txt baz.txt`
@@ -116,10 +123,15 @@ Moreover, if you interpolate multiple arrays into the same word, the
 shell's Cartesian product generation behavior is emulated::
 
     julia> names = ["foo","bar","baz"]
-    ["foo","bar","baz"]
+    3-element ASCIIString Array:
+     "foo"
+     "bar"
+     "baz"
 
     julia> exts = ["aux","log"]
-    ["aux","log"]
+    2-element ASCIIString Array:
+     "aux"
+     "log"
 
     julia> `rm -f $names.$exts`
     `rm -f foo.aux foo.log bar.aux bar.log baz.aux baz.log`
