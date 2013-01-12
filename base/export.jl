@@ -1236,6 +1236,7 @@ export
 # filesystem operations
     cd,
     pwd,
+    cwd,
     is_file_readable,
     ls,
     cp,
