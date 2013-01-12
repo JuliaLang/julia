@@ -2194,11 +2194,15 @@ Parallel Computing
 
 .. function:: nprocs()
 
-   Get the number of available processors
+   Get the number of available processors.
 
 .. function:: myid()
 
-   Get the id of the current processor
+   Get the id of the current processor.
+
+.. function:: pmap(f, c)
+
+   Transform collection ``c`` by applying ``f`` to each element in parallel.
 
 .. function:: remote_call(id, func, args...)
 
