@@ -354,7 +354,11 @@ for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
        end
        function gemv(trans::BlasChar, alpha::($elty), A::StridedMatrix{$elty}, X::StridedVector{$elty})
            Y = Array($elty, size(A,1))
-           gemv!(trans, alpha, A, X, zero($elty), Y)
+           ccall(($(string(fname)),libblas), Void,
+                 (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
+                 &trans, &size(A,1), &size(A,2), &alpha, A, &stride(A,2),
+                 X, &stride(X,1), &0., Y, &1)
            Y
        end
    end

@@ -3,7 +3,7 @@
 #todo: division
 #todo: sparse polynomials?
 
-import Base.length, Base.ref, Base.assign, Base.copy, Base.zero, Base.one
+import Base.length, Base.endof, Base.ref, Base.assign, Base.copy, Base.zero, Base.one
 import Base.show, Base.*, Base./, Base.-, Base.+, Base.==
 
 type Polynomial{T<:Number}
@@ -24,6 +24,7 @@ end
 Polynomial{T<:Number}(a::Vector{T}) = Polynomial{T}(a)
 
 length(p::Polynomial) = length(p.a)-p.nzfirst
+endof(p::Polynomial) = length(p)
 ref(p::Polynomial, i) = p.a[i+p.nzfirst]
 assign(p::Polynomial, v, i) = (p.a[i+p.nzfirst] = v)
 

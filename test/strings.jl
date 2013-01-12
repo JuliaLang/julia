@@ -228,7 +228,7 @@ astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
 # ascii strchr
-for str in {astr, GenericString(astr)}
+for str in {astr, Base.GenericString(astr)}
     @test strchr(str, 'x') == 0
     @test strchr(str, '\0') == 0
     @test strchr(str, '\u80') == 0
@@ -244,7 +244,7 @@ for str in {astr, GenericString(astr)}
 end
 
 # utf-8 strchr
-for str in {u8str, GenericString(u8str)}
+for str in {u8str, Base.GenericString(u8str)}
     @test strchr(str, 'z') == 0
     @test strchr(str, '\0') == 0
     @test strchr(str, '\u80') == 0
