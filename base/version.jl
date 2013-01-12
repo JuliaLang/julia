@@ -133,6 +133,8 @@ function isless(a::VersionNumber, b::VersionNumber)
     return false
 end
 
+hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
+
 ## julia version info
 
 if(isfile("$JULIA_HOME/../../VERSION"))
