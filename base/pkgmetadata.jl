@@ -6,7 +6,7 @@ using LinProgGLPK
 
 import Git
 import GLPK
-import Base.isequal, Base.isless, Base.contains
+import Base.isequal, Base.isless, Base.contains, Base.hash
 
 export parse_requires, Version, VersionSet
 
@@ -101,6 +101,8 @@ function versions(pkgs)
 end
 versions() = versions(packages())
 
+hash(v::Version) = hash([v.(n) for n in Version.names])
+
 type VersionSet
     package::ByteString
     versions::Vector{VersionNumber}
@@ -113,6 +115,9 @@ type VersionSet
     end
 end
 VersionSet(pkg::ByteString) = VersionSet(pkg, VersionNumber[])
+
+isequal(a::VersionSet, b::VersionSet) =
+    a.package == b.package && a.versions == b.versions
 isless(a::VersionSet, b::VersionSet) = a.package < b.package
 
 function contains(s::VersionSet, v::Version)
@@ -122,6 +127,8 @@ function contains(s::VersionSet, v::Version)
     end
     return isempty(s.versions)
 end
+
+hash(s::VersionSet) = hash([s.(n) for n in VersionSet.names])
 
 function parse_requires(file::String)
     reqs = VersionSet[]
@@ -162,57 +169,5 @@ function dependencies(pkgs,vers)
 end
 
 older(a::Version, b::Version) = a.package == b.package && a.version < b.version
-
-function resolve(reqs::Vector{VersionSet})
-    pkgs = packages()
-    vers = versions(pkgs)
-    deps = dependencies(pkgs,vers)
-
-    n = length(vers)
-    z = zeros(Int,n)
-    u = ones(Int,n)
-
-    G  = [ v == d[1]        ? 1 : 0  for v=vers, d=deps ]
-    G *= [ contains(d[2],v) ? 1 : 0  for d=deps, v=vers ]
-    G += [ older(a,b)       ? 2 : 0  for a=vers, b=vers ]
-    I = find(G)
-    W = zeros(Int,length(I),n)
-    for (r,i) in enumerate(I)
-        W[r,rem(i-1,n)+1] = -1
-        W[r,div(i-1,n)+1] = G[i]
-    end
-    #mipopts = GLPK.IntoptParam()
-    mipopts = GLPK.SimplexParam()
-    mipopts["msg_lev"] = GLPK.MSG_ERR
-    mipopts["presolve"] = GLPK.ON
-    #_, ws, flag, _ = mixintprog(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,nothing,mipopts)
-    _, ws, flag = linprog_simplex(u,W,-ones(Int,length(I)),nothing,nothing,u,nothing,mipopts)
-    if flag != 0
-        msg = sprint(print_linprog_flag, flag)
-        error("resolve() failed: $msg.")
-    end
-    w = iround(ws)
-
-    V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
-    R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
-    D = [ d[1] == v ? 1 : contains(d[2],v) ? -1 : 0  for d=deps, v=vers ]
-    b = [  ones(Int,length(pkgs))
-          -ones(Int,length(reqs))
-          zeros(Int,length(deps)) ]
-
-    #_, xs, flag, _ = mixintprog(w,[V;R;D],b,nothing,nothing,z,u,nothing,mipopts)
-    _, xs, flag = linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u,mipopts)
-    if flag != 0
-        msg = sprint(print_linprog_flag, flag)
-        error("resolve() failed: $msg.")
-    end
-    #x = bool(xs)
-    x = xs .> 0.5
-    h = (String=>ASCIIString)[]
-    for v in vers[x]
-        h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")
-    end
-    return h
-end
 
 end # module
