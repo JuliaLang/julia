@@ -59,7 +59,9 @@ end
 
 read{T}(from::IOString, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
 
-length(io::IOString) = (io.seekable ? io.size : nb_available(io))
+# TODO: IOString is not iterable, so doesn't really have a length.
+# This should maybe be sizeof() instead.
+#length(io::IOString) = (io.seekable ? io.size : nb_available(io))
 nb_available(io::IOString) = io.size - io.ptr + 1
 skip(io::IOString, n::Integer) = (io.ptr = min(io.ptr + n, io.size+1))
 function seek(io::IOString, n::Integer) 
