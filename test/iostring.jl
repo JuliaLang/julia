@@ -1,5 +1,6 @@
-let io = IOString()
 ioslength(io::IOString) = (io.seekable ? io.size : nb_available(io))
+
+let io = IOString()
 @assert eof(io)
 @assert try read(io,Uint8); false; catch e; isa(e,EOFError); end
 @assert write(io,"abc") == 3
@@ -73,26 +74,26 @@ Base.compact(io)
 Base.ensureroom(io,50)
 @assert position(io) == 0
 @assert ioslength(io) == 0
-@assert ioslength(io.data) == 50
+@assert length(io.data) == 50
 Base.ensureroom(io,10)
 @assert ioslength(io) == 0
-@assert ioslength(io.data) == 50
+@assert length(io.data) == 50
 io.maxsize = 75
 Base.ensureroom(io,100)
 @assert ioslength(io) == 0
-@assert ioslength(io.data) == 75
+@assert length(io.data) == 75
 @assert seek_end(io)
 @assert ioslength(io) == 0
 @assert position(io) == 0
 write(io,zeros(Uint8,200))
 @assert ioslength(io) == 75
-@assert ioslength(io.data) == 75
+@assert length(io.data) == 75
 write(io,1)
 @assert ioslength(io) == 75
-@assert ioslength(io.data) == 75
+@assert length(io.data) == 75
 write(io,[1,2,3])
 @assert ioslength(io) == 75
-@assert ioslength(io.data) == 75
+@assert length(io.data) == 75
 skip(io,1)
 @assert write(io,uint8(104)) == 1
 skip(io,3)
@@ -108,7 +109,7 @@ write(io,'c')
 write(io,'d')
 write(io,'e')
 @assert ioslength(io) == 75
-@assert ioslength(io.data) == 75
+@assert length(io.data) == 75
 @assert position(io) == 0
 skip(io,72)
 @assert takebuf_string(io) == "\0ab"
