@@ -237,10 +237,10 @@ typedef struct {
     // to create a set of constructors for this sort of type
     jl_value_t *ctor_factory;
     jl_value_t *instance;  // for singletons
-    // hidden fields:
-    uint32_t uid;
     uint32_t size;
+    // hidden fields:
     uint32_t alignment;  // strictest alignment over all fields
+    uint32_t uid;
     void *struct_decl;  //llvm::Value*
     jl_fielddesc_t fields[1];
 } jl_struct_type_t;

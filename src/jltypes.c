@@ -2378,16 +2378,22 @@ void jl_init_types(void)
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
     jl_struct_kind->super = (jl_tag_type_t*)jl_type_type;
     jl_struct_kind->parameters = jl_null;
-    jl_struct_kind->names = jl_tuple(10, jl_symbol("fptr"),
-                                     jl_symbol("env"), jl_symbol("code"),
-                                     jl_symbol("name"), jl_symbol("super"),
+    jl_struct_kind->names = jl_tuple(11, jl_symbol("fptr"),
+                                     jl_symbol("env"),
+                                     jl_symbol("code"),
+                                     jl_symbol("name"),
+                                     jl_symbol("super"),
                                      jl_symbol("parameters"),
-                                     jl_symbol("names"), jl_symbol("types"),
-                                     jl_symbol(""), jl_symbol(""));
-    jl_struct_kind->types = jl_tuple(10, jl_any_type, jl_any_type, jl_any_type,
+                                     jl_symbol("names"),
+                                     jl_symbol("types"),
+                                     jl_symbol("ctor_factory"),
+                                     jl_symbol("instance"),
+                                     jl_symbol("sizeof"));
+    jl_struct_kind->types = jl_tuple(11, jl_any_type, jl_any_type, jl_any_type,
                                      jl_typename_type, jl_type_type,
                                      jl_tuple_type, jl_tuple_type,
-                                     jl_tuple_type, jl_any_type, jl_any_type);
+                                     jl_tuple_type, jl_any_type, jl_any_type,
+                                     jl_any_type); //types will be fixed later
     jl_struct_kind->fptr = jl_f_no_function;
     jl_struct_kind->env = (jl_value_t*)jl_null;
     jl_struct_kind->linfo = NULL;
@@ -2665,6 +2671,7 @@ void jl_init_types(void)
                                              jl_tuple(1,jl_bottom_type));
     jl_voidpointer_type = (jl_bits_type_t*)pointer_void;
     jl_tupleset(jl_struct_kind->types, 0, pointer_void);
+    jl_tupleset(jl_struct_kind->types, 10, jl_int32_type);
     jl_tupleset(jl_function_type->types, 0, pointer_void);
 
     jl_compute_struct_offsets(jl_struct_kind);

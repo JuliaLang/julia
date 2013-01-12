@@ -124,6 +124,7 @@ one(x)  = oftype(x,1)
 
 sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)
+sizeof(T::CompositeKind) = T.sizeof
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
