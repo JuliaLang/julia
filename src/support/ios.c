@@ -470,6 +470,7 @@ off_t ios_skip(ios_t *s, off_t offs)
         off_t fdpos = lseek(s->fd, offs, SEEK_CUR);
         if (fdpos == (off_t)-1)
             return fdpos;
+        s->fpos = fdpos;
         s->bpos = s->size = 0;
         s->_eof = 0;
     }

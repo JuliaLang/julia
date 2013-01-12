@@ -253,15 +253,27 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         return jl_eval_module_expr(ex);
     }
 
-    // handle import, using, export toplevel-only forms
-    if (ex->head == using_sym) {
+    // handle import, using, importall, export toplevel-only forms
+    if (ex->head == using_sym || ex->head == importall_sym) {
         jl_module_t *m = eval_import_path(ex->args);
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         assert(jl_is_symbol(name));
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
-            jl_errorf("invalid using statement");
-        jl_module_using(jl_current_module, m);
+	    jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
+	if (ex->head == using_sym) {
+	    jl_module_using(jl_current_module, m);
+	}
+	else {
+            void **table = m->bindings.table;
+            for(size_t i=1; i < m->bindings.size; i+=2) {
+                if (table[i] != HT_NOTFOUND) {
+                    jl_binding_t *b = (jl_binding_t*)table[i];
+                    if (b->exportp && b->owner==m)
+                        jl_module_import(jl_current_module, m, b->name);
+                }
+            }
+        }
         return jl_nothing;
     }
 
