@@ -86,9 +86,9 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
 }
 
 static Type *julia_struct_to_llvm(jl_value_t *jt) {
-    if (jl_is_struct_type(jt) &&
-            (((jl_struct_type_t*)(jt))->name != jl_array_typename) &&
-            jl_is_leaf_type(jt)) {
+    if (jl_is_struct_type(jt) && !jl_is_array_type(jt)) {
+        if (!jl_is_leaf_type(jt))
+           return NULL;
         jl_struct_type_t *jst = (jl_struct_type_t*)jt;
         if (jst->struct_decl == NULL) {
             size_t ntypes = jl_tuple_len(jst->types);
@@ -99,6 +99,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt) {
             for(i = 0; i < ntypes; i++) {
                 jl_value_t *ty = jl_tupleref(jst->types, i);
                 Type *lty = julia_type_to_llvm(ty);
+                if (lty == jl_pvalue_llvmt)
+                    return NULL;
                 latypes.push_back(lty);
             }
             jst->struct_decl = (void*)StructType::create(latypes, jst->name->name->name);

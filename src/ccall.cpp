@@ -380,6 +380,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     Type *lrt = julia_struct_to_llvm(rt);
     if (lrt == NULL) {
         JL_GC_POP();
+        emit_error("ccall: return type doesn't correspond to a C type", ctx);
         return literal_pointer_val(jl_nothing);
     }
     size_t i;
@@ -423,6 +424,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Type *t = julia_struct_to_llvm(tti);
         if (t == NULL) {
             JL_GC_POP();
+            std::stringstream msg;
+            msg << "ccall: the type of argument ";
+            msg << i+1;
+            msg << " doesn't correspond to a C type";
+            emit_error(msg.str(), ctx);
             return literal_pointer_val(jl_nothing);
         }
         fargt.push_back(t);
