@@ -615,8 +615,8 @@ for op in (:+, :-, :.*, :.^)
                 colptrS[col+1] = ptrS
             end
 
-            rowvalS = delete!(rowvalS, colptrS[end]:length(rowvalS))
-            nzvalCS = delete!(nzvalS, colptrS[end]:length(nzvalS))
+            delete!(rowvalS, colptrS[end]:length(rowvalS))
+            delete!(nzvalS, colptrS[end]:length(nzvalS))
             return SparseMatrixCSC(m, n, colptrS, rowvalS, nzvalS)
         end
 
@@ -1246,9 +1246,12 @@ function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::
         colB += 1
     end
 
+    delete!(rowvalS, colptrS[end]:length(rowvalS))
+    delete!(nzvalS, colptrS[end]:length(nzvalS))
+
     A.colptr = colptrS
-    A.rowval = delete!(rowvalS, colptrS[end]:length(rowvalS))
-    A.nzval  = delete!(nzvalS, colptrS[end]:length(nzvalS))
+    A.rowval = rowvalS
+    A.nzval = nzvalS
     return A
 end
 

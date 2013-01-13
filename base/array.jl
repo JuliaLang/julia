@@ -707,6 +707,7 @@ function delete!(a::Vector, i::Integer)
     if !(1 <= i <= n)
         throw(BoundsError())
     end
+    v = a[i]
     if i < div(n,2)
         for k = i:-1:2
             a[k] = a[k-1]
@@ -718,7 +719,7 @@ function delete!(a::Vector, i::Integer)
         end
         ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
     end
-    return a
+    return v
 end
 
 function delete!{T<:Integer}(a::Vector, r::Range1{T})
@@ -729,8 +730,9 @@ function delete!{T<:Integer}(a::Vector, r::Range1{T})
         throw(BoundsError())
     end
     if l < f
-        return a
+        return T[]
     end
+    v = a[r]
     d = l-f+1
     if f-1 < n-l
         for k = l:-1:1+d
@@ -743,7 +745,7 @@ function delete!{T<:Integer}(a::Vector, r::Range1{T})
         end
         ccall(:jl_array_del_end, Void, (Any, Uint), a, d)
     end
-    return a
+    return v
 end
 
 function empty!(a::Vector)
