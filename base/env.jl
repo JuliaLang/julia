@@ -73,9 +73,10 @@ end
 const ENV = EnvHash()
 
 ref(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
-get(::EnvHash, k::String, deflt) = @accessEnv k (return deflt)
+get(::EnvHash, k::String, def) = @accessEnv k (return def)
 has(::EnvHash, k::String) = hasenv(k)
-delete!(::EnvHash, k::String) = unsetenv(k)
+delete!(::EnvHash, k::String) = (v = ENV[k]; unsetenv(k); v)
+delete!(::EnvHash, k::String, def) = has(ENV,k) ? delete!(ENV,k) : def
 assign(::EnvHash, v, k::String) = setenv(k,string(v))
 
 @unix_only begin

@@ -700,7 +700,8 @@ function grow!(B::BitVector, n::Integer)
         throw(BoundsError())
     end
     if n < 0
-        return delete!(B, n0+n+1:n0)
+        delete!(B, n0+n+1:n0)
+        return B
     end
     k0 = length(B.chunks)
     k1 = num_bit_chunks(n0 + int(n))
@@ -805,6 +806,7 @@ function delete!(B::BitVector, i::Integer)
     if !(1 <= i <= n)
         throw(BoundsError())
     end
+    v = B[i]
 
     k, j = get_chunks_id(i)
 
@@ -831,7 +833,7 @@ function delete!(B::BitVector, i::Integer)
 
     B.dims[1] -= 1
 
-    return B
+    return v
 end
 
 function delete!(B::BitVector, r::Range1{Int})
