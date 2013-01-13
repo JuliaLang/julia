@@ -1,14 +1,13 @@
-require("git")
-require("pkgmetadata")
-require("pkgresolve")
-
 module Pkg
 #
 # Julia's git-based declarative package manager
 #
 
+include("pkg/metadata.jl")
+include("pkg/resolve.jl")
+
 using Metadata
-using PkgResolve
+using Resolve
 
 import Git
 
@@ -209,7 +208,7 @@ function _resolve()
         end
     end
     sort!(reqs)
-    want = PkgResolve.resolve(reqs)
+    want = Resolve.resolve(reqs)
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
         if has(have,pkg)
