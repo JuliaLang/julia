@@ -6,6 +6,7 @@
 /double-conversion-*
 /dsfmt-*
 /fftw-*
+!fftw-config-nopthreads.patch
 /glpk-*
 /gmp-*
 /grisu-*

@@ -34,6 +34,7 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
 #include <setjmp.h>
+#include <malloc.h>
 #include <string>
 #include <sstream>
 #include <map>

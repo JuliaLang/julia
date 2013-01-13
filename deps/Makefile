@@ -144,13 +144,15 @@ else
 LLVM_BUILDDIR = build/Release
 endif
 
-LLVM_LIB_FILE = libLLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
-LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 ifeq ($(OS),WINNT)
-LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/LLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
+LLVM_LIB_FILE = LLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
+LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/$(LLVM_LIB_FILE)
 else
+LLVM_LIB_FILE = libLLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
 LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/$(LLVM_LIB_FILE)
 endif
+LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
+
 
 ifeq ($(LLVM_VER), 3.0)
 LLVM_TAR=llvm-$(LLVM_VER).tar.gz
@@ -263,6 +265,7 @@ $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build install
 	$(INSTALL_NAME_CMD)$(LLVM_LIB_FILE) $(BUILD)/lib/$(LLVM_LIB_FILE)
+	$(AUTOTOOLS_PATH_CORRECT) 
 	touch -c $@
 
 clean-llvm:
@@ -281,10 +284,10 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 ## GNU readline ##
 
-READLINE_OBJ_TARGET = $(BUILD)/lib/libreadline.$(SHLIB_EXT)
-READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(READLINE_VER).$(SHLIB_EXT)
 
 ifeq ($(OS),WINNT)
+READLINE_OBJ_TARGET = $(BUILD)/lib/libreadline.a
+READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/libreadline.a
 READLINE_URL = https://github.com/JuliaLang/readline/tarball/master
 READLINE_OPTS = --disable-shared --enable-static --with-curses
 READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
@@ -299,8 +302,11 @@ $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE) readline-$(READLINE_VER)/checked
 	$(MAKE) -C readline-$(READLINE_VER) $(READLINE_CFLAGS) install
 	touch -c $@
 else
+READLINE_OBJ_TARGET = $(BUILD)/lib/libreadline.$(SHLIB_EXT)
 ifneq ($(OS),Darwin)
 READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(SHLIB_EXT).$(READLINE_VER)
+else
+READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(READLINE_VER).$(SHLIB_EXT)
 endif
 READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
 READLINE_OPTS = --enable-shared --enable-static --with-curses
@@ -618,6 +624,7 @@ $(RMATH_OBJ_SOURCE): Rmath/src/Makefile $(LIBRANDOM_OBJ_TARGET)
 	cd Rmath/src && \
 	$(MAKE) CC="$(CC)" && \
 	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
+	touch -c $@
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
 	cp $< $@
 
@@ -786,7 +793,11 @@ ARPACK_FFLAGS = -fdefault-integer-8
 endif
 
 ARPACK_OBJ_TARGET = $(BUILD)/lib/libarpack.$(SHLIB_EXT)
+ifeq ($(OS),WINNT)
+ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
+else
 ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/.libs/libarpack.$(SHLIB_EXT)
+endif
 ARPACK_ARGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
 
@@ -878,6 +889,9 @@ fftw-$(FFTW_VER).tar.gz:
 fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-single && \
 	tar -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
+ifeq ($(OS),WINNT)
+	patch fftw-$(FFTW_VER)-single/configure < fftw-config-nopthreads.patch
+endif
 	touch -c $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
@@ -912,6 +926,9 @@ endif
 fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-double && \
 	tar -C fftw-$(FFTW_VER)-double --strip-components 1 -xf $<
+ifeq ($(OS),WINNT)
+	patch fftw-$(FFTW_VER)-double/configure < fftw-config-nopthreads.patch
+endif
 	touch -c $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
