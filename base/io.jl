@@ -71,8 +71,9 @@ function write(s::IO, c::Char)
         write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
         write(s, uint8(( c        & 0x3F ) | 0x80))
         return 4
+    else
+        return write(s, '\ufffd')
     end
-    error("invalid Unicode code point: U+", hex(c))
 end
 
 # all subtypes should implement this

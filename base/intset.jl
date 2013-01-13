@@ -46,6 +46,7 @@ function add_each(s::IntSet, ns)
     return s
 end
 
+# TODO: make match Dict behavior somehow?
 function delete!(s::IntSet, n::Integer)
     if n >= s.limit
         if s.fill1s
