@@ -161,31 +161,13 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(Any|Function|None|Range1?|NDRange|Tuple|Real|Vector|Array|AbstractArray|ObjectIdDict|Dict|WeakKeyDict|EnvHash|LineIterator|String|IntSet|FDSet|Set|Task|ASCIIString|UTF8String|Bool|Int(8|16|32|64)?|Uint(8|16|32|64)?|Float(32|64)?|Complex(64|128)|true|false?)\b</string>
-					<key>name</key>
-					<string>support.type.julia</string>
-				</dict>
-				<dict>
-					<key>match</key>
-					<string>\b(std(out|err|in)_stream)\b</string>
-					<key>name</key>
-					<string>support.constant.julia</string>
-				</dict>
-				<dict>
-					<key>match</key>
-					<string>\b(?:exit|whos|edit|load|isa?|is(equal|less)|typeof|n?tuple|uid|hash|finalizer|co(py|nvert)|promote|sub|type(min|max)|real(min|max)|sizeof|eps|promote_type|method_exists|applicable|invoke|start|done|next|isempty|numel|length|contains|reduce|m(ax|in)|sum|prod|anyp?|allp?|countp?|map|ref|assign|has|get|d(el|el_all)|add|intset|choose|union|p(ush|op)|enqueue|shift|insert|del|grow|append!?|str(len|cat|ing|chr)|cstring|(l|r)pad|split|join|ch(op|omp)|ind2chr|chr2ind|open|memio|fdio|flush|close|with_output_stream|write|read|position|s(eek|kip)|current_output_stream|set_current_output_stream|show(all)?|print(ln)?|dump|read(all|line|until|lines)|each_line|dlm(read|write)|csv(read|write)|div|fld|mod|sinc?|cosc?|sinh?|cosh?|tanh?|a(sin|cos|tan|tan2)|sech?|c(sc|ot)h?|a(cos|sin|tan|sec|csc|cot)h?|hypot|log|log2|log10|log1p|logb|ilobg|exp2?|expm1|ldexp|ceil|floor|trunc|round|i(ceil|floor|trunc|round|part)|fpart|m(in|ax)|clamp|abs2?|copysign|sign|signbit|pow|sqrt|cbrt|erfc?|gamma|lgamma|lfact|bessel(j0|j1|y1|y0)|real|imag|conj|angle|cis|binomial|factorial|gcd|lcm|nextpow2|powermod|eps|bin|hex|dec|oct|int2str|parse_int|bool|u?int(8|16|32|64)|float(32|64)|char|safe_char|complex|is(complex|real)|bswap|num2hex|hex2num|one|zero|is(denormal|finite|nan)|nextfloat|prevfloat|integer_valued|real_valued|exponent|mantissa|rand(f|i|bit|bool|n|g|chi2|exp)|srand|ndimds|size|eltype|numel|nnz|strides?|ref|cell|zeros|ones|trues|falses|fill!?|reshape|copy|similar|empty|reinterpret|eye|linspace|sub|slicedim|assign|cat|vcat|hcat|hvcat|flip(dim|pud|plr)|circshift|findn?|i?permute|squeeze|dot|cross|norm|chol|lu|qr|eig|svd|tri(u|l)|diagm?|rank|cond|trace|det|inv|repmat|kron|linreg|sort(r|perm)?!?|issorted|nthperm!?|rand(perm|cycle)|shuffle!?|reverse!?|select!?|mean|std|median|histc?|i?fft(2|3|n|shift)|deconv|conv|xcorr|addprocs_(local|ssh|sge)|nprocs|myid|remote_call|wait|fetch|remote_call_(wait|fetch)|put|take|d(array|zeros|ones|fill|randn?|cell|istribute)|localize|changedist|myindexes|owner|procs|distdim|system|get(hostname|ipaddr|cwd|pid)|setcwd|t(ime|ic|oc|oq)|dl(open|sym)|error|throw|strerror|assert|yieldto|current_task|istaskdone|consume|produce|make_scheduled|yield|tls)\b</string>
-					<key>name</key>
-					<string>support.function.julia</string>
-				</dict>
-				<dict>
-					<key>match</key>
 					<string>\b(?:function|type|macro|quote|abstract|bitstype|typealias|module|new)\b</string>
 					<key>name</key>
 					<string>keyword.other.julia</string>
 				</dict>
 				<dict>
 					<key>match</key>
-					<string>\b(?:if|else|elseif|while|for|in|begin|let|end|do|try|catch|return|break|continue)\b</string>
+					<string>\b(?:if|else|elseif|while|for|in|begin|let|end|do|try|catch|finally|return|break|continue)\b</string>
 					<key>name</key>
 					<string>keyword.control.julia</string>
 				</dict>
@@ -467,7 +449,7 @@
 						</dict>
 					</dict>
 					<key>name</key>
-					<string>string.quoted.double.julia</string>
+					<string>string.quoted.backtick.julia</string>
 					<key>patterns</key>
 					<array>
 						<dict>
