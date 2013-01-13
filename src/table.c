@@ -124,12 +124,11 @@ DLLEXPORT
 jl_value_t *jl_eqtable_del(jl_array_t *h, void *key, jl_value_t *deflt)
 {
     void **bp = jl_table_peek_bp(h, key);
-    if (bp != NULL) {
-        jl_value_t *val = *bp;
-        *bp = NULL;
-        return val;
-    }
-    return deflt;
+    if (bp == NULL || *bp == NULL)
+        return deflt;
+    jl_value_t *val = *bp;
+    *bp = NULL;
+    return val;
 }
 
 DLLEXPORT
