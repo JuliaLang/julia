@@ -1244,6 +1244,7 @@ export
     touch,
     mv,
     mkdir,
+	mkpath,
     rmdir,
     tmpnam,
     tempdir,

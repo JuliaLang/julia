@@ -10,7 +10,7 @@ end
 @windows_only begin
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
-    const path_absolute_re  = r"^(?:\w+:)?[/\\]"
+    const path_absolute_re  = r"^(?:\w+:)[/\\]"
     const path_dir_splitter = r"^(.*?[/\\]+)([^/\\]*)$"
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
