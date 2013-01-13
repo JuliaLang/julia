@@ -33,7 +33,7 @@ diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
 
 function norm{T}(x::AbstractVector{T}, p::Number)
     if length(x) == 0
-        a = zero(eltype(x))
+        a = zero(T)
     elseif p == Inf
         a = max(abs(x))
     elseif p == -Inf
@@ -53,7 +53,7 @@ end
 norm{T<:Integer}(x::AbstractVector{T}, p::Number) = norm(float(x), p)
 norm(x::AbstractVector) = norm(x, 2)
 
-function norm(A::AbstractMatrix, p)
+function norm(A::AbstractMatrix, p::Number)
     m, n = size(A)
     if m == 0 || n == 0
         a = zero(eltype(A))
@@ -65,10 +65,8 @@ function norm(A::AbstractMatrix, p)
         a = max(svdvals(A))
     elseif p == Inf
         a = max(sum(abs(A),2))
-    elseif p == :fro
-        a = norm(reshape(A, length(A)))
     else
-        error("invalid parameter to matrix norm")
+        error("invalid parameter p given to compute matrix norm")
     end
     return float(a)
 end
@@ -77,6 +75,9 @@ norm(A::AbstractMatrix) = norm(A, 2)
 
 norm(x::Number) = abs(x)
 norm(x::Number, p) = abs(x)
+
+normfro(A::AbstractMatrix) = norm(reshape(A, length(A)), 2)
+normfro(x::Number) = abs(x)
 
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)

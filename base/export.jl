@@ -707,6 +707,7 @@ export
     lud,
     lud!,
     norm,
+    normfro,
     null,
     pinv,
     qr,

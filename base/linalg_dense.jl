@@ -779,7 +779,7 @@ end
 svd(A) = svd(A,true,false)
 svd(A, thin::Bool) = svd(A,true,thin)
 
-svdvals(A) = svd(A,false,true)[2]
+svdvals(A) = svdt(A,false,true)[2]
 
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
