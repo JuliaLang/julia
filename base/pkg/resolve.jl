@@ -1,6 +1,4 @@
-require("pkgmetadata")
-
-module PkgResolve
+module Resolve
 #
 # Use max-sum algorithm to resolve packages dependencies
 #
@@ -1018,4 +1016,4 @@ function resolve(reqs)
     return compute_output_dict(reqsstruct, pkgstruct, sol)
 end
 
-end # module PkgResolve
+end # module

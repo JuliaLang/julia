@@ -160,6 +160,10 @@ using DSP
 # deprecated functions
 include("deprecated.jl")
 
+# git utils & package manager
+include("git.jl")
+include("pkg.jl")
+
 include = include_from_node1
 print("\e[0G\e[2K")
 

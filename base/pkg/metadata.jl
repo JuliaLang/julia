@@ -1,11 +1,6 @@
-require("linprog")
-
 module Metadata
 
-using LinProgGLPK
-
 import Git
-import GLPK
 import Base.isequal, Base.isless, Base.contains, Base.hash
 
 export parse_requires, Version, VersionSet
