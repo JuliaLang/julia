@@ -267,7 +267,9 @@ function reload_path(path)
     had = has(package_list, path)
     package_list[path] = time()
     prev = get(tls, :SOURCE_PATH, nothing)
-    delete!(tls, :SOURCE_PATH)
+    if prev != nothing
+        delete!(tls, :SOURCE_PATH)
+    end
     try
         eval(Main, :(Base.include_from_node1($path)))
     catch e
