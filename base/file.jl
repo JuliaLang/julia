@@ -8,7 +8,11 @@ function pwd()
     bytestring(p)
 end
 
-cd(dir::String) = system_error(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+function cd(dir::String)
+    @unix_only system_error(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+    @windows_only system_error(:chdir, ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
+end
+
 cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
