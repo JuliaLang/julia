@@ -12,6 +12,8 @@ import Base.<, Base.<=, Base.==, Base.-, Base.+,
 
 export resolve
 
+# An exception type used internally to signal that an unsatisfiable
+# constraint was detected
 type UnsatError <: Exception
 end
 
@@ -24,15 +26,9 @@ type ResolveParams
                  # step
 
     function ResolveParams()
-        if !has(ENV, "JULIA_PKGRESOLVE_ACCURACY")
-            accuracy = 1
-        else
-            try
-                accuracy = int(ENV["JULIA_PKGRESOLVE_ACCURACY"])
-                @assert accuracy >= 1
-            catch
-                error("error: JULIA_PKGRESOLVE_ACCURACY is not an integer greater than 0")
-            end
+        accuracy = int(get(ENV, "JULIA_PKGRESOLVE_ACCURACY", 1))
+        if accuracy <= 0
+            error("error: JULIA_PKGRESOLVE_ACCURACY must be >= 1")
         end
         nondec_iterations = accuracy * 6
         dec_interval = accuracy * 3
@@ -60,6 +56,8 @@ type ReqsStruct
     end
 end
 
+# The numeric type used to determine how the different
+# versions of a package should be weighed
 typealias VersionWeight Int
 
 # Auxiliary structure to map data from ReqsStruct into
@@ -88,6 +86,9 @@ type PkgStruct
     #                  pvers[p0][v0] = vn
     vdict::Dict{Version,(Int,Int)}
 
+    # version weights: the weight for each version of each package
+    #                  (versions include the uninstalled state; the
+    #                   higher the weight, the more favored the version)
     vweight::Vector{Vector{VersionWeight}}
 
     PkgStruct(spp::Vector{Int}, pdict::Dict{String,Int},
@@ -97,6 +98,7 @@ type PkgStruct
         new(spp, pdict, pvers, vdict, vweight)
 end
 
+# The initial constructor function (pre variable pruning)
 function PkgStruct(reqsstruct::ReqsStruct)
 
     pkgs = reqsstruct.pkgs
@@ -108,12 +110,17 @@ function PkgStruct(reqsstruct::ReqsStruct)
     spp, pvers = gen_pvers(np, pdict, vers)
     vdict = gen_vdict(pdict, pvers, vers)
 
+    # the version weights are just progressive integer numbers,
+    # there is no difference between major, minor, patch etc.
+    # TODO: change this to weigh differently major, minor etc. ?
     vweight = [ [ v0-1 for v0 = 1:spp[p0] ] for p0 = 1:np ]
 
     return PkgStruct(spp, pdict, pvers, vdict, vweight)
 end
 
-function gen_pvers(np, pdict, vers)
+# Generate the pvers field in PkgStruct; used by the
+# constructor and within `prune_versions!`
+function gen_pvers(np::Int, pdict::Dict{String,Int}, vers::Vector{Version})
     spp = ones(Int, np)
 
     pvers = [ VersionNumber[] for i = 1:np ]
@@ -132,7 +139,10 @@ function gen_pvers(np, pdict, vers)
     return spp, pvers
 end
 
-function gen_vdict(pdict, pvers, vers)
+# Generate the vdict field in PkgStruct; used by the
+# constructor and within `prune_versions!`
+function gen_vdict(pdict::Dict{String,Int}, pvers::Vector{Vector{VersionNumber}},
+                   vers::Vector{Version})
 
     vdict = (Version=>(Int,Int))[]
     for v in vers
@@ -149,6 +159,14 @@ function gen_vdict(pdict, pvers, vers)
     return vdict
 end
 
+# Reduce the number of versions by creating equivalence classes, and retaining
+# only the highest version for each equivalence class.
+# Two versions are equivalent if:
+#   1) They are either both explicitly required or both not required (in `reqs`)
+#   2) They appear together as dependecies of another package (i.e. for each
+#      dependency relation, they are both required or both not required)
+#   3) They have the same dependencies
+# This function mutates both input structs.
 function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
 
     np = reqsstruct.np
@@ -162,28 +180,42 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
     vdict = pkgstruct.vdict
     vweight = pkgstruct.vweight
 
+    # To each version in each package, we associate a BitVector.
+    # It is going to hold a pattern such that all versions with
+    # the same pattern are equivalent.
     vmask = [ [ BitVector() for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
 
+    # From the poitn of view of resolve(), VectorSet(pkg,[]) and
+    # VectorSet(pkg, [v0]) are equivelent if v0 is the first
+    # available version of pkg
     function contains_any(vs::VersionSet, first::VersionNumber)
         vvs = vs.versions
         return isempty(vvs) || (length(vvs) == 1 && vvs[1] == first)
     end
 
+    # This function is used to generate patterns both for explicit
+    # requirements and for dependencies
     function parse_reqs(vs_vec)
         for r in vs_vec
             p = r.package
             p0 = pdict[p]
+
+            # packages with just one version or requirements
+            # which do not distiguish between versions are not
+            # interesting
             if spp[p0] == 2 || contains_any(r, pvers[p0][1])
                 continue
             end
 
             pvers0 = pvers[p0]
 
+            # Grow the patterns by one bit
             vmask0 = vmask[p0]
             for vm in vmask0
                 grow!(vm, 1)
             end
 
+            # Store the requirement info in the patterns
             for v0 = 1:spp[p0]-1
                 v = pvers0[v0]
                 vm = vmask0[v0]
@@ -192,9 +224,12 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         end
     end
 
+    # Parse explicit requirements
     parse_reqs(reqs)
 
-    pdeps = [ [ Set{VersionSet}() for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
+    # Parse the dependency list, segregate them according to the
+    # dependant package and version
+    pdeps = [ [ VersionSet[] for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
     for d in deps
         p0, v0 = vdict[d[1]]
         p1 = pdict[d[2].package]
@@ -203,27 +238,38 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         else
             dd = d[2]
         end
-        add(pdeps[p0][v0], dd)
+        push!(pdeps[p0][v0], dd)
     end
 
+    # For each package, we examine the dependencies of its versions
+    # and put together those which are equal.
+    # While we're at it, we also collect all dependencies into alldeps
     alldeps = VersionSet[]
     for p0 = 1:np
-        pdeps0 = [ elements(s) for s in pdeps[p0] ]
-        uniqdepssets = Vector{VersionSet}[] # Using a Vector is faster than Set here
+        pdeps0 = sort!(pdeps[p0])
+
+        # Extract unique dependencies lists (aka classes), thereby
+        # assigning an index to each class.
+        # (one would use a Set for this purpose, calling uniqe(pdeps0),
+        # but it turns out that a Vector is faster here)
+        uniqdepssets = Vector{VersionSet}[]
         for dd in pdeps0
             if !contains(uniqdepssets, dd)
                 push!(uniqdepssets, dd)
             end
         end
 
+        # Store all dependencies seen so far for later use
         for dd in uniqdepssets, v in dd
             push!(alldeps, v)
         end
 
+        # If the package has just one version, it's uninteresting
         if spp[p0] == 2
             continue
         end
 
+        # Grow the pattern by the number of classes
         ff = falses(length(uniqdepssets))
         vmask0 = vmask[p0]
         vmind_base = length(vmask0[1])
@@ -231,6 +277,8 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
             append!(vm, ff)
         end
 
+        # For each version, determine to which class it belongs and
+        # store that info in the patterns
         for v0 = 1:spp[p0]-1
             vmind = findfirst(uniqdepssets, pdeps0[v0])
             @assert vmind >= 0
@@ -240,25 +288,36 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         end
     end
 
+    # Same as with reqs, but using dependencies. Ideally, one would use
+    # unique(alldeps) here (or better still, use a Set from the beginning),
+    # but it takes too much time - better waste a little extra memory.
     parse_reqs(alldeps)
 
+    # At this point, the vmask patterns are computed. We divide them into
+    # classes so that we can keep just one version for each class.
     pruned_vers_id = Array(Vector{Int}, np)
     for p0 = 1:np
         vmask0 = vmask[p0]
-        chunks = [ Base.get_chunks(vm) for vm in vmask0 ]
-        chunks_uniq = unique(chunks)
-        ncu = length(chunks_uniq)
-        id_list = [ Int[] for c0 = 1:ncu ]
+        vmask0_uniq = unique(vmask0)
+        nc = length(vmask0_uniq)
+        classes = [ Int[] for c0 = 1:nc ]
         for v0 = 1:spp[p0]-1
-            chunk = chunks[v0]
-            c0 = findfirst(chunks_uniq, chunk)
-            push!(id_list[c0], v0)
+            vm = vmask0[v0]
+            c0 = findfirst(vmask0_uniq, vm)
+            push!(classes[c0], v0)
         end
-        pruned_vers_id[p0] = sort!([ c[end] for c in id_list ])
+        # For each class, we store only the last entry (i.e. the
+        # highest version)
+        pruned_vers_id[p0] = sort!([ cl[end] for cl in classes ])
     end
 
+    # All that follows is just recomputing the structures' fields
+    # by throwing away unnecessary versions
+
+    # Recompute pvers
     new_pvers = [ pvers[p0][pruned_vers_id[p0]] for p0 = 1:np ]
 
+    # Recompute vers
     new_vers = Version[]
     for p0 = 1:np
         p = pkgs[p0]
@@ -267,6 +326,9 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         end
     end
 
+    # Reompute deps. This is a little trickier because
+    # we need to modify the dependencies lists by mapping all versions
+    # to their representative in the equivalence class.
     new_deps = Array((Version,VersionSet), 0)
 
     for d0 = 1:length(deps)
@@ -294,6 +356,9 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
 
     reqsstruct.vers = new_vers
     reqsstruct.deps = new_deps
+
+    # Finally, mutate pkgstruct fields by regenerating pvers, vdict
+    # and vweights
 
     new_spp, new_pvers = gen_pvers(np, pdict, new_vers)
     new_vdict = gen_vdict(pdict, new_pvers, new_vers)
@@ -395,8 +460,9 @@ function indmax(v::Vector{FieldValue})
     return mi
 end
 
-# secondmax returns the value of the second maximum in a vector
-# of FieldValues. It's used to determine the most polarized field.
+# secondmax returns the (normalized) value of the second maximum in a
+# field (i.e. a Vector of FieldValues. It's used to determine the most
+# polarized field.
 function secondmax(v::Vector{FieldValue})
     m = typemin(FieldValue)
     m2 = typemin(FieldValue)
@@ -429,6 +495,7 @@ type Graph
 
     # energy mask: like gmsk, but it's used to favor dependants over
     # dependencies in case of a tie (works at FieldValue level l3)
+    # TODO: get rid of it (compute it on the fly) or improve it
     gnrg::Vector{Vector{Matrix{Int}}}
 
     # adjacency dict: allows to retrieve the indices in gadj, so that
@@ -510,7 +577,7 @@ type Graph
                 if !contains(vs, Version(vs.package, pvers[p1][v1]))
                     bm[v1, v0] = false
                     bmt[v0, v1] = false
-                    nrgm[v1, v0] = 0
+                    nrgm[v1, v0] = 0 # TODO: useless, probably
                     nrgmt[v0, v1] = 0
                 end
             end
@@ -556,6 +623,7 @@ type Messages
         vdict = pkgstruct.vdict
         vweight = pkgstruct.vweight
 
+        # a "deterministic noise" function based on hashes
         function noise(p0::Int, v0::Int)
             s = pkgs[p0] * string(v0 == spp[p0] ? "UNINST" : pvers[p0][v0])
             int(hash(s)) >>> 30
@@ -657,7 +725,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
 
         # compute the new message by passing cavmsg
         # through the constraint encoded in the bitmask
-        # (roughly equivalent to:
+        # (nearly equivalent to:
         #    newmsg = [ max(cavmsg[bm1[:,v1]]) for v1 = 1:spp1 ]
         #  except for the gnrg term)
         m = FieldValue(-1)
@@ -672,6 +740,8 @@ function update(p0::Int, graph::Graph, msgs::Messages)
             end
         end
         if !validmax(m)
+            # No state available without violating some
+            # hard constraint
             throw(UnsatError())
         end
 
@@ -821,7 +891,6 @@ function converge(graph::Graph, msgs::Messages)
             end
         end
     catch err
-        println(typeof(err))
         if isa(err, UnsatError)
             msg = "Unsatisfiable package requirements detected"
             if msgs.num_nondecimated != graph.np
