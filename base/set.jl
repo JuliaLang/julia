@@ -20,7 +20,7 @@ contains(s::Set, x) = has(s, x)
 get(s::Set, x, deflt) = get(s.hash, x, false)
 
 add(s::Set, x) = (s.hash[x] = true; s)
-delete!(s::Set, x) = (delete!(s.hash, x); s)
+delete!(s::Set, x) = delete!(s.hash, x)
 
 add_each(s::Set, xs) = (for x=xs; add(s,x); end; s)
 del_each(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
@@ -35,6 +35,7 @@ done(s::Set, state) = done(s.hash, state)
 # NOTE: manually optimized to take advantage of Dict representation
 next(s::Set, i)     = (s.hash.keys[i], skip_deleted(s.hash,i+1))
 
+# TODO: simplify me?
 pop!(s::Set) = (val = s.hash.keys[start(s.hash)]; delete!(s.hash, val); val)
 
 union() = Set()

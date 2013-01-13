@@ -96,7 +96,7 @@ _tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 
 function ref(t::Associative, key)
     v = get(t, key, secret_table_token)
-    if is(v,secret_table_token)
+    if is(v, secret_table_token)
         throw(KeyError(key))
     end
     return v
@@ -120,8 +120,13 @@ end
 get(t::ObjectIdDict, key::ANY, default::ANY) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-delete!(t::ObjectIdDict, key::ANY) =
-    (ccall(:jl_eqtable_del, Int32, (Any, Any), t.ht, key); t)
+delete!(t::ObjectIdDict, key::ANY, default::ANY) =
+    ccall(:jl_eqtable_del, Any, (Any, Any, Any), t.ht, key, default)
+
+function delete!(t::ObjectIdDict, key::ANY)
+    val = delete!(t, key, secret_table_token)
+    !is(val,secret_table_token) ? val : throw(KeyError(key))
+end
 
 empty!(t::ObjectIdDict) = (t.ht = cell(length(t.ht)); t)
 
@@ -433,17 +438,24 @@ function key{K,V}(h::Dict{K,V}, key, deflt)
     return (index<0) ? deflt : h.keys[index]::K
 end
 
+function _delete!(h::Dict, index)
+    val = h.vals[index]
+    h.slots[index] = 0x2
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
+    h.ndel += 1
+    h.count -= 1
+    return val
+end
+
 function delete!(h::Dict, key)
     index = ht_keyindex(h, key)
-    if index > 0
-        h.slots[index] = 0x2
-        ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
-        ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
-        h.ndel += 1
-        h.count -= 1
-        return h
-    end
-    throw(KeyError(key))
+    index > 0 ? _delete!(h, index) : throw(KeyError(key))
+end
+
+function delete!(h::Dict, key, default)
+    index = ht_keyindex(h, key)
+    index > 0 ? _delete!(h, index) : default
 end
 
 function skip_deleted(h::Dict, i)
@@ -512,8 +524,9 @@ function key{K}(wkh::WeakKeyDict{K}, kk, deflt)
     return k.value::K
 end
 
-get{K}(wkh::WeakKeyDict{K}, key, deflt) = get(wkh.ht, key, deflt)
+get{K}(wkh::WeakKeyDict{K}, key, def) = get(wkh.ht, key, def)
 delete!{K}(wkh::WeakKeyDict{K}, key) = delete!(wkh.ht, key)
+delete!{K}(wkh::WeakKeyDict{K}, key, def) = delete!(wkh.ht, key, def)
 empty!(wkh::WeakKeyDict)  = (empty!(wkh.ht); wkh)
 has{K}(wkh::WeakKeyDict{K}, key) = has(wkh.ht, key)
 ref{K}(wkh::WeakKeyDict{K}, key) = ref(wkh.ht, key)
@@ -526,4 +539,3 @@ function next{K}(t::WeakKeyDict{K}, i)
     ((kv[1].value::K,kv[2]), i)
 end
 length(t::WeakKeyDict) = length(t.ht)
-
