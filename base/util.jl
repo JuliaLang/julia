@@ -266,10 +266,7 @@ function reload_path(path)
     tls = task_local_storage()
     had = has(package_list, path)
     package_list[path] = time()
-    prev = get(tls, :SOURCE_PATH, nothing)
-    if prev != nothing
-        delete!(tls, :SOURCE_PATH)
-    end
+    prev = delete!(tls, :SOURCE_PATH, nothing)
     try
         eval(Main, :(Base.include_from_node1($path)))
     catch e
