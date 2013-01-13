@@ -10,7 +10,7 @@
     |__/                   |
 
 
-[![Build Status](https://travis-ci.org/JuliaLang/julia.png?branch=master)](https://travis-ci.org/JuliaLang/julia)
+[![Build Status](https://api.travis-ci.org/JuliaLang/julia.png?branch=master)](https://travis-ci.org/JuliaLang/julia)
 
 <a name="The-Julia-Language"/>
 ## The Julia Language
