@@ -28,7 +28,7 @@ ASCII strings, and they will work as expected, both in terms of
 performance and semantics. If such code encounters non-ASCII text, it
 will gracefully fail with a clear error message, rather than silently
 introducing corrupt results. When this happens, modifying the code to
-handle non-ASCII data is straightforward and easy.
+handle non-ASCII data is straightforward.
 
 There are a few noteworthy high-level features about Julia's strings:
 
@@ -54,8 +54,7 @@ There are a few noteworthy high-level features about Julia's strings:
    `Unicode <http://en.wikipedia.org/wiki/Unicode>`_ characters: literal
    strings are always `ASCII <http://en.wikipedia.org/wiki/ASCII>`_ or
    `UTF-8 <http://en.wikipedia.org/wiki/UTF-8>`_ but other encodings for
-   strings from external sources can be supported easily and
-   efficiently.
+   strings from external sources can be supported.
 
 .. _man-characters:
 
@@ -93,12 +92,6 @@ Not all integer values are valid Unicode code points, but for
 performance, the ``char`` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
 value code point, use the ``safe_char`` conversion instead::
-
-    julia> char(0xd800)
-    '???'
-
-    julia> safe_char(0xd800)
-    invalid Unicode code point: U+d800
 
     julia> char(0x110000)
     '\U110000'
@@ -156,11 +149,8 @@ also be used::
     julia> int('\xff')
     255
 
-Like any integers, you can do arithmetic and comparisons with ``Char``
-values::
-
-    julia> 'x' - 'a'
-    23
+You can do comparisons and a limited amount of arithmetic with
+``Char`` values::
 
     julia> 'A' < 'a'
     true
@@ -171,14 +161,10 @@ values::
     julia> 'A' <= 'X' <= 'Z'
     true
 
-Arithmetic with ``Char`` values always yields integer values. To create
-a new ``Char`` value, explicit conversion back to the ``Char`` type is
-required::
+    julia> 'x' - 'a'
+    23
 
     julia> 'A' + 1
-    66
-
-    julia> char(ans)
     'B'
 
 String Basics
@@ -201,13 +187,12 @@ If you want to extract a character from a string, you index into it::
     '\n'
 
 All indexing in Julia is 1-based: the first element of any
-integer-indexed object is found at index 1, not index 0, and the last
-element is found at index ``n`` rather than ``n-1``, when the string has
+integer-indexed object is found at index 1, and the last
+element is found at index ``n``, when the string has
 a length of ``n``.
 
-In any indexing expression, the keyword, ``end``, can be used as a
-shorthand for ``length(x)``, where ``x`` is the object being indexed
-into, whether it is a string, an array, or some other indexable object.
+In any indexing expression, the keyword ``end`` can be used as a
+shorthand for the last index (computed by ``endof(str)``).
 You can perform arithmetic and other operations with ``end``, just like
 a normal value::
 
@@ -287,17 +272,16 @@ such an invalid byte index, an error is thrown::
 In this case, the character ``∀`` is a three-byte character, so the
 indices 2 and 3 are invalid and the next character's index is 4.
 
-Because of variable-length encodings, ``strlen(s)`` and ``length(s)``
-are not always the same: ``strlen(s)`` gives the number of characters in
-``s`` while ``length(s)`` gives the maximum valid byte index into ``s``.
-If you iterate through the indices 1 through ``length(s)`` and index
+Because of variable-length encodings, the number of character in a
+string (given by ``length(s)``) is not always the same as the last index.
+If you iterate through the indices 1 through ``endof(s)`` and index
 into ``s``, the sequence of characters returned, when errors aren't
-thrown, is the sequence of characters comprising the string, ``s``.
-Thus, we do have the identity that ``strlen(s) <= length(s)`` since each
+thrown, is the sequence of characters comprising the string ``s``.
+Thus, we do have the identity that ``length(s) <= endof(s)`` since each
 character in a string must have its own index. The following is an
 inefficient and verbose way to iterate through the characters of ``s``::
 
-    julia> for i = 1:length(s)
+    julia> for i = 1:endof(s)
              try
                println(s[i])
              catch
@@ -317,7 +301,7 @@ awkward idiom is unnecessary for iterating through the characters in a
 string, since you can just use the string as an iterable object, no
 exception handling required::
 
-    julia> for c = s
+    julia> for c in s
              println(c)
            end
     ∀
@@ -455,17 +439,15 @@ Another handy string function is ``repeat``::
 
 Some other useful functions include:
 
--  ``length(str)`` gives the maximal (byte) index that can be used to
+-  ``endof(str)`` gives the maximal (byte) index that can be used to
    index into ``str``.
--  ``strlen(str)`` the number of characters in ``str``; this is *not*
-   the same as ``length(str)``.
+-  ``length(str)`` the number of characters in ``str``.
 -  ``i = start(str)`` gives the first valid index at which a character
    can be found in ``str`` (typically 1).
 -  ``c, j = next(str,i)`` returns next character at or after the index
-   ``i`` and the next valid character index following that. With the
-   ``start`` and ``length``, can be used to iterate through the
-   characters in ``str``. With ``length`` and ``start`` can be used to
-   iterate through the characters in ``str`` in reverse.
+   ``i`` and the next valid character index following that. With
+   ``start`` and ``endof``, can be used to iterate through the
+   characters in ``str``.
 -  ``ind2chr(str,i)`` gives the number of characters in ``str`` up to
    and including any at index ``i``.
 -  ``chr2ind(str,j)`` gives the index at which the ``j``\ th character
