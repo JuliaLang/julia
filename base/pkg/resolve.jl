@@ -481,25 +481,36 @@ end
 # Graph holds the graph structure onto which max-sum is run, in
 # sparse format
 type Graph
-    # adjacency matrix: for each package, has the list of neighbors
-    #                   indices (both dependencies and dependants)
+    # adjacency matrix:
+    #   for each package, has the list of neighbors
+    #   indices (both dependencies and dependants)
     gadj::Vector{Vector{Int}}
 
-    # compatibility mask: for each package p0 has a list of bool masks.
-    #                     Each entry in the list gmsk[p0] is relative to the
-    #                     package p1 as read from gadj[p0].
-    #                     Each mask has dimension spp1 x spp0, where
-    #                     spp0 is the number of states of p0, and
-    #                     spp1 is the number of states of p1.
+    # compatibility mask:
+    #   for each package p0 has a list of bool masks.
+    #   Each entry in the list gmsk[p0] is relative to the
+    #   package p1 as read from gadj[p0].
+    #   Each mask has dimension spp1 x spp0, where
+    #   spp0 is the number of states of p0, and
+    #   spp1 is the number of states of p1.
     gmsk::Vector{Vector{BitMatrix}}
 
-    # energy mask: like gmsk, but it's used to favor dependants over
-    # dependencies in case of a tie (works at FieldValue level l3)
-    # TODO: get rid of it (compute it on the fly) or improve it
-    gnrg::Vector{Vector{Matrix{Int}}}
+    # dependency direction:
+    #   keeps track of which direction the dependency goes
+    #   takes 3 values:
+    #     1  = dependant
+    #     -1 = dependency
+    #     0  = both
+    #   Used to break symmetry between dependants and
+    #   dependencies (introduces a FieldValue at level l3).
+    #   The "both" case is for when there are dependency
+    #   relations which go both ways, in which case the
+    #   noise is left to discriminate in case of ties
+    gdir::Vector{Vector{Int}}
 
-    # adjacency dict: allows to retrieve the indices in gadj, so that
-    #                 gadj[p0][adjdict[p0][p1]] = p1
+    # adjacency dict:
+    #   allows to retrieve the indices in gadj, so that
+    #   gadj[p0][adjdict[p0][p1]] = p1
     adjdict::Vector{Dict{Int,Int}}
 
     # states per package: same as in PkgStruct
@@ -524,7 +535,7 @@ type Graph
 
         gadj = [ Int[] for i = 1:np ]
         gmsk = [ BitMatrix[] for i = 1:np ]
-        gnrg = [ Matrix{Int}[] for i = 1:np ]
+        gdir = [ Int[] for i = 1:np ]
         adjdict = [ (Int=>Int)[] for i = 1:np ]
 
         for d in deps
@@ -558,27 +569,21 @@ type Graph
                 push!(gmsk[p0], bm)
                 push!(gmsk[p1], bmt)
 
-                nrgm = zeros(Int, spp[p1], spp[p0])
-                for vv0 = 1:spp[p0]-2, vv1 = 1:spp[p1]-1
-                    nrgm[vv1,vv0] = v0 - spp[p0] + 1
-                end
-                nrgmt = nrgm'
-                push!(gnrg[p0], nrgm)
-                push!(gnrg[p1], nrgmt)
+                push!(gdir[p0], 1)
+                push!(gdir[p1], -1)
             else
                 bm = gmsk[p0][j0]
                 bmt = gmsk[p1][j1]
-                nrgm = gnrg[p0][j0]
-                nrgmt = gnrg[p1][j1]
+                if gdir[p0][j0] == -1
+                    gdir[p0][j0] = 0
+                    gdir[p1][j0] = 0
+                end
             end
 
-            nrgi = 0
             for v1 = 1:length(pvers[p1])
                 if !contains(vs, Version(vs.package, pvers[p1][v1]))
                     bm[v1, v0] = false
                     bmt[v0, v1] = false
-                    nrgm[v1, v0] = 0 # TODO: useless, probably
-                    nrgmt[v0, v1] = 0
                 end
             end
             bm[end,v0] = false
@@ -587,7 +592,7 @@ type Graph
 
         perm = [1:np]
 
-        return new(gadj, gmsk, gnrg, adjdict, spp, perm, np)
+        return new(gadj, gmsk, gdir, adjdict, spp, perm, np)
     end
 end
 
@@ -689,7 +694,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
 
     gadj = graph.gadj
     gmsk = graph.gmsk
-    gnrg = graph.gnrg
+    gdir = graph.gdir
     adjdict = graph.adjdict
     spp = graph.spp
     np = graph.np
@@ -710,12 +715,19 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         j1 = adjdict[p1][p0]
         #@assert j0 == adjdict[p0][p1]
         bm1 = gmsk[p1][j1]
-        nrg1 = gnrg[p1][j1]
+        dir1 = gdir[p1][j1]
         spp1 = spp[p1]
         msg1 = msg[p1]
 
         # compute the output cavity message p0->p1
         cavmsg = fld0 - msg0[j0]
+
+        if dir1 == -1
+            # p0 depends on p1
+            for v0 = 1:spp0-1
+                cavmsg[v0] += FieldValue(0,0,0,v0)
+            end
+        end
 
         # keep the old input cavity message p0->p1
         oldmsg = msg1[j1]
@@ -732,8 +744,12 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         for v1 = 1:spp1
             for v0 = 1:spp0
                 if bm1[v0, v1]
-                    newmsg[v1] = max(newmsg[v1], cavmsg[v0] + FieldValue(0,0,0,nrg1[v0,v1]))
+                    newmsg[v1] = max(newmsg[v1], cavmsg[v0])
                 end
+            end
+            if dir1 == 1 && v1 != spp1
+                # p1 depends on p0
+                newmsg[v1] += FieldValue(0,0,0,v1)
             end
             if newmsg[v1] > m
                 m = newmsg[v1]
