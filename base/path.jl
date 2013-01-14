@@ -2,6 +2,7 @@
     const path_separator    = "/"
     const path_separator_re = r"/+"
     const path_absolute_re  = r"^/"
+    const path_directory_re = r"(?:^|/)\.{0,2}$"
     const path_dir_splitter = r"^(.*?/+)([^/]*)$"
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
@@ -11,6 +12,7 @@ end
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
     const path_absolute_re  = r"^(?:\w+:)[/\\]"
+    const path_directory_re = r"(?:^|[/\\])\.{0,2}$"
     const path_dir_splitter = r"^(.*?[/\\]+)([^/\\]*)$"
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
@@ -20,13 +22,15 @@ end
     end
 end
 
+isabspath(path::String) = ismatch(path_absolute_re, path)
+isdirpath(path::String) = ismatch(path_directory_re, splitdrive(path)[2])
+
 function splitdir(path::ByteString)
-    ismatch(r"^\.{0,2}$", path) && return (path,"")
+    isdirpath(path) && return (path,"")
     a, b = splitdrive(path)
     m = match(path_dir_splitter,b)
     m == nothing && return (a,b)
-    a *= m.captures[1]; b = m.captures[2]
-    ismatch(r"^\.{0,2}$", b) ? (a*b,"") : (a,b)
+    a*m.captures[1], m.captures[2]
 end
 splitdir(path::String) = splitdir(bytestring(path))
 
@@ -40,8 +44,6 @@ function splitext(path::String)
     a*m.captures[1], m.captures[2]
 end
 
-isabspath(path::String) = ismatch(path_absolute_re, path)
-
 function pathsep(paths::String...)
     for path in paths
         m = match(path_separator_re, path)
@@ -49,7 +51,6 @@ function pathsep(paths::String...)
     end
     return path_separator
 end
-isendsep(a::String) = ismatch(path_separator_re, a[end:end])
 
 joinpath(a::String) = a
 joinpath(a::String, b::String, c::String...) = joinpath(joinpath(a,b), c...)
@@ -60,16 +61,16 @@ function joinpath(a::String, b::String)
     B,b = splitdrive(b)
     !isempty(B) && A != B && error("drive mismatch: $A$a $B$b")
     C = isempty(B) ? A : B
-    isempty(a)  ? strcat(C,b) :
-    isendsep(a) ? strcat(C,a,b) :
-                  strcat(C,a,pathsep(a,b),b)
+    isempty(a)                             ? strcat(C,b) :
+    ismatch(path_separator_re, a[end:end]) ? strcat(C,a,b) :
+                                             strcat(C,a,pathsep(a,b),b)
 end
 
 function normpath(path::String)
     isabs = isabspath(path)
+    isdir = isdirpath(path)
     drive, path = splitdrive(path)
     parts = split(path, path_separator_re)
-    isdir = ismatch(r"^\.{0,2}$", parts[end])
     parts = filter(x->!isempty(x) && x!=".", parts)
     while true
         clean = true
@@ -91,10 +92,10 @@ function normpath(path::String)
     end
     path = join(parts, path_separator)
     if isabs
-        path = strcat(path_separator, path)
+        path = path_separator*path
     end
-    if isdir && !isempty(parts) && !ismatch(r"^\.{0,2}$", parts[end])
-        path = strcat(path, path_separator)
+    if isdir && !isdirpath(path)
+        path *= path_separator
     end
     strcat(drive,path)
 end
