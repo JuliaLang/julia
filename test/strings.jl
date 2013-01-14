@@ -497,3 +497,6 @@ str = "é"
 str_a = [str...]
 @test length(str_a)==1
 @test str_a[1] == str[1]
+
+str = "s\u2200"
+@test str[1:end] == str
