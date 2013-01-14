@@ -269,7 +269,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
             for(size_t i=1; i < m->bindings.size; i+=2) {
                 if (table[i] != HT_NOTFOUND) {
                     jl_binding_t *b = (jl_binding_t*)table[i];
-                    if (b->exportp && b->owner==m)
+                    if (b->exportp && (b->owner==m || b->imported))
                         jl_module_import(jl_current_module, m, b->name);
                 }
             }
