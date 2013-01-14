@@ -20,7 +20,7 @@ end
     end
 end
 
-function splitdir(path::String)
+function splitdir(path::ByteString)
     ismatch(r"^\.{0,2}$", path) && return (path,"")
     a, b = splitdrive(path)
     m = match(path_dir_splitter,b)
@@ -28,6 +28,7 @@ function splitdir(path::String)
     a *= m.captures[1]; b = m.captures[2]
     ismatch(r"^\.{0,2}$", b) ? (a*b,"") : (a,b)
 end
+splitdir(path::String) = splitdir(bytestring(path))
 
  dirname(path::String) = splitdir(path)[1]
 basename(path::String) = splitdir(path)[2]
@@ -48,7 +49,7 @@ function pathsep(paths::String...)
     end
     return path_separator
 end
-isendsep(a::String) = ismatch(path_separator_re, a[thisind(a,end):end])
+isendsep(a::String) = ismatch(path_separator_re, a[end:end])
 
 joinpath(a::String) = a
 joinpath(a::String, b::String, c::String...) = joinpath(joinpath(a,b), c...)
@@ -57,7 +58,7 @@ function joinpath(a::String, b::String)
     isabspath(b) && return b
     A,a = splitdrive(a)
     B,b = splitdrive(b)
-    !isempty(B) && A != B && error("Drive mismatch: $A$a $B$b")
+    !isempty(B) && A != B && error("drive mismatch: $A$a $B$b")
     C = isempty(B) ? A : B
     isempty(a)  ? strcat(C,b) :
     isendsep(a) ? strcat(C,a,b) :
