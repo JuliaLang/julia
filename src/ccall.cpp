@@ -307,8 +307,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_value_t *ptr_ty = expr_type(args[1], ctx);
         Value *arg1 = emit_unboxed(args[1], ctx);
         if (!jl_is_cpointer_type(ptr_ty)) {
-            emit_typecheck(arg1, (jl_value_t*)jl_voidpointer_type,
-                           "ccall: function argument not a pointer or valid constant expression", ctx);
+            emit_cpointercheck(arg1, 
+                    "ccall: function argument not a pointer or valid, constant expression", ctx);
         }
         jl_ptr = emit_unbox(T_size, T_psize, arg1);
     }
