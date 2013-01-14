@@ -1956,8 +1956,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
             lam->functionObject = (void*)f;
         }
     }
-    if (jlrettype == (jl_value_t*)jl_bottom_type)
-        f->setDoesNotReturn();
+    //TODO: this seems to cause problems, but should be made to work eventually
+    //if (jlrettype == (jl_value_t*)jl_bottom_type)
+    //    f->setDoesNotReturn();
 
     ctx.f = f;
 
