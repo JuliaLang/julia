@@ -24,8 +24,6 @@ function factorial{T<:Integer}(n::T, k::T)
     return f
 end
 
-nPr(n, r) = factorial(n, n-r)
-
 function binomial{T<:Integer}(n::T, k::T)
     if k < 0
         return zero(T)
@@ -59,8 +57,6 @@ function binomial{T<:Integer}(n::T, k::T)
     end
     return sgn*iround(T,x)
 end
-
-const nCr = binomial
 
 pascal(n) = [binomial(i+j-2,i-1) for i=1:n,j=1:n]
 
