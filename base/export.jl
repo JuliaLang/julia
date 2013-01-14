@@ -1327,6 +1327,7 @@ export
     unsetenv,
 
 # Macros
+    @get!,
     @v_str,
     @unexpected,
     @assert,

@@ -189,6 +189,17 @@ d4[1001] = randstring(3)
 @test !isequal({1 => 2}, {"dog" => "bone"})
 @test isequal(Dict{Int, Int}(), Dict{String, String}())
 
+#@get!
+let
+    d = {8=>19}
+    def = {}
+    f = x->(push(def,x); x)
+    @test @get!(d,  8, f(5)) == 19
+    @test @get!(d, 19, f(2)) == 2
+    @test d == {8=>19, 19=>2}
+    @test def == [2]
+end
+
 # ############# end of dict tests #############
 
 # #################### set ####################
