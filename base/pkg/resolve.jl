@@ -162,10 +162,11 @@ end
 # Reduce the number of versions by creating equivalence classes, and retaining
 # only the highest version for each equivalence class.
 # Two versions are equivalent if:
-#   1) They are either both explicitly required or both not required (in `reqs`)
-#   2) They appear together as dependecies of another package (i.e. for each
+#   1) They appear together as dependecies of another package (i.e. for each
 #      dependency relation, they are both required or both not required)
-#   3) They have the same dependencies
+#   2) They have the same dependencies
+# Also, for each package explicitly required, dicards all versions outside
+# the allowed range (checking for impossible ranges while at it).
 # This function mutates both input structs.
 function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
 
@@ -185,7 +186,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
     # the same pattern are equivalent.
     vmask = [ [ BitVector() for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
 
-    # From the poitn of view of resolve(), VectorSet(pkg,[]) and
+    # From the point of view of resolve(), VectorSet(pkg,[]) and
     # VectorSet(pkg, [v0]) are equivelent if v0 is the first
     # available version of pkg
     function contains_any(vs::VersionSet, first::VersionNumber)
@@ -193,45 +194,33 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         return isempty(vvs) || (length(vvs) == 1 && vvs[1] == first)
     end
 
-    # This function is used to generate patterns both for explicit
-    # requirements and for dependencies
-    function parse_reqs(vs_vec)
-        for r in vs_vec
-            p = r.package
-            p0 = pdict[p]
-
-            # packages with just one version or requirements
-            # which do not distiguish between versions are not
-            # interesting
-            if spp[p0] == 2 || contains_any(r, pvers[p0][1])
-                continue
-            end
-
-            pvers0 = pvers[p0]
-
-            # Grow the patterns by one bit
-            vmask0 = vmask[p0]
-            for vm in vmask0
-                grow!(vm, 1)
-            end
-
-            # Store the requirement info in the patterns
-            for v0 = 1:spp[p0]-1
-                v = pvers0[v0]
-                vm = vmask0[v0]
-                vm[end] = contains(r, Version(p, v))
-            end
+    # Parse requirements and store allowed versions.
+    allowed = [ trues(spp[p0]-1) for p0 = 1:np ]
+    for r in reqs
+        p = r.package
+        p0 = pdict[p]
+        pvers0 = pvers[p0]
+        allowed0 = allowed[p0]
+        for v0 = 1:spp[p0]-1
+            v = pvers0[v0]
+            allowed0[v0] = contains(r, Version(p, v))
         end
     end
-
-    # Parse explicit requirements
-    parse_reqs(reqs)
+    for p0 = 1:np
+        allowed0 = allowed[p0]
+        if !any(allowed0)
+            error("Invalid requirements: no version allowed for package $(pkgs[p0])")
+        end
+    end
 
     # Parse the dependency list, segregate them according to the
     # dependant package and version
     pdeps = [ [ VersionSet[] for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
     for d in deps
         p0, v0 = vdict[d[1]]
+        if !allowed[p0][v0]
+            continue
+        end
         p1 = pdict[d[2].package]
         if contains_any(d[2], pvers[p1][1])
             dd = VersionSet(d[2].package)
@@ -246,18 +235,11 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
     # While we're at it, we also collect all dependencies into alldeps
     alldeps = VersionSet[]
     for p0 = 1:np
-        pdeps0 = sort!(pdeps[p0])
+        pdeps0 = pdeps[p0]
 
         # Extract unique dependencies lists (aka classes), thereby
         # assigning an index to each class.
-        # (one would use a Set for this purpose, calling uniqe(pdeps0),
-        # but it turns out that a Vector is faster here)
-        uniqdepssets = Vector{VersionSet}[]
-        for dd in pdeps0
-            if !contains(uniqdepssets, dd)
-                push!(uniqdepssets, dd)
-            end
-        end
+        uniqdepssets = unique(pdeps0)
 
         # Store all dependencies seen so far for later use
         for dd in uniqdepssets, v in dd
@@ -280,6 +262,9 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         # For each version, determine to which class it belongs and
         # store that info in the patterns
         for v0 = 1:spp[p0]-1
+            if !allowed[p0][v0]
+                continue
+            end
             vmind = findfirst(uniqdepssets, pdeps0[v0])
             @assert vmind >= 0
             vmind += vmind_base
@@ -288,27 +273,62 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         end
     end
 
-    # Same as with reqs, but using dependencies. Ideally, one would use
-    # unique(alldeps) here (or better still, use a Set from the beginning),
-    # but it takes too much time - better waste a little extra memory.
-    parse_reqs(alldeps)
+    # Produce dependency patterns. Ideally, one would use unique(alldeps)
+    # here (or better still, use a Set from the beginning), but it takes
+    # more time than it saves - better waste a little extra memory.
+    for r in alldeps
+        p = r.package
+        p0 = pdict[p]
+
+        # packages with just one version, or dependencies
+        # which do not distiguish between versions, are not
+        # interesting
+        if spp[p0] == 2 || contains_any(r, pvers[p0][1])
+            continue
+        end
+
+        pvers0 = pvers[p0]
+
+        # Grow the patterns by one bit
+        vmask0 = vmask[p0]
+        for vm in vmask0
+            grow!(vm, 1)
+        end
+
+        # Store the dependency info in the patterns
+        for v0 = 1:spp[p0]-1
+            v = pvers0[v0]
+            vm = vmask0[v0]
+            vm[end] = contains(r, Version(p, v))
+        end
+    end
 
     # At this point, the vmask patterns are computed. We divide them into
     # classes so that we can keep just one version for each class.
-    pruned_vers_id = Array(Vector{Int}, np)
+    pruned_vers_id = [ Int[] for p0 = 1:np ]
     for p0 = 1:np
         vmask0 = vmask[p0]
         vmask0_uniq = unique(vmask0)
         nc = length(vmask0_uniq)
         classes = [ Int[] for c0 = 1:nc ]
         for v0 = 1:spp[p0]-1
+            if !allowed[p0][v0]
+                continue
+            end
             vm = vmask0[v0]
             c0 = findfirst(vmask0_uniq, vm)
             push!(classes[c0], v0)
         end
-        # For each class, we store only the last entry (i.e. the
+
+        # For each nonempty class, we store only the last entry (i.e. the
         # highest version)
-        pruned_vers_id[p0] = sort!([ cl[end] for cl in classes ])
+        pruned0 = pruned_vers_id[p0]
+        for cl in classes
+            if !isempty(cl)
+                push!(pruned0, cl[end])
+            end
+        end
+        sort!(pruned0)
     end
 
     # All that follows is just recomputing the structures' fields
@@ -326,9 +346,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         end
     end
 
-    # Reompute deps. This is a little trickier because
-    # we need to modify the dependencies lists by mapping all versions
-    # to their representative in the equivalence class.
+    # Reompute deps. We could simplify them, but it's not worth it
     new_deps = Array((Version,VersionSet), 0)
 
     for d0 = 1:length(deps)
@@ -337,21 +355,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
         if !contains(pruned_vers_id[p0], v0)
             continue
         end
-
-        p = d[2].package
-        p1 = pdict[p]
-        vs = d[2].versions
-        new_vs_v = VersionNumber[]
-        for v in vs
-            nv1 = 1
-            nv = new_pvers[p1][nv1]
-            while nv < v
-                nv1 += 1
-                nv = new_pvers[p1][nv1]
-            end
-            push!(new_vs_v, nv)
-        end
-        push!(new_deps, (d[1], VersionSet(p, new_vs_v)))
+        push!(new_deps, d)
     end
 
     reqsstruct.vers = new_vers
