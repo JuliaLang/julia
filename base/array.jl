@@ -1716,7 +1716,7 @@ end # let
 # unique_all is like intersect. 
 # algorithm: do intersect first, then iterate through the first
 # vector and produce only those in the set
-function unique_all(vs...)
+function unique_common(vs...)
     args_type = promote_type([eltype(v) for v in vs]...)
     ret = Array(args_type,0)
     all_elems = intersect([Set(v...) for v in vs]...)
