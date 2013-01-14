@@ -15,10 +15,7 @@ FLAGS = \
 	-I$(shell $(LLVM_CONFIG) --includedir) \
 	-I$(JULIAHOME)/deps/libuv/include -I$(JULIAHOME)/usr/include
 
-LIBS = $(shell $(LLVM_CONFIG) --ldflags) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(BUILD)/lib $(BUILD)/lib/libuv.a $(shell $(LLVM_CONFIG) --libs) $(OSLIBS)
-ifeq ($(OS),WINNT)
-LIBS += -ldbghelp
-endif
+LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(BUILD)/lib $(BUILD)/lib/libuv.a $(shell $(LLVM_CONFIG) --libs) $(NO_WHOLE_ARCHIVE) $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS)
 
 ifneq ($(MAKECMDGOALS),debug)
 TARGET =

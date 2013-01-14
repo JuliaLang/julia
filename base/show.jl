@@ -553,11 +553,11 @@ function dump(io::IO, x::Dict, n::Int, indent)
 end
 
 # More generic representation for common types:
-dump(io::IOStream, x::AbstractKind, n::Int, indent) = println(io, x.name)
-dump(io::IOStream, x::AbstractKind) = dumptype(io, x, 5, "")
-dump(io::IOStream, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
-dump(io::IOStream, x::BitsKind, n::Int, indent) = println(io, x.name)
-dump(io::IOStream, x::TypeVar, n::Int, indent) = println(io, x.name)
+dump(io::IO, x::AbstractKind, n::Int, indent) = println(io, x.name)
+dump(io::IO, x::AbstractKind) = dumptype(io, x, 5, "")
+dump(io::IO, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
+dump(io::IO, x::BitsKind, n::Int, indent) = println(io, x.name)
+dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
 showall(x) = showall(OUTPUT_STREAM::Stream, x)

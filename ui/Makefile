@@ -9,7 +9,7 @@ FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
-JLDFLAGS += $(LDFLAGS) $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) $(RPATH)
+JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) $(RPATH)
 
 julia-release julia-debug: %: %-basic %-readline
 

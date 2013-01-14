@@ -33,7 +33,7 @@ $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 	@cp $< $@
 
 # use sys.ji if it exists, otherwise run two stages
-$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl $(BUILD)/share/julia/helpdb.jl
+$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl $(BUILD)/share/julia/helpdb.jl
 	$(QUIET_JULIA) cd base && \
 	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make cleanall'."
 
