@@ -1228,6 +1228,7 @@ export
     dirname,
     basename,
     isabspath,
+    isdirpath,
     joinpath,
     normpath,
     abspath,
