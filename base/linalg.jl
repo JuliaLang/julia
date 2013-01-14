@@ -84,7 +84,7 @@ function rank(A::AbstractMatrix)
     m,n = size(A)
     if m == 0 || n == 0; return 0; end
     sv = svdvals(A)
-    sum(sv .> max(size(A,1),size(A,2))*eps(sv[1]))
+    sum(sv .> max(size(A))*eps(sv[1]))
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
