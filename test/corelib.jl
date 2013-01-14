@@ -275,6 +275,7 @@ s = intersect(Set(1,2), Set(3,4))
 @test isequal(s, Set())
 s = intersect(Set(5,6,7,8), Set(7,8,9))
 @test isequal(s, Set(7,8))
+@test isequal(intersect(Set(2,3,1), Set(4,2,3), Set(5,4,3,2)), Set(2,3))
 
 # setdiff
 @test isequal(setdiff(Set(1,2,3), Set()), Set(1,2,3))

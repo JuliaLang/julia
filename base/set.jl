@@ -62,7 +62,7 @@ function intersect(s::Set, sets::Set...)
     i = copy(s)
     for x in s
         for t in sets
-            if !has(t,x)
+            if !has(t,x) & has(i,x)
                 delete!(i,x)
             end
         end
