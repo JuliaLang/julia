@@ -1557,12 +1557,11 @@ for (gecon, elty) in
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
             ccall(($(string(gecon)),liblapack), Void,
-                (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
-                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
-                    Ptr{BlasInt}),
-                &normtype, &n, A, &lda,
-                &anorm, rcond, work, iwork,
-                info)
+                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                   Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}),
+                  &normtype, &n, A, &lda, &anorm, rcond, work, iwork,
+                  info)
             if info[1] != 0 throw(LapackException(info[1])) end
             return rcond[1]
         end
@@ -1570,7 +1569,7 @@ for (gecon, elty) in
 end
 for (gecon, elty, relty) in
     ((:zgecon_,:Complex128,:Float64),
-     (:cgecon_,:Complex64,:Float32))
+     (:cgecon_,:Complex64, :Float32))
     @eval begin
         function gecon!(normtype::BlasChar, A::StridedMatrix{$elty}, anorm::$relty)
             chkstride1(A)
@@ -1589,15 +1588,14 @@ for (gecon, elty, relty) in
             lda = max(1, size(A, 1))
             rcond = Array($relty, 1)
             work = Array($elty, 2n)
-            rwork = Array(BlasInt, 2n)
+            rwork = Array($relty, 2n)
             info = Array(BlasInt, 1)
             ccall(($(string(gecon)),liblapack), Void,
-                (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
-                    Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty},
-                    Ptr{BlasInt}),
-                &normtype, &n, A, &lda, 
-                &anorm, rcond, work, rwork,
-                info)
+                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                   Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty},
+                   Ptr{BlasInt}),
+                  &normtype, &n, A, &lda, &anorm, rcond, work, rwork,
+                  info)
             if info[1] < 0 throw(LapackException(info[1])) end
             return rcond[1]
         end
