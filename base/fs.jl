@@ -1,7 +1,6 @@
 ## UV based file operations ##
 
 module FS
-using Base
 
 const S_IRUSR = 0o400
 const S_IWUSR = 0o200
