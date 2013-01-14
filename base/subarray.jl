@@ -188,14 +188,32 @@ function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
     ref(s.parent, t)
 end
 
+# translate a linear index vector I for dim n to a linear index vector for
+# the parent array
+function translate_linear_indexes(s, n, I)
+    idx = Array(Int, length(I))
+    ssztail = size(s)[n:]
+    psztail = size(s.parent)[n:]
+    for j=1:length(I)
+        su = ind2sub(ssztail,I[j])
+        idx[j] = sub2ind(psztail, [ s.indexes[n+k-1][su[k]] for k=1:length(su) ]...)
+    end
+    idx
+end
+
 function ref(s::SubArray, I::Union(Real,AbstractArray)...)
     I = indices(I)
-    n = ndims(s.parent)
+    ndp = ndims(s.parent)
+    n = length(I)
     newindexes = Array(Any, n)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
-        newindexes[i] = isa(t, Int) ? t : t[I[i]]
+        if i==n && n < ndp
+            newindexes[i] = translate_linear_indexes(s, i, I[i])
+        else
+            newindexes[i] = isa(t, Int) ? t : t[I[i]]
+        end
     end
 
     rs = ref_shape(I...)
@@ -254,12 +272,17 @@ end
 function assign(s::SubArray, v, I::Union(Real,AbstractArray)...)
     I = indices(I)
     j = 1 #the jth dimension in subarray
-    n = ndims(s.parent)
+    ndp = ndims(s.parent)
+    n = length(I)
     newindexes = cell(n)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
-        newindexes[i] = isa(t, Int) ? t : t[I[j]]
+        if i==n && n < ndp
+            newindexes[i] = translate_linear_indexes(s, i, I[i])
+        else
+            newindexes[i] = isa(t, Int) ? t : t[I[j]]
+        end
         j += 1
     end
 
