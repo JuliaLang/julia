@@ -3,7 +3,7 @@
     const path_separator_re = r"/+"
     const path_absolute_re  = r"^/"
     const path_directory_re = r"(?:^|/)\.{0,2}$"
-    const path_dir_splitter = r"^(.*?/+)([^/]*)$"
+    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
@@ -13,7 +13,7 @@ end
     const path_separator_re = r"[/\\]+"
     const path_absolute_re  = r"^(?:\w+:)[/\\]"
     const path_directory_re = r"(?:^|[/\\])\.{0,2}$"
-    const path_dir_splitter = r"^(.*?[/\\]+)([^/\\]*)$"
+    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::String)
@@ -26,11 +26,11 @@ isabspath(path::String) = ismatch(path_absolute_re, path)
 isdirpath(path::String) = ismatch(path_directory_re, splitdrive(path)[2])
 
 function splitdir(path::ByteString)
-    isdirpath(path) && return (path,"")
     a, b = splitdrive(path)
     m = match(path_dir_splitter,b)
     m == nothing && return (a,b)
-    a*m.captures[1], m.captures[2]
+    a *= isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1]
+    a, m.captures[3]
 end
 splitdir(path::String) = splitdir(bytestring(path))
 
