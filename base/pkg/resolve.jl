@@ -688,7 +688,19 @@ end
 function getsolution(msgs::Messages)
     # the solution is just the location of the maximum in
     # each field
-    return map(indmax, msgs.fld)
+
+    fld = msgs.fld
+    np = length(fld)
+    sol = Array(Int, np)
+    for p0 = 1:np
+        fld0 = fld[p0]
+        s0 = indmax(fld0)
+        if !validmax(fld0[s0])
+            throw(UnsatError())
+        end
+        sol[p0] = s0
+    end
+    return sol
 end
 
 # This is the core of the max-sum solver:
@@ -888,37 +900,26 @@ function converge(graph::Graph, msgs::Messages)
 
     it = 0
     shuffleperminit()
-    try
-        while true
-            it += 1
-            maxdiff = iterate(graph, msgs)
-            #println("it = $it maxdiff = $maxdiff")
+    while true
+        it += 1
+        maxdiff = iterate(graph, msgs)
+        #println("it = $it maxdiff = $maxdiff")
 
-            if maxdiff == zero(FieldValue)
-                if break_ties(msgs)
-                    break
-                else
-                    continue
-                end
-            end
-            if it >= params.nondec_iterations &&
-               (it - params.nondec_iterations) % params.dec_interval == 0
-                numdec = clamp(ifloor(params.dec_fraction * graph.np),  1, msgs.num_nondecimated)
-                decimate(numdec, graph, msgs)
-                if msgs.num_nondecimated == 0
-                    break
-                end
+        if maxdiff == zero(FieldValue)
+            if break_ties(msgs)
+                break
+            else
+                continue
             end
         end
-    catch err
-        if isa(err, UnsatError)
-            msg = "Unsatisfiable package requirements detected"
-            if msgs.num_nondecimated != graph.np
-                msg *= "\n  (you may try increasing the value of the\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
+        if it >= params.nondec_iterations &&
+           (it - params.nondec_iterations) % params.dec_interval == 0
+            numdec = clamp(ifloor(params.dec_fraction * graph.np),  1, msgs.num_nondecimated)
+            decimate(numdec, graph, msgs)
+            if msgs.num_nondecimated == 0
+                break
             end
-            error(msg)
         end
-        rethrow(err)
     end
 
     return getsolution(msgs)
@@ -1095,7 +1096,20 @@ function resolve(reqs)
     msgs = Messages(reqsstruct, pkgstruct, graph)
 
     # find solution
-    sol = converge(graph, msgs)
+    local sol::Vector{Int}
+    try
+        sol = converge(graph, msgs)
+    catch err
+        if isa(err, UnsatError)
+            msg = "Unsatisfiable package requirements detected"
+            if msgs.num_nondecimated != graph.np
+                msg *= "\n  (you may try increasing the value of the" *
+                       "\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
+            end
+            error(msg)
+        end
+        rethrow(err)
+    end
 
     # verify solution (debug code)
     verify_sol(reqsstruct, pkgstruct, sol)
