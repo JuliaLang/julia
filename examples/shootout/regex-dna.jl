@@ -31,7 +31,7 @@ const subs = [
 ]
 
 function main()
-    seq = readall(stdin_stream)
+    seq = readall(STDIN)
     l1 = length(seq)
 
     seq = replace(seq, r">.*\n|\n", "")
