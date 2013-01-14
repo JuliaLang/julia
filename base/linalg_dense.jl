@@ -753,7 +753,7 @@ eigvals(x) = eig(x, false)
 # svdvals(A) = svd(A,false,true)[2]
 
 svdt(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
-svd(x::Number,vecs::Bool,thin::Bool) = svdt(x, vecs, thin)
+svdt(x::Number,vecs::Bool,thin::Bool) = svdt(x, vecs, thin)
 
 function svdt{T<:BlasFloat}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
     m,n = size(A)
@@ -771,7 +771,7 @@ svdt(A, thin::Bool) = svdt(A,true,thin)
 
 svdt(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
 
-function svd(x::StridedMatrix,vecs,thin) 
+function svd(x::StridedMatrix,vecs::Bool,thin::Bool) 
     (u, s, vt) = svdt(x,vecs,thin)
     return (u, s, vt')
 end
