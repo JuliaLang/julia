@@ -231,7 +231,7 @@ function cov_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
     if n != length(y); error("Vectors must have same lenght."); end
     meanx = x[1]
     meany = y[1]
-    C = zero(x[1])
+    C = zero(float(x[1]))
     for i = 2:n
         meanx += (x[i] - meanx) / i
         C += (x[i] - meanx)*(y[i] - meany)
@@ -244,7 +244,7 @@ cov_pearson(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = [cov_pearso
 cov_pearson(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = [cov_pearson(X[:,i], y, corrected) for i = 1:size(X, 2)]
 function cov_pearson(X::AbstractMatrix, corrected::Bool)
     n = size(X, 2)
-    C = Array(typeof(X[1]), n, n)
+    C = Array(typeof(float(X[1])), n, n)
     for i = 1:n
         for j = i:n
             if i == j
