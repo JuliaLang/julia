@@ -275,6 +275,7 @@ s = intersect(Set(1,2), Set(3,4))
 @test isequal(s, Set())
 s = intersect(Set(5,6,7,8), Set(7,8,9))
 @test isequal(s, Set(7,8))
+@test isequal(intersect(Set(2,3,1), Set(4,2,3), Set(5,4,3,2)), Set(2,3))
 
 # setdiff
 @test isequal(setdiff(Set(1,2,3), Set()), Set(1,2,3))
@@ -299,7 +300,7 @@ for (operator, name) in ((|, union), (&, intersect), (-, setdiff))
         @test  isequal(operator(l, r), name(l, r))
     end
 end
-    
+
 # add_each
 s = Set(1,3,5,7)
 add_each(s,(2,3,4,5))
