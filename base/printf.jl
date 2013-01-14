@@ -11,7 +11,7 @@ function _gen(s::String)
         if isa(x,String)
             push!(blk.args, :(write(out, $(length(x)==1 ? x[1] : x))))
         else
-            c = lc(x[end])
+            c = lowercase(x[end])
             f = c=='f' ? _gen_f :
                 c=='e' ? _gen_e :
                 c=='g' ? _gen_g :
@@ -225,7 +225,7 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = _special_handler(flags,width)
     # interpret the number
     prefix = ""
-    if lc(c)=='o'
+    if lowercase(c)=='o'
         f = contains(flags,'#') ? :_int_0ct : :_int_oct
         push!(blk.args, :(($f)($x)))
     elseif c=='x'
