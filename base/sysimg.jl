@@ -11,8 +11,8 @@ if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     length(a::Array) = arraylen(a)
-    print(x) = print(stdout_stream, x)
-    show(x) = show(stdout_stream, x)
+    print(x) = print(STDOUT, x)
+    show(x) = show(STDOUT, x)
     write(io, a::Array{Uint8,1}) =
         ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
               io.ios, a, length(a))

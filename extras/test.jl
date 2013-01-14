@@ -70,7 +70,7 @@ function test_printer_raw(hdl::Task)
             print(".")
         else
             println("")
-            dump(stdout_stream, t)
+            dump(STDOUT, t)
             println("")
         end
     end
