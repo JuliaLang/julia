@@ -649,7 +649,7 @@ for (geev, gesvd, gesdd, elty) in
             S      = Array(Rtyp, minmn)
             cmplx  = iscomplex(A)
             if cmplx
-                rwork = Array(Rtyp, job == 'N' ? 5*minmn : minmn*max(5*minmn+7,2*max(m,n)+2*minmn+1))
+                rwork = Array(Rtyp, job == 'N' ? 7*minmn : 5*minmn*minmn + 5*minmn)
             end
             iwork  = Array(BlasInt, 8*minmn)
             info   = Array(BlasInt, 1)

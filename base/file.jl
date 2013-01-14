@@ -8,7 +8,8 @@ function pwd()
     bytestring(p)
 end
 
-cd(dir::String) = system_error(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+
+cd(dir::String) = system_error(:chdir, ccall(:uv_chdir,Int32,(Ptr{Uint8},),dir) == -1)
 cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
@@ -50,6 +51,19 @@ function mkdir(path::String, mode::Unsigned)
 end
 mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o", mode, "?")
 mkdir(path::String) = mkdir(path, 0o777)
+function mkpath(path::String, mode)
+    dparts = splitdrive(path)
+	path = dparts[1]
+	@windows_only path *= "\\"
+	parts = (split(dparts[2],Base.path_separator_re,false))
+	for x in parts
+		path=joinpath(path,x)
+		if(!isdir(path))
+			mkdir(path,mode)
+		end
+	end
+end
+mkpath(path::String) = mkpath(path,0o777)
 
 function rmdir(path::String)
     @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
