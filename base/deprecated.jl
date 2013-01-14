@@ -34,3 +34,5 @@ end
 @deprecate  dlmread     readdlm
 @deprecate  csvwrite    writecsv
 @deprecate  dlmwrite    writedlm
+@deprecate  lc          lowercase
+@deprecate  uc          uppercase
