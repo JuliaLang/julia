@@ -461,8 +461,6 @@ export
     mod,
     mod1,
     modf,
-    nCr,
-    nPr,
     nan,
     nextfloat,
     nextpow,
