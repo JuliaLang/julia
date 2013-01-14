@@ -817,7 +817,7 @@ export
     union!,
     unique,
     unique_any,
-    unique_all,
+    unique_common,
     unique_diff,
     values,
     valtype,
