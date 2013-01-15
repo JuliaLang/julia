@@ -59,6 +59,7 @@
     jl_arrayunset;
     jl_array_to_string;
     jl_async_send;
+    jl_atexit_hook;
     jl_backtrace_type;
     jl_base_module;
     jl_boundp;
