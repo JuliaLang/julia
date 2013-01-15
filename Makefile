@@ -76,6 +76,10 @@ endif
 ifeq ($(OS), WINNT)
 	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
 	-cp -R $(BUILD)/sbin $(PREFIX)
+	[ -e dist-extras/7za.exe ] && cp dist-extras/7za.exe $(PREFIX)/bin/7z.exe
+	[ -e dist-extras/PortableGit-1.8.0-preview20121022.7z ] && \
+	  mkdir $(PREFIX)/Git && \
+	  7z x dist-extras/PortableGit-1.8.0-preview20121022.7z -o"$(PREFIX)/Git"
 ifeq ($(shell uname),MINGW32_NT-6.1)
 	-for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
 		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
@@ -141,4 +145,11 @@ webrepl: all
 
 tk:
 	@$(MAKE) -C deps install-tk-wrapper
+
+# download target for some hardcoded windows dependencies
+.PHONY: win-extras
+win-extras:
+	cd dist-extras && \
+	wget http://downloads.sourceforge.net/sevenzip/7za920.zip && \
+	wget https://msysgit.googlecode.com/files/PortableGit-1.8.0-preview20121022.7z
 
