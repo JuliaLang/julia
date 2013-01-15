@@ -20,9 +20,9 @@ out = readall(`echo hello` & `echo world`)
 @test search(out,"hello") != (0,0)
 @test readall((`echo hello` & `echo world`)|`sort`)=="hello\nworld\n"
 
-if false
-    @test (run(`echo hello`); true)
+@test (run(`echo STDIO PASSTHROUGH OK`); true)
 
+if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
     @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |
                   prefixer("A",2) & prefixer("B",2))

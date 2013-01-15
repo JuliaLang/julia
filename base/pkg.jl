@@ -62,6 +62,7 @@ function init(meta::String)
         run(`mkdir -p $dir`)
         cd(dir) do
             # create & configure
+            promptuserinfo()
             run(`git init`)
             run(`git commit --allow-empty -m "Initial empty commit"`)
             run(`git remote add origin .`)
@@ -82,8 +83,9 @@ function init(meta::String)
             cd(Git.autoconfig_pushurl,"METADATA")
             Metadata.gen_hashes()
         end
-    catch
+    catch e 
         run(`rm -rf $dir`)
+        rethrow(e)
     end
 end
 init() = init(DEFAULT_META)
@@ -188,7 +190,14 @@ installed(pkg::String) = cd_pkgdir() do
     get(installed(), pkg, nothing)
 end
 
-
+function runbuildscript(pkg)
+    dir = package_directory(pkg)
+    file = joinpath(dir,"deps","build.jl")
+    if(isfile(file))
+        info("Running package-specific build script")
+        include(file)
+    end
+end
 
 # update packages from requirements
 
@@ -226,6 +235,7 @@ function _resolve()
                         run(`git checkout -q $(want[pkg])`)
                     end
                     run(`git add -- $pkg`)
+                    runbuildscript(pkg)
                 end
             else
                 ver = Metadata.version(pkg,have[pkg])
@@ -245,7 +255,7 @@ function _resolve()
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
-                try run(`git checkout -q $(want[pkg])` .> "/dev/null")
+                try run(`git checkout -q $(want[pkg])` .> SpawnNullStream())
                 catch
                     run(`git fetch -q`)
                     try run(`git checkout -q $(want[pkg])`)
@@ -256,6 +266,7 @@ function _resolve()
                 Git.autoconfig_pushurl()
             end
             run(`git add -- $pkg`)
+            runbuildscript(pkg)
         end
     end
 end
@@ -533,6 +544,29 @@ function major(pkg)
     version(pkg, VersionNumber(lver.major+1))
 end
 
+function promptuserinfo()
+    if(isempty(chomp(readall(ignorestatus(`git config --global user.name`)))))
+        info("Git would like to know your name to initialize your .julia directory.\nEnter it below:")
+        name = chomp(readline(STDIN))
+        if(isempty(name))
+            error("Could not read name")
+        else
+            run(`git config --global user.name $name`)
+            info("Thank you. You can change it using run(`git config --global user.name NAME`)")
+        end  
+    end
+    if(isempty(chomp(readall(ignorestatus(`git config --global user.email`)))))
+        info("Git would like to know your email to initialize your .julia directory.\nEnter it below:")
+        email = chomp(readline(STDIN))
+        if(isempty(email))
+            error("Could not read email")
+        else
+            run(`git config --global user.email $email`)
+            info("Thank you. You can change it using run(`git config --global user.email EMAIL`)")
+        end
+    end
+end
+
 function new(pkg::String)
     newpath = joinpath(julia_pkgdir(), pkg)
     cd_pkgdir() do
@@ -565,6 +599,7 @@ with the correct remote name for your repository."
             try
                 sha1 = ""
                 cd(pkg) do
+                    promtuserinfo()
                     run(`git init`)
                     run(`git commit --allow-empty -m "Initial empty commit"`)
                     touch("LICENSE.md") # Should insert MIT content

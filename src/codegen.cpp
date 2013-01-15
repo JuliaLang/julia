@@ -1519,6 +1519,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         return NULL;
     }
     else if (jl_is_linenode(expr)) {
+        if(valuepos)
+            jl_error("Linenode in value position");
         return NULL;
     }
     else if (jl_is_quotenode(expr)) {
