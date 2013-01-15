@@ -6,9 +6,9 @@ type Cmd <: AbstractCmd
     Cmd(exec::Executable) = new(exec,false)
 end
 
-function each_line(cmd::AbstractCmd,stdin)
+function each_line(cmd::AbstractCmd,STDIN)
     out = NamedPipe()
-    processes = spawn(false, cmd, (stdin,out,STDERR))
+    processes = spawn(false, cmd, (STDIN,out,STDERR))
     EachLine(out)
 end
 each_line(cmd::AbstractCmd) = each_line(cmd,SpawnNullStream())

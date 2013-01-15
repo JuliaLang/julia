@@ -1,6 +1,6 @@
 module DSP
 
-using Base.FFTW
+importall Base.FFTW
 import Base.FFTW.normalization
 
 export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,

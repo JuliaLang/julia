@@ -1002,11 +1002,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
     #end
     #print("typeinf ", linfo.name, " ", atypes, "\n")
-    # if isdefined(:stdout_stream)
-    #     write(stdout_stream, "typeinf ")
-    #     write(stdout_stream, string(linfo.name))
-    #     write(stdout_stream, string(atypes))
-    #     write(stdout_stream, '\n')
+    # if isdefined(:STDOUT)
+    #     write(STDOUT, "typeinf ")
+    #     write(STDOUT, string(linfo.name))
+    #     write(STDOUT, string(atypes))
+    #     write(STDOUT, '\n')
     # end
     #print("typeinf ", ast0, " ", sparams, " ", atypes, "\n")
 

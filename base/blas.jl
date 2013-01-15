@@ -172,10 +172,11 @@ for (fname, elty) in ((:dsyrk_,:Float64), (:ssyrk_,:Float32),
            n = size(A, trans == 'N' ? 1 : 2)
            k = size(A, trans == 'N' ? 2 : 1)
            C = Array($elty, (n, n)) 
+           z = zero($elty)
            ccall(($(string(fname)),libblas), Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
-                 &uplo, &trans, &n, &k, &alpha, A, &stride(A,2), &0., C, &stride(C,2))
+                 &uplo, &trans, &n, &k, &alpha, A, &stride(A,2), &z, C, &stride(C,2))
            C
        end
    end

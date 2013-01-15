@@ -40,7 +40,7 @@ end
 function main()
     buff = Uint8[]
     while true
-        line = readline(stdin_stream).data
+        line = readline(STDIN).data
         if isempty(line)
             print_buff(buff)
             return

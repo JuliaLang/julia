@@ -273,7 +273,7 @@ function _start()
     # set CPU core count
     global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
 
-    #atexit(()->flush(stdout_stream))
+    #atexit(()->flush(STDOUT))
     try
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
@@ -355,4 +355,4 @@ print_with_color(msg::String, color::Symbol) = print_with_color(OUTPUT_STREAM, m
 
 # Use colors to print messages and warnings in the REPL
 info(msg::String) = print_with_color(strcat("MESSAGE: ", msg, "\n"), :green)
-warn(msg::String) = print_with_color(stderr_stream, strcat("WARNING: ", msg, "\n"), :red)
+warn(msg::String) = print_with_color(STDERR, strcat("WARNING: ", msg, "\n"), :red)

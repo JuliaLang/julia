@@ -173,7 +173,7 @@
 				</dict>
 				<dict>
 					<key>match</key>
-					<string>\b(?:global|local|const|export|import|using)\b</string>
+					<string>\b(?:global|local|const|export|import|importall|using)\b</string>
 					<key>name</key>
 					<string>storage.modifier.variable.julia</string>
 				</dict>

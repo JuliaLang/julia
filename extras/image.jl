@@ -485,7 +485,7 @@ end
 
 function imread(file::String)
     cmd = `convert -format "%w %h" -identify $file rgb:-`
-    stream = fdio(read_from(cmd).fd, true)
+    stream, _ = read_from(cmd)
     spawn(cmd)
     szline = readline(stream)
     spc = strchr(szline, ' ')

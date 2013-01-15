@@ -1076,7 +1076,7 @@ function verify_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Ve
         # So the solution is non-optimal
         # TODO: we should probably update manually and iterate when this happens
         # (never seen this happen)
-        println(stderr_stream, "Warning: nonoptimal solution for package $(reqsstruct.pkgs[p0]): sol=$s0")
+        println(STDERR, "Warning: nonoptimal solution for package $(reqsstruct.pkgs[p0]): sol=$s0")
         return false
     end
     return true
