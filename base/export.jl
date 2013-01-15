@@ -474,7 +474,6 @@ export
     prevpow,
     prevpow2,
     radians2degrees,
-    rational,
     real,
     real_valued,
     realmax,
