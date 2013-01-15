@@ -323,7 +323,7 @@ function _start()
         println()
         exit(1)
     end
-    exit(0) #HACK: always exit using jl_exit
+    ccall(:jl_atexit_hook, Void, ());
 end
 
 const atexit_hooks = {}
