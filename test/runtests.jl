@@ -1,4 +1,5 @@
-require("test")
+require("test") # FIXME: requiring things in base is weird.
+
 using Test
 
 function runtests(name)
