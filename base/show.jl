@@ -872,8 +872,8 @@ end
 
 print_bit_chunk(io::IO, c::Uint64) = print_bit_chunk(io, c, 64)
 
-print_bit_chunk(c::Uint64, l::Integer) = print_bit_chunk(stdout_stream, c, l)
-print_bit_chunk(c::Uint64) = print_bit_chunk(stdout_stream, c)
+print_bit_chunk(c::Uint64, l::Integer) = print_bit_chunk(STDOUT, c, l)
+print_bit_chunk(c::Uint64) = print_bit_chunk(STDOUT, c)
 
 function bitshow(io::IO, B::BitArray)
     if length(B) == 0
@@ -886,6 +886,6 @@ function bitshow(io::IO, B::BitArray)
     l = (@_mod64 (length(B)-1)) + 1
     print_bit_chunk(io, B.chunks[end], l)
 end
-bitshow(B::BitArray) = bitshow(stdout_stream, B)
+bitshow(B::BitArray) = bitshow(STDOUT, B)
 
 bitstring(B::BitArray) = sprint(bitshow, B)

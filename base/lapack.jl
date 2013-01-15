@@ -1521,7 +1521,7 @@ for (syevr, elty, relty) in
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                     lrwork = blas_int(rwork[1])
-                    rwork = Array($elty, lrwork)
+                    rwork = Array($relty, lrwork)
                     liwork = iwork[1]
                     iwork = Array(BlasInt, liwork)
                 end

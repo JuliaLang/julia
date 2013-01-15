@@ -118,9 +118,6 @@ end
     const STDIN  = _uv_tty2tty(ccall(:jl_stdin_stream ,Ptr{Void},()))
     const STDOUT = _uv_tty2tty(ccall(:jl_stdout_stream,Ptr{Void},()))
     const STDERR = _uv_tty2tty(ccall(:jl_stderr_stream,Ptr{Void},()))
-    const stdin_stream  = STDIN
-    const stdout_stream = STDOUT
-    const stderr_stream = STDERR
     OUTPUT_STREAM = STDOUT
 #end
 #end

@@ -526,9 +526,6 @@ function TransformedString(transform::Function, s::TransformedString)
     TransformedString(newtf, s.string)
 end
 
-const uc = uppercase
-const lc = lowercase
-
 ## string map, filter, has ##
 
 function map(f::Function, s::String)

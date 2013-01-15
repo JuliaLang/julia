@@ -64,6 +64,8 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
     return convert(T,a)//convert(T,b)
 end
 convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(one(x)))
+convert(::Type{Rational}, x::FloatingPoint, tol::Real) = convert(Rational{Int},x,tol)
+convert(::Type{Rational}, x::FloatingPoint) = convert(Rational{Int},x,eps(one(x)))
 convert(::Type{Bool}, x::Rational) = (x!=0)  # to resolve ambiguity
 convert{T<:Rational}(::Type{T}, x::Rational) = x
 convert{T<:Real}(::Type{T}, x::Rational) = convert(T, x.num/x.den)
@@ -141,16 +143,6 @@ trunc(x::Rational) = Rational(itrunc(x))
 floor(x::Rational) = Rational(ifloor(x))
 ceil (x::Rational) = Rational(iceil(x))
 round(x::Rational) = Rational(iround(x))
-
-rational(x::Real) = rational(x, 0)
-rational(x::Rational, tol::Real) = x
-rational(x::Integer) = x // one(x)
-rational(x::Integer, tol::Real) = x // one(x)
-rational(x::Float32, tol::Real) = convert(Rational{Int32}, x, tol)
-rational(x::Float64, tol::Real) = convert(Rational{Int64}, x, tol)
-rational(z::Complex) = complex(rational(real(z)), rational(imag(z)))
-rational(z::Complex, tol::Real) =
-    (tol /= sqrt(2); complex(rational(real(z), tol), rational(imag(z), tol)))
 
 ## rational to int coercion ##
 

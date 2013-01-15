@@ -317,7 +317,7 @@ function commit(f::Function, msg::String)
     assert_git_clean()
     try f()
     catch
-        print(stderr_stream,
+        print(STDERR,
               "\n\n*** ERROR ENCOUNTERED ***\n\n",
               "Rolling back to HEAD...\n")
         checkout()
@@ -328,7 +328,7 @@ function commit(f::Function, msg::String)
         run(`git diff --name-only --diff-filter=D HEAD^ HEAD` | `xargs rm -rf`)
         checkout()
     elseif !Git.dirty()
-        println(stderr_stream, "Nothing to commit.")
+        println(STDERR, "Nothing to commit.")
     else
         error("There are both staged and unstaged changes to packages.")
     end
@@ -391,7 +391,7 @@ pull() = cd_pkgdir() do
         Cc, conflicts, deleted = Git.merge_configs(Bc,Lc,Rc)
         # warn about config conflicts
         for (key,vals) in conflicts
-            print(stderr_stream,
+            print(STDERR,
                 "\nModules config conflict for $key:\n",
                 "  local value  = $(vals[1])\n",
                 "  remote value = $(vals[2])\n",
@@ -428,7 +428,7 @@ pull() = cd_pkgdir() do
     if Git.unstaged()
         unmerged = readall(`git ls-files -m` | `sort` | `uniq`)
         unmerged = replace(unmerged, r"^", "    ")
-        print(stderr_stream,
+        print(STDERR,
             "\n\n*** WARNING ***\n\n",
             "You have unresolved merge conflicts in the following files:\n\n",
             unmerged,
