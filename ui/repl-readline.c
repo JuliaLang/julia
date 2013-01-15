@@ -45,16 +45,22 @@ static void init_history(void)
 {
     using_history();
     if (disable_history) return;
-#ifndef __WIN32__
-    char *home = getenv("HOME");
-    if (!home) return;
-    asprintf(&history_file, "%s/.julia_history", home);
-#else
-    char *home = getenv("AppData");
-    if (!home) return;
-    asprintf(&history_file, "%s/julia/history", home);
-#endif
     struct stat stat_info;
+    if (!stat(".julia_history", &stat_info)) {
+        // history file in current dir
+        history_file = ".julia_history";
+    }
+    else {
+#ifndef __WIN32__
+        char *home = getenv("HOME");
+        if (!home) return;
+        asprintf(&history_file, "%s/.julia_history", home);
+#else
+        char *home = getenv("AppData");
+        if (!home) return;
+        asprintf(&history_file, "%s/julia/history", home);
+#endif
+    }
     if (!stat(history_file, &stat_info)) {
         read_history(history_file);
         for (;;) {
