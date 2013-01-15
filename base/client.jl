@@ -220,7 +220,7 @@ function process_options(args::Array{Any,1})
             machines = split(readall(args[i]), '\n', false)
             addprocs_ssh(machines)
         elseif args[i]=="-v" || args[i]=="--version"
-            println("julia version $VERSION")
+            println("julia version ", VERSION)
             exit(0)
         elseif args[i]=="--no-history"
             # see repl-readline.c
@@ -261,7 +261,7 @@ function _start()
     # set up standard streams
 
     @windows_only if !has(ENV,"HOME")
-        ENV["HOME"] = ENV["APPDATA"]*"\\julia"
+        ENV["HOME"] = joinpath(ENV["APPDATA"],"julia")
     end
     reinit_stdio()
     librandom_init()
@@ -294,11 +294,10 @@ function _start()
 
         global const LOAD_PATH = ByteString[
             ".",
-            julia_pkgdir(),
-            abspath("$JULIA_HOME/../share/julia"),
-            abspath("$JULIA_HOME/../share/julia/base"),
-            abspath("$JULIA_HOME/../share/julia/extras"),
-            abspath("$JULIA_HOME/../share/julia/ui"),
+            abspath(julia_pkgdir()),
+            abspath(JULIA_HOME,"..","share","julia"),
+            abspath(JULIA_HOME,"..","share","julia","base"),
+            abspath(JULIA_HOME,"..","share","julia","extras"),
         ]
 
         (quiet,repl,startup) = process_options(ARGS)
