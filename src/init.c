@@ -97,9 +97,6 @@ void fpe_handler(int arg)
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGSEGV);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
     if (
 #ifdef COPY_STACKS
@@ -111,10 +108,20 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
         ) {
+        sigemptyset(&sset);
+        sigaddset(&sset, SIGSEGV);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_stackovf_exception);
     }
     else {
-        signal(SIGSEGV, SIG_DFL);
+        uv_tty_reset_mode();
+        sigfillset(&sset);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        signal(sig, SIG_DFL);
+        if (sig != SIGSEGV &&
+            sig != SIGBUS &&
+            sig != SIGILL)
+            raise(sig);
     }
 }
 
@@ -317,7 +324,7 @@ void *init_stdio_handle(uv_file fd,int readable)
             handle = malloc(sizeof(uv_tty_t));
             uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable);
             ((uv_tty_t*)handle)->data=0;
-            uv_tty_set_mode((void*)handle,1); //raw stdio
+            uv_tty_set_mode((void*)handle,0); //cooked stdio
             break;
         case UV_NAMED_PIPE:
         case UV_FILE:

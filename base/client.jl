@@ -122,6 +122,7 @@ function readBuffer(stream::TTY, nread)
         end
         ptr = pointer(stream.buffer.data,stream.buffer.ptr)
         skip(stream.buffer,nread)
+        #println(STDERR,stream.buffer.data[stream.buffer.ptr-nread:stream.buffer.ptr-1])
         ccall(:jl_readBuffer,Void,(Ptr{Void},Int32),ptr,nread)
     end
     return false
