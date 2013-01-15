@@ -192,10 +192,14 @@ end
 
 function runbuildscript(pkg)
     dir = package_directory(pkg)
-    file = joinpath(dir,"deps","build.jl")
-    if(isfile(file))
-        info("Running package-specific build script")
-        include(file)
+    path = joinpath(dir, "deps")
+    if isdir(path)
+        cd(path) do
+            if isfile("build.jl")
+                info(strcat("Running build script for package ", pkg))
+                include("build.jl")
+            end
+        end
     end
 end
 
