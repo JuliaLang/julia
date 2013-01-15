@@ -367,12 +367,7 @@ end
 
 function run(cmds::AbstractCmd,args...)
     ps = spawn(cmds,spawn_opts_inherit(args...)...)
-    success = wait_success(ps)
-    if success
-        return true
-    else
-        return pipeline_error(ps)
-    end
+    wait_success(ps) ? nothing : pipeline_error(ps)
 end
 
 success(proc::Process) = (assert(process_exited(proc)); proc.exit_code==0)
@@ -384,7 +379,7 @@ function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
         error("failed process: ",proc," [",proc.exit_code,"]")
     end
-    true
+    nothing
 end
 
 function pipeline_error(procs::ProcessChain)
@@ -401,7 +396,6 @@ function pipeline_error(procs::ProcessChain)
         msg = string(msg,"\n  ",proc," [",proc.exit_code,"]")
     end
     error(msg)
-    return false
 end
 
 function exec(thunk::Function)
