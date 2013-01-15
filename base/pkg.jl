@@ -599,7 +599,7 @@ with the correct remote name for your repository."
             try
                 sha1 = ""
                 cd(pkg) do
-                    promtuserinfo()
+                    promptuserinfo()
                     run(`git init`)
                     run(`git commit --allow-empty -m "Initial empty commit"`)
                     touch("LICENSE.md") # Should insert MIT content
