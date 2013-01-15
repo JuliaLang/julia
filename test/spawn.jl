@@ -12,28 +12,32 @@
 
 #### Examples used in the manual ####
 
-show(readall(`echo hello | sort`))
 @test readall(`echo hello | sort`) == "hello | sort\n"
 @test readall(`echo hello`|`sort`) == "hello\n"
+
 out = readall(`echo hello` & `echo world`)
 @test search(out,"world") != (0,0)
 @test search(out,"hello") != (0,0)
 @test readall((`echo hello` & `echo world`)|`sort`)=="hello\nworld\n"
 
-## THIS requires visual inspection
-@test run(`echo stdio passthrough OK`)
+if false
+    @test (run(`echo hello`); true)
 
-prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
-@test run(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` | prefixer("A",2) & prefixer("B",2))
+    prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
+    @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |
+                  prefixer("A",2) & prefixer("B",2))
+    @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |
+                  prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |
+                  prefixer("A",2) & prefixer("B",2))
+end
 
-@test run(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |
-    prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |
-    prefixer("A",2) & prefixer("B",2))
-
-@test_fails run(`false`)
-@test run(ignorestatus(`false`))
-@test run(ignorestatus(`false`)|`true`)
-@test_fails run(ignorestatus(`false`)|`false`)
-@test_fails run(ignorestatus(`false`)&`false`)
-@test run(ignorestatus(`false`|`false`))
-@test run(ignorestatus(`false`&`false`))
+@test  success(`true`)
+@test !success(`false`)
+if false
+    @test  success(ignorestatus(`false`))
+    @test  success(ignorestatus(`false`) | `true`)
+    @test !success(ignorestatus(`false`) | `false`)
+    @test !success(ignorestatus(`false`) & `false`)
+    @test  success(ignorestatus(`false` | `false`))
+    @test  success(ignorestatus(`false` & `false`))
+end
