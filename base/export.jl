@@ -1373,5 +1373,7 @@ export
     globalEventLoop,
     uv_error,
     UVError,
-    kill
+    kill,
+    startTimer,
+    stopTimer
 

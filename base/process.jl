@@ -99,8 +99,8 @@ ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cm
 (<)(left::AbstractCmd,right::String) = left < FS.open(right,JL_O_RDONLY)
 (>)(left::AbstractCmd,right::String) = left > FS.open(right,JL_O_WRONLY|JL_O_CREAT,S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 (>>)(left::AbstractCmd,right::String) = left > FS.open(right,JL_O_WRONLY|JL_O_APPEND|JL_O_CREAT,S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
-
 (>)(left::Any,right::AbstractCmd) = right < left
+(.>)(left::AbstractCmd,right::Redirectable) = CmdRedirect(left,right,STDERR_NO) 
 
 typealias RawOrBoxedHandle Union(UVHandle,UVStream,FS.File)
 typealias StdIOSet (RawOrBoxedHandle, RawOrBoxedHandle, RawOrBoxedHandle)

@@ -167,7 +167,7 @@ function download_file(url::String, filename::String)
     if downloadcmd == :wget
         run(`wget -O $filename $url`)
     elseif downloadcmd == :curl
-        run(`curl -o $filename $url`)
+        run(`curl -o $filename -L $url`)
     elseif downloadcmd == :fetch
         run(`fetch -f $filename $url`)
     else
