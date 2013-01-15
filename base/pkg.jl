@@ -192,10 +192,14 @@ end
 
 function runbuildscript(pkg)
     dir = package_directory(pkg)
-    file = joinpath(dir,"deps","build.jl")
-    if(isfile(file))
-        info("Running package-specific build script")
-        include(file)
+    path = joinpath(dir, "deps")
+    if isdir(path)
+        cd(path) do
+            if isfile("build.jl")
+                info(strcat("Running build script for package ", pkg))
+                include("build.jl")
+            end
+        end
     end
 end
 
@@ -599,7 +603,7 @@ with the correct remote name for your repository."
             try
                 sha1 = ""
                 cd(pkg) do
-                    promtuserinfo()
+                    promptuserinfo()
                     run(`git init`)
                     run(`git commit --allow-empty -m "Initial empty commit"`)
                     touch("LICENSE.md") # Should insert MIT content
