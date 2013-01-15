@@ -82,15 +82,15 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq tril(a)*x b
 
         # Test null
-        bnull = null(b')
-        @assert_approx_eq_eps norm(b'bnull) zero(elty) n*eps(one(elty))
-        @assert_approx_eq_eps norm(bnull'b) zero(elty) n*eps(one(elty))
+        a15null = null(a[:,1:5]')
+        @assert_approx_eq_eps norm(a[:,1:5]'a15null) zero(elty) n*eps(one(elty))
+        @assert_approx_eq_eps norm(a15null'a[:,1:5]) zero(elty) n*eps(one(elty))
         @test size(null(b), 2) == 0
 
         # Test pinv
-        pinvb = pinv(b)
-        @assert_approx_eq b*pinvb*b b
-        @assert_approx_eq pinvb*b*pinvb pinvb
+        pinva15 = pinv(a[:,1:5])
+        @assert_approx_eq a[:,1:5]*pinva15*a[:,1:5] a[:,1:5]
+        @assert_approx_eq pinva15*a[:,1:5]*pinva15 pinva15
     
         # Complex vector rhs
         x = a\complex(b)
