@@ -77,7 +77,7 @@ function test_printer_raw(hdl::Task)
     println("")
 end
 
-function dump(io::IOStream, t::TestResult)
+function dump(io, t::TestResult)
     println(io, "In $(t.context) / $(t.group)")
     println(io, strcat(t.expr_str, " ", t.succeed ? "succeeded" : "FAILED"))
     println(io, "$(t.operation) with args:")
