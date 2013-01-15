@@ -477,8 +477,6 @@ void julia_init(char *imageFile)
     }
 #endif
 
-    //atexit(jl_atexit_hook);
-
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
