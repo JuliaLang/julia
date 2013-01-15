@@ -825,7 +825,7 @@ end
 
 ## Moore-Penrose inverse
 function pinv{T<:BlasFloat}(A::StridedMatrix{T})
-    u,s,vt      = svd(A, true)
+    u,s,vt      = svdt(A, true)
     sinv        = zeros(T, length(s))
     index       = s .> eps(real(one(T)))*max(size(A))*max(s)
     sinv[index] = 1 ./ s[index]
@@ -838,7 +838,7 @@ pinv(x::Number) = one(x)/x
 ## Basis for null space
 function null{T<:BlasFloat}(A::StridedMatrix{T})
     m,n = size(A)
-    _,s,vt = svd(A)
+    _,s,vt = svdt(A)
     if m == 0; return eye(T, n); end
     indstart = sum(s .> max(m,n)*max(s)*eps(eltype(s))) + 1
     vt[indstart:,:]'
