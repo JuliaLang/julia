@@ -70,8 +70,8 @@ function empty!(lru::LRU)
 end
 
 
-show(io, lru::UnboundedLRU) = print("UnboundedLRU()")
-show(io, lru::BoundedLRU) = print("BoundedLRU($(lru.maxsize))")
+show(io::IO, lru::UnboundedLRU) = print(io,"UnboundedLRU()")
+show(io::IO, lru::BoundedLRU) = print(io,"BoundedLRU($(lru.maxsize))")
 
 ## indexable ##
 
