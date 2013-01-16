@@ -27,7 +27,7 @@ function //(x::Complex, y::Complex)
     complex(real(xy)//yy, imag(xy)//yy)
 end
 
-function show(io, x::Rational)
+function show(io::IO, x::Rational)
     if isinf(x)
         print(io, x.num > 0 ? "Inf" : "-Inf")
     else

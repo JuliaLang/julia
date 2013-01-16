@@ -25,7 +25,7 @@ type AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a,b)
 end
 
-function show(io, cmd::Cmd)
+function show(io::IO, cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
         esc = shell_escape(cmd.exec...)
         print(io,'`')
@@ -41,7 +41,7 @@ function show(io, cmd::Cmd)
     end
 end
 
-function show(io, cmds::OrCmds)
+function show(io::IO, cmds::OrCmds)
     if isa(cmds.a, AndCmds)
         print("(")
         show(io, cmds.a)
@@ -59,7 +59,7 @@ function show(io, cmds::OrCmds)
     end
 end
 
-function show(io, cmds::AndCmds)
+function show(io::IO, cmds::AndCmds)
     if isa(cmds.a, OrCmds)
         print("(")
         show(io, cmds.a)
@@ -532,4 +532,4 @@ function wait_success(x::Union(Process,Vector{Process}))
     success(x)
 end
 
-show(io, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
+show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")

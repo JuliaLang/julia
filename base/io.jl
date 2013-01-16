@@ -1,6 +1,5 @@
 ## core stream types ##
 
-abstract IO
 # the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption
 
 # Generic IO functions
@@ -233,7 +232,7 @@ end
 IOStream(name::String) = IOStream(name, true)
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
-show(io, s::IOStream) = print(io, "IOStream(", s.name, ")")
+show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
