@@ -29,13 +29,13 @@ end
 write(s::IO, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
 if ENDIAN_BOM == 0x01020304
-    function write(s, x::Integer)
+    function write(s::IO, x::Integer)
         for n = sizeof(x):-1:1
             write(s, uint8((x>>>((n-1)<<3))))
         end
     end
 else
-    function write(s, x::Integer)
+    function write(s::IO, x::Integer)
         for n = 1:sizeof(x)
             write(s, uint8((x>>>((n-1)<<3))))
         end
