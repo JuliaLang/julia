@@ -32,7 +32,7 @@ type NamedPipe <: AsyncStream
     NamedPipe() = new(C_NULL,PipeString(),false,true,false,WaitTask[],false,WaitTask[])
 end
 
-show(io,stream::NamedPipe) = print(io,"NamedPipe(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
+show(io::IO,stream::NamedPipe) = print(io,"NamedPipe(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
 
 type TTY <: AsyncStream
     handle::Ptr{Void}
@@ -46,7 +46,7 @@ type TTY <: AsyncStream
     TTY(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],false,WaitTask[])
 end
 
-show(io,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
+show(io::IO,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
 
 abstract Socket <: AsyncStream
 
@@ -72,7 +72,7 @@ type TcpSocket <: Socket
     end
 end
 
-show(io,sock::TcpSocket) = print(io,"TcpSocket(",sock.open?"connected,":"disconnected,",nb_available(sock.buffer)," bytes waiting)")
+show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",sock.open?"connected,":"disconnected,",nb_available(sock.buffer)," bytes waiting)")
 
 type UdpSocket <: Socket
     handle::Ptr{Void}
@@ -96,7 +96,7 @@ end
 uvtype(::AsyncStream) = UV_STREAM
 uvhandle(stream::AsyncStream) = stream.handle
 
-show(io,sock::UdpSocket) = print(io,"TcpSocket(",sock.open?"connected,":"disconnected,",nb_available(sock.buffer)," bytes waiting)")
+show(io::IO,sock::UdpSocket) = print(io,"TcpSocket(",sock.open?"connected,":"disconnected,",nb_available(sock.buffer)," bytes waiting)")
 
 copy(s::TTY) = TTY(s.handle,s.open)
 
@@ -360,16 +360,19 @@ function notify_filled(stream::AsyncStream, nread::Int)
         end
     end
 end
+
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
     if(nread == -1)
-        close(stream)
         if(isa(stream.closecb,Function))
             stream.closecb()
         end
         if(_uv_lasterror() != 1) #UV_EOF == 1
-            error("Failed to start reading: ",_uv_lasterror(globalEventLoop()))
+           error = UVError("readcb")
+           close(stream)
+           throw(error)
         end
-		tasknotify(stream.readnotify, stream)
+        close(stream)
+        tasknotify(stream.readnotify, stream)
         #EOF
     else
         notify_filled(stream.buffer, nread, base, len)
@@ -590,7 +593,7 @@ uverrorname(err::UVError) = bytestring(ccall(:jl_uv_err_name,Ptr{Uint8},(Int32,I
 uv_error(prefix, b::Bool) = b?throw(UVError(string(prefix))):nothing
 uv_error(prefix) = uv_error(prefix, _uv_lasterror() != 0)
 
-show(io, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
+show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
 
 function getaddrinfo_callback(sock::TcpSocket,status::Int32,host::ByteString,port::Uint16,addrinfo_list::Ptr{Void})
     #println("getaddrinfo_callback")
@@ -611,7 +614,8 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-function connect_to_host(host::ByteString,port::Uint16) #TODO: handle errors
+function connect_to_host(host::ByteString,port::Integer) #TODO: handle errors
+    port = uint16(port)
     sock = TcpSocket()
     err = _jl_getaddrinfo(globalEventLoop(),host,C_NULL,
         (addrinfo::Ptr{Void},status::Int32) -> getaddrinfo_callback(sock,status,host,port,addrinfo))

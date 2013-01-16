@@ -572,6 +572,13 @@ DLLEXPORT void gdbbacktrace()
         gdblookup(bt_data[i]);
 }
 
+DLLEXPORT void jlbacktrace()
+{
+    for(size_t i=0; i < bt_size; i++)
+        gdblookup(bt_data[i]);
+}
+
+
 // yield to exception handler
 static void NORETURN throw_internal(jl_value_t *e)
 {

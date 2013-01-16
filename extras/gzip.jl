@@ -111,7 +111,7 @@ type GZError <: Exception
 end
 
 # show
-show(io, s::GZipStream) = print(io, "GZipStream(", s.name, ")")
+show(io::IO, s::GZipStream) = print(io, "GZipStream(", s.name, ")")
 
 macro test_eof_gzerr(s, cc, val)
     quote

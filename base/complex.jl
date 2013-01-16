@@ -34,8 +34,8 @@ function complex_show(io, z::Complex, compact::Bool)
         print(io, "complex(",r,",",i,")")
     end
 end
-show(io, z::Complex) = complex_show(io, z, false)
-showcompact(io, z::Complex) = complex_show(io, z, true)
+show(io::IO, z::Complex) = complex_show(io, z, false)
+showcompact(io::IO, z::Complex) = complex_show(io, z, true)
 
 convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                            throw(InexactError()))
