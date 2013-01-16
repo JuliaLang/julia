@@ -158,7 +158,7 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
          cmd,        argv,            loop,      proc, pp,      uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err))
     if(error != 0)
-        _c_free(proc)
+        c_free(proc)
         throw(UVError("spawn"))
     end
     return proc
@@ -168,6 +168,7 @@ function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::I
     proc.exit_code = exit_status
     proc.term_signal = term_signal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, term_signal) end
+    ccall(:jl_close_uv,Void,(Ptr{Void},),proc.handle)
     tasknotify(proc.exitnotify, proc)
 end
 

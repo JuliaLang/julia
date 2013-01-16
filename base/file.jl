@@ -26,6 +26,7 @@ function cd(f::Function, dir::String)
         f()
     finally
         system_error(:fchdir, ccall(:fchdir,Int32,(Int32,),fd) != 0)
+        system_error(:close, ccall(:close,Int32,(Int32,),fd) != 0)
     end
 end
 end
