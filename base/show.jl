@@ -3,9 +3,9 @@
 show(x) = show(OUTPUT_STREAM::Stream, x)
 
 show(io::Stream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
-show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::Stream, x)
+show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io::Stream, x)
 
-showcompact(io, x) = show(io, x)
+showcompact(io::IO, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::Stream, x)
 
 macro show(exs...)
@@ -18,20 +18,20 @@ macro show(exs...)
     return blk
 end
 
-show(io, s::Symbol) = show_indented(io, s)
-show(io, tn::TypeName) = print(io, tn.name)
-show(io, ::Nothing) = print(io, "nothing")
-show(io, b::Bool) = print(io, b ? "true" : "false")
-show(io, n::Signed) = (write(io, dec(n)); nothing)
-show(io, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
+show(io::IO, s::Symbol) = show_indented(io, s)
+show(io::IO, tn::TypeName) = print(io, tn.name)
+show(io::IO, ::Nothing) = print(io, "nothing")
+show(io::IO, b::Bool) = print(io, b ? "true" : "false")
+show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
+show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 
-show{T}(io, p::Ptr{T}) =
+show{T}(io::IO, p::Ptr{T}) =
     print(io, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
 full_name(m::Module) = m===Main ? () : tuple(full_name(module_parent(m))...,
                                              module_name(m))
 
-function show(io, m::Module)
+function show(io::IO, m::Module)
     if is(m,Main)
         print(io, "Main")
     else
@@ -39,13 +39,13 @@ function show(io, m::Module)
     end
 end
 
-function show(io, l::LambdaStaticData)
+function show(io::IO, l::LambdaStaticData)
     print(io, "AST(")
     show(io, l.ast)
     print(io, ")")
 end
 
-function show_delim_array(io, itr, op, delim, cl, delim_one)
+function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
     print(io, op)
     state = start(itr)
     newline = true
@@ -76,8 +76,8 @@ function show_delim_array(io, itr, op, delim, cl, delim_one)
     print(io, cl)
 end
 
-show_comma_array(io, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)
-show(io, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
+show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)
+show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 
 ## AST decoding helpers ##
 
@@ -302,7 +302,7 @@ function show_unquoted(io::IO, ex::SymbolNode)
 end
 
 
-function show(io, e::TypeError)
+function show(io::IO, e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
     if e.expected === Bool
         print(io, "type error: non-boolean ($(typeof(e.got))) ",
@@ -321,17 +321,17 @@ function show(io, e::TypeError)
     end
 end
 
-show(io, e::LoadError) = (show(io, e.error); print(io, "\nat $(e.file):$(e.line)"))
-show(io, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
-show(io, ::DivideByZeroError) = print(io, "error: integer divide by zero")
-show(io, ::StackOverflowError) = print(io, "error: stack overflow")
-show(io, ::UndefRefError) = print(io, "access to undefined reference")
-show(io, ::EOFError) = print(io, "read: end of file")
-show(io, e::ErrorException) = print(io, e.msg)
-show(io, e::KeyError) = print(io, "key not found: $(e.key)")
-show(io, e::InterruptException) = nothing
+show(io::IO, e::LoadError) = (show(io, e.error); print(io, "\nat $(e.file):$(e.line)"))
+show(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
+show(io::IO, ::DivideByZeroError) = print(io, "error: integer divide by zero")
+show(io::IO, ::StackOverflowError) = print(io, "error: stack overflow")
+show(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
+show(io::IO, ::EOFError) = print(io, "read: end of file")
+show(io::IO, e::ErrorException) = print(io, e.msg)
+show(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
+show(io::IO, e::InterruptException) = nothing
 
-function show(io, e::MethodError)
+function show(io::IO, e::MethodError)
     name = e.f.env.name
     if is(e.f,convert)
         print(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
@@ -340,7 +340,7 @@ function show(io, e::MethodError)
     end
 end
 
-function show(io, bt::BackTrace)
+function show(io::IO, bt::BackTrace)
     show(io, bt.e)
     t = bt.trace
     # we may not declare :eval_user_input
@@ -367,7 +367,7 @@ function show(io, bt::BackTrace)
 end
 end
 
-function show(io, m::Method)
+function show(io::IO, m::Method)
     tv = m.tvars
     if !isa(tv,Tuple)
         tv = (tv,)
@@ -382,7 +382,7 @@ function show(io, m::Method)
     end
 end
 
-function show(io, mt::MethodTable)
+function show(io::IO, mt::MethodTable)
     name = mt.name
     println(io, "Methods for generic function ", name)
     d = mt.defs
@@ -562,7 +562,7 @@ dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 showall(x) = showall(OUTPUT_STREAM::Stream, x)
 
-function showall{T}(io, a::AbstractArray{T,1})
+function showall{T}(io::IO, a::AbstractArray{T,1})
     if is(T,Any)
         opn = '{'; cls = '}'
     else
@@ -799,7 +799,7 @@ whos() = whos(r"")
 whos(m::Module) = whos(m, r"")
 whos(pat::Regex) = whos(ccall(:jl_get_current_module, Module, ()), pat)
 
-function show{T}(io, x::AbstractArray{T,0})
+function show{T}(io::IO, x::AbstractArray{T,0})
     println(io, summary(x),":")
     if isassigned(x)
         sx = sprint(showcompact, x[])
@@ -809,7 +809,7 @@ function show{T}(io, x::AbstractArray{T,0})
     print(io, sx)
 end
 
-function show(io, X::AbstractArray)
+function show(io::IO, X::AbstractArray)
     print(io, summary(X))
     if !isempty(X)
         println(io, ":")
@@ -817,7 +817,7 @@ function show(io, X::AbstractArray)
     end
 end
 
-function showall(io, X::AbstractMatrix)
+function showall(io::IO, X::AbstractMatrix)
     print(io, summary(X))
     if !isempty(X)
         println(io, ":")
@@ -825,7 +825,7 @@ function showall(io, X::AbstractMatrix)
     end
 end
 
-function showall(io, a::AbstractArray)
+function showall(io::IO, a::AbstractArray)
     print(io, summary(a))
     if isempty(a)
         return
@@ -850,8 +850,8 @@ function show_vector(io, v, opn, cls)
     print_matrix(io, X, 1, tty_cols(), opn, ", ", cls, "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 end
 
-show(io, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
-show(io, v::AbstractVector)      = show_vector(io, v, "[", "]")
+show(io::IO, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
+show(io::IO, v::AbstractVector)      = show_vector(io, v, "[", "]")
 
 # printing BitArrays
 

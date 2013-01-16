@@ -58,7 +58,7 @@ function print(io::IO, v::VersionNumber)
         print_joined(io, v.build,'.')
     end
 end
-show(io, v::VersionNumber) = print(io, "v\"", v, "\"")
+show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
 convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)

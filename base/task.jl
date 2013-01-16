@@ -1,4 +1,4 @@
-show(io, t::Task) = print(io, "Task")
+show(io::IO, t::Task) = print(io, "Task")
 
 current_task() = ccall(:jl_get_current_task, Task, ())
 istaskdone(t::Task) = t.done
