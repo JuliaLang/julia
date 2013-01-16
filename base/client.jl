@@ -104,7 +104,7 @@ function eval_user_input(ast::ANY, show_value)
     println()
 end
 
-function readBuffer(stream::TTY, nread)
+function readBuffer(stream::AsyncStream, nread)
     global _repl_enough_stdin::Bool    
     while !_repl_enough_stdin && nb_available(stream.buffer) > 0
         nread = int(memchr(stream.buffer,'\n')) # never more than one line or readline explodes :O

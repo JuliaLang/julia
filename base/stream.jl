@@ -360,16 +360,19 @@ function notify_filled(stream::AsyncStream, nread::Int)
         end
     end
 end
+
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
     if(nread == -1)
-        close(stream)
         if(isa(stream.closecb,Function))
             stream.closecb()
         end
         if(_uv_lasterror() != 1) #UV_EOF == 1
-            error("Failed to start reading: ",_uv_lasterror(globalEventLoop()))
+           error = UVError("readcb")
+           close(stream)
+           throw(error)
         end
-		tasknotify(stream.readnotify, stream)
+        close(stream)
+        tasknotify(stream.readnotify, stream)
         #EOF
     else
         notify_filled(stream.buffer, nread, base, len)
@@ -611,7 +614,8 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-function connect_to_host(host::ByteString,port::Uint16) #TODO: handle errors
+function connect_to_host(host::ByteString,port::Integer) #TODO: handle errors
+    port = uint16(port)
     sock = TcpSocket()
     err = _jl_getaddrinfo(globalEventLoop(),host,C_NULL,
         (addrinfo::Ptr{Void},status::Int32) -> getaddrinfo_callback(sock,status,host,port,addrinfo))
