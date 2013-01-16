@@ -72,7 +72,7 @@ function read(s, ::Type{Complex128})
     i = read(s,Float64)
     complex128(r,i)
 end
-function write(s, z::Complex128)
+function write(s::IO, z::Complex128)
     write(s,real(z))
     write(s,imag(z))
 end
