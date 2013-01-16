@@ -54,4 +54,4 @@ tmpnam() = bytestring(ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8},), C_NULL))
 ## Memory related ##
 
 c_free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
-c_malloc(size::Int32) = ccall(:malloc, Ptr{Void}, (Int,), size)
+c_malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Int,), size)

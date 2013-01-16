@@ -151,11 +151,17 @@ uvtype(::Ptr) = UV_STREAM
 
 function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
         in, out, err)
-    return ccall(:jl_spawn, Ptr{Void},
-        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Process, Int32,
+    proc = c_malloc(ccall(:jl_sizeof_uv_process_t,Int64,()))
+    error = ccall(:jl_spawn, Int32,
+        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
          Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void}),
-         cmd,        argv,            loop,      pp,      uvtype(in),
+         cmd,        argv,            loop,      proc, pp,      uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err))
+    if(error != 0)
+        _c_free(proc)
+        throw(UVError("spawn"))
+    end
+    return proc
 end
 
 function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::Int32)
