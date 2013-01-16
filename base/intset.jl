@@ -134,7 +134,7 @@ end
 length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)) +
     (s.fill1s ? typemax(Int) - s.limit : 0)
 
-function show(io, s::IntSet)
+function show(io::IO, s::IntSet)
     print(io, "IntSet(")
     first = true
     for n in s
