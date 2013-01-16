@@ -120,7 +120,6 @@ void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal)
 {
     JULIA_CB(return_spawn,p->data,2,CB_INT32,exit_status,CB_INT32,term_signal);
     (void)ret;
-    uv_close((uv_handle_t*)p,&closeHandle);
 }
 
 void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
