@@ -176,17 +176,16 @@ type EachLine
 end
 each_line(stream::IO) = EachLine(stream)
 
-start(itr::EachLine) = nothing
+start(itr::EachLine) = readline(itr.stream)
 function done(itr::EachLine, line)
-    peekbyte(itr.stream)
-    if !eof(itr.stream)
+    if !isempty(line)
         return false
     end
     close(itr.stream)
     itr.ondone()
     true
 end
-next(itr::EachLine, this_line) = (readline(itr.stream), nothing)
+next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
 
 function readlines(s, fx::Function...)
     a = {}
@@ -426,36 +425,24 @@ end
 readall(filename::String) = open(readall, filename)
 
 ## Character streams ##
-const _chtmp = Array(Char, 1)
-# API TODO: unpainted bikeshed
-function peekchar(s::IOStream)
-    if ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s, _chtmp)<0
-        return char(-1)
-    end
-    return _chtmp[1]
-end
-
-function peekbyte(s::IOStream)
-    ccall(:ios_peekc, Int32, (Ptr{Void},), s)
-end
-
+const _wstmp = Array(Char, 1)
 function eatwspace(s::IOStream)
-    ch = peekchar(s); status = int(ch)
-    while status >= 0 && iswspace(ch)
+    status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+    while status > 0 && iswspace(_wstmp[1])
         read(s, Char)  # advance one character
-        ch = peekchar(s); status = int(ch)
+        status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     end
 end
 
 function eatwspace_comment(s::IOStream, cmt::Char)
-    ch = peekchar(s); status = int(ch)
-    while status >= 0 && (iswspace(ch) || ch == cmt)
-        if ch == cmt
+    status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+    while status > 0 && (iswspace(_wstmp[1]) || _wstmp[1] == cmt)
+        if _wstmp[1] == cmt
             readline(s)
         else
             read(s, Char)  # advance one character
         end
-        ch = peekchar(s); status = int(ch)
+        status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     end
 end
 
