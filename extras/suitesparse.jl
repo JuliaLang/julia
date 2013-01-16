@@ -128,7 +128,7 @@ type CholmodCommon
     end
 end
 
-function show(io, cm::CholmodCommon)
+function show(io::IO, cm::CholmodCommon)
     st = ccall((:cholmod_print_common, libcholmod), BlasInt,
                (Ptr{Uint8},Ptr{Void}), "", cm.pt[1])
     if st != CHOLMOD_TRUE error("Error calling cholmod_print_common") end
@@ -164,7 +164,7 @@ end
 
 CholmodSparse(S::SparseMatrixCSC) = CholmodSparse(S, CholmodCommon())
 
-function show(io, cs::CholmodSparse)
+function show(io::IO, cs::CholmodSparse)
     ccall(_chm_print_sp,
           BlasInt, (Ptr{Void}, Ptr{Uint8},Ptr{Void}), cs.pt.val[1], "", cs.cm.pt[1])
 end
@@ -231,7 +231,7 @@ function CholmodFactor{Tv,Ti}(cs::CholmodSparse{Tv,Ti})
     CholmodFactor{Tv,Ti}(pt, cs)
 end
 
-function show(io, cf::CholmodFactor)
+function show(io::IO, cf::CholmodFactor)
     st = ccall(_chm_print_fa, BlasInt, (Ptr{Void}, Ptr{Uint8}, Ptr{Void}), cf.pt.val[1], "", cf.cs.cm.pt[1])
     if st != CHOLMOD_TRUE error("Cholmod error in print_factor") end
 end
@@ -264,7 +264,7 @@ CholmodDense{T<:Integer}(B::VecOrMat{T}, cm::CholmodCommon) = CholmodDense(float
     
 size(cd::CholmodDense) = (cd.m, cd.n)
 
-function show(io, cd::CholmodDense)
+function show(io::IO, cd::CholmodDense)
     st = ccall(_chm_print_dn, BlasInt, (Ptr{Void},Ptr{Uint8},Ptr{Void}), cd.pt[1], "", cd.cm.pt[1])
     if st != CHOLMOD_TRUE error("Cholmod error in print_dense") end
 end
@@ -366,7 +366,7 @@ function SparseMatrixCSC{Tv,Ti}(cso::CholmodSparseOut{Tv,Ti})
     convert_to_1_based_indexing!(sp)
 end
 
-function show(io, cso::CholmodSparseOut)
+function show(io::IO, cso::CholmodSparseOut)
     sp = ccall(_chm_print_sp, BlasInt, (Ptr{Void}, Ptr{Uint8},Ptr{Void}), cso.pt.val[1], "", cso.cm.pt[1])
     if sp != CHOLMOD_TRUE error("Cholmod error in print_sparse") end
 end
@@ -495,8 +495,8 @@ type UmfpackLU{Tv<:Union(Float64,Complex128),Ti<:CHMITypes} <: Factorization{Tv}
     mat::SparseMatrixCSC{Tv,Ti}
 end
 
-function show(io, f::UmfpackLU)
-    @printf("UMFPACK LU Factorization of a %d-by-%d sparse matrix\n",
+function show(io::IO, f::UmfpackLU)
+    @printf(io, "UMFPACK LU Factorization of a %d-by-%d sparse matrix\n",
            size(f.mat,1), size(f.mat,2))
     println(f.numeric)
     umfpack_report(f)
@@ -507,8 +507,8 @@ type UmfpackLUTrans{Tv<:Union(Float64,Complex128),Ti<:CHMITypes} <: Factorizatio
     mat::SparseMatrixCSC{Tv,Ti}
 end
 
-function show(io, f::UmfpackLUTrans)
-    @printf("UMFPACK LU Factorization of a transposed %d-by-%d sparse matrix\n",
+function show(io::IO, f::UmfpackLUTrans)
+    @printf(io, "UMFPACK LU Factorization of a transposed %d-by-%d sparse matrix\n",
            size(f.mat,1), size(f.mat,2))
     println(f.numeric)
     umfpack_report(f)
