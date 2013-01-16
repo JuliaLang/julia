@@ -127,7 +127,7 @@ function length(::EnvHash)
     return i
 end
 
-function show(io, ::EnvHash)
+function show(io::IO, ::EnvHash)
     for (k,v) = ENV
         println(io, "$k=$v")
     end

@@ -892,7 +892,7 @@ function full(S::SymTridiagonal)
     M
 end
 
-function show(io, S::SymTridiagonal)
+function show(io::IO, S::SymTridiagonal)
     println(io, summary(S), ":")
     print(io, "diag: ")
     print_matrix(io, (S.dv)')
@@ -940,7 +940,7 @@ function Tridiagonal{Tl<:Number, Td<:Number, Tu<:Number}(dl::Vector{Tl}, d::Vect
 end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
-function show(io, M::Tridiagonal)
+function show(io::IO, M::Tridiagonal)
     println(io, summary(M), ":")
     print(io, " sub: ")
     print_matrix(io, (M.dl)')
@@ -1203,7 +1203,7 @@ Woodbury{T}(A::AbstractMatrix{T}, U::Matrix{T}, C, V::Matrix{T}) = Woodbury{T}(A
 Woodbury{T}(A::AbstractMatrix{T}, U::Vector{T}, C, V::Matrix{T}) = Woodbury{T}(A, reshape(U, length(U), 1), C, V)
 
 size(W::Woodbury) = size(W.A)
-function show(io, W::Woodbury)
+function show(io::IO, W::Woodbury)
     println(io, summary(W), ":")
     print(io, "A: ", W.A)
     print(io, "\nU:\n")

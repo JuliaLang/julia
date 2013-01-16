@@ -261,7 +261,6 @@ int true_main(int argc, char *argv[])
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
-        uv_tty_reset_mode();
         //rl_cleanup_after_signal();
         return 0;
     }
