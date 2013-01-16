@@ -29,7 +29,7 @@ test_group("exception tests")
 @testfails complex(1,2) > 0 # fail
 @test throws_exception(complex(1,2) > 0, MethodError)
 @testfails throws_exception(complex(1,2) > 0, SystemError)
-#@testfails throws_exception(2 > 1, DomainError) # would correctly fail
+@testfails throws_exception(2 > 1, DomainError) # would correctly fail
 
 test_group("printing tests")
 @test sprint(show, :(1+2)) == ":(+(1,2))"
