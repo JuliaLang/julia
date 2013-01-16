@@ -419,21 +419,34 @@ static size_t bt_size = 0;
 
 void getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer);
 
+static const char* name_unknown = "???";
 static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip, int doCframes)
 {
     int fromC = 0;
 
     getFunctionInfo(func_name, line_num, file_name, ip);
     if (*func_name == NULL && doCframes) {
+        fromC = 1;
 #if defined(__WIN32__)
+        *func_name = name_unknown;   // FIXME
+        *file_name = name_unknown;
+        *line_num = 0;
 #else
         Dl_info dlinfo;
-        if (dladdr((void*) ip, &dlinfo) != 0 && dlinfo.dli_sname != NULL) {
-            *func_name = dlinfo.dli_sname;
-            *file_name = dlinfo.dli_fname;
-            // line number in C looks tricky. addr2line and libbfd seem promising. For now, punt and just return address offset.
-            *line_num = ip-(size_t)dlinfo.dli_saddr;
-            fromC = 1;
+        if (dladdr((void*) ip, &dlinfo) != 0) {
+            *file_name = (dlinfo.dli_fname != NULL) ? dlinfo.dli_fname : name_unknown;
+            if (dlinfo.dli_sname != NULL) {
+                *func_name = dlinfo.dli_sname;
+                // line number in C looks tricky. addr2line and libbfd seem promising. For now, punt and just return address offset.
+                *line_num = ip-(size_t)dlinfo.dli_saddr;
+            } else {
+                *func_name = name_unknown;
+                *line_num = 0;
+            }
+        } else {
+            *func_name = name_unknown;
+            *file_name = name_unknown;
+            *line_num = 0;
         }
 #endif
     }
