@@ -23,7 +23,6 @@
     ios_getc;
     ios_getutf8;
     ios_mem;
-    ios_peekc;
     ios_peekutf8;
     ios_pos;
     ios_printf;
