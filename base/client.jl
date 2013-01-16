@@ -322,7 +322,7 @@ function _start()
         println()
         exit(1)
     end
-    ccall(:jl_atexit_hook, Void, ());
+    ccall(:uv_atexit_hook, Void, ())
 end
 
 const atexit_hooks = {}

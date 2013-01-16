@@ -17,6 +17,8 @@ cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
 # TODO: for some reason this causes a strange type inference problem
 #cconvert(::Type{Ptr{Uint8}}, s::String) = bytestring(s)
 
+abstract IO
+
 type ErrorException <: Exception
     msg::String
 end
@@ -72,9 +74,9 @@ type ShowError <: Exception
     err::Exception
 end
 
-show(io, bt::BackTrace) = show(io,bt.e)
+show(io::IO, bt::BackTrace) = show(io,bt.e)
 
-function show(io, se::ShowError)
+function show(io::IO, se::ShowError)
     println("Error showing value of type ", typeof(se.val), ":")
     show(io, se.err)
 end

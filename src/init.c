@@ -214,14 +214,8 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
     if (!queue->first) queue->first = item;
     queue->last = item;
 }
-void jl_atexit_hook()
+DLLEXPORT void uv_atexit_hook()
 {
-    if (jl_base_module) {
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
-        if (f!=NULL && jl_is_function(f)) {
-            jl_apply((jl_function_t*)f, NULL, 0);
-        }
-    }
     uv_loop_t* loop = jl_global_event_loop();
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
