@@ -10,6 +10,7 @@ export
     RNG,
     Math,
     Sort,
+    Test,
     Pkg,
 
 # Types

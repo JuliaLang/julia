@@ -294,10 +294,8 @@ function _start()
         end
 
         global const LOAD_PATH = ByteString[
-            ".",
+            ".", # TODO: should we really look here?
             abspath(julia_pkgdir()),
-            abspath(JULIA_HOME,"..","share","julia"),
-            abspath(JULIA_HOME,"..","share","julia","base"),
             abspath(JULIA_HOME,"..","share","julia","extras"),
         ]
 

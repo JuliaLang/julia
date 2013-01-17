@@ -143,6 +143,7 @@ include("version.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
 include("util.jl")
+include("test.jl")
 
 # linear algebra
 include("blas.jl")
