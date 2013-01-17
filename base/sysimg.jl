@@ -112,8 +112,9 @@ include("path.jl")
 include("stat.jl")
 importall FileStat
 
-# front end
+# front end & code loading
 include("client.jl")
+include("loading.jl")
 
 # core math functions
 include("intfuncs.jl")
@@ -139,9 +140,9 @@ include("mmap.jl")
 
 # utilities - version, timing, help, edit
 include("version.jl")
-include("util.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
+include("util.jl")
 
 # linear algebra
 include("blas.jl")
