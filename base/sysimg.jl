@@ -5,7 +5,7 @@ eval(m,x) = Core.eval(m,x)
 
 include = Core.include
 
-include("export.jl")
+include("exports.jl")
 
 if false
     # simple print definitions for debugging. enable these if something
