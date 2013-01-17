@@ -120,7 +120,7 @@ myindexes(d::DArray) = d.indexes[localpiece(d)]
 
 # find which piece holds index (I...)
 function locate(d::DArray, I::Int...)
-    ntuple(ndims(d), i->search_sorted_last(d.cuts[i], I[i]))
+    ntuple(ndims(d), i->searchsortedlast(d.cuts[i], I[i]))
 end
 
 chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(d.chunks[i...])::A
