@@ -13,40 +13,40 @@ export librandom_init, srand,
        randbool, randbool!,
        Rng, Rng_MT
 
-abstract Rng
+abstract AbstractRNG
 
-start(r::Rng) = 0
-done(r::Rng, count) = r.len == count ? true : false
-next(r::Rng, count) = (rand(r), count + 1)
+type MersenneTwister <: AbstractRNG; end
 
-type Rng_MT <: Rng
+const RNG = MersenneTwister
+
+type MersenneTwister <: AbstractRNG
     state::DSFMT_state
     seed::Union(Uint32,Vector{Uint32})
     len::Int   # Use for iteration. Set to -1 otherwise.
 
-    function Rng_MT()
+    function MersenneTwister()
         seed = uint32(0)
         state = DSFMT_state()
         dsfmt_init_gen_rand(state, seed)
         return new(state, seed, -1)
     end
 
-    Rng_MT(seed) = Rng_MT(seed, -1)
+    MersenneTwister(seed) = MersenneTwister(seed, -1)
 
-    function Rng_MT(seed::Uint32, len::Int)
+    function MersenneTwister(seed::Uint32, len::Int)
         state = DSFMT_state()
         dsfmt_init_gen_rand(state, seed)
         return new(state, seed, len)
     end
 
-    function Rng_MT(seed::Vector{Uint32}, len::Int)
+    function MersenneTwister(seed::Vector{Uint32}, len::Int)
         state = DSFMT_state()
         dsfmt_init_by_array(state, seed)
         return new(state, seed, len)
     end
 end
 
-function srand(r::Rng_MT, seed) 
+function srand(r::MersenneTwister, seed) 
     r.seed = seed
     dsfmt_init_gen_rand(r.state, seed)
     return r
@@ -112,15 +112,15 @@ srand(filename::String) = srand(filename, 4)
 ## rand()
 
 rand() = dsfmt_gv_genrand_close_open()
-rand(r::Rng_MT) = dsfmt_genrand_close_open(r.state)
+rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 
 rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
 rand(dims::Dims) = rand!(Array(Float64, dims))
 rand(dims::Int...) = rand(dims)
 
-rand!(r::Rng_MT, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
-rand(r::Rng, dims::Dims) = rand!(r, Array(Float64, dims))
-rand(r::Rng, dims::Int...) = rand(r, dims)
+rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
+rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
+rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
 ## random integers
 
