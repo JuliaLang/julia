@@ -172,10 +172,7 @@ function histc(v::StridedVector, edg)
     last = edg[n]
     for x in v
         if !isless(last, x) && !isless(x, first)
-            i = search_sorted(edg, x)
-            while isless(x, edg[i])
-                i -= 1
-            end
+            i = searchsortedlast(edg, x)
             h[i] += 1
         end
     end
