@@ -151,11 +151,9 @@ function _test(ex::Expr, expect_succeed::Bool)
         end
     end
     
-    # if we failed with an exception, handle throws_exception
-    if tr.exception_thrown != NoException() && ex.args[1] == :throws_exception
-        if isa(tr.exception_thrown, eval(ex.args[3])) # we got the right one
-            tr.succeed = true
-        end
+    # if we expected an exception, see if we got the right one
+    if ex.args[1] == :throws_exception
+        tr.succeed = isa(tr.exception_thrown, eval(ex.args[3])) # we got the right one
     end
     
     # if we're running takes_less_than, see how we did
