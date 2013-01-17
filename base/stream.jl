@@ -564,7 +564,13 @@ write(s::AsyncStream, b::Uint8) =
     ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s))
 write(s::AsyncStream, c::Char) =
     ccall(:jl_pututf8, Int32, (Ptr{Void},Char), handle(s), c)
-write{T<:BitsKind}(s::AsyncStream, a::Array{T}) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),handle(s), a, uint(length(a)*sizeof(T)))
+function write{T}(s::AsyncStream, a::Array{T})
+    if(isa(T,BitsKind))
+        ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),handle(s), a, uint(length(a)*sizeof(T)))
+    else
+        invoke(write,(IO,Array),s,a)
+    end
+end
 write(s::AsyncStream, p::Ptr, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),handle(s), p, uint(nb))
 _write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),handle(s),p,uint(nb))
 
