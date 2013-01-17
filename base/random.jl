@@ -1,4 +1,4 @@
-module RNG
+module Random
 
 using Base.LibRandom
 
@@ -11,11 +11,9 @@ export librandom_init, srand,
        randchi2, randchi2!,
        randbeta, randbeta!,
        randbool, randbool!,
-       AbstractRNG, MersenneTwister
+       AbstractRNG, RNG, MersenneTwister
 
 abstract AbstractRNG
-
-const RNG = MersenneTwister
 
 type MersenneTwister <: AbstractRNG
     state::DSFMT_state
@@ -43,6 +41,9 @@ type MersenneTwister <: AbstractRNG
         return new(state, seed, len)
     end
 end
+
+# MersenneTwister is the default RNG.
+const RNG = MersenneTwister
 
 function srand(r::MersenneTwister, seed) 
     r.seed = seed

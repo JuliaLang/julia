@@ -125,8 +125,8 @@ importall Math
 # random number generation and statistics
 include("statistics.jl")
 include("librandom.jl")
-include("rng.jl")
-importall RNG
+include("random.jl")
+importall Random
 
 # Combinatorics
 include("sort.jl")
@@ -201,10 +201,10 @@ compile_hint(cmp, (Int32, Int32))
 compile_hint(min, (Int32, Int32))
 compile_hint(==, (ASCIIString, ASCIIString))
 compile_hint(arg_gen, (ASCIIString,))
-compile_hint(RNG.librandom_init, ())
-compile_hint(RNG.srand, (ASCIIString, Int))
+compile_hint(Random.librandom_init, ())
+compile_hint(Random.srand, (ASCIIString, Int))
+compile_hint(Random.srand, (Uint64,))
 compile_hint(open, (ASCIIString, Bool, Bool, Bool, Bool))
-compile_hint(RNG.srand, (Uint64,))
 compile_hint(done, (IntSet, Int64))
 compile_hint(next, (IntSet, Int64))
 compile_hint(ht_keyindex, (Dict{Any,Any}, Int32))
