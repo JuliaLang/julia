@@ -11,11 +11,9 @@ export librandom_init, srand,
        randchi2, randchi2!,
        randbeta, randbeta!,
        randbool, randbool!,
-       Rng, Rng_MT
+       AbstractRNG, MersenneTwister
 
 abstract AbstractRNG
-
-type MersenneTwister <: AbstractRNG; end
 
 const RNG = MersenneTwister
 
