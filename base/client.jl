@@ -328,6 +328,7 @@ function _start()
                 @unix_only global have_color = (begins_with(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
                 @windows_only global have_color = true
             end
+
             global is_interactive = true
             if !quiet
                 banner()
@@ -358,18 +359,29 @@ function _atexit()
 end
 
 # Have colors passed as simple symbols: :black, :red, ...
-function print_with_color(io::IO, msg::String, color::Symbol)
+function print_with_color(io::IO, color::Symbol, msg::String...)
     if have_color
-        default = color_normal
-        printed_color = get(text_colors, color, default)
-        print(io, printed_color, msg, default)
+        printed_color = get(text_colors, color, color_normal)
+        print(io, printed_color, msg..., color_normal)
     else
-        print(io, msg)
+        print(io, strs...)
     end
 end
+print_with_color(color::Symbol, msg::String...) =
+    print_with_color(OUTPUT_STREAM, color, msg...)
 
-print_with_color(msg::String, color::Symbol) = print_with_color(OUTPUT_STREAM, msg, color)
+# deprecated versions
+function print_with_color(io::IO, msg::String, color::Symbol)
+    warn("print_with_color(io, msg, color) is deprecated, ",
+         "use print_with_color(io, color, msg) instead.")
+    print_with_color(io, color, msg)
+end
+function print_with_color(msg::String, color::Symbol)
+    warn("print_with_color(msg, color) is deprecated, ",
+         "use print_with_color(color, msg) instead.")
+    print_with_color(color, msg)
+end
 
 # Use colors to print messages and warnings in the REPL
-info(msg::String) = print_with_color(strcat("MESSAGE: ", msg, "\n"), :green)
-warn(msg::String) = print_with_color(STDERR, strcat("WARNING: ", msg, "\n"), :red)
+info(msg::String...) = print_with_color(STDERR, :green, "MESSAGE: ", msg..., "\n")
+warn(msg::String...) = print_with_color(STDERR, :red,   "WARNING: ", msg..., "\n")
