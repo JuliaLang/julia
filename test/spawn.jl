@@ -20,7 +20,7 @@ out = readall(`echo hello` & `echo world`)
 @test search(out,"hello") != (0,0)
 @test readall((`echo hello` & `echo world`)|`sort`)=="hello\nworld\n"
 
-@test (run(`echo -e "       \033[34m[stdio passthrough ok]\033[0m"`); true)
+@test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
