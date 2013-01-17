@@ -7,7 +7,7 @@ export
     LAPACK,
     BLAS,
     LibRandom,
-    RNG,
+    Random,
     Math,
     Sort,
     Test,
