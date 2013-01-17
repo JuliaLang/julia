@@ -182,6 +182,7 @@ function process_options(args::Array{Any,1})
     quiet = false
     repl = true
     startup = true
+    color_set = false
     if has(ENV, "JL_POST_BOOT")
         eval(Main,parse_input_line(ENV["JL_POST_BOOT"]))
     end
@@ -231,6 +232,23 @@ function process_options(args::Array{Any,1})
             # load juliarc now before processing any more options
             try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             startup = false
+        elseif begins_with(args[i], "--color")
+            if args[i] == "--color"
+                color_set = true
+                global have_color = true
+            elseif args[i][8] == '='
+                val = args[i][9:]
+                if contains(("no","0","false"), val)
+                    color_set = true
+                    global have_color = false
+                elseif contains(("yes","1","true"), val)
+                    color_set = true
+                    global have_color = true
+                end
+            end
+            if !color_set
+                error("invalid option: ", args[i])
+            end
         elseif args[i][1]!='-'
             # program
             repl = false
@@ -243,7 +261,7 @@ function process_options(args::Array{Any,1})
         end
         i += 1
     end
-    return (quiet,repl,startup)
+    return (quiet,repl,startup,color_set)
 end
 
 const roottask = current_task()
@@ -299,16 +317,17 @@ function _start()
             abspath(JULIA_HOME,"..","share","julia","extras"),
         ]
 
-        (quiet,repl,startup) = process_options(ARGS)
+        (quiet,repl,startup,color_set) = process_options(ARGS)
 
         if repl
             if startup
                 try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             end
 
-            @unix_only global have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
-                                    success(`tput setaf 0`)
-            @windows_only global have_color = true
+            if !color_set
+                @unix_only global have_color = (begins_with(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
+                @windows_only global have_color = true
+            end
             global is_interactive = true
             if !quiet
                 banner()
