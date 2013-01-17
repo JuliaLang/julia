@@ -144,10 +144,10 @@ end
 # gerqf - unpivoted RQ decomposition
 # getrf - LU decomposition
 for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty, relty) in
-    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgerqf_,:dgetrf_,:Float64, Float64),
-     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgerqf_,:sgetrf_,:Float32, Float32),
-     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgerqf_,:zgetrf_,:Complex128, Float64),
-     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgerqf_,:cgetrf_,:Complex64, Float32))
+    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgerqf_,:dgetrf_,:Float64,:Float64),
+     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgerqf_,:sgetrf_,:Float32,:Float32),
+     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
+     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
     @eval begin
         # SUBROUTINE DGEBRD( M, N, A, LDA, D, E, TAUQ, TAUP, WORK, LWORK,
         #                    INFO )
@@ -454,8 +454,8 @@ for (gels, gesv, getrs, getri, elty) in
         end
     end
 end
-for (gelsd, elty) in ((:dgelsd_, Float64),
-                      (:sgelsd_, Float32))
+for (gelsd, elty) in ((:dgelsd_, :Float64),
+                      (:sgelsd_, :Float32))
     @eval begin
         # SUBROUTINE DGELSD( M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK,
         #      $                   WORK, LWORK, IWORK, INFO )
@@ -502,8 +502,8 @@ for (gelsd, elty) in ((:dgelsd_, Float64),
         gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
     end
 end
-for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
-                             (:cgelsd_, Complex64, Float32))
+for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
+                             (:cgelsd_, :Complex64, :Float32))
     @eval begin
         # SUBROUTINE ZGELSD( M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK,
         #      $                   WORK, LWORK, RWORK, IWORK, INFO )
@@ -556,10 +556,10 @@ end
 
 # (GE) general matrices eigenvalue-eigenvector and singular value decompositions
 for (geev, gesvd, gesdd, elty, relty) in
-    ((:dgeev_,:dgesvd_,:dgesdd_,:Float64, Float64),
-     (:sgeev_,:sgesvd_,:sgesdd_,:Float32, Float32),
-     (:zgeev_,:zgesvd_,:zgesdd_,:Complex128, Float64),
-     (:cgeev_,:cgesvd_,:cgesdd_,:Complex64, Float32))
+    ((:dgeev_,:dgesvd_,:dgesdd_,:Float64,Float64),
+     (:sgeev_,:sgesvd_,:sgesdd_,:Float32,:Float32),
+     (:zgeev_,:zgesvd_,:zgesdd_,:Complex128,:Float64),
+     (:cgeev_,:cgesvd_,:cgesdd_,:Complex64,:Float32))
     @eval begin
         #      SUBROUTINE DGEEV( JOBVL, JOBVR, N, A, LDA, WR, WI, VL, LDVL, VR,
         #      $                  LDVR, WORK, LWORK, INFO )
@@ -1126,7 +1126,7 @@ end
 ## (TR) triangular matrices: solver and inverse
 for (trtri, trtrs, elty) in
     ((:dtrtri_,:dtrtrs_,:Float64),
-     (:strtri_,:strtrs_,Float32),
+     (:strtri_,:strtrs_,:Float32),
      (:ztrtri_,:ztrtrs_,:Complex128),
      (:ctrtri_,:ctrtrs_,:Complex64))
     @eval begin
@@ -1199,11 +1199,11 @@ end
 
 ## (SY) symmetric matrices - eigendecomposition, Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
-for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
-    ((:dsyconv_,:dsyev_,:dsysv_,:dsytrf_,:dsytri_,:dsytrs_,:Float64),
-     (:ssyconv_,:ssyev_,:ssysv_,:ssytrf_,:ssytri_,:ssytrs_,:Float32),
-     (:zheconv_,:zheev_,:zhesv_,:zhetrf_,:zhetri_,:zhetrs_,:Complex128),
-     (:checonv_,:cheev_,:chesv_,:chetrf_,:chetri_,:chetrs_,:Complex64))
+for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
+    ((:dsyconv_,:dsyev_,:dsysv_,:dsytrf_,:dsytri_,:dsytrs_,:Float64, :Float64),
+     (:ssyconv_,:ssyev_,:ssysv_,:ssytrf_,:ssytri_,:ssytrs_,:Float32, :Float32),
+     (:zheconv_,:zheev_,:zhesv_,:zhetrf_,:zhetri_,:zhetrs_,:Complex128, :Float64),
+     (:checonv_,:cheev_,:chesv_,:chetrf_,:chetri_,:chetrs_,:Complex64, :Float32))
     @eval begin
         #       SUBROUTINE DSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
         # *     .. Scalar Arguments ..
