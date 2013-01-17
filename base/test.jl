@@ -1,4 +1,5 @@
 module Test
+
 export @test, @test_fails
 
 abstract Result

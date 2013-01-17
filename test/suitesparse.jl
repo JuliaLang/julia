@@ -1,4 +1,4 @@
-require("extras/suitesparse")
+require("suitesparse")
 
 using SuiteSparse
 
