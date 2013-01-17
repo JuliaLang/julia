@@ -1,3 +1,11 @@
+module FileStat
+
+import Base.show
+
+export Stat, stat, lstat, ispath, isfifo, ischardev, isdir, isblockdev, isfile, islink,
+       issocket, issetuid, issetgid, issticky, isreadable, iswriteable, isexecutable,
+       uperm, gperm, operm, filemode, filesize, mtime, ctime, samefile
+
 type Stat
     device  :: Uint
     inode   :: Uint
@@ -37,7 +45,7 @@ macro stat_call(sym,arg)
     quote
         fill!(stat_buf,0)
         r = ccall($(expr(:quote,sym)), Int32, (Ptr{Uint8},Ptr{Uint8}), $arg, stat_buf)
-        uv_errno = _uv_lasterror(globalEventLoop())
+        uv_errno = Base._uv_lasterror(globalEventLoop())
         ENOENT = 34
         system_error(:stat, r!=0 && uv_errno!=ENOENT)
         st = Stat(stat_buf)
@@ -113,3 +121,5 @@ filesize(path::String) = stat(path).size
 
 samefile(a::Stat, b::Stat) = a.device==b.device && a.inode==b.inode
 samefile(a::String, b::String) = samefile(stat(a),stat(b))
+
+end # module
