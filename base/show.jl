@@ -41,7 +41,12 @@ end
 
 function show(io::IO, l::LambdaStaticData)
     print(io, "AST(")
-    show(io, l.ast)
+    if isa(l.ast,Expr)
+        show(io, l.ast)
+    else
+        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
+        show(io, ast)
+    end
     print(io, ")")
 end
 

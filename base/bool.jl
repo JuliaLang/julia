@@ -1,5 +1,6 @@
 ## boolean conversions ##
 
+convert(::Type{Bool}, x::Bool) = x
 convert(::Type{Bool}, x::Real) = (x!=0)
 
 # promote Bool to any other numeric type
