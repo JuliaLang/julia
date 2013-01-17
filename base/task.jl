@@ -50,9 +50,12 @@ function consume(P::Task)
     v
 end
 
-start(t::Task) = consume(t)
-done(t::Task, val) = istaskdone(t)
-next(t::Task, val) = (val, consume(t))
+start(t::Task) = nothing
+function done(t::Task, val)
+    t.result = consume(t)
+    istaskdone(t)
+end
+next(t::Task, val) = (t.result, nothing)
 
 macro task(ex)
     :(Task(()->$(esc(ex))))
