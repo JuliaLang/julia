@@ -1,5 +1,6 @@
 ## symbols ##
 
+symbol(s::Symbol) = s
 symbol(s::ASCIIString) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =
