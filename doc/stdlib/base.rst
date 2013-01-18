@@ -1241,7 +1241,10 @@ Data Formats
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 
-.. function:: parse_int(type, str, base)
+.. function:: parse_int(Type, String, base::Integer) -> Integer
+              parse_int(Type, String)
+              parse_int(String)
+              parse_int(String, base::Integer)
 
    Parse a string as an integer in the given base, yielding a number of the specified type.
 
@@ -1301,11 +1304,11 @@ Data Formats
 
    Convert real numbers or arrays to complex
 
-.. function:: iscomplex(x)
+.. function:: iscomplex(x) -> Bool
 
    Test whether a number or array is of a complex type
 
-.. function:: isreal(x)
+.. function:: isreal(x) -> Bool
 
    Test whether a number or array is of a real type
 
@@ -1336,23 +1339,23 @@ Numbers
 
    The constant pi
 
-.. function:: isdenormal(f)
+.. function:: isdenormal(f) -> Bool
 
    Test whether a floating point number is denormal
 
-.. function:: isfinite(f)
+.. function:: isfinite(f) -> Bool
 
    Test whether a number is finite
 
-.. function:: isnan(f)
+.. function:: isnan(f) -> Bool
 
    Test whether a floating point number is not a number (NaN)
 
-.. function:: nextfloat(f)
+.. function:: nextfloat(f) -> Float
 
    Get the next floating point number in lexicographic order
 
-.. function:: prevfloat(f)
+.. function:: prevfloat(f) -> Float
 
    Get the previous floating point number in lexicographic order
 
@@ -1377,27 +1380,27 @@ Random Numbers
 
 Random numbers are generated in Julia by calling functions from the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_.
 
-.. function:: rand
+.. function:: rand -> Float64
 
    Generate a ``Float64`` random number in (0,1)
 
-.. function:: randf
+.. function:: randf -> Float32
 
    Generate a ``Float32`` random number in (0,1)
 
-.. function:: randi(Int32|Uint32|Int64|Uint64)
+.. function:: randi(Int32|Uint32|Int64|Uint64) -> Integer
 
    Generate a random integer of the given type
 
-.. function:: randi(n)
+.. function:: randi(n) -> Integer
 
    Generate a random integer from 1 to ``n`` inclusive
 
-.. function:: randi(n, dims...)
+.. function:: randi(n, dims...) -> Array{Integer}
 
    Generate an array of random integers from 1 to ``n`` inclusive
 
-.. function:: randi((a,b))
+.. function:: randi((a,b)) -> Array{Integer}
 
    Generate a random integer in the interval from ``a`` to ``b`` inclusive. The argument is a tuple.
 
@@ -1405,7 +1408,7 @@ Random numbers are generated in Julia by calling functions from the `Mersenne Tw
 
    Generate an array of random integers in the interval from ``a`` to ``b`` inclusive. The first argument is a tuple.
 
-.. function:: randbool
+.. function:: randbool -> Bool
 
    Generate a random boolean value
 
@@ -1439,7 +1442,7 @@ Arrays
 Basic functions
 ~~~~~~~~~~~~~~~
 
-.. function:: ndims(A)
+.. function:: ndims(A) -> Integer
 
    Returns the number of dimensions of A
 
@@ -1451,7 +1454,7 @@ Basic functions
 
    Returns the type of the elements contained in A
 
-.. function:: length(A)
+.. function:: length(A) -> Integer
 
    Returns the number of elements in A (note that this differs from Matlab where ``length(A)`` is the largest dimension of ``A``)
 
@@ -1633,7 +1636,7 @@ Indexing, Assignment, and Concatenation
 
    Remove singleton dimensions from the shape of array ``A``
 
-.. function:: vec(A)
+.. function:: vec(Array) -> Vector
 
    Make a vector out of an array with only one non-singleton dimension.
 
@@ -1859,19 +1862,19 @@ Combinatorics
 
    Construct a random cyclic permutation of the given length.
 
-.. function:: shuffle(v)
+.. function:: shuffle(v) -> Vector
 
    Randomly rearrange the elements of a vector.
 
-.. function:: shuffle!(v)
+.. function:: shuffle!(v) -> v
 
    In-place version of :func:`shuffle`.
 
-.. function:: reverse(v)
+.. function:: reverse(v) -> Vector
 
    Reverse vector ``v``.
 
-.. function:: reverse!(v)
+.. function:: reverse!(v) -> v
 
    In-place version of :func:`reverse`.
 
