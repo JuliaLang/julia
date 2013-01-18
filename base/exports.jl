@@ -1106,7 +1106,6 @@ export
     include_string,
     reload,
     require,
-    julia_pkgdir,
 
 # RTS internals
     compile_hint,
