@@ -1713,10 +1713,9 @@ end # let
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-# unique_all is like intersect.
-# algorithm: do intersect first, then iterate through the first
+# algorithm: do intersect on sets first, then iterate through the first
 # vector and produce only those in the set
-function unique_common(vs...)
+function intersect(vs...)
     args_type = promote_type([eltype(v) for v in vs]...)
     ret = Array(args_type,0)
     all_elems = intersect([Set(v...) for v in vs]...)
@@ -1727,8 +1726,7 @@ function unique_common(vs...)
     end
     ret
 end
-# unique_any is like union
-function unique_any(vs...)
+function union(vs...)
     args_type = promote_type([eltype(v) for v in vs]...)
     ret = Array(args_type,0)
     seen = Set()
@@ -1742,8 +1740,8 @@ function unique_any(vs...)
     end
     ret
 end
-# unique_diff is like setdiff -- only accepts two args
-function unique_diff(a, b)
+# uniquediff is like setdiff -- only accepts two args
+function uniquediff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
     bset = Set(b...)
     ret = Array(args_type,0)
