@@ -239,7 +239,7 @@ A C function declared to return ``void`` will give ``nothing`` in Julia.
 systems we currently support (UNIX), it is 32-bit.
 
 For string arguments (``char*``) the Julia type should be ``Ptr{Uint8}``,
-not ``String``. C functions that take an arguments of the type ``char**``
+not ``ASCIIString``. C functions that take an argument of the type ``char**``
 can be called by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, 
 C functions of the form::
 
