@@ -1,27 +1,23 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-have_color = false # default can be altered
+const text_colors = {
+    :black   => "\033[1m\033[30m",
+    :red     => "\033[1m\033[31m",
+    :green   => "\033[1m\033[32m",
+    :yellow  => "\033[1m\033[33m",
+    :blue    => "\033[1m\033[34m",
+    :magenta => "\033[1m\033[35m",
+    :cyan    => "\033[1m\033[36m",
+    :white   => "\033[1m\033[37m",
+    :normal  => "\033[0m",
+}
 
-const color_normal = "\033[0m"
-
-text_colors = {:black   => "\033[1m\033[30m",
-               :red     => "\033[1m\033[31m",
-               :green   => "\033[1m\033[32m",
-               :yellow  => "\033[1m\033[33m",
-               :blue    => "\033[1m\033[34m",
-               :magenta => "\033[1m\033[35m",
-               :cyan    => "\033[1m\033[36m",
-               :white   => "\033[1m\033[37m",
-               :normal  => color_normal}
-
-function answer_color()
-    c = symbol(get(ENV, "JL_ANSWER_COLOR", ""))
-    return get(text_colors, c, "\033[1m\033[34m")
-end
+have_color = false
+color_answer = text_colors[:blue]
+color_normal = text_colors[:normal]
 
 banner() = print(have_color ? banner_color : banner_plain)
-
 
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
@@ -83,7 +79,12 @@ function eval_user_input(ast::ANY, show_value)
                 global ans = value
                 if !is(value,nothing) && show_value
                     if have_color
-                        print(answer_color())
+                        color = color_answer
+                        try
+                            key = symbol(lowercase(string(Main.ANSWER_COLOR)))
+                            color = get(text_colors,key,color_answer)
+                        end
+                        print(color)
                     end
                     try repl_show(value)
                     catch err
@@ -183,9 +184,6 @@ function process_options(args::Array{Any,1})
     repl = true
     startup = true
     color_set = false
-    if has(ENV, "JL_POST_BOOT")
-        eval(Main,parse_input_line(ENV["JL_POST_BOOT"]))
-    end
     i = 1
     while i <= length(args)
         if args[i]=="-q" || args[i]=="--quiet"
@@ -320,9 +318,7 @@ function _start()
         (quiet,repl,startup,color_set) = process_options(ARGS)
 
         if repl
-            if startup
-                try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
-            end
+            startup && try_include(joinpath(ENV["HOME"],".juliarc.jl"))
 
             if !color_set
                 @unix_only global have_color = (begins_with(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
@@ -330,9 +326,20 @@ function _start()
             end
 
             global is_interactive = true
-            if !quiet
-                banner()
+            quiet || banner()
+
+            @unix_only    answer_color = "blue"
+            @windows_only answer_color = "normal"
+            if has(ENV,"JULIA_ANSWER_COLOR")
+                answer_color = ENV["JULIA_ANSWER_COLOR"]
+            elseif has(ENV,"JL_ANSWER_COLOR")
+                warn("JL_ANSWER_COLOR is deprecated, use JULIA_ANSWER_COLOR instead.")
+                answer_color = ENV["JL_ANSWER_COLOR"]
             end
+            eval(Main,:(ANSWER_COLOR = $answer_color))
+            global color_answer
+            color_answer = get(text_colors,symbol(answer_color),color_answer)
+
             run_repl()
         end
     catch err
