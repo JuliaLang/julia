@@ -269,6 +269,8 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     ASCIIString(a)
 end
 
+num2hex(n::Integer) = hex(n, sizeof(n)*2)
+
 function base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
     if !(2 <= b <= length(symbols)) error("invalid base: $b") end
     i = neg + max(pad,ndigits0z(x,b))
