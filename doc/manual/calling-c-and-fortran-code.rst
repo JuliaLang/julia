@@ -219,6 +219,7 @@ translated to Julia types as follows.
 -  ``unsigned long long`` ⟺ ``Uint64``
 -  ``float`` ⟺ ``Float32``
 -  ``double`` ⟺ ``Float64``
+-  ``void`` ⟺ ``Void``
 
 *Note:* the ``bool`` type is only defined by C++, where it is 8 bits
 wide. In C, however, ``int`` is often used for boolean values. Since
