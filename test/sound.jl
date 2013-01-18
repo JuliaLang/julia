@@ -1,8 +1,9 @@
 ## -*-Julia-*-
 ## Test suite for Julia's sound module
 
-require("extras/sound")
-require("extras/options")
+require("sound")
+require("options")
+
 using Sound
 using OptionsMod
 

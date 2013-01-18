@@ -101,7 +101,8 @@ function normpath(path::String)
 end
 normpath(a::String, b::String...) = normpath(joinpath(a,b...))
 
-abspath(path::String) = normpath(isabspath(path) ? path : joinpath(pwd(),path))
+abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+abspath(a::String, b::String...) = abspath(joinpath(a,b...))
 
 function realpath(path::String)
     p = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), path, C_NULL)

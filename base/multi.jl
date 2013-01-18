@@ -247,7 +247,7 @@ function identify_socket(otherid, sock)
         PGRP.np += d
     end
     PGRP.workers[i] = Worker("", 0, sock, i)
-    #write(stdout_stream, "$(PGRP.myid) heard from $i\n")
+    #write(STDOUT, "$(PGRP.myid) heard from $i\n")
     nothing
 end
 
@@ -881,7 +881,7 @@ function start_worker(out::Stream)
     write(out, "$(dec(actual_port))#") # print port
     write(out, "localhost")      #TODO: print hostname
     write(out, '\n')
-    # close stdin; workers will not use it
+    # close STDIN; workers will not use it
     #close(STDIN)
 
     ccall(:jl_install_sigint_handler, Void, ())

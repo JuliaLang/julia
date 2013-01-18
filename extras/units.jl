@@ -77,7 +77,7 @@ global lshow
 global _unit_si_prefixes
 for (t, f, s, ps, ls, fs) in prefix_table
     @eval to_reference(::Type{$t}) = $f
-    @eval show(io, ::Type{$t}) = print(io, $s)
+    @eval show(io::IO, ::Type{$t}) = print(io, $s)
     @eval pshow(io, ::Type{$t}) = print(io, $ps)
     @eval lshow(io, ::Type{$t}) = print(io, $ls)
     @eval fshow(io, ::Type{$t}) = print(io, $fs)
@@ -94,7 +94,7 @@ end
 _unit_si_prefixes = ntuple(length(prefix_table)+1, i->return_prefix(i))
 end  # let
 to_reference(::Type{SINone}) = 1
-show(io, ::Type{SINone}) = nothing
+show(io::IO, ::Type{SINone}) = nothing
 pshow(io, ::Type{SINone}) = nothing
 lshow(io, ::Type{SINone}) = nothing
 fshow(io, ::Type{SINone}) = nothing
@@ -147,7 +147,7 @@ function _unit_gen_func_multiplicative(table)
         @eval reference(::Type{$t}) = $r
         @eval to_reference(::Type{$t}) = x->x*$to_r
         @eval from_reference(::Type{$t}) = x->x/$to_r
-        @eval show(io, ::Type{$t}) = print(io, $s)
+        @eval show(io::IO, ::Type{$t}) = print(io, $s)
         @eval pshow(io, ::Type{$t}) = print(io, $ps)
         @eval lshow(io, ::Type{$t}) = print(io, $ls)
         @eval fshow(io, ::Type{$t}) = print(io, $fs)
@@ -159,7 +159,7 @@ function _unit_gen_func(table)
         @eval reference(::Type{$t}) = $r
         @eval to_reference(::Type{$t}) = $to_func
         @eval from_reference(::Type{$t}) = $from_func
-        @eval show(io, ::Type{$t}) = print(io, $s)
+        @eval show(io::IO, ::Type{$t}) = print(io, $s)
         @eval pshow(io, ::Type{$t}) = print(io, $ps)
         @eval lshow(io, ::Type{$t}) = print(io, $ls)
         @eval fshow(io, ::Type{$t}) = print(io, $fs)

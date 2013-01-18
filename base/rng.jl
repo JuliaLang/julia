@@ -60,7 +60,7 @@ function librandom_init()
     try
         srand("/dev/urandom")
     catch
-        println(stderr, "Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
+        println(STDERR, "Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try

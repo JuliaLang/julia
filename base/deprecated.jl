@@ -36,3 +36,4 @@ end
 @deprecate  dlmwrite    writedlm
 @deprecate  lc          lowercase
 @deprecate  uc          uppercase
+@deprecate  nCr         binomial

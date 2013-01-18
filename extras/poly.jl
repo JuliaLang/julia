@@ -33,7 +33,7 @@ copy(p::Polynomial) = Polynomial(copy(p.a[1+p.nzfirst:end]))
 zero{T}(p::Polynomial{T}) = Polynomial([zero(T)])
 one{T}(p::Polynomial{T}) = Polynomial([one(T)])
 
-function show(io,p::Polynomial)
+function show(io::IO,p::Polynomial)
     n = length(p)
     print(io,"Polynomial(")
     if n <= 0

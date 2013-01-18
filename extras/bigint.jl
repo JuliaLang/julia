@@ -199,7 +199,7 @@ function string(x::BigInt)
     ret
 end
 
-function show(io, x::BigInt)
+function show(io::IO, x::BigInt)
     print(io, string(x))
 end
 

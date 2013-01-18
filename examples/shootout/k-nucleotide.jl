@@ -59,12 +59,12 @@ end
 function main()
     three = ">THREE "
     while true
-        line = readline(stdin_stream)
+        line = readline(STDIN)
         if length(line) >= length(three) && line[1:length(three)] == three
             break
         end
     end
-    data = chars(readall(stdin_stream))
+    data = chars(readall(STDIN))
     # delete the newlines and convert to upper case
     i, j = 1, 1
     while i <= length(data)

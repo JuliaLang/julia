@@ -62,6 +62,7 @@ function init(meta::String)
         run(`mkdir -p $dir`)
         cd(dir) do
             # create & configure
+            promptuserinfo()
             run(`git init`)
             run(`git commit --allow-empty -m "Initial empty commit"`)
             run(`git remote add origin .`)
@@ -82,8 +83,9 @@ function init(meta::String)
             cd(Git.autoconfig_pushurl,"METADATA")
             Metadata.gen_hashes()
         end
-    catch
+    catch e 
         run(`rm -rf $dir`)
+        rethrow(e)
     end
 end
 init() = init(DEFAULT_META)
@@ -188,7 +190,18 @@ installed(pkg::String) = cd_pkgdir() do
     get(installed(), pkg, nothing)
 end
 
-
+function runbuildscript(pkg)
+    dir = package_directory(pkg)
+    path = joinpath(dir, "deps")
+    if isdir(path)
+        cd(path) do
+            if isfile("build.jl")
+                info(strcat("Running build script for package ", pkg))
+                include("build.jl")
+            end
+        end
+    end
+end
 
 # update packages from requirements
 
@@ -226,6 +239,7 @@ function _resolve()
                         run(`git checkout -q $(want[pkg])`)
                     end
                     run(`git add -- $pkg`)
+                    runbuildscript(pkg)
                 end
             else
                 ver = Metadata.version(pkg,have[pkg])
@@ -245,7 +259,7 @@ function _resolve()
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
-                try run(`git checkout -q $(want[pkg])` .> "/dev/null")
+                try run(`git checkout -q $(want[pkg])` .> SpawnNullStream())
                 catch
                     run(`git fetch -q`)
                     try run(`git checkout -q $(want[pkg])`)
@@ -256,6 +270,7 @@ function _resolve()
                 Git.autoconfig_pushurl()
             end
             run(`git add -- $pkg`)
+            runbuildscript(pkg)
         end
     end
 end
@@ -317,7 +332,7 @@ function commit(f::Function, msg::String)
     assert_git_clean()
     try f()
     catch
-        print(stderr_stream,
+        print(STDERR,
               "\n\n*** ERROR ENCOUNTERED ***\n\n",
               "Rolling back to HEAD...\n")
         checkout()
@@ -328,7 +343,7 @@ function commit(f::Function, msg::String)
         run(`git diff --name-only --diff-filter=D HEAD^ HEAD` | `xargs rm -rf`)
         checkout()
     elseif !Git.dirty()
-        println(stderr_stream, "Nothing to commit.")
+        println(STDERR, "Nothing to commit.")
     else
         error("There are both staged and unstaged changes to packages.")
     end
@@ -391,7 +406,7 @@ pull() = cd_pkgdir() do
         Cc, conflicts, deleted = Git.merge_configs(Bc,Lc,Rc)
         # warn about config conflicts
         for (key,vals) in conflicts
-            print(stderr_stream,
+            print(STDERR,
                 "\nModules config conflict for $key:\n",
                 "  local value  = $(vals[1])\n",
                 "  remote value = $(vals[2])\n",
@@ -428,7 +443,7 @@ pull() = cd_pkgdir() do
     if Git.unstaged()
         unmerged = readall(`git ls-files -m` | `sort` | `uniq`)
         unmerged = replace(unmerged, r"^", "    ")
-        print(stderr_stream,
+        print(STDERR,
             "\n\n*** WARNING ***\n\n",
             "You have unresolved merge conflicts in the following files:\n\n",
             unmerged,
@@ -533,6 +548,29 @@ function major(pkg)
     version(pkg, VersionNumber(lver.major+1))
 end
 
+function promptuserinfo()
+    if(isempty(chomp(readall(ignorestatus(`git config --global user.name`)))))
+        info("Git would like to know your name to initialize your .julia directory.\nEnter it below:")
+        name = chomp(readline(STDIN))
+        if(isempty(name))
+            error("Could not read name")
+        else
+            run(`git config --global user.name $name`)
+            info("Thank you. You can change it using run(`git config --global user.name NAME`)")
+        end  
+    end
+    if(isempty(chomp(readall(ignorestatus(`git config --global user.email`)))))
+        info("Git would like to know your email to initialize your .julia directory.\nEnter it below:")
+        email = chomp(readline(STDIN))
+        if(isempty(email))
+            error("Could not read email")
+        else
+            run(`git config --global user.email $email`)
+            info("Thank you. You can change it using run(`git config --global user.email EMAIL`)")
+        end
+    end
+end
+
 function new(pkg::String)
     newpath = joinpath(julia_pkgdir(), pkg)
     cd_pkgdir() do
@@ -565,6 +603,7 @@ with the correct remote name for your repository."
             try
                 sha1 = ""
                 cd(pkg) do
+                    promptuserinfo()
                     run(`git init`)
                     run(`git commit --allow-empty -m "Initial empty commit"`)
                     touch("LICENSE.md") # Should insert MIT content

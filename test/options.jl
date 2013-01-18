@@ -1,4 +1,5 @@
-require("extras/options")
+require("options")
+
 using OptionsMod
 
 oo = Options(:a, true, :b, 7)

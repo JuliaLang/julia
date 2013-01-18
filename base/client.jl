@@ -1,27 +1,23 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
-have_color = false # default can be altered
+const text_colors = {
+    :black   => "\033[1m\033[30m",
+    :red     => "\033[1m\033[31m",
+    :green   => "\033[1m\033[32m",
+    :yellow  => "\033[1m\033[33m",
+    :blue    => "\033[1m\033[34m",
+    :magenta => "\033[1m\033[35m",
+    :cyan    => "\033[1m\033[36m",
+    :white   => "\033[1m\033[37m",
+    :normal  => "\033[0m",
+}
 
-const color_normal = "\033[0m"
-
-text_colors = {:black   => "\033[1m\033[30m",
-               :red     => "\033[1m\033[31m",
-               :green   => "\033[1m\033[32m",
-               :yellow  => "\033[1m\033[33m",
-               :blue    => "\033[1m\033[34m",
-               :magenta => "\033[1m\033[35m",
-               :cyan    => "\033[1m\033[36m",
-               :white   => "\033[1m\033[37m",
-               :normal  => color_normal}
-
-function answer_color()
-    c = symbol(get(ENV, "JL_ANSWER_COLOR", ""))
-    return get(text_colors, c, "\033[1m\033[34m")
-end
+have_color = false
+color_answer = text_colors[:blue]
+color_normal = text_colors[:normal]
 
 banner() = print(have_color ? banner_color : banner_plain)
-
 
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
@@ -83,7 +79,12 @@ function eval_user_input(ast::ANY, show_value)
                 global ans = value
                 if !is(value,nothing) && show_value
                     if have_color
-                        print(answer_color())
+                        color = color_answer
+                        try
+                            key = symbol(lowercase(string(Main.ANSWER_COLOR)))
+                            color = get(text_colors,key,color_answer)
+                        end
+                        print(color)
                     end
                     try repl_show(value)
                     catch err
@@ -104,7 +105,7 @@ function eval_user_input(ast::ANY, show_value)
     println()
 end
 
-function readBuffer(stream::TTY, nread)
+function readBuffer(stream::AsyncStream, nread)
     global _repl_enough_stdin::Bool    
     while !_repl_enough_stdin && nb_available(stream.buffer) > 0
         nread = int(memchr(stream.buffer,'\n')) # never more than one line or readline explodes :O
@@ -122,6 +123,7 @@ function readBuffer(stream::TTY, nread)
         end
         ptr = pointer(stream.buffer.data,stream.buffer.ptr)
         skip(stream.buffer,nread)
+        #println(STDERR,stream.buffer.data[stream.buffer.ptr-nread:stream.buffer.ptr-1])
         ccall(:jl_readBuffer,Void,(Ptr{Void},Int32),ptr,nread)
     end
     return false
@@ -181,9 +183,7 @@ function process_options(args::Array{Any,1})
     quiet = false
     repl = true
     startup = true
-    if has(ENV, "JL_POST_BOOT")
-        eval(Main,parse_input_line(ENV["JL_POST_BOOT"]))
-    end
+    color_set = false
     i = 1
     while i <= length(args)
         if args[i]=="-q" || args[i]=="--quiet"
@@ -220,7 +220,7 @@ function process_options(args::Array{Any,1})
             machines = split(readall(args[i]), '\n', false)
             addprocs_ssh(machines)
         elseif args[i]=="-v" || args[i]=="--version"
-            println("julia version $VERSION")
+            println("julia version ", VERSION)
             exit(0)
         elseif args[i]=="--no-history"
             # see repl-readline.c
@@ -230,6 +230,23 @@ function process_options(args::Array{Any,1})
             # load juliarc now before processing any more options
             try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
             startup = false
+        elseif begins_with(args[i], "--color")
+            if args[i] == "--color"
+                color_set = true
+                global have_color = true
+            elseif args[i][8] == '='
+                val = args[i][9:]
+                if contains(("no","0","false"), val)
+                    color_set = true
+                    global have_color = false
+                elseif contains(("yes","1","true"), val)
+                    color_set = true
+                    global have_color = true
+                end
+            end
+            if !color_set
+                error("invalid option: ", args[i])
+            end
         elseif args[i][1]!='-'
             # program
             repl = false
@@ -242,7 +259,7 @@ function process_options(args::Array{Any,1})
         end
         i += 1
     end
-    return (quiet,repl,startup)
+    return (quiet,repl,startup,color_set)
 end
 
 const roottask = current_task()
@@ -261,7 +278,7 @@ function _start()
     # set up standard streams
 
     @windows_only if !has(ENV,"HOME")
-        ENV["HOME"] = ENV["APPDATA"]*"\\julia"
+        ENV["HOME"] = joinpath(ENV["APPDATA"],"julia")
     end
     reinit_stdio()
     librandom_init()
@@ -273,7 +290,7 @@ function _start()
     # set CPU core count
     global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
 
-    #atexit(()->flush(stdout_stream))
+    #atexit(()->flush(STDOUT))
     try
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
@@ -293,28 +310,36 @@ function _start()
         end
 
         global const LOAD_PATH = ByteString[
-            ".",
-            julia_pkgdir(),
-            abspath("$JULIA_HOME/../share/julia"),
-            abspath("$JULIA_HOME/../share/julia/base"),
-            abspath("$JULIA_HOME/../share/julia/extras"),
-            abspath("$JULIA_HOME/../share/julia/ui"),
+            ".", # TODO: should we really look here?
+            abspath(julia_pkgdir()),
+            abspath(JULIA_HOME,"..","share","julia","extras"),
         ]
 
-        (quiet,repl,startup) = process_options(ARGS)
+        (quiet,repl,startup,color_set) = process_options(ARGS)
 
         if repl
-            if startup
-                try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
+            startup && try_include(joinpath(ENV["HOME"],".juliarc.jl"))
+
+            if !color_set
+                @unix_only global have_color = (begins_with(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
+                @windows_only global have_color = true
             end
 
-            @unix_only global have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
-                                    success(`tput setaf 0`)
-            @windows_only global have_color = true
             global is_interactive = true
-            if !quiet
-                banner()
+            quiet || banner()
+
+            @unix_only    answer_color = "blue"
+            @windows_only answer_color = "normal"
+            if has(ENV,"JULIA_ANSWER_COLOR")
+                answer_color = ENV["JULIA_ANSWER_COLOR"]
+            elseif has(ENV,"JL_ANSWER_COLOR")
+                warn("JL_ANSWER_COLOR is deprecated, use JULIA_ANSWER_COLOR instead.")
+                answer_color = ENV["JL_ANSWER_COLOR"]
             end
+            eval(Main,:(ANSWER_COLOR = $answer_color))
+            global color_answer
+            color_answer = get(text_colors,symbol(answer_color),color_answer)
+
             run_repl()
         end
     catch err
@@ -322,7 +347,7 @@ function _start()
         println()
         exit(1)
     end
-    exit(0) #HACK: always exit using jl_exit
+    ccall(:uv_atexit_hook, Void, ())
 end
 
 const atexit_hooks = {}
@@ -341,18 +366,29 @@ function _atexit()
 end
 
 # Have colors passed as simple symbols: :black, :red, ...
-function print_with_color(io::IO, msg::String, color::Symbol)
+function print_with_color(io::IO, color::Symbol, msg::String...)
     if have_color
-        default = color_normal
-        printed_color = get(text_colors, color, default)
-        print(io, printed_color, msg, default)
+        printed_color = get(text_colors, color, color_normal)
+        print(io, printed_color, msg..., color_normal)
     else
-        print(io, msg)
+        print(io, strs...)
     end
 end
+print_with_color(color::Symbol, msg::String...) =
+    print_with_color(OUTPUT_STREAM, color, msg...)
 
-print_with_color(msg::String, color::Symbol) = print_with_color(OUTPUT_STREAM, msg, color)
+# deprecated versions
+function print_with_color(io::IO, msg::String, color::Symbol)
+    warn("print_with_color(io, msg, color) is deprecated, ",
+         "use print_with_color(io, color, msg) instead.")
+    print_with_color(io, color, msg)
+end
+function print_with_color(msg::String, color::Symbol)
+    warn("print_with_color(msg, color) is deprecated, ",
+         "use print_with_color(color, msg) instead.")
+    print_with_color(color, msg)
+end
 
 # Use colors to print messages and warnings in the REPL
-info(msg::String) = print_with_color(strcat("MESSAGE: ", msg, "\n"), :green)
-warn(msg::String) = print_with_color(stderr_stream, strcat("WARNING: ", msg, "\n"), :red)
+info(msg::String...) = print_with_color(STDERR, :green, "MESSAGE: ", msg..., "\n")
+warn(msg::String...) = print_with_color(STDERR, :red,   "WARNING: ", msg..., "\n")

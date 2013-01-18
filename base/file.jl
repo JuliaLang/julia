@@ -26,6 +26,7 @@ function cd(f::Function, dir::String)
         f()
     finally
         system_error(:fchdir, ccall(:fchdir,Int32,(Int32,),fd) != 0)
+        system_error(:close, ccall(:close,Int32,(Int32,),fd) != 0)
     end
 end
 end
@@ -167,7 +168,7 @@ function download_file(url::String, filename::String)
     if downloadcmd == :wget
         run(`wget -O $filename $url`)
     elseif downloadcmd == :curl
-        run(`curl -o $filename $url`)
+        run(`curl -o $filename -L $url`)
     elseif downloadcmd == :fetch
         run(`fetch -f $filename $url`)
     else

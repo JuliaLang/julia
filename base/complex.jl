@@ -34,8 +34,8 @@ function complex_show(io, z::Complex, compact::Bool)
         print(io, "complex(",r,",",i,")")
     end
 end
-show(io, z::Complex) = complex_show(io, z, false)
-showcompact(io, z::Complex) = complex_show(io, z, true)
+show(io::IO, z::Complex) = complex_show(io, z, false)
+showcompact(io::IO, z::Complex) = complex_show(io, z, true)
 
 convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                            throw(InexactError()))
@@ -72,7 +72,7 @@ function read(s, ::Type{Complex128})
     i = read(s,Float64)
     complex128(r,i)
 end
-function write(s, z::Complex128)
+function write(s::IO, z::Complex128)
     write(s,real(z))
     write(s,imag(z))
 end
