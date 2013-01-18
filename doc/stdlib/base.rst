@@ -12,7 +12,7 @@ Getting Around
    Print information about global variables in a module, optionally restricted
    to those matching ``pattern``.
 
-.. function:: edit("file", [line])
+.. function:: edit(file, [line])
 
    Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor. If the file name ends in ".jl" it is reloaded when the editor closes the file.
 
@@ -20,25 +20,27 @@ Getting Around
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit. When the editor exits, the source file containing the definition is reloaded.
 
-.. function:: load("file")
+.. function:: require(file::String...)
 
-   Evaluate the contents of a source file
+   Evaluate the contents of a source file.
+   
+   **Note**: :func:`load` is now deprecated in favor of :func:`require`.
 
-.. function:: help("name" or object)
+.. function:: help(name::String or object)
 
    Get help for a function
 
-.. function:: apropos("string")
+.. function:: apropos(substring::String)
 
    Search help for a substring
 
 .. function:: which(f, args...)
 
-   Show which method of ``f`` will be called for the given arguments
+   Show which method of ``f`` will be called for the given arguments.
 
 .. function:: methods(f)
 
-   Show all methods of ``f`` with their argument types
+   Show all methods of ``f`` with their argument types.
 
 All Objects
 -----------
@@ -145,9 +147,11 @@ Types
 Generic Functions
 -----------------
 
-.. function:: method_exists(f, tuple)
+.. function:: method_exists(f, tuple) -> Bool
 
    Determine whether the given generic function has a method matching the given tuple of argument types.
+   
+   **Example**: ``method_exists(length, (Array,)) = true``
 
 .. function:: applicable(f, args...)
 
@@ -180,11 +184,11 @@ is translated to:
 
 The ``state`` object may be anything, and should be chosen appropriately for each iterable type.
 
-.. function:: start(iter)
+.. function:: start(iter) -> state
 
    Get initial iteration state for an iterable object
 
-.. function:: done(iter, state)
+.. function:: done(iter, state) -> Bool
 
    Test whether we are done iterating
 
@@ -197,11 +201,15 @@ Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, `
 General Collections
 -------------------
 
-.. function:: isempty(collection)
+.. function:: isempty(collection) -> Bool
 
    Determine whether a collection is empty (has no elements).
 
-.. function:: length(collection)
+.. function:: empty!(collection) -> collection
+   
+   Remove all elements from a collection.
+
+.. function:: length(collection) -> Integer
 
    For ordered, indexable collections, the maximum index ``i`` for which ``ref(collection, i)`` is valid. For unordered collections, the number of elements.
 
@@ -212,73 +220,75 @@ Partially implemented by: ``FDSet``.
 Iterable Collections
 --------------------
 
-.. function:: contains(itr, x)
+.. function:: contains(iterable, x) -> Bool
 
    Determine whether a collection contains the given value, ``x``.
 
-.. function:: reduce(op, v0, itr)
+.. function:: reduce(op, v0, iterable{Type})
 
    Reduce the given collection with the given operator, i.e. accumulate ``v = op(v,elt)`` for each element, where ``v`` starts as ``v0``. Reductions for certain commonly-used operators are available in a more convenient 1-argument form: ``max(itr)``, ``min(itr)``, ``sum(itr)``, ``prod(itr)``, ``any(itr)``, ``all(itr)``.
 
-.. function:: max(itr)
+.. function:: max(iterable{Type}) -> element::Type
 
    Determine maximum element in a collection
 
-.. function:: min(itr)
+.. function:: min(iterable{Type}) -> element::Type
 
    Determine minimum element in a collection
 
-.. function:: indmax(itr)
+.. function:: indmax(iterable) -> Integer
 
    Returns the index of the maximum element in a collection
 
-.. function:: indmin(itr)
+.. function:: indmin(iterable) -> Integer
 
    Returns the index of the minimum element in a collection
 
-.. function:: findmax(iter)
+.. function:: findmax(iterable{Type}) -> (element::Type, index::Int)
 
    Returns a tuple of the maximum element and its index
 
-.. function:: findmin(iter)
+.. function:: findmin(iterable{Type}) -> (element::Type, index::Int)
 
    Returns a tuple of the minimum element and its index
 
-.. function:: sum(itr)
+.. function:: sum(iterable{Type}) -> sum::Type
 
    Sum elements of a collection
 
-.. function:: prod(itr)
+.. function:: prod(iterable{Type}) -> prod::Type
 
    Multiply elements of a collection
 
-.. function:: any(itr)
+.. function:: any(iterable{Type}) -> Bool
 
    Test whether any elements of a boolean collection are true
 
-.. function:: all(itr)
+.. function:: all(iterable{Type}) -> Bool
 
    Test whether all elements of a boolean collection are true
 
-.. function:: count(itr)
+.. function:: count(iterable) -> Integer
 
    Count the number of boolean elements in ``itr`` which are ``true`` rather than ``false``.
 
-.. function:: countp(p, itr)
+.. function:: countp(p, iterable) -> Integer
 
    Count the number of elements in ``itr`` for which predicate ``p`` is true.
 
-.. function:: anyp(p, itr)
+.. function:: anyp(p, iterable) -> Bool
 
    Determine whether any element of ``itr`` satisfies the given predicate.
 
-.. function:: allp(p, itr)
+.. function:: allp(p, iterable) -> Bool
 
    Determine whether all elements of ``itr`` satisfy the given predicate.
 
-.. function:: map(f, c)
+.. function:: map(function, collection) -> collection
 
-   Transform collection ``c`` by applying ``f`` to each element
+   Transform collection by applying to each element.
+   
+   **Example**: ``map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]``
 
 Indexable Collections
 ---------------------
@@ -321,13 +331,16 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Return the value stored for the given key, or the given default value if no mapping for the key is present.
 
-.. function:: del(collection, key)
+.. function:: delete!(collection, key)
 
    Delete the mapping for the given key in a collection.
 
 .. function:: del_all(collection)
+              empty!(collection)
 
    Delete all keys from a collection.
+   
+   **Note**: Deprecated in favor of ``empty!``.
 
 .. function:: keys(collection)
 
@@ -376,7 +389,7 @@ Set-Like Collections
 
    Construct an ``IntSet`` of the given integers. Implemented as a bit string, and therefore good for dense integer sets.
 
-.. function:: choose(s)
+.. function:: choose(s::Set{Type}) -> element::Type
 
    Pick an element of a set
 
@@ -389,35 +402,39 @@ Fully implemented by: ``IntSet``, ``Set``, ``FDSet``.
 Dequeues
 --------
 
-.. function:: push(collection, item)
+.. function:: push!(collection, item) -> collection
 
    Insert an item at the end of a collection.
 
-.. function:: pop(collection)
+.. function:: pop!(collection{Type}) -> item::Type
 
    Remove the last item in a collection and return it.
 
-.. function:: enqueue(collection, item)
+.. function:: unshift!(collection, item) -> collection
+   
+   Prepend item to the collection.
 
-   Insert an item at the beginning of a collection. Also called ``unshift``.
+.. function:: shift!(collection{Type}) -> item::Type
 
-.. function:: shift(collection)
+   Remove the first item in a collection.
 
-   Remove the first item in a collection and return it.
-
-.. function:: insert(collection, index, item)
+.. function:: insert!(collection, index, item)
 
    Insert an item at the given index.
 
-.. function:: del(collection, index)
+.. function:: delete!(collection{Type}, index) -> item_at_index::Type
 
    Remove the item at the given index.
 
-.. function:: grow(collection, n)
+.. function:: delete!(collection{Type}, range) -> items{Type}
+   
+   Remove items at specified range.
+
+.. function:: grow!(collection, n) -> collection
 
    Add uninitialized space for ``n`` elements at the end of a collection.
 
-.. function:: append!(collection, items)
+.. function:: append!(collection, items) -> collection
 
    Add the elements of ``items`` to the end of a collection.
 
@@ -425,10 +442,6 @@ Fully implemented by: ``Vector`` (aka 1-d ``Array``).
 
 Strings
 -------
-
-.. function:: strlen(s)
-
-   The number of characters in string ``s``.
 
 .. function:: length(s)
 
@@ -441,6 +454,8 @@ Strings
 .. function:: strcat(strs...)
 
    Concatenate strings.
+   
+   **Note**: The ``*`` operator can also be used to concatenate strings (eg. ``"Hello " * "world" == "Hello world"``).
 
 .. function:: string(char...)
 
@@ -557,23 +572,23 @@ Strings
 I/O
 ---
 
-.. data:: stdout_stream
+.. data:: STDOUT
 
    Global variable referring to the standard out stream.
 
-.. data:: stderr_stream
+.. data:: STDERR
 
    Global variable referring to the standard error stream.
 
-.. data:: stdin_stream
+.. data:: STDIN
 
    Global variable referring to the standard input stream.
 
-.. function:: open(file_name, [read, write, create, truncate, append])
+.. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
-.. function:: open(file_name, [mode])
+.. function:: open(file_name, [mode]) -> IOStream
 
    Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
 
@@ -586,11 +601,16 @@ I/O
     a+   read, write, create, append
    ==== =================================
 
-.. function:: memio([size])
+.. function:: open(file_name) -> IOStream
+   
+   Open a file in read mode.
+
+.. function:: memio([size[, finalize::Bool]]) -> IOStream
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
-.. function:: fdio(descriptor, [own])
+.. function:: fdio(name[, fd::Integer[, own::Bool]]) -> IOStream
+              fdio(name[, own::Bool]) -> IOStream
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected.
 
@@ -644,7 +664,7 @@ Text I/O
 
 .. function:: println(x)
 
-   Print (using ``print``) ``x`` followed by a newline
+   Print (using :func:`print`) ``x`` followed by a newline
 
 .. function:: showall(x)
 
@@ -670,27 +690,31 @@ Text I/O
 
    Read all lines as an array.
 
-.. function:: EachLine(stream)
+.. function:: each_line(stream)
+              EachLine(stream)
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: dlmread(filename, delim::Char)
+.. function:: each_search(string, pattern)
+              EachSearch(string, pattern)
+
+.. function:: readdlm(filename, delim::Char)
 
    Read a matrix from a text file where each line gives one row, with elements separated by the given delimeter. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
-.. function:: dlmread(filename, delim::Char, T::Type)
+.. function:: readdlm(filename, delim::Char, T::Type)
 
    Read a matrix from a text file with a given element type. If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``String``, and ``Any``.
 
-.. function:: dlmwrite(filename, array, delim::Char)
+.. function:: writedlm(filename, array, delim::Char)
 
    Write an array to a text file using the given delimeter (defaults to comma).
 
-.. function:: csvread(filename, [T::Type])
+.. function:: readcsv(filename, [T::Type])
 
-   Equivalent to ``dlmread`` with ``delim`` set to comma.
+   Equivalent to ``readdlm`` with ``delim`` set to comma.
 
-.. function:: csvwrite(filename, array)
+.. function:: writecsv(filename, array)
 
    Equivalent to ``dlmwrite`` with ``delim`` set to comma.
 
@@ -705,7 +729,7 @@ Memory-mapped I/O
 
    The file is specified via the stream.  When you initialize the stream, use "r" for a "read-only" array, and "w+" to create a new array used to write values to disk. Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file.
 
-   Example:  A = mmap_array(Int64, (25,30000), s)
+   **Example**:  A = mmap_array(Int64, (25,30000), s)
 
    This would create a 25-by-30000 array of Int64s, linked to the file associated with stream s.
 
@@ -753,7 +777,8 @@ Mathematical Functions
 
    Modulus after division
 
-.. function:: rem %
+.. function:: rem
+              %
 
    Remainder after division
 
@@ -1350,7 +1375,7 @@ Numbers
 Random Numbers
 --------------
 
-Random numbers are generated in Julia by calling functions from the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_
+Random numbers are generated in Julia by calling functions from the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_.
 
 .. function:: rand
 
@@ -1394,7 +1419,7 @@ Random numbers are generated in Julia by calling functions from the `Mersenne Tw
 
 .. function:: randchi2(n)
 
-   Generate a sample from the chi-squared distribution with ``n`` degrees of freedom (also available as ``chi2rnd``)
+   Generate a sample from the chi-squared distribution with ``n`` degrees of freedom.
 
 .. function:: randexp
 
@@ -1403,6 +1428,10 @@ Random numbers are generated in Julia by calling functions from the `Mersenne Tw
 .. function:: srand
 
    Seed the RNG
+
+.. function:: rand!(array) -> array
+
+   Fill the array with random floats.
 
 Arrays
 ------
@@ -1421,10 +1450,6 @@ Basic functions
 .. function:: eltype(A)
 
    Returns the type of the elements contained in A
-
-.. function:: numel(A)
-
-   Returns the number of elements in A
 
 .. function:: length(A)
 
@@ -1602,7 +1627,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: ipermute(A,perm)
 
-   Like ``permute``, except the inverse of the given permutation is applied.
+   Like :func:`permute`, except the inverse of the given permutation is applied.
 
 .. function:: squeeze(A)
 
@@ -1789,7 +1814,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: null(M)
 
-   Basis for null space of M
+   Basis for null space of M.
 
 .. function:: repmat(A, n, m)
 
@@ -1805,50 +1830,50 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: linreg(x, y, w)
 
-   Weighted least-squares linear regression
+   Weighted least-squares linear regression.
 
 Combinatorics
 -------------
 
 .. function:: nthperm(v, k)
 
-   Compute the kth lexicographic permutation of a vector
+   Compute the kth lexicographic permutation of a vector.
 
 .. function:: nthperm!(v, k)
 
-   In-place version of ``nthperm``
+   In-place version of :func:`nthperm`.
 
 .. function:: randperm(n)
 
-   Construct a random permutation of the given length
+   Construct a random permutation of the given length.
 
-.. function:: invperm(v)
+.. function:: invperm(v) -> Bool
 
-   Return the inverse permtation of v
+   Return the inverse permutation of v.
 
-.. function:: isperm(v)
+.. function:: isperm(v) -> Bool
 
-   Returns true if v is a valid permutation
+   Returns true if v is a valid permutation.
 
 .. function:: randcycle(n)
 
-   Construct a random cyclic permutation of the given length
+   Construct a random cyclic permutation of the given length.
 
 .. function:: shuffle(v)
 
-   Randomly rearrange the elements of a vector
+   Randomly rearrange the elements of a vector.
 
 .. function:: shuffle!(v)
 
-   In-place version of ``shuffle``
+   In-place version of :func:`shuffle`.
 
 .. function:: reverse(v)
 
-   Reverse vector ``v``
+   Reverse vector ``v``.
 
 .. function:: reverse!(v)
 
-   Reverse vector ``v`` in-place
+   In-place version of :func:`reverse`.
 
 Statistics
 ----------
@@ -1990,7 +2015,8 @@ Signal Processing
 
 FFT functions in Julia are largely implemented by calling functions from `FFTW <http://www.fftw.org>`_
 
-.. function:: fft(A [, dims]), fft!
+.. function:: fft(A [, dims])
+              fft!
 
    Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
    argument specifies an iterable subset of dimensions (e.g. an integer,
@@ -2006,7 +2032,10 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    transform (DFT) as defined by :math:`\operatorname{DFT}[k] = \sum_{n=1}^{\operatorname{length}(A)} \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n]`.  A multidimensional FFT simply performs this operation
    along each transformed dimension of ``A``.
 
-.. function:: ifft(A [, dims]), ifft!, bfft, bfft!
+.. function:: ifft(A [, dims])
+              ifft!
+              bfft
+              bfft!
 
    Multidimensional inverse FFT. 
 
@@ -2029,7 +2058,12 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    each transformed dimension of ``A``.  The inverse FFT computes
    the same thing divided by the product of the transformed dimensions.
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!
+.. function:: plan_fft(A [, dims [, flags [, timelimit]]])
+              plan_fft!
+              plan_ifft
+              plan_ifft!
+              plan_bfft
+              plan_bfft!
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
@@ -2064,7 +2098,8 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    of (roughly) halving the first dimension of ``A`` in the result, the
    ``dims[1]`` dimension is (roughly) halved in the same way.
 
-.. function:: irfft(A, d [, dims]), brfft
+.. function:: irfft(A, d [, dims])
+              brfft
 
    Inverse of :func:`rfft`: for a complex array ``A``, gives the
    corresponding real array whose FFT yields ``A`` in the first half.
@@ -2088,13 +2123,17 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
-.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
+              plan_bfft
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
    three arguments have the same meaning as for :func:`irfft`.
 
-.. function:: dct(A [, dims]), dct!, idct, idct!
+.. function:: dct(A [, dims])
+              dct!
+              idct
+              idct!
 
    Performs a multidimensional type-II discrete cosine transform (DCT)
    of the array ``A``, using the unitary normalization of the DCT.
@@ -2112,7 +2151,10 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    the inverse DCT (technically, a type-III DCT with the unitary
    normalization).
 
-.. function:: plan_dct(A [, dims [, flags [, timelimit]]]), plan_dct!, plan_idct, plan_idct!
+.. function:: plan_dct(A [, dims [, flags [, timelimit]]])
+              plan_dct!
+              plan_idct
+              plan_idct!
 
    Pre-plan an optimized discrete cosine transform (DCT), similar to
    :func:`plan_fft` except producint a function that computes
@@ -2120,7 +2162,8 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    respectively.  The first two arguments have the same meaning as for
    :func:`dct`.
 
-.. function:: FFTW.r2r(A, kind [, dims]), FFTW.r2r!
+.. function:: FFTW.r2r(A, kind [, dims])
+              FFTW.r2r!
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
@@ -2147,7 +2190,8 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    in-place on ``A``, which must be an array of real or complex 
    floating-point numbers.
 
-.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
+.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+              FFTW.plan_r2r!
 
    Pre-plan an optimized r2r transform, similar to :func:`plan_fft`
    except that the transforms (and the first three arguments)
@@ -2163,7 +2207,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
 .. function:: ifftshift(x, [dim])
 
-   Undoes the effect of ``fftshift``.
+   Undoes the effect of :func:`fftshift`.
 
 .. function:: filt(b,a,x)
 
@@ -2310,23 +2354,23 @@ Distributed Arrays
 System
 ------
 
-.. function:: system("command")
+.. function:: system(command::String)
 
    Run a shell command.
 
-.. function:: gethostname()
+.. function:: gethostname() -> String
 
    Get the local machine's host name.
 
-.. function:: getipaddr()
+.. function:: getipaddr() -> String
 
    Get the IP address of the local machine, as a string of the form "x.x.x.x".
 
-.. function:: pwd()
+.. function:: pwd() -> String
 
    Get the current working directory.
 
-.. function:: cd("dir")
+.. function:: cd(dir::String)
 
    Set the current working directory. Returns the new current directory.
 
@@ -2339,7 +2383,7 @@ System
 
    Remove the directory named ``path``.
 
-.. function:: getpid()
+.. function:: getpid() -> Int32
 
    Get julia's process ID.
 
@@ -2353,21 +2397,25 @@ System
 
 .. function:: tic()
 
-   Set a timer to be read by the next call to ``toc`` or ``toq``. The macro call ``@time expr`` can also be used to time evaluation.
+   Set a timer to be read by the next call to :func:`toc` or :func:`toq`. The macro call ``@time expr`` can also be used to time evaluation.
 
 .. function:: toc()
 
-   Print and return the time elapsed since the last ``tic``
+   Print and return the time elapsed since the last :func:`tic`.
 
 .. function:: toq()
 
-   Return, but do not print, the time elapsed since the last ``tic``
+   Return, but do not print, the time elapsed since the last :func:`tic`.
 
-.. function:: EnvHash()
+.. function:: EnvHash() -> EnvHash
 
-   A singleton of this type, ``ENV``, provides a hash table interface to environment variables.
+   A singleton of this type provides a hash table interface to environment variables.
 
-.. function:: dlopen(libfile)
+.. data:: ENV
+
+   Reference to the singleton ``EnvHash``.
+
+.. function:: dlopen(libfile::String)
 
    Load a shared library, returning an opaque handle
 
@@ -2378,7 +2426,8 @@ System
 Errors
 ------
 
-.. function:: error(message)
+.. function:: error(message::String)
+              error(Any{Exception})
 
    Raise an error with the given message
 
