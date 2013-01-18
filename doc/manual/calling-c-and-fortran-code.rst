@@ -219,6 +219,7 @@ translated to Julia types as follows.
 -  ``unsigned long long`` ⟺ ``Uint64``
 -  ``float`` ⟺ ``Float32``
 -  ``double`` ⟺ ``Float64``
+-  ``void`` ⟺ ``Void``
 
 *Note:* the ``bool`` type is only defined by C++, where it is 8 bits
 wide. In C, however, ``int`` is often used for boolean values. Since
@@ -237,9 +238,10 @@ A C function declared to return ``void`` will give ``nothing`` in Julia.
 *Note:* Although ``wchar_t`` is technically system-dependent, on all the
 systems we currently support (UNIX), it is 32-bit.
 
-C functions that take an arguments of the type ``char**`` can be called
-by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, C
-functions of the form::
+For string arguments (``char*``) the Julia type should be ``Ptr{Uint8}``,
+not ``ASCIIString``. C functions that take an argument of the type ``char**``
+can be called by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, 
+C functions of the form::
 
     int main(int argc, char **argv);
 
@@ -255,7 +257,7 @@ A ``(name, library)`` function specification must be a constant expression.
 However, it is possible to use computed values as function names by staging
 through ``eval`` as follows:
 
-    @eval ccall(($(strcat("a","b")), :lib), ...
+    @eval ccall(($(strcat("a","b")),"lib"), ...
 
 This expression constructs a name using ``strcat``, then substitutes this
 name into a new ``ccall`` expression, which is then evaluated. Keep in mind that
