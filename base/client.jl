@@ -268,11 +268,7 @@ const roottask_wi = WorkItem(roottask)
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
-@unix_only julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
-@windows_only begin
-    const JULIA_USER_DATA_DIR = string(ENV["AppData"],"/julia")
-    julia_pkgdir() = abspath(get(ENV,"JULIA_PKGDIR",string(JULIA_USER_DATA_DIR,"/packages")))
-end
+@windows_only const JULIA_USER_DATA_DIR = abspath(ENV["AppData"],"julia")
 
 function _start()
     # set up standard streams
@@ -311,7 +307,7 @@ function _start()
 
         global const LOAD_PATH = ByteString[
             ".", # TODO: should we really look here?
-            abspath(julia_pkgdir()),
+            abspath(Pkg.dir()),
             abspath(JULIA_HOME,"..","share","julia","extras"),
         ]
 

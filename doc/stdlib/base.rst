@@ -162,15 +162,11 @@ Iteration
 
 Sequential iteration is implemented by the methods ``start``, ``done``, and ``next``. The general ``for`` loop:
 
-::
-
     for i = I
       # body
     end
 
 is translated to:
-
-::
 
     state = start(I)
     while !done(I, state)
@@ -1990,7 +1986,7 @@ Signal Processing
 
 FFT functions in Julia are largely implemented by calling functions from `FFTW <http://www.fftw.org>`_
 
-.. function:: fft(A [, dims]), fft!
+.. function:: fft(A [, dims])
 
    Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
    argument specifies an iterable subset of dimensions (e.g. an integer,
@@ -1999,27 +1995,18 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    primes; see :func:`nextprod`.  See also :func:`plan_fft` for even
    greater efficiency.
 
-   :func:`fft!` is the same as :func:`fft`, but operates in-place on ``A``,
-   which must be an array of complex floating-point numbers.
-
    A one-dimensional FFT computes the one-dimensional discrete Fourier
    transform (DFT) as defined by :math:`\operatorname{DFT}[k] = \sum_{n=1}^{\operatorname{length}(A)} \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n]`.  A multidimensional FFT simply performs this operation
    along each transformed dimension of ``A``.
 
-.. function:: ifft(A [, dims]), ifft!, bfft, bfft!
+.. function:: fft!(A [, dims])
 
-   Multidimensional inverse FFT. 
+   Same as :func:`fft`, but operates in-place on ``A``,
+   which must be an array of complex floating-point numbers.
 
-   :func:`ifft` and :func:`ifft!` have the same arguments as
-   :func:`fft` and :func:`fft!`, respectively.
+.. function:: ifft(A [, dims]), bfft, bfft!
 
-   :func:`bfft` and :func:`bfft!` are similar to :func:`ifft` and 
-   :func:`ifft!`, respectively, but compute an unnormalized inverse
-   (backward) transform, which must be divided by the product of the sizes of
-   the transformed dimensions in order to obtain the inverse.  (These
-   are slightly more efficient than :func:`ifft` and :func:`ifft!`
-   because they omit a scaling step, which in some applications can
-   be combined with other camputational steps elsewhere.)
+   Multidimensional inverse FFT.
 
    A one-dimensional backward FFT computes
    :math:`\operatorname{BDFT}[k] =
@@ -2029,7 +2016,24 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    each transformed dimension of ``A``.  The inverse FFT computes
    the same thing divided by the product of the transformed dimensions.
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!
+.. function:: ifft!(A [, dims])
+
+   Same as :func:`ifft`, but operates in-place on ``A``.
+
+.. function:: bfft(A [, dims])
+
+   Similar to :func:`ifft`, but computes an unnormalized inverse
+   (backward) transform, which must be divided by the product of the sizes
+   of the transformed dimensions in order to obtain the inverse.  (This is
+   slightly more efficient than :func:`ifft` because it omits a scaling
+   step, which in some applications can be combined with other
+   computational steps elsewhere.)
+
+.. function:: bfft!(A [, dims])
+
+   Same as :func:`bfft`, but operates in-place on ``A``.
+
+.. function:: plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
@@ -2051,6 +2055,18 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    are similar but produce plans that perform the equivalent of
    the inverse transforms :func:`ifft` and so on.
 
+.. function:: plan_fft!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_fft`, but operates in-place on ``A``.
+
+.. function:: plan_ifft!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_ifft`, but operates in-place on ``A``.
+
+.. function:: plan_bfft!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_bfft`, but operates in-place on ``A``.
+
 .. function:: rfft(A [, dims])
 
    Multidimensional FFT of a real array A, exploiting the fact that
@@ -2064,7 +2080,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    of (roughly) halving the first dimension of ``A`` in the result, the
    ``dims[1]`` dimension is (roughly) halved in the same way.
 
-.. function:: irfft(A, d [, dims]), brfft
+.. function:: irfft(A, d [, dims])
 
    Inverse of :func:`rfft`: for a complex array ``A``, gives the
    corresponding real array whose FFT yields ``A`` in the first half.
@@ -2076,7 +2092,9 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    (This parameter cannot be inferred from ``size(A)`` due to the 
    possibility of rounding by the ``floor`` function here.)
 
-   :func:`brfft` is similar but computes an unnormalized inverse transform
+.. function:: brfft(A, d [, dims])
+
+   Similar to :func:`irfft` but computes an unnormalized inverse transform
    (similar to :func:`bfft`), which must be divided by the product
    of the sizes of the transformed dimensions (of the real output array)
    in order to obtain the inverse transform.
@@ -2094,7 +2112,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
    three arguments have the same meaning as for :func:`irfft`.
 
-.. function:: dct(A [, dims]), dct!, idct, idct!
+.. function:: dct(A [, dims])
 
    Performs a multidimensional type-II discrete cosine transform (DCT)
    of the array ``A``, using the unitary normalization of the DCT.
@@ -2104,21 +2122,46 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    dimensions is a product of small primes; see :func:`nextprod`.  See
    also :func:`plan_dct` for even greater efficiency.
 
-   The :func:`dct!` is the same, except that it operates in-place
+.. function:: dct!(A [, dims])
+
+   Same as :func:`dct!`, except that it operates in-place
    on ``A``, which must be an array of real or complex floating-point
    values. 
 
-   Similarly, :func:`idct(A [, dims])` and :func:`idct!` compute
-   the inverse DCT (technically, a type-III DCT with the unitary
-   normalization).
+.. function:: idct(A [, dims])
 
-.. function:: plan_dct(A [, dims [, flags [, timelimit]]]), plan_dct!, plan_idct, plan_idct!
+   Computes the multidimensional inverse discrete cosine transform (DCT)
+   of the array ``A`` (technically, a type-III DCT with the unitary
+   normalization).
+   The optional ``dims`` argument specifies an iterable subset of
+   dimensions (e.g. an integer, range, tuple, or array) to transform
+   along.  Most efficient if the size of ``A`` along the transformed
+   dimensions is a product of small primes; see :func:`nextprod`.  See
+   also :func:`plan_idct` for even greater efficiency.
+
+.. function:: idct!(A [, dims])
+
+   Same as :func:`idct!`, but operates in-place on ``A``.
+
+.. function:: plan_dct(A [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized discrete cosine transform (DCT), similar to
-   :func:`plan_fft` except producint a function that computes
-   :func:`dct`, :func:`dct!`, :func:`idct`, and :func:`idct!`
-   respectively.  The first two arguments have the same meaning as for
-   :func:`dct`.
+   :func:`plan_fft` except producing a function that computes :func:`dct`.
+   The first two arguments have the same meaning as for :func:`dct`.
+
+.. function:: plan_dct!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_dct`, but operates in-place on ``A``.
+
+.. function:: plan_idct(A [, dims [, flags [, timelimit]]])
+
+   Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
+   :func:`plan_fft` except producing a function that computes :func:`idct`.
+   The first two arguments have the same meaning as for :func:`idct`.
+
+.. function:: plan_idct!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_idct`, but operates in-place on ``A``.
 
 .. function:: FFTW.r2r(A, kind [, dims]), FFTW.r2r!
 
