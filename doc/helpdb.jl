@@ -1030,19 +1030,19 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"STDOUT",E"STDOUT
+(E"I/O",E"Base",E"stdout_stream",E"stdout_stream
 
    Global variable referring to the standard out stream.
 
 "),
 
-(E"I/O",E"Base",E"STDERR",E"STDERR
+(E"I/O",E"Base",E"stderr_stream",E"stderr_stream
 
    Global variable referring to the standard error stream.
 
 "),
 
-(E"I/O",E"Base",E"STDIN",E"STDIN
+(E"I/O",E"Base",E"stdin_stream",E"stdin_stream
 
    Global variable referring to the standard input stream.
 
@@ -2826,9 +2826,17 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svd",E"svd(A) -> U, S, V'
+(E"Linear Algebra",E"Base",E"svd",E"svd(A) -> U, S, V
 
-   Compute the SVD of A
+   Compute the SVD of A, returning \"U\", \"S\", and \"V\" such that
+   \"A = U*S*V'\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdt",E"svdt(A) -> U, S, Vt
+
+   Compute the SVD of A, returning \"U\", \"S\", and \"Vt\" such that
+   \"A = U*S*Vt\".
 
 "),
 
@@ -2885,9 +2893,18 @@ airyaiprime(x)
 
 (E"Linear Algebra",E"Base",E"norm",E"norm(A[, p])
 
-   Compute the p-norm of a vector or a matrix. \"p\" is \"2\" by
-   default, if not provided. If \"A\" is a matrix, valid values for
-   \"p\" are \"1\", \"2\", \"Inf\", or \":fro\" (Frobenius norm).
+   Compute the \"p\"-norm of a vector or a matrix. \"p\" is \"2\" by
+   default, if not provided. If \"A\" is a vector, \"norm(A, p)\"
+   computes the \"p\"-norm. \"norm(A, Inf)\" returns the largest value
+   in \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest. If
+   \"A\" is a matrix, valid values for \"p\" are \"1\", \"2\", or
+   \"Inf\". In order to compute the Frobenius norm, use \"normfro\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"normfro",E"normfro(A)
+
+   Compute the Frobenius norm of a matrix \"A\".
 
 "),
 
@@ -2895,7 +2912,7 @@ airyaiprime(x)
 
    Matrix condition number, computed using the p-norm. \"p\" is 2 by
    default, if not provided. Valid values for \"p\" are \"1\", \"2\",
-   \"Inf\", or \":fro\" (Frobenius norm).
+   or \"Inf\".
 
 "),
 
@@ -3551,13 +3568,20 @@ airyaiprime(x)
 
 (E"Parallel Computing",E"Base",E"nprocs",E"nprocs()
 
-   Get the number of available processors
+   Get the number of available processors.
 
 "),
 
 (E"Parallel Computing",E"Base",E"myid",E"myid()
 
-   Get the id of the current processor
+   Get the id of the current processor.
+
+"),
+
+(E"Parallel Computing",E"Base",E"pmap",E"pmap(f, c)
+
+   Transform collection \"c\" by applying \"f\" to each element in
+   parallel.
 
 "),
 
