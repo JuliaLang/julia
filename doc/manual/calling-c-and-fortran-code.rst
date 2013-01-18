@@ -238,9 +238,10 @@ A C function declared to return ``void`` will give ``nothing`` in Julia.
 *Note:* Although ``wchar_t`` is technically system-dependent, on all the
 systems we currently support (UNIX), it is 32-bit.
 
-C functions that take an arguments of the type ``char**`` can be called
-by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, C
-functions of the form::
+For string arguments (``char*``) the Julia type should be ``Ptr{Uint8}``,
+not ``String``. C functions that take an arguments of the type ``char**``
+can be called by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, 
+C functions of the form::
 
     int main(int argc, char **argv);
 
