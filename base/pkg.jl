@@ -15,17 +15,23 @@ const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 
 # some utility functions
 
+@unix_only dir() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(ENV["HOME"],".julia")))
+@windows_only begin
+    dir() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(JULIA_USER_DATA_DIR,"packages")))
+end
+dir(pkg::String...) = joinpath(dir(),pkg...)
+
 function cd_pkgdir(f::Function)
-    dir = julia_pkgdir()
-    if !isdir(dir)
+    d = dir()
+    if !isdir(d)
         if has(ENV,"JULIA_PKGDIR")
-            error("Package directory $dir doesn't exist; run Pkg.init() to create it.")
+            error("Package directory $d doesn't exist; run Pkg.init() to create it.")
         else
-            warn("Initializing default package repository $dir.")
+            warn("Initializing default package repository $d.")
             init()
         end
     end
-    cd(f,dir)
+    cd(f,d)
 end
 
 function print_pkg_status(pkg::String, path::String)
@@ -50,24 +56,23 @@ status() = cd_pkgdir() do
         print_pkg_status(pkg, path)
     end
 end
-
-status(pkg::String) = print_pkg_status(pkg, "$(julia_pkgdir())/$pkg")
+status(pkg::String) = print_pkg_status(pkg, joinpath(dir(),pkg))
 
 # create a new empty packge repository
 
 function init(meta::String)
-    dir = julia_pkgdir()
-    isdir(dir) && error("Package directory $dir already exists.")
+    d = dir()
+    isdir(d) && error("Package directory $d already exists.")
     try
-        run(`mkdir -p $dir`)
-        cd(dir) do
+        run(`mkdir -p $d`)
+        cd(d) do
             # create & configure
             promptuserinfo()
             run(`git init`)
             run(`git commit --allow-empty -m "Initial empty commit"`)
             run(`git remote add origin .`)
         if success(`git config --global github.user` > SpawnNullStream())
-                base = basename(dir)
+                base = basename(d)
                 user = readchomp(`git config --global github.user`)
                 run(`git config remote.origin.url git@github.com:$user/$base`)
             else
@@ -84,7 +89,7 @@ function init(meta::String)
             Metadata.gen_hashes()
         end
     catch e 
-        run(`rm -rf $dir`)
+        run(`rm -rf $d`)
         rethrow(e)
     end
 end
@@ -191,8 +196,8 @@ installed(pkg::String) = cd_pkgdir() do
 end
 
 function runbuildscript(pkg)
-    dir = package_directory(pkg)
-    path = joinpath(dir, "deps")
+    d = dir(pkg)
+    path = joinpath(d, "deps")
     if isdir(path)
         cd(path) do
             if isfile("build.jl")
@@ -274,15 +279,15 @@ function _resolve()
         end
     end
 end
-resolve() = cd(_resolve,julia_pkgdir())
+resolve() = cd(_resolve,dir())
 
 # clone a new package repo from a URL
 
 # TODO: this is horribly broken
 function clone(url::String)
-    dir = julia_pkgdir()
-    if isdir(dir)
-        error("Package directory $dir already exists.")
+    d = dir()
+    if isdir(d)
+        error("Package directory $d already exists.")
     end
     tmpdir = mktempdir()
     run(`git clone $url $tmpdir`)
@@ -294,7 +299,7 @@ function clone(url::String)
             end
         end
     end
-    run(`mv $tmpdir $dir`)
+    run(`mv $tmpdir $d`)
 end
 
 # record all submodule commits as tags
@@ -572,7 +577,7 @@ function promptuserinfo()
 end
 
 function new(pkg::String)
-    newpath = joinpath(julia_pkgdir(), pkg)
+    newpath = joinpath(dir(), pkg)
     cd_pkgdir() do
         if isdir(pkg)
             # This is an existing package that we assume is ready to go
@@ -644,6 +649,9 @@ obliterate(pkg::String) = cd_pkgdir() do
 end
 
 # If a package contains data, make it easy to find its location
-package_directory(pkg::String) = joinpath(julia_pkgdir(), pkg)
+function package_directory(pkg::String)
+    warn("Pkg.package_directory is deprecated, use Pkg.dir instead.")
+    joinpath(dir(), pkg)
+end
 
 end # module
