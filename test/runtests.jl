@@ -1,4 +1,3 @@
-require("test")
 using Test
 
 function runtests(name)
@@ -21,28 +20,26 @@ end
 check_approx_eq(va, vb, astr, bstr) = check_approx_eq(va, vb, 10^4*length(va)*eps(max(max(abs(va)), max(abs(vb)))) * max(1, max(abs(va)), max(abs(vb))), astr, bstr)
 
 macro assert_approx_eq_eps(a, b, c)
-    quote
-        check_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b)))
-    end
+    :(check_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))
 end
 
 macro assert_approx_eq(a, b)
-    quote
-        check_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b)))
-    end
+    :(check_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
 end
 
 macro timeit(ex,name)
     quote
         t = Inf
-        for i=1:5
+        for i = 1:5
             t = min(t, @elapsed $(esc(ex)))
         end
         println(rpad(strcat($name,":"), 20), t)
     end
 end
 
+shift!(LOAD_PATH) # looking in . messes things up badly
+
 for t in ARGS
     runtests(t)
-    println("    \033[32;1mSUCCESS\033[0m")
 end
+println("    \033[32;1mSUCCESS\033[0m")

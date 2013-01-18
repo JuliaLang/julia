@@ -647,7 +647,7 @@ for a = -5:5, b = -5:5
     if a == b == 0; continue; end
     @test a//b == a/b
     @test a//b == a//b
-    @test a//b == rational(a/b)
+    @test a//b == convert(Rational,a/b)
     if b == 0
         @test_fails integer(a//b) == integer(a/b)
     else

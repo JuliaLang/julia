@@ -8,13 +8,6 @@ char *stdin_buf = NULL;
 unsigned long stdin_buf_len = 0;
 unsigned long stdin_buf_maxlen = 128;
 
-void repl_print(const char *buf, size_t n)
-{
-    if(jl_uv_stdin->type == UV_TTY) {
-       jl_write(jl_uv_stdin, buf, n);
-    }
-}
-
 void init_repl_environment(int argc, char *argv[])
 {
     stdin_buf = malloc(stdin_buf_maxlen);
@@ -26,18 +19,12 @@ DLLEXPORT void jl_enable_color(void)
 }
 
 void jl_prep_terminal(int meta_flag)
-{   //order must be 2,1,0
-    uv_tty_set_mode((uv_tty_t*)JL_STDERR,1);
-    uv_tty_set_mode((uv_tty_t*)JL_STDOUT,1);
-    uv_tty_set_mode((uv_tty_t*)JL_STDIN,1);
+{
 }
 
 /* Restore the terminal's normal settings and modes. */
 void jl_deprep_terminal()
-{   //order must be 0,1,2
-    uv_tty_set_mode((uv_tty_t*)JL_STDIN,0);
-    uv_tty_set_mode((uv_tty_t*)JL_STDOUT,0);
-    uv_tty_set_mode((uv_tty_t*)JL_STDERR,0);
+{
 }
 
 void jl_input_line_callback(char *input)
@@ -94,12 +81,12 @@ void jl_readBuffer(char* base, ssize_t nread)
             switch (*start) {
             case '\n':
             case '\r':
-                jl_putc('\n', jl_uv_stdout);
+                //jl_putc('\n', jl_uv_stdout);
                 stdin_buf_pushc('\n');
                 newline = 1;
                 break;
             case '\x03':
-                repl_print("^C\n", 3);
+                JL_WRITE(jl_uv_stdout, "^C\n", 3);
                 jl_clear_input();
                 break;
             case '\x04':
@@ -117,7 +104,7 @@ void jl_readBuffer(char* base, ssize_t nread)
             case '\b':
                 if (stdin_buf_len > 0 && stdin_buf[stdin_buf_len-1] != '\n') {
                     stdin_buf_len--;
-                    repl_print("\b \b",3);
+                    JL_WRITE(jl_uv_stdout,"\b \b",3);
                 }
             }
         }
@@ -135,8 +122,6 @@ void jl_readBuffer(char* base, ssize_t nread)
             esc = 0;
         }
         else {
-            if(jl_uv_stdin->type == UV_TTY)
-                jl_putc(*start, jl_uv_stdin);
             stdin_buf_pushc(*start);
         }
         start++;
@@ -149,6 +134,6 @@ void jl_clear_input(void)
 {
     stdin_buf_len = 0;
     stdin_buf[0] = 0;
-    repl_print("\n",1);
+    JL_WRITE(jl_uv_stdout,"\n",1);
     repl_callback_enable();
 }

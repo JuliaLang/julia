@@ -11,7 +11,7 @@ set PATH=%~dp0bin;%~dp0usr\bin;%~dp0..\usr\bin;%~dp0..\..\usr\bin
 set JULIA_EXE=julia-release-readline.exe
 for %%A in (%JULIA_EXE%) do set JULIA_HOME=%%~dp$PATH:A
 set JULIA=%JULIA_HOME%%JULIA_EXE%
-set PATH=%JULIA_HOME%..\lib\julia;%JULIA_HOME%..\lib;.;%SYS_PATH%;%~dp0\Git\bin
+set PATH=%JULIA_HOME%;%JULIA_HOME%..\lib\julia;%JULIA_HOME%..\lib;.;%SYS_PATH%;%~dp0\Git\bin
 set HOME=%JULIA_HOME%..\..
 set JL_PRIVATE_LIBDIR=lib\julia
 

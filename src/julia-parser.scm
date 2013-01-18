@@ -714,7 +714,8 @@
 	((->)   (take-token s)
 	 ;; -> is unusual: it binds tightly on the left and
 	 ;; loosely on the right.
-	 (list '-> ex (parse-eq* s)))
+	 (let ((lno (line-number-filename-node s)))
+	   `(-> ,ex (block ,lno ,(parse-eq* s)))))
 	(else
 	 ex)))))
 

@@ -101,9 +101,9 @@ function _show(io, x::FloatingPoint, mode::Int32, n::Int)
     nothing
 end
 
-show(io, x::Float64) = _show(io, x, SHORTEST, 0)
-show(io, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0)
-showcompact(io, x::FloatingPoint) = _show(io, x, PRECISION, 6)
+show(io::IO, x::Float64) = _show(io, x, SHORTEST, 0)
+show(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0)
+showcompact(io::IO, x::FloatingPoint) = _show(io, x, PRECISION, 6)
 
 # normal:
 #   0 < pt < len        ####.####           len+1

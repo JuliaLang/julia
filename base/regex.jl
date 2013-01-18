@@ -37,7 +37,7 @@ macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
 copy(r::Regex) = r
 
-function show(io, re::Regex)
+function show(io::IO, re::Regex)
     imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
     if (re.options & ~imsx) == DEFAULT_OPTS
         print(io, 'r')
@@ -65,7 +65,7 @@ type RegexMatch
     offsets::Vector{Int}
 end
 
-function show(io, m::RegexMatch)
+function show(io::IO, m::RegexMatch)
     print(io, "RegexMatch(")
     show(io, m.match)
     if !isempty(m.captures)

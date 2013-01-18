@@ -120,7 +120,6 @@ void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal)
 {
     JULIA_CB(return_spawn,p->data,2,CB_INT32,exit_status,CB_INT32,term_signal);
     (void)ret;
-    uv_close((uv_handle_t*)p,&closeHandle);
 }
 
 void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
@@ -262,8 +261,8 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog)
 #ifdef __APPLE__
 #include <crt_externs.h>
 #endif
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
-                                 jl_value_t *julia_struct,
+DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
+                                 uv_process_t *proc, jl_value_t *julia_struct,
                                  uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
                                  uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
                                  uv_handle_type stderr_type,uv_pipe_t *stderr_pipe)
@@ -271,7 +270,6 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
 #ifdef __APPLE__
     char **environ = *_NSGetEnviron();
 #endif
-    uv_process_t *proc = malloc(sizeof(uv_process_t));
     uv_process_options_t opts;
     uv_stdio_container_t stdio[3];
     int error;
@@ -295,12 +293,8 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
     //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
     opts.exit_cb = &jl_return_spawn;
     error = uv_spawn(loop,proc,opts);
-    if (error) {
-        free(proc);
-        jl_errorf("Failed to create process %s: %d",name,error);
-    }
     proc->data = julia_struct;
-    return proc;
+    return error;
 }
 
 #ifdef __WIN32__
@@ -479,14 +473,19 @@ DLLEXPORT size_t jl_sizeof_uv_pipe_t()
     return sizeof(uv_pipe_t);
 }
 
-extern void jl_atexit_hook();
+DLLEXPORT size_t jl_sizeof_uv_process_t()
+{
+    return sizeof(uv_process_t);
+}
+
+DLLEXPORT void uv_atexit_hook();
 DLLEXPORT void jl_exit(int exitcode)
 {
     /*if (jl_io_loop) {
         jl_process_events(&jl_io_loop);
     }*/
     uv_tty_reset_mode();
-    jl_atexit_hook();
+    uv_atexit_hook();
     exit(exitcode);
 }
 

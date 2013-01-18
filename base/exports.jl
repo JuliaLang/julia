@@ -10,6 +10,7 @@ export
     RNG,
     Math,
     Sort,
+    Test,
     Pkg,
 
 # Types
@@ -461,8 +462,6 @@ export
     mod,
     mod1,
     modf,
-    nCr,
-    nPr,
     nan,
     nextfloat,
     nextpow,
@@ -476,7 +475,6 @@ export
     prevpow,
     prevpow2,
     radians2degrees,
-    rational,
     real,
     real_valued,
     realmax,
@@ -1174,12 +1172,6 @@ export
     seek_end,
     serialize,
     skip,
-    stderr,
-    stderr_stream,
-    stdin,
-    stdin_stream,
-    stdout,
-    stdout_stream,
     takebuf_array,
     takebuf_string,
     truncate,
@@ -1385,5 +1377,7 @@ export
     globalEventLoop,
     uv_error,
     UVError,
-    kill
+    kill,
+    startTimer,
+    stopTimer
 

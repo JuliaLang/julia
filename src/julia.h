@@ -781,11 +781,11 @@ DLLEXPORT jl_value_t *jl_environ(int i);
 DLLEXPORT jl_value_t *jl_env_done(char *pos);
 #endif
 
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
-                                 jl_value_t *julia_struct,
-                                 uv_handle_type stdin_type, uv_pipe_t *stdin_pipe,
-                                 uv_handle_type stdout_type, uv_pipe_t *stdout_pipe,
-                                 uv_handle_type stderr_type, uv_pipe_t *stderr_pipe);
+DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
+                                 uv_process_t *proc, jl_value_t *julia_struct,
+                                 uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
+                                 uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
+                                 uv_handle_type stderr_type,uv_pipe_t *stderr_pipe);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT void jl_process_events(uv_loop_t *loop);
 
@@ -898,6 +898,7 @@ DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
 void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
 void *jl_dlsym_win32(char *name);
+DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
 //event loop
 DLLEXPORT void jl_runEventLoop();
@@ -1081,6 +1082,7 @@ typedef struct _jl_task_t {
     jl_value_t *consumers;
     int8_t done;
     int8_t runnable;
+    jl_value_t *result;
     jl_jmp_buf ctx;
     union {
         void *stackbase;
@@ -1091,7 +1093,6 @@ typedef struct _jl_task_t {
     void *stkbuf;
     size_t ssize;
     jl_function_t *start;
-    jl_value_t *result;
     // current exception handler
     jl_handler_t *eh;
     // saved gc stack top for context switches

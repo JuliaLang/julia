@@ -137,8 +137,8 @@ function string(x::BigFloat)
     ret
 end
 
-show(io, b::BigFloat) = print(io, string(b))
-showcompact(io, b::BigFloat) = print(io, string(b))
+show(io::IO, b::BigFloat) = print(io, string(b))
+showcompact(io::IO, b::BigFloat) = print(io, string(b))
 
 function BigFloat_clear(x::BigFloat)
     ccall((:jl_mpf_clear, :libgmp_wrapper), Void, (Ptr{Void},), x.mpf)

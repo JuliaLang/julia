@@ -7,7 +7,7 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 has(t::Associative, key) = !is(get(t, key, secret_table_token),
                                secret_table_token)
 
-function show{K,V}(io, t::Associative{K,V})
+function show{K,V}(io::IO, t::Associative{K,V})
     if isempty(t)
         print(io, typeof(t),"()")
     else

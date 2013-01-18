@@ -25,7 +25,7 @@ type AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a,b)
 end
 
-function show(io, cmd::Cmd)
+function show(io::IO, cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
         esc = shell_escape(cmd.exec...)
         print(io,'`')
@@ -41,7 +41,7 @@ function show(io, cmd::Cmd)
     end
 end
 
-function show(io, cmds::OrCmds)
+function show(io::IO, cmds::OrCmds)
     if isa(cmds.a, AndCmds)
         print("(")
         show(io, cmds.a)
@@ -59,7 +59,7 @@ function show(io, cmds::OrCmds)
     end
 end
 
-function show(io, cmds::AndCmds)
+function show(io::IO, cmds::AndCmds)
     if isa(cmds.a, OrCmds)
         print("(")
         show(io, cmds.a)
@@ -99,8 +99,8 @@ ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cm
 (<)(left::AbstractCmd,right::String) = left < FS.open(right,JL_O_RDONLY)
 (>)(left::AbstractCmd,right::String) = left > FS.open(right,JL_O_WRONLY|JL_O_CREAT,S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 (>>)(left::AbstractCmd,right::String) = left > FS.open(right,JL_O_WRONLY|JL_O_APPEND|JL_O_CREAT,S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
-
 (>)(left::Any,right::AbstractCmd) = right < left
+(.>)(left::AbstractCmd,right::Redirectable) = CmdRedirect(left,right,STDERR_NO) 
 
 typealias RawOrBoxedHandle Union(UVHandle,UVStream,FS.File)
 typealias StdIOSet (RawOrBoxedHandle, RawOrBoxedHandle, RawOrBoxedHandle)
@@ -151,17 +151,24 @@ uvtype(::Ptr) = UV_STREAM
 
 function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
         in, out, err)
-    return ccall(:jl_spawn, Ptr{Void},
-        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Process, Int32,
+    proc = c_malloc(ccall(:jl_sizeof_uv_process_t,Int64,()))
+    error = ccall(:jl_spawn, Int32,
+        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
          Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void}),
-         cmd,        argv,            loop,      pp,      uvtype(in),
+         cmd,        argv,            loop,      proc, pp,      uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err))
+    if(error != 0)
+        c_free(proc)
+        throw(UVError("spawn"))
+    end
+    return proc
 end
 
 function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::Int32)
     proc.exit_code = exit_status
     proc.term_signal = term_signal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, term_signal) end
+    ccall(:jl_close_uv,Void,(Ptr{Void},),proc.handle)
     tasknotify(proc.exitnotify, proc)
 end
 
@@ -367,12 +374,7 @@ end
 
 function run(cmds::AbstractCmd,args...)
     ps = spawn(cmds,spawn_opts_inherit(args...)...)
-    success = wait_success(ps)
-    if success
-        return true
-    else
-        return pipeline_error(ps)
-    end
+    wait_success(ps) ? nothing : pipeline_error(ps)
 end
 
 success(proc::Process) = (assert(process_exited(proc)); proc.exit_code==0)
@@ -384,7 +386,7 @@ function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
         error("failed process: ",proc," [",proc.exit_code,"]")
     end
-    true
+    nothing
 end
 
 function pipeline_error(procs::ProcessChain)
@@ -401,7 +403,6 @@ function pipeline_error(procs::ProcessChain)
         msg = string(msg,"\n  ",proc," [",proc.exit_code,"]")
     end
     error(msg)
-    return false
 end
 
 function exec(thunk::Function)
@@ -531,4 +532,4 @@ function wait_success(x::Union(Process,Vector{Process}))
     success(x)
 end
 
-show(io, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
+show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")

@@ -1,4 +1,3 @@
-require("test")   # for running perf standalone
 using Test
 
 macro timeit(ex,name)
@@ -135,14 +134,14 @@ end
 ## printfd ##
 
 @unix_only begin
-function printfd(n)
-    open("/dev/null","w") do io
-        for i = 1:n
-            @printf(io,"%d %d\n",i,i+1)
+    function printfd(n)
+        open("/dev/null","w") do io
+            for i = 1:n
+                @printf(io,"%d %d\n",i,i+1)
+            end
         end
     end
-end
 
-printfd(1)
-@timeit printfd(100000) "printfd"
+    printfd(1)
+    @timeit printfd(100000) "printfd"
 end

@@ -1,6 +1,5 @@
 ## core stream types ##
 
-abstract IO
 # the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption
 
 # Generic IO functions
@@ -29,13 +28,13 @@ end
 write(s::IO, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
 if ENDIAN_BOM == 0x01020304
-    function write(s, x::Integer)
+    function write(s::IO, x::Integer)
         for n = sizeof(x):-1:1
             write(s, uint8((x>>>((n-1)<<3))))
         end
     end
 else
-    function write(s, x::Integer)
+    function write(s::IO, x::Integer)
         for n = 1:sizeof(x)
             write(s, uint8((x>>>((n-1)<<3))))
         end
@@ -232,7 +231,7 @@ end
 IOStream(name::String) = IOStream(name, true)
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
-show(io, s::IOStream) = print(io, "IOStream(", s.name, ")")
+show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)

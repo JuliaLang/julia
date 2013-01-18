@@ -97,9 +97,6 @@ void fpe_handler(int arg)
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGSEGV);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
     if (
 #ifdef COPY_STACKS
@@ -111,10 +108,20 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
         ) {
+        sigemptyset(&sset);
+        sigaddset(&sset, SIGSEGV);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_stackovf_exception);
     }
     else {
-        signal(SIGSEGV, SIG_DFL);
+        uv_tty_reset_mode();
+        sigfillset(&sset);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        signal(sig, SIG_DFL);
+        if (sig != SIGSEGV &&
+            sig != SIGBUS &&
+            sig != SIGILL)
+            raise(sig);
     }
 }
 
@@ -207,14 +214,8 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
     if (!queue->first) queue->first = item;
     queue->last = item;
 }
-void jl_atexit_hook()
+DLLEXPORT void uv_atexit_hook()
 {
-    if (jl_base_module) {
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
-        if (f!=NULL && jl_is_function(f)) {
-            jl_apply((jl_function_t*)f, NULL, 0);
-        }
-    }
     uv_loop_t* loop = jl_global_event_loop();
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
@@ -317,7 +318,7 @@ void *init_stdio_handle(uv_file fd,int readable)
             handle = malloc(sizeof(uv_tty_t));
             uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable);
             ((uv_tty_t*)handle)->data=0;
-            uv_tty_set_mode((void*)handle,1); //raw stdio
+            uv_tty_set_mode((void*)handle,0); //cooked stdio
             break;
         case UV_NAMED_PIPE:
         case UV_FILE:
@@ -469,8 +470,6 @@ void julia_init(char *imageFile)
         jl_exit(1);
     }
 #endif
-
-    //atexit(jl_atexit_hook);
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
