@@ -13,7 +13,7 @@ type Regex
         pattern = bytestring(pattern)
         options = uint32(options)
         if (options & ~PCRE.OPTIONS_MASK) != 0
-            error("invalid regex option(s)")
+            error("invalid regex options: $options")
         end
         regex = PCRE.compile(pattern, options & PCRE.COMPILE_MASK)
         new(pattern, options, regex)
