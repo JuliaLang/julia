@@ -11,11 +11,19 @@ const text_colors = {
     :cyan    => "\033[1m\033[36m",
     :white   => "\033[1m\033[37m",
     :normal  => "\033[0m",
+    :bold    => "\033[1m",
 }
 
 have_color = false
-color_answer = text_colors[:blue]
+@unix_only default_color_answer = text_colors[:blue]
+@windows_only default_color_answer = text_colors[:normal]
+color_answer = default_color_answer
 color_normal = text_colors[:normal]
+
+function answer_color()
+    c = symbol(get(ENV, "JULIA_ANSWER_COLOR", ""))
+    return get(text_colors, c, default_color_answer)
+end
 
 banner() = print(have_color ? banner_color : banner_plain)
 
@@ -78,12 +86,7 @@ function eval_user_input(ast::ANY, show_value)
                 global ans = value
                 if !is(value,nothing) && show_value
                     if have_color
-                        color = color_answer
-                        try
-                            key = symbol(lowercase(string(Main.ANSWER_COLOR)))
-                            color = get(text_colors,key,color_answer)
-                        end
-                        print(color)
+                        print(answer_color())
                     end
                     try repl_show(value)
                     catch err
@@ -318,17 +321,10 @@ function _start()
             global is_interactive = true
             quiet || banner()
 
-            @unix_only    answer_color = "blue"
-            @windows_only answer_color = "normal"
-            if has(ENV,"JULIA_ANSWER_COLOR")
-                answer_color = ENV["JULIA_ANSWER_COLOR"]
-            elseif has(ENV,"JL_ANSWER_COLOR")
+            if has(ENV,"JL_ANSWER_COLOR")
                 warn("JL_ANSWER_COLOR is deprecated, use JULIA_ANSWER_COLOR instead.")
-                answer_color = ENV["JL_ANSWER_COLOR"]
+                ENV["JULIA_ANSWER_COLOR"] = ENV["JL_ANSWER_COLOR"]
             end
-            eval(Main,:(ANSWER_COLOR = $answer_color))
-            global color_answer
-            color_answer = get(text_colors,symbol(answer_color),color_answer)
 
             run_repl()
         end
