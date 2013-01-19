@@ -24,7 +24,6 @@ exit() = exit(0)
 quit() = exit()
 
 function repl_callback(ast::ANY, show_value)
-    # use root task to execute user input
     global _repl_enough_stdin = true
     stop_reading(STDIN) 
     STDIN.readcb = false
@@ -106,7 +105,7 @@ function eval_user_input(ast::ANY, show_value)
 end
 
 function readBuffer(stream::AsyncStream, nread)
-    global _repl_enough_stdin::Bool    
+    global _repl_enough_stdin::Bool
     while !_repl_enough_stdin && nb_available(stream.buffer) > 0
         nread = int(memchr(stream.buffer,'\n')) # never more than one line or readline explodes :O
         nread2 = int(memchr(stream.buffer,'\r'))
@@ -144,6 +143,7 @@ function run_repl()
 
     # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
+    STDIN.closecb = stream->(println();exit(0))
 
     while true
         ccall(:repl_callback_enable, Void, ())

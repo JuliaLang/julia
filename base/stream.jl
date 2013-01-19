@@ -363,9 +363,6 @@ end
 
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
     if(nread == -1)
-        if(isa(stream.closecb,Function))
-            stream.closecb()
-        end
         if(_uv_lasterror() != 1) #UV_EOF == 1
            error = UVError("readcb")
            close(stream)
