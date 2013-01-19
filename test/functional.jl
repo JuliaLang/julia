@@ -23,7 +23,7 @@
 
 # mapreduce -- reduce.jl
 @test mapreduce(-, -, [-10 -9 -3]) == ((10 - 9) - 3)
-@test mapreduce((x,y)->"($x+$y)", (x)->x[1:3], ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
+@test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
 
 # filter -- array.jl
 @test isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
