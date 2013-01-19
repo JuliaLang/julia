@@ -537,6 +537,7 @@ export
     besselh,
     beta,
     lbeta,
+    betacdf,
     eta,
     zeta,
 
