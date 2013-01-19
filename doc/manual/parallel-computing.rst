@@ -573,3 +573,12 @@ the same processor. However, no locking is required, since the threads
 are scheduled cooperatively and not preemptively. This means context
 switches only occur at well-defined points (during the ``fetch``
 operation).
+
+Sending Instructions To All Processors
+--------------------------------------
+
+It is often useful to execute a statement on all processors, particularly
+for setup tasks such as loading source files and defining common variables.
+This can be done with the ``@everywhere`` macro:
+
+    @everywhere include("defs.jl")
