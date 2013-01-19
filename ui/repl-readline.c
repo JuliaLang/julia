@@ -193,7 +193,8 @@ static int return_callback(int count, int key)
         consecutive_returns > 1;
     if (!rl_done) {
         newline_callback(count, key);
-    } else {
+    }
+    else {
         reset_indent();
         rl_point = rl_end;
         rl_redisplay();
@@ -240,7 +241,8 @@ static int tab_callback(int count, int key)
     // indent to next tab stop
     if (suppress_space()) {
         spaces_suppressed += tab_width;
-    } else {
+    }
+    else {
         i = line_start(rl_point) + prompt_length;
         do { rl_insert_text(" "); } while ((rl_point - i) % tab_width);
     }
@@ -344,7 +346,8 @@ static int up_callback(int count, int key)
         if (j == 0) rl_point -= prompt_length;
         rl_point += j - i;
         if (rl_point >= i) rl_point = i - 1;
-    } else {
+    }
+    else {
         last_hist_offset = -1;
         rl_get_previous_history(count, key);
         rl_point = line_end(0);
@@ -363,7 +366,8 @@ static int down_callback(int count, int key)
         int k = line_end(j+1);
         if (rl_point > k) rl_point = k;
         return 0;
-    } else {
+    }
+    else {
         if (last_hist_offset >= 0) {
             history_set_pos(last_hist_offset);
             last_hist_offset = -1;
@@ -380,7 +384,8 @@ void jl_input_line_callback(char *input)
     if (!input || ios_eof(ios_stdin)) {
         end = 1;
         rl_ast = NULL;
-    } else if (!rl_ast) {
+    }
+    else if (!rl_ast) {
         // In vi mode, it's possible for this function to be called w/o a
         // previous call to return_callback.
         rl_ast = jl_parse_input_line(rl_line_buffer);
@@ -615,7 +620,8 @@ void repl_sigint_handler(int sig, siginfo_t *info, void *context)
     else {
         if (jl_sigint_act.sa_flags & SA_SIGINFO) {
             jl_sigint_act.sa_sigaction(sig, info, context);
-        } else {
+        }
+        else {
             void (*f)(int) = jl_sigint_act.sa_handler;
             if (f == SIG_DFL)
                 raise(sig);
@@ -646,6 +652,8 @@ static void init_rl(void)
         rl_bind_keyseq_in_map("\e[1~", line_start_callback, keymaps[i]);
         rl_bind_keyseq_in_map("\e[4~", line_end_callback,   keymaps[i]);
         rl_bind_keyseq_in_map("\e[3~", delete_callback,     keymaps[i]);
+        rl_bind_keyseq_in_map("\e[5~", rl_named_function("beginning-of-history"), keymaps[i]);
+        rl_bind_keyseq_in_map("\e[6~", rl_named_function("end-of-history"), keymaps[i]);
         rl_bind_keyseq_in_map("\e[A",  up_callback,         keymaps[i]);
         rl_bind_keyseq_in_map("\e[B",  down_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
