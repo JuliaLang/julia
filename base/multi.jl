@@ -1243,7 +1243,7 @@ function preduce(reducer, f, r::Range1{Int})
         end
         results[i] = @spawn f(lo, hi)
     end
-    mapreduce(reducer, fetch, results)
+    mapreduce(fetch, reducer, results)
 end
 
 function pfor(f, r::Range1{Int})
