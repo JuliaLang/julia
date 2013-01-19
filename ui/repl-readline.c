@@ -436,8 +436,7 @@ static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
     } while (tree != NULL);
 }
 
-static jl_module_t *
-find_submodule_named(jl_module_t *module, const char *name)
+static jl_module_t *find_submodule_named(jl_module_t *module, const char *name)
 {
     jl_sym_t *s = jl_symbol_lookup(name);
     if (!s) return NULL;
@@ -457,15 +456,14 @@ char *strtok_r(char *str, const char *delim, char **save)
 {
     char *res, *last;
 
-    if( !save )
+    if (!save)
         return strtok(str, delim);
-    if( !str && !(str = *save) )
+    if (!str && !(str = *save))
         return NULL;
     last = str + strlen(str);
-    if( (*save = res = strtok(str, delim)) )
-    {
+    if ((*save = res = strtok(str, delim))) {
         *save += strlen(res);
-        if( *save < last )
+        if (*save < last)
             (*save)++;
         else
             *save = NULL;
@@ -690,7 +688,7 @@ void jl_prep_terminal (int meta_flag)
             jl_exit(1);
         }
         if (repl_sigint_act.sa_sigaction != oldact.sa_sigaction &&
-              jl_sigint_act.sa_sigaction != oldact.sa_sigaction)
+            jl_sigint_act.sa_sigaction != oldact.sa_sigaction)
             jl_sigint_act = oldact;
     }
 #endif
@@ -707,10 +705,8 @@ void jl_deprep_terminal ()
 void init_repl_environment(int argc, char *argv[])
 {
     disable_history = 0;
-    for (int i = 0; i < argc; i++)
-    {
-        if (!strcmp(argv[i], "--no-history"))
-        {
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "--no-history")) {
             disable_history = 1;
             break;
         }
@@ -779,4 +775,3 @@ DLLEXPORT void jl_clear_input(void)
     jl_write(jl_uv_stdout, "\e[4C", 4); //hack: try to fix cursor location
 #endif
 }
-
