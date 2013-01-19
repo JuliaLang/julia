@@ -337,10 +337,12 @@ function _start()
         println()
         exit(1)
     end
-    if have_color
-        print(color_normal)
+    if is_interactive
+        if have_color
+            print(color_normal)
+        end
+        println()
     end
-    println()
     ccall(:uv_atexit_hook, Void, ())
 end
 
