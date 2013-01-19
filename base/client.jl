@@ -363,7 +363,7 @@ function print_with_color(io::IO, color::Symbol, msg::String...)
         printed_color = get(text_colors, color, color_normal)
         print(io, printed_color, msg..., color_normal)
     else
-        print(io, strs...)
+        print(io, msg...)
     end
 end
 print_with_color(color::Symbol, msg::String...) =
