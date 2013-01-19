@@ -14,7 +14,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
-       beta, lbeta, eta, zeta, digamma
+       beta, lbeta, betacdf, eta, zeta, digamma
 
 import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
        Base.tanh, Base.asin, Base.acos, Base.atan, Base.asinh, Base.acosh,
@@ -556,6 +556,79 @@ beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
 @vectorize_2arg Number beta
 @vectorize_2arg Number lbeta
+
+# Regularised incomplete beta function or the beta cdf
+# Translation of betai.f from slatec/fn
+function betacdf(x::Real, pin::Real, qin::Real)
+    
+    lneps = log(eps())
+    sml = realmin(Float64)
+    lnsml = log(sml)
+
+    if (x < 0. || x > 1.0) error("x must be between zero and one") end
+    if (pin <= 0. || qin <= 0.) error("p and q must be positive") end
+
+    y = x
+    p = pin
+    q = qin
+    if (q > p && x >= 0.2) || x > 0.8
+        y = 1.0 - y
+        p = qin
+        q = pin
+    end
+
+    if ((p + q) * y / (p + 1.) >= eps())
+        ps = q - trunc(q)
+        if (ps == 0.) ps = 1.0 end
+        xb = p * log(y) - lbeta(ps, p) - log(p)
+        ansbetai = 0.0
+        if (xb >= lnsml)
+            ansbetai = exp(xb)
+            term = ansbetai * p
+            if (ps != 1.0)
+                n = itrunc(max(lneps / log(y), 4.0))
+                for i = 1.:n
+                    term *= (i - ps) * y / i
+                    ansbetai += term / (p + i)
+                end
+            end
+        end
+
+        if (q > 1.0)
+            xb = p * log(y) + q * log(1.0 - y) - lbeta(p, q) - log(q)
+            ib = itrunc(max(xb / lnsml, 0.0))
+            term = exp(xb - ib * lnsml)
+            c = 1.0 / (1.0 - y)
+            p1 = q * c / (p + q - 1.)
+
+            finsum = 0.0
+            n = itrunc(q)
+            if (q == n) n -= 1 end
+            for i = 1.:n
+                if (p1 <= 1.0 && term / eps() <= finsum) break end
+                term = (q - (i - 1.)) * c * term / (p + q - i)
+
+                if (term > 1.0) 
+                    ib -= 1
+                    term *= sml
+                end
+
+                if (ib == 0) finsum += term end
+            end
+
+            ansbetai += finsum
+        end
+        if (y != x || p != pin) ansbetai = 1.0 - ansbetai end
+        ansbetai = max(min(ansbetai, 1.0), 0.0)
+        return ansbetai
+    end
+
+    ansbetai = 0.0
+    xb = p * log(y) - log(p) - lbeta(p, q)
+    if (xb > lnsml && y != 0.) ansbetai = exp(xb) end
+    if (y != x || p != pin) ansbetai = 1.0 - ansbetai end
+    return ansbetai
+end
 
 const eta_coeffs =
     [.99999999999999999997,
