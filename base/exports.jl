@@ -1204,8 +1204,10 @@ export
 # distributed arrays
     defaultdist,
     distribute,
+    dones,
     drand,
     drandn,
+    dzeros,
     localize,
     myindexes,
     procs,
