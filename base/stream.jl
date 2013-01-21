@@ -558,20 +558,20 @@ end
 ## low-level calls
 
 write(s::AsyncStream, b::ASCIIString) =
-    ccall(:jl_puts, Int32, (Ptr{Uint8},Ptr{Void}),b.data,handle(s))
+    int(ccall(:jl_puts, Int32, (Ptr{Uint8},Ptr{Void}),b.data,handle(s)))
 write(s::AsyncStream, b::Uint8) =
-    ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s))
+    int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s)))
 write(s::AsyncStream, c::Char) =
-    ccall(:jl_pututf8, Int32, (Ptr{Void},Char), handle(s), c)
+    int(ccall(:jl_pututf8, Int32, (Ptr{Void},Char), handle(s), c))
 function write{T}(s::AsyncStream, a::Array{T})
     if(isa(T,BitsKind))
-        ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),handle(s), a, uint(length(a)*sizeof(T)))
+        ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint32), handle(s), a, uint(length(a)*sizeof(T)))
     else
         invoke(write,(IO,Array),s,a)
     end
 end
-write(s::AsyncStream, p::Ptr, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),handle(s), p, uint(nb))
-_write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),handle(s),p,uint(nb))
+write(s::AsyncStream, p::Ptr, nb::Integer) = ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint), handle(s), p, uint(nb))
+_write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint), handle(s), p, uint(nb))
 
 _jl_connect_raw(sock::TcpSocket,sockaddr::Ptr{Void}) = ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void}),sock.handle,sockaddr)
 _jl_getaddrinfo(loop::Ptr{Void},host::ByteString,service::Ptr{Void},cb::Function) = ccall(:jl_getaddrinfo,Int32,(Ptr{Void},Ptr{Uint8},Ptr{Uint8},Function),loop,host,service,cb)
