@@ -142,9 +142,10 @@ t_func[arraylen] = (1, 1, x->Int)
 arraysize_tfunc(a, d) = Int
 function arraysize_tfunc(a)
     if isa(a,CompositeKind) && subtype(a,Array)
-        return NTuple{a.parameters[2],Int}
+        N = a.parameters[2]
+        return isa(N,Int) ? NTuple{N,Int} : (Int...)
     else
-        return NTuple{Array.parameters[2],Int}
+        return (Int...)
     end
 end
 t_func[arraysize] = (1, 2, arraysize_tfunc)
