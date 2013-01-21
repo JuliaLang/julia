@@ -134,16 +134,10 @@ function run_repl()
     if have_color
         ccall(:jl_enable_color, Void, ())
     end
-    atexit() do
-        if have_color
-            print(color_normal)
-        end
-        println()
-    end
 
     # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
-    STDIN.closecb = stream->(println();exit(0))
+    STDIN.closecb = (x...)->put(repl_channel,(nothing,-1))
 
     while true
         ccall(:repl_callback_enable, Void, ())
@@ -156,6 +150,11 @@ function run_repl()
         end
         eval_user_input(ast, show_value!=0)
     end
+
+    if have_color
+        print(color_normal)
+    end
+    println()
 end
 
 function parse_input_line(s::String)
