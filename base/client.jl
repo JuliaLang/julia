@@ -176,7 +176,7 @@ function try_include(f::String)
 end
 
 function process_options(args::Array{Any,1})
-    global ARGS
+    global ARGS, bind_addr
     quiet = false
     repl = true
     startup = true
@@ -188,6 +188,9 @@ function process_options(args::Array{Any,1})
         elseif args[i]=="--worker"
             start_worker()
             # doesn't return
+        elseif args[i]=="--bind-to"
+            i += 1
+            bind_addr = args[i]
         elseif args[i]=="-e"
             # TODO: support long options
             repl = false
@@ -269,6 +272,9 @@ isinteractive() = (is_interactive::Bool)
 
 function _start()
     # set up standard streams
+
+    # set default local address
+    global bind_addr = getipaddr()
 
     @windows_only if !has(ENV,"HOME")
         ENV["HOME"] = joinpath(ENV["APPDATA"],"julia")
