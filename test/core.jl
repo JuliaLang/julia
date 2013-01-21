@@ -566,3 +566,9 @@ let
     @test ff(Any) === Any
     @test ff(Int) === Int
 end
+
+# issue #2098
+let
+    i2098() = (c={2.0};[1:1:c[1]])
+    @test isequal(i2098(), [1.0,2.0])
+end

@@ -173,6 +173,9 @@ function static_convert(to::ANY, from::ANY)
             if isseqtype(pe)
                 pe = pe.parameters[1]
                 pseq = true
+            elseif isa(pe,TypeVar) && isseqtype(pe.ub)
+                pe = pe.ub.parameters[1]
+                pseq = true
             end
         else
             return None
