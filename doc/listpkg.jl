@@ -1,10 +1,7 @@
-require("pkg")
-try 
+
 require("JSON")
-catch 
-Pkg.add("JSON")
-require("JSON")
-end
+require("Calendar")
+using Calendar
 
 try 
 	  global gh_auth
@@ -88,7 +85,9 @@ function gen_listpkg()
 
 		print(io, "----\n\n")
 	end  #for pkg
+	print(io, ".. footer: $(length(Pkg.Metadata.packages())) packages, generated $(now()) \n\n")
 	end  #cd
+	
 	close(io)
 end #function
 

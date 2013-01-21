@@ -416,17 +416,17 @@ ________________________________________________________
         :alt: pao
         :target: https://github.com/pao
 
+    .. image:: https://secure.gravatar.com/avatar/2cbc175271c0dbdaf0aa8f68af6c13d4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Glen Hertz
+        :target: https://github.com/GlenHertz
+
     .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: dmbates
         :target: https://github.com/dmbates
-
-    .. image:: https://secure.gravatar.com/avatar/903acb22f47a901577ee48d3962d5858?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Tom Short
-        :target: https://github.com/tshort
 
     .. image:: https://secure.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -434,17 +434,17 @@ ________________________________________________________
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://secure.gravatar.com/avatar/2cbc175271c0dbdaf0aa8f68af6c13d4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Glen Hertz
-        :target: https://github.com/GlenHertz
-
     .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
+
+    .. image:: https://secure.gravatar.com/avatar/903acb22f47a901577ee48d3962d5858?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tom Short
+        :target: https://github.com/tshort
 
     .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -452,17 +452,17 @@ ________________________________________________________
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Miles
-        :target: https://github.com/mlubin
-
     .. image:: https://secure.gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Ian Fiske
         :target: https://github.com/ianfiske
+
+    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Miles
+        :target: https://github.com/mlubin
 
     .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -776,7 +776,7 @@ _____________________________________________
 `GLUT <https://github.com/rennis250/GLUT.jl>`_
 ______________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/3753123303ea2852accbce22339f67b4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
      :width: 80px
      :align: right
@@ -795,6 +795,12 @@ ______________________________________________
       OpenGL         Any Version
 
   Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Robert Ennis
+        :target: https://github.com/rennis250
 
 ----
 
@@ -831,6 +837,12 @@ ________________________________________________
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
+    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: dmbates
+        :target: https://github.com/dmbates
+
     .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -843,18 +855,18 @@ ________________________________________________
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: dmbates
-        :target: https://github.com/dmbates
+        :alt: Robert Ennis
+        :target: https://github.com/rennis250
 
 ----
 
 `GetC <https://github.com/rennis250/GetC.jl>`_
 ______________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/3753123303ea2852accbce22339f67b4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
      :width: 80px
      :align: right
@@ -872,6 +884,12 @@ ______________________________________________
       None
 
   Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Robert Ennis
+        :target: https://github.com/rennis250
 
 ----
 
@@ -1597,7 +1615,7 @@ ______________________________________________
 `ODBC <https://github.com/karbarcca/ODBC>`_
 ___________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/1214b9051c4ae96c1ca5c5e6cc25716e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
      :width: 80px
      :align: right
@@ -1616,7 +1634,7 @@ ___________________________________________
 
   Contributors:
 
-    .. image:: https://secure.gravatar.com/avatar/1214b9051c4ae96c1ca5c5e6cc25716e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
@@ -1633,7 +1651,7 @@ ___________________________________________
 `OpenGL <https://github.com/rennis250/OpenGL.jl>`_
 __________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/3753123303ea2852accbce22339f67b4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
      :width: 80px
      :align: right
@@ -1651,6 +1669,12 @@ __________________________________________________
       GetC           Any Version
 
   Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Robert Ennis
+        :target: https://github.com/rennis250
 
 ----
 
@@ -1838,7 +1862,7 @@ __________________________________________________
 
   Dependencies::
 
-      None
+      Options        Any Version
 
   Contributors:
 
@@ -1986,7 +2010,7 @@ ___________________________________________
 `SDL <https://github.com/rennis250/SDL.jl>`_
 ____________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/3753123303ea2852accbce22339f67b4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
      :width: 80px
      :align: right
@@ -2005,6 +2029,12 @@ ____________________________________________
       OpenGL         Any Version
 
   Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Robert Ennis
+        :target: https://github.com/rennis250
 
 ----
 
@@ -2399,4 +2429,6 @@ _________________________________________________
         :target: https://github.com/johnmyleswhite
 
 ----
+
+.. footer: 65 packages, generated 21 Jan 2013 00:58:48 GMT 
 

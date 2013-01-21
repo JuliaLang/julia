@@ -69,6 +69,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
         d,v   = eig(a)                          # non-symmetric eigen decomposition
         for i in 1:size(a,2) @assert_approx_eq a*v[:,i] d[i]*v[:,i] end
     
+        u, q, v = schur(a)                         # Schur
+        @assert_approx_eq q*u*q' a
+        @assert_approx_eq sort(real(v)) sort(real(d))
+        @assert_approx_eq sort(imag(v)) sort(imag(d))
+        @test istriu(u) || isreal(a)
+
         u,s,vt = svdt(a)                        # singular value decomposition
         @assert_approx_eq u*diagmm(s,vt) a
     
@@ -92,7 +98,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq a[:,1:5]*pinva15*a[:,1:5] a[:,1:5]
         @assert_approx_eq pinva15*a[:,1:5]*pinva15 pinva15
     
-        # Complex vector rhs
+        # Complex complex rhs real lhs
         x = a\complex(b)
         @assert_approx_eq a*x complex(b)
 
@@ -101,6 +107,10 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq_eps cond(a, 2) 1.960057871514615e+02 0.01
         @assert_approx_eq_eps cond(a, Inf) 3.757017682707787e+02 0.01
         @assert_approx_eq_eps cond(a[:,1:5]) 10.233059337453463 0.01
+
+        # Matrix square root
+        asq = sqrtm(a)
+        @assert_approx_eq asq*asq a
 end
 a = [ones(20) 1:20 1:20]
 b = reshape(eye(8, 5), 20, 2)
@@ -208,7 +218,7 @@ Asub = sub(Ai, 1:2:2*cutoff, 1:3)
 Aref = Ai[1:2:2*cutoff, 1:3]
 @test Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
 
-# Matrix exponential
+# Matrix exponential and Hessenberg
 for elty in (Float32, Float64, Complex64, Complex128)
         A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
         eA1 = convert(Matrix{elty}, [147.866622446369 127.781085523181  127.781085523182;
@@ -231,6 +241,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
         0.367879439109187 1.47151775849686  1.10363831732856;
         0.135335281175235 0.406005843524598 0.541341126763207]')
         @assert_approx_eq expm(A3) eA3
+
+        # Hessenberg
+        @assert_approx_eq hess(A1) convert(Matrix{elty}, 
+                        [4.000000000000000  -1.414213562373094  -1.414213562373095
+                        -1.414213562373095   4.999999999999996  -0.000000000000000
+                                         0  -0.000000000000002   3.000000000000000])
 end
 
 # matmul for types w/o sizeof (issue #1282)
