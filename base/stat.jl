@@ -28,17 +28,19 @@ Stat(buf::Vector{Uint8}) = Stat(
     ccall(:jl_stat_ctime,   Float64, (Ptr{Uint8},), buf),
 )
 
-show(io::IO, st::Stat) = println("Stat(mode=$(oct(st.mode,6)), size=$(st.size))")
+show(io::IO, st::Stat) = print("Stat(mode=$(oct(st.mode,6)), size=$(st.size))")
 
 # stat & lstat functions
 
-const _jl_stat_buf = Array(Uint8, ccall(:jl_sizeof_stat, Int, ()))
-macro _jl_stat_call(sym,arg)
+const stat_buf = Array(Uint8, ccall(:jl_sizeof_stat, Int, ()))
+macro stat_call(sym,arg)
     quote
-        fill!(_jl_stat_buf,0)
-        r = ccall($(expr(:quote,sym)), Int32, (Ptr{Uint8},Ptr{Uint8}), $arg, _jl_stat_buf)
-        system_error("stat", r!=0 && errno()!=ENOENT)
-        st = Stat(_jl_stat_buf)
+        fill!(stat_buf,0)
+        r = ccall($(expr(:quote,sym)), Int32, (Ptr{Uint8},Ptr{Uint8}), $arg, stat_buf)
+        uv_errno = _uv_lasterror(globalEventLoop())
+        ENOENT = 34
+        system_error(:stat, r!=0 && uv_errno!=ENOENT)
+        st = Stat(stat_buf)
         if ispath(st) != (r==0)
             error("WTF: stat returned zero type for a valid path!?")
         end
@@ -46,9 +48,9 @@ macro _jl_stat_call(sym,arg)
     end
 end
 
-stat(path::String)  = @_jl_stat_call jl_stat  path
-stat(fd::Integer)   = @_jl_stat_call jl_fstat fd
-lstat(path::String) = @_jl_stat_call jl_lstat path
+stat(path::String)  = @stat_call jl_stat  path
+stat(fd::Integer)   = @stat_call jl_fstat fd
+lstat(path::String) = @stat_call jl_lstat path
 
 # mode type predicates
 
@@ -108,3 +110,6 @@ filemode(path::String) = stat(path).mode
 filesize(path::String) = stat(path).size
    mtime(path::String) = stat(path).mtime
    ctime(path::String) = stat(path).ctime
+
+samefile(a::Stat, b::Stat) = a.device==b.device && a.inode==b.inode
+samefile(a::String, b::String) = samefile(stat(a),stat(b))

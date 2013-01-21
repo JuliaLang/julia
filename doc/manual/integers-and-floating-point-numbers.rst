@@ -25,6 +25,8 @@ them. The following are Julia's primitive numeric types:
    -  ``Uint32`` — unsigned 32-bit integers ranging from 0 to 2^32 - 1.
    -  ``Int64`` — signed 64-bit integers ranging from -2^63 to 2^63 - 1.
    -  ``Uint64`` — unsigned 64-bit integers ranging from 0 to 2^64 - 1.
+   -  ``Int128`` - signed 128-bit integers ranging from -2^127 to 2^127 - 1.
+   -  ``Uint128`` - unsigned 128-bit integers ranging from 0 to 2^128 - 1.
    -  ``Bool`` — either ``true`` or ``false``, which correspond
       numerically to 1 and 0.
    -  ``Char`` — a 32-bit numeric type representing a `Unicode
@@ -67,7 +69,8 @@ system has a 32-bit architecture or a 64-bit architecture::
     julia> typeof(1)
     Int64
 
-The type ``Int`` is an alias for the system-native integer type::
+Use ``WORD_SIZE`` to figure out whether the target system is 32-bit
+or 64-bit. The type ``Int`` is an alias for the system-native integer type::
 
     # 32-bit system:
     julia> Int
@@ -144,17 +147,20 @@ such as integers are given by the ``typemin`` and ``typemax`` functions::
     julia> (typemin(Int32), typemax(Int32))
     (-2147483648,2147483647)
 
-    julia> for T = {Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32,Uint64}
+    julia> for T = {Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128}
              println("$(lpad(T,6)): [$(typemin(T)),$(typemax(T))]")
            end
-      Int8: [-128,127]
-     Int16: [-32768,32767]
-     Int32: [-2147483648,2147483647]
-     Int64: [-9223372036854775808,9223372036854775807]
-     Uint8: [0x00,0xff]
-    Uint16: [0x0000,0xffff]
-    Uint32: [0x00000000,0xffffffff]
-    Uint64: [0x0000000000000000,0xffffffffffffffff]
+
+       Int8: [-128,127]
+      Int16: [-32768,32767]
+      Int32: [-2147483648,2147483647]
+      Int64: [-9223372036854775808,9223372036854775807]
+     Int128: [-170141183460469231731687303715884105728,170141183460469231731687303715884105727]
+      Uint8: [0x00,0xff]
+     Uint16: [0x0000,0xffff]
+     Uint32: [0x00000000,0xffffffff]
+     Uint64: [0x0000000000000000,0xffffffffffffffff]
+    Uint128: [0x00000000000000000000000000000000,0xffffffffffffffffffffffffffffffff]
 
 The values returned by ``typemin`` and ``typemax`` are always of the
 given argument type. The above expression uses several features we have
@@ -200,11 +206,11 @@ for ``Float32``, but you can convert values to ``Float32`` easily::
 There are three specified standard floating-point values that do not
 correspond to a point on the real number line:
 
--  ``Inf`` — positive infinity — a value greater than all finite
+-  ``Inf`` — positive infinity — a value greater than all finite
    floating-point values
--  ``-Inf`` — negative infinity — a value less than all finite
+-  ``-Inf`` — negative infinity — a value less than all finite
    floating-point values
--  ``NaN`` — not a number — a value incomparable to all floating-point
+-  ``NaN`` — not a number — a value incomparable to all floating-point
    values (including itself).
 
 For further discussion of how these non-finite floating-point values are
@@ -244,13 +250,12 @@ The ``typemin`` and ``typemax`` functions also apply to floating-point
 types::
 
     julia> (typemin(Float32),typemax(Float32))
-    (-Inf,Inf)
+    (-Inf32,Inf32)
 
     julia> (typemin(Float64),typemax(Float64))
     (-Inf,Inf)
 
-Note that ``Float32`` values ``NaN``, ``Inf`` and ``-Inf`` are shown
-identically to their ``Float64`` counterparts.
+Note that ``Float32`` values have the suffix ``32: ``NaN32``, ``Inf32``, and ``-Inf32``.
 
 Floating-point types also support the ``eps`` function, which gives the
 distance between ``1.0`` and the next larger representable
@@ -262,7 +267,7 @@ floating-point value::
     julia> eps(Float64)
     2.22044604925031308e-16
 
-These values are ``2^-23`` and ``2^-52`` as ``Float32`` and ``Float64``
+These values are ``2.0^-23`` and ``2.0^-52`` as ``Float32`` and ``Float64``
 values, respectively. The ``eps`` function can also take a
 floating-point value as an argument, and gives the absolute difference
 between that value and the next representable floating point value. That
@@ -280,7 +285,7 @@ than ``x``::
     1.79366203433576585e-43
 
     julia> eps(0.0)
-    4.94065645841246544e-324
+    5.0e-324
 
 As you can see, the distance to the next larger representable
 floating-point value is smaller for smaller values and larger for larger
@@ -290,13 +295,6 @@ exponentially as one moves farther away from zero. By definition,
 ``eps(1.0)`` is the same as ``eps(Float64)`` since ``1.0`` is a 64-bit
 floating-point value.
 
-.. raw:: html
-
-   <!-- ### Exercises
-
-   - Define an integer variable with value equal to 1. Convert it into a Float64. [Answer](answer_int2float)
-
-   - Round off 3.8 to the nearest integer. [Answer](answer_roundoff) -->
 
 Background and References
 ~~~~~~~~~~~~~~~~~~~~~~~~~

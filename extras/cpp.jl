@@ -21,7 +21,7 @@ macro cpp(ex)
     fstr = string(sym)
     fstr = fstr[2:end]   # strip the :
     #GNU3-4 ABI
-    fstr = string("_Z",strlen(fstr),fstr)
+    fstr = string("_Z",length(fstr),fstr)
     # Parse the arguments to ccall and construct the parameter type string
     extmp = ex.args[3]
     if extmp.head != :tuple

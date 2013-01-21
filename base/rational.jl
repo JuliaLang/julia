@@ -27,7 +27,7 @@ function //(x::Complex, y::Complex)
     complex(real(xy)//yy, imag(xy)//yy)
 end
 
-function show(io, x::Rational)
+function show(io::IO, x::Rational)
     if isinf(x)
         print(io, x.num > 0 ? "Inf" : "-Inf")
     else
@@ -41,19 +41,31 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
     if isnan(x);       return zero(T)//zero(T); end
     if x < typemin(T); return -one(T)//zero(T); end
     if typemax(T) < x; return  one(T)//zero(T); end
+    tm = x < 0 ? typemin(T) : typemax(T)
+    z = x*tm
+    if z <= 0.5 return zero(T)//one(T) end
+    if z <= 1.0 return one(T)//tm end
     y = x
-    a = d = one(T)
-    b = c = zero(T)
+    a = d = 1
+    b = c = 0
     while true
-        f = convert(T,trunc(y)); y -= f
-        a, b, c, d = f*a+c, f*b+d, a, b
+        f = itrunc(y); y -= f
+        p, q = f*a+c, f*b+d
+        if p < typemin(T) || p > typemax(T) ||
+           q < typemin(T) || q > typemax(T)
+           break
+        end
+        a, b, c, d = p, q, a, b
         if y == 0 || abs(a/b-x) <= tol
-            return a//b
+            break
         end
         y = 1/y
     end
+    return convert(T,a)//convert(T,b)
 end
-convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,0)
+convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(one(x)))
+convert(::Type{Rational}, x::FloatingPoint, tol::Real) = convert(Rational{Int},x,tol)
+convert(::Type{Rational}, x::FloatingPoint) = convert(Rational{Int},x,eps(one(x)))
 convert(::Type{Bool}, x::Rational) = (x!=0)  # to resolve ambiguity
 convert{T<:Rational}(::Type{T}, x::Rational) = x
 convert{T<:Real}(::Type{T}, x::Rational) = convert(T, x.num/x.den)
@@ -131,16 +143,6 @@ trunc(x::Rational) = Rational(itrunc(x))
 floor(x::Rational) = Rational(ifloor(x))
 ceil (x::Rational) = Rational(iceil(x))
 round(x::Rational) = Rational(iround(x))
-
-rational(x::Real) = rational(x, 0)
-rational(x::Rational, tol::Real) = x
-rational(x::Integer) = x // one(x)
-rational(x::Integer, tol::Real) = x // one(x)
-rational(x::Float32, tol::Real) = convert(Rational{Int32}, x, tol)
-rational(x::Float64, tol::Real) = convert(Rational{Int64}, x, tol)
-rational(z::Complex) = complex(rational(real(z)), rational(imag(z)))
-rational(z::Complex, tol::Real) =
-    (tol /= sqrt(2); complex(rational(real(z), tol), rational(imag(z), tol)))
 
 ## rational to int coercion ##
 

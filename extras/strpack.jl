@@ -1,5 +1,6 @@
-load("iostring.jl")
-load("lru.jl")
+include("lru.jl")
+
+import Base.isequal, Base.length, Base.ref
 
 bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
 
@@ -25,7 +26,7 @@ function Struct{T}(::Type{T}, endianness)
     if !isbitsequivalent(T)
         error("Type $T is not bits-equivalent.")
     end
-    s = string(T)
+    s = canonicalize(T, endianness)
     if has(STRUCTS, s)
         return STRUCTS[s]
     end
@@ -49,6 +50,9 @@ end
 DataAlign(def::Function, agg::Function) = DataAlign((Type=>Integer)[], def, agg)
 
 canonicalize(s::String) = replace(s, r"\s|#.*$"m, "")
+
+# colons chosen since they are not allowed in struct-format strings or in type names
+canonicalize(t::Type,e::Endianness) = strcat("::", string(t), "::", string(e))
 
 # A byte of padding
 bitstype 8 PadByte
@@ -177,7 +181,7 @@ function struct_parse(s::String)
             end
         end
         i += length(m.match)
-        push(t, (elemtype, dims, name))
+        push!(t, (elemtype, dims, name))
     end
     (endianness, t)
 end
@@ -197,7 +201,7 @@ function gen_typelist(types::Array)
                 :(($fn)::($typ))
             end
         end
-        push(xprs, xpr)
+        push!(xprs, xpr)
     end
     xprs         
 end
@@ -217,24 +221,24 @@ end
 function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Symbol, strategy::Symbol)
     xprs, rvars = {}, {}
     @gensym pad
-    push(xprs, :($offset = 0))
+    push!(xprs, :($offset = 0))
     for (typ, dims) in types
-        push(xprs, quote
+        push!(xprs, quote
             $pad = pad_next($offset, $typ, $strategy)
             if $pad > 0
-                skip($stream, $pad)
+                Base.skip($stream, $pad)
                 $offset += $pad
             end
             $offset += sizeof($typ)*prod($dims)
         end)
         rvar = gensym()
-        push(rvars, rvar)
-        push(xprs, if isa(typ, CompositeKind)
+        push!(rvars, rvar)
+        push!(xprs, if isa(typ, CompositeKind)
             :($rvar = unpack($stream, $typ))
         elseif dims == 1
-            :($rvar = ($convert)(read($stream, $typ)))
+            :($rvar = ($convert)(Base.read($stream, $typ)))
         else
-            :($rvar = map($convert, read($stream, $typ, $dims...)))
+            :($rvar = map($convert, Base.read($stream, $typ, $dims...)))
         end)
     end
     xprs, rvars
@@ -246,7 +250,7 @@ function struct_unpack(convert, types, struct_type)
         (($in)::IO, ($strategy)::DataAlign) -> begin
             $(readers...)
             # tail pad
-            skip($in, pad_next($offset, $struct_type, $strategy))
+            Base.skip($in, pad_next($offset, $struct_type, $strategy))
             ($struct_type)($(rvars...))
         end
     end
@@ -260,21 +264,21 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
     elnum = 0
     for (typ, dims) in types
         elnum += 1
-        push(xprs, quote
+        push!(xprs, quote
             $pad = pad_next($offset, $typ, $strategy)
             if $pad > 0
-                write($stream, fill(uint8(0), $pad))
+                Base.write($stream, fill(uint8(0), $pad))
                 $offset += $pad
             end
             $offset += sizeof($typ)*prod($dims)
         end)
-        push(xprs, if isa(typ, CompositeKind)
+        push!(xprs, if isa(typ, CompositeKind)
             :(pack($stream, getfield($struct, ($fieldnames)[$elnum])))
         elseif dims == 1
-            :(write($stream, ($convert)(getfield($struct, ($fieldnames)[$elnum]))))
+            :(Base.write($stream, ($convert)(getfield($struct, ($fieldnames)[$elnum]))))
         else
             ranges = tuple([1:d for d in dims]...)
-            :(write($stream, map($convert, ref(getfield($struct, ($fieldnames)[$elnum]), ($ranges)...))))
+            :(Base.write($stream, map($convert, ref(getfield($struct, ($fieldnames)[$elnum]), ($ranges)...))))
         end)
     end
     xprs
@@ -286,7 +290,7 @@ function struct_pack(convert, types, struct_type)
         (($out)::IO, ($strategy)::DataAlign, ($struct)::($struct_type)) -> begin
             $(writers...)
             # tail pad
-            write($out, fill(uint8(0), pad_next($offset, $struct_type, $strategy)))
+            Base.write($out, fill(uint8(0), pad_next($offset, $struct_type, $strategy)))
         end
     end
     eval(packdef)
@@ -461,15 +465,15 @@ function pad(s::Struct, strategy::DataAlign)
     for (typ, dims) in s.types
         fix = pad_next(offset, typ, strategy)
         if fix > 0
-            push(newtypes, (PadByte, fix))
+            push!(newtypes, (PadByte, fix))
             offset += fix
         end
-        push(newtypes, (typ, dims))
+        push!(newtypes, (typ, dims))
         offset += sizeof(typ) * prod(dims)
     end
     fix = pad_next(offset, s, strategy)
     if fix > 0
-        push(newtypes, (PadByte, fix))
+        push!(newtypes, (PadByte, fix))
     end
     newtypes
 end
@@ -506,17 +510,15 @@ show_struct_layout(s::Struct, strategy::DataAlign) = show_struct_layout(s, strat
 show_struct_layout(s::Struct, strategy::DataAlign, width) = show_struct_layout(s, strategy, width, 10)
 
 ## Native layout ##
-const libLLVM = dlopen("libLLVM-3.1")
-const LLVMAlign = dlsym(libLLVM, :LLVMPreferredAlignmentOfType)
 macro llvmalign(tsym)
     quote
-        int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                  ccall(dlsym(libLLVM, $tsym), Ptr, ())))
+        int(ccall(:LLVMPreferredAlignmentOfType, Uint, (Ptr, Ptr),
+                  tgtdata, ccall($tsym, Ptr, ())))
     end
 end
 
 align_native = align_table(align_default, let
-    tgtdata = ccall(dlsym(libLLVM, :LLVMCreateTargetData), Ptr, (String,), "")
+    tgtdata = ccall(:LLVMCreateTargetData, Ptr, (String,), "")
 
     int8align = @llvmalign :LLVMInt8Type
     int16align = @llvmalign :LLVMInt16Type
@@ -525,7 +527,7 @@ align_native = align_table(align_default, let
     float32align = @llvmalign :LLVMFloatType
     float64align = @llvmalign :LLVMDoubleType
 
-    ccall(dlsym(libLLVM, :LLVMDisposeTargetData), Void, (Ptr,), tgtdata)
+    ccall(:LLVMDisposeTargetData, Void, (Ptr,), tgtdata)
 
     [
      Int8 => int8align,

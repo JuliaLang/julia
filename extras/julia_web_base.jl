@@ -16,29 +16,21 @@
 # [message_type::number, arg0::string, arg1::string, ...]
 
 # import the message types
-load("webrepl_msgtypes_h.jl")
+include("webrepl_msgtypes_h.jl")
 
 ###########################################
 # set up the socket connection
 ###########################################
 
 # open a socket on any port
-__ports = [int16(4444)]
-__sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), __ports)
-if __sockfd == -1
-    # couldn't open the socket
-    println("could not open server socket on port 4444.")
-    exit()
-end
+(port,sock) = Base.open_any_tcp_port(4444,false)
 
 # print the socket number so the server knows what it is
-println(__ports[1])
+println(STDOUT,int16(port))
 
 # wait for the server to connect to the socket
-__connectfd = ccall(:accept, Int32, (Int32, Ptr{Void}, Ptr{Void}), __sockfd, C_NULL, C_NULL)
-
-# create an io object from the file descriptor
-__io = fdio(__connectfd)
+__io = Base.wait_accept(sock)
+Base.start_reading(__io)
 
 ###########################################
 # protocol implementation
@@ -58,7 +50,7 @@ function __read_message()
     for i=1:num_args
         arg_length = read(__io, Uint32)
         arg = ASCIIString(read(__io, Uint8, arg_length))
-        push(args, arg)
+        push!(args, arg)
     end
     return __Message(msg_type, args)
 end
@@ -71,7 +63,7 @@ function __write_message(msg)
         write(__io, uint32(length(arg)))
         write(__io, arg)
     end
-    flush(__io)
+    #flush(__io)
 end
 
 # print a message (useful for debugging)
@@ -91,7 +83,7 @@ end
 ###########################################
 
 # load the special functions available to the web repl
-load("julia_web.jl")
+include("julia_web.jl")
 
 ###########################################
 # input event handler
@@ -171,7 +163,7 @@ function __socket_callback(fd)
 end
 
 # event handler for socket input
-add_fd_handler(__connectfd, __socket_callback)
+enq_work(@task while true __socket_callback(__io) end)
 
 web_show(user_id, ans) =
     __Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(repl_show, ans)})
@@ -200,11 +192,11 @@ function __eval_exprs(__parsed_exprs)
 end
 
 # print version info
-println("Julia ", Base._jl_version_string)
-println(Base._jl_commit_string, "\n")
+println("Julia ", Base.version_string)
+println(Base.commit_string, "\n")
 
 # work around bug displaying "\n "
-#print("  ",replace(Base._jl_banner_plain, "\n", "\n  "))
+#print("  ",replace(Base.banner_plain, "\n", "\n  "))
 
 ###########################################
 # wait forever while asynchronous processing happens

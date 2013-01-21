@@ -1,5 +1,6 @@
 ## symbols ##
 
+symbol(s::Symbol) = s
 symbol(s::ASCIIString) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =
@@ -16,9 +17,9 @@ gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
 macro gensym(names...)
     blk = expr(:block)
     for name in names
-        push(blk.args, :($(esc(name)) = gensym($(string(name)))))
+        push!(blk.args, :($(esc(name)) = gensym($(string(name)))))
     end
-    push(blk.args, :nothing)
+    push!(blk.args, :nothing)
     return blk
 end
 
@@ -42,7 +43,7 @@ isequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
 isequal(x::SymbolNode, y::Symbol)     = is(x.name,y)
 isequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
 
-function show(io, tv::TypeVar)
+function show(io::IO, tv::TypeVar)
     if !is(tv.lb, None)
         show(io, tv.lb)
         print(io, "<:")
@@ -60,5 +61,5 @@ macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
 ## misc syntax ##
 
 macro eval(x)
-    :(eval($(expr(:quote,x))))
+    :($(esc(:eval))($(expr(:quote,x))))
 end

@@ -51,8 +51,8 @@ type Filter{I}
 end
 filter(flt::Function, itr) = Filter(flt, itr)
 
-start(f::Filter) = _jl_start_filter(f.flt, f.itr)
-function _jl_start_filter(pred, itr)
+start(f::Filter) = start_filter(f.flt, f.itr)
+function start_filter(pred, itr)
     s = start(itr)
     while !done(itr,s)
         v,t = next(itr,s)
@@ -64,8 +64,8 @@ function _jl_start_filter(pred, itr)
     s
 end
 
-next(f::Filter, s) = _jl_advance_filter(f.flt, f.itr, s)
-function _jl_advance_filter(pred, itr, s)
+next(f::Filter, s) = advance_filter(f.flt, f.itr, s)
+function advance_filter(pred, itr, s)
     v,s = next(itr,s)
     while !done(itr,s)
         w,t = next(itr,s)

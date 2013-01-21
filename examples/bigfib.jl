@@ -1,8 +1,7 @@
-require("extras/bigint.jl")
+require("extras/bigint")
 
 module BigFib
 export bigfib
-import Base.*
 const BigInt = Main.BigInt
 
 # Large Fibonacci to exercise BigInt

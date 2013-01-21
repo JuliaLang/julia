@@ -22,11 +22,11 @@
    constructors
    conversion-and-promotion
    arrays
+   sparse-matrices
    modules
    running-external-programs
    metaprogramming
    parallel-computing
    calling-c-and-fortran-code
    performance-tips
-   potential-features
 

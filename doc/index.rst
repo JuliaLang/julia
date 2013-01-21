@@ -8,4 +8,5 @@
 
    manual/index
    stdlib/index
+   packages/packagelist
 

@@ -1,13 +1,13 @@
 ## file formats ##
 
-const _jl_invalid_dlm = char(0xfffffffe)
+const invalid_dlm = char(0xfffffffe)
 
-function _jl_dlm_readrow(io::IO, dlm, eol::Char)
+function dlm_readrow(io::IO, dlm, eol::Char)
     row_string = readuntil(io, eol)
     while length(row_string)==1 && row_string[1] == eol
         row_string = readuntil(io, eol)
     end
-    if dlm == _jl_invalid_dlm
+    if dlm == invalid_dlm
         row = split(row_string)
     else
         row = split(row_string, dlm, true)
@@ -19,18 +19,18 @@ function _jl_dlm_readrow(io::IO, dlm, eol::Char)
 end
 
 # all strings
-function _jl_dlmread(a, io, dlm, nr, nc, row, eol)
+function readdlm(a, io, dlm, nr, nc, row, eol)
     for i=1:nr
         a[i,:] = row
         if i < nr
-            row = _jl_dlm_readrow(io, dlm, eol)
+            row = dlm_readrow(io, dlm, eol)
         end
     end
     a
 end
 
 # all numeric, with NaN for invalid data
-function _jl_dlmread{T<:Number}(a::Array{T}, io, dlm, nr, nc, row, eol)
+function readdlm{T<:Number}(a::Array{T}, io, dlm, nr, nc, row, eol)
     tmp = Array(Float64,1)
     for i=1:nr
         for j=1:nc
@@ -41,15 +41,15 @@ function _jl_dlmread{T<:Number}(a::Array{T}, io, dlm, nr, nc, row, eol)
             end
         end
         if i < nr
-            row = _jl_dlm_readrow(io, dlm, eol)
+            row = dlm_readrow(io, dlm, eol)
         end
     end
 end
 
 # float64 or string
-_jl_dlmread(a::Array{Any}, io, dlm, nr, nc, row, eol) =
-    _jl_dlmread(a, io, dlm, nr, nc, row, eol, 1, 1)
-function _jl_dlmread(a::Array{Any}, io, dlm, nr, nc, row, eol, i0, j0)
+readdlm(a::Array{Any}, io, dlm, nr, nc, row, eol) =
+    readdlm(a, io, dlm, nr, nc, row, eol, 1, 1)
+function readdlm(a::Array{Any}, io, dlm, nr, nc, row, eol, i0, j0)
     tmp = Array(Float64,1)
     j = j0
     for i=i0:nr
@@ -64,28 +64,28 @@ function _jl_dlmread(a::Array{Any}, io, dlm, nr, nc, row, eol, i0, j0)
         end
         j = 1
         if i < nr
-            row = _jl_dlm_readrow(io, dlm, eol)
+            row = dlm_readrow(io, dlm, eol)
         end
     end
     a
 end
 
 # float64 or cell depending on data
-function _jl_dlmread_auto(a, io, dlm, nr, nc, row, eol)
+function readdlm_auto(a, io, dlm, nr, nc, row, eol)
     tmp = Array(Float64, 1)
     for i=1:nr
         for j=1:nc
             el = row[j]
             if !float64_isvalid(el, tmp)
                 a = convert(Array{Any,2}, a)
-                _jl_dlmread(a, io, dlm, nr, nc, row, eol, i, j)
+                readdlm(a, io, dlm, nr, nc, row, eol, i, j)
                 return a
             else
                 a[i,j] = tmp[1]
             end
         end
         if i < nr
-            row = _jl_dlm_readrow(io, dlm, eol)
+            row = dlm_readrow(io, dlm, eol)
         end
     end
     a
@@ -97,7 +97,7 @@ function countlines(filename::String, eol::Char)
         countlines(io, eol)
     end
 end
-function countlines(io::IOStream, eol::Char)
+function countlines(io::Stream, eol::Char)
     if !iswascii(eol)
         error("countlines: only ASCII line terminators supported")
     end
@@ -121,45 +121,45 @@ function countlines(io::IOStream, eol::Char)
     nl
 end
 
-function _jl_dlmread_setup(fname::String, dlm, eol)
+function readdlm_setup(fname::String, dlm, eol)
     if length(dlm) == 0
-        error("dlmread: no separator characters specified")
+        error("readdlm: no separator characters specified")
     end
     nr = countlines(fname,eol)
     io = open(fname)
-    row = _jl_dlm_readrow(io, dlm, eol)
+    row = dlm_readrow(io, dlm, eol)
     nc = length(row)
     return (io, nr, nc, row)
 end
 
-dlmread(fname::String, T::Type) = dlmread(fname, _jl_invalid_dlm, T, '\n')
+readdlm(fname::String, T::Type) = readdlm(fname, invalid_dlm, T, '\n')
 
-dlmread(fname::String, dlm, T::Type) = dlmread(fname, dlm, T, '\n')
+readdlm(fname::String, dlm, T::Type) = readdlm(fname, dlm, T, '\n')
 
-function dlmread(fname::String, dlm, T::Type, eol::Char)
-    (io, nr, nc, row) = _jl_dlmread_setup(fname, dlm, eol)
+function readdlm(fname::String, dlm, T::Type, eol::Char)
+    (io, nr, nc, row) = readdlm_setup(fname, dlm, eol)
     a = Array(T, nr, nc)
-    _jl_dlmread(a, io, dlm, nr, nc, row, eol)
+    readdlm(a, io, dlm, nr, nc, row, eol)
     close(io)
     return a
 end
 
-dlmread(fname::String) = dlmread(fname, _jl_invalid_dlm, '\n')
-dlmread(fname::String, dlm) = dlmread(fname, dlm, '\n')
+readdlm(fname::String) = readdlm(fname, invalid_dlm, '\n')
+readdlm(fname::String, dlm) = readdlm(fname, dlm, '\n')
 
-function dlmread(fname::String, dlm, eol::Char)
-    (io, nr, nc, row) = _jl_dlmread_setup(fname, dlm, eol)
+function readdlm(fname::String, dlm, eol::Char)
+    (io, nr, nc, row) = readdlm_setup(fname, dlm, eol)
     a = Array(Float64, nr, nc)
-    a = _jl_dlmread_auto(a, io, dlm, nr, nc, row, eol)
+    a = readdlm_auto(a, io, dlm, nr, nc, row, eol)
     close(io)
     return a
 end
 
-csvread(io)          = dlmread(io, ',')
-csvread(io, T::Type) = dlmread(io, ',', T)
+readcsv(io)          = readdlm(io, ',')
+readcsv(io, T::Type) = readdlm(io, ',', T)
 
 # todo: keyword argument for # of digits to print
-function dlmwrite(io, a::Matrix, dlm::Char)
+function writedlm(io, a::Matrix, dlm::Char)
     nr, nc = size(a)
     for i = 1:nr
         for j = 1:nc
@@ -178,13 +178,13 @@ function dlmwrite(io, a::Matrix, dlm::Char)
     nothing
 end
 
-dlmwrite(io, a::Vector, dlm::Char) = dlmwrite(io, reshape(a,length(a),1), dlm)
+writedlm(io, a::Vector, dlm::Char) = writedlm(io, reshape(a,length(a),1), dlm)
 
-function dlmwrite(fname::String, a::Matrix, dlm::Char)
+function writedlm(fname::String, a::Matrix, dlm::Char)
     open(fname, "w") do io
-        dlmwrite(io, a, dlm)
+        writedlm(io, a, dlm)
     end
 end
 
-dlmwrite(io, a) = dlmwrite(io, a, ',')
-csvwrite(io, a) = dlmwrite(io, a, ',')
+writedlm(io, a) = writedlm(io, a, '\t')
+writecsv(io, a) = writedlm(io, a, ',')

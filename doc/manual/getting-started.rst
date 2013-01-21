@@ -26,17 +26,18 @@ learn and experiment with Julia is by starting an interactive session
     julia> ans
     3
 
-    julia> load("file.jl")
+    julia> require("file")
 
-To exit the interactive session, type ``^D`` — the control key together
-with the ``d`` key. When run in interactive mode, ``julia`` displays a
-banner and prompts the user for input. Once the user has entered a
-complete expression, such as ``1 + 2``, and hits enter, the interactive
-session evaluates the expression and shows its value. If an expression
-is entered into an interactive session with a trailing semicolon, its
-value is not shown. The variable ``ans`` is bound to the value of the
-last evaluated expression whether it is shown or not. The ``load``
-function reads and evaluates the contents of the given file.
+To exit the interactive session, type ``^D`` — the control key
+together with the ``d`` key or type ``quit()``. When run in interactive
+mode, ``julia`` displays a banner and prompts the user for input. Once
+the user has entered a complete expression, such as ``1 + 2``, and
+hits enter, the interactive session evaluates the expression and shows
+its value. If an expression is entered into an interactive session
+with a trailing semicolon, its value is not shown. The variable
+``ans`` is bound to the value of the last evaluated expression whether
+it is shown or not. The ``require`` function reads and evaluates the
+contents of the given file, ``file.jl`` in this case.
 
 To run code in a file non-interactively, you can give it as the first
 argument to the julia command::
@@ -70,13 +71,18 @@ those available for the ``perl`` and ``ruby`` programs::
      -H --home=<dir>          Load files relative to <dir>
      -T --tab=<size>          Set REPL tab width to <size>
 
-     -e --eval=<expr>         Evaluate <expr> and don't print
-     -E --print=<expr>        Evaluate and print <expr>
+     -e --eval=<expr>         Evaluate <expr>
+     -E --print=<expr>        Evaluate and show <expr>
      -P --post-boot=<expr>    Evaluate <expr> right after boot
      -L --load=file           Load <file> right after boot
      -J --sysimage=file       Start up with the given system image file
 
      -p n                     Run n local processes
+     --machinefile file       Run processes on hosts listed in file
+
+     --no-history             Don't load or save history
+     -f --no-startup          Don't load ~/.juliarc.jl
+     -F                       Load ~/.juliarc.jl, then handle remaining inputs
 
      -h --help                Print this message
 
@@ -94,13 +100,13 @@ functional differences. The following are the most significant
 differences that may trip up Julia users accustomed to MATLAB®:
 
 -  Arrays are indexed with square brackets, ``A[i,j]``.
+-  The imaginary unit ``sqrt(-1)`` is represented in julia with ``im``.
 -  Multiple values are returned and assigned with parentheses,
    ``return (a, b)`` and ``(a, b) = f(x)``.
 -  Values are passed and assigned by reference. If a function modifies
    an array, the changes will be visible in the caller.
--  Use n for nx1: The number of arguments to an array constructor equals
-   the number of dimensions of the result. In particular, ``rand(n)``
-   makes a 1-dimensional array.
+-  Julia has 1-dimensional arrays. Column vectors are of size ``N``, not
+   ``Nx1``. For example, ``rand(N)`` makes a 1-dimensional array.
 -  Concatenating scalars and arrays with the syntax ``[x,y,z]``
    concatenates in the first dimension ("vertically"). For the second
    dimension ("horizontally"), use spaces as in ``[x y z]``. To
@@ -131,4 +137,5 @@ differences that may trip up Julia users accustomed to MATLAB®:
 -  If ``A`` and ``B`` are arrays, ``A == B`` doesn't return an array of
    booleans. Use ``A .== B`` instead. Likewise for the other boolean
    operators, ``<``, ``>``, ``!=``, etc.
-
+-  The elements of a collection can be passed as arguments to a function
+   using ``...``, as in ``xs=[1,2]; f(xs...)``.

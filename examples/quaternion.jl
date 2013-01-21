@@ -21,7 +21,7 @@ promote_rule{S}(::Type{Bool}, ::Type{Quaternion{S}}) = Quaternion{S}
 promote_rule{T<:Real,S}(::Type{T}, ::Type{Quaternion{S}}) =
     Quaternion{promote_type(T,S)}
 
-function show(io, z::Quaternion)
+function show(io::IO, z::Quaternion)
     show(io, z.q0)
     i = z.q1
     if sign(i) == -1

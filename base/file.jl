@@ -1,197 +1,77 @@
-# File and path name manipulation
-# These do not examine the filesystem at all, they just work on strings
-@unix_only begin
-    const os_separator = "/"
-    const os_separator_match = r"/+"
-    const os_separator_match_chars = "/"
-end
-@windows_only begin
-    const os_separator = "\\"
-    const os_separator_match = r"[/\\]" # permit either slash type on Windows
-    const os_separator_match_chars = "/\\" # to permit further concatenation
-end
-# Match only the final separator
-const last_separator = Regex(strcat(os_separator_match.pattern, "(?!.*", os_separator_match.pattern, ")"))
-# Match the "." indicating a file extension. Must satisfy the
-# following requirements:
-#   - It's not followed by a later "." or os_separator
-#     (handles cases like myfile.txt.gz, or Mail.directory/cur)
-#   - It's not the first character in a string, nor is it preceded by
-#     an os_separator (handles cases like .bashrc or /home/fred/.juliarc)
-const extension_separator_match = Regex(strcat(L"(?<!^|[",
-    os_separator_match_chars, L"])\.[^.", os_separator_match_chars, L"]+$"))
-
-filesep() = os_separator
-
-function basename(path::String)
-    m = match(last_separator, path)
-    if m == nothing
-        return path
-    else
-        return path[m.offset+1:end]
-    end
-end
-
-function dirname(path::String)
-    m = match(last_separator, path)
-    if m == nothing
-        return ""
-    else
-        return path[1:m.offset-1]
-    end
-end
-
-function dirname_basename(path::String)
-    m = match(last_separator, path)
-    if m == nothing
-        return "", path
-    else
-        return path[1:m.offset-1], path[m.offset+1:end]
-    end
-end
-
-function split_extension(path::String)
-    m = match(extension_separator_match, path)
-    if m == nothing
-        return path, ""
-    else
-        return path[1:m.offset-1], path[m.offset:end]
-    end
-end
-
-split_path(path::String) = split(path, os_separator_match)
-
-function fileparts(filename::String)
-    pathname, filestr = dirname_basename(filename)
-    filebase, ext = split_extension(filestr)
-    return pathname, filebase, ext
-end
-
-function file_path(components...)
-    join(components, os_separator)
-end
-
-const fullfile = file_path
-
-# Test for an absolute path
-function isrooted(path::String)
-    # Check whether it begins with the os_separator. On Windows, matches
-    # \\servername syntax, so this is a relevant check for everyone
-    m = match(Regex(strcat("^", os_separator_match.pattern)), path)
-    if m != nothing
-        return true
-    end
-    @windows_only begin
-        m = match(r"^\w+:", path)
-        if m != nothing
-            return true
-        end
-    end
-    false
-end
-
-@windows_only tilde_expand(path::String) = path # on windows, ~ means "temporary file"
-@unix_only function tilde_expand(path::String)
-    i = start(path)
-    c, i = next(path,i)
-    if c != '~' return path end
-    if done(path,i) return ENV["HOME"] end
-    c, j = next(path,i)
-    if c == '/' return ENV["HOME"]*path[i:end] end
-    error("~user tilde expansion not yet implemented")
-end
-
-# Get the absolute path to a file. Uses file system for cwd() when
-# needed, the rest is all string manipulation. In particular, it
-# doesn't check whether the file exists.
-function abs_path_split(fname::String)
-    fname = tilde_expand(fname)
-    if isrooted(fname)
-        comp = split(fname, os_separator_match)
-    else
-        comp = [split(cwd(), os_separator_match), split(fname, os_separator_match)]
-    end
-    n = length(comp)
-    pmask = trues(n)
-    last_is_dir = false
-    for i = 2:n
-        if comp[i] == "." || comp[i] == ""
-            pmask[i] = false
-            last_is_dir = true
-        elseif comp[i] == ".."
-            pmask[i] = false
-            last_is_dir = true
-            for j = i-1:-1:2
-                if pmask[j]
-                    pmask[j] = false
-                    break
-                end
-            end
-        else
-            last_is_dir = false
-        end
-    end
-    comp = comp[pmask]
-    if last_is_dir
-        push(comp, "")
-    end
-    return comp
-end
-function abs_path(fname::String)
-    comp = abs_path_split(fname)
-    return join(comp, os_separator)
-end
-
-# Get the full, real path to a file, including dereferencing
-# symlinks.
-function realpath(fname::String)
-    fname = tilde_expand(fname)
-    sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
-    if sp == C_NULL
-        error("Cannot find ", fname)
-    end
-    s = bytestring(sp)
-    c_free(sp)
-    return s
-end
-
 # get and set current directory
 
-function cwd()
+function pwd()
     b = Array(Uint8,1024)
-    p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
-    system_error("getcwd", p == C_NULL)
+    @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
+    @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
+    system_error(:getcwd, p == C_NULL)
     bytestring(p)
 end
 
-cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+
+function cd(dir::String) 
+	@windows_only system_error(:_chdir, ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
+	@unix_only system_error(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+end
 cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
+
+@unix_only begin
 function cd(f::Function, dir::String)
     fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
-    system_error("open", fd == -1)
+    system_error(:open, fd == -1)
+    try
+        cd(dir)
+        f()
+    finally
+        system_error(:fchdir, ccall(:fchdir,Int32,(Int32,),fd) != 0)
+        system_error(:close, ccall(:close,Int32,(Int32,),fd) != 0)
+    end
+end
+end
+
+@windows_only begin
+function cd(f::Function, dir::String)
+    old = pwd()
     try
         cd(dir)
         retval = f()
-        system_error("fchdir", ccall(:fchdir,Int32,(Int32,),fd) != 0)
+        cd(old)
         retval
     catch err
-        system_error("fchdir", ccall(:fchdir,Int32,(Int32,),fd) != 0)
-        throw(err)
+        cd(old)
+        rethrow(err)
     end
 end
+end
+
 cd(f::Function) = cd(f, ENV["HOME"])
 
 function mkdir(path::String, mode::Unsigned)
-    ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    @windows_only ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), bytestring(path))
     system_error(:mkdir, ret != 0)
 end
 mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o", mode, "?")
 mkdir(path::String) = mkdir(path, 0o777)
+function mkpath(path::String, mode)
+    dparts = splitdrive(path)
+	path = dparts[1]
+	@windows_only path *= "\\"
+	parts = (split(dparts[2],Base.path_separator_re,false))
+	for x in parts
+		path=joinpath(path,x)
+		if(!isdir(path))
+			mkdir(path,mode)
+		end
+	end
+end
+mkpath(path::String) = mkpath(path,0o777)
 
 function rmdir(path::String)
-    ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
+    @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
+    @windows_only ret = ccall(:_rmdir, Int32, (Ptr{Uint8},), bytestring(path))
     system_error(:rmdir, ret != 0)
 end
 
@@ -202,34 +82,16 @@ ls() = run(`ls -l`)
 ls(args::Cmd) = run(`ls -l $args`)
 ls(args::String...) = run(`ls -l $args`)
 
-function path_expand(path::String)
-  chomp(readlines(`bash -c "echo $path"`)[1])
-end
-
-function file_copy(source::String, destination::String)
-  run(`cp $source $destination`)
-end
-
-function file_create(filename::String)
-  run(`touch $filename`)
-end
-
-function file_remove(filename::String)
-    ret = ccall(:unlink, Int32, (Ptr{Uint8},), bytestring(filename))
-    system_error(:unlink, ret != 0)
-end
-
-function path_rename(old_pathname::String, new_pathname::String)
-    ret = ccall(:rename, Int32, (Ptr{Uint8},Ptr{Uint8}), bytestring(old_pathname), bytestring(new_pathname))
-    system_error(:rename, ret != 0)
-end
+rm(path::String) = run(`rm $path`)
+cp(src::String, dst::String) = run(`cp $src $dst`)
+mv(src::String, dst::String) = run(`mv $src $dst`)
+touch(path::String) = run(`touch $path`)
 
 # Obtain a temporary filename.
-const tempnam = (OS_NAME == :Windows) ? :_tempnam : :tempnam
-
 function tempname()
   d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-  p = ccall(tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+  @unix_only p = ccall(:tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+  @windows_only p = ccall(:_tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
   s = bytestring(p)
   c_free(p)
   s
@@ -240,24 +102,56 @@ tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
 @unix_only function mktemp()
-  b = file_path(tempdir(), "tmpXXXXXX")
+  b = joinpath(tempdir(), "tmpXXXXXX")
   p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b)
   return (b, fdio(p, true))
 end
 
-@windows_only function mktemp()
-  error("not yet implemented")
+@windows_only begin 
+function GetTempPath()
+  temppath = Array(Uint8,261)
+  lentemppath = ccall(:GetTempPathA,stdcall,Uint32,(Uint32,Ptr{Uint8}),length(temppath),temppath)
+  if lentemppath >= length(temppath) || lentemppath == 0
+      error("GetTempPath failed")
+end
+  grow!(temppath,lentemppath-length(temppath))
+  return convert(ASCIIString,temppath)
+end
+GetTempFileName(uunique::Uint32) = GetTempFileName(GetTempPath(), uunique)
+function GetTempFileName(temppath::String,uunique::Uint32)
+  tname = Array(Uint8,261)
+  uunique = ccall(:GetTempFileNameA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32,Ptr{Uint8}),temppath,"julia",uunique,tname)
+  lentname = findfirst(tname,0)-1
+  if uunique == 0 || lentname <= 0
+      error("GetTempFileName failed")
+  end
+  grow!(tname,lentname-length(tname))
+  return convert(ASCIIString, tname)
+end
+function mktemp()
+  filename = GetTempFileName(uint32(0))
+  return (filename, open(filename,"r+"))
+end
 end
 
 # Create and return the name of a temporary directory
 @unix_only function mktempdir()
-  b = file_path(tempdir(), "tmpXXXXXX")
+  b = joinpath(tempdir(), "tmpXXXXXX")
   p = ccall(:mkdtemp, Ptr{Uint8}, (Ptr{Uint8}, ), b)
   return bytestring(p)
 end
 
 @windows_only function mktempdir()
-  error("not yet implemented")
+  seed = randi(Uint32)
+  while true
+      filename = GetTempFileName(seed)
+      ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), filename)
+      if ret == 0
+          return filename
+end
+      system_error(:mktempdir, errno()!=EEXIST)
+      seed += 1
+  end
 end
 
 downloadcmd = nothing
@@ -274,7 +168,7 @@ function download_file(url::String, filename::String)
     if downloadcmd == :wget
         run(`wget -O $filename $url`)
     elseif downloadcmd == :curl
-        run(`curl -o $filename $url`)
+        run(`curl -o $filename -L $url`)
     elseif downloadcmd == :fetch
         run(`fetch -f $filename $url`)
     else
@@ -308,7 +202,7 @@ function readdir(path::String)
   for i = 1:file_count
     entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Ptr{Uint8}, 
                              (Ptr{Uint8}, Int), uv_readdir_req, offset))
-    push(entries, entry)
+    push!(entries, entry)
     offset += length(entry) + 1   # offset to the next entry
   end
 

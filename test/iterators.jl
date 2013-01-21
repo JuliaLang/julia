@@ -1,17 +1,18 @@
-require("../extras/iterators.jl")
+require("iterators")
+
 using Iterators
 
 # aux function emulating a comprehension [x for x in f]
 function buildvec(f)
     v = Any[]
     for i = f
-        push(v, i)
+        push!(v, i)
     end
     return v
 end
 
 macro assert_buildvec(ex...)
-    :(@assert buildvec($(ex[1])) == $(ex[2]))
+    :(@test buildvec($(ex[1])) == $(ex[2]))
 end
 
 @assert_buildvec take(count(), 0)           []

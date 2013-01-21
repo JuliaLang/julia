@@ -45,7 +45,7 @@ set(SRCDIR ${CMAKE_CURRENT_SOURCE_DIR})
 string(REPLACE "${TOP_CMAKE_SRCDIR}" "" SRCDIR "${SRCDIR}")
 prefixlist(bench2_STAT_SRCS "${TOP_SRCDIR}/${SRCDIR}/")
 
-add_library(bench2 STATIC ${bench2_STAT_SRCS})
+add_library(bench2${PREC_SUFFIX} STATIC ${bench2_STAT_SRCS})
 
 
 ########### install files ###############

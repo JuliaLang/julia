@@ -1,11 +1,23 @@
 # important core definitions
 
+using Core.Intrinsics
+
 import Core.Array  # to add methods
 
 convert(T, x)               = convert_default(T, x, convert)
 convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 
 ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
+ptr_arg_convert(::Type{Ptr{Void}}, x) = x
+
+# conversion used by ccall
+cconvert(T, x) = convert(T, x)
+# use the code in ccall.cpp to safely allocate temporary pointer arrays
+cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
+# TODO: for some reason this causes a strange type inference problem
+#cconvert(::Type{Ptr{Uint8}}, s::String) = bytestring(s)
+
+abstract IO
 
 type ErrorException <: Exception
     msg::String
@@ -62,14 +74,12 @@ type ShowError <: Exception
     err::Exception
 end
 
-show(io, bt::BackTrace) = show(io,bt.e)
+show(io::IO, bt::BackTrace) = show(io,bt.e)
 
-function show(io, se::ShowError)
+function show(io::IO, se::ShowError)
     println("Error showing value of type ", typeof(se.val), ":")
     show(io, se.err)
 end
-
-method_missing(f, args...) = throw(MethodError(f, args))
 
 type WeakRef
     value
@@ -91,6 +101,15 @@ names(m::Module, all::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int3
 names(m::Module) = names(m,false)
 module_name(m::Module) = ccall(:jl_module_name, Symbol, (Any,), m)
 module_parent(m::Module) = ccall(:jl_module_parent, Module, (Any,), m)
+function names(v)
+    if typeof(v) === CompositeKind
+        return v.names
+    elseif typeof(typeof(v)) === CompositeKind
+        return typeof(v).names
+    else
+        error("cannot call names() on a non-composite type")
+    end
+end
 
 # index colon
 type Colon
@@ -118,7 +137,11 @@ const isimmutable = x->(isa(x,Tuple) || isa(x,Symbol) ||
 
 dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
+dlsym_e(hnd, s::Union(Symbol,String)) = ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlopen(s::String) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), s)
+
+cfunction(f::Function, r, a) =
+    ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
 identity(x) = x
 

@@ -30,7 +30,11 @@
 # define BVOFFS 4
 #endif
 
+#ifdef __LP64__
 #define GC_PAGE_SZ (1536*sizeof(void*))//bytes
+#else
+#define GC_PAGE_SZ (2048*sizeof(void*))//bytes
+#endif
 
 typedef struct _gcpage_t {
     char data[GC_PAGE_SZ];
@@ -219,19 +223,40 @@ static int szclass(size_t sz)
     return 41;
 }
 
+#ifdef __LP64__
+#define malloc_a16(sz) malloc(((sz)+15)&-16)
+#else
+#if defined(WIN32)
+// TODO - use _aligned_malloc, which requires _aligned_free
+#define malloc_a16(sz) malloc(((sz)+15)&-16)
+
+#elif defined(__APPLE__)
+#define malloc_a16(sz) malloc(((sz)+15)&-16)
+
+#else
+static inline void *malloc_a16(size_t sz)
+{
+    void *ptr;
+    if (posix_memalign(&ptr, 16, (sz+15)&-16))
+        return NULL;
+    return ptr;
+}
+#endif
+#endif
+
 static void *alloc_big(size_t sz)
 {
     if (allocd_bytes > collect_interval) {
         jl_gc_collect();
     }
-    sz = (sz+3) & -4;
     size_t offs = BVOFFS*sizeof(void*);
-    if (sz + offs < offs)  // overflow in adding offs, size was "negative"
-        jl_raise(jl_memory_exception);
-    bigval_t *v = (bigval_t*)malloc(sz + offs);
-    allocd_bytes += (sz+offs);
+    if (sz+offs+15 < offs+15)  // overflow in adding offs, size was "negative"
+        jl_throw(jl_memory_exception);
+    size_t allocsz = (sz+offs+15) & -16;
+    bigval_t *v = (bigval_t*)malloc_a16(allocsz);
+    allocd_bytes += allocsz;
     if (v == NULL)
-        jl_raise(jl_memory_exception);
+        jl_throw(jl_memory_exception);
     v->sz = sz;
     v->flags = 0;
     v->next = big_objects;
@@ -283,10 +308,10 @@ jl_mallocptr_t *jl_gc_managed_malloc(size_t sz)
     if (allocd_bytes > collect_interval) {
         jl_gc_collect();
     }
-    sz = (sz+3) & -4;
-    void *b = malloc(sz);
+    sz = (sz+15) & -16;
+    void *b = malloc_a16(sz);
     if (b == NULL)
-        jl_raise(jl_memory_exception);
+        jl_throw(jl_memory_exception);
     allocd_bytes += sz;
     return jl_gc_acquire_buffer(b, sz);
 }
@@ -316,9 +341,9 @@ static void sweep_malloc_ptrs(void)
 
 static void add_page(pool_t *p)
 {
-    gcpage_t *pg = malloc(sizeof(gcpage_t));
+    gcpage_t *pg = malloc_a16(sizeof(gcpage_t));
     if (pg == NULL)
-        jl_raise(jl_memory_exception);
+        jl_throw(jl_memory_exception);
     gcval_t *v = (gcval_t*)&pg->data[0];
     char *lim = (char*)v + GC_PAGE_SZ - p->osize;
     gcval_t *fl;
@@ -469,19 +494,17 @@ static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
 {
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
-        size_t i;
-        jl_value_t ***rts = (jl_value_t***)((char*)s->roots + offset);
-        if (s->indirect) {
-            size_t nr = s->nroots;
-            for(i=0; i < nr; i++) {
+        jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+        size_t nr = s->nroots>>1;
+        if (s->nroots & 1) {
+            for(size_t i=0; i < nr; i++) {
                 jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
                 if (*ptr != NULL)
                     gc_push_root(*ptr);
             }
         }
         else {
-            size_t nr = s->nroots;
-            for(i=0; i < nr; i++) {
+            for(size_t i=0; i < nr; i++) {
                 if (rts[i] != NULL)
                     gc_push_root(rts[i]);
             }
@@ -553,7 +576,7 @@ static void gc_mark_all()
             }
         }
         if (a->ptrarray) {
-            size_t l = a->length;
+            size_t l = jl_array_len(a);
             for(size_t i=0; i < l; i++) {
                 jl_value_t *elt = ((jl_value_t**)data)[i];
                 if (elt != NULL) gc_push_root(elt);
@@ -571,22 +594,23 @@ static void gc_mark_all()
         gc_push_root(ta->consumers);
         if (ta->start)  gc_push_root(ta->start);
         if (ta->result) gc_push_root(ta->result);
-        gc_push_root(ta->state.eh_task);
-        if (ta->stkbuf != NULL)
-            gc_setmark_buf(ta->stkbuf);
+        if (ta->stkbuf != NULL || ta == jl_current_task) {
+            if (ta->stkbuf != NULL)
+                gc_setmark_buf(ta->stkbuf);
 #ifdef COPY_STACKS
-        ptrint_t offset;
-        if (ta == jl_current_task) {
-            offset = 0;
-            gc_mark_stack(jl_pgcstack, offset);
-        }
-        else {
-            offset = ta->stkbuf - (ta->stackbase-ta->ssize);
-            gc_mark_stack(ta->state.gcstack, offset);
-        }
+            ptrint_t offset;
+            if (ta == jl_current_task) {
+                offset = 0;
+                gc_mark_stack(jl_pgcstack, offset);
+            }
+            else {
+                offset = ta->stkbuf - (ta->stackbase-ta->ssize);
+                gc_mark_stack(ta->gcstack, offset);
+            }
 #else
-        gc_mark_stack(ta->state.gcstack, 0);
+            gc_mark_stack(ta->gcstack, 0);
 #endif
+        }
     }
     else {
         jl_struct_type_t *st = (jl_struct_type_t*)vt;
@@ -608,6 +632,18 @@ extern jl_value_t * volatile jl_task_arg_in_transit;
 #if defined(GCTIME) || defined(GC_FINAL_STATS)
 double clock_now(void);
 #endif
+
+static void gc_mark_uv_handle(uv_handle_t *handle, void *arg)
+{
+    if(handle->data) {
+        gc_push_root((jl_value_t*)(handle->data));
+    }
+}
+
+static void gc_mark_uv_state(uv_loop_t *loop)
+{
+    uv_walk(loop,gc_mark_uv_handle,0);
+}
 
 static void gc_mark(void)
 {
@@ -633,6 +669,9 @@ static void gc_mark(void)
     gc_push_root(jl_null);
     gc_push_root(jl_true);
     gc_push_root(jl_false);
+
+    // libuv loops
+    gc_mark_uv_state(jl_global_event_loop());
 
     jl_mark_box_caches();
 
@@ -666,7 +705,7 @@ static void gc_mark(void)
     gc_mark_all();
 }
 
-static int is_gc_enabled = 0;
+static int is_gc_enabled = 1;
 DLLEXPORT void jl_gc_enable(void)    { is_gc_enabled = 1; }
 DLLEXPORT void jl_gc_disable(void)   { is_gc_enabled = 0; }
 DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
@@ -685,9 +724,9 @@ static void print_obj_profile(void)
     jl_value_t *errstream = jl_stderr_obj();
     for(int i=0; i < obj_counts.size; i+=2) {
         if (obj_counts.table[i+1] != HT_NOTFOUND) {
-            ios_printf(ios_stderr, "%d ", obj_counts.table[i+1]-1);
+            jl_printf(jl_stderr, "%d ", obj_counts.table[i+1]-1);
             jl_show(errstream, obj_counts.table[i]);
-            ios_printf(ios_stderr, "\n");
+            jl_printf(jl_stderr, "\n");
         }
     }
 }
@@ -810,13 +849,13 @@ void print_gc_stats(void)
 {
     malloc_stats();
     double ptime = clock_now()-process_t0;
-    ios_printf(ios_stderr, "exec time\t%.5f sec\n", ptime);
-    ios_printf(ios_stdout, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
+    jl_printf(JL_STDERR, "exec time\t%.5f sec\n", ptime);
+    jl_printf(JL_STDOUT, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
                (total_gc_time/ptime)*100);
     struct mallinfo mi = mallinfo();
-    ios_printf(ios_stdout, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
-    ios_printf(ios_stdout, "total freed\t%llu b\n", total_freed_bytes);
-    ios_printf(ios_stdout, "free rate\t%.1f MB/sec\n",
+    jl_printf(JL_STDOUT, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
+    jl_printf(JL_STDOUT, "total freed\t%llu b\n", total_freed_bytes);
+    jl_printf(JL_STDOUT, "free rate\t%.1f MB/sec\n",
                (total_freed_bytes/total_gc_time)/1024/1024);
 }
 #endif

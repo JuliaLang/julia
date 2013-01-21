@@ -1,8 +1,11 @@
 # general zlib constants, definitions
 
-_zlib = dlopen("libz")
+const _zlib = "libz"
 
 # Constants
+
+zlib_version = bytestring(ccall((:zlibVersion, _zlib), Ptr{Uint8}, ()))
+ZLIB_VERSION = tuple([int(c) for c in split(zlib_version, '.')]...)
 
 # Flush values
 const Z_NO_FLUSH       = int32(0)
@@ -26,7 +29,7 @@ const Z_VERSION_ERROR  = int32(-6)
 
 
 # Zlib errors as Exceptions
-zerror(e::Integer) = bytestring(ccall(dlsym(_zlib, :zError), Ptr{Uint8}, (Int32,), e))
+zerror(e::Integer) = bytestring(ccall((:zError, _zlib), Ptr{Uint8}, (Int32,), e))
 type ZError <: Exception
     err::Int32
     err_str::String
@@ -66,3 +69,24 @@ const Z_BIG_BUFSIZE = 131072
 # Constants for use with gzseek
 const SEEK_SET = int32(0)
 const SEEK_CUR = int32(1)
+
+# Create ZFileOffset alias
+# This is usually the same as FileOffset, 
+# unless we're on a 32-bit system and
+# 64-bit functions are not available
+
+# Get compile-time option flags
+zlib_compile_flags = ccall((:zlibCompileFlags, _zlib), Uint, ())
+
+let _zlib_h = dlopen("libz")
+    global ZFileOffset
+
+    z_off_t_sz   = 2 << ((zlib_compile_flags >> 6) & uint(3))
+    if z_off_t_sz == sizeof(FileOffset) || (sizeof(FileOffset) == 8 && dlsym_e(_zlib_h, :gzopen64) != C_NULL)
+        typealias ZFileOffset FileOffset
+    elseif z_off_t_sz == 4      # 64-bit functions not available
+        typealias ZFileOffset Int32
+    else
+        error("Can't figure out what to do with ZFileOffset.  sizeof(z_off_t) = ", z_off_t_sz)
+    end
+end

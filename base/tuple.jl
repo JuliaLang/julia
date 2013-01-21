@@ -1,10 +1,12 @@
 ## indexing ##
 
 length(t::Tuple) = tuplelen(t)
+endof(t::Tuple) = tuplelen(t)
 size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension")
 ref(t::Tuple, i::Int) = tupleref(t, i)
-ref(t::Tuple, i::Integer) = tupleref(t, int(i))
-ref(t::Tuple, r::Ranges) = tuple([t[ri] for ri in r]...)
+ref(t::Tuple, i::Real) = tupleref(t, convert(Int, i))
+ref(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
+ref(t::Tuple, b::AbstractArray{Bool}) = ref(t,find(b))
 
 ## iterating ##
 

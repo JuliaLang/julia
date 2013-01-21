@@ -4,12 +4,12 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c operators.c socket.c \
+SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c operators.c \
 	utf8.c ios.c htable.c bitvector.c \
 	int2str.c libsupportinit.c arraylist.c
 
 ifeq ($(OS),WINNT)
-SRCS += asprintf
+SRCS += asprintf.c wcwidth.c
 endif
 
 OBJS = $(SRCS:%.c=%.o)
@@ -31,15 +31,15 @@ default: release
 HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
 
 %.o: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(DEBUGFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 release debug: libsupport.a
 
 libsupport.a: $(XOBJS)
 	rm -rf $@
-	$(QUIET_LINK) ar -rcs $@ $^
+	$(QUIET_LINK) $(AR) -rcs $@ $^
 
 clean:
 	rm -f *.o

@@ -1,5 +1,6 @@
-import Tk.*
-import Cairo.*
+require("Tk")
+using Tk
+using Cairo
 
 function sketch_window()
     w = Window("drawing", 400, 300)

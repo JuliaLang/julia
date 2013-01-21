@@ -1,6 +1,5 @@
 module RNG
 
-using Base
 using Base.LibRandom
 
 export librandom_init, srand,
@@ -8,10 +7,10 @@ export librandom_init, srand,
        randn, randn!,
        randi, randi!, randival, randival!,
        randg, randg!,
-       randexp, randexp!, exprnd,
-       randchi2, randchi2!, chi2rnd,
-       randbeta, randbeta!, betarnd,
-       randbit, randbit!, randbool, randbool!,
+       randexp, randexp!,
+       randchi2, randchi2!,
+       randbeta, randbeta!,
+       randbool, randbool!,
        Rng, Rng_MT
 
 abstract Rng
@@ -61,7 +60,7 @@ function librandom_init()
     try
         srand("/dev/urandom")
     catch
-        println(stderr, "Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
+        println(STDERR, "Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try
@@ -78,57 +77,28 @@ end
     win32_SystemFunction036!(a)
     srand(a)
 end
-
     randmtzig_create_ziggurat_tables()
 end
 
-# macros to generate random arrays
-
-macro rand_matrix_builder(T, f)
-    f! = esc(symbol("$(f)!"))
-    f = esc(f)
-    quote
-        function ($f!)(A::Array{$T})
-            for i = 1:numel(A)
-                A[i] = ($f)()
-            end
-            return A
-        end
-        ($f)(dims::Dims) = ($f!)(Array($T, dims))
-        ($f)(dims::Int...) = ($f)(dims)
-    end
-end
-
-macro rand_matrix_builder_1arg(T, f)
-    f! = esc(symbol("$(f)!"))
-    f = esc(f)
-    quote
-        function ($f!)(arg, A::Array{$T})
-            for i = 1:numel(A)
-                A[i] = ($f)(arg)
-            end
-            return A
-        end
-        ($f)(arg::Number, dims::Dims) = ($f!)(arg, Array($T, dims))
-        ($f)(arg::Number, dims::Int...) = ($f)(arg, dims)
-    end
-end
-
 ## srand()
-
-function srand(seed::Uint32)
-    global RANDOM_SEED = seed
-    dsfmt_gv_init_gen_rand(seed)
-end
 
 function srand(seed::Vector{Uint32})
     global RANDOM_SEED = seed
     dsfmt_gv_init_by_array(seed)
 end
+srand(n::Integer) = srand(make_seed(n))
 
-srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
-srand(seed::Int32) = srand(uint32(seed))
-srand(seed::Int64) = srand(uint64(seed))
+function make_seed(n::Integer)
+    n < 0 && throw(DomainError())
+    seed = Uint32[]
+    while true
+        push!(seed, n & 0xffffffff)
+        n >>= 32
+        if n == 0
+            return seed
+        end
+    end
+end
 
 function srand(filename::String, n::Integer)
     open(filename) do io
@@ -155,10 +125,7 @@ rand(r::Rng, dims::Int...) = rand(r, dims)
 ## random integers
 
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
-
-dsfmt_randui64() =
-    box(Uint64,or_int(zext64(unbox(Uint32,dsfmt_randui32())),
-                      shl_int(zext64(unbox(Uint32,dsfmt_randui32())), 32)))
+dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
 
 randi(::Type{Uint32})  = dsfmt_randui32()
 randi(::Type{Uint64})  = dsfmt_randui64()
@@ -196,7 +163,7 @@ end
 function randival!{T<:Integer}(lo, hi, A::Array{T})
     lo = convert(T,lo)
     hi = convert(T,hi)
-    for i = 1:numel(A)
+    for i = 1:length(A)
         A[i] = randival(lo, hi)
     end
     return A
@@ -217,11 +184,21 @@ randi(r::(Integer,Integer), dims::Int...) = randival(r[1], r[2], dims)
 
 ## random Bools
 
-randbit() = int(dsfmt_randui32() & 1)
-@rand_matrix_builder Int randbit
+rand!(B::BitArray) = Base.bitarray_rand_fill!(B)
 
-randbool() = randbit() == 1
-@rand_matrix_builder Bool randbool
+randbool(dims::Dims) = rand!(BitArray(dims))
+randbool(dims::Int...) = rand!(BitArray(dims))
+
+randbool() = ((dsfmt_randui32() & 1) == 1)
+
+randbool!(B::BitArray) = rand!(B)
+
+function randbool!(A::Array)
+    for i = 1:length(A)
+        A[i] = randbool()
+    end
+    return A
+end
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
@@ -239,8 +216,6 @@ randexp() = randmtzig_exprnd()
 randexp!(A::Array{Float64}) = randmtzig_fill_exprnd!(A)
 randexp(dims::Dims) = randexp!(Array(Float64, dims))
 randexp(dims::Int...) = randexp(dims)
-
-const exprnd = randexp
 
 ## randg()
 
@@ -269,10 +244,10 @@ function randg!(a::Real, A::Array{Float64})
     if a <= 0. error("shape parameter a must be > 0") end
     d = (a <= 1. ? a + 1 : a) - 1.0/3.0
     c = 1.0/sqrt(9.0d)
-    for i in 1:numel(A) A[i] = randg2(d, c) end
+    for i in 1:length(A) A[i] = randg2(d, c) end
     if a <= 1.
         ainv = 1./a
-        for i in 1:numel(A) A[i] *= rand()^ainv end
+        for i in 1:length(A) A[i] *= rand()^ainv end
     end
     A
 end
@@ -291,14 +266,14 @@ randg(a::Real, dims::Int...) = randg(a, dims)
 
 function randchi2!(df::Real, A::Array{Float64})
     if df == 1
-        for i in 1:numel(A)
+        for i in 1:length(A)
             A[i] = randn()^2
             end
         return A
     end
     d = df >= 2 ? df/2. - 1.0/3.0 : error("require degrees of freedom df >= 2")
     c = 1.0/sqrt(9.0d)
-    for i in 1:numel(A) A[i] = 2.randg2(d,c) end
+    for i in 1:length(A) A[i] = 2.randg2(d,c) end
     A
 end
 
@@ -306,28 +281,8 @@ randchi2(df::Real) = df == 1 ? randn()^2 : 2.randg(df/2.)
 randchi2(df::Real, dims::Dims) = randchi2!(df, Array(Float64, dims))
 randchi2(df::Real, dims::Int...) = randchi2(df, dims)
 
-const chi2rnd = randchi2 # alias chi2rnd
-
-function randbeta!(alpha::Real, beta::Real, A::Array{Float64})
-    d1 = alpha >= 1 ? alpha - 1.0/3.0 : error("require alpha >= 1")
-    c1 = 1.0/sqrt(9.0d1)
-    d2 = beta >= 1 ? beta - 1.0/3.0 : error("require beta >= 1")
-    c2 = 1.0/sqrt(9.0d2)
-    for i in 1:numel(A)
-       u = randg2(d1,c1)
-       A[i] = u/(u + randg2(d2,c2))
-    end
-    A
-end
-
-randbeta(alpha::Real, beta::Real) = (u=randg(alpha); u/(u + randg(beta)))
-
-function randbeta(alpha::Real, beta::Real, dims::Dims)
-    randbeta!(alpha, beta, Array(Float64, dims))
-end
-
+randbeta(alpha::Real, beta::Real) = (u = randg(alpha); u / (u + randg(beta)))
+randbeta(alpha::Real, beta::Real, dims::Dims) = (u = randg(alpha, dims); u ./ (u + randg(beta, dims)))
 randbeta(alpha::Real, beta::Real, dims::Int...) = randbeta(alpha, beta, dims)
-
-const betarnd = randbeta
 
 end # module

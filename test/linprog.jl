@@ -1,15 +1,17 @@
 ### Linear programming
 
-cd("../extras") do
-require("linprog.jl")
+cd("../extras") # we can't use do-notation because of "using"
+require("linprog")
+
+using LinProgGLPK
 
 ## Simplex method
 
 # Set options (disable all output
 # excpept for errors, turn on presolver)
-lps_opts = GLPSimplexParam()
-lps_opts["msg_lev"] = GLP_MSG_ERR
-lps_opts["presolve"] = GLP_ON
+lps_opts = GLPK.SimplexParam()
+lps_opts["msg_lev"] = GLPK.MSG_ERR
+lps_opts["presolve"] = GLPK.ON
 lps_opts["it_lim"] = 1000
 
 # A small dense optimization problem
@@ -22,9 +24,9 @@ lb = [ 0.; 0.];
 
 (z, x, flag) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
 
-@assert flag == 0
-@assert z == -180.0
-@assert isequal(x, [20.; 60.])
+@test flag == 0
+@test z == -180.0
+@test isequal(x, [20.; 60.])
 
 
 # A constraint satisfaction (matching) problem
@@ -48,9 +50,9 @@ ub = ones(Float64, 9);
 
 (z, x, flag) = linprog_simplex(f, [], [], Aeq, beq, lb, ub, lps_opts);
 
-@assert flag == 0
-@assert z == 5.
-@assert isequal(x, [ 0.; 0.; 1. ;
+@test flag == 0
+@test z == 5.
+@test isequal(x, [ 0.; 0.; 1. ;
                      0.; 1.; 0. ;
                      1.; 0.; 0. ])
 
@@ -59,16 +61,16 @@ ub = ones(Float64, 9);
 
 # Same problem and options as above
 
-lpi_opts = GLPInteriorParam()
-lpi_opts["msg_lev"] = GLP_MSG_ERR
+lpi_opts = GLPK.InteriorParam()
+lpi_opts["msg_lev"] = GLPK.MSG_ERR
 
 (z, x, ret) = linprog(f, [], [], Aeq, beq, lb, ub, lpi_opts);
 
 tol = 1e-4
 
-@assert flag == 0
-@assert abs(z - 5.) < tol
-@assert max(abs(x - [ 0.; 0.; 1. ;
+@test flag == 0
+@test abs(z - 5.) < tol
+@test max(abs(x - [ 0.; 0.; 1. ;
                       0.; 1.; 0. ;
                       1.; 0.; 0. ])) < tol
 
@@ -77,19 +79,19 @@ tol = 1e-4
 
 # Same problem and options as above
 
-mip_opts = GLPIntoptParam()
-mip_opts["msg_lev"] = GLP_MSG_ERR
-mip_opts["presolve"] = GLP_ON
+mip_opts = GLPK.IntoptParam()
+mip_opts["msg_lev"] = GLPK.MSG_ERR
+mip_opts["presolve"] = GLPK.ON
 
 # Use binary variables
-colkind = int32([ GLP_BV for i = 1 : 9 ])
+colkind = int32([ GLPK.BV for i = 1 : 9 ])
 
 (z, x, ret, ret_ps) = mixintprog(f, [], [], Aeq, beq, [], [], colkind, mip_opts);
 
-@assert flag == 0
-@assert z == 5.
-@assert isequal(x, [ 0.; 0.; 1. ;
+@test flag == 0
+@test z == 5.
+@test isequal(x, [ 0.; 0.; 1. ;
                      0.; 1.; 0. ;
                      1.; 0.; 0. ])
 
-end # cd
+cd("../test")

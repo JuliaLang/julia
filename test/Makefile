@@ -1,15 +1,14 @@
-JULIAHOME = ..
+JULIAHOME = $(abspath ..)
 include ../Make.inc
 
 default all extra unicode gzip::
-	@$(MAKE) -sC unicode
 
 TESTS = default all extra \
-core numbers strings unicode corelib hashing \
-arrayops linalg fft sparse arpack bitarray \
-random math functional bigint dists combinatorics statistics \
-glpk linprog bigfloat poly file Rmath remote zlib sound image \
-iterators gzip
+core numbers strings unicode corelib hashing remote \
+arrayops linalg fft dct sparse bitarray suitesparse arpack \
+random math functional bigint bigfloat combinatorics \
+statistics glpk linprog poly file Rmath remote zlib image \
+iostring gzip integers spawn ccall
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
@@ -25,8 +24,13 @@ benchmark:
 	@$(MAKE) -C perf $@
 
 clean:
-	@$(MAKE) -C unicode $@
 	@$(MAKE) -C perf $@
+	-rm -f libccalltest.${SHLIB_EXT} ccalltest
 
 .PHONY: $(TESTS) perf benchmark clean
 
+libccalltest.$(SHLIB_EXT): ccalltest.c
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -fPIC -shared -o $@ $(LDFLAGS) -DCC=$(CC)
+
+ccalltest: ccalltest.c
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -o $@ $(LDFLAGS) -DCC=$(CC)

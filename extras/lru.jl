@@ -16,6 +16,12 @@
 # collections, the difference in performance is small, and this implmentation
 # is simpler and easier to understand.
 
+import Base.isempty, Base.length, Base.sizeof
+import Base.start, Base.next, Base.done
+import Base.has, Base.get
+import Base.assign, Base.ref, Base.delete!, Base.empty!
+import Base.show
+
 abstract LRU{K,V} <: Associative{K,V}
 
 # Default cache size
@@ -48,7 +54,6 @@ BoundedLRU() = BoundedLRU{Any, Any}()
 ## collections ##
 
 isempty(lru::LRU) = isempty(lru.q)
-numel(lru::LRU) = numel(lru.q)
 length(lru::LRU) = length(lru.q)
 has(lru::LRU, key) = has(lru.ht, key)
 
@@ -59,14 +64,14 @@ has(lru::LRU, key) = has(lru.ht, key)
 
 get(lru::LRU, key, default) = has(lru, key) ? lru[key] : default
 
-function del_all(lru::LRU)
-    del_all(lru.ht)
-    del_all(lru.q)
+function empty!(lru::LRU)
+    empty!(lru.ht)
+    empty!(lru.q)
 end
 
 
-show(io, lru::UnboundedLRU) = print("UnboundedLRU()")
-show(io, lru::BoundedLRU) = print("BoundedLRU($(lru.maxsize))")
+show(io::IO, lru::UnboundedLRU) = print(io,"UnboundedLRU()")
+show(io::IO, lru::BoundedLRU) = print(io,"BoundedLRU($(lru.maxsize))")
 
 ## indexable ##
 
@@ -83,8 +88,8 @@ end
 function ref(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
-    del(lru.q, idx)
-    enqueue(lru.q, item)
+    delete!(lru.q, idx)
+    unshift!(lru.q, item)
     item.v
 end
 
@@ -93,12 +98,12 @@ function assign(lru::LRU, v, key)
         item = lru.ht[key]
         idx = locate(lru.q, item)
         item.v = v
-        del(lru.q, idx)
+        delete!(lru.q, idx)
     else
         item = CacheItem(key, v)
         lru.ht[key] = item
     end
-    enqueue(lru.q, item)
+    unshift!(lru.q, item)
 end
 
 # Eviction
@@ -106,16 +111,16 @@ function assign{V,K}(lru::BoundedLRU, v::V, key::K)
     invoke(assign, (LRU, V, K), lru, v, key)
     nrm = length(lru) - lru.maxsize
     for i in 1:nrm
-        rm = pop(lru.q)
-        del(lru.ht, rm.k)
+        rm = pop!(lru.q)
+        delete!(lru.ht, rm.k)
     end
 end
 
 ## associative ##
 
-function del(lru::LRU, key)
+function delete!(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
-    del(lru.ht, key)
-    del(lru.q, idx)
+    delete!(lru.ht, key)
+    delete!(lru.q, idx)
 end

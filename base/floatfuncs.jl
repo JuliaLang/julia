@@ -31,10 +31,6 @@ maxintfloat() = maxintfloat(Float64)
 
 integer_valued(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
 
-sqrt(x::Real) = sqrt(float(x))
-sin(x::Real) = sin(float(x))
-cos(x::Real) = cos(float(x))
-
 num2hex(x::Float32) = hex(box(Uint32,unbox(Float32,x)),8)
 num2hex(x::Float64) = hex(box(Uint64,unbox(Float64,x)),16)
 
@@ -72,7 +68,6 @@ function _signif_og(x, digits, base)
         float(base) ^ floor(log2(abs(x))/log2(base) - digits + 1.)
     end
 end
-_round_og(digits, base) = float(base) ^ (- digits)
 
 function signif(x, digits::Integer, base::Integer)
     if digits < 0
@@ -83,11 +78,13 @@ function signif(x, digits::Integer, base::Integer)
 end
 signif(x, digits) = signif(x, digits, 10)
 
+_round_og(digits, base) = float(base) ^ digits
+
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
         function ($f)(x, digits::Integer, base::Integer)
             og = _round_og(digits, base)
-            ($f)(float(x) / og) * og
+            ($f)(float(x) * og) / og
         end
         ($f)(x, digits) = ($f)(x, digits, 10)
     end

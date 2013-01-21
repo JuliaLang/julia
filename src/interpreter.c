@@ -36,7 +36,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
     }
     JL_CATCH {
         jl_current_module = last_m;
-        jl_raise(jl_exception_in_transit);
+        jl_rethrow();
     }
     jl_current_module = last_m;
     assert(v);
@@ -46,11 +46,11 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
 static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
                            jl_value_t **locals, size_t nl)
 {
-    jl_value_t **argv = alloca((nargs+1) * sizeof(jl_value_t*));
+    jl_value_t **argv;
+    JL_GC_PUSHARGS(argv, nargs+1);
     size_t i;
     argv[0] = (jl_value_t*)f;
     for(i=1; i < nargs+1; i++) argv[i] = NULL;
-    JL_GC_PUSHARGS(argv, nargs+1);
     for(i=0; i < nargs; i++)
         argv[i+1] = eval(args[i], locals, nl);
     jl_value_t *result = jl_apply(f, &argv[1], nargs);
@@ -94,10 +94,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return jl_fieldref(e,0);
     }
     if (jl_is_topnode(e)) {
-        jl_value_t *v = jl_get_global(jl_current_module,
-                                      (jl_sym_t*)jl_fieldref(e,0));
+        jl_sym_t *s = (jl_sym_t*)jl_fieldref(e,0);
+        jl_value_t *v = jl_get_global(jl_base_relative_to(jl_current_module),s);
         if (v == NULL)
-            jl_errorf("%s not defined", ((jl_sym_t*)jl_fieldref(e,0))->name);
+            jl_errorf("%s not defined", s->name);
         return v;
     }
     if (!jl_is_expr(e)) {
@@ -122,7 +122,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         if (!jl_is_func(f))
             jl_type_error("apply", (jl_value_t*)jl_function_type,
                           (jl_value_t*)f);
-        return do_call(f, &args[1], ex->args->length-1, locals, nl);
+        return do_call(f, &args[1], jl_array_len(ex->args)-1, locals, nl);
     }
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];
@@ -195,7 +195,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == global_sym) {
         // create uninitialized mutable binding for "global x" decl
         // TODO: handle type decls
-        for (size_t i=0; i < ex->args->length; i++) {
+        for (size_t i=0; i < jl_array_len(ex->args); i++) {
             assert(jl_is_symbol(args[i]));
             jl_get_binding_wr(jl_current_module, (jl_sym_t*)args[i]);
         }
@@ -281,7 +281,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == error_sym || ex->head == jl_continue_sym) {
         if (jl_is_byte_string(args[0]))
             jl_errorf("syntax error: %s", jl_string_data(args[0]));
-        jl_raise(args[0]);
+        jl_throw(args[0]);
     }
     jl_errorf("unsupported or misplaced expression %s", ex->head->name);
     return (jl_value_t*)jl_nothing;
@@ -291,20 +291,19 @@ static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
 {
     size_t j;
     long ltgt = jl_unbox_long(tgt);
-    for(j=0; j < stmts->length; j++) {
+    for(j=0; j < stmts->nrows; j++) {
         jl_value_t *l = jl_cellref(stmts,j);
         if (jl_is_labelnode(l) && jl_labelnode_label(l)==ltgt)
             break;
     }
-    assert(j < stmts->length);
+    assert(j < stmts->nrows);
     return j;
 }
 
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                              int start)
 {
-    jl_savestate_t __ss;
-    jl_jmp_buf __handlr;
+    jl_handler_t __eh;
     size_t i=start;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -329,8 +328,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                 return eval(jl_exprarg(stmt,0), locals, nl);
             }
             else if (head == enter_sym) {
-                jl_enter_handler(&__ss, &__handlr);
-                if (!jl_setjmp(__handlr,1)) {
+                jl_enter_handler(&__eh);
+                if (!jl_setjmp(__eh.eh_ctx,1)) {
                     return eval_body(stmts, locals, nl, i+1);
                 }
                 else {
@@ -361,20 +360,21 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     jl_array_t *stmts = jl_lam_body(ast)->args;
     jl_array_t *l = jl_lam_locals(ast);
+    size_t llength = jl_array_len(l);
     jl_value_t **names = &((jl_value_t**)l->data)[0];
-    nl += l->length;
-    jl_value_t **locals = (jl_value_t**)alloca(nl*2*sizeof(void*));
+    nl += llength;
+    jl_value_t **locals;
+    JL_GC_PUSHARGS(locals, nl*2);
     jl_value_t *r = (jl_value_t*)jl_null;
     size_t i=0;
-    for(i=0; i < l->length; i++) {
+    for(i=0; i < llength; i++) {
         locals[i*2]   = names[i];
         locals[i*2+1] = NULL;
     }
     for(; i < nl; i++) {
-        locals[i*2]   = loc[(i-l->length)*2];
-        locals[i*2+1] = loc[(i-l->length)*2+1];
+        locals[i*2]   = loc[(i-llength)*2];
+        locals[i*2+1] = loc[(i-llength)*2+1];
     }
-    JL_GC_PUSHARGS(locals, nl*2);
     r = eval_body(stmts, locals, nl, 0);
     JL_GC_POP();
     return r;

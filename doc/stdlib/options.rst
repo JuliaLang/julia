@@ -1,22 +1,28 @@
-.. _options-module:
-
-:mod:`options.jl` --- Optional arguments to functions
+:mod:`OptionsMod` --- Optional arguments to functions
 =====================================================
 
-.. module:: options.jl
+.. module:: OptionsMod
    :synopsis: Allows a flexible approach to providing default values for parameters in functions
 
-.. function:: options
+.. note:: located in ``options.jl``
 
-   Use the ``@options`` macro to set the value of optional parameters for a function that has been written to use them (see :func:`defaults` to learn how to write such functions).  The syntax is::
+This module allows a flexible approach to providing default values for parameters in functions.
+
+.. function:: @options([check_flag,] assignments...)
+
+   Use the ``@options`` macro to set the value of optional parameters for a function that has been written
+   to use them (see :func:`defaults` to learn how to write such functions).  The syntax is::
 
      opts = @options a=5 b=7
 
-   For a function that uses optional parameters ``a`` and ``b``, this will override the default settings for these parameters. You would likely call that function in the following way::
+   For a function that uses optional parameters ``a`` and ``b``, this will override the default settings
+   for these parameters. You would likely call that function in the following way::
 
      myfunc(requiredarg1, requiredarg2, ..., opts)
 
-   Most functions written to use optional arguments will probably check to make sure that you are not supplying parameters that are never used by the function or its sub-functions. Typically, supplying unused parameters will result in an error. You can control the behavior this way::
+   Most functions written to use optional arguments will probably check to make sure that you are not
+   supplying parameters that are never used by the function or its sub-functions. Typically, supplying
+   unused parameters will result in an error. You can control the behavior this way::
 
      # throw an error if a or b is not used (the default)
      opts = @options CheckError a=5 b=2
@@ -31,7 +37,7 @@
 
    The check flag is optional.
 
-.. function:: set_options
+.. function:: @set_options(opts, assigments...)
 
     The ``@set_options`` macro lets you add new parameters to an existing options structure.  For example::
 
@@ -39,9 +45,10 @@
 
     would add ``d`` to the set of parameters in ``opts``, or re-set its value if it was already supplied.
 
-.. function:: defaults
+.. function:: @defaults(opts, assignments...)
 
-    The ``@defaults`` macro is for writing functions that take optional parameters.  The typical syntax of such functions is::
+    The ``@defaults`` macro is for writing functions that take optional parameters.  The typical syntax of
+    such functions is::
 
       function myfunc(requiredarg1, requiredarg2, ..., opts::Options)
           @defaults opts a=11 b=2a+1 c=a*b d=100
@@ -56,7 +63,7 @@
 	  return y
       end
 
-    Note the function calls :func:`check_used` at the end.
+    Note the function calls :func:`@check_used` at the end.
 
     It is possible to have more than one Options parameter to a function, for example::
 
@@ -70,9 +77,12 @@
  
     Within a given scope, you should only have one call to ``@defaults`` per options variable.
 
-.. function:: check_used
+.. function:: @check_used(opts)
 
-    The ``@check_used`` macro tests whether user-supplied parameters were ever accessed by the ``@defaults`` macro. The test is performed at the end of the function body, so that subfunction handling parameters not used by the parent function may be "credited" for their usage. Each sub-function should also call ``@check_used``, for example::
+    The ``@check_used`` macro tests whether user-supplied parameters were ever accessed by the :func:`@defaults`
+    macro. The test is performed at the end of the function body, so that subfunction handling parameters not
+    used by the parent function may be "credited" for their usage. Each sub-function should also call
+    ``@check_used``, for example::
 
       function complexfun(x, opts::Options)
           @defaults opts parent=3 both=7
@@ -107,7 +117,8 @@ Advanced topics
 
    .. attribute:: key2index
 
-      A ``Dict`` that looks up an integer index, given the symbol for a variable (e.g., ``key2index[:a]`` for the variable ``a``)
+      A ``Dict`` that looks up an integer index, given the symbol for a variable (e.g., ``key2index[:a]`` for
+      the variable ``a``)
 
    .. attribute:: vals
 
@@ -115,8 +126,13 @@ Advanced topics
 
    .. attribute:: used
 
-      A vector of booleans, one per variable, with ``used[key2index[:a]]`` representing the value for variable ``a``. These all start as ``false``, but access by a ``@defaults`` command sets the corresponding value to ``true``. This marks the variable as having been used in the function.
+      A vector of booleans, one per variable, with ``used[key2index[:a]]`` representing the value for variable
+      ``a``. These all start as ``false``, but access by a ``@defaults`` command sets the corresponding value
+      to ``true``. This marks the variable as having been used in the function.
 
    .. attribute:: check_lock
 
-      A vector of booleans, one per variable. This is a "lock" that prevents sub-functions from complaining that they did not access variables that were intended for the parent function. ``@defaults`` sets the lock to true for any options variables that have already been defined; new variables added through ``@set_options`` will start with their ``check_lock`` set to ``false``, to be handled by a subfunction.
+      A vector of booleans, one per variable. This is a "lock" that prevents sub-functions from complaining
+      that they did not access variables that were intended for the parent function. :func:`@defaults` sets the
+      lock to true for any options variables that have already been defined; new variables added through
+      :func:`@set_options` will start with their ``check_lock`` set to ``false``, to be handled by a subfunction.

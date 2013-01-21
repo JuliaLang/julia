@@ -14,12 +14,15 @@ SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 LLTDIR = ../support
-LLT = $(LLTDIR)/libsupport.a $(USRLIB)/uv.a
+LLT = $(LLTDIR)/libsupport.a $(BUILD)/lib/libuv.a
 
 FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) -fvisibility=hidden
 LIBFILES = $(LLT)
-LIBS = $(LIBFILES) -lm -lpthread
+LIBS = $(LIBFILES) -lm
+ifneq ($(OS),WINNT)
+LIBS += -lpthread
+endif
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
@@ -33,9 +36,9 @@ debug: $(EXENAME)-debug
 HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
 
 %.o: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(DEBUGFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 flisp.o:   flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
 flisp.do:  flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
@@ -47,19 +50,19 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 
 $(LIBTARGET)-debug.a: $(DOBJS)
 	rm -rf $@
-	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
+	$(QUIET_LINK) $(AR) -rcs $@ $(DOBJS)
 	ln -sf $@ $(LIBTARGET).a
 
 $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
-	$(QUIET_LINK) ar -rcs $@ $(OBJS)
+	$(QUIET_LINK) $(AR) -rcs $@ $(OBJS)
 
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	$(QUIET_CC) $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	$(QUIET_CC) $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS)
 	./$(EXENAME)-debug unittest.lsp
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	$(QUIET_CC) $(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	$(QUIET_CC) $(CC) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS)
 	./$(EXENAME) unittest.lsp
 
 clean:

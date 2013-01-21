@@ -1,22 +1,23 @@
-:mod:`sound.jl` --- Functions for audio
-=======================================================
+:mod:`Sound` --- Functions for audio
+====================================
 
-.. module:: sound.jl
+.. module:: Sound
    :synopsis: Functions for acoustic processing
+
+.. note:: located in ``sound.jl``
 
 This module contains functions intended to process acoustic samples.
 
 RIFF/WAVE Functions
 -------------------
-These functions are used for loading and saving RIFF/WAVE (wav) functions. The API is very similar to the one found in MATLAB.
+These functions are used for loading and saving RIFF/WAVE (wav) functions. The API is very similar to
+the one found in MATLAB.
 
-Here is a quick example that copies an existing file:
+Here is a quick example that copies an existing file::
 
-::
+    julia> require("sound")
 
-    julia> require("sound.jl")
-
-    julia> import Sound.*
+    julia> using Sound
 
     julia> in_filename = ARGS[1]
 
@@ -26,12 +27,12 @@ Here is a quick example that copies an existing file:
 
 .. note:: This implementation only supports little endian machines right now.
 
-.. function:: Sound.wavread(io [, options])
+.. function:: wavread(io, [options])
 
    Reads and returns the samples from a RIFF/WAVE file. The samples are converted to floating
    point values in the range from -1.0 to 1.0 by default. The ``io`` argument accepts either an
    ``IO`` object or a filename (``String``). The options are passed via an ``Options`` object
-   (see the :ref:`options page <options-module>`).
+   (see the :mod:`OptionsMod` module).
 
    The available options, and the default values, are:
 
@@ -51,18 +52,16 @@ Here is a quick example that copies an existing file:
    * ``nbits``: The number of bits used to encode each sample
    * ``extra``: Any additional bytes used to encode the samples (is always ``None``)
 
-   The following functions are also defined to make this function compatible with MATLAB:
+   The following functions are also defined to make this function compatible with MATLAB::
 
-::
-
-   wavread(filename::String) = wavread(filename, @options)
-   wavread(filename::String, fmt::String) = wavread(filename, @options format=fmt)
-   wavread(filename::String, N::Int) = wavread(filename, @options subrange=N)
-   wavread(filename::String, N::Range1{Int}) = wavread(filename, @options subrange=N)
-   wavread(filename::String, N::Int, fmt::String) = wavread(filename, @options subrange=N format=fmt)
-   wavread(filename::String, N::Range1{Int}, fmt::String) = wavread(filename, @options subrange=N format=fmt)
+    wavread(filename::String) = wavread(filename, @options)
+    wavread(filename::String, fmt::String) = wavread(filename, @options format=fmt)
+    wavread(filename::String, N::Int) = wavread(filename, @options subrange=N)
+    wavread(filename::String, N::Range1{Int}) = wavread(filename, @options subrange=N)
+    wavread(filename::String, N::Int, fmt::String) = wavread(filename, @options subrange=N format=fmt)
+    wavread(filename::String, N::Range1{Int}, fmt::String) = wavread(filename, @options subrange=N format=fmt)
    
-.. function:: Sound.wavwrite(samples, io [, options])
+.. function:: wavwrite(samples, io, [options])
 
     Writes samples to a RIFF/WAVE file io object. The ``io`` argument
     accepts either an ``IO`` object or a filename (``String``). The
@@ -70,14 +69,15 @@ Here is a quick example that copies an existing file:
     encode each sample. Both of these values can be changed with the
     options parameter. Each column of the data represents a different
     channel. Stereo files should contain two columns. The options are
-    passed via an ``Options`` object (see the :ref:`options page
-    <options-module>`).
+    passed via an ``Options`` object (see the :mod:`OptionsMod` module).
 
     The available options, and the default values, are:
 
    * ``sample_rate`` (default = ``8000``): sampling frequency
    * ``nbits`` (default = ``16``): number of bits used to encode each
      sample
+   * ``compression`` (default = ``WAVE_FORMAT_PCM``): The desired
+     compression technique; accepted values are: WAVE_FORMAT_PCM, WAVE_FORMAT_IEEE_FLOAT
 
    The type of the input array, samples, also affects the generated
    file. "Native" WAVE files are written when integers are passed into
@@ -105,9 +105,7 @@ Here is a quick example that copies an existing file:
    ======    ================   =================   =============
 
    The following functions are also defined to make this function
-   compatible with MATLAB:
-
-::
+   compatible with MATLAB::
 
     wavwrite(y::Array) = wavwrite(y, @options)
     wavwrite(y::Array, Fs::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs)

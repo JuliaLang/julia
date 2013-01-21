@@ -6,13 +6,14 @@ runtests("unicode")
 runtests("corelib")
 runtests("hashing")
 runtests("remote")
+runtests("iostring")
 
 # array/matrix tests
 runtests("arrayops")
 runtests("linalg")
 runtests("fft")
+runtests("dct")
 runtests("sparse")
-runtests("arpack")
 runtests("bitarray")
 
 # other tests
@@ -20,6 +21,9 @@ runtests("random")
 runtests("math")
 runtests("functional")
 runtests("bigint")
-runtests("distributions")
 runtests("combinatorics")
 runtests("statistics")
+
+# io, etc.
+runtests("iostring")
+runtests("spawn")

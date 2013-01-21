@@ -75,8 +75,11 @@ size_t u8_codingsize(uint32_t *wcstr, size_t n)
 {
     size_t i, c=0;
 
-    for(i=0; i < n; i++)
-        c += u8_charlen(wcstr[i]);
+    for(i=0; i < n; i++) {
+        size_t cl = u8_charlen(wcstr[i]);
+        if (cl == 0) cl = 3;  // invalid: encoded as replacement char
+        c += cl;
+    }
     return c;
 }
 
@@ -165,6 +168,14 @@ size_t u8_toutf8(char *dest, size_t sz, const uint32_t *src, size_t srcsz)
             *dest++ = ((ch>>6) & 0x3F) | 0x80;
             *dest++ = (ch & 0x3F) | 0x80;
         }
+        else {
+            if (dest >= dest_end-2)
+                break;
+            // invalid: use replacement char \ufffd
+            *dest++ = 0xef;
+            *dest++ = 0xbf;
+            *dest++ = 0xbd;
+        }
         i++;
     }
     return (dest-dest0);
@@ -194,7 +205,10 @@ size_t u8_wc_toutf8(char *dest, uint32_t ch)
         dest[3] = (ch & 0x3F) | 0x80;
         return 4;
     }
-    return 0;
+    dest[0] = 0xef;
+    dest[1] = 0xbf;
+    dest[2] = 0xbd;
+    return 3;
 }
 
 /* charnum => byte offset */
@@ -243,7 +257,9 @@ size_t u8_strlen(const char *s)
     return count;
 }
 
-extern int wcwidth(wchar_t c);
+#ifdef __WIN32__
+extern int wcwidth(uint32_t ch);
+#endif
 
 size_t u8_strwidth(const char *s)
 {
@@ -272,6 +288,7 @@ size_t u8_strwidth(const char *s)
             }
             ch -= offsetsFromUTF8[nb];
             w = wcwidth(ch);  // might return -1
+            w=0;
             if (w > 0) tot += w;
         }
     }

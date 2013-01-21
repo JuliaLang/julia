@@ -130,7 +130,17 @@ to zero::
     false
 
 The method signatures for conversion methods are often quite a bit more
-involved than this example, especially for parametric types.
+involved than this example, especially for parametric types. The example 
+above is meant to be pedagogical, and is not the actual julia behaviour.
+This is the actual implementation in julia::
+
+    convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
+                                               throw(InexactError()))
+
+    julia> convert(Bool, 1im)
+    InexactError()
+     in convert at complex.jl:40
+
 
 Case Study: Rational Conversions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -255,7 +265,7 @@ fields promoted to an appropriate common type. For example, recall that
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_
 provides the following outer constructor method::
 
-    Rational(n::Int, d::Int) = Rational(promote(n,d)...)
+    Rational(n::Integere, d::Integer) = Rational(promote(n,d)...)
 
 This allows calls like the following to work::
 
@@ -263,7 +273,7 @@ This allows calls like the following to work::
     -3//1
 
     julia> typeof(ans)
-    Rational{Int32}
+    Rational{Int64}
 
 For most user-defined types, it is better practice to require
 programmers to supply the expected types to constructor functions
@@ -289,20 +299,18 @@ promoted together, they should be promoted to 64-bit floating-point. The
 promotion type does not need to be one of the argument types, however;
 the following promotion rules both occur in Julia's standard library::
 
-    promote_rule(::Type{Uint8}, ::Type{Int8}) = Int16
+    promote_rule(::Type{Uint8}, ::Type{Int8}) = Int
     promote_rule(::Type{Char}, ::Type{Uint8}) = Int32
 
-The former rule expresses that ``Int16`` is the smallest integer type
-that contains all the values representable by both ``Uint8`` and
-``Int8`` since the former's range extends above 127 while the latter's
-range extends below 0. In the latter case, the result type is ``Int32``
-since ``Int32`` is large enough to contain all possible Unicode code
-points, and numeric operations on characters always result in plain old
-integers unless explicitly cast back to characters (see
-:ref:`man-characters`). Also note that one does not need to
+As a general rule, Julia promotes integers to `Int` during computation
+order to avoid overflow. In the latter case, the result type is
+``Int32`` since ``Int32`` is large enough to contain all possible
+Unicode code points, and numeric operations on characters always
+result in plain old integers unless explicitly cast back to characters
+(see :ref:`man-characters`). Also note that one does not need to
 define both ``promote_rule(::Type{A}, ::Type{B})`` and
-``promote_rule(::Type{B}, ::Type{A})`` — the symmetry is implied by the
-way ``promote_rule`` is used in the promotion process.
+``promote_rule(::Type{B}, ::Type{A})`` — the symmetry is implied by
+the way ``promote_rule`` is used in the promotion process.
 
 The ``promote_rule`` function is used as a building block to define a
 second function called ``promote_type``, which, given any number of type
@@ -312,7 +320,7 @@ of actual values, what type a collection of values of certain types
 would promote to, one can use ``promote_type``::
 
     julia> promote_type(Int8, Uint16)
-    Int32
+    Int64
 
 Internally, ``promote_type`` is used inside of ``promote`` to determine
 what type argument values should be converted to for promotion. It can,

@@ -39,8 +39,9 @@ namespace JL_I {
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
         checked_fptoui32, checked_fptosi32, checked_fptoui64, checked_fptosi64,
+        nan_dom_err,
         // c interface
-        ccall,
+        ccall, jl_alloca
     };
 };
 
@@ -197,7 +198,7 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
             return ConstantInt::get(T_size, 0);
         }
     }
-    Type *to = julia_type_to_llvm(bt, ctx);
+    Type *to = julia_type_to_llvm(bt);
     if (to == NULL || to == jl_pvalue_llvmt) {
         unsigned int nb = jl_bitstype_nbits(bt);
         to = IntegerType::get(jl_LLVMContext, nb);
@@ -227,6 +228,14 @@ static int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
 // unbox using user-specified type
 static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
+    jl_value_t *et = expr_type(targ, ctx);
+    if (jl_is_type_type(et)) {
+        jl_value_t *p = jl_tparam0(et);
+        if (jl_is_leaf_type(p)) {
+            Type *to = julia_type_to_llvm(p);
+            return emit_unbox(to, PointerType::get(to,0), emit_unboxed(x,ctx));
+        }
+    }
     int nb = try_to_determine_bitstype_nbits(targ, ctx);
     if (nb == -1) {
         jl_value_t *bt=NULL;
@@ -272,7 +281,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_error("box: expected bits type as first argument");
     }
     else {
-        llvmt = julia_type_to_llvm(bt, ctx);
+        llvmt = julia_type_to_llvm(bt);
         if (nb == -1)
             nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_bitstype_nbits(bt);
     }
@@ -296,10 +305,15 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
             vx = builder.CreateIntToPtr(vx, llvmt);
         }
         else {
-            if (llvmt == T_int1)
+            if (llvmt == T_int1) {
                 vx = builder.CreateTrunc(vx, llvmt);
-            else
+            }
+            else {
+                if (vx->getType()->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
+                    jl_error("box: argument is of incorrect size");
+                }
                 vx = builder.CreateBitCast(vx, llvmt);
+            }
         }
     }
 
@@ -319,7 +333,7 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                                       jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bits_type(bt))
         jl_error("trunc_int: expected bits type as first argument");
-    Type *to = julia_type_to_llvm(bt, ctx);
+    Type *to = julia_type_to_llvm(bt);
     if (to == NULL) {
         unsigned int nb = jl_bitstype_nbits(bt);
         to = IntegerType::get(jl_LLVMContext, nb);
@@ -398,22 +412,24 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
 static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx) {
     jl_value_t *aty = expr_type(e, ctx);
     if (!jl_is_cpointer_type(aty))
-        jl_error("pointerref: expected pointer type as first argument");
+        jl_error("pointerset: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
     if(jl_is_typevar(ety))
-        jl_error("pointerref: invalid pointer");
+        jl_error("pointerset: invalid pointer");
     jl_value_t *xty = expr_type(x, ctx);    
     if (!jl_subtype(xty, ety, 0))
-        jl_error("pointerref: type mismatch in assign");
+        jl_error("pointerset: type mismatch in assign");
     if (!jl_is_bits_type(ety)) {
         ety = (jl_value_t*)jl_any_type;
     }
     if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
-        jl_error("pointerref: invalid index type");
+        jl_error("pointerset: invalid index type");
     }
     Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
-    return typed_store(auto_unbox(e,ctx), im1, emit_unboxed(x,ctx), ety, ctx);
+    Value *thePtr = auto_unbox(e,ctx);
+    (void)typed_store(thePtr, im1, emit_unboxed(x,ctx), ety, ctx);
+    return mark_julia_type(thePtr, aty);
 }
 
 #define HANDLE(intr,n)                                                  \
@@ -921,6 +937,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         raise_exception_unless(emit_eqfui64(x, v), jlinexacterr_var, ctx);
         return v;
     }
+    HANDLE(nan_dom_err,2) {
+        // nan_dom_err(f, x) throw DomainError if isnan(f)&&!isnan(x)
+        Value *f = FP(x); x = FP(y);
+        raise_exception_unless(builder.CreateOr(builder.CreateFCmpORD(f,f),
+                                                builder.CreateFCmpUNO(x,x)),
+                               jldomerr_var, ctx);
+        return f;
+    }
 
     HANDLE(abs_float,1)
     {
@@ -970,6 +994,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *tmp = builder.CreateAShr(fy, ConstantInt::get(intt,((IntegerType*)intt)->getBitWidth()-1));
         return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
     }
+    HANDLE(jl_alloca,1) {
+        return builder.CreateAlloca(IntegerType::get(jl_LLVMContext, 8),JL_INT(x));
+    }
     default:
         assert(false);
     }
@@ -1007,16 +1034,21 @@ static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
     box_##ct##_func = boxfunc_llvm(ft1arg(jl_pvalue_llvmt, T_##jl_ct),     \
                                    "jl_box_"#ct, (void*)&jl_box_##ct);
 
-static void add_intrinsic(const std::string &name, intrinsic f)
+static void add_intrinsic(jl_module_t *m, const std::string &name, intrinsic f)
 {
     jl_value_t *i = jl_box32(jl_intrinsic_type, (int32_t)f);
-    jl_set_const(jl_core_module, jl_symbol((char*)name.c_str()), i);
+    jl_sym_t *sym = jl_symbol((char*)name.c_str());
+    jl_set_const(m, sym, i);
+    jl_module_export(m, sym);
 }
 
-#define ADD_I(name) add_intrinsic(#name, name)
+#define ADD_I(name) add_intrinsic(inm, #name, name)
 
 extern "C" void jl_init_intrinsic_functions(void)
 {
+    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
+    inm->parent = jl_core_module;
+    jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
     ADD_I(box); ADD_I(unbox);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
@@ -1055,5 +1087,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_smul); ADD_I(checked_umul);
     ADD_I(checked_fptosi32); ADD_I(checked_fptoui32);
     ADD_I(checked_fptosi64); ADD_I(checked_fptoui64);
+    ADD_I(nan_dom_err);
     ADD_I(ccall);
+    ADD_I(jl_alloca);
 }

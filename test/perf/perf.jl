@@ -1,3 +1,5 @@
+using Test
+
 macro timeit(ex,name)
     quote
         t = Inf
@@ -13,19 +15,19 @@ end
 
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
-@assert fib(20) == 6765
+@test fib(20) == 6765
 @timeit fib(20) "fib"
 
 ## parse integer ##
 
 function parseintperf(t)
-    local n
+    local n, m
     for i=1:t
         n = randi(Uint32)
         s = hex(n)
         m = uint32(parse_hex(s))
-        @assert m == n
     end
+    @test m == n
     return n
 end
 
@@ -33,13 +35,13 @@ end
 
 ## array constructors ##
 
-@assert all(ones(200,200) .== 1)
+@test all(ones(200,200) .== 1)
 # @timeit ones(200,200) "ones"
 
 ## matmul and transpose ##
 
 A = ones(200,200)
-@assert all(A*A' .== 200)
+@test all(A*A' .== 200)
 # @timeit A*A' "AtA"
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
@@ -56,8 +58,8 @@ function mandel(z)
     return maxiter
 end
 
-mandelperf() = [ mandel(complex(r,i)) for r=-2.0:.1:0.5, i=-1.:.1:1. ]
-@assert sum(mandelperf()) == 14791
+mandelperf() = [ mandel(complex(r,i)) for i=-1.:.1:1., r=-2.0:.1:0.5 ]
+@test sum(mandelperf()) == 14791
 @timeit mandelperf() "mandel"
 
 ## numeric vector sort ##
@@ -83,7 +85,7 @@ end
 function sortperf(n)
     qsort!(rand(n), 1, n)
 end
-@assert issorted(sortperf(5000))
+@test issorted(sortperf(5000))
 @timeit sortperf(5000) "quicksort"
 
 ## slow pi series ##
@@ -99,7 +101,7 @@ function pisum()
     sum
 end
 
-@assert abs(pisum()-1.644834071848065) < 1e-12
+@test abs(pisum()-1.644834071848065) < 1e-12
 @timeit pisum() "pi_sum"
 
 ## random matrix statistics ##
@@ -122,7 +124,7 @@ function randmatstat(t)
 end
 
 (s1, s2) = randmatstat(1000)
-@assert 0.5 < s1 < 1.0 && 0.5 < s2 < 1.0
+@test 0.5 < s1 < 1.0 && 0.5 < s2 < 1.0
 @timeit randmatstat(1000) "rand_mat_stat"
 
 ## largish random number gen & matmul ##
@@ -132,14 +134,14 @@ end
 ## printfd ##
 
 @unix_only begin
-function printfd(n)
-    open("/dev/null","w") do io
-        for i = 1:n
-            @printf(io,"%d %d\n",i,i+1)
+    function printfd(n)
+        open("/dev/null","w") do io
+            for i = 1:n
+                @printf(io,"%d %d\n",i,i+1)
+            end
         end
     end
-end
 
-printfd(1)
-@timeit printfd(100000) "printfd"
+    printfd(1)
+    @timeit printfd(100000) "printfd"
 end

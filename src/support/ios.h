@@ -2,8 +2,7 @@
 #define IOS_H
 
 #include <stdarg.h>
-#include <pthread.h>
-#include "../../deps/libuv/include/uv.h"
+#include "../../usr/include/uv.h"
 
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
@@ -11,7 +10,6 @@
 
 //make it compatible with UV Handles
 typedef enum { bm_none=UV_HANDLE_TYPE_MAX+1, bm_line, bm_block, bm_mem } bufmode_t;
-
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
 #define IOS_INLSIZE 54
@@ -58,12 +56,7 @@ typedef struct {
     // request durable writes (fsync)
     // unsigned char durable:1;
 
-    unsigned char mutex_initialized:1;
-
     int64_t userdata;
-    pthread_mutex_t mutex;
-
-    // todo: mutex
     char local[IOS_INLSIZE];
 } ios_t;
 

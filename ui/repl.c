@@ -4,6 +4,9 @@
 */
 
 #include "repl.h"
+#include "uv.h"
+#define WHOLE_ARCHIVE
+#include "../src/julia.h"
 
 static int lisp_prompt = 0;
 static char *program = NULL;
@@ -147,7 +150,6 @@ static int exec_program(void)
     int err = 0;
  again: ;
     JL_TRY {
-        jl_register_toplevel_eh();
         if (err) {
             //jl_lisp_prompt();
             //return 1;
@@ -162,20 +164,17 @@ static int exec_program(void)
                         e = jl_fieldref(e, 2);
                         // TODO: show file and line
                     }
-                    else if (jl_typeof(e) == (jl_type_t*)jl_backtrace_type) {
-                        e = jl_fieldref(e, 0);
-                    }
                     else break;
                 }
                 if (jl_typeof(e) == (jl_type_t*)jl_errorexception_type) {
-                    ios_printf(ios_stderr, "error during bootstrap: %s\n",
+                    jl_printf(JL_STDERR, "error during bootstrap: %s\n",
                                jl_string_data(jl_fieldref(e,0)));
                 }
                 else {
-                    ios_printf(ios_stderr, "error during bootstrap\n");
+                    jl_printf(JL_STDERR, "error during bootstrap\n");
                 }
             }
-            ios_printf(ios_stderr, "\n");
+            jl_printf(JL_STDERR, "\n");
             JL_EH_POP();
             return 1;
         }
@@ -222,6 +221,16 @@ static void print_profile(void)
 }
 #endif
 
+uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
+{
+    if(suggested_size>512) suggested_size = 512; //Readline has a max buffer of 512
+    char *buf = malloc(suggested_size);
+    uv_buf_t *ret = malloc(sizeof(uv_buf_t));
+    *ret = uv_buf_init(buf,suggested_size);
+    return ret;
+}
+
+
 int true_main(int argc, char *argv[])
 {
     if (jl_base_module != NULL) {
@@ -238,7 +247,9 @@ int true_main(int argc, char *argv[])
 
     // run program if specified, otherwise enter REPL
     if (program) {
-        return exec_program();
+        int ret = exec_program();
+        uv_tty_reset_mode();
+        return ret;
     }
 
     init_repl_environment(argc, argv);
@@ -246,39 +257,37 @@ int true_main(int argc, char *argv[])
     jl_function_t *start_client =
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start"));
 
+    //uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&readBuffer);
+
     if (start_client) {
         jl_apply(start_client, NULL, 0);
+        //rl_cleanup_after_signal();
         return 0;
     }
 
     // client event loop not available; use fallback blocking version
+    //install_read_event_handler(&echoBack);
     int iserr = 0;
+
  again:
     ;
     JL_TRY {
         if (iserr) {
-            jl_show(jl_stderr_obj(), jl_exception_in_transit);
-            ios_printf(ios_stderr, "\n\n");
+            //jl_show(jl_exception_in_transit);# What if the error was in show?
+            jl_printf(JL_STDERR, "\n\n");
             iserr = 0;
         }
-        while (1) {
-            char *input = read_expr("julia> ");
-            if (!input || ios_eof(ios_stdin)) {
-                ios_printf(ios_stdout, "\n");
-                break;
-            }
-            jl_value_t *ast = jl_parse_input_line(input);
-            jl_value_t *value = jl_toplevel_eval(ast);
-            jl_show(jl_stdout_obj(), value);
-            ios_printf(ios_stdout, "\n\n");
-        }
+    uv_run(jl_global_event_loop());
     }
     JL_CATCH {
         iserr = 1;
+        JL_PUTS("error during run:\n",JL_STDERR);
+        jl_show(jl_stderr_obj(),jl_exception_in_transit);
+        JL_PUTS("\n",JL_STDOUT);
         goto again;
     }
-
-    return 0;
+    uv_tty_reset_mode();
+    return iserr;
 }
 
 int main(int argc, char *argv[])

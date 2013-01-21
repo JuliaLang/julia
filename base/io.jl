@@ -1,6 +1,6 @@
 ## core stream types ##
 
-abstract IO
+# the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption
 
 # Generic IO functions
 
@@ -28,16 +28,20 @@ end
 write(s::IO, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
 if ENDIAN_BOM == 0x01020304
-    function write(s, x::Integer)
-        for n = sizeof(x):-1:1
+    function write(s::IO, x::Integer)
+        sz = sizeof(x)
+        for n = sz:-1:1
             write(s, uint8((x>>>((n-1)<<3))))
         end
+        sz
     end
 else
-    function write(s, x::Integer)
-        for n = 1:sizeof(x)
+    function write(s::IO, x::Integer)
+        sz = sizeof(x)
+        for n = 1:sz
             write(s, uint8((x>>>((n-1)<<3))))
         end
+        sz
     end
 end
 
@@ -46,9 +50,11 @@ write(s::IO, x::Float32) = write(s, box(Int32,unbox(Float32,x)))
 write(s::IO, x::Float64) = write(s, box(Int64,unbox(Float64,x)))
 
 function write(s::IO, a::AbstractArray)
-    for i = 1:numel(a)
-        write(s, a[i])
+    nb = 0
+    for i = 1:length(a)
+        nb += write(s, a[i])
     end
+    nb
 end
 
 function write(s::IO, c::Char)
@@ -70,8 +76,9 @@ function write(s::IO, c::Char)
         write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
         write(s, uint8(( c        & 0x3F ) | 0x80))
         return 4
+    else
+        return write(s, '\ufffd')
     end
-    error("invalid Unicode code point: U+", hex(c))
 end
 
 # all subtypes should implement this
@@ -97,7 +104,7 @@ read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
 read{T}(s::IO, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
 
 function read{T}(s::IO, a::Array{T})
-    for i = 1:numel(a)
+    for i = 1:length(a)
         a[i] = read(s, T)
     end
     return a
@@ -110,7 +117,7 @@ function read(s::IO, ::Type{Char})
     end
 
     # mimic utf8.next function
-    trailing = Base._jl_utf8_trailing[ch+1]
+    trailing = Base.utf8_trailing[ch+1]
     c::Uint32 = 0
     for j = 1:trailing
         c += ch
@@ -118,13 +125,18 @@ function read(s::IO, ::Type{Char})
         ch = read(s, Uint8)
     end
     c += ch
-    c -= Base._jl_utf8_offset[trailing+1]
+    c -= Base.utf8_offset[trailing+1]
     char(c)
 end
 
-function readuntil(s::IO, delim)
+function readuntil(s::IO, delim::Char)
+    if delim < 0x80
+        data = readuntil(s, uint8(delim))
+        enc = byte_string_classify(data)
+        return (enc==1) ? ASCIIString(data) : UTF8String(data)
+    end
     out = memio()
-    while (!eof(s))
+    while !eof(s)
         c = read(s, Char)
         write(out, c)
         if c == delim
@@ -134,23 +146,38 @@ function readuntil(s::IO, delim)
     takebuf_string(out)
 end
 
+function readuntil{T}(s::IO, delim::T)
+    out = T[]
+    while !eof(s)
+        c = read(s, T)
+        push!(out, c)
+        if c == delim
+            break
+        end
+    end
+    out
+end
+
 readline(s::IO) = readuntil(s, '\n')
 
 function readall(s::IO)
     out = memio()
-    while (!eof(s))
+    while !eof(s)
         a = read(s, Uint8)
         write(out, a)
     end
     takebuf_string(out)
 end
 
-readchomp(x) = chomp(readall(x))
+readchomp(x) = chomp!(readall(x))
 
 ## high-level iterator interfaces ##
 
 type EachLine
     stream::IO
+    ondone::Function
+    EachLine(stream) = EachLine(stream, ()->nothing)
+    EachLine(stream, ondone) = new(stream, ondone)
 end
 each_line(stream::IO) = EachLine(stream)
 
@@ -160,6 +187,7 @@ function done(itr::EachLine, line)
         return false
     end
     close(itr.stream)
+    itr.ondone()
     true
 end
 next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
@@ -170,7 +198,7 @@ function readlines(s, fx::Function...)
         for f in fx
           l = f(l)
         end
-        push(a, l)
+        push!(a, l)
     end
     return a
 end
@@ -187,33 +215,31 @@ else
     typealias FileOffset Int64
 end
 
-type IOStream <: IO
-    # NOTE: for some reason the order of these field is significant!?
+abstract Stream <: IO
+
+type IOStream <: Stream
+    handle::Ptr{Void}
     ios::Array{Uint8,1}
     name::String
 
-    IOStream(name::String, buf::Array{Uint8,1}) = new(buf, name)
-
-    # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
-    # in the case where we takebuf it.
-    function IOStream(name::String, finalize::Bool)
-        x = new(zeros(Uint8,sizeof_ios_t), name)
-        if finalize
-            finalizer(x, close)
-        end
-        return x
-    end
-    IOStream(name::String) = IOStream(name, true)
+    IOStream(name::String, buf::Array{Uint8,1}) = new(pointer(buf), buf, name)
 end
+# TODO: delay adding finalizer, e.g. for memio with a small buffer, or
+# in the case where we takebuf it.
+function IOStream(name::String, finalize::Bool)
+    buf = zeros(Uint8,sizeof_ios_t)
+    x = IOStream(name, buf)
+    if finalize
+        finalizer(x, close)
+    end
+    return x
+end
+IOStream(name::String) = IOStream(name, true)
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
-
-show(io, s::IOStream) = print(io, "IOStream(", s.name, ")")
-
+show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
-
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
-
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Integer) =
@@ -249,10 +275,6 @@ fdio(name::String, fd::Integer) = fdio(name, fd, false)
 fdio(fd::Integer, own::Bool) = fdio(string("<fd ",fd,">"), fd, own)
 fdio(fd::Integer) = fdio(fd, false)
 
-make_stdin_stream() = fdio("<stdin>", ccall(:jl_stdin, Int32, ()))
-make_stderr_stream() = fdio("<stderr>", ccall(:jl_stderr, Int32, ()))
-make_stdout_stream() = IOStream("<stdout>", ccall(:jl_stdout_stream, Any, ()))
-
 function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(strcat("<file ",fname,">"))
     if ccall(:ios_file, Ptr{Void},
@@ -279,12 +301,11 @@ end
 
 function open(f::Function, args...)
     io = open(args...)
-    x = try f(io) catch err
+    try
+        f(io)
+    finally
         close(io)
-        throw(err)
     end
-    close(io)
-    return x
 end
 
 function memio(x::Integer, finalize::Bool)
@@ -297,19 +318,19 @@ memio() = memio(0, true)
 
 ## low-level calls ##
 
-write(s::IOStream, b::Uint8) = ccall(:ios_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
+write(s::IOStream, b::Uint8) = int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, s.ios))
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
-              s.ios, a, numel(a)*sizeof(T))
+        ccall(:ios_write, Int, (Ptr{Void}, Ptr{Void}, Uint),
+              s.ios, a, length(a)*sizeof(T))
     else
-        invoke(write, (Any, Array), s, a)
+        invoke(write, (IO, Array), s, a)
     end
 end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
-    ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
+    ccall(:ios_write, Int, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
 end
 
 function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
@@ -318,10 +339,11 @@ function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
     end
     colsz = size(a,1)*sizeof(T)
     if N<=1
-        write(s, pointer(a, 1), colsz)
+        return write(s, pointer(a, 1), colsz)
     else
         cartesian_map((idxs...)->write(s, pointer(a, idxs), colsz),
                       tuple(1, size(a)[2:]...))
+        return colsz*trailingsize(a,2)
     end
 end
 
@@ -336,19 +358,22 @@ function read(s::IOStream, ::Type{Uint8})
     uint8(b)
 end
 
-function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,Float32,Float64,Complex64,Complex128)}(s::IOStream, a::Array{T})
-    nb = numel(a)*sizeof(T)
-    if ccall(:ios_readall, Uint,
-             (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
-        throw(EOFError())
+function read{T}(s::IOStream, a::Array{T})
+    if isa(T,BitsKind)
+        nb = length(a)*sizeof(T)
+        if ccall(:ios_readall, Uint,
+                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
+            throw(EOFError())
+        end
+    else
+        invoke(read, (IO, Array), s, a)
     end
     a
 end
 
 ## text I/O ##
 
-write(s::IOStream, c::Char) = ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
-
+write(s::IOStream, c::Char) = int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
 takebuf_string(s::IOStream) =
@@ -385,19 +410,16 @@ function with_output_to_string(thunk)
     OUTPUT_STREAM = m
     try
         thunk()
+    finally
         OUTPUT_STREAM = oldio
-    catch e
-        OUTPUT_STREAM = oldio
-        throw(e)
     end
     takebuf_string(m)
 end
 
 write(x) = write(OUTPUT_STREAM::IOStream, x)
 
-function readuntil(s::IOStream, delim)
-    # TODO: faster versions that avoid the encoding check
-    ccall(:jl_readuntil, ByteString, (Ptr{Void}, Uint8), s.ios, delim)
+function readuntil(s::IOStream, delim::Uint8)
+    ccall(:jl_readuntil, Array{Uint8,1}, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
 function readall(s::IOStream)
@@ -406,76 +428,6 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 readall(filename::String) = open(readall, filename)
-
-## select interface ##
-
-const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
-
-type FDSet
-    data::Array{Uint8,1}
-    nfds::Int32
-
-    function FDSet()
-        ar = Array(Uint8, sizeof_fd_set)
-        ccall(:jl_fd_zero, Void, (Ptr{Void},), ar)
-        new(ar, 0)
-    end
-end
-
-isempty(s::FDSet) = (s.nfds==0)
-
-function add(s::FDSet, i::Integer)
-    if !(0 <= i < sizeof_fd_set*8)
-        error("invalid descriptor ", i)
-    end
-    ccall(:jl_fd_set, Void, (Ptr{Void}, Int32), s.data, i)
-    if i >= s.nfds
-        s.nfds = i+1
-    end
-    return s
-end
-
-function has(s::FDSet, i::Integer)
-    if 0 <= i < sizeof_fd_set*8
-        return ccall(:jl_fd_isset, Int32, (Ptr{Void}, Int32), s.data, i)!=0
-    end
-    return false
-end
-
-function del(s::FDSet, i::Integer)
-    if 0 <= i < sizeof_fd_set*8
-        ccall(:jl_fd_clr, Void, (Ptr{Void}, Int32), s.data, i)
-        if i == s.nfds-1
-            s.nfds -= 1
-            while s.nfds>0 && !has(s, s.nfds-1)
-                s.nfds -= 1
-            end
-        end
-    end
-    return s
-end
-
-function del_all(s::FDSet)
-    ccall(:jl_fd_zero, Void, (Ptr{Void},), s.data)
-    s.nfds = 0
-    return s
-end
-
-begin
-    local tv = Array(Uint8, int(ccall(:jl_sizeof_timeval, Int32, ())))
-    global select_read
-    function select_read(readfds::FDSet, timeout::Real)
-        if timeout == Inf
-            tout = C_NULL
-        else
-            ccall(:jl_set_timeval, Void, (Ptr{Void}, Float64), tv, timeout)
-            tout = convert(Ptr{Void}, tv)
-        end
-        ccall(:select, Int32,
-              (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
-              readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
-    end
-end
 
 ## Character streams ##
 const _wstmp = Array(Char, 1)
@@ -498,3 +450,37 @@ function eatwspace_comment(s::IOStream, cmt::Char)
         status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     end
 end
+
+# BitArray I/O
+
+write(s::IO, B::BitArray) = write(s, B.chunks)
+read(s::IO, B::BitArray) = read(s, B.chunks)
+
+function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+    prot, flags, iswrite = mmap_stream_settings(s)
+    if length(dims) == 0
+        dims = 0
+    end
+    n = prod(dims)
+    nc = num_bit_chunks(n)
+    B = BitArray{N}()
+    chunks = mmap_array(Uint64, (nc,), s, offset)
+    if iswrite
+        chunks[end] &= @_msk_end n
+    else
+        if chunks[end] != chunks[end] & @_msk_end n
+            error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with r+ to override)")
+        end
+    end
+    dims = [i::Int for i in dims]
+    B.chunks = chunks
+    B.dims = dims
+    return B
+end
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
+    mmap_bitarray(dims, s, offset)
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+
+msync(B::BitArray, flags::Integer) = msync(pointer(B.chunks), flags)
+msync(B::BitArray) = msync(B.chunks,MS_SYNC)

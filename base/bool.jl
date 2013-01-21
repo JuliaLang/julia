@@ -1,5 +1,6 @@
 ## boolean conversions ##
 
+convert(::Type{Bool}, x::Bool) = x
 convert(::Type{Bool}, x::Real) = (x!=0)
 
 # promote Bool to any other numeric type
@@ -39,8 +40,10 @@ sign(x::Bool) = int(x)
 abs(x::Bool) = int(x)
 
 <(x::Bool, y::Bool) = y&!x
+<=(x::Bool, y::Bool) = y|!x
 ==(x::Bool, y::Bool) = eq_int(unbox(Bool,x),unbox(Bool,y))
 
++(x::Bool) =  int(x)
 -(x::Bool) = -int(x)
 
 +(x::Bool, y::Bool) = int(x)+int(y)

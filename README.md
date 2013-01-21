@@ -5,10 +5,12 @@
       (_)     | (_) (_)    |   A fresh approach to technical computing
        _ _   _| |_  __ _   |
       | | | | | | |/ _` |  |          http://julialang.org
-      | | |_| | | | (_| |  |       julia-dev@googlegroups.com
+      | | |_| | | | (_| |  |       julia-users@googlegroups.com
      _/ |\__'_|_|_|\__'_|  |           #julia on freenode
     |__/                   |
 
+
+[![Build Status](https://api.travis-ci.org/JuliaLang/julia.png?branch=master)](https://travis-ci.org/JuliaLang/julia)
 
 <a name="The-Julia-Language"/>
 ## The Julia Language
@@ -20,11 +22,18 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Resources"/>
 
 - **Homepage:** <http://julialang.org>
-- **Mailing list:** <http://groups.google.com/group/julia-dev/>
+- **Binaries:** <http://code.google.com/p/julialang/downloads/list>
+- **Packages:** <http://docs.julialang.org/en/latest/packages/packagelist/>
+- **Mailing lists:** <http://julialang.org/mailing_lists>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Documentation:** <http://julialang.org/manual/>
+
+The mailing list for developer discussion is
+<http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
+of messages is higher, and the discussions tend to be more esoteric. New
+developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the julia codebase.
 
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
@@ -32,8 +41,9 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **GNU/Linux**
 - **Darwin/OS X**
 - **FreeBSD**
+- **Windows**
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. [Julia has been ported to Windows](https://github.com/loladiro/julia) as well, and Windows support will be merged into the julia mainline once it stabilizes.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. 
 
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
@@ -194,12 +204,7 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](https://github.com/JuliaLang/julia/downloads).
-To install from source, download the appropriate tarball and untar it somewhere.
-For example, if you are on an OS X (Darwin) x86/64 system, do the following:
-
-    wget https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz
-    tar zxvf julia-c4865bd18d-Darwin-i386.tar.gz
+Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://code.google.com/p/julialang/downloads/list).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere (in the current shell session):
 
@@ -212,7 +217,8 @@ Now you should be able to run julia like this:
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
-An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available.
+An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available. Julia has also been added to [Debian](http://packages.debian.org/sid/julia). On OS X, julia is available through [homebrew](http://mxcl.github.com/homebrew/).
+
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
@@ -235,7 +241,7 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
 Julia has a web REPL with very preliminary graphics capabilities. The web REPL is currently a showcase to try out new ideas. The web REPL is social - multiple people signing in with a common session name can collaborate within a session.
 
-1. Do `make -C deps install-lighttpd` to download and build the webserver.
+1. Do `make webrepl` to build the julia webserver.
 2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
 3. Point your browser to `http://localhost:2000/`.
 4. Try `plot(cumsum(randn(1000)))` and other things.

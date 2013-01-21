@@ -1,5 +1,5 @@
-require("sound.jl")
-import Sound.*
+require("sound")
+using Sound
 
 in_filename = ARGS[1]
 

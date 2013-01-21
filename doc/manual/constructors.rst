@@ -123,7 +123,7 @@ Now ``OrderedPair`` objects can only be constructed such that
 
     julia> OrderedPair(2,1)
     out of order
-     in OrderedPair at prompt:5
+     in OrderedPair at none:5
 
 You can still reach in and directly change the field values to violate
 this invariant (support for immutable composites is planned but not yet

@@ -7,12 +7,15 @@
 /dist
 
 /julia
+/julia-*
 /h2j
 
 *.exe
 *.dll
 *.do
 *.o
+*.dylib
+*.dSYM
 
 *.out
 
@@ -22,5 +25,7 @@
 *.creator
 *.user
 *.orig
+*.swp
+*.kate-swp
 
 /usr

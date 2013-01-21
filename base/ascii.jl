@@ -7,8 +7,8 @@
 
 ## required core functionality ##
 
-length(s::ASCIIString) = length(s.data)
-ref(s::ASCIIString, i::Int) = char(s.data[i])
+endof(s::ASCIIString) = length(s.data)
+ref(s::ASCIIString, i::Int) = (x=s.data[i]; x < 0x80 ? char(x) : '\ufffd')
 
 ## overload methods for efficiency ##
 
@@ -37,31 +37,31 @@ function lcfirst(s::ASCIIString)
 end
 
 function uppercase(s::ASCIIString)
-    for i = 1:length(s)
-        if 'a' <= s[i] <= 'z'
-            t = ASCIIString(copy(s.data))
-            while i <= length(t)
-                if 'a' <= t[i] <= 'z'
-                    t.data[i] -= 32
+    d = s.data
+    for i = 1:length(d)
+        if 'a' <= d[i] <= 'z'
+            td = copy(d)
+            for j = i:length(td)
+                if 'a' <= td[j] <= 'z'
+                    td[j] -= 32
                 end
-                i += 1
             end
-            return t
+            return ASCIIString(td)
         end
     end
     return s
 end
 function lowercase(s::ASCIIString)
-    for i = 1:length(s)
-        if 'A' <= s[i] <= 'Z'
-            t = ASCIIString(copy(s.data))
-            while i <= length(t)
-                if 'A' <= t[i] <= 'Z'
-                    t.data[i] += 32
+    d = s.data
+    for i = 1:length(d)
+        if 'A' <= d[i] <= 'Z'
+            td = copy(d)
+            for j = i:length(td)
+                if 'A' <= td[j] <= 'Z'
+                    td[j] += 32
                 end
-                i += 1
             end
-            return t
+            return ASCIIString(td)
         end
     end
     return s
@@ -69,7 +69,7 @@ end
 
 ## outputing ASCII strings ##
 
-print(io::IO, s::ASCIIString) = (write(io, s.data);nothing)
+print(io::IO, s::ASCIIString) = (write(io, s);nothing)
 write(io::IO, s::ASCIIString) = write(io, s.data)
 
 ## transcoding to ASCII ##
