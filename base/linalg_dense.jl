@@ -582,15 +582,6 @@ function det{T}(lu::LUDense{T})
     prod(diag(lu.lu)) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
 
-function det(A::Matrix)
-    m, n = size(A)
-    if m != n; error("det only defined for square matrices"); end
-    if istriu(A) | istril(A); return prod(diag(A)); end
-    return det(lud(A))
-end
-
-det(x::Number) = x
-
 function (\){T<:BlasFloat}(lu::LUDense{T}, B::StridedVecOrMat{T})
     if lu.info > 0; throw(LAPACK.SingularException(info)); end
     LAPACK.getrs!('N', lu.lu, lu.ipiv, copy(B))
@@ -683,6 +674,43 @@ function (\){T<:BlasFloat}(A::QRPDense{T}, B::StridedVecOrMat{T})
     if info > 0; throw(LAPACK.SingularException(info)); end
     isa(B, Vector) ? x[invperm(A.jpvt)] : x[:,invperm(A.jpvt)]
 end
+
+##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
+##       Add rcond methods for Cholesky, LU, QR and QRP types
+## Lower priority: Add LQ, QL and RQ factorizations
+
+# FIXME! Should add balancing option through xgebal
+type Hessenberg{T} <: Factorization{T}
+    H::Matrix{T}
+    tau::Vector{T}
+    ilo::Int
+    ihi::Int
+end
+function hessfact(A::StridedMatrix)
+    tmp = LAPACK.gehrd!(copy(A))
+    return Hessenberg(tmp[1], tmp[2], 1, size(A, 1))
+end
+function factors(H::Hessenberg) 
+    A = copy(H.H)
+    n = size(A, 1)
+    for j = 1:n-2
+        for i = j+2:n
+            A[i,j] = zero(A[1])
+        end
+    end
+    return (A, LAPACK.orghr!(H.ilo, H.ihi, H.H, H.tau))
+end
+hess(A::StridedMatrix) = factors(hessfact(A))[1]
+
+### Linear algebra for general matrices
+
+function det(A::Matrix)
+    m, n = size(A)
+    if m != n; error("det only defined for square matrices"); end
+    if istriu(A) | istril(A); return prod(diag(A)); end
+    return det(lud(A))
+end
+det(x::Number) = x
 
 function eig{T<:BlasFloat}(A::StridedMatrix{T}, vecs::Bool)
     n = size(A, 2)
@@ -781,6 +809,50 @@ svd(A, thin::Bool) = svd(A,true,thin)
 
 svdvals(A) = svdt(A,false,true)[2]
 
+schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
+
+function sqrtm(A::Matrix, cond::Bool)
+    m, n = size(A)
+    if m != n error("DimentionMismatch") end
+    if ishermitian(A)
+        z = similar(A)
+        v = LAPACK.syevr!(copy(A),z)
+        vsqrt = sqrt(complex(v))
+        if all(imag(vsqrt) .== 0)
+            retmat = symmetrize!(diagmm(z, real(vsqrt)) * z')
+        else
+            zc = complex(z)
+            retmat = symmetrize!(diagmm(zc, vsqrt) * zc')
+        end
+        if cond
+            return retmat, norm(vsqrt, Inf)^2/norm(v, Inf)
+        else
+            return retmat
+        end
+    else
+        T,Q,_ = schur(complex(A))
+        R = zeros(eltype(T), n, n)
+        for j = 1:n
+            R[j,j] = sqrt(T[j,j])
+            for i = j - 1:-1:1
+                r = zero(A[1])
+                for k = i + 1:j - 1
+                    r += R[i,k]*R[k,j]
+                end
+                R[i,j] = (T[i,j] - r) / (R[i,i] + R[j,j])
+            end
+        end
+        retmat = Q*R*Q'
+        if cond
+            alpha = norm(R)^2/norm(T)
+            return (all(imag(retmat) .== 0) ? real(retmat) : retmat), alpha
+        else
+            return (all(imag(retmat) .== 0) ? real(retmat) : retmat)
+        end
+    end
+end
+sqrtm(A::Matrix) = sqrtm(A, false)
+sqrtm(a::Number) = isreal(a) ? (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)  : sqrt(a)
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     Acopy = copy(A)
@@ -818,10 +890,6 @@ end
 (\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(complex128(A), complex128(B))
 
 (/)(A::StridedVecOrMat, B::StridedVecOrMat) = (B' \ A')'
-
-##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
-##       Add rcond methods for Cholesky, LU, QR and QRP types
-## Lower priority: Add LQ, QL and RQ factorizations
 
 ## Moore-Penrose inverse
 function pinv{T<:BlasFloat}(A::StridedMatrix{T})
