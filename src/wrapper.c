@@ -408,9 +408,9 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
     }
 }
 
-DLLEXPORT int jl_write(uv_stream_t *stream, const char *str, size_t n)
+DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
 {
-//TODO: BAD!! Needed because Julia can't yet detect null stdio
+    //TODO: BAD!! Needed because Julia can't yet detect null stdio
     if (stream == 0)
         return 0;
     if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
