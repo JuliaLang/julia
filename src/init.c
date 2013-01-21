@@ -201,7 +201,7 @@ struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *n
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
 static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status)
 {
-    if (status == 0) uv_close((uv_handle_t*)req->handle,NULL); //doesn't appear to be necessary...
+    if (status == 0) jl_close_uv((uv_handle_t*)req->handle);
     free(req);
 }
 static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
@@ -216,6 +216,12 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
 }
 DLLEXPORT void uv_atexit_hook()
 {
+    if (jl_base_module) {
+        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
+        if (f!=NULL && jl_is_function(f)) {
+            jl_apply((jl_function_t*)f, NULL, 0);
+        }
+    }    
     uv_loop_t* loop = jl_global_event_loop();
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
@@ -227,7 +233,7 @@ DLLEXPORT void uv_atexit_hook()
             case UV_UDP:
 //#ifndef __WIN32__ // unix only supports shutdown on TCP and NAMED_PIPE
 // but uv_shutdown doesn't seem to be particularly reliable, so we'll avoid it in general
-                uv_close(handle,NULL);
+                jl_close_uv(handle);
                 break;
 //#endif
             case UV_TCP:
@@ -238,7 +244,7 @@ DLLEXPORT void uv_atexit_hook()
                     if (err != 0) { printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
                 }
                 else {
-                    uv_close(handle,NULL);
+                    jl_close_uv(handle);
                 }
                 break;
             case UV_POLL:
