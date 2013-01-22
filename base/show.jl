@@ -204,6 +204,7 @@ end
 show_unquoted(io::IO, sym::Symbol, indent::Int) = print(io, sym)
 show_unquoted(io::IO, x::Number, indent::Int)   = show(io, x)
 show_unquoted(io::IO, x::String, indent::Int)   = show(io, x)
+show_unquoted(io::IO, x::Char, indent::Int)     = show(io, x)
 
 const _expr_infix_wide = Set(:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=), 
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||))
