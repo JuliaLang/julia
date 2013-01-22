@@ -814,6 +814,7 @@ export
     ref,
     resize,
     similar,
+    symdiff,
     toggle,
     toggle_each,
     union,
