@@ -944,7 +944,6 @@ export
     randbool,
     randn!,
     randn,
-    RNG,
     # deprecated stuff
     randbeta,
     randchi2,
