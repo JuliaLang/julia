@@ -126,15 +126,15 @@ rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
 dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
 
-randi(::Type{Uint32})  = dsfmt_randui32()
-randi(::Type{Uint64})  = dsfmt_randui64()
-randi(::Type{Uint128}) = uint128(randi(Uint64))<<64 | randi(Uint64)
+rand(::Type{Uint32})  = dsfmt_randui32()
+rand(::Type{Uint64})  = dsfmt_randui64()
+rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
 
-randi(::Type{Int32})   = int32(randi(Uint32)) & typemax(Int32)
-randi(::Type{Int64})   = int64(randi(Uint64)) & typemax(Int64)
-randi(::Type{Int128})  = int128(randi(Uint128)) & typemax(Int128)
+rand(::Type{Int32})   = int32(rand(Uint32)) & typemax(Int32)
+rand(::Type{Int64})   = int64(rand(Uint64)) & typemax(Int64)
+rand(::Type{Int128})  = int128(rand(Uint128)) & typemax(Int128)
 
-randi() = randi(Int)
+rand() = rand(Int)
 
 # random integer from lo to hi inclusive
 function rand{T<:Integer}(r::Range1{T})
