@@ -804,6 +804,7 @@ promote_array_type{S<:Real, A<:Real}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Complex, A<:Complex}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Real, A<:Integer}(::Type{S}, ::Type{A}) = promote_type(S, A)
+promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
 ./{T<:Integer,S<:Integer}(x::StridedArray{T}, y::StridedArray{S}) =
     reshape( [ x[i] ./ y[i] for i=1:length(x) ], size(x) )
@@ -892,7 +893,7 @@ for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
 end
 
 # functions that should give an Int result for Bool arrays
-for f in (:+, :-, :div)
+for f in (:+, :-)
     @eval begin
         function ($f)(x::Bool, y::StridedArray{Bool})
             reshape([ ($f)(x, y[i]) for i=1:length(y) ], size(y))
