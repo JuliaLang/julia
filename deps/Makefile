@@ -560,7 +560,7 @@ install-openlibm-extras: $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrap
 
 # Wrapper for openlibm/Faddeeva since ccall doesn't support C99 complex:
 $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBMEXT_OBJ_TARGET)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm-extras
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm-extras $(RPATH_ORIGIN)
 	$(INSTALL_NAME_CMD)libFaddeeva_wrapper.$(SHLIB_EXT) $@
 	touch -c $@
 

@@ -1597,7 +1597,7 @@ function map_to2(f, first, dest::StridedArray, As::StridedArray...)
 end
 
 function map(f, As::StridedArray...)
-    shape = mapreduce(promote_shape, size, As)
+    shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
         return similar(As[1], eltype(As[1]), shape)
     end

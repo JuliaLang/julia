@@ -110,7 +110,6 @@ include("errno_h.jl")
 include("file.jl")
 include("path.jl")
 include("stat.jl")
-importall FileStat
 
 # front end & code loading
 include("client.jl")
@@ -238,7 +237,6 @@ compile_hint(hash, (Int,))
 compile_hint(isequal, (Symbol, Symbol))
 compile_hint(isequal, (Bool, Bool))
 compile_hint(WaitFor, (Symbol, RemoteRef))
-compile_hint(answer_color, ())
 compile_hint(get, (EnvHash, ASCIIString, ASCIIString))
 compile_hint(notify_empty, (WorkItem,))
 compile_hint(rr2id, (RemoteRef,))

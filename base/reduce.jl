@@ -106,7 +106,7 @@ function reduce(op::Function, v0, itr)
     return v
 end
 
-function mapreduce(op, f, itr)
+function mapreduce(f, op, itr)
     s = start(itr)
     if done(itr, s)
         return op()  # empty collection
@@ -120,7 +120,7 @@ function mapreduce(op, f, itr)
     return v
 end
 
-function mapreduce(op::Function, f::Function, v0, itr)
+function mapreduce(f::Function, op::Function, v0, itr)
     v = v0
     for x in itr
         v = op(v,f(x))
@@ -147,10 +147,10 @@ function all(itr)
 end
 all(args::Bool...) = all(args)
 
-max(f::Function, itr)   = mapreduce(max, f, itr)
-min(f::Function, itr)   = mapreduce(min, f, itr)
-sum(f::Function, itr)   = mapreduce(+,   f, itr)
-prod(f::Function, itr)  = mapreduce(*,   f, itr)
+max(f::Function, itr)   = mapreduce(f, max, itr)
+min(f::Function, itr)   = mapreduce(f, min, itr)
+sum(f::Function, itr)   = mapreduce(f, +  , itr)
+prod(f::Function, itr)  = mapreduce(f, *  , itr)
 any(f::Function, itr)   = anyp(f, itr)
 all(f::Function, itr)   = allp(f, itr)
 count(f::Function, itr) = countp(f, itr)
