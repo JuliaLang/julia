@@ -948,6 +948,14 @@ function converge(graph::Graph, msgs::Messages)
         end
     end
 
+    # Finally, decimate everything just to
+    # check against inconsistencies
+    # (old_numnondec is saved just to prevent
+    # wrong messages about accuracy)
+    old_numnondec = msgs.num_nondecimated
+    decimate(msgs.num_nondecimated, graph, msgs)
+    msgs.num_nondecimated = old_numnondec
+
     return getsolution(msgs)
 end
 
