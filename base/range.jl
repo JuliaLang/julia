@@ -56,6 +56,11 @@ colon{T}(start::T, step, stop::T) =
 colon{T}(start::T, stop::T) =
     OrdinalRange(start, 1, max(0, stop-start+1))
 
+colon(start::Char, step::Int, stop::Char) =
+    OrdinalRange(start, step, max(0, div(stop-start+step, step)))
+colon(start::Char, stop::Char) =
+    OrdinalRange(start, 1, max(0, stop-start+1))
+
 function colon{T<:Real}(start::T, step::T, stop::T)
     len = (stop-start)/step
     if len >= typemax(Int)
