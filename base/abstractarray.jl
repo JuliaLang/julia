@@ -121,11 +121,11 @@ function in_bounds(sz::Dims, I::Int...)
             return false
         end
     end
-    sz = size(A,n)
-    for i = n+1:ndims(A)
-        sz *= size(A,i)
+    s = sz[n]
+    for i = n+1:length(sz)
+        s *= sz[i]
     end
-    1 <= I[n] <= sz
+    1 <= I[n] <= s
 end
 
 ## Constructors ##
