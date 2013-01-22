@@ -946,18 +946,12 @@ export
     randn,
     RNG,
     # deprecated stuff
-    randbeta!,
     randbeta,
-    randchi2!,
     randchi2,
-    randexp!,
     randexp,
-    randg!,
     randg,
     randg2,
-    randi!,
     randi,
-    randival!,
     randival,
 
 # statistics

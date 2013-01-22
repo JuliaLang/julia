@@ -148,7 +148,7 @@ end
 @test !isequal({1 => 1}, {2 => 1})
 
 # Generate some data to populate dicts to be compared
-data_in = [ (randi(1000), randstring(2)) for _ in 1:1001 ]
+data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
 
 # Populate the first dict
 d1 = Dict{Int, String}(length(data_in))
@@ -158,7 +158,7 @@ end
 data_in = pairs(d1)
 # shuffle the data
 for i in 1:length(data_in)
-    j = randi(length(data_in))
+    j = rand(1:length(data_in))
     data_in[i], data_in[j] = data_in[j], data_in[i]
 end
 # Inserting data in different (shuffled) order should result in
@@ -172,10 +172,10 @@ end
 d3 = copy(d2)
 d4 = copy(d2)
 # Removing an item gives different dict
-delete!(d1, data_in[randi(length(data_in))][1])
+delete!(d1, data_in[rand(1:length(data_in))][1])
 @test !isequal(d1, d2)
 # Changing a value gives different dict
-d3[data_in[randi(length(data_in))][1]] = randstring(3)
+d3[data_in[rand(1:length(data_in))][1]] = randstring(3)
 !isequal(d1, d3)
 # Adding a pair gives different dict
 d4[1001] = randstring(3)

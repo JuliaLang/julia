@@ -34,7 +34,7 @@ s4 = 4
 
 b1 = randbool(n1, n2)
 @test isequal(bitpack(bitunpack(b1)), b1)
-i1 = randi(2, n1, n2) - 1
+i1 = rand(1:2, n1, n2) - 1
 @test isequal(bitunpack(bitpack(i1)), i1)
 
 timesofar("conversions")
@@ -56,8 +56,8 @@ timesofar("utils")
 ## Indexing ##
 
 b1 = randbool(n1, n2)
-m1 = randi(n1)
-m2 = randi(n2)
+m1 = rand(1:n1)
+m2 = rand(1:n2)
 b2 = randbool(m1, m2)
 @check_bit_operation copy_to BitMatrix (b1, b2)
 @check_bit_operation ref BitMatrix (b1, 1:m1, m2:n2)
@@ -68,8 +68,8 @@ b2 = randbool(m1, m2)
 b2 = randbool(m1)
 @check_bit_operation assign BitMatrix (b1, b2, 1:m1, m2)
 
-for p1 = [randi(v1) 1 63 64 65 191 192 193]
-    for p2 = [randi(v1) 1 63 64 65 191 192 193]
+for p1 = [rand(1:v1) 1 63 64 65 191 192 193]
+    for p2 = [rand(1:v1) 1 63 64 65 191 192 193]
         for n = 0 : min(v1 - p1 + 1, v1 - p2 + 1)
             b1 = randbool(v1)
             b2 = randbool(v1)
@@ -145,7 +145,7 @@ end
 b1 = BitArray()
 i1 = bitunpack(b1)
 for m = 1 : v1
-    j = randi(m)
+    j = rand(1:m)
     x = randbool()
     insert!(b1, j, x)
     insert!(i1, j, x)
@@ -155,7 +155,7 @@ end
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
-    x = randi(2) - 1
+    x = rand(1:2) - 1
     insert!(b1, j, x)
     insert!(i1, j, x)
     @test isequal(bitunpack(b1), i1)
@@ -164,7 +164,7 @@ end
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for m = v1 : -1 : 1
-    j = randi(m)
+    j = rand(1:m)
     delete!(b1, j)
     delete!(i1, j)
     @test isequal(bitunpack(b1), i1)
@@ -248,7 +248,7 @@ b2 = randbool(n1, n1)
 @check_bit_operation (\) Matrix{Float64} (b1, b1)
 
 b1 = randbool(n1, n2)
-b2 = randi(10, n1, n2)
+b2 = rand(1:10, n1, n2)
 @check_bit_operation (&) Matrix{Int} (b1, b2)
 @check_bit_operation (|) Matrix{Int} (b1, b2)
 @check_bit_operation ($) Matrix{Int} (b1, b2)
@@ -291,7 +291,7 @@ timesofar("binary comparison")
 
 b1 = randbool(s1, s2, s3, s4)
 for d = 1 : 4
-    j = randi(size(b1, d))
+    j = rand(1:size(b1, d))
     #for j = 1 : size(b1, d)
         @check_bit_operation slicedim BitArray{4} (b1, d, j)
     #end
@@ -309,7 +309,7 @@ for m = 0 : v1
 end
 
 b1 = randbool(v1)
-for m = [randi(v1)-1 0 1 63 64 65 191 192 193 v1-1]
+for m = [rand(1:v1)-1 0 1 63 64 65 191 192 193 v1-1]
     @test isequal(b1 << m, [ b1[m+1:end]; falses(m) ])
     @test isequal(b1 >>> m, [ falses(m); b1[1:end-m] ])
     @test isequal(rotl(b1, m), [ b1[m+1:end]; b1[1:m] ])

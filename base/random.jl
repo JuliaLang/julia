@@ -5,11 +5,6 @@ using Base.LibRandom
 export librandom_init, srand,
        rand, rand!,
        randn, randn!,
-       randi, randi!, randival, randival!,
-       randg, randg!,
-       randexp, randexp!,
-       randchi2, randchi2!,
-       randbeta, randbeta!,
        randbool, randbool!,
        AbstractRNG, RNG, MersenneTwister
 
@@ -134,15 +129,13 @@ rand(::Type{Int32})   = int32(rand(Uint32)) & typemax(Int32)
 rand(::Type{Int64})   = int64(rand(Uint64)) & typemax(Int64)
 rand(::Type{Int128})  = int128(rand(Uint128)) & typemax(Int128)
 
-rand() = rand(Int)
-
 # random integer from lo to hi inclusive
 function rand{T<:Integer}(r::Range1{T})
     lo = r[1]
     hi = r[end]
 
     m = typemax(T)
-    s = randi(T)
+    s = rand(T)
     if (hi-lo == m)
         return s + lo
     end
@@ -154,7 +147,7 @@ function rand{T<:Integer}(r::Range1{T})
     # note: m>=0 && r>=0
     lim = m - rem(rem(m,r)+1, r)
     while s > lim
-        s = randi(T)
+        s = rand(T)
     end
     return rem(s,r) + lo
 end
