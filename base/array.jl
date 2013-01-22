@@ -629,23 +629,10 @@ end
 get{T}(A::Array, I::Ranges, default::T) = get(Array(T, length(I)), A, I, default)
 
 RangeVecIntList = Union((Union(Ranges, Vector{Int})...), Vector{Range1{Int}}, Vector{Range{Int}}, Vector{Vector{Int}})
+
 function get{T}(X::Array{T}, A::Array, I::RangeVecIntList, default::T)
     fill!(X, default)
-    n = length(I)
-    dst = Array(Range1{Int}, n)
-    src = Array(Any, n)
-    for dim = 1:(n-1)
-        tmp = findin(I[dim], 1:size(A, dim))
-        dst[dim] = tmp
-        src[dim] = I[dim][tmp]
-    end
-    sz = size(A,n)
-    for i = n+1:ndims(A)
-        sz *= size(A, i)
-    end
-    tmp = findin(I[n], 1:sz)
-    dst[n] = tmp
-    src[n] = I[n][tmp]
+    dst, src = indcopy(size(A), I)
     X[dst...] = A[src...]
     X
 end
@@ -1330,13 +1317,34 @@ function findin(v::Vector{Int}, span::Range1)
     ind = Array(Int, 0)
     f = first(span)
     l = last(span)
-    for i in v
-        if f <= i <= l
+    for i = 1:length(v)
+        if f <= v[i] <= l
             push!(ind, i)
         end
     end
     ind
 end
+
+# Copying subregions
+function indcopy(sz::Dims, I::RangeVecIntList)
+    n = length(I)
+    dst = Array(AbstractVector{Int}, n)
+    src = Array(AbstractVector{Int}, n)
+    for dim = 1:(n-1)
+        tmp = findin(I[dim], 1:sz[dim])
+        dst[dim] = tmp
+        src[dim] = I[dim][tmp]
+    end
+    s = sz[n]
+    for i = n+1:length(sz)
+        s *= sz[i]
+    end
+    tmp = findin(I[n], 1:s)
+    dst[n] = tmp
+    src[n] = I[n][tmp]
+    dst, src
+end
+
 
 ## Reductions ##
 

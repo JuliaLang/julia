@@ -88,13 +88,24 @@ B[4,[2,3]] = 7
 # get
 let
     A = reshape(1:24, 3, 8)
+    x = get(A, 32, -12)
+    @test x == -12
+    x = get(A, 14, -12)
+    @test x == 14
+    x = get(A, (2,4), -12)
+    @test x == 11
+    x = get(A, (4,4), -12)
+    @test x == -12
     X = get(A, -5:5, nan(Float32))
+    @test eltype(X) == Float32
     @test isnan(X) == [trues(6),falses(5)]
     @test X[7:11] == 1:5
     X = get(A, (2:4, 9:-2:-13), 0)
     Xv = zeros(Int, 3, 12)
     Xv[1:2, 2:5] = A[2:3, 7:-2:1]
     @test X == Xv
+    X2 = get(A, Vector{Int}[[2:4], [9:-2:-13]], 0)
+    @test X == X2
 end
 
 ## arrays as dequeues
