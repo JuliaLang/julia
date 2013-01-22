@@ -433,17 +433,37 @@ typemax(::Type{FieldValue}) = FieldValue([typemax(Int) for i = 1:5])
 function (<)(a::FieldValue, b::FieldValue)
     va = a.v
     vb = b.v
-    return va[1] < vb[1] || (va[1] == vb[1] &&
-           (va[2] < vb[2] || (va[2] == vb[2] &&
-           (va[3] < vb[3] || (va[3] == vb[3] &&
-           (va[4] < vb[4] || (va[4] == vb[4] &&
-           va[5] < vb[5])))))))
+    va[1] < vb[1] && return true
+    va[1] > vb[1] && return false
+    va[2] < vb[2] && return true
+    va[2] > vb[2] && return false
+    va[3] < vb[3] && return true
+    va[3] > vb[3] && return false
+    va[4] < vb[4] && return true
+    va[4] > vb[4] && return false
+    va[5] < vb[5] && return true
+    return false
 end
 
 isless(a::FieldValue, b::FieldValue) = a < b
 
 abs(a::FieldValue) = FieldValue(abs(a.v))
 abs(v::Vector{FieldValue}) = FieldValue[abs(a) for a in v]
+
+# A faster, in-place version of
+#   a += FieldValue(0,0,0,x,0)
+# where the position of the x is set by n
+inplaceadd!(a::FieldValue, x::Int, n::Int) = (a.v[n] = x)
+
+# A faster, in-place version of
+#   a += b
+function inplaceadd!(a::FieldValue, b::FieldValue)
+    av = a.v
+    bv = b.v
+    for i = 1:5
+        av[i] += bv[i]
+    end
+end
 
 # if the maximum field has l0 < 0, it means that
 # some hard constraint is being violated
@@ -514,7 +534,7 @@ type Graph
 
     # adjacency dict:
     #   allows to retrieve the indices in gadj, so that
-    #   gadj[p0][adjdict[p0][p1]] = p1
+    #   gadj[p0][adjdict[p1][p0]] = p1
     adjdict::Vector{Dict{Int,Int}}
 
     # states per package: same as in PkgStruct
@@ -564,8 +584,8 @@ type Graph
                 j0 = length(gadj[p0])
                 j1 = length(gadj[p1])
 
-                adjdict[p0][p1] = j0
-                adjdict[p1][p0] = j1
+                adjdict[p1][p0] = j0
+                adjdict[p0][p1] = j1
 
                 bm = ones(Bool, spp[p1], spp[p0])
                 bmt = bm'
@@ -716,6 +736,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
     np = graph.np
     msg = msgs.msg
     fld = msgs.fld
+    decimated = msgs.decimated
 
     maxdiff = zero(FieldValue)
 
@@ -723,13 +744,17 @@ function update(p0::Int, graph::Graph, msgs::Messages)
     msg0 = msg[p0]
     fld0 = fld[p0]
     spp0 = spp[p0]
+    adjdict0 = adjdict[p0]
 
     # iterate over all neighbors of p0
     for j0 in 1:length(gadj0)
 
         p1 = gadj0[j0]
-        j1 = adjdict[p1][p0]
-        #@assert j0 == adjdict[p0][p1]
+        if decimated[p1]
+            continue
+        end
+        j1 = adjdict0[p1]
+        #@assert j0 == adjdict[p1][p0]
         bm1 = gmsk[p1][j1]
         dir1 = gdir[p1][j1]
         spp1 = spp[p1]
@@ -741,7 +766,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         if dir1 == -1
             # p0 depends on p1
             for v0 = 1:spp0-1
-                cavmsg[v0] += FieldValue(0,0,0,v0)
+                inplaceadd!(cavmsg[v0], v0, 4)
             end
         end
 
@@ -765,11 +790,11 @@ function update(p0::Int, graph::Graph, msgs::Messages)
             end
             if dir1 == 1 && v1 != spp1
                 # p1 depends on p0
+                # Note: cannot use inplaceadd! here since it may
+                #       mutate cavmsg
                 newmsg[v1] += FieldValue(0,0,0,v1)
             end
-            if newmsg[v1] > m
-                m = newmsg[v1]
-            end
+            m = max(m, newmsg[v1])
         end
         if !validmax(m)
             # No state available without violating some
@@ -782,14 +807,14 @@ function update(p0::Int, graph::Graph, msgs::Messages)
             newmsg[v1] -= m
         end
 
-        absdiff = max(abs(newmsg - oldmsg))
-        maxdiff = max(maxdiff, absdiff)
-
+        diff = newmsg - oldmsg
+        maxabsdiff = max(abs(diff))
+        maxdiff = max(maxdiff, maxabsdiff)
 
         # update the field of p1
         fld1 = fld[p1]
         for v1 = 1:spp1
-            fld1[v1] += newmsg[v1] - oldmsg[v1]
+            inplaceadd!(fld1[v1], diff[v1])
         end
 
         # put the newly computed message in place
