@@ -231,7 +231,7 @@ b2 = randbool(n1, n2)
 @check_bit_operation (.^) Matrix{Float64} (b1, b2)
 
 b2 = trues(n1, n2)
-@check_bit_operation div Matrix{Int} (b1, b2)
+@check_bit_operation div Matrix{Bool} (b1, b2)
 @check_bit_operation mod Matrix{Bool} (b1, b2)
 
 while true
