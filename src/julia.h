@@ -163,7 +163,7 @@ typedef struct _jl_lambda_info_t {
     struct _jl_module_t *module;
     struct _jl_lambda_info_t *def;  // original this is specialized from
     jl_value_t *capt;  // captured var info
-    jl_value_t *file;
+    jl_sym_t *file;
     int32_t line;
     int8_t inferred;
 
