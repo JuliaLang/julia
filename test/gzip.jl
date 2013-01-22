@@ -176,7 +176,7 @@ let BUFSIZE = 65536
             elseif isa(T, Complex128)
                 r = Int64[rand(BUFSIZE)...] + Int64[rand(BUFSIZE)...] * im
             else
-                r = b[randi((1,BUFSIZE), BUFSIZE)];
+                r = b[rand(1:BUFSIZE, BUFSIZE)];
             end
 
             # Array file

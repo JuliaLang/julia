@@ -17,7 +17,7 @@ for i = 1:length(b)
 end
 
 # Random array
-r = b[randi((1,256), BUFSIZE)]
+r = b[rand(1:256, BUFSIZE)]
 
 ########################
 # type size tests
