@@ -1360,21 +1360,13 @@ Random numbers are generated in Julia by calling functions from the `Mersenne Tw
 
    Generate a random integer of the given type
 
-.. function:: randi(n)
+.. function:: randi(r)
 
-   Generate a random integer from 1 to ``n`` inclusive
+   Generate a random integer from the range ``1:``n`` inclusive
 
-.. function:: randi(n, dims...)
+.. function:: randi(r, dims...)
 
-   Generate an array of random integers from 1 to ``n`` inclusive
-
-.. function:: randi((a,b))
-
-   Generate a random integer in the interval from ``a`` to ``b`` inclusive. The argument is a tuple.
-
-.. function:: randi((a,b), dims...)
-
-   Generate an array of random integers in the interval from ``a`` to ``b`` inclusive. The first argument is a tuple.
+   Generate an array of random integers from ``1``:``n`` inclusive
 
 .. function:: randbool
 
@@ -1383,18 +1375,6 @@ Random numbers are generated in Julia by calling functions from the `Mersenne Tw
 .. function:: randn
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1
-
-.. function:: randg(a)
-
-   Generate a sample from the gamma distribution with shape parameter ``a``
-
-.. function:: randchi2(n)
-
-   Generate a sample from the chi-squared distribution with ``n`` degrees of freedom (also available as ``chi2rnd``)
-
-.. function:: randexp
-
-   Generate samples from the exponential distribution
 
 .. function:: srand
 

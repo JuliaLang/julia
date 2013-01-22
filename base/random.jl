@@ -190,11 +190,4 @@ randn!(A::Array{Float64}) = randmtzig_fill_randn!(A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn(dims)
 
-## randexp() - Exponentially distributed random numbers using Ziggurat algorithm
-
-randexp() = randmtzig_exprnd()
-randexp!(A::Array{Float64}) = randmtzig_fill_exprnd!(A)
-randexp(dims::Dims) = randexp!(Array(Float64, dims))
-randexp(dims::Int...) = randexp(dims)
-
 end # module
