@@ -376,11 +376,25 @@ Set-Like Collections
 
    Pick an element of a set
 
-.. function:: union(s1,s2)
+.. function:: union(s1,s2...)
 
-   Construct the union of two sets
+   Construct the union of two or more sets. Maintains order with arrays.
+
+.. function:: intersect(s1,s2...)
+
+   Construct the intersection of two or more sets. Maintains order with arrays.
+
+.. function:: setdiff(s1,s2)
+
+   Construct the set of elements in ``s1`` but not ``s2``. Maintains order with arrays.
+
+.. function:: symdiff(s1,s2...)
+
+   Construct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.
 
 Fully implemented by: ``IntSet``, ``Set``, ``FDSet``.
+
+Partially implemented by: ``Array``.
 
 Dequeues
 --------
