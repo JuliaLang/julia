@@ -85,6 +85,18 @@ B[4,[2,3]] = 7
 
 @test isequal(reshape(1:27, 3, 3, 3)[1,:], [1  4  7  10  13  16  19  22  25])
 
+# get
+let
+    A = reshape(1:24, 3, 8)
+    X = get(A, -5:5, nan(Float32))
+    @test isnan(X) == [trues(6),falses(5)]
+    @test X[7:11] == 1:5
+    X = get(A, (2:4, 9:-2:-13), 0)
+    Xv = zeros(Int, 3, 12)
+    Xv[1:2, 2:5] = A[2:3, 7:-2:1]
+    @test X == Xv
+end
+
 ## arrays as dequeues
 l = {1,2,3}
 push!(l,8)

@@ -112,6 +112,22 @@ function check_bounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
     end
 end
 
+## Bounds-checking without errors ##
+in_bounds(l::Int, i::Integer) = 1 <= i <= l
+function in_bounds(sz::Dims, I::Int...)
+    n = length(I)
+    for dim = 1:(n-1)
+        if !(1 <= I[dim] <= sz[dim])
+            return false
+        end
+    end
+    sz = size(A,n)
+    for i = n+1:ndims(A)
+        sz *= size(A,i)
+    end
+    1 <= I[n] <= sz
+end
+
 ## Constructors ##
 
 # default arguments to similar()

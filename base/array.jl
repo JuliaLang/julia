@@ -611,6 +611,47 @@ assign{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector{Bool}) = as
 
 assign{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = assign(A, x, find(I),J)
 
+# get (ref with a default value)
+
+get{T}(A::Array, i::Integer, default::T) = in_bounds(length(A), i) ? A[i] : default
+
+get{T}(A::Array, I::(), default::T) = Array(T, 0)
+get{T}(A::Array, I::Dims, default::T) = in_bounds(size(A), I...) ? A[I...] : default
+
+function get{T}(X::Array{T}, A::Array, I::Union(Ranges, Vector{Int}), default::T)
+    ind = findin(I, 1:length(A))
+    X[ind] = A[I[ind]]
+    X[1:first(ind)-1] = default
+    X[last(ind)+1:length(X)] = default
+    X
+end
+
+get{T}(A::Array, I::Ranges, default::T) = get(Array(T, length(I)), A, I, default)
+
+RangeVecIntList = Union((Union(Ranges, Vector{Int})...), Vector{Range1{Int}}, Vector{Range{Int}}, Vector{Vector{Int}})
+function get{T}(X::Array{T}, A::Array, I::RangeVecIntList, default::T)
+    fill!(X, default)
+    n = length(I)
+    dst = Array(Range1{Int}, n)
+    src = Array(Any, n)
+    for dim = 1:(n-1)
+        tmp = findin(I[dim], 1:size(A, dim))
+        dst[dim] = tmp
+        src[dim] = I[dim][tmp]
+    end
+    sz = size(A,n)
+    for i = n+1:ndims(A)
+        sz *= size(A, i)
+    end
+    tmp = findin(I[n], 1:sz)
+    dst[n] = tmp
+    src[n] = I[n][tmp]
+    X[dst...] = A[src...]
+    X
+end
+
+get{T}(A::Array, I::RangeVecIntList, default::T) = get(Array(T, map(length, I)...), A, I, default)
+
 ## Dequeue functionality ##
 
 function push!{T}(a::Array{T,1}, item)
@@ -1283,6 +1324,19 @@ end
 
 indmax(a) = findmax(a)[2]
 indmin(a) = findmin(a)[2]
+
+# findin (the index of intersection)
+function findin(v::Vector{Int}, span::Range1)
+    ind = Array(Int, 0)
+    f = first(span)
+    l = last(span)
+    for i in v
+        if f <= i <= l
+            push!(ind, i)
+        end
+    end
+    ind
+end
 
 ## Reductions ##
 

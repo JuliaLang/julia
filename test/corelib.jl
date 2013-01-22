@@ -26,6 +26,14 @@ r = [5:-1:1]
 @test r[4]==2
 @test r[5]==1
 
+let
+    span = 5:20
+    r = -7:3:42
+    @test findin(r, span) == 5:10
+    r = 15:-2:-38
+    @test findin(r, span) == 1:6
+end
+
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
 @test X[2,3] == 8

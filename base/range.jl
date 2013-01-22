@@ -160,6 +160,25 @@ function intersect(r::Range1, s::Range)
 end
 intersect(r::Range, s::Range1) = intersect(s, r)
 
+# findin (the index of intersection)
+function findin(r::Ranges, span::Range1)
+    local ifirst
+    local ilast
+    fspan = first(span)
+    lspan = last(span)
+    fr = first(r)
+    lr = last(r)
+    sr = step(r)
+    if sr > 0
+        ifirst = fr >= fspan ? 1 : iceil((fspan-fr)/sr)+1
+        ilast = lr <= lspan ? length(r) : length(r) - iceil((lr-lspan)/sr)
+    else
+        ifirst = fr <= lspan ? 1 : iceil((lspan-fr)/sr)+1
+        ilast = lr >= fspan ? length(r) : length(r) - iceil((lr-fspan)/sr)
+    end
+    ifirst:ilast
+end
+
 ## linear operations on ranges ##
 
 -(r::Ranges) = Range(-r.start, -step(r), r.len)

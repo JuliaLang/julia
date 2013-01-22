@@ -567,6 +567,7 @@ export
     fill,
     fill!,
     find,
+    findin,
     findmax,
     findmin,
     findn,
