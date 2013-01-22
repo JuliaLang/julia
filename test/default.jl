@@ -11,6 +11,7 @@ runtests("iostring")
 # array/matrix tests
 runtests("arrayops")
 runtests("linalg")
+runtests("blas")
 runtests("fft")
 runtests("dct")
 runtests("sparse")
