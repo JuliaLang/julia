@@ -497,7 +497,7 @@ type Graph
     #   Each mask has dimension spp1 x spp0, where
     #   spp0 is the number of states of p0, and
     #   spp1 is the number of states of p1.
-    gmsk::Vector{Vector{BitMatrix}}
+    gmsk::Vector{Vector{Matrix{Bool}}}
 
     # dependency direction:
     #   keeps track of which direction the dependency goes
@@ -538,7 +538,7 @@ type Graph
         vdict = pkgstruct.vdict
 
         gadj = [ Int[] for i = 1:np ]
-        gmsk = [ BitMatrix[] for i = 1:np ]
+        gmsk = [ Matrix{Bool}[] for i = 1:np ]
         gdir = [ Int[] for i = 1:np ]
         adjdict = [ (Int=>Int)[] for i = 1:np ]
 
@@ -567,7 +567,7 @@ type Graph
                 adjdict[p0][p1] = j0
                 adjdict[p1][p0] = j1
 
-                bm = trues(spp[p1], spp[p0])
+                bm = ones(Bool, spp[p1], spp[p0])
                 bmt = bm'
 
                 push!(gmsk[p0], bm)
