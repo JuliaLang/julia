@@ -37,9 +37,6 @@ type MersenneTwister <: AbstractRNG
     end
 end
 
-# MersenneTwister is the default RNG.
-const RNG = MersenneTwister
-
 function srand(r::MersenneTwister, seed) 
     r.seed = seed
     dsfmt_init_gen_rand(r.state, seed)
