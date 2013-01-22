@@ -91,11 +91,15 @@ type PkgStruct
     #                   higher the weight, the more favored the version)
     vweight::Vector{Vector{VersionWeight}}
 
+    # has version pruning been performed?
+    # (used for debug purposes only)
+    waspruned::Bool
+
     PkgStruct(spp::Vector{Int}, pdict::Dict{String,Int},
               pvers::Vector{Vector{VersionNumber}},
               vdict::Dict{Version,(Int,Int)},
               vweight::Vector{Vector{VersionWeight}}) =
-        new(spp, pdict, pvers, vdict, vweight)
+        new(spp, pdict, pvers, vdict, vweight, false)
 end
 
 # The initial constructor function (pre variable pruning)
@@ -382,6 +386,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
     pkgstruct.pvers = new_pvers
     pkgstruct.vdict = new_vdict
     pkgstruct.vweight = new_vweight
+    pkgstruct.waspruned = true
 
     #println("pruning stats:")
     #println("  before: vers=$(length(vers)) deps=$(length(deps))")
@@ -1016,9 +1021,8 @@ function verify_sol(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{In
 
 end
 
-# Verifies that the given solution is a local optimium, i.e. that for each
-# installed package, bumping its version would violate some hard constraint
-function verify_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{Int})
+# Push the given solution to a local optimium if needed
+function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{Int})
     np = reqsstruct.np
 
     reqs = reqsstruct.reqs
@@ -1027,93 +1031,103 @@ function verify_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Ve
     pdict = pkgstruct.pdict
     pvers = pkgstruct.pvers
     vdict = pkgstruct.vdict
+    waspruned = pkgstruct.waspruned
 
-    for p0 = 1:np
-        s0 = sol[p0]
-        if s0 >= spp[p0] - 1
-            # either the package is not installed,
-            # or it's already at the maximum version
-            continue
+    # prepare some useful structures
+    # pdeps[p0][v0] has all dependencies of package p0 version v0
+    pdeps = [ [ VersionSet[] for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
+    # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
+    # depends upon
+    prevdeps = [ (Int=>Dict{Int,VersionSet})[] for p0 = 1:np ]
+
+    for d in deps
+        p0, v0 = vdict[d[1]]
+        vs = d[2]
+        push!(pdeps[p0][v0], vs)
+        p1 = pdict[vs.package]
+        if !has(prevdeps[p1], p0)
+            prevdeps[p1][p0] = (Int=>VersionSet)[]
         end
-        # check if bumping would violate a requirement
-        viol = false
-        for r in reqs
-            p = r.package
-            if p0 != pdict[p]
-                continue
-            end
-            v = pvers[p0][s0+1]
-            if !contains(r, Version(p, v))
-                viol = true
-                break
-            end
-        end
-        if viol
-            continue
-        end
-        # check if the higher version has a depencency which
-        # would be violated by the state of the remaining packages
-        for d in deps
-            p0b, v0 = vdict[d[1]]
-            if p0 != p0b || v0 != s0+1
-                # we're looking for the depencencies of the
-                # higher version
-                continue
-            end
-            vs = d[2]
-            p = vs.package
-            p1 = pdict[p]
-            if sol[p1] == spp[p1]
-                # the dependency is violated because
-                # the other package is not being installed
-                viol = true
-                break
-            end
-            v = pvers[p1][sol[p1]]
-            if !contains(vs, Version(p, v))
-                # the dependency is violated because
-                # the other package version is invalid
-                viol = true
-                break
-            end
-        end
-        if viol
-            continue
-        end
-        # check if bumping the version would violate some
-        # dependency of another package
-        for d in deps
-            vs = d[2]
-            p = vs.package
-            if p0 != pdict[p]
-                # we're looking for packages which
-                # depend on this one
-                continue
-            end
-            p1, v1 = vdict[d[1]]
-            if sol[p1] != v1
-                # we're looking for the dependencies
-                # of the (other) installed packages)
-                continue
-            end
-            v = pvers[p0][s0+1]
-            if !contains(vs, Version(p, v))
-                # bumping the version would violate
-                # the dependency
-                viol = true
-                break
-            end
-        end
-        if viol
-            continue
-        end
-        # So the solution is non-optimal
-        # TODO: we should probably update manually and iterate when this happens
-        # (never seen this happen)
-        println(STDERR, "Warning: nonoptimal solution for package $(reqsstruct.pkgs[p0]): sol=$s0")
-        return false
+        prevdeps[p1][p0][v0] = vs
     end
-    return true
+
+    restart = true
+    while restart
+        restart = false
+        for p0 = 1:np
+            s0 = sol[p0]
+            if s0 >= spp[p0] - 1
+                # either the package is not installed,
+                # or it's already at the maximum version
+                continue
+            end
+            viol = false
+            if !waspruned
+                # check if bumping would violate a requirement
+                for r in reqs
+                    p = r.package
+                    if p0 != pdict[p]
+                        continue
+                    end
+                    v = pvers[p0][s0+1]
+                    if !contains(r, Version(p, v))
+                        viol = true
+                        break
+                    end
+                end
+                if viol
+                    continue
+                end
+            end
+            # check if the higher version has a depencency which
+            # would be violated by the state of the remaining packages
+            for vs in pdeps[p0][s0+1]
+                p = vs.package
+                p1 = pdict[p]
+                if sol[p1] == spp[p1]
+                    # the dependency is violated because
+                    # the other package is not being installed
+                    viol = true
+                    break
+                end
+                v = pvers[p1][sol[p1]]
+                if !contains(vs, Version(p, v))
+                    # the dependency is violated because
+                    # the other package version is invalid
+                    viol = true
+                    break
+                end
+            end
+            if viol
+                continue
+            end
+
+            # check if bumping the version would violate some
+            # dependency of another package
+            for (p1,d) in prevdeps[p0]
+                vs = get(d, sol[p1], nothing)
+                if vs == nothing
+                    continue
+                end
+                p = vs.package
+                v = pvers[p0][s0+1]
+                if !contains(vs, Version(p, v))
+                    # bumping the version would violate
+                    # the dependency
+                    viol = true
+                    break
+                end
+            end
+            if viol
+                continue
+            end
+            # So the solution is non-optimal: we bump it manually
+            #println(STDERR, "Warning: nonoptimal solution for package $(reqsstruct.pkgs[p0]): sol=$s0")
+            sol[p0] += 1
+            restart = true
+        end
+    end
+    return
 end
 
 # The external-facing function
@@ -1145,9 +1159,9 @@ function resolve(reqs)
         rethrow(err)
     end
 
-    # verify solution (debug code)
+    # verify solution (debug code) and enforce its optimality
     verify_sol(reqsstruct, pkgstruct, sol)
-    verify_optimality(reqsstruct, pkgstruct, sol)
+    enforce_optimality(reqsstruct, pkgstruct, sol)
 
     # return the solution as a Dict mapping package_name => sha1
     return compute_output_dict(reqsstruct, pkgstruct, sol)
