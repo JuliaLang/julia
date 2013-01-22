@@ -143,11 +143,11 @@ end
 # gegp3 - pivoted QR decomposition
 # gerqf - unpivoted RQ decomposition
 # getrf - LU decomposition
-for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
-    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgerqf_,:dgetrf_,:Float64),
-     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgerqf_,:sgetrf_,:Float32),
-     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgerqf_,:zgetrf_,:Complex128),
-     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgerqf_,:cgetrf_,:Complex64))
+for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty, relty) in
+    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgerqf_,:dgetrf_,:Float64,:Float64),
+     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgerqf_,:sgetrf_,:Float32,:Float32),
+     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
+     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
     @eval begin
         # SUBROUTINE DGEBRD( M, N, A, LDA, D, E, TAUQ, TAUP, WORK, LWORK,
         #                    INFO )
@@ -248,15 +248,14 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
-            Rtyp  = typeof(real(A[1]))
             cmplx = iscomplex(A)
-            if cmplx rwork = Array(Rtyp, 2n) end
+            if cmplx; rwork = Array($relty, 2n); end
             for i in 1:2
                 if cmplx
                     ccall(($(string(geqp3)),liblapack), Void,
                           (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
-                           Ptr{Rtyp}, Ptr{BlasInt}),
+                           Ptr{$relty}, Ptr{BlasInt}),
                           &m, &n, A, &stride(A,2), jpvt, tau, work, &lwork, rwork, info)
                 else
                     ccall(($(string(geqp3)),liblapack), Void,
@@ -455,8 +454,8 @@ for (gels, gesv, getrs, getri, elty) in
         end
     end
 end
-for (gelsd, elty) in ((:dgelsd_, Float64),
-                      (:sgelsd_, Float32))
+for (gelsd, elty) in ((:dgelsd_, :Float64),
+                      (:sgelsd_, :Float32))
     @eval begin
         # SUBROUTINE DGELSD( M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK,
         #      $                   WORK, LWORK, IWORK, INFO )
@@ -503,8 +502,8 @@ for (gelsd, elty) in ((:dgelsd_, Float64),
         gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
     end
 end
-for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
-                             (:cgelsd_, Complex64, Float32))
+for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
+                             (:cgelsd_, :Complex64, :Float32))
     @eval begin
         # SUBROUTINE ZGELSD( M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK,
         #      $                   WORK, LWORK, RWORK, IWORK, INFO )
@@ -556,11 +555,11 @@ for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
 end
 
 # (GE) general matrices eigenvalue-eigenvector and singular value decompositions
-for (geev, gesvd, gesdd, elty) in
-    ((:dgeev_,:dgesvd_,:dgesdd_,:Float64),
-     (:sgeev_,:sgesvd_,:sgesdd_,:Float32),
-     (:zgeev_,:zgesvd_,:zgesdd_,:Complex128),
-     (:cgeev_,:cgesvd_,:cgesdd_,:Complex64))
+for (geev, gesvd, gesdd, elty, relty) in
+    ((:dgeev_,:dgesvd_,:dgesdd_,:Float64,Float64),
+     (:sgeev_,:sgesvd_,:sgesdd_,:Float32,:Float32),
+     (:zgeev_,:zgesvd_,:zgesdd_,:Complex128,:Float64),
+     (:cgeev_,:cgesvd_,:cgesdd_,:Complex64,:Float32))
     @eval begin
         #      SUBROUTINE DGEEV( JOBVL, JOBVR, N, A, LDA, WR, WI, VL, LDVL, VR,
         #      $                  LDVR, WORK, LWORK, INFO )
@@ -578,11 +577,10 @@ for (geev, gesvd, gesdd, elty) in
             rvecs = jobvr == 'V'
             VL    = Array($elty, (n, lvecs ? n : 0))
             VR    = Array($elty, (n, rvecs ? n : 0))
-            Rtyp  = typeof(real(A[1]))
             cmplx = iscomplex(A)
             if cmplx
                 W     = Array($elty, n)
-                rwork = Array(Rtyp, 2n)
+                rwork = Array($relty, 2n)
             else
                 WR    = Array($elty, n)
                 WI    = Array($elty, n)
@@ -596,7 +594,7 @@ for (geev, gesvd, gesdd, elty) in
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, 
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                           Ptr{Rtyp}, Ptr{BlasInt}),
+                           Ptr{$relty}, Ptr{BlasInt}),
                           &jobvl, &jobvr, &n, A, &stride(A,2), W, VL, &n, VR, &n,
                           work, &lwork, rwork, info)
                 else
@@ -645,11 +643,10 @@ for (geev, gesvd, gesdd, elty) in
             end
             work   = Array($elty, 1)
             lwork  = blas_int(-1)
-            Rtyp   = typeof(real(A[1]))
-            S      = Array(Rtyp, minmn)
+            S      = Array($relty, minmn)
             cmplx  = iscomplex(A)
             if cmplx
-                rwork = Array(Rtyp, job == 'N' ? 7*minmn : 5*minmn*minmn + 5*minmn)
+                rwork = Array($relty, job == 'N' ? 7*minmn : 5*minmn*minmn + 5*minmn)
             end
             iwork  = Array(BlasInt, 8*minmn)
             info   = Array(BlasInt, 1)
@@ -659,7 +656,7 @@ for (geev, gesvd, gesdd, elty) in
                           (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                           Ptr{Rtyp}, Ptr{BlasInt}, Ptr{BlasInt}),
+                           Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
                           &job, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, iwork, info)
                 else
@@ -693,15 +690,14 @@ for (geev, gesvd, gesdd, elty) in
         #      $                   VT( LDVT, * ), WORK( * )
         function gesvd!(jobu::BlasChar, jobvt::BlasChar, A::StridedMatrix{$elty})
             chkstride1(A)
-            Rtyp   = typeof(real(A[1]))
             m, n   = size(A)
             minmn  = min(m, n)
-            S      = Array(Rtyp, minmn)
+            S      = Array($relty, minmn)
             U      = Array($elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
             VT     = Array($elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
             work   = Array($elty, 1)
             cmplx  = iscomplex(A)
-            if cmplx rwork = Array(Rtyp, 5minmn) end
+            if cmplx; rwork = Array($relty, 5minmn); end
             lwork  = blas_int(-1)
             info   = Array(BlasInt, 1)
             for i in 1:2
@@ -710,7 +706,7 @@ for (geev, gesvd, gesdd, elty) in
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                           Ptr{BlasInt}, Ptr{Rtyp}, Ptr{BlasInt}),
+                           Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                           &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, info)
                 else
@@ -1130,7 +1126,7 @@ end
 ## (TR) triangular matrices: solver and inverse
 for (trtri, trtrs, elty) in
     ((:dtrtri_,:dtrtrs_,:Float64),
-     (:strtri_,:strtrs_,Float32),
+     (:strtri_,:strtrs_,:Float32),
      (:ztrtri_,:ztrtrs_,:Complex128),
      (:ctrtri_,:ctrtrs_,:Complex64))
     @eval begin
@@ -1203,11 +1199,11 @@ end
 
 ## (SY) symmetric matrices - eigendecomposition, Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
-for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
-    ((:dsyconv_,:dsyev_,:dsysv_,:dsytrf_,:dsytri_,:dsytrs_,:Float64),
-     (:ssyconv_,:ssyev_,:ssysv_,:ssytrf_,:ssytri_,:ssytrs_,:Float32),
-     (:zheconv_,:zheev_,:zhesv_,:zhetrf_,:zhetri_,:zhetrs_,:Complex128),
-     (:checonv_,:cheev_,:chesv_,:chetrf_,:chetri_,:chetrs_,:Complex64))
+for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
+    ((:dsyconv_,:dsyev_,:dsysv_,:dsytrf_,:dsytri_,:dsytrs_,:Float64, :Float64),
+     (:ssyconv_,:ssyev_,:ssysv_,:ssytrf_,:ssytri_,:ssytrs_,:Float32, :Float32),
+     (:zheconv_,:zheev_,:zhesv_,:zhetrf_,:zhetri_,:zhetrs_,:Complex128, :Float64),
+     (:checonv_,:cheev_,:chesv_,:chetrf_,:chetri_,:chetrs_,:Complex64, :Float32))
     @eval begin
         #       SUBROUTINE DSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
         # *     .. Scalar Arguments ..
@@ -1239,25 +1235,24 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
             chkstride1(A)
             chksquare(A)
             cmplx = iscomplex(A)
-            Rtyp  = typeof(real(A[1]))
             n     = size(A, 1)
-            W     = Array(Rtyp, n)
+            W     = Array($relty, n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             if cmplx
-                rwork = Array(Rtyp, max(1, 3n-2))
+                rwork = Array($relty, max(1, 3n-2))
             end
             info  = Array(BlasInt, 1)
             for i in 1:2
                 if cmplx
                     ccall(($(string(syev)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                          Ptr{Rtyp}, Ptr{$elty}, Ptr{BlasInt}, Ptr{Rtyp}, Ptr{BlasInt}),
+                          Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                           &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
                 else
                     ccall(($(string(syev)),liblapack), Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                          Ptr{Rtyp}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                          Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                           &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, info)
                 end
                 if info[1] != 0 throw(LapackException(info[1])) end

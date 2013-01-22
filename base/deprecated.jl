@@ -23,9 +23,6 @@ end
 @deprecate  idump         xdump
 @deprecate  cwd           pwd
 @deprecate  strlen        length
-@deprecate  chi2rnd       randchi2
-@deprecate  betarnd       randbeta
-@deprecate  exprnd        randexp
 @deprecate  islogical     isbool
 @deprecate  csvread       readcsv
 @deprecate  dlmread       readdlm
@@ -35,3 +32,23 @@ end
 @deprecate  uc            uppercase
 @deprecate  nCr           binomial
 @deprecate  julia_pkgdir  Pkg.dir
+@deprecate  chi2rnd       randchi2
+@deprecate  betarnd       randbeta
+@deprecate  exprnd        randexp
+
+randi(x...) = error("randi is deprecated. Instead use: rand(r::Range)")
+
+randival(x...) = error("randi is deprecated. Instead use: rand(r::Range)")
+
+randexp(x...) = error("randexp is deprecated. Instead use the Distributions package:
+    using Distributions; rand(Exponential())")
+
+randg(x...) = error("randg is deprecated. Instead use the Distributions package:
+    using Distributions; rand(Gamma())")
+
+randbeta(x...) = error("randbeta is deprecated. Instead use the Distributions package:
+    using Distributions; rand(Beta)")
+
+randchi2(x...) = error("randbeta is deprecated. Instead use the Distributions package:
+    using Distributions; rand(Chisq())")
+
