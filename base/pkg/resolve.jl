@@ -30,8 +30,8 @@ type ResolveParams
         if accuracy <= 0
             error("error: JULIA_PKGRESOLVE_ACCURACY must be >= 1")
         end
-        nondec_iterations = accuracy * 6
-        dec_interval = accuracy * 3
+        nondec_iterations = accuracy * 20
+        dec_interval = accuracy * 10
         dec_fraction = 0.05 / accuracy
         return new(nondec_iterations, dec_interval, dec_fraction)
     end
