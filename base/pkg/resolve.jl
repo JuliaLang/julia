@@ -856,7 +856,7 @@ function iterate(graph::Graph, msgs::Messages)
     return maxdiff
 end
 
-function decimate1(p0::Int, msgs::Messages)
+function decimate1(p0::Int, graph::Graph, msgs::Messages)
     @assert !msgs.decimated[p0]
     fld0 = msgs.fld[p0]
     s0 = indmax(fld0)
@@ -866,6 +866,7 @@ function decimate1(p0::Int, msgs::Messages)
             fld0[v0] -= FieldValue(1)
         end
     end
+    update(p0, graph, msgs)
     msgs.decimated[p0] = true
     msgs.num_nondecimated -= 1
 end
@@ -882,7 +883,7 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
         if decimated[p0]
             continue
         end
-        decimate1(p0, msgs)
+        decimate1(p0, graph, msgs)
         n -= 1
         if n == 0
             break
