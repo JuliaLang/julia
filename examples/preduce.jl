@@ -28,7 +28,7 @@ function sum(v::DArray)
 end
 
 function reduce(f, v::DArray)
-    mapreduce(f, fetch,
+    mapreduce(fetch, f,
               { @spawnat p reduce(f,localize(v)) for p = procs(v) })
 end
 

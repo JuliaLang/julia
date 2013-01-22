@@ -30,8 +30,8 @@ type ResolveParams
         if accuracy <= 0
             error("error: JULIA_PKGRESOLVE_ACCURACY must be >= 1")
         end
-        nondec_iterations = accuracy * 6
-        dec_interval = accuracy * 3
+        nondec_iterations = accuracy * 20
+        dec_interval = accuracy * 10
         dec_fraction = 0.05 / accuracy
         return new(nondec_iterations, dec_interval, dec_fraction)
     end
@@ -91,11 +91,15 @@ type PkgStruct
     #                   higher the weight, the more favored the version)
     vweight::Vector{Vector{VersionWeight}}
 
+    # has version pruning been performed?
+    # (used for debug purposes only)
+    waspruned::Bool
+
     PkgStruct(spp::Vector{Int}, pdict::Dict{String,Int},
               pvers::Vector{Vector{VersionNumber}},
               vdict::Dict{Version,(Int,Int)},
               vweight::Vector{Vector{VersionWeight}}) =
-        new(spp, pdict, pvers, vdict, vweight)
+        new(spp, pdict, pvers, vdict, vweight, false)
 end
 
 # The initial constructor function (pre variable pruning)
@@ -382,6 +386,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct)
     pkgstruct.pvers = new_pvers
     pkgstruct.vdict = new_vdict
     pkgstruct.vweight = new_vweight
+    pkgstruct.waspruned = true
 
     #println("pruning stats:")
     #println("  before: vers=$(length(vers)) deps=$(length(deps))")
@@ -433,17 +438,37 @@ typemax(::Type{FieldValue}) = FieldValue([typemax(Int) for i = 1:5])
 function (<)(a::FieldValue, b::FieldValue)
     va = a.v
     vb = b.v
-    return va[1] < vb[1] || (va[1] == vb[1] &&
-           (va[2] < vb[2] || (va[2] == vb[2] &&
-           (va[3] < vb[3] || (va[3] == vb[3] &&
-           (va[4] < vb[4] || (va[4] == vb[4] &&
-           va[5] < vb[5])))))))
+    va[1] < vb[1] && return true
+    va[1] > vb[1] && return false
+    va[2] < vb[2] && return true
+    va[2] > vb[2] && return false
+    va[3] < vb[3] && return true
+    va[3] > vb[3] && return false
+    va[4] < vb[4] && return true
+    va[4] > vb[4] && return false
+    va[5] < vb[5] && return true
+    return false
 end
 
 isless(a::FieldValue, b::FieldValue) = a < b
 
 abs(a::FieldValue) = FieldValue(abs(a.v))
 abs(v::Vector{FieldValue}) = FieldValue[abs(a) for a in v]
+
+# A faster, in-place version of
+#   a += FieldValue(0,0,0,x,0)
+# where the position of the x is set by n
+inplaceadd!(a::FieldValue, x::Int, n::Int) = (a.v[n] = x)
+
+# A faster, in-place version of
+#   a += b
+function inplaceadd!(a::FieldValue, b::FieldValue)
+    av = a.v
+    bv = b.v
+    for i = 1:5
+        av[i] += bv[i]
+    end
+end
 
 # if the maximum field has l0 < 0, it means that
 # some hard constraint is being violated
@@ -497,7 +522,7 @@ type Graph
     #   Each mask has dimension spp1 x spp0, where
     #   spp0 is the number of states of p0, and
     #   spp1 is the number of states of p1.
-    gmsk::Vector{Vector{BitMatrix}}
+    gmsk::Vector{Vector{Matrix{Bool}}}
 
     # dependency direction:
     #   keeps track of which direction the dependency goes
@@ -514,7 +539,7 @@ type Graph
 
     # adjacency dict:
     #   allows to retrieve the indices in gadj, so that
-    #   gadj[p0][adjdict[p0][p1]] = p1
+    #   gadj[p0][adjdict[p1][p0]] = p1
     adjdict::Vector{Dict{Int,Int}}
 
     # states per package: same as in PkgStruct
@@ -538,7 +563,7 @@ type Graph
         vdict = pkgstruct.vdict
 
         gadj = [ Int[] for i = 1:np ]
-        gmsk = [ BitMatrix[] for i = 1:np ]
+        gmsk = [ Matrix{Bool}[] for i = 1:np ]
         gdir = [ Int[] for i = 1:np ]
         adjdict = [ (Int=>Int)[] for i = 1:np ]
 
@@ -564,10 +589,10 @@ type Graph
                 j0 = length(gadj[p0])
                 j1 = length(gadj[p1])
 
-                adjdict[p0][p1] = j0
-                adjdict[p1][p0] = j1
+                adjdict[p1][p0] = j0
+                adjdict[p0][p1] = j1
 
-                bm = trues(spp[p1], spp[p0])
+                bm = ones(Bool, spp[p1], spp[p0])
                 bmt = bm'
 
                 push!(gmsk[p0], bm)
@@ -716,6 +741,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
     np = graph.np
     msg = msgs.msg
     fld = msgs.fld
+    decimated = msgs.decimated
 
     maxdiff = zero(FieldValue)
 
@@ -723,13 +749,17 @@ function update(p0::Int, graph::Graph, msgs::Messages)
     msg0 = msg[p0]
     fld0 = fld[p0]
     spp0 = spp[p0]
+    adjdict0 = adjdict[p0]
 
     # iterate over all neighbors of p0
     for j0 in 1:length(gadj0)
 
         p1 = gadj0[j0]
-        j1 = adjdict[p1][p0]
-        #@assert j0 == adjdict[p0][p1]
+        if decimated[p1]
+            continue
+        end
+        j1 = adjdict0[p1]
+        #@assert j0 == adjdict[p1][p0]
         bm1 = gmsk[p1][j1]
         dir1 = gdir[p1][j1]
         spp1 = spp[p1]
@@ -741,7 +771,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         if dir1 == -1
             # p0 depends on p1
             for v0 = 1:spp0-1
-                cavmsg[v0] += FieldValue(0,0,0,v0)
+                inplaceadd!(cavmsg[v0], v0, 4)
             end
         end
 
@@ -765,11 +795,11 @@ function update(p0::Int, graph::Graph, msgs::Messages)
             end
             if dir1 == 1 && v1 != spp1
                 # p1 depends on p0
+                # Note: cannot use inplaceadd! here since it may
+                #       mutate cavmsg
                 newmsg[v1] += FieldValue(0,0,0,v1)
             end
-            if newmsg[v1] > m
-                m = newmsg[v1]
-            end
+            m = max(m, newmsg[v1])
         end
         if !validmax(m)
             # No state available without violating some
@@ -782,14 +812,14 @@ function update(p0::Int, graph::Graph, msgs::Messages)
             newmsg[v1] -= m
         end
 
-        absdiff = max(abs(newmsg - oldmsg))
-        maxdiff = max(maxdiff, absdiff)
-
+        diff = newmsg - oldmsg
+        maxabsdiff = max(abs(diff))
+        maxdiff = max(maxdiff, maxabsdiff)
 
         # update the field of p1
         fld1 = fld[p1]
         for v1 = 1:spp1
-            fld1[v1] += newmsg[v1] - oldmsg[v1]
+            inplaceadd!(fld1[v1], diff[v1])
         end
 
         # put the newly computed message in place
@@ -831,7 +861,7 @@ function iterate(graph::Graph, msgs::Messages)
     return maxdiff
 end
 
-function decimate1(p0::Int, msgs::Messages)
+function decimate1(p0::Int, graph::Graph, msgs::Messages)
     @assert !msgs.decimated[p0]
     fld0 = msgs.fld[p0]
     s0 = indmax(fld0)
@@ -841,6 +871,7 @@ function decimate1(p0::Int, msgs::Messages)
             fld0[v0] -= FieldValue(1)
         end
     end
+    update(p0, graph, msgs)
     msgs.decimated[p0] = true
     msgs.num_nondecimated -= 1
 end
@@ -857,7 +888,7 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
         if decimated[p0]
             continue
         end
-        decimate1(p0, msgs)
+        decimate1(p0, graph, msgs)
         n -= 1
         if n == 0
             break
@@ -922,6 +953,14 @@ function converge(graph::Graph, msgs::Messages)
         end
     end
 
+    # Finally, decimate everything just to
+    # check against inconsistencies
+    # (old_numnondec is saved just to prevent
+    # wrong messages about accuracy)
+    old_numnondec = msgs.num_nondecimated
+    decimate(msgs.num_nondecimated, graph, msgs)
+    msgs.num_nondecimated = old_numnondec
+
     return getsolution(msgs)
 end
 
@@ -982,9 +1021,8 @@ function verify_sol(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{In
 
 end
 
-# Verifies that the given solution is a local optimium, i.e. that for each
-# installed package, bumping its version would violate some hard constraint
-function verify_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{Int})
+# Push the given solution to a local optimium if needed
+function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{Int})
     np = reqsstruct.np
 
     reqs = reqsstruct.reqs
@@ -993,93 +1031,103 @@ function verify_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Ve
     pdict = pkgstruct.pdict
     pvers = pkgstruct.pvers
     vdict = pkgstruct.vdict
+    waspruned = pkgstruct.waspruned
 
-    for p0 = 1:np
-        s0 = sol[p0]
-        if s0 >= spp[p0] - 1
-            # either the package is not installed,
-            # or it's already at the maximum version
-            continue
+    # prepare some useful structures
+    # pdeps[p0][v0] has all dependencies of package p0 version v0
+    pdeps = [ [ VersionSet[] for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
+    # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
+    # depends upon
+    prevdeps = [ (Int=>Dict{Int,VersionSet})[] for p0 = 1:np ]
+
+    for d in deps
+        p0, v0 = vdict[d[1]]
+        vs = d[2]
+        push!(pdeps[p0][v0], vs)
+        p1 = pdict[vs.package]
+        if !has(prevdeps[p1], p0)
+            prevdeps[p1][p0] = (Int=>VersionSet)[]
         end
-        # check if bumping would violate a requirement
-        viol = false
-        for r in reqs
-            p = r.package
-            if p0 != pdict[p]
-                continue
-            end
-            v = pvers[p0][s0+1]
-            if !contains(r, Version(p, v))
-                viol = true
-                break
-            end
-        end
-        if viol
-            continue
-        end
-        # check if the higher version has a depencency which
-        # would be violated by the state of the remaining packages
-        for d in deps
-            p0b, v0 = vdict[d[1]]
-            if p0 != p0b || v0 != s0+1
-                # we're looking for the depencencies of the
-                # higher version
-                continue
-            end
-            vs = d[2]
-            p = vs.package
-            p1 = pdict[p]
-            if sol[p1] == spp[p1]
-                # the dependency is violated because
-                # the other package is not being installed
-                viol = true
-                break
-            end
-            v = pvers[p1][sol[p1]]
-            if !contains(vs, Version(p, v))
-                # the dependency is violated because
-                # the other package version is invalid
-                viol = true
-                break
-            end
-        end
-        if viol
-            continue
-        end
-        # check if bumping the version would violate some
-        # dependency of another package
-        for d in deps
-            vs = d[2]
-            p = vs.package
-            if p0 != pdict[p]
-                # we're looking for packages which
-                # depend on this one
-                continue
-            end
-            p1, v1 = vdict[d[1]]
-            if sol[p1] != v1
-                # we're looking for the dependencies
-                # of the (other) installed packages)
-                continue
-            end
-            v = pvers[p0][s0+1]
-            if !contains(vs, Version(p, v))
-                # bumping the version would violate
-                # the dependency
-                viol = true
-                break
-            end
-        end
-        if viol
-            continue
-        end
-        # So the solution is non-optimal
-        # TODO: we should probably update manually and iterate when this happens
-        # (never seen this happen)
-        println(STDERR, "Warning: nonoptimal solution for package $(reqsstruct.pkgs[p0]): sol=$s0")
-        return false
+        prevdeps[p1][p0][v0] = vs
     end
-    return true
+
+    restart = true
+    while restart
+        restart = false
+        for p0 = 1:np
+            s0 = sol[p0]
+            if s0 >= spp[p0] - 1
+                # either the package is not installed,
+                # or it's already at the maximum version
+                continue
+            end
+            viol = false
+            if !waspruned
+                # check if bumping would violate a requirement
+                for r in reqs
+                    p = r.package
+                    if p0 != pdict[p]
+                        continue
+                    end
+                    v = pvers[p0][s0+1]
+                    if !contains(r, Version(p, v))
+                        viol = true
+                        break
+                    end
+                end
+                if viol
+                    continue
+                end
+            end
+            # check if the higher version has a depencency which
+            # would be violated by the state of the remaining packages
+            for vs in pdeps[p0][s0+1]
+                p = vs.package
+                p1 = pdict[p]
+                if sol[p1] == spp[p1]
+                    # the dependency is violated because
+                    # the other package is not being installed
+                    viol = true
+                    break
+                end
+                v = pvers[p1][sol[p1]]
+                if !contains(vs, Version(p, v))
+                    # the dependency is violated because
+                    # the other package version is invalid
+                    viol = true
+                    break
+                end
+            end
+            if viol
+                continue
+            end
+
+            # check if bumping the version would violate some
+            # dependency of another package
+            for (p1,d) in prevdeps[p0]
+                vs = get(d, sol[p1], nothing)
+                if vs == nothing
+                    continue
+                end
+                p = vs.package
+                v = pvers[p0][s0+1]
+                if !contains(vs, Version(p, v))
+                    # bumping the version would violate
+                    # the dependency
+                    viol = true
+                    break
+                end
+            end
+            if viol
+                continue
+            end
+            # So the solution is non-optimal: we bump it manually
+            #println(STDERR, "Warning: nonoptimal solution for package $(reqsstruct.pkgs[p0]): sol=$s0")
+            sol[p0] += 1
+            restart = true
+        end
+    end
+    return
 end
 
 # The external-facing function
@@ -1111,9 +1159,9 @@ function resolve(reqs)
         rethrow(err)
     end
 
-    # verify solution (debug code)
+    # verify solution (debug code) and enforce its optimality
     verify_sol(reqsstruct, pkgstruct, sol)
-    verify_optimality(reqsstruct, pkgstruct, sol)
+    enforce_optimality(reqsstruct, pkgstruct, sol)
 
     # return the solution as a Dict mapping package_name => sha1
     return compute_output_dict(reqsstruct, pkgstruct, sol)

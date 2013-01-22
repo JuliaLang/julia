@@ -127,6 +127,10 @@ chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(d.chunks[i...])::A
 
 ## convenience constructors ##
 
+dzeros(args...) = DArray(I->zeros(map(length,I)), args...)
+dzeros(d::Int...) = dzeros(d)
+dones(args...) = DArray(I->ones(map(length,I)), args...)
+dones(d::Int...) = dones(d)
 drand(args...)  = DArray(I->rand(map(length,I)), args...)
 drand(d::Int...) = drand(d)
 drandn(args...) = DArray(I->randn(map(length,I)), args...)
