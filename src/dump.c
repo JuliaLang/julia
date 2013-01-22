@@ -628,7 +628,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->specTypes = (jl_tuple_t*)jl_deserialize_value(s);
         li->specializations = (jl_array_t*)jl_deserialize_value(s);
         li->inferred = read_int8(s);
-        li->file = jl_deserialize_value(s);
+        li->file = (jl_sym_t*)jl_deserialize_value(s);
         li->line = read_int32(s);
         li->module = (jl_module_t*)jl_deserialize_value(s);
         li->roots = (jl_array_t*)jl_deserialize_value(s);
