@@ -137,10 +137,10 @@ randi(::Type{Int128})  = int128(randi(Uint128)) & typemax(Int128)
 randi() = randi(Int)
 
 # random integer from lo to hi inclusive
-function randival{T<:Integer}(lo::T, hi::T)
-    if lo > hi
-        error("randi: invalid range")
-    end
+function rand{T<:Integer}(r::Range1{T})
+    lo = r[1]
+    hi = r[end]
+
     m = typemax(T)
     s = randi(T)
     if (hi-lo == m)
@@ -159,27 +159,15 @@ function randival{T<:Integer}(lo::T, hi::T)
     return rem(s,r) + lo
 end
 
-function randival!{T<:Integer}(lo, hi, A::Array{T})
-    lo = convert(T,lo)
-    hi = convert(T,hi)
-    for i = 1:length(A)
-        A[i] = randival(lo, hi)
+function rand!{T<:Integer}(r::Range1{T}, A::Array{T})
+    for i=1:length(A) 
+        A[i] = rand(r)
     end
     return A
 end
-randival{T<:Integer}(lo::T, hi::T, dims::Dims) = randival!(lo, hi, Array(T, dims))
-randival(lo, hi, dims::Dims)   = randival(promote(lo, hi)..., dims)
-randival(lo, hi, dims::Int...) = randival(lo, hi, dims)
 
-randi!(max::Integer, A::Array)         = randival!(one(max), max, A)
-randi!(r::(Integer,Integer), A::Array) = randival!(r[1], r[2], A)
-
-randi(max::Integer)                    = randival(one(max), max)
-randi(max::Integer, dims::Dims)        = randival(one(max), max, dims)
-randi(max::Integer, dims::Int...)      = randival(one(max), max, dims)
-randi(r::(Integer,Integer))               = randival(r[1], r[2])
-randi(r::(Integer,Integer), dims::Dims)   = randival(r[1], r[2], dims)
-randi(r::(Integer,Integer), dims::Int...) = randival(r[1], r[2], dims)
+rand{T<:Integer}(r::Range1{T}, dims::Dims) = rand!(r, Array(T, dims))
+rand{T<:Integer}(r::Range1{T}, dims::Int...) = rand(r, dims)
 
 ## random Bools
 
@@ -189,15 +177,8 @@ randbool(dims::Dims) = rand!(BitArray(dims))
 randbool(dims::Int...) = rand!(BitArray(dims))
 
 randbool() = ((dsfmt_randui32() & 1) == 1)
-
 randbool!(B::BitArray) = rand!(B)
-
-function randbool!(A::Array)
-    for i = 1:length(A)
-        A[i] = randbool()
-    end
-    return A
-end
+randbool!(A::Array) = [ randbool() for i in 1:length(A) ]
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
@@ -215,73 +196,5 @@ randexp() = randmtzig_exprnd()
 randexp!(A::Array{Float64}) = randmtzig_fill_exprnd!(A)
 randexp(dims::Dims) = randexp!(Array(Float64, dims))
 randexp(dims::Int...) = randexp(dims)
-
-## randg()
-
-# A simple method for generating gamma variables - Marsaglia and Tsang (2000)
-# http://www.cparity.com/projects/AcmClassification/samples/358414.pdf
-# Page 369
-
-# basic simulation loop for pre-computed d and c
-function randg2(d::Float64, c::Float64) 
-    while true
-        x = v = 0.0
-        while v <= 0.0
-            x = randn()
-            v = 1.0 + c*x
-        end
-        v = v^3
-        U = rand()
-        x2 = x^2
-        if U < 1.0-0.331*x2^2 || log(U) < 0.5*x2+d*(1.0-v+log(v))
-            return d*v
-        end
-    end
-end
-
-function randg!(a::Real, A::Array{Float64})
-    if a <= 0. error("shape parameter a must be > 0") end
-    d = (a <= 1. ? a + 1 : a) - 1.0/3.0
-    c = 1.0/sqrt(9.0d)
-    for i in 1:length(A) A[i] = randg2(d, c) end
-    if a <= 1.
-        ainv = 1./a
-        for i in 1:length(A) A[i] *= rand()^ainv end
-    end
-    A
-end
-
-function randg(a::Real)
-    if a <= 0. error("shape parameter a must be > 0") end
-    d = (a <= 1. ? a + 1 : a) - 1.0/3.0
-    randg2(d, 1.0/sqrt(9.0d)) * (a > 1. ? 1. : rand()^(1./a))
-end
-
-randg(a::Real, dims::Dims) = randg!(a, Array(Float64, dims))
-randg(a::Real, dims::Int...) = randg(a, dims)
-
-## randchi2 - the distribution chi^2(df) is 2*gamma(df/2)
-## for integer n, a chi^2(n) is the sum of n squared standard normals
-
-function randchi2!(df::Real, A::Array{Float64})
-    if df == 1
-        for i in 1:length(A)
-            A[i] = randn()^2
-            end
-        return A
-    end
-    d = df >= 2 ? df/2. - 1.0/3.0 : error("require degrees of freedom df >= 2")
-    c = 1.0/sqrt(9.0d)
-    for i in 1:length(A) A[i] = 2.randg2(d,c) end
-    A
-end
-
-randchi2(df::Real) = df == 1 ? randn()^2 : 2.randg(df/2.)
-randchi2(df::Real, dims::Dims) = randchi2!(df, Array(Float64, dims))
-randchi2(df::Real, dims::Int...) = randchi2(df, dims)
-
-randbeta(alpha::Real, beta::Real) = (u = randg(alpha); u / (u + randg(beta)))
-randbeta(alpha::Real, beta::Real, dims::Dims) = (u = randg(alpha, dims); u ./ (u + randg(beta, dims)))
-randbeta(alpha::Real, beta::Real, dims::Int...) = randbeta(alpha, beta, dims)
 
 end # module
