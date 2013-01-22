@@ -2,6 +2,7 @@
 {% set sidebar_width = '230px' %}
 
 @import url("basic.css");
+@import url(http://fonts.googleapis.com/css?family=Rokkitt:400,700|Lato:400,700,400italic);
 
 /* general site formatting */
 
@@ -13,15 +14,35 @@
 body {
   background-color: #fff;
   color: #000;
-  font: 11.5pt Georgia, Arial, sans-serif;
+  font: 11.5pt Lato, 'Helvetica Neue', Helvetica, Arial, sans-serif;
   line-height: 1.5;
 }
 
+h1,h2,h3,h4,h5,h6 {
+  font-family: Rokkitt, sans-serif;
+}
+
 div.related {
-  background: #eee;
-  border-bottom: 1px solid #ddd;
-  margin: 0;
-  padding: 0.5em;
+  background: #000;
+  color: #fff;
+  z-index: 100;
+}
+
+div.related,
+div.related a,
+div.related a:visited {
+  color: #fff;
+}
+
+div.related li {
+  display: block;
+  float: left;
+  margin-left: 3px;
+  margin-right: 3px;
+}
+
+div.related li.right {
+  margin-left: 0px;
 }
 
 div.sphinxsidebar {
@@ -29,7 +50,7 @@ div.sphinxsidebar {
 }
 
 div.document {
-  margin: 3em auto 0 auto;
+  margin: 46px auto 0 auto;
 }
 
 @media screen and (min-width: 768px) {
@@ -37,6 +58,7 @@ div.document {
     position: fixed;
     left: 0;
     top: 0;
+    padding: 0.5em;
   }
 }
 
@@ -63,6 +85,9 @@ div.sphinxsidebar {
   margin-left: inherit;
   width: {{ sidebar_width }};
   position: fixed;
+  top: 46px;
+  bottom: 0;
+  overflow-y: auto;
 }
 
 div.footer {
@@ -77,11 +102,6 @@ div.body {
 div.header {
   margin: auto auto auto auto
 }
-  div.header .title {
-    font-weight: bold;
-    margin-bottom: 2em;
-    margin-top: 2.5em;
-  }
   div.header .links {
     text-align: center;
     margin: 0
@@ -90,23 +110,7 @@ div.header {
       text-decoration: none;
     }
 
-.title, h1, h2, h3, h4, h5, h6 {
-  font-family: Helvetica, Arial, Clean, sans-serif;
-  font-size: 105%;
-}
-
-.title {
-  text-align: center;
-  font-size: 130%;
-}
-
-h1 {
-  font-size: 110%;
-  padding-top: 1ex;
-  margin: 1em 0;
-}
-
-h2 {
+h1,h2 {
   padding-top: 1ex;
   margin: 1em 0;
 }
@@ -116,10 +120,10 @@ p {
 }
 
 a {
-  color: #00b;
+  color: #aa0000;
   text-decoration: none;
 }
-  a:visited { color: #88b; }
+  a:visited { color: #550000; }
   a:hover   { text-decoration: underline; }
 
 ol,ul {
@@ -149,7 +153,9 @@ dl dt big, span.optional {
   .figure p.note { font-size: 75%; }
 
 div.footer {
+/*
   border-top: 1px solid #ddd;
+*/
   color: #999;
   font-size: smaller;
   font-style: italic;
@@ -161,7 +167,7 @@ div.footer {
 /* code blocks, tables, and blockquotes */
 
 code,tt,pre {
-  font: 80% Menlo, Consolas, Monaco, 'Source Code Pro', 'DejaVu Sans Mono', 'Courier New', Courier, monospace;
+  font: 10pt Menlo, Consolas, Monaco, 'Source Code Pro', 'DejaVu Sans Mono', 'Courier New', Courier, monospace;
 }
 
 blockquote,table {
@@ -186,7 +192,6 @@ table.docutils td, table.docutils th {
 }
 
 .chaplink {
-  font-family: Helvetica, Arial, Clean, sans-serif;
   font-size: 90%;
 }
 .prevlink {
@@ -196,23 +201,32 @@ table.docutils td, table.docutils th {
   float: right;
 }
 
+div.sidebar {
+  font-size: smaller;
+  margin: 0.75em 0 0.75em 0.75em;
+  padding: 0.75em;
+}
+div.sidebar p {
+  margin: 0;
+}
+
+/*
 div.sphinxsidebarview::-webkit-scrollbar {
   -webkit-appearance: none;
   width: 0px;
 }
+*/
 
 div.sphinxsidebarwrapper {
   padding: 20px 10px;
 }
 
 div.sphinxsidebar h3 {
-  font-family: Helvetica, Arial, Clean, sans-serif;
   font-size: 1.4em;
   font-weight: normal;
 }
 
 div.sphinxsidebar h4 {
-  font-family: Helvetica, Arial, sans-serif;
   font-size: 1.3em;
   font-weight: normal;
   margin: 5px 0 0 0;
@@ -228,11 +242,14 @@ div.sphinxsidebar ul {
   padding: 0;
 }
 
+div.sphinxsidebar input {
+  font-family: Lato, sans-serif;
+}
+
 div.sphinxsidebar #searchbox table {
   border: 1px solid #ddd;
   border-radius: 3px;
   border-spacing: 0;
-  font-family: sans-serif;
   font-size: 1em;
   padding: 0;
   margin: 0 5px 0 0;
