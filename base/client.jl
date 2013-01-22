@@ -157,7 +157,6 @@ function run_repl()
     if have_color
         print(color_normal)
     end
-    println()
 end
 
 function parse_input_line(s::String)
