@@ -404,8 +404,8 @@ end
 
 function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v)
     numnz = int(m*n*density)
-    I = randival!(1, m, Array(Int, numnz))
-    J = randival!(1, n, Array(Int, numnz))
+    I = rand!(1:m, Array(Int, numnz))
+    J = rand!(1:n, Array(Int, numnz))
     S = sparse(I, J, v, m, n)
     if !isbool(v)
         S.nzval = rng(nnz(S))

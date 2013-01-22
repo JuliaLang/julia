@@ -44,7 +44,7 @@ for i = -5:.5:4
     @test search_sorted_last_r(rg_r, i) == search_sorted_last_r(rgv_r, i)
 end
 
-a = randi(10000, 1000)
+a = rand(1:10000, 1000)
 
 # insertion_sort
 for _sort in [insertionsort, mergesort, timsort]
