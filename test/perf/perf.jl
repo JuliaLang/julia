@@ -23,7 +23,7 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 function parseintperf(t)
     local n, m
     for i=1:t
-        n = randi(Uint32)
+        n = rand(Uint32)
         s = hex(n)
         m = uint32(parse_hex(s))
     end

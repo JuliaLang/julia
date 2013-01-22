@@ -64,7 +64,7 @@ pascal(n) = [binomial(i+j-2,i-1) for i=1:n,j=1:n]
 
 function shuffle!(a::AbstractVector)
     for i = length(a):-1:2
-        j = randi(i)
+        j = rand(1:i)
         a[i], a[j] = a[j], a[i]
     end
     return a
@@ -76,7 +76,7 @@ function randperm(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
     for i = 2:n
-        j = randi(i)
+        j = rand(1:i)
         a[i] = a[j]
         a[j] = i
     end
@@ -87,7 +87,7 @@ function randcycle(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
     for i = 2:n
-        j = randi(i-1)
+        j = rand(1:i-1)
         a[i] = a[j]
         a[j] = i
     end
