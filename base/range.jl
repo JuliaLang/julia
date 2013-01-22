@@ -250,6 +250,8 @@ function vcat{T}(r::Ranges{T})
     return a
 end
 
+convert{T}(::Type{Array{T,1}}, r::Ranges{T}) = vcat(r)
+
 function vcat{T}(rs::Ranges{T}...)
     n = sum(length,rs)::Int
     a = Array(T,n)

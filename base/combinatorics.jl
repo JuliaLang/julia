@@ -1,5 +1,3 @@
-#import Sort.@in_place_matrix_op
-
 function factorial(n::Integer)
     if n < 0
         return zero(n)

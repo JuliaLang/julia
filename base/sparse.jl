@@ -943,7 +943,7 @@ function ref_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVec
 
     nnzS = 0
 
-    I, pI = sortperm(I)
+    pI = sortperm(I); I = I[pI]
     fI = find(I)
 
     W = zeros(Int, nI + 1) # Keep row counts
@@ -1159,14 +1159,14 @@ function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::
     issortedJ = issorted(J)
 
     if ~issortedI && ~issortedJ
-        I, pI = sortperm(I)
-        J, pJ = sortperm(J)
+        pI = sortperm(I); I = I[pI]
+        pJ = sortperm(J); J = J[pJ]
         B = B[pI, pJ]
     elseif ~issortedI
-        I, pI = sortperm(I)
+        pI = sortperm(I); I = I[pI]
         B = B[pI,:]
     else ~issortedJ
-        J, pJ = sortperm(J)
+        pJ = sortperm(J); J = J[pJ]
         B = B[:, pJ]
     end
 
