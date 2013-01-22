@@ -1346,39 +1346,51 @@ Numbers
 Random Numbers
 --------------
 
-Random numbers are generated in Julia by calling functions from the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_
+Random number generateion in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_. Julia has a global RNG, which is used by default. Multiple RNGs can be plugged in using the ``AbstractRNG`` object, which can then be used to have multiple streams of random numbers. Currently, only ``MersenneTwister`` is supported.
 
-.. function:: rand
+.. function:: srand([rng], seed)
+
+   Seed the RNG with a ``seed``, which may be an unsigned integer or a vector of unsigned integers. ``seed`` can even be a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
+
+.. function:: MersenneTwister([seed])
+
+   Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
+
+.. function:: rand()
 
    Generate a ``Float64`` random number in (0,1)
 
-.. function:: randf
+.. function:: rand!([rng], A)
 
-   Generate a ``Float32`` random number in (0,1)
+   Populate the array A with random number generated from the specified RNG.
 
-.. function:: randi(Int32|Uint32|Int64|Uint64)
+.. function:: rand(rng::AbstractRNG, [dims...])
+
+   Generate a random ``Float64`` number or array of the size specified by dims, using the specified RNG object. Currently, ``MersenneTwister`` is the only available Random Number Generator (RNG), which may be seeded using srand.
+
+.. function:: rand(dims...)
+
+   Generate a random ``Float64`` array of the size specified by dims
+
+.. function:: rand(Int32|Uint32|Int64|Uint64)
 
    Generate a random integer of the given type
 
-.. function:: randi(r)
+.. function:: rand(r, [dims...])
 
-   Generate a random integer from the range ``1:``n`` inclusive
+   Generate a random integer from ``1``:``n`` inclusive. Optionally, generate a random integer array.
 
-.. function:: randi(r, dims...)
+.. function:: randbool([dims...])
 
-   Generate an array of random integers from ``1``:``n`` inclusive
+   Generate a random boolean value. Optionally, generate an array of random boolean values.
 
-.. function:: randbool
+.. function:: randbool!(A)
 
-   Generate a random boolean value
+   Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.   
 
-.. function:: randn
+.. function:: randn([dims...])
 
-   Generate a normally-distributed random number with mean 0 and standard deviation 1
-
-.. function:: srand
-
-   Seed the RNG
+   Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
 
 Arrays
 ------
