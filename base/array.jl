@@ -1740,8 +1740,8 @@ function union(vs...)
     end
     ret
 end
-# uniquediff is like setdiff -- only accepts two args
-function uniquediff(a, b)
+# setdiff only accepts two args
+function setdiff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
     bset = Set(b...)
     ret = Array(args_type,0)
@@ -1754,4 +1754,14 @@ function uniquediff(a, b)
     end
     ret
 end
+# symdiff is associative, so a relatively clean
+# way to implement this is by using setdiff and union, and
+# recursing. Has the advantage of keeping order, too, but
+# not as fast as other methods that make a single pass and
+# store counts with a Dict.
+symdiff(a) = a
+symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
+symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
+
+
 
