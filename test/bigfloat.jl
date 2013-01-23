@@ -1,7 +1,3 @@
-require("gmp")
-
-using GMP
-
 a = BigFloat("12.34567890121")
 b = BigFloat("12.34567890122")
 
