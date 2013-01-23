@@ -53,6 +53,10 @@ div.document {
   margin: 46px auto 0 auto;
 }
 
+div.footerwrapper {
+  margin: 3em auto 3em auto;
+}
+
 @media screen and (min-width: 768px) {
   div.related {
     position: fixed;
@@ -64,7 +68,8 @@ div.document {
 
 @media screen and (min-width: {{ page_width }}) {
 
-div.document {
+div.document,
+div.footerwrapper {
   width: {{ page_width }};
 }
 
@@ -73,7 +78,8 @@ div.documentwrapper {
   width: 100%;
 }
 
-div.bodywrapper {
+div.bodywrapper,
+div.footer {
   margin: 0 0 0 {{ sidebar_width }};
 }
 
@@ -88,10 +94,6 @@ div.sphinxsidebar {
   top: 46px;
   bottom: 0;
   overflow-y: auto;
-}
-
-div.footer {
-  width: {{ page_width }};
 }
 }
 
@@ -153,15 +155,8 @@ dl dt big, span.optional {
   .figure p.note { font-size: 75%; }
 
 div.footer {
-/*
-  border-top: 1px solid #ddd;
-*/
-  color: #999;
   font-size: smaller;
   font-style: italic;
-  margin: 3em auto 2em auto;
-  padding-top: 1.5em;
-  text-align: right;
 }
 
 /* code blocks, tables, and blockquotes */
@@ -210,12 +205,10 @@ div.sidebar p {
   margin: 0;
 }
 
-/*
-div.sphinxsidebarview::-webkit-scrollbar {
+div.sphinxsidebar::-webkit-scrollbar {
   -webkit-appearance: none;
   width: 0px;
 }
-*/
 
 div.sphinxsidebarwrapper {
   padding: 20px 10px;

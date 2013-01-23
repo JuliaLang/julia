@@ -1,5 +1,8 @@
 {% extends "basic/layout.html" %}
 
+{# Silence the relbar's #}
+{% block relbar2 %}{% endblock %}
+
 {% block rootrellink %}
 <li><a href="http://julialang.org/">Julia</a>{{ reldelim1 }}</li>
 <li><a href="{{ pathto('index') }}">Documentation</a>{{ reldelim1 }}</li>
@@ -11,5 +14,19 @@
 </style>
 {% endblock %}
 
-{# Silence the relbar's #}
-{% block relbar2 %}{% endblock %}
+{% block footer %}
+<div class="footerwrapper">
+  <div class="footer">
+    {% if prev %}
+    <div class="prevlink">
+      <a href="{{ prev.link }}">&laquo; {{ prev.title }}</a>
+    </div>
+    {% endif %}
+    {% if next %}
+    <div class="nextlink">
+      <a href="{{ next.link }}">{{ next.title }} &raquo;</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
