@@ -58,8 +58,8 @@ for structuring and organizing programs.
 
 Footnote 1: In C++ or Java, for example, in a method call like
 obj.meth(arg1,arg2), the object obj "receives" the method call and is
-implicitly passed to the method via the this keyword, rather then as an
-explicit method argument. When the current this object is the receiver
+implicitly passed to the method via the *this* keyword, rather then as an
+explicit method argument. When the current *this* object is the receiver
 of a method call, it can be omitted altogether, writing just
 meth(arg1,arg2), with this implied as the receiving object.
 
@@ -271,7 +271,7 @@ arguments::
     julia> g(2, 3.0)
     8.0
 
-    julia> f(2.0, 3.0)
+    julia> g(2.0, 3.0)
     7.0
 
 Here the call ``g(2.0, 3.0)`` could be handled by either the
@@ -293,7 +293,7 @@ the intersection case::
     julia> g(2, 3.0)
     8.0
 
-    julia> f(2.0, 3.0)
+    julia> g(2.0, 3.0)
     10.0
 
 To suppress Julia's warning, the disambiguating method must be defined
