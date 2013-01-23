@@ -1167,7 +1167,6 @@ export
     takebuf_array,
     takebuf_string,
     truncate,
-    with_output_to_string,
     write,
 
 # multiprocessing
@@ -1232,7 +1231,7 @@ export
     touch,
     mv,
     mkdir,
-	mkpath,
+    mkpath,
     rmdir,
     tmpnam,
     tempdir,
@@ -1265,18 +1264,10 @@ export
     operm,
 
 # external processes
-    cmd_stdin_stream,
-    cmd_stdout_stream,
-    cmds,
     connect,
-    dup2,
     exec,
-    fork,
     getpid,
     ignorestatus,
-    make_pipe,
-    other,
-    output,
     pipeline_error,
     process_exit_status,
     process_exited,
@@ -1289,12 +1280,9 @@ export
     process_term_signal,
     read_from,
     run,
-    setsuccess,
     success,
-    successful,
     system,
     wait,
-    wait_nohang,
     write_to,
 
 # C interface

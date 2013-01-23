@@ -402,20 +402,6 @@ function repr(x)
     takebuf_string(s)
 end
 
-# using this is not recommended
-function with_output_to_string(thunk)
-    global OUTPUT_STREAM
-    oldio = OUTPUT_STREAM
-    m = memio()
-    OUTPUT_STREAM = m
-    try
-        thunk()
-    finally
-        OUTPUT_STREAM = oldio
-    end
-    takebuf_string(m)
-end
-
 write(x) = write(OUTPUT_STREAM::IOStream, x)
 
 function readuntil(s::IOStream, delim::Uint8)
