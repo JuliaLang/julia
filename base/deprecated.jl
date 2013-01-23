@@ -35,3 +35,4 @@ end
 @deprecate  uc            uppercase
 @deprecate  nCr           binomial
 @deprecate  julia_pkgdir  Pkg.dir
+@deprecate  tintersect    typeintersect

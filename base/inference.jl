@@ -47,7 +47,7 @@ is_closed(sv::StaticVarInfo, s::Symbol) = has(sv.cenv, s)
 is_global(sv::StaticVarInfo, s::Symbol) =
     !is_local(sv,s) && !is_closed(sv,s) && !is_static_parameter(sv,s)
 
-tintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
+typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 
 methods(f::Union(Function,CompositeKind),t) = methods(f,t,-1)::Array{Any,1}
 methods(f::Union(Function,CompositeKind),t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
@@ -157,7 +157,7 @@ function static_convert(to::ANY, from::ANY)
         if subtype(from, to)
             return from
         end
-        t = tintersect(from,to)
+        t = typeintersect(from,to)
         return is(t,None) ? to : t
     end
     if is(to,Tuple)
@@ -232,9 +232,9 @@ t_func[typeof] = (1, 1, typeof_tfunc)
 # involving constants: typeassert, tupleref, getfield, fieldtype, apply_type
 # therefore they get their arguments unevaluated
 t_func[typeassert] =
-    (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
+    (2, 2, (A, v, t)->(isType(t) ? typeintersect(v,t.parameters[1]) :
                        isa(t,Tuple) && allp(isType,t) ?
-                           tintersect(v,map(t->t.parameters[1],t)) :
+                           typeintersect(v,map(t->t.parameters[1],t)) :
                        Any))
 
 const tupleref_tfunc = function (A, t, i)
@@ -471,7 +471,7 @@ const limit_tuple_type = function (t::Tuple)
             last = last.parameters[1]
         end
         tail = tuple(t[MAX_TUPLETYPE_LEN:(n-1)]..., last)
-        tail = tintersect(reduce(tmerge, None, tail), Any)
+        tail = typeintersect(reduce(tmerge, None, tail), Any)
         return tuple(t[1:(MAX_TUPLETYPE_LEN-1)]..., ...{tail})
     end
     return t
@@ -491,6 +491,19 @@ function abstract_call_gf(f, fargs, argtypes, e)
             e.head = :call1
             return (tupleref_tfunc(fargs, argtypes[1], argtypes[2]), Int)
         end
+    end
+    if f === Main.Base.promote_type || f === Main.Base.typejoin
+        la = length(argtypes)
+        c = cell(la)
+        for i = 1:la
+            t = argtypes[i]
+            if isType(t) && !isa(t.parameters[1],TypeVar)
+                c[i] = t.parameters[1]
+            else
+                return Type
+            end
+        end
+        return Type{f(c...)}
     end
     # don't consider more than N methods. this trades off between
     # compiler performance and generated code performance.
@@ -541,7 +554,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
 end
 
 function invoke_tfunc(f, types, argtypes)
-    argtypes = tintersect(types,limit_tuple_type(argtypes))
+    argtypes = typeintersect(types,limit_tuple_type(argtypes))
     if is(argtypes,None)
         return None
     end
@@ -643,7 +656,7 @@ end
 function abstract_eval_arg(a, vtypes, sv)
     t = abstract_eval(a, vtypes, sv)
     if isa(a,Symbol) || isa(a,SymbolNode)
-        t = tintersect(t,Any)  # remove Undef
+        t = typeintersect(t,Any)  # remove Undef
     end
     return t
 end
@@ -704,7 +717,7 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
-        t = tintersect(t, Any)
+        t = typeintersect(t, Any)
         if is(t,None)
         elseif isleaftype(t)
             t = Type{t}

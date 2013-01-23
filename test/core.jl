@@ -19,7 +19,7 @@
 @test Array{Int8,1} <: Array{Int8,1}
 @test !subtype(Type{None}, Type{Int32})
 @test !subtype(Vector{Float64},Vector{Union(Float64,Float32)})
-@test is(None, tintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
+@test is(None, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
 
 @test !isa(Array,Type{Any})
 @test subtype(Type{ComplexPair},CompositeKind)
@@ -27,53 +27,71 @@
 @test !subtype(Type{Ptr{None}},Type{Ptr})
 @test !subtype(Type{Rational{Int}}, Type{Rational})
 let T = TypeVar(:T,true)
-    @test !is(None, tintersect(Array{None},AbstractArray{T}))
-    @test  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
-                                 (Type{Ptr{T}},Ptr{T})))
+    @test !is(None, typeintersect(Array{None},AbstractArray{T}))
+    @test  is(None, typeintersect((Type{Ptr{Uint8}},Ptr{None}),
+                                  (Type{Ptr{T}},Ptr{T})))
     @test !subtype(Type{T},TypeVar)
 
-    @test isequal(tintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
-                    (Range{Int},(Int,Int)))
+    @test isequal(typeintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
+                  (Range{Int},(Int,Int)))
+    
+    @test isequal(typeintersect((T, AbstractArray{T}),(Number, Array{Int,1})),
+                  (Int, Array{Int,1}))
 
-    @test isequal(tintersect((T, AbstractArray{T}),(Number, Array{Int,1})),
-                    (Int, Array{Int,1}))
+    @test isequal(typeintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
+                  None)
 
-    @test isequal(tintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
-                    None)
-
-    @test isequal(tintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
-                    (Number, Array{Number,1}))
-    @test !is(None, tintersect((Array{T}, Array{T}), (Array, Array{Any})))
-    @test is(None, tintersect((Vector{Vector{Int}},Vector{Vector}),
-                                (Vector{Vector{T}},Vector{Vector{T}})))
+    @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
+                  (Number, Array{Number,1}))
+    @test !is(None, typeintersect((Array{T}, Array{T}), (Array, Array{Any})))
+    @test is(None, typeintersect((Vector{Vector{Int}},Vector{Vector}),
+                                 (Vector{Vector{T}},Vector{Vector{T}})))
 end
 let N = TypeVar(:N,true)
-    @test isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
-                               ((Integer,Integer), (Integer...))),
-                    ((Integer,Integer), (Integer,Integer)))
-    @test isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
-                               ((Integer...), (Integer,Integer))),
-                    ((Integer,Integer), (Integer,Integer)))
-    local A = tintersect((NTuple{N,Any},Array{Int,N}),
-                         ((Int,Int...),Array))
+    @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
+                                ((Integer,Integer), (Integer...))),
+                  ((Integer,Integer), (Integer,Integer)))
+    @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
+                                ((Integer...), (Integer,Integer))),
+                  ((Integer,Integer), (Integer,Integer)))
+    local A = typeintersect((NTuple{N,Any},Array{Int,N}),
+                            ((Int,Int...),Array))
     local B = ((Int,Int...),Array{Int,N})
     @test A<:B && B<:A
-    @test isequal(tintersect((NTuple{N,Any},Array{Int,N}),
-                               ((Int,Int...),Array{Int,2})),
-                    ((Int,Int), Array{Int,2}))
+    @test isequal(typeintersect((NTuple{N,Any},Array{Int,N}),
+                                ((Int,Int...),Array{Int,2})),
+                  ((Int,Int), Array{Int,2}))
 end
-@test is(None, tintersect(Type{Any},Type{ComplexPair}))
-@test is(None, tintersect(Type{Any},Type{TypeVar(:T,Real)}))
+@test is(None, typeintersect(Type{Any},Type{ComplexPair}))
+@test is(None, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
 @test !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
 @test !subtype(Type{Array{Integer}},Type{Array{TypeVar(:T,Integer)}})
-@test is(None, tintersect(Type{Function},BitsKind))
-@test is(Type{Int32}, tintersect(Type{Int32},BitsKind))
+@test is(None, typeintersect(Type{Function},BitsKind))
+@test is(Type{Int32}, typeintersect(Type{Int32},BitsKind))
 @test !subtype(Type,TypeVar)
-@test !is(None, tintersect(BitsKind, Type))
-@test !is(None, tintersect(BitsKind, Type{Int}))
-@test is(None, tintersect(BitsKind, Type{Integer}))
-@test !is(None, tintersect(BitsKind, Type{TypeVar(:T,Int)}))
-@test !is(None, tintersect(BitsKind, Type{TypeVar(:T,Integer)}))
+@test !is(None, typeintersect(BitsKind, Type))
+@test !is(None, typeintersect(BitsKind, Type{Int}))
+@test is(None, typeintersect(BitsKind, Type{Integer}))
+@test !is(None, typeintersect(BitsKind, Type{TypeVar(:T,Int)}))
+@test !is(None, typeintersect(BitsKind, Type{TypeVar(:T,Integer)}))
+
+# join
+@test typejoin(Int8,Int16) === Signed
+@test typejoin(Int,String) === Any
+@test typejoin(Array{Float64},BitArray) <: AbstractArray
+@test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
+@test typejoin((Int,Int8),(Int8,Float64)) === (Signed,Real)
+@test Base.typeseq(typejoin((ASCIIString,ASCIIString),(UTF8String,ASCIIString),
+                            (ASCIIString,UTF8String),(Int,ASCIIString,Int)),
+                   (Any,String,Int...))
+@test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8)),
+                   (Int8,Signed...))
+@test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8...)),
+                   (Int8,Signed...))
+@test Base.typeseq(typejoin((Int8,Uint8,Int...),(Int8,Int8...)),
+                   (Int8,Integer...))
+@test Base.typeseq(typejoin(Union(Int,String),Int), Union(Int,String))
+@test Base.typeseq(typejoin(Union(Int,String),Int8), Any)
 
 # ntuples
 nttest1{n}(x::NTuple{n,Int}) = n
