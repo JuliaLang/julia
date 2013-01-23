@@ -159,6 +159,10 @@ include("fftw.jl")
 include("dsp.jl")
 importall DSP
 
+# BigInts and BigFloats
+include("gmp.jl")
+importall GMP
+
 # deprecated functions
 include("deprecated.jl")
 
