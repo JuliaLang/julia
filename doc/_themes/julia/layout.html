@@ -1,4 +1,5 @@
 {% extends "basic/layout.html" %}
+{% set reldelim1 = '&nbsp;/&nbsp;' %}
 
 {# Silence the relbar's #}
 {% block relbar2 %}{% endblock %}
@@ -6,12 +7,6 @@
 {% block rootrellink %}
 <li><a href="http://julialang.org/">Julia</a>{{ reldelim1 }}</li>
 <li><a href="{{ pathto('index') }}">Documentation</a>{{ reldelim1 }}</li>
-{% endblock %}
-
-{% block extrahead %}
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-{{ super() }}
-</style>
 {% endblock %}
 
 {% block footer %}

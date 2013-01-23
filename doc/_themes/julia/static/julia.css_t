@@ -1,4 +1,3 @@
-{% set page_width = '940px' %}
 {% set sidebar_width = '230px' %}
 
 @import url("basic.css");
@@ -24,7 +23,10 @@ h1,h2,h3,h4,h5,h6 {
 
 div.related {
   background: #000;
-  color: #fff;
+  position: fixed;
+  left: 0;
+  top: 0;
+  padding: 0.5em;
   z-index: 100;
 }
 
@@ -37,12 +39,6 @@ div.related a:visited {
 div.related li {
   display: block;
   float: left;
-  margin-left: 3px;
-  margin-right: 3px;
-}
-
-div.related li.right {
-  margin-left: 0px;
 }
 
 div.sphinxsidebar {
@@ -57,20 +53,9 @@ div.footerwrapper {
   margin: 3em auto 3em auto;
 }
 
-@media screen and (min-width: 768px) {
-  div.related {
-    position: fixed;
-    left: 0;
-    top: 0;
-    padding: 0.5em;
-  }
-}
-
-@media screen and (min-width: {{ page_width }}) {
-
 div.document,
 div.footerwrapper {
-  width: {{ page_width }};
+  width: 940px;
 }
 
 div.documentwrapper {
@@ -95,25 +80,13 @@ div.sphinxsidebar {
   bottom: 0;
   overflow-y: auto;
 }
-}
 
 div.body {
-  padding: 0 1em 0 1em;
+  padding: 1em;
 }
-
-div.header {
-  margin: auto auto auto auto
-}
-  div.header .links {
-    text-align: center;
-    margin: 0
-  }
-    div.header .links a {
-      text-decoration: none;
-    }
 
 h1,h2 {
-  padding-top: 1ex;
+  padding-top: 1em;
   margin: 1em 0;
 }
 
@@ -157,6 +130,7 @@ dl dt big, span.optional {
 div.footer {
   font-size: smaller;
   font-style: italic;
+  padding: 0 1em;
 }
 
 /* code blocks, tables, and blockquotes */
