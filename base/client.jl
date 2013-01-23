@@ -272,22 +272,23 @@ const roottask_wi = WorkItem(roottask)
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
-@windows_only const JULIA_USER_DATA_DIR = abspath(ENV["AppData"],"julia")
 
 function _start()
     # set up standard streams
+    reinit_stdio()
+    librandom_init()
 
     # set default local address
     global bind_addr = getipaddr()
 
-    @windows_only if !has(ENV,"HOME")
-        ENV["HOME"] = joinpath(ENV["APPDATA"],"julia")
-    end
-    reinit_stdio()
-    librandom_init()
-
-    @windows_only if(!isdir(JULIA_USER_DATA_DIR))
-        mkdir(JULIA_USER_DATA_DIR)
+    @windows_only begin
+        user_data_dir = abspath(ENV["AppData"],"julia")
+        if !isdir(user_data_dir)
+            mkdir(user_data_dir)
+        end
+        if !has(ENV,"HOME")
+            ENV["HOME"] = user_data_dir
+        end
     end
 
     # set CPU core count
