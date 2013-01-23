@@ -26,3 +26,5 @@ d = BigFloat("-24.69135780242")
 @test string(d) == "-24.69135780242"
 
 @test abs((BigFloat(3)/BigFloat(2)) - BigFloat(1.5)) < 0.00000000001
+
+@assert BigFloat(2) + BigInt(2) == BigFloat(4)
