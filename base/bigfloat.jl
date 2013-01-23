@@ -46,6 +46,7 @@ type BigFloat <: FloatingPoint
         finalizer(b, BigFloat_clear)
         b
     end
+
 end
 
 convert(::Type{BigFloat}, x::Int8)   = BigFloat(int(x))
@@ -62,6 +63,7 @@ convert(::Type{BigFloat}, x::Uint8)  = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Uint16) = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Float64) = BigFloat(x)
 convert(::Type{BigFloat}, x::Float32) = BigFloat(float64(x))
+convert(::Type{BigFloat}, x::BigInt) = BigFloat(x)
 
 promote_rule(::Type{BigFloat}, ::Type{Float32}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{Float64}) = BigFloat
@@ -73,6 +75,7 @@ promote_rule(::Type{BigFloat}, ::Type{Uint8}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{Uint16}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{Uint32}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{Uint64}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{BigInt})  = BigFloat
 
 # mpf doesn't have inf or nan
 isnan(x::BigFloat) = false
