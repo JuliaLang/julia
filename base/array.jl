@@ -1772,3 +1772,59 @@ function permute(A::StridedArray, perm)
     return P
 end
 end # let
+
+# set-like operators for vectors
+# These are moderately efficient, preserve order, and remove dupes.
+
+# algorithm: do intersect on sets first, then iterate through the first
+# vector and produce only those in the set
+function intersect(vs...)
+    args_type = promote_type([eltype(v) for v in vs]...)
+    ret = Array(args_type,0)
+    all_elems = intersect([Set(v...) for v in vs]...)
+    for v_elem in vs[1]
+        if has(all_elems, v_elem)
+            push!(ret, v_elem)
+        end
+    end
+    ret
+end
+function union(vs...)
+    args_type = promote_type([eltype(v) for v in vs]...)
+    ret = Array(args_type,0)
+    seen = Set()
+    for v in vs
+        for v_elem in v
+            if !has(seen, v_elem)
+                push!(ret, v_elem)
+                add(seen, v_elem)
+            end
+        end
+    end
+    ret
+end
+# setdiff only accepts two args
+function setdiff(a, b)
+    args_type = promote_type(eltype(a), eltype(b))
+    bset = Set(b...)
+    ret = Array(args_type,0)
+    seen = Set()
+    for a_elem in a
+        if !has(seen, a_elem) && !has(bset, a_elem)
+            push!(ret, a_elem)
+            add(seen, a_elem)
+        end
+    end
+    ret
+end
+# symdiff is associative, so a relatively clean
+# way to implement this is by using setdiff and union, and
+# recursing. Has the advantage of keeping order, too, but
+# not as fast as other methods that make a single pass and
+# store counts with a Dict.
+symdiff(a) = a
+symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
+symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
+
+
+

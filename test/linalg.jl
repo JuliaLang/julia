@@ -180,8 +180,8 @@ B = [2 -2; 3 -5; -4 7]
 A = ones(Int, 2, 100)
 B = ones(Int, 100, 3)
 @test A*B == [100 100 100; 100 100 100]
-A = randi(20, 5, 5) - 10
-B = randi(20, 5, 5) - 10
+A = rand(1:20, 5, 5) - 10
+B = rand(1:20, 5, 5) - 10
 @test At_mul_B(A, B) == A'*B
 @test A_mul_Bt(A, B) == A*B'
 # Preallocated

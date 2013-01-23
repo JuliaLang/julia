@@ -690,6 +690,18 @@ end
 @test (ComplexPair(1,2)/ComplexPair(2.5,3.0))*ComplexPair(2.5,3.0) == ComplexPair(1,2)
 @test 0.7 < real(sqrt(ComplexPair(0,1))) < 0.707107
 
+for T in {Int8,Int16,Int32,Int64,Int128}
+    @test abs(typemin(T)) == -typemin(T)
+    for x in {typemin(T),convert(T,-1),zero(T),one(T),typemax(T)}
+        @test signed(unsigned(x)) == x
+    end
+end
+
+for T in {Uint8,Uint16,Uint32,Uint64,Uint128},
+    x in {typemin(T),one(T),typemax(T)}
+    @test unsigned(signed(x)) == x
+end
+
 for S = {Int8,  Int16,  Int32,  Int64},
     U = {Uint8, Uint16, Uint32, Uint64}
     @test !(-one(S) == typemax(U))
