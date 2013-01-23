@@ -368,7 +368,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     for(i=0; i < nargt; i++) {
         jl_value_t *tti = jl_tupleref(tt,i);
-        if (jl_is_seq_type(tti)) {
+        if (jl_is_vararg_type(tti)) {
             isVa = true;
             tti = jl_tparam0(tti);
         }

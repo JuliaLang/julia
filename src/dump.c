@@ -486,7 +486,7 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
         tt->fptr = NULL;
         tt->env = NULL;
         tt->linfo = NULL;
-        if (tt->name == jl_type_type->name || tt->name == jl_seq_type->name ||
+        if (tt->name == jl_type_type->name || tt->name == jl_vararg_type->name ||
             tt->name == jl_abstractarray_type->name) {
             jl_cell_1d_push(tagtype_list, (jl_value_t*)tt);
         }
@@ -1014,7 +1014,7 @@ void jl_init_serializer(void)
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
                      jl_type_type, jl_bottom_type, jl_pointer_type,
-                     jl_seq_type, jl_ntuple_type, jl_abstractarray_type,
+                     jl_vararg_type, jl_ntuple_type, jl_abstractarray_type,
                      jl_box_type, jl_typector_type, jl_undef_type, jl_top_type,
                      jl_typename_type, jl_task_type, jl_union_kind,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
@@ -1027,7 +1027,7 @@ void jl_init_serializer(void)
                      jl_array_type->name, jl_expr_type->name,
                      jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
                      jl_method_type->name, jl_tvar_type->name,
-                     jl_seq_type->name, jl_ntuple_type->name, jl_abstractarray_type->name,
+                     jl_vararg_type->name, jl_ntuple_type->name, jl_abstractarray_type->name,
                      jl_lambda_info_type->name, jl_module_type->name,
                      jl_box_type->name, jl_function_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_undef_type->name,

@@ -82,7 +82,7 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= =>
-      <<= >>= >>>= -> --> |\|\|| && |::| |.|))
+      <<= >>= >>>= -> --> |\|\|| && |::| |.| ...))
 (define syntactic-unary-operators '($ &))
 
 (define reserved-words '(begin while if for try return break continue

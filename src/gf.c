@@ -455,7 +455,7 @@ static jl_value_t *nth_slot_type(jl_tuple_t *sig, size_t i)
         return NULL;
     if (i < len-1)
         return jl_tupleref(sig, i);
-    if (jl_is_seq_type(jl_tupleref(sig,len-1))) {
+    if (jl_is_vararg_type(jl_tupleref(sig,len-1))) {
         return jl_tparam0(jl_tupleref(sig,len-1));
     }
     if (i == len-1)
@@ -542,7 +542,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             if (i < jl_tuple_len(decl)) {
                 jl_value_t *declt = jl_tupleref(decl,i);
                 // for T..., intersect with T
-                if (jl_is_seq_type(declt))
+                if (jl_is_vararg_type(declt))
                     declt = jl_tparam0(declt);
                 if (declt == (jl_value_t*)jl_tuple_type ||
                     jl_subtype((jl_value_t*)jl_tuple_type, declt, 0)) {
@@ -609,7 +609,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             if (i < jl_tuple_len(decl)) {
                 jl_value_t *declt = jl_tupleref(decl,i);
                 // for T..., intersect with T
-                if (jl_is_seq_type(declt))
+                if (jl_is_vararg_type(declt))
                     declt = jl_tparam0(declt);
                 jl_tupleset(type, i,
                             jl_type_intersection(declt, (jl_value_t*)jl_typetype_type));
@@ -709,7 +709,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
     if (jl_tuple_len(type) > mt->max_args &&
-        jl_is_seq_type(jl_tupleref(decl,jl_tuple_len(decl)-1))) {
+        jl_is_vararg_type(jl_tupleref(decl,jl_tuple_len(decl)-1))) {
         size_t nspec = mt->max_args + 2;
         jl_tuple_t *limited = jl_alloc_tuple(nspec);
         for(i=0; i < nspec-1; i++) {
@@ -738,7 +738,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             if (jl_is_type_type(lasttype) && jl_is_type_type(jl_tparam0(lasttype)))
                 lasttype = (jl_value_t*)jl_type_type;
             temp = (jl_value_t*)jl_tuple1(lasttype);
-            jl_tupleset(type, i, jl_apply_type((jl_value_t*)jl_seq_type,
+            jl_tupleset(type, i, jl_apply_type((jl_value_t*)jl_vararg_type,
                                                (jl_tuple_t*)temp));
         }
         else {
@@ -994,7 +994,7 @@ int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 
 static int is_va_tuple(jl_tuple_t *t)
 {
-    return (jl_tuple_len(t)>0 && jl_is_seq_type(jl_tupleref(t,jl_tuple_len(t)-1)));
+    return (jl_tuple_len(t)>0 && jl_is_vararg_type(jl_tupleref(t,jl_tuple_len(t)-1)));
 }
 
 static void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
@@ -1062,7 +1062,7 @@ static int has_unions(jl_tuple_t *type)
     for(i=0; i < jl_tuple_len(type); i++) {
         jl_value_t *t = jl_tupleref(type,i);
         if (jl_is_union_type(t) ||
-            (jl_is_seq_type(t) && jl_is_union_type(jl_tparam0(t))))
+            (jl_is_vararg_type(t) && jl_is_union_type(jl_tparam0(t))))
             return 1;
     }
     return 0;
@@ -1101,7 +1101,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             l->sig = type;
             l->tvars = tvars;
             l->va = (jl_tuple_len(type) > 0 &&
-                     jl_is_seq_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
+                     jl_is_vararg_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
                 1 : 0;
             l->invokes = JL_NULL;
             l->func = method;
@@ -1128,7 +1128,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     newrec->sig = type;
     newrec->tvars = tvars;
     newrec->va = (jl_tuple_len(type) > 0 &&
-                  jl_is_seq_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
+                  jl_is_vararg_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
         1 : 0;
     newrec->func = method;
     newrec->invokes = JL_NULL;
