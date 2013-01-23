@@ -101,6 +101,14 @@ match(r::Regex, s::String) = match(r, s, start(s))
 match(r::Regex, s::String, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
 
+function all_matches(r::Regex, s::String)
+    matches = RegexMatch[]
+    for m in each_match(r, s)
+        push(matches, m)
+    end
+    return matches
+end
+
 function search(str::ByteString, re::Regex, idx::Integer)
     len = length(str.data)
     if idx >= len+2
