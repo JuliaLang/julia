@@ -423,7 +423,7 @@ union of no types is the "bottom" type, ``None``::
 Recall from the `discussion above <#Any+and+None>`_ that ``None`` is the
 abstract type which is the subtype of all other types, and which no
 object is an instance of. Since a zero-argument ``Union`` call has no
-argument types for objects to be instances of, it should produce the a
+argument types for objects to be instances of, it should produce a
 type which no objects are instances of — i.e. ``None``.
 
 Tuple Types
