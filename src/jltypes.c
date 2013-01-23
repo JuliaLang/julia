@@ -2399,7 +2399,7 @@ void jl_init_types(void)
     jl_typename_type->parameters = jl_null;
     jl_typename_type->names = jl_tuple(4, jl_symbol("name"),
                                        jl_symbol("module"),
-                                       jl_symbol(""), jl_symbol(""));
+                                       jl_symbol("primary"), jl_symbol(""));
     jl_typename_type->types = jl_tuple(4, jl_sym_type, jl_any_type,
                                        jl_type_type, jl_tuple_type);
     jl_typename_type->uid = jl_assign_type_uid();

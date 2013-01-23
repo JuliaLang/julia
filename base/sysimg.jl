@@ -51,10 +51,10 @@ include("expr.jl")
 include("error.jl")
 
 # core numeric operations & types
+include("promotion.jl")
 include("bool.jl")
 include("number.jl")
 include("int.jl")
-include("promotion.jl")
 include("operators.jl")
 include("pointer.jl")
 
