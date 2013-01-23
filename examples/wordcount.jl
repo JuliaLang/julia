@@ -82,6 +82,6 @@ function wordcount_files(result_file,input_file_names...)
     wc=parallel_wordcount(text)
     fo=open(result_file,"w")
     for (k,v) = wc
-        with_output_stream(fo,println,k,"=",v)
+        println(fo,k,"=",v)
     end
 end
