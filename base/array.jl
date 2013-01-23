@@ -1313,12 +1313,23 @@ indmax(a) = findmax(a)[2]
 indmin(a) = findmin(a)[2]
 
 # findin (the index of intersection)
-function findin(v::Vector{Int}, span::Range1)
+function findin(a, b::Range1)
     ind = Array(Int, 0)
-    f = first(span)
-    l = last(span)
-    for i = 1:length(v)
-        if f <= v[i] <= l
+    f = first(b)
+    l = last(b)
+    for i = 1:length(a)
+        if f <= a[i] <= l
+            push!(ind, i)
+        end
+    end
+    ind
+end
+
+function findin(a, b)
+    ind = Array(Int, 0)
+    bset = Set(b...)
+    for i = 1:length(a)
+        if has(bset, a[i])
             push!(ind, i)
         end
     end
@@ -1825,6 +1836,5 @@ end
 symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
-
 
 
