@@ -16,17 +16,17 @@ export # also exported by Base
     searchsortedfirst,
     searchsortedlast
 
-# export # not exported by Base
-#     Ordering,
-#         Forward,
-#         Reverse,
-#         By,
-#         Lt,
-#         lt,
-#     Algorithm,
-#         InsertionSort,
-#         QuickSort,
-#         MergeSort
+export # not exported by Base
+    Ordering,
+        Forward,
+        # Reverse, # TODO: clashes with Reverse iterator
+        By,
+        Lt,
+        lt,
+    Algorithm,
+        InsertionSort,
+        QuickSort,
+        MergeSort
 
 ## notions of element ordering ##
 
@@ -266,5 +266,65 @@ for s in {:sort!, :sort, :sortperm}
         $s(              v::AbstractVector) = $s(   Forward(), v)
     end
 end
+
+## fast, clever sorting for floats ##
+
+import Intrinsics.slt_int,
+       Intrinsics.unbox
+
+type FpFwd <: Ordering end
+type FpRev <: Ordering end
+
+lt(::FpFwd, x::Float32, y::Float32) = slt_int(unbox(Float32,x),unbox(Float32,y))
+lt(::FpFwd, x::Float64, y::Float64) = slt_int(unbox(Float64,x),unbox(Float64,y))
+lt(::FpRev, x::Float32, y::Float32) = slt_int(unbox(Float32,y),unbox(Float32,x))
+lt(::FpRev, x::Float64, y::Float64) = slt_int(unbox(Float64,y),unbox(Float64,x))
+
+# push NaNs to the end of v, returning # of non-NaNs
+function nans2end!{T<:Union(Float32,Float64)}(v::AbstractVector{T})
+    i, n = 1, length(v)
+    if n <= 1
+        return n
+    end
+    while (i < n) & (v[i]==v[i])
+        i += 1
+    end
+    nans = 0
+    while true
+        if v[i]==v[i]
+            i += 1
+        else
+            nans += 1
+        end
+        if i+nans > n
+            break
+        end
+        if nans > 0
+            v[i], v[i+nans] = v[i+nans], v[i]
+        end
+    end
+    return n-nans
+end
+
+function sort!{T<:Union(Float32,Float64)}(a::Algorithm, ::Forward, v::AbstractVector{T})
+    n = nans2end!(v)
+    i, j = 1, n
+    while true
+        while i <= j &&  lt(FpFwd(), v[i], zero(T)); i += 1; end
+        while i <= j && !lt(FpFwd(), v[j], zero(T)); j -= 1; end
+        if i <= j
+            v[i], v[j] = v[j], v[i]
+            i += 1
+            j -= 1
+        else
+            break
+        end
+    end
+    sort!(a, FpRev(), v, 1, j)
+    sort!(a, FpFwd(), v, i, n)
+    return v
+end
+
+# TODO: sortperm?
 
 end # module
