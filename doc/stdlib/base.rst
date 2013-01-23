@@ -160,16 +160,16 @@ Generic Functions
 Iteration
 ---------
 
-Sequential iteration is implemented by the methods ``start``, ``done``, and ``next``. The general ``for`` loop:
+Sequential iteration is implemented by the methods ``start``, ``done``, and ``next``. The general ``for`` loop::
 
-    for i = I
+   for i = I
       # body
-    end
+   end
 
-is translated to:
+is translated to::
 
-    state = start(I)
-    while !done(I, state)
+   state = start(I)
+   while !done(I, state)
       (i, state) = next(I, state)
       # body
     end
@@ -1360,6 +1360,16 @@ Numbers
 .. function:: mantissa(f)
 
    Get the mantissa of a floating-point number
+
+.. function:: BigInt(x)
+
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``String``. 
+   The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``. 
+
+.. function:: BigFloat(x)
+
+   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The 
+   usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``.
 
 Random Numbers
 --------------
