@@ -241,11 +241,11 @@ sort!(a::MergeSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int) = sort!(a,
 
 ## sortperm: the permutation to sort an array ##
 
-type Perm{O<:Ordering,V<:AbstractVector} <: Ordering
+type Perm{O<:Ordering,T} <: Ordering
     ord::O
-    vec::V
+    vec::AbstractVector{T}
 end
-Perm{O<:Ordering,V<:AbstractVector}(o::O,v::V) = Perm{O,V}(o,v)
+Perm{O<:Ordering,T}(o::O,v::AbstractVector{T}) = Perm{O,T}(o,v)
 
 lt(p::Perm, a, b) = lt(p.ord, p.vec[a], p.vec[b])
 
@@ -267,51 +267,92 @@ for s in {:sort!, :sort, :sortperm}
     end
 end
 
-## fast, clever sorting for floats ##
+## fast clever sorting for floats ##
 
-import Intrinsics.slt_int,
-       Intrinsics.unbox
+module Float
+using Sort
 
-type FpFwd <: Ordering end
-type FpRev <: Ordering end
+import Sort.sort!, Sort.Perm, Sort.lt
+import Intrinsics.slt_int, Intrinsics.unbox
 
-lt(::FpFwd, x::Float32, y::Float32) = slt_int(unbox(Float32,x),unbox(Float32,y))
-lt(::FpFwd, x::Float64, y::Float64) = slt_int(unbox(Float64,x),unbox(Float64,y))
-lt(::FpRev, x::Float32, y::Float32) = slt_int(unbox(Float32,y),unbox(Float32,x))
-lt(::FpRev, x::Float64, y::Float64) = slt_int(unbox(Float64,y),unbox(Float64,x))
+typealias Floats Union(Float32,Float64)
+typealias Direct Union(Forward,Reverse)
 
-# push NaNs to the end of v, returning # of non-NaNs
-function nans2end!{T<:Union(Float32,Float64)}(v::AbstractVector{T})
-    i, n = 1, length(v)
-    if n <= 1
-        return n
-    end
-    while (i < n) & (v[i]==v[i])
+type Fwd <: Ordering end
+type Rev <: Ordering end
+
+left(::Forward) = Rev()
+left(::Reverse) = Fwd()
+right(::Forward) = Fwd()
+right(::Reverse) = Rev()
+
+left{O<:Direct}(o::Perm{O}) = Perm(left(O()),o.vec)
+right{O<:Direct}(o::Perm{O}) = Perm(right(O()),o.vec)
+
+lt{T<:Floats}(::Fwd, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
+lt{T<:Floats}(::Rev, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
+
+isnan(o::Direct, x::Floats) = (x!=x)
+isnan{O<:Direct}(o::Perm{O}, i::Int) = isnan(O(),o.vec[i])
+
+function nans2left!(o::Ordering, v::AbstractVector, lo::Int, hi::Int)
+    i = lo
+    while (i < hi) & isnan(o, v[i])
         i += 1
     end
-    nans = 0
+    r = 0
     while true
-        if v[i]==v[i]
+        if isnan(o, v[i])
             i += 1
         else
-            nans += 1
+            r += 1
         end
-        if i+nans > n
-            break
-        end
-        if nans > 0
-            v[i], v[i+nans] = v[i+nans], v[i]
+        j = i + r
+        j > hi && break
+        if r > 0
+            v[i], v[j] = v[j], v[i]
         end
     end
-    return n-nans
+    return i, hi
 end
 
-function sort!{T<:Union(Float32,Float64)}(a::Algorithm, ::Forward, v::AbstractVector{T})
-    n = nans2end!(v)
-    i, j = 1, n
+function nans2right!(o::Ordering, v::AbstractVector, lo::Int, hi::Int)
+    i = hi
+    while (i > lo) & isnan(o, v[i])
+        i -= 1
+    end
+    r = 0
     while true
-        while i <= j &&  lt(FpFwd(), v[i], zero(T)); i += 1; end
-        while i <= j && !lt(FpFwd(), v[j], zero(T)); j -= 1; end
+        if isnan(o, v[i])
+            i -= 1
+        else
+            r += 1
+        end
+        j = i - r
+        j < lo && break
+        if r > 0
+            v[i], v[j] = v[j], v[i]
+        end
+    end
+    return lo, i
+end
+
+nans2left!(o::Ordering, v::AbstractVector) = nans2left!(o,v,1,length(v))
+nans2right!(o::Ordering, v::AbstractVector) = nans2right!(o,v,1,length(v))
+
+nans2end!(o::Forward, v::AbstractVector) = nans2right!(o,v)
+nans2end!(o::Reverse, v::AbstractVector) = nans2left!(o,v)
+nans2end!{O<:Forward,T<:Floats}(o::Perm{O,T}, v::AbstractVector{Int}) = nans2right!(o,v)
+nans2end!{O<:Reverse,T<:Floats}(o::Perm{O,T}, v::AbstractVector{Int}) = nans2left!(o,v)
+
+issignleft(o::Direct, x::Floats) = lt(right(o), x, zero(x))
+issignleft{O<:Direct}(o::Perm{O}, i::Int) = issignleft(O(),o.vec[i])
+
+function fpsort!(a::Algorithm, o::Ordering, v::AbstractVector)
+    i, j = lo, hi = nans2end!(o, v)
+    while true
+        while i <= j &&  issignleft(o, v[i]); i += 1; end
+        while i <= j && !issignleft(o, v[j]); j -= 1; end
         if i <= j
             v[i], v[j] = v[j], v[i]
             i += 1
@@ -320,11 +361,14 @@ function sort!{T<:Union(Float32,Float64)}(a::Algorithm, ::Forward, v::AbstractVe
             break
         end
     end
-    sort!(a, FpRev(), v, 1, j)
-    sort!(a, FpFwd(), v, i, n)
+    sort!(a, left(o),  v, lo, j )
+    sort!(a, right(o), v, i,  hi)
     return v
 end
 
-# TODO: sortperm?
+sort!{T<:Floats}(a::Algorithm, o::Direct, v::AbstractVector{T}) = fpsort!(a,o,v)
+sort!{O<:Direct,T<:Floats}(a::Algorithm, o::Perm{O,T}, v::AbstractVector{Int}) = fpsort!(a,o,v)
 
-end # module
+end # module Sort.Float
+
+end # module Sort
