@@ -85,6 +85,11 @@ B[4,[2,3]] = 7
 
 @test isequal(reshape(1:27, 3, 3, 3)[1,:], [1  4  7  10  13  16  19  22  25])
 
+a = [3, 5, -7, 6]
+b = [4, 6, 2, -7, 1]
+ind = findin(a, b)
+@test ind == [3,4]
+
 # get
 let
     A = reshape(1:24, 3, 8)

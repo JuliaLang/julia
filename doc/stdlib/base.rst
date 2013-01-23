@@ -212,6 +212,10 @@ Iterable Collections
 
    Determine whether a collection contains the given value, ``x``.
 
+.. function:: findin(a, b)
+
+   Returns the indices of elements in collection ``a`` that appear in collection ``b``
+
 .. function:: reduce(op, v0, itr)
 
    Reduce the given collection with the given operator, i.e. accumulate ``v = op(v,elt)`` for each element, where ``v`` starts as ``v0``. Reductions for certain commonly-used operators are available in a more convenient 1-argument form: ``max(itr)``, ``min(itr)``, ``sum(itr)``, ``prod(itr)``, ``any(itr)``, ``all(itr)``.

@@ -525,6 +525,13 @@
 
 "),
 
+(E"Iterable Collections",E"Base",E"findin",E"findin(a, b)
+
+   Returns the indices of elements in collection \"a\" that appear in
+   collection \"b\"
+
+"),
+
 (E"Iterable Collections",E"Base",E"reduce",E"reduce(op, v0, itr)
 
    Reduce the given collection with the given operator, i.e.
