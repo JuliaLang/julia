@@ -23,11 +23,8 @@ h1,h2,h3,h4,h5,h6 {
 
 div.related {
   background: #000;
-  position: fixed;
-  left: 0;
-  top: 0;
+  overflow: hidden; /* enclose all child floats */
   padding: 0.5em;
-  z-index: 100;
 }
 
 div.related,
@@ -41,16 +38,12 @@ div.related li {
   float: left;
 }
 
-div.sphinxsidebar {
-  display: none;
-}
-
 div.document {
-  margin: 46px auto 0 auto;
+  margin: 0 auto;
 }
 
 div.footerwrapper {
-  margin: 3em auto 3em auto;
+  margin: 3em auto;
 }
 
 div.document,
@@ -70,15 +63,21 @@ div.footer {
 
 div.sphinxsidebar {
   color: #444;
-  display: block;
   float: none;
   font-size: 10pt;
   margin-left: inherit;
   width: {{ sidebar_width }};
-  position: fixed;
+  position: absolute;
   top: 46px;
+}
+
+/* only fix on desktops */
+@media only screen and (min-width : 1025px) {
+div.sphinxsidebar {
+  position: fixed;
   bottom: 0;
   overflow-y: auto;
+}
 }
 
 div.body {
@@ -185,7 +184,7 @@ div.sphinxsidebar::-webkit-scrollbar {
 }
 
 div.sphinxsidebarwrapper {
-  padding: 20px 10px;
+  padding: 3em 10px;
 }
 
 div.sphinxsidebar h3 {
