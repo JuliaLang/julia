@@ -17,7 +17,7 @@ const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 
 @unix_only dir() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(ENV["HOME"],".julia")))
 @windows_only begin
-    dir() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(JULIA_USER_DATA_DIR,"packages")))
+    dir() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(ENV["HOME"],"packages")))
 end
 dir(pkg::String...) = joinpath(dir(),pkg...)
 

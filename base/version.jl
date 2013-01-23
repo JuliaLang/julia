@@ -147,7 +147,7 @@ end
 if(isfile("$JULIA_HOME/../../COMMIT"))
     const VERSION_COMMIT = ""
     const commit_string = readchomp("$JULIA_HOME/../../COMMIT")
-elseif(isfile("JULIA_HOME/../share/julia/COMMIT"))
+elseif(isfile("$JULIA_HOME/../share/julia/COMMIT"))
     const VERSION_COMMIT = ""
     const commit_string = readchomp("$JULIA_HOME/../share/julia/COMMIT")
 else

@@ -67,9 +67,7 @@ install: release webrepl
 		cp -a $(BUILD)/lib/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	# Copy system image
-ifneq ($(OS), WINNT)
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
-endif
 	# Copy in all .jl sources as well
 	-cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
 	-cp $(BUILD)/etc/nginx.conf $(PREFIX)/etc/

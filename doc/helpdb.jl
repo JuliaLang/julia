@@ -748,9 +748,31 @@ collection[key...] = value
 
 "),
 
-(E"Set-Like Collections",E"Base",E"union",E"union(s1, s2)
+(E"Set-Like Collections",E"Base",E"union",E"union(s1, s2...)
 
-   Construct the union of two sets
+   Construct the union of two or more sets. Maintains order with
+   arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"intersect",E"intersect(s1, s2...)
+
+   Construct the intersection of two or more sets. Maintains order
+   with arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"setdiff",E"setdiff(s1, s2)
+
+   Construct the set of elements in \"s1\" but not \"s2\". Maintains
+   order with arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff",E"symdiff(s1, s2...)
+
+   Construct the symmetric difference of elements in the passed in
+   sets or arrays. Maintains order with arrays.
 
 "),
 
@@ -2262,86 +2284,83 @@ airyaiprime(x)
 
 "),
 
+(E"Random Numbers",E"Base",E"srand",E"srand([rng], seed)
+
+   Seed the RNG with a \"seed\", which may be an unsigned integer or a
+   vector of unsigned integers. \"seed\" can even be a filename, in
+   which case the seed is read from a file. If the argument \"rng\" is
+   not provided, the default global RNG is seeded.
+
+"),
+
+(E"Random Numbers",E"Base",E"MersenneTwister",E"MersenneTwister([seed])
+
+   Create a \"MersenneTwister\" RNG object. Different RNG objects can
+   have their own seeds, which may be useful for generating different
+   streams of random numbers.
+
+"),
+
 (E"Random Numbers",E"Base",E"rand",E"rand()
 
    Generate a \"Float64\" random number in (0,1)
 
 "),
 
-(E"Random Numbers",E"Base",E"randf",E"randf()
+(E"Random Numbers",E"Base",E"rand!",E"rand!([rng], A)
 
-   Generate a \"Float32\" random number in (0,1)
+   Populate the array A with random number generated from the
+   specified RNG.
 
 "),
 
-(E"Random Numbers",E"Base",E"randi",E"randi(Int32|Uint32|Int64|Uint64)
+(E"Random Numbers",E"Base",E"rand",E"rand(rng::AbstractRNG[, dims...])
+
+   Generate a random \"Float64\" number or array of the size specified
+   by dims, using the specified RNG object. Currently,
+   \"MersenneTwister\" is the only available Random Number Generator
+   (RNG), which may be seeded using srand.
+
+"),
+
+(E"Random Numbers",E"Base",E"rand",E"rand(dims...)
+
+   Generate a random \"Float64\" array of the size specified by dims
+
+"),
+
+(E"Random Numbers",E"Base",E"rand",E"rand(Int32|Uint32|Int64|Uint64)
 
    Generate a random integer of the given type
 
 "),
 
-(E"Random Numbers",E"Base",E"randi",E"randi(n)
+(E"Random Numbers",E"Base",E"rand",E"rand(r[, dims...])
 
-   Generate a random integer from 1 to \"n\" inclusive
-
-"),
-
-(E"Random Numbers",E"Base",E"randi",E"randi(n, dims...)
-
-   Generate an array of random integers from 1 to \"n\" inclusive
+   Generate a random integer from \"1\":\"n\" inclusive. Optionally,
+   generate a random integer array.
 
 "),
 
-(E"Random Numbers",E"Base",E"randi",E"randi((a, b))
+(E"Random Numbers",E"Base",E"randbool",E"randbool([dims...])
 
-   Generate a random integer in the interval from \"a\" to \"b\"
-   inclusive. The argument is a tuple.
-
-"),
-
-(E"Random Numbers",E"Base",E"randi",E"randi((a, b), dims...)
-
-   Generate an array of random integers in the interval from \"a\" to
-   \"b\" inclusive. The first argument is a tuple.
+   Generate a random boolean value. Optionally, generate an array of
+   random boolean values.
 
 "),
 
-(E"Random Numbers",E"Base",E"randbool",E"randbool()
+(E"Random Numbers",E"Base",E"randbool!",E"randbool!(A)
 
-   Generate a random boolean value
+   Fill an array with random boolean values. A may be an \"Array\" or
+   a \"BitArray\".
 
 "),
 
-(E"Random Numbers",E"Base",E"randn",E"randn()
+(E"Random Numbers",E"Base",E"randn",E"randn([dims...])
 
    Generate a normally-distributed random number with mean 0 and
-   standard deviation 1
-
-"),
-
-(E"Random Numbers",E"Base",E"randg",E"randg(a)
-
-   Generate a sample from the gamma distribution with shape parameter
-   \"a\"
-
-"),
-
-(E"Random Numbers",E"Base",E"randchi2",E"randchi2(n)
-
-   Generate a sample from the chi-squared distribution with \"n\"
-   degrees of freedom (also available as \"chi2rnd\")
-
-"),
-
-(E"Random Numbers",E"Base",E"randexp",E"randexp()
-
-   Generate samples from the exponential distribution
-
-"),
-
-(E"Random Numbers",E"Base",E"srand",E"srand()
-
-   Seed the RNG
+   standard deviation 1. Optionally generate an array of normally-
+   distributed random numbers.
 
 "),
 

@@ -239,10 +239,10 @@ function bitarray_rand_fill!(B::BitArray)
     end
     Bc = B.chunks
     for i = 1 : length(Bc) - 1
-        Bc[i] = randi(Uint64)
+        Bc[i] = rand(Uint64)
     end
     msk = @_msk_end length(B)
-    Bc[end] = msk & randi(Uint64)
+    Bc[end] = msk & rand(Uint64)
     return B
 end
 
