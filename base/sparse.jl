@@ -185,6 +185,18 @@ function sparse(A::Matrix)
     return sparse_IJ_sorted!(I,J,V,m,n)
 end
 
+# The alternative to this was: sparse(keys(vec), [ 1 for k = 1:dims ], values(vec), 1, +)
+function sparse{K <: Integer, V}(vec :: Dict{K, V}, dims :: Int)
+  ret = SparseMatrixCSC(V, K, dims, 1, length(vec))
+  i = 1
+  for k in sort(keys(vec))
+    ret.nzval[i]  = vec[k]
+    ret.rowval[i] = k
+    i += 1
+  end
+  return ret
+end
+
 sparse(S::SparseMatrixCSC) = S
 
 sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,+)
@@ -404,8 +416,8 @@ end
 
 function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v)
     numnz = int(m*n*density)
-    I = randival!(1, m, Array(Int, numnz))
-    J = randival!(1, n, Array(Int, numnz))
+    I = rand!(1:m, Array(Int, numnz))
+    J = rand!(1:n, Array(Int, numnz))
     S = sparse(I, J, v, m, n)
     if !isbool(v)
         S.nzval = rng(nnz(S))

@@ -525,6 +525,13 @@
 
 "),
 
+(E"Iterable Collections",E"Base",E"findin",E"findin(a, b)
+
+   Returns the indices of elements in collection \"a\" that appear in
+   collection \"b\"
+
+"),
+
 (E"Iterable Collections",E"Base",E"reduce",E"reduce(op, v0, itr)
 
    Reduce the given collection with the given operator, i.e.
@@ -748,9 +755,31 @@ collection[key...] = value
 
 "),
 
-(E"Set-Like Collections",E"Base",E"union",E"union(s1, s2)
+(E"Set-Like Collections",E"Base",E"union",E"union(s1, s2...)
 
-   Construct the union of two sets
+   Construct the union of two or more sets. Maintains order with
+   arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"intersect",E"intersect(s1, s2...)
+
+   Construct the intersection of two or more sets. Maintains order
+   with arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"setdiff",E"setdiff(s1, s2)
+
+   Construct the set of elements in \"s1\" but not \"s2\". Maintains
+   order with arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff",E"symdiff(s1, s2...)
+
+   Construct the symmetric difference of elements in the passed in
+   sets or arrays. Maintains order with arrays.
 
 "),
 
@@ -1030,19 +1059,19 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"STDOUT",E"STDOUT
+(E"I/O",E"Base",E"stdout_stream",E"stdout_stream
 
    Global variable referring to the standard out stream.
 
 "),
 
-(E"I/O",E"Base",E"STDERR",E"STDERR
+(E"I/O",E"Base",E"stderr_stream",E"stderr_stream
 
    Global variable referring to the standard error stream.
 
 "),
 
-(E"I/O",E"Base",E"STDIN",E"STDIN
+(E"I/O",E"Base",E"stdin_stream",E"stdin_stream
 
    Global variable referring to the standard input stream.
 
@@ -2262,86 +2291,83 @@ airyaiprime(x)
 
 "),
 
+(E"Random Numbers",E"Base",E"srand",E"srand([rng], seed)
+
+   Seed the RNG with a \"seed\", which may be an unsigned integer or a
+   vector of unsigned integers. \"seed\" can even be a filename, in
+   which case the seed is read from a file. If the argument \"rng\" is
+   not provided, the default global RNG is seeded.
+
+"),
+
+(E"Random Numbers",E"Base",E"MersenneTwister",E"MersenneTwister([seed])
+
+   Create a \"MersenneTwister\" RNG object. Different RNG objects can
+   have their own seeds, which may be useful for generating different
+   streams of random numbers.
+
+"),
+
 (E"Random Numbers",E"Base",E"rand",E"rand()
 
    Generate a \"Float64\" random number in (0,1)
 
 "),
 
-(E"Random Numbers",E"Base",E"randf",E"randf()
+(E"Random Numbers",E"Base",E"rand!",E"rand!([rng], A)
 
-   Generate a \"Float32\" random number in (0,1)
+   Populate the array A with random number generated from the
+   specified RNG.
 
 "),
 
-(E"Random Numbers",E"Base",E"randi",E"randi(Int32|Uint32|Int64|Uint64)
+(E"Random Numbers",E"Base",E"rand",E"rand(rng::AbstractRNG[, dims...])
+
+   Generate a random \"Float64\" number or array of the size specified
+   by dims, using the specified RNG object. Currently,
+   \"MersenneTwister\" is the only available Random Number Generator
+   (RNG), which may be seeded using srand.
+
+"),
+
+(E"Random Numbers",E"Base",E"rand",E"rand(dims...)
+
+   Generate a random \"Float64\" array of the size specified by dims
+
+"),
+
+(E"Random Numbers",E"Base",E"rand",E"rand(Int32|Uint32|Int64|Uint64)
 
    Generate a random integer of the given type
 
 "),
 
-(E"Random Numbers",E"Base",E"randi",E"randi(n)
+(E"Random Numbers",E"Base",E"rand",E"rand(r[, dims...])
 
-   Generate a random integer from 1 to \"n\" inclusive
-
-"),
-
-(E"Random Numbers",E"Base",E"randi",E"randi(n, dims...)
-
-   Generate an array of random integers from 1 to \"n\" inclusive
+   Generate a random integer from \"1\":\"n\" inclusive. Optionally,
+   generate a random integer array.
 
 "),
 
-(E"Random Numbers",E"Base",E"randi",E"randi((a, b))
+(E"Random Numbers",E"Base",E"randbool",E"randbool([dims...])
 
-   Generate a random integer in the interval from \"a\" to \"b\"
-   inclusive. The argument is a tuple.
-
-"),
-
-(E"Random Numbers",E"Base",E"randi",E"randi((a, b), dims...)
-
-   Generate an array of random integers in the interval from \"a\" to
-   \"b\" inclusive. The first argument is a tuple.
+   Generate a random boolean value. Optionally, generate an array of
+   random boolean values.
 
 "),
 
-(E"Random Numbers",E"Base",E"randbool",E"randbool()
+(E"Random Numbers",E"Base",E"randbool!",E"randbool!(A)
 
-   Generate a random boolean value
+   Fill an array with random boolean values. A may be an \"Array\" or
+   a \"BitArray\".
 
 "),
 
-(E"Random Numbers",E"Base",E"randn",E"randn()
+(E"Random Numbers",E"Base",E"randn",E"randn([dims...])
 
    Generate a normally-distributed random number with mean 0 and
-   standard deviation 1
-
-"),
-
-(E"Random Numbers",E"Base",E"randg",E"randg(a)
-
-   Generate a sample from the gamma distribution with shape parameter
-   \"a\"
-
-"),
-
-(E"Random Numbers",E"Base",E"randchi2",E"randchi2(n)
-
-   Generate a sample from the chi-squared distribution with \"n\"
-   degrees of freedom (also available as \"chi2rnd\")
-
-"),
-
-(E"Random Numbers",E"Base",E"randexp",E"randexp()
-
-   Generate samples from the exponential distribution
-
-"),
-
-(E"Random Numbers",E"Base",E"srand",E"srand()
-
-   Seed the RNG
+   standard deviation 1. Optionally generate an array of normally-
+   distributed random numbers.
 
 "),
 
@@ -2826,9 +2852,17 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svd",E"svd(A) -> U, S, V'
+(E"Linear Algebra",E"Base",E"svd",E"svd(A) -> U, S, V
 
-   Compute the SVD of A
+   Compute the SVD of A, returning \"U\", \"S\", and \"V\" such that
+   \"A = U*S*V'\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdt",E"svdt(A) -> U, S, Vt
+
+   Compute the SVD of A, returning \"U\", \"S\", and \"Vt\" such that
+   \"A = U*S*Vt\".
 
 "),
 
@@ -2885,9 +2919,18 @@ airyaiprime(x)
 
 (E"Linear Algebra",E"Base",E"norm",E"norm(A[, p])
 
-   Compute the p-norm of a vector or a matrix. \"p\" is \"2\" by
-   default, if not provided. If \"A\" is a matrix, valid values for
-   \"p\" are \"1\", \"2\", \"Inf\", or \":fro\" (Frobenius norm).
+   Compute the \"p\"-norm of a vector or a matrix. \"p\" is \"2\" by
+   default, if not provided. If \"A\" is a vector, \"norm(A, p)\"
+   computes the \"p\"-norm. \"norm(A, Inf)\" returns the largest value
+   in \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest. If
+   \"A\" is a matrix, valid values for \"p\" are \"1\", \"2\", or
+   \"Inf\". In order to compute the Frobenius norm, use \"normfro\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"normfro",E"normfro(A)
+
+   Compute the Frobenius norm of a matrix \"A\".
 
 "),
 
@@ -2895,7 +2938,7 @@ airyaiprime(x)
 
    Matrix condition number, computed using the p-norm. \"p\" is 2 by
    default, if not provided. Valid values for \"p\" are \"1\", \"2\",
-   \"Inf\", or \":fro\" (Frobenius norm).
+   or \"Inf\".
 
 "),
 
@@ -3292,7 +3335,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"fft(A [, dims]), fft!",E"fft(A [, dims]), fft!
+(E"Signal Processing",E"Base",E"fft",E"fft(A[, dims])
 
    Performs a multidimensional FFT of the array \"A\".  The optional
    \"dims\" argument specifies an iterable subset of dimensions (e.g.
@@ -3300,9 +3343,6 @@ airyaiprime(x)
    efficient if the size of \"A\" along the transformed dimensions is
    a product of small primes; see \"nextprod()\".  See also
    \"plan_fft()\" for even greater efficiency.
-
-   \"fft!()\" is the same as \"fft()\", but operates in-place on
-   \"A\", which must be an array of complex floating-point numbers.
 
    A one-dimensional FFT computes the one-dimensional discrete Fourier
    transform (DFT) as defined by \\operatorname{DFT}[k] =
@@ -3313,20 +3353,16 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"ifft(A [, dims]), ifft!, bfft, bfft!",E"ifft(A [, dims]), ifft!, bfft, bfft!
+(E"Signal Processing",E"Base",E"fft!",E"fft!(A[, dims])
+
+   Same as \"fft()\", but operates in-place on \"A\", which must be an
+   array of complex floating-point numbers.
+
+"),
+
+(E"Signal Processing",E"",E"ifft(A [, dims]), bfft, bfft!",E"ifft(A [, dims]), bfft, bfft!
 
    Multidimensional inverse FFT.
-
-   \"ifft()\" and \"ifft!()\" have the same arguments as \"fft()\" and
-   \"fft!()\", respectively.
-
-   \"bfft()\" and \"bfft!()\" are similar to \"ifft()\" and
-   \"ifft!()\", respectively, but compute an unnormalized inverse
-   (backward) transform, which must be divided by the product of the
-   sizes of the transformed dimensions in order to obtain the inverse.
-   (These are slightly more efficient than \"ifft()\" and \"ifft!()\"
-   because they omit a scaling step, which in some applications can be
-   combined with other camputational steps elsewhere.)
 
    A one-dimensional backward FFT computes \\operatorname{BDFT}[k] =
    \\sum_{n=1}^{\\operatorname{length}(A)} \\exp\\left(+i\\frac{2\\pi
@@ -3337,7 +3373,30 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!",E"plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!
+(E"Signal Processing",E"Base",E"ifft!",E"ifft!(A[, dims])
+
+   Same as \"ifft()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"bfft",E"bfft(A[, dims])
+
+   Similar to \"ifft()\", but computes an unnormalized inverse
+   (backward) transform, which must be divided by the product of the
+   sizes of the transformed dimensions in order to obtain the inverse.
+   (This is slightly more efficient than \"ifft()\" because it omits a
+   scaling step, which in some applications can be combined with other
+   computational steps elsewhere.)
+
+"),
+
+(E"Signal Processing",E"Base",E"bfft!",E"bfft!(A[, dims])
+
+   Same as \"bfft()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"",E"plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft",E"plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
 
    Pre-plan an optimized FFT along given dimensions (\"dims\") of
    arrays matching the shape and type of \"A\".  (The first two
@@ -3362,6 +3421,24 @@ airyaiprime(x)
 
 "),
 
+(E"Signal Processing",E"Base",E"plan_fft!",E"plan_fft!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_fft()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_ifft!",E"plan_ifft!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_ifft()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_bfft!",E"plan_bfft!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_bfft()\", but operates in-place on \"A\".
+
+"),
+
 (E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dims])
 
    Multidimensional FFT of a real array A, exploiting the fact that
@@ -3378,7 +3455,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"irfft(A, d [, dims]), brfft",E"irfft(A, d [, dims]), brfft
+(E"Signal Processing",E"Base",E"irfft",E"irfft(A, d[, dims])
 
    Inverse of \"rfft()\": for a complex array \"A\", gives the
    corresponding real array whose FFT yields \"A\" in the first half.
@@ -3391,7 +3468,11 @@ airyaiprime(x)
    from \"size(A)\" due to the possibility of rounding by the
    \"floor\" function here.)
 
-   \"brfft()\" is similar but computes an unnormalized inverse
+"),
+
+(E"Signal Processing",E"Base",E"brfft",E"brfft(A, d[, dims])
+
+   Similar to \"irfft()\" but computes an unnormalized inverse
    transform (similar to \"bfft()\"), which must be divided by the
    product of the sizes of the transformed dimensions (of the real
    output array) in order to obtain the inverse transform.
@@ -3416,7 +3497,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"dct(A [, dims]), dct!, idct, idct!",E"dct(A [, dims]), dct!, idct, idct!
+(E"Signal Processing",E"Base",E"dct",E"dct(A[, dims])
 
    Performs a multidimensional type-II discrete cosine transform (DCT)
    of the array \"A\", using the unitary normalization of the DCT. The
@@ -3426,22 +3507,60 @@ airyaiprime(x)
    dimensions is a product of small primes; see \"nextprod()\".  See
    also \"plan_dct()\" for even greater efficiency.
 
-   The \"dct!()\" is the same, except that it operates in-place on
-   \"A\", which must be an array of real or complex floating-point
-   values.
+"),
 
-   Similarly, \"idct(A [, dims])()\" and \"idct!()\" compute the
-   inverse DCT (technically, a type-III DCT with the unitary
-   normalization).
+(E"Signal Processing",E"Base",E"dct!",E"dct!(A[, dims])
+
+   Same as \"dct!()\", except that it operates in-place on \"A\",
+   which must be an array of real or complex floating-point values.
 
 "),
 
-(E"Signal Processing",E"",E"plan_dct(A [, dims [, flags [, timelimit]]]), plan_dct!, plan_idct, plan_idct!",E"plan_dct(A [, dims [, flags [, timelimit]]]), plan_dct!, plan_idct, plan_idct!
+(E"Signal Processing",E"Base",E"idct",E"idct(A[, dims])
+
+   Computes the multidimensional inverse discrete cosine transform
+   (DCT) of the array \"A\" (technically, a type-III DCT with the
+   unitary normalization). The optional \"dims\" argument specifies an
+   iterable subset of dimensions (e.g. an integer, range, tuple, or
+   array) to transform along.  Most efficient if the size of \"A\"
+   along the transformed dimensions is a product of small primes; see
+   \"nextprod()\".  See also \"plan_idct()\" for even greater
+   efficiency.
+
+"),
+
+(E"Signal Processing",E"Base",E"idct!",E"idct!(A[, dims])
+
+   Same as \"idct!()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_dct",E"plan_dct(A[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized discrete cosine transform (DCT), similar to
-   \"plan_fft()\" except producint a function that computes \"dct()\",
-   \"dct!()\", \"idct()\", and \"idct!()\" respectively.  The first
-   two arguments have the same meaning as for \"dct()\".
+   \"plan_fft()\" except producing a function that computes \"dct()\".
+   The first two arguments have the same meaning as for \"dct()\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_dct!",E"plan_dct!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_dct()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_idct",E"plan_idct(A[, dims[, flags[, timelimit]]])
+
+   Pre-plan an optimized inverse discrete cosine transform (DCT),
+   similar to \"plan_fft()\" except producing a function that computes
+   \"idct()\". The first two arguments have the same meaning as for
+   \"idct()\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_idct!",E"plan_idct!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_idct()\", but operates in-place on \"A\".
 
 "),
 
@@ -3551,13 +3670,20 @@ airyaiprime(x)
 
 (E"Parallel Computing",E"Base",E"nprocs",E"nprocs()
 
-   Get the number of available processors
+   Get the number of available processors.
 
 "),
 
 (E"Parallel Computing",E"Base",E"myid",E"myid()
 
-   Get the id of the current processor
+   Get the id of the current processor.
+
+"),
+
+(E"Parallel Computing",E"Base",E"pmap",E"pmap(f, c)
+
+   Transform collection \"c\" by applying \"f\" to each element in
+   parallel.
 
 "),
 

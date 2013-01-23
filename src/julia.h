@@ -163,7 +163,7 @@ typedef struct _jl_lambda_info_t {
     struct _jl_module_t *module;
     struct _jl_lambda_info_t *def;  // original this is specialized from
     jl_value_t *capt;  // captured var info
-    jl_value_t *file;
+    jl_sym_t *file;
     int32_t line;
     int8_t inferred;
 
@@ -366,7 +366,7 @@ extern jl_type_t *jl_bottom_type;
 extern jl_value_t *jl_top_type;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern DLLEXPORT jl_struct_type_t *jl_module_type;
-extern jl_tag_type_t *jl_seq_type;
+extern jl_tag_type_t *jl_vararg_type;
 extern jl_struct_type_t *jl_function_type;
 extern jl_tag_type_t *jl_abstractarray_type;
 extern jl_struct_type_t *jl_array_type;
@@ -590,10 +590,10 @@ static inline int jl_is_cpointer_type(void *t)
             ((jl_bits_type_t*)(t))->name == jl_pointer_type->name);
 }
 
-static inline int jl_is_seq_type(jl_value_t *v)
+static inline int jl_is_vararg_type(jl_value_t *v)
 {
     return (jl_is_tag_type(v) &&
-            ((jl_tag_type_t*)(v))->name == jl_seq_type->name);
+            ((jl_tag_type_t*)(v))->name == jl_vararg_type->name);
 }
 
 static inline int jl_is_ntuple_type(jl_value_t *v)
@@ -1125,7 +1125,7 @@ DLLEXPORT void jl_free2(void *p, void *hint);
 
 DLLEXPORT int jl_cpu_cores(void);
 
-DLLEXPORT int jl_write(uv_stream_t *stream, const char *str, size_t n);
+DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 

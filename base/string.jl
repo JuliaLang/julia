@@ -581,7 +581,7 @@ function print_escaped(io, s::String, esc::String)
         c == '\e'       ? print(io, L"\e") :
         c == '\\'       ? print(io, "\\\\") :
         contains(esc,c) ? print(io, '\\', c) :
-        7 <= c <= 13    ? print(io, '\\', "abtnvfr"[c-6]) :
+        7 <= c <= 13    ? print(io, '\\', "abtnvfr"[int(c-6)]) :
         iswprint(c)     ? print(io, c) :
         c <= '\x7f'     ? print(io, L"\x", hex(c, 2)) :
         c <= '\uffff'   ? print(io, L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
@@ -1227,7 +1227,7 @@ end
 
 # find the index of the first occurrence of a value in a byte array
 
-function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
+function memchr(a::Array{Uint8,1}, b, i::Integer)
     if i < 1 error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
@@ -1235,7 +1235,7 @@ function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
 end
-memchr(a::Array{Uint8,1}, b::Integer) = memchr(a,b,1)
+memchr(a::Array{Uint8,1}, b) = memchr(a,b,1)
 
 # return a random string (often useful for temporary filenames/dirnames)
 let

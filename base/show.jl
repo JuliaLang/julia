@@ -2,11 +2,11 @@
 
 show(x) = show(OUTPUT_STREAM::Stream, x)
 
-show(io::Stream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
+print(io::IO, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
 show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io::Stream, x)
 
 showcompact(io::IO, x) = show(io, x)
-showcompact(x)     = showcompact(OUTPUT_STREAM::Stream, x)
+showcompact(x) = showcompact(OUTPUT_STREAM::Stream, x)
 
 macro show(exs...)
     blk = expr(:block)
@@ -204,6 +204,7 @@ end
 show_unquoted(io::IO, sym::Symbol, indent::Int) = print(io, sym)
 show_unquoted(io::IO, x::Number, indent::Int)   = show(io, x)
 show_unquoted(io::IO, x::String, indent::Int)   = show(io, x)
+show_unquoted(io::IO, x::Char, indent::Int)     = show(io, x)
 
 const _expr_infix_wide = Set(:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=), 
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||))

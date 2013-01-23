@@ -142,7 +142,7 @@ end
 end
 
 @windows_only function mktempdir()
-  seed = randi(Uint32)
+  seed = rand(Uint32)
   while true
       filename = GetTempFileName(seed)
       ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), filename)

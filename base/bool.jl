@@ -48,11 +48,11 @@ abs(x::Bool) = int(x)
 
 +(x::Bool, y::Bool) = int(x)+int(y)
 -(x::Bool, y::Bool) = int(x)-int(y)
-*(x::Bool, y::Bool) = int(x)*int(y)
+*(x::Bool, y::Bool) = x&y
 /(x::Bool, y::Bool) = int(x)/int(y)
-^(x::Bool, y::Bool) = int(x)^int(y)
+^(x::Bool, y::Bool) = x|!y
 
-div(x::Bool, y::Bool) = div(int(x),int(y))
-fld(x::Bool, y::Bool) = fld(int(x),int(y))
-rem(x::Bool, y::Bool) = rem(int(x),int(y))
-mod(x::Bool, y::Bool) = mod(int(x),int(y))
+div(x::Bool, y::Bool) = y ? x : throw(DivideByZeroError())
+fld(x::Bool, y::Bool) = div(x,y)
+rem(x::Bool, y::Bool) = y ? false : throw(DivideByZeroError())
+mod(x::Bool, y::Bool) = rem(x,y)

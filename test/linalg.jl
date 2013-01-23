@@ -66,10 +66,16 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq asym*v[:,1] d[1]*v[:,1]
         @assert_approx_eq v*diagmm(d,v') asym
 
-        d,v   = eig(a)             # non-symmetric eigen decomposition
+        d,v   = eig(a)                 # non-symmetric eigen decomposition
         for i in 1:size(a,2) @assert_approx_eq a*v[:,i] d[i]*v[:,i] end
     
-        u,s,vt = svdt(a)                # singular value decomposition
+        u, q, v = schur(a)             # Schur
+        @assert_approx_eq q*u*q' a
+        @assert_approx_eq sort(real(v)) sort(real(d))
+        @assert_approx_eq sort(imag(v)) sort(imag(d))
+        @test istriu(u) || isreal(a)
+
+        u,s,vt = svdt(a)               # singular value decomposition
         @assert_approx_eq u*diagmm(s,vt) a
     
         x = a \ b
@@ -101,6 +107,10 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq_eps cond(a, 2) 1.960057871514615e+02 0.01
         @assert_approx_eq_eps cond(a, Inf) 3.757017682707787e+02 0.01
         @assert_approx_eq_eps cond(a[:,1:5]) 10.233059337453463 0.01
+
+                                        # Matrix square root
+        asq = sqrtm(a)
+        @assert_approx_eq asq*asq a
 end
 
 ## Least squares solutions
@@ -119,7 +129,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
         x = a\b                         # Rank deficient
         @assert_approx_eq det((a*x-b)'*(a*x-b)) convert(elty, 4.437969924812031)
 
-        x = convert(Matrix{elty}, [1 0 0; 0 1 -1]) \ convert(Vector{elty}, [1,1]) # Underdetermined minimum norm
+                                        # Underdetermined minimum norm
+        x = convert(Matrix{elty}, [1 0 0; 0 1 -1]) \ convert(Vector{elty}, [1,1]) 
         @assert_approx_eq x convert(Vector{elty}, [1, 0.5, -0.5])
 
                                         # symmetric, positive definite
@@ -171,8 +182,8 @@ B = [2 -2; 3 -5; -4 7]
 A = ones(Int, 2, 100)
 B = ones(Int, 100, 3)
 @test A*B == [100 100 100; 100 100 100]
-A = randi(20, 5, 5) - 10
-B = randi(20, 5, 5) - 10
+A = rand(1:20, 5, 5) - 10
+B = rand(1:20, 5, 5) - 10
 @test At_mul_B(A, B) == A'*B
 @test A_mul_Bt(A, B) == A*B'
                                         # Preallocated
@@ -232,6 +243,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
         0.367879439109187 1.47151775849686  1.10363831732856;
         0.135335281175235 0.406005843524598 0.541341126763207]')
         @assert_approx_eq expm(A3) eA3
+
+                                        # Hessenberg
+        @assert_approx_eq hess(A1) convert(Matrix{elty}, 
+                        [4.000000000000000  -1.414213562373094  -1.414213562373095
+                        -1.414213562373095   4.999999999999996  -0.000000000000000
+                                         0  -0.000000000000002   3.000000000000000])
 end
 
                                         # matmul for types w/o sizeof (issue #1282)

@@ -85,6 +85,34 @@ B[4,[2,3]] = 7
 
 @test isequal(reshape(1:27, 3, 3, 3)[1,:], [1  4  7  10  13  16  19  22  25])
 
+a = [3, 5, -7, 6]
+b = [4, 6, 2, -7, 1]
+ind = findin(a, b)
+@test ind == [3,4]
+
+# get
+let
+    A = reshape(1:24, 3, 8)
+    x = get(A, 32, -12)
+    @test x == -12
+    x = get(A, 14, -12)
+    @test x == 14
+    x = get(A, (2,4), -12)
+    @test x == 11
+    x = get(A, (4,4), -12)
+    @test x == -12
+    X = get(A, -5:5, nan(Float32))
+    @test eltype(X) == Float32
+    @test isnan(X) == [trues(6),falses(5)]
+    @test X[7:11] == 1:5
+    X = get(A, (2:4, 9:-2:-13), 0)
+    Xv = zeros(Int, 3, 12)
+    Xv[1:2, 2:5] = A[2:3, 7:-2:1]
+    @test X == Xv
+    X2 = get(A, Vector{Int}[[2:4], [9:-2:-13]], 0)
+    @test X == X2
+end
+
 ## arrays as dequeues
 l = {1,2,3}
 push!(l,8)
@@ -279,3 +307,35 @@ begin
 end
 
 @test (1:5)[[true,false,true,false,true]] == [1,3,5]
+
+# set-like operations
+@test isequal(union([1,2,3], [4,3,4]), [1,2,3,4])
+@test isequal(union(['e','c','a'], ['b','a','d']), ['e','c','a','b','d'])
+@test isequal(union([1,2,3], [4,3], [5]), [1,2,3,4,5])
+@test isequal(union([1,2,3]), [1,2,3])
+@test isequal(union([1,2,3], Int64[]), [1,2,3])
+@test isequal(union([1,2,3], Float64[]), [1.0,2,3])
+@test isequal(union(Int64[], [1,2,3]), [1,2,3])
+@test isequal(union(Int64[]), Int64[])
+@test isequal(intersect([1,2,3], [4,3,4]), [3])
+@test isequal(intersect(['e','c','a'], ['b','a','d']), ['a'])
+@test isequal(intersect([1,2,3], [3,1], [2,1,3]), [1,3])
+@test isequal(intersect([1,2,3]), [1,2,3])
+@test isequal(intersect([1,2,3], Int64[]), Int64[])
+@test isequal(intersect([1,2,3], Float64[]), Float64[])
+@test isequal(intersect(Int64[], [1,2,3]), Int64[])
+@test isequal(intersect(Int64[]), Int64[])
+@test isequal(setdiff([1,2,3,4], [2,5,4]), [1,3])
+@test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
+@test isequal(setdiff([1,2,3,4], Int64[]), [1,2,3,4])
+@test isequal(setdiff([1,2,3,4], [1,2,3,4,5]), Int64[])
+@test isequal(symdiff([1,2,3], [4,3,4]), [1,2,4])
+@test isequal(symdiff(['e','c','a'], ['b','a','d']), ['e','c','b','d'])
+@test isequal(symdiff([1,2,3], [4,3], [5]), [1,2,4,5])
+@test isequal(symdiff([1,2,3,4,5], [1,2,3], [3,4]), [3,5])
+@test isequal(symdiff([1,2,3]), [1,2,3])
+@test isequal(symdiff([1,2,3], Int64[]), [1,2,3])
+@test isequal(symdiff([1,2,3], Float64[]), [1.0,2,3])
+@test isequal(symdiff(Int64[], [1,2,3]), [1,2,3])
+@test isequal(symdiff(Int64[]), Int64[])
+

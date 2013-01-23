@@ -1393,6 +1393,8 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
         end
     end
 end
+
+# New symmetric eigen solver
 for (syevr, elty) in
     ((:dsyevr_,:Float64),
      (:ssyevr_,:Float32))
@@ -1593,6 +1595,180 @@ for (gecon, elty, relty) in
                   info)
             if info[1] < 0 throw(LapackException(info[1])) end
             return rcond[1]
+        end
+    end
+end
+
+# Hessenberg form
+for (gehrd, elty) in
+    ((:dgehrd_,:Float64),
+     (:sgehrd_,:Float32),
+     (:zgehrd_,:Complex128),
+     (:cgehrd_,:Complex64))
+    @eval begin
+        function gehrd!(ilo::BlasInt, ihi::BlasInt, A::StridedMatrix{$elty})
+#                 .. Scalar Arguments ..
+#       INTEGER            IHI, ILO, INFO, LDA, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION  A( LDA, * ), TAU( * ), WORK( * )
+            chkstride1(A)
+            chksquare(A)
+            n = size(A, 1)
+            tau = Array($elty, n - 1)
+            work = Array($elty, 1)
+            lwork = blas_int(-1)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(gehrd)),liblapack), Void,
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{BlasInt}),
+                    &n, &ilo, &ihi, A, 
+                    &max(1,n), tau, work, &lwork, 
+                    info)
+                if info[1] < 0 throw(LapackException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(work[1])
+                    work = Array($elty, lwork)
+                end
+            end
+            return A, tau
+        end
+    end
+end
+gehrd!(A::StridedMatrix) = gehrd!(1, size(A, 1), A)
+
+# construct Q from Hessenberg
+for (orghr, elty) in
+    ((:dorghr_,:Float64),
+     (:sorghr_,:Float32),
+     (:zunghr_,:Complex128),
+     (:cunghr_,:Complex64))
+    @eval begin
+        function orghr!(ilo::BlasInt, ihi::BlasInt, A::StridedMatrix{$elty}, tau::StridedVector{$elty})
+# *     .. Scalar Arguments ..
+#       INTEGER            IHI, ILO, INFO, LDA, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+            chkstride1(A)
+            chksquare(A)
+            n = size(A, 1)
+            if n - length(tau) != 1 throw(LapackDimMismatch) end
+            work = Array($elty, 1)
+            lwork = blas_int(-1)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(orghr)),liblapack), Void,
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{BlasInt}),
+                    &n, &ilo, &ihi, A, 
+                    &max(1,n), tau, work, &lwork, 
+                    info)
+                if info[1] < 0 throw(LapackException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(work[1])
+                    work = Array($elty, lwork)
+                end
+            end
+            return A
+        end
+    end
+end
+# Schur form
+for (gees, elty) in
+    ((:dgees_,:Float64),
+     (:sgees_,:Float32))
+    @eval begin
+        function gees!(jobvs::BlasChar, A::StridedMatrix{$elty})
+#     .. Scalar Arguments ..
+#     CHARACTER          JOBVS, SORT
+#     INTEGER            INFO, LDA, LDVS, LWORK, N, SDIM
+#     ..
+#     .. Array Arguments ..
+#     LOGICAL            BWORK( * )
+#     DOUBLE PRECISION   A( LDA, * ), VS( LDVS, * ), WI( * ), WORK( * ),
+#    $                   WR( * )
+            chkstride1(A)
+            chksquare(A)
+            sort = 'N'
+            n = size(A, 1)
+            sdim = Array(BlasInt, 1)
+            wr = Array($elty, n)
+            wi = Array($elty, n)
+            ldvs = jobvs == 'V' ? n : 1
+            vs = Array($elty, ldvs, n)
+            work = Array($elty, 1)
+            lwork = blas_int(-1)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(gees)),liblapack), Void,
+                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Void}, Ptr{BlasInt},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                        Ptr{BlasInt}, Ptr{Void}, Ptr{BlasInt}),
+                    &jobvs, &sort, [], &n, 
+                        A, &max(1, n), sdim, wr,
+                        wi, vs, &ldvs, work, 
+                        &lwork, [], info)
+                if info[1] != 0 throw(LapackException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(work[1])
+                    work = Array($elty, lwork)
+                end
+            end
+            if all(wi .== 0)
+                return A, vs, wr
+            else
+                return A, vs, complex(wr, wi)
+            end
+        end
+    end
+end
+for (gees, elty, relty) in
+    ((:zgees_,:Complex128,:Float64),
+     (:cgees_,:Complex64,:Float32))
+    @eval begin
+        function gees!(jobvs::BlasChar, A::StridedMatrix{$elty})
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBVS, SORT
+#       INTEGER            INFO, LDA, LDVS, LWORK, N, SDIM
+# *     ..
+# *     .. Array Arguments ..
+#       LOGICAL            BWORK( * )
+#       DOUBLE PRECISION   RWORK( * )
+#       COMPLEX*16         A( LDA, * ), VS( LDVS, * ), W( * ), WORK( * )
+            chkstride1(A)
+            chksquare(A)
+            sort = 'N'
+            n = size(A, 1)
+            sdim = Array(BlasInt, 1)
+            w = Array($elty, n)
+            ldvs = jobvs == 'V' ? n : 1
+            vs = Array($elty, ldvs, n)
+            work = Array($elty, 1)
+            lwork = blas_int(-1)
+            rwork = Array($relty, n)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(gees)),liblapack), Void,
+                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Void}, Ptr{BlasInt},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                        Ptr{$relty}, Ptr{Void}, Ptr{BlasInt}),
+                    &jobvs, &sort, [], &n, 
+                        A, &max(1, n), sdim, w,
+                        vs, &ldvs, work, &lwork, 
+                        rwork, [], info)
+                if info[1] != 0 throw(LapackException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(work[1])
+                    work = Array($elty, lwork)
+                end
+            end
+            return A, vs, w
         end
     end
 end

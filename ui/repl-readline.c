@@ -193,7 +193,8 @@ static int return_callback(int count, int key)
         consecutive_returns > 1;
     if (!rl_done) {
         newline_callback(count, key);
-    } else {
+    }
+    else {
         reset_indent();
         rl_point = rl_end;
         rl_redisplay();
@@ -240,7 +241,8 @@ static int tab_callback(int count, int key)
     // indent to next tab stop
     if (suppress_space()) {
         spaces_suppressed += tab_width;
-    } else {
+    }
+    else {
         i = line_start(rl_point) + prompt_length;
         do { rl_insert_text(" "); } while ((rl_point - i) % tab_width);
     }
@@ -344,7 +346,8 @@ static int up_callback(int count, int key)
         if (j == 0) rl_point -= prompt_length;
         rl_point += j - i;
         if (rl_point >= i) rl_point = i - 1;
-    } else {
+    }
+    else {
         last_hist_offset = -1;
         rl_get_previous_history(count, key);
         rl_point = line_end(0);
@@ -363,7 +366,8 @@ static int down_callback(int count, int key)
         int k = line_end(j+1);
         if (rl_point > k) rl_point = k;
         return 0;
-    } else {
+    }
+    else {
         if (last_hist_offset >= 0) {
             history_set_pos(last_hist_offset);
             last_hist_offset = -1;
@@ -380,7 +384,8 @@ void jl_input_line_callback(char *input)
     if (!input || ios_eof(ios_stdin)) {
         end = 1;
         rl_ast = NULL;
-    } else if (!rl_ast) {
+    }
+    else if (!rl_ast) {
         // In vi mode, it's possible for this function to be called w/o a
         // previous call to return_callback.
         rl_ast = jl_parse_input_line(rl_line_buffer);
@@ -431,8 +436,7 @@ static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
     } while (tree != NULL);
 }
 
-static jl_module_t *
-find_submodule_named(jl_module_t *module, const char *name)
+static jl_module_t *find_submodule_named(jl_module_t *module, const char *name)
 {
     jl_sym_t *s = jl_symbol_lookup(name);
     if (!s) return NULL;
@@ -452,15 +456,14 @@ char *strtok_r(char *str, const char *delim, char **save)
 {
     char *res, *last;
 
-    if( !save )
+    if (!save)
         return strtok(str, delim);
-    if( !str && !(str = *save) )
+    if (!str && !(str = *save))
         return NULL;
     last = str + strlen(str);
-    if( (*save = res = strtok(str, delim)) )
-    {
+    if ((*save = res = strtok(str, delim))) {
         *save += strlen(res);
-        if( *save < last )
+        if (*save < last)
             (*save)++;
         else
             *save = NULL;
@@ -615,7 +618,8 @@ void repl_sigint_handler(int sig, siginfo_t *info, void *context)
     else {
         if (jl_sigint_act.sa_flags & SA_SIGINFO) {
             jl_sigint_act.sa_sigaction(sig, info, context);
-        } else {
+        }
+        else {
             void (*f)(int) = jl_sigint_act.sa_handler;
             if (f == SIG_DFL)
                 raise(sig);
@@ -646,6 +650,8 @@ static void init_rl(void)
         rl_bind_keyseq_in_map("\e[1~", line_start_callback, keymaps[i]);
         rl_bind_keyseq_in_map("\e[4~", line_end_callback,   keymaps[i]);
         rl_bind_keyseq_in_map("\e[3~", delete_callback,     keymaps[i]);
+        rl_bind_keyseq_in_map("\e[5~", rl_named_function("beginning-of-history"), keymaps[i]);
+        rl_bind_keyseq_in_map("\e[6~", rl_named_function("end-of-history"), keymaps[i]);
         rl_bind_keyseq_in_map("\e[A",  up_callback,         keymaps[i]);
         rl_bind_keyseq_in_map("\e[B",  down_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
@@ -682,7 +688,7 @@ void jl_prep_terminal (int meta_flag)
             jl_exit(1);
         }
         if (repl_sigint_act.sa_sigaction != oldact.sa_sigaction &&
-              jl_sigint_act.sa_sigaction != oldact.sa_sigaction)
+            jl_sigint_act.sa_sigaction != oldact.sa_sigaction)
             jl_sigint_act = oldact;
     }
 #endif
@@ -699,10 +705,8 @@ void jl_deprep_terminal ()
 void init_repl_environment(int argc, char *argv[])
 {
     disable_history = 0;
-    for (int i = 0; i < argc; i++)
-    {
-        if (!strcmp(argv[i], "--no-history"))
-        {
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "--no-history")) {
             disable_history = 1;
             break;
         }
@@ -771,4 +775,3 @@ DLLEXPORT void jl_clear_input(void)
     jl_write(jl_uv_stdout, "\e[4C", 4); //hack: try to fix cursor location
 #endif
 }
-
