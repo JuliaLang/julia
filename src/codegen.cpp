@@ -1002,7 +1002,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (jl_is_long(args[2])) {
                 size_t tlen = jl_tuple_len(tty);
                 int isseqt =
-                    tlen>0 && jl_is_seq_type(jl_tupleref(tty, tlen-1));
+                    tlen>0 && jl_is_vararg_type(jl_tupleref(tty, tlen-1));
                 size_t idx = jl_unbox_long(args[2]);
                 if (idx > 0 && (idx < tlen || (idx == tlen && !isseqt))) {
                     // known to be in bounds

@@ -33,23 +33,23 @@ function typejoin(a::ANY, b::ANY)
             return Tuple
         end
         if la < lb
-            if isseqtype(a[la])
+            if isvarargtype(a[la])
                 c = cell(la)
-                c[la] = ...{typejoin(a[la].parameters[1], tailjoin(b,la))}
+                c[la] = Vararg{typejoin(a[la].parameters[1], tailjoin(b,la))}
                 n = la-1
             else
                 c = cell(la+1)
-                c[la+1] = ...{tailjoin(b,la+1)}
+                c[la+1] = Vararg{tailjoin(b,la+1)}
                 n = la
             end
         elseif lb < la
-            if isseqtype(b[lb])
+            if isvarargtype(b[lb])
                 c = cell(lb)
-                c[lb] = ...{typejoin(b[lb].parameters[1], tailjoin(a,lb))}
+                c[lb] = Vararg{typejoin(b[lb].parameters[1], tailjoin(a,lb))}
                 n = lb-1
             else
                 c = cell(lb+1)
-                c[lb+1] = ...{tailjoin(a,lb+1)}
+                c[lb+1] = Vararg{tailjoin(a,lb+1)}
                 n = lb
             end
         else
@@ -59,10 +59,10 @@ function typejoin(a::ANY, b::ANY)
         for i=1:n
             ai = a[i]; bi = b[i]
             va = false
-            if isseqtype(ai); va=true; ai = ai.parameters[1]; end
-            if isseqtype(bi); va=true; bi = bi.parameters[1]; end
+            if isvarargtype(ai); va=true; ai = ai.parameters[1]; end
+            if isvarargtype(bi); va=true; bi = bi.parameters[1]; end
             t = typejoin(ai,bi)
-            c[i] = va ? ...{t} : t
+            c[i] = va ? Vararg{t} : t
         end
         return tuple(c...)
     elseif isa(b,Tuple)
@@ -85,7 +85,7 @@ function tailjoin(tup, i)
     t = None
     for j = i:length(tup)
         tj = tup[j]
-        t = typejoin(t, isseqtype(tj)?tj.parameters[1]:tj)
+        t = typejoin(t, isvarargtype(tj)?tj.parameters[1]:tj)
     end
     return t
 end

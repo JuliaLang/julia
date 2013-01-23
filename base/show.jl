@@ -6,7 +6,7 @@ print(io::IO, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, 
 show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io::Stream, x)
 
 showcompact(io::IO, x) = show(io, x)
-showcompact(x)     = showcompact(OUTPUT_STREAM::Stream, x)
+showcompact(x) = showcompact(OUTPUT_STREAM::Stream, x)
 
 macro show(exs...)
     blk = expr(:block)

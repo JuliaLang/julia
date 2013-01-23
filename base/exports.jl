@@ -1374,4 +1374,3 @@ export
     kill,
     startTimer,
     stopTimer
-

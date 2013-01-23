@@ -366,7 +366,7 @@ extern jl_type_t *jl_bottom_type;
 extern jl_value_t *jl_top_type;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern DLLEXPORT jl_struct_type_t *jl_module_type;
-extern jl_tag_type_t *jl_seq_type;
+extern jl_tag_type_t *jl_vararg_type;
 extern jl_struct_type_t *jl_function_type;
 extern jl_tag_type_t *jl_abstractarray_type;
 extern jl_struct_type_t *jl_array_type;
@@ -590,10 +590,10 @@ static inline int jl_is_cpointer_type(void *t)
             ((jl_bits_type_t*)(t))->name == jl_pointer_type->name);
 }
 
-static inline int jl_is_seq_type(jl_value_t *v)
+static inline int jl_is_vararg_type(jl_value_t *v)
 {
     return (jl_is_tag_type(v) &&
-            ((jl_tag_type_t*)(v))->name == jl_seq_type->name);
+            ((jl_tag_type_t*)(v))->name == jl_vararg_type->name);
 }
 
 static inline int jl_is_ntuple_type(jl_value_t *v)

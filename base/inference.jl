@@ -88,7 +88,7 @@ cmp_tfunc = (x,y)->Bool
 
 isType(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name,Type.name)
 
-isseqtype(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name.name,:...)
+isvarargtype(t::ANY) = isa(t,AbstractKind)&&is((t::AbstractKind).name,Vararg.name)
 
 const t_func = ObjectIdDict()
 #t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
@@ -171,10 +171,10 @@ function static_convert(to::ANY, from::ANY)
         if pseq
         elseif i <= pl
             pe = to[i]
-            if isseqtype(pe)
+            if isvarargtype(pe)
                 pe = pe.parameters[1]
                 pseq = true
-            elseif isa(pe,TypeVar) && isseqtype(pe.ub)
+            elseif isa(pe,TypeVar) && isvarargtype(pe.ub)
                 pe = pe.ub.parameters[1]
                 pseq = true
             end
@@ -182,11 +182,11 @@ function static_convert(to::ANY, from::ANY)
             return None
         end
         # tuple conversion calls convert recursively
-        if isseqtype(ce)
+        if isvarargtype(ce)
             R = abstract_call_gf(convert, (), (Type{pe}, ce.parameters[1]), ())
             #R = static_convert(pe, ce.parameters[1])
             isType(R) && (R = R.parameters[1])
-            result[i] = ...{R}
+            result[i] = Vararg{R}
         else
             R = abstract_call_gf(convert, (), (Type{pe}, ce), ())
             #R = static_convert(pe, ce)
@@ -249,7 +249,7 @@ const tupleref_tfunc = function (A, t, i)
     end
     n = length(t)
     last = tupleref(t,n)
-    vararg = isseqtype(last)
+    vararg = isvarargtype(last)
     if isa(A[2],Integer)
         # index is a constant
         i = A[2]
@@ -444,7 +444,7 @@ end
 
 const isconstantref = isconstantfunc
 
-isvatuple(t::Tuple) = (n = length(t); n > 0 && isseqtype(t[n]))
+isvatuple(t::Tuple) = (n = length(t); n > 0 && isvarargtype(t[n]))
 
 const limit_tuple_depth = t->limit_tuple_depth_(t,0)
 
@@ -467,12 +467,12 @@ const limit_tuple_type = function (t::Tuple)
     n = length(t)
     if n > MAX_TUPLETYPE_LEN
         last = t[n]
-        if isseqtype(last)
+        if isvarargtype(last)
             last = last.parameters[1]
         end
         tail = tuple(t[MAX_TUPLETYPE_LEN:(n-1)]..., last)
         tail = typeintersect(reduce(tmerge, None, tail), Any)
-        return tuple(t[1:(MAX_TUPLETYPE_LEN-1)]..., ...{tail})
+        return tuple(t[1:(MAX_TUPLETYPE_LEN-1)]..., Vararg{tail})
     end
     return t
 end

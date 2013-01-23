@@ -199,7 +199,9 @@
 		    (cons (replace-end (expand-index-colon idx) a n tuples last)
 			  ret)))))))
 
-(define (make-decl n t) `(|::| ,n ,t))
+(define (make-decl n t) `(|::| ,n ,(if (and (pair? t) (eq? (car t) '...))
+				       `(curly Vararg ,(cadr t))
+				       t)))
 
 (define (function-expr argl body)
   (let ((t (llist-types argl))
@@ -880,17 +882,15 @@
 		     `(call (top apply) ,f ,@(tuple-wrap argl '()))))
 
    ; tuple syntax (a, b...)
-   ; note, directly inside tuple ... means sequence type
+   ; note, directly inside tuple ... means Vararg type
    (pattern-lambda (tuple . args)
 		   `(call (top tuple)
 			  ,@(map (lambda (x)
 				   (if (and (length= x 2)
 					    (eq? (car x) '...))
-				       `(curly ... ,(cadr x))
+				       `(curly Vararg ,(cadr x))
 				       x))
 				 args)))
-
-   (pattern-lambda (... a) `(curly ... ,a))
 
    ;; dict syntax
    (pattern-lambda (dict . args)
