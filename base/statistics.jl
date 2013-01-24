@@ -225,7 +225,7 @@ end
 
 function cov_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
     n = length(x)
-    if n != length(y); error("Vectors must have same lenght."); end
+    if n != length(y); error("vectors must have same length"); end
     meanx = x[1]
     meany = y[1]
     C = zero(float(x[1]))
@@ -356,7 +356,7 @@ percentile(v::AbstractVector) = quantile(v,[1:99]/100)
 function bound_quantiles(qs::AbstractVector)
     epsilon = 100*eps()
     if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
-        error("quantiles out of [0,1] range!")
+        error("quantiles out of [0,1] range")
     end
     [min(1,max(0,q)) for q = qs]
 end
