@@ -27,7 +27,11 @@ export # not exported by Base
         InsertionSort,
         QuickSort,
         MergeSort,
-        TimSort
+        TimSort,
+    DEFAULT_UNSTABLE,
+    DEFAULT_STABLE,
+    SMALL_ALGORITHM,
+    SMALL_THRESHOLD
 
 ## notions of element ordering ##
 

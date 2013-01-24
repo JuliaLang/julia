@@ -5,6 +5,11 @@
 #
 # Original author: @kmsquire
 
+module _TimSort
+using Sort
+
+import Sort.sort!
+
 typealias Run Range1{Int}
 
 const MIN_GALLOP = 7
@@ -427,3 +432,5 @@ function sort!(::TimSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int)
     end
     return v
 end
+
+end # module _TimSort
