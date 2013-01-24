@@ -296,6 +296,11 @@
     uv_*;
     LLVM*;
     add_library_mapping;
+
+    /* freebsd */
+    environ;
+    __progname;
+
   local:
     *;
 };
