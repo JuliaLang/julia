@@ -990,7 +990,7 @@
 		 body))))
     ((export)
      (let ((es (map macrocall-to-atsym
-		    (parse-comma-separated-assignments s))))
+		    (parse-comma-separated s parse-atom))))
        (if (not (every symbol? es))
 	   (error "invalid export statement"))
        `(export ,@es)))
