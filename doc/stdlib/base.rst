@@ -376,10 +376,6 @@ Set-Like Collections
 
    Construct an ``IntSet`` of the given integers. Implemented as a bit string, and therefore good for dense integer sets.
 
-.. function:: choose(s)
-
-   Pick an element of a set
-
 .. function:: union(s1,s2...)
 
    Construct the union of two or more sets. Maintains order with arrays.
@@ -403,31 +399,31 @@ Partially implemented by: ``Array``.
 Dequeues
 --------
 
-.. function:: push(collection, item)
+.. function:: push!(collection, item)
 
    Insert an item at the end of a collection.
 
-.. function:: pop(collection)
+.. function:: pop!(collection)
 
    Remove the last item in a collection and return it.
 
-.. function:: enqueue(collection, item)
+.. function:: unshift!(collection, item)
 
-   Insert an item at the beginning of a collection. Also called ``unshift``.
+   Insert an item at the beginning of a collection.
 
-.. function:: shift(collection)
+.. function:: shift!(collection)
 
    Remove the first item in a collection and return it.
 
-.. function:: insert(collection, index, item)
+.. function:: insert!(collection, index, item)
 
    Insert an item at the given index.
 
-.. function:: del(collection, index)
+.. function:: delete!(collection, index)
 
    Remove the item at the given index.
 
-.. function:: grow(collection, n)
+.. function:: grow!(collection, n)
 
    Add uninitialized space for ``n`` elements at the end of a collection.
 
