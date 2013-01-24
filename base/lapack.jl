@@ -1637,7 +1637,7 @@ for (gehrd, elty) in
         end
     end
 end
-gehrd!(A::StridedMatrix) = gehrd!(1, size(A, 1), A)
+gehrd!(A::StridedMatrix) = gehrd!(blas_int(1), blas_int(size(A, 1)), A)
 
 # construct Q from Hessenberg
 for (orghr, elty) in
