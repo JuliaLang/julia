@@ -26,7 +26,8 @@ export # not exported by Base
     Algorithm,
         InsertionSort,
         QuickSort,
-        MergeSort
+        MergeSort,
+        TimSort
 
 ## notions of element ordering ##
 
@@ -147,6 +148,7 @@ abstract Algorithm
 type InsertionSort <: Algorithm end
 type QuickSort     <: Algorithm end
 type MergeSort     <: Algorithm end
+type TimSort       <: Algorithm end
 
 const DEFAULT_UNSTABLE = QuickSort()
 const DEFAULT_STABLE   = MergeSort()
@@ -243,6 +245,8 @@ function sort!(::MergeSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int, t:
     return v
 end
 sort!(a::MergeSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int) = sort!(a,o,v,lo,hi,similar(v))
+
+include("timsort.jl")
 
 ## sortperm: the permutation to sort an array ##
 
