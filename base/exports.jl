@@ -745,6 +745,7 @@ export
     full,
     issparse,
     sparse,
+    sparsevec,
     speye,
     spones,
     sprand,
