@@ -654,4 +654,21 @@ function package_directory(pkg::String)
     joinpath(dir(), pkg)
 end
 
+# Repository sanity check
+check_repository() = cd_pkgdir() do
+    try
+        Resolve.sanity_check()
+    catch err
+        if !isa(err, Resolve.MetadataError)
+            rethrow(err)
+        end
+        println("Packages with unsatisfiable requirements found:")
+        for (v, pp) in err.info
+            println("  $(v.package) v$(v.version) : no valid versions exist for package $pp")
+        end
+        return false
+    end
+    return true
+end
+
 end # module
