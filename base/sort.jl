@@ -69,7 +69,7 @@ function select!(o::Ordering, v::AbstractVector, k::Int, lo::Int, hi::Int)
             return v[lo]
         end
         i, j = lo, hi
-        pivot = v[(lo+hi)>>>1]
+        pivot = v[rand(lo:hi)] # v[(lo+hi)>>>1]
         while i < j
             while lt(o, v[i], pivot); i += 1; end
             while lt(o, pivot, v[j]); j -= 1; end
@@ -185,13 +185,13 @@ function sort!(::InsertionSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int
     return v
 end
 
-function sort!(::QuickSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int)
+function sort!(a::QuickSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int)
     while hi > lo
         if hi-lo <= SMALL_THRESHOLD
             return sort!(SMALL_ALGORITHM, o, v, lo, hi)
         end
+        pivot = v[rand(lo:hi)] # v[(lo+hi)>>>1]
         i, j = lo, hi
-        pivot = v[(lo+hi)>>>1]
         while i <= j
             while lt(o, v[i], pivot); i += 1; end
             while lt(o, pivot, v[j]); j -= 1; end
@@ -202,22 +202,22 @@ function sort!(::QuickSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int)
             end
         end
         if lo < j
-            sort!(QuickSort(), o, v, lo, j)
+            sort!(a, o, v, lo, j)
         end
         lo = i
     end
     return v
 end
 
-function sort!(::MergeSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int, t::AbstractVector)
+function sort!(a::MergeSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int, t::AbstractVector)
     if lo < hi
         if hi-lo <= SMALL_THRESHOLD
             return sort!(SMALL_ALGORITHM, o, v, lo, hi)
         end
 
         m = (lo+hi)>>>1
-        sort!(MergeSort(), o, v, lo,  m,  t)
-        sort!(MergeSort(), o, v, m+1, hi, t)
+        sort!(a, o, v, lo,  m,  t)
+        sort!(a, o, v, m+1, hi, t)
 
         i = 1
         j = lo
