@@ -268,10 +268,6 @@ add(s,2)
 delete!(s,2)
 @test length(s) == 2
 
-# get
-@test get(Set(1,2,3), 2, "ignored") == true
-@test get(Set(1,  3), 2, "ignored") == false
-
 # union
 s = union(Set(1,2), Set(3,4))
 @test isequal(s, Set(1,2,3,4))

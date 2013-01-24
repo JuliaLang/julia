@@ -1130,10 +1130,10 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     handler_at = { () for i=1:n }
 
     while !isempty(W)
-        pc = choose(W)
+        pc = first(W)
         while true
             #print(pc,": ",s[pc],"\n")
-            delete!(W, pc)
+            delete!(W, pc, 0)
             if is(handler_at[pc],())
                 handler_at[pc] = cur_hand
             else
