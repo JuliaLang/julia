@@ -13,6 +13,7 @@ export
     Sort,
     Test,
     Pkg,
+    Operators,
 
 # Types
     AbstractMatrix,
@@ -303,7 +304,6 @@ export
     .^,
     /,
     //,
-    :,
     <,
     <:,
     <<,
@@ -323,6 +323,7 @@ export
     ^,
     |,
     ~,
+    :,
     A_ldiv_Bc,
     A_ldiv_Bt,
     A_mul_B,
