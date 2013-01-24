@@ -97,6 +97,11 @@ promote_type(T) = T
 promote_type(T, S   ) = typejoin(T, S)
 promote_type(T, S...) = promote_type(T, promote_type(S...))
 
+promote_type(::Type{None}, ::Type{None}) = None
+promote_type{T}(::Type{T}, ::Type{T}) = T
+promote_type{T}(::Type{T}, ::Type{None}) = T
+promote_type{T}(::Type{None}, ::Type{T}) = T
+
 function promote_type{T,S}(::Type{T}, ::Type{S})
     if applicable(promote_rule, T, S)
         return promote_rule(T,S)
