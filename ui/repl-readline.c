@@ -634,6 +634,7 @@ static void init_rl(void)
 {
     rl_readline_name = "julia";
     rl_attempted_completion_function = julia_completion;
+    rl_completer_word_break_characters = " \t\n\"\\'`@$><=;|&{}()[],+-*/?%^~!";
     Keymap keymaps[] = {emacs_standard_keymap, vi_insertion_keymap};
     int i;
     for (i = 0; i < sizeof(keymaps)/sizeof(keymaps[0]); i++) {
