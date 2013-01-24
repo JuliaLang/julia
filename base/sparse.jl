@@ -171,7 +171,25 @@ function dense{Tv}(S::SparseMatrixCSC{Tv})
     return A
 end
 
-function sparse(a::Vector)
+# Construct a sparse vector
+
+sparsevec{K<:Integer,V}(d::Dict{K,V}, len::Int) = sparsevec(keys(d), values(d), len)
+
+sparsevec{K<:Integer,V}(d::Dict{K,V}) = sparsevec(keys(d), values(d))
+
+sparsevec(I::AbstractVector, V, m::Integer) = sparsevec(I, V, m, +)
+
+sparsevec(I::AbstractVector, V) = sparsevec(I, V, max(I), +)
+
+function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
+    nI = length(I)
+    if isa(V, Number); V = fill(V, nI); end
+    (I, P) = sortperm(I)
+    V = V[P]
+    sparse_IJ_sorted!(I, ones(Int, nI), V, m, 1, combine)
+end
+
+function sparsevec(a::Vector)
     n = length(a)
     I = find(a)
     J = ones(Int, n)
@@ -179,25 +197,15 @@ function sparse(a::Vector)
     return sparse_IJ_sorted!(I,J,V,n,1,+)
 end
 
+sparse(a::Vector) = sparsevec(a)
+
 function sparse(A::Matrix)
     m, n = size(A)
     (I, J, V) = findn_nzs(A)
     return sparse_IJ_sorted!(I,J,V,m,n)
 end
 
-# The alternative to this was: sparse(keys(vec), [ 1 for k = 1:dims ], values(vec), 1, +)
-function sparse{K <: Integer, V}(vec :: Dict{K, V}, dims :: Int)
-  ret = SparseMatrixCSC(V, K, dims, 1, length(vec))
-  i = 1
-  for k in sort(keys(vec))
-    ret.nzval[i]  = vec[k]
-    ret.rowval[i] = k
-    i += 1
-  end
-  return ret
-end
-
-sparse(S::SparseMatrixCSC) = S
+sparse(S::SparseMatrixCSC) = copy(S)
 
 sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,+)
 

@@ -2291,6 +2291,24 @@ airyaiprime(x)
 
 "),
 
+(E"Numbers",E"Base",E"BigInt",E"BigInt(x)
+
+   Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
+   anything that can be converted to an \"Int\") or a \"String\". The
+   usual mathematical operators are defined for this type, and results
+   are promoted to a \"BigInt\".
+
+"),
+
+(E"Numbers",E"Base",E"BigFloat",E"BigFloat(x)
+
+   Create an arbitrary precision floating point number. \"x\" may be
+   an \"Integer\", a \"Float64\", a \"String\" or a \"BigInt\". The
+   usual mathematical operators are defined for this type, and results
+   are promoted to a \"BigFloat\".
+
+"),
+
 (E"Random Numbers",E"Base",E"srand",E"srand([rng], seed)
 
    Seed the RNG with a \"seed\", which may be an unsigned integer or a

@@ -243,3 +243,60 @@ macro vectorize_2arg(S,f)
         end
     end
 end
+
+# some operators not defined yet
+global //, .>>, .<<, &>, &>>, &<, &<<
+
+module Operators
+
+export
+    !,
+    !=,
+    $,
+    %,
+    &,
+    *,
+    +,
+    -,
+    .!=,
+    .+,
+    .-,
+    .*,
+    ./,
+    .<,
+    .<=,
+    .==,
+    .>,
+    .>=,
+    .\,
+    .^,
+    /,
+    //,
+    <,
+    <:,
+    <<,
+    <=,
+    ==,
+    >,
+    >=,
+    >>,
+    .>>,
+    .<<,
+    >>>,
+    &>,
+    &>>,
+    &<,
+    &<<,
+    \,
+    ^,
+    |,
+    ~
+
+import
+    Base.!, Base.!=, Base.$, Base.%, Base.&, Base.*, Base.+, Base.-, Base..!=,
+    Base..+, Base..-, Base..*, Base../, Base..<, Base..<=, Base..==, Base..>,
+    Base..>=, Base..\, Base..^, Base./, Base.//, Base.<, Base.<:, Base.<<,
+    Base.<=, Base.==, Base.>, Base.>=, Base.>>, Base..>>, Base..<<, Base.>>>,
+    Base.&>, Base.&>>, Base.&<, Base.&<<, Base.\, Base.^, Base.|, Base.~
+
+end

@@ -93,6 +93,8 @@ end
 @test Base.typeseq(typejoin(Union(Int,String),Int), Union(Int,String))
 @test Base.typeseq(typejoin(Union(Int,String),Int8), Any)
 
+@test promote_type(Bool,None) === Bool
+
 # ntuples
 nttest1{n}(x::NTuple{n,Int}) = n
 @test nttest1(()) == 0
