@@ -320,7 +320,7 @@ the "Father of Floating-Point". Of particular interest may be `An
 Interview with the Old Man of
 Floating-Point <http://www.cs.berkeley.edu/~wkahan/ieee754status/754story.html>`_.
 
-.. _man_arbitrary_precision_arithmetic
+.. _man_arbitrary_precision_arithmetic:
 
 Arbitrary Precision Arithmetic
 ------------------------------
@@ -330,7 +330,7 @@ Julia wraps the `GNU Multiple Precision Arithmetic Library, GMP <http://gmplib.o
 The `BigInt` and `BigFloat` types are available in Julia for arbitrary precision 
 integer and floating point numbers respectively. 
 
-Constructors exist to create these types from primitive numerical types, or from ``String``s. 
+Constructors exist to create these types from primitive numerical types, or from ``String``. 
 Once created, they participate in arithmetic with all other numeric types thanks to Julia's 
 type promotion and conversion mechanism. ::
 
