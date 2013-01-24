@@ -3,7 +3,7 @@
 // --- library symbol lookup ---
 
 // map from "libX" to full soname "libX.so.ver"
-#if !defined(__APPLE__) && !defined(_WIN32)
+#if defined(__linux__)
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
 
