@@ -241,11 +241,11 @@ sort!(a::MergeSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int) = sort!(a,
 
 ## sortperm: the permutation to sort an array ##
 
-type Perm{O<:Ordering,T} <: Ordering
+type Perm{O<:Ordering,V<:AbstractVector} <: Ordering
     ord::O
-    vec::AbstractVector{T}
+    vec::V
 end
-Perm{O<:Ordering,T}(o::O,v::AbstractVector{T}) = Perm{O,T}(o,v)
+Perm{O<:Ordering,V<:AbstractVector}(o::O,v::V) = Perm{O,V}(o,v)
 
 lt(p::Perm, a, b) = lt(p.ord, p.vec[a], p.vec[b])
 
@@ -272,7 +272,7 @@ end
 module Float
 using Sort
 
-import Sort.sort!, Sort.Perm, Sort.lt
+import Sort.sort!, Sort.Perm, Sort.lt, Sort.Reverse
 import Intrinsics.slt_int, Intrinsics.unbox
 
 typealias Floats Union(Float32,Float64)
@@ -342,10 +342,10 @@ nans2right!(o::Ordering, v::AbstractVector) = nans2right!(o,v,1,length(v))
 
 nans2end!(o::Forward, v::AbstractVector) = nans2right!(o,v)
 nans2end!(o::Reverse, v::AbstractVector) = nans2left!(o,v)
-nans2end!{O<:Forward,T<:Floats}(o::Perm{O,T}, v::AbstractVector{Int}) = nans2right!(o,v)
-nans2end!{O<:Reverse,T<:Floats}(o::Perm{O,T}, v::AbstractVector{Int}) = nans2left!(o,v)
+nans2end!{O<:Forward}(o::Perm{O}, v::AbstractVector{Int}) = nans2right!(o,v)
+nans2end!{O<:Reverse}(o::Perm{O}, v::AbstractVector{Int}) = nans2left!(o,v)
 
-issignleft(o::Direct, x::Floats) = lt(right(o), x, zero(x))
+issignleft(o::Direct, x::Floats) = lt(o, x, zero(x))
 issignleft{O<:Direct}(o::Perm{O}, i::Int) = issignleft(O(),o.vec[i])
 
 function fpsort!(a::Algorithm, o::Ordering, v::AbstractVector)
@@ -367,7 +367,7 @@ function fpsort!(a::Algorithm, o::Ordering, v::AbstractVector)
 end
 
 sort!{T<:Floats}(a::Algorithm, o::Direct, v::AbstractVector{T}) = fpsort!(a,o,v)
-sort!{O<:Direct,T<:Floats}(a::Algorithm, o::Perm{O,T}, v::AbstractVector{Int}) = fpsort!(a,o,v)
+sort!{O<:Direct,T<:Floats}(a::Algorithm, o::Perm{O,Vector{T}}, v::Vector{Int}) = fpsort!(a,o,v)
 
 end # module Sort.Float
 
