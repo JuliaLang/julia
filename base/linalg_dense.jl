@@ -698,7 +698,7 @@ function factors(H::Hessenberg)
             A[i,j] = zero(A[1])
         end
     end
-    return (A, LAPACK.orghr!(H.ilo, H.ihi, H.H, H.tau))
+    return (A, LAPACK.orghr!(BLAS.blas_int(H.ilo), BLAS.blas_int(H.ihi), H.H, H.tau))
 end
 hess(A::StridedMatrix) = factors(hessfact(A))[1]
 
