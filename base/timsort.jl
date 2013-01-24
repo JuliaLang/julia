@@ -32,7 +32,6 @@ function merge_compute_minrun(N::Int, bits::Int)
     end
     N + r
 end
-
 merge_compute_minrun(N::Int) = merge_compute_minrun(N, 6)
 
 # Galloping binary search starting at left
