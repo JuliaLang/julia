@@ -257,7 +257,7 @@ size_t u8_strlen(const char *s)
     return count;
 }
 
-#ifdef __WIN32__
+#if defined(__WIN32__) || defined(__linux__)
 extern int wcwidth(uint32_t ch);
 #endif
 
