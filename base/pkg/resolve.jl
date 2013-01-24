@@ -15,6 +15,7 @@ export resolve
 # An exception type used internally to signal that an unsatisfiable
 # constraint was detected
 type UnsatError <: Exception
+    info
 end
 
 # Some parameters to drive the decimation process
@@ -721,7 +722,7 @@ function getsolution(msgs::Messages)
         fld0 = fld[p0]
         s0 = indmax(fld0)
         if !validmax(fld0[s0])
-            throw(UnsatError())
+            throw(UnsatError(p0))
         end
         sol[p0] = s0
     end
@@ -804,7 +805,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         if !validmax(m)
             # No state available without violating some
             # hard constraint
-            throw(UnsatError())
+            throw(UnsatError(p1))
         end
 
         # normalize the new message
@@ -1149,7 +1150,9 @@ function resolve(reqs)
         sol = converge(graph, msgs)
     catch err
         if isa(err, UnsatError)
-            msg = "Unsatisfiable package requirements detected"
+            p = reqsstruct.pkgs[err.info]
+            msg = "Unsatisfiable package requirements detected: " *
+                  "no feasible version could be found for package: $p"
             if msgs.num_nondecimated != graph.np
                 msg *= "\n  (you may try increasing the value of the" *
                        "\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
