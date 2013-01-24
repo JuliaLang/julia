@@ -619,7 +619,6 @@ export
     any,
     anyp,
     assign,
-    choose,
     complement,
     complement!,
     contains,

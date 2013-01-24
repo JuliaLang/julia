@@ -413,13 +413,20 @@
 
 (define (parse-cond s)
   (let ((ex (parse-or s)))
-    (if (not (eq? (peek-token s) '?))
-	ex
-	(begin (take-token s)
-	       (let ((then (without-range-colon (parse-eq* s))))
-		 (if (not (eq? (take-token s) ':))
-		     (error "colon expected in ? expression")
-		     (list 'if ex then (parse-cond s))))))))
+    (cond ((eq? (peek-token s) '?)
+	   (begin (take-token s)
+		  (let ((then (without-range-colon (parse-eq* s))))
+		    (if (not (eq? (take-token s) ':))
+			(error "colon expected in ? expression")
+			(list 'if ex then (parse-cond s))))))
+	  #;((string? ex)
+	   (let loop ((args (list ex)))
+	     (let ((next (peek-token s)))
+	       (if (or (eof-object? next) (closing-token? next)
+		       (newline? next))
+		   `(call (top string) ,@(reverse args))
+		   (loop (cons (parse-or s) args))))))
+	  (else ex))))
 
 (define (invalid-initial-token? tok)
   (or (eof-object? tok)
@@ -581,17 +588,6 @@
 
 (define (parse-shift s) (parse-LtoR s parse-term (prec-ops 8)))
 
-; given an expression and the next token, is there a juxtaposition
-; operator between them?
-(define (juxtapose? expr t)
-  (and (not (operator? t))
-       (not (operator? expr))
-       (not (memq t reserved-words))
-       (not (closing-token? t))
-       (not (newline? t))
-       (or (number? expr)
-	   (not (memv t '(#\( #\[ #\{))))))
-
 (define (parse-term s)
   (let ((ops (prec-ops 9)))
     (let loop ((ex       (parse-rational s))
@@ -636,16 +632,27 @@
 (define (maybe-negate op num)
   (if (eq? op '-) (- num) num))
 
+; given an expression and the next token, is there a juxtaposition
+; operator between them?
+(define (juxtapose? expr t)
+  (and (not (operator? t))
+       (not (operator? expr))
+       (not (memq t reserved-words))
+       (not (closing-token? t))
+       (not (newline? t))
+       (or (number? expr)
+	   (not (memv t '(#\( #\[ #\{))))))
+
 (define (parse-juxtapose ex s)
   (let ((next (peek-token s)))
     ;; numeric literal juxtaposition is a unary operator
-    (if (and (juxtapose? ex next)
-	     (not (ts:space? s)))
-	(begin
-	  #;(if (and (number? ex) (= ex 0))
-  	      (error "juxtaposition with literal 0"))
-	  `(call * ,ex ,(parse-unary s)))
-	ex)))
+    (cond ((and (juxtapose? ex next)
+		(not (ts:space? s)))
+	   (begin
+	     #;(if (and (number? ex) (= ex 0))
+		 (error "juxtaposition with literal 0"))
+	     `(call * ,ex ,(parse-unary s))))
+	  (else ex))))
 
 (define (parse-unary s)
   (let ((t (require-token s)))
