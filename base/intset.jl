@@ -46,18 +46,28 @@ function add_each(s::IntSet, ns)
     return s
 end
 
-# TODO: make match Dict behavior somehow?
-function delete!(s::IntSet, n::Integer)
+function delete!(s::IntSet, n::Integer, deflt)
     if n >= s.limit
         if s.fill1s
             lim = int(n + div(n,2))
             resize(s, lim)
         else
-            return s
+            return deflt
         end
     end
-    s.bits[n>>5 + 1] &= ~(uint32(1)<<(n&31))
-    return s
+    mask = uint32(1)<<(n&31)
+    idx = n>>5 + 1
+    b = s.bits[idx]
+    if (b&mask)==0; return deflt; end
+    s.bits[idx] = b&~mask
+    return n
+end
+
+function delete!(s::IntSet, n::Integer)
+    if delete!(s, n, n+1) == n+1
+        throw(KeyError(n))
+    end
+    return n
 end
 
 function del_each(s::IntSet, ns)
@@ -80,7 +90,7 @@ function toggle(s::IntSet, n::Integer)
         resize(s, lim)
     end
     s.bits[n>>5 + 1] $= (uint32(1)<<(n&31))
-   return s
+    return s
 end
 
 function toggle_each(s::IntSet, ns)
@@ -117,19 +127,15 @@ end
 isempty(s::IntSet) =
     !s.fill1s && ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)==0
 
-function choose(s::IntSet)
+function first(s::IntSet)
     n = next(s,0)[1]
     if n >= s.limit
-        error("choose: set is empty")
+        error("first: set is empty")
     end
     return n
 end
 
-function pop!(s::IntSet)
-    n = choose(s)
-    delete!(s, n)
-    n
-end
+shift!(s::IntSet) = delete!(s, first(s))
 
 length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)) +
     (s.fill1s ? typemax(Int) - s.limit : 0)

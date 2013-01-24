@@ -17,10 +17,15 @@ eltype{T}(s::Set{T}) = T
 
 has(s::Set, x) = has(s.hash, x)
 contains(s::Set, x) = has(s, x)
-get(s::Set, x, deflt) = get(s.hash, x, false)
 
 add(s::Set, x) = (s.hash[x] = true; s)
-delete!(s::Set, x) = delete!(s.hash, x)
+delete!(s::Set, x) = (delete!(s.hash, x); x)
+function delete!(s::Set, x, deflt)
+    if delete!(s.hash, x, false)
+        return x
+    end
+    return deflt
+end
 
 add_each(s::Set, xs) = (for x=xs; add(s,x); end; s)
 del_each(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
