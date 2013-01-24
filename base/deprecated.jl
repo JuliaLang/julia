@@ -36,6 +36,7 @@ end
 @deprecate  chi2rnd       randchi2
 @deprecate  betarnd       randbeta
 @deprecate  exprnd        randexp
+@deprecate  searchsorted  searchsortedfirst
 
 export randi, randival, randexp, randg, randbeta, randchi2
 
