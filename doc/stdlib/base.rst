@@ -160,16 +160,16 @@ Generic Functions
 Iteration
 ---------
 
-Sequential iteration is implemented by the methods ``start``, ``done``, and ``next``. The general ``for`` loop:
+Sequential iteration is implemented by the methods ``start``, ``done``, and ``next``. The general ``for`` loop::
 
-    for i = I
+   for i = I
       # body
-    end
+   end
 
-is translated to:
+is translated to::
 
-    state = start(I)
-    while !done(I, state)
+   state = start(I)
+   while !done(I, state)
       (i, state) = next(I, state)
       # body
     end
@@ -1361,6 +1361,16 @@ Numbers
 
    Get the mantissa of a floating-point number
 
+.. function:: BigInt(x)
+
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``String``. 
+   The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``. 
+
+.. function:: BigFloat(x)
+
+   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The 
+   usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``.
+
 Random Numbers
 --------------
 
@@ -1623,9 +1633,17 @@ Sparse Matrices
 
 Sparse matrices support much of the same set of operations as dense matrices. The following functions are specific to sparse matrices.
 
-.. function:: sparse(I,J,V[,m,n,combine])
+.. function:: sparse(I,J,V,[m,n,combine])
 
    Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``. The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``max(I)`` and ``max(J)`` respectively. If the ``combine`` function is not supplied, duplicates are added by default.
+
+.. function:: sparsevec(I, V, [m, combine])
+
+   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``. Duplicates are combined using the ``combine`` function, which defaults to `+` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
+
+.. function:: sparsevec(D::Dict, [m])
+
+   Create a sparse matrix of size ``m x 1`` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
 
 .. function:: issparse(S)
 
@@ -1638,6 +1656,10 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparse(A)
 
    Convert a dense matrix ``A`` into a sparse matrix.
+
+.. function:: sparsevec(A)
+
+   Convert a dense vector ``A`` into a sparse matrix of size ``m x 1``. In julia, sparse vectors are really just sparse matrices with one column.
 
 .. function:: dense(S)
 
