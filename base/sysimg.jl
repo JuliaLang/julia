@@ -80,6 +80,7 @@ include("inference.jl")
 include("io.jl")
 include("iostring.jl")
 include("stream.jl")
+include("socket.jl")
 include("fs.jl")
 importall FS
 include("process.jl")

@@ -396,7 +396,7 @@ function pipeline_error(procs::ProcessChain)
             push!(failed, p)
         end
     end
-    if length(failed)==0 return true end
+    if length(failed)==0 return nothing end
     if length(failed)==1 pipeline_error(failed[1]) end
     msg = "failed processes:"
     for proc in failed
