@@ -220,7 +220,7 @@ latex_documents = [
 #latex_appendices = []
 
 # If false, no module index is generated.
-#latex_domain_indices = True
+latex_domain_indices = False
 
 
 # -- Options for manual page output --------------------------------------------
