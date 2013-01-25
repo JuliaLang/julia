@@ -15,4 +15,4 @@ set PATH=%JULIA_HOME%;%JULIA_HOME%..\lib\julia;%JULIA_HOME%..\lib;.;%SYS_PATH%;%
 set HOME=%JULIA_HOME%..\..
 set JL_PRIVATE_LIBDIR=lib\julia
 
-if not exist "%JULIA_HOME%..\lib\julia\sys.ji" (echo "Preparing Julia for first launch. This may take a while" && echo "You may see two git related errors. This is completely normal" && cd "%JULIA_HOME%..\share\julia\base" && "%JULIA%" -b sysimg.jl && popd && pushd %cd%)
+if not exist "%JULIA_HOME%..\lib\julia\sys.ji" (echo "Preparing Julia for first launch. This may take a while" && echo "You may see two git related errors. This is completely normal" && cd "%JULIA_HOME%..\share\julia\base" && "%JULIA%" -b sysimg.jl && popd && pushd "%cd%")
