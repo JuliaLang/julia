@@ -64,37 +64,37 @@ issorted{T<:Ordering}(::Type{T}, itr) = issorted(T(), itr)
 issorted(itr) = issorted(Forward(), itr)
 
 function select!(o::Ordering, v::AbstractVector, k::Int, lo::Int, hi::Int)
-    while true
-        if lo == hi
-            return v[lo]
-        end
+    lo <= k <= hi || error("select index $k is out of range $lo:$hi")
+    while lo < hi
+        pivot = v[(lo+hi)>>>1]
         i, j = lo, hi
-        pivot = v[rand(lo:hi)] # v[(lo+hi)>>>1]
-        while i < j
+        while true
             while lt(o, v[i], pivot); i += 1; end
             while lt(o, pivot, v[j]); j -= 1; end
-            if !lt(o, v[i], v[j]) && !lt(o, v[j], v[i])
-                i += 1
-            elseif i < j
-                v[i], v[j] = v[j], v[i]
-            end
+            # @assert all(v[lo:i-1] .<= pivot)
+            # @assert all(v[j+1:hi] .>= pivot)
+            # @assert v[j] <= pivot <= v[i]
+            i <= j || break
+            v[i], v[j] = v[j], v[i]
+            i += 1; j -= 1
+            # @assert all(v[lo:i-1] .<= pivot)
+            # @assert all(v[j+1:hi] .>= pivot)
         end
-        pivot_ind = j
-        len = pivot_ind - lo + 1
-        if k == len
-            return v[pivot_ind]
-        elseif k <  len
-            hi = pivot_ind - 1
+        # @assert lo <= j < i <= hi
+        # @assert all(v[lo:i-1]  .<= pivot)
+        # @assert all(v[j+1:i-1] .== pivot)
+        # @assert all(v[j+1:hi]  .>= pivot)
+        if k <= j
+            hi = j
+        elseif i <= k
+            lo = i
         else
-            lo = pivot_ind + 1
-            k = k - len
+            return pivot
         end
     end
+    return v[lo]
 end
-function select!(o::Ordering, v::AbstractVector, k::Int)
-    1 <= k <= length(v) || error("select index $k is out of bounds")
-    select!(o, v, k, 1, length(v))
-end
+select!(o::Ordering, v::AbstractVector, k::Int) = select!(o, v, k, 1, length(v))
 select!{T<:Ordering}(::Type{T}, v::AbstractVector, k::Int) = select!(T(), v, k)
 select!(v::AbstractVector, k::Int) = select!(Forward, v, k)
 
