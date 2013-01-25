@@ -391,7 +391,7 @@ export
     typemax,
     typemin,
 
-#specfun
+# specfun
     airy,
     airyai,
     airyprime,
@@ -1100,7 +1100,6 @@ export
 
 # external processes
     connect,
-    exec,
     getpid,
     ignorestatus,
     pipeline_error,
@@ -1116,7 +1115,6 @@ export
     read_from,
     run,
     success,
-    system,
     wait,
     write_to,
 
@@ -1175,7 +1173,7 @@ export
     @sprintf
 
 export
-#libuv branch stuff
+# libuv branch stuff
     accept,
     listen,
     bind,

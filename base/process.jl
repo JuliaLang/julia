@@ -405,16 +405,6 @@ function pipeline_error(procs::ProcessChain)
     error(msg)
 end
 
-function exec(thunk::Function)
-    try
-        thunk()
-    catch err
-        show(err)
-        exit(0xff)
-    end
-    exit(0)
-end
-
 _jl_kill(p::Process,signum::Integer) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int32),p.handle,signum)
 function kill(p::Process,signum::Integer)
     if process_running(p)
