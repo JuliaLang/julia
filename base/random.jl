@@ -168,7 +168,6 @@ randbool(dims::Int...) = rand!(BitArray(dims))
 
 randbool() = ((dsfmt_randui32() & 1) == 1)
 randbool!(B::BitArray) = rand!(B)
-randbool!(A::Array) = [ randbool() for i in 1:length(A) ]
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 

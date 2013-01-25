@@ -38,6 +38,7 @@ end
 @deprecate  exprnd        randexp
 @deprecate  searchsorted  searchsortedfirst
 @deprecate  choose        first
+@deprecate  system        run
 #@deprecate  strcat        string
 
 export strcat
