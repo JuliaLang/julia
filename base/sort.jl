@@ -71,19 +71,10 @@ function select!(o::Ordering, v::AbstractVector, k::Int, lo::Int, hi::Int)
         while true
             while lt(o, v[i], pivot); i += 1; end
             while lt(o, pivot, v[j]); j -= 1; end
-            # @assert all(v[lo:i-1] .<= pivot)
-            # @assert all(v[j+1:hi] .>= pivot)
-            # @assert v[j] <= pivot <= v[i]
             i <= j || break
             v[i], v[j] = v[j], v[i]
             i += 1; j -= 1
-            # @assert all(v[lo:i-1] .<= pivot)
-            # @assert all(v[j+1:hi] .>= pivot)
         end
-        # @assert lo <= j < i <= hi
-        # @assert all(v[lo:i-1]  .<= pivot)
-        # @assert all(v[j+1:i-1] .== pivot)
-        # @assert all(v[j+1:hi]  .>= pivot)
         if k <= j
             hi = j
         elseif i <= k
