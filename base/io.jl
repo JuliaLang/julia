@@ -276,7 +276,7 @@ fdio(fd::Integer, own::Bool) = fdio(string("<fd ",fd,">"), fd, own)
 fdio(fd::Integer) = fdio(fd, false)
 
 function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
-    s = IOStream(strcat("<file ",fname,">"))
+    s = IOStream(string("<file ",fname,">"))
     if ccall(:ios_file, Ptr{Void},
              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
              s.ios, fname, rd, wr, cr, tr) == C_NULL

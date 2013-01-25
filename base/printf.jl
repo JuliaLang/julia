@@ -370,7 +370,7 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push!(blk.args, :(exp = POINT[1]-1))
     expmark = c=='E' ? "E" : "e"
     if precision==0 && contains(flags,'#')
-        expmark = strcat(".",expmark)
+        expmark = string(".",expmark)
     end
     # calculate padding
     padding = nothing

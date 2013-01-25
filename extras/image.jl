@@ -290,7 +290,7 @@ function _image_named_coords_sub(img::Image,ind...)
     for iarg = 1:2:length(ind)
         idim = strchr(img.arrayi_order,ind[iarg])
         if idim == 0
-            error(strcat("Array index name '",ind[iarg],"' does not match any of the names in \"",img.arrayi_order,"\""))
+            error(string("Array index name '",ind[iarg],"' does not match any of the names in \"",img.arrayi_order,"\""))
         end
         sniprange[idim] = ind[iarg+1]
     end

@@ -8,7 +8,7 @@ end
 
 function check_approx_eq(va, vb, Eps, astr, bstr)
     diff = max(abs(va - vb))
-    sdiff = strcat("|", astr, " - ", bstr, "| < ", Eps)
+    sdiff = string("|", astr, " - ", bstr, "| < ", Eps)
     if diff < Eps
         nothing
     else
@@ -33,7 +33,7 @@ macro timeit(ex,name)
         for i = 1:5
             t = min(t, @elapsed $(esc(ex)))
         end
-        println(rpad(strcat($name,":"), 20), t)
+        println(rpad(string($name,":"), 20), t)
     end
 end
 

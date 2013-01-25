@@ -63,10 +63,10 @@ function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax
     if length(x_safe) < 1 return error("at least two data points required for line plot") end
 
     # make sure the window is okay
-    if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(strcat("invalid xmin: ", string(xmin))) end
-    if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(strcat("invalid xmax: ", string(xmax))) end
-    if ymin == Inf || ymin == -Inf || isequal(ymin, NaN) return error(strcat("invalid ymin: ", string(ymin))) end
-    if ymax == Inf || ymax == -Inf || isequal(ymax, NaN) return error(strcat("invalid ymax: ", string(ymax))) end
+    if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(string("invalid xmin: ", string(xmin))) end
+    if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(string("invalid xmax: ", string(xmax))) end
+    if ymin == Inf || ymin == -Inf || isequal(ymin, NaN) return error(string("invalid ymin: ", string(ymin))) end
+    if ymax == Inf || ymax == -Inf || isequal(ymax, NaN) return error(string("invalid ymax: ", string(ymax))) end
     if xmin >= xmax return error("xmax must be greater than xmin") end
     if ymin >= ymax return error("ymax must be greater than ymin") end
 
@@ -85,8 +85,8 @@ function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax
     # send the message to the browser
     __write_message(__Message(__MSG_OUTPUT_PLOT, {
         plottype,
-        strcat("[", join([string(i) for i=x_safe], ","), "]"),
-        strcat("[", join([string(i) for i=y_safe], ","), "]"),
+        string("[", join([string(i) for i=x_safe], ","), "]"),
+        string("[", join([string(i) for i=y_safe], ","), "]"),
         string(float64(xmin)),
         string(float64(xmax)),
         string(float64(ymin)),
@@ -206,8 +206,8 @@ plot(f::Function, xmin::Number, xmax::Number) = plot(f, xmin, xmax, "line")
 
 function plot(f::Function, xmin::Number, xmax::Number, plottype::String)
     # make sure the window is okay
-    if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(strcat("invalid xmin: ", string(xmin))) end
-    if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(strcat("invalid xmax: ", string(xmax))) end
+    if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(string("invalid xmin: ", string(xmin))) end
+    if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(string("invalid xmax: ", string(xmax))) end
     if xmin >= xmax return error("xmax must be greater than xmin") end
 
     # make the range
@@ -225,10 +225,10 @@ plot(f::Function, xmin::Number, xmax::Number, ymin::Number, ymax::Number) =
 
 function plot(f::Function, xmin::Number, xmax::Number, ymin::Number, ymax::Number, plottype::String)
     # make sure the window is okay
-    if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(strcat("invalid xmin: ", string(xmin))) end
-    if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(strcat("invalid xmax: ", string(xmax))) end
-    if ymin == Inf || ymin == -Inf || isequal(ymin, NaN) return error(strcat("invalid ymin: ", string(ymin))) end
-    if ymax == Inf || ymax == -Inf || isequal(ymax, NaN) return error(strcat("invalid ymax: ", string(ymax))) end
+    if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(string("invalid xmin: ", string(xmin))) end
+    if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(string("invalid xmax: ", string(xmax))) end
+    if ymin == Inf || ymin == -Inf || isequal(ymin, NaN) return error(string("invalid ymin: ", string(ymin))) end
+    if ymax == Inf || ymax == -Inf || isequal(ymax, NaN) return error(string("invalid ymax: ", string(ymax))) end
     if xmin >= xmax return error("xmax must be greater than xmin") end
     if ymin >= ymax return error("ymax must be greater than ymin") end
 

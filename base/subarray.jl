@@ -312,4 +312,4 @@ function pointer(s::SubArray, is::(Int...))
 end
 
 summary(s::SubArray) =
-    strcat(dims2string(size(s)), " SubArray of ", summary(s.parent))
+    string(dims2string(size(s)), " SubArray of ", summary(s.parent))

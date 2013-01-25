@@ -97,8 +97,8 @@ end
 
 ## Macro for deferring freeing data until GC for wilcox and signrank
 macro libRmath_deferred_free(base)
-    libcall = symbol(strcat(string(base), "_free"))
-    func = symbol(strcat(string(base), "_deferred_free"))
+    libcall = symbol(string(base, "_free"))
+    func = symbol(string(base, "_deferred_free"))
     quote
         let gc_tracking_obj = []
             global $func
@@ -118,9 +118,9 @@ end
 
 ## Non-ccall functions for distributions with 1 parameter and no defaults
 macro libRmath_1par_0d_aliases(base)
-    dd = symbol(strcat("d", string(base)))
-    pp = symbol(strcat("p", string(base)))
-    qq = symbol(strcat("q", string(base)))
+    dd = symbol(string("d", base))
+    pp = symbol(string("p", base))
+    qq = symbol(string("q", base))
     quote
         global $dd, $pp, $qq
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) =
@@ -146,10 +146,10 @@ end
 
 ## Distributions with 1 parameter and no default
 macro libRmath_1par_0d(base)
-    dd = symbol(strcat("d", string(base)))
-    pp = symbol(strcat("p", string(base)))
-    qq = symbol(strcat("q", string(base)))
-    rr = symbol(strcat("r", string(base)))   
+    dd = symbol(string("d", base))
+    pp = symbol(string("p", base))
+    qq = symbol(string("q", base))
+    rr = symbol(string("r", base))   
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, give_log::Bool) = 
@@ -190,10 +190,10 @@ rsignrank(nn::Integer, p1::Number) =
 
 ## Distributions with 1 parameter and a default
 macro libRmath_1par_1d(base, d1)
-    dd = symbol(strcat("d", string(base)))
-    pp = symbol(strcat("p", string(base)))
-    qq = symbol(strcat("q", string(base)))
-    rr = symbol(strcat("r", string(base)))   
+    dd = symbol(string("d", base))
+    pp = symbol(string("p", base))
+    qq = symbol(string("q", base))
+    rr = symbol(string("r", base))   
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, give_log::Bool) = 
@@ -248,9 +248,9 @@ end
 
 ## Non-ccall functions for distributions with 2 parameters and no defaults
 macro libRmath_2par_0d_aliases(base)
-    dd = symbol(strcat("d", string(base)))
-    pp = symbol(strcat("p", string(base)))
-    qq = symbol(strcat("q", string(base)))
+    dd = symbol(string("d", base))
+    pp = symbol(string("p", base))
+    qq = symbol(string("q", base))
     quote
         global $dd, $pp, $qq
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
@@ -278,10 +278,10 @@ end
 
 ## Distributions with 2 parameters and no defaults
 macro libRmath_2par_0d(base)
-    dd = symbol(strcat("d", string(base)))
-    pp = symbol(strcat("p", string(base)))
-    qq = symbol(strcat("q", string(base)))
-    rr = symbol(strcat("r", string(base)))    
+    dd = symbol(string("d", base))
+    pp = symbol(string("p", base))
+    qq = symbol(string("q", base))
+    rr = symbol(string("r", base))    
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
@@ -324,10 +324,10 @@ rwilcox(nn::Integer, p1::Number, p2::Number) =
 
 ## Distributions with 2 parameters and 1 default
 macro libRmath_2par_1d(base, d2)
-    dd = symbol(strcat("d", string(base)))
-    pp = symbol(strcat("p", string(base)))
-    qq = symbol(strcat("q", string(base)))
-    rr = symbol(strcat("r", string(base)))    
+    dd = symbol(string("d", base))
+    pp = symbol(string("p", base))
+    qq = symbol(string("q", base))
+    rr = symbol(string("r", base))    
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
@@ -382,10 +382,10 @@ end
 
 ## Distributions with 2 parameters and 2 defaults
 macro libRmath_2par_2d(base, d1, d2)
-    ddsym = dd = symbol(strcat("d", string(base)))
-    ppsym = pp = symbol(strcat("p", string(base)))
-    qqsym = qq = symbol(strcat("q", string(base)))
-    rr = symbol(strcat("r", string(base)))    
+    ddsym = dd = symbol(string("d", base))
+    ppsym = pp = symbol(string("p", base))
+    qqsym = qq = symbol(string("q", base))
+    rr = symbol(string("r", base))    
     if (string(base) == "norm")
         ddsym = :dnorm4
         ppsym = :pnorm5
@@ -466,10 +466,10 @@ end
 
 ## Distributions with 3 parameters and no defaults
 macro libRmath_3par_0d(base)
-    dd = symbol(strcat("d", string(base)))
-    pp = symbol(strcat("p", string(base)))
-    qq = symbol(strcat("q", string(base)))
-    rr = symbol(strcat("r", string(base)))    
+    dd = symbol(string("d", base))
+    pp = symbol(string("p", base))
+    qq = symbol(string("q", base))
+    rr = symbol(string("r", base))    
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, p3::Number, give_log::Bool) =

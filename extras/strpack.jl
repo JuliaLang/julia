@@ -52,7 +52,7 @@ DataAlign(def::Function, agg::Function) = DataAlign((Type=>Integer)[], def, agg)
 canonicalize(s::String) = replace(s, r"\s|#.*$"m, "")
 
 # colons chosen since they are not allowed in struct-format strings or in type names
-canonicalize(t::Type,e::Endianness) = strcat("::", string(t), "::", string(e))
+canonicalize(t::Type,e::Endianness) = string("::", string(t), "::", string(e))
 
 # A byte of padding
 bitstype 8 PadByte
