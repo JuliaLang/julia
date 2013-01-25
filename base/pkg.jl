@@ -201,7 +201,7 @@ function runbuildscript(pkg)
     if isdir(path)
         cd(path) do
             if isfile("build.jl")
-                info(strcat("Running build script for package ", pkg))
+                info(string("Running build script for package ", pkg))
                 include("build.jl")
             end
         end
@@ -615,7 +615,7 @@ with the correct remote name for your repository."
                     touch("README.md")
                     touch("REQUIRE")
                     mkdir("src")
-                    touch(joinpath("src", strcat(pkg, ".jl")))
+                    touch(joinpath("src", string(pkg, ".jl")))
                     mkdir("test")
                     run(`git add --all`)
                     run(`git commit -m "Scaffold for Julia package $pkg"`)

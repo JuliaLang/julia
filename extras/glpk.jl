@@ -248,7 +248,7 @@ function assign{T}(param::Param, val::T, field_name::String)
                 throw(Error("invalid struct"))
             end
             t = param.desc.field_types[i]
-            csf = strcat("jl_glpkw__", param.desc.struct_name, "_set_", field_name)
+            csf = string("jl_glpkw__", param.desc.struct_name, "_set_", field_name)
             ccs = :(ccall(($csf, :libglpk_wrapper), Void, (Ptr{Void}, $t), pointer($param), $val))
             eval(ccs)
             return
@@ -267,7 +267,7 @@ function ref(param::Param, field_name::String)
                 throw(Error("invalid struct"))
             end
             t = param.desc.field_types[i]
-            cgf = strcat("jl_glpkw__", param.desc.struct_name, "_get_", field_name)
+            cgf = string("jl_glpkw__", param.desc.struct_name, "_get_", field_name)
             ccg = :(ccall(($cgf, :libglpk_wrapper), $t, (Ptr{Void},), pointer($param)))
             return eval(ccg)
         end

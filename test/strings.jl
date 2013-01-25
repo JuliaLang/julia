@@ -69,13 +69,13 @@ for i = 0:0x7f, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
     cp = string(c,p)
     op = string(char(div(i,8)), oct(i%8), p)
     hp = string(char(div(i,16)), hex(i%16), p)
-    @test strcat(unescape_string(strcat("\\",oct(i,1),p))) == cp
-    @test strcat(unescape_string(strcat("\\",oct(i,2),p))) == cp
-    @test strcat(unescape_string(strcat("\\",oct(i,3),p))) == cp
-    @test strcat(unescape_string(strcat("\\",oct(i,4),p))) == op
-    @test strcat(unescape_string(strcat("\\x",hex(i,1),p))) == cp
-    @test strcat(unescape_string(strcat("\\x",hex(i,2),p))) == cp
-    @test strcat(unescape_string(strcat("\\x",hex(i,3),p))) == hp
+    @test string(unescape_string(string("\\",oct(i,1),p))) == cp
+    @test string(unescape_string(string("\\",oct(i,2),p))) == cp
+    @test string(unescape_string(string("\\",oct(i,3),p))) == cp
+    @test string(unescape_string(string("\\",oct(i,4),p))) == op
+    @test string(unescape_string(string("\\x",hex(i,1),p))) == cp
+    @test string(unescape_string(string("\\x",hex(i,2),p))) == cp
+    @test string(unescape_string(string("\\x",hex(i,3),p))) == hp
 end
 
 @test "\z" == unescape_string("\z") == "z"

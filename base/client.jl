@@ -232,7 +232,7 @@ function process_options(args::Array{Any,1})
             startup = false
         elseif args[i] == "-F"
             # load juliarc now before processing any more options
-            try_include(strcat(ENV["HOME"],"/.juliarc.jl"))
+            try_include(string(ENV["HOME"],"/.juliarc.jl"))
             startup = false
         elseif begins_with(args[i], "--color")
             if args[i] == "--color"

@@ -114,7 +114,7 @@ function __socket_callback(fd)
 
         for i=1:length(__lines)
             # add the next line of input
-            __input_so_far = strcat(__input_so_far, __lines[i], "\n")
+            __input_so_far = string(__input_so_far, __lines[i], "\n")
 
             # try to parse it
             __expr = parse_input_line(__input_so_far)

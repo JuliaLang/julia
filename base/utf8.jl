@@ -90,7 +90,7 @@ function strchr(s::UTF8String, c::Char, i::Integer)
     end
 end
 
-strcat(a::ByteString, b::ByteString, c::ByteString...) =
+string(a::ByteString, b::ByteString, c::ByteString...) =
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
     UTF8String([a.data,b.data,map(s->s.data,c)...])
 

@@ -719,7 +719,6 @@ export
     safe_char,
     search,
     split,
-    strcat,
     strchr,
     string,
     strip,

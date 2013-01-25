@@ -84,11 +84,11 @@ function parse_json(strng::String)
             #     index_esc = index_esc + 1
             # end
             # if index_esc > len_esc
-            #     str = strcat(str, strng[pos:end])
+            #     str = string(str, strng[pos:end])
             #     pos = len + 1
             #     break
             # else
-            #     str = strcat(str, strng[pos:esc(index_esc)-1])
+            #     str = string(str, strng[pos:esc(index_esc)-1])
             #     pos = esc(index_esc)
             # end
             nc = strng[pos]
@@ -102,20 +102,20 @@ function parse_json(strng::String)
                 pos = pos + 1
                 anc = strng[pos]
                 if anc == '"' || anc == '\\' || anc == '/'
-                    str = strcat(str, strng[pos])
+                    str = string(str, strng[pos])
                     pos = pos + 1
                 elseif anc ==  'b' || anc == 'f'|| anc == 'n' || anc == 'r' || anc == 't'
-                    str = strcat(str, '\\', string[pos])
+                    str = string(str, '\\', string[pos])
                     pos = pos + 1
                 elseif anc == 'u'
                     if pos+4 > len
                         error_pos("End of file reached in escaped unicode character")
                     end
-                    str = strcat(str, strng[pos-1:pos+4])
+                    str = string(str, strng[pos-1:pos+4])
                     pos = pos + 5
                 end
             else # should never happen
-                str = strcat(str,strng[pos])
+                str = string(str,strng[pos])
                 pos = pos + 1
             end
         end

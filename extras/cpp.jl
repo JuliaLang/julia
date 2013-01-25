@@ -56,6 +56,6 @@ macro cpp(ex)
             error("Argument not recognized")
         end
     end
-    ex.args[1].args[3] = strcat(fstr,pstr)
+    ex.args[1].args[3] = string(fstr,pstr)
     ex
 end

@@ -494,7 +494,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = ByteString[]
     for h = head, t = tail
-        push!(vals,bytestring(strcat(h,t)))
+        push!(vals,bytestring(h,t))
     end
     vals
 end
