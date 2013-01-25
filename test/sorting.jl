@@ -1,5 +1,3 @@
-using Sort
-
 @test sort([2,3,1]) == [1,2,3]
 @test sort(Sort.Reverse,[2,3,1]) == [3,2,1]
 @test sortperm([2,3,1]) == [3,1,2]
@@ -54,7 +52,7 @@ end
 
 a = rand(1:10000, 1000)
 
-for alg in [Sort.InsertionSort, Sort.MergeSort] #, Sort.TimSort]
+for alg in [Sort.InsertionSort, Sort.MergeSort, Sort.TimSort]
     b = sort(alg, a)
     @test issorted(b)
     ix = sortperm(alg, a)

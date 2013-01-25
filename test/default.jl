@@ -21,7 +21,7 @@ runtests("random")
 runtests("math")
 runtests("functional")
 runtests("bigint")
-runtests("combinatorics")
+runtests("sorting")
 runtests("statistics")
 
 # io, etc.
