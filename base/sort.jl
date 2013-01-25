@@ -99,7 +99,7 @@ select!{T<:Ordering}(::Type{T}, v::AbstractVector, k::Int) = select!(T(), v, k)
 select!(v::AbstractVector, k::Int) = select!(Forward, v, k)
 
 select(o::Ordering, v::AbstractVector, k::Int) = select!(o, copy(v), k)
-select{T<:Ordering}(::Type{T}, v::AbstractVector, k::Int) = select!(T, copy(v), k)
+select{T<:Ordering}(::Type{T}, v::AbstractVector, k::Int) = select(T(), v, k)
 select(v::AbstractVector, k::Int) = select!(copy(v), k)
 
 # reference on sorted binary search:
@@ -186,24 +186,18 @@ function sort!(::InsertionSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int
 end
 
 function sort!(a::QuickSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int)
-    while hi > lo
-        if hi-lo <= SMALL_THRESHOLD
-            return sort!(SMALL_ALGORITHM, o, v, lo, hi)
-        end
-        pivot = v[rand(lo:hi)] # v[(lo+hi)>>>1]
+    while lo < hi
+        hi-lo <= SMALL_THRESHOLD && return sort!(SMALL_ALGORITHM, o, v, lo, hi)
+        pivot = v[(lo+hi)>>>1]
         i, j = lo, hi
-        while i <= j
+        while true
             while lt(o, v[i], pivot); i += 1; end
             while lt(o, pivot, v[j]); j -= 1; end
-            if i <= j
-                v[i], v[j] = v[j], v[i]
-                i += 1
-                j -= 1
-            end
+            i <= j || break
+            v[i], v[j] = v[j], v[i]
+            i += 1; j -= 1
         end
-        if lo < j
-            sort!(a, o, v, lo, j)
-        end
+        lo < j && sort!(a, o, v, lo, j)
         lo = i
     end
     return v
@@ -211,24 +205,20 @@ end
 
 function sort!(a::MergeSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int, t::AbstractVector)
     if lo < hi
-        if hi-lo <= SMALL_THRESHOLD
-            return sort!(SMALL_ALGORITHM, o, v, lo, hi)
-        end
+        hi-lo <= SMALL_THRESHOLD && return sort!(SMALL_ALGORITHM, o, v, lo, hi)
 
         m = (lo+hi)>>>1
         sort!(a, o, v, lo,  m,  t)
         sort!(a, o, v, m+1, hi, t)
 
-        i = 1
-        j = lo
+        i, j = 1, lo
         while j <= m
             t[i] = v[j]
             i += 1
             j += 1
         end
 
-        i = 1
-        k = lo
+        i, k = 1, lo
         while k < j <= hi
             if lt(o, v[j], t[i])
                 v[k] = v[j]
