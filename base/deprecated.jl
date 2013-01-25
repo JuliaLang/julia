@@ -19,23 +19,14 @@ end
 @deprecate  del           delete!
 @deprecate  del_all       empty!
 @deprecate  load          require
-@deprecate  numel         length
 @deprecate  idump         xdump
 @deprecate  cwd           pwd
 @deprecate  strlen        length
-@deprecate  islogical     isbool
-@deprecate  csvread       readcsv
-@deprecate  dlmread       readdlm
-@deprecate  csvwrite      writecsv
-@deprecate  dlmwrite      writedlm
 @deprecate  lc            lowercase
 @deprecate  uc            uppercase
 @deprecate  nCr           binomial
 @deprecate  julia_pkgdir  Pkg.dir
 @deprecate  tintersect    typeintersect
-@deprecate  chi2rnd       randchi2
-@deprecate  betarnd       randbeta
-@deprecate  exprnd        randexp
 @deprecate  searchsorted  searchsortedfirst
 @deprecate  choose        first
 @deprecate  system        run
@@ -43,6 +34,18 @@ end
 
 export strcat
 strcat(xs...) = string(xs...)
+
+# compatibility aliases
+@deprecate  numel         length
+@deprecate  islogical     isbool
+@deprecate  csvread       readcsv
+@deprecate  dlmread       readdlm
+@deprecate  csvwrite      writecsv
+@deprecate  dlmwrite      writedlm
+@deprecate  chi2rnd       randchi2
+@deprecate  betarnd       randbeta
+@deprecate  exprnd        randexp
+@deprecate  rot90         rotl90
 
 export randi, randival, randexp, randg, randbeta, randchi2
 

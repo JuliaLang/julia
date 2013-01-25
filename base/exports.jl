@@ -484,7 +484,6 @@ export
     reverse,
     reverse!,
     rot180,
-    rot90,
     rotl90,
     rotr90,
     searchsortedfirst,
@@ -1030,6 +1029,7 @@ export
     spawnat,
     spawnlocal,
     take,
+    wait,
 
 # distributed arrays
     defaultdist,
@@ -1115,7 +1115,6 @@ export
     read_from,
     run,
     success,
-    wait,
     write_to,
 
 # C interface

@@ -1094,7 +1094,6 @@ function rotl90(A::AbstractMatrix, k::Integer)
 end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
-const rot90 = rotl90
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
 function reverse!(v::StridedVector)
