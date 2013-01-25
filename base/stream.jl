@@ -65,7 +65,7 @@ make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 function _uv_tty2tty(handle::Ptr{Void})
     tty = TTY(handle,true)
     tty.line_buffered = false
-    ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),handle,tty)
+    ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),handle,tty)
     tty
 end
 
@@ -266,7 +266,7 @@ type SingleAsyncWork <: AsyncWork
             return new(cb,C_NULL)
         end
         this=new(cb)
-        this.handle=ccall(:jl_make_async,Ptr{Void},(Ptr{Void},SingleAsyncWork),loop,this)
+        this.handle=ccall(:jl_make_async,Ptr{Void},(Ptr{Void},Any),loop,this)
         this
     end
 end
@@ -276,7 +276,7 @@ type IdleAsyncWork <: AsyncWork
     handle::Ptr{Void}
     function IdleAsyncWork(loop::Ptr{Void},cb::Function)
         this=new(cb)
-        this.handle=ccall(:jl_make_idle,Ptr{Void},(Ptr{Void},IdleAsyncWork),loop,this)
+        this.handle=ccall(:jl_make_idle,Ptr{Void},(Ptr{Void},Any),loop,this)
         this
     end
 end
@@ -286,7 +286,7 @@ type TimeoutAsyncWork <: AsyncWork
     handle::Ptr{Void}
     function TimeoutAsyncWork(loop::Ptr{Void},cb::Function)
         this=new(cb)
-        this.handle=ccall(:jl_make_timer,Ptr{Void},(Ptr{Void},TimeoutAsyncWork),loop,this)
+        this.handle=ccall(:jl_make_timer,Ptr{Void},(Ptr{Void},Any),loop,this)
         this
     end
 end
@@ -337,8 +337,8 @@ run_event_loop() = run_event_loop(globalEventLoop())
 malloc_pipe() = c_malloc(_sizeof_uv_pipe)
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool,pipe::AsyncStream)
     #make the pipe an unbuffered stream for now
-    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,AsyncStream), read_end, 0, readable_julia_only, pipe)
-    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,AsyncStream), write_end, 1, readable_julia_only, pipe)
+    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,Any), read_end, 0, readable_julia_only, pipe)
+    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,Any), write_end, 1, readable_julia_only, pipe)
     error = ccall(:uv_pipe_link, Int, (Ptr{Void}, Ptr{Void}), read_end, write_end)
     if error != 0 # don't use assert here as $string isn't be defined yet
         error("uv_pipe_link failed")
