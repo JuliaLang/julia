@@ -177,9 +177,18 @@ end
 bind(sock::Socket, addr::InetAddr) = bind(sock,addr.host,addr.port)
 bind(sock::Socket, host::IpAddr, port) = bind(sock, InetAddr(host,port))
 
-bind(sock::TcpSocket, host::IPv4, port::Uint16) = 
-    ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
-	  sock.handle, hton(port), hton(host.host)) != -1
+const UV_SUCCESS = 0
+const UV_EADDRINUSE = 5
+
+function bind(sock::TcpSocket, host::IPv4, port::Uint16) 
+    err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
+	  sock.handle, hton(port), hton(host.host)) 
+    if(err == -1 && _uv_lasterror() != UV_EADDRINUSE)
+        throw(UVError("bind"))
+    end
+    err != -1
+end
+
 bind(sock::TcpSocket, host::IPv6, port::Uint16) = 
     error("IPv6 Support not fully implemented")
 
@@ -188,10 +197,9 @@ bind(sock::TcpSocket, host::IPv6, port::Uint16) =
 callback_dict = ObjectIdDict()
 
 function _uv_hook_getaddrinfo(cb::Function,addrinfo::Ptr{Void}, status::Int32)
-    println("Hello")
     delete!(callback_dict,cb)
     if(status==-1)
-        #@async error("Name lookup failed "*host)
+        throw(UVError("getaddrinfo callback"))
     end
     sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
     if(ccall(:jl_sockaddr_is_ip4,Int,(Ptr{Void},),sockaddr)==1)
@@ -236,8 +244,14 @@ end
 
 function connect(sock::TcpSocket, host::ASCIIString, port)
 	ipaddr = getaddrinfo(host)
-	connect(ipaddr,port)
+	connect(sock,ipaddr,port)
 end
+
+function default_connectcb(sock,status)
+    if(status == -1)
+        throw(UVError("connect callback"))
+    end
+end 
 
 function connect(cb::Function, sock::TcpSocket, host::ASCIIString, port)
 	getaddrinfo(host) do ipaddr
@@ -257,11 +271,13 @@ for (args,forward_args) in ( ((:(addr::InetAddr),), (:(addr.host),:(addr.port)) 
 			connect(cb,sock,$(forward_args...))
 		function connect($(args...)) 
 			sock = TcpSocket()
+            sock.ccb = default_connectcb
 			connect(sock,$(forward_args...))
 			sock
 		end
 		function connect(cb::Function,$(args...)) 
 			sock = TcpSocket()
+            sock.ccb = default_connectcb
 			connect(cb,sock,$(forward_args...))
 			sock
 		end
@@ -281,7 +297,7 @@ listen(addr::InetAddr) = listen(addr.host,addr.port)
 listen(host::IpAddr, port::Uint16) = listen(InetAddr(host,port))
 
 listen(cb::Function,args...) = (sock=listen(args...);sock.ccb=cb;sock)
-listen(cb::Function,sock::Socket) = (listen(sock);sock)
+listen(cb::Function,sock::Socket) = (sock.ccb=cb;listen(sock))
 
 ##
 
@@ -302,23 +318,25 @@ end
 
 ## Utility functions
 
-const UV_SUCCESS = 0
-const UV_EADDRINUSE = 5
-
-function open_any_tcp_port(cb,default_port)
-	sock = TcpSocket()
+function open_any_tcp_port(cb::Function,default_port)
 	addr = InetAddr(IPv4(uint32(0)),default_port)
-    err::Int32 = 0
-	while(!bind(sock,addr) && err == UV_EADDRINUSE)
+	while(true)
+        sock = TcpSocket()
+
+        if(bind(sock,addr) && listen(cb,sock))
+            return (addr.port,sock)
+        end
+        err = _uv_lasterror()
+        system = _uv_lastsystemerror()
+        sock.open = true #need to make close() work
+        close(sock)
+        if(err != UV_SUCCESS && err != UV_EADDRINUSE)
+            throw(UVError("open_any_tcp_port",err,system))
+        end
 		addr.port += 1
-		err = _uv_lasterror()
+        if(addr.port==default_port)
+            error("Not a single port is available.")
+        end
 	end
-	if(err != UV_SUCCESS && err != UV_EADDRINUSE)
-		system = _uv_lastsystemerror()
-		close(sock)
-		throw(UVError("open_any_tcp_port",err,system))
-	end
-	listen(cb,sock)
-	(addr.port,sock)
 end
 
