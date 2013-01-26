@@ -18,7 +18,7 @@ CONFIG_GUESS := $(shell ./config.guess)
 CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
 endif
 
-#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp glpk patchelf
+#autoconf configure-driven scripts: llvm readline pcre arpack fftw clp unwind lighttpd gmp glpk patchelf
 #custom configure-driven script: zlib nginx
 #custom Makefile rules: openlibm Faddeeva-wrapper rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
 
@@ -53,6 +53,11 @@ endif
 ifeq ($(USE_SYSTEM_LLVM), 0)
 STAGE1_DEPS += llvm
 endif
+
+# Disable web repl
+#ifneq ($(OS),WINNT)
+#STAGE1_DEPS += lighttpd
+#endif
 
 ifeq ($(OS),WINNT)
 READLINE_VER = 5.0
@@ -1073,6 +1078,48 @@ configure-suitesparse-wrapper:
 compile-suitesparse-wrapper:
 check-suitesparse-wrapper:
 install-suitesparse-wrapper: $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT)
+
+
+## CLP ##
+CLP_OBJ_SOURCE = clp-$(CLP_VER)/Clp/src/.libs/libClp.$(SHLIB_EXT)
+CLP_OBJ_TARGET = $(BUILD)/lib/libClp.$(SHLIB_EXT)
+
+compile-clp: install-clp
+install-clp: $(CLP_OBJ_TARGET)
+
+clp-$(CLP_VER).tar.gz:
+	$(WGET_DASH_O) $@ http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz
+clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
+	mkdir -p clp-$(CLP_VER)
+	tar -C clp-$(CLP_VER) --strip-components 1 -zxf $<
+	touch -c $@
+clp-$(CLP_VER)/config.status: clp-$(CLP_VER)/configure
+	cd clp-$(CLP_VER) && \
+	./configure $(CONFIGURE_COMMON) MPIF77="$(FC)" MPICXX="$(CXX)" MPICC="$(CC)"
+	touch -c $@
+$(CLP_OBJ_SOURCE): clp-$(CLP_VER)/config.status
+	$(MAKE) -C clp-$(CLP_VER)
+	touch -c $@
+clp-$(CLP_VER)/checked: $(CLP_OBJ_SOURCE)
+ifeq ($(OS),$(BUILD_OS))
+	$(MAKE) -C clp-$(CLP_VER) test
+endif
+	echo 1 > $@
+$(CLP_OBJ_TARGET): $(CLP_OBJ_SOURCE) clp-$(CLP_VER)/checked
+	$(MAKE) -C clp-$(CLP_VER) install
+	touch -c $@
+
+clean-clp:
+	-$(MAKE) -C clp-$(CLP_VER) clean
+	-rm -f $(CLP_OBJ_TARGET)
+distclean-clp:
+	-rm -rf clp-$(CLP_VER).tar.gz clp-$(CLP_VER)
+
+get-clp: clp-$(CLP_VER).tar.gz
+configure-clp: clp-$(CLP_VER)/config.status
+compile-clp: $(CLP_OBJ_SOURCE)
+check-clp: clp-$(CLP_VER)/checked
+install-clp: $(CLP_OBJ_TARGET)
 
 
 ## UNWIND ##
