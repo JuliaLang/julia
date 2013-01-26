@@ -122,9 +122,9 @@ rand(::Type{Uint32})  = dsfmt_randui32()
 rand(::Type{Uint64})  = dsfmt_randui64()
 rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
 
-rand(::Type{Int32})   = int32(rand(Uint32)) & typemax(Int32)
-rand(::Type{Int64})   = int64(rand(Uint64)) & typemax(Int64)
-rand(::Type{Int128})  = int128(rand(Uint128)) & typemax(Int128)
+rand(::Type{Int32})   = int32(rand(Uint32))
+rand(::Type{Int64})   = int64(rand(Uint64))
+rand(::Type{Int128})  = int128(rand(Uint128))
 
 for itype in (:Uint32, :Uint64, :Uint128, :Int32, :Int64, :Int128) 
     @eval begin
@@ -145,7 +145,7 @@ function rand{T<:Integer}(r::Range1{T})
     hi = r[end]
 
     m = typemax(T)
-    s = rand(T)
+    s = abs(rand(T))
     if (hi-lo == m)
         return s + lo
     end
