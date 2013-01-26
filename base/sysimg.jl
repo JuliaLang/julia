@@ -314,7 +314,7 @@ end # baremodule Base
 
 using Base
 
-let JL_PRIVATE_LIBDIR = getenv("JL_PRIVATE_LIBDIR")
+let JL_PRIVATE_LIBDIR = try getenv("JL_PRIVATE_LIBDIR") catch e "lib/julia" end
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},),
       "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji")
