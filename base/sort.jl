@@ -272,19 +272,17 @@ import Intrinsics.slt_int, Intrinsics.unbox
 typealias Floats Union(Float32,Float64)
 typealias Direct Union(Forward,Reverse)
 
-type Fwd <: Ordering end
-type Rev <: Ordering end
+type Left <: Ordering end
+type Right <: Ordering end
 
-left(::Forward) = Rev()
-left(::Reverse) = Fwd()
-right(::Forward) = Fwd()
-right(::Reverse) = Rev()
+left(::Direct) = Left()
+right(::Direct) = Right()
 
 left{O<:Direct}(o::Perm{O}) = Perm(left(O()),o.vec)
 right{O<:Direct}(o::Perm{O}) = Perm(right(O()),o.vec)
 
-lt{T<:Floats}(::Fwd, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
-lt{T<:Floats}(::Rev, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
+lt{T<:Floats}(::Left, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
+lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
 
 isnan(o::Direct, x::Floats) = (x!=x)
 isnan{O<:Direct}(o::Perm{O}, i::Int) = isnan(O(),o.vec[i])
