@@ -20,7 +20,11 @@ typealias UVStream AsyncStream
 
 const _sizeof_uv_pipe = ccall(:jl_sizeof_uv_pipe_t,Int32,())
 
-eof(s::AsyncStream) = !s.open && nb_available(s.buffer)<=0
+function eof(s::AsyncStream)
+    start_reading(s)
+    wait_readnb(s,1)
+    !s.open && nb_available(s.buffer)<=0
+end
 
 type NamedPipe <: AsyncStream
     handle::Ptr{Void}
