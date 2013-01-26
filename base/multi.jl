@@ -110,7 +110,7 @@ Worker(host::String, port::Integer, sock::TcpSocket) =
 Worker(host::String, port::Integer) =
     Worker(host, port, connect(host,uint16(port)))
 Worker(host::String, port::Integer, tunneluser::String) = 
-    Worker(host, port, connect_to_host("localhost",
+    Worker(host, port, connect("localhost",
            ssh_tunnel(tunnel_user, host, uint16(port))))
 
 function send_msg_now(w::Worker, kind, args...)
@@ -765,17 +765,11 @@ end
 
 # activity on accept fd
 function accept_handler(server::TcpSocket, status::Int32)
-    #println("Accepted")
     if(status == -1)
         error("An error occured during the creation of the server")
     end
-    client = TcpSocket()
-    err = accept(server,client)
-    if err!=0
-        print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
-    else
-       create_message_handler_loop(client)
-    end
+    client =  accept(server)
+    create_message_handler_loop(client)
 end
 
 type DisconnectException <: Exception end
