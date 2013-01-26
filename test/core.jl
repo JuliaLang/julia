@@ -457,9 +457,9 @@ begin
     @test a == [11,99,13]
     a2 = Any[101,102,103]
     p2 = pointer(a2)
-    @test unsafe_ref(p2) == 101
-    unsafe_assign(p2, 909, 3)
-    @test a2 == [101,102,909]
+    @test_fails unsafe_ref(p2) == 101
+    @test_fails unsafe_assign(p2, 909, 3)
+    @test a2 == [101,102,103]
 end
 
 # issue #1287, combinations of try, catch, return
