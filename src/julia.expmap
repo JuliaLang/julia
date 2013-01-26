@@ -5,7 +5,6 @@
     bitvector_count;
     bitvector_next;
     clock_now;
-    connect_to_host;
     ev_break;
     get_exename;
     getlocalip;

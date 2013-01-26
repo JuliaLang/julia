@@ -5,16 +5,21 @@ type IPv4 <: IpAddr
     host::Uint32
     IPv4(host::Uint32) = new(host)
     IPv4(a::Uint8,b::Uint8,c::Uint8,d::Uint8) = new(uint32(a)<<24|
-						    uint32(b)<<16|
-						    uint32(c)<<8|
-						    d)
-    function IPv4(a::Integer,b::Integer,c::Integer,d::Integer)
-	if !(0<=a<=255 && 0<=b<=255 && 0<=c<=255 && 0<=d<=255)
-	    throw(DomainError())
-	end
-	IPv4(uint8(a),uint8(b),uint8(c),uint8(d))
+                                                    uint32(b)<<16|
+                                                    uint32(c)<<8|
+                                                    d)
+	function IPv4(a::Integer,b::Integer,c::Integer,d::Integer)
+        if(!( 0<=a<=255 && 0<=b<=255 && 0<=c<=255 && 0<=d<=255 ))
+            throw(DomainError())
+        end
+        IPv4(uint8(a),uint8(b),uint8(c),uint8(d))
     end
 end
+
+show(io::IO,ip::IPv4) = print(io,"IPv4(",dec((ip.host&(0xFF000000))>>24),".",
+                                         dec((ip.host&(0xFF0000))>>16),".",
+                                         dec((ip.host&(0xFF00))>>8),".",
+                                         dec(ip.host&0xFF),")")
 
 type IPv6 <: IpAddr
     host::Uint128
@@ -38,6 +43,15 @@ type IPv6 <: IpAddr
 	     uint16(e),uint16(f),uint16(g),uint16(h))
     end
 end
+
+show(io::IO,ip::IPv6) = print(io,"IPv6(",
+                        hex((ip.host&(uint128(0xFFFF)<<(7*16)))>>(7*16)),":",
+                        hex((ip.host&(uint128(0xFFFF)<<(6*16)))>>(7*16)),":",
+                        hex((ip.host&(uint128(0xFFFF)<<(5*16)))>>(7*16)),":",
+                        hex((ip.host&(uint128(0xFFFF)<<(4*16)))>>(7*16)),":",
+                        hex((ip.host&(uint128(0xFFFF)<<(3*16)))>>(7*16)),":",
+                        hex((ip.host&(uint128(0xFFFF)<<(2*16)))>>(7*16)),":",
+                        hex((ip.host&0xFFFF), ")"))
 
 type InetAddr
     host::IpAddr
@@ -175,12 +189,16 @@ function getaddrinfo_callback(cb, addrinfo::Ptr{Void}, status::Int32)
     if(status==-1)
         #@async error("Name lookup failed "*host)
     end
-    cb(IPv4(_jl_sockaddr_from_addrinfo(addrinfo_list)))
+    sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
+    if(ccall(:jl_sockaddr_is_ip4,Int,(Ptr{Void},),sockaddr)==1)
+    	cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,Uint32,(Ptr{Void},),sockaddr))))
+    else
+    	cb(IPv6(ntoh(ccall(:jl_sockaddr_host6,Uint128,(Ptr{Void},),sockaddr))))
+    end
 end
 
-jl_getaddrinfo(loop::Ptr{Void},host::ByteString,service::Ptr{Void},cb::Function) =
-    ccall(:jl_getaddrinfo,Int32,(Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Any),
-          loop,      host,       service,    cb)
+jl_getaddrinfo(loop::Ptr{Void},host::ByteString,service::Ptr{Void},cb::Function) = ccall(:jl_getaddrinfo,Int32,(Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Any),
+			 			  loop,      host,       service,    cb)
 
 getaddrinfo(cb::Function,host::ASCIIString) = 
     jl_getaddrinfo(globalEventLoop(),host,C_NULL,(addr,status)->
@@ -200,44 +218,58 @@ end
 ##
 
 function connect(cb::Function, sock::TcpSocket, host::IPv4, port::Uint16)
-    sock.ccb = cb
-    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
-			     sock.handle,host.host,hton(port)) != -1)
+	sock.ccb = cb
+	uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
+								  sock.handle,hton(host.host),hton(port)) == -1)	
 end
 
 function connect(sock::TcpSocket, host::IPv4, port::Uint16) 
-    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
-			     sock.handle,host.host,hton(port)) != -1)
-    wait_connected(sock)
+	uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
+								  sock.handle,hton(host.host),hton(port)) == -1)
+	wait_connected(sock)
 end
 
+function connect(sock::TcpSocket, host::ASCIIString, port)
+	ipaddr = getaddrinfo(host)
+	connect(ipaddr,port)
+end
+
+function connect(cb::Function, sock::TcpSocket, host::ASCIIString, port)
+	ipaddr = getaddrinfo(host) do ipaddr
+		connect(cb,sock,ipaddr,port)
+	end
+end
+
+
 for (args,forward_args) in ( ((:(addr::InetAddr),), (:(addr.host),:(addr.port)) ),
-			    ((:(host::IpAddr),:port),(:(InetAddr(host,port)),) ),
-			    ((:(addr::InetAddr),), (:(addr.host),:(addr.port))))
-    @eval begin
-	connect(sock::Socket,$(args...)) = connect(sock,$(forward_args...))
-	connect(cb::Function,sock::Socket,$(args...)) =
-	connect(cb,sock,$(forward_args...))
-	function connect($(args...))
-	    sock = TcpSocket()
-	    connect(sock,$(forward_args...))
-	    sock
+							 ((:(host::IpAddr),:port),(:(InetAddr(host,port)),) ),
+							 ((:(addr::InetAddr),), (:(addr.host),:(addr.port))), 
+							 ((:(host::ASCIIString),:port), (:host,:port))
+							 )
+	@eval begin
+		connect(sock::Socket,$(args...)) = connect(sock,$(forward_args...))
+		connect(cb::Function,sock::Socket,$(args...)) = 
+			connect(cb,sock,$(forward_args...))
+		function connect($(args...)) 
+			sock = TcpSocket()
+			connect(sock,$(forward_args...))
+			sock
+		end
+		function connect(cb::Function,$(args...)) 
+			sock = TcpSocket()
+			connect(cb,sock,$(forward_args...))
+			sock
+		end
 	end
-	function connect(cb::Function,$(args...))
-	    sock = TcpSocket()
-	    connect(cb,sock,$(forward_args...))
-	    sock
-	end
-    end
 end
 
 ##
 
-function listen(host::IPv4, port::Uint16)
-    sock = TcpSocket()
-    uv_error("listen",!bind(sock,host,port))
-    listen(sock)
-    sock
+function listen(host::IPv4,   port::Uint16)
+	sock = TcpSocket()
+	uv_error("listen",!bind(sock,host,port))
+	listen(sock)
+	sock
 end
 listen(port::Integer) = listen(IPv4(uint32(0)),uint16(port))
 listen(addr::InetAddr) = listen(addr.host,addr.port)
@@ -261,3 +293,23 @@ function accept(server::TcpSocket)
     client.open = true
     client
 end
+
+## Utility functions
+
+const UV_EADDRINUSE = 5
+
+function open_any_tcp_port(cb,default_port)
+	sock = TcpSocket()
+	addr = InetAddr(IPv4(0),default_port)
+	while(!bind(addr) && ((err = _uv_lasterror()) == UV_EADDRINUSE))
+		addr.port += 1
+	end
+	if(err != UV_EADDRINUSE)
+		system = _uv_lastsystemerror()
+		close(sock)
+		uv_error("open_any_tcp_port",err,system)
+	end
+	listen(cb,sock)
+	(addr.port,sock)
+end
+

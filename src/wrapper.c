@@ -399,6 +399,7 @@ static void jl_free_buffer(uv_write_t* req, int status)
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
+    if(stream!=0) {
     if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         uvw->data=0;
@@ -409,6 +410,7 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
     else {
         ios_t *handle = (ios_t*)stream;
         return ios_putc(c,handle);
+    }
     }
 }
 
@@ -591,6 +593,17 @@ DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
     memcpy(addr,addrinfo->ai_addr,sizeof(struct sockaddr));
     return addr;
 }
+
+DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr *addr)
+{
+    return (addr->sa_family==AF_INET);
+}
+
+DLLEXPORT unsigned int jl_sockaddr_host4(struct sockaddr *addr)
+{
+    return ((struct sockaddr_in*)addr)->sin_addr.s_addr;
+}
+
 
 DLLEXPORT void jl_sockaddr_set_port(struct sockaddr *addr,uint16_t port)
 {
