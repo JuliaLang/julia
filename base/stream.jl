@@ -459,7 +459,7 @@ type UVError <: Exception
     uv_code::Int32
     system_code::Int32
     UVError(p::String)=new(p,_uv_lasterror(),_uv_lastsystemerror())
-    UVError(p::String,uv::Int,system::Int)=new(p,uv,system)
+    UVError(p::String,uv::Integer,system::Integer)=new(p,uv,system)
 end
 
 struverror(err::UVError) = bytestring(ccall(:jl_uv_strerror,Ptr{Uint8},(Int32,Int32),err.uv_code,err.system_code))
