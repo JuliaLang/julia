@@ -133,8 +133,9 @@ uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size)
 {
     uv_buf_t buf;
     JULIA_CB(alloc_buf,handle->data,1,CB_INT32,suggested_size);
-    if (!jl_is_tuple(ret) || !jl_is_pointer(jl_t0(ret)) || !jl_is_int32(jl_t1(ret)))
+    if (!jl_is_tuple(ret) || !jl_is_pointer(jl_t0(ret)) || !jl_is_int32(jl_t1(ret))) {
         jl_error("jl_alloc_buf: Julia function returned invalid value for buffer allocation callback");
+    }
     buf.base = jl_unbox_voidpointer(jl_t0(ret));
     buf.len = jl_unbox_int32(jl_t1(ret));
     return buf;
@@ -273,10 +274,10 @@ extern char **environ;
 #endif
 
 DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
-                                 uv_process_t *proc, jl_value_t *julia_struct,
-                                 uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
-                                 uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
-                                 uv_handle_type stderr_type,uv_pipe_t *stderr_pipe)
+                       uv_process_t *proc, jl_value_t *julia_struct,
+                       uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
+                       uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
+                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe)
 {
 #ifdef __APPLE__
     char **environ = *_NSGetEnviron();

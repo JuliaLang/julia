@@ -228,6 +228,9 @@
     jl_sizeof_*;
     jl_sockaddr_from_addrinfo;
     jl_sockaddr_set_port;
+    jl_sockaddr_is_ip4;
+    jl_sockaddr_host4;
+    jl_tcp4_connect;
     jl_spawn;
     jl_start_io_thread;
     jl_start_reading;

@@ -80,16 +80,14 @@ end
 
 #@init_stdio
 
-
 function _init_buf(stream::AsyncStream)
     if(!isa(stream.buf,IOStream))
         stream.buf=memio()
     end
 end
 
-## SOCKETS ##
-   
 
+## SOCKETS ##
 
 function tasknotify(waittasks::Vector{WaitTask}, args...)
     newwts = WaitTask[]
