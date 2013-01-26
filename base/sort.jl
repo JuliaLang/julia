@@ -288,6 +288,7 @@ isnan(o::Direct, x::Floats) = (x!=x)
 isnan{O<:Direct}(o::Perm{O}, i::Int) = isnan(O(),o.vec[i])
 
 function nans2left!(o::Ordering, v::AbstractVector, lo::Int, hi::Int)
+    hi < lo && return lo, hi
     i = lo
     while (i < hi) & isnan(o, v[i])
         i += 1
@@ -307,8 +308,8 @@ function nans2left!(o::Ordering, v::AbstractVector, lo::Int, hi::Int)
     end
     return i, hi
 end
-
 function nans2right!(o::Ordering, v::AbstractVector, lo::Int, hi::Int)
+    hi < lo && return lo, hi
     i = hi
     while (i > lo) & isnan(o, v[i])
         i -= 1
@@ -328,7 +329,6 @@ function nans2right!(o::Ordering, v::AbstractVector, lo::Int, hi::Int)
     end
     return lo, i
 end
-
 nans2left!(o::Ordering, v::AbstractVector) = nans2left!(o,v,1,length(v))
 nans2right!(o::Ordering, v::AbstractVector) = nans2right!(o,v,1,length(v))
 

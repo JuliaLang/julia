@@ -93,24 +93,56 @@ randnans(n) = reinterpret(Float64,[rand(Uint64)|0x7ff8000000000000 for i=1:n])
 
 function randn_with_nans(n,p)
     v = randn(n)
-    x = find(rand(n) .< p)
+    x = find(rand(n).<p)
     v[x] = randnans(length(x))
     return v
 end
 
 srand(0xdeadbeef)
 
-n = 1000
-v = randn_with_nans(n,0.1)
+for n in [0:10, 100, 1000]
+    r = 1:10
+    v = rand(1:10,n)
+    h = hist(v,length(r))
 
-for ord in [Forward, Sort.Reverse],
-    alg in [InsertionSort, QuickSort, MergeSort, TimSort]
-    s = sort(alg,ord,v)
-    @test issorted(ord,s)
-    @test reinterpret(Uint64,v[isnan(v)]) == reinterpret(Uint64,s[isnan(s)])
-    p = sortperm(alg,ord,v)
-    @test isperm(p)
-    vp = v[p]
-    @test isequal(s,vp)
-    @test reinterpret(Uint64,s) == reinterpret(Uint64,vp)
+    for ord in [Forward, Sort.Reverse]
+        # insersion sort as a reference
+        pi = sortperm(InsertionSort,ord,v)
+        @test isperm(pi)
+        s = v[pi]
+        @test issorted(ord,s)
+        @test hist(s) == h
+        @test all([ issorted(pi[s.==i]) for i in r ])
+
+        # mergesort
+        pm = sortperm(MergeSort,ord,v)
+        @test pi == pm
+
+        # timsort
+        pt = sortperm(TimSort,ord,v)
+        # @test pi == pt ### FIXME: #2138
+        @test isperm(pt)
+        @test v[pt] == s
+
+        # quicksort (unstable)
+        pq = sortperm(QuickSort,ord,v)
+        @test isperm(pi)
+        @test v[pq] == s
+    end
+
+    v = randn_with_nans(n,0.1)
+    for ord in [Forward, Sort.Reverse],
+        alg in [InsertionSort, QuickSort, MergeSort, TimSort]
+        # test float sorting with NaNs
+        s = sort(alg,ord,v)
+        @test issorted(ord,s)
+        @test reinterpret(Uint64,v[isnan(v)]) == reinterpret(Uint64,s[isnan(s)])
+
+        # test float permutation with NaNs
+        p = sortperm(alg,ord,v)
+        @test isperm(p)
+        vp = v[p]
+        @test isequal(s,vp)
+        @test reinterpret(Uint64,s) == reinterpret(Uint64,vp)
+    end
 end
