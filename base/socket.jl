@@ -297,8 +297,8 @@ listen(port::Integer) = listen(IPv4(uint32(0)),uint16(port))
 listen(addr::InetAddr) = listen(addr.host,addr.port)
 listen(host::IpAddr, port::Uint16) = listen(InetAddr(host,port))
 
-listen(cb::Function,args...) = (sock=listen(args...);sock.ccb=cb;sock)
-listen(cb::Function,sock::Socket) = (sock.ccb=cb;listen(sock))
+listen(cb::Callback,args...) = (sock=listen(args...);sock.ccb=cb;sock)
+listen(cb::Callback,sock::Socket) = (sock.ccb=cb;listen(sock))
 
 ##
 
@@ -320,7 +320,7 @@ end
 
 ## Utility functions
 
-function open_any_tcp_port(cb::Function,default_port)
+function open_any_tcp_port(cb::Callback,default_port)
     addr = InetAddr(IPv4(uint32(0)),default_port)
     while true
         sock = TcpSocket()
@@ -341,3 +341,4 @@ function open_any_tcp_port(cb::Function,default_port)
         end
     end
 end
+open_any_tcp_port(default_port) = open_any_tcp_port(false,default_port)
