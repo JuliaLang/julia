@@ -23,7 +23,7 @@ include("webrepl_msgtypes_h.jl")
 ###########################################
 
 # open a socket on any port
-(port,sock) = Base.open_any_tcp_port(4444,false)
+(port,sock) = Base.open_any_tcp_port(4444)
 
 # print the socket number so the server knows what it is
 println(STDOUT,int16(port))
