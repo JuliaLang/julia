@@ -628,7 +628,7 @@ function check_rows_ids(prob::Prob, min_size::Integer, num_rows::Integer, rows_i
         throw(Error("invalid vector size: declared>=$num_rows actual=$(length(rows_ids))"))
     end
     ind_set = IntSet()
-    add_each(ind_set, rows_ids[1 : num_rows])
+    add_each!(ind_set, rows_ids[1 : num_rows])
     if min(ind_set) < 1 || max(ind_set) > rows
         throw(Error("index out of bounds (min=1 max=$rows)"))
     elseif length(ind_set) != length(rows_ids)
@@ -649,7 +649,7 @@ function check_cols_ids(prob::Prob, min_size::Integer, num_cols::Integer, cols_i
         throw(Error("invalid vector size: declared>=$num_cols actual=$(length(cols_ids))"))
     end
     ind_set = IntSet()
-    add_each(ind_set, cols_ids[1 : num_cols])
+    add_each!(ind_set, cols_ids[1 : num_cols])
     if min(ind_set) < 1 || max(ind_set) > cols
         throw(Error("index out of bounds (min=1 max=$cols)"))
     elseif length(ind_set) != length(cols_ids)

@@ -323,7 +323,7 @@ function lookup_ref(id)
         wi = WorkItem(bottom_func)
         # this WorkItem is just for storing the result value
         GRP.refs[id] = wi
-        add(wi.clientset, id[1])
+        add!(wi.clientset, id[1])
     end
     wi
 end
@@ -373,7 +373,7 @@ end
 
 function add_client(id, client)
     wi = lookup_ref(id)
-    add(wi.clientset, client)
+    add!(wi.clientset, client)
     nothing
 end
 
@@ -420,7 +420,7 @@ schedule_call(rid, f_thk, args_thk) =
 function schedule_call(rid, thunk)
     wi = WorkItem(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
-    add(wi.clientset, rid[1])
+    add!(wi.clientset, rid[1])
     enq_work(wi)
     wi
 end
@@ -1144,7 +1144,7 @@ function spawnlocal(thunk)
     rid = rr2id(rr)
     wi = WorkItem(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
-    add(wi.clientset, rid[1])
+    add!(wi.clientset, rid[1])
     push!(Workqueue, wi)   # add to the *front* of the queue, work first
     queueAsync(multi_cb_handles.work_cb)
     yield()

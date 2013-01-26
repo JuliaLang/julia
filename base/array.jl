@@ -1807,7 +1807,7 @@ function union(vs...)
         for v_elem in v
             if !has(seen, v_elem)
                 push!(ret, v_elem)
-                add(seen, v_elem)
+                add!(seen, v_elem)
             end
         end
     end
@@ -1822,7 +1822,7 @@ function setdiff(a, b)
     for a_elem in a
         if !has(seen, a_elem) && !has(bset, a_elem)
             push!(ret, a_elem)
-            add(seen, a_elem)
+            add!(seen, a_elem)
         end
     end
     ret

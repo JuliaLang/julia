@@ -1075,7 +1075,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     recpts = IntSet()  # statements that depend recursively on our value
     W = IntSet()
     # initial set of pc
-    add(W,1)
+    add!(W,1)
     # initial types
     s[1] = ObjectIdDict()
     for v in vars
@@ -1146,7 +1146,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 if !(isa(frame.prev,CallStack) && frame.prev.recurred)
                     toprec = true
                 end
-                add(recpts, pc)
+                add!(recpts, pc)
                 #if dbg
                 #    show(pc); print(" recurred\n")
                 #end
@@ -1156,7 +1156,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 # propagate type info to exception handler
                 l = cur_hand[1]::Int
                 if stchanged(changes, s[l], vars)
-                    add(W, l)
+                    add!(W, l)
                     s[l] = stupdate(s[l], changes, vars)
                 end
             end
@@ -1176,14 +1176,14 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         # general case
                         handler_at[l] = cur_hand
                         if stchanged(changes, s[l], vars)
-                            add(W, l)
+                            add!(W, l)
                             s[l] = stupdate(s[l], changes, vars)
                         end
                     end
                 elseif is(hd,:type_goto)
                     l = findlabel(body,stmt.args[1])
                     if stchanged(changes, s[l], vars)
-                        add(W, l)
+                        add!(W, l)
                         s[l] = stupdate(s[l], changes, vars)
                     end
                 elseif is(hd,:return)
@@ -1194,7 +1194,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         if !(isa(frame.prev,CallStack) && frame.prev.recurred)
                             toprec = true
                         end
-                        add(recpts, pc)
+                        add!(recpts, pc)
                         #if dbg
                         #    show(pc); print(" recurred\n")
                         #end
@@ -1215,7 +1215,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                             #    show(r)
                             #    print("\n")
                             #end
-                            add(W,r)
+                            add!(W,r)
                         end
                     end
                 elseif is(hd,:enter)
