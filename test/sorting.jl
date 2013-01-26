@@ -84,3 +84,33 @@ b = sort(Sort.QuickSort, Sort.By(x -> -10x), a)
 
 @test select(Sort.Reverse, [3,6,30,1,9], 2) == 9
 @test select(Sort.By(x -> -x), [3,6,30,1,9], 2) == 9
+
+## more advanced sorting tests ##
+
+using Sort
+
+randnans(n) = reinterpret(Float64,[rand(Uint64)|0x7ff8000000000000 for i=1:n])
+
+function randn_with_nans(n,p)
+    v = randn(n)
+    x = find(rand(n) .< p)
+    v[x] = randnans(length(x))
+    return v
+end
+
+srand(0xdeadbeef)
+
+n = 1000
+v = randn_with_nans(n,0.1)
+
+for ord in [Forward, Sort.Reverse],
+    alg in [InsertionSort, QuickSort, MergeSort, TimSort]
+    s = sort(alg,ord,v)
+    @test issorted(ord,s)
+    @test reinterpret(Uint64,v[isnan(v)]) == reinterpret(Uint64,s[isnan(s)])
+    p = sortperm(alg,ord,v)
+    @test isperm(p)
+    vp = v[p]
+    @test isequal(s,vp)
+    @test reinterpret(Uint64,s) == reinterpret(Uint64,vp)
+end
