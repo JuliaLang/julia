@@ -776,17 +776,6 @@
 			  (+ i 1)))))
       ,t)))
 
-(define kw-pattern
-  (pattern-set
-   ;; call with keyword arguments
-   (pattern-lambda (call f ... (= k v) ...)
-		   (let ((argl (cddr __)))
-		     (receive
-		      (kws args) (separate (lambda (x)
-					     (and (pair? x) (eq? (car x) '=)))
-					   argl)
-		      `(call ,f ,@args (keywords ,@kws)))))))
-
 (define patterns
   (pattern-set
    (pattern-lambda (block)
@@ -2264,9 +2253,8 @@ So far only the second case can actually occur.
 
 (define (julia-expand01 ex)
   (to-LFF
-   (pattern-expand kw-pattern
-    (pattern-expand patterns
-     (pattern-expand binding-form-patterns ex)))))
+   (pattern-expand patterns
+    (pattern-expand binding-form-patterns ex))))
 
 (define (julia-expand0 ex)
   (let ((e (julia-expand-macros ex)))
