@@ -302,7 +302,7 @@ function reinit_stdio()
     STDOUT.buffer = PipeString()
     STDERR.buffer = PipeString()
     for stream in (STDIN,STDOUT,STDERR)
-        ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),stream.handle,stream)
+        ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),stream.handle,stream)
     end
 end
 

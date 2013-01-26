@@ -70,7 +70,7 @@ type TcpSocket <: Socket
                                WaitTask[],false,WaitTask[],false,WaitTask[])
     function TcpSocket()
         this = TcpSocket(C_NULL,false)
-        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},TcpSocket),
+        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
                             globalEventLoop(),this)
         if (this.handle == C_NULL)
             error("Failed to start reading: ",_uv_lasterror())
@@ -94,7 +94,7 @@ type UdpSocket <: Socket
                                false,WaitTask[],false,WaitTask[])
     function UdpSocket()
         this = UdpSocket(C_NULL,false)
-        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},UdpSocket),
+        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
                             globalEventLoop(),this)
         this
     end
@@ -179,7 +179,7 @@ function getaddrinfo_callback(cb, addrinfo::Ptr{Void}, status::Int32)
 end
 
 jl_getaddrinfo(loop::Ptr{Void},host::ByteString,service::Ptr{Void},cb::Function) =
-    ccall(:jl_getaddrinfo,Int32,(Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Function),
+    ccall(:jl_getaddrinfo,Int32,(Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Any),
           loop,      host,       service,    cb)
 
 getaddrinfo(cb::Function,host::ASCIIString) = 

@@ -165,7 +165,7 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x)
             return builder.CreateZExt(x, T_int8);
         if (x->getType()->isPointerTy() && !to->isPointerTy())
             return builder.CreatePtrToInt(x, to);
-        assert(x->getType() == to);
+        if (x->getType() != to) jl_error("unbox: T != typeof(x)");
         return x;
     }
     Value *p = bitstype_pointer(x);
@@ -397,16 +397,29 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     jl_value_t *ety = jl_tparam0(aty);
     if(jl_is_typevar(ety))
         jl_error("pointerref: invalid pointer");
-    if (!jl_is_bits_type(ety)) {
-        ety = (jl_value_t*)jl_any_type;
-    }
     if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
         jl_error("pointerref: invalid index type");
     }
-    //Value *idx = builder.CreateIntCast(auto_unbox(i,ctx), T_size, false); //TODO: use this instead (and remove assert jl_is_long)?
+    Value *thePtr = auto_unbox(e,ctx);
     Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
-    return typed_load(auto_unbox(e, ctx), im1, ety, ctx);
+    if (!jl_is_bits_type(ety)) {
+        if (!jl_is_struct_type(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety))
+            jl_error("pointerref: invalid pointer type");
+        uint64_t size = ((jl_struct_type_t*)ety)->size;
+        Value *strct =
+            builder.CreateCall(jlallocobj_func,
+                               ConstantInt::get(T_size,
+                                    sizeof(void*)+size));
+        builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
+                            emit_nthptr_addr(strct, (size_t)0));
+        im1 = builder.CreateMul(im1, ConstantInt::get(T_size, size));
+        thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
+        builder.CreateMemCpy(builder.CreateBitCast(emit_nthptr_addr(strct, (size_t)1), T_pint8),
+                            thePtr, size, 1);
+        return mark_julia_type(strct, ety);
+    }
+    return typed_load(thePtr, im1, ety, ctx);
 }
 
 static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx) {
@@ -420,7 +433,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     if (!jl_subtype(xty, ety, 0))
         jl_error("pointerset: type mismatch in assign");
     if (!jl_is_bits_type(ety)) {
-        ety = (jl_value_t*)jl_any_type;
+        jl_error("pointerset: invalid pointer type"); //ety = (jl_value_t*)jl_any_type;
     }
     if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
         jl_error("pointerset: invalid index type");
