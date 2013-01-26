@@ -187,15 +187,14 @@ getaddrinfo(cb::Function,host::ASCIIString) =
 		   getaddrinfo_callback(cb,addr,status))
 
 function getaddrinfo(host::ASCIIString)
-    ct = current_task()
-    getaddrinfo(host) do IP
-	yieldto(ct,IP)
-	ct.runnable = true
-    end
+    ct=current_task()
+    wt=WaitTask(ct)
+	getaddrinfo(host) do IP
+		tasknotify([wt],IP)
+	end
     ct.runnable = false
-    ip = yield()
-    yieldto(Scheduler)
-    return ip
+    (ip,) = yield()
+	return ip
 end
 
 ##
