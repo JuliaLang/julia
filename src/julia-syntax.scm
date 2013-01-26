@@ -105,8 +105,9 @@
       (let ((arg2 (caddr e)))
 	(if (pair? arg2)
 	    (let ((g (gensy)))
-	      `(call & (call ,(cadr e) ,(car e) (= ,g ,arg2))
-		     ,(expand-compare-chain (cons g (cdddr e)))))
+	      `(block (= ,g ,arg2)
+		      (call & (call ,(cadr e) ,(car e) ,g)
+			    ,(expand-compare-chain (cons g (cdddr e))))))
 	    `(call & (call ,(cadr e) ,(car e) ,arg2)
 		   ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
@@ -756,6 +757,17 @@
 			  (+ i 1)))))
       ,t)))
 
+(define kw-pattern
+  (pattern-set
+   ;; call with keyword arguments
+   (pattern-lambda (call f ... (= k v) ...)
+		   (let ((argl (cddr __)))
+		     (receive
+		      (kws args) (separate (lambda (x)
+					     (and (pair? x) (eq? (car x) '=)))
+					   argl)
+		      `(call ,f ,@args (keywords ,@kws)))))))
+
 (define patterns
   (pattern-set
    (pattern-lambda (block)
@@ -861,7 +873,7 @@
    (pattern-lambda (curly type . elts)
 		   `(call (top apply_type) ,type ,@elts))
 
-   ; call with splat
+   ;; call with splat
    (pattern-lambda (call f ... (... _) ...)
 		   (let ((argl (cddr __)))
 		     ; wrap sequences of non-... arguments in tuple()
@@ -2233,8 +2245,9 @@ So far only the second case can actually occur.
 
 (define (julia-expand01 ex)
   (to-LFF
-   (pattern-expand patterns
-    (pattern-expand binding-form-patterns ex))))
+   (pattern-expand kw-pattern
+    (pattern-expand patterns
+     (pattern-expand binding-form-patterns ex)))))
 
 (define (julia-expand0 ex)
   (let ((e (julia-expand-macros ex)))
