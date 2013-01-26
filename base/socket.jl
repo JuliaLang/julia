@@ -185,24 +185,29 @@ bind(sock::TcpSocket, host::IPv6, port::Uint16) =
 
 ##
 
-function getaddrinfo_callback(cb, addrinfo::Ptr{Void}, status::Int32)
+callback_dict = ObjectIdDict()
+
+function _uv_hook_getaddrinfo(cb::Function,addrinfo::Ptr{Void}, status::Int32)
+    println("Hello")
+    delete!(callback_dict,cb)
     if(status==-1)
         #@async error("Name lookup failed "*host)
     end
     sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
     if(ccall(:jl_sockaddr_is_ip4,Int,(Ptr{Void},),sockaddr)==1)
-    	cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,Uint32,(Ptr{Void},),sockaddr))))
+        cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,Uint32,(Ptr{Void},),sockaddr))))
     else
-    	cb(IPv6(ntoh(ccall(:jl_sockaddr_host6,Uint128,(Ptr{Void},),sockaddr))))
+        cb(IPv6(ntoh(ccall(:jl_sockaddr_host6,Uint128,(Ptr{Void},),sockaddr))))
     end
 end
 
 jl_getaddrinfo(loop::Ptr{Void},host::ByteString,service::Ptr{Void},cb::Function) = ccall(:jl_getaddrinfo,Int32,(Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Any),
 			 			  loop,      host,       service,    cb)
 
-getaddrinfo(cb::Function,host::ASCIIString) = 
-    jl_getaddrinfo(globalEventLoop(),host,C_NULL,(addr,status)->
-		   getaddrinfo_callback(cb,addr,status))
+getaddrinfo(cb::Function,host::ASCIIString) = begin
+    callback_dict[cb] = cb
+    jl_getaddrinfo(globalEventLoop(),host,C_NULL,cb)
+end
 
 function getaddrinfo(host::ASCIIString)
     ct=current_task()
@@ -235,7 +240,7 @@ function connect(sock::TcpSocket, host::ASCIIString, port)
 end
 
 function connect(cb::Function, sock::TcpSocket, host::ASCIIString, port)
-	ipaddr = getaddrinfo(host) do ipaddr
+	getaddrinfo(host) do ipaddr
 		connect(cb,sock,ipaddr,port)
 	end
 end
@@ -276,6 +281,7 @@ listen(addr::InetAddr) = listen(addr.host,addr.port)
 listen(host::IpAddr, port::Uint16) = listen(InetAddr(host,port))
 
 listen(cb::Function,args...) = (sock=listen(args...);sock.ccb=cb;sock)
+listen(cb::Function,sock::Socket) = (listen(sock);sock)
 
 ##
 
@@ -296,18 +302,21 @@ end
 
 ## Utility functions
 
+const UV_SUCCESS = 0
 const UV_EADDRINUSE = 5
 
 function open_any_tcp_port(cb,default_port)
 	sock = TcpSocket()
-	addr = InetAddr(IPv4(0),default_port)
-	while(!bind(addr) && ((err = _uv_lasterror()) == UV_EADDRINUSE))
+	addr = InetAddr(IPv4(uint32(0)),default_port)
+    err::Int32 = 0
+	while(!bind(sock,addr) && err == UV_EADDRINUSE)
 		addr.port += 1
+		err = _uv_lasterror()
 	end
-	if(err != UV_EADDRINUSE)
+	if(err != UV_SUCCESS && err != UV_EADDRINUSE)
 		system = _uv_lastsystemerror()
 		close(sock)
-		uv_error("open_any_tcp_port",err,system)
+		throw(UVError("open_any_tcp_port",err,system))
 	end
 	listen(cb,sock)
 	(addr.port,sock)

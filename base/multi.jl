@@ -876,9 +876,7 @@ end
 start_worker() = start_worker(STDOUT)
 function start_worker(out::Stream)
     default_port = uint16(9009)
-    (actual_port,sock) = open_any_tcp_port(default_port) do handle,status 
-        accept_handler(handle,status)
-    end
+    (actual_port,sock) = open_any_tcp_port(accept_handler,default_port) 
     write(out, "julia_worker:")  # print header
     write(out, "$(dec(actual_port))#") # print port
     write(out, bind_addr)      #TODO: print hostname

@@ -35,7 +35,8 @@ extern "C" {
 	XX(alloc_buf) \
 	XX(connectcb) \
 	XX(connectioncb) \
-	XX(asynccb)
+	XX(asynccb) \
+    XX(getaddrinfo)
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
@@ -148,6 +149,12 @@ void jl_connectcb(uv_connect_t *connect, int status)
 void jl_connectioncb(uv_stream_t *stream, int status)
 {
     JULIA_CB(connectioncb,stream->data,1,CB_INT32,status);
+    (void)ret;
+}
+
+void jl_getaddrinfocb(uv_getaddrinfo_t *req,int status, struct addrinfo *addr)
+{
+    JULIA_CB(getaddrinfo,req->data,2,CB_PTR,addr,CB_INT32,status);
     (void)ret;
 }
 
@@ -400,18 +407,19 @@ static void jl_free_buffer(uv_write_t* req, int status)
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
     if(stream!=0) {
-    if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
-        uv_write_t *uvw = malloc(sizeof(uv_write_t));
-        uvw->data=0;
-        uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
-        int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
-        return err ? 0 : 1;
+        if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
+            uv_write_t *uvw = malloc(sizeof(uv_write_t));
+            uvw->data=0;
+            uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
+            int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
+            return err ? 0 : 1;
+        }
+        else {
+            ios_t *handle = (ios_t*)stream;
+            return ios_putc(c,handle);
+        }
     }
-    else {
-        ios_t *handle = (ios_t*)stream;
-        return ios_putc(c,handle);
-    }
-    }
+    return 0;
 }
 
 DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
@@ -563,15 +571,6 @@ DLLEXPORT void getlocalip(char *buf, size_t len)
     if (ifAddrStruct!=NULL) uv_free_interface_addresses(ifAddrStruct,count);
 }
 
-void jl_addinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res)
-{
-    if (handle->data) {
-        jl_callback_call(((jl_function_t*)handle->data),0,2,CB_PTR,res,CB_INT32,status);
-    }
-    free(handle);
-    uv_freeaddrinfo(res);
-}
-
 DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *service, jl_function_t *cb)
 {
     uv_getaddrinfo_t *req = malloc(sizeof(uv_getaddrinfo_t));
@@ -584,7 +583,7 @@ DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *serv
 
     req->data = cb;
 
-    return uv_getaddrinfo(loop,req,jl_addinfo_cb,host,service,&hints);
+    return uv_getaddrinfo(loop,req,jl_getaddrinfocb,host,service,&hints);
 }
 
 DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
