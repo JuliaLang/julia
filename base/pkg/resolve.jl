@@ -1222,7 +1222,7 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
         for p0 in staged
             for w in pdeps[p0], vs in w
                 p1 = pdict[vs.package]
-                add(staged_next, p1)
+                add!(staged_next, p1)
             end
         end
         pset = union(pset, staged_next)

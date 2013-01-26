@@ -6,7 +6,7 @@ type IntSet
     IntSet() = new(zeros(Uint32,256>>>5), 256, false)
 end
 
-IntSet(args...) = (s=IntSet(); for a in args; add(s,a); end; s)
+IntSet(args...) = (s=IntSet(); for a in args; add!(s,a); end; s)
 
 similar(s::IntSet) = IntSet()
 
@@ -26,7 +26,7 @@ function resize(s::IntSet, top::Integer)
     s.limit
 end
 
-function add(s::IntSet, n::Integer)
+function add!(s::IntSet, n::Integer)
     if n >= s.limit
         if s.fill1s
             return s
@@ -39,9 +39,9 @@ function add(s::IntSet, n::Integer)
     return s
 end
 
-function add_each(s::IntSet, ns)
+function add_each!(s::IntSet, ns)
     for n in ns
-        add(s, n)
+        add!(s, n)
     end
     return s
 end
@@ -70,21 +70,22 @@ function delete!(s::IntSet, n::Integer)
     return n
 end
 
-function del_each(s::IntSet, ns)
+function del_each!(s::IntSet, ns)
     for n in ns
         delete!(s, n)
     end
     return s
 end
 
-setdiff(a::IntSet, b::IntSet) = del_each(copy(a),b)
+setdiff(a::IntSet, b::IntSet) = del_each!(copy(a),b)
+symdiff(a::IntSet, b::IntSet) = a $ b
 
 function empty!(s::IntSet)
     s.bits[:] = 0
     return s
 end
 
-function toggle(s::IntSet, n::Integer)
+function symdiff!(s::IntSet, n::Integer)
     if n >= s.limit
         lim = int(n + dim(n,2))
         resize(s, lim)
@@ -93,9 +94,9 @@ function toggle(s::IntSet, n::Integer)
     return s
 end
 
-function toggle_each(s::IntSet, ns)
+function symdiff!(s::IntSet, ns)
    for n in ns
-       toggle(s, n)
+       toggle!(s, n)
    end
    return s
 end
@@ -181,7 +182,7 @@ end
 
 union(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? union!(copy(s1), s2) : union!(copy(s2), s1))
 
-add_each(s::IntSet, s2::IntSet) = union!(s, s2)
+add_each!(s::IntSet, s2::IntSet) = union!(s, s2)
 
 function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
@@ -212,7 +213,7 @@ end
 
 complement(s::IntSet) = complement!(copy(s))
 
-function xor!(s::IntSet, s2::IntSet)
+function symdiff!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         resize(s, s2.limit)
     end
@@ -229,7 +230,8 @@ function xor!(s::IntSet, s2::IntSet)
     s
 end
 
-($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(copy(s1), s2) : xor!(copy(s2), s1))
+($)(s1::IntSet, s2::IntSet) =
+    (s1.limit >= s2.limit ? symdiff!(copy(s1), s2) : symdiff!!(copy(s2), s1))
 
 |(s::IntSet, s2::IntSet) = union(s, s2)
 (&)(s::IntSet, s2::IntSet) = intersect(s, s2)

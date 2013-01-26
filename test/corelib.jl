@@ -141,7 +141,7 @@ begin
     for id in seq
         if id > 0
             x = xs[id]
-            add(s, x)
+            add!(s, x)
             @test has(s, x)                 # check that x can be found
         else
             delete!(s, xs[-id])
@@ -228,7 +228,7 @@ d4[1001] = randstring(3)
 s = Set()
 @test isempty(s)
 for i in 1:1000
-    add(s, i)
+    add!(s, i)
     @test (length(s) == i)
 end
 
@@ -263,7 +263,7 @@ data_out = elements(s)
 # no duplicates
 s = Set(1,2,3)
 @test length(s) == 3
-add(s,2)
+add!(s,2)
 @test length(s) == 3
 delete!(s,2)
 @test length(s) == 2
@@ -307,12 +307,12 @@ end
     
 # add_each
 s = Set(1,3,5,7)
-add_each(s,(2,3,4,5))
+add_each!(s,(2,3,4,5))
 @test isequal(s,Set(1,2,3,4,5,7))
 
 # del_each
 s = Set(1,3,5,7)
-del_each(s,(3,5))
+del_each!(s,(3,5))
 @test isequal(s,Set(1,7))
 
 # similar
@@ -328,8 +328,8 @@ data_in = (1,2,9,8,4)
 s = Set(data_in...)
 c = copy(s)
 @test isequal(s,c)
-add(s,100)
-add(c,200)
+add!(s,100)
+add!(c,200)
 @test !has(c, 100)
 @test !has(s, 200)
 
@@ -340,7 +340,7 @@ for data_in in ((7,8,4,5),
 
     s_new = Set()
     for el in s
-        add(s_new, el)
+        add!(s_new, el)
     end
     @test isequal(s, s_new)
     

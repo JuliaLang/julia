@@ -18,6 +18,12 @@ end
 @deprecate  insert        insert!
 @deprecate  del           delete!
 @deprecate  del_all       empty!
+@deprecate  add           add!
+@deprecate  add_each      add_each!
+@deprecate  del_each      del_each!
+@deprecate  toggle        symdiff!
+@deprecate  toggle_each   symdiff!
+@deprecate  xor!          symdiff!
 @deprecate  load          require
 @deprecate  idump         xdump
 @deprecate  cwd           pwd
