@@ -126,6 +126,19 @@ rand(::Type{Int32})   = int32(rand(Uint32)) & typemax(Int32)
 rand(::Type{Int64})   = int64(rand(Uint64)) & typemax(Int64)
 rand(::Type{Int128})  = int128(rand(Uint128)) & typemax(Int128)
 
+for itype in (:Uint32, :Uint64, :Uint128, :Int32, :Int64, :Int128) 
+    @eval begin
+        function rand!(A::Array{$itype})
+            for i=1:length(A)
+                A[i] = rand($itype)
+            end
+            A
+        end
+        rand(::Type{$itype}, dims::Dims) = rand!(Array($itype, dims))
+        rand(::Type{$itype}, dims::Int...) = rand($itype, dims)
+    end
+end
+
 # random integer from lo to hi inclusive
 function rand{T<:Integer}(r::Range1{T})
     lo = r[1]
