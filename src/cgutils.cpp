@@ -184,10 +184,13 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
 {
     if (jt == (jl_value_t*)jl_any_type)
         return v;
-    if (has_julia_type(v) && julia_type_of(v) == jt)
+    if (has_julia_type(v)) {
+        if (julia_type_of(v) == jt)
+            return v;
+    }
+    else if (julia_type_of_without_metadata(v,false) == jt) {
         return v;
-    if (julia_type_of_without_metadata(v,false) == jt)
-        return v;
+    }
     if (dyn_cast<Instruction>(v) == NULL)
         v = NoOpCast(v);
     assert(dyn_cast<Instruction>(v));
