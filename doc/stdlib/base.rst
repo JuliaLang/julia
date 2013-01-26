@@ -1396,9 +1396,9 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
    Generate a random ``Float64`` array of the size specified by dims
 
-.. function:: rand(Int32|Uint32|Int64|Uint64|Int128|Uint128, [dims...])
+.. function:: rand(Int32|Uint32|Int64|Uint64)
 
-   Generate a random integer of the given type. Optionally, generate an array of random integers of the given type by specifying dims.
+   Generate a random integer of the given type
 
 .. function:: rand(r, [dims...])
 
