@@ -470,6 +470,15 @@
 	  (loop (if isseq F (cdr F)) (cdr A) stmts
 		(list* rt (ccall-conversion ty ca) C))))))
 
+(define (replace-return e bb ret retval)
+  (cond ((or (atom? e) (quoted? e)) e)
+	((eq? (car e) 'lambda) e)
+	((eq? (car e) 'return)
+	 `(block (= ,ret true)
+		 (= ,retval ,(cadr e))
+		 (break ,bb)))
+	(else (map (lambda (x) (replace-return x bb ret retval)) e))))
+
 ;; patterns that introduce lambdas
 (define binding-form-patterns
   (pattern-set
@@ -566,18 +575,28 @@
    ;; try with finally
    (pattern-lambda (try tryb var catchb finalb)
 		   (let ((err (gensy))
+			 (ret (gensy))
+			 (retval (gensy))
+			 (bb  (gensy))
 			 (val (gensy)))
-		     `(scope-block
-		       (block
-			(= ,err false)
-			(= ,val (try ,(if catchb
-					  `(try ,tryb ,var ,catchb)
-					  tryb)
-				     #f
-				     (= ,err true)))
-			,finalb
-			(if ,err (ccall 'jl_rethrow Void (tuple)))
-			,val))))
+		     (let ((tryb   (replace-return tryb bb ret retval))
+			   (catchb (replace-return catchb bb ret retval)))
+		       `(scope-block
+			 (block
+			  (local ,retval)
+			  (= ,err false)
+			  (= ,ret false)
+			  (break-block
+			   ,bb
+			   (= ,val (try ,(if catchb
+					     `(try ,tryb ,var ,catchb)
+					     tryb)
+					#f
+					(= ,err true))))
+			  ,finalb
+			  (if ,err (ccall 'jl_rethrow Void (tuple)))
+			  (if ,ret (return ,retval))
+			  ,val)))))
 
    ;; try - catch
    (pattern-lambda (try tryb var catchb)

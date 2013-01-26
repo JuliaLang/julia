@@ -380,6 +380,17 @@ begin
     end
     @test b == 42
     @test after == 1
+
+    glo = 0
+    function retfinally()
+        try
+            return 5
+        finally
+            glo = 18
+        end
+    end
+    @test retfinally() == 5
+    @test glo == 18
 end
 
 # allow typevar in Union to match as long as the arguments contain
