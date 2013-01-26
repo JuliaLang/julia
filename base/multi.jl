@@ -108,7 +108,7 @@ end
 Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
-    Worker(host, port, connect_to_host(host,uint16(port)))
+    Worker(host, port, connect(host,uint16(port)))
 Worker(host::String, port::Integer, tunneluser::String) = 
     Worker(host, port, connect_to_host("localhost",
            ssh_tunnel(tunnel_user, host, uint16(port))))
@@ -876,7 +876,9 @@ end
 start_worker() = start_worker(STDOUT)
 function start_worker(out::Stream)
     default_port = uint16(9009)
-    (actual_port,sock) = open_any_tcp_port(default_port,(handle,status)->accept_handler(handle,status))
+    (actual_port,sock) = open_any_tcp_port(default_port) do handle,status 
+        accept_handler(handle,status)
+    end
     write(out, "julia_worker:")  # print header
     write(out, "$(dec(actual_port))#") # print port
     write(out, bind_addr)      #TODO: print hostname
