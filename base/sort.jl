@@ -9,25 +9,23 @@ import
 export # also exported by Base
     sort,
     sort!,
+    sortby,
+    sortby!,
     sortperm,
     select,
     select!,
     issorted,
     searchsortedfirst,
-    searchsortedlast
+    searchsortedlast,
+    InsertionSort,
+    QuickSort,
+    MergeSort,
+    TimSort
 
 export # not exported by Base
-    Ordering,
-        Forward,
-        # Reverse, # TODO: clashes with Reverse iterator
-        By,
-        Lt,
-        lt,
-    Algorithm,
-        InsertionSort,
-        QuickSort,
-        MergeSort,
-        TimSort,
+    Ordering, Algorithm,
+    Forward, By, Lt, lt,
+    # Reverse, # TODO: clashes with Reverse iterator
     DEFAULT_UNSTABLE,
     DEFAULT_STABLE,
     SMALL_ALGORITHM,
@@ -266,6 +264,22 @@ for s in {:sort!, :sort, :sortperm}
         $s{A<:Algorithm,O<:Ordering}(::Type{O},   ::Type{A},    v::AbstractVector) = $s(A(), O(), v)
         $s{A<:Algorithm            }(o::Ordering, ::Type{A},    v::AbstractVector) = $s(A(), o,   v)
         $s{             O<:Ordering}(::Type{O},   a::Algorithm, v::AbstractVector) = $s(a,   O(), v)
+    end
+end
+
+for s in {:sort!, :sort}
+    @eval begin
+        $s{A<:Algorithm}(a::Union(A,Type{A}), lt::Function, v::AbstractVector) = $s(a,Sort.Lt(lt),v)
+        $s{A<:Algorithm}(lt::Function, a::Union(A,Type{A}), v::AbstractVector) = $s(a,lt,v)
+        $s(lt::Function, v::AbstractVector) = $s(Sort.Lt(lt),v)
+    end
+end
+
+for (sb,s) in {(:sortby!, :sort!), (:sortby, :sort)}
+    @eval begin
+        $sb{A<:Algorithm}(a::Union(A,Type{A}), by::Function, v::AbstractVector) = $s(a,Sort.By(by),v)
+        $sb{A<:Algorithm}(by::Function, a::Union(A,Type{A}), v::AbstractVector) = $s(a,by,v)
+        $sb(by::Function, v::AbstractVector) = $s(Sort.By(by),v)
     end
 end
 
