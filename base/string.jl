@@ -1233,8 +1233,8 @@ memchr(a::Array{Uint8,1}, b) = memchr(a,b,1)
 
 # return a random string (often useful for temporary filenames/dirnames)
 let
-global randstring
-const randstring_chars = ASCIIString(uint8([0x30:0x39,0x41:0x5a,0x61:0x7a]))
-randstring(len::Int) =
-    randstring_chars[iceil(length(randstring_chars)*rand(len))]
+    global randstring
+    const b = uint8(['0':'9','A':'Z','a':'z'])
+    randstring(n::Int) = ASCIIString(b[rand(1:length(b),n)])
+    randstring() = randstring(8)
 end
