@@ -110,6 +110,10 @@ export
     LDLTTridiagonal,
     QRDense,
     QRPDense,
+    InsertionSort,
+    QuickSort,
+    MergeSort,
+    TimSort,
 
 # Exceptions
     ArgumentError,
@@ -497,6 +501,8 @@ export
     slicedim,
     sort,
     sort!,
+    sortby,
+    sortby!,
     sortperm,
     squeeze,
     step,

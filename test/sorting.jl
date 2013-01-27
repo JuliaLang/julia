@@ -52,7 +52,7 @@ end
 
 a = rand(1:10000, 1000)
 
-for alg in [Sort.InsertionSort, Sort.MergeSort, Sort.TimSort]
+for alg in [InsertionSort, MergeSort, TimSort]
     b = sort(alg, a)
     @test issorted(b)
     ix = sortperm(alg, a)
@@ -67,7 +67,7 @@ for alg in [Sort.InsertionSort, Sort.MergeSort, Sort.TimSort]
     @test issorted(Sort.Reverse, b)
     @test a[ix] == b
 
-    b = sort(alg, Sort.By(x -> -10x), a)
+    b = sortby(alg, x -> -10x, a)
     @test issorted(Sort.By(x -> -10x), b)
     ix = sortperm(alg, Sort.By(x -> -10x), a)
     b = a[ix]
@@ -75,19 +75,17 @@ for alg in [Sort.InsertionSort, Sort.MergeSort, Sort.TimSort]
     @test a[ix] == b
 end
 
-b = sort(Sort.QuickSort, a)
+b = sort(QuickSort, a)
 @test issorted(b)
-b = sort(Sort.QuickSort, Sort.Reverse, a)
+b = sort(QuickSort, Sort.Reverse, a)
 @test issorted(Sort.Reverse, b)
-b = sort(Sort.QuickSort, Sort.By(x -> -10x), a)
+b = sortby(QuickSort, x -> -10x, a)
 @test issorted(Sort.By(x -> -10x), b)
 
 @test select(Sort.Reverse, [3,6,30,1,9], 2) == 9
 @test select(Sort.By(x -> -x), [3,6,30,1,9], 2) == 9
 
 ## more advanced sorting tests ##
-
-using Sort
 
 randnans(n) = reinterpret(Float64,[rand(Uint64)|0x7ff8000000000000 for i=1:n])
 
@@ -105,7 +103,7 @@ for n in [0:10, 100, 1000]
     v = rand(1:10,n)
     h = hist(v,length(r))
 
-    for ord in [Forward, Sort.Reverse]
+    for ord in [Sort.Forward, Sort.Reverse]
         # insersion sort as a reference
         pi = sortperm(InsertionSort,ord,v)
         @test isperm(pi)
@@ -131,7 +129,7 @@ for n in [0:10, 100, 1000]
     end
 
     v = randn_with_nans(n,0.1)
-    for ord in [Forward, Sort.Reverse],
+    for ord in [Sort.Forward, Sort.Reverse],
         alg in [InsertionSort, QuickSort, MergeSort, TimSort]
         # test float sorting with NaNs
         s = sort(alg,ord,v)
