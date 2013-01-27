@@ -250,14 +250,22 @@ sortperm(o::Ordering, v::AbstractVector) = sortperm(DEFAULT_STABLE, o, v)
 
 for s in {:sort!, :sort, :sortperm}
     @eval begin
+        # default to forward sort ordering
+        $s(a::Algorithm, v::AbstractVector) = $s(a, Forward(), v)
+        $s(              v::AbstractVector) = $s(   Forward(), v)
+
+        # auto-instntiate algorithms and orderings from types
         $s{A<:Algorithm,O<:Ordering}(::Type{A},    ::Type{O},   v::AbstractVector) = $s(A(), O(), v)
         $s{A<:Algorithm            }(::Type{A},    o::Ordering, v::AbstractVector) = $s(A(), o,   v)
         $s{             O<:Ordering}(a::Algorithm, ::Type{O},   v::AbstractVector) = $s(a,   O(), v)
         $s{A<:Algorithm            }(::Type{A},                 v::AbstractVector) = $s(A(),      v)
         $s{             O<:Ordering}(              ::Type{O},   v::AbstractVector) = $s(     O(), v)
 
-        $s(a::Algorithm, v::AbstractVector) = $s(a, Forward(), v)
-        $s(              v::AbstractVector) = $s(   Forward(), v)
+        # also allow ordering before algorithm
+        $s(o::Ordering, a::Algorithm, v::AbstractVector) = $s(a, o, v)
+        $s{A<:Algorithm,O<:Ordering}(::Type{O},   ::Type{A},    v::AbstractVector) = $s(A(), O(), v)
+        $s{A<:Algorithm            }(o::Ordering, ::Type{A},    v::AbstractVector) = $s(A(), o,   v)
+        $s{             O<:Ordering}(::Type{O},   a::Algorithm, v::AbstractVector) = $s(a,   O(), v)
     end
 end
 
@@ -357,7 +365,6 @@ function fpsort!(a::Algorithm, o::Ordering, v::AbstractVector)
     sort!(a, right(o), v, i,  hi)
     return v
 end
-
 sort!{T<:Floats}(a::Algorithm, o::Direct, v::AbstractVector{T}) = fpsort!(a,o,v)
 sort!{O<:Direct,T<:Floats}(a::Algorithm, o::Perm{O,Vector{T}}, v::Vector{Int}) = fpsort!(a,o,v)
 
