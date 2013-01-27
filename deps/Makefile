@@ -20,13 +20,13 @@ endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp glpk patchelf
 #custom configure-driven script: zlib nginx
-#custom Makefile rules: openlibm Faddeeva-wrapper rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
+#custom Makefile rules: openlibm rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
 STAGE1_DEPS = uv openlibm-extras random rmath double-conversion
-STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
+STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = glpk-wrapper suitesparse-wrapper
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
@@ -551,24 +551,7 @@ get-openlibm-extras: openlibm/Makefile.extras
 configure-openlibm-extras: get-openlibm-extras
 compile-openlibm-extras: $(OPENLIBMEXT_OBJ_SOURCE)
 check-openlibm-extras: compile-openlibm-extras
-install-openlibm-extras: $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
-
-# Wrapper for openlibm/Faddeeva since ccall doesn't support C99 complex:
-$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBMEXT_OBJ_TARGET)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm-extras $(RPATH_ORIGIN)
-	$(INSTALL_NAME_CMD)libFaddeeva_wrapper.$(SHLIB_EXT) $@
-	touch -c $@
-
-clean-Faddeeva-wrapper:
-	-rm -f $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
-distclean-Faddeeva-wrapper: clean-Faddeeva-wrapper
-
-get-Faddeeva-wrapper: get-openlibm
-configure-Faddeeva-wrapper: get-openlibm
-compile-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
-check-Faddeeva-wrapper: compile-Faddeeva-wrapper
-install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
-
+install-openlibm-extras: $(OPENLIBMEXT_OBJ_TARGET)
 
 ## LIBRANDOM ##
 
