@@ -302,7 +302,7 @@ function reinit_stdio()
     STDOUT.buffer = PipeString()
     STDERR.buffer = PipeString()
     for stream in (STDIN,STDOUT,STDERR)
-        ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),stream.handle,stream)
+        ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),stream.handle,stream)
     end
 end
 
@@ -396,23 +396,13 @@ function pipeline_error(procs::ProcessChain)
             push!(failed, p)
         end
     end
-    if length(failed)==0 return true end
+    if length(failed)==0 return nothing end
     if length(failed)==1 pipeline_error(failed[1]) end
     msg = "failed processes:"
     for proc in failed
         msg = string(msg,"\n  ",proc," [",proc.exit_code,"]")
     end
     error(msg)
-end
-
-function exec(thunk::Function)
-    try
-        thunk()
-    catch err
-        show(err)
-        exit(0xff)
-    end
-    exit(0)
 end
 
 _jl_kill(p::Process,signum::Integer) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int32),p.handle,signum)
@@ -494,7 +484,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = ByteString[]
     for h = head, t = tail
-        push!(vals,bytestring(strcat(h,t)))
+        push!(vals,bytestring(h,t))
     end
     vals
 end

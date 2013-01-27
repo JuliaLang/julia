@@ -248,7 +248,7 @@ function assign{T}(param::Param, val::T, field_name::String)
                 throw(Error("invalid struct"))
             end
             t = param.desc.field_types[i]
-            csf = strcat("jl_glpkw__", param.desc.struct_name, "_set_", field_name)
+            csf = string("jl_glpkw__", param.desc.struct_name, "_set_", field_name)
             ccs = :(ccall(($csf, :libglpk_wrapper), Void, (Ptr{Void}, $t), pointer($param), $val))
             eval(ccs)
             return
@@ -267,7 +267,7 @@ function ref(param::Param, field_name::String)
                 throw(Error("invalid struct"))
             end
             t = param.desc.field_types[i]
-            cgf = strcat("jl_glpkw__", param.desc.struct_name, "_get_", field_name)
+            cgf = string("jl_glpkw__", param.desc.struct_name, "_get_", field_name)
             ccg = :(ccall(($cgf, :libglpk_wrapper), $t, (Ptr{Void},), pointer($param)))
             return eval(ccg)
         end
@@ -628,7 +628,7 @@ function check_rows_ids(prob::Prob, min_size::Integer, num_rows::Integer, rows_i
         throw(Error("invalid vector size: declared>=$num_rows actual=$(length(rows_ids))"))
     end
     ind_set = IntSet()
-    add_each(ind_set, rows_ids[1 : num_rows])
+    add_each!(ind_set, rows_ids[1 : num_rows])
     if min(ind_set) < 1 || max(ind_set) > rows
         throw(Error("index out of bounds (min=1 max=$rows)"))
     elseif length(ind_set) != length(rows_ids)
@@ -649,7 +649,7 @@ function check_cols_ids(prob::Prob, min_size::Integer, num_cols::Integer, cols_i
         throw(Error("invalid vector size: declared>=$num_cols actual=$(length(cols_ids))"))
     end
     ind_set = IntSet()
-    add_each(ind_set, cols_ids[1 : num_cols])
+    add_each!(ind_set, cols_ids[1 : num_cols])
     if min(ind_set) < 1 || max(ind_set) > cols
         throw(Error("index out of bounds (min=1 max=$cols)"))
     elseif length(ind_set) != length(cols_ids)

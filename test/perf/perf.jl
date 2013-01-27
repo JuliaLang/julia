@@ -1,12 +1,16 @@
 using Test
 
+print_output = isempty(ARGS) || contains(ARGS, "perf/perf.jl") || contains(ARGS, "perf")
+
 macro timeit(ex,name)
     quote
         t = Inf
         for i=1:5
             t = min(t, @elapsed $ex)
         end
-        println("julia,", $name, ",", t*1000)
+        if print_output
+            println("julia,", $name, ",", t*1000)
+        end
         #gc()
     end
 end
@@ -23,7 +27,7 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 function parseintperf(t)
     local n, m
     for i=1:t
-        n = randi(Uint32)
+        n = rand(Uint32)
         s = hex(n)
         m = uint32(parse_hex(s))
     end

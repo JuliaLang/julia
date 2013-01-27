@@ -449,7 +449,7 @@ JL_CALLABLE(jl_f_convert_tuple)
         }
         else if (i < pl) {
             pe = jl_tupleref(to,i);
-            if (jl_is_seq_type(pe)) {
+            if (jl_is_vararg_type(pe)) {
                 pe = jl_tparam0(pe);
                 pseq = 1;
             }
@@ -486,6 +486,10 @@ DLLEXPORT void *jl_symbol_name(jl_sym_t *s)
 DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
     return a->data;
+}
+DLLEXPORT void *jl_value_ptr(jl_value_t *a)
+{
+    return (void*)a;
 }
 
 // printing -------------------------------------------------------------------
@@ -607,7 +611,7 @@ static void show_type(jl_value_t *st, jl_value_t *t)
             jl_show_tuple(st, ((jl_uniontype_t*)t)->types, '(', ')', 0);
         }
     }
-    else if (jl_is_seq_type(t)) {
+    else if (jl_is_vararg_type(t)) {
         jl_show(st, jl_tparam0(t));
         JL_WRITE(s, "...", 3);
     }
@@ -930,7 +934,7 @@ void jl_init_primitives(void)
     add_builtin("Tuple", (jl_value_t*)jl_tuple_type);
     add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
-    add_builtin("...", (jl_value_t*)jl_seq_type);
+    add_builtin("Vararg", (jl_value_t*)jl_vararg_type);
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
     add_builtin("CompositeKind", (jl_value_t*)jl_struct_kind);
     add_builtin("AbstractKind", (jl_value_t*)jl_tag_kind);

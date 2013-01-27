@@ -5,7 +5,6 @@
     bitvector_count;
     bitvector_next;
     clock_now;
-    connect_to_host;
     ev_break;
     get_exename;
     getlocalip;
@@ -23,6 +22,7 @@
     ios_getc;
     ios_getutf8;
     ios_mem;
+    ios_peekc;
     ios_peekutf8;
     ios_pos;
     ios_printf;
@@ -229,6 +229,9 @@
     jl_sizeof_*;
     jl_sockaddr_from_addrinfo;
     jl_sockaddr_set_port;
+    jl_sockaddr_is_ip4;
+    jl_sockaddr_host4;
+    jl_tcp4_connect;
     jl_spawn;
     jl_start_io_thread;
     jl_start_reading;
@@ -274,6 +277,7 @@
     jl_uv_*;
     jl_wrap_raw_dl_handle;
     jl_write;
+    jl_value_ptr;
     jl_zero_denormals;
     julia_free;
     julia_home;
@@ -296,6 +300,11 @@
     uv_*;
     LLVM*;
     add_library_mapping;
+
+    /* freebsd */
+    environ;
+    __progname;
+
   local:
     *;
 };

@@ -60,7 +60,7 @@ function defaultdist(dims, procs)
     dims = [dims...]
     chunks = ones(Int, length(dims))
     np = length(procs)
-    f = sortr(keys(factor(np)))
+    f = sort!(Sort.Reverse,keys(factor(np)))
     k = 1
     while np > 1
         # repeatedly allocate largest factor to largest dim
@@ -120,13 +120,17 @@ myindexes(d::DArray) = d.indexes[localpiece(d)]
 
 # find which piece holds index (I...)
 function locate(d::DArray, I::Int...)
-    ntuple(ndims(d), i->search_sorted_last(d.cuts[i], I[i]))
+    ntuple(ndims(d), i->searchsortedlast(d.cuts[i], I[i]))
 end
 
 chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(d.chunks[i...])::A
 
 ## convenience constructors ##
 
+dzeros(args...) = DArray(I->zeros(map(length,I)), args...)
+dzeros(d::Int...) = dzeros(d)
+dones(args...) = DArray(I->ones(map(length,I)), args...)
+dones(d::Int...) = dones(d)
 drand(args...)  = DArray(I->rand(map(length,I)), args...)
 drand(d::Int...) = drand(d)
 drandn(args...) = DArray(I->randn(map(length,I)), args...)

@@ -611,6 +611,34 @@ assign{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector{Bool}) = as
 
 assign{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = assign(A, x, find(I),J)
 
+# get (ref with a default value)
+
+get{T}(A::Array, i::Integer, default::T) = in_bounds(length(A), i) ? A[i] : default
+
+get{T}(A::Array, I::(), default::T) = Array(T, 0)
+get{T}(A::Array, I::Dims, default::T) = in_bounds(size(A), I...) ? A[I...] : default
+
+function get{T}(X::Array{T}, A::Array, I::Union(Ranges, Vector{Int}), default::T)
+    ind = findin(I, 1:length(A))
+    X[ind] = A[I[ind]]
+    X[1:first(ind)-1] = default
+    X[last(ind)+1:length(X)] = default
+    X
+end
+
+get{T}(A::Array, I::Ranges, default::T) = get(Array(T, length(I)), A, I, default)
+
+RangeVecIntList = Union((Union(Ranges, Vector{Int})...), Vector{Range1{Int}}, Vector{Range{Int}}, Vector{Vector{Int}})
+
+function get{T}(X::Array{T}, A::Array, I::RangeVecIntList, default::T)
+    fill!(X, default)
+    dst, src = indcopy(size(A), I)
+    X[dst...] = A[src...]
+    X
+end
+
+get{T}(A::Array, I::RangeVecIntList, default::T) = get(Array(T, map(length, I)...), A, I, default)
+
 ## Dequeue functionality ##
 
 function push!{T}(a::Array{T,1}, item)
@@ -804,6 +832,7 @@ promote_array_type{S<:Real, A<:Real}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Complex, A<:Complex}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Real, A<:Integer}(::Type{S}, ::Type{A}) = promote_type(S, A)
+promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
 ./{T<:Integer,S<:Integer}(x::StridedArray{T}, y::StridedArray{S}) =
     reshape( [ x[i] ./ y[i] for i=1:length(x) ], size(x) )
@@ -892,7 +921,7 @@ for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
 end
 
 # functions that should give an Int result for Bool arrays
-for f in (:+, :-, :div)
+for f in (:+, :-)
     @eval begin
         function ($f)(x::Bool, y::StridedArray{Bool})
             reshape([ ($f)(x, y[i]) for i=1:length(y) ], size(y))
@@ -1065,7 +1094,6 @@ function rotl90(A::AbstractMatrix, k::Integer)
 end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
-const rot90 = rotl90
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
 function reverse!(v::StridedVector)
@@ -1282,6 +1310,51 @@ end
 
 indmax(a) = findmax(a)[2]
 indmin(a) = findmin(a)[2]
+
+# findin (the index of intersection)
+function findin(a, b::Range1)
+    ind = Array(Int, 0)
+    f = first(b)
+    l = last(b)
+    for i = 1:length(a)
+        if f <= a[i] <= l
+            push!(ind, i)
+        end
+    end
+    ind
+end
+
+function findin(a, b)
+    ind = Array(Int, 0)
+    bset = Set(b...)
+    for i = 1:length(a)
+        if has(bset, a[i])
+            push!(ind, i)
+        end
+    end
+    ind
+end
+
+# Copying subregions
+function indcopy(sz::Dims, I::RangeVecIntList)
+    n = length(I)
+    dst = Array(AbstractVector{Int}, n)
+    src = Array(AbstractVector{Int}, n)
+    for dim = 1:(n-1)
+        tmp = findin(I[dim], 1:sz[dim])
+        dst[dim] = tmp
+        src[dim] = I[dim][tmp]
+    end
+    s = sz[n]
+    for i = n+1:length(sz)
+        s *= sz[i]
+    end
+    tmp = findin(I[n], 1:s)
+    dst[n] = tmp
+    src[n] = I[n][tmp]
+    dst, src
+end
+
 
 ## Reductions ##
 
@@ -1597,7 +1670,7 @@ function map_to2(f, first, dest::StridedArray, As::StridedArray...)
 end
 
 function map(f, As::StridedArray...)
-    shape = mapreduce(promote_shape, size, As)
+    shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
         return similar(As[1], eltype(As[1]), shape)
     end
@@ -1709,3 +1782,58 @@ function permute(A::StridedArray, perm)
     return P
 end
 end # let
+
+# set-like operators for vectors
+# These are moderately efficient, preserve order, and remove dupes.
+
+# algorithm: do intersect on sets first, then iterate through the first
+# vector and produce only those in the set
+function intersect(vs...)
+    args_type = promote_type([eltype(v) for v in vs]...)
+    ret = Array(args_type,0)
+    all_elems = intersect([Set(v...) for v in vs]...)
+    for v_elem in vs[1]
+        if has(all_elems, v_elem)
+            push!(ret, v_elem)
+        end
+    end
+    ret
+end
+function union(vs...)
+    args_type = promote_type([eltype(v) for v in vs]...)
+    ret = Array(args_type,0)
+    seen = Set()
+    for v in vs
+        for v_elem in v
+            if !has(seen, v_elem)
+                push!(ret, v_elem)
+                add!(seen, v_elem)
+            end
+        end
+    end
+    ret
+end
+# setdiff only accepts two args
+function setdiff(a, b)
+    args_type = promote_type(eltype(a), eltype(b))
+    bset = Set(b...)
+    ret = Array(args_type,0)
+    seen = Set()
+    for a_elem in a
+        if !has(seen, a_elem) && !has(bset, a_elem)
+            push!(ret, a_elem)
+            add!(seen, a_elem)
+        end
+    end
+    ret
+end
+# symdiff is associative, so a relatively clean
+# way to implement this is by using setdiff and union, and
+# recursing. Has the advantage of keeping order, too, but
+# not as fast as other methods that make a single pass and
+# store counts with a Dict.
+symdiff(a) = a
+symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
+symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
+
+

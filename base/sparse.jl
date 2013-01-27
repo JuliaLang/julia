@@ -171,7 +171,25 @@ function dense{Tv}(S::SparseMatrixCSC{Tv})
     return A
 end
 
-function sparse(a::Vector)
+# Construct a sparse vector
+
+sparsevec{K<:Integer,V}(d::Dict{K,V}, len::Int) = sparsevec(keys(d), values(d), len)
+
+sparsevec{K<:Integer,V}(d::Dict{K,V}) = sparsevec(keys(d), values(d))
+
+sparsevec(I::AbstractVector, V, m::Integer) = sparsevec(I, V, m, +)
+
+sparsevec(I::AbstractVector, V) = sparsevec(I, V, max(I), +)
+
+function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
+    nI = length(I)
+    if isa(V, Number); V = fill(V, nI); end
+    (I, P) = sortperm(I)
+    V = V[P]
+    sparse_IJ_sorted!(I, ones(Int, nI), V, m, 1, combine)
+end
+
+function sparsevec(a::Vector)
     n = length(a)
     I = find(a)
     J = ones(Int, n)
@@ -179,13 +197,15 @@ function sparse(a::Vector)
     return sparse_IJ_sorted!(I,J,V,n,1,+)
 end
 
+sparse(a::Vector) = sparsevec(a)
+
 function sparse(A::Matrix)
     m, n = size(A)
     (I, J, V) = findn_nzs(A)
     return sparse_IJ_sorted!(I,J,V,m,n)
 end
 
-sparse(S::SparseMatrixCSC) = S
+sparse(S::SparseMatrixCSC) = copy(S)
 
 sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,+)
 
@@ -404,8 +424,8 @@ end
 
 function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v)
     numnz = int(m*n*density)
-    I = randival!(1, m, Array(Int, numnz))
-    J = randival!(1, n, Array(Int, numnz))
+    I = rand!(1:m, Array(Int, numnz))
+    J = rand!(1:n, Array(Int, numnz))
     S = sparse(I, J, v, m, n)
     if !isbool(v)
         S.nzval = rng(nnz(S))
@@ -931,7 +951,7 @@ function ref_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVec
 
     nnzS = 0
 
-    I, pI = sortperm(I)
+    pI = sortperm(I); I = I[pI]
     fI = find(I)
 
     W = zeros(Int, nI + 1) # Keep row counts
@@ -1147,14 +1167,14 @@ function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::
     issortedJ = issorted(J)
 
     if ~issortedI && ~issortedJ
-        I, pI = sortperm(I)
-        J, pJ = sortperm(J)
+        pI = sortperm(I); I = I[pI]
+        pJ = sortperm(J); J = J[pJ]
         B = B[pI, pJ]
     elseif ~issortedI
-        I, pI = sortperm(I)
+        pI = sortperm(I); I = I[pI]
         B = B[pI,:]
     else ~issortedJ
-        J, pJ = sortperm(J)
+        pJ = sortperm(J); J = J[pJ]
         B = B[:, pJ]
     end
 

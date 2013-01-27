@@ -51,10 +51,10 @@ include("expr.jl")
 include("error.jl")
 
 # core numeric operations & types
+include("promotion.jl")
 include("bool.jl")
 include("number.jl")
 include("int.jl")
-include("promotion.jl")
 include("operators.jl")
 include("pointer.jl")
 
@@ -80,6 +80,7 @@ include("inference.jl")
 include("io.jl")
 include("iostring.jl")
 include("stream.jl")
+include("socket.jl")
 include("fs.jl")
 importall FS
 include("process.jl")
@@ -106,7 +107,8 @@ include("build_h.jl")
 include("osutils.jl")
 include("libc.jl")
 include("env.jl")
-include("errno_h.jl")
+include("errno.jl")
+using Errno
 include("file.jl")
 include("path.jl")
 include("stat.jl")
@@ -124,8 +126,8 @@ importall Math
 # random number generation and statistics
 include("statistics.jl")
 include("librandom.jl")
-include("rng.jl")
-importall RNG
+include("random.jl")
+importall Random
 
 # Combinatorics
 include("sort.jl")
@@ -158,6 +160,10 @@ include("linalg_sparse.jl")
 include("fftw.jl")
 include("dsp.jl")
 importall DSP
+
+# BigInts and BigFloats
+include("gmp.jl")
+importall GMP
 
 # deprecated functions
 include("deprecated.jl")
@@ -200,10 +206,10 @@ compile_hint(cmp, (Int32, Int32))
 compile_hint(min, (Int32, Int32))
 compile_hint(==, (ASCIIString, ASCIIString))
 compile_hint(arg_gen, (ASCIIString,))
-compile_hint(RNG.librandom_init, ())
-compile_hint(RNG.srand, (ASCIIString, Int))
+compile_hint(Random.librandom_init, ())
+compile_hint(Random.srand, (ASCIIString, Int))
+compile_hint(Random.srand, (Uint64,))
 compile_hint(open, (ASCIIString, Bool, Bool, Bool, Bool))
-compile_hint(RNG.srand, (Uint64,))
 compile_hint(done, (IntSet, Int64))
 compile_hint(next, (IntSet, Int64))
 compile_hint(ht_keyindex, (Dict{Any,Any}, Int32))
@@ -308,7 +314,7 @@ end # baremodule Base
 
 using Base
 
-let JL_PRIVATE_LIBDIR = getenv("JL_PRIVATE_LIBDIR")
+let JL_PRIVATE_LIBDIR = try getenv("JL_PRIVATE_LIBDIR") catch e "lib/julia" end
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},),
       "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji")

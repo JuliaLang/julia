@@ -142,7 +142,7 @@ end
 end
 
 @windows_only function mktempdir()
-  seed = randi(Uint32)
+  seed = rand(Uint32)
   while true
       filename = GetTempFileName(seed)
       ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), filename)
@@ -159,7 +159,7 @@ function download_file(url::String, filename::String)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
-            if system("which $checkcmd > /dev/null") == 0
+            if success(`which $checkcmd` > SpawnNullStream())
                 downloadcmd = checkcmd
                 break
             end

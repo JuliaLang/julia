@@ -2,7 +2,7 @@ type Set{T}
     hash::Dict{T,Bool}
 
     Set() = new((T=>Bool)[])
-    Set(x...) = add_each(new(Dict{T,Bool}(length(x))), x)
+    Set(x...) = add_each!(new(Dict{T,Bool}(length(x))), x)
 end
 Set() = Set{Any}()
 Set(x...) = Set{Any}(x...)
@@ -17,16 +17,21 @@ eltype{T}(s::Set{T}) = T
 
 has(s::Set, x) = has(s.hash, x)
 contains(s::Set, x) = has(s, x)
-get(s::Set, x, deflt) = get(s.hash, x, false)
 
-add(s::Set, x) = (s.hash[x] = true; s)
-delete!(s::Set, x) = delete!(s.hash, x)
+add!(s::Set, x) = (s.hash[x] = true; s)
+delete!(s::Set, x) = (delete!(s.hash, x); x)
+function delete!(s::Set, x, deflt)
+    if delete!(s.hash, x, false)
+        return x
+    end
+    return deflt
+end
 
-add_each(s::Set, xs) = (for x=xs; add(s,x); end; s)
-del_each(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
+add_each!(s::Set, xs) = (for x=xs; add!(s,x); end; s)
+del_each!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 
 similar{T}(s::Set{T}) = Set{T}()
-copy(s::Set) = add_each(similar(s), s)
+copy(s::Set) = add_each!(similar(s), s)
 
 empty!{T}(s::Set{T}) = (empty!(s.hash); s)
 
@@ -50,9 +55,9 @@ function union(s::Set, sets::Set...)
         end
     end
     u = Set{U}()
-    add_each(u,s)
+    add_each!(u,s)
     for t in sets
-        add_each(u,t)
+        add_each!(u,t)
     end
     return u
 end
@@ -62,7 +67,7 @@ function intersect(s::Set, sets::Set...)
     i = copy(s)
     for x in s
         for t in sets
-            if !has(t,x)
+            if !has(t,x) & has(i,x)
                 delete!(i,x)
             end
         end
@@ -95,4 +100,4 @@ function <=(l::Set, r::Set)
     return true
 end
 
-unique(C) = elements(add_each(Set{eltype(C)}(), C))
+unique(C) = elements(add_each!(Set{eltype(C)}(), C))

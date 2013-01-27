@@ -108,9 +108,9 @@ end
 Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
-    Worker(host, port, connect_to_host(host,uint16(port)))
+    Worker(host, port, connect(host,uint16(port)))
 Worker(host::String, port::Integer, tunneluser::String) = 
-    Worker(host, port, connect_to_host("localhost",
+    Worker(host, port, connect("localhost",
            ssh_tunnel(tunnel_user, host, uint16(port))))
 
 function send_msg_now(w::Worker, kind, args...)
@@ -323,7 +323,7 @@ function lookup_ref(id)
         wi = WorkItem(bottom_func)
         # this WorkItem is just for storing the result value
         GRP.refs[id] = wi
-        add(wi.clientset, id[1])
+        add!(wi.clientset, id[1])
     end
     wi
 end
@@ -373,7 +373,7 @@ end
 
 function add_client(id, client)
     wi = lookup_ref(id)
-    add(wi.clientset, client)
+    add!(wi.clientset, client)
     nothing
 end
 
@@ -420,7 +420,7 @@ schedule_call(rid, f_thk, args_thk) =
 function schedule_call(rid, thunk)
     wi = WorkItem(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
-    add(wi.clientset, rid[1])
+    add!(wi.clientset, rid[1])
     enq_work(wi)
     wi
 end
@@ -765,17 +765,11 @@ end
 
 # activity on accept fd
 function accept_handler(server::TcpSocket, status::Int32)
-    #println("Accepted")
     if(status == -1)
         error("An error occured during the creation of the server")
     end
-    client = TcpSocket()
-    err = accept(server,client)
-    if err!=0
-        print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
-    else
-       create_message_handler_loop(client)
-    end
+    client =  accept(server)
+    create_message_handler_loop(client)
 end
 
 type DisconnectException <: Exception end
@@ -876,10 +870,10 @@ end
 start_worker() = start_worker(STDOUT)
 function start_worker(out::Stream)
     default_port = uint16(9009)
-    (actual_port,sock) = open_any_tcp_port(default_port,(handle,status)->accept_handler(handle,status))
+    (actual_port,sock) = open_any_tcp_port(accept_handler,default_port) 
     write(out, "julia_worker:")  # print header
     write(out, "$(dec(actual_port))#") # print port
-    write(out, "localhost")      #TODO: print hostname
+    write(out, bind_addr)      #TODO: print hostname
     write(out, '\n')
     # close STDIN; workers will not use it
     #close(STDIN)
@@ -974,11 +968,11 @@ function ssh_tunnel(user, host, port)
 end
 
 function worker_ssh_cmd(host)
-    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker remote\""`
+    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
 end
 
 #function worker_ssh_cmd(host, key)
-#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker remote\""`
+#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
 #end
 
 function addprocs_ssh(machines)
@@ -1003,7 +997,7 @@ end
 #    add_workers(PGRP, start_remote_workers(machines, map(x->worker_ssh_cmd(x[1],x[2]), cmdargs)))
 #end
 
-worker_local_cmd() = `$JULIA_HOME/julia-release-basic --worker local`
+worker_local_cmd() = `$JULIA_HOME/julia-release-basic --bind-to $bind_addr --worker`
 
 addprocs_local(np::Integer) =
     add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
@@ -1015,7 +1009,7 @@ function start_sge_workers(n)
     sgedir = "$home/../../SGE"
     run(`mkdir -p $sgedir`)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
-    `echo $home/julia-release-basic --worker remote` | qsub_cmd
+    `echo $home/julia-release-basic --worker` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
@@ -1150,7 +1144,7 @@ function spawnlocal(thunk)
     rid = rr2id(rr)
     wi = WorkItem(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
-    add(wi.clientset, rid[1])
+    add!(wi.clientset, rid[1])
     push!(Workqueue, wi)   # add to the *front* of the queue, work first
     queueAsync(multi_cb_handles.work_cb)
     yield()
@@ -1243,7 +1237,7 @@ function preduce(reducer, f, r::Range1{Int})
         end
         results[i] = @spawn f(lo, hi)
     end
-    mapreduce(reducer, fetch, results)
+    mapreduce(fetch, reducer, results)
 end
 
 function pfor(f, r::Range1{Int})

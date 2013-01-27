@@ -163,7 +163,7 @@ typedef struct _jl_lambda_info_t {
     struct _jl_module_t *module;
     struct _jl_lambda_info_t *def;  // original this is specialized from
     jl_value_t *capt;  // captured var info
-    jl_value_t *file;
+    jl_sym_t *file;
     int32_t line;
     int8_t inferred;
 
@@ -237,10 +237,11 @@ typedef struct {
     // to create a set of constructors for this sort of type
     jl_value_t *ctor_factory;
     jl_value_t *instance;  // for singletons
-    // hidden fields:
-    uint32_t uid;
     uint32_t size;
+    // hidden fields:
     uint32_t alignment;  // strictest alignment over all fields
+    uint32_t uid;
+    void *struct_decl;  //llvm::Value*
     jl_fielddesc_t fields[1];
 } jl_struct_type_t;
 
@@ -366,7 +367,7 @@ extern jl_type_t *jl_bottom_type;
 extern jl_value_t *jl_top_type;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern DLLEXPORT jl_struct_type_t *jl_module_type;
-extern jl_tag_type_t *jl_seq_type;
+extern jl_tag_type_t *jl_vararg_type;
 extern jl_struct_type_t *jl_function_type;
 extern jl_tag_type_t *jl_abstractarray_type;
 extern jl_struct_type_t *jl_array_type;
@@ -590,10 +591,10 @@ static inline int jl_is_cpointer_type(void *t)
             ((jl_bits_type_t*)(t))->name == jl_pointer_type->name);
 }
 
-static inline int jl_is_seq_type(jl_value_t *v)
+static inline int jl_is_vararg_type(jl_value_t *v)
 {
     return (jl_is_tag_type(v) &&
-            ((jl_tag_type_t*)(v))->name == jl_seq_type->name);
+            ((jl_tag_type_t*)(v))->name == jl_vararg_type->name);
 }
 
 static inline int jl_is_ntuple_type(jl_value_t *v)
@@ -768,6 +769,7 @@ DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
 DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
+DLLEXPORT void *jl_value_ptr(jl_value_t *a);
 void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 
 // system information
@@ -889,6 +891,7 @@ void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 void jl_declare_constant(jl_binding_t *b);
 void jl_module_using(jl_module_t *to, jl_module_t *from);
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
+void jl_module_importall(jl_module_t *to, jl_module_t *from);
 DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 
 // external libraries
@@ -1125,7 +1128,7 @@ DLLEXPORT void jl_free2(void *p, void *hint);
 
 DLLEXPORT int jl_cpu_cores(void);
 
-DLLEXPORT int jl_write(uv_stream_t *stream, const char *str, size_t n);
+DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 

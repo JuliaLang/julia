@@ -124,6 +124,7 @@ one(x)  = oftype(x,1)
 
 sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)
+sizeof(T::CompositeKind) = if isleaftype(T) T.sizeof else error("type does not have a native sizeof") end
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
@@ -242,4 +243,61 @@ macro vectorize_2arg(S,f)
             reshape([ ($f)(x[i], y[i]) for i=1:length(x) ], shp)
         end
     end
+end
+
+# some operators not defined yet
+global //, .>>, .<<, &>, &>>, &<, &<<
+
+module Operators
+
+export
+    !,
+    !=,
+    $,
+    %,
+    &,
+    *,
+    +,
+    -,
+    .!=,
+    .+,
+    .-,
+    .*,
+    ./,
+    .<,
+    .<=,
+    .==,
+    .>,
+    .>=,
+    .\,
+    .^,
+    /,
+    //,
+    <,
+    <:,
+    <<,
+    <=,
+    ==,
+    >,
+    >=,
+    >>,
+    .>>,
+    .<<,
+    >>>,
+    &>,
+    &>>,
+    &<,
+    &<<,
+    \,
+    ^,
+    |,
+    ~
+
+import
+    Base.!, Base.!=, Base.$, Base.%, Base.&, Base.*, Base.+, Base.-, Base..!=,
+    Base..+, Base..-, Base..*, Base../, Base..<, Base..<=, Base..==, Base..>,
+    Base..>=, Base..\, Base..^, Base./, Base.//, Base.<, Base.<:, Base.<<,
+    Base.<=, Base.==, Base.>, Base.>=, Base.>>, Base..>>, Base..<<, Base.>>>,
+    Base.&>, Base.&>>, Base.&<, Base.&<<, Base.\, Base.^, Base.|, Base.~
+
 end

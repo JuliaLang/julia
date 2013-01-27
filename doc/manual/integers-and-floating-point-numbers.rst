@@ -320,6 +320,35 @@ the "Father of Floating-Point". Of particular interest may be `An
 Interview with the Old Man of
 Floating-Point <http://www.cs.berkeley.edu/~wkahan/ieee754status/754story.html>`_.
 
+.. _man_arbitrary_precision_arithmetic:
+
+Arbitrary Precision Arithmetic
+------------------------------
+
+To allow computations with arbitrary precision integers and floating point numbers, 
+Julia wraps the `GNU Multiple Precision Arithmetic Library, GMP <http://gmplib.org>`_. 
+The `BigInt` and `BigFloat` types are available in Julia for arbitrary precision 
+integer and floating point numbers respectively. 
+
+Constructors exist to create these types from primitive numerical types, or from ``String``. 
+Once created, they participate in arithmetic with all other numeric types thanks to Julia's 
+type promotion and conversion mechanism. ::
+
+    julia> BigInt(typemax(Int64)) + 1
+    9223372036854775808
+
+    julia> BigInt("123456789012345678901234567890") + 1
+    123456789012345678901234567891
+
+    julia> BigFloat("1.23456789012345678901")
+    1.23456789012345678901
+
+    julia> BigFloat(2.0^66) / 3
+    24595658764946068821.3
+
+    julia> factorial(BigInt(40))
+    815915283247897734345611269596115894272000000000
+
 .. _man-numeric-literal-coefficients:
 
 Numeric Literal Coefficients

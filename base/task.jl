@@ -1,6 +1,6 @@
 show(io::IO, t::Task) = print(io, "Task")
 
-current_task() = ccall(:jl_get_current_task, Task, ())
+current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = t.done
 
 function task_local_storage()

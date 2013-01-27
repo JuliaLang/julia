@@ -3,7 +3,7 @@
 #abstract Any <: Any
 #abstract Type{T}
 
-#abstract ...{T}
+#abstract Vararg{T}
 #Tuple = (Any...)
 
 #type Symbol
@@ -120,7 +120,7 @@ import Intrinsics.ccall
 
 export
     # key types
-    AbstractKind, Any, BitsKind, CompositeKind, ..., ANY, NTuple, None, Top,
+    AbstractKind, Any, BitsKind, CompositeKind, Vararg, ANY, NTuple, None, Top,
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionKind, Void,
     AbstractArray,
     # special objects

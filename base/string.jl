@@ -30,7 +30,7 @@ string(xs...) = print_to_string(xs...)
 
 bytestring() = ""
 bytestring(s::Array{Uint8,1}) = bytestring(pointer(s),length(s))
-bytestring(s::String) = print_to_string(s)
+bytestring(s::String...) = print_to_string(s...)
 
 function bytestring(p::Ptr{Uint8})
     p == C_NULL ? error("cannot convert NULL to string") :
@@ -65,7 +65,7 @@ print(io::IO, s::String) = for c in s write(io, c) end
 write(io::IO, s::String) = print(io, s)
 show(io::IO, s::String) = print_quoted(io, s)
 
-(*)(s::Union(String,Char)...) = strcat(s...)
+(*)(s::Union(String,Char)...) = string(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
 
 length(s::DirectIndexString) = endof(s)
@@ -446,12 +446,6 @@ end
 
 endof(s::RopeString) = s.endof
 
-strcat() = ""
-strcat(s::String) = s
-strcat(s::String, t::String...) =
-    (t = strcat(t...); isempty(s) ? t : isempty(t) ? s : RopeString(s, t))
-strcat(xs...) = string(xs...)  # backwards compat
-
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 
 write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
@@ -581,7 +575,7 @@ function print_escaped(io, s::String, esc::String)
         c == '\e'       ? print(io, L"\e") :
         c == '\\'       ? print(io, "\\\\") :
         contains(esc,c) ? print(io, '\\', c) :
-        7 <= c <= 13    ? print(io, '\\', "abtnvfr"[c-6]) :
+        7 <= c <= 13    ? print(io, '\\', "abtnvfr"[int(c-6)]) :
         iswprint(c)     ? print(io, c) :
         c <= '\x7f'     ? print(io, L"\x", hex(c, 2)) :
         c <= '\uffff'   ? print(io, L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
@@ -1095,7 +1089,7 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     i = start(s)
     while true
         if done(s,i)
-            throw(ArgumentError(strcat(
+            throw(ArgumentError(string(
                 "premature end of integer (in ", repr(s) ,")"
             )))
         end
@@ -1108,14 +1102,14 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     if T <: Signed && c == '-'
         sgn = -sgn
         if done(s,i)
-            throw(ArgumentError(strcat(
+            throw(ArgumentError(string(
                 "premature end of integer (in ", repr(s), ")"
             )))
         end
         c,i = next(s,i)
     elseif c == '+'
         if done(s,i)
-            throw(ArgumentError(strcat(
+            throw(ArgumentError(string(
                 "premature end of integer (in ", repr(s), ")"
             )))
         end
@@ -1129,14 +1123,14 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
             'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
         if d >= base
             if !iswspace(c)
-                throw(ArgumentError(strcat(
+                throw(ArgumentError(string(
                     repr(c)," is not a valid digit (in ", repr(s), ")"
                 )))
             end
             while !done(s,i)
                 c,i = next(s,i)
                 if !iswspace(c)
-                    throw(ArgumentError(strcat(
+                    throw(ArgumentError(string(
                         "extra characters after whitespace (in ", repr(s), ")"
                     )))
                 end
@@ -1227,7 +1221,7 @@ end
 
 # find the index of the first occurrence of a value in a byte array
 
-function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
+function memchr(a::Array{Uint8,1}, b, i::Integer)
     if i < 1 error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
@@ -1235,7 +1229,7 @@ function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
 end
-memchr(a::Array{Uint8,1}, b::Integer) = memchr(a,b,1)
+memchr(a::Array{Uint8,1}, b) = memchr(a,b,1)
 
 # return a random string (often useful for temporary filenames/dirnames)
 let

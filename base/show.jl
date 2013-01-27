@@ -2,11 +2,11 @@
 
 show(x) = show(OUTPUT_STREAM::Stream, x)
 
-show(io::Stream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
+print(io::IO, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
 show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io::Stream, x)
 
 showcompact(io::IO, x) = show(io, x)
-showcompact(x)     = showcompact(OUTPUT_STREAM::Stream, x)
+showcompact(x) = showcompact(OUTPUT_STREAM::Stream, x)
 
 macro show(exs...)
     blk = expr(:block)
@@ -204,6 +204,7 @@ end
 show_unquoted(io::IO, sym::Symbol, indent::Int) = print(io, sym)
 show_unquoted(io::IO, x::Number, indent::Int)   = show(io, x)
 show_unquoted(io::IO, x::String, indent::Int)   = show(io, x)
+show_unquoted(io::IO, x::Char, indent::Int)     = show(io, x)
 
 const _expr_infix_wide = Set(:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=), 
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||))
@@ -426,7 +427,7 @@ function xdump(fn::Function, io::IO, x, n::Int, indent)
             for field in T.names
                 if field != symbol("")    # prevents segfault if symbol is blank
                     print(io, indent, "  ", field, ": ")
-                    fn(io, getfield(x, field), n - 1, strcat(indent, "  "))
+                    fn(io, getfield(x, field), n - 1, string(indent, "  "))
                 end
             end
         end
@@ -443,13 +444,13 @@ function xdump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
     if n > 0
         for i in 1:(length(x) <= 10 ? length(x) : 5)
             print(io, indent, "  ", i, ": ")
-            fn(io, x[i], n - 1, strcat(indent, "  "))
+            fn(io, x[i], n - 1, string(indent, "  "))
         end
         if length(x) > 10
             println(io, indent, "  ...")
             for i in length(x)-4:length(x)
                 print(io, indent, "  ", i, ": ")
-                fn(io, x[i], n - 1, strcat(indent, "  "))
+                fn(io, x[i], n - 1, string(indent, "  "))
             end
         end
     end
@@ -467,7 +468,7 @@ function xdump(fn::Function, io::IO, x::CompositeKind, n::Int, indent)
             if x.names[idx] != symbol("")    # prevents segfault if symbol is blank
                 print(io, indent, "  ", x.names[idx], "::")
                 if isa(x.types[idx], CompositeKind) 
-                    xdump(fn, io, x.types[idx], n - 1, strcat(indent, "  "))
+                    xdump(fn, io, x.types[idx], n - 1, string(indent, "  "))
                 else
                     println(x.types[idx])
                 end
@@ -513,7 +514,7 @@ function dumptype(io::Stream, x, n::Int, indent)
                         println(io, indent, "  ", s, " = ", t.name)
                     elseif t != Any 
                         print(io, indent, "  ")
-                        dumptype(io, t, n - 1, strcat(indent, "  "))
+                        dumptype(io, t, n - 1, string(indent, "  "))
                     end
                 end
             end
@@ -547,7 +548,7 @@ function dump(io::IO, x::Dict, n::Int, indent)
         i = 1
         for (k,v) in x
             print(io, indent, "  ", k, ": ")
-            dump(io, v, n - 1, strcat(indent, "  "))
+            dump(io, v, n - 1, string(indent, "  "))
             if i > 10
                 println(io, indent, "  ...")
                 break
@@ -793,7 +794,7 @@ function show_nd(io, a::AbstractArray)
 end
 
 function whos(m::Module, pattern::Regex)
-    for s in sort(map(string, names(m)))
+    for s in sort!(map(string, names(m)))
         v = symbol(s)
         if isdefined(m,v) && ismatch(pattern, s)
             println(rpad(s, 30), summary(eval(m,v)))

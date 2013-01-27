@@ -164,20 +164,16 @@ Generic Functions
 Iteration
 ---------
 
-Sequential iteration is implemented by the methods ``start``, ``done``, and ``next``. The general ``for`` loop:
+Sequential iteration is implemented by the methods ``start``, ``done``, and ``next``. The general ``for`` loop::
 
-::
-
-    for i = I
+   for i = I
       # body
-    end
+   end
 
-is translated to:
+is translated to::
 
-::
-
-    state = start(I)
-    while !done(I, state)
+   state = start(I)
+   while !done(I, state)
       (i, state) = next(I, state)
       # body
     end
@@ -223,6 +219,10 @@ Iterable Collections
 .. function:: contains(iterable, x) -> Bool
 
    Determine whether a collection contains the given value, ``x``.
+
+.. function:: findin(a, b)
+
+   Returns the indices of elements in collection ``a`` that appear in collection ``b``
 
 .. function:: reduce(op, v0, iterable{Type})
 
@@ -391,13 +391,25 @@ Set-Like Collections
 
 .. function:: choose(s::Set{Type}) -> element::Type
 
-   Pick an element of a set
+.. function:: union(s1,s2...)
 
-.. function:: union(s1,s2)
+   Construct the union of two or more sets. Maintains order with arrays.
 
-   Construct the union of two sets
+.. function:: intersect(s1,s2...)
+
+   Construct the intersection of two or more sets. Maintains order with arrays.
+
+.. function:: setdiff(s1,s2)
+
+   Construct the set of elements in ``s1`` but not ``s2``. Maintains order with arrays.
+
+.. function:: symdiff(s1,s2...)
+
+   Construct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.
 
 Fully implemented by: ``IntSet``, ``Set``, ``FDSet``.
+
+Partially implemented by: ``Array``.
 
 Dequeues
 --------
@@ -412,7 +424,7 @@ Dequeues
 
 .. function:: unshift!(collection, item) -> collection
    
-   Prepend item to the collection.
+   Insert an item at the beginning of a collection.
 
 .. function:: shift!(collection{Type}) -> item::Type
 
@@ -1378,63 +1390,51 @@ Numbers
 Random Numbers
 --------------
 
-Random numbers are generated in Julia by calling functions from the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_.
+Random number generateion in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_. Julia has a global RNG, which is used by default. Multiple RNGs can be plugged in using the ``AbstractRNG`` object, which can then be used to have multiple streams of random numbers. Currently, only ``MersenneTwister`` is supported.
 
-.. function:: rand -> Float64
+.. function:: srand([rng], seed)
+
+   Seed the RNG with a ``seed``, which may be an unsigned integer or a vector of unsigned integers. ``seed`` can even be a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
+
+.. function:: MersenneTwister([seed])
+
+   Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
+
+.. function:: rand()
 
    Generate a ``Float64`` random number in (0,1)
 
-.. function:: randf -> Float32
+.. function:: rand!([rng], A)
 
-   Generate a ``Float32`` random number in (0,1)
+   Populate the array A with random number generated from the specified RNG.
 
-.. function:: randi(Int32|Uint32|Int64|Uint64) -> Integer
+.. function:: rand(rng::AbstractRNG, [dims...])
 
-   Generate a random integer of the given type
+   Generate a random ``Float64`` number or array of the size specified by dims, using the specified RNG object. Currently, ``MersenneTwister`` is the only available Random Number Generator (RNG), which may be seeded using srand.
 
-.. function:: randi(n) -> Integer
+.. function:: rand(dims...)
 
-   Generate a random integer from 1 to ``n`` inclusive
+   Generate a random ``Float64`` array of the size specified by dims
 
-.. function:: randi(n, dims...) -> Array{Integer}
+.. function:: rand(Int32|Uint32|Int64|Uint64|Int128|Uint128, [dims...])
 
-   Generate an array of random integers from 1 to ``n`` inclusive
+   Generate a random integer of the given type. Optionally, generate an array of random integers of the given type by specifying dims.
 
-.. function:: randi((a,b)) -> Array{Integer}
+.. function:: rand(r, [dims...])
 
-   Generate a random integer in the interval from ``a`` to ``b`` inclusive. The argument is a tuple.
+   Generate a random integer from ``1``:``n`` inclusive. Optionally, generate a random integer array.
 
-.. function:: randi((a,b), dims...)
+.. function:: randbool([dims...])
 
-   Generate an array of random integers in the interval from ``a`` to ``b`` inclusive. The first argument is a tuple.
+   Generate a random boolean value. Optionally, generate an array of random boolean values.
 
-.. function:: randbool -> Bool
+.. function:: randbool!(A)
 
-   Generate a random boolean value
+   Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.   
 
-.. function:: randn
+.. function:: randn([dims...])
 
-   Generate a normally-distributed random number with mean 0 and standard deviation 1
-
-.. function:: randg(a)
-
-   Generate a sample from the gamma distribution with shape parameter ``a``
-
-.. function:: randchi2(n)
-
-   Generate a sample from the chi-squared distribution with ``n`` degrees of freedom.
-
-.. function:: randexp
-
-   Generate samples from the exponential distribution
-
-.. function:: srand
-
-   Seed the RNG
-
-.. function:: rand!(array) -> array
-
-   Fill the array with random floats.
+   Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
 
 Arrays
 ------
@@ -1645,9 +1645,17 @@ Sparse Matrices
 
 Sparse matrices support much of the same set of operations as dense matrices. The following functions are specific to sparse matrices.
 
-.. function:: sparse(I,J,V[,m,n,combine])
+.. function:: sparse(I,J,V,[m,n,combine])
 
    Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``. The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``max(I)`` and ``max(J)`` respectively. If the ``combine`` function is not supplied, duplicates are added by default.
+
+.. function:: sparsevec(I, V, [m, combine])
+
+   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``. Duplicates are combined using the ``combine`` function, which defaults to `+` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
+
+.. function:: sparsevec(D::Dict, [m])
+
+   Create a sparse matrix of size ``m x 1`` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
 
 .. function:: issparse(S)
 
@@ -1660,6 +1668,10 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sparse(A)
 
    Convert a dense matrix ``A`` into a sparse matrix.
+
+.. function:: sparsevec(A)
+
+   Convert a dense vector ``A`` into a sparse matrix of size ``m x 1``. In julia, sparse vectors are really just sparse matrices with one column.
 
 .. function:: dense(S)
 
@@ -2019,7 +2031,6 @@ Signal Processing
 FFT functions in Julia are largely implemented by calling functions from `FFTW <http://www.fftw.org>`_
 
 .. function:: fft(A [, dims])
-              fft!
 
    Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
    argument specifies an iterable subset of dimensions (e.g. an integer,
@@ -2028,30 +2039,18 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    primes; see :func:`nextprod`.  See also :func:`plan_fft` for even
    greater efficiency.
 
-   :func:`fft!` is the same as :func:`fft`, but operates in-place on ``A``,
-   which must be an array of complex floating-point numbers.
-
    A one-dimensional FFT computes the one-dimensional discrete Fourier
    transform (DFT) as defined by :math:`\operatorname{DFT}[k] = \sum_{n=1}^{\operatorname{length}(A)} \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n]`.  A multidimensional FFT simply performs this operation
    along each transformed dimension of ``A``.
 
-.. function:: ifft(A [, dims])
-              ifft!
-              bfft
-              bfft!
+.. function:: fft!(A [, dims])
 
-   Multidimensional inverse FFT. 
+   Same as :func:`fft`, but operates in-place on ``A``,
+   which must be an array of complex floating-point numbers.
 
-   :func:`ifft` and :func:`ifft!` have the same arguments as
-   :func:`fft` and :func:`fft!`, respectively.
+.. function:: ifft(A [, dims]), bfft, bfft!
 
-   :func:`bfft` and :func:`bfft!` are similar to :func:`ifft` and 
-   :func:`ifft!`, respectively, but compute an unnormalized inverse
-   (backward) transform, which must be divided by the product of the sizes of
-   the transformed dimensions in order to obtain the inverse.  (These
-   are slightly more efficient than :func:`ifft` and :func:`ifft!`
-   because they omit a scaling step, which in some applications can
-   be combined with other camputational steps elsewhere.)
+   Multidimensional inverse FFT.
 
    A one-dimensional backward FFT computes
    :math:`\operatorname{BDFT}[k] =
@@ -2061,12 +2060,24 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    each transformed dimension of ``A``.  The inverse FFT computes
    the same thing divided by the product of the transformed dimensions.
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]])
-              plan_fft!
-              plan_ifft
-              plan_ifft!
-              plan_bfft
-              plan_bfft!
+.. function:: ifft!(A [, dims])
+
+   Same as :func:`ifft`, but operates in-place on ``A``.
+
+.. function:: bfft(A [, dims])
+
+   Similar to :func:`ifft`, but computes an unnormalized inverse
+   (backward) transform, which must be divided by the product of the sizes
+   of the transformed dimensions in order to obtain the inverse.  (This is
+   slightly more efficient than :func:`ifft` because it omits a scaling
+   step, which in some applications can be combined with other
+   computational steps elsewhere.)
+
+.. function:: bfft!(A [, dims])
+
+   Same as :func:`bfft`, but operates in-place on ``A``.
+
+.. function:: plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
@@ -2088,6 +2099,18 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    are similar but produce plans that perform the equivalent of
    the inverse transforms :func:`ifft` and so on.
 
+.. function:: plan_fft!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_fft`, but operates in-place on ``A``.
+
+.. function:: plan_ifft!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_ifft`, but operates in-place on ``A``.
+
+.. function:: plan_bfft!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_bfft`, but operates in-place on ``A``.
+
 .. function:: rfft(A [, dims])
 
    Multidimensional FFT of a real array A, exploiting the fact that
@@ -2102,7 +2125,6 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    ``dims[1]`` dimension is (roughly) halved in the same way.
 
 .. function:: irfft(A, d [, dims])
-              brfft
 
    Inverse of :func:`rfft`: for a complex array ``A``, gives the
    corresponding real array whose FFT yields ``A`` in the first half.
@@ -2114,7 +2136,9 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    (This parameter cannot be inferred from ``size(A)`` due to the 
    possibility of rounding by the ``floor`` function here.)
 
-   :func:`brfft` is similar but computes an unnormalized inverse transform
+.. function:: brfft(A, d [, dims])
+
+   Similar to :func:`irfft` but computes an unnormalized inverse transform
    (similar to :func:`bfft`), which must be divided by the product
    of the sizes of the transformed dimensions (of the real output array)
    in order to obtain the inverse transform.
@@ -2126,17 +2150,13 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
-.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
-              plan_bfft
+.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
    three arguments have the same meaning as for :func:`irfft`.
 
 .. function:: dct(A [, dims])
-              dct!
-              idct
-              idct!
 
    Performs a multidimensional type-II discrete cosine transform (DCT)
    of the array ``A``, using the unitary normalization of the DCT.
@@ -2146,27 +2166,48 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    dimensions is a product of small primes; see :func:`nextprod`.  See
    also :func:`plan_dct` for even greater efficiency.
 
-   The :func:`dct!` is the same, except that it operates in-place
+.. function:: dct!(A [, dims])
+
+   Same as :func:`dct!`, except that it operates in-place
    on ``A``, which must be an array of real or complex floating-point
    values. 
 
-   Similarly, :func:`idct(A [, dims])` and :func:`idct!` compute
-   the inverse DCT (technically, a type-III DCT with the unitary
+.. function:: idct(A [, dims])
+
+   Computes the multidimensional inverse discrete cosine transform (DCT)
+   of the array ``A`` (technically, a type-III DCT with the unitary
    normalization).
+   The optional ``dims`` argument specifies an iterable subset of
+   dimensions (e.g. an integer, range, tuple, or array) to transform
+   along.  Most efficient if the size of ``A`` along the transformed
+   dimensions is a product of small primes; see :func:`nextprod`.  See
+   also :func:`plan_idct` for even greater efficiency.
+
+.. function:: idct!(A [, dims])
+
+   Same as :func:`idct!`, but operates in-place on ``A``.
 
 .. function:: plan_dct(A [, dims [, flags [, timelimit]]])
-              plan_dct!
-              plan_idct
-              plan_idct!
 
    Pre-plan an optimized discrete cosine transform (DCT), similar to
-   :func:`plan_fft` except producint a function that computes
-   :func:`dct`, :func:`dct!`, :func:`idct`, and :func:`idct!`
-   respectively.  The first two arguments have the same meaning as for
-   :func:`dct`.
+   :func:`plan_fft` except producing a function that computes :func:`dct`.
+   The first two arguments have the same meaning as for :func:`dct`.
 
-.. function:: FFTW.r2r(A, kind [, dims])
-              FFTW.r2r!
+.. function:: plan_dct!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_dct`, but operates in-place on ``A``.
+
+.. function:: plan_idct(A [, dims [, flags [, timelimit]]])
+
+   Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
+   :func:`plan_fft` except producing a function that computes :func:`idct`.
+   The first two arguments have the same meaning as for :func:`idct`.
+
+.. function:: plan_idct!(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_idct`, but operates in-place on ``A``.
+
+.. function:: FFTW.r2r(A, kind [, dims]), FFTW.r2r!
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
@@ -2193,8 +2234,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    in-place on ``A``, which must be an array of real or complex 
    floating-point numbers.
 
-.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]])
-              FFTW.plan_r2r!
+.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
 
    Pre-plan an optimized r2r transform, similar to :func:`plan_fft`
    except that the transforms (and the first three arguments)
@@ -2210,7 +2250,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
 .. function:: ifftshift(x, [dim])
 
-   Undoes the effect of :func:`fftshift`.
+   Undoes the effect of ``fftshift``.
 
 .. function:: filt(b,a,x)
 

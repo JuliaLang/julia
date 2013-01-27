@@ -79,7 +79,7 @@ end
 
 function dump(io, t::TestResult)
     println(io, "In $(t.context) / $(t.group)")
-    println(io, strcat(t.expr_str, " ", t.succeed ? "succeeded" : "FAILED"))
+    println(io, string(t.expr_str, " ", t.succeed ? "succeeded" : "FAILED"))
     println(io, "$(t.operation) with args:")
     println(io, "1: $(t.arg1)\n2: $(t.arg2)\n3: $(t.arg3)")
     println(io, "Exception: $(t.exception_thrown)")

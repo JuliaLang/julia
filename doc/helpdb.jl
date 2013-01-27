@@ -525,6 +525,13 @@
 
 "),
 
+(E"Iterable Collections",E"Base",E"findin",E"findin(a, b)
+
+   Returns the indices of elements in collection \"a\" that appear in
+   collection \"b\"
+
+"),
+
 (E"Iterable Collections",E"Base",E"reduce",E"reduce(op, v0, itr)
 
    Reduce the given collection with the given operator, i.e.
@@ -748,9 +755,31 @@ collection[key...] = value
 
 "),
 
-(E"Set-Like Collections",E"Base",E"union",E"union(s1, s2)
+(E"Set-Like Collections",E"Base",E"union",E"union(s1, s2...)
 
-   Construct the union of two sets
+   Construct the union of two or more sets. Maintains order with
+   arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"intersect",E"intersect(s1, s2...)
+
+   Construct the intersection of two or more sets. Maintains order
+   with arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"setdiff",E"setdiff(s1, s2)
+
+   Construct the set of elements in \"s1\" but not \"s2\". Maintains
+   order with arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff",E"symdiff(s1, s2...)
+
+   Construct the symmetric difference of elements in the passed in
+   sets or arrays. Maintains order with arrays.
 
 "),
 
@@ -1030,19 +1059,19 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"STDOUT",E"STDOUT
+(E"I/O",E"Base",E"stdout_stream",E"stdout_stream
 
    Global variable referring to the standard out stream.
 
 "),
 
-(E"I/O",E"Base",E"STDERR",E"STDERR
+(E"I/O",E"Base",E"stderr_stream",E"stderr_stream
 
    Global variable referring to the standard error stream.
 
 "),
 
-(E"I/O",E"Base",E"STDIN",E"STDIN
+(E"I/O",E"Base",E"stdin_stream",E"stdin_stream
 
    Global variable referring to the standard input stream.
 
@@ -2262,86 +2291,101 @@ airyaiprime(x)
 
 "),
 
+(E"Numbers",E"Base",E"BigInt",E"BigInt(x)
+
+   Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
+   anything that can be converted to an \"Int\") or a \"String\". The
+   usual mathematical operators are defined for this type, and results
+   are promoted to a \"BigInt\".
+
+"),
+
+(E"Numbers",E"Base",E"BigFloat",E"BigFloat(x)
+
+   Create an arbitrary precision floating point number. \"x\" may be
+   an \"Integer\", a \"Float64\", a \"String\" or a \"BigInt\". The
+   usual mathematical operators are defined for this type, and results
+   are promoted to a \"BigFloat\".
+
+"),
+
+(E"Random Numbers",E"Base",E"srand",E"srand([rng], seed)
+
+   Seed the RNG with a \"seed\", which may be an unsigned integer or a
+   vector of unsigned integers. \"seed\" can even be a filename, in
+   which case the seed is read from a file. If the argument \"rng\" is
+   not provided, the default global RNG is seeded.
+
+"),
+
+(E"Random Numbers",E"Base",E"MersenneTwister",E"MersenneTwister([seed])
+
+   Create a \"MersenneTwister\" RNG object. Different RNG objects can
+   have their own seeds, which may be useful for generating different
+   streams of random numbers.
+
+"),
+
 (E"Random Numbers",E"Base",E"rand",E"rand()
 
    Generate a \"Float64\" random number in (0,1)
 
 "),
 
-(E"Random Numbers",E"Base",E"randf",E"randf()
+(E"Random Numbers",E"Base",E"rand!",E"rand!([rng], A)
 
-   Generate a \"Float32\" random number in (0,1)
+   Populate the array A with random number generated from the
+   specified RNG.
 
 "),
 
-(E"Random Numbers",E"Base",E"randi",E"randi(Int32|Uint32|Int64|Uint64)
+(E"Random Numbers",E"Base",E"rand",E"rand(rng::AbstractRNG[, dims...])
+
+   Generate a random \"Float64\" number or array of the size specified
+   by dims, using the specified RNG object. Currently,
+   \"MersenneTwister\" is the only available Random Number Generator
+   (RNG), which may be seeded using srand.
+
+"),
+
+(E"Random Numbers",E"Base",E"rand",E"rand(dims...)
+
+   Generate a random \"Float64\" array of the size specified by dims
+
+"),
+
+(E"Random Numbers",E"Base",E"rand",E"rand(Int32|Uint32|Int64|Uint64)
 
    Generate a random integer of the given type
 
 "),
 
-(E"Random Numbers",E"Base",E"randi",E"randi(n)
+(E"Random Numbers",E"Base",E"rand",E"rand(r[, dims...])
 
-   Generate a random integer from 1 to \"n\" inclusive
-
-"),
-
-(E"Random Numbers",E"Base",E"randi",E"randi(n, dims...)
-
-   Generate an array of random integers from 1 to \"n\" inclusive
+   Generate a random integer from \"1\":\"n\" inclusive. Optionally,
+   generate a random integer array.
 
 "),
 
-(E"Random Numbers",E"Base",E"randi",E"randi((a, b))
+(E"Random Numbers",E"Base",E"randbool",E"randbool([dims...])
 
-   Generate a random integer in the interval from \"a\" to \"b\"
-   inclusive. The argument is a tuple.
-
-"),
-
-(E"Random Numbers",E"Base",E"randi",E"randi((a, b), dims...)
-
-   Generate an array of random integers in the interval from \"a\" to
-   \"b\" inclusive. The first argument is a tuple.
+   Generate a random boolean value. Optionally, generate an array of
+   random boolean values.
 
 "),
 
-(E"Random Numbers",E"Base",E"randbool",E"randbool()
+(E"Random Numbers",E"Base",E"randbool!",E"randbool!(A)
 
-   Generate a random boolean value
+   Fill an array with random boolean values. A may be an \"Array\" or
+   a \"BitArray\".
 
 "),
 
-(E"Random Numbers",E"Base",E"randn",E"randn()
+(E"Random Numbers",E"Base",E"randn",E"randn([dims...])
 
    Generate a normally-distributed random number with mean 0 and
-   standard deviation 1
-
-"),
-
-(E"Random Numbers",E"Base",E"randg",E"randg(a)
-
-   Generate a sample from the gamma distribution with shape parameter
-   \"a\"
-
-"),
-
-(E"Random Numbers",E"Base",E"randchi2",E"randchi2(n)
-
-   Generate a sample from the chi-squared distribution with \"n\"
-   degrees of freedom (also available as \"chi2rnd\")
-
-"),
-
-(E"Random Numbers",E"Base",E"randexp",E"randexp()
-
-   Generate samples from the exponential distribution
-
-"),
-
-(E"Random Numbers",E"Base",E"srand",E"srand()
-
-   Seed the RNG
+   standard deviation 1. Optionally generate an array of normally-
+   distributed random numbers.
 
 "),
 
@@ -2826,9 +2870,17 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svd",E"svd(A) -> U, S, V'
+(E"Linear Algebra",E"Base",E"svd",E"svd(A) -> U, S, V
 
-   Compute the SVD of A
+   Compute the SVD of A, returning \"U\", \"S\", and \"V\" such that
+   \"A = U*S*V'\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdt",E"svdt(A) -> U, S, Vt
+
+   Compute the SVD of A, returning \"U\", \"S\", and \"Vt\" such that
+   \"A = U*S*Vt\".
 
 "),
 
@@ -2885,9 +2937,18 @@ airyaiprime(x)
 
 (E"Linear Algebra",E"Base",E"norm",E"norm(A[, p])
 
-   Compute the p-norm of a vector or a matrix. \"p\" is \"2\" by
-   default, if not provided. If \"A\" is a matrix, valid values for
-   \"p\" are \"1\", \"2\", \"Inf\", or \":fro\" (Frobenius norm).
+   Compute the \"p\"-norm of a vector or a matrix. \"p\" is \"2\" by
+   default, if not provided. If \"A\" is a vector, \"norm(A, p)\"
+   computes the \"p\"-norm. \"norm(A, Inf)\" returns the largest value
+   in \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest. If
+   \"A\" is a matrix, valid values for \"p\" are \"1\", \"2\", or
+   \"Inf\". In order to compute the Frobenius norm, use \"normfro\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"normfro",E"normfro(A)
+
+   Compute the Frobenius norm of a matrix \"A\".
 
 "),
 
@@ -2895,7 +2956,7 @@ airyaiprime(x)
 
    Matrix condition number, computed using the p-norm. \"p\" is 2 by
    default, if not provided. Valid values for \"p\" are \"1\", \"2\",
-   \"Inf\", or \":fro\" (Frobenius norm).
+   or \"Inf\".
 
 "),
 
@@ -3292,7 +3353,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"fft(A [, dims]), fft!",E"fft(A [, dims]), fft!
+(E"Signal Processing",E"Base",E"fft",E"fft(A[, dims])
 
    Performs a multidimensional FFT of the array \"A\".  The optional
    \"dims\" argument specifies an iterable subset of dimensions (e.g.
@@ -3300,9 +3361,6 @@ airyaiprime(x)
    efficient if the size of \"A\" along the transformed dimensions is
    a product of small primes; see \"nextprod()\".  See also
    \"plan_fft()\" for even greater efficiency.
-
-   \"fft!()\" is the same as \"fft()\", but operates in-place on
-   \"A\", which must be an array of complex floating-point numbers.
 
    A one-dimensional FFT computes the one-dimensional discrete Fourier
    transform (DFT) as defined by \\operatorname{DFT}[k] =
@@ -3313,20 +3371,16 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"ifft(A [, dims]), ifft!, bfft, bfft!",E"ifft(A [, dims]), ifft!, bfft, bfft!
+(E"Signal Processing",E"Base",E"fft!",E"fft!(A[, dims])
+
+   Same as \"fft()\", but operates in-place on \"A\", which must be an
+   array of complex floating-point numbers.
+
+"),
+
+(E"Signal Processing",E"",E"ifft(A [, dims]), bfft, bfft!",E"ifft(A [, dims]), bfft, bfft!
 
    Multidimensional inverse FFT.
-
-   \"ifft()\" and \"ifft!()\" have the same arguments as \"fft()\" and
-   \"fft!()\", respectively.
-
-   \"bfft()\" and \"bfft!()\" are similar to \"ifft()\" and
-   \"ifft!()\", respectively, but compute an unnormalized inverse
-   (backward) transform, which must be divided by the product of the
-   sizes of the transformed dimensions in order to obtain the inverse.
-   (These are slightly more efficient than \"ifft()\" and \"ifft!()\"
-   because they omit a scaling step, which in some applications can be
-   combined with other camputational steps elsewhere.)
 
    A one-dimensional backward FFT computes \\operatorname{BDFT}[k] =
    \\sum_{n=1}^{\\operatorname{length}(A)} \\exp\\left(+i\\frac{2\\pi
@@ -3337,7 +3391,30 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!",E"plan_fft(A [, dims [, flags [, timelimit]]]), plan_fft!, plan_ifft, plan_ifft!, plan_bfft, plan_bfft!
+(E"Signal Processing",E"Base",E"ifft!",E"ifft!(A[, dims])
+
+   Same as \"ifft()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"bfft",E"bfft(A[, dims])
+
+   Similar to \"ifft()\", but computes an unnormalized inverse
+   (backward) transform, which must be divided by the product of the
+   sizes of the transformed dimensions in order to obtain the inverse.
+   (This is slightly more efficient than \"ifft()\" because it omits a
+   scaling step, which in some applications can be combined with other
+   computational steps elsewhere.)
+
+"),
+
+(E"Signal Processing",E"Base",E"bfft!",E"bfft!(A[, dims])
+
+   Same as \"bfft()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"",E"plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft",E"plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
 
    Pre-plan an optimized FFT along given dimensions (\"dims\") of
    arrays matching the shape and type of \"A\".  (The first two
@@ -3362,6 +3439,24 @@ airyaiprime(x)
 
 "),
 
+(E"Signal Processing",E"Base",E"plan_fft!",E"plan_fft!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_fft()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_ifft!",E"plan_ifft!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_ifft()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_bfft!",E"plan_bfft!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_bfft()\", but operates in-place on \"A\".
+
+"),
+
 (E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dims])
 
    Multidimensional FFT of a real array A, exploiting the fact that
@@ -3378,7 +3473,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"irfft(A, d [, dims]), brfft",E"irfft(A, d [, dims]), brfft
+(E"Signal Processing",E"Base",E"irfft",E"irfft(A, d[, dims])
 
    Inverse of \"rfft()\": for a complex array \"A\", gives the
    corresponding real array whose FFT yields \"A\" in the first half.
@@ -3391,7 +3486,11 @@ airyaiprime(x)
    from \"size(A)\" due to the possibility of rounding by the
    \"floor\" function here.)
 
-   \"brfft()\" is similar but computes an unnormalized inverse
+"),
+
+(E"Signal Processing",E"Base",E"brfft",E"brfft(A, d[, dims])
+
+   Similar to \"irfft()\" but computes an unnormalized inverse
    transform (similar to \"bfft()\"), which must be divided by the
    product of the sizes of the transformed dimensions (of the real
    output array) in order to obtain the inverse transform.
@@ -3416,7 +3515,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"dct(A [, dims]), dct!, idct, idct!",E"dct(A [, dims]), dct!, idct, idct!
+(E"Signal Processing",E"Base",E"dct",E"dct(A[, dims])
 
    Performs a multidimensional type-II discrete cosine transform (DCT)
    of the array \"A\", using the unitary normalization of the DCT. The
@@ -3426,22 +3525,60 @@ airyaiprime(x)
    dimensions is a product of small primes; see \"nextprod()\".  See
    also \"plan_dct()\" for even greater efficiency.
 
-   The \"dct!()\" is the same, except that it operates in-place on
-   \"A\", which must be an array of real or complex floating-point
-   values.
+"),
 
-   Similarly, \"idct(A [, dims])()\" and \"idct!()\" compute the
-   inverse DCT (technically, a type-III DCT with the unitary
-   normalization).
+(E"Signal Processing",E"Base",E"dct!",E"dct!(A[, dims])
+
+   Same as \"dct!()\", except that it operates in-place on \"A\",
+   which must be an array of real or complex floating-point values.
 
 "),
 
-(E"Signal Processing",E"",E"plan_dct(A [, dims [, flags [, timelimit]]]), plan_dct!, plan_idct, plan_idct!",E"plan_dct(A [, dims [, flags [, timelimit]]]), plan_dct!, plan_idct, plan_idct!
+(E"Signal Processing",E"Base",E"idct",E"idct(A[, dims])
+
+   Computes the multidimensional inverse discrete cosine transform
+   (DCT) of the array \"A\" (technically, a type-III DCT with the
+   unitary normalization). The optional \"dims\" argument specifies an
+   iterable subset of dimensions (e.g. an integer, range, tuple, or
+   array) to transform along.  Most efficient if the size of \"A\"
+   along the transformed dimensions is a product of small primes; see
+   \"nextprod()\".  See also \"plan_idct()\" for even greater
+   efficiency.
+
+"),
+
+(E"Signal Processing",E"Base",E"idct!",E"idct!(A[, dims])
+
+   Same as \"idct!()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_dct",E"plan_dct(A[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized discrete cosine transform (DCT), similar to
-   \"plan_fft()\" except producint a function that computes \"dct()\",
-   \"dct!()\", \"idct()\", and \"idct!()\" respectively.  The first
-   two arguments have the same meaning as for \"dct()\".
+   \"plan_fft()\" except producing a function that computes \"dct()\".
+   The first two arguments have the same meaning as for \"dct()\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_dct!",E"plan_dct!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_dct()\", but operates in-place on \"A\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_idct",E"plan_idct(A[, dims[, flags[, timelimit]]])
+
+   Pre-plan an optimized inverse discrete cosine transform (DCT),
+   similar to \"plan_fft()\" except producing a function that computes
+   \"idct()\". The first two arguments have the same meaning as for
+   \"idct()\".
+
+"),
+
+(E"Signal Processing",E"Base",E"plan_idct!",E"plan_idct!(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_idct()\", but operates in-place on \"A\".
 
 "),
 
@@ -3551,13 +3688,20 @@ airyaiprime(x)
 
 (E"Parallel Computing",E"Base",E"nprocs",E"nprocs()
 
-   Get the number of available processors
+   Get the number of available processors.
 
 "),
 
 (E"Parallel Computing",E"Base",E"myid",E"myid()
 
-   Get the id of the current processor
+   Get the id of the current processor.
+
+"),
+
+(E"Parallel Computing",E"Base",E"pmap",E"pmap(f, c)
+
+   Transform collection \"c\" by applying \"f\" to each element in
+   parallel.
 
 "),
 
@@ -5703,85 +5847,120 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(v)
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(v[, dim])
 
-   Sort a vector in ascending order, according to \"isless\".
+   Sort a vector in ascending order.  If \"dim\" is provided, sort
+   along the given dimension.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sort!",E"sort!(v)
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(lessthan, v[, dim])
+
+   Sort with a custom comparison function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(alg, ...)
+
+   Sort using a specific sorting algorithm (InsertionSort, QuickSort,
+   MergeSort, or TimSort).
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sort!",E"sort!(...)
 
    In-place sort.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortr",E"sortr(v)
+(E"Base.Sort",E"Base.Sort",E"sortr",E"sortr(v[, dim])
 
-   Sort a vector in descending order.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortr!",E"sortr!(v)
-
-   In-place sort in descending-order.
+   Sort a vector in descending order. If \"dim\" is provided, sort
+   along the given dimension.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sort_by",E"sort_by(by, v)
+(E"Base.Sort",E"Base.Sort",E"sortr",E"sortr(alg, ...)
 
-   Sort a vector by the result of applying function \"by\" to every
-   element.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sort_by!",E"sort_by!(by, v)
-
-   Sort a vector in place by the result of applying function \"by\" to
-   every element.
+   Sort in descending order with a specific sorting algorithm
+   (InsertionSort, QuickSort, MergeSort, or TimSort).
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(a, dim)
+(E"Base.Sort",E"Base.Sort",E"sortr!",E"sortr!(...)
 
-   Sort an array along the given dimension.
+   In-place \"sortr\".
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(lessthan, a[, dim])
+(E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(by, v[, dim])
 
-   Sort with a custom comparison function.
+   Sort a vector according to \"by(v)\".   If \"dim\" is provided,
+   sort along the given dimension.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(alg, ...)
+
+   \"sortby\" using a specific sorting algorithm (\"InsertionSort\",
+   \"QuickSort\", \"MergeSort\", or \"TimSort\").
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortby!",E"sortby!(...)
+
+   In-place \"sortby\".
 
 "),
 
 (E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v) -> s,p
 
    Sort a vector in ascending order, also constructing the permutation
-   that sorts the vector
+   that sorts the vector.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(v) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(lessthan, v) -> s,p
 
-   Sort a vector in ascending order in-place, also constructing the
-   permutation that sorts the vector
+   Sort a vector with a custom comparison function, also constructing
+   the permutation that sorts the vector.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm_r",E"sortperm_r(v) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(alg, ...) -> s,p
+
+   \"sortperm\" using a specific sorting algorithm (\"InsertionSort\",
+   \"QuickSort\", \"MergeSort\", or \"TimSort\").
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(...) -> s,p
+
+   In-place \"sortperm\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortpermr",E"sortpermr(v) -> s,p
 
    Sort a vector in descending order, also constructing the
-   permutation that sorts the vector
+   permutation that sorts the vector!
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm_r!",E"sortperm_r!(v) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortpermr",E"sortpermr(alg, ...) -> s,p
 
-   Sort a vector in descending order in-place, also constructing the
-   permutation that sorts the vector
+   \"sortpermr\" using a specific sorting algorithm
+   (\"InsertionSort\", \"QuickSort\", \"MergeSort\", or \"TimSort\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm_by",E"sortperm_by(by, v) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortpermr!",E"sortpermr!(v) -> s,p
+
+   In-place \"sortpermr\".
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortpermby",E"sortpermby(by, v) -> s,p
 
    Sort a vector according to the result of function \"by\" applied to
    all values, also constructing the permutation that sorts the
@@ -5789,383 +5968,16 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm_by!",E"sortperm_by!(by, v) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortpermby",E"sortpermby(alg, ...) -> s,p
 
-   Sort a vector in-place according to the result of function \"by\"
-   applied to all values of \"v\", also constructing the permutation
-   that sorts the vector
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort",E"insertionsort(v[, dim])
-
-   Sort a vector in ascending order with insertion sort, according to
-   \"isless\".
+   \"sortpermby\" using a specific sorting algorithm
+   (\"InsertionSort\", \"QuickSort\", \"MergeSort\", or \"TimSort\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"insertionsort",E"insertionsort(lessthan, v[, dim])
+(E"Base.Sort",E"Base.Sort",E"sortpermby!",E"sortpermby!(...) -> s,p
 
-   Sort a vector in ascending order with insertion sort, using a
-   custom comparison function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort!",E"insertionsort!(v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort!",E"insertionsort!(v[, lo, hi])
-
-   In-place insertion sort, accoring to \"isless\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort!",E"insertionsort!(lessthan, v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort!",E"insertionsort!(lessthan, v[, lo, hi])
-
-   In-place insertion sort with a custom comparison function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_r",E"insertionsort_r(v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_r",E"insertionsort_r(v[, lo, hi])
-
-   Sort a vector in descending order using insertion sort.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_r!",E"insertionsort_r!(v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_r!",E"insertionsort_r!(v[, lo, hi])
-
-   In-place insertion sort in descending order.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_by",E"insertionsort_by(by, v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_by",E"insertionsort_by(by, v[, lo, hi])
-
-   Sort a vector with insertion sort according to the result of
-   function \"by\" applied to all values.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_by!",E"insertionsort_by!(by, v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_by!",E"insertionsort_by!(by, v[, lo, hi])
-
-   Sort a vector with insertion sort in place according to the result
-   of function \"by\" applied to all values.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_perm",E"insertionsort_perm(v[, p[, lo, hi]]) -> s,p
-
-   Sort a vector in ascending order, also constructing the permutation
-   that sorts the vector
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_perm",E"insertionsort_perm(lessthan, v[, p[, lo, hi]]) -> s,p
-
-   Sort a vector, using a custom comparison function, also
-   constructing the permutation that sorts the vector .
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_perm!",E"insertionsort_perm!(v[, p[, lo, hi]])
-
-   Sort a vector in ascending order in-place, also constructing the
-   permutation that sorts the vector
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_perm!",E"insertionsort_perm!(lessthan, v[, p[, lo, hi]])
-
-   Sort a vector in place, using a custom comparison function, also
-   constructing the permutation that sorts the vector .
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_perm_r",E"insertionsort_perm_r(v[, p[, lo, hi]])
-
-   Sort a vector in descending order, also constructing the
-   permutation that sorts the vector
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_perm_r!",E"insertionsort_perm_r!(v[, p[, lo, hi]])
-
-   Sort a vector in descending order in place, also constructing the
-   permutation that sorts the vector
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_perm_by",E"insertionsort_perm_by(by, v[, p[, lo, hi]])
-
-   Sort a vector with insertion sort according to the result of
-   function \"by\" applied to all values.
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"insertionsort_perm_by!",E"insertionsort_perm_by!(by, v[, p[, lo, hi]])
-
-   Sort a vector with insertion sort in place according to the result
-   of function \"by\" applied to all values.
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort",E"mergesort(v[, dim])
-
-   Sort a vector in ascending order with mergesort, according to
-   \"isless\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort",E"mergesort(lessthan, v[, dim])
-
-   Sort a vector in ascending order with mergesort, using a custom
-   comparison function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort!",E"mergesort!(v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort!",E"mergesort!(v[, lo, hi])
-
-   In-place mergesort, accoring to \"isless\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort!",E"mergesort!(lessthan, v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort!",E"mergesort!(lessthan, v[, lo, hi])
-
-   In-place mergesort with a custom comparison function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_r",E"mergesort_r(v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_r",E"mergesort_r(v[, lo, hi])
-
-   Sort a vector in descending order using mergesort.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_r!",E"mergesort_r!(v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_r!",E"mergesort_r!(v[, lo, hi])
-
-   In-place mergesort in descending order.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_by",E"mergesort_by(by, v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_by",E"mergesort_by(by, v[, lo, hi])
-
-   Sort a vector with mergesort according to the result of function
-   \"by\" applied to all values.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_by!",E"mergesort_by!(by, v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_by!",E"mergesort_by!(by, v[, lo, hi])
-
-   Sort a vector with mergesort in place according to the result of
-   function \"by\" applied to all values.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_perm",E"mergesort_perm(v[, p[, lo, hi]]) -> s,p
-
-   Sort a vector in ascending order, also constructing the permutation
-   that sorts the vector
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_perm",E"mergesort_perm(lessthan, v[, p[, lo, hi]]) -> s,p
-
-   Sort a vector, using a custom comparison function, also
-   constructing the permutation that sorts the vector .
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_perm!",E"mergesort_perm!(v[, p[, lo, hi]])
-
-   Sort a vector in ascending order in-place, also constructing the
-   permutation that sorts the vector
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_perm!",E"mergesort_perm!(lessthan, v[, p[, lo, hi]])
-
-   Sort a vector in place, using a custom comparison function, also
-   constructing the permutation that sorts the vector .
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_perm_r",E"mergesort_perm_r(v[, p[, lo, hi]])
-
-   Sort a vector in descending order, also constructing the
-   permutation that sorts the vector
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_perm_r!",E"mergesort_perm_r!(v[, p[, lo, hi]])
-
-   Sort a vector in descending order in place, also constructing the
-   permutation that sorts the vector
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_perm_by",E"mergesort_perm_by(by, v[, p[, lo, hi]])
-
-   Sort a vector with mergesort according to the result of function
-   \"by\" applied to all values.
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"mergesort_perm_by!",E"mergesort_perm_by!(by, v[, p[, lo, hi]])
-
-   Sort a vector with mergesort in place according to the result of
-   function \"by\" applied to all values.
-
-   If provided, \"p\" is an initial permutation.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort",E"quicksort(v[, dim])
-
-   Sort a vector in ascending order with quicksort, according to
-   \"isless\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort",E"quicksort(lessthan, v[, dim])
-
-   Sort a vector in ascending order with quicksort, using a custom
-   comparison function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort!",E"quicksort!(v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort!",E"quicksort!(v[, lo, hi])
-
-   In-place quicksort, accoring to \"isless\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort!",E"quicksort!(lessthan, v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort!",E"quicksort!(lessthan, v[, lo, hi])
-
-   In-place quicksort with a custom comparison function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort_r",E"quicksort_r(v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort_r",E"quicksort_r(v[, lo, hi])
-
-   Sort a vector in descending order using quicksort.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort_r!",E"quicksort_r!(v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort_r!",E"quicksort_r!(v[, lo, hi])
-
-   In-place quicksort in descending order.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort_by",E"quicksort_by(by, v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort_by",E"quicksort_by(by, v[, lo, hi])
-
-   Sort a vector with quicksort according to the result of function
-   \"by\" applied to all values.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort_by!",E"quicksort_by!(by, v[, dim])
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"quicksort_by!",E"quicksort_by!(by, v[, lo, hi])
-
-   Sort a vector with quicksort in place according to the result of
-   function \"by\" applied to all values.
+   In-place \"sortpermby\".
 
 "),
 
@@ -6175,146 +5987,133 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"issorted_r",E"issorted_r(v)
+(E"Base.Sort",E"Base.Sort",E"issortedr",E"issortedr(v)
 
    Test whether a vector is in descending sorted order
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"issorted_by",E"issorted_by(by, v)
+(E"Base.Sort",E"Base.Sort",E"issortedby",E"issortedby(by, v)
 
-   Test whether a vector is sorted by the result of function \"by\"
-   applied to all values of \"v\"
+   Test whether a vector is sorted according to \"by(v)\".
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"search_sorted",E"search_sorted(a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsorted",E"searchsorted(a, x[, lo, hi])
 
    For \"a\" sorted low to high, returns the index of the first value
    \">=x\".
 
    \"lo\" and \"hi\" optionally limit the search range.
 
-   Alias for \"search_sorted_first()\"
+   Alias for \"searchsortedfirst()\"
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"search_sorted",E"search_sorted(lt, a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsorted",E"searchsorted(lt, a, x[, lo, hi])
 
-   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
-   index of the first value equal to \"x\" or following \"x\" in the
-   induced order
+   For \"a\" sorted using \"lt(x,y)\", returns the index of the first
+   value \">=x\" according to the induced order
 
    \"lo\" and \"hi\" optionally limit the search range.
 
-   Alias for \"search_sorted_first()\"
+   Alias for \"searchsortedfirst()\"
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"search_sorted_r",E"search_sorted_r(a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedr",E"searchsortedr(a, x[, lo, hi])
 
    For \"a\" sorted high to low, returns the index of the first value
    \"<=x\".
 
    \"lo\" and \"hi\" optionally limit the search range.
 
-   Alias for \"search_sorted_first_r()\"
+   Alias for \"searchsortedfirstr()\"
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"search_sorted_by",E"search_sorted_by(by, a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedby",E"searchsortedby(by, a, x[, lo, hi])
 
-   For \"a\" sorted according to the natural order of \"by(x)\" for
-   \"x\" in \"a\", returns the index of the first value equal to or
-   following \"x\" in the induced order.
+   For \"a\" sorted according to \"by(a)\", returns the index of the
+   first value \">=x\" according to the induced order.
 
    \"lo\" and \"hi\" optionally limit the search range.
 
-   Alias for \"search_sorted_first_by()\"
+   Alias for \"searchsortedfirstby()\"
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"search_sorted_first",E"search_sorted_first(a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedfirst",E"searchsortedfirst(a, x[, lo, hi])
 
-   For \"a\" sorted low to high, returns the index of the first
-   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
-   first value following \"x\" in natural order.
+   For \"a\" sorted low to high, returns the index of the first value
+   \">=x\".
 
    \"lo\" and \"hi\" optionally limit the search range.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"search_sorted_first",E"search_sorted_first(lt, a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedfirst",E"searchsortedfirst(lt, a, x[, lo, hi])
 
    For \"a\" sorted using ordering function \"lt(x,y)\", returns the
-   index of the first occurance of \"x\", or if \"x\" is not in \"a\",
-   the index of the first value following \"x\" in the induced order.
+   index of the first value \">=x\" according to the induced order.
 
    \"lo\" and \"hi\" optionally limit the search range.
 
-   Alias for \"search_sorted_first()\"
+   Alias for \"searchsortedfirst()\"
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"search_sorted_first_r",E"search_sorted_first_r(a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedfirstr",E"searchsortedfirstr(a, x[, lo, hi])
 
-   For \"a\" sorted high to low, returns the index of the first
-   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
-   first value following \"x\" in reverse natural order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"search_sorted_first_by",E"search_sorted_first_by(by, a, x[, lo, hi])
-
-   For \"a\" sorted according to the natural order of \"by(x)\" for
-   \"x\" in \"a\", returns the index of the first occurance of \"x\",
-   or if \"x\" is not in \"a\", the index of the first value following
-   \"x\" in the induced order.
+   For \"a\" sorted high to low, returns the index of the first value
+   \"<=x\".
 
    \"lo\" and \"hi\" optionally limit the search range.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"search_sorted_last",E"search_sorted_last(a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedfirstby",E"searchsortedfirstby(by, a, x[, lo, hi])
 
-   For \"a\" sorted low to high, returns the index of the last
-   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
-   last value preceding \"x\" in natural order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"search_sorted_last",E"search_sorted_last(lt, a, x[, lo, hi])
-
-   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
-   index of the last occurance of``x``, or if \"x\" is not in \"a\",
-   the index of the last value preceding \"x\" in the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"search_sorted_last()\"
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"search_sorted_last_r",E"search_sorted_last_r(a, x[, lo, hi])
-
-   For \"a\" sorted high to low, returns the index of the last
-   occurance of \"x\", or if \"x\" is not in \"a\", the index of the
-   last value preceding \"x\" in reverse natural order.
+   For \"a\" sorted according to \"by(a)\", returns the index of the
+   first value \">=x\" according to the induced order.
 
    \"lo\" and \"hi\" optionally limit the search range.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"search_sorted_last_by",E"search_sorted_last_by(by, a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedlast",E"searchsortedlast(a, x[, lo, hi])
 
-   For \"a\" sorted according to the natural order of \"by(x)\" for
-   \"x\" in \"a\", returns the index of the last occurance of \"x\",
-   or if \"x\" is not in \"a\", the index of the last value preceding
-   \"x\" in the induced order.
+   For \"a\" sorted low to high, returns the index of the last value
+   \"<=x\".
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"searchsortedlast",E"searchsortedlast(lt, a, x[, lo, hi])
+
+   For \"a\" sorted low to high, returns the index of the last value
+   \"<=x\" according to the induced order.
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+   Alias for \"searchsortedlast()\"
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"searchsortedlastr",E"searchsortedlastr(a, x[, lo, hi])
+
+   For \"a\" sorted high to low, returns the index of the last value
+   \">=x\".
+
+   \"lo\" and \"hi\" optionally limit the search range.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"searchsortedlastby",E"searchsortedlastby(by, a, x[, lo, hi])
+
+   For \"a\" sorted according to \"by(a)\", returns the index of the
+   last value \"<=x\" according to the induced order.
 
    \"lo\" and \"hi\" optionally limit the search range.
 
@@ -6346,29 +6145,29 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"select_r",E"select_r(v, k)
+(E"Base.Sort",E"Base.Sort",E"selectr",E"selectr(v, k)
 
    Find the element in position \"k\" in the reverse sorted vector
    \"v\", without sorting.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"select_r!",E"select_r!(v, k)
+(E"Base.Sort",E"Base.Sort",E"selectr!",E"selectr!(v, k)
 
-   Version of \"select_r\" which permutes the input vector in place.
+   Version of \"selectr\" which permutes the input vector in place.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"select_by",E"select_by(by, v, k)
+(E"Base.Sort",E"Base.Sort",E"selectby",E"selectby(by, v, k)
 
    Find the element in position \"k\" in the vector \"v\" as if sorted
-   by sort_by, without sorting.
+   by sortby, without sorting.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"select_by!",E"select_by!(by, v, k)
+(E"Base.Sort",E"Base.Sort",E"selectby!",E"selectby!(by, v, k)
 
-   Version of \"select_by\" which permutes the input vector in place.
+   Version of \"selectby\" which permutes the input vector in place.
 
 "),
 

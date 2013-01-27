@@ -853,7 +853,7 @@ function (==)(A::DArray, B::DArray)
     if size(A) != size(B)
         return false
     end
-    mapreduce(all, fetch,
+    mapreduce(fetch, all,
               { @spawnat p localize(A)==localize(B,A) for p in procs(A) })
 end
 
@@ -861,18 +861,18 @@ function (!=)(A::DArray, B::DArray)
     if size(A) != size(B)
         return true
     end
-    mapreduce(any, fetch,
+    mapreduce(fetch, any,
               { @spawnat p localize(A)!=localize(B,A) for p in procs(A) })
 end
 
 function reduce(f, v::DArray)
-    mapreduce(f, fetch,
+    mapreduce(fetch, f,
               { @spawnat p reduce(f,localize(v)) for p = procs(v) })
 end
 
-function mapreduce(op, f, v::DArray)
-    mapreduce(op, fetch,
-              { @spawnat p mapreduce(op,f,localize(v)) for p = procs(v) })
+function mapreduce(f, op, v::DArray)
+    mapreduce(fetch, op,
+              { @spawnat p mapreduce(f,op,localize(v)) for p = procs(v) })
 end
 
 sum(d::DArray) = reduce(+, d)
@@ -895,7 +895,7 @@ function sum{T}(A::DArray{T}, d::Int)
     sz = ntuple(ndims(A), i->(i==d ? 1 : size(A,i)))
     if d == distdim(A)
         darray(S, sz, distdim(A)) do T,lsz,da
-            mapreduce(+, fetch,
+            mapreduce(fetch, +,
                       {@spawnat p sum(localize(A),d) for p in procs(A)})
         end
     else

@@ -30,7 +30,7 @@ static char *extensions[] = { ".so", "" };
 
 extern char *julia_home;
 
-#if !defined(__APPLE__) && !defined(_WIN32)
+#if defined(__linux__)
 char *jl_lookup_soname(char *pfx, size_t n);
 #endif
 
@@ -89,7 +89,7 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
         error = jl_uv_dlopen(path, handle);
         if (!error) goto done;
     }
-#if !defined(__APPLE__) && !defined(_WIN32)
+#if defined(__linux__)
     char *soname = jl_lookup_soname(modname, strlen(modname));
     error = (soname==NULL) || jl_uv_dlopen(soname, handle);
     if (!error) goto done;

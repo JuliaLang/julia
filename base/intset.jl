@@ -6,7 +6,7 @@ type IntSet
     IntSet() = new(zeros(Uint32,256>>>5), 256, false)
 end
 
-IntSet(args...) = (s=IntSet(); for a in args; add(s,a); end; s)
+IntSet(args...) = (s=IntSet(); for a in args; add!(s,a); end; s)
 
 similar(s::IntSet) = IntSet()
 
@@ -26,7 +26,7 @@ function resize(s::IntSet, top::Integer)
     s.limit
 end
 
-function add(s::IntSet, n::Integer)
+function add!(s::IntSet, n::Integer)
     if n >= s.limit
         if s.fill1s
             return s
@@ -39,53 +39,64 @@ function add(s::IntSet, n::Integer)
     return s
 end
 
-function add_each(s::IntSet, ns)
+function add_each!(s::IntSet, ns)
     for n in ns
-        add(s, n)
+        add!(s, n)
     end
     return s
 end
 
-# TODO: make match Dict behavior somehow?
-function delete!(s::IntSet, n::Integer)
+function delete!(s::IntSet, n::Integer, deflt)
     if n >= s.limit
         if s.fill1s
             lim = int(n + div(n,2))
             resize(s, lim)
         else
-            return s
+            return deflt
         end
     end
-    s.bits[n>>5 + 1] &= ~(uint32(1)<<(n&31))
-    return s
+    mask = uint32(1)<<(n&31)
+    idx = n>>5 + 1
+    b = s.bits[idx]
+    if (b&mask)==0; return deflt; end
+    s.bits[idx] = b&~mask
+    return n
 end
 
-function del_each(s::IntSet, ns)
+function delete!(s::IntSet, n::Integer)
+    if delete!(s, n, n+1) == n+1
+        throw(KeyError(n))
+    end
+    return n
+end
+
+function del_each!(s::IntSet, ns)
     for n in ns
         delete!(s, n)
     end
     return s
 end
 
-setdiff(a::IntSet, b::IntSet) = del_each(copy(a),b)
+setdiff(a::IntSet, b::IntSet) = del_each!(copy(a),b)
+symdiff(a::IntSet, b::IntSet) = a $ b
 
 function empty!(s::IntSet)
     s.bits[:] = 0
     return s
 end
 
-function toggle(s::IntSet, n::Integer)
+function symdiff!(s::IntSet, n::Integer)
     if n >= s.limit
         lim = int(n + dim(n,2))
         resize(s, lim)
     end
     s.bits[n>>5 + 1] $= (uint32(1)<<(n&31))
-   return s
+    return s
 end
 
-function toggle_each(s::IntSet, ns)
+function symdiff!(s::IntSet, ns)
    for n in ns
-       toggle(s, n)
+       toggle!(s, n)
    end
    return s
 end
@@ -117,19 +128,15 @@ end
 isempty(s::IntSet) =
     !s.fill1s && ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)==0
 
-function choose(s::IntSet)
+function first(s::IntSet)
     n = next(s,0)[1]
     if n >= s.limit
-        error("choose: set is empty")
+        error("first: set is empty")
     end
     return n
 end
 
-function pop!(s::IntSet)
-    n = choose(s)
-    delete!(s, n)
-    n
-end
+shift!(s::IntSet) = delete!(s, first(s))
 
 length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)) +
     (s.fill1s ? typemax(Int) - s.limit : 0)
@@ -175,7 +182,7 @@ end
 
 union(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? union!(copy(s1), s2) : union!(copy(s2), s1))
 
-add_each(s::IntSet, s2::IntSet) = union!(s, s2)
+add_each!(s::IntSet, s2::IntSet) = union!(s, s2)
 
 function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
@@ -206,7 +213,7 @@ end
 
 complement(s::IntSet) = complement!(copy(s))
 
-function xor!(s::IntSet, s2::IntSet)
+function symdiff!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         resize(s, s2.limit)
     end
@@ -223,7 +230,8 @@ function xor!(s::IntSet, s2::IntSet)
     s
 end
 
-($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(copy(s1), s2) : xor!(copy(s2), s1))
+($)(s1::IntSet, s2::IntSet) =
+    (s1.limit >= s2.limit ? symdiff!(copy(s1), s2) : symdiff!!(copy(s2), s1))
 
 |(s::IntSet, s2::IntSet) = union(s, s2)
 (&)(s::IntSet, s2::IntSet) = intersect(s, s2)

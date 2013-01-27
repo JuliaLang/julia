@@ -26,6 +26,14 @@ r = [5:-1:1]
 @test r[4]==2
 @test r[5]==1
 
+let
+    span = 5:20
+    r = -7:3:42
+    @test findin(r, span) == 5:10
+    r = 15:-2:-38
+    @test findin(r, span) == 1:6
+end
+
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
 @test X[2,3] == 8
@@ -133,7 +141,7 @@ begin
     for id in seq
         if id > 0
             x = xs[id]
-            add(s, x)
+            add!(s, x)
             @test has(s, x)                 # check that x can be found
         else
             delete!(s, xs[-id])
@@ -148,7 +156,7 @@ end
 @test !isequal({1 => 1}, {2 => 1})
 
 # Generate some data to populate dicts to be compared
-data_in = [ (randi(1000), randstring(2)) for _ in 1:1001 ]
+data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
 
 # Populate the first dict
 d1 = Dict{Int, String}(length(data_in))
@@ -158,7 +166,7 @@ end
 data_in = pairs(d1)
 # shuffle the data
 for i in 1:length(data_in)
-    j = randi(length(data_in))
+    j = rand(1:length(data_in))
     data_in[i], data_in[j] = data_in[j], data_in[i]
 end
 # Inserting data in different (shuffled) order should result in
@@ -172,10 +180,10 @@ end
 d3 = copy(d2)
 d4 = copy(d2)
 # Removing an item gives different dict
-delete!(d1, data_in[randi(length(data_in))][1])
+delete!(d1, data_in[rand(1:length(data_in))][1])
 @test !isequal(d1, d2)
 # Changing a value gives different dict
-d3[data_in[randi(length(data_in))][1]] = randstring(3)
+d3[data_in[rand(1:length(data_in))][1]] = randstring(3)
 !isequal(d1, d3)
 # Adding a pair gives different dict
 d4[1001] = randstring(3)
@@ -220,7 +228,7 @@ d4[1001] = randstring(3)
 s = Set()
 @test isempty(s)
 for i in 1:1000
-    add(s, i)
+    add!(s, i)
     @test (length(s) == i)
 end
 
@@ -255,14 +263,10 @@ data_out = elements(s)
 # no duplicates
 s = Set(1,2,3)
 @test length(s) == 3
-add(s,2)
+add!(s,2)
 @test length(s) == 3
 delete!(s,2)
 @test length(s) == 2
-
-# get
-@test get(Set(1,2,3), 2, "ignored") == true
-@test get(Set(1,  3), 2, "ignored") == false
 
 # union
 s = union(Set(1,2), Set(3,4))
@@ -275,6 +279,7 @@ s = intersect(Set(1,2), Set(3,4))
 @test isequal(s, Set())
 s = intersect(Set(5,6,7,8), Set(7,8,9))
 @test isequal(s, Set(7,8))
+@test isequal(intersect(Set(2,3,1), Set(4,2,3), Set(5,4,3,2)), Set(2,3))
 
 # setdiff
 @test isequal(setdiff(Set(1,2,3), Set()), Set(1,2,3))
@@ -302,12 +307,12 @@ end
     
 # add_each
 s = Set(1,3,5,7)
-add_each(s,(2,3,4,5))
+add_each!(s,(2,3,4,5))
 @test isequal(s,Set(1,2,3,4,5,7))
 
 # del_each
 s = Set(1,3,5,7)
-del_each(s,(3,5))
+del_each!(s,(3,5))
 @test isequal(s,Set(1,7))
 
 # similar
@@ -323,8 +328,8 @@ data_in = (1,2,9,8,4)
 s = Set(data_in...)
 c = copy(s)
 @test isequal(s,c)
-add(s,100)
-add(c,200)
+add!(s,100)
+add!(c,200)
 @test !has(c, 100)
 @test !has(s, 200)
 
@@ -335,7 +340,7 @@ for data_in in ((7,8,4,5),
 
     s_new = Set()
     for el in s
-        add(s_new, el)
+        add!(s_new, el)
     end
     @test isequal(s, s_new)
     

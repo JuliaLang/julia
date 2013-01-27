@@ -265,14 +265,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 	    jl_module_using(jl_current_module, m);
 	}
 	else {
-            void **table = m->bindings.table;
-            for(size_t i=1; i < m->bindings.size; i+=2) {
-                if (table[i] != HT_NOTFOUND) {
-                    jl_binding_t *b = (jl_binding_t*)table[i];
-                    if (b->exportp && (b->owner==m || b->imported))
-                        jl_module_import(jl_current_module, m, b->name);
-                }
-            }
+            jl_module_importall(jl_current_module, m);
         }
         return jl_nothing;
     }
@@ -435,8 +428,7 @@ void jl_reinstantiate_inner_types(jl_tag_type_t *t);
 
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
 {
-    size_t i;
-    for(i=0; i < jl_tuple_len(t); i++) {
+    for(size_t i=0; i < jl_tuple_len(t); i++) {
         jl_value_t *elt = jl_tupleref(t,i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
@@ -494,7 +486,17 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     assert(jl_is_function(f));
     assert(jl_is_tuple(argtypes));
     assert(jl_is_tuple(t));
-    jl_check_type_tuple(argtypes, name, "method definition");
+
+    for(size_t i=0; i < jl_tuple_len(argtypes); i++) {
+        jl_value_t *elt = jl_tupleref(argtypes,i);
+        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+            jl_lambda_info_t *li = f->linfo;
+            jl_errorf("invalid type for argument %s in method definition for %s at %s:%d",
+                      ((jl_sym_t*)jl_arrayref(jl_lam_args((jl_expr_t*)li->ast),i))->name,
+                      name->name, li->file->name, li->line);
+        }
+    }
+
     for(size_t i=0; i < jl_tuple_len(t); i++) {
         if (!jl_is_typevar(jl_tupleref(t,i)))
             jl_type_error_rt(name->name, "method definition",

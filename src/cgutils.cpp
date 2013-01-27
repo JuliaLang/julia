@@ -85,6 +85,32 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
     return jl_pvalue_llvmt;
 }
 
+static Type *julia_struct_to_llvm(jl_value_t *jt) {
+    if (jl_is_struct_type(jt) && !jl_is_array_type(jt)) {
+        if (!jl_is_leaf_type(jt))
+           return NULL;
+        jl_struct_type_t *jst = (jl_struct_type_t*)jt;
+        if (jst->struct_decl == NULL) {
+            size_t ntypes = jl_tuple_len(jst->types);
+            if (ntypes == 0)
+                return NULL;
+            std::vector<Type *> latypes(0);
+            size_t i;
+            for(i = 0; i < ntypes; i++) {
+                jl_value_t *ty = jl_tupleref(jst->types, i);
+                Type *lty = julia_type_to_llvm(ty);
+                if (lty == jl_pvalue_llvmt)
+                    return NULL;
+                latypes.push_back(lty);
+            }
+            jst->struct_decl = (void*)StructType::create(latypes, jst->name->name->name);
+        }
+        Type *t = (Type*)jst->struct_decl;
+        return t;
+    }
+    return julia_type_to_llvm(jt);
+}
+
 // NOTE: llvm cannot express all julia types (for example unsigned),
 // so this is an approximation. it's only correct if the associated LLVM
 // value is not tagged with our value name hack.
@@ -184,10 +210,13 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
 {
     if (jt == (jl_value_t*)jl_any_type)
         return v;
-    if (has_julia_type(v) && julia_type_of(v) == jt)
+    if (has_julia_type(v)) {
+        if (julia_type_of(v) == jt)
+            return v;
+    }
+    else if (julia_type_of_without_metadata(v,false) == jt) {
         return v;
-    if (julia_type_of_without_metadata(v,false) == jt)
-        return v;
+    }
     if (dyn_cast<Instruction>(v) == NULL)
         v = NoOpCast(v);
     assert(dyn_cast<Instruction>(v));
@@ -671,4 +700,26 @@ static Value *boxed(Value *v, jl_value_t *jt)
     }
     int nb = jl_bitstype_nbits(jt);
     return allocate_box_dynamic(literal_pointer_val(jt), nb, v);
+}
+
+
+static void emit_cpointercheck(Value *x, const std::string &msg,
+                           jl_codectx_t *ctx)
+{
+    Value *t = emit_typeof(x);
+    emit_typecheck(t, (jl_value_t*)jl_bits_kind, msg, ctx);
+
+    Value *istype =
+        builder.CreateICmpEQ(emit_nthptr(t, offsetof(jl_bits_type_t,name)/sizeof(char*)),
+                literal_pointer_val((jl_value_t*)jl_pointer_type->name));
+    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
+    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
+    builder.CreateCondBr(istype, passBB, failBB);
+    builder.SetInsertPoint(failBB);
+
+    emit_type_error(x, (jl_value_t*)jl_pointer_type, msg, ctx);
+
+    builder.CreateBr(passBB);
+    ctx->f->getBasicBlockList().push_back(passBB);
+    builder.SetInsertPoint(passBB);
 }

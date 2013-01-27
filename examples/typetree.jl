@@ -40,7 +40,7 @@ extra = Dict{String, String}()
 function insert_type(m,s,x,ex)
     try
         ms = m[s]
-        add(ms, x)
+        add!(ms, x)
     catch
         m[s] = Set{String}(x)
     end
