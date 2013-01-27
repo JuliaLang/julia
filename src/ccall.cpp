@@ -158,10 +158,10 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
     jl_value_t *jvt = (jl_value_t*)jl_typeof(v);
     if (addressof) {
         if (jvt == jt) {
-            if (jl_is_bits_type(jt)) {
+            if (jl_is_bits_type(jvt)) {
                 size_t osz = jl_bitstype_nbits(jt)/8;
                 return alloc_temp_arg_copy(jl_bits_data(v), osz);
-            } else if (jl_is_struct_type(jt)) {
+            } else if (jl_is_struct_type(jvt) && jl_is_leaf_type(jvt) && !jl_is_array_type(jvt)) {
                 return v + 1;
             }
         }
@@ -169,14 +169,15 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
     }
     else {
         if (jl_is_cpointer_type(jvt) && jl_tparam0(jvt) == jt) {
-            return (void*)jl_unbox_long(v);
+            return (void*)jl_unbox_voidpointer(v);
         }
     }
+
     if (((jl_value_t*)jl_uint8_type == jt ||
          (jl_value_t*)jl_int8_type == jt) && jl_is_byte_string(v)) {
         return jl_string_data(v);
     }
-    if (jl_is_array(v)) {
+    if (jl_is_array_type(jvt)) {
         if (jl_tparam0(jl_typeof(v)) == jt || jt==(jl_value_t*)jl_bottom_type)
             return ((jl_array_t*)v)->data;
         if (jl_is_cpointer_type(jt)) {
@@ -190,6 +191,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
             return temp;
         }
     }
+
  value_to_pointer_error:
     std::map<int, std::string>::iterator it = argNumberStrings.find(argn);
     if (it == argNumberStrings.end()) {
@@ -254,7 +256,11 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         if (aty == (jl_value_t*)jl_ascii_string_type || aty == (jl_value_t*)jl_utf8_string_type) {
             return builder.CreateBitCast(emit_arrayptr(emit_nthptr(jv,1)), ty);
         }
-        if (jl_is_struct_type(aty) && jl_is_leaf_type(aty)) {
+        if (jl_is_struct_type(aty) && jl_is_leaf_type(aty) && !jl_is_array_type(aty)) {
+            if (!addressOf) {
+                emit_error("ccall: expected addressOf operator", ctx);
+                return literal_pointer_val(jl_nothing);
+            }
             return builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
         }
         Value *p = builder.CreateCall4(value_to_pointer_func,
@@ -264,6 +270,8 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         return builder.CreateBitCast(p, ty);
     }
     else if (jl_is_struct_type(jt)) {
+        if (addressOf)
+            jl_error("ccall: unexpected addressOf operator"); // the only "safe" thing to emit here is the expected struct
         assert (ty->isStructTy() && (Type*)((jl_struct_type_t*)jt)->struct_decl == ty);
         jl_value_t *aty = expr_type(argex, ctx);
         if (aty != jt) {
@@ -427,7 +435,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             std::stringstream msg;
             msg << "ccall: the type of argument ";
             msg << i+1;
-            msg << " doesn't correspond to a C type";
+            msg << " doesn't correspond to a C type containing only BitsKinds";
             emit_error(msg.str(), ctx);
             return literal_pointer_val(jl_nothing);
         }
