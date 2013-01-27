@@ -1126,17 +1126,20 @@ NGINX_OBJ_TARGET = $(BUILD)/sbin/nginx
 NGINX_SRC_TARGET = nginx/objs/nginx
 NGINX_FLAGS = --with-ld-opt="-L'$(BUILD)/lib' -lpcre -Wl,-rpath,'$(BUILD)/lib' $(RPATH)"
 
+nginx/.gitignore:
+	rm -f $@
+	for x in .gitignore Makefile config.status objs; do echo /$$x >> $@; done
 nginx/auto/configure: | compile-pcre
 	(cd .. && git submodule update --init)
 	touch -c $@
-nginx/config.status: nginx/auto/configure
+nginx/config.status: nginx/auto/configure nginx/.gitignore
 	cd nginx && \
 	./auto/configure --without-http_gzip_module --without-http_rewrite_module $(NGINX_FLAGS) --with-debug --prefix=".."
 	echo 1 > $@
-$(NGINX_SRC_TARGET): nginx/config.status
+$(NGINX_SRC_TARGET): nginx/config.status nginx/.gitignore
 	$(MAKE) -C nginx
 	touch -c $@
-$(NGINX_OBJ_TARGET): $(NGINX_SRC_TARGET)
+$(NGINX_OBJ_TARGET): $(NGINX_SRC_TARGET) nginx/.gitignore
 	$(MAKE) -C nginx install DESTDIR="$(abspath $(BUILD)/bin)/"
 	touch -c $@
 
