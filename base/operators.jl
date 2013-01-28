@@ -176,7 +176,7 @@ function index_shape(I...)
 end
 
 index_shape(i::Real) = ()
-index_shape(i)       = (length(i),)
+index_shape(i)       = size(i)
 index_shape(i::Real,j::Real) = ()
 index_shape(i      ,j::Real) = (length(i),)
 index_shape(i      ,j)       = (length(i),length(j))
