@@ -35,6 +35,7 @@ end
 merge_compute_minrun(N::Int) = merge_compute_minrun(N, 6)
 
 # Galloping binary search starting at left
+# Finds the last value in v <= x
 function gallop_last(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
     i = lo
     inc = 1
@@ -49,16 +50,17 @@ function gallop_last(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
     # Binary search
     while lo < hi-1
         i = (lo+hi)>>>1
-        if !lt(o, x, v[i])
-            lo = i
-        else
+        if lt(o, x, v[i])
             hi = i
+        else
+            lo = i
         end
     end
-    hi
+    lo
 end
 
 # Galloping binary search starting at right
+# Finds the last value in v <= x
 function rgallop_last(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
     i = hi
     dec = 1
@@ -73,16 +75,17 @@ function rgallop_last(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
     # Binary search
     while lo < hi-1
         i = (lo+hi)>>>1
-        if !lt(o, x, v[i])
-            lo = i
-        else
+        if lt(o, x, v[i])
             hi = i
+        else
+            lo = i
         end
     end
-    hi
+    lo
 end
 
 # Galloping binary search starting at left
+# Finds the first value in v >= x
 function gallop_first(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
     i = lo
     inc = 1
@@ -107,6 +110,7 @@ function gallop_first(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
 end
 
 # Galloping binary search starting at right
+# Finds the first value in v >= x
 function rgallop_first(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
     i = hi
     dec = 1
@@ -195,7 +199,7 @@ end
 function merge(o::Ordering, v::AbstractVector, a::Run, b::Run, state::MergeState)
 
     # First elements in a <= b[1] are already in place
-    a = gallop_last(o, v, v[first(b)], first(a), last(a)) : last(a)
+    a = gallop_last(o, v, v[first(b)], first(a), last(a))+1: last(a)
 
     if length(a) == 0  return  end
 
@@ -272,7 +276,7 @@ function merge_lo(o::Ordering, v::AbstractVector, a::Run, b::Run, state::MergeSt
                 if from_a > length(a) || from_b > last(b) break end
 
                 # Copy the next run from a
-                a_run = from_a : gallop_last(o, v_a, v[from_b], from_a, length(a)) - 1
+                a_run = from_a : gallop_last(o, v_a, v[from_b], from_a, length(a))
                 i_end = i + length(a_run) - 1
                 v[i:i_end] = v_a[a_run]
                 i = i_end + 1
@@ -323,7 +327,7 @@ function merge_hi(o::Ordering, v::AbstractVector, a::Run, b::Run, state::MergeSt
             # Compare and copy element by element
             count_a = count_b = 0
             while from_a >= first(a) && from_b >= 1
-                if lt(o, v[from_a], v_b[from_b])
+                if !lt(o, v_b[from_b], v[from_a])
                     v[i] = v_b[from_b]
                     from_b -= 1
                     count_a = 0
@@ -367,7 +371,7 @@ function merge_hi(o::Ordering, v::AbstractVector, a::Run, b::Run, state::MergeSt
                 if from_a < first(a) || from_b < 1 break end
                 
                 # Copy the next run from a
-                a_run = rgallop_last(o, v, v_b[from_b], first(a), from_a) : from_a
+                a_run = rgallop_last(o, v, v_b[from_b], first(a), from_a) + 1: from_a
                 i_start = i - length(a_run) + 1
                 v[i_start:i] = v[a_run]
                 i = i_start - 1
