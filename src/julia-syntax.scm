@@ -105,8 +105,9 @@
       (let ((arg2 (caddr e)))
 	(if (pair? arg2)
 	    (let ((g (gensy)))
-	      `(call & (call ,(cadr e) ,(car e) (= ,g ,arg2))
-		     ,(expand-compare-chain (cons g (cdddr e)))))
+	      `(block (= ,g ,arg2)
+		      (call & (call ,(cadr e) ,(car e) ,g)
+			    ,(expand-compare-chain (cons g (cdddr e))))))
 	    `(call & (call ,(cadr e) ,(car e) ,arg2)
 		   ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
@@ -469,6 +470,15 @@
 	  (loop (if isseq F (cdr F)) (cdr A) stmts
 		(list* rt (ccall-conversion ty ca) C))))))
 
+(define (replace-return e bb ret retval)
+  (cond ((or (atom? e) (quoted? e)) e)
+	((eq? (car e) 'lambda) e)
+	((eq? (car e) 'return)
+	 `(block (= ,ret true)
+		 (= ,retval ,(cadr e))
+		 (break ,bb)))
+	(else (map (lambda (x) (replace-return x bb ret retval)) e))))
+
 ;; patterns that introduce lambdas
 (define binding-form-patterns
   (pattern-set
@@ -565,18 +575,28 @@
    ;; try with finally
    (pattern-lambda (try tryb var catchb finalb)
 		   (let ((err (gensy))
+			 (ret (gensy))
+			 (retval (gensy))
+			 (bb  (gensy))
 			 (val (gensy)))
-		     `(scope-block
-		       (block
-			(= ,err false)
-			(= ,val (try ,(if catchb
-					  `(try ,tryb ,var ,catchb)
-					  tryb)
-				     #f
-				     (= ,err true)))
-			,finalb
-			(if ,err (ccall 'jl_rethrow Void (tuple)))
-			,val))))
+		     (let ((tryb   (replace-return tryb bb ret retval))
+			   (catchb (replace-return catchb bb ret retval)))
+		       `(scope-block
+			 (block
+			  (local ,retval)
+			  (= ,err false)
+			  (= ,ret false)
+			  (break-block
+			   ,bb
+			   (= ,val (try ,(if catchb
+					     `(try ,tryb ,var ,catchb)
+					     tryb)
+					#f
+					(= ,err true))))
+			  ,finalb
+			  (if ,err (ccall 'jl_rethrow Void (tuple)))
+			  (if ,ret (return ,retval))
+			  ,val)))))
 
    ;; try - catch
    (pattern-lambda (try tryb var catchb)
@@ -861,7 +881,7 @@
    (pattern-lambda (curly type . elts)
 		   `(call (top apply_type) ,type ,@elts))
 
-   ; call with splat
+   ;; call with splat
    (pattern-lambda (call f ... (... _) ...)
 		   (let ((argl (cddr __)))
 		     ; wrap sequences of non-... arguments in tuple()

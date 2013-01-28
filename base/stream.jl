@@ -20,7 +20,11 @@ typealias UVStream AsyncStream
 
 const _sizeof_uv_pipe = ccall(:jl_sizeof_uv_pipe_t,Int32,())
 
-eof(s::AsyncStream) = !s.open && nb_available(s.buffer)<=0
+function eof(s::AsyncStream)
+    start_reading(s)
+    wait_readnb(s,1)
+    !s.open && nb_available(s.buffer)<=0
+end
 
 type NamedPipe <: AsyncStream
     handle::Ptr{Void}
@@ -31,7 +35,8 @@ type NamedPipe <: AsyncStream
     readnotify::Vector{WaitTask}
     closecb::Callback
     closenotify::Vector{WaitTask}
-    NamedPipe() = new(C_NULL,PipeString(),false,true,false,WaitTask[],false,WaitTask[])
+    NamedPipe() = new(C_NULL,PipeString(),false,true,false,WaitTask[],false,
+                      WaitTask[])
 end
 
 show(io::IO,stream::NamedPipe) = print(io,"NamedPipe(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
@@ -50,55 +55,8 @@ end
 
 show(io::IO,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
 
-abstract Socket <: AsyncStream
-
-type TcpSocket <: Socket
-    handle::Ptr{Void}
-    open::Bool
-    line_buffered::Bool
-    buffer::Buffer
-    readcb::Callback
-    readnotify::Vector{WaitTask}
-    ccb::Callback
-    connectnotify::Vector{WaitTask}
-    closecb::Callback
-    closenotify::Vector{WaitTask}
-    TcpSocket(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],false,WaitTask[],false,WaitTask[])
-    function TcpSocket()
-        this = TcpSocket(C_NULL,false)
-        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},TcpSocket),globalEventLoop(),this)
-        if(this.handle == C_NULL)
-            error("Failed to start reading: ",_uv_lasterror())
-        end
-        this
-    end
-end
-
-show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",sock.open?"connected,":"disconnected,",nb_available(sock.buffer)," bytes waiting)")
-
-type UdpSocket <: Socket
-    handle::Ptr{Void}
-    open::Bool
-    line_buffered::Bool
-    buffer::Buffer
-    readcb::Callback
-    readnotify::Vector{WaitTask}
-    ccb::Callback
-    connectnotify::Vector{WaitTask}
-    closecb::Callback
-    closenotify::Vector{WaitTask}
-    UdpSocket(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],false,WaitTask[],false,WaitTask[])
-    function UdpSocket()
-        this = UdpSocket(C_NULL,false)
-        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},UdpSocket),globalEventLoop(),this)
-        this
-    end
-end
-
 uvtype(::AsyncStream) = UV_STREAM
 uvhandle(stream::AsyncStream) = stream.handle
-
-show(io::IO,sock::UdpSocket) = print(io,"TcpSocket(",sock.open?"connected,":"disconnected,",nb_available(sock.buffer)," bytes waiting)")
 
 copy(s::TTY) = TTY(s.handle,s.open)
 
@@ -111,7 +69,7 @@ make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 function _uv_tty2tty(handle::Ptr{Void})
     tty = TTY(handle,true)
     tty.line_buffered = false
-    ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),handle,tty)
+    ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),handle,tty)
     tty
 end
 
@@ -126,30 +84,14 @@ end
 
 #@init_stdio
 
-## SOCKETS ##
-
 function _init_buf(stream::AsyncStream)
     if(!isa(stream.buf,IOStream))
         stream.buf=memio()
     end
 end
 
-_jl_tcp_init(loop::Ptr{Void}) = ccall(:jl_tcp_init,Ptr{Void},(Ptr{Void},),loop)
-_jl_udp_init(loop::Ptr{Void}) = ccall(:jl_udp_init,Ptr{Void},(Ptr{Void},),loop)
 
-abstract IpAddr
-
-type Ip4Addr <: IpAddr
-    port::Uint16
-    host::Uint32
-end
-
-type Ip6Addr <: IpAddr
-    port::Uint16
-    host::Array{Uint8,1} #this should be fixed at 16 bytes if fixed size arrays are implemented
-    flow_info::Uint32
-    scope::Uint32
-end
+## SOCKETS ##
 
 function tasknotify(waittasks::Vector{WaitTask}, args...)
     newwts = WaitTask[]
@@ -233,48 +175,14 @@ macro waitfilter(fcn,notify,filter_fcn,types)
     end
 end
 
+wait_readnb(a::AsyncStream,b::Int) = wait_readnb((a,b))
+
 #general form of generated calls is: wait_<for_event>(o::NotificationObject, [args::AsRequired...])
 @waitfilter wait_connected connectnotify wait_connect_filter AsyncStream
 @waitfilter wait_readable readnotify wait_readable_filter AsyncStream
 @waitfilter wait_readline readnotify wait_readline_filter AsyncStream
 @waitfilter wait_readnb readnotify wait_readnb_filter (AsyncStream,Int)
 
-wait_readnb(a::AsyncStream,b::Int) = wait_readnb((a,b))
-function wait_accept(server::TcpSocket)
-    client = TcpSocket()
-    err = accept(server,client)
-    if err == 0
-        return client
-    else
-        err = _uv_lasterror()
-        if err != 4 #EAGAIN
-            error("accept error: ", err, "\n")
-        end
-    end
-    ct = current_task()
-    tw = WaitTask(ct)
-    while true
-        push!(server.connectnotify,tw)
-        ct.runnable = false
-        args = yield()
-        if isa(args,InterruptException)
-            error(args)
-        end
-        status = args[2]::Int32
-        if status == -1
-            error("listen error: ", _uv_lasterror(), "\n")
-        end
-        err = accept(server,client)
-        if err == 0
-            return client
-        else
-            err = _uv_lasterror()
-            if err != 4 #EAGAIN
-                error("accept error: ", err, "\n")
-            end
-        end
-    end
-end
     
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
@@ -293,39 +201,6 @@ function _uv_hook_connectioncb(sock::AsyncStream, status::Int32)
     end
     tasknotify(sock.connectnotify, sock, status)
 end
-
-listen(sock::AsyncStream,backlog::Integer) = ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog)
-listen(sock::AsyncStream) = listen(sock,4)
-
-bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
-
-_jl_tcp_accept(server::Ptr{Void},client::Ptr{Void}) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
-function accept(server::TcpSocket,client::TcpSocket)
-    err = _jl_tcp_accept(server.handle,client.handle)
-    if err == 0
-        client.open = true
-    end
-    err
-end
-connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,addr.host,hton(addr.port))
-
-function open_any_tcp_port(preferred_port::Uint16,cb::Callback)
-    addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
-    while true
-        socket = TcpSocket()
-        if bind(socket,addr)!=0
-            error("open_any_tcp_port: could not bind to socket")
-        end
-        socket.ccb = cb
-        if(listen(socket) == 0)
-            return (addr.port,socket)
-        end
-        socket.open = true
-        close(socket)
-        addr.port+=1;
-    end
-end
-open_any_tcp_port(preferred_port::Integer,cb::Callback)=open_any_tcp_port(uint16(preferred_port),cb)
 
 ## BUFFER ##
 ## Allocate a simple buffer
@@ -393,7 +268,7 @@ type SingleAsyncWork <: AsyncWork
             return new(cb,C_NULL)
         end
         this=new(cb)
-        this.handle=ccall(:jl_make_async,Ptr{Void},(Ptr{Void},SingleAsyncWork),loop,this)
+        this.handle=ccall(:jl_make_async,Ptr{Void},(Ptr{Void},Any),loop,this)
         this
     end
 end
@@ -403,7 +278,7 @@ type IdleAsyncWork <: AsyncWork
     handle::Ptr{Void}
     function IdleAsyncWork(loop::Ptr{Void},cb::Function)
         this=new(cb)
-        this.handle=ccall(:jl_make_idle,Ptr{Void},(Ptr{Void},IdleAsyncWork),loop,this)
+        this.handle=ccall(:jl_make_idle,Ptr{Void},(Ptr{Void},Any),loop,this)
         this
     end
 end
@@ -413,7 +288,7 @@ type TimeoutAsyncWork <: AsyncWork
     handle::Ptr{Void}
     function TimeoutAsyncWork(loop::Ptr{Void},cb::Function)
         this=new(cb)
-        this.handle=ccall(:jl_make_timer,Ptr{Void},(Ptr{Void},TimeoutAsyncWork),loop,this)
+        this.handle=ccall(:jl_make_timer,Ptr{Void},(Ptr{Void},Any),loop,this)
         this
     end
 end
@@ -464,8 +339,8 @@ run_event_loop() = run_event_loop(globalEventLoop())
 malloc_pipe() = c_malloc(_sizeof_uv_pipe)
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool,pipe::AsyncStream)
     #make the pipe an unbuffered stream for now
-    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,AsyncStream), read_end, 0, readable_julia_only, pipe)
-    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,AsyncStream), write_end, 1, readable_julia_only, pipe)
+    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,Any), read_end, 0, readable_julia_only, pipe)
+    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,Any), write_end, 1, readable_julia_only, pipe)
     error = ccall(:uv_pipe_link, Int, (Ptr{Void}, Ptr{Void}), read_end, write_end)
     if error != 0 # don't use assert here as $string isn't be defined yet
         error("uv_pipe_link failed")
@@ -570,13 +445,10 @@ function write{T}(s::AsyncStream, a::Array{T})
         invoke(write,(IO,Array),s,a)
     end
 end
-write(s::AsyncStream, p::Ptr, nb::Integer) = ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint), handle(s), p, uint(nb))
-_write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint), handle(s), p, uint(nb))
-
-_jl_connect_raw(sock::TcpSocket,sockaddr::Ptr{Void}) = ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void}),sock.handle,sockaddr)
-_jl_getaddrinfo(loop::Ptr{Void},host::ByteString,service::Ptr{Void},cb::Function) = ccall(:jl_getaddrinfo,Int32,(Ptr{Void},Ptr{Uint8},Ptr{Uint8},Function),loop,host,service,cb)
-_jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
-_jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},Uint16),ptr,port)
+write(s::AsyncStream, p::Ptr, nb::Integer) = 
+    ccall(:jl_write, Int,(Ptr{Void}, Ptr{Void}, Uint),handle(s), p, uint(nb))
+_write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = 
+    ccall(:jl_write, Int,(Ptr{Void}, Ptr{Void}, Uint),handle(s),p,uint(nb))
 
 ## Libuv error handling
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
@@ -589,7 +461,7 @@ type UVError <: Exception
     uv_code::Int32
     system_code::Int32
     UVError(p::String)=new(p,_uv_lasterror(),_uv_lastsystemerror())
-    UVError(p::String,uv::Int,system::Int)=new(p,uv,system)
+    UVError(p::String,uv::Integer,system::Integer)=new(p,uv,system)
 end
 
 struverror(err::UVError) = bytestring(ccall(:jl_uv_strerror,Ptr{Uint8},(Int32,Int32),err.uv_code,err.system_code))
@@ -600,33 +472,12 @@ uv_error(prefix) = uv_error(prefix, _uv_lasterror() != 0)
 
 show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
 
-function getaddrinfo_callback(sock::TcpSocket,status::Int32,host::ByteString,port::Uint16,addrinfo_list::Ptr{Void})
-    #println("getaddrinfo_callback")
-    if(status==-1)
-        error("Name lookup failed "*host)
-    end
-    sockaddr = _jl_sockaddr_from_addrinfo(addrinfo_list) #only use first entry of the list for now
-    _jl_sockaddr_set_port(sockaddr,hton(port))
-    err = _jl_connect_raw(sock,sockaddr)
-    if(err != 0)
-        error("Failed to connect to host "*host*":"*string(port)*" #"*string(_uv_lasterror()))
-    end
-end
-
 function readall(s::IOStream)
     dest = memio()
     ccall(:ios_copyall, Uint, (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
     takebuf_string(dest)
 end
 
-function connect_to_host(host::ByteString,port::Integer) #TODO: handle errors
-    port = uint16(port)
-    sock = TcpSocket()
-    err = _jl_getaddrinfo(globalEventLoop(),host,C_NULL,
-        (addrinfo::Ptr{Void},status::Int32) -> getaddrinfo_callback(sock,status,host,port,addrinfo))
-    if(err!=0)
-        error("Failed to  initilize request to resolve hostname: ",host)
-    end
-    wait_connected(sock)
-    return sock
-end
+listen(sock::AsyncStream,backlog::Integer) = (err = ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog); err != -1 ? (sock.open = true): false)
+listen(sock::AsyncStream) = listen(sock,4)
+#listen(path::String)

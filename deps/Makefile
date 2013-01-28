@@ -18,15 +18,15 @@ CONFIG_GUESS := $(shell ./config.guess)
 CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
 endif
 
-#autoconf configure-driven scripts: llvm readline pcre arpack fftw clp unwind lighttpd gmp glpk patchelf
+#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp glpk patchelf
 #custom configure-driven script: zlib nginx
-#custom Makefile rules: openlibm Faddeeva-wrapper rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
+#custom Makefile rules: openlibm rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
 STAGE1_DEPS = uv openlibm-extras random rmath double-conversion
-STAGE2_DEPS = gmp-wrapper Faddeeva-wrapper
+STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = glpk-wrapper suitesparse-wrapper
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
@@ -53,11 +53,6 @@ endif
 ifeq ($(USE_SYSTEM_LLVM), 0)
 STAGE1_DEPS += llvm
 endif
-
-# Disable web repl
-#ifneq ($(OS),WINNT)
-#STAGE1_DEPS += lighttpd
-#endif
 
 ifeq ($(OS),WINNT)
 READLINE_VER = 5.0
@@ -556,24 +551,7 @@ get-openlibm-extras: openlibm/Makefile.extras
 configure-openlibm-extras: get-openlibm-extras
 compile-openlibm-extras: $(OPENLIBMEXT_OBJ_SOURCE)
 check-openlibm-extras: compile-openlibm-extras
-install-openlibm-extras: $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
-
-# Wrapper for openlibm/Faddeeva since ccall doesn't support C99 complex:
-$(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT): Faddeeva_wrapper.c $(OPENLIBMEXT_OBJ_TARGET)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) -I openlibm/Faddeeva Faddeeva_wrapper.c -o $@ -L $(BUILD)/lib -lopenlibm-extras $(RPATH_ORIGIN)
-	$(INSTALL_NAME_CMD)libFaddeeva_wrapper.$(SHLIB_EXT) $@
-	touch -c $@
-
-clean-Faddeeva-wrapper:
-	-rm -f $(OPENLIBMEXT_OBJ_TARGET) $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
-distclean-Faddeeva-wrapper: clean-Faddeeva-wrapper
-
-get-Faddeeva-wrapper: get-openlibm
-configure-Faddeeva-wrapper: get-openlibm
-compile-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
-check-Faddeeva-wrapper: compile-Faddeeva-wrapper
-install-Faddeeva-wrapper: $(BUILD)/lib/libFaddeeva_wrapper.$(SHLIB_EXT)
-
+install-openlibm-extras: $(OPENLIBMEXT_OBJ_TARGET)
 
 ## LIBRANDOM ##
 
@@ -1080,48 +1058,6 @@ check-suitesparse-wrapper:
 install-suitesparse-wrapper: $(BUILD)/lib/libsuitesparse_wrapper.$(SHLIB_EXT)
 
 
-## CLP ##
-CLP_OBJ_SOURCE = clp-$(CLP_VER)/Clp/src/.libs/libClp.$(SHLIB_EXT)
-CLP_OBJ_TARGET = $(BUILD)/lib/libClp.$(SHLIB_EXT)
-
-compile-clp: install-clp
-install-clp: $(CLP_OBJ_TARGET)
-
-clp-$(CLP_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz
-clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
-	mkdir -p clp-$(CLP_VER)
-	tar -C clp-$(CLP_VER) --strip-components 1 -zxf $<
-	touch -c $@
-clp-$(CLP_VER)/config.status: clp-$(CLP_VER)/configure
-	cd clp-$(CLP_VER) && \
-	./configure $(CONFIGURE_COMMON) MPIF77="$(FC)" MPICXX="$(CXX)" MPICC="$(CC)"
-	touch -c $@
-$(CLP_OBJ_SOURCE): clp-$(CLP_VER)/config.status
-	$(MAKE) -C clp-$(CLP_VER)
-	touch -c $@
-clp-$(CLP_VER)/checked: $(CLP_OBJ_SOURCE)
-ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C clp-$(CLP_VER) test
-endif
-	echo 1 > $@
-$(CLP_OBJ_TARGET): $(CLP_OBJ_SOURCE) clp-$(CLP_VER)/checked
-	$(MAKE) -C clp-$(CLP_VER) install
-	touch -c $@
-
-clean-clp:
-	-$(MAKE) -C clp-$(CLP_VER) clean
-	-rm -f $(CLP_OBJ_TARGET)
-distclean-clp:
-	-rm -rf clp-$(CLP_VER).tar.gz clp-$(CLP_VER)
-
-get-clp: clp-$(CLP_VER).tar.gz
-configure-clp: clp-$(CLP_VER)/config.status
-compile-clp: $(CLP_OBJ_SOURCE)
-check-clp: clp-$(CLP_VER)/checked
-install-clp: $(CLP_OBJ_TARGET)
-
-
 ## UNWIND ##
 
 LIBUNWIND_TARGET_OBJ = $(BUILD)/lib/libunwind.a
@@ -1173,17 +1109,20 @@ NGINX_OBJ_TARGET = $(BUILD)/sbin/nginx
 NGINX_SRC_TARGET = nginx/objs/nginx
 NGINX_FLAGS = --with-ld-opt="-L'$(BUILD)/lib' -lpcre -Wl,-rpath,'$(BUILD)/lib' $(RPATH)"
 
+nginx/.gitignore:
+	rm -f $@
+	for x in .gitignore Makefile config.status objs; do echo /$$x >> $@; done
 nginx/auto/configure: | compile-pcre
 	(cd .. && git submodule update --init)
 	touch -c $@
-nginx/config.status: nginx/auto/configure
+nginx/config.status: nginx/auto/configure nginx/.gitignore
 	cd nginx && \
 	./auto/configure --without-http_gzip_module --without-http_rewrite_module $(NGINX_FLAGS) --with-debug --prefix=".."
 	echo 1 > $@
-$(NGINX_SRC_TARGET): nginx/config.status
+$(NGINX_SRC_TARGET): nginx/config.status nginx/.gitignore
 	$(MAKE) -C nginx
 	touch -c $@
-$(NGINX_OBJ_TARGET): $(NGINX_SRC_TARGET)
+$(NGINX_OBJ_TARGET): $(NGINX_SRC_TARGET) nginx/.gitignore
 	$(MAKE) -C nginx install DESTDIR="$(abspath $(BUILD)/bin)/"
 	touch -c $@
 

@@ -207,7 +207,7 @@ function stringOfMasks(masks)
         for x in 0:width-1
             for color in 0:9
                 if (masks[color+1] & mask) != 0
-                    s = strcat(s, color)
+                    s = string(s, color)
                     break
                 elseif color == 9
                     s *= "."

@@ -36,22 +36,14 @@ diagmm(b::Vector, A::Matrix) =
 
 # Dot products
 
-function dot{T<:Union(Vector{Float64}, Vector{Float32})}(x::T, y::T)
-    length(x) != length(y) ? error("Inputs should be of same length") : true
-    BLAS.dot(length(x), x, 1, y, 1)
-end
-
-function dot{T<:Union(Float64, Float32), TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+dot{T<:BLAS.BlasFloat}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
+function dot{T<:BLAS.BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
     length(rx) != length(ry) ? error("Ranges should be of same length") : true
     if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
         throw(BoundsError())
     end
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
-
-Ac_mul_B(x::Vector, y::Vector) = [dot(x, y)]
-At_mul_B{T<:Real}(x::Vector{T}, y::Vector{T}) = [dot(x, y)]
-
 function dot(x::Vector, y::Vector)
     s = zero(eltype(x))
     for i=1:length(x)
@@ -59,6 +51,9 @@ function dot(x::Vector, y::Vector)
     end
     s
 end
+dot(x::Number, y::Number) = conj(x) * y
+Ac_mul_B(x::Vector, y::Vector) = [dot(x, y)]
+At_mul_B{T<:Real}(x::Vector{T}, y::Vector{T}) = [dot(x, y)]
 
 dot(x::Number, y::Number) = conj(x) * y
 

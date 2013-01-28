@@ -201,7 +201,7 @@ function runbuildscript(pkg)
     if isdir(path)
         cd(path) do
             if isfile("build.jl")
-                info(strcat("Running build script for package ", pkg))
+                info(string("Running build script for package ", pkg))
                 include("build.jl")
             end
         end
@@ -615,7 +615,7 @@ with the correct remote name for your repository."
                     touch("README.md")
                     touch("REQUIRE")
                     mkdir("src")
-                    touch(joinpath("src", strcat(pkg, ".jl")))
+                    touch(joinpath("src", string(pkg, ".jl")))
                     mkdir("test")
                     run(`git add --all`)
                     run(`git commit -m "Scaffold for Julia package $pkg"`)
@@ -652,6 +652,23 @@ end
 function package_directory(pkg::String)
     warn("Pkg.package_directory is deprecated, use Pkg.dir instead.")
     joinpath(dir(), pkg)
+end
+
+# Repository sanity check
+check_repository() = cd_pkgdir() do
+    try
+        Resolve.sanity_check()
+    catch err
+        if !isa(err, Resolve.MetadataError)
+            rethrow(err)
+        end
+        println("Packages with unsatisfiable requirements found:")
+        for (v, pp) in err.info
+            println("  $(v.package) v$(v.version) : no valid versions exist for package $pp")
+        end
+        return false
+    end
+    return true
 end
 
 end # module

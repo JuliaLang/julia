@@ -33,7 +33,6 @@ each_tagged_version(dir::String) = cd(each_tagged_version,dir)
 function each_submodule(f::Function, recursive::Bool, dir::ByteString)
     cmd = `git submodule foreach --quiet 'echo "$name $path $sha1"'`
     for line in each_line(cmd)
-        isempty(line) && break # FIXME: temporary work-around #2089
         name, path, sha1 = match(r"^(.*) (.*) ([0-9a-f]{40})$", line).captures
         cd(dir) do
             f(name, path, sha1)
@@ -97,7 +96,7 @@ function config_sections(cfg::Dict)
     sections = Set{ByteString}()
     for (key,_) in cfg
         m = match(r"^(.+)\.", key)
-        if m != nothing add(sections,m.captures[1]) end
+        if m != nothing add!(sections,m.captures[1]) end
     end
     sections
 end
@@ -112,7 +111,7 @@ function merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     for section in Bs - Ls & Rs
         filter!((k,v)->!begins_with(k,"$section."),Lc)
         filter!((k,v)->!begins_with(k,"$section."),Rc)
-        add(deleted, section)
+        add!(deleted, section)
     end
     # merge the remaining config key-value pairs
     cfg = Dict()

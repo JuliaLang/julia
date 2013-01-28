@@ -181,16 +181,16 @@ type EachLine
 end
 each_line(stream::IO) = EachLine(stream)
 
-start(itr::EachLine) = readline(itr.stream)
-function done(itr::EachLine, line)
-    if !isempty(line)
+start(itr::EachLine) = nothing
+function done(itr::EachLine, nada)
+    if !eof(itr.stream)
         return false
     end
     close(itr.stream)
     itr.ondone()
     true
 end
-next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
+next(itr::EachLine, nada) = (readline(itr.stream), nothing)
 
 function readlines(s, fx::Function...)
     a = {}
@@ -276,7 +276,7 @@ fdio(fd::Integer, own::Bool) = fdio(string("<fd ",fd,">"), fd, own)
 fdio(fd::Integer) = fdio(fd, false)
 
 function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
-    s = IOStream(strcat("<file ",fname,">"))
+    s = IOStream(string("<file ",fname,">"))
     if ccall(:ios_file, Ptr{Void},
              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
              s.ios, fname, rd, wr, cr, tr) == C_NULL
@@ -416,24 +416,35 @@ end
 readall(filename::String) = open(readall, filename)
 
 ## Character streams ##
-const _wstmp = Array(Char, 1)
+const _chtmp = Array(Char, 1)
+function peekchar(s::IOStream)
+    if ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s, _chtmp) < 0
+        return char(-1)
+    end
+    return _chtmp[1]
+end
+
+function peek(s::IOStream)
+    ccall(:ios_peekc, Int32, (Ptr{Void},), s)
+end
+
 function eatwspace(s::IOStream)
-    status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
-    while status > 0 && iswspace(_wstmp[1])
+    ch = peekchar(s); status = int(ch)
+    while status >= 0 && iswspace(ch)
         read(s, Char)  # advance one character
-        status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+        ch = peekchar(s); status = int(ch)
     end
 end
 
 function eatwspace_comment(s::IOStream, cmt::Char)
-    status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
-    while status > 0 && (iswspace(_wstmp[1]) || _wstmp[1] == cmt)
-        if _wstmp[1] == cmt
+    ch = peekchar(s); status = int(ch)
+    while status >= 0 && (iswspace(ch) || ch == cmt)
+        if ch == cmt
             readline(s)
         else
             read(s, Char)  # advance one character
         end
-        status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+        ch = peekchar(s); status = int(ch)
     end
 end
 

@@ -1,7 +1,7 @@
 
 const line_width = 60
 
-const alu = strcat( 
+const alu = string( 
    "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG",
    "GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA",
    "CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT",
@@ -37,7 +37,7 @@ end
 
 function repeat_fasta(src, n)
     k = length(src)
-    s = strcat(src, src, src[1:n % k])
+    s = string(src, src, src[1:n % k])
 
     for j = 0:div(n, line_width) - 1
         i = j * line_width % k

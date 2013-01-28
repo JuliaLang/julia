@@ -1,5 +1,3 @@
-import Sort.@in_place_matrix_op
-
 function factorial(n::Integer)
     if n < 0
         return zero(n)
@@ -70,7 +68,7 @@ function shuffle!(a::AbstractVector)
     return a
 end
 
-@in_place_matrix_op shuffle
+#@in_place_matrix_op shuffle
 
 function randperm(n::Integer)
     a = Array(typeof(n), n)

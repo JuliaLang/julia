@@ -35,7 +35,7 @@ $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl $(BUILD)/share/julia/helpdb.jl
 	$(QUIET_JULIA) cd base && \
-	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make cleanall'."
+	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make clean'. If the error persists, 'make cleanall' may help."
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
@@ -48,7 +48,7 @@ JL_LIBS = julia-release julia-debug
 # private libraries, that are installed in $(PREFIX)/lib/julia
 JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
                   fftw3f_threads glpk glpk_wrapper gmp gmp_wrapper grisu \
-                  history Faddeeva_wrapper openlibm openlibm-extras pcre \
+                  history openlibm openlibm-extras pcre \
 		  random readline Rmath spqr suitesparse_wrapper \
 		  tk_wrapper umfpack z openblas
 

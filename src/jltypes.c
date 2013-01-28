@@ -1726,7 +1726,8 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->linfo = NULL;
             nst->ctor_factory = st->ctor_factory;
             nst->instance = NULL;
-            nst->uid = 0;
+            nst->uid = 0;    
+            nst->struct_decl = NULL;
             nst->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)st->super, env,n,stack);
             jl_tuple_t *ftypes = st->types;
             if (ftypes != NULL) {
@@ -2371,27 +2372,35 @@ void jl_init_types(void)
     jl_tag_kind->ctor_factory = NULL;
     jl_tag_kind->instance = NULL;
     jl_tag_kind->uid = jl_assign_type_uid();
+    jl_tag_kind->struct_decl = NULL;
 
     jl_struct_kind->name = jl_new_typename(jl_symbol("CompositeKind"));
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
     jl_struct_kind->super = (jl_tag_type_t*)jl_type_type;
     jl_struct_kind->parameters = jl_null;
-    jl_struct_kind->names = jl_tuple(10, jl_symbol("fptr"),
-                                     jl_symbol("env"), jl_symbol("code"),
-                                     jl_symbol("name"), jl_symbol("super"),
+    jl_struct_kind->names = jl_tuple(11, jl_symbol("fptr"),
+                                     jl_symbol("env"),
+                                     jl_symbol("code"),
+                                     jl_symbol("name"),
+                                     jl_symbol("super"),
                                      jl_symbol("parameters"),
-                                     jl_symbol("names"), jl_symbol("types"),
-                                     jl_symbol(""), jl_symbol(""));
-    jl_struct_kind->types = jl_tuple(10, jl_any_type, jl_any_type, jl_any_type,
+                                     jl_symbol("names"),
+                                     jl_symbol("types"),
+                                     jl_symbol("ctor_factory"),
+                                     jl_symbol("instance"),
+                                     jl_symbol("sizeof"));
+    jl_struct_kind->types = jl_tuple(11, jl_any_type, jl_any_type, jl_any_type,
                                      jl_typename_type, jl_type_type,
                                      jl_tuple_type, jl_tuple_type,
-                                     jl_tuple_type, jl_any_type, jl_any_type);
+                                     jl_tuple_type, jl_any_type, jl_any_type,
+                                     jl_any_type); //types will be fixed later
     jl_struct_kind->fptr = jl_f_no_function;
     jl_struct_kind->env = (jl_value_t*)jl_null;
     jl_struct_kind->linfo = NULL;
     jl_struct_kind->ctor_factory = NULL;
     jl_struct_kind->instance = NULL;
     jl_struct_kind->uid = jl_assign_type_uid();
+    jl_struct_kind->struct_decl = NULL;
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
@@ -2408,6 +2417,7 @@ void jl_init_types(void)
     jl_typename_type->linfo = NULL;
     jl_typename_type->ctor_factory = NULL;
     jl_typename_type->instance = NULL;
+    jl_typename_type->struct_decl = NULL;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
     jl_sym_type->name->primary = (jl_value_t*)jl_sym_type;
@@ -2421,6 +2431,7 @@ void jl_init_types(void)
     jl_sym_type->ctor_factory = NULL;
     jl_sym_type->instance = NULL;
     jl_sym_type->uid = jl_assign_type_uid();
+    jl_sym_type->struct_decl = NULL;
 
     // now they can be used to create the remaining base kinds and types
     jl_union_kind = jl_new_struct_type(jl_symbol("UnionKind"),
@@ -2660,6 +2671,7 @@ void jl_init_types(void)
                                              jl_tuple(1,jl_bottom_type));
     jl_voidpointer_type = (jl_bits_type_t*)pointer_void;
     jl_tupleset(jl_struct_kind->types, 0, pointer_void);
+    jl_tupleset(jl_struct_kind->types, 10, jl_int32_type);
     jl_tupleset(jl_function_type->types, 0, pointer_void);
 
     jl_compute_struct_offsets(jl_struct_kind);

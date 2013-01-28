@@ -322,7 +322,7 @@ DLLEXPORT int jl_cpu_cores(void)
     return sysconf(_SC_NPROCESSORS_ONLN);
 #elif defined(__WIN32__)
     //Try to get WIN7 API method
-    GAPC gapc = (GAPC) jl_dlsym(
+    GAPC gapc = (GAPC) jl_dlsym_e(
         jl_kernel32_handle,
         "GetActiveProcessorCount"
     );

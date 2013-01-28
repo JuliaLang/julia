@@ -23,7 +23,7 @@ include("webrepl_msgtypes_h.jl")
 ###########################################
 
 # open a socket on any port
-(port,sock) = Base.open_any_tcp_port(4444,false)
+(port,sock) = Base.open_any_tcp_port(4444)
 
 # print the socket number so the server knows what it is
 println(STDOUT,int16(port))
@@ -114,7 +114,7 @@ function __socket_callback(fd)
 
         for i=1:length(__lines)
             # add the next line of input
-            __input_so_far = strcat(__input_so_far, __lines[i], "\n")
+            __input_so_far = string(__input_so_far, __lines[i], "\n")
 
             # try to parse it
             __expr = parse_input_line(__input_so_far)

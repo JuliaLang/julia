@@ -93,6 +93,8 @@ end
 @test Base.typeseq(typejoin(Union(Int,String),Int), Union(Int,String))
 @test Base.typeseq(typejoin(Union(Int,String),Int8), Any)
 
+@test promote_type(Bool,None) === Bool
+
 # ntuples
 nttest1{n}(x::NTuple{n,Int}) = n
 @test nttest1(()) == 0
@@ -378,6 +380,17 @@ begin
     end
     @test b == 42
     @test after == 1
+
+    glo = 0
+    function retfinally()
+        try
+            return 5
+        finally
+            glo = 18
+        end
+    end
+    @test retfinally() == 5
+    @test glo == 18
 end
 
 # allow typevar in Union to match as long as the arguments contain
@@ -455,9 +468,9 @@ begin
     @test a == [11,99,13]
     a2 = Any[101,102,103]
     p2 = pointer(a2)
-    @test unsafe_ref(p2) == 101
-    unsafe_assign(p2, 909, 3)
-    @test a2 == [101,102,909]
+    @test_fails unsafe_ref(p2) == 101
+    @test_fails unsafe_assign(p2, 909, 3)
+    @test a2 == [101,102,103]
 end
 
 # issue #1287, combinations of try, catch, return

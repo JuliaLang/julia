@@ -99,6 +99,8 @@ If you get link errors mentioning `gfortran`, it might help to put `/usr/local/g
 
 Clang is now used by default to build julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build julia.
 
+If you are building on a 32-bit Mac or on Snow Leopard, it may have trouble building openlibm. In such a case, use `make USE_SYSTEM_LIBM=1`. If you run into trouble building openblas, try `make USE_SYSTEM_BLAS=1 USE_SYSTEM_LAPACK=1`. These settings can even be saved in `Make.user` so that you do not have to provide them every time you compile.
+
 #### FreeBSD
 
 *Release 9.0:* install the gcc46, git, and gmake packages/ports, and compile julia with the command:

@@ -237,10 +237,11 @@ typedef struct {
     // to create a set of constructors for this sort of type
     jl_value_t *ctor_factory;
     jl_value_t *instance;  // for singletons
-    // hidden fields:
-    uint32_t uid;
     uint32_t size;
+    // hidden fields:
     uint32_t alignment;  // strictest alignment over all fields
+    uint32_t uid;
+    void *struct_decl;  //llvm::Value*
     jl_fielddesc_t fields[1];
 } jl_struct_type_t;
 
@@ -768,6 +769,7 @@ DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
 DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
+DLLEXPORT void *jl_value_ptr(jl_value_t *a);
 void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 
 // system information
@@ -889,6 +891,7 @@ void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 void jl_declare_constant(jl_binding_t *b);
 void jl_module_using(jl_module_t *to, jl_module_t *from);
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
+void jl_module_importall(jl_module_t *to, jl_module_t *from);
 DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 
 // external libraries

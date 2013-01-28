@@ -1094,7 +1094,6 @@ function rotl90(A::AbstractMatrix, k::Integer)
 end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
-const rot90 = rotl90
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
 function reverse!(v::StridedVector)
@@ -1808,7 +1807,7 @@ function union(vs...)
         for v_elem in v
             if !has(seen, v_elem)
                 push!(ret, v_elem)
-                add(seen, v_elem)
+                add!(seen, v_elem)
             end
         end
     end
@@ -1823,7 +1822,7 @@ function setdiff(a, b)
     for a_elem in a
         if !has(seen, a_elem) && !has(bset, a_elem)
             push!(ret, a_elem)
-            add(seen, a_elem)
+            add!(seen, a_elem)
         end
     end
     ret

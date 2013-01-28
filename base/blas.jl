@@ -72,18 +72,41 @@ for (fname, elty) in ((:dscal_,:Float64),    (:sscal_,:Float32),
     end
 end
 
-# ccall is unable to return complex values (Issue #85)
-#@blas_dot :zdotc_ Complex128
-#@blas_dot :cdotc_ Complex64
-# DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
+# dot
 for (fname, elty) in ((:ddot_,:Float64), (:sdot_,:Float32))
     @eval begin
+#       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
+# *     .. Scalar Arguments ..
+#       INTEGER INCX,INCY,N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION DX(*),DY(*)
         function dot(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
             ccall(($(string(fname)),libblas), $elty,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &n, DX, &incx, DY, &incy)
         end
     end
+end
+for (fname, elty, relty) in ((:zdotc_,:Complex128,:Float64), (:cdotc_,:Complex64,:Float32))
+    @eval begin
+#       DOUBLE COMPLEX FUNCTION ZDOTC(N,ZX,INCX,ZY,INCY)
+# *     .. Scalar Arguments ..
+#       INTEGER INCX,INCY,N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE COMPLEX ZX(*),ZY(*)
+        function dot(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
+            convert($elty, ccall(($(string(fname)),libblas), ComplexPair{$relty},
+                  (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                  &n, DX, &incx, DY, &incy))
+        end
+    end
+end
+function dot{T<:BlasFloat}(DX::Array{T}, DY::Array{T})
+    n = length(DX)
+    if n != length(DY) throw(BlasDimMisMatch) end
+    return dot(n, DX, 1, DY, 1)
 end
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)

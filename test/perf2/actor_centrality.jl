@@ -25,7 +25,7 @@ function centrality_mean(G::Graph, start_node)
             if !has(dists, n) 
                 dists[n] = cdist
                 for neigh in n.n
-                    add(nnext, neigh)
+                    add!(nnext, neigh)
                 end
             end
         end
@@ -44,9 +44,9 @@ function read_graph()
             k = split(strip(readline(io)), "\t")
             actor, movie = k[1], join(k[2:3], "_")
             ac, mn = get(G, actor), get(G, movie)
-            add(actors, actor)
-            add(ac.n, mn)
-            add(mn.n, ac)
+            add!(actors, actor)
+            add!(ac.n, mn)
+            add!(mn.n, ac)
         end
     end
     G, sort!([ a for a in actors])
