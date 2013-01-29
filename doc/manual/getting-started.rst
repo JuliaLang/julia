@@ -86,10 +86,6 @@ those available for the ``perl`` and ``ruby`` programs::
 
      -h --help                Print this message
 
-Example Code
-------------
-
-At this point it is useful to take a look at some :ref:`man-example-programs`.
 
 Major Differences From MATLAB®
 ------------------------------
