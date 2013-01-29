@@ -17,6 +17,12 @@ body {
   line-height: 1.5;
 }
 
+@media screen {
+  body {
+    color: #222;
+  }
+}
+
 h1,h2,h3,h4,h5,h6 {
   font-family: Rokkitt, sans-serif;
 }
@@ -85,8 +91,7 @@ div.body {
 }
 
 h1,h2 {
-  padding-top: 1em;
-  margin: 1em 0;
+  margin: 1em 0 0.5em 0;
 }
 
 p {
@@ -135,7 +140,7 @@ div.footer {
 /* code blocks, tables, and blockquotes */
 
 code,tt,pre {
-  font: 10pt Menlo, Consolas, Monaco, 'Source Code Pro', 'DejaVu Sans Mono', 'Courier New', Courier, monospace;
+  font: 9.5pt Menlo, Consolas, Monaco, 'Source Code Pro', 'DejaVu Sans Mono', 'Courier New', Courier, monospace;
 }
 
 blockquote,table {
@@ -145,7 +150,7 @@ blockquote,table {
 
 pre {
   border: 1px solid #ddd;
-  line-height: 1.5;
+  line-height: 1.4;
   margin: 1em 2em 1em 1.5em;
   padding: .75em 1.25em;
 }
