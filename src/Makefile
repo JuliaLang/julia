@@ -13,9 +13,16 @@ FLAGS = \
 	-Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-Iflisp -Isupport -fvisibility=hidden -fno-common \
 	-I$(shell $(LLVM_CONFIG) --includedir) \
-	-I$(JULIAHOME)/deps/libuv/include -I$(JULIAHOME)/usr/include
+	-I$(JULIAHOME)/deps/libuv/include -I$(JULIAHOME)/usr/include \
+    -I$(JULIAHOME)/deps/llvm-3.2/tools/clang/lib
 
-LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(BUILD)/lib $(BUILD)/lib/libuv.a $(shell $(LLVM_CONFIG) --libs) $(NO_WHOLE_ARCHIVE) $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS)
+CLANG_LIBS = -lclangFrontendTool -lclangBasic -lclangLex -lclangDriver -lclangFrontend -lclangParse \
+        -lclangAST -lclangASTMatchers -lclangSema -lclangAnalysis -lclangEdit \
+        -lclangRewriteFrontend -lclangRewriteCore -lclangSerialization -lclangStaticAnalyzerCheckers \
+        -lclangStaticAnalyzerCore -lclangStaticAnalyzerFrontend -lclangTooling \
+        -lclangCodeGen -lclangARCMigrate -lclang 
+
+LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(BUILD)/lib $(BUILD)/lib/libuv.a $(CLANG_LIBS) $(shell $(LLVM_CONFIG) --libs) $(NO_WHOLE_ARCHIVE) $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS)
 
 ifneq ($(MAKECMDGOALS),debug)
 TARGET =

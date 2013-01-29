@@ -9,5 +9,6 @@ runtests("zlib")
 runtests("image")
 # runtests("iterators")
 @unix_only runtests("gzip")
+runtests("ccall")
 
 runtests("perf")

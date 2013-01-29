@@ -75,40 +75,94 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
     }
     if (jl_is_bits_type(jt)) {
         int nb = jl_bitstype_nbits(jt);
-        if (nb == 8)  return T_int8;
-        if (nb == 16) return T_int16;
-        if (nb == 32) return T_int32;
-        if (nb == 64) return T_int64;
-        else          return Type::getIntNTy(getGlobalContext(), nb);
+        if (nb == 8)   return T_int8;
+        if (nb == 16)  return T_int16;
+        if (nb == 32)  return T_int32;
+        if (nb == 64)  return T_int64;
+        if (nb == 128) return T_int128;
+        else           return Type::getIntNTy(getGlobalContext(), nb);
     }
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
     return jl_pvalue_llvmt;
 }
 
-static Type *julia_struct_to_llvm(jl_value_t *jt) {
-    if (jl_is_struct_type(jt) && !jl_is_array_type(jt)) {
-        if (!jl_is_leaf_type(jt))
-           return NULL;
+
+// --- mapping between julia and clang types ---
+// --- this must be kept in sync with above ---
+static jl_value_t *jl_signed_type=NULL;
+static jl_value_t *jl_complex_type=NULL;
+static clang::CanQualType julia_type_to_clang(jl_value_t *jt, bool *error, bool as_struct=false) {
+    if (as_struct && jl_is_struct_type(jt) && !jl_is_array_type(jt)) {
+        if (!jl_is_leaf_type(jt)) {
+            *error = true;
+            return cT_void;
+        }
         jl_struct_type_t *jst = (jl_struct_type_t*)jt;
         if (jst->struct_decl == NULL) {
             size_t ntypes = jl_tuple_len(jst->types);
             if (ntypes == 0)
-                return NULL;
-            std::vector<Type *> latypes(0);
+                return cT_void;
             size_t i;
+            clang::RecordDecl *strct = clang::RecordDecl::Create(*clang_astcontext, clang::TTK_Struct,
+                    clang_astcontext->getTranslationUnitDecl(),
+                    clang::SourceLocation(), clang::SourceLocation(), NULL, NULL);
+            strct->startDefinition();
             for(i = 0; i < ntypes; i++) {
                 jl_value_t *ty = jl_tupleref(jst->types, i);
-                Type *lty = julia_type_to_llvm(ty);
-                if (lty == jl_pvalue_llvmt)
-                    return NULL;
-                latypes.push_back(lty);
+                clang::CanQualType lty = julia_type_to_clang(ty, error);
+                if (*error)
+                    return cT_void;
+                clang::FieldDecl *D = clang::FieldDecl::Create(*clang_astcontext, strct,
+                    clang::SourceLocation(), clang::SourceLocation(),
+                    NULL, lty, 0, 0, false, clang::ICIS_NoInit);
+                strct->addDecl(D);
             }
-            jst->struct_decl = (void*)StructType::create(latypes, jst->name->name->name);
+            strct->completeDefinition();
+            clang::CanQualType strct_ty = clang_astcontext->getCanonicalType(clang_astcontext->getRecordType(strct));
+            jst->struct_decl = (void*) new clang::CanQualType(strct_ty);
         }
-        Type *t = (Type*)jst->struct_decl;
-        return t;
+        return *(clang::CanQualType*)jst->struct_decl;
     }
-    return julia_type_to_llvm(jt);
+    if (jt == (jl_value_t*)jl_bool_type) return cT_int1;
+    if (jt == (jl_value_t*)jl_float32_type) return cT_float32;
+    if (jt == (jl_value_t*)jl_float64_type) return cT_float64;
+    if (jl_is_cpointer_type(jt)) {
+        jl_value_t *jet = jl_tparam0(jt);
+        clang::CanQualType lt;
+        lt = julia_type_to_clang(jet,error);
+        *error = false;
+        return clang_astcontext->getPointerType(lt);
+    }
+    if (jl_is_bits_type(jt)) {
+        int nb = jl_bitstype_nbits(jt);
+        if (jl_signed_type == NULL) {
+            jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
+        }
+        if (jl_complex_type == NULL) {
+            jl_complex_type = jl_get_global(jl_base_module,jl_symbol("Complex")); //TODO: move Complex to Core
+        }
+        if (as_struct && jl_complex_type && jl_subtype(jt, jl_complex_type, 0)) {
+            if (nb == 64)  return cT_complex64;
+            if (nb == 128) return cT_complex128;
+            else           { *error = true; return cT_void; }
+        } else if (jl_signed_type && jl_subtype(jt, jl_signed_type, 0)) {
+            if (nb == 8)   return cT_int8;
+            if (nb == 16)  return cT_int16;
+            if (nb == 32)  return cT_int32;
+            if (nb == 64)  return cT_int64;
+            if (nb == 128) return cT_int128;
+            else           { *error = true; return cT_void; }
+        } else {    
+            if (nb == 8)   return cT_uint8;
+            if (nb == 16)  return cT_uint16;
+            if (nb == 32)  return cT_uint32;
+            if (nb == 64)  return cT_uint64;
+            if (nb == 128) return cT_uint128;
+            else           { *error = true; return cT_void; }
+        }
+    }
+    if (jt == (jl_value_t*)jl_bottom_type) return cT_void;
+    return cT_pvoid;
 }
 
 // NOTE: llvm cannot express all julia types (for example unsigned),
