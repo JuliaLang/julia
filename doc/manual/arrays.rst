@@ -343,7 +343,6 @@ The following example computes the QR decomposition of a small section
 of a larger array, without creating any temporaries, and by calling the
 appropriate LAPACK function with the right leading dimension size and
 stride parameters.
-
 ::
 
     julia> a = rand(10,10)
