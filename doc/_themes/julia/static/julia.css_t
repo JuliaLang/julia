@@ -1,7 +1,7 @@
-{% set sidebar_width = '230px' %}
+{% set sidebar_width = '250px' %}
 
 @import url("basic.css");
-@import url(http://fonts.googleapis.com/css?family=Rokkitt:400,700|Lato:400,700,400italic);
+@import url(http://fonts.googleapis.com/css?family=Rokkitt:400,700|Lato:400,400italic);
 
 /* general site formatting */
 
@@ -13,7 +13,7 @@
 body {
   background-color: #fff;
   color: #000;
-  font: 11.5pt Lato, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font: 11.5pt 'Helvetica Neue', helvetica, arial, freesans, clean, sans-serif;
   line-height: 1.5;
 }
 
@@ -30,7 +30,7 @@ h1,h2,h3,h4,h5,h6 {
 div.related {
   background: #000;
   overflow: hidden; /* enclose all child floats */
-  padding: 0.5em;
+  padding: 0.5em 0;
 }
 
 div.related,
@@ -213,6 +213,9 @@ div.sphinxsidebar ul {
   padding: 0;
 }
 
+div.related,
+div.footer,
+div.sphinxsidebar,
 div.sphinxsidebar input {
   font-family: Lato, sans-serif;
 }
