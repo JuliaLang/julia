@@ -118,9 +118,7 @@ for n in [0:10, 100, 1000]
 
         # timsort
         pt = sortperm(TimSort,ord,v)
-        # @test pi == pt ### FIXME: #2138
-        @test isperm(pt)
-        @test v[pt] == s
+        @test pi == pt
 
         # quicksort (unstable)
         pq = sortperm(QuickSort,ord,v)

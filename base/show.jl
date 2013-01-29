@@ -803,7 +803,7 @@ function whos(m::Module, pattern::Regex)
 end
 whos() = whos(r"")
 whos(m::Module) = whos(m, r"")
-whos(pat::Regex) = whos(ccall(:jl_get_current_module, Module, ()), pat)
+whos(pat::Regex) = whos(ccall(:jl_get_current_module, Any, ())::Module, pat)
 
 function show{T}(io::IO, x::AbstractArray{T,0})
     println(io, summary(x),":")
