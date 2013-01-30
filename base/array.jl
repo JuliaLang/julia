@@ -1687,6 +1687,18 @@ function filter(f::Function, As::StridedArray)
     As[boolmap]
 end
 
+function filter!(f::Function, a::Array)
+    insrt = 1
+    for curr = 1:length(a)
+        if f(a[curr])
+            a[insrt] = a[curr]
+            insrt += 1
+        end
+    end
+    delete!(a, insrt:length(a))
+    return a
+end
+
 ## Transpose ##
 
 function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
