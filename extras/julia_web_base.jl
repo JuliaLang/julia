@@ -1,3 +1,7 @@
+## Julia Webrepl ##
+const DEBUG = false
+import Base.show
+
 ###########################################
 # protocol
 ###########################################
@@ -41,6 +45,7 @@ type __Message
     msg_type::Uint8
     args::Array{Any, 1}
 end
+show(m::__Message) = __print_message(m)
 
 # read a message
 function __read_message()
@@ -56,12 +61,16 @@ function __read_message()
 end
 
 # send a message
+const __io_out_buf = PipeString()
 function __write_message(msg)
+    if DEBUG show(msg); println() end
     write(__io, uint8(msg.msg_type))
     write(__io, uint8(length(msg.args)))
     for arg=msg.args
-        write(__io, uint32(length(arg)))
-        write(__io, arg)
+        write(__io_out_buf, arg)
+        data = takebuf_array(__io_out_buf)
+        write(__io, uint32(length(data)))
+        write(__io, data)
     end
     #flush(__io)
 end
@@ -96,6 +105,7 @@ ans = nothing
 function __socket_callback(fd)
     # read the message
     __msg = __read_message()
+    if DEBUG show(__msg); println() end
     
     # MSG_INPUT_EVAL
     if __msg.msg_type == __MSG_INPUT_EVAL && length(__msg.args) == 3
