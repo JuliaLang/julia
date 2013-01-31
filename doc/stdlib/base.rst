@@ -1388,6 +1388,16 @@ Numbers
 
    Get the mantissa of a floating-point number
 
+.. function:: BigInt(x)
+
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``String``. 
+   The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``. 
+
+.. function:: BigFloat(x)
+
+   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The 
+   usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``.
+
 Random Numbers
 --------------
 
