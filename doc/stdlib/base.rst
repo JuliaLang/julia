@@ -164,16 +164,17 @@ Generic Functions
 Iteration
 ---------
 
-Sequential iteration is implemented by the methods ``start``, ``done``, and ``next``. The general ``for`` loop::
+Sequential iteration is implemented by the methods ``start``, ``done``, and
+``next``. The general ``for`` loop::
 
-   for i = I
+    for i = I
       # body
-   end
+    end
 
 is translated to::
 
-   state = start(I)
-   while !done(I, state)
+    state = start(I)
+    while !done(I, state)
       (i, state) = next(I, state)
       # body
     end
