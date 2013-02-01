@@ -358,6 +358,7 @@ function readall(cmd::AbstractCmd,stdin::AsyncStream)
     if !wait_success(pc)
         pipeline_error(pc)
     end
+    wait_close(out)
     return takebuf_string(out.buffer)
 end
 
