@@ -1398,6 +1398,46 @@ Numbers
    Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The 
    usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``.
 
+Integers
+~~~~~~~~
+
+.. function:: count_ones(x::Integer) -> Integer
+
+   Number of ones in the binary representation of ``x``.
+   
+   **Example**: ``count_ones(7) -> 3``
+
+.. function:: count_zeros(x::Integer) -> Integer
+
+   Number of zeros in the binary representation of ``x``.
+   
+   **Example**: ``count_zeros(int32(2 ^ 16 - 1)) -> 16``
+
+.. function:: leading_zeros(x::Integer) -> Integer
+
+   Number of zeros leading the binary representation of ``x``.
+   
+   **Example**: ``leading_zeros(int32(1)) -> 31``
+
+.. function:: leading_ones(x::Integer) -> Integer
+
+   Number of ones leading the binary representation of ``x``.
+   
+   **Example**: ``leading_ones(int32(2 ^ 32 - 2)) -> 31``
+
+.. function:: trailing_zeros(x::Integer) -> Integer
+
+   Number of zeros trailing the binary representation of ``x``.
+   
+   **Example**: ``trailing_zeros(2) -> 1``
+
+.. function:: trailing_ones(x::Integer) -> Integer
+
+   Number of ones trailing the binary representation of ``x``.
+   
+   **Example**: ``trailing_ones(3) -> 2``
+
+
 Random Numbers
 --------------
 
