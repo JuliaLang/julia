@@ -1364,7 +1364,7 @@ ifeq ($(OS), Darwin)
 else
   TKW_INC += -I/usr/include/tcl
 endif
-TKW_LIB += -ltcl8.5 -ltk8.5 -L$(BUILD)/lib/
+TKW_LIB += -ltcl -ltk -L$(BUILD)/lib/
 
 $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
