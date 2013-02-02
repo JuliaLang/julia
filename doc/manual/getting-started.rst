@@ -87,13 +87,13 @@ those available for the ``perl`` and ``ruby`` programs::
      -h --help                Print this message
 
 
-Major Differences From MATLAB®
-------------------------------
+Major Differences From MATLAB
+-----------------------------
 
-Julia's syntax is intended to be familiar to users of MATLAB®. However,
-Julia is in no way a MATLAB® clone: there are major syntactic and
+Julia's syntax is intended to be familiar to users of MATLAB. However,
+Julia is in no way a MATLAB clone: there are major syntactic and
 functional differences. The following are the most significant
-differences that may trip up Julia users accustomed to MATLAB®:
+differences that may trip up Julia users accustomed to MATLAB:
 
 -  Arrays are indexed with square brackets, ``A[i,j]``.
 -  The imaginary unit ``sqrt(-1)`` is represented in julia with ``im``.
