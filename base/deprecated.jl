@@ -56,10 +56,9 @@ end
 @deprecate  betarnd       randbeta
 @deprecate  exprnd        randexp
 @deprecate  rot90         rotl90
-
-#@deprecate  strcat        string
-export strcat
-strcat(xs...) = string(xs...)
+@deprecate  chars         collect
+@deprecate  elements      collect
+@deprecate  strcat        string
 
 export randi
 function randi(n,x...)
