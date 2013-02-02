@@ -1,87 +1,97 @@
+{% set sidebar_width = '250px' %}
 
 @import url("basic.css");
+@import url(http://fonts.googleapis.com/css?family=Rokkitt:400,700|Lato:400,400italic);
 
 /* general site formatting */
-
 
 * {
   margin: 0;
   padding: 0;
 }
 
-html, body {
-  height: 100%;
-}
-
 body {
-  background-color: {{ theme_bgcolor }};
-  font: 11.5pt Georgia, Arial, sans-serif;
-  width: 100%;
-  text-align: left;
+  background-color: #fff;
+  color: #000;
+  font: 11.5pt 'Helvetica Neue', helvetica, arial, freesans, clean, sans-serif;
   line-height: 1.5;
 }
 
+@media screen {
+  body {
+    color: #222;
+  }
+}
+
+h1,h2,h3,h4,h5,h6 {
+  font-family: Rokkitt, sans-serif;
+}
+
+div.related {
+  background: #000;
+  overflow: hidden; /* enclose all child floats */
+  padding: 0.5em 0;
+}
+
+div.related,
+div.related a,
+div.related a:visited {
+  color: #fff;
+}
+
+div.related li {
+  display: block;
+  float: left;
+}
+
 div.document {
-  background-color: {{ theme_bgcolor }};
+  margin: 0 auto;
+}
+
+div.footerwrapper {
+  margin: 3em auto;
+}
+
+div.document,
+div.footerwrapper {
+  width: 940px;
 }
 
 div.documentwrapper {
   float: left;
   width: 100%;
-  background-color: {{ theme_bgcolor }};
 }
 
-div.bodywrapper {
-  margin: 0 {{ theme_sidebarmargwidth|toint }}px 0 {{ theme_sidebarmargwidth|toint }}px;
-  background-color: {{ theme_bgcolor }};
+div.bodywrapper,
+div.footer {
+  margin: 0 0 0 {{ sidebar_width }};
+}
+
+div.sphinxsidebar {
+  color: #444;
+  float: none;
+  font-size: 10pt;
+  margin-left: inherit;
+  width: {{ sidebar_width }};
+  position: absolute;
+  top: 46px;
+}
+
+/* only fix on desktops */
+@media only screen and (min-width : 1025px) {
+div.sphinxsidebar {
+  position: fixed;
+  bottom: 0;
+  overflow-y: auto;
+}
 }
 
 div.body {
-  background-color: {{ theme_bgcolor }};
-  max-width: {{ theme_bodywidth|toint }}em;
-  text-align: left;
-  line-height: 1.5;
-  margin: 0 auto auto auto;
-  /*margin: auto auto auto auto;*/
+  padding: 1em;
 }
 
-div.header {
-  max-width: {{ theme_bodywidth|toint }}em;
-  margin: auto auto auto auto
-}
-  div.header .title {
-    font-weight: bold;
-    margin-bottom: 2em;
-    margin-top: 2.5em;
-  }
-  div.header .links {
-    text-align: center;
-    margin: 0
-  }
-    div.header .links a {
-      text-decoration: none;
-      color: {{ theme_hlinkcolor }};
-    }
-
-.title, h1, h2, h3, h4, h5, h6 {
-  font-family: Helvetica, Arial, Clean, sans-serif;
-  font-size: 105%;
-}
-
-.title {
-  text-align: center;
-  font-size: 130%;
-}
-
-h1 {
-  font-size: 110%;
-  padding-top: 1ex;
-  margin: 1em 0;
-}
-
-h2 {
-  padding-top: 1ex;
-  margin: 1em 0;
+h1,h2 {
+  margin: 1em 0 0.5em 0;
 }
 
 p {
@@ -89,11 +99,11 @@ p {
 }
 
 a {
+  color: #aa0000;
   text-decoration: none;
-  color: {{ theme_linkcolor }};
 }
-  a:visited { color: {{ theme_linkvcolor }}; }
-  a:hover   { color: {{ theme_linkhcolor }}; }
+  a:visited { color: #550000; }
+  a:hover   { text-decoration: underline; }
 
 ol,ul {
   margin-left: 2.2em;
@@ -121,19 +131,16 @@ dl dt big, span.optional {
 }
   .figure p.note { font-size: 75%; }
 
-div.footerwrapper {
-  margin: 2em {{ theme_sidebarmargwidth|toint }}px 2em {{ theme_sidebarmargwidth|toint }}px;
-}
-
 div.footer {
-  max-width: {{ theme_bodywidth|toint }}em;
-  margin: auto auto auto auto;
+  font-size: smaller;
+  font-style: italic;
+  padding: 0 1em;
 }
 
 /* code blocks, tables, and blockquotes */
 
 code,tt,pre {
-  font: 80% Menlo, Consolas, Monaco, 'Source Code Pro', 'DejaVu Sans Mono', 'Courier New', Courier, monospace;
+  font: 9.5pt Menlo, Consolas, Monaco, 'Source Code Pro', 'DejaVu Sans Mono', 'Courier New', Courier, monospace;
 }
 
 blockquote,table {
@@ -143,7 +150,7 @@ blockquote,table {
 
 pre {
   border: 1px solid #ddd;
-  line-height: 1.5;
+  line-height: 1.4;
   margin: 1em 2em 1em 1.5em;
   padding: .75em 1.25em;
 }
@@ -158,7 +165,6 @@ table.docutils td, table.docutils th {
 }
 
 .chaplink {
-  font-family: Helvetica, Arial, Clean, sans-serif;
   font-size: 90%;
 }
 .prevlink {
@@ -168,94 +174,34 @@ table.docutils td, table.docutils th {
   float: right;
 }
 
-div.sphinxsidebar {
-  background-color: {{ theme_bgcolor }};
-  position: fixed;
-  top: 0px;
-  bottom: 0;
+div.sidebar {
+  font-size: smaller;
+  margin: 0.75em 0 0.75em 0.75em;
+  padding: 0.75em;
+}
+div.sidebar p {
   margin: 0;
-  padding: 0;
-  padding-top: 15px;
-  padding-bottom: 15px;
-  height: auto;
 }
 
-div.sphinxsidebarview {
-  border-radius: 5px;
-  height: 100%;
-}
-
-div.sphinxsidebarview::-webkit-scrollbar {
+div.sphinxsidebar::-webkit-scrollbar {
   -webkit-appearance: none;
   width: 0px;
 }
 
 div.sphinxsidebarwrapper {
-  border-radius: 5px;
-  margin: 0;
-  padding: 0;
-  margin-left: {{ theme_sidebarlmarg|toint }}px;
-  height: 100%;
-}
-
-div.sphinxsidebarcontentwrapper {
-  border-radius: 5px 0 0 5px;
-  height: 100%;
-  overflow: auto;
-
-}
-
-div.sphinxsidebarcontent {
-  background-color: {{ theme_sidebarbgcolor }};
-  padding: 10px 5px 10px 10px;
-  vertical-align: middle;
-}
-
-div.sphinxsidebarbutton {
-  background-color: {{ theme_sidebttbgcolor }};
-  border-radius: 0 5px 5px 0;
-  color: {{ theme_sidebttcolor }};
-  font-size: 1.2em;
-  cursor: pointer;
-  width: 12px;
-  height: 100%;
-  margin: auto;
-  float: right;
-}
-
-div.sphinxsidebarbutton:hover {
-  background-color: {{ theme_sidebtthvbgcolor }};
-}
-
-#sidebarbutton {
-  display: block;
-  float: right;
+  padding: 3em 10px;
 }
 
 div.sphinxsidebar h3 {
-  font-family: Helvetica, Arial, Clean, sans-serif;
-  color: {{ theme_sidebarcolor }};
   font-size: 1.4em;
   font-weight: normal;
-  margin: 0;
-  padding: 0;
-}
-
-div.sphinxsidebar h3 a {
-  color: {{ theme_sidebartoccolor }};
 }
 
 div.sphinxsidebar h4 {
-  font-family: Helvetica, Arial, sans-serif;
-  color: {{ theme_sidebarcolor}};
   font-size: 1.3em;
   font-weight: normal;
   margin: 5px 0 0 0;
   padding: 0;
-}
-
-div.sphinxsidebar p {
-  color: {{ theme_sidebarcolor }};
 }
 
 div.sphinxsidebar p.topless {
@@ -265,30 +211,29 @@ div.sphinxsidebar p.topless {
 div.sphinxsidebar ul {
   margin: 10px;
   padding: 0;
-  color: {{ theme_sidebarcolor }};
 }
 
-div.sphinxsidebar a {
-  color: {{ theme_sidebarlinkcolor }};
+div.related,
+div.footer,
+div.sphinxsidebar,
+div.sphinxsidebar input {
+  font-family: Lato, sans-serif;
 }
-div.sphinxsidebar a:hover { color: {{ theme_sidebarlinkhcolor }}; }
 
 div.sphinxsidebar #searchbox table {
-  border: 1px solid {{ theme_sidebttbgcolor }};
+  border: 1px solid #ddd;
   border-radius: 3px;
   border-spacing: 0;
-  font-family: sans-serif;
   font-size: 1em;
   padding: 0;
   margin: 0 5px 0 0;
 }
 
 div.sphinxsidebar #searchbox input[type="text"] {
-  width: {{ theme_sidesearchboxwidth|toint }}px;
+  width: 130px;
   border-radius: 3px 0 0 3px;
   border: 0;
   padding: 1px 1px 1px 4px;
-  background-color: white;
 }
 
 div.sphinxsidebar #searchbox input[type="submit"] {
@@ -296,6 +241,5 @@ div.sphinxsidebar #searchbox input[type="submit"] {
   border-radius: 0 3px 3px 0;
   border: 0;
   padding: 1px;
-  background-color: {{ theme_sidebarsearchbuttoncolor }};
+  background-color: #ddd;
 }
-

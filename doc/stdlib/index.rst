@@ -5,30 +5,27 @@
  The Julia Standard Library
 ############################
 
-:Release: |version|
-:Date: |today|
-
-*********
-Built-ins
-*********
+***********
+ Built-ins
+***********
 
 .. toctree::
    :maxdepth: 1
 
    base
 
-****************
-Built-in Modules
-****************
+******************
+ Built-in Modules
+******************
 
 .. toctree::
    :maxdepth: 1
 
    sort
 
-******
-Extras
-******
+********
+ Extras
+********
 
 .. toctree::
    :maxdepth: 1
@@ -43,9 +40,9 @@ Extras
    textwrap
    zlib
 
-****************
-Math & Numerical
-****************
+******************
+ Math & Numerical
+******************
 
 .. toctree::
    :maxdepth: 1

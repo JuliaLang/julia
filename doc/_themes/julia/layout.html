@@ -1,47 +1,12 @@
 {% extends "basic/layout.html" %}
+{% set reldelim1 = '&nbsp;/&nbsp;' %}
 
 {# Silence the relbar's #}
-{% block relbar1 %}{% endblock %}
 {% block relbar2 %}{% endblock %}
 
-{% set script_files = script_files + ['_static/sidebar.js'] %}
-{%- block sidebar2 %}
-  {%- if render_sidebar %}
-    <div class="sphinxsidebar">
-      <div class="sphinxsidebarview">
-        <div class="sphinxsidebarwrapper">
-          <div class="sphinxsidebarbutton">
-            <div id="sidebarbutton">
-            <span>&laquo;</span>
-            </div>
-          </div>
-          <div class="sphinxsidebarcontentwrapper">
-            <div class="sphinxsidebarcontent">
-              {#- new style sidebar: explicitly include/exclude templates #}
-              {%- for sidebartemplate in sidebars %}
-              {%- include sidebartemplate %}
-              {%- endfor %}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  {%- endif %}
-{% endblock %}
-
-{% block header %}
-<div class="header">
-  <div class="title">Julia Documentation</div>
-  <div class="links">
-    <p> <a href="http://julialang.org/">julia</a>
-      | <a href="https://github.com/JuliaLang/julia">source</a>
-      | <a href="http://groups.google.com/group/julia-dev/">dev list</a>
-      | <a href="http://docs.julialang.org/en/latest/">docs</a>
-      | <a href="http://julialang.org/blog/">blog</a>
-      | <a href="http://feeds.feedburner.com/JuliaLang">rss</a>
-    </p>
-  </div>
-</div>
+{% block rootrellink %}
+<li><a href="http://julialang.org/">Julia</a>{{ reldelim1 }}</li>
+<li><a href="{{ pathto('index') }}">Documentation</a>{{ reldelim1 }}</li>
 {% endblock %}
 
 {% block footer %}

@@ -10,9 +10,3 @@
    stdlib/index
    packages/packagelist
 
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`search`
-

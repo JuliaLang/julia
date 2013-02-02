@@ -15,11 +15,7 @@ ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 # the i18n builder cannot share the environment and doctrees with the others
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 
-JQUERYDEST = _themes/julia/static/jquery.js
-JQUERYURL = http://code.jquery.com/jquery-latest.js
-WGET = $(abspath ../deps)/jldownload
-
-.PHONY: help clean clean-jquery cleanall get-jquery html dirhtml singlehtml pickle json htmlhelp qthelp devhelp \
+.PHONY: help clean cleanall html dirhtml singlehtml pickle json htmlhelp qthelp devhelp \
 	epub latex latexpdf text man changes linkcheck doctest gettext listpkg
 
 help:
@@ -50,27 +46,17 @@ clean:
 	-rm -rf $(BUILDDIR)/*
 	-rm -f sphinx/*.pyc
 
-clean-jquery:
-	-rm -f $(JQUERYDEST)
-
-cleanall: clean clean-jquery
-
-get-jquery: $(JQUERYDEST)
-
-$(JQUERYDEST):
-	$(WGET) $@ $(JQUERYURL)
-
-html: get-jquery
+html:
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
 
-dirhtml: get-jquery
+dirhtml:
 	$(SPHINXBUILD) -b dirhtml $(ALLSPHINXOPTS) $(BUILDDIR)/dirhtml
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/dirhtml."
 
-singlehtml: get-jquery
+singlehtml:
 	$(SPHINXBUILD) -b singlehtml $(ALLSPHINXOPTS) $(BUILDDIR)/singlehtml
 	@echo
 	@echo "Build finished. The HTML page is in $(BUILDDIR)/singlehtml."
@@ -85,13 +71,13 @@ json:
 	@echo
 	@echo "Build finished; now you can process the JSON files."
 
-htmlhelp: get-jquery
+htmlhelp:
 	$(SPHINXBUILD) -b htmlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/htmlhelp
 	@echo
 	@echo "Build finished; now you can run HTML Help Workshop with the" \
 	      ".hhp project file in $(BUILDDIR)/htmlhelp."
 
-qthelp: get-jquery
+qthelp:
 	$(SPHINXBUILD) -b qthelp $(ALLSPHINXOPTS) $(BUILDDIR)/qthelp
 	@echo
 	@echo "Build finished; now you can run "qcollectiongenerator" with the" \
