@@ -111,7 +111,7 @@ blocks as desired can be used. The condition expressions in the
 evaluates to ``true``, after which the associated block is evaluated,
 and no further condition expressions or blocks are evaluated.
 
-Unlike C, MATLAB®, Perl, Python, and Ruby — but like Java, and a few
+Unlike C, MATLAB, Perl, Python, and Ruby — but like Java, and a few
 other stricter, typed languages — it is an error if the value of a
 conditional expression is anything but ``true`` or ``false``::
 
