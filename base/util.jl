@@ -109,7 +109,7 @@ which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 edit(file::String) = edit(file, 1)
 function edit(file::String, line::Integer)
     editor = get(ENV, "JULIA_EDITOR", "emacs")
-    issrc = file[end-2:end] == ".jl"
+    issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         if file[1]!='/' && !is_file_readable(file)
             file2 = "$JULIA_HOME/../lib/julia/base/$file"
