@@ -13,5 +13,5 @@ end
 convert{n}(::Type{ModInt{n}}, i::Int) = ModInt{n}(i)
 promote_rule{n}(::Type{ModInt{n}}, ::Type{Int}) = ModInt{n}
 
-show{n}(io, k::ModInt{n}) = print(io, "$(k.k) mod $n")
-showcompact(io, k::ModInt) = print(io, k.k)
+show{n}(io::IO, k::ModInt{n}) = print(io, "$(k.k) mod $n")
+showcompact(io::IO, k::ModInt) = print(io, k.k)
