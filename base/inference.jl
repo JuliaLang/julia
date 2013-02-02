@@ -154,6 +154,9 @@ t_func[pointerset] = (3, 3, (a,v,i)->a)
 
 function static_convert(to::ANY, from::ANY)
     if !isa(to,Tuple) || !isa(from,Tuple)
+        if isa(to,TypeVar)
+            return to
+        end
         if subtype(from, to)
             return from
         end
