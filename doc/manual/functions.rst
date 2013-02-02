@@ -14,15 +14,15 @@ is::
       x + y
     end
 
-This syntax is similar to MATLAB®, but there are some significant
+This syntax is similar to MATLAB, but there are some significant
 differences:
 
--  In MATLAB®, this definition must be saved in a file, named ``f.m``,
+-  In MATLAB, this definition must be saved in a file, named ``f.m``,
    whereas in Julia, this expression can appear anywhere, including in
    an interactive session.
--  In MATLAB®, the closing ``end`` is optional, being implied by the end
+-  In MATLAB, the closing ``end`` is optional, being implied by the end
    of the file. In Julia, the terminating ``end`` is required.
--  In MATLAB®, this function would print the value ``x + y`` but would
+-  In MATLAB, this function would print the value ``x + y`` but would
    not return any value, whereas in Julia, the last expression evaluated
    is a function's return value.
 -  Expression values are never printed automatically except in
@@ -30,7 +30,7 @@ differences:
    expressions on the same line.
 
 In general, while the function definition syntax is reminiscent of
-MATLAB®, the similarity is largely superficial. Therefore, rather than
+MATLAB, the similarity is largely superficial. Therefore, rather than
 continually comparing the two, in what follows, we will simply describe
 the behavior of functions in Julia directly.
 
