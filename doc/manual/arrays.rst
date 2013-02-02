@@ -287,7 +287,7 @@ vector to the size of the matrix::
      1.26743   1.77988  1.13859
 
 This is wasteful when dimensions get large, so Julia offers the
-Matlab-inspired ``bsxfun``, which expands singleton dimensions in
+MATLAB-inspired ``bsxfun``, which expands singleton dimensions in
 array arguments to match the corresponding dimension in the other
 array without using extra memory, and applies the given binary
 function::
