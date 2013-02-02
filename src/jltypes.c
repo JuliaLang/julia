@@ -1285,16 +1285,16 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b)
     if (jl_is_tuple(a)) {
         if (jl_is_tuple(b)) {
             jl_tuple_t *ta = (jl_tuple_t*)a; jl_tuple_t *tb = (jl_tuple_t*)b;
-            int sqa = (jl_tuple_len(ta)>0 &&
-                       jl_is_vararg_type(jl_tupleref(ta,jl_tuple_len(ta)-1)));
-            int sqb = (jl_tuple_len(tb)>0 &&
-                       jl_is_vararg_type(jl_tupleref(tb,jl_tuple_len(tb)-1)));
-            if (sqa && sqb)
-                return extensionally_same_type(a, b);
-            if (sqa != sqb || jl_tuple_len(ta) != jl_tuple_len(tb))
-                return 0;
-            for(int i=0; i < jl_tuple_len(ta); i++) {
-                if (!type_eqv_(jl_tupleref(ta,i),jl_tupleref(tb,i)))
+            int la = jl_tuple_len(ta), lb = jl_tuple_len(tb);
+            if (la != lb) return 0;
+            int sqa = (la>0 && jl_is_vararg_type(jl_tupleref(ta,la-1)));
+            int sqb = (lb>0 && jl_is_vararg_type(jl_tupleref(tb,lb-1)));
+            if (sqa != sqb) return 0;
+            for(int i=0; i < la; i++) {
+                jl_value_t *ea=jl_tupleref(ta,i), *eb=jl_tupleref(tb,i);
+                if (jl_is_vararg_type(ea)) ea = jl_tparam0(ea);
+                if (jl_is_vararg_type(eb)) eb = jl_tparam0(eb);
+                if (!type_eqv_(ea, eb))
                     return 0;
             }
             return 1;
