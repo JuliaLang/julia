@@ -246,7 +246,7 @@ end
 # elements
 data_in = (1,"banana", ())
 s = Set(data_in...)
-data_out = elements(s)
+data_out = collect(s)
 @test is(typeof(data_out), Array{Any,1})
 @test all(map(d->contains(data_out,d), data_in))
 @test all(map(data_in) do d contains(data_out, d) end)

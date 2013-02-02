@@ -237,6 +237,8 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
+collect(itr) = [x for x in itr]
+
 ## Indexing: ref ##
 
 ref(a::Array) = arrayref(a,1)
