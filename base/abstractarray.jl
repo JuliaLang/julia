@@ -152,10 +152,14 @@ reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 vec(a::AbstractArray) = reshape(a,max(size(a)))
 
 function squeeze(A::AbstractArray)
-    d = ()
-    for i in size(A)
-        if i != 1
-            d = tuple(d..., i)
+    if length(A) == 1
+        d = (1,)
+    else
+        d = ()
+        for i in size(A)
+            if i != 1
+                d = tuple(d..., i)
+            end
         end
     end
     reshape(A, d)

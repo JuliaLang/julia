@@ -404,7 +404,7 @@ void jl_load(const char *fname)
 {
     if (jl_current_module == jl_base_module) {
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
-        jl_printf(JL_STDOUT, "\e[0G\e[2K %s", fname);
+        jl_printf(JL_STDOUT, "%s\n", fname);
     }
     char *fpath = (char*)fname;
     uv_statbuf_t stbuf;
@@ -414,6 +414,9 @@ void jl_load(const char *fname)
     jl_start_parsing_file(fpath);
     jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
+    if (jl_current_module == jl_base_module) {
+        jl_printf(JL_STDOUT, "\e[1F\e[2K");
+    }
 }
 
 // load from filename given as a ByteString object

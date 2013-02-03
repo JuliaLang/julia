@@ -241,7 +241,7 @@ Perm{O<:Ordering,V<:AbstractVector}(o::O,v::V) = Perm{O,V}(o,v)
 
 lt(p::Perm, a, b) = lt(p.ord, p.vec[a], p.vec[b])
 
-sortperm(a::Algorithm, o::Ordering, v::AbstractVector) = sort(a, Perm(o,v), [1:length(v)])
+sortperm(a::Algorithm, o::Ordering, v::AbstractVector) = sort!(a, Perm(o,v), [1:length(v)])
 sortperm(o::Ordering, v::AbstractVector) = sortperm(DEFAULT_STABLE, o, v)
 
 # generic sorting methods

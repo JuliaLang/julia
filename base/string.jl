@@ -225,15 +225,6 @@ done(itr::EachSearch, st) = (st[1]==0)
 next(itr::EachSearch, st) =
     (st, search(itr.string, itr.pattern, max(nextind(itr.string,st[1]),st[2])))
 
-function chars(s::String)
-    cx = Array(Char,length(s))
-    i = 0
-    for c in s
-        cx[i+=1] = c
-    end
-    return cx
-end
-
 function cmp(a::String, b::String)
     i = start(a)
     j = start(b)

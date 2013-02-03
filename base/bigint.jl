@@ -147,7 +147,18 @@ function ^(x::BigInt, y::Uint)
     ccall((:jl_mpz_pow_ui, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, y)
     BigInt(z)
 end
-^(x::BigInt, y::Integer) = y<0 ? throw(DomainError()) : ^(x, uint(y))
+
+function bigint_pow(x::BigInt, y::Integer)
+    if y<0; throw(DomainError()); end
+    if x== 1; return x; end
+    if x==-1; return isodd(y) ? x : -x; end
+    if y>typemax(Uint); throw(DomainError()); end
+    return x^uint(y)
+end
+
+^(x::BigInt , y::BigInt ) = bigint_pow(x, y)
+^(x::BigInt , y::Integer) = bigint_pow(x, y)
+^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 
 function gcd(x::BigInt, y::BigInt)
     z = BigInt_init()

@@ -139,6 +139,7 @@ dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd
 dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym_e(hnd, s::Union(Symbol,String)) = ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlopen(s::String) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), s)
+dlclose(p::Ptr) = ccall(:uv_dlclose,Void,(Ptr{Void},),p)
 
 cfunction(f::Function, r, a) =
     ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)

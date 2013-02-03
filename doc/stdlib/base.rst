@@ -1507,7 +1507,7 @@ Basic functions
 
 .. function:: length(A) -> Integer
 
-   Returns the number of elements in A (note that this differs from Matlab where ``length(A)`` is the largest dimension of ``A``)
+   Returns the number of elements in A (note that this differs from MATLAB where ``length(A)`` is the largest dimension of ``A``)
 
 .. function:: nnz(A)
 

@@ -18,11 +18,11 @@
 	       `(continue ,msg)
 	       e))
 	 (begin
-	   (newline)
-	   (display "unexpected error: ")
-	   (prn e)
-	   (print-stack-trace (stacktrace))
-	   #f)))
+	   ;;(newline)
+	   ;;(display "unexpected error: ")
+	   ;;(prn e)
+	   ;;(print-stack-trace (stacktrace))
+	   '(error "malformed expression"))))
    thk))
 
 ;; assigned variables except those marked local or inside inner functions

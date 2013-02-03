@@ -237,6 +237,8 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
+collect(itr) = [x for x in itr]
+
 ## Indexing: ref ##
 
 ref(a::Array) = arrayref(a,1)
@@ -1682,10 +1684,21 @@ end
 ## Filter ##
 
 # given a function returning a boolean and an array, return matching elements
-function filter(f::Function, As::StridedArray)
-    boolmap::Array{Bool} = map(f, As)
-    As[boolmap]
+filter(f::Function, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
+
+function filter!(f::Function, a::Vector)
+    insrt = 1
+    for curr = 1:length(a)
+        if f(a[curr])
+            a[insrt] = a[curr]
+            insrt += 1
+        end
+    end
+    delete!(a, insrt:length(a))
+    return a
 end
+
+filter(f::Function, a::Vector) = filter!(f, copy(a))
 
 ## Transpose ##
 

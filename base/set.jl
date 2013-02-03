@@ -12,7 +12,6 @@ show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,'(',')'))
 
 isempty(s::Set) = isempty(s.hash)
 length(s::Set)  = length(s.hash)
-elements(s::Set) = keys(s.hash)
 eltype{T}(s::Set{T}) = T
 
 has(s::Set, x) = has(s.hash, x)
@@ -100,4 +99,4 @@ function <=(l::Set, r::Set)
     return true
 end
 
-unique(C) = elements(add_each!(Set{eltype(C)}(), C))
+unique(C) = collect(add_each!(Set{eltype(C)}(), C))
