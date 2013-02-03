@@ -179,6 +179,12 @@
 				</dict>
 				<dict>
 					<key>match</key>
+					<string>\b(?:nothing|true|false)\b</string>
+					<key>name</key>
+					<string>constant.language.julia</string>
+				</dict>
+				<dict>
+					<key>match</key>
 					<string>@\w+\b</string>
 					<key>name</key>
 					<string>support.macro.julia</string>
