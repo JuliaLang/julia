@@ -598,7 +598,7 @@ install-random: $(LIBRANDOM_OBJ_TARGET)
 RMATH_OBJ_TARGET = $(BUILD)/lib/libRmath.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 
-RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) USE_LIBRANDOM=1 LIBRANDOM_PATH=$(BUILD)/usr/lib
+RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) USE_LIBRANDOM=1 LIBRANDOM_PATH=$(BUILD)/lib
 
 Rmath/Make.inc:
 	(cd .. && git submodule init && git submodule update)
