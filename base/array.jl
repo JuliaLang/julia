@@ -1684,12 +1684,8 @@ end
 ## Filter ##
 
 # given a function returning a boolean and an array, return matching elements
-function filter(f::Function, As::StridedArray)
-    boolmap::Array{Bool} = map(f, As)
-    As[boolmap]
-end
-
-function filter!(f::Function, a::Array)
+function filter!(f::Function, a::StridedArray)
+    a = reshape(a, length(a))
     insrt = 1
     for curr = 1:length(a)
         if f(a[curr])
@@ -1700,6 +1696,8 @@ function filter!(f::Function, a::Array)
     delete!(a, insrt:length(a))
     return a
 end
+
+filter(f::Function, a::StridedArray) = filter!(f, copy(a))
 
 ## Transpose ##
 
