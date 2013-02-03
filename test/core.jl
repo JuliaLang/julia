@@ -608,5 +608,11 @@ end
 let
     i2161_1() = promote(2,2,2.0,2)
     i2161_2() = i2161_1()[1]
-    @test i2161_2() == 2
+    @test i2161_2() === 2.0
+end
+
+# issue #2169
+let
+    i2169{T}(a::Array{T}) = typemin(T)
+    @test invoke(i2169,(Array,),Int8[1]) === int8(-128)
 end
