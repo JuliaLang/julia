@@ -365,7 +365,7 @@ issignleft(o::Direct, x::Floats) = lt(o, x, zero(x))
 issignleft{O<:Direct}(o::Perm{O}, i::Int) = issignleft(O(),o.vec[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
-    i, j = lo, hi = nans2end!(o, v)
+    i, j = lo, hi = nans2end!(v,o)
     while true
         while i <= j &&  issignleft(o, v[i]); i += 1; end
         while i <= j && !issignleft(o, v[j]); j -= 1; end
