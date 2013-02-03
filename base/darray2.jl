@@ -60,7 +60,7 @@ function defaultdist(dims, procs)
     dims = [dims...]
     chunks = ones(Int, length(dims))
     np = length(procs)
-    f = sort!(Sort.Reverse,keys(factor(np)))
+    f = sort!(keys(factor(np)), Sort.Reverse)
     k = 1
     while np > 1
         # repeatedly allocate largest factor to largest dim

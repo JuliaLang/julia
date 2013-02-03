@@ -406,7 +406,7 @@ function merge_hi(o::Ordering, v::AbstractVector, a::Run, b::Run, state::MergeSt
 end
 
 # TimSort main method
-function sort!(::TimSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int)
+function sort!(v::AbstractVector, lo::Int, hi::Int, ::TimSort, o::Ordering)
     minrun = merge_compute_minrun(hi-lo+1)
     state = MergeState()
     i = lo
@@ -417,7 +417,7 @@ function sort!(::TimSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int)
             # Make a run of length minrun
             count = min(minrun, hi-i+1)
             run_range = i:i+count-1
-            sort!(SMALL_ALGORITHM, o, v, i, i+count-1)
+            sort!(v, i, i+count-1, SMALL_ALGORITHM, o)
         else
             if !issorted(run_range)
                 run_range = last(run_range):first(run_range)
