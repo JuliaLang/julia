@@ -1437,7 +1437,10 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         newsig = (jl_tuple_t*)m->sig;
 
         if (env != (jl_value_t*)jl_false) {
-            tpenv = (jl_tuple_t*)env;
+            jl_value_t *ti =
+                lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig, &tpenv, m->tvars);
+            assert(ti != (jl_value_t*)jl_bottom_type);
+            (void)ti;
             // don't bother computing this if no arguments are tuples
             for(i=0; i < jl_tuple_len(tt); i++) {
                 if (jl_is_tuple(jl_tupleref(tt,i)))
