@@ -56,9 +56,12 @@ end
 mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o", mode, "?")
 mkdir(path::String) = mkdir(path, 0o777)
 function mkpath(path::String, mode)
-    dparts = splitdrive(path)
-	path = dparts[1]
-	@windows_only path *= "\\"
+  dparts = splitdrive(path)
+	@windows_only begin 
+    path = dparts[1]
+    path *= "\\"
+  end
+  @unix_only if(path[1]=='/'); path = "/"; end
 	parts = (split(dparts[2],Base.path_separator_re,false))
 	for x in parts
 		path=joinpath(path,x)
