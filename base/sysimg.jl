@@ -173,7 +173,6 @@ include("git.jl")
 include("pkg.jl")
 
 include = include_from_node1
-print("\e[0G\e[2K")
 
 # prime method cache with some things we know we'll need right after startup
 compile_hint(pwd, ())
