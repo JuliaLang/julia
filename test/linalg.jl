@@ -118,6 +118,11 @@ for elty in (Float32, Float64, Complex64, Complex128)
         a = convert(Matrix{elty}, a)
         b = convert(Matrix{elty}, b)
 
+        # Matrix and vector multiplication
+        @assert_approx_eq b'b convert(Matrix{elty}, [3 0; 0 2])
+        @assert_approx_eq b'b[:,1] convert(Vector{elty}, [3, 0])
+        @assert_approx_eq dot(b[:,1], b[:,1]) convert(elty, 3.0)
+
         # Least squares        
         x = a[:,1:2]\b[:,1]                             # Vector rhs
         @assert_approx_eq ((a[:,1:2]*x-b[:,1])'*(a[:,1:2]*x-b[:,1]))[1] convert(elty, 2.546616541353384)

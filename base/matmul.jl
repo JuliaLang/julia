@@ -36,7 +36,7 @@ diagmm(b::Vector, A::Matrix) =
 
 # Dot products
 
-dot{T<:BLAS.BlasFloat}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
+dot{T<:Union(Float32, Float64)}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
 function dot{T<:BLAS.BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
     length(rx) != length(ry) ? error("Ranges should be of same length") : true
     if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
