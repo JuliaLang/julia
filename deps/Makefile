@@ -20,12 +20,12 @@ endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp glpk patchelf
 #custom configure-driven script: zlib nginx
-#custom Makefile rules: openlibm rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
+#custom Makefile rules: openlibm Rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm-extras random rmath double-conversion
+STAGE1_DEPS = uv openlibm-extras random Rmath double-conversion
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = glpk-wrapper suitesparse-wrapper
 
@@ -598,24 +598,33 @@ install-random: $(LIBRANDOM_OBJ_TARGET)
 RMATH_OBJ_TARGET = $(BUILD)/lib/libRmath.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 
-$(RMATH_OBJ_SOURCE): Rmath/src/Makefile $(LIBRANDOM_OBJ_TARGET)
-	cd Rmath/src && \
-	$(MAKE) CC="$(CC)" && \
-	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
+RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) USE_LIBRANDOM=1 LIBRANDOM_PATH=$(BUILD)/usr/lib
+
+Rmath/Make.inc:
+	(cd .. && git submodule init && git submodule update)
+ifeq (exists, $(shell [ -d Rmath/.git ] && echo exists ))
+$(RMATH_OBJ_SOURCE): Rmath/.git/HEAD
+endif
+ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
+$(RMATH_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/Rmath/HEAD
+endif
+$(RMATH_OBJ_SOURCE): Rmath/Make.inc
+	$(MAKE) -C Rmath/src $(RMATH_FLAGS)
 	touch -c $@
-$(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
+$(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
+	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) $@
 
-clean-rmath:
-	-cd Rmath/src && $(MAKE) clean
-	-rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
-distclean-rmath: clean-rmath
+clean-Rmath:
+	-$(MAKE) -C Rmath/src clean
+	-rm $(RMATH_OBJ_TARGET)
+distclean-Rmath: clean-Rmath
 
-get-rmath: $(RMATH_OBJ_SOURCE)
-configure-rmath: get-rmath
-compile-rmath: $(RMATH_OBJ_SOURCE)
-check-rmath: compile-rmath
-install-rmath: $(RMATH_OBJ_TARGET)
+get-Rmath: Rmath/Make.inc
+configure-Rmath: get-Rmath
+compile-Rmath: $(RMATH_OBJ_SOURCE)
+check-Rmath: compile-Rmath
+install-Rmath: $(RMATH_OBJ_TARGET) 
 
 
 ## OpenBLAS ##
