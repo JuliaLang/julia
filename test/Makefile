@@ -8,7 +8,7 @@ core numbers strings unicode corelib hashing remote \
 arrayops linalg fft dct sparse bitarray suitesparse arpack \
 random math functional bigint bigfloat sorting \
 statistics glpk linprog poly file Rmath remote zlib image \
-iostring gzip integers spawn ccall parallel
+iostring gzip integers spawn ccall blas parallel
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@

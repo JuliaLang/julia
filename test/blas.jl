@@ -1,0 +1,78 @@
+## BLAS tests - testing the interface code to BLAS routines
+for elty in (Float32, Float64, Complex64, Complex128)
+
+    o4 = ones(elty, 4)
+    z4 = zeros(elty, 4)
+
+    I4 = eye(elty, 4)
+    L4 = tril(ones(elty, (4,4)))    
+    U4 = triu(ones(elty, (4,4)))
+    Z4 = zeros(elty, (4,4))
+
+    elm1 = convert(elty, -1)    
+    el2 = convert(elty, 2)
+    v14 = convert(Vector{elty}, [1:4])
+    v41 = convert(Vector{elty}, [4:-1:1])    
+                                        # gemv
+    @assert all(BLAS.gemv('N', I4, o4) .== o4)
+    @assert all(BLAS.gemv('T', I4, o4) .== o4)
+    @assert all(BLAS.gemv('N', el2, I4, o4) .== el2 * o4)
+    @assert all(BLAS.gemv('T', el2, I4, o4) .== el2 * o4)
+    o4cp = copy(o4)
+    @assert all(BLAS.gemv!('N', one(elty), I4, o4, elm1, o4cp) .== z4)
+    @assert all(o4cp .== z4)
+    o4cp[:] = o4
+    @assert all(BLAS.gemv!('T', one(elty), I4, o4, elm1, o4cp) .== z4)
+    @assert all(o4cp .== z4)
+    @assert all(BLAS.gemv('N', U4, o4) .== v41)
+    @assert all(BLAS.gemv('N', U4, o4) .== v41)
+                                        # gemm
+    @assert all(BLAS.gemm('N', 'N', I4, I4) .== I4)
+    @assert all(BLAS.gemm('N', 'T', I4, I4) .== I4)
+    @assert all(BLAS.gemm('T', 'N', I4, I4) .== I4)
+    @assert all(BLAS.gemm('T', 'T', I4, I4) .== I4)
+    @assert all(BLAS.gemm('N', 'N', el2, I4, I4) .== el2 * I4)    
+    @assert all(BLAS.gemm('N', 'T', el2, I4, I4) .== el2 * I4)    
+    @assert all(BLAS.gemm('T', 'N', el2, I4, I4) .== el2 * I4)    
+    @assert all(BLAS.gemm('T', 'T', el2, I4, I4) .== el2 * I4)
+    I4cp = copy(I4)
+    @assert all(BLAS.gemm!('N', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
+    @assert all(I4cp .== Z4)
+    I4cp[:] = I4
+    @assert all(BLAS.gemm!('N', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
+    @assert all(I4cp .== Z4)
+    I4cp[:] = I4
+    @assert all(BLAS.gemm!('T', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
+    @assert all(I4cp .== Z4)
+    I4cp[:] = I4
+    @assert all(BLAS.gemm!('T', 'T', one(elty), I4, I4, elm1, I4cp) .== Z4)
+    @assert all(I4cp .== Z4)
+    @assert all(BLAS.gemm('N', 'N', I4, U4) .== U4)
+    @assert all(BLAS.gemm('N', 'T', I4, U4) .== L4)
+                                        # gemm compared to (sy)(he)rk
+    if iscomplex(elm1)
+        @assert all(triu(BLAS.herk('U', 'N', U4)) .== triu(BLAS.gemm('N', 'T', U4, U4)))
+        @assert all(tril(BLAS.herk('L', 'N', U4)) .== tril(BLAS.gemm('N', 'T', U4, U4)))
+        @assert all(triu(BLAS.herk('U', 'N', L4)) .== triu(BLAS.gemm('N', 'T', L4, L4)))
+        @assert all(tril(BLAS.herk('L', 'N', L4)) .== tril(BLAS.gemm('N', 'T', L4, L4)))
+        @assert all(triu(BLAS.herk('U', 'T', U4)) .== triu(BLAS.gemm('T', 'N', U4, U4)))
+        @assert all(tril(BLAS.herk('L', 'T', U4)) .== tril(BLAS.gemm('T', 'N', U4, U4)))
+        @assert all(triu(BLAS.herk('U', 'T', L4)) .== triu(BLAS.gemm('T', 'N', L4, L4)))
+        @assert all(tril(BLAS.herk('L', 'T', L4)) .== tril(BLAS.gemm('T', 'N', L4, L4)))
+        ans = similar(L4)
+        @assert all(tril(BLAS.herk('L','T', L4)) .== tril(BLAS.herk!('L', 'T', one(elty), L4, zero(elty), ans)))
+        @assert all(symmetrize!(ans, 'L') .== BLAS.gemm('T', 'N', L4, L4))
+    else
+        @assert all(triu(BLAS.syrk('U', 'N', U4)) .== triu(BLAS.gemm('N', 'T', U4, U4)))
+        @assert all(tril(BLAS.syrk('L', 'N', U4)) .== tril(BLAS.gemm('N', 'T', U4, U4)))
+        @assert all(triu(BLAS.syrk('U', 'N', L4)) .== triu(BLAS.gemm('N', 'T', L4, L4)))
+        @assert all(tril(BLAS.syrk('L', 'N', L4)) .== tril(BLAS.gemm('N', 'T', L4, L4)))
+        @assert all(triu(BLAS.syrk('U', 'T', U4)) .== triu(BLAS.gemm('T', 'N', U4, U4)))
+        @assert all(tril(BLAS.syrk('L', 'T', U4)) .== tril(BLAS.gemm('T', 'N', U4, U4)))
+        @assert all(triu(BLAS.syrk('U', 'T', L4)) .== triu(BLAS.gemm('T', 'N', L4, L4)))
+        @assert all(tril(BLAS.syrk('L', 'T', L4)) .== tril(BLAS.gemm('T', 'N', L4, L4)))
+        ans = similar(L4)
+        @assert all(tril(BLAS.syrk('L','T', L4)) .== tril(BLAS.syrk!('L', 'T', one(elty), L4, zero(elty), ans)))
+        @assert all(symmetrize!(ans, 'L') .== BLAS.gemm('T', 'N', L4, L4))
+    end
+end
