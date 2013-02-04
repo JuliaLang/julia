@@ -15,7 +15,7 @@ const text_colors = {
 }
 
 have_color = false
-@unix_only default_color_answer = text_colors[:blue]
+@unix_only default_color_answer = text_colors[:bold]
 @windows_only default_color_answer = text_colors[:normal]
 color_answer = default_color_answer
 color_normal = text_colors[:normal]
