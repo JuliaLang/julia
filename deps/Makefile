@@ -1295,7 +1295,7 @@ get-glpk-wrapper:
 configure-glpk-wrapper:
 compile-glpk-wrapper:
 check-glpk-wrapper:
-install-glpk-wrapper: $(GLPK_OBJ_TARGET) $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT)
+install-glpk-wrapper: $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT)
 
 
 ## ZLIB ##
