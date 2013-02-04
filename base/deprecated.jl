@@ -75,27 +75,10 @@ end
 # discontinued functions
 
 export randexp, randg, randbeta, randchi
-
-randexp(x...) = error("randexp is no longer supported, use the Distributions package instead:
-
-    using Distributions
-    rand(Exponential())
-")
-
-randg(x...) = error("randg is no longer supported, use the Distributions package instead:
+for (fun,typ) in {(:randexp,:Exponential), (:randg,:Gamma), (:randbeta,:Beta), (:randchi,:Chisq)}
+@eval $fun(x...) = error("randexp is no longer supported, use the Distributions package instead:
 
     using Distributions
-    rand(Gamma())
+    rand(",$(expr(:quote,typ)),"())
 ")
-
-randbeta(x...) = error("randbeta is no longer supported, use the Distributions package instead:
-
-    using Distributions
-    rand(Beta)
-")
-
-randchi2(x...) = error("randchi2 is no longer supported, use the Distributions package instead:
-
-    using Distributions
-    rand(Chisq())
-")
+end
