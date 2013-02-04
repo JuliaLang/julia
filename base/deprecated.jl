@@ -76,18 +76,26 @@ end
 
 export randexp, randg, randbeta, randchi
 
-randexp(x...) = error("randexp is no longer supported; use the Distributions package instead:
-    using Distributions
-    rand(Exponential())")
+randexp(x...) = error("randexp is no longer supported, use the Distributions package instead:
 
-randg(x...) = error("randg is no longer supported; use the Distributions package instead:
     using Distributions
-    rand(Gamma())")
+    rand(Exponential())
+")
 
-randbeta(x...) = error("randbeta is no longer supported; use the Distributions package instead:
-    using Distributions
-    rand(Beta)")
+randg(x...) = error("randg is no longer supported, use the Distributions package instead:
 
-randchi2(x...) = error("randchi2 is no longer supported; use the Distributions package instead:
     using Distributions
-    rand(Chisq())")
+    rand(Gamma())
+")
+
+randbeta(x...) = error("randbeta is no longer supported, use the Distributions package instead:
+
+    using Distributions
+    rand(Beta)
+")
+
+randchi2(x...) = error("randchi2 is no longer supported, use the Distributions package instead:
+
+    using Distributions
+    rand(Chisq())
+")
