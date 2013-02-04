@@ -808,7 +808,7 @@ svdvals(A::StridedMatrix, B::StridedMatrix) = LAPACK.ggsvd!('N', 'N', 'N', copy(
 
 schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 
-function sqrtm(A::Matrix, cond::Bool)
+function sqrtm(A::StridedMatrix, cond::Bool)
     m, n = size(A)
     if m != n error("DimentionMismatch") end
     if ishermitian(A)
@@ -848,7 +848,9 @@ function sqrtm(A::Matrix, cond::Bool)
         end
     end
 end
-sqrtm(A::Matrix) = sqrtm(A, false)
+sqrtm{T<:Integer}(A::StridedMatrix{T}, cond::Bool) = sqrtm(float(A), cond)
+sqrtm{T<:Integer}(A::StridedMatrix{ComplexPair{T}}, cond::Bool) = sqrtm(complex128(A), cond)
+sqrtm(A::StridedMatrix) = sqrtm(A, false)
 sqrtm(a::Number) = isreal(a) ? (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)  : sqrt(a)
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
