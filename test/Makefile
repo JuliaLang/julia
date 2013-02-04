@@ -5,7 +5,7 @@ default all extra unicode gzip::
 
 TESTS = default all extra \
 core numbers strings unicode corelib hashing remote \
-arrayops linalg fft dct sparse bitarray suitesparse arpack \
+arrayops blas linalg fft dct sparse bitarray suitesparse arpack \
 random math functional bigint bigfloat sorting \
 statistics poly file Rmath remote zlib image \
 iostring gzip integers spawn ccall parallel
