@@ -7,3 +7,6 @@
 [submodule "deps/nginx"]
 	path = deps/nginx
 	url = git://github.com/git-mirror/nginx
+[submodule "deps/Rmath"]
+	path = deps/Rmath
+	url = git://github.com/JuliaLang/Rmath.git
