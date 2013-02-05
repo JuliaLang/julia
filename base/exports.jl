@@ -853,7 +853,6 @@ export
     next,
     enumerate,
     zip,
-    times,
 
 # object identity and equality
     copy,
