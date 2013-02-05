@@ -2,7 +2,7 @@ importall Base
 
 type BubbleSort <: Sort.Algorithm end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, ::BubbleSort, o::Sort.Ordering)
+function sort!(::BubbleSort, o::Sort.Ordering, v::AbstractVector, lo::Int, hi::Int)
 	while true
 		clean = true
 		for i = lo:hi-1

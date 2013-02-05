@@ -390,7 +390,7 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
             break
         end
     end
-    sort!(a, left(o),  v, lo, j)
+    sort!(a, left(o),  v, lo, j )
     sort!(a, right(o), v, i,  hi)
     return v
 end
