@@ -85,7 +85,16 @@ function filter!(f::Function, d::Associative)
     end
     return d
 end
-filter(f::Function, d::Associative) = filter!(f,copy(d))
+function filter(f::Function, as::Associative)
+    as_type = typeof(as)
+    result = as_type{as_type.parameters}()
+    for (k,v) in as
+        if f(k,v)
+            result[k] = v
+        end
+    end
+    return result
+end
 
 keytype{K,V}(a::Associative{K, V}) = K
 valtype{K,V}(a::Associative{K, V}) = V
