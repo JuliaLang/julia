@@ -184,8 +184,7 @@ sparsevec(I::AbstractVector, V) = sparsevec(I, V, max(I), +)
 function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
     nI = length(I)
     if isa(V, Number); V = fill(V, nI); end
-    (I, P) = sortperm(I)
-    V = V[P]
+    V = V[sortperm(I)]
     sparse_IJ_sorted!(I, ones(Int, nI), V, m, 1, combine)
 end
 
