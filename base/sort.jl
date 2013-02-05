@@ -285,7 +285,7 @@ for s in {:sort!, :sort}
         $s{A<:Algorithm}(v::AbstractVector, a::Union(A,Type{A}), lt::Function) = $s(v,a,Sort.Lt(lt))
         $s{A<:Algorithm}(v::AbstractVector, lt::Function, a::Union(A,Type{A})) = $s(v,a,lt)
         $s              (v::AbstractVector, lt::Function)                      = $s(v,Sort.Lt(lt))
-        $s{A<:Algorithm}(lt::Function, v::AbstractVector, args...)             = $s(v,lt,args...)
+        $s              (lt::Function, v::AbstractVector, args...)             = $s(v,lt,args...)
     end
 end
 
@@ -294,7 +294,7 @@ for (sb,s) in {(:sortby!, :sort!), (:sortby, :sort)}
         $sb{A<:Algorithm}(v::AbstractVector, a::Union(A,Type{A}), by::Function) = $s(v,a,Sort.By(by))
         $sb{A<:Algorithm}(v::AbstractVector, by::Function, a::Union(A,Type{A})) = $s(v,a,by)
         $sb              (v::AbstractVector, by::Function)                      = $s(v,Sort.By(by))
-        $sb{A<:Algorithm}(by::Function, v::AbstractVector, args...)             = $s(v,by,args...)
+        $sb              (by::Function, v::AbstractVector, args...)             = $s(v,Sort.By(by),args...)
     end
 end
 
