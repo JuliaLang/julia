@@ -1698,7 +1698,15 @@ function filter!(f::Function, a::Vector)
     return a
 end
 
-filter(f::Function, a::Vector) = filter!(f, copy(a))
+function filter(f::Function, a::Vector)
+    r = Array(eltype(a), 0)
+    for i = 1:length(a)
+        if f(a[i])
+            push!(r, a[i])
+        end
+    end
+    return r
+end
 
 ## Transpose ##
 
