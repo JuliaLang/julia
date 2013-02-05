@@ -73,6 +73,16 @@ for alg in [InsertionSort, MergeSort, TimSort]
     b = a[ix]
     @test issorted(b, Sort.By(x -> -10x))
     @test a[ix] == b
+
+    c = sort(a, alg) do x,y
+        x > y
+    end
+    @test b == c
+
+    c = sortby(a, alg) do x
+        -10x
+    end
+    @test b == c
 end
 
 b = sort(a, QuickSort)

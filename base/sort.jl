@@ -31,6 +31,11 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+# not exported
+    # selectby
+    # selectby!
+    # sortpermby
+
 ## notions of element ordering ##
 
 abstract Ordering
@@ -91,16 +96,19 @@ select             (v::AbstractVector, k::Int, o::Ordering) = select!(copy(v), k
 select{T<:Ordering}(v::AbstractVector, k::Int, ::Type{T})   = select (v,       k, T())
 select             (v::AbstractVector, k::Int)              = select!(copy(v), k)
 
-# TODO: do we want these?
-#for s in {:select!, :select}
-#    $s(v::AbstractVector, k::Int, lt::Function)  = $s(v,k,Sort.Lt(lt))
-#    $s(lt::Function, v::AbstractVector, k::Int)  = $s(v,k,lt)
-#end
+for s in {:select!, :select}
+    @eval begin
+        $s(v::AbstractVector, k::Int, lt::Function)  = $s(v,k,Sort.Lt(lt))
+        $s(lt::Function, v::AbstractVector, k::Int)  = $s(v,k,lt)
+    end
+end
 
-#for s in {:selectby!, :selectby}
-#    $s(v::AbstractVector, k::Int, by::Function)  = $s(v,k,Sort.By(by))
-#    $s(by::Function, v::AbstractVector, k::Int)  = $s(v,k,by)
-#end
+for s in {:selectby!, :selectby}
+    @eval begin
+        $s(v::AbstractVector, k::Int, by::Function)  = $s(v,k,Sort.By(by))
+        $s(by::Function, v::AbstractVector, k::Int)  = $s(v,k,by)
+    end
+end
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
@@ -280,7 +288,7 @@ for s in {:sort!, :sort, :sortperm}
     end
 end
 
-for s in {:sort!, :sort}
+for s in {:sort!, :sort, :sortperm}
     @eval begin
         $s{A<:Algorithm}(v::AbstractVector, a::Union(A,Type{A}), lt::Function) = $s(v,a,Sort.Lt(lt))
         $s{A<:Algorithm}(v::AbstractVector, lt::Function, a::Union(A,Type{A})) = $s(v,a,lt)
@@ -289,7 +297,7 @@ for s in {:sort!, :sort}
     end
 end
 
-for (sb,s) in {(:sortby!, :sort!), (:sortby, :sort)}
+for (sb,s) in {(:sortby!, :sort!), (:sortby, :sort), (:sortpermby, :sortperm)}
     @eval begin
         $sb{A<:Algorithm}(v::AbstractVector, a::Union(A,Type{A}), by::Function) = $s(v,a,Sort.By(by))
         $sb{A<:Algorithm}(v::AbstractVector, by::Function, a::Union(A,Type{A})) = $s(v,a,by)
