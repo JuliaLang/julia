@@ -91,6 +91,17 @@ select             (v::AbstractVector, k::Int, o::Ordering) = select!(copy(v), k
 select{T<:Ordering}(v::AbstractVector, k::Int, ::Type{T})   = select (v,       k, T())
 select             (v::AbstractVector, k::Int)              = select!(copy(v), k)
 
+# TODO: do we want these?
+#for s in {:select!, :select}
+#    $s(v::AbstractVector, k::Int, lt::Function)  = $s(v,k,Sort.Lt(lt))
+#    $s(lt::Function, v::AbstractVector, k::Int)  = $s(v,k,lt)
+#end
+
+#for s in {:selectby!, :selectby}
+#    $s(v::AbstractVector, k::Int, by::Function)  = $s(v,k,Sort.By(by))
+#    $s(by::Function, v::AbstractVector, k::Int)  = $s(v,k,by)
+#end
+
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
 
@@ -148,7 +159,7 @@ const DEFAULT_STABLE   = MergeSort()
 const SMALL_ALGORITHM  = InsertionSort()
 const SMALL_THRESHOLD  = 20
 
-sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, 1, length(v), a, o)
+sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(a, o, v, 1, length(v) )
 sort (v::AbstractVector, a::Algorithm, o::Ordering) = sort!(copy(v), a, o)
 
 sort!{T<:Number}(v::AbstractVector{T}, o::Ordering) = sort!(v, DEFAULT_UNSTABLE, o)
@@ -157,7 +168,7 @@ sort {T<:Number}(v::AbstractVector{T}, o::Ordering) = sort (v, DEFAULT_UNSTABLE,
 sort!(v::AbstractVector, o::Ordering) = sort!(v, DEFAULT_STABLE, o)
 sort (v::AbstractVector, o::Ordering) = sort (v, DEFAULT_STABLE, o)
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSort, o::Ordering)
+function sort!(::InsertionSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int)
     for i = lo+1:hi
         j = i
         x = v[i]
@@ -174,9 +185,9 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSort, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSort, o::Ordering)
+function sort!(a::QuickSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int)
     while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        hi-lo <= SMALL_THRESHOLD && return sort!(SMALL_ALGORITHM, o, v, lo, hi)
         pivot = v[(lo+hi)>>>1]
         i, j = lo, hi
         while true
@@ -186,19 +197,19 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSort, o::Ordering)
             v[i], v[j] = v[j], v[i]
             i += 1; j -= 1
         end
-        lo < j && sort!(v, lo, j, a, o)
+        lo < j && sort!(a, o, v, lo, j)
         lo = i
     end
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, t::AbstractVector, a::MergeSort, o::Ordering)
+function sort!(a::MergeSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int, t::AbstractVector)
     if lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        hi-lo <= SMALL_THRESHOLD && return sort!(SMALL_ALGORITHM, o, v, lo, hi)
 
         m = (lo+hi)>>>1
-        sort!(v, lo,  m,  t, a, o)
-        sort!(v, m+1, hi, t, a, o)
+        sort!(a, o, v, lo,  m,  t)
+        sort!(a, o, v, m+1, hi, t)
 
         i, j = 1, lo
         while j <= m
@@ -227,7 +238,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, t::AbstractVector, a::MergeS
 
     return v
 end
-sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSort, o::Ordering) = sort!(v,lo,hi,similar(v),a,o)
+sort!(a::MergeSort, o::Ordering, v::AbstractVector, lo::Int, hi::Int) = sort!(a,o,v,lo,hi,similar(v))
 
 include("timsort.jl")
 
@@ -379,8 +390,8 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
             break
         end
     end
-    sort!(v, lo, j,  a, left(o))
-    sort!(v, i,  hi, a, right(o))
+    sort!(a, left(o),  v, lo, j)
+    sort!(a, right(o), v, i,  hi)
     return v
 end
 sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::Direct) = fpsort!(v,a,o)
