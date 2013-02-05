@@ -33,7 +33,7 @@ type ResolveParams
     function ResolveParams()
         accuracy = int(get(ENV, "JULIA_PKGRESOLVE_ACCURACY", 1))
         if accuracy <= 0
-            error("error: JULIA_PKGRESOLVE_ACCURACY must be >= 1")
+            error("JULIA_PKGRESOLVE_ACCURACY must be >= 1")
         end
         nondec_iterations = accuracy * 20
         dec_interval = accuracy * 10

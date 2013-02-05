@@ -98,7 +98,7 @@ function eval_user_input(ast::ANY, show_value)
             break
         catch err
             if iserr
-                println("SYSTEM ERROR: show(lasterr) caused an error")
+                println("SYSTEM: show(lasterr) caused an error")
             end
             iserr, lasterr = true, err
             bt = backtrace()
@@ -367,31 +367,3 @@ function _atexit()
         end
     end
 end
-
-# Have colors passed as simple symbols: :black, :red, ...
-function print_with_color(io::IO, color::Symbol, msg::String...)
-    if have_color
-        printed_color = get(text_colors, color, color_normal)
-        print(io, printed_color, msg..., color_normal)
-    else
-        print(io, msg...)
-    end
-end
-print_with_color(color::Symbol, msg::String...) =
-    print_with_color(OUTPUT_STREAM, color, msg...)
-
-# deprecated versions
-function print_with_color(io::IO, msg::String, color::Symbol)
-    warn("print_with_color(io, msg, color) is deprecated, ",
-         "use print_with_color(io, color, msg) instead.")
-    print_with_color(io, color, msg)
-end
-function print_with_color(msg::String, color::Symbol)
-    warn("print_with_color(msg, color) is deprecated, ",
-         "use print_with_color(color, msg) instead.")
-    print_with_color(color, msg)
-end
-
-# Use colors to print messages and warnings in the REPL
-info(msg::String...) = print_with_color(STDERR, :green, "MESSAGE: ", msg..., "\n")
-warn(msg::String...) = print_with_color(STDERR, :red,   "WARNING: ", msg..., "\n")

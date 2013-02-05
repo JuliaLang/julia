@@ -853,7 +853,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             #        # TODO: remove machine from group
             #        throw(DisconnectException())
             #    else
-            #        print("deserialization error: ", e, "\n")
+            #        print("deserialization: ", e, "\n")
             #        #while nb_available(sock) > 0 #|| select(sock)
             #        #    read(sock, Uint8)
             #        #end
