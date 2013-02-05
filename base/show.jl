@@ -309,40 +309,51 @@ end
 
 
 function show(io::IO, e::TypeError)
-    ctx = isempty(e.context) ? "" : "in $(e.context), "
-    if e.expected === Bool
-        print(io, "type error: non-boolean ($(typeof(e.got))) ",
-                  "used in boolean context")
-    elseif e.expected === Function && e.func === :apply && isa(e.got,AbstractKind)
-        print(io, "type error: cannot instantiate abstract type $(e.got.name)")
-    else
-        if isa(e.got,Type)
-            tstr = "Type{$(e.got)}"
+    with_output_color(:red, io) do io
+        ctx = isempty(e.context) ? "" : "in $(e.context), "
+        if e.expected === Bool
+            print(io, "type error: non-boolean ($(typeof(e.got))) ",
+                      "used in boolean context")
+        elseif e.expected === Function && e.func === :apply && isa(e.got,AbstractKind)
+            print(io, "type error: cannot instantiate abstract type $(e.got.name)")
         else
-            tstr = string(typeof(e.got))
+            if isa(e.got,Type)
+                tstr = "Type{$(e.got)}"
+            else
+                tstr = string(typeof(e.got))
+            end
+            print(io, "type error: $(e.func): ",
+                      "$(ctx)expected $(e.expected), ",
+                      "got $tstr")
         end
-        print(io, "type error: $(e.func): ",
-                  "$(ctx)expected $(e.expected), ",
-                  "got $tstr")
     end
 end
 
-show(io::IO, e::LoadError) = (show(io, e.error); print(io, "\nat $(e.file):$(e.line)"))
-show(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
-show(io::IO, ::DivideByZeroError) = print(io, "error: integer divide by zero")
-show(io::IO, ::StackOverflowError) = print(io, "error: stack overflow")
-show(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
-show(io::IO, ::EOFError) = print(io, "read: end of file")
-show(io::IO, e::ErrorException) = print(io, e.msg)
-show(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
+print_error(f::Function, io::IO, args...) = with_output_color(:red, io) do io
+    print("ERROR: ")
+    f(io, args...)
+end
+print_error(io::IO, args...) = print_error(print, io, args...)
+
+show(io::IO, e::LoadError) = print_error(io) do io
+    show(io, e.error)
+    print(io, "\nat $(e.file):$(e.line)")
+end
+show(io::IO, e::SystemError) = print_error(io, "$(e.prefix): $(strerror(e.errnum))")
+show(io::IO, ::DivideByZeroError) = print_error(io, "integer divide by zero")
+show(io::IO, ::StackOverflowError) = print_error(io, "stack overflow")
+show(io::IO, ::UndefRefError) = print_error(io, "access to undefined reference")
+show(io::IO, ::EOFError) = print_error(io, "read: end of file")
+show(io::IO, e::ErrorException) = print_error(io, e.msg)
+show(io::IO, e::KeyError) = print_error(io, "key not found: $(e.key)")
 show(io::IO, e::InterruptException) = nothing
 
 function show(io::IO, e::MethodError)
     name = e.f.env.name
     if is(e.f,convert)
-        print(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
+        print_error(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
     else
-        print(io, "no method $(name)$(typeof(e.args))")
+        print_error(io, "no method $(name)$(typeof(e.args))")
     end
 end
 

@@ -210,7 +210,7 @@ end
 if version() != (MAJOR_VERSION, MINOR_VERSION)
     bv = version()
     hv = (MAJOR_VERSION, MINOR_VERSION)
-    error("GLPK error: mismatched versions: header=$(hv[1]).$(hv[2]) binary=$(bv[1]).$(bv[2])")
+    error("GLPK: mismatched versions: header=$(hv[1]).$(hv[2]) binary=$(bv[1]).$(bv[2])")
 end
 #}}}
 

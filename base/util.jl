@@ -165,7 +165,7 @@ disassemble(f::Function, types::Tuple) =
 
 function methods(f::Function)
     if !isgeneric(f)
-        error("methods: error: not a generic function")
+        error("methods: not a generic function")
     end
     f.env
 end

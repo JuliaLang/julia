@@ -144,7 +144,7 @@ function wait_accept(server::TcpSocket)
     else
         err = _uv_lasterror()
         if err != 4 #EAGAIN
-            error("accept error: ", err, "\n")
+            error("accept: ", err, "\n")
         end
     end
     ct = current_task()
@@ -158,7 +158,7 @@ function wait_accept(server::TcpSocket)
         end
         status = args[2]::Int32
         if status == -1
-            error("listen error: ", _uv_lasterror(), "\n")
+            error("listen: ", _uv_lasterror(), "\n")
         end
         err = accept(server,client)
         if err == 0
@@ -166,7 +166,7 @@ function wait_accept(server::TcpSocket)
         else
             err = _uv_lasterror()
             if err != 4 #EAGAIN
-                error("accept error: ", err, "\n")
+                error("accept: ", err, "\n")
             end
         end
     end
