@@ -313,24 +313,22 @@ print_error(f::Function, io::IO, args...) = with_output_color(:red, io) do io
 end
 print_error(io::IO, args...) = print_error(print, io, args...)
 
-function show(io::IO, e::TypeError)
-    print_error(io) do io
-        ctx = isempty(e.context) ? "" : "in $(e.context), "
-        if e.expected === Bool
-            print(io, "type error: non-boolean ($(typeof(e.got))) ",
-                      "used in boolean context")
-        elseif e.expected === Function && e.func === :apply && isa(e.got,AbstractKind)
-            print(io, "type error: cannot instantiate abstract type $(e.got.name)")
+show(io::IO, e::TypeError) = print_error(io) do io
+    ctx = isempty(e.context) ? "" : "in $(e.context), "
+    if e.expected === Bool
+        print(io, "type error: non-boolean ($(typeof(e.got))) ",
+                  "used in boolean context")
+    elseif e.expected === Function && e.func === :apply && isa(e.got,AbstractKind)
+        print(io, "type error: cannot instantiate abstract type $(e.got.name)")
+    else
+        if isa(e.got,Type)
+            tstr = "Type{$(e.got)}"
         else
-            if isa(e.got,Type)
-                tstr = "Type{$(e.got)}"
-            else
-                tstr = string(typeof(e.got))
-            end
-            print(io, "type error: $(e.func): ",
-                      "$(ctx)expected $(e.expected), ",
-                      "got $tstr")
+            tstr = string(typeof(e.got))
         end
+        print(io, "type error: $(e.func): ",
+                  "$(ctx)expected $(e.expected), ",
+                  "got $tstr")
     end
 end
 
