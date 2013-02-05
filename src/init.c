@@ -228,6 +228,10 @@ DLLEXPORT void uv_atexit_hook()
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
         uv_handle_t *handle = item->h;
+        if (uv_is_closing(handle)) {
+            item = item->next;
+            continue;
+        }
         switch(handle->type) {
         case UV_TTY:
         case UV_UDP:
