@@ -307,9 +307,14 @@ function show_unquoted(io::IO, ex::SymbolNode)
     show_expr_type(io, ex.typ)
 end
 
+print_error(f::Function, io::IO, args...) = with_output_color(:red, io) do io
+    print("ERROR: ")
+    f(io, args...)
+end
+print_error(io::IO, args...) = print_error(print, io, args...)
 
 function show(io::IO, e::TypeError)
-    with_output_color(:red, io) do io
+    print_error(io) do io
         ctx = isempty(e.context) ? "" : "in $(e.context), "
         if e.expected === Bool
             print(io, "type error: non-boolean ($(typeof(e.got))) ",
@@ -329,16 +334,11 @@ function show(io::IO, e::TypeError)
     end
 end
 
-print_error(f::Function, io::IO, args...) = with_output_color(:red, io) do io
-    print("ERROR: ")
-    f(io, args...)
-end
-print_error(io::IO, args...) = print_error(print, io, args...)
-
 show(io::IO, e::LoadError) = print_error(io) do io
     show(io, e.error)
     print(io, "\nat $(e.file):$(e.line)")
 end
+
 show(io::IO, e::SystemError) = print_error(io, "$(e.prefix): $(strerror(e.errnum))")
 show(io::IO, ::DivideByZeroError) = print_error(io, "integer divide by zero")
 show(io::IO, ::StackOverflowError) = print_error(io, "stack overflow")
