@@ -34,3 +34,5 @@ clean:
 	rm -f pcre_h.jl
 	rm -f errno_h.jl
 	rm -f build_h.jl
+	rm -f uv_constants.jl
+	rm -f file_constants.jl
