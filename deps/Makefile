@@ -18,7 +18,7 @@ CONFIG_GUESS := $(shell ./config.guess)
 CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
 endif
 
-#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp glpk patchelf
+#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp patchelf
 #custom configure-driven script: zlib nginx
 #custom Makefile rules: openlibm Rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
 
@@ -27,7 +27,7 @@ unexport CONFIG_SITE
 
 STAGE1_DEPS = uv openlibm-extras random Rmath double-conversion
 STAGE2_DEPS = gmp-wrapper
-STAGE3_DEPS = glpk-wrapper suitesparse-wrapper
+STAGE3_DEPS = suitesparse-wrapper
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
@@ -78,10 +78,6 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
-ifeq ($(USE_SYSTEM_GLPK), 0)
-STAGE1_DEPS += glpk
-endif
-
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 STAGE1_DEPS += zlib
 endif
@@ -118,7 +114,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-clp get-unwind get-nginx get-gmp get-glpk get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-clp get-unwind get-nginx get-gmp get-zlib get-patchelf
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -1233,73 +1229,6 @@ configure-gmp-wrapper:
 compile-gmp-wrapper:
 check-gmp-wrapper:
 install-gmp-wrapper: $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT)
-
-
-## GLPK ##
-
-GLPK_SRC_TARGET = glpk-$(GLPK_VER)/src/.libs/libglpk.$(SHLIB_EXT)
-GLPK_OBJ_TARGET = $(BUILD)/lib/libglpk.$(SHLIB_EXT)
-
-glpk-$(GLPK_VER).tar.gz:
-	$(WGET) http://ftp.gnu.org/gnu/glpk/$@
-glpk-$(GLPK_VER)/configure: glpk-$(GLPK_VER).tar.gz
-	tar zxf $<
-	touch -c $@
-glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
-	cd glpk-$(GLPK_VER) && \
-	./configure $(CONFIGURE_COMMON)
-	touch -c $@
-$(GLPK_SRC_TARGET): glpk-$(GLPK_VER)/config.status
-	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD)
-	touch -c $@
-glpk-$(GLPK_VER)/checked: $(GLPK_SRC_TARGET)
-ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) check
-endif
-	echo 1 > $@
-$(GLPK_OBJ_TARGET): $(GLPK_SRC_TARGET) glpk-$(GLPK_VER)/checked
-	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) install
-	$(INSTALL_NAME_CMD)libglpk.dylib $@
-	$(AUTOTOOLS_PATH_CORRECT)
-	touch -c $@
-
-clean-glpk:
-	-$(MAKE) -C glpk-$(GLPK_VER) uninstall || true
-	-$(MAKE) -C glpk-$(GLPK_VER) clean
-distclean-glpk: clean-glpk
-	-rm -rf glpk-$(GLPK_VER).tar.gz glpk-$(GLPK_VER)
-
-get-glpk: glpk-$(GLPK_VER).tar.gz
-configure-glpk: glpk-$(GLPK_VER)/config.status
-compile-glpk: $(GLPK_SRC_TARGET)
-check-glpk: glpk-$(GLPK_VER)/checked
-install-glpk: $(GLPK_OBJ_TARGET) $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT)
-
-## GLPK Wrapper
-
-ifeq ($(USE_SYSTEM_GLPK), 1)
-GLPKW_INC = -I /usr/include/
-GLPKW_LIB = -lglpk
-else
-GLPKW_INC = -I $(BUILD)/include
-GLPKW_LIB = -L$(BUILD)/lib -lglpk
-$(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT): $(GLPK_OBJ_TARGET)
-endif
-
-$(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT) $(RPATH_ORIGIN)
-	$(INSTALL_NAME_CMD)libglpk_wrapper.$(SHLIB_EXT) $@
-	touch -c $@
-
-clean-glpk-wrapper:
-	-rm -f $(GLPK_OBJ_TARGET) $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT)
-distclean-glpk-wrapper: clean-glpk-wrapper
-
-get-glpk-wrapper:
-configure-glpk-wrapper:
-compile-glpk-wrapper:
-check-glpk-wrapper:
-install-glpk-wrapper: $(BUILD)/lib/libglpk_wrapper.$(SHLIB_EXT)
 
 
 ## ZLIB ##
