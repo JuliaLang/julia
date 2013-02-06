@@ -448,6 +448,7 @@ type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
     tol::Real
     function CholeskyDensePivoted(A::Matrix{T}, UL::BlasChar, tol::Real)
         A, piv, rank, info = LAPACK.pstrf!(UL, A, tol)
+        if info != 0; throw(LAPACK.RankDeficientException(info)); end
         if UL == 'U'
             new(triu!(A), UL, piv, rank, tol)
         elseif UL == 'L'
@@ -464,11 +465,12 @@ size(C::CholeskyDensePivoted,d::Integer) = size(C.LR,d)
 factors(C::CholeskyDensePivoted) = C.LR, C.piv
 
 function \{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedVector{T})
-    if C.rank < size(C.LR, 1) error("Matrix is not positive-definite") end
+    if C.rank < size(C.LR, 1); throw(LAPACK.RankDeficientException(info)); end
     LAPACK.potrs!(C.UL, C.LR, copy(B)[C.piv])[invperm(C.piv)]
 end
+
 function \{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedMatrix{T})
-    if C.rank < size(C.LR, 1) error("Matrix is not positive-definite") end
+    if C.rank < size(C.LR, 1); throw(LAPACK.RankDeficientException(info)); end
     LAPACK.potrs!(C.UL, C.LR, copy(B)[C.piv,:])[invperm(C.piv),:]
 end
 
@@ -491,18 +493,20 @@ function inv(C::CholeskyDensePivoted)
 end
 
 ## Should these functions check that the matrix is Hermitian?
-cholpd!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = CholeskyDensePivoted{T}(A, UL, tol)
-cholpd!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpd!(A, UL, -1.)
-cholpd!{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpd!(A, 'U', tol)
-cholpd!{T<:BlasFloat}(A::Matrix{T}) = cholpd!(A, 'U', -1.)
-cholpd{T<:Number}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpd(float64(A), UL, tol)
-cholpd{T<:Number}(A::Matrix{T}, UL::BlasChar) = cholpd(float64(A), UL, -1.)
-cholpd{T<:Number}(A::Matrix{T}, tol::Real) = cholpd(float64(A), true, tol)
-cholpd{T<:Number}(A::Matrix{T}) = cholpd(float64(A), 'U', -1.)
-cholpd{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpd!(copy(A), UL, tol)
-cholpd{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpd!(copy(A), UL, -1.)
-cholpd{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpd!(copy(A), 'U', tol)
-cholpd{T<:BlasFloat}(A::Matrix{T}) = cholpd!(copy(A), 'U', -1.)
+cholpivot!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = CholeskyDensePivoted{T}(A, UL, tol)
+cholpivot!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpivot!(A, UL, -1.)
+cholpivot!{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpivot!(A, 'U', tol)
+cholpivot!{T<:BlasFloat}(A::Matrix{T}) = cholpivot!(A, 'U', -1.)
+cholpivot{T<:Number}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpivot(float64(A), UL, tol)
+cholpivot{T<:Number}(A::Matrix{T}, UL::BlasChar) = cholpivot(float64(A), UL, -1.)
+cholpivot{T<:Number}(A::Matrix{T}, tol::Real) = cholpivot(float64(A), true, tol)
+cholpivot{T<:Number}(A::Matrix{T}) = cholpivot(float64(A), 'U', -1.)
+cholpivot{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpivot!(copy(A), UL, tol)
+cholpivot{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpivot!(copy(A), UL, -1.)
+cholpivot{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpivot!(copy(A), 'U', tol)
+cholpivot{T<:BlasFloat}(A::Matrix{T}) = cholpivot!(copy(A), 'U', -1.)
+
+# LU Factorization
 
 type LUDense{T} <: Factorization{T}
     lu::Matrix{T}

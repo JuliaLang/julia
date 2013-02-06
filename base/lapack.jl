@@ -16,6 +16,10 @@ type PosDefException <: Exception
     info::BlasInt
 end
 
+type RankDeficientException <: Exception
+    info::BlasInt
+end
+
 type SingularException <: Exception
     info::BlasInt
 end

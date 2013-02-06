@@ -8,7 +8,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         apd   = a'*a                    # symmetric positive-definite
         b     = convert(Vector{elty}, b)
         
-        capd  = chold(apd)              # upper Cholesky factor
+        capd  = chol(apd)              # upper Cholesky factor
         r     = factors(capd)
         @assert_approx_eq r'*r apd
         @assert_approx_eq b apd * (capd\b)
@@ -16,10 +16,10 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq a*(capd\(a'*b)) b # least squares soln for square a
         @assert_approx_eq det(capd) det(apd)
 
-        l     = factors(chold(apd, 'L')) # lower Cholesky factor
+        l     = factors(chol(apd, 'L')) # lower Cholesky factor
         @assert_approx_eq l*l' apd
 
-        cpapd = cholpd(apd)           # pivoted Choleksy decomposition
+        cpapd = cholpivot(apd)           # pivoted Choleksy decomposition
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.LR))).<=0.) # diagonal should be non-increasing
         @assert_approx_eq b apd * (cpapd\b)

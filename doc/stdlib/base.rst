@@ -1728,6 +1728,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``chol!`` is the same as ``chol``, but overwrites the input matrix A with the factorization.
 
+.. function:: cholpivot(A, [LU])
+
+   Compute the pivoted Cholesky factorization of ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The ``factors(cholpivot(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``.
+
+.. function:: cholpivot!(A, [LU])
+
+   ``cholpivot!`` is the same as ``cholpivot``, but overwrites the input matrix A with the factorization.
+
 .. function:: qr(A)
 
    Compute QR factorization
