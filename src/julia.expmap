@@ -298,7 +298,6 @@
     u8_strlen;
     u8_strwidth;
     uv_*;
-    LLVM*;
     add_library_mapping;
 
     /* freebsd */
