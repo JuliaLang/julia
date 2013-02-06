@@ -1740,7 +1740,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     else {
         if (!strcmp(head->name, "$"))
-            jl_error("syntax error: prefix $ in non-quoted expression");
+            jl_error("syntax: prefix $ in non-quoted expression");
         // some expression types are metadata and can be ignored
         if (valuepos || !(head == line_sym || head == type_goto_sym)) {
             jl_errorf("unsupported or misplaced expression %s in function %s",

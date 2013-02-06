@@ -308,7 +308,7 @@ function show_unquoted(io::IO, ex::SymbolNode)
 end
 
 print_error(f::Function, io::IO, args...) = with_output_color(:red, io) do io
-    print("ERROR: ")
+    print(io, "ERROR: ")
     f(io, args...)
 end
 print_error(io::IO, args...) = print_error(print, io, args...)
@@ -316,23 +316,23 @@ print_error(io::IO, args...) = print_error(print, io, args...)
 show(io::IO, e::TypeError) = print_error(io) do io
     ctx = isempty(e.context) ? "" : "in $(e.context), "
     if e.expected === Bool
-        print(io, "type error: non-boolean ($(typeof(e.got))) ",
+        print(io, "type: non-boolean ($(typeof(e.got))) ",
                   "used in boolean context")
     elseif e.expected === Function && e.func === :apply && isa(e.got,AbstractKind)
-        print(io, "type error: cannot instantiate abstract type $(e.got.name)")
+        print(io, "type: cannot instantiate abstract type $(e.got.name)")
     else
         if isa(e.got,Type)
             tstr = "Type{$(e.got)}"
         else
             tstr = string(typeof(e.got))
         end
-        print(io, "type error: $(e.func): ",
+        print(io, "type: $(e.func): ",
                   "$(ctx)expected $(e.expected), ",
                   "got $tstr")
     end
 end
 
-show(io::IO, e::LoadError) = print_error(io) do io
+function show(io::IO, e::LoadError)
     show(io, e.error)
     print(io, "\nat $(e.file):$(e.line)")
 end
