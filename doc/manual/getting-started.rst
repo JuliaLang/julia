@@ -4,7 +4,7 @@
  Getting Started  
 *****************
 
-Julia binaries are available for `Mac and Windows <http://code.google.com/p/julialang/downloads/list>`_. Installation is straightforward for precompiled binaries or compiling from source:
+Mac and Windows binaries are available for download at `http://code.google.com/p/julialang/downloads/list <http://code.google.com/p/julialang/downloads/list>`_. Installation is straightforward, whether using precompiled binaries or compiling from source:
 
 1. On a Mac, download the tar.gz file from the downloads page. Double-click on the downloaded file to uncompress and extract it into a directory. Start Julia by double-clicking the `julia` executable in the julia directory.
 
@@ -92,12 +92,12 @@ those available for the ``perl`` and ``ruby`` programs::
      -h --help                Print this message
 
 
-Major Differences From MATLAB
------------------------------
+Noteworthy differences From MATLAB
+----------------------------------
 
-Julia's syntax is intended to be familiar to users of MATLAB. However,
+MATLAB users may find Julia's syntax familiar. However,
 Julia is in no way a MATLAB clone: there are major syntactic and
-functional differences. The following are the most significant
+functional differences. The following are some noteworthy
 differences that may trip up Julia users accustomed to MATLAB:
 
 -  Arrays are indexed with square brackets, ``A[i,j]``.
@@ -140,3 +140,36 @@ differences that may trip up Julia users accustomed to MATLAB:
    operators, ``<``, ``>``, ``!=``, etc.
 -  The elements of a collection can be passed as arguments to a function
    using ``...``, as in ``xs=[1,2]; f(xs...)``.
+
+Noteworthy differences from R
+-----------------------------
+
+One of Julia's goals is to provide an effective language for data analysis and statistical programming. For users coming to Julia from R, these are some noteworthy differences:
+
+- Julia uses `=` for assignment. Julia does not provide any operator like `<-` or `<-`.
+- Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
+- Julia's matrix operations are more like traditional mathematical notation than R's. If `A` and `B` are matrices, then `A * B` defines a matrix multiplication in Julia equivalent to R's `A %*% B`. In R, this some notation would perform an elementwise Hadamard product. To get the elementwise multiplication operation, you need to write `A .* B` in Julia.
+- Julia performs matrix transposition using the `'` operator. Julia's `A'` is therefore equivalent to R's `t(A)`.
+- Julia does not require parentheses when writing `if` statements or `for` loops: use `for i in [1, 2, 3]` instead of `for (i in c(1, 2, 3))` and `if i == 1` instead of `if (i == 1)`.
+- Julia does not treat the numbers `0` and `1` as Booleans. You cannot write `if (1)` in Julia, because `if` statements accept only booleans. Instead, you can write `if true`.
+- Julia does not provide `nrow` and `ncol`. Instead, use `size(M, 1)` for `nrow(M)` and `size(M, 2)` for `ncol(M)`.
+- Julia's SVD is not thinned by default, unlike R. To get results like R's, you will often want to call `svd(X, true)` on a matrix `X`.
+- Julia is very careful to distinguish scalars, vectors and matrices. In R, `1` and `c(1)` are the same. In Julia, they can not be used interchangeably. One potentially confusing result of this is that `x' - y` for vectors `x` and `y` is a 1-element vector, not a scalar. To get a scalar, use `dot(x, y)`.
+- Julia's `diag()` and `diagm()` are not like R's.
+- Julia cannot assign to the results of function calls on the left-hand of an assignment operation: you cannot write `diag(M) = ones(n)`.
+- Julia discourages populating the main namespace with functions. Most statistical functionality for Julia is found in packages like the DataFrames and Distributions packages:
+	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
+	- The `DataFrames package <https://github.com/HarlanH/DataFrames.jl>`_ provides data frames.
+	- Formulas for GLM's must be escaped: use `:(y ~ x)` instead of `y ~ x`.
+- Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of `list(a = 1, b = 2)`, use `(1, 2)`. 
+- Julia encourages all users to write their own types. Julia's types are much easier to use than S3 or S4 objects in R. Julia's multiple dispatch system means that `table(x::TypeA)` and `table(x::TypeB)` act like R's `table.TypeA(x)` and `table.TypeB(x)`.
+- In Julia, values are passed and assigned by reference. If a function modifies an array, the changes will be visible in the caller. This is very different from R and allows new functions to operate on large data structures much more efficiently.
+- Concatenation of vectors and matrices is done using `hcat` and `vcat`, not `c`, `rbind` and `cbind`.
+- A Julia range object like `a:b` is not shorthand for a vector like in R, but is a specialized type of object that is used for iteration without high memory overhead. To convert a range into a vector, you need to 
+- Julia has several functions that can mutate their arguments. For example, it has `sort(v)` and `sort!(v)`.
+- `colMeans()` and `rowMeans()`, `size(m, 1)` and `size(m, 2)`
+- In R, performance requires vectorization. In Julia, almost the opposite is true: the best performing code is often achieved by using devectorized loops.
+- Unlike R, there is no delayed evaluation in Julia. For most users, this means that there are very few unquoted expressions or column names.
+- Julia does not `NULL` type.
+- Julia currently has no keyword arguments, but it is a planned feature.
+- There is no equivalent of R's `assign` or `get` in Julia.
