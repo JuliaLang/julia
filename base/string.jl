@@ -288,6 +288,16 @@ strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
 strwidth(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
 # TODO: implement and use u8_strnwidth that takes a length argument
 
+## libc character class predicates ##
+
+isascii(c::Char) = c < 0x80
+
+for name = ("alnum", "alpha", "blank", "cntrl", "digit", "graph",
+            "lower", "print", "punct", "space", "upper", "xdigit")
+    f = symbol(string("is",name))
+    @eval ($f)(c::Char) = bool(ccall($(string("is",name)), Int32, (Char,), c))
+end
+
 ## generic string uses only endof and next ##
 
 type GenericString <: String
@@ -436,9 +446,7 @@ function next(s::RopeString, i::Int)
 end
 
 endof(s::RopeString) = s.endof
-
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
-
 write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 
 ## transformed strings ##
@@ -567,7 +575,7 @@ function print_escaped(io, s::String, esc::String)
         c == '\\'       ? print(io, "\\\\") :
         contains(esc,c) ? print(io, '\\', c) :
         7 <= c <= 13    ? print(io, '\\', "abtnvfr"[int(c-6)]) :
-        iswprint(c)     ? print(io, c) :
+        isprint(c)      ? print(io, c) :
         c <= '\x7f'     ? print(io, L"\x", hex(c, 2)) :
         c <= '\uffff'   ? print(io, L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
                           print(io, L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
@@ -753,13 +761,13 @@ function shell_parse(raw::String, interp::Bool)
 
     while !done(s,j)
         c, k = next(s,j)
-        if !in_single_quotes && !in_double_quotes && iswspace(c)
+        if !in_single_quotes && !in_double_quotes && isspace(c)
             update_arg(s[i:j-1])
             append_arg()
             j = k
             while !done(s,j)
                 c, k = next(s,j)
-                if !iswspace(c)
+                if !isspace(c)
                     i = j
                     break
                 end
@@ -770,7 +778,7 @@ function shell_parse(raw::String, interp::Bool)
             if done(s,k)
                 error("\$ right before end of command")
             end
-            if iswspace(s[k])
+            if isspace(s[k])
                 error("space not allowed right after \$")
             end
             ex, j = parseatom(s,j)
@@ -838,7 +846,7 @@ function print_shell_word(io, word::String)
     has_single = false
     has_special = false
     for c in word
-        if iswspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
+        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
             has_special = true
             if c == '\''
                 has_single = true
@@ -1050,7 +1058,7 @@ function lstrip(s::String)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        if !iswspace(c)
+        if !isspace(c)
             return s[i:end]
         end
         i = j
@@ -1063,7 +1071,7 @@ function rstrip(s::String)
     i = start(r)
     while !done(r,i)
         c, j = next(r,i)
-        if !iswspace(c)
+        if !isspace(c)
             return s[1:end-i+1]
         end
         i = j
@@ -1085,7 +1093,7 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
             )))
         end
         c,i = next(s,i)
-        if !iswspace(c)
+        if !isspace(c)
             break
         end
     end
@@ -1113,14 +1121,14 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
             'A' <= c <= 'Z' ? c-'A'+10 :
             'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
         if d >= base
-            if !iswspace(c)
+            if !isspace(c)
                 throw(ArgumentError(string(
                     repr(c)," is not a valid digit (in ", repr(s), ")"
                 )))
             end
             while !done(s,i)
                 c,i = next(s,i)
-                if !iswspace(c)
+                if !isspace(c)
                     throw(ArgumentError(string(
                         "extra characters after whitespace (in ", repr(s), ")"
                     )))

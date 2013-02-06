@@ -67,7 +67,7 @@ function parse_json(strng::String)
     end
     
     function skip_whitespace()
-        while pos <= len && iswspace(strng[pos])
+        while pos <= len && isspace(strng[pos])
             pos = pos + 1
         end
     end
