@@ -298,22 +298,22 @@ end
 
 lapack_size(t::Char, M::StridedVecOrMat) = (t == 'N') ? (size(M, 1), size(M, 2)) : (size(M,2), size(M, 1))
 
-function copy_to{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if tM == 'N'
-        copy_to(B, ir_dest, jr_dest, M, ir_src, jr_src)
+        copy!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
-        copy_to_transpose(B, ir_dest, jr_dest, M, jr_src, ir_src)
+        copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         if tM == 'C'
             conj!(B)
         end
     end
 end
 
-function copy_to_transpose{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if tM == 'N'
-        copy_to_transpose(B, ir_dest, jr_dest, M, ir_src, jr_src)
+        copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
-        copy_to(B, ir_dest, jr_dest, M, jr_src, ir_src)
+        copy!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         if tM == 'C'
             conj!(B)
         end
@@ -408,8 +408,8 @@ function generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{
         z = zero(R)
 
         if mA < tile_size && nA < tile_size && nB < tile_size
-            copy_to_transpose(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
-            copy_to(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
+            copy_transpose!(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
+            copy!(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
             for j = 1:nB
                 boff = (j-1)*tile_size
                 for i = 1:mA
@@ -433,8 +433,8 @@ function generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{
                     for kb = 1:tile_size:nA
                         klim = min(kb+tile_size-1,mB)
                         klen = klim-kb+1
-                        copy_to_transpose(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
-                        copy_to(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
+                        copy_transpose!(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
+                        copy!(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
                         for j=1:jlen
                             bcoff = (j-1)*tile_size
                             for i = 1:ilen
@@ -447,7 +447,7 @@ function generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{
                             end
                         end
                     end
-                    copy_to(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
+                    copy!(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
                 end
             end
         end

@@ -65,6 +65,7 @@ end
 @deprecate  iswspace      isspace
 @deprecate  iswupper      isupper
 @deprecate  iswxdigit     isxdigit
+@deprecate  copy_to       copy!
 
 export randi
 function randi(n,x...)

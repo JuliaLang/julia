@@ -147,7 +147,7 @@ end
 size(s::SubArray) = s.dims
 ndims{T,N}(s::SubArray{T,N}) = N
 
-copy(s::SubArray) = copy_to(similar(s.parent, size(s)), s)
+copy(s::SubArray) = copy!(similar(s.parent, size(s)), s)
 similar(s::SubArray, T, dims::Dims) = similar(s.parent, T, dims)
 
 ref{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]

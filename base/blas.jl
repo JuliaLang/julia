@@ -445,7 +445,7 @@ end # module
 
 # Use BLAS copy for small arrays where it is faster than memcpy, and for strided copying
 
-function copy_to{T<:BlasFloat}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
+function copy!{T<:BlasFloat}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
         BLAS.copy!(n, src, 1, dest, 1)
     else
@@ -454,15 +454,15 @@ function copy_to{T<:BlasFloat}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     return dest
 end
 
-function copy_to{T<:BlasFloat}(dest::Array{T}, src::Array{T})
+function copy!{T<:BlasFloat}(dest::Array{T}, src::Array{T})
     n = length(src)
     if n > length(dest); throw(BoundsError()); end
-    copy_to(pointer(dest), pointer(src), n)
+    copy!(pointer(dest), pointer(src), n)
     return dest
 end
 
-function copy_to{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{Ti},Range{Ti}), 
-                                            src::Array{T}, rsrc::Union(Range1{Ti},Range{Ti}))
+function copy!{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{Ti},Range{Ti}), 
+                                         src::Array{T}, rsrc::Union(Range1{Ti},Range{Ti}))
     if min(rdest) < 1 || max(rdest) > length(dest) || min(rsrc) < 1 || max(rsrc) > length(src)
         throw(BoundsError())
     end

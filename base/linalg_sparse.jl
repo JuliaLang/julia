@@ -335,7 +335,7 @@ function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     nzval = Array(Tv, numnz)
 
     if size(v,1) == 1
-        copy_to(colptr, 1, v.colptr, 1, n+1)
+        copy!(colptr, 1, v.colptr, 1, n+1)
         ptr = 1
         for col = 1:n
             if colptr[col] != colptr[col+1]
@@ -345,8 +345,8 @@ function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
             end
         end
     else
-        copy_to(rowval, 1, v.rowval, 1, numnz)
-        copy_to(nzval, 1, v.nzval, 1, numnz)
+        copy!(rowval, 1, v.rowval, 1, numnz)
+        copy!(nzval, 1, v.nzval, 1, numnz)
         colptr[1] = 1
         ptr = 1
         col = 1

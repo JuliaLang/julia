@@ -426,7 +426,7 @@ export
     circshift,
     colon,
     conj!,
-    copy_to,
+    copy!,
     cumprod,
     cumsum,
     cumsum_kbn,

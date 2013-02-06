@@ -101,7 +101,7 @@ function symdiff!(s::IntSet, ns)
    return s
 end
 
-function copy_to(to::IntSet, from::IntSet)
+function copy!(to::IntSet, from::IntSet)
     empty!(to)
     union!(to, from)
 end
