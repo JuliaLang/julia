@@ -12,6 +12,10 @@ type LapackException <: Exception
     info::BlasInt
 end
 
+type PosDefException <: Exception
+    info::BlasInt
+end
+
 type SingularException <: Exception
     info::BlasInt
 end

@@ -389,13 +389,15 @@ end
 
 \{T<:BlasFloat}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) =
     LAPACK.sytrs!(B.UL, B.LD, B.ipiv, copy(R))
-    
+
+# Dense Cholesky factorization
+
 type CholeskyDense{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
     UL::BlasChar
-    function CholeskyDense(A::Matrix{T}, UL::BlasChar)
+    function CholeskyDense{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar)
         A, info = LAPACK.potrf!(UL, A)
-        if info != 0 error("Matrix A not positive-definite") end
+        if info != 0; throw(LAPACK.PosDefException(info)); end
         if UL == 'U'
             new(triu!(A), UL)
         elseif UL == 'L'
@@ -407,7 +409,7 @@ type CholeskyDense{T<:BlasFloat} <: Factorization{T}
 end
 
 size(C::CholeskyDense) = size(C.LR)
-size(C::CholeskyDense,d::Integer) = size(C.LR,d)
+size(C::CholeskyDense, d::Integer) = size(C.LR, d)
 
 factors(C::CholeskyDense) = C.LR
 
@@ -417,27 +419,26 @@ factors(C::CholeskyDense) = C.LR
 function det{T}(C::CholeskyDense{T})
     ff = C.LR
     dd = one(T)
-    for i in 1:size(ff,1) dd *= abs2(ff[i,i]) end
+    for i in 1:size(ff,1); dd *= abs2(ff[i,i]); end
     dd
 end
-    
+
 function inv(C::CholeskyDense)
     Ci, info = LAPACK.potri!(C.UL, copy(C.LR))
-    if info != 0 error("Matrix singular") end 
+    if info != 0; throw(LAPACK.SingularException(info)); end 
     symmetrize!(Ci, C.UL)
 end
 
 ## Should these functions check that the matrix is Hermitian?
-chold!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = CholeskyDense{T}(A, UL)
-chold!{T<:BlasFloat}(A::Matrix{T}) = chold!(A, 'U')
-chold{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = chold!(copy(A), UL)
-chold{T<:Number}(A::Matrix{T}, UL::BlasChar) = chold(float64(A), UL)
-chold{T<:Number}(A::Matrix{T}) = chold(A, 'U')
+chol!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = CholeskyDense{T}(A, UL)
+chol!{T<:BlasFloat}(A::Matrix{T}) = chol!(A, 'U')
+chol{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = chol!(copy(A), UL)
+chol{T<:Number}(A::Matrix{T}, UL::BlasChar) = chol(float64(A), UL)
+chol{T<:Number}(A::Matrix{T}) = chol(A, 'U')
 
-## Matlab (and R) compatible
-chol(A::Matrix, UL::BlasChar) = factors(chold(A, UL))
-chol(A::Matrix) = chol(A, 'U')
 chol(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
+
+# Pivoted Cholesky factorization
 
 type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
