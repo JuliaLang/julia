@@ -140,6 +140,54 @@ function isperm(a::AbstractVector)
     return isempty(b) || b[1]!=0
 end
 
+function permute!!(a, p::AbstractVector{Int})
+    count = 0
+    start = 0
+    while count < length(a)
+        ptr = start = findnext(p, start+1)
+        temp = a[start]
+        next = p[start]
+        count += 1
+        while next != start
+            a[ptr] = a[next]
+            p[ptr] = 0
+            ptr = next
+            next = p[next]
+            count += 1
+        end
+        a[ptr] = temp
+        p[ptr] = 0
+    end
+    a
+end
+
+permute!(a, p::AbstractVector{Int}) = permute!!(a, copy(p))
+
+function ipermute!!(a, p::AbstractVector{Int})
+    count = 0
+    start = 0
+    while count < length(a)
+        start = findnext(p, start+1)
+        temp = a[start]
+        next = p[start]
+        count += 1
+        while next != start
+            temp_next = a[next]
+            a[next] = temp
+            temp = temp_next
+            ptr = p[next]
+            p[next] = 0
+            next = ptr
+            count += 1
+        end
+        a[next] = temp
+        p[next] = 0
+    end
+    a
+end
+
+ipermute!(a, p::AbstractVector{Int}) = ipermute!!(a, copy(p))
+
 # Algorithm T from TAoCP 7.2.1.3
 function combinations(a::AbstractVector, t::Integer)
   # T1

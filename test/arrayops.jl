@@ -171,13 +171,13 @@ end
 @assert indmax([10,12,9,11]) == 2
 @assert indmin([10,12,9,11]) == 3
 
-## permute ##
+## permutedims ##
 
 #keeps the num of dim
 p = randperm(5)
 q = randperm(5)
 a = rand(p...)
-b = permute(a,q)
+b = permutedims(a,q)
 @test isequal(size(b), tuple(p[q]...))
 
 #hand made case
@@ -193,22 +193,22 @@ for i = 1:3
 end
 
 #permutes correctly
-@test isequal(z,permute(y,(3,1,2))) 
+@test isequal(z,permutedims(y,(3,1,2))) 
 
 # of a subarray
 a = rand(5,5)
 s = sub(a,2:3,2:3)
-p = permute(s, [2,1])
+p = permutedims(s, [2,1])
 @test p[1,1]==a[2,2] && p[1,2]==a[3,2]
 @test p[2,1]==a[2,3] && p[2,2]==a[3,3]
 
-## ipermute ##
+## ipermutedims ##
 
 tensors = {rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)}
 for i = tensors
     perm = randperm(4)
-    @test isequal(i,ipermute(permute(i,perm),perm))
-    @test isequal(i,permute(ipermute(i,perm),perm))
+    @test isequal(i,ipermutedims(permutedims(i,perm),perm))
+    @test isequal(i,permutedims(ipermutedims(i,perm),perm))
 end
 
 
@@ -234,7 +234,7 @@ v[2,2,1,1] = 40.0
 for i = 1 : 5
     a = rand(200, 300)
 
-    @test isequal(a', permute(a, (2, 1)))
+    @test isequal(a', permutedims(a, (2, 1)))
 end
 
 ## basic darray ##

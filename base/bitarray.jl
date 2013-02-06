@@ -1272,25 +1272,26 @@ function nnz(B::BitArray)
     return n
 end
 
-# returns the index of the first non-zero element, or 0 if all zeros
-function findfirst(B::BitArray)
+# returns the index of the next non-zero element, or 0 if all zeros
+function findnext(B::BitArray, start::Integer)
     Bc = B.chunks
-    for i = 1:length(Bc)
+    for i = div(start-1,64)+1:length(Bc)
         if Bc[i] != 0
             return (i-1) << 6 + trailing_zeros(Bc[i]) + 1
         end
     end
     return 0
 end
+#findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
 # aux function: same as findfirst(~B), but performed without temporaries
-function findfirstnot(B::BitArray)
+function findnextnot(B::BitArray, start::Integer)
     Bc = B.chunks
     l = length(Bc)
     if l == 0
         return 0
     end
-    for i = 1:l-1
+    for i = div(start-1,64)+1:l-1
         if Bc[i] != _msk64
             return (i-1) << 6 + trailing_ones(Bc[i]) + 1
         end
@@ -1301,20 +1302,22 @@ function findfirstnot(B::BitArray)
     end
     return 0
 end
+findfirstnot(B::BitArray) = findnextnot(B,1)
 
 # returns the index of the first matching element
-function findfirst(B::BitArray, v)
+function findnext(B::BitArray, v, start::Integer)
     if v == false
-        return findfirstnot(B)
+        return findnextnot(B, start)
     elseif v == true
-        return findfirst(B)
+        return findnext(B, start)
     else
         return 0
     end
 end
+#findfirst(B::BitArray, v) = findnext(B, 1, v)  ## defined in array.jl
 
 # returns the index of the first element for which the function returns true
-function findfirst(testf::Function, B::BitArray)
+function findnext(testf::Function, B::BitArray, start::Integer)
     f0::Bool = testf(false)
     f1::Bool = testf(true)
     if length(B) == 0 || !(f0 || f1)
@@ -1322,11 +1325,12 @@ function findfirst(testf::Function, B::BitArray)
     elseif f0 && f1
         return 1
     elseif !f0 && f1
-        return findfirst(B)
+        return findnext(B, start)
     else
-        return findfirstnot(B)
+        return findnextnot(B, start)
     end
 end
+#findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
 function find(B::BitArray)
     nnzB = nnz(B)
@@ -1575,11 +1579,11 @@ end
 
 ctranspose(B::BitArray) = transpose(B)
 
-## Permute ##
+## Permute array dims ##
 
-let permute_cache = nothing, stridenames::Array{Any,1} = {}
-global permute
-function permute(B::BitArray, perm)
+let permutedims_cache = nothing, stridenames::Array{Any,1} = {}
+global permutedims
+function permutedims(B::BitArray, perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
     dimsP = ntuple(ndimsB, i->dimsB[perm[i]])
@@ -1599,7 +1603,7 @@ function permute(B::BitArray, perm)
     end
     offset = 1-offset
 
-    function permute_one(ivars)
+    function permute_one_dim(ivars)
         len = length(ivars)
         counts = { gensym() for i=1:len}
         toReturn = cell(len+1,2)
@@ -1634,11 +1638,11 @@ function permute(B::BitArray, perm)
         toReturn
     end
 
-    if is(permute_cache,nothing)
-        permute_cache = Dict()
+    if is(permutedims_cache,nothing)
+        permutedims_cache = Dict()
     end
 
-    gen_cartesian_map(permute_cache, permute_one, ranges,
+    gen_cartesian_map(permutedims_cache, permute_one_dim, ranges,
                       tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
                       B, P, perm, offset, strides...)
 

@@ -73,6 +73,13 @@ for alg in [InsertionSort, MergeSort, TimSort]
     b = a[ix]
     @test issorted(Sort.By(x -> -10x), b)
     @test a[ix] == b
+
+    c = copy(a)
+    permute!(c, ix)
+    @test c == b
+
+    ipermute!(c, ix)
+    @test c == a
 end
 
 b = sort(QuickSort, a)
@@ -111,19 +118,40 @@ for n in [0:10, 100, 1000]
         @test issorted(ord,s)
         @test hist(s) == h
         @test all([ issorted(pi[s.==i]) for i in r ])
+        si = copy(v)
+        permute!(si, pi)
+        @test si == s
+        ipermute!(si, pi)
+        @test si == v
 
         # mergesort
         pm = sortperm(MergeSort,ord,v)
         @test pi == pm
+        sm = copy(v)
+        permute!(sm, pm)
+        @test sm == s
+        ipermute!(sm, pm)
+        @test sm == v
 
         # timsort
         pt = sortperm(TimSort,ord,v)
         @test pi == pt
+        st = copy(v)
+        permute!(st, pt)
+        @test st == s
+        ipermute!(st, pt)
+        @test st == v
 
         # quicksort (unstable)
         pq = sortperm(QuickSort,ord,v)
         @test isperm(pi)
         @test v[pq] == s
+        sq = copy(v)
+        permute!(sq, pq)
+        @test sq == s
+        ipermute!(sq, pq)
+        @test sq == v
+
     end
 
     v = randn_with_nans(n,0.1)

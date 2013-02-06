@@ -1108,35 +1108,38 @@ function nnz(a)
     return n
 end
 
-# returns the index of the first non-zero element, or 0 if all zeros
-function findfirst(A)
-    for i = 1:length(A)
+# returns the index of the next non-zero element, or 0 if all zeros
+function findnext(A, start::Integer)
+    for i = start:length(A)
         if A[i] != 0
             return i
         end
     end
     return 0
 end
+findfirst(A) = findnext(A,1)
 
-# returns the index of the first matching element
-function findfirst(A, v)
-    for i = 1:length(A)
+# returns the index of the next matching element
+function findnext(A, v, start::Integer)
+    for i = start:length(A)
         if A[i] == v
             return i
         end
     end
     return 0
 end
+findfirst(A,v) = findnext(A,v,1)
 
-# returns the index of the first element for which the function returns true
-function findfirst(testf::Function, A)
-    for i = 1:length(A)
+# returns the index of the next element for which the function returns true
+function findnext(testf::Function, A, start::Integer)
+    for i = start:length(A)
         if testf(A[i])
             return i
         end
     end
     return 0
 end
+findfirst(testf::Function, A) = findnext(testf, A, 1)
 
 function find(testf::Function, A::StridedArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
@@ -1695,11 +1698,11 @@ transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
 ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) for i=1, j=1:size(x,1) ]
 ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
 
-## Permute ##
+## Permute array dims ##
 
-let permute_cache = nothing, stridenames::Array{Any,1} = {}
-global permute
-function permute(A::StridedArray, perm)
+let permutedims_cache = nothing, stridenames::Array{Any,1} = {}
+global permutedims
+function permutedims(A::StridedArray, perm)
     dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
@@ -1724,7 +1727,7 @@ function permute(A::StridedArray, perm)
         A = A.parent
     end
 
-    function permute_one(ivars)
+    function permute_one_dim(ivars)
         len = length(ivars)
         counts = { symbol(string("count",i)) for i=1:len}
         toReturn = cell(len+1,2)
@@ -1759,11 +1762,11 @@ function permute(A::StridedArray, perm)
         toReturn
     end
 
-    if is(permute_cache,nothing)
-	permute_cache = Dict()
+    if is(permutedims_cache,nothing)
+	permutedims_cache = Dict()
     end
 
-    gen_cartesian_map(permute_cache, permute_one, ranges,
+    gen_cartesian_map(permutedims_cache, permute_one_dim, ranges,
                       tuple(:A, :P, :perm, :offset, stridenames[1:ndimsA]...),
                       A, P, perm, offset, strides...)
 
