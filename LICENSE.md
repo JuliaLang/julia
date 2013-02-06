@@ -54,7 +54,6 @@ External libraries, if used, include their own licenses:
 - [FADDEEVA](http://ab-initio.mit.edu/Faddeeva)
 - [FEMTOLISP](https://github.com/JeffBezanson/femtolisp)
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
-- [GLPK](http://www.gnu.org/software/glpk)
 - [GMP](http://gmplib.org/manual/Copying.html#Copying)
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt)
 - [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
