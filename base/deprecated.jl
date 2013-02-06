@@ -28,6 +28,8 @@ end
 @deprecate  idump         xdump
 @deprecate  cwd           pwd
 @deprecate  strlen        length
+@deprecate  strchr        search
+@deprecate  memchr        search
 @deprecate  lc            lowercase
 @deprecate  uc            uppercase
 @deprecate  nCr           binomial

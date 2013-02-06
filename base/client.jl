@@ -110,8 +110,8 @@ end
 function readBuffer(stream::AsyncStream, nread)
     global _repl_enough_stdin::Bool
     while !_repl_enough_stdin && nb_available(stream.buffer) > 0
-        nread = int(memchr(stream.buffer,'\n')) # never more than one line or readline explodes :O
-        nread2 = int(memchr(stream.buffer,'\r'))
+        nread = int(search(stream.buffer,'\n')) # never more than one line or readline explodes :O
+        nread2 = int(search(stream.buffer,'\r'))
         if nread == 0
             if nread2 == 0
                 nread = nb_available(stream.buffer)

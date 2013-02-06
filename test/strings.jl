@@ -227,170 +227,170 @@ end
 astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
-# ascii strchr
+# ascii search
 for str in {astr, Base.GenericString(astr)}
-    @test strchr(str, 'x') == 0
-    @test strchr(str, '\0') == 0
-    @test strchr(str, '\u80') == 0
-    @test strchr(str, '∀') == 0
-    @test strchr(str, 'H') == 1
-    @test strchr(str, 'l') == 3
-    @test strchr(str, 'l', 4) == 4
-    @test strchr(str, 'l', 5) == 11
-    @test strchr(str, 'l', 12) == 0
-    @test strchr(str, ',') == 6
-    @test strchr(str, ',', 7) == 0
-    @test strchr(str, '\n') == 14
+    @test search(str, 'x') == 0
+    @test search(str, '\0') == 0
+    @test search(str, '\u80') == 0
+    @test search(str, '∀') == 0
+    @test search(str, 'H') == 1
+    @test search(str, 'l') == 3
+    @test search(str, 'l', 4) == 4
+    @test search(str, 'l', 5) == 11
+    @test search(str, 'l', 12) == 0
+    @test search(str, ',') == 6
+    @test search(str, ',', 7) == 0
+    @test search(str, '\n') == 14
 end
 
-# utf-8 strchr
+# utf-8 search
 for str in {u8str, Base.GenericString(u8str)}
-    @test strchr(str, 'z') == 0
-    @test strchr(str, '\0') == 0
-    @test strchr(str, '\u80') == 0
-    @test strchr(str, '∄') == 0
-    @test strchr(str, '∀') == 1
-    @test strchr(str, '∀', 2) == 0
-    @test strchr(str, '∃') == 13
-    @test strchr(str, '∃', 14) == 0
-    @test strchr(str, 'x') == 26
-    @test strchr(str, 'x', 27) == 43
-    @test strchr(str, 'x', 44) == 0
-    @test strchr(str, 'δ') == 17
-    @test strchr(str, 'δ', 18) == 33
-    @test strchr(str, 'δ', 34) == 0
-    @test strchr(str, 'ε') == 5
-    @test strchr(str, 'ε', 6) == 54
-    @test strchr(str, 'ε', 55) == 0
+    @test search(str, 'z') == 0
+    @test search(str, '\0') == 0
+    @test search(str, '\u80') == 0
+    @test search(str, '∄') == 0
+    @test search(str, '∀') == 1
+    @test search(str, '∀', 2) == 0
+    @test search(str, '∃') == 13
+    @test search(str, '∃', 14) == 0
+    @test search(str, 'x') == 26
+    @test search(str, 'x', 27) == 43
+    @test search(str, 'x', 44) == 0
+    @test search(str, 'δ') == 17
+    @test search(str, 'δ', 18) == 33
+    @test search(str, 'δ', 34) == 0
+    @test search(str, 'ε') == 5
+    @test search(str, 'ε', 6) == 54
+    @test search(str, 'ε', 55) == 0
 end
 
 # string search with a char
-@test search(astr, 'x')[1] == 0
-@test search(astr, 'H') == (1,2)
-@test search(astr, 'H', 2)[1] == 0
-@test search(astr, 'l') == (3,4)
-@test search(astr, 'l', 4) == (4,5)
-@test search(astr, 'l', 5) == (11,12)
-@test search(astr, 'l', 12)[1] == 0
-@test search(astr, '\n') == (14,15)
-@test search(astr, '\n', 15)[1] == 0
-@test search(u8str, 'z')[1] == 0
-@test search(u8str, '∄')[1] == 0
-@test search(u8str, '∀') == (1,4)
-@test search(u8str, '∀', 4)[1] == 0
-@test search(u8str, '∃') == (13,16)
-@test search(u8str, '∃', 16)[1] == 0
-@test search(u8str, 'x') == (26,27)
-@test search(u8str, 'x', 27) == (43,44)
-@test search(u8str, 'x', 44)[1] == 0
-@test search(u8str, 'ε') == (5,7)
+@test search(astr, 'x') == 0
+@test search(astr, 'H') == 1
+@test search(astr, 'H', 2) == 0
+@test search(astr, 'l') == 3
+@test search(astr, 'l', 4) == 4
+@test search(astr, 'l', 5) == 11
+@test search(astr, 'l', 12) == 0
+@test search(astr, '\n') == 14
+@test search(astr, '\n', 15) == 0
+@test search(u8str, 'z') == 0
+@test search(u8str, '∄') == 0
+@test search(u8str, '∀') == 1
+@test search(u8str, '∀', 4) == 0
+@test search(u8str, '∃') == 13
+@test search(u8str, '∃', 16) == 0
+@test search(u8str, 'x') == 26
+@test search(u8str, 'x', 27) == 43
+@test search(u8str, 'x', 44) == 0
+@test search(u8str, 'ε') == 5
 # TODO: the character case returns (54,55), but searching for this as a
 # 1-character string returns (54,56) (see below). This might be OK if all
 # that matters is "> endof(s)", but needs investigation.
-@test search(u8str, 'ε', 7) == (54,55)
-@test search(u8str, 'ε', 56)[1] == 0
+@test search(u8str, 'ε', 7) == 54
+@test search(u8str, 'ε', 56) == 0
 
 # string search with a single-char string
-@test search(astr, "x")[1] == 0
-@test search(astr, "H") == (1,2)
-@test search(astr, "H", 2)[1] == 0
-@test search(astr, "l") == (3,4)
-@test search(astr, "l", 4) == (4,5)
-@test search(astr, "l", 5) == (11,12)
-@test search(astr, "l", 12)[1] == 0
-@test search(astr, "\n") == (14,15)
-@test search(astr, "\n", 15)[1] == 0
-@test search(u8str, "z")[1] == 0
-@test search(u8str, "∄")[1] == 0
-@test search(u8str, "∀") == (1,4)
-@test search(u8str, "∀", 4)[1] == 0
-@test search(u8str, "∃") == (13,16)
-@test search(u8str, "∃", 16)[1] == 0
-@test search(u8str, "x") == (26,27)
-@test search(u8str, "x", 27) == (43,44)
-@test search(u8str, "x", 44)[1] == 0
-@test search(u8str, "ε") == (5,7)
-@test search(u8str, "ε", 7) == (54,56)
-@test search(u8str, "ε", 56)[1] == 0
+@test search(astr, "x") == 0:-1
+@test search(astr, "H") == 1:1
+@test search(astr, "H", 2) == 0:-1
+@test search(astr, "l") == 3:3
+@test search(astr, "l", 4) == 4:4
+@test search(astr, "l", 5) == 11:11
+@test search(astr, "l", 12) == 0:-1
+@test search(astr, "\n") == 14:14
+@test search(astr, "\n", 15) == 0:-1
+@test search(u8str, "z") == 0:-1
+@test search(u8str, "∄") == 0:-1
+@test search(u8str, "∀") == 1:3
+@test search(u8str, "∀", 4) == 0:-1
+@test search(u8str, "∃") == 13:15
+@test search(u8str, "∃", 16) == 0:-1
+@test search(u8str, "x") == 26:26
+@test search(u8str, "x", 27) == 43:43
+@test search(u8str, "x", 44) == 0:-1
+@test search(u8str, "ε") == 5:6
+@test search(u8str, "ε", 7) == 54:55
+@test search(u8str, "ε", 56) == 0:-1
 
 # string search with a single-char regex
-@test search(astr, r"x")[1] == 0
-@test search(astr, r"H") == (1,2)
-@test search(astr, r"H", 2)[1] == 0
-@test search(astr, r"l") == (3,4)
-@test search(astr, r"l", 4) == (4,5)
-@test search(astr, r"l", 5) == (11,12)
-@test search(astr, r"l", 12)[1] == 0
-@test search(astr, r"\n") == (14,15)
-@test search(astr, r"\n", 15)[1] == 0
-@test search(u8str, r"z")[1] == 0
-@test search(u8str, r"∄")[1] == 0
-@test search(u8str, r"∀") == (1,4)
-@test search(u8str, r"∀", 4)[1] == 0
-@test search(u8str, r"∃") == (13,16)
-@test search(u8str, r"∃", 16)[1] == 0
-@test search(u8str, r"x") == (26,27)
-@test search(u8str, r"x", 27) == (43,44)
-@test search(u8str, r"x", 44)[1] == 0
-@test search(u8str, r"ε") == (5,7)
-@test search(u8str, r"ε", 7) == (54,56)
-@test search(u8str, r"ε", 56)[1] == 0
+@test search(astr, r"x") == 0:-1
+@test search(astr, r"H") == 1:1
+@test search(astr, r"H", 2) == 0:-1
+@test search(astr, r"l") == 3:3
+@test search(astr, r"l", 4) == 4:4
+@test search(astr, r"l", 5) == 11:11
+@test search(astr, r"l", 12) == 0:-1
+@test search(astr, r"\n") == 14:14
+@test search(astr, r"\n", 15) == 0:-1
+@test search(u8str, r"z") == 0:-1
+@test search(u8str, r"∄") == 0:-1
+@test search(u8str, r"∀") == 1:3
+@test search(u8str, r"∀", 4) == 0:-1
+@test search(u8str, r"∃") == 13:15
+@test search(u8str, r"∃", 16) == 0:-1
+@test search(u8str, r"x") == 26:26
+@test search(u8str, r"x", 27) == 43:43
+@test search(u8str, r"x", 44) == 0:-1
+@test search(u8str, r"ε") == 5:6
+@test search(u8str, r"ε", 7) == 54:55
+@test search(u8str, r"ε", 56) == 0:-1
 for i = 1:length(astr)
-    @test search(astr, r"."s, i) == (i,i+1)
+    @test search(astr, r"."s, i) == i:i
 end
 for i = 1:length(u8str)
     # TODO: should regex search fast-forward invalid indices?
     if isvalid(u8str,i)
-        @test search(u8str, r"."s, i) == (i,nextind(u8str,i))
+        @test search(u8str, r"."s, i) == i:(nextind(u8str,i)-1)
     end
 end
 
 # string search with a zero-char string
 for i = 1:length(astr)
-    @test search(astr, "", i) == (i,i)
+    @test search(astr, "", i) == i:i-1
 end
 for i = 1:length(u8str)
-    @test search(u8str, "", i) == (i,i)
+    @test search(u8str, "", i) == i:i-1
 end
 
 # string search with a zero-char regex
 for i = 1:length(astr)
-    @test search(astr, r"", i) == (i,i)
+    @test search(astr, r"", i) == i:i-1
 end
 for i = 1:length(u8str)
     # TODO: should regex search fast-forward invalid indices?
     if isvalid(u8str,i)
-        @test search(u8str, r""s, i) == (i,i)
+        @test search(u8str, r""s, i) == i:i-1
     end
 end
 
 # string search with a two-char string literal
-@test search("foo,bar,baz", "xx")[1] == 0
-@test search("foo,bar,baz", "fo") == (1,3)
-@test search("foo,bar,baz", "fo", 3)[1] == 0
-@test search("foo,bar,baz", "oo") == (2,4)
-@test search("foo,bar,baz", "oo", 4)[1] == 0
-@test search("foo,bar,baz", "o,") == (3,5)
-@test search("foo,bar,baz", "o,", 5)[1] == 0
-@test search("foo,bar,baz", ",b") == (4,6)
-@test search("foo,bar,baz", ",b", 6) == (8,10)
-@test search("foo,bar,baz", ",b", 10)[1] == 0
-@test search("foo,bar,baz", "az") == (10,12)
-@test search("foo,bar,baz", "az", 12)[1] == 0
+@test search("foo,bar,baz", "xx") == 0:-1
+@test search("foo,bar,baz", "fo") == 1:2
+@test search("foo,bar,baz", "fo", 3) == 0:-1
+@test search("foo,bar,baz", "oo") == 2:3
+@test search("foo,bar,baz", "oo", 4) == 0:-1
+@test search("foo,bar,baz", "o,") == 3:4
+@test search("foo,bar,baz", "o,", 5) == 0:-1
+@test search("foo,bar,baz", ",b") == 4:5
+@test search("foo,bar,baz", ",b", 6) == 8:9
+@test search("foo,bar,baz", ",b", 10) == 0:-1
+@test search("foo,bar,baz", "az") == 10:11
+@test search("foo,bar,baz", "az", 12) == 0:-1
 
 # string search with a two-char regex
-@test search("foo,bar,baz", r"xx")[1] == 0
-@test search("foo,bar,baz", r"fo") == (1,3)
-@test search("foo,bar,baz", r"fo", 3)[1] == 0
-@test search("foo,bar,baz", r"oo") == (2,4)
-@test search("foo,bar,baz", r"oo", 4)[1] == 0
-@test search("foo,bar,baz", r"o,") == (3,5)
-@test search("foo,bar,baz", r"o,", 5)[1] == 0
-@test search("foo,bar,baz", r",b") == (4,6)
-@test search("foo,bar,baz", r",b", 6) == (8,10)
-@test search("foo,bar,baz", r",b", 10)[1] == 0
-@test search("foo,bar,baz", r"az") == (10,12)
-@test search("foo,bar,baz", r"az", 12)[1] == 0
+@test search("foo,bar,baz", r"xx") == 0:-1
+@test search("foo,bar,baz", r"fo") == 1:2
+@test search("foo,bar,baz", r"fo", 3) == 0:-1
+@test search("foo,bar,baz", r"oo") == 2:3
+@test search("foo,bar,baz", r"oo", 4) == 0:-1
+@test search("foo,bar,baz", r"o,") == 3:4
+@test search("foo,bar,baz", r"o,", 5) == 0:-1
+@test search("foo,bar,baz", r",b") == 4:5
+@test search("foo,bar,baz", r",b", 6) == 8:9
+@test search("foo,bar,baz", r",b", 10) == 0:-1
+@test search("foo,bar,baz", r"az") == 10:11
+@test search("foo,bar,baz", r"az", 12) == 0:-1
 
 # split
 @test isequal(split("foo,bar,baz", 'x'), ["foo,bar,baz"])

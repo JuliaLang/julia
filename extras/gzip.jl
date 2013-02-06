@@ -411,7 +411,7 @@ function readuntil(s::GZipStream, c::Uint8)
 
     while(true)
         # since gzgets didn't return C_NULL, there must be a \0 in the buffer
-        eos = memchr(buf, '\0', pos)
+        eos = search(buf, '\0', pos)
         if eos == 1 || buf[eos-1] == c
             return buf[1:eos-1]
         end
