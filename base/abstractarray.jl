@@ -961,14 +961,14 @@ for (f, op) = ((:cummin, :min), (:cummax, :max))
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
 
-## ipermute in terms of permute ##
+## ipermutedims in terms of permutedims ##
 
-function ipermute(A::AbstractArray,perm)
+function ipermutedims(A::AbstractArray,perm)
     iperm = Array(Int,length(perm))
     for i = 1:length(perm)
 	iperm[perm[i]] = i
     end
-    return permute(A,iperm)
+    return permutedims(A,iperm)
 end
 
 ## Other array functions ##

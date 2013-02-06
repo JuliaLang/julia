@@ -71,6 +71,8 @@ end
 @deprecate  anyp          any
 @deprecate  allp          all
 @deprecate  resize        sizehint
+@deprecate  permute       permutedims
+@deprecate  ipermute      ipermutedims
 
 export grow!
 function grow!(a, d)

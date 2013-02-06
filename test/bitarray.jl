@@ -391,13 +391,13 @@ end
 
 timesofar("transpose")
 
-## Permute ##
+## Permutedims ##
 
 b1 = randbool(s1, s2, s3, s4)
 p = randperm(4)
-@check_bit_operation permute BitArray{4} (b1, p)
+@check_bit_operation permutedims BitArray{4} (b1, p)
 
-timesofar("permute")
+timesofar("permutedims")
 
 ## Concatenation ##
 
