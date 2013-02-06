@@ -224,7 +224,6 @@ function linspace(start::Real, stop::Real, n::Integer)
     end
     a
 end
-
 linspace(start::Real, stop::Real) = linspace(start, stop, 100)
 
 logspace(start::Real, stop::Real, n::Integer) = 10.^linspace(start, stop, n)
@@ -604,19 +603,14 @@ assign(A::Array, x, I::AbstractVector{Bool}) = assign_bool_scalar_1d(A, x, I)
 assign(A::Array, x, I::AbstractArray{Bool}) = assign_bool_scalar_1d(A, x, I)
 
 assign(A::Array, x, I::Real, J::AbstractVector{Bool}) = assign(A, x, I,find(J))
-
 assign(A::Array, x, I::AbstractVector{Bool}, J::Real) = assign(A,x,find(I),J)
-
 assign(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = assign(A, x, find(I),find(J))
-
 assign{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector{Bool}) = assign(A, x, I,find(J))
-
 assign{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = assign(A, x, find(I),J)
 
 # get (ref with a default value)
 
 get{T}(A::Array, i::Integer, default::T) = in_bounds(length(A), i) ? A[i] : default
-
 get{T}(A::Array, I::(), default::T) = Array(T, 0)
 get{T}(A::Array, I::Dims, default::T) = in_bounds(size(A), I...) ? A[I...] : default
 
@@ -627,7 +621,6 @@ function get{T}(X::Array{T}, A::Array, I::Union(Ranges, Vector{Int}), default::T
     X[last(ind)+1:length(X)] = default
     X
 end
-
 get{T}(A::Array, I::Ranges, default::T) = get(Array(T, length(I)), A, I, default)
 
 RangeVecIntList = Union((Union(Ranges, Vector{Int})...), Vector{Range1{Int}}, Vector{Range{Int}}, Vector{Vector{Int}})
@@ -638,7 +631,6 @@ function get{T}(X::Array{T}, A::Array, I::RangeVecIntList, default::T)
     X[dst...] = A[src...]
     X
 end
-
 get{T}(A::Array, I::RangeVecIntList, default::T) = get(Array(T, map(length, I)...), A, I, default)
 
 ## Dequeue functionality ##
@@ -1719,7 +1711,6 @@ function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
 end
 
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
-
 ctranspose(x::StridedVecOrMat) = transpose(x)
 
 transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
@@ -1856,5 +1847,3 @@ end
 symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
-
-
