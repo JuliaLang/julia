@@ -44,6 +44,7 @@ print_with_color(color::Symbol, io::IO, msg::String...) =
 print_with_color(color::Symbol, msg::String...) =
     print_with_color(color, OUTPUT_STREAM, msg...)
 
-# Use colors to print messages and warnings in the REPL
+# use colors to print messages and warnings in the REPL
+
 info(msg::String...) = print_with_color(:blue, STDERR, "MESSAGE: ", msg..., "\n")
 warn(msg::String...) = print_with_color(:red,  STDERR, "WARNING: ", msg..., "\n")

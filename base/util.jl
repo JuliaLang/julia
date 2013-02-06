@@ -358,3 +358,13 @@ function help(x)
         println("  which has fields $(t.names)")
     end
 end
+
+# print a warning only once
+
+const have_warned = (ByteString=>Bool)[]
+function warn_once(msg::String...)
+    msg = bytestring(msg...)
+    has(have_warned,msg) && return
+    have_warned[msg] = true
+    warn(msg)
+end

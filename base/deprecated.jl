@@ -1,19 +1,10 @@
-const depwarned = (ByteString=>Bool)[]
-
-function depwarn(msg::String...)
-    msg = bytestring(msg...)
-    has(depwarned,msg) && return
-    depwarned[msg] = true
-    warn(msg)
-end
-
 macro deprecate(oldf,newf)
     oldname = expr(:quote,oldf)
     newname = expr(:quote,newf)
     expr(:toplevel,
         expr(:export,esc(oldf)),
         :(function $(esc(oldf))(args...)
-              depwarn(string($oldname," is deprecated, use ",$newname," instead."))
+              warn_once(string($oldname," is deprecated, use ",$newname," instead."))
               $(esc(newf))(args...)
           end))
 end
@@ -75,13 +66,13 @@ end
 
 export randi
 function randi(n,x...)
-    depwarn("randi(n,...) is deprecated, use rand(1:n,...) instead.")
+    warn_once("randi(n,...) is deprecated, use rand(1:n,...) instead.")
     rand(1:n,x...)
 end
 
 export randival
 function randival(lo,hi,x...)
-    depwarn("randival(lo,hi,...) is deprecated, use rand(lo:hi,...) instead.")
+    warn_once("randival(lo,hi,...) is deprecated, use rand(lo:hi,...) instead.")
     rand(lo:hi,x...)
 end
 
