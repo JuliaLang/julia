@@ -295,7 +295,7 @@ isascii(c::Char) = c < 0x80
 for name = ("alnum", "alpha", "blank", "cntrl", "digit", "graph",
             "lower", "print", "punct", "space", "upper", "xdigit")
     f = symbol(string("is",name))
-    @eval ($f)(c::Char) = bool(ccall($(string("is",name)), Int32, (Char,), c))
+    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Char,), c))
 end
 
 ## generic string uses only endof and next ##
