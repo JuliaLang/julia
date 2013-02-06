@@ -157,9 +157,9 @@ One of Julia's goals is to provide an effective language for data analysis and s
 - Julia is very careful to distinguish scalars, vectors and matrices. In R, ``1`` and ``c(1)`` are the same. In Julia, they can not be used interchangeably. One potentially confusing result of this is that ``x' - y`` for vectors ``x`` and ``y`` is a 1-element vector, not a scalar. To get a scalar, use ``dot(x, y)``.
 - Julia's ``diag()`` and ``diagm()`` are not like R's.
 - Julia cannot assign to the results of function calls on the left-hand of an assignment operation: you cannot write ``diag(M) = ones(n)``.
-- Julia discourages populating the main namespace with functions. Most statistical functionality for Julia is found in packages like the DataFrames and Distributions packages:
-	- Distributions functions are found in the ``Distributions package <https://github.com/JuliaStats/Distributions.jl>``_
-	- The ``DataFrames package <https://github.com/HarlanH/DataFrames.jl>``_ provides data frames.
+- Julia discourages populating the main namespace with functions. Most statistical functionality for Julia is found in `packages <http://docs.julialang.org/en/latest/packages/packagelist/>`_ like the DataFrames and Distributions packages:
+	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
+	- The `DataFrames package <https://github.com/HarlanH/DataFrames.jl>`_ provides data frames.
 	- Formulas for GLM's must be escaped: use ``:(y ~ x)`` instead of ``y ~ x``.
 - Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of ``list(a = 1, b = 2)``, use ``(1, 2)``. 
 - Julia encourages all users to write their own types. Julia's types are much easier to use than S3 or S4 objects in R. Julia's multiple dispatch system means that ``table(x::TypeA)`` and ``table(x::TypeB)`` act like R's ``table.TypeA(x)`` and ``table.TypeB(x)``.
