@@ -24,12 +24,11 @@
    methods
    constructors
    conversion-and-promotion
-   arrays
-   sparse-matrices
    modules
-   running-external-programs
    metaprogramming
+   arrays
    parallel-computing
+   running-external-programs
    calling-c-and-fortran-code
    performance-tips
 
