@@ -65,16 +65,3 @@ sizeof(::Type{Char}) = 4
 
 print(io::IO, c::Char) = (write(io,c); nothing)
 show(io::IO, c::Char) = (print(io,'\''); print_escaped(io,CharString(c),"'"); print(io,'\''))
-
-## libc character class testing functions ##
-
-iswascii(c::Char) = c < 0x80
-
-for f = (:iswalnum, :iswalpha, :iswblank, :iswcntrl, :iswdigit,
-         :iswgraph, :iswlower, :iswprint, :iswpunct, :iswspace,
-         :iswupper, :iswxdigit,
-         # these are BSD-only
-         #:iswhexnumber, :iswideogram, :iswnumber, :iswphonogram, :iswrune, :iswspecial, 
-         )
-    @eval ($f)(c::Char) = bool(ccall($(expr(:quote,f)), Int32, (Char,), c))
-end

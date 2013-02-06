@@ -54,7 +54,7 @@ cx = {
 for i = 1:size(cx,1)
     @test cx[i,1] == cx[i,2]
     @test string(cx[i,2]) == unescape_string(cx[i,3])
-    if iswascii(cx[i,2]) || !iswprint(cx[i,2])
+    if isascii(cx[i,2]) || !isprint(cx[i,2])
         @test cx[i,3] == escape_string(string(cx[i,2]))
     end
     for j = 1:size(cx,1)

@@ -313,7 +313,7 @@ cor_spearman(x, y) = cor_spearman(x, y, true)
 const cor = cor_pearson
 
 ## autocorrelation at a specific lag
-autocor(v::AbstractVector, lag::Int) = cor(v[1:(end-lag)], v[(1 + lag):end])
+autocor(v::AbstractVector, lag::Int) = cor(v[1:end-lag], v[1+lag:end])
 
 ## autocorrelation at a default lag of 1
 autocor(v::AbstractVector) = autocor(v, 1)

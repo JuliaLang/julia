@@ -430,7 +430,7 @@ end
 
 function eatwspace(s::IOStream)
     ch = peekchar(s); status = int(ch)
-    while status >= 0 && iswspace(ch)
+    while status >= 0 && isspace(ch)
         read(s, Char)  # advance one character
         ch = peekchar(s); status = int(ch)
     end
@@ -438,7 +438,7 @@ end
 
 function eatwspace_comment(s::IOStream, cmt::Char)
     ch = peekchar(s); status = int(ch)
-    while status >= 0 && (iswspace(ch) || ch == cmt)
+    while status >= 0 && (isspace(ch) || ch == cmt)
         if ch == cmt
             readline(s)
         else

@@ -59,6 +59,19 @@ end
 @deprecate  chars         collect
 @deprecate  elements      collect
 @deprecate  strcat        string
+@deprecate  iswalnum      isalnum
+@deprecate  iswalpha      isalpha
+@deprecate  iswascii      isascii
+@deprecate  iswblank      isblank
+@deprecate  iswcntrl      iscntrl
+@deprecate  iswdigit      isdigit
+@deprecate  iswgraph      isgraph
+@deprecate  iswlower      islower
+@deprecate  iswprint      isprint
+@deprecate  iswpunct      ispunct
+@deprecate  iswspace      isspace
+@deprecate  iswupper      isupper
+@deprecate  iswxdigit     isxdigit
 
 export randi
 function randi(n,x...)
