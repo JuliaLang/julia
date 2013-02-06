@@ -441,30 +441,7 @@ print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 
 write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 
-## transformed strings ##
-
-type TransformedString <: String
-    transform::Function
-    string::String
-end
-
-endof(s::TransformedString) = endof(s.string)
-length(s::TransformedString) = length(s.string)
-
-function next(s::TransformedString, i::Int)
-    c, j = next(s.string,i)
-    c = s.transform(c, i)
-    return c, j
-end
-
 ## uppercase and lowercase transformations ##
-
-const _TF_U = (c,i)->uppercase(c)
-const _TF_L = (c,i)->lowercase(c)
-const _TF_u = (c,i)->i==1 ? uppercase(c) : c
-const _TF_l = (c,i)->i==1 ? lowercase(c) : c
-const _TF_C = (c,i)->i==1 ? uppercase(c) : lowercase(c)
-const _TF_c = (c,i)->i==1 ? lowercase(c) : uppercase(c)
 
 uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
 lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
@@ -472,44 +449,11 @@ lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
 uppercase(c::Uint8) = ccall(:toupper, Uint8, (Uint8,), c)
 lowercase(c::Uint8) = ccall(:tolower, Uint8, (Uint8,), c)
 
-uppercase(s::String) = TransformedString(_TF_U, s)
-lowercase(s::String) = TransformedString(_TF_L, s)
+uppercase(s::String) = map(uppercase, s)
+lowercase(s::String) = map(lowercase, s)
 
-ucfirst(s::String) = TransformedString(_TF_u, s)
-lcfirst(s::String) = TransformedString(_TF_l, s)
-
-function _transfunc_compose(f2::Function, f1::Function)
-    allf = [_TF_U, _TF_L, _TF_u, _TF_l, _TF_C, _TF_c]
-    if !contains(allf, f2) || !contains(allf, f1)
-        return nothing
-    end
-    if f2 == _TF_U || f2 == _TF_L || f2 == _TF_C || f2 == _TF_c ||
-            f2 == f1 ||
-            (f2 == _TF_u && f1 == _TF_l) ||
-            (f2 == _TF_l && f1 == _TF_u)
-        return f2
-    elseif (f2 == _TF_u && (f1 == _TF_U || f1 == _TF_C)) ||
-           (f2 == _TF_l && (f1 == _TF_L || f1 == _TF_c))
-        return f1
-    elseif (f2 == _TF_u && f1 == _TF_L)
-        return _TF_C
-    elseif (f2 == _TF_l && f1 == _TF_U)
-        return _TF_c
-    elseif (f2 == _TF_u && f1 == _TF_c)
-        return _TF_U
-    elseif (f2 == _TF_l && f1 == _TF_C)
-        return _TF_L
-    end
-    error("this is a bug")
-end
-
-function TransformedString(transform::Function, s::TransformedString)
-    newtf = _transfunc_compose(transform, s.transform)
-    if newtf === nothing
-        return invoke(TransformedString, (Function, String), transform, s)
-    end
-    TransformedString(newtf, s.string)
-end
+ucfirst(s::String) = iswupper(s[1]) ? s : string(uppercase(s[1]),s[nextind(s,1):end])
+lcfirst(s::String) = iswlower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):end])
 
 ## string map, filter, has ##
 
