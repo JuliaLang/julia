@@ -79,6 +79,11 @@ function randival(lo,hi,x...)
     rand(lo:hi,x...)
 end
 
+function squeeze(A::AbstractArray)
+    warn_once("squeeze(A) is deprecated, use squeeze(A, dims) specifying the dimensions to remove.")
+    squeeze(A, find([size(A)...].==1))
+end
+
 # discontinued functions
 
 export randexp, randg, randbeta, randchi
