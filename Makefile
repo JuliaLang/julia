@@ -144,6 +144,11 @@ webrepl: all
 tk:
 	@$(MAKE) -C deps install-tk-wrapper
 
+install-graphics-libs-mac:
+	-cp -r ~/.julia/Cairo/deps/usr/* $(BUILD)/
+	-cp -r ~/.julia/Tk/deps/usr/* $(BUILD)/
+	-chmod a+rw $(JULIAHOME)/usr/lib/*
+
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras
 win-extras:
