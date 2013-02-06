@@ -199,13 +199,13 @@ write(to::IOString, p::Ptr) = write(to, convert(Uint, p))
 
 readbytes(io::IOString,nb::Integer) = bytestring(read(io, Array(Uint8, nb)))
 readall(io::IOString) = readbytes(io,nb_available(io))
-function memchr(buf::IOString, delim)
+function search(buf::IOString, delim)
     p = pointer(buf.data, buf.ptr)
     q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Int32),p,delim,nb_available(buf))
     nb = (q == C_NULL ? 0 : q-p+1)
 end
 function readuntil(io::IOString, delim::Uint8)
-    nb = memchr(io, delim)
+    nb = search(io, delim)
     if nb == 0
         nb = nb_available(io)
     end

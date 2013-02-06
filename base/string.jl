@@ -154,7 +154,13 @@ end
 
 typealias Chars Union(Char,AbstractVector{Char},Set{Char})
 
-function strchr(s::String, c::Chars, i::Integer)
+function search(s::String, c::Chars, i::Integer)
+    if isempty(c)
+        return 1 <= i <= endof(s)+1 ? i :
+               i == endof(s)+2      ? 0 :
+               error(BoundsError)
+    end
+
     if i < 1 error(BoundsError) end
     i = nextind(s,i-1)
     while !done(s,i)
@@ -166,31 +172,20 @@ function strchr(s::String, c::Chars, i::Integer)
     end
     return 0
 end
-strchr(s::String, c::Chars) = strchr(s,c,start(s))
-
-contains(s::String, c::Char) = (strchr(s,c)!=0)
-
-function search(s::String, c::Chars, i::Integer)
-    if isempty(c)
-        return 1 <= i <= endof(s)+1 ? (i,i) :
-               i == endof(s)+2      ? (0,0) :
-               error(BoundsError)
-    end
-    i=strchr(s,c,i)
-    (i, nextind(s,i))
-end
 search(s::String, c::Chars) = search(s,c,start(s))
+
+contains(s::String, c::Char) = (search(s,c)!=0)
 
 function search(s::String, t::String, i::Integer)
     if isempty(t)
-        return 1 <= i <= endof(s)+1 ? (i,i) :
-               i == endof(s)+2      ? (0,0) :
+        return 1 <= i <= endof(s)+1 ? (i:i-1) :
+               i == endof(s)+2      ? (0:-1) :
                error(BoundsError)
     end
     t1, j2 = next(t,start(t))
     while true
-        i = strchr(s,t1,i)
-        if i == 0 return (0,0) end
+        i = search(s,t1,i)
+        if i == 0 return (0:-1) end
         c, ii = next(s,i)
         j = j2; k = ii
         matched = true
@@ -207,23 +202,12 @@ function search(s::String, t::String, i::Integer)
             end
         end
         if matched
-            return (i,k)
+            return i:k-1
         end
         i = ii
     end
 end
 search(s::String, t::String) = search(s,t,start(s))
-
-type EachSearch
-    string::String
-    pattern
-end
-each_search(string::String, pattern) = EachSearch(string, pattern)
-
-start(itr::EachSearch) = search(itr.string, itr.pattern)
-done(itr::EachSearch, st) = (st[1]==0)
-next(itr::EachSearch, st) =
-    (st, search(itr.string, itr.pattern, max(nextind(itr.string,st[1]),st[2])))
 
 function cmp(a::String, b::String)
     i = start(a)
@@ -882,7 +866,8 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     strs = String[]
     i = start(str)
     n = endof(str)
-    j, k = search(str,splitter,i)
+    r = search(str,splitter,i)
+    j, k = first(r), last(r)+1
     while 0 < j <= n && length(strs) != limit-1
         if i < k
             if keep_empty || i < j
@@ -891,7 +876,8 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
             i = k
         end
         if k <= j; k = nextind(str,j) end
-        j, k = search(str,splitter,k)
+        r = search(str,splitter,k)
+        j, k = first(r), last(r)+1
     end
     if keep_empty || !done(str,i)
         push!(strs, str[i:])
@@ -910,7 +896,8 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
     rstr = ""
     i = a = start(str)
-    j, k = search(str,pattern,i)
+    r = search(str,pattern,i)
+    j, k = first(r), last(r)+1
     out = IOString()
     while j != 0
         if i == a || i < k
@@ -919,7 +906,8 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
             i = k
         end
         if k <= j; k = nextind(str,j) end
-        j, k = search(str,pattern,k)
+        r = search(str,pattern,k)
+        j, k = first(r), last(r)+1
         if n == limit break end
         n += 1
     end
@@ -933,7 +921,8 @@ replace(s::String, pat, r) = replace(s, pat, r, 0)
 function search_count(str::String, pattern, limit::Integer)
     n = 0
     i = a = start(str)
-    j, k = search(str,pattern,i)
+    r = search(str,pattern,i)
+    j, k = first(r), last(r)+1
     while j != 0
         if i == a || i < k
             n += 1
@@ -941,7 +930,8 @@ function search_count(str::String, pattern, limit::Integer)
             i = k
         end
         if k <= j; k = nextind(str,j) end
-        j, k = search(str,pattern,k)
+        r = search(str,pattern,k)
+        j, k = first(r), last(r)+1
     end
     return n
 end
@@ -1164,7 +1154,7 @@ end
 
 # find the index of the first occurrence of a value in a byte array
 
-function memchr(a::Array{Uint8,1}, b, i::Integer)
+function search(a::Array{Uint8,1}, b, i::Integer)
     if i < 1 error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
@@ -1172,7 +1162,7 @@ function memchr(a::Array{Uint8,1}, b, i::Integer)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
 end
-memchr(a::Array{Uint8,1}, b) = memchr(a,b,1)
+search(a::Array{Uint8,1}, b) = search(a,b,1)
 
 # return a random string (often useful for temporary filenames/dirnames)
 let

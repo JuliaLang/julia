@@ -327,8 +327,8 @@ function apropos(txt::String)
         if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
             for desc in entries
                 nl = search(desc,'\n')
-                if nl[1] != 0
-                    println(desc[1:(nl[1]-1)])
+                if nl != 0
+                    println(desc[1:(nl-1)])
                 else
                     println(desc)
                 end

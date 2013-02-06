@@ -22,6 +22,8 @@ endof(x::Number) = 1
 ref(x::Number) = x
 ref(x::Number, i::Integer) = i == 1 ? x : throw(BoundsError())
 ref(x::Number, i::Real) = ref(x, to_index(i))
+first(x::Number) = x
+last(x::Number) = x
 
 signbit(x::Real) = int(x < 0)
 sign(x::Real) = x < 0 ? -one(x) : x > 0 ? one(x) : x
