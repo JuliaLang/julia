@@ -523,10 +523,9 @@ export
 
 # linear algebra
     chol,
-    chold,
-    chold!,
-    cholpd,
-    cholpd!,
+    chol!,
+    cholpivot,
+    cholpivot!,
     cond,
     cross,
     ctranspose,
