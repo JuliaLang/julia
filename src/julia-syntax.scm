@@ -472,7 +472,9 @@
 
 (define (replace-return e bb ret retval)
   (cond ((or (atom? e) (quoted? e)) e)
-	((eq? (car e) 'lambda) e)
+	((or (eq? (car e) 'lambda)
+	     (eq? (car e) 'function)
+	     (eq? (car e) '->)) e)
 	((eq? (car e) 'return)
 	 `(block (= ,ret true)
 		 (= ,retval ,(cadr e))
