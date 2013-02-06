@@ -59,7 +59,7 @@ b1 = randbool(n1, n2)
 m1 = rand(1:n1)
 m2 = rand(1:n2)
 b2 = randbool(m1, m2)
-@check_bit_operation copy_to BitMatrix (b1, b2)
+@check_bit_operation copy! BitMatrix (b1, b2)
 @check_bit_operation ref BitMatrix (b1, 1:m1, m2:n2)
 @check_bit_operation ref BitVector (b1, 1:m1, m2)
 @check_bit_operation ref BitMatrix (b1, 1:m1, [n2,m2,1])
@@ -73,7 +73,7 @@ for p1 = [rand(1:v1) 1 63 64 65 191 192 193]
         for n = 0 : min(v1 - p1 + 1, v1 - p2 + 1)
             b1 = randbool(v1)
             b2 = randbool(v1)
-            @check_bit_operation copy_to BitVector (b1, p1, b2, p2, n)
+            @check_bit_operation copy! BitVector (b1, p1, b2, p2, n)
         end
     end
 end
