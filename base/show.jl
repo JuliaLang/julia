@@ -776,7 +776,7 @@ function show_nd(io, a::AbstractArray)
         for i = 1:nd
             ii = idxs[i]
             if size(a,i+2) > 10
-                if ii == 4 && allp(x->x==1,idxs[1:i-1])
+                if ii == 4 && all(x->x==1,idxs[1:i-1])
                     for j=i+1:nd
                         szj = size(a,j+2)
                         if szj>10 && 3 < idxs[j] <= szj-3

@@ -324,7 +324,7 @@ function apropos(txt::String)
         end
     end
     for (func, entries) in help_function_dict
-        if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
+        if ismatch(r, func) || any(e->ismatch(r,e), entries)
             for desc in entries
                 nl = search(desc,'\n')
                 if nl != 0

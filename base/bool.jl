@@ -24,15 +24,6 @@ isequal(x::Bool, y::Bool) = eq_int(unbox(Bool,x),unbox(Bool,y))
 (|)(x::Bool, y::Bool) = box(Bool,or_int(unbox(Bool,x),unbox(Bool,y)))
 ($)(x::Bool, y::Bool) = (x!=y)
 
-any() = false
-all() = true
-
-any(x::Bool)  = x
-all(x::Bool)  = x
-
-any(x::Bool, y::Bool) = x | y
-all(x::Bool, y::Bool) = x & y
-
 ## do arithmetic as Int ##
 
 signbit(x::Bool) = 0

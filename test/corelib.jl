@@ -163,7 +163,7 @@ d1 = Dict{Int, String}(length(data_in))
 for (k,v) in data_in
     d1[k] = v
 end
-data_in = pairs(d1)
+data_in = collect(d1)
 # shuffle the data
 for i in 1:length(data_in)
     j = rand(1:length(data_in))

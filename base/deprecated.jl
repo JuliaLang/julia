@@ -51,6 +51,7 @@ end
 @deprecate  rot90         rotl90
 @deprecate  chars         collect
 @deprecate  elements      collect
+@deprecate  pairs         collect
 @deprecate  strcat        string
 @deprecate  iswalnum      isalnum
 @deprecate  iswalpha      isalpha
@@ -66,6 +67,9 @@ end
 @deprecate  iswupper      isupper
 @deprecate  iswxdigit     isxdigit
 @deprecate  copy_to       copy!
+@deprecate  countp        count
+@deprecate  anyp          any
+@deprecate  allp          all
 
 export randi
 function randi(n,x...)
