@@ -900,8 +900,6 @@ export
     expr,
     gensym,
     parse,
-    parse_input_line,
-    parseatom,
     symbol,
 
 # help and reflection

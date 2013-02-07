@@ -621,7 +621,7 @@ function interp_parse(s::String, unescape::Function, printer::Function)
             if !isempty(s[i:j-1])
                 push!(sx, unescape(s[i:j-1]))
             end
-            ex, j = parseatom(s,k)
+            ex, j = parse(s,k,false)
             if isa(ex,Expr) && is(ex.head,:continue)
                 throw(ParseError("incomplete expression"))
             end
@@ -709,7 +709,7 @@ function shell_parse(raw::String, interp::Bool)
             if isspace(s[k])
                 error("space not allowed right after \$")
             end
-            ex, j = parseatom(s,j)
+            ex, j = parse(s,j,false)
             update_arg(esc(ex)); i = j
         else
             if !in_double_quotes && c == '\''
@@ -810,22 +810,24 @@ shell_escape(cmd::String, args::String...) =
 
 ## interface to parser ##
 
-function parse(s::String, pos, greedy)
+function parse(str::String, pos::Int, greedy::Bool)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8}, Int32, Int32),
-                    s, pos-1, greedy ? 1:0)
+                    str, pos-1, greedy ? 1:0)
     if isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
     if ex == (); throw(ParseError("end of input")); end
     ex, pos+1 # C is zero-based, Julia is 1-based
 end
+parse(str::String, pos::Int) = parse(str, pos, true)
 
-parse(s::String)          = parse(s, 1, true)
-parse(s::String, pos)     = parse(s, pos, true)
-parseatom(s::String)      = parse(s, 1, false)
-parseatom(s::String, pos) = parse(s, pos, false)
+function parse(str::String)
+    ex, pos = parse(str, start(str))
+    done(str, pos) || error("syntax: extra token after end of expression")
+    return ex
+end
 
 ## miscellaneous string functions ##
 
