@@ -79,9 +79,8 @@ function truncate(io::IOBuffer, n::Integer)
     if !io.writable error("truncate failed") end 
     if !io.seekable error("truncate failed") end #because absolute offsets are meaningless
     if n > io.maxsize || n < 0 error("truncate failed") end
-    nadd = n - length(io.data)
-    if nadd > 0
-        grow!(io.data, nadd)
+    if n > length(io.data)
+        resize!(io.data, n)
     end
     io.data[io.size+1:end] = 0
     io.size = n
@@ -112,16 +111,15 @@ function ensureroom(io::IOBuffer, nshort::Int)
         end
     end
     n = min(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
-    ngrow = n - length(io.data)
-    if ngrow > 0
-        grow!(io.data, ngrow)
+    if n > length(io.data)
+        resize!(io.data, n)
     end
     return io
 end
 eof(io::IOBuffer) = (io.ptr-1 == io.size)
 function close(io::IOBuffer)
     if io.writable
-        grow!(io.data, -length(io.data))
+        resize!(io.data, 0)
     else
         io.data = Uint8[]
     end
@@ -147,7 +145,7 @@ function takebuf_array(io::IOBuffer)
         else
             data = copy(data)
         end
-        grow!(data,io.size-length(data))
+        resize!(data,io.size)
     else
         nbytes = nb_available(io)
         a = Array(Uint8, nbytes)

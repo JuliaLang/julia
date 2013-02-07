@@ -310,7 +310,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
         # Grow the patterns by one bit
         vmask0 = vmask[p0]
         for vm in vmask0
-            grow!(vm, 1)
+            resize!(vm, length(vm)+1)
         end
 
         # Store the dependency info in the patterns

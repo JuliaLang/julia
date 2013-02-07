@@ -72,6 +72,12 @@ end
 @deprecate  allp          all
 @deprecate  resize        sizehint
 
+export grow!
+function grow!(a, d)
+    warn_once("grow!(array,delta) is deprecated, use resize!(array,newsize) instead.")
+    resize!(a, length(a)+d)
+end
+
 export randi
 function randi(n,x...)
     warn_once("randi(n,...) is deprecated, use rand(1:n,...) instead.")

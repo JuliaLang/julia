@@ -278,10 +278,10 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     nel = h.count
     h.ndel = h.count = 0
     if nel == 0
-        grow!(h.slots, newsz-sz)
+        resize!(h.slots, newsz)
         fill!(h.slots, 0)
-        grow!(h.keys, newsz-sz)
-        grow!(h.vals, newsz-sz)
+        resize!(h.keys, newsz)
+        resize!(h.vals, newsz)
         return h
     end
     h.slots = zeros(Uint8,newsz)

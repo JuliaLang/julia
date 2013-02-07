@@ -117,7 +117,7 @@ function GetTempPath()
   if lentemppath >= length(temppath) || lentemppath == 0
       error("GetTempPath failed")
 end
-  grow!(temppath,lentemppath-length(temppath))
+  resize!(temppath,lentemppath)
   return convert(ASCIIString,temppath)
 end
 GetTempFileName(uunique::Uint32) = GetTempFileName(GetTempPath(), uunique)
@@ -128,7 +128,7 @@ function GetTempFileName(temppath::String,uunique::Uint32)
   if uunique == 0 || lentname <= 0
       error("GetTempFileName failed")
   end
-  grow!(tname,lentname-length(tname))
+  resize!(tname,lentname)
   return convert(ASCIIString, tname)
 end
 function mktemp()

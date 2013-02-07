@@ -48,7 +48,6 @@ let io = IOString("hamster\nguinea pig\nturtle")
 @assert seek(io,0)
 @assert read(io,Uint8) == 'h'
 @assert try truncate(io,0); false; catch e; true; end
-@assert try grow!(io,0); false; catch e; true; end
 @assert try write(io,uint8(0)); false; catch e; true; end
 @assert try write(io,Uint8[0]); false; catch e; true; end
 @assert takebuf_string(io) == "hamster\nguinea pig\nturtle"

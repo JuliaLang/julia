@@ -662,14 +662,15 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
     return a
 end
 
-function grow!(a::Vector, n::Integer)
-    if n > 0
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
+function resize!(a::Vector, nl::Integer)
+    l = length(a)
+    if nl > l
+        ccall(:jl_array_grow_end, Void, (Any, Uint), a, nl-l)
     else
-        if n < -length(a)
+        if nl < 0
             throw(BoundsError())
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, -n)
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, l-nl)
     end
     return a
 end

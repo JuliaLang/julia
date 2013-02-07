@@ -692,22 +692,22 @@ end
 append!(B::BitVector, items::AbstractVector{Bool}) = append!(B, bitpack(items))
 append!(A::Vector{Bool}, items::BitVector) = append!(A, bitunpack(items))
 
-function grow!(B::BitVector, n::Integer)
-    n0 = length(B)
-    if n < -n0
+function resize!(B::BitVector, n::Integer)
+    if n < 0
         throw(BoundsError())
     end
-    if n < 0
-        delete!(B, n0+n+1:n0)
+    n0 = length(B)
+    if n <= n0
+        delete!(B, n+1:n0)
         return B
     end
     k0 = length(B.chunks)
-    k1 = num_bit_chunks(n0 + int(n))
+    k1 = num_bit_chunks(int(n))
     if k1 > k0
         ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, k1 - k0)
         B.chunks[end] = uint64(0)
     end
-    B.dims[1] += n
+    B.dims[1] = n
     return B
 end
 
