@@ -80,6 +80,18 @@ function grow!(a, d)
     resize!(a, length(a)+d)
 end
 
+export keytype
+function keytype(a::Associative)
+    warn_once("keytype(assoc) is deprecated, use eltype(assoc)[1] instead.")
+    eltype(a)[1]
+end
+
+export valtype
+function valtype(a::Associative)
+    warn_once("valtype(assoc) is deprecated, use eltype(assoc)[2] instead.")
+    eltype(a)[2]
+end
+
 export randi
 function randi(n,x...)
     warn_once("randi(n,...) is deprecated, use rand(1:n,...) instead.")
