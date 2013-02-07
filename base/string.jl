@@ -320,7 +320,7 @@ SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offs
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
 SubString(s::String, i::Integer) = SubString(s, i, endof(s))
 
-write{T<:ByteString}(to::IOString, s::SubString{T}) = write_sub(to, s.string.data, s.offset+1, s.endof)
+write{T<:ByteString}(to::IOBuffer, s::SubString{T}) = write_sub(to, s.string.data, s.offset+1, s.endof)
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
@@ -898,7 +898,7 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     i = a = start(str)
     r = search(str,pattern,i)
     j, k = first(r), last(r)+1
-    out = IOString()
+    out = IOBuffer()
     while j != 0
         if i == a || i < k
             write(out, SubString(str,i,j-1))

@@ -215,9 +215,7 @@ else
     typealias FileOffset Int64
 end
 
-abstract Stream <: IO
-
-type IOStream <: Stream
+type IOStream <: IO
     handle::Ptr{Void}
     ios::Array{Uint8,1}
     name::String

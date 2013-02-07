@@ -72,11 +72,11 @@ const multi_cb_handles = MultiCBHandles(dummySingleAsync,dummySingleAsync)
 
 ## workers and message i/o ##
 
-function send_msg_unknown(s::Stream, kind, args)
+function send_msg_unknown(s::IO, kind, args)
     error("attempt to send to unknown socket")
 end
 
-function send_msg(s::Stream, kind, args...)
+function send_msg(s::IO, kind, args...)
     id = worker_id_from_socket(s)
     if id > -1
         return send_msg(worker_from_id(id), kind, args...)
@@ -84,7 +84,7 @@ function send_msg(s::Stream, kind, args...)
     send_msg_unknown(s, kind, args)
 end
 
-function send_msg_now(s::Stream, kind, args...)
+function send_msg_now(s::IO, kind, args...)
     id = worker_id_from_socket(s)
     if id > -1
         return send_msg_now(worker_from_id(id), kind, args...)
@@ -96,14 +96,14 @@ type Worker
     host::ByteString
     port::Uint16
     socket::TcpSocket
-    sendbuf::Buffer
+    sendbuf::IOBuffer
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     id::Int
     gcflag::Bool
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
-        new(bytestring(host), uint16(port), sock, IOString(), {}, {}, id, false)
+        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
 end
 Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
@@ -699,7 +699,7 @@ function perform_work(job::WorkItem)
     end
 end
 
-function deliver_result(sock::Stream, msg, oid, value)
+function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
     if is(msg,:fetch) || is(msg,:call_fetch)
         val = value
@@ -868,7 +868,7 @@ end
 # the entry point for julia worker processes. does not return.
 # argument is descriptor to write listening port # to.
 start_worker() = start_worker(STDOUT)
-function start_worker(out::Stream)
+function start_worker(out::IO)
     default_port = uint16(9009)
     (actual_port,sock) = open_any_tcp_port(accept_handler,default_port) 
     write(out, "julia_worker:")  # print header
