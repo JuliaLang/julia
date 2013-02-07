@@ -635,13 +635,11 @@ export
     eltype,
     get,
     has,
-    hash,
     intersect,
     intersect!,
     isempty,
     key,
     keys,
-    keytype,
     length,
     endof,
     setdiff,
@@ -661,7 +659,6 @@ export
     union!,
     unique,
     values,
-    valtype,
     pop!,
     push!,
     filter,
@@ -856,6 +853,7 @@ export
     deepcopy_internal,
     isequal,
     isless,
+    hash,
     identity,
     object_id,
     sizeof,
@@ -932,7 +930,7 @@ export
     require,
 
 # RTS internals
-    compile_hint,
+    compile_hint, # TODO: rename to "precompile"?
     finalizer,
     gc,
     gc_disable,
@@ -1067,7 +1065,7 @@ export
     tempname,
     mktemp,
     mktempdir,
-    download_file, # TODO: really?
+    download_file, # TODO: rename to "download".
     filemode,
     filesize,
     mtime,
@@ -1142,8 +1140,8 @@ export
     @b_str,
     @cmd,
     @time,
-    @elapsed,
     @timed,
+    @elapsed,
     @windows_only,
     @unix_only,
     @osx_only,

@@ -389,7 +389,7 @@ end
 
 \{T<:BlasFloat}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) =
     LAPACK.sytrs!(B.UL, B.LD, B.ipiv, copy(R))
-    
+
 type CholeskyDense{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
     UL::BlasChar
