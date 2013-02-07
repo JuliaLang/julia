@@ -28,6 +28,9 @@ b = a'
 @test a[1,1] == 1. && a[1,2] == 2. && a[2,1] == 3. && a[2,2] == 4.
 @test b[1,1] == 1. && b[2,1] == 2. && b[1,2] == 3. && b[2,2] == 4.
 
+a = [1 2; 3 4]
+@test vec(a) == [1, 3, 2, 4]
+
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 a[1,2,1,1,2] = 20
@@ -41,12 +44,14 @@ b = reshape(a, (32,))
 @test b[1]  == 10
 @test b[19] == 20
 @test b[13] == 30
+@test b == vec(a)
 
 b = rand(32)
 a = reshape(b, (2, 2, 2, 2, 2))
 @test ndims(a) == 5
 @test a[2,1,2,2,1] == b[14]
 @test a[2,2,2,2,2] == b[end]
+@test b == vec(a)
 
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
