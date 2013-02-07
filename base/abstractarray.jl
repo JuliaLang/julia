@@ -1,5 +1,3 @@
-## abstractarray.jl : Generic array interfaces.
-
 ## Type aliases for convenience ##
 
 typealias AbstractVector{T} AbstractArray{T,1}
@@ -149,14 +147,21 @@ function reshape(a::AbstractArray, dims::Dims)
 end
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
-vec(a::AbstractArray) = reshape(a,max(size(a)))
+function vec(a::AbstractArray)
+    n = 0
+    for d in size(a)
+        d != 1 && (n += 1)
+    end
+    n > 1 && error("vec: array must have only one non-singleton dimension")
+    reshape(a,length(a))
+end
 
 function squeeze(A::AbstractArray, dims)
     d = ()
     for i in 1:ndims(A)
         if contains(dims,i)
             if size(A,i) != 1
-                error("squeezed dims should all be size 1")
+                error("squeezed dims must all be size 1")
             end
         else
             d = tuple(d..., size(A,i))
