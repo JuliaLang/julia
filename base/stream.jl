@@ -106,7 +106,7 @@ function tasknotify(waittasks::Vector{WaitTask}, args...)
             push!(newwts,wt)
         end
     end
-    grow!(waittasks,length(newwts)-length(waittasks))
+    resize!(waittasks,length(newwts))
     waittasks[:] = newwts
 end
 

@@ -609,7 +609,7 @@ export
 
 # dequeues
     append!,
-    grow!,
+    resize!,
     insert!,
     shift!,
     unshift!,

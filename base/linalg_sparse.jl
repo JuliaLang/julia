@@ -72,8 +72,8 @@ function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     x  = zeros(Tv, mA)
     for i in 1:nB
         if ip + mA - 1 > nnzC
-            rowvalC = grow!(rowvalC, max(nnzC,mA))
-            nzvalC = grow!(nzvalC, max(nnzC,mA))
+            resize!(rowvalC, nnzC + max(nnzC,mA))
+            resize!(nzvalC, nnzC + max(nnzC,mA))
             nnzC = length(nzvalC)
         end
         colptrC[i] = ip

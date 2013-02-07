@@ -242,7 +242,7 @@ function identify_socket(otherid, sock)
     @assert i > PGRP.myid
     d = i-length(PGRP.workers)
     if d > 0
-        grow!(PGRP.workers, d)
+        resize!(PGRP.workers, i)
         PGRP.workers[(end-d+1):end] = nothing
         PGRP.np += d
     end

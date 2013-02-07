@@ -1436,8 +1436,8 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     A.colptr[A.n + 1] = nz
     nz -= 1
     if nz < nzorig
-        grow!(A.nzval, nz - nzorig)
-        grow!(A.rowval, nz - nzorig)
+        resize!(A.nzval, nz)
+        resize!(A.rowval, nz)
     end
     A
 end
