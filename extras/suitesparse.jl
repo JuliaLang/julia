@@ -1,8 +1,8 @@
 module SuiteSparse
 
 import Base.SparseMatrixCSC, Base.size, Base.nnz, Base.eltype, Base.show
-import Base.triu, Base.norm, Base.solve, Base.(\), Base.lu
-import Base.Ac_ldiv_B, Base.At_ldiv_B, Base.lud, Base.lud!
+import Base.triu, Base.norm, Base.solve, Base.(\), Base.lu, Base.lu!
+import Base.Ac_ldiv_B, Base.At_ldiv_B
 
 import Base.BlasInt
 import Base.blas_int
@@ -14,7 +14,7 @@ export                                  # types
     CholmodFactor,
     CholmodDense,
     CholmodSparseOut,
-    UmfpackLU,                          # call these lud and lud! instead?
+    UmfpackLU,                          # call these lu and lu! instead?
     UmfpackLU!,
                                         # methods
     decrement,
@@ -89,7 +89,7 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:CHMITypes} <: Factorization{Tv}
     nzval::Vector{Tv}
 end
 
-function lud{Tv<:UMFVTypes,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
+function lu{Tv<:UMFVTypes,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
     zerobased = S.colptr[1] == 0
     lu = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                    zerobased ? copy(S.colptr) : decrement(S.colptr),
@@ -98,7 +98,7 @@ function lud{Tv<:UMFVTypes,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
     umfpack_numeric!(lu)
 end
 
-function lud!{Tv<:UMFVTypes,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
+function lu!{Tv<:UMFVTypes,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
     zerobased = S.colptr[1] == 0
     UmfpackLU(C_NULL, C_NULL, S.m, S.n,
               zerobased ? S.colptr : decrement!(S.colptr),
@@ -119,13 +119,13 @@ end
 
 # Solve directly with matrix
 
-(\)(S::SparseMatrixCSC, b::Vector) = lud(S) \ b
-At_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = umfpack_solve(lud(S), b, UMFPACK_Aat)
+(\)(S::SparseMatrixCSC, b::Vector) = lu(S) \ b
+At_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = umfpack_solve(lu(S), b, UMFPACK_Aat)
 function At_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb})
     ## should be more careful here in case Ts<:Real and Tb<:Complex
     At_ldiv_B(S, convert(Vector{Ts}, b))
 end
-Ac_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = umfpack_solve(lud(S), b, UMFPACK_At)
+Ac_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = umfpack_solve(lu(S), b, UMFPACK_At)
 function Ac_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb})
     ## should be more careful here in case Ts<:Real and Tb<:Complex
     Ac_ldiv_B(S, convert(Vector{Ts}, b))
