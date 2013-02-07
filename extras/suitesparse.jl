@@ -10,7 +10,7 @@ import Base.blas_int
 export                                  # types
 #    CholmodPtr,
 #    CholmodCommon,
-#    CholmodSparse,
+    CholmodSparse,
 #    CholmodFactor,
     CholmodDense,
 #    CholmodSparseOut,
@@ -352,11 +352,11 @@ end
 function chm_itype{Tv,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
     int32(Ti == Int32 ? CHOLMOD_INT : CHOLMOD_LONG)
 end
-function chm_xtype{Tv<:CHMVTypes}(S::SparseMatrixCSC{Tv})
-    int32(Tv <: Complex ? CHOLMOD_COMPLEX : CHOLMOD_REAL)
+function chm_xtype{T<:CHMVTypes}(S::SparseMatrixCSC{T})
+    int32(T<:Complex ? CHOLMOD_COMPLEX : CHOLMOD_REAL)
 end
-function chm_dtype{Tv<:CHMVTypes}(S::SparseMatrixCSC{Tv})
-    int32(T <: Union(Float32, Complex64) ? CHOLMOD_SINGLE : CHOLMOD_DOUBLE)
+function chm_dtype{T<:CHMVTypes}(S::SparseMatrixCSC{T})
+    int32(T<:Union(Float32, Complex64) ? CHOLMOD_SINGLE : CHOLMOD_DOUBLE)
 end
 
 function set_chm_prt_lev(cm::Array{Uint8}, lev::Integer)
@@ -366,7 +366,7 @@ end
 type CholmodDense{T<:CHMVTypes}
     m::Int
     n::Int
-    nnz::Int
+    nzmax::Int
     lda::Int
     xpt::Ptr{T}
     zpt::Ptr{Void}
@@ -378,10 +378,6 @@ end
 
 function CholmodDense{T<:CHMVTypes}(aa::VecOrMat{T})
     m = size(aa,1); n = size(aa,2)
-    typs = CholmodDense{T}.types[1:8]   # doesn't actually depend on T
-    sz = [sizeof(t) for t in typs]
-    inds = zeros(Int,9)
-    inds[2:9] = cumsum(sz)
     CholmodDense{T}(m, n, m*n, stride(aa,2), convert(Ptr{T}, aa), C_NULL,
                     int32(T<:Complex ? CHOLMOD_COMPLEX : CHOLMOD_REAL),
                     int32(T<:Union(Float32,Complex64) ? CHOLMOD_SINGLE : CHOLMOD_DOUBLE),
@@ -410,6 +406,41 @@ end
 
 chm_prt_dn{T<:CHMVTypes}(cd::CholmodDense{T}, lev::Integer) = chm_prt_dn(cd, lev, "")    
 chm_prt_dn{T<:CHMVTypes}(cd::CholmodDense{T}) = chm_prt_dn(cd, int32(4), "")
+
+type CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
+    m::Int
+    n::Int
+    nzmax::Int
+    ppt::Ptr{Ti}
+    ipt::Ptr{Ti}
+    nzpt::Ptr{Void}
+    xpt::Ptr{Tv}
+    zpt::Ptr{Void}
+    stype::Int32
+    itype::Int32
+    xtype::Int32
+    dtype::Int32
+    sorted::Int32
+    packed::Int32
+    colptr0::Vector{Ti} # 0-based column pointers
+    rowval0::Vector{Ti} # 0-based row indices
+    nzval::Vector{Tv}   # a copy of the non-zero values
+    chm_free::Bool      # was storage allocated by Cholmod?
+    structpt::Ptr{Void} # pointer to the C struct (when created from Cholmod results)
+end
+
+function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(A::SparseMatrixCSC{Tv,Ti})
+    colptr0 = decrement(A.colptr)
+    rowval0 = decrement(A.rowval)
+    nzval = copy(A.nzval)
+    CholmodSparse{Tv,Ti}(size(A,1),size(A,2),int(colptr0[end]),
+                         convert(Ptr{Ti}, colptr0), convert(Ptr{Ti}, rowval0),
+                         convert(Ptr{Tv}, nzval), C_NULL, int32(0),
+                         chm_itype(A), chm_xtype(A), chm_dtype(A),
+                         CHOLMOD_TRUE, CHOLMOD_TRUE,
+                         colptr0, rowval0, nzval, false, C_NULL)
+end
+
     
 if false    
 # Wrapper for memory allocated by CHOLMOD. Carry along the value and index types.
