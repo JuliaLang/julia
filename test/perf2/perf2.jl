@@ -100,14 +100,14 @@ open("random.csv","w") do io
     writecsv(io, rand(100000,4))
 end
 
-function parse()
+function parsecsv()
     file = EachLine(open("random.csv"))
     for line in file
         line = split(line, ',')
     end
 end
 
-@timeit parse() "splitline"
+@timeit parsecsv() "splitline"
 
 rm("random.csv")
 

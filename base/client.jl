@@ -161,7 +161,7 @@ end
 
 function parse_input_line(s::String)
     # s = bytestring(s)
-    # (expr, pos) = parse(s, 1, true)
+    # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
     #                   (Ptr{Uint8},Int32,Int32),
     #                   s, int32(pos)-1, 1)
