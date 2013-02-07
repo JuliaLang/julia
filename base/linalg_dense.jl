@@ -573,17 +573,16 @@ end
 size(A::QRDense) = size(A.hh)
 size(A::QRDense,n) = size(A.hh,n)
 
-qrd!{T<:BlasFloat}(A::StridedMatrix{T}) = QRDense{T}(LAPACK.geqrf!(A)...)
-qrd{T<:BlasFloat}(A::StridedMatrix{T}) = qrd!(copy(A))
-qrd{T<:Real}(A::StridedMatrix{T}) = qrd(float64(A))
+qr!{T<:BlasFloat}(A::StridedMatrix{T}) = QRDense{T}(LAPACK.geqrf!(A)...)
+qr{T<:BlasFloat}(A::StridedMatrix{T}) = qr!(copy(A))
+qr{T<:Real}(A::StridedMatrix{T}) = qr(float64(A))
 
-function factors{T<:BlasFloat}(qrd::QRDense{T})
-    aa  = copy(qrd.hh)
+function factors{T<:BlasFloat}(qr::QRDense{T})
+    aa  = copy(qr.hh)
     R   = triu(aa[1:min(size(aa)),:])   # must be *before* call to orgqr!
-    LAPACK.orgqr!(aa, qrd.tau, size(aa,2)), R
+    LAPACK.orgqr!(aa, qr.tau, size(aa,2)), R
 end
 
-qr{T<:Number}(x::StridedMatrix{T}) = factors(qrd(x))
 qr(x::Number) = (one(x), x)
 
 ## Multiplication by Q from the QR decomposition
@@ -602,41 +601,42 @@ function (\){T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T})
     return ans
 end
 
-type QRPDense{T} <: Factorization{T}
+## Pivoted QR decomposition
+
+type QRDensePivoted{T} <: Factorization{T}
     hh::Matrix{T}
     tau::Vector{T}
     jpvt::Vector{BlasInt}
-    function QRPDense(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{BlasInt})
+    function QRDensePivoted(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{BlasInt})
         m, n = size(hh)
         if length(tau) != min(m,n) || length(jpvt) != n
-            error("QRPDense: mismatched dimensions")
+            error("QRDensePivoted: mismatched dimensions")
         end
         new(hh,tau,jpvt)
     end
 end
-size(x::QRPDense)   = size(x.hh)
-size(x::QRPDense,d) = size(x.hh,d)
+size(x::QRDensePivoted)   = size(x.hh)
+size(x::QRDensePivoted,d) = size(x.hh,d)
 ## Multiplication by Q from the QR decomposition
-(*){T<:BlasFloat}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
+(*){T<:BlasFloat}(A::QRDensePivoted{T}, B::StridedVecOrMat{T}) =
     LAPACK.ormqr!('L', 'N', A.hh, size(A,2), A.tau, copy(B))
 ## Multiplication by Q' from the QR decomposition
-Ac_mul_B{T<:BlasFloat}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
+Ac_mul_B{T<:BlasFloat}(A::QRDensePivoted{T}, B::StridedVecOrMat{T}) =
     LAPACK.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A,2), A.tau, copy(B))
 
-qrpd!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPDense{T}(LAPACK.geqp3!(A)...)
-qrpd{T<:BlasFloat}(A::StridedMatrix{T}) = qrpd!(copy(A))
-qrpd{T<:Real}(x::StridedMatrix{T}) = qrpd(float64(x))
+qrpivot!{T<:BlasFloat}(A::StridedMatrix{T}) = QRDensePivoted{T}(LAPACK.geqp3!(A)...)
+qrpivot{T<:BlasFloat}(A::StridedMatrix{T}) = qrpivot!(copy(A))
+qrpivot{T<:Real}(x::StridedMatrix{T}) = qrpivot(float64(x))
 
-function factors{T<:BlasFloat}(x::QRPDense{T})
+function factors{T<:BlasFloat}(x::QRDensePivoted{T})
     aa = copy(x.hh)
     R  = triu(aa[1:min(size(aa)),:])
     LAPACK.orgqr!(aa, x.tau, size(aa,2)), R, x.jpvt
 end
 
-qrp{T<:BlasFloat}(x::StridedMatrix{T}) = factors(qrpd(x))
-qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
+qrpivot{T<:Real}(x::StridedMatrix{T}) = qrpivot(float64(x))
 
-function (\){T<:BlasFloat}(A::QRPDense{T}, B::StridedVecOrMat{T})
+function (\){T<:BlasFloat}(A::QRDensePivoted{T}, B::StridedVecOrMat{T})
     n = length(A.tau)
     x, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
     if info > 0; throw(LAPACK.SingularException(info)); end

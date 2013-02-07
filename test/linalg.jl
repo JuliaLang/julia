@@ -39,23 +39,19 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq a * inv(lua) eye(elty, n)
         @assert_approx_eq a*(lua\b) b
 
-        qra   = qrd(a)                  # QR decomposition
+        qra   = qr(a)                  # QR decomposition
         q,r   = factors(qra)
         @assert_approx_eq q'*q eye(elty, n)
         @assert_approx_eq q*q' eye(elty, n)
-        Q,R   = qr(a)
-        @test q == Q && r == R
         @assert_approx_eq q*r a
-        @assert_approx_eq qra*b Q*b
-        @assert_approx_eq qra'*b Q'*b
+        @assert_approx_eq qra*b q*b
+        @assert_approx_eq qra'*b q'*b
         @assert_approx_eq a*(qra\b) b
 
-        qrpa  = qrpd(a)                 # pivoted QR decomposition
+        qrpa  = qrpivot(a)                 # pivoted QR decomposition
         q,r,p = factors(qrpa)
         @assert_approx_eq q'*q eye(elty, n)
         @assert_approx_eq q*q' eye(elty, n)
-        Q,R,P = qrp(a)
-        @test q == Q && r == R && p == P
         @assert_approx_eq q*r a[:,p]
         @assert_approx_eq q*r[:,invperm(p)] a
         @assert_approx_eq a*(qrpa\b) b

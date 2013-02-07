@@ -1742,11 +1742,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qr(A)
 
-   Compute QR factorization
+   Compute the QR factorization of ``A`` and return a ``QRDense`` object. ``factors(qr(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDense`` objects: ``size``, ``factors``, ``*``, ``Ac_mul_B``, ``\``. 
 
-.. function:: qrp(A)
+.. function:: qr!(A)
 
-   Compute QR factorization with pivoting
+   ``qr!`` is the same as ``qr``, but overwrites the input matrix A with the factorization.
+
+.. function:: qrpivot(A)
+
+   Compute the QR factorization of ``A`` and return a ``QRDensePivoted`` object. ``factors(qr(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``factors``, ``*``, ``Ac_mul_B``, ``\``. 
+
+.. function:: qrpivot!(A)
+
+   ``qrpivot!`` is the same as ``qrpivot``, but overwrites the input matrix A with the factorization.
 
 .. function:: factors(F)
 
