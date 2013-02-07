@@ -252,7 +252,7 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
         for i = 1:length(d.chunks)
             K_c = {d.indexes[i]...}
             K = [ intersect(J[j],K_c[j]) for j=1:n ]
-            if !anyp(isempty, K)
+            if !any(isempty, K)
                 idxs = [ I[j][K[j]-offs[j]] for j=1:n ]
                 if isequal(K, K_c)
                     # whole chunk

@@ -49,16 +49,6 @@ function values(T, a::Associative)
 end
 values{K,V}(a::Associative{K,V}) = values(V,a)
 
-function pairs(T::(Union(Type,Tuple),Union(Type,Tuple)), a::Associative)
-    i = 0
-    pairz = Array(T,length(a))
-    for (k,v) in a
-        pairz[i+=1] = (k,v)
-    end
-    return pairz
-end
-pairs{K,V}(a::Associative{K,V}) = pairs((K,V),a)
-
 function copy(a::Associative)
     b = similar(a)
     for (k,v) in a

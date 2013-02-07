@@ -1439,8 +1439,8 @@ prod{T}(A::AbstractArray{T}, region) = areduce(*,A,region,one(T))
 all(A::AbstractArray{Bool}, region) = areduce(all,A,region,true)
 any(A::AbstractArray{Bool}, region) = areduce(any,A,region,false)
 sum(A::AbstractArray{Bool}, region) = areduce(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
-sum(A::AbstractArray{Bool}) = count(A)
-sum(A::StridedArray{Bool})  = count(A)
+sum(A::AbstractArray{Bool}) = sum(A, [1:ndims(A)])[1]
+sum(A::StridedArray{Bool})  = sum(A, [1:ndims(A)])[1]
 prod(A::AbstractArray{Bool}) =
     error("use all() instead of prod() for boolean arrays")
 prod(A::AbstractArray{Bool}, region) =

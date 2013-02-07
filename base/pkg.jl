@@ -115,7 +115,7 @@ add(pkgs::Vector{VersionSet}) = cd_pkgdir() do
             error("Unknown package $(pkg.package); Perhaps you need to Pkg.update() for new metadata?")
         end
         reqs = parse_requires("REQUIRE")
-        if anyp(req->req.package==pkg.package,reqs)
+        if any(req->req.package==pkg.package,reqs)
             error("package already required: $pkg")
         end
         open("REQUIRE","a") do io
@@ -143,7 +143,7 @@ rm(pkgs::Vector{String}) = cd_pkgdir() do
             error("invalid package: $pkg")
         end
         reqs = parse_requires("REQUIRE")
-        if !anyp(req->req.package==pkg,reqs)
+        if !any(req->req.package==pkg,reqs)
             error("package not required: $pkg")
         end
         open("REQUIRE") do r

@@ -299,7 +299,7 @@ function _start()
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
 
-        if !anyp(a->(a=="--worker"), ARGS)
+        if !any(a->(a=="--worker"), ARGS)
             # start in "head node" mode
             global const Scheduler = Task(()->event_loop(true), 1024*1024)
             global PGRP;
