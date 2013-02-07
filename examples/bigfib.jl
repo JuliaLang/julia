@@ -1,8 +1,6 @@
-require("extras/bigint")
 
 module BigFib
 export bigfib
-const BigInt = Main.BigInt
 
 # Large Fibonacci to exercise BigInt
 # from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633
