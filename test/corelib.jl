@@ -49,7 +49,7 @@ end
 @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
 @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
 
-@test (10.^[-1])[1] == 0.1
+@test_fails (10.^[-1])[1] == 0.1
 @test (10.^[-1.])[1] == 0.1
 
 # tricky space sensitive syntax cases

@@ -830,45 +830,20 @@ promote_array_type{S<:Real, A<:Integer}(::Type{S}, ::Type{A}) = promote_type(S, 
 promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
 ./{T<:Integer,S<:Integer}(x::StridedArray{T}, y::StridedArray{S}) =
-    reshape( [ x[i] ./ y[i] for i=1:length(x) ], size(x) )
+    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
 ./{T<:Integer}(x::Integer, y::StridedArray{T}) =
-    reshape( [ x    ./ y[i] for i=1:length(y) ], size(y) )
+    reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
 ./{T<:Integer}(x::StridedArray{T}, y::Integer) =
-    reshape( [ x[i] ./ y    for i=1:length(x) ], size(x) )
+    reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
 
 # ^ is difficult, since negative exponents give a different type
 
-.^(x::StridedArray, y::StridedArray ) = reshape( [ x[i] ^ y[i] for i=1:length(x) ], size(x) )
-.^(x::Number,       y::StridedArray ) = reshape( [ x    ^ y[i] for i=1:length(y) ], size(y) )
-.^(x::StridedArray, y::Number       ) = reshape( [ x[i] ^ y    for i=1:length(x) ], size(x) )
-
-function .^{S<:Integer,T<:Integer}(A::StridedArray{S}, B::StridedArray{T})
-    F = Array(Float64, promote_shape(size(A), size(B)))
-    for i=1:length(A)
-        F[i] = float64(A[i])^float64(B[i])
-    end
-    return F
-end
-
-function .^{T<:Integer}(A::Integer, B::StridedArray{T})
-    F = similar(B, Float64)
-    for i=1:length(B)
-        F[i] = float64(A)^float64(B[i])
-    end
-    return F
-end
-
-function power_array_int_body{T}(F::StridedArray{T}, A, B)
-    for i=1:length(A)
-        F[i] = A[i]^convert(T,B)
-    end
-    return F
-end
-
-function .^{T<:Integer}(A::StridedArray{T}, B::Integer)
-    F = similar(A, B < 0 ? Float64 : promote_type(T,typeof(B)))
-    power_array_int_body(F, A, B)
-end
+.^(x::StridedArray, y::StridedArray) =
+    reshape([ x[i] ^ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
+.^(x::Number,       y::StridedArray) =
+    reshape([ x    ^ y[i] for i=1:length(y) ], size(y))
+.^(x::StridedArray, y::Number      ) =
+    reshape([ x[i] ^ y    for i=1:length(x) ], size(x))
 
 for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
     @eval begin
