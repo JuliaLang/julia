@@ -650,7 +650,7 @@ export
     merge!,
     reduce,
     ref,
-    resize,
+    sizehint,
     similar,
     symdiff,
     symdiff!,

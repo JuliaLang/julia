@@ -70,6 +70,7 @@ end
 @deprecate  countp        count
 @deprecate  anyp          any
 @deprecate  allp          all
+@deprecate  resize        sizehint
 
 export randi
 function randi(n,x...)
