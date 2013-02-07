@@ -165,7 +165,7 @@ disassemble(f::Function, types::Tuple) =
 
 function methods(f::Function)
     if !isgeneric(f)
-        error("methods: error: not a generic function")
+        error("methods: not a generic function")
     end
     f.env
 end
@@ -327,8 +327,8 @@ function apropos(txt::String)
         if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
             for desc in entries
                 nl = search(desc,'\n')
-                if nl[1] != 0
-                    println(desc[1:(nl[1]-1)])
+                if nl != 0
+                    println(desc[1:(nl-1)])
                 else
                     println(desc)
                 end
@@ -359,6 +359,12 @@ function help(x)
     end
 end
 
-# misc
+# print a warning only once
 
-times(f::Function, n::Int) = for i=1:n f() end
+const have_warned = (ByteString=>Bool)[]
+function warn_once(msg::String...)
+    msg = bytestring(msg...)
+    has(have_warned,msg) && return
+    have_warned[msg] = true
+    warn(msg)
+end

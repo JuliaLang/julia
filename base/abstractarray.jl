@@ -151,15 +151,15 @@ reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
 vec(a::AbstractArray) = reshape(a,max(size(a)))
 
-function squeeze(A::AbstractArray)
-    if length(A) == 1
-        d = (1,)
-    else
-        d = ()
-        for i in size(A)
-            if i != 1
-                d = tuple(d..., i)
+function squeeze(A::AbstractArray, dims)
+    d = ()
+    for i in 1:ndims(A)
+        if contains(dims,i)
+            if size(A,i) != 1
+                error("squeezed dims should all be size 1")
             end
+        else
+            d = tuple(d..., size(A,i))
         end
     end
     reshape(A, d)
@@ -172,7 +172,7 @@ function fill!(A::AbstractArray, x)
     return A
 end
 
-function copy_to(dest::AbstractArray, src)
+function copy!(dest::AbstractArray, src)
     i = 1
     for x in src
         dest[i] = x
@@ -181,7 +181,7 @@ function copy_to(dest::AbstractArray, src)
     return dest
 end
 
-copy(a::AbstractArray) = copy_to(similar(a), a)
+copy(a::AbstractArray) = copy!(similar(a), a)
 copy(a::AbstractArray{None}) = a # cannot be assigned into so is immutable
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
@@ -219,14 +219,14 @@ for (f,t) in ((:char,   Char),
 end
 
 bool(x::AbstractArray{Bool}) = x
-bool(x::AbstractArray) = copy_to(similar(x,Bool), x)
+bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
 for (f,t) in ((:float32,    Float32),
               (:float64,    Float64),
               (:complex64,  Complex64),
               (:complex128, Complex128))
     @eval ($f)(x::AbstractArray{$t}) = x
-    @eval ($f)(x::AbstractArray) = copy_to(similar(x,$t), x)
+    @eval ($f)(x::AbstractArray) = copy!(similar(x,$t), x)
 end
 
 integer{T<:Integer}(x::AbstractArray{T}) = x
@@ -236,8 +236,8 @@ complex{T<:Complex}(x::AbstractArray{T}) = x
 
 integer (x::AbstractArray) = iround_to(similar(x,typeof(integer(one(eltype(x))))), x)
 unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
-float   (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
-complex (x::AbstractArray) = copy_to(similar(x,typeof(complex(one(eltype(x))))), x)
+float   (x::AbstractArray) = copy!(similar(x,typeof(float(one(eltype(x))))), x)
+complex (x::AbstractArray) = copy!(similar(x,typeof(complex(one(eltype(x))))), x)
 
 dense(x::AbstractArray) = x
 full(x::AbstractArray) = x
@@ -574,7 +574,7 @@ function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
         for k=1:nargs
             Ak = A[k]
             n = length(Ak)
-            copy_to(B, pos, Ak, 1, n)
+            copy!(B, pos, Ak, 1, n)
             pos += n
         end
     else

@@ -184,8 +184,9 @@ sparsevec(I::AbstractVector, V) = sparsevec(I, V, max(I), +)
 function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
     nI = length(I)
     if isa(V, Number); V = fill(V, nI); end
-    (I, P) = sortperm(I)
-    V = V[P]
+    p = sortperm(I)
+    I = I[p]
+    V = V[p]
     sparse_IJ_sorted!(I, ones(Int, nI), V, m, 1, combine)
 end
 
@@ -214,6 +215,8 @@ sparse_IJ_sorted!(I,J,V::AbstractVector{Bool},m,n) = sparse_IJ_sorted!(I,J,V,m,n
 function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                         V::AbstractVector,
                                         m::Integer, n::Integer, combine::Function)
+
+    if length(V) == 0; return spzeros(m,n); end
 
     cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes

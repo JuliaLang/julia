@@ -153,7 +153,7 @@ elseif(isfile("$JULIA_HOME/../share/julia/COMMIT"))
 else
 
 let
-    expected = ErrorException("error: don't copy this code, for breaking out of uv_run during boot-strapping only")
+    expected = ErrorException("don't copy this code, for breaking out of uv_run during boot-strapping only")
     acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
                                               # this point in the bootstrapping, conflicts between old and new
                                               # defintions for write, TTY, ASCIIString, and STDOUT make it fail

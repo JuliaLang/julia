@@ -749,12 +749,6 @@ collection[key...] = value
 
 "),
 
-(E"Set-Like Collections",E"Base",E"choose",E"choose(s)
-
-   Pick an element of a set
-
-"),
-
 (E"Set-Like Collections",E"Base",E"union",E"union(s1, s2...)
 
    Construct the union of two or more sets. Maintains order with
@@ -783,44 +777,43 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"Base",E"push",E"push(collection, item)
+(E"Dequeues",E"Base",E"push!",E"push!(collection, item)
 
    Insert an item at the end of a collection.
 
 "),
 
-(E"Dequeues",E"Base",E"pop",E"pop(collection)
+(E"Dequeues",E"Base",E"pop!",E"pop!(collection)
 
    Remove the last item in a collection and return it.
 
 "),
 
-(E"Dequeues",E"Base",E"enqueue",E"enqueue(collection, item)
+(E"Dequeues",E"Base",E"unshift!",E"unshift!(collection, item)
 
-   Insert an item at the beginning of a collection. Also called
-   \"unshift\".
+   Insert an item at the beginning of a collection.
 
 "),
 
-(E"Dequeues",E"Base",E"shift",E"shift(collection)
+(E"Dequeues",E"Base",E"shift!",E"shift!(collection)
 
    Remove the first item in a collection and return it.
 
 "),
 
-(E"Dequeues",E"Base",E"insert",E"insert(collection, index, item)
+(E"Dequeues",E"Base",E"insert!",E"insert!(collection, index, item)
 
    Insert an item at the given index.
 
 "),
 
-(E"Dequeues",E"Base",E"del",E"del(collection, index)
+(E"Dequeues",E"Base",E"delete!",E"delete!(collection, index)
 
    Remove the item at the given index.
 
 "),
 
-(E"Dequeues",E"Base",E"grow",E"grow(collection, n)
+(E"Dequeues",E"Base",E"grow!",E"grow!(collection, n)
 
    Add uninitialized space for \"n\" elements at the end of a
    collection.
@@ -2354,9 +2347,10 @@ airyaiprime(x)
 
 "),
 
-(E"Random Numbers",E"Base",E"rand",E"rand(Int32|Uint32|Int64|Uint64)
+(E"Random Numbers",E"Base",E"rand",E"rand(Int32|Uint32|Int64|Uint64|Int128|Uint128[, dims...])
 
-   Generate a random integer of the given type
+   Generate a random integer of the given type. Optionally, generate
+   an array of random integers of the given type by specifying dims.
 
 "),
 
@@ -2416,7 +2410,7 @@ airyaiprime(x)
 (E"Arrays",E"Base",E"length",E"length(A)
 
    Returns the number of elements in A (note that this differs from
-   Matlab where \"length(A)\" is the largest dimension of \"A\")
+   MATLAB where \"length(A)\" is the largest dimension of \"A\")
 
 "),
 
@@ -2716,6 +2710,26 @@ airyaiprime(x)
 
 "),
 
+(E"Sparse Matrices",E"Base",E"sparsevec",E"sparsevec(I, V[, m, combine])
+
+   Create a sparse matrix \"S\" of size \"m x 1\" such that \"S[I[k]]
+   = V[k]\". Duplicates are combined using the \"combine\" function,
+   which defaults to *+* if it is not provided. In julia, sparse
+   vectors are really just sparse matrices with one column. Given
+   Julia's Compressed Sparse Columns (CSC) storage format, a sparse
+   column matrix with one column is sparse, whereas a sparse row
+   matrix with one row ends up being dense.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"sparsevec",E"sparsevec(D::Dict[, m])
+
+   Create a sparse matrix of size \"m x 1\" where the row values are
+   keys from the dictionary, and the nonzero values are the values
+   from the dictionary.
+
+"),
+
 (E"Sparse Matrices",E"Base",E"issparse",E"issparse(S)
 
    Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
@@ -2731,6 +2745,14 @@ airyaiprime(x)
 (E"Sparse Matrices",E"Base",E"sparse",E"sparse(A)
 
    Convert a dense matrix \"A\" into a sparse matrix.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"sparsevec",E"sparsevec(A)
+
+   Convert a dense vector \"A\" into a sparse matrix of size \"m x
+   1\". In julia, sparse vectors are really just sparse matrices with
+   one column.
 
 "),
 

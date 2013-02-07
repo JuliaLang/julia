@@ -1,9 +1,7 @@
 ## work with Vector{Uint8} via I/O primitives ##
 
-abstract Buffer <: IO
-
 # Stateful string
-type IOString <: Buffer
+type IOBuffer <: IO
     data::Vector{Uint8}
     readable::Bool
     writable::Bool
@@ -12,27 +10,30 @@ type IOString <: Buffer
     size::Int
     maxsize::Int # pre-allocated, fixed array size
     ptr::Int # read (and maybe write) pointer
-    IOString(data::Vector{Uint8},readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) = 
+    IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) = 
         new(data,readable,writable,seekable,append,length(data),maxsize,1)
 end
-#typealias PipeString IOString
-# PipeStrings behave like Unix Pipes. They are readable and writable, the act appendable, and not seekable.
-PipeString(data::Vector{Uint8},maxsize::Int) = IOString(data,true,true,false,true,maxsize)
-PipeString(data::Vector{Uint8}) = PipeString(data,typemax(Int))
-PipeString() = PipeString(Uint8[])
-PipeString(maxsize::Int) = (x = PipeString(Array(Uint8,maxsize),data,maxsize); x.size=0; x)
+typealias IOString IOBuffer
+#typealias PipeBuffer IOBuffer
+# PipeBuffers behave like Unix Pipes. They are readable and writable, the act appendable, and not seekable.
+PipeBuffer(data::Vector{Uint8},maxsize::Int) = IOBuffer(data,true,true,false,true,maxsize)
+PipeBuffer(data::Vector{Uint8}) = PipeBuffer(data,typemax(Int))
+PipeBuffer() = PipeBuffer(Uint8[])
+PipeBuffer(maxsize::Int) = (x = PipeBuffer(Array(Uint8,maxsize),data,maxsize); x.size=0; x)
 
-# IOStrings behave like Files. They are readable and writable. They are seekable. (They can be appendable).
-IOString(data::Vector{Uint8},readable::Bool,writable::Bool,maxsize::Int) =
-        IOString(data,readable,writable,true,false,maxsize)
-IOString(data::Vector{Uint8},readable::Bool,writable::Bool) = IOString(data,readable,writable,typemax(Int))
-IOString(data::Vector{Uint8}) = IOString(data, true, false)
-IOString(str::String) = IOString(str.data, true, false)
-IOString(readable::Bool,writable::Bool) = IOString(Uint8[],readable,writable)
-IOString() = IOString(Uint8[], true, true)
-IOString(maxsize::Int) = (x=IOString(Array(Uint8,maxsize),true,true,maxsize); x.size=0; x)
+const PipeString = PipeBuffer
 
-function read{T}(from::IOString, a::Array{T})
+# IOBuffers behave like Files. They are readable and writable. They are seekable. (They can be appendable).
+IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,maxsize::Int) =
+        IOBuffer(data,readable,writable,true,false,maxsize)
+IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool) = IOBuffer(data,readable,writable,typemax(Int))
+IOBuffer(data::Vector{Uint8}) = IOBuffer(data, true, false)
+IOBuffer(str::String) = IOBuffer(str.data, true, false)
+IOBuffer(readable::Bool,writable::Bool) = IOBuffer(Uint8[],readable,writable)
+IOBuffer() = IOBuffer(Uint8[], true, true)
+IOBuffer(maxsize::Int) = (x=IOBuffer(Array(Uint8,maxsize),true,true,maxsize); x.size=0; x)
+
+function read{T}(from::IOBuffer, a::Array{T})
     if !from.readable error("read failed") end
     if isa(T, BitsKind)
         nb = length(a)*sizeof(T)
@@ -43,11 +44,11 @@ function read{T}(from::IOString, a::Array{T})
         from.ptr += nb
         return a
     else
-        error("Read from IOString only supports bits types or arrays of bits types; got "*string(T)*".")
+        error("Read from IOBuffer only supports bits types or arrays of bits types; got "*string(T)*".")
     end
 end
 
-function read(from::IOString, ::Type{Uint8})
+function read(from::IOBuffer, ::Type{Uint8})
     if !from.readable error("read failed") end
     if from.ptr > from.size
         throw(EOFError())
@@ -57,24 +58,24 @@ function read(from::IOString, ::Type{Uint8})
     return byte
 end
 
-read{T}(from::IOString, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
+read{T}(from::IOBuffer, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
 
-# TODO: IOString is not iterable, so doesn't really have a length.
+# TODO: IOBuffer is not iterable, so doesn't really have a length.
 # This should maybe be sizeof() instead.
-#length(io::IOString) = (io.seekable ? io.size : nb_available(io))
-nb_available(io::IOString) = io.size - io.ptr + 1
-skip(io::IOString, n::Integer) = (io.ptr = min(io.ptr + n, io.size+1))
-function seek(io::IOString, n::Integer) 
+#length(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
+nb_available(io::IOBuffer) = io.size - io.ptr + 1
+skip(io::IOBuffer, n::Integer) = (io.ptr = min(io.ptr + n, io.size+1))
+function seek(io::IOBuffer, n::Integer)
     if !io.seekable error("seek failed") end
     io.ptr = min(n+1, io.size+1)
     return true
 end
-function seek_end(io::IOString)
+function seek_end(io::IOBuffer)
     io.ptr = io.size+1
     return true 
 end
-position(io::IOString) = io.ptr-1
-function truncate(io::IOString, n::Integer)
+position(io::IOBuffer) = io.ptr-1
+function truncate(io::IOBuffer, n::Integer)
     if !io.writable error("truncate failed") end 
     if !io.seekable error("truncate failed") end #because absolute offsets are meaningless
     if n > io.maxsize || n < 0 error("truncate failed") end
@@ -87,7 +88,7 @@ function truncate(io::IOString, n::Integer)
     io.ptr = min(io.ptr, n+1)
     return true
 end
-function compact(io::IOString)
+function compact(io::IOBuffer)
     if !io.writable error("compact failed") end 
     if io.seekable error("compact failed") end
     ccall(:memmove, Void, (Ptr{Void},Ptr{Void},Int), io.data, pointer(io.data,io.ptr), nb_available(io))
@@ -95,7 +96,7 @@ function compact(io::IOString)
     io.ptr = 1
     return true
 end
-function ensureroom(io::IOString, nshort::Int)
+function ensureroom(io::IOBuffer, nshort::Int)
     if !io.writable error("ensureroom failed") end 
     if !io.seekable
         if nshort < 0 error("ensureroom failed") end
@@ -117,8 +118,8 @@ function ensureroom(io::IOString, nshort::Int)
     end
     return io
 end
-eof(io::IOString) = (io.ptr-1 == io.size)
-function close(io::IOString)
+eof(io::IOBuffer) = (io.ptr-1 == io.size)
+function close(io::IOBuffer)
     if io.writable
         grow!(io.data, -length(io.data))
     else
@@ -132,12 +133,12 @@ function close(io::IOString)
     io.ptr = 1
     nothing
 end
-function bytestring(io::IOString)
+function bytestring(io::IOBuffer)
     if !io.readable error("bytestring read failed") end 
     if !io.seekable error("bytestring read failed") end 
     bytestring(io.data[1:io.size])
 end
-function takebuf_array(io::IOString)
+function takebuf_array(io::IOBuffer)
     if io.seekable
         data = io.data
         if io.writable
@@ -158,9 +159,9 @@ function takebuf_array(io::IOString)
     end
     data
 end
-takebuf_string(io::IOString) = bytestring(takebuf_array(io))
+takebuf_string(io::IOBuffer) = bytestring(takebuf_array(io))
 
-function write_sub{T}(to::IOString, a::Array{T}, offs, nel)
+function write_sub{T}(to::IOBuffer, a::Array{T}, offs, nel)
     if !to.writable; error("write failed") end
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
@@ -174,14 +175,14 @@ function write_sub{T}(to::IOString, a::Array{T}, offs, nel)
         to.size = max(to.size, ptr - 1 + nb)
         if !to.append; to.ptr += nb; end
     else
-        error("Write to IOString only supports bits types or arrays of bits types; got "*string(T)*".")
+        error("Write to IOBuffer only supports bits types or arrays of bits types; got "*string(T)*".")
     end
     nb
 end
 
-write(to::IOString, a::Array) = write_sub(to, a, 1, length(a))
+write(to::IOBuffer, a::Array) = write_sub(to, a, 1, length(a))
 
-function write(to::IOString, a::Uint8)
+function write(to::IOBuffer, a::Uint8)
     if !to.writable error("write failed") end
     ensureroom(to, 1)
     ptr = (to.append ? to.size+1 : to.ptr)
@@ -195,17 +196,17 @@ function write(to::IOString, a::Uint8)
     sizeof(Uint8)
 end
 
-write(to::IOString, p::Ptr) = write(to, convert(Uint, p))
+write(to::IOBuffer, p::Ptr) = write(to, convert(Uint, p))
 
-readbytes(io::IOString,nb::Integer) = bytestring(read(io, Array(Uint8, nb)))
-readall(io::IOString) = readbytes(io,nb_available(io))
-function memchr(buf::IOString, delim)
+readbytes(io::IOBuffer,nb::Integer) = bytestring(read(io, Array(Uint8, nb)))
+readall(io::IOBuffer) = readbytes(io,nb_available(io))
+function search(buf::IOBuffer, delim)
     p = pointer(buf.data, buf.ptr)
     q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Int32),p,delim,nb_available(buf))
     nb = (q == C_NULL ? 0 : q-p+1)
 end
-function readuntil(io::IOString, delim::Uint8)
-    nb = memchr(io, delim)
+function readuntil(io::IOBuffer, delim::Uint8)
+    nb = search(io, delim)
     if nb == 0
         nb = nb_available(io)
     end

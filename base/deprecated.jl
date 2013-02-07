@@ -1,19 +1,10 @@
-const depwarned = (ByteString=>Bool)[]
-
-function depwarn(msg::String...)
-    msg = bytestring(msg...)
-    has(depwarned,msg) && return
-    depwarned[msg] = true
-    warn(msg)
-end
-
 macro deprecate(oldf,newf)
     oldname = expr(:quote,oldf)
     newname = expr(:quote,newf)
     expr(:toplevel,
         expr(:export,esc(oldf)),
         :(function $(esc(oldf))(args...)
-              depwarn(string($oldname," is deprecated, use ",$newname," instead."))
+              warn_once(string($oldname," is deprecated, use ",$newname," instead."))
               $(esc(newf))(args...)
           end))
 end
@@ -37,6 +28,8 @@ end
 @deprecate  idump         xdump
 @deprecate  cwd           pwd
 @deprecate  strlen        length
+@deprecate  strchr        search
+@deprecate  memchr        search
 @deprecate  lc            lowercase
 @deprecate  uc            uppercase
 @deprecate  nCr           binomial
@@ -64,35 +57,46 @@ end
 @deprecate  lud           lu
 @deprecate  qrd           qr
 @deprecate  qrpd          qrpivot
+@deprecate  iswalnum      isalnum
+@deprecate  iswalpha      isalpha
+@deprecate  iswascii      isascii
+@deprecate  iswblank      isblank
+@deprecate  iswcntrl      iscntrl
+@deprecate  iswdigit      isdigit
+@deprecate  iswgraph      isgraph
+@deprecate  iswlower      islower
+@deprecate  iswprint      isprint
+@deprecate  iswpunct      ispunct
+@deprecate  iswspace      isspace
+@deprecate  iswupper      isupper
+@deprecate  iswxdigit     isxdigit
+@deprecate  copy_to       copy!
+
 
 export randi
 function randi(n,x...)
-    depwarn("randi(n,...) is deprecated, use rand(1:n,...) instead.")
+    warn_once("randi(n,...) is deprecated, use rand(1:n,...) instead.")
     rand(1:n,x...)
 end
 
 export randival
 function randival(lo,hi,x...)
-    depwarn("randival(lo,hi,...) is deprecated, use rand(lo:hi,...) instead.")
+    warn_once("randival(lo,hi,...) is deprecated, use rand(lo:hi,...) instead.")
     rand(lo:hi,x...)
+end
+
+function squeeze(A::AbstractArray)
+    warn_once("squeeze(A) is deprecated, use squeeze(A, dims) specifying the dimensions to remove.")
+    squeeze(A, find([size(A)...].==1))
 end
 
 # discontinued functions
 
 export randexp, randg, randbeta, randchi
+for (fun,typ) in {(:randexp,:Exponential), (:randg,:Gamma), (:randbeta,:Beta), (:randchi,:Chisq)}
+@eval $fun(x...) = error("randexp is no longer supported, use the Distributions package instead:
 
-randexp(x...) = error("randexp is no longer supported; use the Distributions package instead:
     using Distributions
-    rand(Exponential())")
-
-randg(x...) = error("randg is no longer supported; use the Distributions package instead:
-    using Distributions
-    rand(Gamma())")
-
-randbeta(x...) = error("randbeta is no longer supported; use the Distributions package instead:
-    using Distributions
-    rand(Beta)")
-
-randchi2(x...) = error("randchi2 is no longer supported; use the Distributions package instead:
-    using Distributions
-    rand(Chisq())")
+    rand(",$(expr(:quote,typ)),"())
+")
+end

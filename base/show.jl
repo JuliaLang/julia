@@ -1,12 +1,12 @@
 # formerly built-in methods. can be replaced any time.
 
-show(x) = show(OUTPUT_STREAM::Stream, x)
+show(x) = show(OUTPUT_STREAM::IO, x)
 
 print(io::IO, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
-show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io::Stream, x)
+show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io::IO, x)
 
 showcompact(io::IO, x) = show(io, x)
-showcompact(x) = showcompact(OUTPUT_STREAM::Stream, x)
+showcompact(x) = showcompact(OUTPUT_STREAM::IO, x)
 
 macro show(exs...)
     blk = expr(:block)
@@ -307,42 +307,51 @@ function show_unquoted(io::IO, ex::SymbolNode)
     show_expr_type(io, ex.typ)
 end
 
+print_error(f::Function, io::IO, args...) = with_output_color(:red, io) do io
+    print(io, "ERROR: ")
+    f(io, args...)
+end
+print_error(io::IO, args...) = print_error(print, io, args...)
 
-function show(io::IO, e::TypeError)
+show(io::IO, e::TypeError) = print_error(io) do io
     ctx = isempty(e.context) ? "" : "in $(e.context), "
     if e.expected === Bool
-        print(io, "type error: non-boolean ($(typeof(e.got))) ",
+        print(io, "type: non-boolean ($(typeof(e.got))) ",
                   "used in boolean context")
     elseif e.expected === Function && e.func === :apply && isa(e.got,AbstractKind)
-        print(io, "type error: cannot instantiate abstract type $(e.got.name)")
+        print(io, "type: cannot instantiate abstract type $(e.got.name)")
     else
         if isa(e.got,Type)
             tstr = "Type{$(e.got)}"
         else
             tstr = string(typeof(e.got))
         end
-        print(io, "type error: $(e.func): ",
+        print(io, "type: $(e.func): ",
                   "$(ctx)expected $(e.expected), ",
                   "got $tstr")
     end
 end
 
-show(io::IO, e::LoadError) = (show(io, e.error); print(io, "\nat $(e.file):$(e.line)"))
-show(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
-show(io::IO, ::DivideByZeroError) = print(io, "error: integer divide by zero")
-show(io::IO, ::StackOverflowError) = print(io, "error: stack overflow")
-show(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
-show(io::IO, ::EOFError) = print(io, "read: end of file")
-show(io::IO, e::ErrorException) = print(io, e.msg)
-show(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
+function show(io::IO, e::LoadError)
+    show(io, e.error)
+    print(io, "\nat $(e.file):$(e.line)")
+end
+
+show(io::IO, e::SystemError) = print_error(io, "$(e.prefix): $(strerror(e.errnum))")
+show(io::IO, ::DivideByZeroError) = print_error(io, "integer divide by zero")
+show(io::IO, ::StackOverflowError) = print_error(io, "stack overflow")
+show(io::IO, ::UndefRefError) = print_error(io, "access to undefined reference")
+show(io::IO, ::EOFError) = print_error(io, "read: end of file")
+show(io::IO, e::ErrorException) = print_error(io, e.msg)
+show(io::IO, e::KeyError) = print_error(io, "key not found: $(e.key)")
 show(io::IO, e::InterruptException) = nothing
 
 function show(io::IO, e::MethodError)
     name = e.f.env.name
     if is(e.f,convert)
-        print(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
+        print_error(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
     else
-        print(io, "no method $(name)$(typeof(e.args))")
+        print_error(io, "no method $(name)$(typeof(e.args))")
     end
 end
 
@@ -483,7 +492,7 @@ end
 # dumptype is for displaying abstract type hierarchies like Jameson
 # Nash's wiki page: https://github.com/JuliaLang/julia/wiki/Types-Hierarchy
 
-function dumptype(io::Stream, x, n::Int, indent)
+function dumptype(io::IO, x, n::Int, indent)
     # based on Jameson Nash's examples/typetree.jl
     println(io, x)
     if n == 0   # too deeply nested
@@ -524,21 +533,21 @@ end
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-xdump(fn::Function, io::Stream, x::AbstractKind) = dumptype(io, x, 5, "")
-xdump(fn::Function, io::Stream, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
+xdump(fn::Function, io::IO, x::AbstractKind) = dumptype(io, x, 5, "")
+xdump(fn::Function, io::IO, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
 
 # defaults:
-xdump(fn::Function, io::Stream, x) = xdump(xdump, io, x, 5, "")  # default is 5 levels
-xdump(fn::Function, io::Stream, x, n::Int) = xdump(xdump, io, x, n, "")
-xdump(fn::Function, args...) = xdump(fn, OUTPUT_STREAM::Stream, args...)
-xdump(io::Stream, args...) = xdump(xdump, io, args...)
-xdump(args...) = xdump(xdump, OUTPUT_STREAM::Stream, args...)
+xdump(fn::Function, io::IO, x) = xdump(xdump, io, x, 5, "")  # default is 5 levels
+xdump(fn::Function, io::IO, x, n::Int) = xdump(xdump, io, x, n, "")
+xdump(fn::Function, args...) = xdump(fn, OUTPUT_STREAM::IO, args...)
+xdump(io::IO, args...) = xdump(xdump, io, args...)
+xdump(args...) = xdump(xdump, OUTPUT_STREAM::IO, args...)
 
 
 # Here are methods specifically for dump:
 dump(io::IO, x, n::Int) = dump(io, x, n, "")
 dump(io::IO, x) = dump(io, x, 5, "")  # default is 5 levels
-dump(args...) = dump(OUTPUT_STREAM::Stream, args...)
+dump(args...) = dump(OUTPUT_STREAM::IO, args...)
 dump(io::IO, x::String, n::Int, indent) = println(io, typeof(x), " \"", x, "\"")
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
 
@@ -566,7 +575,7 @@ dump(io::IO, x::BitsKind, n::Int, indent) = println(io, x.name)
 dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
-showall(x) = showall(OUTPUT_STREAM::Stream, x)
+showall(x) = showall(OUTPUT_STREAM::IO, x)
 
 function showall{T}(io::IO, a::AbstractArray{T,1})
     if is(T,Any)

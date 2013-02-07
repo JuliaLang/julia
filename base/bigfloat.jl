@@ -121,6 +121,16 @@ function sqrt(x::BigFloat)
     BigFloat(z)
 end
 
+for f in (:ceil, :floor, :trunc)
+    @eval begin
+        function ($f)(x::BigFloat)
+            z = BigFloat_init()
+            ccall(($(string(:__gmpf_,f)), :libgmp), Void, (Ptr{Void}, Ptr{Void}), z, x.mpf)
+            BigFloat(z)
+        end
+    end
+end
+
 function ^(x::BigFloat, y::Uint)
     z = BigFloat_init()
     ccall((:jl_mpf_pow_ui, :libgmp_wrapper), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpf, y)

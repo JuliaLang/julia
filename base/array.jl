@@ -35,14 +35,14 @@ isassigned(a::Array, i::Int...) = isdefined(a, i...)
 
 ## copy ##
 
-function copy_to{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
+function copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
     if so+N-1 > length(src) || dsto+N-1 > length(dest) || dsto < 1 || so < 1
         throw(BoundsError())
     end
-    copy_to_unsafe(dest, dsto, src, so, N)
+    copy_unsafe!(dest, dsto, src, so, N)
 end
 
-function copy_to_unsafe{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
+function copy_unsafe!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
     if isa(T, BitsKind)
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
               pointer(dest, dsto), pointer(src, so), N*sizeof(T))
@@ -54,11 +54,11 @@ function copy_to_unsafe{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
     return dest
 end
 
-copy_to{T}(dest::Array{T}, src::Array{T}) = copy_to(dest, 1, src, 1, length(src))
+copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
 
-function copy_to{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
-        error("copy_to: size mismatch")
+        error("copy!: size mismatch")
     end
     check_bounds(B, ir_dest, jr_dest)
     check_bounds(A, ir_src, jr_src)
@@ -67,7 +67,7 @@ function copy_to{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, 
     Bskip = size(B, 1)
     if stride(A, 1) == 1 && R == S
         for jsrc in jr_src
-            copy_to(B, (jdest-1)*Bskip+first(ir_dest), A, (jsrc-1)*Askip+first(ir_src), length(ir_src))
+            copy!(B, (jdest-1)*Bskip+first(ir_dest), A, (jsrc-1)*Askip+first(ir_src), length(ir_src))
             jdest += 1
         end
     else
@@ -83,9 +83,9 @@ function copy_to{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, 
         end
     end
 end
-function copy_to_transpose{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
-        error("copy_to: size mismatch")
+        error("copy_transpose!: size mismatch")
     end
     check_bounds(B, ir_dest, jr_dest)
     check_bounds(A, ir_src, jr_src)
@@ -224,7 +224,6 @@ function linspace(start::Real, stop::Real, n::Integer)
     end
     a
 end
-
 linspace(start::Real, stop::Real) = linspace(start, stop, 100)
 
 logspace(start::Real, stop::Real, n::Integer) = 10.^linspace(start, stop, n)
@@ -235,7 +234,7 @@ logspace(start::Real, stop::Real) = logspace(start, stop, 50)
 convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
-convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
+convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
 collect(itr) = [x for x in itr]
 
@@ -257,10 +256,10 @@ ref(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real) =
 ref(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, I::Int...) =
     arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5),I...)
 
-# Fast copy using copy_to for Range1
+# Fast copy using copy! for Range1
 function ref(A::Array, I::Range1{Int})
     X = similar(A, length(I))
-    copy_to(X, 1, A, first(I), length(I))
+    copy!(X, 1, A, first(I), length(I))
     return X
 end
 
@@ -274,18 +273,18 @@ function ref(A::Array, I::Range1{Int}, j::Real)
     j = to_index(j)
     check_bounds(A, I, j)
     X = similar(A,length(I))
-    copy_to_unsafe(X, 1, A, (j-1)*size(A,1) + first(I), length(I))
+    copy_unsafe!(X, 1, A, (j-1)*size(A,1) + first(I), length(I))
     return X
 end
 function ref(A::Array, I::Range1{Int}, J::Range1{Int})
     check_bounds(A, I, J)
     X = similar(A, ref_shape(I, J))
     if length(I) == size(A,1)
-        copy_to_unsafe(X, 1, A, (first(J)-1)*size(A,1) + 1, size(A,1)*length(J))
+        copy_unsafe!(X, 1, A, (first(J)-1)*size(A,1) + 1, size(A,1)*length(J))
     else
         storeoffset = 1
         for j = J
-            copy_to_unsafe(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
+            copy_unsafe!(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
             storeoffset += length(I)
         end
     end
@@ -296,7 +295,7 @@ function ref(A::Array, I::Range1{Int}, J::AbstractVector{Int})
     X = similar(A, ref_shape(I, J))
     storeoffset = 1
     for j = J
-        copy_to_unsafe(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
+        copy_unsafe!(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
         storeoffset += length(I)
     end
     return X
@@ -398,7 +397,7 @@ end
 
 function assign{T}(A::Array{T}, X::Array{T}, I::Range1{Int})
     if length(X) != length(I); error("argument dimensions must match"); end
-    copy_to(A, first(I), X, 1, length(I))
+    copy!(A, first(I), X, 1, length(I))
     return A
 end
 
@@ -458,7 +457,7 @@ function assign{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, j::Real)
     j = to_index(j)
     check_bounds(A, I, j)
     if length(X) != length(I); error("argument dimensions must match"); end
-    copy_to_unsafe(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
+    copy_unsafe!(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
     return A
 end
 
@@ -470,11 +469,11 @@ function assign{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::Range1{Int})
         error("argument dimensions must match")
     end
     if length(I) == size(A,1)
-        copy_to_unsafe(A, first(I) + (first(J)-1)*size(A,1), X, 1, size(A,1)*length(J))
+        copy_unsafe!(A, first(I) + (first(J)-1)*size(A,1), X, 1, size(A,1)*length(J))
     else
         refoffset = 1
         for j = J
-            copy_to_unsafe(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
+            copy_unsafe!(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
             refoffset += length(I)
         end
     end
@@ -490,7 +489,7 @@ function assign{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::AbstractVector{I
     end
     refoffset = 1
     for j = J
-        copy_to_unsafe(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
+        copy_unsafe!(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
         refoffset += length(I)
     end
     return A
@@ -604,19 +603,14 @@ assign(A::Array, x, I::AbstractVector{Bool}) = assign_bool_scalar_1d(A, x, I)
 assign(A::Array, x, I::AbstractArray{Bool}) = assign_bool_scalar_1d(A, x, I)
 
 assign(A::Array, x, I::Real, J::AbstractVector{Bool}) = assign(A, x, I,find(J))
-
 assign(A::Array, x, I::AbstractVector{Bool}, J::Real) = assign(A,x,find(I),J)
-
 assign(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = assign(A, x, find(I),find(J))
-
 assign{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector{Bool}) = assign(A, x, I,find(J))
-
 assign{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = assign(A, x, find(I),J)
 
 # get (ref with a default value)
 
 get{T}(A::Array, i::Integer, default::T) = in_bounds(length(A), i) ? A[i] : default
-
 get{T}(A::Array, I::(), default::T) = Array(T, 0)
 get{T}(A::Array, I::Dims, default::T) = in_bounds(size(A), I...) ? A[I...] : default
 
@@ -627,7 +621,6 @@ function get{T}(X::Array{T}, A::Array, I::Union(Ranges, Vector{Int}), default::T
     X[last(ind)+1:length(X)] = default
     X
 end
-
 get{T}(A::Array, I::Ranges, default::T) = get(Array(T, length(I)), A, I, default)
 
 RangeVecIntList = Union((Union(Ranges, Vector{Int})...), Vector{Range1{Int}}, Vector{Range{Int}}, Vector{Vector{Int}})
@@ -638,7 +631,6 @@ function get{T}(X::Array{T}, A::Array, I::RangeVecIntList, default::T)
     X[dst...] = A[src...]
     X
 end
-
 get{T}(A::Array, I::RangeVecIntList, default::T) = get(Array(T, map(length, I)...), A, I, default)
 
 ## Dequeue functionality ##
@@ -1045,7 +1037,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
                 for j=0:stride:(N-stride)
                     offs = j + 1 + (i-1)*M
                     boffs = j + 1 + (ri-1)*M
-                    copy_to(B, boffs, A, offs, M)
+                    copy!(B, boffs, A, offs, M)
                 end
             end
         else
@@ -1180,7 +1172,7 @@ function find(testf::Function, A::StridedArray)
         end
     end
     I = Array(Int, length(tmpI))
-    copy_to(I, tmpI)
+    copy!(I, tmpI)
     I
 end
 
@@ -1698,7 +1690,15 @@ function filter!(f::Function, a::Vector)
     return a
 end
 
-filter(f::Function, a::Vector) = filter!(f, copy(a))
+function filter(f::Function, a::Vector)
+    r = Array(eltype(a), 0)
+    for i = 1:length(a)
+        if f(a[i])
+            push!(r, a[i])
+        end
+    end
+    return r
+end
 
 ## Transpose ##
 
@@ -1711,7 +1711,6 @@ function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
 end
 
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
-
 ctranspose(x::StridedVecOrMat) = transpose(x)
 
 transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
@@ -1848,5 +1847,3 @@ end
 symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
-
-

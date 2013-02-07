@@ -113,7 +113,7 @@ function copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64}, 
     return
 end
 
-## similar, fill, copy_to etc ##
+## similar, fill!, copy! etc ##
 
 similar(B::BitArray) = BitArray(B.dims...)
 similar(B::BitArray, dims::Int...) = BitArray(dims)
@@ -155,7 +155,7 @@ function one(x::BitMatrix)
     return a
 end
 
-function copy_to(dest::BitArray, src::BitArray)
+function copy!(dest::BitArray, src::BitArray)
     destc = dest.chunks; srcc = src.chunks
     nc_d = length(destc)
     nc_s = length(srcc)
@@ -176,7 +176,7 @@ function copy_to(dest::BitArray, src::BitArray)
     return dest
 end
 
-function copy_to(dest::BitArray, pos_d::Integer, src::BitArray, pos_s::Integer, numbits::Integer)
+function copy!(dest::BitArray, pos_d::Integer, src::BitArray, pos_s::Integer, numbits::Integer)
     if pos_s+numbits-1 > length(src) || pos_d+numbits-1 > length(dest) || pos_d < 1 || pos_s < 1
         throw(BoundsError())
     end

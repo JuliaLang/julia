@@ -311,21 +311,21 @@ similar(d::DArray, T::Type, dims::Dims) =
 copy{T}(d::SubOrDArray{T}) =
     darray((T,lsz,da)->localize_copy(d, da), T, size(d), distdim(d), procs(d))
 
-function copy_to(d::DArray, src::SubOrDArray)
+function copy!(d::DArray, src::SubOrDArray)
     @sync begin
         for p = d.pmap
-            @spawnat p copy_to(localize(d), localize(src, d))
+            @spawnat p copy!(localize(d), localize(src, d))
         end
     end
     return d
 end
 
-function copy_to(d::DArray, src::AbstractArray)
+function copy!(d::DArray, src::AbstractArray)
     @sync begin
         for i = 1:length(d.pmap)
             p = d.pmap[i]
             block = src[pieceindexes(d, i)...]
-            @spawnat p copy_to(localize(d), block)
+            @spawnat p copy!(localize(d), block)
         end
     end
     return d

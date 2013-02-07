@@ -72,11 +72,11 @@ const multi_cb_handles = MultiCBHandles(dummySingleAsync,dummySingleAsync)
 
 ## workers and message i/o ##
 
-function send_msg_unknown(s::Stream, kind, args)
+function send_msg_unknown(s::IO, kind, args)
     error("attempt to send to unknown socket")
 end
 
-function send_msg(s::Stream, kind, args...)
+function send_msg(s::IO, kind, args...)
     id = worker_id_from_socket(s)
     if id > -1
         return send_msg(worker_from_id(id), kind, args...)
@@ -84,7 +84,7 @@ function send_msg(s::Stream, kind, args...)
     send_msg_unknown(s, kind, args)
 end
 
-function send_msg_now(s::Stream, kind, args...)
+function send_msg_now(s::IO, kind, args...)
     id = worker_id_from_socket(s)
     if id > -1
         return send_msg_now(worker_from_id(id), kind, args...)
@@ -96,14 +96,14 @@ type Worker
     host::ByteString
     port::Uint16
     socket::TcpSocket
-    sendbuf::Buffer
+    sendbuf::IOBuffer
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     id::Int
     gcflag::Bool
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
-        new(bytestring(host), uint16(port), sock, IOString(), {}, {}, id, false)
+        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
 end
 Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
@@ -699,7 +699,7 @@ function perform_work(job::WorkItem)
     end
 end
 
-function deliver_result(sock::Stream, msg, oid, value)
+function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
     if is(msg,:fetch) || is(msg,:call_fetch)
         val = value
@@ -853,7 +853,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             #        # TODO: remove machine from group
             #        throw(DisconnectException())
             #    else
-            #        print("deserialization error: ", e, "\n")
+            #        print("deserialization: ", e, "\n")
             #        #while nb_available(sock) > 0 #|| select(sock)
             #        #    read(sock, Uint8)
             #        #end
@@ -868,7 +868,7 @@ end
 # the entry point for julia worker processes. does not return.
 # argument is descriptor to write listening port # to.
 start_worker() = start_worker(STDOUT)
-function start_worker(out::Stream)
+function start_worker(out::IO)
     default_port = uint16(9009)
     (actual_port,sock) = open_any_tcp_port(accept_handler,default_port) 
     write(out, "julia_worker:")  # print header
@@ -897,11 +897,10 @@ function start_remote_workers(machines, cmds, tunnel)
     n = length(cmds)
     outs = cell(n)
     w = cell(n)
-    pps = Array(Process,n)
     for i=1:n
-        outs[i],pps[i] = read_from(cmds[i])
+        outs[i],_ = read_from(cmds[i])
         outs[i].line_buffered = true
-            end
+    end
     for i=1:n
         local hostname::String, port::Int16
         stream = outs[i]
@@ -1010,7 +1009,7 @@ function start_sge_workers(n)
     run(`mkdir -p $sgedir`)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
     `echo $home/julia-release-basic --worker` | qsub_cmd
-    out = cmd_stdout_stream(qsub_cmd)
+    out,_ = read_from(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
     end

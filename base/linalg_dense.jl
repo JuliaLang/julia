@@ -212,7 +212,7 @@ end
 
 function rref{T}(A::Matrix{T})
     nr, nc = size(A)
-    U = copy_to(similar(A, T <: Complex ? Complex128 : Float64), A)
+    U = copy!(similar(A, T <: Complex ? Complex128 : Float64), A)
     e = eps(norm(U,Inf))
     i = j = 1
     while i <= nr && j <= nc

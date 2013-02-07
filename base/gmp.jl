@@ -16,10 +16,12 @@ import
     Base.>=,
     Base.^,
     Base.binomial,
+    Base.ceil,
     Base.cmp,
     Base.convert,
     Base.div,
     Base.factorial,
+    Base.floor,
     Base.gcd,
     Base.gcdx,
     Base.isinf,
@@ -29,7 +31,8 @@ import
     Base.show,
     Base.showcompact,
     Base.sqrt,
-    Base.string
+    Base.string,
+    Base.trunc
 
 include("bigint.jl")
 include("bigfloat.jl")

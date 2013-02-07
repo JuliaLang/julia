@@ -13,7 +13,7 @@ type WaitTask
     WaitTask(task::Task) = new(task, false, nothing)
 end
 
-abstract AsyncStream <: Stream
+abstract AsyncStream <: IO
 
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
@@ -28,14 +28,14 @@ end
 
 type NamedPipe <: AsyncStream
     handle::Ptr{Void}
-    buffer::Buffer
+    buffer::IOBuffer
     open::Bool
     line_buffered::Bool
     readcb::Callback
     readnotify::Vector{WaitTask}
     closecb::Callback
     closenotify::Vector{WaitTask}
-    NamedPipe() = new(C_NULL,PipeString(),false,true,false,WaitTask[],false,
+    NamedPipe() = new(C_NULL,PipeBuffer(),false,true,false,WaitTask[],false,
                       WaitTask[])
 end
 
@@ -45,12 +45,12 @@ type TTY <: AsyncStream
     handle::Ptr{Void}
     open::Bool
     line_buffered::Bool
-    buffer::Buffer
+    buffer::IOBuffer
     readcb::Callback
     readnotify::Vector{WaitTask}
     closecb::Callback
     closenotify::Vector{WaitTask}
-    TTY(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],false,WaitTask[])
+    TTY(handle,open)=new(handle,open,true,PipeBuffer(),false,WaitTask[],false,WaitTask[])
 end
 
 show(io::IO,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
@@ -113,7 +113,7 @@ end
 wait_connect_filter(w::AsyncStream, args...) = !w.open
 wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
 wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
-wait_readline_filter(w::AsyncStream, args...) = w.open && (memchr(w.buffer,'\n') <= 0)
+wait_readline_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
 
 macro waitfilter(fcn,notify,filter_fcn,types)
     quote
@@ -204,7 +204,7 @@ end
 
 ## BUFFER ##
 ## Allocate a simple buffer
-function alloc_request(buffer::IOString, recommended_size::Int32)
+function alloc_request(buffer::IOBuffer, recommended_size::Int32)
     ensureroom(buffer, int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
@@ -215,7 +215,7 @@ function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
     (buf,int32(size))
 end
 
-function notify_filled(buffer::IOString, nread::Int, base::Ptr{Void}, len::Int32)
+function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::Int32)
     if buffer.append
         buffer.size += nread
     else
@@ -226,7 +226,7 @@ function notify_filled(stream::AsyncStream, nread::Int)
     more = true
     while more
         if isa(stream.readcb,Function)
-            nreadable = (stream.line_buffered ? int(memchr(stream.buffer, '\n')) : nb_available(stream.buffer))
+            nreadable = (stream.line_buffered ? int(search(stream.buffer, '\n')) : nb_available(stream.buffer))
             if nreadable > 0
                 more = stream.readcb(stream, nreadable)
             else
