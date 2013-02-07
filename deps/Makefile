@@ -20,13 +20,13 @@ endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp patchelf
 #custom configure-driven script: zlib nginx
-#custom Makefile rules: openlibm Rmath double-conversion random gmp-wrapper suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
+#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
 STAGE1_DEPS = uv openlibm-extras random Rmath double-conversion
-STAGE2_DEPS = gmp-wrapper
+STAGE2_DEPS =
 STAGE3_DEPS = suitesparse-wrapper
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
@@ -1202,34 +1202,7 @@ get-gmp: gmp-$(GMP_VER).tar.bz2
 configure-gmp: gmp-$(GMP_VER)/config.status
 compile-gmp: $(GMP_SRC_TARGET)
 check-gmp: gmp-$(GMP_VER)/checked
-install-gmp: $(GMP_OBJ_TARGET) install-gmp-wrapper
-
-## GMP Wrapper ##
-
-ifeq ($(USE_SYSTEM_GMP), 1)
-GMPW_INC =
-GMPW_LIB = -lgmp
-else
-GMPW_INC = -I $(BUILD)/include
-GMPW_LIB = -L$(BUILD)/lib/ -lgmp
-$(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT): $(GMP_OBJ_TARGET)
-endif
-
-$(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c | $(BUILD)/lib
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMPW_INC) gmp_wrapper.c -o $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT) $(RPATH_ORIGIN) $(GMPW_LIB)
-	$(INSTALL_NAME_CMD)libgmp_wrapper.$(SHLIB_EXT) $@
-	touch -c $@
-
-clean-gmp-wrapper:
-	-rm -f $(GMP_OBJ_TARGET) $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT)
-distclean-gmp-wrapper: clean-gmp-wrapper
-
-get-gmp-wrapper:
-configure-gmp-wrapper:
-compile-gmp-wrapper:
-check-gmp-wrapper:
-install-gmp-wrapper: $(BUILD)/lib/libgmp_wrapper.$(SHLIB_EXT)
-
+install-gmp: $(GMP_OBJ_TARGET)
 
 ## ZLIB ##
 
