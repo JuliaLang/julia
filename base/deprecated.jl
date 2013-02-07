@@ -59,6 +59,11 @@ end
 @deprecate  chars         collect
 @deprecate  elements      collect
 @deprecate  strcat        string
+@deprecate  chold         chol
+@deprecate  cholpd        cholpivot
+@deprecate  lud           lu
+@deprecate  qrd           qr
+@deprecate  qrpd          qrpivot
 
 export randi
 function randi(n,x...)
