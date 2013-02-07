@@ -924,7 +924,7 @@ export
 
 # loading source files
     evalfile,
-    find_in_path,
+    find_in_path, # TODO: don't export.
     include,
     include_string,
     reload,
@@ -1052,7 +1052,7 @@ export
 # filesystem operations
     cd,
     pwd,
-    is_file_readable,
+    is_file_readable, # TODO: don't export.
     ls,
     cp,
     rm,
@@ -1066,7 +1066,7 @@ export
     tempname,
     mktemp,
     mktempdir,
-    download_file,
+    download_file, # TODO: really?
     filemode,
     filesize,
     mtime,
@@ -1091,7 +1091,7 @@ export
     gperm,
     operm,
 
-# external processes
+# external processes ## TODO: whittle down these exports.
     connect,
     getpid,
     ignorestatus,
