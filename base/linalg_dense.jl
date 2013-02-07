@@ -776,6 +776,39 @@ svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
 
 svdvals(A::StridedMatrix) = svdt(A,false,true)[2]
 
+# Generalized svd
+type GSVD{T} <: Factorization{T}
+    U::Matrix{T}
+    V::Matrix{T}
+    Q::Matrix{T}
+    a::Vector #{eltype(real(one(T)))}
+    b::Vector #{eltype(real(one(T)))}
+    k::Int
+    l::Int
+    R::Matrix{T}
+end
+function svd(A::StridedMatrix, B::StridedMatrix)
+    U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', copy(A), copy(B))
+    return GSVD(U, V, Q, a, b, k, l, R)
+end
+function factors{T}(obj::GSVD{T})
+    m = size(obj.U, 1)
+    p = size(obj.V, 1)
+    n = size(obj.Q, 1)
+    if m - obj.k - obj.l >= 0
+        D1 = [eye(T, obj.k) zeros(T, obj.k, obj.l); zeros(T, obj.l, obj.k) diagm(obj.a[obj.k + 1:obj.k + obj.l]); zeros(T, m - obj.k - obj.l, obj.k + obj.l)]
+        D2 = [zeros(T, obj.l, obj.k) diagm(obj.b[obj.k + 1:obj.k + obj.l]); zeros(T, p - obj.l, obj.k + obj.l)]
+        R0 = [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
+    else
+        D1 = [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); diagm(a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
+        D2 = [zeros(T, p, obj.k) [diagm(b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
+        R0 = [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
+    end
+    return obj.U, obj.V, obj.Q, D1, D2, R0
+end
+
+svdvals(A::StridedMatrix, B::StridedMatrix) = LAPACK.ggsvd!('N', 'N', 'N', copy(A), copy(B))[4:5]
+
 schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 
 function sqrtm(A::Matrix, cond::Bool)

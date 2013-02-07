@@ -78,6 +78,10 @@ for elty in (Float32, Float64, Complex64, Complex128)
         u,s,vt = svdt(a)                        # singular value decomposition
         @assert_approx_eq u*diagmm(s,vt) a
     
+        gsvd = factors(svd(a,a[1:5,:]))         # Generalized svd
+        @assert_approx_eq gsvd[1]*gsvd[4]*gsvd[6]*gsvd[3]' a
+        @assert_approx_eq gsvd[2]*gsvd[5]*gsvd[6]*gsvd[3]' a[1:5,:]
+
         x = a \ b
         @assert_approx_eq a*x b
     
