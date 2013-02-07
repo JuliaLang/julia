@@ -140,21 +140,14 @@ function reshape(a::AbstractArray, dims::Dims)
         error("reshape: invalid dimensions")
     end
     b = similar(a, dims)
-    for i=1:length(a)
+    for i = 1:length(a)
         b[i] = a[i]
     end
     return b
 end
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
-function vec(a::AbstractArray)
-    n = 0
-    for d in size(a)
-        d != 1 && (n += 1)
-    end
-    n > 1 && error("vec: array must have only one non-singleton dimension")
-    reshape(a,length(a))
-end
+vec(a::AbstractArray) = reshape(a,length(a))
 
 function squeeze(A::AbstractArray, dims)
     d = ()
