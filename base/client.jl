@@ -297,7 +297,7 @@ function _start()
     #atexit(()->flush(STDOUT))
     try
         global const Workqueue = WorkItem[]
-        global const Waiting = Dict(64)
+        global const Waiting = Dict()
 
         if !any(a->(a=="--worker"), ARGS)
             # start in "head node" mode

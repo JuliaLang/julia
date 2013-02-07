@@ -159,7 +159,7 @@ end
 data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
 
 # Populate the first dict
-d1 = Dict{Int, String}(length(data_in))
+d1 = Dict{Int, String}()
 for (k,v) in data_in
     d1[k] = v
 end
@@ -171,7 +171,7 @@ for i in 1:length(data_in)
 end
 # Inserting data in different (shuffled) order should result in
 # equivalent dict.
-d2 = Dict{Int, String}(length(data_in))
+d2 = Dict{Int, String}()
 for (k,v) in data_in
     d2[k] = v
 end
@@ -189,7 +189,7 @@ d3[data_in[rand(1:length(data_in))][1]] = randstring(3)
 d4[1001] = randstring(3)
 @test !isequal(d1, d4)
 
-@test isequal(Dict(), Dict(96))
+@test isequal(Dict(), sizehint(Dict(),96))
 
 # Here is what currently happens when dictionaries of different types
 # are compared. This is not necessarily desirable. These tests are

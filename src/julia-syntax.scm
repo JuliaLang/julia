@@ -1245,8 +1245,8 @@
 		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	   (label ,initlabl)
 	   (= ,result (call (curly (top Dict)
-			    (static_typeof ,onekey)
-			    (static_typeof ,oneval))))
+				   (static_typeof ,onekey)
+				   (static_typeof ,oneval))))
 	   ,(construct-loops (reverse loopranges))
 	   ,result)))))))
 
