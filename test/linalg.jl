@@ -32,10 +32,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq inv(bc2) * apd eye(elty, n)
         @assert_approx_eq apd * (bc2\b) b
 
-        lua   = lud(a)                  # LU decomposition
-        l,u,p = lu(a)
-        L,U,P = factors(lua)
-        @test l == L && u == U && p == P
+        lua   = lu(a)                  # LU decomposition
+        l,u,p = factors(lua)
         @assert_approx_eq l*u a[p,:]
         @assert_approx_eq l[invperm(p),:]*u a
         @assert_approx_eq a * inv(lua) eye(elty, n)
@@ -290,7 +288,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq solve(T,v) invFv
         B = convert(Matrix{elty}, B)
         @assert_approx_eq solve(T, B) F\B
-        Tlu = lud(T)
+        Tlu = lu(T)
         x = Tlu\v
         @assert_approx_eq x invFv
         @assert_approx_eq det(T) det(F)

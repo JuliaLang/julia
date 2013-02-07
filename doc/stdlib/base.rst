@@ -1716,13 +1716,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the norm of a ``Vector`` or a ``Matrix``
 
-.. function:: lu(A) -> LU
+.. function:: lu(A)
 
-   Compute LU factorization. LU is an "LU factorization" type that can be used as an ordinary matrix.
+   Compute the LU factorization of ``A`` and return a ``LUDense`` object. ``factors(lu(A))`` returns the triangular matrices containing the factorization. The following functions are available for ``LUDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``.
+
+.. function:: lu!(A)
+
+   ``lu!`` is the same as ``lu``, but overwrites the input matrix A with the factorization.
 
 .. function:: chol(A, [LU])
 
-   Compute the Cholesky factorization of ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The ``factors(chol(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``.
+   Compute the Cholesky factorization of ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(chol(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
 
 .. function:: chol!(A, [LU])
 
@@ -1730,7 +1734,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholpivot(A, [LU])
 
-   Compute the pivoted Cholesky factorization of ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The ``factors(cholpivot(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``.
+   Compute the pivoted Cholesky factorization of ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholpivot(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
 
 .. function:: cholpivot!(A, [LU])
 
@@ -1744,9 +1748,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute QR factorization with pivoting
 
-.. function:: factors(D)
+.. function:: factors(F)
 
-   Return the factors of a decomposition D. For an LU decomposition, factors(LU) -> L, U, p
+   Return the factors from a ``Factorization`` object.
 
 .. function:: eig(A) -> D, V
 

@@ -536,17 +536,13 @@ function factors{T}(lu::LUDense{T})
     L, U, P
 end
 
-function lud!{T<:BlasFloat}(A::Matrix{T})
+function lu!{T<:BlasFloat}(A::Matrix{T})
     lu, ipiv, info = LAPACK.getrf!(A)
     LUDense{T}(lu, ipiv, info)
 end
 
-lud{T<:BlasFloat}(A::Matrix{T}) = lud!(copy(A))
-lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
-
-## Matlab-compatible
-lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
-lu(x::Number) = (one(x), x, [1])
+lu{T<:BlasFloat}(A::Matrix{T}) = lu!(copy(A))
+lu{T<:Number}(A::Matrix{T}) = lu(float64(A))
 
 function det{T}(lu::LUDense{T})
     m, n = size(lu)
@@ -680,7 +676,7 @@ function det(A::Matrix)
     m, n = size(A)
     if m != n; error("det only defined for square matrices"); end
     if istriu(A) | istril(A); return prod(diag(A)); end
-    return det(lud(A))
+    return det(lu(A))
 end
 det(x::Number) = x
 
@@ -894,7 +890,7 @@ function cond(A::StridedMatrix, p)
     elseif p == 1 || p == Inf
         m, n = size(A)
         if m != n; error("Use 2-norm for non-square matrices"); end
-        cnd = 1 / LAPACK.gecon!(p == 1 ? '1' : 'I', lud(A).lu, norm(A, p))
+        cnd = 1 / LAPACK.gecon!(p == 1 ? '1' : 'I', lu(A).lu, norm(A, p))
     else
         error("Norm type must be 1, 2 or Inf")
     end
@@ -1190,16 +1186,16 @@ end
 
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
-lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
-lud{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
-lu(A::Tridiagonal) = factors(lud(A))
+lu!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
+lu{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
+lu(A::Tridiagonal) = factors(lu(A))
 
 function det{T}(lu::LUTridiagonal{T})
     n = length(lu.d)
     prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
 
-det(A::Tridiagonal) = det(lud(A))
+det(A::Tridiagonal) = det(lu(A))
 
 (\){T<:BlasFloat}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
     LAPACK.gttrs!('N', lu.dl, lu.d, lu.du, lu.du2, lu.ipiv, copy(B))
