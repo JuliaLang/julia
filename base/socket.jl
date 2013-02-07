@@ -73,14 +73,14 @@ type TcpSocket <: Socket
     handle::Ptr{Void}
     open::Bool
     line_buffered::Bool
-    buffer::Buffer
+    buffer::IOBuffer
     readcb::Callback
     readnotify::Vector{WaitTask}
     ccb::Callback
     connectnotify::Vector{WaitTask}
     closecb::Callback
     closenotify::Vector{WaitTask}
-    TcpSocket(handle,open)=new(handle,open,true,PipeString(),false,
+    TcpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,
                                WaitTask[],false,WaitTask[],false,WaitTask[])
     function TcpSocket()
         this = TcpSocket(C_NULL,false)
@@ -97,14 +97,14 @@ type UdpSocket <: Socket
     handle::Ptr{Void}
     open::Bool
     line_buffered::Bool
-    buffer::Buffer
+    buffer::IOBuffer
     readcb::Callback
     readnotify::Vector{WaitTask}
     ccb::Callback
     connectnotify::Vector{WaitTask}
     closecb::Callback
     closenotify::Vector{WaitTask}
-    UdpSocket(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],
+    UdpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,WaitTask[],
                                false,WaitTask[],false,WaitTask[])
     function UdpSocket()
         this = UdpSocket(C_NULL,false)
