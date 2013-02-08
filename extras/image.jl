@@ -376,8 +376,8 @@ end
 
 
 ### Manipulations
-function permute!{DataType}(img::ImageArray{DataType},perm)
-    img.data = permute(img.data,perm)
+function permutedims!{DataType}(img::ImageArray{DataType},perm)
+    img.data = permutedims(img.data,perm)
     img.size_ancestor = img.size_ancestor[perm]
     img.arrayi_range = img.arrayi_range[perm]
     # Permute arrayi2physc: first compute the spatial permutation
