@@ -55,15 +55,21 @@ static void init_history(void)
         history_file = ".julia_history";
     }
     else {
+        char *histenv = getenv("JULIA_HISTORY");
+        if (histenv) {
+            history_file = histenv;
+        }
+        else {
 #ifndef __WIN32__
-        char *home = getenv("HOME");
-        if (!home) return;
-        asprintf(&history_file, "%s/.julia_history", home);
+            char *home = getenv("HOME");
+            if (!home) return;
+            asprintf(&history_file, "%s/.julia_history", home);
 #else
-        char *home = getenv("AppData");
-        if (!home) return;
-        asprintf(&history_file, "%s/julia/history", home);
+            char *home = getenv("AppData");
+            if (!home) return;
+            asprintf(&history_file, "%s/julia/history", home);
 #endif
+        }
     }
     if (!stat(history_file, &stat_info)) {
         read_history(history_file);
