@@ -120,3 +120,21 @@ for (fun,typ) in {(:randexp,:Exponential), (:randg,:Gamma), (:randbeta,:Beta), (
     rand(",$(expr(:quote,typ)),"())
 ")
 end
+
+export getenv, hasenv, setenv, unsetenv
+function getenv(var::String)
+    warn_once("getenv(var) is deprecated, use ENV[var] instead.")
+    ENV[var]
+end
+function hasenv(var::String)
+    warn_once("hasenv(var) is deprecated, use has(ENV,var) instead.")
+    has(ENV, var)
+end
+function setenv(var::String, val::String)
+    warn_once("setenv(var,val) is deprecated, use ENV[var]=val instead.")
+    ENV[var] = val
+end
+function unsetenv(var::String)
+    warn_once("unsetenv(var) is deprecated, use delete!(ENV,var) instead.")
+    delete!(ENV, var)
+end

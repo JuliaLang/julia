@@ -1109,16 +1109,12 @@ export
     dlsym,
     dlsym_e,
     errno,
-    getenv,
-    hasenv,
     pointer,
     pointer_to_array,
     cfunction,
-    setenv,
     strerror,
     unsafe_ref,
     unsafe_assign,
-    unsetenv,
 
 # Macros
     @v_str,
