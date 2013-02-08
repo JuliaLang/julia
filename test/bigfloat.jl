@@ -20,10 +20,10 @@ d = BigFloat("-24.69135780242")
 @test abs(d + c) < 0.00000000001
 
 #Multiple calls for sanity check, since we're doing direct memory manipulation
-@test string(a) == "12.34567890121"
-@test string(b) == "12.34567890122"
-@test string(c) == "24.69135780242"
-@test string(d) == "-24.69135780242"
+@test string(a) == "1.234567890121e+01"
+@test string(b) == "1.234567890122e+01"
+@test string(c) == "2.469135780242e+01"
+@test string(d) == "-2.469135780242e+01"
 
 @test abs((BigFloat(3)/BigFloat(2)) - BigFloat(1.5)) < 0.00000000001
 
