@@ -743,6 +743,8 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
                 t = Type{TypeVar(:_,t)}
             end
         end
+    elseif is(e.head,:method)
+        t = Function
     else
         t = Any
     end
