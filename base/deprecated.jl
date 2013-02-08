@@ -74,6 +74,8 @@ end
 @deprecate  permute       permutedims
 @deprecate  ipermute      ipermutedims
 @deprecate  is_hex_digit  isxdigit
+@deprecate  read_from     readsfrom
+@deprecate  write_to      writesto
 
 export grow!
 function grow!(a, d)

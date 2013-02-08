@@ -1096,11 +1096,11 @@ export
     #process_stop_signal,
     #process_stopped,
     process_term_signal,
-    read_from,
+    readsfrom,
     run,
     spawn,
     success,
-    write_to,
+    writesto,
 
 # C interface
     c_free,
