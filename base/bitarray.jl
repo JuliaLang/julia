@@ -1583,18 +1583,22 @@ ctranspose(B::BitArray) = transpose(B)
 
 let permutedims_cache = nothing, stridenames::Array{Any,1} = {}
 global permutedims
-function permutedims(B::BitArray, perm)
+function permutedims(B::Union(BitArray,StridedArray), perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
     dimsP = ntuple(ndimsB, i->dimsB[perm[i]])
     P = similar(B, dimsP)
-    ranges = ntuple(ndimsB, i->(colon(1,dimsP[i])))
+    ranges = ntuple(ndimsB, i->(1:dimsP[i]))
     while length(stridenames) < ndimsB
         push!(stridenames, gensym())
     end
 
     #calculates all the strides
-    strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
+    if isa(B,BitArray)
+        strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
+    else
+        strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
+    end
 
     #Creates offset, because indexing starts at 1
     offset = 0
@@ -1603,9 +1607,14 @@ function permutedims(B::BitArray, perm)
     end
     offset = 1-offset
 
+    if isa(B,SubArray)
+        offset += (B.first_index-1)
+        B = B.parent
+    end
+
     function permute_one_dim(ivars)
         len = length(ivars)
-        counts = { gensym() for i=1:len}
+        counts = { symbol(string("count",i)) for i=1:len}
         toReturn = cell(len+1,2)
         for i = 1:length(toReturn)
             toReturn[i] = nothing
