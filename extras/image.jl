@@ -1,4 +1,4 @@
-import Base.ref, Base.assign, Base.sub, Base.size, Base.copy
+import Base.ref, Base.assign, Base.sub, Base.size, Base.copy, Base.permute!
 
 ## Color spaces
 abstract ColorSpace
@@ -376,6 +376,7 @@ end
 
 
 ### Manipulations
+# TODO: rename to permutedims!
 function permute!{DataType}(img::ImageArray{DataType},perm)
     img.data = permute(img.data,perm)
     img.size_ancestor = img.size_ancestor[perm]
