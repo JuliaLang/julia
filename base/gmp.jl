@@ -26,6 +26,7 @@ import
     Base.gcdx,
     Base.isinf,
     Base.isnan,
+    Base.ndigits,
     Base.promote_rule,
     Base.rem,
     Base.show,
