@@ -293,8 +293,6 @@ type TimeoutAsyncWork <: AsyncWork
     end
 end
 
-const dummySingleAsync = SingleAsyncWork(C_NULL,()->nothing)
-
 function _uv_hook_close(uv::AsyncStream)
     uv.handle = 0
     uv.open = false

@@ -666,7 +666,7 @@ static void init_rl(void)
 #endif
 }
 
-void jl_prep_terminal (int meta_flag)
+void jl_prep_terminal(int meta_flag)
 {
     FILE *rl_in = rl_instream;
     rl_instream = stdin;
@@ -720,9 +720,9 @@ void init_repl_environment(int argc, char *argv[])
     jl_sigint_act.sa_sigaction = NULL;
 #endif
     rl_catch_signals = 0;
-    rl_prep_term_function=&jl_prep_terminal;
-    rl_deprep_term_function=&jl_deprep_terminal;
-    rl_instream=fopen("/dev/null","r");
+    rl_prep_term_function = &jl_prep_terminal;
+    rl_deprep_term_function = &jl_deprep_terminal;
+    rl_instream = fopen("/dev/null","r");
     prompt_length = strlen(prompt_plain);
     init_history();
     rl_startup_hook = (Function*)init_rl;
