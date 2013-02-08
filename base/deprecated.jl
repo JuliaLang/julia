@@ -53,6 +53,11 @@ end
 @deprecate  elements      collect
 @deprecate  pairs         collect
 @deprecate  strcat        string
+@deprecate  chold         chol
+@deprecate  cholpd        cholpivot
+@deprecate  lud           lu
+@deprecate  qrd           qr
+@deprecate  qrpd          qrpivot
 @deprecate  iswalnum      isalnum
 @deprecate  iswalpha      isalpha
 @deprecate  iswascii      isascii
@@ -79,6 +84,7 @@ function grow!(a, d)
     warn_once("grow!(array,delta) is deprecated, use resize!(array,newsize) instead.")
     resize!(a, length(a)+d)
 end
+
 
 export randi
 function randi(n,x...)
