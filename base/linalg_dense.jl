@@ -761,8 +761,8 @@ function svdt{T<:BlasFloat}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
 end
 
 svdt{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svdt(float64(x),vecs,thin)
-svdt(A) = svdt(A,true,false)
-svdt(A, thin::Bool) = svdt(A,true,thin)
+svdt(A::StridedMatrix) = svdt(A,true,false)
+svdt(A::StridedMatrix, thin::Bool) = svdt(A,true,thin)
 
 svdt(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
 
@@ -771,10 +771,10 @@ function svd(x::StridedMatrix,vecs::Bool,thin::Bool)
     return (u, s, vt')
 end
 
-svd(A) = svd(A,true,false)
-svd(A, thin::Bool) = svd(A,true,thin)
+svd(A::StridedMatrix) = svd(A,true,false)
+svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
 
-svdvals(A) = svdt(A,false,true)[2]
+svdvals(A::StridedMatrix) = svdt(A,false,true)[2]
 
 schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 
