@@ -88,9 +88,13 @@ function eval_user_input(ast::ANY, show_value)
                     if have_color
                         print(answer_color())
                     end
-                    try repl_show(value)
-                    catch err
-                        throw(ShowError(value,err))
+                    if isgeneric(value) && !isa(value,CompositeKind) && isa(ast,Expr) && ast.head === :method
+                        print("# method added to generic function ", value.env.name)
+                    else
+                        try repl_show(value)
+                        catch err
+                            throw(ShowError(value,err))
+                        end
                     end
                     println()
                 end

@@ -179,7 +179,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_method_def(fname, bp, b, (jl_tuple_t*)atypes,
                       (jl_function_t*)meth, (jl_tuple_t*)tvars);
         JL_GC_POP();
-        return jl_nothing;
+        return *bp;
     }
     else if (ex->head == const_sym) {
         jl_value_t *sym = args[0];

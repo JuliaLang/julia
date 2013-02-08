@@ -399,7 +399,7 @@ end
 
 function show(io::IO, mt::MethodTable)
     name = mt.name
-    println(io, "Methods for generic function ", name)
+    println(io, "# methods for generic function ", name)
     d = mt.defs
     while !is(d,())
         print(io, name)
