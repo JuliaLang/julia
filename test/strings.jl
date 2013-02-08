@@ -133,6 +133,7 @@ end
 @test "\x0F" == unescape_string("\\x0F")
 
 # TODO: more Unicode testing here.
+macro S_str(s); Base.interp_parse(s); end
 
 @test S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
 

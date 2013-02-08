@@ -73,6 +73,7 @@ end
 @deprecate  resize        sizehint
 @deprecate  permute       permutedims
 @deprecate  ipermute      ipermutedims
+@deprecate  is_hex_digit  isxdigit
 
 export grow!
 function grow!(a, d)
