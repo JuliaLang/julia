@@ -90,6 +90,7 @@ function _init_buf(stream::AsyncStream)
     end
 end
 
+flush(::TTY) = nothing
 
 ## SOCKETS ##
 
