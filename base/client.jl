@@ -217,7 +217,11 @@ function process_options(args::Array{Any,1})
             require(args[i])
         elseif args[i]=="-p"
             i+=1
-            np = int32(args[i])
+            if i > length(args) || !isdigit(args[i][1])
+                np = CPU_CORES
+            else
+                np = int(args[i])
+            end
             addprocs_local(np-1)
         elseif args[i]=="--machinefile"
             i+=1
