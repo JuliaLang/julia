@@ -310,14 +310,14 @@ function _start()
         if !any(a->(a=="--worker"), ARGS)
             # start in "head node" mode
             global const Scheduler = Task(()->event_loop(true), 1024*1024)
-            global PGRP;
+            global PGRP
             PGRP.myid = 1
             assert(PGRP.np == 0)
             push!(PGRP.workers,LocalProcess())
             push!(PGRP.locs,("",0))
             PGRP.np = 1
             # make scheduler aware of current (root) task
-            enq_work(roottask_wi)
+            unshift!(Workqueue, roottask_wi)
             yield()
         end
 
