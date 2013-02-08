@@ -68,8 +68,6 @@ function shuffle!(a::AbstractVector)
     return a
 end
 
-#@in_place_matrix_op shuffle
-
 function randperm(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1

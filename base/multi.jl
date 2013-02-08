@@ -1078,8 +1078,8 @@ end
 spawnat(p, thunk) = sync_add(remote_call(p, thunk))
 
 let lastp = 1
-    global spawn
-    function spawn(thunk::Function)
+    global chooseproc
+    function chooseproc(thunk::Function)
         p = -1
         env = thunk.env
         if isa(env,Tuple)
@@ -1098,9 +1098,11 @@ let lastp = 1
                 lastp = 1
             end
         end
-        spawnat(p, thunk)
+        p
     end
 end
+
+spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
 find_vars(e) = find_vars(e, {})
 function find_vars(e, lst)
@@ -1129,7 +1131,7 @@ end
 
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawn($(esc(expr))))
+    :(spawn_somewhere($(esc(expr))))
 end
 
 function spawnlocal(thunk)
@@ -1145,13 +1147,14 @@ function spawnlocal(thunk)
     rr
 end
 
-macro spawnlocal(expr)
+macro async(expr)
     expr = localize_vars(:(()->($expr)))
     :(spawnlocal($(esc(expr))))
 end
 
-macro async(expr)
-    :(@spawnlocal $(esc(expr)))
+macro spawnlocal(expr)
+    warn_once("@spawnlocal is deprecated, use @async instead.")
+    :(@async $(esc(expr)))
 end
 
 macro spawnat(p, expr)
