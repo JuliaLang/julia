@@ -166,11 +166,16 @@ where each I\_k may be:
 1. A scalar value
 2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
 3. An arbitrary integer vector, including the empty vector ``[]``
+4. A boolean vector
 
-The result X has the dimensions
-``(size(I_1), size(I_2), ..., size(I_n))``, with location
+The result X generally has dimensions
+``(length(I_1), length(I_2), ..., length(I_n))``, with location
 ``(i_1, i_2, ..., i_n)`` of X containing the value
-``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
+``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions indexed with
+scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
+``(length(I),)``. The size of a dimension indexed by a boolean vector
+will be the number of true values in the vector (they behave as if they were
+transformed with ``find``).
 
 Indexing syntax is equivalent to a call to ``ref``::
 
@@ -202,8 +207,9 @@ where each I\_k may be:
 1. A scalar value
 2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
 3. An arbitrary integer vector, including the empty vector ``[]``
+4. A boolean vector
 
-The size of X should be ``(size(I_1), size(I_2), ..., size(I_n))``, and
+The size of X should be ``(length(I_1), length(I_2), ..., length(I_n))``, and
 the value in location ``(i_1, i_2, ..., i_n)`` of A is overwritten with
 the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
 
