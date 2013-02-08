@@ -878,7 +878,15 @@ end
 
 ## Unary operators ##
 
-(-)(B::BitArray) = -bitunpack(B)
+function (-)(B::BitArray)
+    A = zeros(Int, size(B))
+    for i = 1:length(B)
+        if B[i]
+            A[i] = -1
+        end
+    end
+    return A
+end
 sign(B::BitArray) = copy(B)
 
 real(B::BitArray) = copy(B)
@@ -917,7 +925,33 @@ end
 
 ## Binary arithmetic operators ##
 
-for f in (:+, :-, :div, :mod, :./, :.^, :/, :\)
+for (f,t) in ((:+,Int), (:-,Int), (:./,Float64))
+    @eval begin
+        function ($f)(A::BitArray, B::BitArray)
+            shp = promote_shape(size(A),size(B))
+            reshape(($t)[ ($f)(A[i], B[i]) for i=1:length(A) ], shp)
+        end
+        function ($f)(B::BitArray, x::Number)
+            pt = typeof(($f)(true, one(x)))
+            reshape(pt[ ($f)(B[i], x) for i = 1:length(B) ], size(B))
+        end
+        function ($f)(x::Number, B::BitArray)
+            pt = typeof(($f)(true, one(x)))
+            reshape(pt[ ($f)(x, B[i]) for i = 1:length(B) ], size(B))
+        end
+    end
+end
+
+for f in (:/, :\)
+    @eval begin
+        ($f)(A::BitArray, B::BitArray) = ($f)(bitunpack(A), bitunpack(B))
+    end
+end
+(/)(B::BitArray, x::Number) = (/)(bitunpack(B), x)
+(/)(x::Number, B::BitArray) = (/)(x, bitunpack(B))
+
+# TODO: don't unpack
+for f in (:div, :mod)
     @eval begin
         ($f)(A::BitArray, B::BitArray) = ($f)(bitunpack(A), bitunpack(B))
         ($f)(B::BitArray, x::Number) = ($f)(bitunpack(B), x)
@@ -969,10 +1003,107 @@ for f in (:&, :|, :$)
             return F
         end
         ($f)(A::Array{Bool}, B::BitArray) = ($f)(bitpack(A), B)
-        ($f)(B::BitArray, A::Array{Bool}) = ($f)(A, B)
+        ($f)(B::BitArray, A::Array{Bool}) = ($f)(B, bitpack(A))
         ($f)(x::Number, B::BitArray) = ($f)(x, bitunpack(B))
-        ($f)(B::BitArray, x::Number) = ($f)(x, B)
+        ($f)(B::BitArray, x::Number) = ($f)(bitunpack(B), x)
     end
+end
+
+function (.^)(A::BitArray, B::BitArray)
+    F = BitArray(promote_shape(size(A),size(B))...)
+    Fc = F.chunks
+    Ac = A.chunks
+    Bc = B.chunks
+    if !isempty(Ac) && !isempty(Bc)
+        for i = 1:length(Fc) - 1
+            Fc[i] = Ac[i] | ~Bc[i]
+        end
+        msk = @_msk_end length(F)
+        Fc[end] = msk & (Ac[end] | ~Bc[end])
+    end
+    return F
+end
+(.^)(A::Array{Bool}, B::BitArray) = (.^)(bitpack(A), B)
+(.^)(B::BitArray, A::Array{Bool}) = (.^)(B, bitpack(A))
+function (.^)(B::BitArray, x::Bool)
+    if x
+        return copy(B)
+    else
+        return trues(size(B))
+    end
+end
+function (.^)(x::Bool, B::BitArray)
+    if x
+        return trues(size(B))
+    else
+        return ~B
+    end
+end
+function (.^){T<:Number}(x::T, B::BitArray)
+    u = one(T)
+    reshape(T[ B[i] ? x : u for i = 1:length(B) ], size(B))
+end
+function (.^){T<:Integer}(B::BitArray, x::T)
+    if x == 0
+        return trues(size(B))
+    elseif x < 0
+        throw(DomainError())
+    else
+        return copy(B)
+    end
+end
+function (.^){T<:Number}(B::BitArray, x::T)
+    if x == 0
+        return ones(T, size(B))
+    elseif T <: Real && x > 0
+        return convert(Array{T}, B)
+    else
+        z = nothing
+        u = nothing
+        zerr = nothing
+        uerr = nothing
+        try
+            z = false .^ x
+        catch err
+            zerr = err
+        end
+        try
+            u = true .^ x
+        catch err
+            uerr = err
+        end
+        if zerr == nothing && uerr == nothing
+            t = promote_type(typeof(z), typeof(u))
+        elseif zerr == nothing
+            t = typeof(z)
+        else
+            t = typeof(u)
+        end
+        F = Array(t, size(B))
+        for i = 1:length(B)
+            if B[i]
+                if uerr == nothing
+                    F[i] = u
+                else
+                    throw(uerr)
+                end
+            else
+                if zerr == nothing
+                    F[i] = z
+                else
+                    throw(zerr)
+                end
+            end
+        end
+        return F
+    end
+end
+function (.^){T<:Integer}(A::BitArray, B::Array{T})
+    F = BitArray(promote_shape(size(A),size(B))...)
+    for i = 1:length(A)
+        F[i] = A[i] .^ B[i]
+    end
+    return F
 end
 
 (.*)(A::BitArray, B::BitArray) = A & B

@@ -836,6 +836,21 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 ./{T<:Integer}(x::StridedArray{T}, y::Integer) =
     reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
 
+./{T<:Integer,S<:Integer}(x::StridedArray{ComplexPair{T}}, y::StridedArray{S}) =
+    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
+./{T<:Integer,S<:Integer}(x::StridedArray{T}, y::StridedArray{ComplexPair{S}}) =
+    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
+./{T<:Integer,S<:Integer}(x::StridedArray{ComplexPair{T}}, y::StridedArray{ComplexPair{S}}) =
+    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
+./{T<:Integer}(x::Integer, y::StridedArray{ComplexPair{T}}) =
+    reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
+./{T<:Integer}(x::StridedArray{ComplexPair{T}}, y::Integer) =
+    reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
+./{S<:Integer,T<:Integer}(x::ComplexPair{S}, y::StridedArray{T}) =
+    reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
+./{S<:Integer,T<:Integer}(x::StridedArray{S}, y::ComplexPair{T}) =
+    reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
+
 # ^ is difficult, since negative exponents give a different type
 
 .^(x::StridedArray, y::StridedArray) =
