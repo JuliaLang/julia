@@ -598,36 +598,6 @@ ________________________________________________________
 
 ----
 
-`DeExpr <https://github.com/lindahua/DeExpr.jl>`_
-_________________________________________________
-
-  .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-     :height: 80px
-     :width: 80px
-     :align: right
-     :alt: Dahua Lin
-     :target: https://github.com/lindahua
-
-  Current Version: ``0.0.0``
-
-  A Julia framework for delayed expression evaluation 
-
-  Maintainer: `Dahua Lin <https://github.com/lindahua>`_
-
-  Dependencies::
-
-      None
-
-  Contributors:
-
-    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Dahua Lin
-        :target: https://github.com/lindahua
-
-----
-
 `Debug <https://github.com/toivoh/Debug.jl>`_
 _____________________________________________
 
@@ -691,6 +661,36 @@ _______________________________________________________________
         :width: 40px
         :alt: Ben Sadeghi
         :target: https://github.com/bensadeghi
+
+----
+
+`Devectorize <https://github.com/lindahua/Devectorize.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Dahua Lin
+     :target: https://github.com/lindahua
+
+  Current Version: ``0.0.0``
+
+  A Julia framework for de-vectorized evaluation 
+
+  Maintainer: `Dahua Lin <https://github.com/lindahua>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
 
 ----
 
