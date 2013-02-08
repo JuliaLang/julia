@@ -1656,13 +1656,13 @@ Indexing, Assignment, and Concatenation
 
    Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``.
 
-.. function:: permute(A,perm)
+.. function:: permutedims(A,perm)
 
    Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permute(A,[2,1])``.
 
-.. function:: ipermute(A,perm)
+.. function:: ipermutedims(A,perm)
 
-   Like ``permute``, except the inverse of the given permutation is applied.
+   Like ``permutedims``, except the inverse of the given permutation is applied.
 
 .. function:: squeeze(A)
 
@@ -1901,6 +1901,18 @@ Combinatorics
 .. function:: isperm(v)
 
    Returns true if v is a valid permutation
+
+.. function:: permute!(v, p)
+
+   Permute vector ``v`` in-place, according to permutation ``p``.  No
+   checking is done to verify that ``p`` is a permutation.
+
+   To return a new permutation, use ``v[p]``.  Note that this is
+   generally faster than ``permute!(v,p)`` for large vectors.
+
+.. function:: ipermute!(v, p)
+
+   Like permute!, but the inverse of the given permutation is applied.
 
 .. function:: randcycle(n)
 

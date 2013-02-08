@@ -505,6 +505,17 @@
 
 "),
 
+(E"Iteration",E"Base",E"zip",E"zip(iters...)
+
+   For a set of iterable objects, returns an iterable of tuples, where
+   the >>``<<i``th tuple contains the >>``<<i``th component of each
+   input iterable.
+
+   Note that \"zip\" is it's own inverse: [zip(zip(a...)...)...] ==
+   [a...]
+
+"),
+
 (E"General Collections",E"Base",E"isempty",E"isempty(collection)
 
    Determine whether a collection is empty (has no elements).
@@ -653,10 +664,9 @@ collection[key...] = value
 
 "),
 
-(E"Associative Collections",E"Base",E"Dict{K,V}",E"Dict{K,V}(n)
+(E"Associative Collections",E"Base",E"Dict{K,V}",E"Dict{K,V}()
 
-   Construct a hashtable with keys of type K and values of type V and
-   intial size of n
+   Construct a hashtable with keys of type K and values of type V
 
 "),
 
@@ -2302,6 +2312,54 @@ airyaiprime(x)
 
 "),
 
+(E"Numbers",E"Base",E"count_ones",E"count_ones(x::Integer) -> Integer
+
+   Number of ones in the binary representation of \"x\".
+
+   **Example**: \"count_ones(7) -> 3\"
+
+"),
+
+(E"Numbers",E"Base",E"count_zeros",E"count_zeros(x::Integer) -> Integer
+
+   Number of zeros in the binary representation of \"x\".
+
+   **Example**: \"count_zeros(int32(2 ^ 16 - 1)) -> 16\"
+
+"),
+
+(E"Numbers",E"Base",E"leading_zeros",E"leading_zeros(x::Integer) -> Integer
+
+   Number of zeros leading the binary representation of \"x\".
+
+   **Example**: \"leading_zeros(int32(1)) -> 31\"
+
+"),
+
+(E"Numbers",E"Base",E"leading_ones",E"leading_ones(x::Integer) -> Integer
+
+   Number of ones leading the binary representation of \"x\".
+
+   **Example**: \"leading_ones(int32(2 ^ 32 - 2)) -> 31\"
+
+"),
+
+(E"Numbers",E"Base",E"trailing_zeros",E"trailing_zeros(x::Integer) -> Integer
+
+   Number of zeros trailing the binary representation of \"x\".
+
+   **Example**: \"trailing_zeros(2) -> 1\"
+
+"),
+
+(E"Numbers",E"Base",E"trailing_ones",E"trailing_ones(x::Integer) -> Integer
+
+   Number of ones trailing the binary representation of \"x\".
+
+   **Example**: \"trailing_ones(3) -> 2\"
+
+"),
+
 (E"Random Numbers",E"Base",E"srand",E"srand([rng], seed)
 
    Seed the RNG with a \"seed\", which may be an unsigned integer or a
@@ -2671,7 +2729,7 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"permute",E"permute(A, perm)
+(E"Arrays",E"Base",E"permutedims",E"permutedims(A, perm)
 
    Permute the dimensions of array \"A\". \"perm\" is a vector
    specifying a permutation of length \"ndims(A)\". This is a
@@ -2680,10 +2738,10 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"ipermute",E"ipermute(A, perm)
+(E"Arrays",E"Base",E"ipermutedims",E"ipermutedims(A, perm)
 
-   Like \"permute\", except the inverse of the given permutation is
-   applied.
+   Like \"permutedims\", except the inverse of the given permutation
+   is applied.
 
 "),
 
@@ -3065,6 +3123,22 @@ airyaiprime(x)
 (E"Combinatorics",E"Base",E"isperm",E"isperm(v)
 
    Returns true if v is a valid permutation
+
+"),
+
+(E"Combinatorics",E"Base",E"permute!",E"permute!(v, p)
+
+   Permute vector \"v\" in-place, according to permutation \"p\".  No
+   checking is done to verify that \"p\" is a permutation.
+
+   To return a new permutation, use \"v[p]\".  Note that this is
+   generally faster than \"permute!(v,p)\" for large vectors.
+
+"),
+
+(E"Combinatorics",E"Base",E"ipermute!",E"ipermute!(v, p)
+
+   Like permute!, but the inverse of the given permutation is applied.
 
 "),
 
@@ -5895,26 +5969,6 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortr",E"sortr(v[, dim])
-
-   Sort a vector in descending order. If \"dim\" is provided, sort
-   along the given dimension.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortr",E"sortr(alg, ...)
-
-   Sort in descending order with a specific sorting algorithm
-   (InsertionSort, QuickSort, MergeSort, or TimSort).
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortr!",E"sortr!(...)
-
-   In-place \"sortr\".
-
-"),
-
 (E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(by, v[, dim])
 
    Sort a vector according to \"by(v)\".   If \"dim\" is provided,
@@ -5935,71 +5989,31 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v)
 
-   Sort a vector in ascending order, also constructing the permutation
-   that sorts the vector.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(lessthan, v) -> s,p
-
-   Sort a vector with a custom comparison function, also constructing
-   the permutation that sorts the vector.
+   Return a permutation vector, which when applied to the input vector
+   \"v\" will sort it.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(alg, ...) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(lessthan, v)
+
+   Return a permutation vector, which when applied to the input vector
+   \"v\" will sort it, using the specified \"lessthan\" comparison
+   function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(alg, ...)
 
    \"sortperm\" using a specific sorting algorithm (\"InsertionSort\",
    \"QuickSort\", \"MergeSort\", or \"TimSort\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(...) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(...)
 
    In-place \"sortperm\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermr",E"sortpermr(v) -> s,p
-
-   Sort a vector in descending order, also constructing the
-   permutation that sorts the vector!
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermr",E"sortpermr(alg, ...) -> s,p
-
-   \"sortpermr\" using a specific sorting algorithm
-   (\"InsertionSort\", \"QuickSort\", \"MergeSort\", or \"TimSort\").
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermr!",E"sortpermr!(v) -> s,p
-
-   In-place \"sortpermr\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermby",E"sortpermby(by, v) -> s,p
-
-   Sort a vector according to the result of function \"by\" applied to
-   all values, also constructing the permutation that sorts the
-   vector.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermby",E"sortpermby(alg, ...) -> s,p
-
-   \"sortpermby\" using a specific sorting algorithm
-   (\"InsertionSort\", \"QuickSort\", \"MergeSort\", or \"TimSort\").
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermby!",E"sortpermby!(...) -> s,p
-
-   In-place \"sortpermby\".
 
 "),
 
