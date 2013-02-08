@@ -337,16 +337,16 @@ spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::UVStream) = spawn(pc,c
 spawn_nostdin(cmd::AbstractCmd,out::UVStream) = spawn(false,cmd,(null_handle,out,null_handle),false,false)
 
 #returns a pipe to read from the last command in the pipelines
-read_from(cmds::AbstractCmd)=read_from(cmds, null_handle)
-function read_from(cmds::AbstractCmd, stdin::AsyncStream)
+readsfrom(cmds::AbstractCmd) = readsfrom(cmds, null_handle)
+function readsfrom(cmds::AbstractCmd, stdin::AsyncStream)
     out = NamedPipe()
     processes = spawn(false, cmds, (stdin,out,STDERR))
     start_reading(out)
     (out, processes)
 end
 
-write_to(cmds::AbstractCmd) = write_to(cmds, null_handle)
-function write_to(cmds::AbstractCmd, stdout::UVStream)
+writesto(cmds::AbstractCmd) = writesto(cmds, null_handle)
+function writesto(cmds::AbstractCmd, stdout::UVStream)
     in = NamedPipe()
     processes = spawn(false, cmds, (in,stdout,null_handle))
     (in, processes)
@@ -354,7 +354,7 @@ end
 
 readall(cmd::AbstractCmd) = readall(cmd, null_handle)
 function readall(cmd::AbstractCmd,stdin::AsyncStream)
-    (out,pc)=read_from(cmd, stdin)
+    (out,pc) = readsfrom(cmd, stdin)
     if !wait_success(pc)
         pipeline_error(pc)
     end
@@ -364,7 +364,7 @@ end
 
 writeall(cmd::AbstractCmd, stdout::String) = writeall(cmd, stdout, null_handle)
 function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream)
-    (in,pc) = write_to(cmd, stdout)
+    (in,pc) = writesto(cmd, stdout)
     write(in, stdin)
     close(in)
     if !wait_success(pc)

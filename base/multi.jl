@@ -893,7 +893,7 @@ function start_remote_workers(machines, cmds, tunnel)
     outs = cell(n)
     w = cell(n)
     for i=1:n
-        outs[i],_ = read_from(cmds[i])
+        outs[i],_ = readsfrom(cmds[i])
         outs[i].line_buffered = true
     end
     for i=1:n
@@ -1004,7 +1004,7 @@ function start_sge_workers(n)
     run(`mkdir -p $sgedir`)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
     `echo $home/julia-release-basic --worker` | qsub_cmd
-    out,_ = read_from(qsub_cmd)
+    out,_ = readsfrom(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
     end

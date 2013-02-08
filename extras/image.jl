@@ -485,7 +485,7 @@ end
 
 function imread(file::String)
     cmd = `convert -format "%w %h" -identify $file rgb:-`
-    stream, _ = read_from(cmd)
+    stream, _ = readsfrom(cmd)
     spawn(cmd)
     szline = readline(stream)
     spc = strchr(szline, ' ')
@@ -505,7 +505,7 @@ function imwrite(I, file::String)
     end
     h, w = size(I)
     cmd = `convert -size $(w)x$(h) -depth 8 rgb: $file`
-    stream = fdio(write_to(cmd).fd, true)
+    stream = fdio(writesto(cmd).fd, true)
     spawn(cmd)
     write_bitmap_data(stream, I)
     close(stream)
