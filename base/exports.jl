@@ -782,6 +782,7 @@ export
     cov_spearman,
     decile,
     dist,
+    ecdf,
     hist,
     histc,
     inverse_rle,
