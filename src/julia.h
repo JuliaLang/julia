@@ -893,6 +893,7 @@ void jl_module_using(jl_module_t *to, jl_module_t *from);
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 void jl_module_importall(jl_module_t *to, jl_module_t *from);
 DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
+void jl_add_standard_imports(jl_module_t *m);
 
 // external libraries
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);

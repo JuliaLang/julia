@@ -28,6 +28,15 @@ jl_module_t *jl_old_base_module = NULL;
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
+void jl_add_standard_imports(jl_module_t *m)
+{
+    // using Base
+    jl_module_using(m, jl_base_module);
+    // importall Base.Operators
+    jl_module_importall(m, (jl_module_t*)jl_get_global(jl_base_module,
+                                                       jl_symbol("Operators")));
+}
+
 extern int base_module_conflict;
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
@@ -60,8 +69,9 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 
     // add standard imports unless baremodule
     if (std_imports) {
-        if (jl_base_module != NULL)
-            jl_module_using(newm, jl_base_module); // using Base
+        if (jl_base_module != NULL) {
+            jl_add_standard_imports(newm);
+        }
     }
 
     JL_GC_PUSH(&last_module);

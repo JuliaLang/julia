@@ -439,8 +439,9 @@ void julia_init(char *imageFile)
     // the Main module is the one which is always open, and set as the
     // current module for bare (non-module-wrapped) toplevel expressions.
     // it does "using Base" if Base is available.
-    if (jl_base_module != NULL)
-        jl_module_using(jl_main_module, jl_base_module);
+    if (jl_base_module != NULL) {
+        jl_add_standard_imports(jl_main_module);
+    }
     // eval() uses Main by default, so Main.eval === Core.eval
     jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
     jl_current_module = jl_main_module;
