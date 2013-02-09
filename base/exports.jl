@@ -783,7 +783,6 @@ export
     decile,
     dist,
     hist,
-    histc,
     inverse_rle,
     iqr,
     kurtosis,

@@ -162,7 +162,7 @@ function hist(A::StridedMatrix, nbins::Integer)
     h
 end
 
-function histc(v::StridedVector, edg)
+function hist(v::StridedVector, edg::AbstractVector)
     n = length(edg)
     h = zeros(Int, n)
     if n == 0
@@ -179,7 +179,7 @@ function histc(v::StridedVector, edg)
     h
 end
 
-function histc(A::StridedMatrix, edg)
+function hist(A::StridedMatrix, edg::AbstractVector)
     m, n = size(A)
     h = Array(Int, length(edg), n)
     for j=1:n
