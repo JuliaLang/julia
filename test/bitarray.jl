@@ -337,8 +337,8 @@ end
 @check_bit_operation (.^) Matrix{Float64} (1.0, b1)
 @check_bit_operation (.^) Matrix{Complex128} (0.0im, b1)
 @check_bit_operation (.^) Matrix{Complex128} (1.0im, b1)
-@check_bit_operation (.^) Matrix{ComplexPair{Int64}} (0im, b1)
-@check_bit_operation (.^) Matrix{ComplexPair{Int64}} (1im, b1)
+@check_bit_operation (.^) Matrix{ComplexPair{Int}} (0im, b1)
+@check_bit_operation (.^) Matrix{ComplexPair{Int}} (1im, b1)
 
 # Matrix/Number
 b1 = randbool(n1, n2)
@@ -362,7 +362,7 @@ b2 = rand(1:10)
 @check_bit_operation (.^) Matrix{Float64} (b1, 0.0)
 @check_bit_operation (.^) Matrix{Float64} (b1, 1.0)
 @check_bit_operation (.^) Matrix{Complex128} (b1, 0.0im)
-@check_bit_operation (.^) Matrix{ComplexPair{Int64}} (b1, 0im)
+@check_bit_operation (.^) Matrix{ComplexPair{Int}} (b1, 0im)
 
 b1 = trues(n1, n2)
 @check_bit_operation (.^) Matrix{Complex128} (b1, -1.0im)
