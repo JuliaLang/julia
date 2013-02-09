@@ -46,5 +46,5 @@ print_with_color(color::Symbol, msg::String...) =
 
 # use colors to print messages and warnings in the REPL
 
-info(msg::String...) = print_with_color(:blue, STDERR, "MESSAGE: ", msg..., "\n")
-warn(msg::String...) = print_with_color(:red,  STDERR, "WARNING: ", msg..., "\n")
+info(msg::String...) = print_with_color(:blue,   STDERR, "MESSAGE: ", msg..., "\n")
+warn(msg::String...) = print_with_color(:yellow, STDERR, "WARNING: ", msg..., "\n")
