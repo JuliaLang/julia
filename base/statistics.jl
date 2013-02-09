@@ -223,7 +223,7 @@ end
 
 ## pearson covariance functions ##
 
-function cov_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
+function cov(x::AbstractVector, y::AbstractVector, corrected::Bool)
     n = length(x)
     if n != length(y); error("vectors must have same length"); end
     meanx = x[1]
@@ -236,10 +236,10 @@ function cov_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
     end
     return C / (n - (corrected ? 1 : 0))
 end
-cov_pearson(X::AbstractMatrix, Y::AbstractMatrix, corrected::Bool) = [cov_pearson(X[:,i], Y[:,j], corrected) for i = 1:size(X, 2), j = 1:size(Y,2)]
-cov_pearson(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = [cov_pearson(x, Y[:,i], corrected) for i = 1:size(Y, 2)]
-cov_pearson(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = [cov_pearson(X[:,i], y, corrected) for i = 1:size(X, 2)]
-function cov_pearson(X::AbstractMatrix, corrected::Bool)
+cov(X::AbstractMatrix, Y::AbstractMatrix, corrected::Bool) = [cov(X[:,i], Y[:,j], corrected) for i = 1:size(X, 2), j = 1:size(Y,2)]
+cov(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = [cov(x, Y[:,i], corrected) for i = 1:size(Y, 2)]
+cov(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = [cov(X[:,i], y, corrected) for i = 1:size(X, 2)]
+function cov(X::AbstractMatrix, corrected::Bool)
     n = size(X, 2)
     C = Array(typeof(float(X[1])), n, n)
     for i = 1:n
@@ -247,20 +247,20 @@ function cov_pearson(X::AbstractMatrix, corrected::Bool)
             if i == j
                 C[i,i] = var(X[:,i], corrected)
             else
-                C[i,j] = cov_pearson(X[:,i], X[:,j], corrected)
+                C[i,j] = cov(X[:,i], X[:,j], corrected)
                 C[j,i] = C[i,j]
             end
         end
     end
     return C
 end
-cov_pearson(x) = cov_pearson(x, true)
-cov_pearson(x, y) = cov_pearson(x, y, true)
+cov(x) = cov(x, true)
+cov(x, y) = cov(x, y, true)
 
 ## spearman covariance functions ##
 
 # spearman covariance between two vectors
-cov_spearman(x::AbstractVector, y::AbstractVector, corrected::Bool) = cov_pearson(tiedrank(x), tiedrank(y), corrected)
+cov_spearman(x::AbstractVector, y::AbstractVector, corrected::Bool) = cov(tiedrank(x), tiedrank(y), corrected)
 
 # spearman covariance over all pairs of columns of two matrices
 cov_spearman(X::AbstractMatrix, Y::AbstractMatrix, corrected::Bool) = [cov_spearman(X[:,i], Y[:,j], corrected) for i = 1:size(X, 2), j = 1:size(Y,2)]
@@ -268,49 +268,45 @@ cov_spearman(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = [cov_spear
 cov_spearman(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = [cov_spearman(X[:,i], y, corrected) for i = 1:size(X, 2)]
 
 # spearman covariance over all pairs of columns of a matrix
-cov_spearman(X::AbstractMatrix, corrected::Bool) = cov_pearson(tiedrank(X, 1), corrected)
+cov_spearman(X::AbstractMatrix, corrected::Bool) = cov(tiedrank(X, 1), corrected)
 
 cov_spearman(x) = cov_spearman(x, true)
 cov_spearman(x, y) = cov_spearman(x, y, true)
 
-const cov = cov_pearson
-
 ## pearson correlation functions ##
 
 # pearson correlation between two vectors
-cor_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool) = cov_pearson(x, y, corrected) / (std(x, corrected)*std(y, corrected))
+cor(x::AbstractVector, y::AbstractVector, corrected::Bool) = cov(x, y, corrected) / (std(x, corrected)*std(y, corrected))
 
 # pearson correlation over all pairs of columns of two matrices
-cor_pearson(X::AbstractMatrix, Y::AbstractMatrix, corrected::Bool) = [cor_pearson(X[:,i], Y[:,j], corrected) for i = 1:size(X, 2), j = 1:size(Y,2)]
-cor_pearson(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = [cor_pearson(x, Y[:,i], corrected) for i = 1:size(Y, 2)]
-cor_pearson(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = [cor_pearson(X[:,i], y, corrected) for i = 1:size(X, 2)]
+cor(X::AbstractMatrix, Y::AbstractMatrix, corrected::Bool) = [cor(X[:,i], Y[:,j], corrected) for i = 1:size(X, 2), j = 1:size(Y,2)]
+cor(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = [cor(x, Y[:,i], corrected) for i = 1:size(Y, 2)]
+cor(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = [cor(X[:,i], y, corrected) for i = 1:size(X, 2)]
 
 # pearson correlation over all pairs of columns of a matrix
-function cor_pearson(X::AbstractMatrix, corrected::Bool) 
+function cor(X::AbstractMatrix, corrected::Bool) 
     vsd = amap(x -> std(x, corrected), X, 2)
-    return cov_pearson(X, corrected) ./ (vsd*vsd')
+    return cov(X, corrected) ./ (vsd*vsd')
 end
 
-cor_pearson(x) = cor_pearson(x, true)
-cor_pearson(x, y) = cor_pearson(x, y, true)
+cor(x) = cor(x, true)
+cor(x, y) = cor(x, y, true)
 
 ## spearman correlation functions ##
 
 # spearman correlation between two vectors
-cor_spearman(x::AbstractVector, y::AbstractVector, corrected::Bool) = cor_pearson(tiedrank(x), tiedrank(y), corrected)
+cor_spearman(x::AbstractVector, y::AbstractVector, corrected::Bool) = cor(tiedrank(x), tiedrank(y), corrected)
 
 # spearman correlation over all pairs of columns of two matrices
-cor_spearman(X::AbstractMatrix, Y::AbstractMatrix, corrected::Bool) = cor_pearson(tiedrank(X, 1), tiedrank(Y, 1))
-cor_spearman(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = cor_pearson(tiedrank(X, 1), tiedrank(y))
-cor_spearman(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = cor_pearson(tiedrank(x), tiedrank(Y, 1))
+cor_spearman(X::AbstractMatrix, Y::AbstractMatrix, corrected::Bool) = cor(tiedrank(X, 1), tiedrank(Y, 1))
+cor_spearman(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = cor(tiedrank(X, 1), tiedrank(y))
+cor_spearman(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = cor(tiedrank(x), tiedrank(Y, 1))
 
 # spearman correlation over all pairs of columns of a matrix
-cor_spearman(X::AbstractMatrix, corrected::Bool) = cor_pearson(tiedrank(X, 1), corrected)
+cor_spearman(X::AbstractMatrix, corrected::Bool) = cor(tiedrank(X, 1), corrected)
 
 cor_spearman(x) = cor_spearman(x, true)
 cor_spearman(x, y) = cor_spearman(x, y, true)
-
-const cor = cor_pearson
 
 ## autocorrelation at a specific lag
 autocor(v::AbstractVector, lag::Int) = cor(v[1:end-lag], v[1+lag:end])

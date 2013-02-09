@@ -771,14 +771,13 @@ export
     randbool,
     randn!,
     randn,
+    srand,
 
 # statistics
     autocor,
     cor,
-    cor_pearson,
     cor_spearman,
     cov,
-    cov_pearson,
     cov_spearman,
     decile,
     dist,
@@ -795,7 +794,6 @@ export
     quintile,
     rle,
     skewness,
-    srand,
     std,
     tiedrank,
     var,
@@ -946,6 +944,7 @@ export
     accept,
     listen,
     bind,
+    connect,
     close,
     countlines,
     readcsv,
@@ -1086,7 +1085,6 @@ export
     operm,
 
 # external processes ## TODO: whittle down these exports.
-    connect,
     getpid,
     ignorestatus,
     kill,
