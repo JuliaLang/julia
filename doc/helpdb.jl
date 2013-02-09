@@ -246,7 +246,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"load",E"load(\"file\")
+(E"Getting Around",E"Base",E"require",E"require(\"file\")
 
    Evaluate the contents of a source file
 
@@ -621,21 +621,21 @@
 
 "),
 
-(E"Iterable Collections",E"Base",E"countp",E"countp(p, itr)
+(E"Iterable Collections",E"Base",E"count",E"count(p, itr)
 
    Count the number of elements in \"itr\" for which predicate \"p\"
    is true.
 
 "),
 
-(E"Iterable Collections",E"Base",E"anyp",E"anyp(p, itr)
+(E"Iterable Collections",E"Base",E"any",E"any(p, itr)
 
    Determine whether any element of \"itr\" satisfies the given
    predicate.
 
 "),
 
-(E"Iterable Collections",E"Base",E"allp",E"allp(p, itr)
+(E"Iterable Collections",E"Base",E"all",E"all(p, itr)
 
    Determine whether all elements of \"itr\" satisfy the given
    predicate.
@@ -683,13 +683,13 @@ collection[key...] = value
 
 "),
 
-(E"Associative Collections",E"Base",E"del",E"del(collection, key)
+(E"Associative Collections",E"Base",E"delete!",E"delete!(collection, key)
 
    Delete the mapping for the given key in a collection.
 
 "),
 
-(E"Associative Collections",E"Base",E"del_all",E"del_all(collection)
+(E"Associative Collections",E"Base",E"empty!",E"empty!(collection)
 
    Delete all keys from a collection.
 
@@ -707,7 +707,7 @@ collection[key...] = value
 
 "),
 
-(E"Associative Collections",E"Base",E"pairs",E"pairs(collection)
+(E"Associative Collections",E"Base",E"collect",E"collect(collection)
 
    Return an array of all (key, value) tuples in a collection.
 
@@ -739,7 +739,14 @@ collection[key...] = value
 
 "),
 
-(E"Set-Like Collections",E"Base",E"add",E"add(collection, key)
+(E"Associative Collections",E"Base",E"eltype",E"eltype(collection)
+
+   Returns the type tuple of the (key,value) pairs contained in
+   collection.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"add!",E"add!(collection, key)
 
    Add an element to a set-like collection.
 
@@ -823,10 +830,9 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"Base",E"grow!",E"grow!(collection, n)
+(E"Dequeues",E"Base",E"resize!",E"resize!(collection, n)
 
-   Add uninitialized space for \"n\" elements at the end of a
-   collection.
+   Resize collection to contain \"n\" elements.
 
 "),
 
@@ -836,26 +842,19 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"Base",E"strlen",E"strlen(s)
+(E"Strings",E"Base",E"length",E"length(s)
 
    The number of characters in string \"s\".
 
 "),
 
-(E"Strings",E"Base",E"length",E"length(s)
-
-   The last valid index for string \"s\". Indexes are byte offsets and
-   not character numbers.
-
-"),
-
-(E"Strings",E"Base",E"chars",E"chars(string)
+(E"Strings",E"Base",E"collect",E"collect(string)
 
    Return an array of the characters in \"string\".
 
 "),
 
-(E"Strings",E"Base",E"strcat",E"strcat(strs...)
+(E"Strings",E"Base",E"string",E"string(strs...)
 
    Concatenate strings.
 
@@ -912,7 +911,7 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"Base",E"strchr",E"strchr(string, char[, i])
+(E"Strings",E"Base",E"search",E"search(string, char[, i])
 
    Return the index of \"char\" in \"string\", giving 0 if not found.
    The second argument may also be a vector or a set of characters.
@@ -1252,7 +1251,7 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"Base",E"dlmread",E"dlmread(filename, delim::Char)
+(E"Text I/O",E"Base",E"readdlm",E"readdlm(filename, delim::Char)
 
    Read a matrix from a text file where each line gives one row, with
    elements separated by the given delimeter. If all data is numeric,
@@ -1261,7 +1260,7 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"Base",E"dlmread",E"dlmread(filename, delim::Char, T::Type)
+(E"Text I/O",E"Base",E"readdlm",E"readdlm(filename, delim::Char, T::Type)
 
    Read a matrix from a text file with a given element type. If \"T\"
    is a numeric type, the result is an array of that type, with any
@@ -1271,22 +1270,22 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"Base",E"dlmwrite",E"dlmwrite(filename, array, delim::Char)
+(E"Text I/O",E"Base",E"writedlm",E"writedlm(filename, array, delim::Char)
 
    Write an array to a text file using the given delimeter (defaults
    to comma).
 
 "),
 
-(E"Text I/O",E"Base",E"csvread",E"csvread(filename[, T::Type])
+(E"Text I/O",E"Base",E"readcsv",E"readcsv(filename[, T::Type])
 
-   Equivalent to \"dlmread\" with \"delim\" set to comma.
+   Equivalent to \"readdlm\" with \"delim\" set to comma.
 
 "),
 
-(E"Text I/O",E"Base",E"csvwrite",E"csvwrite(filename, array)
+(E"Text I/O",E"Base",E"writecsv",E"writecsv(filename, array)
 
-   Equivalent to \"dlmwrite\" with \"delim\" set to comma.
+   Equivalent to \"writedlm\" with \"delim\" set to comma.
 
 "),
 
@@ -2459,12 +2458,6 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"numel",E"numel(A)
-
-   Returns the number of elements in A
-
-"),
-
 (E"Arrays",E"Base",E"length",E"length(A)
 
    Returns the number of elements in A (note that this differs from
@@ -2745,9 +2738,9 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"squeeze",E"squeeze(A)
+(E"Arrays",E"Base",E"squeeze",E"squeeze(A, dims)
 
-   Remove singleton dimensions from the shape of array \"A\"
+   Remove the dimensions specified by \"dims\" from array \"A\"
 
 "),
 
@@ -3262,7 +3255,7 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"histc",E"histc(v, e)
+(E"Statistics",E"Base",E"hist",E"hist(v, e)
 
    Compute the histogram of \"v\" using a vector \"e\" as the edges
    for the bins
@@ -3972,7 +3965,7 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"system",E"system(\"command\")
+(E"System",E"Base",E"run",E"run(\"command\")
 
    Run a shell command.
 
