@@ -1239,7 +1239,7 @@ end
 (>>)(B::BitVector, i::Int32) = B >>> i
 (>>)(B::BitVector, i::Integer) = B >>> i
 
-function rotl(B::BitVector, i::Integer)
+function rol(B::BitVector, i::Integer)
     n = length(B)
     i %= n
     if i == 0; return copy(B); end
@@ -1249,7 +1249,7 @@ function rotl(B::BitVector, i::Integer)
     return A
 end
 
-function rotr(B::BitVector, i::Integer)
+function ror(B::BitVector, i::Integer)
     n = length(B)
     i %= n
     if i == 0; return copy(B); end
@@ -1259,7 +1259,7 @@ function rotr(B::BitVector, i::Integer)
     return A
 end
 
-#TODO: rotl!, rotr!
+#TODO: rol!, ror!
 
 ## nnz & find ##
 
