@@ -604,8 +604,8 @@ export
     falses,
     flipbits,
     flipbits!,
-    rotl,
-    rotr,
+    rol,
+    ror,
     trues,
 
 # dequeues
