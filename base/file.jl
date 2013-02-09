@@ -158,7 +158,7 @@ end
 end
 
 downloadcmd = nothing
-function download_file(url::String, filename::String)
+function download(url::String, filename::String)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
@@ -179,9 +179,9 @@ function download_file(url::String, filename::String)
     end
     filename
 end
-function download_file(url::String)
+function download(url::String)
   filename = tempname()
-  download_file(url, filename)
+  download(url, filename)
 end
 
 function readdir(path::String)

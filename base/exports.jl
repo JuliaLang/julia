@@ -920,7 +920,6 @@ export
 
 # loading source files
     evalfile,
-    find_in_path, # TODO: don't export.
     include,
     include_string,
     reload,
@@ -1043,7 +1042,6 @@ export
 # filesystem operations
     cd,
     pwd,
-    is_file_readable, # TODO: don't export.
     ls,
     cp,
     rm,
@@ -1057,7 +1055,7 @@ export
     tempname,
     mktemp,
     mktempdir,
-    download_file, # TODO: rename to "download".
+    download,
     filemode,
     filesize,
     mtime,

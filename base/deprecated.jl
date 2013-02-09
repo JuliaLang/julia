@@ -76,6 +76,7 @@ end
 @deprecate  is_hex_digit  isxdigit
 @deprecate  read_from     readsfrom
 @deprecate  write_to      writesto
+@deprecate  download_file download
 
 export grow!
 function grow!(a, d)
