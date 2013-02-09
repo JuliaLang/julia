@@ -112,17 +112,6 @@ function squeeze(A::AbstractArray)
     squeeze(A, find([size(A)...].==1))
 end
 
-# discontinued functions
-
-export randexp, randg, randbeta, randchi
-for (fun,typ) in {(:randexp,:Exponential), (:randg,:Gamma), (:randbeta,:Beta), (:randchi,:Chisq)}
-@eval $fun(x...) = error("randexp is no longer supported, use the Distributions package instead:
-
-    using Distributions
-    rand(",$(expr(:quote,typ)),"())
-")
-end
-
 export getenv, hasenv, setenv, unsetenv
 function getenv(var::String)
     warn_once("getenv(var) is deprecated, use ENV[var] instead.")
@@ -139,4 +128,15 @@ end
 function unsetenv(var::String)
     warn_once("unsetenv(var) is deprecated, use delete!(ENV,var) instead.")
     delete!(ENV, var)
+end
+
+# discontinued functions
+
+export randexp, randg, randbeta, randchi
+for (fun,typ) in {(:randexp,:Exponential), (:randg,:Gamma), (:randbeta,:Beta), (:randchi,:Chisq)}
+@eval $fun(x...) = error("randexp is no longer supported, use the Distributions package instead:
+
+    using Distributions
+    rand(",$(expr(:quote,typ)),"())
+")
 end
