@@ -1575,7 +1575,7 @@ end
 
 
 ## 1 argument
-function map_to(f, dest::StridedArray, A::StridedArray)
+function map!(f, dest::StridedArray, A::StridedArray)
     for i=1:length(A)
         dest[i] = f(A[i])
     end
@@ -1597,7 +1597,7 @@ function map(f, A::StridedArray)
 end
 
 ## 2 argument
-function map_to(f, dest::StridedArray, A::StridedArray, B::StridedArray)
+function map!(f, dest::StridedArray, A::StridedArray, B::StridedArray)
     for i=1:length(A)
         dest[i] = f(A[i], B[i])
     end
@@ -1622,7 +1622,7 @@ function map(f, A::StridedArray, B::StridedArray)
 end
 
 ## N argument
-function map_to(f, dest::StridedArray, As::StridedArray...)
+function map!(f, dest::StridedArray, As::StridedArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
