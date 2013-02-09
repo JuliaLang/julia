@@ -832,11 +832,13 @@ function sqrtm(A::StridedMatrix, cond::Bool)
         for j = 1:n
             R[j,j] = sqrt(T[j,j])
             for i = j - 1:-1:1
-                r = zero(A[1])
+                r = T[i,j]
                 for k = i + 1:j - 1
-                    r += R[i,k]*R[k,j]
+                    r -= R[i,k]*R[k,j]
                 end
-                R[i,j] = (T[i,j] - r) / (R[i,i] + R[j,j])
+                if r != 0
+                    R[i,j] = r / (R[i,i] + R[j,j])
+                end
             end
         end
         retmat = Q*R*Q'
