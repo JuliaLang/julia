@@ -312,8 +312,8 @@ b1 = randbool(v1)
 for m = [rand(1:v1)-1 0 1 63 64 65 191 192 193 v1-1]
     @test isequal(b1 << m, [ b1[m+1:end]; falses(m) ])
     @test isequal(b1 >>> m, [ falses(m); b1[1:end-m] ])
-    @test isequal(rotl(b1, m), [ b1[m+1:end]; b1[1:m] ])
-    @test isequal(rotr(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
+    @test isequal(rol(b1, m), [ b1[m+1:end]; b1[1:m] ])
+    @test isequal(ror(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
 end
 
 timesofar("datamove")

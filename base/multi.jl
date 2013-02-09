@@ -1373,8 +1373,8 @@ function _jl_work_cb(args...)
 end
 
 function event_loop(isclient)
-    global work_cb = SingleAsyncWork(globalEventLoop(),_jl_work_cb)
-    global fgcm_cb = SingleAsyncWork(globalEventLoop(),(args...)->flush_gc_msgs());
+    global work_cb = SingleAsyncWork(eventloop(), _jl_work_cb)
+    global fgcm_cb = SingleAsyncWork(eventloop(), (args...)->flush_gc_msgs());
     queueAsync(work_cb::SingleAsyncWork)
     iserr, lasterr = false, ()
     while true

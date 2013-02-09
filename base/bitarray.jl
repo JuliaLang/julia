@@ -887,7 +887,7 @@ imag(B::BitArray) = falses(size(B))
 conj!(B::BitArray) = B
 conj(B::BitArray) = copy(B)
 
-function flipbits(B::BitArray)
+function (~)(B::BitArray)
     C = similar(B)
     Bc = B.chunks
     if !isempty(Bc)
@@ -913,8 +913,7 @@ function flipbits!(B::BitArray)
     return B
 end
 
-(~)(B::BitArray) = flipbits(B)
-!(B::BitArray) = flipbits(B)
+!(B::BitArray) = ~B
 
 ## Binary arithmetic operators ##
 

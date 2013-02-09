@@ -81,6 +81,7 @@ end
 @deprecate  map_to        map!
 @deprecate  rotl          rol
 @deprecate  rotr          ror
+@deprecate  flipbits      ~
 
 export grow!
 function grow!(a, d)

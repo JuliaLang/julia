@@ -37,7 +37,7 @@ macro stat_call(sym,arg)
     quote
         fill!(stat_buf,0)
         r = ccall($(expr(:quote,sym)), Int32, (Ptr{Uint8},Ptr{Uint8}), $arg, stat_buf)
-        uv_errno = _uv_lasterror(globalEventLoop())
+        uv_errno = _uv_lasterror(eventloop())
         ENOENT = 34
         system_error(:stat, r!=0 && uv_errno!=ENOENT)
         st = Stat(stat_buf)
