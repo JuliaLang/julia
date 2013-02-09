@@ -78,6 +78,7 @@ end
 @deprecate  write_to      writesto
 @deprecate  download_file download
 @deprecate  histc         hist
+@deprecate  map_to        map!
 
 export grow!
 function grow!(a, d)
