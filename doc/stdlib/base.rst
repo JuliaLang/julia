@@ -20,7 +20,7 @@ Getting Around
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit. When the editor exits, the source file containing the definition is reloaded.
 
-.. function:: load("file")
+.. function:: require("file")
 
    Evaluate the contents of a source file
 
@@ -272,15 +272,15 @@ Iterable Collections
 
    Count the number of boolean elements in ``itr`` which are ``true`` rather than ``false``.
 
-.. function:: countp(p, itr)
+.. function:: count(p, itr)
 
    Count the number of elements in ``itr`` for which predicate ``p`` is true.
 
-.. function:: anyp(p, itr)
+.. function:: any(p, itr)
 
    Determine whether any element of ``itr`` satisfies the given predicate.
 
-.. function:: allp(p, itr)
+.. function:: all(p, itr)
 
    Determine whether all elements of ``itr`` satisfy the given predicate.
 
@@ -329,11 +329,11 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Return the value stored for the given key, or the given default value if no mapping for the key is present.
 
-.. function:: del(collection, key)
+.. function:: delete!(collection, key)
 
    Delete the mapping for the given key in a collection.
 
-.. function:: del_all(collection)
+.. function:: empty!(collection)
 
    Delete all keys from a collection.
 
@@ -345,7 +345,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Return an array of all values in a collection.
 
-.. function:: pairs(collection)
+.. function:: collect(collection)
 
    Return an array of all (key, value) tuples in a collection.
 
@@ -365,6 +365,10 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Update collection, removing (key, value) pairs for which function is false.
 
+.. function:: eltype(collection)
+
+   Returns the type tuple of the (key,value) pairs contained in collection.
+
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
 Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``FDSet``, ``Array``.
@@ -372,7 +376,7 @@ Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``FDSet``, ``Array``
 Set-Like Collections
 --------------------
 
-.. function:: add(collection, key)
+.. function:: add!(collection, key)
 
    Add an element to a set-like collection.
 
@@ -431,9 +435,9 @@ Dequeues
 
    Remove the item at the given index.
 
-.. function:: grow!(collection, n)
+.. function:: resize!(collection, n)
 
-   Add uninitialized space for ``n`` elements at the end of a collection.
+   Resize collection to contain ``n`` elements.
 
 .. function:: append!(collection, items)
 
@@ -444,19 +448,15 @@ Fully implemented by: ``Vector`` (aka 1-d ``Array``).
 Strings
 -------
 
-.. function:: strlen(s)
+.. function:: length(s)
 
    The number of characters in string ``s``.
 
-.. function:: length(s)
-
-   The last valid index for string ``s``. Indexes are byte offsets and not character numbers.
-
-.. function:: chars(string)
+.. function:: collect(string)
 
    Return an array of the characters in ``string``.
 
-.. function:: strcat(strs...)
+.. function:: string(strs...)
 
    Concatenate strings.
 
@@ -492,7 +492,7 @@ Strings
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 
-.. function:: strchr(string, char, [i])
+.. function:: search(string, char, [i])
 
    Return the index of ``char`` in ``string``, giving 0 if not found. The second argument may also be a vector or a set of characters. The third argument optionally specifies a starting index.
 
@@ -692,25 +692,25 @@ Text I/O
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: dlmread(filename, delim::Char)
+.. function:: readdlm(filename, delim::Char)
 
    Read a matrix from a text file where each line gives one row, with elements separated by the given delimeter. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
-.. function:: dlmread(filename, delim::Char, T::Type)
+.. function:: readdlm(filename, delim::Char, T::Type)
 
    Read a matrix from a text file with a given element type. If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``String``, and ``Any``.
 
-.. function:: dlmwrite(filename, array, delim::Char)
+.. function:: writedlm(filename, array, delim::Char)
 
    Write an array to a text file using the given delimeter (defaults to comma).
 
-.. function:: csvread(filename, [T::Type])
+.. function:: readcsv(filename, [T::Type])
 
-   Equivalent to ``dlmread`` with ``delim`` set to comma.
+   Equivalent to ``readdlm`` with ``delim`` set to comma.
 
-.. function:: csvwrite(filename, array)
+.. function:: writecsv(filename, array)
 
-   Equivalent to ``dlmwrite`` with ``delim`` set to comma.
+   Equivalent to ``writedlm`` with ``delim`` set to comma.
 
 Memory-mapped I/O
 -----------------
@@ -1482,10 +1482,6 @@ Basic functions
 
    Returns the type of the elements contained in A
 
-.. function:: numel(A)
-
-   Returns the number of elements in A
-
 .. function:: length(A)
 
    Returns the number of elements in A (note that this differs from MATLAB where ``length(A)`` is the largest dimension of ``A``)
@@ -1664,9 +1660,9 @@ Indexing, Assignment, and Concatenation
 
    Like ``permutedims``, except the inverse of the given permutation is applied.
 
-.. function:: squeeze(A)
+.. function:: squeeze(A, dims)
 
-   Remove singleton dimensions from the shape of array ``A``
+   Remove the dimensions specified by ``dims`` from array ``A``
 
 .. function:: vec(A)
 
@@ -1965,7 +1961,7 @@ Statistics
 
    Compute the histogram of ``v``, optionally using ``n`` bins
 
-.. function:: histc(v, e)
+.. function:: hist(v, e)
 
    Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
 
@@ -2441,7 +2437,7 @@ Distributed Arrays
 System
 ------
 
-.. function:: system("command")
+.. function:: run("command")
 
    Run a shell command.
 
