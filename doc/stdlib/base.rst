@@ -1670,7 +1670,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: vec(A)
 
-   Make a vector out of an array with only one non-singleton dimension.
+   Vectorize an array using column-major convention.
 
 Sparse Matrices
 ---------------
