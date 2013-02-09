@@ -1575,12 +1575,6 @@ end
 
 
 ## 1 argument
-function map!(f, dest::StridedArray, A::StridedArray)
-    for i=1:length(A)
-        dest[i] = f(A[i])
-    end
-    return dest
-end
 function map_to2(f, first, dest::StridedArray, A::StridedArray)
     dest[1] = first
     for i=2:length(A)
@@ -1597,12 +1591,6 @@ function map(f, A::StridedArray)
 end
 
 ## 2 argument
-function map!(f, dest::StridedArray, A::StridedArray, B::StridedArray)
-    for i=1:length(A)
-        dest[i] = f(A[i], B[i])
-    end
-    return dest
-end
 function map_to2(f, first, dest::StridedArray, A::StridedArray, B::StridedArray)
     dest[1] = first
     for i=2:length(A)
@@ -1622,15 +1610,6 @@ function map(f, A::StridedArray, B::StridedArray)
 end
 
 ## N argument
-function map!(f, dest::StridedArray, As::StridedArray...)
-    n = length(As[1])
-    i = 1
-    ith = a->a[i]
-    for i=1:n
-        dest[i] = f(map(ith, As)...)
-    end
-    return dest
-end
 function map_to2(f, first, dest::StridedArray, As::StridedArray...)
     n = length(As[1])
     i = 1
