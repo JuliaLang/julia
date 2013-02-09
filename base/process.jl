@@ -179,7 +179,7 @@ function _uv_hook_close(proc::Process)
 end
 
 function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
-    loop = globalEventLoop()
+    loop = eventloop()
     close_in,close_out,close_err = false,false,false
     pp = Process(cmd,C_NULL,stdios[1],stdios[2],stdios[3]);
     in,out,err=stdios

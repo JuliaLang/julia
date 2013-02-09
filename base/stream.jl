@@ -305,11 +305,11 @@ _uv_hook_close(uv::AsyncWork) = (uv.handle = 0; nothing)
 # This serves as a common callback for all async classes
 _uv_hook_asynccb(async::AsyncWork, status::Int32) = async.cb(status)
 
-function startTimer(timer::TimeoutAsyncWork,timeout::Int64,repeat::Int64)
+function start_timer(timer::TimeoutAsyncWork,timeout::Int64,repeat::Int64)
     ccall(:jl_timer_start,Int32,(Ptr{Void},Int64,Int64),timer.handle,timeout,repeat)
 end
 
-function stopTimer(timer::TimeoutAsyncWork)
+function stop_timer(timer::TimeoutAsyncWork)
     ccall(:jl_timer_stop,Int32,(Ptr{Void},),timer.handle)
 end
 
@@ -326,13 +326,13 @@ function queueAsync(work::SingleAsyncWork)
 end
 
 ## event loop ##
-globalEventLoop() = ccall(:jl_global_event_loop,Ptr{Void},())
+eventloop() = ccall(:jl_global_event_loop,Ptr{Void},())
 #mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},()) # this would be fine, but is nowhere supported
 
 function run_event_loop(loop::Ptr{Void})
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),loop)
 end
-run_event_loop() = run_event_loop(globalEventLoop())
+run_event_loop() = run_event_loop(eventloop())
 
 ##pipe functions
 malloc_pipe() = c_malloc(_sizeof_uv_pipe)
@@ -451,9 +451,9 @@ _write(s::AsyncStream, p::Ptr{Void}, nb::Integer) =
 
 ## Libuv error handling
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
-_uv_lasterror() = _uv_lasterror(globalEventLoop())
+_uv_lasterror() = _uv_lasterror(eventloop())
 _uv_lastsystemerror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
-_uv_lastsystemerror() = _uv_lasterror(globalEventLoop())
+_uv_lastsystemerror() = _uv_lasterror(eventloop())
 
 type UVError <: Exception
     prefix::String

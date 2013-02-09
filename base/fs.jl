@@ -36,7 +36,7 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 #import Base.show, Base.open, Base.close, Base.write
-import Base.uvtype, Base.uvhandle
+import Base.uvtype, Base.uvhandle, Base.eventloop
 
 include("file_constants.jl")
 
@@ -64,7 +64,7 @@ _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 function open(f::File,flags::Integer,mode::Integer)
     req = Base.Intrinsics.box(Ptr{Void},Intrinsics.jl_alloca(Base.Intrinsics.unbox(Int32,_sizeof_uv_fs_t)))
     ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Int32,Int32,Ptr{Void}),
-                         globalEventLoop(),req,bytestring(f.path),flags,mode,C_NULL)
+                         eventloop(),req,bytestring(f.path),flags,mode,C_NULL)
     uv_error(:open,ret==-1)
     f.handle = _uv_fs_result(req)
     f.open = true
@@ -80,7 +80,7 @@ function close(f::File)
     end
     req = Intrinsics.box(Ptr{Void},Intrinsics.jl_alloca(Intrinsics.unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Void}),
-                         globalEventLoop(),req,f.handle,C_NULL)
+                         eventloop(),req,f.handle,C_NULL)
     uv_error(err)
     f.handle = -1
     f.open = false
@@ -91,7 +91,7 @@ end
 function unlink(p::String)
     req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_unlink,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Ptr{Void}),
-                         globalEventLoop(),req,bytestring(p),C_NULL)
+                         eventloop(),req,bytestring(p),C_NULL)
     uv_error(err)
 end
 function unlink(f::File)
@@ -108,7 +108,7 @@ function write(f::File,buf::Ptr{Uint8},len::Int32,offset::Int64)
     end
     req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Int32,Int64,Ptr{Void}),
-                         globalEventLoop(),req,f.handle,buf,len,offset,C_NULL)
+                         eventloop(),req,f.handle,buf,len,offset,C_NULL)
     uv_error(err)
     f
 end
