@@ -1358,15 +1358,15 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"Base",E"div",E"div()
+(E"Mathematical Functions",E"Base",E"div",E"div(a, b)
 
-   Integer truncating division
+   Compute a/b, truncating to an integer
 
 "),
 
-(E"Mathematical Functions",E"Base",E"fld",E"fld()
+(E"Mathematical Functions",E"Base",E"fld",E"fld(a, b)
 
-   Integer floor division
+   Largest integer less than or equal to a/b
 
 "),
 
@@ -1388,6 +1388,12 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"den",E"den(x)
+
+   Denominator of the rational representation of \"x\"
+
+"),
+
 (E"Mathematical Functions",E"",E"<< >>",E"<< >>
 
    Left and right shift operators
@@ -1398,6 +1404,13 @@ collection[key...] = value
 
    Comparison operators to test equals, not equals, less than, less
    than or equals, greater than, and greater than or equals
+
+"),
+
+(E"Mathematical Functions",E"Base",E"cmp",E"cmp(x, y)
+
+   Return -1, 0, or 1 depending on whether \"x<y\", \"x==y\", or
+   \"x>y\", respectively
 
 "),
 
@@ -1433,55 +1446,74 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"sin",E"sin(x)
 
-   Compute sine of \"x\"
+   Compute sine of \"x\", where \"x\" is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"cos",E"cos(x)
 
-   Compute cosine of \"x\"
+   Compute cosine of \"x\", where \"x\" is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"tan",E"tan(x)
 
-   Compute tangent of \"x\"
+   Compute tangent of \"x\", where \"x\" is in radians
+
+"),
+
+(E"Mathematical Functions",E"Base",E"sind",E"sind(x)
+
+   Compute sine of \"x\", where \"x\" is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"cosd",E"cosd(x)
+
+   Compute cosine of \"x\", where \"x\" is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"tand",E"tand(x)
+
+   Compute tangent of \"x\", where \"x\" is in degrees
 
 "),
 
 (E"Mathematical Functions",E"Base",E"sinh",E"sinh(x)
 
-   Compute hyperbolic sine of \"x\" specified in radians
+   Compute hyperbolic sine of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"cosh",E"cosh(x)
 
-   Compute hyperbolic cosine of \"x\" specified in radians
+   Compute hyperbolic cosine of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"tanh",E"tanh(x)
 
-   Compute hyperbolic tangent of \"x\" specified in radians
+   Compute hyperbolic tangent of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"asin",E"asin(x)
 
-   Compute the inverse sine of \"x\" specified in radians
+   Compute the inverse sine of \"x\", where the output is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acos",E"acos(x)
 
-   Compute the inverse cosine of \"x\" specified in radians
+   Compute the inverse cosine of \"x\", where the output is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"atan",E"atan(x)
 
-   Compute the inverse tangent of \"x\" specified in radians
+   Compute the inverse tangent of \"x\", where the output is in
+   radians
 
 "),
 
@@ -1492,96 +1524,152 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"asind",E"asind(x)
+
+   Compute the inverse sine of \"x\", where the output is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"acosd",E"acosd(x)
+
+   Compute the inverse cosine of \"x\", where the output is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"atand",E"atand(x)
+
+   Compute the inverse tangent of \"x\", where the output is in
+   degrees
+
+"),
+
 (E"Mathematical Functions",E"Base",E"sec",E"sec(x)
 
-   Compute the secant of \"x\" specified in radians
+   Compute the secant of \"x\", where \"x\" is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"csc",E"csc(x)
 
-   Compute the cosecant of \"x\" specified in radians
+   Compute the cosecant of \"x\", where \"x\" is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"cot",E"cot(x)
 
-   Compute the cotangent of \"x\" specified in radians
+   Compute the cotangent of \"x\", where \"x\" is in radians
+
+"),
+
+(E"Mathematical Functions",E"Base",E"secd",E"secd(x)
+
+   Compute the secant of \"x\", where \"x\" is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"cscd",E"cscd(x)
+
+   Compute the cosecant of \"x\", where \"x\" is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"cotd",E"cotd(x)
+
+   Compute the cotangent of \"x\", where \"x\" is in degrees
 
 "),
 
 (E"Mathematical Functions",E"Base",E"asec",E"asec(x)
 
-   Compute the inverse secant of \"x\" specified in radians
+   Compute the inverse secant of \"x\", where the output is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acsc",E"acsc(x)
 
-   Compute the inverse cosecant of \"x\" specified in radians
+   Compute the inverse cosecant of \"x\", where the output is in
+   radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acot",E"acot(x)
 
-   Compute the inverse cotangent of \"x\" specified in radians
+   Compute the inverse cotangent of \"x\", where the output is in
+   radians
+
+"),
+
+(E"Mathematical Functions",E"Base",E"asecd",E"asecd(x)
+
+   Compute the inverse secant of \"x\", where the output is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"acscd",E"acscd(x)
+
+   Compute the inverse cosecant of \"x\", where the output is in
+   degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"acotd",E"acotd(x)
+
+   Compute the inverse cotangent of \"x\", where the output is in
+   degrees
 
 "),
 
 (E"Mathematical Functions",E"Base",E"sech",E"sech(x)
 
-   Compute the hyperbolic secant of \"x\" specified in radians
+   Compute the hyperbolic secant of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"csch",E"csch(x)
 
-   Compute the hyperbolic cosecant of \"x\" specified in radians
+   Compute the hyperbolic cosecant of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"coth",E"coth(x)
 
-   Compute the hyperbolic cotangent of \"x\" specified in radians
+   Compute the hyperbolic cotangent of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"asinh",E"asinh(x)
 
-   Compute the inverse hyperbolic sine of \"x\" specified in radians
+   Compute the inverse hyperbolic sine of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acosh",E"acosh(x)
 
-   Compute the inverse hyperbolic cosine of \"x\" specified in radians
+   Compute the inverse hyperbolic cosine of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"atanh",E"atanh(x)
 
-   Compute the inverse hyperbolic cotangent of \"x\" specified in
-   radians
+   Compute the inverse hyperbolic cotangent of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"asech",E"asech(x)
 
-   Compute the inverse hyperbolic secant of \"x\" specified in radians
+   Compute the inverse hyperbolic secant of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acsch",E"acsch(x)
 
-   Compute the inverse hyperbolic cosecant of \"x\" specified in
-   radians
+   Compute the inverse hyperbolic cosecant of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acoth",E"acoth(x)
 
-   Compute the inverse hyperbolic cotangent of \"x\" specified in
-   radians
+   Compute the inverse hyperbolic cotangent of \"x\"
 
 "),
 
@@ -1594,6 +1682,12 @@ collection[key...] = value
 (E"Mathematical Functions",E"Base",E"cosc",E"cosc(x)
 
    Compute cos(\\pi x) / x
+
+"),
+
+(E"Mathematical Functions",E"Base",E"degrees2radians",E"degrees2radians(x)
+
+   Convert \"x\" from degrees to radians
 
 "),
 
@@ -1936,13 +2030,26 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"gamma",E"gamma(x)
 
+   Compute the gamma function of \"x\"
+
 "),
 
 (E"Mathematical Functions",E"Base",E"lgamma",E"lgamma(x)
 
+   Compute the logarithm of \"gamma(x)\"
+
 "),
 
 (E"Mathematical Functions",E"Base",E"lfact",E"lfact(x)
+
+   Compute the logarithmic factorial of \"x\"
+
+"),
+
+(E"Mathematical Functions",E"Base",E"digamma",E"digamma(x)
+
+   Compute the digamma function of \"x\" (the logarithmic derivative
+   of \"gamma(x)\")
 
 "),
 
@@ -2160,6 +2267,24 @@ airyaiprime(x)
 (E"Data Formats",E"Base",E"float32",E"float32(x)
 
    Convert a number or array to \"Float32\" data type
+
+"),
+
+(E"Data Formats",E"Base",E"float64",E"float64(x)
+
+   Convert a number or array to \"Float64\" data type
+
+"),
+
+(E"Data Formats",E"Base",E"complex64",E"complex64(r, i)
+
+   Convert to \"r+i*im\" represented as a \"Complex64\" data type
+
+"),
+
+(E"Data Formats",E"Base",E"complex128",E"complex128(r, i)
+
+   Convert to \"r+i*im\" represented as a \"Complex128\" data type
 
 "),
 
@@ -2753,8 +2878,7 @@ airyaiprime(x)
 
 (E"Arrays",E"Base",E"vec",E"vec(A)
 
-   Make a vector out of an array with only one non-singleton
-   dimension.
+   Vectorize an array using column-major convention.
 
 "),
 

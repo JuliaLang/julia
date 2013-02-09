@@ -759,15 +759,15 @@ Mathematical Functions
 
    The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
-.. function:: div
+.. function:: div(a,b)
 
-   Integer truncating division
+   Compute a/b, truncating to an integer
 
-.. function:: fld
+.. function:: fld(a,b)
 
-   Integer floor division
+   Largest integer less than or equal to a/b
 
-.. function:: mod 
+.. function:: mod
 
    Modulus after division
 
@@ -779,6 +779,10 @@ Mathematical Functions
 
    Rational division
 
+.. function:: den(x)
+
+   Denominator of the rational representation of ``x``
+
 .. function:: << >>
 
    Left and right shift operators
@@ -786,6 +790,10 @@ Mathematical Functions
 .. function:: == != < <= > >=
 
    Comparison operators to test equals, not equals, less than, less than or equals, greater than, and greater than or equals
+
+.. function:: cmp(x,y)
+
+   Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively
 
 .. function:: !
 
@@ -809,103 +817,151 @@ Mathematical Functions
 
 .. function:: sin(x)
 
-   Compute sine of ``x``
+   Compute sine of ``x``, where ``x`` is in radians
 
 .. function:: cos(x)
 
-   Compute cosine of ``x``
+   Compute cosine of ``x``, where ``x`` is in radians
 
 .. function:: tan(x)
 
-   Compute tangent of ``x``
+   Compute tangent of ``x``, where ``x`` is in radians
+
+.. function:: sind(x)
+
+   Compute sine of ``x``, where ``x`` is in degrees
+
+.. function:: cosd(x)
+
+   Compute cosine of ``x``, where ``x`` is in degrees
+
+.. function:: tand(x)
+
+   Compute tangent of ``x``, where ``x`` is in degrees
 
 .. function:: sinh(x)
 
-   Compute hyperbolic sine of ``x`` specified in radians
+   Compute hyperbolic sine of ``x``
 
 .. function:: cosh(x)
 
-   Compute hyperbolic cosine of ``x`` specified in radians
+   Compute hyperbolic cosine of ``x``
 
 .. function:: tanh(x)
 
-   Compute hyperbolic tangent of ``x`` specified in radians
+   Compute hyperbolic tangent of ``x``
 
 .. function:: asin(x)
 
-   Compute the inverse sine of ``x`` specified in radians
+   Compute the inverse sine of ``x``, where the output is in radians
 
 .. function:: acos(x)
 
-   Compute the inverse cosine of ``x`` specified in radians
+   Compute the inverse cosine of ``x``, where the output is in radians
 
 .. function:: atan(x)
 
-   Compute the inverse tangent of ``x`` specified in radians
+   Compute the inverse tangent of ``x``, where the output is in radians
 
 .. function:: atan2(y, x)
 
    Compute the inverse tangent of ``y/x``, using the signs of both ``x`` and ``y`` to determine the quadrant of the return value.
 
+.. function:: asind(x)
+
+   Compute the inverse sine of ``x``, where the output is in degrees
+
+.. function:: acosd(x)
+
+   Compute the inverse cosine of ``x``, where the output is in degrees
+
+.. function:: atand(x)
+
+   Compute the inverse tangent of ``x``, where the output is in degrees
+
 .. function:: sec(x)
 
-   Compute the secant of ``x`` specified in radians
+   Compute the secant of ``x``, where ``x`` is in radians
 
 .. function:: csc(x)
 
-   Compute the cosecant of ``x`` specified in radians
+   Compute the cosecant of ``x``, where ``x`` is in radians
 
 .. function:: cot(x)
 
-   Compute the cotangent of ``x`` specified in radians
+   Compute the cotangent of ``x``, where ``x`` is in radians
+
+.. function:: secd(x)
+
+   Compute the secant of ``x``, where ``x`` is in degrees
+
+.. function:: cscd(x)
+
+   Compute the cosecant of ``x``, where ``x`` is in degrees
+
+.. function:: cotd(x)
+
+   Compute the cotangent of ``x``, where ``x`` is in degrees
 
 .. function:: asec(x)
 
-   Compute the inverse secant of ``x`` specified in radians
+   Compute the inverse secant of ``x``, where the output is in radians
 
 .. function:: acsc(x)
 
-   Compute the inverse cosecant of ``x`` specified in radians
+   Compute the inverse cosecant of ``x``, where the output is in radians
 
 .. function:: acot(x)
 
-   Compute the inverse cotangent of ``x`` specified in radians
+   Compute the inverse cotangent of ``x``, where the output is in radians
+
+.. function:: asecd(x)
+
+   Compute the inverse secant of ``x``, where the output is in degrees
+
+.. function:: acscd(x)
+
+   Compute the inverse cosecant of ``x``, where the output is in degrees
+
+.. function:: acotd(x)
+
+   Compute the inverse cotangent of ``x``, where the output is in degrees
 
 .. function:: sech(x)
 
-   Compute the hyperbolic secant of ``x`` specified in radians
+   Compute the hyperbolic secant of ``x``
 
 .. function:: csch(x)
 
-   Compute the hyperbolic cosecant of ``x`` specified in radians
+   Compute the hyperbolic cosecant of ``x``
 
 .. function:: coth(x)
 
-   Compute the hyperbolic cotangent of ``x`` specified in radians
+   Compute the hyperbolic cotangent of ``x``
 
 .. function:: asinh(x)
 
-   Compute the inverse hyperbolic sine of ``x`` specified in radians
+   Compute the inverse hyperbolic sine of ``x``
 
 .. function:: acosh(x)
 
-   Compute the inverse hyperbolic cosine of ``x`` specified in radians
+   Compute the inverse hyperbolic cosine of ``x``
 
 .. function:: atanh(x)
 
-   Compute the inverse hyperbolic cotangent of ``x`` specified in radians
+   Compute the inverse hyperbolic cotangent of ``x``
 
 .. function:: asech(x)
 
-   Compute the inverse hyperbolic secant of ``x`` specified in radians
+   Compute the inverse hyperbolic secant of ``x``
 
 .. function:: acsch(x)
 
-   Compute the inverse hyperbolic cosecant of ``x`` specified in radians
+   Compute the inverse hyperbolic cosecant of ``x``
 
 .. function:: acoth(x)
 
-   Compute the inverse hyperbolic cotangent of ``x`` specified in radians
+   Compute the inverse hyperbolic cotangent of ``x``
 
 .. function:: sinc(x)
 
@@ -914,6 +970,10 @@ Mathematical Functions
 .. function:: cosc(x)
 
    Compute :math:`cos(\pi x) / x`
+
+.. function:: degrees2radians(x)
+
+   Convert ``x`` from degrees to radians
 
 .. function:: hypot(x, y)
 
@@ -1133,8 +1193,20 @@ Mathematical Functions
    Compute ``mod(x^p, m)``
 
 .. function:: gamma(x)
+
+   Compute the gamma function of ``x``
+
 .. function:: lgamma(x)
+
+   Compute the logarithm of ``gamma(x)``
+
 .. function:: lfact(x)
+
+   Compute the logarithmic factorial of ``x``
+
+.. function:: digamma(x)
+
+   Compute the digamma function of ``x`` (the logarithmic derivative of ``gamma(x)``)
 
 .. function:: airy(x)
               airyai(x)
@@ -1277,6 +1349,18 @@ Data Formats
 .. function:: float32(x)
 
    Convert a number or array to ``Float32`` data type
+
+.. function:: float64(x)
+
+   Convert a number or array to ``Float64`` data type
+
+.. function:: complex64(r,i)
+
+   Convert to ``r+i*im`` represented as a ``Complex64`` data type
+
+.. function:: complex128(r,i)
+
+   Convert to ``r+i*im`` represented as a ``Complex128`` data type
 
 .. function:: float64(x)
 
