@@ -1345,12 +1345,6 @@ end
 
 ## event processing, I/O and work scheduling ##
 
-function make_scheduled(t::Task)
-    t.parent = Scheduler
-    enq_work(WorkItem(t))
-    t
-end
-
 function yield(args...)
     ct = current_task()
     # preserve Task.last across calls to the scheduler

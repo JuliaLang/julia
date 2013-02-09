@@ -74,6 +74,8 @@ type ShowError <: Exception
     err::Exception
 end
 
+type EOFError <: Exception end
+
 show(io::IO, bt::BackTrace) = show(io,bt.e)
 
 function show(io::IO, se::ShowError)

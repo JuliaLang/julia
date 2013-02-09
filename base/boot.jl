@@ -133,8 +133,8 @@ export
     # string types
     Char, ASCIIString, ByteString, DirectIndexString, String, UTF8String,
     # errors
-    BoundsError, DivideByZeroError, DomainError, EOFError, Exception,
-    IOError, InexactError, InterruptException, MemoryError, OverflowError,
+    BoundsError, DivideByZeroError, DomainError, Exception,
+    InexactError, InterruptException, MemoryError, OverflowError,
     StackOverflowError, UndefRefError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
@@ -211,9 +211,7 @@ type DomainError        <: Exception end
 type OverflowError      <: Exception end
 type InexactError       <: Exception end
 type MemoryError        <: Exception end
-type IOError            <: Exception end
 type StackOverflowError <: Exception end
-type EOFError           <: Exception end
 type UndefRefError      <: Exception end
 type InterruptException <: Exception end
 
