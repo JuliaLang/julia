@@ -268,14 +268,6 @@ Iterable Collections
 
    Test whether all elements of a boolean collection are true
 
-.. function:: count(itr)
-
-   Count the number of boolean elements in ``itr`` which are ``true`` rather than ``false``.
-
-.. function:: count(p, itr)
-
-   Count the number of elements in ``itr`` for which predicate ``p`` is true.
-
 .. function:: any(p, itr)
 
    Determine whether any element of ``itr`` satisfies the given predicate.
@@ -347,7 +339,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
 .. function:: collect(collection)
 
-   Return an array of all (key, value) tuples in a collection.
+   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
 
 .. function:: merge(collection, others...)
 
@@ -2521,9 +2513,9 @@ Distributed Arrays
 System
 ------
 
-.. function:: run("command")
+.. function:: run(command)
 
-   Run a shell command.
+   Run a command object, constructed with backticks.
 
 .. function:: gethostname()
 
