@@ -627,8 +627,6 @@ export
     complement,
     complement!,
     contains,
-    contains_is,
-    count,
     delete!,
     empty!,
     del_each!,

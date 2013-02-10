@@ -42,6 +42,15 @@ function is_static_parameter(sv::StaticVarInfo, s::Symbol)
     return false
 end
 
+function contains_is(itr, x::ANY)
+    for y in itr
+        if is(y,x)
+            return true
+        end
+    end
+    return false
+end
+
 is_local(sv::StaticVarInfo, s::Symbol) = contains_is(sv.vars, s)
 is_closed(sv::StaticVarInfo, s::Symbol) = has(sv.cenv, s)
 is_global(sv::StaticVarInfo, s::Symbol) =
