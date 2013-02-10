@@ -1,6 +1,5 @@
 export
 # Modules
-    Grisu,
     PCRE,
     FFTW,
     DSP,
@@ -121,7 +120,6 @@ export
 
 # Exceptions
     ArgumentError,
-    BackTrace,
     DisconnectException,
     EOFError,
     ErrorException,
@@ -350,7 +348,6 @@ export
     num,
     num2hex,
     one,
-    power_by_squaring,
     powermod,
     prevfloat,
     prevpow,
@@ -609,6 +606,8 @@ export
     insert!,
     shift!,
     unshift!,
+    pop!,
+    push!,
 
 # collections
     add!,
@@ -622,6 +621,7 @@ export
     contains,
     delete!,
     empty!,
+    endof,
     del_each!,
     eltype,
     get,
@@ -632,8 +632,6 @@ export
     key,
     keys,
     length,
-    endof,
-    setdiff,
     map,
     map!,
     mapreduce,
@@ -643,14 +641,13 @@ export
     ref,
     sizehint,
     similar,
+    setdiff,
     symdiff,
     symdiff!,
     union,
     union!,
     unique,
     values,
-    pop!,
-    push!,
     filter,
     filter!,
 

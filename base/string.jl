@@ -467,8 +467,6 @@ function filter(f::Function, s::String)
     takebuf_string(out)
 end
 
-has(s::String, c::Char) = contains(s, c)
-
 ## string promotion rules ##
 
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
