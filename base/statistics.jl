@@ -357,6 +357,25 @@ function bound_quantiles(qs::AbstractVector)
     [min(1,max(0,q)) for q = qs]
 end
 
+## Empirical cummulative density function
+function ecdf(X::AbstractVector)
+    Xs = sort(X)
+    isnan(Xs[end]) && error("ecdf undefined in presence of NaNs")
+    n = length(X)
+    e(x::Real) = searchsortedlast(Xs, x) / n
+    function e(v::Vector)
+        ord = sortperm(v)
+        r = similar(v)
+        j = 1
+        for i in 1:length(v)
+            while (Xs[j] < v[ord[i]] && j <= n) j += 1 end
+            r[ord[i]] = j
+        end
+        return r / n
+    end
+    return e
+end
+
 ## run-length encoding
 function rle{T}(v::Vector{T})
     n = length(v)

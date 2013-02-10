@@ -772,6 +772,7 @@ export
     cov_spearman,
     decile,
     dist,
+    ecdf,
     hist,
     inverse_rle,
     iqr,
