@@ -614,20 +614,6 @@
 
 "),
 
-(E"Iterable Collections",E"Base",E"count",E"count(itr)
-
-   Count the number of boolean elements in \"itr\" which are \"true\"
-   rather than \"false\".
-
-"),
-
-(E"Iterable Collections",E"Base",E"count",E"count(p, itr)
-
-   Count the number of elements in \"itr\" for which predicate \"p\"
-   is true.
-
-"),
-
 (E"Iterable Collections",E"Base",E"any",E"any(p, itr)
 
    Determine whether any element of \"itr\" satisfies the given
@@ -709,7 +695,8 @@ collection[key...] = value
 
 (E"Associative Collections",E"Base",E"collect",E"collect(collection)
 
-   Return an array of all (key, value) tuples in a collection.
+   Return an array of all items in a collection. For associative
+   collections, returns (key, value) tuples.
 
 "),
 
@@ -4089,9 +4076,9 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"run",E"run(\"command\")
+(E"System",E"Base",E"run",E"run(command)
 
-   Run a shell command.
+   Run a command object, constructed with backticks.
 
 "),
 
