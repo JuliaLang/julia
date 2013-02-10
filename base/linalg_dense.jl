@@ -946,14 +946,20 @@ type SymTridiagonal{T<:BlasFloat} <: AbstractMatrix{T}
 end
 
 SymTridiagonal{T<:BlasFloat}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(copy(dv), copy(ev))
+
 function SymTridiagonal{T<:Real}(dv::Vector{T}, ev::Vector{T})
     SymTridiagonal{Float64}(float64(dv),float64(ev))
 end
+
 function SymTridiagonal{Td<:Number,Te<:Number}(dv::Vector{Td}, ev::Vector{Te})
     T = promote(Td,Te)
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end
+
+SymTridiagonal(A::AbstractMatrix) = SymTridiagonal(diag(A), diag(A,1))
+
 copy(S::SymTridiagonal) = SymTridiagonal(S.dv,S.ev)
+
 function full(S::SymTridiagonal)
     M = diagm(S.dv)
     for i in 1:length(S.ev)
@@ -976,8 +982,7 @@ size(m::SymTridiagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<
 
 eig(m::SymTridiagonal, vecs::Bool) = LAPACK.stev!(vecs ? 'V' : 'N', copy(m.dv), copy(m.ev))
 eig(m::SymTridiagonal) = eig(m::SymTridiagonal, true)
-## This function has been in Julia for some time.  Could probably be dropped.
-trideig{T<:BlasFloat}(d::Vector{T}, e::Vector{T}) = LAPACK.stev!('N', copy(d), copy(e))[1]
+eigvals(m::SymTridiagonal) = eig(m::SymTridiagonal, false)[1]
 
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
