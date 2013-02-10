@@ -392,7 +392,7 @@ type CholeskyDense{T<:BlasFloat} <: Factorization{T}
     UL::BlasChar
     function CholeskyDense(A::Matrix{T}, UL::BlasChar)
         A, info = LAPACK.potrf!(UL, A)
-        if info != 0 error("Matrix A not positive-definite") end
+        if info != 0; throw(LAPACK.PosDefException(info)); end
         if UL == 'U'
             new(triu!(A), UL)
         elseif UL == 'L'
@@ -420,7 +420,7 @@ end
     
 function inv(C::CholeskyDense)
     Ci, info = LAPACK.potri!(C.UL, copy(C.LR))
-    if info != 0 error("Matrix singular") end 
+    if info != 0; throw(LAPACK.SingularException(info)); end 
     symmetrize!(Ci, C.UL)
 end
 
@@ -436,14 +436,15 @@ chol(A::Matrix, UL::BlasChar) = factors(chold(A, UL))
 chol(A::Matrix) = chol(A, 'U')
 chol(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
 
-type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
+type CholeskyPivotedDense{T<:BlasFloat} <: Factorization{T}
     LR::Matrix{T}
     UL::BlasChar
     piv::Vector{BlasInt}
     rank::BlasInt
     tol::Real
-    function CholeskyDensePivoted(A::Matrix{T}, UL::BlasChar, tol::Real)
+    function CholeskyPivotedDense(A::Matrix{T}, UL::BlasChar, tol::Real)
         A, piv, rank, info = LAPACK.pstrf!(UL, A, tol)
+        if info != 0; throw(LAPACK.RankDeficientException(info)); end
         if UL == 'U'
             new(triu!(A), UL, piv, rank, tol)
         elseif UL == 'L'
@@ -454,23 +455,24 @@ type CholeskyDensePivoted{T<:BlasFloat} <: Factorization{T}
     end
 end
 
-size(C::CholeskyDensePivoted) = size(C.LR)
-size(C::CholeskyDensePivoted,d::Integer) = size(C.LR,d)
+size(C::CholeskyPivotedDense) = size(C.LR)
+size(C::CholeskyPivotedDense,d::Integer) = size(C.LR,d)
 
-factors(C::CholeskyDensePivoted) = C.LR, C.piv
+factors(C::CholeskyPivotedDense) = C.LR, C.piv
 
-function \{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedVector{T})
-    if C.rank < size(C.LR, 1) error("Matrix is not positive-definite") end
+function \{T<:BlasFloat}(C::CholeskyPivotedDense{T}, B::StridedVector{T})
+    if C.rank < size(C.LR, 1); throw(LAPACK.RankDeficientException(info)); end
     LAPACK.potrs!(C.UL, C.LR, copy(B)[C.piv])[invperm(C.piv)]
 end
-function \{T<:BlasFloat}(C::CholeskyDensePivoted{T}, B::StridedMatrix{T})
-    if C.rank < size(C.LR, 1) error("Matrix is not positive-definite") end
+
+function \{T<:BlasFloat}(C::CholeskyPivotedDense{T}, B::StridedMatrix{T})
+    if C.rank < size(C.LR, 1); throw(LAPACK.RankDeficientException(info)); end
     LAPACK.potrs!(C.UL, C.LR, copy(B)[C.piv,:])[invperm(C.piv),:]
 end
 
-rank(C::CholeskyDensePivoted) = C.rank
+rank(C::CholeskyPivotedDense) = C.rank
 
-function det{T}(C::CholeskyDensePivoted{T})
+function det{T}(C::CholeskyPivotedDense{T})
     if C.rank < size(C.LR, 1) 
         return real(zero(T))
     else 
@@ -478,7 +480,7 @@ function det{T}(C::CholeskyDensePivoted{T})
     end
 end
     
-function inv(C::CholeskyDensePivoted)
+function inv(C::CholeskyPivotedDense)
     if C.rank < size(C.LR, 1) error("Matrix singular") end
     Ci, info = LAPACK.potri!(C.UL, copy(C.LR))
     if info != 0 error("Matrix is singular") end
@@ -487,7 +489,7 @@ function inv(C::CholeskyDensePivoted)
 end
 
 ## Should these functions check that the matrix is Hermitian?
-cholpd!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = CholeskyDensePivoted{T}(A, UL, tol)
+cholpd!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = CholeskyPivotedDense{T}(A, UL, tol)
 cholpd!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpd!(A, UL, -1.)
 cholpd!{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpd!(A, 'U', tol)
 cholpd!{T<:BlasFloat}(A::Matrix{T}) = cholpd!(A, 'U', -1.)
@@ -598,32 +600,32 @@ function (\){T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T})
     return ans
 end
 
-type QRPDense{T} <: Factorization{T}
+type QRPivotedDense{T} <: Factorization{T}
     hh::Matrix{T}
     tau::Vector{T}
     jpvt::Vector{BlasInt}
-    function QRPDense(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{BlasInt})
+    function QRPivotedDense(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{BlasInt})
         m, n = size(hh)
         if length(tau) != min(m,n) || length(jpvt) != n
-            error("QRPDense: mismatched dimensions")
+            error("QRPivotedDense: mismatched dimensions")
         end
         new(hh,tau,jpvt)
     end
 end
-size(x::QRPDense)   = size(x.hh)
-size(x::QRPDense,d) = size(x.hh,d)
+size(x::QRPivotedDense)   = size(x.hh)
+size(x::QRPivotedDense,d) = size(x.hh,d)
 ## Multiplication by Q from the QR decomposition
-(*){T<:BlasFloat}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
+(*){T<:BlasFloat}(A::QRPivotedDense{T}, B::StridedVecOrMat{T}) =
     LAPACK.ormqr!('L', 'N', A.hh, size(A,2), A.tau, copy(B))
 ## Multiplication by Q' from the QR decomposition
-Ac_mul_B{T<:BlasFloat}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
+Ac_mul_B{T<:BlasFloat}(A::QRPivotedDense{T}, B::StridedVecOrMat{T}) =
     LAPACK.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A,2), A.tau, copy(B))
 
-qrpd!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPDense{T}(LAPACK.geqp3!(A)...)
+qrpd!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPivotedDense{T}(LAPACK.geqp3!(A)...)
 qrpd{T<:BlasFloat}(A::StridedMatrix{T}) = qrpd!(copy(A))
 qrpd{T<:Real}(x::StridedMatrix{T}) = qrpd(float64(x))
 
-function factors{T<:BlasFloat}(x::QRPDense{T})
+function factors{T<:BlasFloat}(x::QRPivotedDense{T})
     aa = copy(x.hh)
     R  = triu(aa[1:min(size(aa)),:])
     LAPACK.orgqr!(aa, x.tau, size(aa,2)), R, x.jpvt
@@ -632,7 +634,7 @@ end
 qrp{T<:BlasFloat}(x::StridedMatrix{T}) = factors(qrpd(x))
 qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
 
-function (\){T<:BlasFloat}(A::QRPDense{T}, B::StridedVecOrMat{T})
+function (\){T<:BlasFloat}(A::QRPivotedDense{T}, B::StridedVecOrMat{T})
     n = length(A.tau)
     x, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
     if info > 0; throw(LAPACK.SingularException(info)); end
