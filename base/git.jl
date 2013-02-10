@@ -62,9 +62,11 @@ end
 
 # TODO: provide a clean way to avoid this disaster
 function read_config_blob(blob::String)
-    tmp = tmpnam()
-    open(tmp,"w") do io
+    tmp, io = mktemp()
+    try
         write(io, readall(`git cat-file blob $blob`))
+    finally
+        close(io)
     end
     cfg = read_config(tmp)
     run(`rm -f tmp`)
@@ -72,7 +74,7 @@ function read_config_blob(blob::String)
 end
 
 function write_config(file::String, cfg::Dict)
-    tmp = tmpnam()
+    tmp = tempname()
     for key in sort!(keys(cfg))
         val = cfg[key]
         if isa(val,Array)
