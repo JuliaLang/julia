@@ -1,5 +1,5 @@
 @test sort([2,3,1]) == [1,2,3]
-@test sort(Sort.Reverse,[2,3,1]) == [3,2,1]
+@test sort([2,3,1],Sort.Reverse) == [3,2,1]
 @test sortperm([2,3,1]) == [3,1,2]
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
@@ -24,54 +24,54 @@ rg_r = 57:-1:49; rgv_r = [rg_r]
 for i = 47:59
     @test searchsortedfirst(rg, i) == searchsortedfirst(rgv, i)
     @test searchsortedlast(rg, i) == searchsortedlast(rgv, i)
-    @test searchsortedfirst(Sort.Reverse, rg_r, i) ==
-          searchsortedfirst(Sort.Reverse, rgv_r, i)
-    @test searchsortedlast(Sort.Reverse, rg_r, i) ==
-          searchsortedlast(Sort.Reverse, rgv_r, i)
+    @test searchsortedfirst(rg_r, i, Sort.Reverse) ==
+          searchsortedfirst(rgv_r, i, Sort.Reverse)
+    @test searchsortedlast(rg_r, i, Sort.Reverse) ==
+          searchsortedlast(rgv_r, i, Sort.Reverse)
 end
 rg = 1:2:17; rgv = [rg]
 rg_r = 17:-2:1; rgv_r = [rg_r]
 for i = -1:19
     @test searchsortedfirst(rg, i) == searchsortedfirst(rgv, i)
     @test searchsortedlast(rg, i) == searchsortedlast(rgv, i)
-    @test searchsortedfirst(Sort.Reverse, rg_r, i) ==
-          searchsortedfirst(Sort.Reverse, rgv_r, i)
-    @test searchsortedlast(Sort.Reverse, rg_r, i) ==
-          searchsortedlast(Sort.Reverse, rgv_r, i)
+    @test searchsortedfirst(rg_r, i, Sort.Reverse) ==
+          searchsortedfirst(rgv_r, i, Sort.Reverse)
+    @test searchsortedlast(rg_r, i, Sort.Reverse) ==
+          searchsortedlast(rgv_r, i, Sort.Reverse)
 end
 rg = -3:0.5:2; rgv = [rg]
 rg_r = 2:-0.5:-3; rgv_r = [rg_r]
 for i = -5:.5:4
     @test searchsortedfirst(rg, i) == searchsortedfirst(rgv, i)
     @test searchsortedlast(rg, i) == searchsortedlast(rgv, i)
-    @test searchsortedfirst(Sort.Reverse, rg_r, i) ==
-          searchsortedfirst(Sort.Reverse, rgv_r, i)
-    @test searchsortedlast(Sort.Reverse, rg_r, i) ==
-          searchsortedlast(Sort.Reverse, rgv_r, i)
+    @test searchsortedfirst(rg_r, i, Sort.Reverse) ==
+          searchsortedfirst(rgv_r, i, Sort.Reverse)
+    @test searchsortedlast(rg_r, i, Sort.Reverse) ==
+          searchsortedlast(rgv_r, i, Sort.Reverse)
 end
 
 a = rand(1:10000, 1000)
 
 for alg in [InsertionSort, MergeSort, TimSort]
-    b = sort(alg, a)
+    b = sort(a, alg)
     @test issorted(b)
-    ix = sortperm(alg, a)
+    ix = sortperm(a, alg)
     b = a[ix]
     @test issorted(b)
     @test a[ix] == b
 
-    b = sort(alg, Sort.Reverse, a)
-    @test issorted(Sort.Reverse, b)
-    ix = sortperm(alg, Sort.Reverse, a)
+    b = sort(a, alg, Sort.Reverse)
+    @test issorted(b, Sort.Reverse)
+    ix = sortperm(a, alg, Sort.Reverse)
     b = a[ix]
-    @test issorted(Sort.Reverse, b)
+    @test issorted(b, Sort.Reverse)
     @test a[ix] == b
 
-    b = sortby(alg, x -> -10x, a)
-    @test issorted(Sort.By(x -> -10x), b)
-    ix = sortperm(alg, Sort.By(x -> -10x), a)
+    b = sortby(a, alg, x -> -10x)
+    @test issorted(b, Sort.By(x -> -10x))
+    ix = sortperm(a, alg, Sort.By(x -> -10x))
     b = a[ix]
-    @test issorted(Sort.By(x -> -10x), b)
+    @test issorted(b, Sort.By(x -> -10x))
     @test a[ix] == b
 
     c = copy(a)
@@ -80,17 +80,27 @@ for alg in [InsertionSort, MergeSort, TimSort]
 
     ipermute!(c, ix)
     @test c == a
+
+    c = sort(a, alg) do x,y
+        x > y
+    end
+    @test b == c
+
+    c = sortby(a, alg) do x
+        -10x
+    end
+    @test b == c
 end
 
-b = sort(QuickSort, a)
+b = sort(a, QuickSort)
 @test issorted(b)
-b = sort(QuickSort, Sort.Reverse, a)
-@test issorted(Sort.Reverse, b)
-b = sortby(QuickSort, x -> -10x, a)
-@test issorted(Sort.By(x -> -10x), b)
+b = sort(a, QuickSort, Sort.Reverse)
+@test issorted(b, Sort.Reverse)
+b = sortby(a, QuickSort, x -> -10x)
+@test issorted(b, Sort.By(x -> -10x))
 
-@test select(Sort.Reverse, [3,6,30,1,9], 2) == 9
-@test select(Sort.By(x -> -x), [3,6,30,1,9], 2) == 9
+@test select([3,6,30,1,9], 2, Sort.Reverse) == 9
+@test select([3,6,30,1,9], 2, Sort.By(x -> -x)) == 9
 
 ## more advanced sorting tests ##
 
@@ -112,10 +122,10 @@ for n in [0:10, 100, 1000]
 
     for ord in [Sort.Forward, Sort.Reverse]
         # insersion sort as a reference
-        pi = sortperm(InsertionSort,ord,v)
+        pi = sortperm(v,InsertionSort,ord)
         @test isperm(pi)
         s = v[pi]
-        @test issorted(ord,s)
+        @test issorted(s, ord)
         @test hist(s) == h
         @test all([ issorted(pi[s.==i]) for i in r ])
         si = copy(v)
@@ -125,7 +135,7 @@ for n in [0:10, 100, 1000]
         @test si == v
 
         # mergesort
-        pm = sortperm(MergeSort,ord,v)
+        pm = sortperm(v,MergeSort,ord)
         @test pi == pm
         sm = copy(v)
         permute!(sm, pm)
@@ -134,7 +144,7 @@ for n in [0:10, 100, 1000]
         @test sm == v
 
         # timsort
-        pt = sortperm(TimSort,ord,v)
+        pt = sortperm(v,TimSort,ord)
         @test pi == pt
         st = copy(v)
         permute!(st, pt)
@@ -143,7 +153,7 @@ for n in [0:10, 100, 1000]
         @test st == v
 
         # quicksort (unstable)
-        pq = sortperm(QuickSort,ord,v)
+        pq = sortperm(v,QuickSort,ord)
         @test isperm(pi)
         @test v[pq] == s
         sq = copy(v)
@@ -158,12 +168,12 @@ for n in [0:10, 100, 1000]
     for ord in [Sort.Forward, Sort.Reverse],
         alg in [InsertionSort, QuickSort, MergeSort, TimSort]
         # test float sorting with NaNs
-        s = sort(alg,ord,v)
-        @test issorted(ord,s)
+        s = sort(v,alg,ord)
+        @test issorted(s, ord)
         @test reinterpret(Uint64,v[isnan(v)]) == reinterpret(Uint64,s[isnan(s)])
 
         # test float permutation with NaNs
-        p = sortperm(alg,ord,v)
+        p = sortperm(v,alg,ord)
         @test isperm(p)
         vp = v[p]
         @test isequal(s,vp)
