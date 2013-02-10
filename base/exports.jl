@@ -570,6 +570,7 @@ export
     schur,
     solve,
     svd,
+    svdfact,
     svdt,
     svdvals,
     symmetrize!,

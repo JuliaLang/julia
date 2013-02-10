@@ -2012,6 +2012,18 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the singular values of ``A``.
 
+.. function:: svdfact(A, B) -> GSVDDense
+
+   Compute the generalized SVD of ``A`` and ``B``, returning a ``GSVDDense`` Factorization object.
+   
+.. function:: svd(A, B) -> U, V, X, C, S
+
+   Compute the generalized SVD of ``A`` and ``B``.
+ 
+.. function:: svdvals(A, B)
+
+   Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``.
+
 .. function:: triu(M)
 
    Upper triangle of a matrix
