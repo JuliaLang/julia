@@ -425,14 +425,14 @@ function inv(C::CholeskyDense)
 end
 
 ## Should these functions check that the matrix is Hermitian?
-chold!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = CholeskyDense{T}(A, UL)
-chold!{T<:BlasFloat}(A::Matrix{T}) = chold!(A, 'U')
-chold{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = chold!(copy(A), UL)
-chold{T<:Number}(A::Matrix{T}, UL::BlasChar) = chold(float64(A), UL)
-chold{T<:Number}(A::Matrix{T}) = chold(A, 'U')
+cholfact!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = CholeskyDense{T}(A, UL)
+cholfact!{T<:BlasFloat}(A::Matrix{T}) = cholfact!(A, 'U')
+cholfact{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholfact!(copy(A), UL)
+cholfact{T<:Number}(A::Matrix{T}, UL::BlasChar) = cholfact(float64(A), UL)
+cholfact{T<:Number}(A::Matrix{T}) = cholfact(A, 'U')
 
 ## Matlab (and R) compatible
-chol(A::Matrix, UL::BlasChar) = factors(chold(A, UL))
+chol(A::Matrix, UL::BlasChar) = factors(cholfact(A, UL))
 chol(A::Matrix) = chol(A, 'U')
 chol(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
 
@@ -489,18 +489,18 @@ function inv(C::CholeskyPivotedDense)
 end
 
 ## Should these functions check that the matrix is Hermitian?
-cholpd!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = CholeskyPivotedDense{T}(A, UL, tol)
-cholpd!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpd!(A, UL, -1.)
-cholpd!{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpd!(A, 'U', tol)
-cholpd!{T<:BlasFloat}(A::Matrix{T}) = cholpd!(A, 'U', -1.)
-cholpd{T<:Number}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpd(float64(A), UL, tol)
-cholpd{T<:Number}(A::Matrix{T}, UL::BlasChar) = cholpd(float64(A), UL, -1.)
-cholpd{T<:Number}(A::Matrix{T}, tol::Real) = cholpd(float64(A), true, tol)
-cholpd{T<:Number}(A::Matrix{T}) = cholpd(float64(A), 'U', -1.)
-cholpd{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpd!(copy(A), UL, tol)
-cholpd{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpd!(copy(A), UL, -1.)
-cholpd{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpd!(copy(A), 'U', tol)
-cholpd{T<:BlasFloat}(A::Matrix{T}) = cholpd!(copy(A), 'U', -1.)
+cholpfact!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = CholeskyPivotedDense{T}(A, UL, tol)
+cholpfact!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpfact!(A, UL, -1.)
+cholpfact!{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpfact!(A, 'U', tol)
+cholpfact!{T<:BlasFloat}(A::Matrix{T}) = cholpfact!(A, 'U', -1.)
+cholpfact{T<:Number}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpfact(float64(A), UL, tol)
+cholpfact{T<:Number}(A::Matrix{T}, UL::BlasChar) = cholpfact(float64(A), UL, -1.)
+cholpfact{T<:Number}(A::Matrix{T}, tol::Real) = cholpfact(float64(A), true, tol)
+cholpfact{T<:Number}(A::Matrix{T}) = cholpfact(float64(A), 'U', -1.)
+cholpfact{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar, tol::Real) = cholpfact!(copy(A), UL, tol)
+cholpfact{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = cholpfact!(copy(A), UL, -1.)
+cholpfact{T<:BlasFloat}(A::Matrix{T}, tol::Real) = cholpfact!(copy(A), 'U', tol)
+cholpfact{T<:BlasFloat}(A::Matrix{T}) = cholpfact!(copy(A), 'U', -1.)
 
 type LUDense{T} <: Factorization{T}
     lu::Matrix{T}
@@ -530,16 +530,16 @@ function factors{T}(lu::LUDense{T})
     L, U, P
 end
 
-function lud!{T<:BlasFloat}(A::Matrix{T})
+function lufact!{T<:BlasFloat}(A::Matrix{T})
     lu, ipiv, info = LAPACK.getrf!(A)
     LUDense{T}(lu, ipiv, info)
 end
 
-lud{T<:BlasFloat}(A::Matrix{T}) = lud!(copy(A))
-lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
+lufact{T<:BlasFloat}(A::Matrix{T}) = lufact!(copy(A))
+lufact{T<:Number}(A::Matrix{T}) = lufact(float64(A))
 
 ## Matlab-compatible
-lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
+lu{T<:Number}(A::Matrix{T}) = factors(lufact(A))
 lu(x::Number) = (one(x), x, [1])
 
 function det{T}(lu::LUDense{T})
@@ -571,31 +571,31 @@ end
 size(A::QRDense) = size(A.hh)
 size(A::QRDense,n) = size(A.hh,n)
 
-qrd!{T<:BlasFloat}(A::StridedMatrix{T}) = QRDense{T}(LAPACK.geqrf!(A)...)
-qrd{T<:BlasFloat}(A::StridedMatrix{T}) = qrd!(copy(A))
-qrd{T<:Real}(A::StridedMatrix{T}) = qrd(float64(A))
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QRDense{T}(LAPACK.geqrf!(A)...)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(copy(A))
+qrfact{T<:Real}(A::StridedMatrix{T}) = qrfact(float64(A))
 
-function factors{T<:BlasFloat}(qrd::QRDense{T})
-    aa  = copy(qrd.hh)
+function factors{T<:BlasFloat}(qrfact::QRDense{T})
+    aa  = copy(qrfact.hh)
     R   = triu(aa[1:min(size(aa)),:])   # must be *before* call to orgqr!
-    LAPACK.orgqr!(aa, qrd.tau, size(aa,2)), R
+    LAPACK.orgqr!(aa, qrfact.tau, size(aa,2)), R
 end
 
-qr{T<:Number}(x::StridedMatrix{T}) = factors(qrd(x))
+qr{T<:Number}(x::StridedMatrix{T}) = factors(qrfact(x))
 qr(x::Number) = (one(x), x)
 
 ## Multiplication by Q from the QR decomposition
-(*){T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T}) =
+qmulQR{T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T}) =
     LAPACK.ormqr!('L', 'N', A.hh, size(A.hh,2), A.tau, copy(B))
 
 ## Multiplication by Q' from the QR decomposition
-Ac_mul_B{T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T}) =
+qTmulQR{T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T}) =
     LAPACK.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A.hh,2), A.tau, copy(B))
 
 ## Least squares solution.  Should be more careful about cases with m < n
 function (\){T<:BlasFloat}(A::QRDense{T}, B::StridedVecOrMat{T})
     n   = length(A.tau)
-    ans, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
+    ans, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(qTmulQR(A,B))[1:n,:])
     if info > 0; throw(LAPACK.SingularException(info)); end
     return ans
 end
@@ -615,15 +615,15 @@ end
 size(x::QRPivotedDense)   = size(x.hh)
 size(x::QRPivotedDense,d) = size(x.hh,d)
 ## Multiplication by Q from the QR decomposition
-(*){T<:BlasFloat}(A::QRPivotedDense{T}, B::StridedVecOrMat{T}) =
+qmulQR{T<:BlasFloat}(A::QRPivotedDense{T}, B::StridedVecOrMat{T}) =
     LAPACK.ormqr!('L', 'N', A.hh, size(A,2), A.tau, copy(B))
 ## Multiplication by Q' from the QR decomposition
-Ac_mul_B{T<:BlasFloat}(A::QRPivotedDense{T}, B::StridedVecOrMat{T}) =
+qTmulQR{T<:BlasFloat}(A::QRPivotedDense{T}, B::StridedVecOrMat{T}) =
     LAPACK.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A,2), A.tau, copy(B))
 
-qrpd!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPivotedDense{T}(LAPACK.geqp3!(A)...)
-qrpd{T<:BlasFloat}(A::StridedMatrix{T}) = qrpd!(copy(A))
-qrpd{T<:Real}(x::StridedMatrix{T}) = qrpd(float64(x))
+qrpfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPivotedDense{T}(LAPACK.geqp3!(A)...)
+qrpfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrpfact!(copy(A))
+qrpfact{T<:Real}(x::StridedMatrix{T}) = qrpfact(float64(x))
 
 function factors{T<:BlasFloat}(x::QRPivotedDense{T})
     aa = copy(x.hh)
@@ -631,12 +631,12 @@ function factors{T<:BlasFloat}(x::QRPivotedDense{T})
     LAPACK.orgqr!(aa, x.tau, size(aa,2)), R, x.jpvt
 end
 
-qrp{T<:BlasFloat}(x::StridedMatrix{T}) = factors(qrpd(x))
+qrp{T<:BlasFloat}(x::StridedMatrix{T}) = factors(qrpfact(x))
 qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
 
 function (\){T<:BlasFloat}(A::QRPivotedDense{T}, B::StridedVecOrMat{T})
     n = length(A.tau)
-    x, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
+    x, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(qTmulQR(A,B))[1:n,:])
     if info > 0; throw(LAPACK.SingularException(info)); end
     isa(B, Vector) ? x[invperm(A.jpvt)] : x[:,invperm(A.jpvt)]
 end
@@ -674,7 +674,7 @@ function det(A::Matrix)
     m, n = size(A)
     if m != n; error("det only defined for square matrices"); end
     if istriu(A) | istril(A); return prod(diag(A)); end
-    return det(lud(A))
+    return det(lufact(A))
 end
 det(x::Number) = x
 
@@ -921,7 +921,7 @@ function cond(A::StridedMatrix, p)
     elseif p == 1 || p == Inf
         m, n = size(A)
         if m != n; error("Use 2-norm for non-square matrices"); end
-        cnd = 1 / LAPACK.gecon!(p == 1 ? '1' : 'I', lud(A).lu, norm(A, p))
+        cnd = 1 / LAPACK.gecon!(p == 1 ? '1' : 'I', lufact(A).lu, norm(A, p))
     else
         error("Norm type must be 1, 2 or Inf")
     end
@@ -1217,16 +1217,16 @@ end
 
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
-lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
-lud{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
-lu(A::Tridiagonal) = factors(lud(A))
+lufact!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
+lufact{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
+lu(A::Tridiagonal) = factors(lufact(A))
 
 function det{T}(lu::LUTridiagonal{T})
     n = length(lu.d)
     prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
 
-det(A::Tridiagonal) = det(lud(A))
+det(A::Tridiagonal) = det(lufact(A))
 
 (\){T<:BlasFloat}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
     LAPACK.gttrs!('N', lu.dl, lu.d, lu.du, lu.du2, lu.ipiv, copy(B))
