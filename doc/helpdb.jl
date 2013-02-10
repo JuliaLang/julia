@@ -426,6 +426,13 @@
 
 "),
 
+(E"Types",E"Base",E"maxintfloat",E"maxintfloat(type)
+
+   The largest integer losslessly representable by the given floating-
+   point type
+
+"),
+
 (E"Types",E"Base",E"sizeof",E"sizeof(type)
 
    Size, in bytes, of the canonical binary representation of the given
@@ -1356,9 +1363,9 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"Base",E"mod",E"mod()
+(E"Mathematical Functions",E"Base",E"mod",E"mod(x, m)
 
-   Modulus after division
+   Modulus after division, returning in the range [0,m)
 
 "),
 
@@ -1368,9 +1375,21 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"mod1",E"mod1(x, m)
+
+   Modulus after division, returning in the range (0,m]
+
+"),
+
 (E"Mathematical Functions",E"Base",E"//",E"//()
 
    Rational division
+
+"),
+
+(E"Mathematical Functions",E"Base",E"num",E"num(x)
+
+   Numerator of the rational representation of \"x\"
 
 "),
 
@@ -1964,6 +1983,12 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"factor",E"factor(n)
+
+   Compute the prime factorization of an integer \"n\"
+
+"),
+
 (E"Mathematical Functions",E"Base",E"gcd",E"gcd(x, y)
 
    Greatest common divisor
@@ -1976,9 +2001,28 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"gcdx",E"gcdx(x, y)
+
+   Greatest common divisor, also returning integer coefficients \"u\"
+   and \"v\" that solve \"ux+vy == gcd(x,y)\"
+
+"),
+
+(E"Mathematical Functions",E"Base",E"ispow2",E"ispow2(n)
+
+   Test whether \"n\" is a power of two
+
+"),
+
 (E"Mathematical Functions",E"Base",E"nextpow2",E"nextpow2(n)
 
    Next power of two not less than \"n\"
+
+"),
+
+(E"Mathematical Functions",E"Base",E"prevpow2",E"prevpow2(n)
+
+   Previous power of two not greater than \"n\"
 
 "),
 
@@ -2005,6 +2049,12 @@ collection[key...] = value
 
    Previous integer not greater than \"n\" that can be written \"a^i1
    * b^i2 * c^i3\" for integers \"i1\", \"i2\", \"i3\".
+
+"),
+
+(E"Mathematical Functions",E"Base",E"invmod",E"invmod(x, m)
+
+   Inverse of \"x\", modulo \"m\"
 
 "),
 
@@ -2202,6 +2252,34 @@ airyaiprime(x)
 
 "),
 
+(E"Data Formats",E"Base",E"isbool",E"isbool(x)
+
+   Test whether number or array is boolean
+
+"),
+
+(E"Data Formats",E"Base",E"int",E"int(x)
+
+   Convert a number or array to the default integer type on your
+   platform. Alternatively, \"x\" can be a string, which is parsed as
+   an integer.
+
+"),
+
+(E"Data Formats",E"Base",E"integer",E"integer(x)
+
+   Convert a number or array to integer type. If \"x\" is already of
+   integer type it is unchanged, otherwise it converts it to the
+   default integer type on your platform.
+
+"),
+
+(E"Data Formats",E"Base",E"isinteger",E"isinteger(x)
+
+   Test whether a number or array is of integer type
+
+"),
+
 (E"Data Formats",E"Base",E"int8",E"int8(x)
 
    Convert a number or array to \"Int8\" data type
@@ -2223,6 +2301,12 @@ airyaiprime(x)
 (E"Data Formats",E"Base",E"int64",E"int64(x)
 
    Convert a number or array to \"Int64\" data type
+
+"),
+
+(E"Data Formats",E"Base",E"int128",E"int128(x)
+
+   Convert a number or array to \"Int128\" data type
 
 "),
 
@@ -2250,6 +2334,12 @@ airyaiprime(x)
 
 "),
 
+(E"Data Formats",E"Base",E"uint128",E"uint128(x)
+
+   Convert a number or array to \"Uint128\" data type
+
+"),
+
 (E"Data Formats",E"Base",E"float32",E"float32(x)
 
    Convert a number or array to \"Float32\" data type
@@ -2262,6 +2352,21 @@ airyaiprime(x)
 
 "),
 
+(E"Data Formats",E"Base",E"float",E"float(x)
+
+   Convert a number, array, or string to a \"FloatingPoint\" data
+   type. For numeric data, the smallest suitable \"FloatingPoint\"
+   type is used. For strings, it converts to \"Float64\".
+
+"),
+
+(E"Data Formats",E"Base",E"float64_valued",E"float64_valued(x::Rational)
+
+   True if \"x\" can be losslessly represented as a \"Float64\" data
+   type
+
+"),
+
 (E"Data Formats",E"Base",E"complex64",E"complex64(r, i)
 
    Convert to \"r+i*im\" represented as a \"Complex64\" data type
@@ -2271,12 +2376,6 @@ airyaiprime(x)
 (E"Data Formats",E"Base",E"complex128",E"complex128(r, i)
 
    Convert to \"r+i*im\" represented as a \"Complex128\" data type
-
-"),
-
-(E"Data Formats",E"Base",E"float64",E"float64(x)
-
-   Convert a number or array to \"Float64\" data type
 
 "),
 
@@ -2363,9 +2462,29 @@ airyaiprime(x)
 
 "),
 
+(E"Numbers",E"Base",E"isinf",E"isinf(f)
+
+   Test whether a number is infinite
+
+"),
+
 (E"Numbers",E"Base",E"isnan",E"isnan(f)
 
    Test whether a floating point number is not a number (NaN)
+
+"),
+
+(E"Numbers",E"Base",E"inf",E"inf(f)
+
+   Returns infinity in the same floating point type as \"f\" (or \"f\"
+   can by the type itself)
+
+"),
+
+(E"Numbers",E"Base",E"nan",E"nan(f)
+
+   Returns NaN in the same floating point type as \"f\" (or \"f\" can
+   by the type itself)
 
 "),
 
@@ -2468,6 +2587,14 @@ airyaiprime(x)
    Number of ones trailing the binary representation of \"x\".
 
    **Example**: \"trailing_ones(3) -> 2\"
+
+"),
+
+(E"Numbers",E"Base",E"isprime",E"isprime(x::Integer) -> Bool
+
+      Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
+
+   **Example**: \"isprime(3) -> true\"
 
 "),
 
@@ -3010,35 +3137,139 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"lu",E"lu(A) -> LU
+(E"Linear Algebra",E"Base",E"factors",E"factors(F)
 
-   Compute LU factorization. LU is an \"LU factorization\" type that
-   can be used as an ordinary matrix.
-
-"),
-
-(E"Linear Algebra",E"Base",E"chol",E"chol(A)
-
-   Compute Cholesky factorization
+   Return the factors of a factorization \"F\". For example, in the
+   case of an LU decomposition, factors(LU) -> L, U, P
 
 "),
 
-(E"Linear Algebra",E"Base",E"qr",E"qr(A)
+(E"Linear Algebra",E"Base",E"lu",E"lu(A) -> L, U, P
 
-   Compute QR factorization
-
-"),
-
-(E"Linear Algebra",E"Base",E"qrp",E"qrp(A)
-
-   Compute QR factorization with pivoting
+   Compute the LU factorization of \"A\", such that \"A[P,:] = L*U\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"factors",E"factors(D)
+(E"Linear Algebra",E"Base",E"lufact",E"lufact(A) -> LUDense
 
-   Return the factors of a decomposition D. For an LU decomposition,
-   factors(LU) -> L, U, p
+   Compute the LU factorization of \"A\" and return a \"LUDense\"
+   object. \"factors(lufact(A))\" returns the triangular matrices
+   containing the factorization. The following functions are available
+   for \"LUDense\" objects: \"size\", \"factors\", \"\\\", \"inv\",
+   \"det\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"lufact!",E"lufact!(A) -> LUDense
+
+   \"lufact!\" is the same as \"lufact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+(E"Linear Algebra",E"Base",E"chol",E"chol(A[, LU]) -> F
+
+   Compute Cholesky factorization of a symmetric positive-definite
+   matrix \"A\" and return the matrix \"F\". If \"LU\" is \"L\"
+   (Lower), \"A = L*L'\". If \"LU\" is \"U\" (Upper), \"A = R'*R\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"cholfact",E"cholfact(A[, LU]) -> CholeskyDense
+
+   Compute the Cholesky factorization of a symmetric positive-definite
+   matrix \"A\" and return a \"CholeskyDense\" object. \"LU\" may be
+   'L' for using the lower part or 'U' for the upper part. The default
+   is to use 'U'. \"factors(cholfact(A))\" returns the triangular
+   matrix containing the factorization. The following functions are
+   available for \"CholeskyDense\" objects: \"size\", \"factors\",
+   \"\\\", \"inv\", \"det\". A \"LAPACK.PosDefException\" error is
+   thrown in case the matrix is not positive definite.
+
+"),
+
+(E"Linear Algebra",E"Base",E"cholpfact",E"cholpfact(A[, LU]) -> CholeskyPivotedDense
+
+   Compute the pivoted Cholesky factorization of a symmetric positive
+   semi-definite matrix \"A\" and return a \"CholeskyDensePivoted\"
+   object. \"LU\" may be 'L' for using the lower part or 'U' for the
+   upper part. The default is to use 'U'. \"factors(cholpfact(A))\"
+   returns the triangular matrix containing the factorization. The
+   following functions are available for \"CholeskyDensePivoted\"
+   objects: \"size\", \"factors\", \"\\\", \"inv\", \"det\". A
+   \"LAPACK.RankDeficientException\" error is thrown in case the
+   matrix is rank deficient.
+
+"),
+
+(E"Linear Algebra",E"Base",E"cholpfact!",E"cholpfact!(A[, LU]) -> CholeskyPivotedDense
+
+   \"cholpfact!\" is the same as \"cholpfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+(E"Linear Algebra",E"Base",E"qr",E"qr(A) -> Q, R
+
+   Compute the QR factorization of \"A\" such that \"A = Q*R\". Also
+   see \"qrd\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrfact",E"qrfact(A)
+
+   Compute the QR factorization of \"A\" and return a \"QRDense\"
+   object. \"factors(qrfact(A))\" returns \"Q\" and \"R\". The
+   following functions are available for \"QRDense\" objects:
+   \"size\", \"factors\", \"qmulQR\", \"qTmulQR\", \"\\\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrfact!",E"qrfact!(A)
+
+   \"qrfact!\" is the same as \"qrfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrp",E"qrp(A) -> Q, R, P
+
+   Compute the QR factorization of \"A\" with pivoting, such that
+   \"A*I[:,P] = Q*R\", where \"I\" is the identity matrix. Also see
+   \"qrpfact\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrpfact",E"qrpfact(A) -> QRPivotedDense
+
+   Compute the QR factorization of \"A\" with pivoting and return a
+   \"QRDensePivoted\" object. \"factors(qrpfact(A))\" returns \"Q\"
+   and \"R\". The following functions are available for
+   \"QRDensePivoted\" objects: \"size\", \"factors\", \"qmulQR\",
+   \"qTmulQR\", \"\\\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrpfact!",E"qrpfact!(A) -> QRPivotedDense
+
+   \"qrpfact!\" is the same as \"qrpfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+(E"Linear Algebra",E"Base",E"qmulQR",E"qmulQR(QR, A)
+
+   Perform Q*A efficiently, where Q is a an orthogonal matrix defined
+   as the product of k elementary reflectors from the QR
+   decomposition.
+
+"),
+
+(E"Linear Algebra",E"Base",E"qTmulQR",E"qTmulQR(QR, A)
+
+   Perform Q'>>*<<A efficiently, where Q is a an orthogonal matrix
+   defined as the product of k elementary reflectors from the QR
+   decomposition.
 
 "),
 
