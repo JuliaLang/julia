@@ -372,6 +372,14 @@ else
 JULIA_EXECUTABLE = $(JULIAHOME)/julia
 endif
 
+ifeq ($(OS), Darwin)
+OSX_VER = $(shell sw_vers -productVersion | cut -b 1-4)
+ifeq ($(OSX_VER), 10.6)
+USE_SYSTEM_LIBM = 1
+USE_SYSTEM_BLAS = 1
+USE_SYSTEM_LAPACK = 1
+endif
+endif
 
 # Colors for make
 ifndef USE_QUIET
