@@ -502,7 +502,7 @@ Strings
 
 .. function:: search(string, chars, [start])
 
-   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a tuple with 2 integers: the index of the match and the first valid index past the match (or an index beyond the end of the string if the match is at the end); it returns ``(0,0)`` if no match was found, and ``(start,start)`` if ``chars`` is empty.
+   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
 
 .. function:: replace(string, pat, r[, n])
 
@@ -571,15 +571,15 @@ Strings
 I/O
 ---
 
-.. data:: stdout_stream
+.. data:: STDOUT
 
    Global variable referring to the standard out stream.
 
-.. data:: stderr_stream
+.. data:: STDERR
 
    Global variable referring to the standard error stream.
 
-.. data:: stdin_stream
+.. data:: STDIN
 
    Global variable referring to the standard input stream.
 
@@ -600,7 +600,7 @@ I/O
     a+   read, write, create, append
    ==== =================================
 
-.. function:: memio([size])
+.. function:: IOBuffer([size])
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
@@ -644,6 +644,9 @@ I/O
 
    Seek a stream relative to the current position.
 
+.. function:: eof(stream)
+
+   Tests whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this function will block to wait for more data if necessary, and then return ``false``. Therefore it is always safe to read one byte after seeing ``eof`` return ``false``.
 
 Text I/O
 --------
@@ -684,7 +687,7 @@ Text I/O
 
    Read all lines as an array.
 
-.. function:: EachLine(stream)
+.. function:: each_line(stream)
 
    Create an iterable object that will yield each line from a stream.
 
