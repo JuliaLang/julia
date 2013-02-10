@@ -1490,6 +1490,23 @@ Integers
    
    **Example**: ``trailing_ones(3) -> 2``
 
+.. function:: isprime(x::Integer) -> Bool
+
+   Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
+
+  **Example**: ``isprime(3) -> true``
+
+.. function: isodd(x::Integer) -> Bool
+
+   Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
+
+   **Example**: ``isodd(9) -> false``
+
+.. function: iseven(x::Integer) -> Bool
+
+   Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
+
+   **Example**: ``iseven(1) -> false``
 
 Random Numbers
 --------------
