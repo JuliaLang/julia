@@ -77,4 +77,4 @@ function bigfib(n)
       s[1]
    end
 end
-@test length(string(bigfib(10000000))) == 2089877
+@test length(string(bigfib(1000000))) == 208988

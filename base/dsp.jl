@@ -142,7 +142,7 @@ end
 
 # Discrete cosine and sine transforms via FFTW's r2r transforms;
 # we follow the Matlab convention and adopt a unitary normalization here.
-# Unlike Matlab we compute the multidimensional trnasform by default,
+# Unlike Matlab we compute the multidimensional transform by default,
 # similar to the Julia fft functions.
 
 fftwcopy{T<:fftwNumber}(X::StridedArray{T}) = copy(X)
