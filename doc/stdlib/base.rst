@@ -2000,17 +2000,29 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the eigenvalues of ``A``.
 
-.. function:: svd(A) -> U, S, V
+.. function:: svdfact(A, [thin]) -> SVDDense
 
-   Compute the SVD of A, returning ``U``, ``S``, and ``V`` such that ``A = U*S*V'``.
+   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVDDense`` object. ``factors(svdfact(A))`` returns ``U``, ``S``, and ``Vt``, such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
-.. function:: svdt(A) -> U, S, Vt
+.. function:: svdfact!(A, [thin]) -> SVDDense
 
-   Compute the SVD of A, returning ``U``, ``S``, and ``Vt`` such that ``A = U*S*Vt``.
+   ``svdfact!`` is the same as ``svdfact`` but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned.
+
+.. function:: svd(A, [thin]) -> U, S, V
+
+   Compute the SVD of A, returning ``U``, ``S``, and ``V`` such that ``A = U*S*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned.
+
+.. function:: svdt(A, [thin]) -> U, S, Vt
+
+   Compute the SVD of A, returning ``U``, ``S``, and ``Vt`` such that ``A = U*S*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
 .. function:: svdvals(A)
 
    Returns the singular values of ``A``.
+
+.. function:: svdvals!(A)
+
+   Returns the singular values of ``A``, while saving space by overwriting the input.
 
 .. function:: svdfact(A, B) -> GSVDDense
 

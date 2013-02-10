@@ -151,6 +151,16 @@ function globalEventLoop()
     eventloop()
 end
 
+function svd(a::StridedMatrix, vecs::Bool, thin::Bool)
+    warn_once("The second argument ``vecs`` is no longer supported. Use svd(a, thin) instead.")
+    svd(a, thin)
+end
+
+function svdt(a::StridedMatrix, vecs::Bool, thin::Bool)
+    warn_once("The second argument ``vecs`` is no longer supported. Use svdt(a, thin) instead.")
+    svdt(a, thin)
+end
+
 # discontinued functions
 
 export randexp, randg, randbeta, randchi

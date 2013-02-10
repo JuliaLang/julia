@@ -75,7 +75,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @assert_approx_eq sort(imag(v)) sort(imag(d))
         @test istriu(u) || isreal(a)
 
-        u,s,vt = svdt(a)               # singular value decomposition
+        u,s,vt = svdt(a)                # singular value decomposition
         @assert_approx_eq u*diagmm(s,vt) a
     
         gsvd = svd(a,a[1:5,:])         # Generalized svd

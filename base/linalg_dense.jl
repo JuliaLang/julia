@@ -727,53 +727,53 @@ eig(x::Number, vecs::Bool) = vecs ? (x, one(x)) : x
 eig(x) = eig(x, true)
 eigvals(x) = eig(x, false)
 
-# This is the svd based on the LAPACK GESVD, which is slower, but takes
-# lesser memory. It should be made available through a keyword argument
-# at a later date.
-#
-# function svd{T<:BlasFloat}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
-#     m,n = size(A)
-#     if m == 0 || n == 0
-#         if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
-#         return (zeros(T, 0, 0), zeros(T, 0), zeros(T, 0, 0))
-#     end
-#     if vecs; return LAPACK.gesvd!(thin ? 'S' : 'A', thin ? 'S' : 'A', copy(A)); end
-#     LAPACK.gesvd!('N', 'N', copy(A))
-# end
-#
-# svd{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svd(float64(x),vecs,thin)
-# svd(A::StridedMatrix) = svd(A,true,false)
-# svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
-# svdvals(A) = svd(A,false,true)[2]
+# svd
+type SVDDense{T,Tr} <: Factorization{T}
+    U::Matrix{T}
+    S::Vector{Tr}
+    V::Matrix{T}
+end
 
-svdt(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
-svdt(x::Number,vecs::Bool,thin::Bool) = svdt(x, vecs, thin)
-
-function svdt{T<:BlasFloat}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
+function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, thin::Bool)
     m,n = size(A)
     if m == 0 || n == 0
-        if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
+        u,s,v = (eye(m, thin ? n : m), zeros(0), eye(n,n))
+    else
+        u,s,v = LAPACK.gesdd!(thin ? 'S' : 'A', A)
+    end
+    return SVDDense(u,s,v)
+end
+
+svdfact!(A::StridedMatrix) = svdfact(A, false)
+
+svdfact(A::StridedMatrix, thin::Bool) = svdfact!(copy(A), thin)
+svdfact(A::StridedMatrix) = svdfact(A, false)
+
+factors(F::SVDDense) = (F.U, F.S, F.V)
+
+function svdvals!(A::StridedMatrix)
+    m,n = size(A)
+    if m == 0 || n == 0
         return (zeros(T, 0, 0), zeros(T, 0), zeros(T, 0, 0))
     end
-    if vecs; return LAPACK.gesdd!(thin ? 'S' : 'A', copy(A)); end
-    LAPACK.gesdd!('N', copy(A))
+    U, S, V = LAPACK.gesdd!('N', A)
+    return S
 end
 
-svdt{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svdt(float64(x),vecs,thin)
-svdt(A::StridedMatrix) = svdt(A,true,false)
-svdt(A::StridedMatrix, thin::Bool) = svdt(A,true,thin)
+svdvals(A) = svdvals!(copy(A))
 
-svdt(x::Number,vecs::Bool,thin::Bool) = vecs ? (x==0?one(x):x/abs(x),abs(x),one(x)) : ([],abs(x),[])
-
-function svd(x::StridedMatrix,vecs::Bool,thin::Bool) 
-    (u, s, vt) = svdt(x,vecs,thin)
-    return (u, s, vt')
+function svd(A::StridedMatrix, thin::Bool)
+    u,s,v = factors(svdfact(A, thin))
+    return (u,s,v')
 end
 
-svd(A::StridedMatrix) = svd(A,true,false)
-svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
+svdt(A::StridedMatrix, thin::Bool) = factors(svdfact(A, thin))
+svdt(A::StridedMatrix) = svdt(A, false)
+svdt(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
 
-svdvals(A::StridedMatrix) = svdt(A,false,true)[2]
+svd(A::StridedMatrix) = svd(A, false)
+svd(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
+
 
 # Generalized svd
 type GSVDDense{T} <: Factorization{T}
