@@ -934,11 +934,9 @@ collection[key...] = value
    characters, a string, or a regular expression (but regular
    expressions are only allowed on contiguous strings, such as ASCII
    or UTF-8 strings). The third argument optionally specifies a
-   starting index. The return value is a tuple with 2 integers: the
-   index of the match and the first valid index past the match (or an
-   index beyond the end of the string if the match is at the end); it
-   returns \"(0,0)\" if no match was found, and \"(start,start)\" if
-   \"chars\" is empty.
+   starting index. The return value is a range of indexes where the
+   matching sequence is found, such that \"s[search(s,x)] == x\". The
+   return value is \"0:-1\" if there is no match.
 
 "),
 
@@ -1055,19 +1053,31 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"stdout_stream",E"stdout_stream
+(E"Strings",E"Base",E"charwidth",E"charwidth(c)
+
+   Gives the number of columns needed to print a character.
+
+"),
+
+(E"Strings",E"Base",E"strwidth",E"strwidth(s)
+
+   Gives the number of columns needed to print a string.
+
+"),
+
+(E"I/O",E"Base",E"STDOUT",E"STDOUT
 
    Global variable referring to the standard out stream.
 
 "),
 
-(E"I/O",E"Base",E"stderr_stream",E"stderr_stream
+(E"I/O",E"Base",E"STDERR",E"STDERR
 
    Global variable referring to the standard error stream.
 
 "),
 
-(E"I/O",E"Base",E"stdin_stream",E"stdin_stream
+(E"I/O",E"Base",E"STDIN",E"STDIN
 
    Global variable referring to the standard input stream.
 
@@ -1104,7 +1114,7 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"memio",E"memio([size])
+(E"I/O",E"Base",E"IOBuffer",E"IOBuffer([size])
 
    Create an in-memory I/O stream, optionally specifying how much
    initial space is needed.
@@ -1179,6 +1189,15 @@ collection[key...] = value
 
 "),
 
+(E"I/O",E"Base",E"eof",E"eof(stream)
+
+   Tests whether an I/O stream is at end-of-file. If the stream is not
+   yet exhausted, this function will block to wait for more data if
+   necessary, and then return \"false\". Therefore it is always safe
+   to read one byte after seeing \"eof\" return \"false\".
+
+"),
+
 (E"Text I/O",E"Base",E"show",E"show(x)
 
    Write an informative text representation of a value to the current
@@ -1239,7 +1258,7 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"Base",E"EachLine",E"EachLine(stream)
+(E"Text I/O",E"Base",E"each_line",E"each_line(stream)
 
    Create an iterable object that will yield each line from a stream.
 
@@ -1985,7 +2004,13 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"factor",E"factor(n)
 
-   Compute the prime factorization of an integer \"n\"
+   Compute the prime factorization of an integer \"n\". Returns a
+   dictionary. The keys of the dictionary correspond to the factors,
+   and hence are of the same type as \"n\". The value associated with
+   each key indicates the number of times the factor appears in the
+   factorization.
+
+   **Example**: 100=2*2*5*5; then, \"factor(100) -> [5=>2,2=>2]\"
 
 "),
 
@@ -3285,23 +3310,69 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svd",E"svd(A) -> U, S, V
+(E"Linear Algebra",E"Base",E"svdfact",E"svdfact(A[, thin]) -> SVDDense
 
-   Compute the SVD of A, returning \"U\", \"S\", and \"V\" such that
-   \"A = U*S*V'\".
+   Compute the Singular Value Decomposition (SVD) of \"A\" and return
+   an \"SVDDense\" object. \"factors(svdfact(A))\" returns \"U\",
+   \"S\", and \"Vt\", such that \"A = U*diagm(S)*Vt\". If \"thin\" is
+   \"true\", an economy mode decomposition is returned.
 
 "),
 
-(E"Linear Algebra",E"Base",E"svdt",E"svdt(A) -> U, S, Vt
+(E"Linear Algebra",E"Base",E"svdfact!",E"svdfact!(A[, thin]) -> SVDDense
+
+   \"svdfact!\" is the same as \"svdfact\" but saves space by
+   overwriting the input A, instead of creating a copy. If \"thin\" is
+   \"true\", an economy mode decomposition is returned.
+
+"),
+
+(E"Linear Algebra",E"Base",E"svd",E"svd(A[, thin]) -> U, S, V
+
+   Compute the SVD of A, returning \"U\", \"S\", and \"V\" such that
+   \"A = U*S*V'\". If \"thin\" is \"true\", an economy mode
+   decomposition is returned.
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdt",E"svdt(A[, thin]) -> U, S, Vt
 
    Compute the SVD of A, returning \"U\", \"S\", and \"Vt\" such that
-   \"A = U*S*Vt\".
+   \"A = U*S*Vt\". If \"thin\" is \"true\", an economy mode
+   decomposition is returned.
 
 "),
 
 (E"Linear Algebra",E"Base",E"svdvals",E"svdvals(A)
 
    Returns the singular values of \"A\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdvals!",E"svdvals!(A)
+
+   Returns the singular values of \"A\", while saving space by
+   overwriting the input.
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdfact",E"svdfact(A, B) -> GSVDDense
+
+   Compute the generalized SVD of \"A\" and \"B\", returning a
+   \"GSVDDense\" Factorization object.
+
+"),
+
+(E"Linear Algebra",E"Base",E"svd",E"svd(A, B) -> U, V, X, C, S
+
+   Compute the generalized SVD of \"A\" and \"B\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdvals",E"svdvals(A, B)
+
+   Return only the singular values from the generalized singular value
+   decomposition of \"A\" and \"B\".
 
 "),
 
@@ -4195,41 +4266,26 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"Base",E"darray",E"darray(init, type, dims[, distdim, procs, dist])
+(E"Distributed Arrays",E"Base",E"DArray",E"DArray(init, dims[, procs, dist])
 
-   Construct a distributed array. \"init\" is a function of three
-   arguments that will run on each processor, and should return an
-   \"Array\" holding the local data for the current processor. Its
-   arguments are \"(T,d,da)\" where \"T\" is the element type, \"d\"
-   is the dimensions of the needed local piece, and \"da\" is the new
-   \"DArray\" being constructed (though, of course, it is not fully
-   initialized). \"type\" is the element type. \"dims\" is the
-   dimensions of the entire \"DArray\". \"distdim\" is the dimension
-   to distribute in. \"procs\" is a vector of processor ids to use.
-   \"dist\" is a vector giving the first index of each contiguous
-   distributed piece, such that the nth piece consists of indexes
-   \"dist[n]\" through \"dist[n+1]-1\". If you have a vector \"v\" of
-   the sizes of the pieces, \"dist\" can be computed as
-   \"cumsum([1,v])\". Fortunately, all arguments after \"dims\" are
-   optional.
+   Construct a distributed array. \"init\" is a function accepting a
+   tuple of index ranges. This function should return a chunk of the
+   distributed array for the specified indexes. \"dims\" is the
+   overall size of the distributed array. \"procs\" optionally
+   specifies a vector of processor IDs to use. \"dist\" is an integer
+   vector specifying how many chunks the distributed array should be
+   divided into in each dimension.
 
 "),
 
-(E"Distributed Arrays",E"Base",E"darray",E"darray(f, A)
-
-   Transform \"DArray\" \"A\" to another of the same type and
-   distribution by applying function \"f\" to each block of \"A\".
-
-"),
-
-(E"Distributed Arrays",E"Base",E"dzeros",E"dzeros([type], dims, ...)
+(E"Distributed Arrays",E"Base",E"dzeros",E"dzeros(dims, ...)
 
    Construct a distributed array of zeros. Trailing arguments are the
    same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"Base",E"dones",E"dones([type], dims, ...)
+(E"Distributed Arrays",E"Base",E"dones",E"dones(dims, ...)
 
    Construct a distributed array of ones. Trailing arguments are the
    same as those accepted by \"darray\".
@@ -4257,14 +4313,7 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"Base",E"dcell",E"dcell(dims, ...)
-
-   Construct a distributed cell array. Trailing arguments are the same
-   as those accepted by \"darray\".
-
-"),
-
-(E"Distributed Arrays",E"Base",E"distribute",E"distribute(a[, distdim])
+(E"Distributed Arrays",E"Base",E"distribute",E"distribute(a)
 
    Convert a local array to distributed
 
@@ -4276,22 +4325,9 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"Base",E"changedist",E"changedist(d, distdim)
-
-   Change the distributed dimension of a \"DArray\"
-
-"),
-
 (E"Distributed Arrays",E"Base",E"myindexes",E"myindexes(d)
 
    A tuple describing the indexes owned by the local processor
-
-"),
-
-(E"Distributed Arrays",E"Base",E"owner",E"owner(d, i)
-
-   Get the id of the processor holding index \"i\" in the distributed
-   dimension
 
 "),
 
@@ -4301,15 +4337,34 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"Base",E"distdim",E"distdim(d)
+(E"System",E"Base",E"run",E"run(command)
 
-   Get the distributed dimension of \"d\"
+   Run a command object, constructed with backticks. Throws an error
+   if anything goes wrong, including the process exiting with a non-
+   zero status.
 
 "),
 
-(E"System",E"Base",E"run",E"run(command)
+(E"System",E"Base",E"success",E"success(command)
 
-   Run a command object, constructed with backticks.
+   Run a command object, constructed with backticks, and tell whether
+   it was successful (exited with a code of 0).
+
+"),
+
+(E"System",E"Base",E"readsfrom",E"readsfrom(command)
+
+   Starts running a command asynchronously, and returns a tuple
+   (stream,process). The first value is a stream reading from the
+   process' standard output.
+
+"),
+
+(E"System",E"Base",E"writesto",E"writesto(command)
+
+   Starts running a command asynchronously, and returns a tuple
+   (stream,process). The first value is a stream writing to the
+   process' standard input.
 
 "),
 
