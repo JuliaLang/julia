@@ -1852,25 +1852,65 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the norm of a ``Vector`` or a ``Matrix``
 
-.. function:: lu(A) -> LU
+.. function:: factors(F)
 
-   Compute LU factorization. LU is an "LU factorization" type that can be used as an ordinary matrix.
+   Return the factors of a factorization ``F``. For eg. In the case of an LU decomposition, factors(LU) -> L, U, P
 
-.. function:: chol(A)
+.. function:: lu(A) -> L, U, P
 
-   Compute Cholesky factorization
+   Compute the LU factorization of ``A``, such that ``L*U = A[P,:]``.
 
-.. function:: qr(A)
+.. function:: lud(A) -> LUDense
 
-   Compute QR factorization
+   Compute the LU factorization of ``A`` and return a ``LUDense`` object. ``factors(lud(A))`` returns the triangular matrices containing the factorization. The following functions are available for ``LUDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``.
 
-.. function:: qrp(A)
+.. function:: lud!(A) -> LUDense
 
-   Compute QR factorization with pivoting
+   ``lud!`` is the same as ``lud`` but saves space by overwriting the input A, instead of creating a copy.
 
-.. function:: factors(D)
+.. function:: chol(A, [LU]) -> F
 
-   Return the factors of a decomposition D. For an LU decomposition, factors(LU) -> L, U, p
+   Compute Cholesky factorization of ``A`` and return the matrix ``F``. If ``LU`` is ``L`` (Lower), ``A = L*L'``. If ``LU`` is ``U`` (Upper), ``A = R'*R``.
+
+.. function:: chold(A, [LU]) -> CholeskyDense
+
+   Compute the Cholesky factorization of ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(chold(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
+
+.. function: chold!(A, [LU]) -> CholeskyDense
+
+   ``chold!`` is the same as ``chold`` but saves space by overwriting the input A, instead of creating a copy.
+
+..  function:: cholpd(A, [LU]) -> CholeskyDensePivoted
+
+   Compute the pivoted Cholesky factorization of ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholpd(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
+
+.. function:: cholpd!(A, [LU]) -> CholeskyDensePivoted
+
+   ``cholpd!`` is the same as ``cholpd`` but saves space by overwriting the input A, instead of creating a copy.
+
+.. function:: qr(A) -> Q, R
+
+   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrd``.
+
+.. function:: qrd(A)
+
+   Compute the QR factorization of ``A`` and return a ``QRDense`` object. ``factors(qrd(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDense`` objects: ``size``, ``factors``, ``*``, ``Ac_mul_B``, ``\``. 
+
+.. function:: qrd!(A)
+
+   ``qrd!`` is the same as ``qrd`` but saves space by overwriting the input A, instead of creating a copy.
+
+.. function:: qrp(A) -> Q, R, P
+
+   Compute the QR factorization of ``A`` with pivoting. Also see ``qrpd``.
+
+.. function:: qrpd(A)
+
+   Compute the QR factorization of ``A`` with pivoting and return a ``QRDensePivoted`` object. ``factors(qrpd(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``factors``, ``*``, ``Ac_mul_B``, ``\``. 
+
+.. function:: qrpd!(A)
+
+   ``qrpd!`` is the same as ``qrpd`` but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: eig(A) -> D, V
 
