@@ -632,7 +632,7 @@ export
     intersect,
     intersect!,
     isempty,
-    key,
+    getkey,
     keys,
     length,
     map,

@@ -91,6 +91,7 @@ end
 @deprecate  cholpd        cholpfact
 @deprecate  qrd           qrfact
 @deprecate  qrpd          qrpfact
+@deprecate  key           getkey
 
 export grow!
 function grow!(a, d)
