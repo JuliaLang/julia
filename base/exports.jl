@@ -998,8 +998,8 @@ export
     wait,
 
 # distributed arrays
-    defaultdist,
     distribute,
+    dfill,
     dones,
     drand,
     drandn,
