@@ -1169,7 +1169,9 @@ Mathematical Functions
 
 .. function:: factor(n)
 
-   Compute the prime factorization of an integer ``n``
+   Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
+
+   **Example**: :math:`100=2*2*5*5`; then, ``factor(100) -> [5=>2,2=>2]``
 
 .. function:: gcd(x,y)
 
