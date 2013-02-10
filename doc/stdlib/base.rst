@@ -1858,7 +1858,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: lu(A) -> L, U, P
 
-   Compute the LU factorization of ``A``, such that ``L*U = A[P,:]``.
+   Compute the LU factorization of ``A``, such that ``A[P,:] = L*U``.
 
 .. function:: lud(A) -> LUDense
 
@@ -1870,21 +1870,21 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: chol(A, [LU]) -> F
 
-   Compute Cholesky factorization of ``A`` and return the matrix ``F``. If ``LU`` is ``L`` (Lower), ``A = L*L'``. If ``LU`` is ``U`` (Upper), ``A = R'*R``.
+   Compute Cholesky factorization of a symmetric positive-definite matrix ``A`` and return the matrix ``F``. If ``LU`` is ``L`` (Lower), ``A = L*L'``. If ``LU`` is ``U`` (Upper), ``A = R'*R``.
 
 .. function:: chold(A, [LU]) -> CholeskyDense
 
-   Compute the Cholesky factorization of ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(chold(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
+   Compute the Cholesky factorization of a symmetric positive-definite matrix ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(chold(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
 
 .. function: chold!(A, [LU]) -> CholeskyDense
 
    ``chold!`` is the same as ``chold`` but saves space by overwriting the input A, instead of creating a copy.
 
-..  function:: cholpd(A, [LU]) -> CholeskyDensePivoted
+..  function:: cholpd(A, [LU]) -> CholeskyPivotedDense
 
-   Compute the pivoted Cholesky factorization of ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholpd(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
+   Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholpd(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
 
-.. function:: cholpd!(A, [LU]) -> CholeskyDensePivoted
+.. function:: cholpd!(A, [LU]) -> CholeskyPivotedDense
 
    ``cholpd!`` is the same as ``cholpd`` but saves space by overwriting the input A, instead of creating a copy.
 
@@ -1902,13 +1902,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qrp(A) -> Q, R, P
 
-   Compute the QR factorization of ``A`` with pivoting. Also see ``qrpd``.
+   Compute the QR factorization of ``A`` with pivoting, such that ``A*I[:,P] = Q*R``, where ``I`` is the identity matrix. Also see ``qrpd``.
 
-.. function:: qrpd(A)
+.. function:: qrpd(A) -> QRPivotedDense
 
    Compute the QR factorization of ``A`` with pivoting and return a ``QRDensePivoted`` object. ``factors(qrpd(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``factors``, ``*``, ``Ac_mul_B``, ``\``. 
 
-.. function:: qrpd!(A)
+.. function:: qrpd!(A) -> QRPivotedDense
 
    ``qrpd!`` is the same as ``qrpd`` but saves space by overwriting the input A, instead of creating a copy.
 
