@@ -85,6 +85,7 @@ end
 @deprecate  cor_pearson   cor
 @deprecate  cov_pearson   cov
 @deprecate  areduce       reducedim
+@deprecate  tmpnam        tempname
 
 export grow!
 function grow!(a, d)

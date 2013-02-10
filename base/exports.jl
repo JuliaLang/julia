@@ -1045,7 +1045,6 @@ export
     mkdir,
     mkpath,
     rmdir,
-    tmpnam,
     tempdir,
     tempname,
     mktemp,

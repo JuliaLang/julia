@@ -46,10 +46,6 @@ function getipaddr()
     bytestring(convert(Ptr{Uint8},ip))
 end
 
-## get a temporary file name ##
-
-tmpnam() = bytestring(ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8},), C_NULL))
-
 ## Memory related ##
 
 c_free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
