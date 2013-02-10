@@ -126,6 +126,10 @@ Types
 
    The highest finite value representable by the given floating-point type
 
+.. function:: maxintfloat(type)
+
+   The largest integer losslessly representable by the given floating-point type
+
 .. function:: sizeof(type)
 
    Size, in bytes, of the canonical binary representation of the given type, if any.
@@ -759,17 +763,25 @@ Mathematical Functions
 
    Largest integer less than or equal to a/b
 
-.. function:: mod
+.. function:: mod(x,m)
 
-   Modulus after division
+   Modulus after division, returning in the range [0,m)
 
 .. function:: rem %
 
    Remainder after division
 
+.. function:: mod1(x,m)
+
+   Modulus after division, returning in the range (0,m]
+
 .. function:: //
 
    Rational division
+
+.. function:: num(x)
+
+   Numerator of the rational representation of ``x``
 
 .. function:: den(x)
 
@@ -1152,6 +1164,10 @@ Mathematical Functions
 
    Compute ``factorial(n)/factorial(k)``
 
+.. function:: factor(n)
+
+   Compute the prime factorization of an integer ``n``
+
 .. function:: gcd(x,y)
 
    Greatest common divisor
@@ -1160,9 +1176,21 @@ Mathematical Functions
 
    Least common multiple
 
+.. function:: gcdx(x,y)
+
+   Greatest common divisor, also returning integer coefficients ``u`` and ``v`` that solve ``ux+vy == gcd(x,y)``
+
+.. function:: ispow2(n)
+
+   Test whether ``n`` is a power of two
+
 .. function:: nextpow2(n)
 
    Next power of two not less than ``n``
+
+.. function:: prevpow2(n)
+
+   Previous power of two not greater than ``n``
 
 .. function:: nextpow(a, n)
 
@@ -1179,6 +1207,10 @@ Mathematical Functions
 .. function:: prevprod([a,b,c], n)
 
    Previous integer not greater than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
+
+.. function:: invmod(x,m)
+
+   Inverse of ``x``, modulo ``m``
 
 .. function:: powermod(x, p, m)
 
@@ -1306,6 +1338,22 @@ Data Formats
 
    Convert a number or numeric array to boolean
 
+.. function:: isbool(x)
+
+   Test whether number or array is boolean
+
+.. function:: int(x)
+
+   Convert a number or array to the default integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an integer.
+
+.. function:: integer(x)
+
+   Convert a number or array to integer type. If ``x`` is already of integer type it is unchanged, otherwise it converts it to the default integer type on your platform.
+
+.. function:: isinteger(x)
+
+   Test whether a number or array is of integer type
+
 .. function:: int8(x)
 
    Convert a number or array to ``Int8`` data type
@@ -1321,6 +1369,10 @@ Data Formats
 .. function:: int64(x)
 
    Convert a number or array to ``Int64`` data type
+
+.. function:: int128(x)
+
+   Convert a number or array to ``Int128`` data type
 
 .. function:: uint8(x)
 
@@ -1338,6 +1390,10 @@ Data Formats
 
    Convert a number or array to ``Uint64`` data type
 
+.. function:: uint128(x)
+
+   Convert a number or array to ``Uint128`` data type
+
 .. function:: float32(x)
 
    Convert a number or array to ``Float32`` data type
@@ -1346,6 +1402,14 @@ Data Formats
 
    Convert a number or array to ``Float64`` data type
 
+.. function:: float(x)
+
+   Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. For strings, it converts to ``Float64``.
+
+.. function:: float64_valued(x::Rational)
+
+   True if ``x`` can be losslessly represented as a ``Float64`` data type
+
 .. function:: complex64(r,i)
 
    Convert to ``r+i*im`` represented as a ``Complex64`` data type
@@ -1353,10 +1417,6 @@ Data Formats
 .. function:: complex128(r,i)
 
    Convert to ``r+i*im`` represented as a ``Complex128`` data type
-
-.. function:: float64(x)
-
-   Convert a number or array to ``Float64`` data type
 
 .. function:: char(x)
 
@@ -1413,9 +1473,21 @@ Numbers
 
    Test whether a number is finite
 
+.. function:: isinf(f)
+
+   Test whether a number is infinite
+
 .. function:: isnan(f)
 
    Test whether a floating point number is not a number (NaN)
+
+.. function:: inf(f)
+
+   Returns infinity in the same floating point type as ``f`` (or ``f`` can by the type itself)
+
+.. function:: nan(f)
+
+   Returns NaN in the same floating point type as ``f`` (or ``f`` can by the type itself)
 
 .. function:: nextfloat(f)
 
@@ -1854,7 +1926,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: factors(F)
 
-   Return the factors of a factorization ``F``. For eg. In the case of an LU decomposition, factors(LU) -> L, U, P
+   Return the factors of a factorization ``F``. For example, in the case of an LU decomposition, factors(LU) -> L, U, P
 
 .. function:: lu(A) -> L, U, P
 
