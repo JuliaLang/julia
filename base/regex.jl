@@ -85,8 +85,6 @@ end
 ismatch(r::Regex, s::String) =
     PCRE.exec(r.regex, C_NULL, bytestring(s), 0, r.options & PCRE.EXECUTE_MASK, false)
 
-contains(s::String, r::Regex) = ismatch(r,s)
-
 function match(re::Regex, str::ByteString, idx::Integer)
     opts = re.options & PCRE.EXECUTE_MASK
     m, n = PCRE.exec(re.regex, C_NULL, str, idx-1, opts, true)
