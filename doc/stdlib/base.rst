@@ -1490,6 +1490,12 @@ Integers
    
    **Example**: ``trailing_ones(3) -> 2``
 
+.. function: factor(x::Integer)
+
+   Find the prime factorization of ``x``. Returns a dictionary. The keys of the dictionary are of the same type as ``x``, and the values are of type ``Int``. The keys correspond to the factors, and the value associated with each key indicates the number of times the factor appears in the factorization.
+
+   **Example**: :math"`100=2*2*5*5`; then, ``factor(100) -> [5=2,2=>2]``
+
 
 Random Numbers
 --------------
