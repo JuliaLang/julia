@@ -84,6 +84,7 @@ end
 @deprecate  flipbits      (~)
 @deprecate  cor_pearson   cor
 @deprecate  cov_pearson   cov
+@deprecate  areduce       reducedim
 
 export grow!
 function grow!(a, d)

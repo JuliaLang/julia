@@ -421,8 +421,7 @@ export
     zeta,
 
 # arrays
-    amap,
-    areduce,
+    reducedim,
     bsxfun,
     cartesian_map,
     cat,
@@ -437,12 +436,6 @@ export
     cummin,
     cummax,
     diff,
-    each_col,
-    each_col!,
-    each_row,
-    each_row!,
-    each_vec,
-    each_vec!,
     fill,
     fill!,
     find,
