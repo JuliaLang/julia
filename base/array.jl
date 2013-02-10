@@ -1348,15 +1348,15 @@ end
 
 reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 : size(A,i)))
 
-areduce(f::Function, A, region, v0) =
-    areduce(f, A, region, v0, similar(A, reduced_dims(A, region)))
+reducedim(f::Function, A, region, v0) =
+    reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
 
 # TODO:
 # - find out why inner loop with dimsA[i] instead of size(A,i) is way too slow
 
-let areduce_cache = nothing
+let reducedim_cache = nothing
 # generate the body of the N-d loop to compute a reduction
-function gen_areduce_func(n, f)
+function gen_reducedim_func(n, f)
     ivars = { symbol(string("i",i)) for i=1:n }
     # limits and vars for reduction loop
     lo    = { symbol(string("lo",i)) for i=1:n }
@@ -1391,12 +1391,12 @@ function gen_areduce_func(n, f)
     end
 end
 
-global areduce
-function areduce(f::Function, A, region, v0, R)
+global reducedim
+function reducedim(f::Function, A, region, v0, R)
     ndimsA = ndims(A)
 
-    if is(areduce_cache,nothing)
-        areduce_cache = Dict()
+    if is(reducedim_cache,nothing)
+        reducedim_cache = Dict()
     end
 
     key = ndimsA
@@ -1411,12 +1411,12 @@ function areduce(f::Function, A, region, v0, R)
         key = (fname, ndimsA)
     end
 
-    if !has(areduce_cache,key)
-        fexpr = gen_areduce_func(ndimsA, fname)
+    if !has(reducedim_cache,key)
+        fexpr = gen_reducedim_func(ndimsA, fname)
         func = eval(fexpr)
-        areduce_cache[key] = func
+        reducedim_cache[key] = func
     else
-        func = areduce_cache[key]
+        func = reducedim_cache[key]
     end
 
     func(f, A, region, R, v0)
@@ -1425,14 +1425,14 @@ function areduce(f::Function, A, region, v0, R)
 end
 end
 
-max{T}(A::AbstractArray{T}, b::(), region) = areduce(max,A,region,typemin(T))
-min{T}(A::AbstractArray{T}, b::(), region) = areduce(min,A,region,typemax(T))
-sum{T}(A::AbstractArray{T}, region)  = areduce(+,A,region,zero(T))
-prod{T}(A::AbstractArray{T}, region) = areduce(*,A,region,one(T))
+max{T}(A::AbstractArray{T}, b::(), region) = reducedim(max,A,region,typemin(T))
+min{T}(A::AbstractArray{T}, b::(), region) = reducedim(min,A,region,typemax(T))
+sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
+prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
 
-all(A::AbstractArray{Bool}, region) = areduce(all,A,region,true)
-any(A::AbstractArray{Bool}, region) = areduce(any,A,region,false)
-sum(A::AbstractArray{Bool}, region) = areduce(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
+all(A::AbstractArray{Bool}, region) = reducedim(all,A,region,true)
+any(A::AbstractArray{Bool}, region) = reducedim(any,A,region,false)
+sum(A::AbstractArray{Bool}, region) = reducedim(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
 sum(A::AbstractArray{Bool}) = sum(A, [1:ndims(A)])[1]
 sum(A::StridedArray{Bool})  = sum(A, [1:ndims(A)])[1]
 prod(A::AbstractArray{Bool}) =
