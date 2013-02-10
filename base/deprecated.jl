@@ -86,6 +86,11 @@ end
 @deprecate  cov_pearson   cov
 @deprecate  areduce       reducedim
 @deprecate  tmpnam        tempname
+@deprecate  lud           lufact
+@deprecate  chold         cholfact
+@deprecate  cholpd        cholpfact
+@deprecate  qrd           qrfact
+@deprecate  qrpd          qrpfact
 
 export grow!
 function grow!(a, d)

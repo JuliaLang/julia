@@ -1860,57 +1860,65 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the LU factorization of ``A``, such that ``A[P,:] = L*U``.
 
-.. function:: lud(A) -> LUDense
+.. function:: lufact(A) -> LUDense
 
-   Compute the LU factorization of ``A`` and return a ``LUDense`` object. ``factors(lud(A))`` returns the triangular matrices containing the factorization. The following functions are available for ``LUDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``.
+   Compute the LU factorization of ``A`` and return a ``LUDense`` object. ``factors(lufact(A))`` returns the triangular matrices containing the factorization. The following functions are available for ``LUDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``.
 
-.. function:: lud!(A) -> LUDense
+.. function:: lufact!(A) -> LUDense
 
-   ``lud!`` is the same as ``lud`` but saves space by overwriting the input A, instead of creating a copy.
+   ``lufact!`` is the same as ``lufact`` but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: chol(A, [LU]) -> F
 
    Compute Cholesky factorization of a symmetric positive-definite matrix ``A`` and return the matrix ``F``. If ``LU`` is ``L`` (Lower), ``A = L*L'``. If ``LU`` is ``U`` (Upper), ``A = R'*R``.
 
-.. function:: chold(A, [LU]) -> CholeskyDense
+.. function:: cholfact(A, [LU]) -> CholeskyDense
 
-   Compute the Cholesky factorization of a symmetric positive-definite matrix ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(chold(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
+   Compute the Cholesky factorization of a symmetric positive-definite matrix ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholfact(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
 
-.. function: chold!(A, [LU]) -> CholeskyDense
+.. function: cholfact!(A, [LU]) -> CholeskyDense
 
-   ``chold!`` is the same as ``chold`` but saves space by overwriting the input A, instead of creating a copy.
+   ``cholfact!`` is the same as ``cholfact`` but saves space by overwriting the input A, instead of creating a copy.
 
-..  function:: cholpd(A, [LU]) -> CholeskyPivotedDense
+..  function:: cholpfact(A, [LU]) -> CholeskyPivotedDense
 
-   Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholpd(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
+   Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholpfact(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
 
-.. function:: cholpd!(A, [LU]) -> CholeskyPivotedDense
+.. function:: cholpfact!(A, [LU]) -> CholeskyPivotedDense
 
-   ``cholpd!`` is the same as ``cholpd`` but saves space by overwriting the input A, instead of creating a copy.
+   ``cholpfact!`` is the same as ``cholpfact`` but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: qr(A) -> Q, R
 
    Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrd``.
 
-.. function:: qrd(A)
+.. function:: qrfact(A)
 
-   Compute the QR factorization of ``A`` and return a ``QRDense`` object. ``factors(qrd(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDense`` objects: ``size``, ``factors``, ``*``, ``Ac_mul_B``, ``\``. 
+   Compute the QR factorization of ``A`` and return a ``QRDense`` object. ``factors(qrfact(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDense`` objects: ``size``, ``factors``, ``qmulQR``, ``qTmulQR``, ``\``. 
 
-.. function:: qrd!(A)
+.. function:: qrfact!(A)
 
-   ``qrd!`` is the same as ``qrd`` but saves space by overwriting the input A, instead of creating a copy.
+   ``qrfact!`` is the same as ``qrfact`` but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: qrp(A) -> Q, R, P
 
-   Compute the QR factorization of ``A`` with pivoting, such that ``A*I[:,P] = Q*R``, where ``I`` is the identity matrix. Also see ``qrpd``.
+   Compute the QR factorization of ``A`` with pivoting, such that ``A*I[:,P] = Q*R``, where ``I`` is the identity matrix. Also see ``qrpfact``.
 
-.. function:: qrpd(A) -> QRPivotedDense
+.. function:: qrpfact(A) -> QRPivotedDense
 
-   Compute the QR factorization of ``A`` with pivoting and return a ``QRDensePivoted`` object. ``factors(qrpd(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``factors``, ``*``, ``Ac_mul_B``, ``\``. 
+   Compute the QR factorization of ``A`` with pivoting and return a ``QRDensePivoted`` object. ``factors(qrpfact(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``factors``, ``qmulQR``, ``qTmulQR``, ``\``. 
 
-.. function:: qrpd!(A) -> QRPivotedDense
+.. function:: qrpfact!(A) -> QRPivotedDense
 
-   ``qrpd!`` is the same as ``qrpd`` but saves space by overwriting the input A, instead of creating a copy.
+   ``qrpfact!`` is the same as ``qrpfact`` but saves space by overwriting the input A, instead of creating a copy.
+
+.. function:: qmulQR(QR, A)
+   
+   Perform Q*A efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
+
+.. function:: qTmulQR(QR, A)
+
+   Perform Q'*A efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
 
 .. function:: eig(A) -> D, V
 
