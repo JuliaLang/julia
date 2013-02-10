@@ -776,7 +776,7 @@ svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
 svdvals(A::StridedMatrix) = svdt(A,false,true)[2]
 
 # Generalized svd
-type GSVD{T} <: Factorization{T}
+type GSVDDense{T} <: Factorization{T}
     U::Matrix{T}
     V::Matrix{T}
     Q::Matrix{T}
@@ -786,11 +786,15 @@ type GSVD{T} <: Factorization{T}
     l::Int
     R::Matrix{T}
 end
-function svd(A::StridedMatrix, B::StridedMatrix)
+
+function svdfact(A::StridedMatrix, B::StridedMatrix)
     U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', copy(A), copy(B))
-    return GSVD(U, V, Q, a, b, k, l, R)
+    return GSVDDense(U, V, Q, a, b, k, l, R)
 end
-function factors{T}(obj::GSVD{T})
+
+svd(A::StridedMatrix, B::StridedMatrix) = factors(svdfact(A, B))
+
+function factors{T}(obj::GSVDDense{T})
     m = size(obj.U, 1)
     p = size(obj.V, 1)
     n = size(obj.Q, 1)
