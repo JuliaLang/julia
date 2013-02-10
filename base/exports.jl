@@ -580,7 +580,6 @@ export
     symmetrize!,
     trace,
     transpose,
-    trideig,
     tril,
     triu,
     tril!,
