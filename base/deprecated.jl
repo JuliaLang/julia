@@ -146,6 +146,11 @@ function unsetenv(var::String)
     delete!(ENV, var)
 end
 
+function globalEventLoop()
+    warn_once("globalEventLoop() is deprecated, use eventloop() instead.")
+    eventloop()
+end
+
 # discontinued functions
 
 export randexp, randg, randbeta, randchi
