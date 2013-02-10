@@ -138,7 +138,9 @@ test-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
 
 webrepl: all
+ifeq ($(USE_SYSTEM_NGINX), 0)
 	@$(MAKE) $(QUIET_MAKE) -C deps install-nginx
+endif
 	@$(MAKE) -C ui/webserver julia-release
 
 tk:
