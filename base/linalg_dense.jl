@@ -727,12 +727,14 @@ eig(x::Number, vecs::Bool) = vecs ? (x, one(x)) : x
 eig(x) = eig(x, true)
 eigvals(x) = eig(x, false)
 
-# svd
+# SVD
 type SVDDense{T,Tr} <: Factorization{T}
     U::Matrix{T}
     S::Vector{Tr}
     V::Matrix{T}
 end
+
+factors(F::SVDDense) = (F.U, F.S, F.V)
 
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, thin::Bool)
     m,n = size(A)
@@ -749,8 +751,6 @@ svdfact!(A::StridedMatrix) = svdfact(A, false)
 svdfact(A::StridedMatrix, thin::Bool) = svdfact!(copy(A), thin)
 svdfact(A::StridedMatrix) = svdfact(A, false)
 
-factors(F::SVDDense) = (F.U, F.S, F.V)
-
 function svdvals!(A::StridedMatrix)
     m,n = size(A)
     if m == 0 || n == 0
@@ -762,14 +762,14 @@ end
 
 svdvals(A) = svdvals!(copy(A))
 
+svdt(A::StridedMatrix, thin::Bool) = factors(svdfact(A, thin))
+svdt(A::StridedMatrix) = svdt(A, false)
+svdt(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
+
 function svd(A::StridedMatrix, thin::Bool)
     u,s,v = factors(svdfact(A, thin))
     return (u,s,v')
 end
-
-svdt(A::StridedMatrix, thin::Bool) = factors(svdfact(A, thin))
-svdt(A::StridedMatrix) = svdt(A, false)
-svdt(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
 
 svd(A::StridedMatrix) = svd(A, false)
 svd(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
