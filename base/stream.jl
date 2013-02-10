@@ -273,6 +273,7 @@ type SingleAsyncWork <: AsyncWork
         this
     end
 end
+SingleAsyncWork(cb::Function) = SingleAsyncWork(eventloop(),cb)
 
 type IdleAsyncWork <: AsyncWork
     cb::Function
@@ -283,6 +284,7 @@ type IdleAsyncWork <: AsyncWork
         this
     end
 end
+IdleAsyncWork(cb::Function) = IdleAsyncWork(eventloop(),cb)
 
 type TimeoutAsyncWork <: AsyncWork
     cb::Function
@@ -293,6 +295,7 @@ type TimeoutAsyncWork <: AsyncWork
         this
     end
 end
+TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 
 function _uv_hook_close(uv::AsyncStream)
     uv.handle = 0
