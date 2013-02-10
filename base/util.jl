@@ -106,6 +106,28 @@ end
 
 which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 
+macro which(ex)
+    ex = expand(ex)
+    exret = expr(:call, :error, "expression is not a function call")
+    if !isa(ex, Expr)
+        # do nothing -> error
+    elseif ex.head == :call
+        exret = expr(:call, :which, map(esc, ex.args)...)
+    elseif ex.head == :body
+        a1 = ex.args[1]
+        if isa(a1, Expr) && a1.head == :call
+            a11 = a1.args[1]
+            if isa(a11, TopNode) && a11.name == :assign
+                exret = expr(:call, :which, eval(expr(:toplevel, :assign)), map(esc, a1.args[2:end])...)
+            end
+        end
+    elseif ex.head == :thunk
+        exret = expr(:call, :error, "expression is not a function call, or is too complex for @which to analyze; "
+                                  * "break it down to simpler parts if possible")
+    end
+    exret
+end
+
 edit(file::String) = edit(file, 1)
 function edit(file::String, line::Integer)
     editor = get(ENV, "JULIA_EDITOR", "emacs")

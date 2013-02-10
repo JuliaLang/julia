@@ -1124,6 +1124,7 @@ export
     @time,
     @timed,
     @elapsed,
+    @which,
     @windows_only,
     @unix_only,
     @osx_only,
