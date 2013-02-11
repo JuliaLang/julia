@@ -19,7 +19,7 @@ function median!{T<:Real}(v::AbstractVector{T})
     isnan(v[end]) && error("median is undefined in presence of NaNs")
     isodd(length(v)) ? float(v[div(end+1,2)]) : (v[div(end,2)]+v[div(end,2)+1])/2
 end
-median{T<:Real}(v::AbstractArray{T}) = median!(copy(v))
+median{T<:Real}(v::AbstractArray{T}) = median!(copy(reshape(v, length(v))))
 
 ## variance with known mean
 function var(v::AbstractVector, m::Number, corrected::Bool)
