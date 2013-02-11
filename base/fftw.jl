@@ -175,9 +175,6 @@ execute_r2r{T<:fftwSingle}(plan, X::StridedArray{T}, Y::StridedArray{T}) =
     ccall((:fftwf_execute_r2r,libfftwf), Void, 
           (Ptr{Void},Ptr{T},Ptr{T}), plan, X, Y)
 
-execute{T<:fftwReal}(plan, X::StridedArray{T}, Y::StridedArray{T}) =
-    execute_r2r(plan, X, Y)
-
 # Destroy plan
 
 destroy_plan(precision::fftwTypeDouble, plan) =
@@ -254,12 +251,7 @@ end
 # Compute dims and howmany for FFTW guru planner
 function dims_howmany(X::StridedArray, Y::StridedArray, 
                       sz::Array{Int,1}, region)
-    reg = sort([region...])
-    for i = 1:length(reg)-1
-        if reg[i] == reg[i+1]
-            throw(ArgumentError("each dimension can be transformed at most once"))
-        end
-    end
+    reg = [region...]
     ist = [strides(X)...]
     ost = [strides(Y)...]
     dims = [sz[reg] ist[reg] ost[reg]]'
