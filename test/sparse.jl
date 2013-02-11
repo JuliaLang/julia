@@ -58,7 +58,7 @@ s116[p, p] = reshape(1:9, 3, 3)
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = sprand(5, 10, 0.1)
-    @assert_approx_eq max(abs(a*b - dense(a)*dense(b))) 0.0
+    @test_approx_eq max(abs(a*b - dense(a)*dense(b))) 0.0
 end
 
 # reductions
