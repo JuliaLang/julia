@@ -810,7 +810,10 @@ function factors{T}(obj::GSVDDense{T})
     return obj.U, obj.V, obj.Q, D1, D2, R0
 end
 
-svdvals(A::StridedMatrix, B::StridedMatrix) = LAPACK.ggsvd!('N', 'N', 'N', copy(A), copy(B))[4:5]
+function svdvals(A::StridedMatrix, B::StridedMatrix)
+    _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', copy(A), copy(B))
+    return a[1:k + l] ./ b[1:k + l]
+end
 
 schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 

@@ -2111,11 +2111,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svdfact(A, B) -> GSVDDense
 
-   Compute the generalized SVD of ``A`` and ``B``, returning a ``GSVDDense`` Factorization object.
+   Compute the generalized SVD of ``A`` and ``B``, returning a ``GSVDDense`` Factorization object. ``factors(svdfact(A,b))`` returns ``U``, ``V``, ``Q``, ``D1``, ``D2``, and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
    
-.. function:: svd(A, B) -> U, V, X, C, S
+.. function:: svd(A, B) -> U, V, Q, D1, D2, R0
 
-   Compute the generalized SVD of ``A`` and ``B``.
+   Compute the generalized SVD of ``A`` and ``B``, returning ``U``, ``V``, ``Q``, ``D1``, ``D2``, and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
  
 .. function:: svdvals(A, B)
 
