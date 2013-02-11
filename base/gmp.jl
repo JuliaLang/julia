@@ -22,6 +22,7 @@ import
     Base.binomial,
     Base.ceil,
     Base.cmp,
+    Base.complex,
     Base.convert,
     Base.div,
     Base.factorial,
