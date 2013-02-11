@@ -789,7 +789,7 @@ end
 
 function svdfact(A::StridedMatrix, B::StridedMatrix)
     U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', copy(A), copy(B))
-    return GSVDDense(U, V, Q, a, b, k, l, R)
+    return GSVDDense(U, V, Q, a, b, int(k), int(l), R)
 end
 
 svd(A::StridedMatrix, B::StridedMatrix) = factors(svdfact(A, B))
