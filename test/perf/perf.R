@@ -1,4 +1,4 @@
-library(R.utils)
+require(compiler)
 
 assert = function(bool) {
     if (!bool) stop('Assertion failed')
@@ -6,6 +6,7 @@ assert = function(bool) {
 
 timeit = function(name, f, ..., times=5) {
     tmin = Inf
+    f = cmpfun(f)
     for (t in 1:times) {
         t = system.time(f(...))["elapsed"]
         if (t < tmin) tmin = t
@@ -32,8 +33,8 @@ parseintperf = function(t) {
     for (i in 1:t) {
         # R doesn't support uint32 values
         n = floor(2^31-1*runif(1))
-        s = intToHex(n)
-        m = as.numeric(paste("0x",s,sep=""))
+        s = sprintf("0x%x", n)
+        m = as.numeric(s)
         assert(m == n)
     }
 }
@@ -120,6 +121,15 @@ pisum = function() {
 
 assert(abs(pisum()-1.644834071848065) < 1e-12);
 timeit("pi_sum", pisum, times=1)
+
+## pi_sum_vec ##
+
+pisumvec = function() {
+	return(replicate(500, sum(1/((1:10000)^2)))[1])
+}
+
+#assert(abs(pisumvec()-1.644834071848065) < 1e-12);
+#timeit("pi_sum_vec", pisumvec, times=10)
 
 ## rand_mat_stat ##
 
