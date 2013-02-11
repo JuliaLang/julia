@@ -38,25 +38,6 @@ function repl_callback(ast::ANY, show_value)
     put(repl_channel, (ast, show_value))
 end
 
-# called to show a REPL result
-repl_show(v::ANY) = repl_show(OUTPUT_STREAM, v)
-function repl_show(io, v::ANY)
-    if !(isa(v,Function) && isgeneric(v))
-        if isa(v,AbstractVector) && !isa(v,Ranges)
-            print(io, summary(v))
-            if !isempty(v)
-                println(io, ":")
-                print_matrix(io, reshape(v,(length(v),1)))
-            end
-        else
-            show(io, v)
-        end
-    end
-    if isgeneric(v) && !isa(v,CompositeKind)
-        show(io, v.env)
-    end
-end
-
 function add_backtrace(e, bt)
     if isa(e,LoadError)
         if isa(e.error,LoadError)
@@ -78,7 +59,10 @@ function eval_user_input(ast::ANY, show_value)
                 print(color_normal)
             end
             if iserr
-                show(add_backtrace(lasterr,bt))
+                with_output_color(:red, OUTPUT_STREAM) do io
+                    print(io, "ERROR: ")
+                    error_show(io, add_backtrace(lasterr,bt))
+                end
                 println()
                 iserr, lasterr = false, ()
             else
