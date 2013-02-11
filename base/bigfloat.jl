@@ -110,6 +110,8 @@ end
 <(x::BigFloat, y::BigFloat) = cmp(x,y) < 0
 >(x::BigFloat, y::BigFloat) = cmp(x,y) > 0
 
+complex(x::BigFloat, y::BigFloat) = ComplexPair(x, y)
+
 function string(x::BigFloat)
     lng = 128
     for i = 1:2
