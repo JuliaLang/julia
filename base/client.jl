@@ -51,6 +51,13 @@ function add_backtrace(e, bt)
     end
 end
 
+function display_error(er)
+    with_output_color(:red, OUTPUT_STREAM) do io
+        print(io, "ERROR: ")
+        error_show(io, er)
+    end
+end
+
 function eval_user_input(ast::ANY, show_value)
     iserr, lasterr, bt = false, (), nothing
     while true
@@ -59,10 +66,7 @@ function eval_user_input(ast::ANY, show_value)
                 print(color_normal)
             end
             if iserr
-                with_output_color(:red, OUTPUT_STREAM) do io
-                    print(io, "ERROR: ")
-                    error_show(io, add_backtrace(lasterr,bt))
-                end
+                display_error(add_backtrace(lasterr,bt))
                 println()
                 iserr, lasterr = false, ()
             else
@@ -332,7 +336,7 @@ function _start()
             run_repl()
         end
     catch err
-        show(add_backtrace(err,backtrace()))
+        display_error(add_backtrace(err,backtrace()))
         println()
         exit(1)
     end
