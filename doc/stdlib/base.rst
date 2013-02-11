@@ -2215,34 +2215,6 @@ Statistics
 
    Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
 
-.. function:: weighted_mean(v, w)
-
-   Compute the weighted mean of ``v`` using a vector of weights ``w``
-
-.. function:: mad(v, m)
-
-   Compute the median absolute deviation from the entries of a vector ``v`` relative to a known median ``m``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
-
-.. function:: mad(v)
-
-   Compute the median absolute deviation from the entries of a vector ``v`` relative to the median of ``v``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
-
-.. function:: skewness(v, m)
-
-   Compute the sample skewness of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
-
-.. function:: skewness(v)
-
-   Compute the sample skewness of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
-
-.. function:: kurtosis(v, m)
-
-   Compute the sample kurtosis of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
-
-.. function:: kurtosis(v)
-
-   Compute the sample kurtosis of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
-
 .. function:: quantile(v, p)
 
    Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``.
@@ -2251,69 +2223,13 @@ Statistics
 
    Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
 
-.. function:: quartile(v)
-
-   Compute the quartiles of a vector ``v`` at the probability values ``[.0, .25, .5, .75, 1.0]``.
-
-.. function:: quintile(v)
-
-   Compute the quintiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
-
-.. function:: decile(v)
-
-   Compute the deciles of a vector ``v`` at the probability values ``[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]``.
-
-.. function:: iqr(v)
-
-   Compute the interquantile range of a vector ``v`` at the probability values ``[.25, .75]``.
-
-.. function:: tiedrank(v)
-
-   Compute the ranks of the entries of vector ``v``. Ties are resolved by taking the average rank over all tied values.
-
-.. function:: cov_pearson(v1, v2)
-
-   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
-
-.. function:: cov_spearman(v)
-
-   Compute the Spearman covariance between two vectors ``v1`` and ``v2``.
-
 .. function:: cov(v)
 
    Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
 
-.. function:: cor_pearson(v)
-
-   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
-
-.. function:: cor_spearman(v)
-
-   Compute the Spearman correlation between two vectors ``v1`` and ``v2``.
-
 .. function:: cor(v)
 
    Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
-
-.. function:: autocor(v, l)
-
-   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``l``.
-
-.. function:: autocor(v)
-
-   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``1``.
-
-.. function:: dist(m)
-
-   Compute the distance matrix between all of the rows of ``m``.
-
-.. function:: rle(v)
-
-   Compute a run-length encoding representation of a vector ``v``.
-
-.. function:: inverse_rle(vals, lens)
-
-   Compute a vector from its run-length vector representation as values ``vals`` and run lengths ``lens``.
 
 Signal Processing
 -----------------
