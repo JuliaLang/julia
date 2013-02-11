@@ -1,6 +1,9 @@
 # Sample of strpack.jl: Reading a .png header
 
-load("strpack")
+require("strpack")
+if length(ARGS) == 0 
+    error("Provide a png file. Example usage: julia png.jl <file.png>")
+end
 fpng = open(ARGS[1])
 
 # check the signature
