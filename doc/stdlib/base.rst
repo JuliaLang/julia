@@ -296,9 +296,9 @@ Iterable Collections
 
 .. function:: mapreduce(f, op, itr)
 
-   Applies function ``f`` to each element in ``itr`` and then reduces the result with a fold using the binary function ``op``.
+   Applies function ``f`` to each element in ``itr`` and then reduces the result using the binary function ``op``.
 
-   **Example**: ``mapreduce(x->x^2, (x,y)->x+y, [1:3]) == 1 + 4 + 9 == 14``
+   **Example**: ``mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14``
 
 Indexable Collections
 ---------------------
@@ -343,7 +343,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
 .. function:: getkey(collection, key, default)
 
-   Return ``key`` if the key exists in ``collection``, otherwise return ``default``.
+   Return the key matching argument ``key`` if one exists in ``collection``, otherwise return ``default``.
 
 .. function:: delete!(collection, key)
 
@@ -387,7 +387,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
 .. function:: sizehint(s, n)
 
-   Resizes the collection ``s`` to a capacity of at least ``n``. 
+   Suggest that collection ``s`` reserve capacity for at least ``n`` elements. This can improve performance.
    
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
@@ -434,31 +434,31 @@ Set-Like Collections
 
 .. function:: symdiff!(s, n)
 
-   With integer ``n``, s is destructively modified to toggle the inclusion of ``n``.
+   IntSet s is destructively modified to toggle the inclusion of integer ``n``.
 
 .. function:: symdiff!(s, itr)
 
-   For each element in ``itr``, destructively toggle the inclusion of set ``s``.
+   For each element in ``itr``, destructively toggle its inclusion in set ``s``.
 
 .. function:: symdiff!(s1, s2)
 
-   Construct the symmetric difference of elements in IntSets ``s1`` and ``s2``. Store the result in ``s1``.
+   Construct the symmetric difference of IntSets ``s1`` and ``s2``, storing the result in ``s1``.
 
 .. function:: complement(s)
 
-   Defined only for IntSets, returns the set-wise complement of IntSet s.
+   Returns the set-complement of IntSet s.
 
 .. function:: complement!(s)
 
-   Defined only for IntSets, mutates the IntSet s into its set-wise complement. 
+   Mutates IntSet s into its set-complement.
 
 .. function:: del_each!(s, itr)
 
-   Deletes each element of itr in set s. This is done in-place.
+   Deletes each element of itr in set s in-place.
 
 .. function:: intersect!(s1, s2)
 
-   Only defined for IntSets. Intersects sets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.
+   Intersects IntSets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.
 
 Fully implemented by: ``IntSet``, ``Set``, ``FDSet``.
 
@@ -518,7 +518,7 @@ Strings
 
 .. function:: ^
 
-   Iterate a string.
+   Repeat a string.
 
    **Example**: ``"Julia "^3 == "Julia Julia Julia "``
 
