@@ -366,7 +366,7 @@ void init_stdio()
     JL_STDIN = init_stdio_handle(0,1);
 }
 
-void julia_init(char *imageFile)
+void real_julia_init(char *imageFile)
 {
     jl_page_size = getPageSize();
     jl_find_stack_bottom();
@@ -496,6 +496,19 @@ void julia_init(char *imageFile)
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
+}
+extern void * __stack_chk_guard;
+void julia_init(char *imageFile)
+{
+    unsigned char * p = (unsigned char *) &__stack_chk_guard;
+    /* If you have the ability to generate random numbers in your kernel then use them */
+    p[sizeof(__stack_chk_guard)-1] = 255;
+    p[sizeof(__stack_chk_guard)-2] = '\n';
+    p[0] = 0;
+    real_julia_init(imageFile);
+    p[sizeof(__stack_chk_guard)-1] = 0;
+    p[sizeof(__stack_chk_guard)-2] = 0;
+    p[0] = 0;
 }
 
 DLLEXPORT void jl_install_sigint_handler()
