@@ -161,6 +161,12 @@ Generic Functions
 
    Invoke a method for the given generic function matching the specified types (as a tuple), on the specified arguments. The arguments must be compatible with the specified types. This allows invoking a method other than the most specific matching method, which is useful when the behavior of a more general definition is explicitly needed (often as part of the implementation of a more specific method of the same function).
 
+.. function:: |
+   
+   Applies a function to the preceding argument which allows for easy function chaining.
+
+   **Example**: ``[1:5] | x->x.^2 | sum | inv``
+
 Iteration
 ---------
 
@@ -228,6 +234,10 @@ Iterable Collections
 
    Returns the indices of elements in collection ``a`` that appear in collection ``b``
 
+.. function:: unique(itr)
+
+   Returns an array containing only the unique elements of the iterable ``itr``.
+
 .. function:: reduce(op, v0, itr)
 
    Reduce the given collection with the given operator, i.e. accumulate ``v = op(v,elt)`` for each element, where ``v`` starts as ``v0``. Reductions for certain commonly-used operators are available in a more convenient 1-argument form: ``max(itr)``, ``min(itr)``, ``sum(itr)``, ``prod(itr)``, ``any(itr)``, ``all(itr)``.
@@ -284,6 +294,12 @@ Iterable Collections
 
    Transform collection ``c`` by applying ``f`` to each element
 
+.. function:: mapreduce(f, op, itr)
+
+   Applies function ``f`` to each element in ``itr`` and then reduces the result with a fold using the binary function ``op``.
+
+   **Example**: ``mapreduce(x->x^2, (x,y)->x+y, [1:3]) == 1 + 4 + 9 == 14``
+
 Indexable Collections
 ---------------------
 
@@ -325,6 +341,10 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Return the value stored for the given key, or the given default value if no mapping for the key is present.
 
+.. function:: getkey(collection, key, default)
+
+   Return ``key`` if the key exists in ``collection``, otherwise return ``default``.
+
 .. function:: delete!(collection, key)
 
    Delete the mapping for the given key in a collection.
@@ -365,6 +385,10 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Returns the type tuple of the (key,value) pairs contained in collection.
 
+.. function:: sizehint(s, n)
+
+   Resizes the collection ``s`` to a capacity of at least ``n``. 
+   
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
 Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``FDSet``, ``Array``.
@@ -375,6 +399,10 @@ Set-Like Collections
 .. function:: add!(collection, key)
 
    Add an element to a set-like collection.
+
+.. function:: add_each!(collection, iterable)
+
+   Adds each element in iterable to the collection.
 
 .. function:: Set(x...)
 
@@ -388,6 +416,10 @@ Set-Like Collections
 
    Construct the union of two or more sets. Maintains order with arrays.
 
+.. function:: union!(s1,s2)
+
+   Constructs the union of IntSets s1 and s2, stores the result in ``s1``.
+
 .. function:: intersect(s1,s2...)
 
    Construct the intersection of two or more sets. Maintains order with arrays.
@@ -399,6 +431,34 @@ Set-Like Collections
 .. function:: symdiff(s1,s2...)
 
    Construct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.
+
+.. function:: symdiff!(s, n)
+
+   With integer ``n``, s is destructively modified to toggle the inclusion of ``n``.
+
+.. function:: symdiff!(s, itr)
+
+   For each element in ``itr``, destructively toggle the inclusion of set ``s``.
+
+.. function:: symdiff!(s1, s2)
+
+   Construct the symmetric difference of elements in IntSets ``s1`` and ``s2``. Store the result in ``s1``.
+
+.. function:: complement(s)
+
+   Defined only for IntSets, returns the set-wise complement of IntSet s.
+
+.. function:: complement!(s)
+
+   Defined only for IntSets, mutates the IntSet s into its set-wise complement. 
+
+.. function:: del_each!(s, itr)
+
+   Deletes each element of itr in set s. This is done in-place.
+
+.. function:: intersect!(s1, s2)
+
+   Only defined for IntSets. Intersects sets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.
 
 Fully implemented by: ``IntSet``, ``Set``, ``FDSet``.
 
@@ -452,9 +512,15 @@ Strings
 
    Return an array of the characters in ``string``.
 
-.. function:: string(strs...)
+.. function:: *, string(strs...)
 
    Concatenate strings.
+
+.. function:: ^
+
+   Iterate a string.
+
+   **Example**: ``"Julia "^3 == "Julia Julia Julia "``
 
 .. function:: string(char...)
 
@@ -607,6 +673,12 @@ I/O
     a    write, create, append
     a+   read, write, create, append
    ==== =================================
+
+.. function:: open(f::function, args...)
+
+   Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
+
+   **Example**: ``open(readall, "file.txt")``
 
 .. function:: IOBuffer([size])
 
@@ -2599,6 +2671,12 @@ System
 
    Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream writing to the process' standard input.
 
+.. function:: > < >> .>
+
+   ``>`` ``<`` and ``>>`` work exactly as in bash, and ``.>`` redirects STDERR.
+
+   **Example**: ``run((`ls` > "out.log") .> "err.log")``
+
 .. function:: gethostname()
 
    Get the local machine's host name.
@@ -2614,6 +2692,10 @@ System
 .. function:: cd("dir")
 
    Set the current working directory. Returns the new current directory.
+
+.. function:: cd(f, ["dir"])
+
+   Temporarily changes the current working directory (HOME if not specified) and applies function f before returning. 
 
 .. function:: mkdir(path, [mode])
 
