@@ -332,7 +332,6 @@ void *init_stdio_handle(uv_file fd,int readable)
             break;
         case UV_NAMED_PIPE:
         case UV_FILE:
-            if (readable) ios_printf(ios_stderr,"Using pipes/files as STDIN is not yet supported. Proceed with caution!\n");
             handle = malloc(sizeof(uv_pipe_t));
             uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle,(readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE));
             uv_pipe_open((uv_pipe_t*)handle,fd);
