@@ -157,7 +157,7 @@
   largc lvargc vargc argc compile-in lastcdr caddr ret values #fn(function)
   encode-byte-code bcode:code const-to-idx-vec]) filter keyword-arg?])
   #fn(length)]) #fn(length)]) make-code-emitter lastcdr lambda-vars filter #.pair?
-  lambda])] #0=[#:g689 ()])
+  lambda])] #0=[#:g691 ()])
 	  compile-for #fn(":000r5e0g4316X0e1|}^g2342e1|}^g3342e1|}^g4342e2|c342;e4c541;" [1arg-lambda?
   compile-in emit for error "for: third form must be a 1-argument lambda"] compile-for)
 	  compile-if #fn("<000r4c0qe1|31e1|31g3\x84e2g331e3g331F6;0e4g331560e53045;" [#fn(";000r5g2]\x82>0e0~\x7fi02g344;g2^\x82>0e0~\x7fi02g444;e0~\x7f^g2342e1~c2|332e0~\x7fi02g3342i026<0e1~c3325:0e1~c4}332e5~|322e0~\x7fi02g4342e5~}42;" [compile-in
@@ -190,8 +190,10 @@
 	  const-to-idx-vec #fn("9000r1c0qc1e2|313141;" [#fn("9000r1e0c1qe2~31322|;" [table.foreach
   #fn("8000r2~}|\\;" []) bcode:ctable]) #fn(vector.alloc) bcode:nconst] const-to-idx-vec)
 	  count #fn("7000r2c0q]41;" [#fn("9000r1c0qm02|~\x7f`43;" [#fn(":000r3}\x8550g2;~|}N|}M31690g2aw540g243;" [] count-)])] count)
-	  delete-duplicates #fn("8000r1|?640|;c0|M|N42;" [#fn("8000r2e0|}32680e1}41;|e1}31K;" [member
-  delete-duplicates])] delete-duplicates)
+	  delete-duplicates #fn("8000r1e0|bD326<0c1qc23041;|?640|;c3|M|N42;" [length>
+  #fn("8000r1e0c1q~322e2|41;" [for-each #fn("9000r1c0~|]43;" [#fn(put!)])
+			       table.keys])
+  #fn(table) #fn("8000r2e0|}32680e1}41;|e1}31K;" [member delete-duplicates])] delete-duplicates)
 	  div #fn("8000r2|}V|`X16C02}`X16402a17502b/17402`w;" [] div) emit
 	  #fn("G000s2g2\x85b0}c0<16C02|`[F16:02|`[Mc1<6;0|`[c2O5:0|`}|`[K\\5\xe20c3}c4326A0e5|g2M32L1m2530]2c6qc7}c832312c9qc7}c:32312}c;\x82\\0g2c<>6=0c=m12_m25F0g2c>>6=0c?m12_m2530^530]2}c@\x82\\0g2cA>6=0cBm12_m25F0g2cC>6=0cDm12_m2530^530]2cEq|`[F690|`[M530_|`[322|;" [car
   cdr cadr #fn(memq) (loadv loadg setg) bcode:indexfor #fn("8000r1|16=02e0i02Mc132680|\x84o01;];" [>
