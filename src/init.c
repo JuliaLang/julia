@@ -201,18 +201,22 @@ struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *n
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
 static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status)
 {
-    if (status == 0) jl_close_uv((uv_handle_t*)req->handle);
+    //if (status == 0)
+        jl_close_uv((uv_handle_t*)req->handle);
     free(req);
 }
-static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
+static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue *queue)
 {
-    struct uv_shutdown_queue *queue = arg;
     struct uv_shutdown_queue_item *item = malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
     if (queue->last) queue->last->next = item;
     if (!queue->first) queue->first = item;
     queue->last = item;
+}
+static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
+    if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
+        jl_uv_exitcleanup_add(handle, arg);
 }
 DLLEXPORT void uv_atexit_hook()
 {
@@ -225,6 +229,10 @@ DLLEXPORT void uv_atexit_hook()
     uv_loop_t* loop = jl_global_event_loop();
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
+    // close stdout and stderr last, since we like being
+    // able to show stuff (incl. printf's)
+    jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stdout, &queue);
+    jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
         uv_handle_t *handle = item->h;
@@ -235,7 +243,7 @@ DLLEXPORT void uv_atexit_hook()
         switch(handle->type) {
         case UV_TTY:
         case UV_UDP:
-            //#ifndef __WIN32__ // unix only supports shutdown on TCP and NAMED_PIPE
+//#ifndef __WIN32__ // unix only supports shutdown on TCP and NAMED_PIPE
 // but uv_shutdown doesn't seem to be particularly reliable, so we'll avoid it in general
             jl_close_uv(handle);
             break;
@@ -245,7 +253,10 @@ DLLEXPORT void uv_atexit_hook()
             if (uv_is_writable((uv_stream_t*)handle)) { // uv_shutdown returns an error if not writable
                 uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
                 int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
-                if (err != 0) { printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
+                if (err != 0) {
+                    printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));
+                    jl_close_uv(handle);
+                }
             }
             else {
                 jl_close_uv(handle);
@@ -261,7 +272,7 @@ DLLEXPORT void uv_atexit_hook()
         case UV_PROCESS:
         case UV_FS_EVENT:
         case UV_FS_POLL:
-            uv_close(handle,NULL); //do we want to use jl_close_uv?
+            jl_close_uv(handle);
             break;
         case UV_HANDLE:
         case UV_STREAM:
