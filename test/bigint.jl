@@ -42,6 +42,11 @@ ee = typemax(Int64)
 @test a+int32(1) == b
 @test a+int64(1) == b
 
+@test BigInt(5) << 3 == 40
+@test BigInt(5) >> 1 == 2
+@test BigInt(-5) << 3 == -40
+@test BigInt(-5) >> 1 == -3
+
 @test factorial(BigInt(40)) == BigInt("815915283247897734345611269596115894272000000000")
 @test binomial(BigInt(-53), 42) == BigInt("959509335087854414441273718")
 @test binomial(BigInt(113), BigInt(42)) == BigInt("18672199984318438125634054194360")
