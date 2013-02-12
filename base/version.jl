@@ -153,19 +153,19 @@ elseif(isfile("$JULIA_HOME/../share/julia/COMMIT"))
 else
 
 let
-    expected = ErrorException("error: don't copy this code, for breaking out of uv_run during boot-strapping only")
+    expected = ErrorException("don't copy this code, for breaking out of uv_run during boot-strapping only")
     acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
                                               # this point in the bootstrapping, conflicts between old and new
                                               # defintions for write, TTY, ASCIIString, and STDOUT make it fail
     ver = string(VERSION)
-    (outver,ps) = read_from(`git rev-parse HEAD`)
+    (outver,ps) = readsfrom(`git rev-parse HEAD`)
     ps.closecb = function(proc)
         if !success(proc)
             #acceptable.msg = "failed process: $proc [$(proc.exit_code)]"
             error(acceptable)
         end
         commit = readchomp(proc.out.buffer)
-        (outtag,ps) = read_from(`git rev-parse --verify --quiet v$ver`)
+        (outtag,ps) = readsfrom(`git rev-parse --verify --quiet v$ver`)
         ps.closecb = function(proc)
             tagged = if success(proc)
                 readchomp(proc.out.buffer)
@@ -176,7 +176,7 @@ let
                 error(acceptable)
             end
             tagged = success(proc) ? readchomp(proc.out.buffer) : "doesn't reference a commit"
-            (outctim,ps) = read_from(`git log -1 --pretty=format:%ct`)
+            (outctim,ps) = readsfrom(`git log -1 --pretty=format:%ct`)
             ps.closecb = function(proc)
                 if !success(proc)
                     #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")

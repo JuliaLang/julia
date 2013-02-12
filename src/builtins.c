@@ -592,7 +592,7 @@ static void show_function(JL_STREAM *s, jl_value_t *v)
         JL_PUTS(jl_gf_name(v)->name, s);
     }
     else {
-        JL_PUTS("#<function>", s);
+        JL_PUTS("# function", s);
     }
 }
 
@@ -642,7 +642,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
         show_function(s, v);
     }
     else if (jl_typeis(v,jl_intrinsic_type)) {
-        JL_PRINTF(s, "#<intrinsic-function %d>", *(uint32_t*)jl_bits_data(v));
+        JL_PRINTF(s, "# intrinsic function %d", *(uint32_t*)jl_bits_data(v));
     }
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);

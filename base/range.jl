@@ -277,16 +277,15 @@ sort!(r::Range1) = r
 
 sort{T<:Real}(r::Range{T}) = issorted(r) ? r : reverse(r)
 
-sortperm(r::Range1) = (r, 1:length(r))
-sortperm{T<:Real}(r::Range{T}) = issorted(r) ? (r, 1:1:length(r)) :
-                                               (reverse(r), length(r):-1:1)
+sortperm(r::Range1) = 1:length(r)
+sortperm{T<:Real}(r::Range{T}) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
 
 function sum{T<:Real}(r::Ranges{T})
     l = length(r)
     return l * first(r) + step(r) * div(l * (l - 1), 2)
 end
 
-function map_to(f, dest, r::Ranges)
+function map!(f, dest, r::Ranges)
     i = 1
     for ri in r dest[i] = f(ri); i+=1; end
     dest

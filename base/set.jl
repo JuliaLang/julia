@@ -2,7 +2,7 @@ type Set{T}
     hash::Dict{T,Bool}
 
     Set() = new((T=>Bool)[])
-    Set(x...) = add_each!(new(Dict{T,Bool}(length(x))), x)
+    Set(x...) = add_each!(new(Dict{T,Bool}()), x)
 end
 Set() = Set{Any}()
 Set(x...) = Set{Any}(x...)

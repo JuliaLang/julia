@@ -85,8 +85,6 @@ end
 ismatch(r::Regex, s::String) =
     PCRE.exec(r.regex, C_NULL, bytestring(s), 0, r.options & PCRE.EXECUTE_MASK, false)
 
-contains(s::String, r::Regex) = ismatch(r,s)
-
 function match(re::Regex, str::ByteString, idx::Integer)
     opts = re.options & PCRE.EXECUTE_MASK
     m, n = PCRE.exec(re.regex, C_NULL, str, idx-1, opts, true)
@@ -104,11 +102,11 @@ match(r::Regex, s::String, i::Integer) =
 function search(str::ByteString, re::Regex, idx::Integer)
     len = length(str.data)
     if idx >= len+2
-        return idx == len+2 ? (0,0) : error(BoundsError)
+        return idx == len+2 ? (0:-1) : error(BoundsError)
     end
     opts = re.options & PCRE.EXECUTE_MASK
     m, n = PCRE.exec(re.regex, C_NULL, str, idx-1, opts, true)
-    isempty(m) ? (0,0) : (m[1]+1,m[2]+1)
+    isempty(m) ? (0:-1) : ((m[1]+1):m[2])
 end
 search(s::String, r::Regex, idx::Integer) =
     error("regex search is only available for bytestrings; use bytestring(s) to convert")

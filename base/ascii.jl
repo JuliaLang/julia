@@ -15,7 +15,7 @@ ref(s::ASCIIString, i::Int) = (x=s.data[i]; x < 0x80 ? char(x) : '\ufffd')
 ref(s::ASCIIString, r::Vector) = ASCIIString(ref(s.data,r))
 ref(s::ASCIIString, r::Range1{Int}) = ASCIIString(ref(s.data,r))
 ref(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
-strchr(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? memchr(s.data,c,i) : 0
+search(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? search(s.data,c,i) : 0
 string(a::ASCIIString, b::ASCIIString, c::ASCIIString...) =
     ASCIIString([a.data,b.data,map(s->s.data,c)...])
 

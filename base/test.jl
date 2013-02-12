@@ -1,6 +1,6 @@
 module Test
 
-export @test, @test_fails
+export @test, @test_fails, @test_approx_eq, @test_approx_eq_eps
 
 abstract Result
 type Success <: Result
@@ -43,6 +43,27 @@ end
 
 macro test_fails(ex)
     :(do_test_fails(()->($(esc(ex))),$(expr(:quote,ex))))
+end
+
+function test_approx_eq(va, vb, Eps, astr, bstr)
+    diff = max(abs(va - vb))
+    sdiff = string("|", astr, " - ", bstr, "| < ", Eps)
+    if diff < Eps
+        nothing
+    else
+        error("assertion failed: ", sdiff, "\n  ", astr, " = ", va, "\n  ",
+              bstr, " = ", vb)
+    end
+end
+
+test_approx_eq(va, vb, astr, bstr) = test_approx_eq(va, vb, 10^4*length(va)*eps(max(max(abs(va)), max(abs(vb)))) * max(1, max(abs(va)), max(abs(vb))), astr, bstr)
+
+macro test_approx_eq_eps(a, b, c)
+    :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))
+end
+
+macro test_approx_eq(a, b)
+    :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
 end
 
 end # module

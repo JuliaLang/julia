@@ -42,6 +42,15 @@ function is_static_parameter(sv::StaticVarInfo, s::Symbol)
     return false
 end
 
+function contains_is(itr, x::ANY)
+    for y in itr
+        if is(y,x)
+            return true
+        end
+    end
+    return false
+end
+
 is_local(sv::StaticVarInfo, s::Symbol) = contains_is(sv.vars, s)
 is_closed(sv::StaticVarInfo, s::Symbol) = has(sv.cenv, s)
 is_global(sv::StaticVarInfo, s::Symbol) =
@@ -127,7 +136,7 @@ t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
 t_func[isdefined] = (1, 2, (args...)->Bool)
 t_func[Union] = (0, Inf,
-                 (args...)->(if allp(isType,args)
+                 (args...)->(if all(isType,args)
                                  Type{Union(map(t->t.parameters[1],args)...)}
                              else
                                  Type
@@ -202,7 +211,7 @@ end
 t_func[convert_default] =
     (3, 3, (t,x,f)->(isType(t) ? static_convert(t.parameters[1],x) : Any))
 t_func[convert_tuple] =
-    (3, 3, (t,x,f)->(if isa(t,Tuple) && allp(isType,t)
+    (3, 3, (t,x,f)->(if isa(t,Tuple) && all(isType,t)
                          t = Type{map(t->t.parameters[1],t)}
                      end;
                      isType(t) ? static_convert(t.parameters[1],x) :
@@ -236,7 +245,7 @@ t_func[typeof] = (1, 1, typeof_tfunc)
 # therefore they get their arguments unevaluated
 t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? typeintersect(v,t.parameters[1]) :
-                       isa(t,Tuple) && allp(isType,t) ?
+                       isa(t,Tuple) && all(isType,t) ?
                            typeintersect(v,map(t->t.parameters[1],t)) :
                        Any))
 
@@ -582,8 +591,8 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         af = isconstantfunc(fargs[1], sv)
         if !is(af,false)
             aargtypes = argtypes[2:]
-            if allp(x->isa(x,Tuple), aargtypes) &&
-                !anyp(isvatuple, aargtypes[1:(length(aargtypes)-1)])
+            if all(x->isa(x,Tuple), aargtypes) &&
+                !any(isvatuple, aargtypes[1:(length(aargtypes)-1)])
                 e.head = :call1
                 # apply with known func with known tuple types
                 # can be collapsed to a call to the applied func
@@ -636,7 +645,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         af = isconstantfunc(fargs[1], sv)
         if !is(af,false) && (af=_ieval(af);isgeneric(af))
             sig = argtypes[2]
-            if isa(sig,Tuple) && allp(isType, sig)
+            if isa(sig,Tuple) && all(isType, sig)
                 sig = map(t->t.parameters[1], sig)
                 return invoke_tfunc(af, sig, argtypes[3:])
             end
@@ -667,7 +676,7 @@ end
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = e.args[2:]
     argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
-    if anyp(x->is(x,None), argtypes)
+    if any(x->is(x,None), argtypes)
         return None
     end
     called = e.args[1]
@@ -743,6 +752,8 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
                 t = Type{TypeVar(:_,t)}
             end
         end
+    elseif is(e.head,:method)
+        t = Function
     else
         t = Any
     end

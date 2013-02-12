@@ -47,7 +47,7 @@ JL_LIBS = julia-release julia-debug
 
 # private libraries, that are installed in $(PREFIX)/lib/julia
 JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
-                  fftw3f_threads glpk glpk_wrapper gmp gmp_wrapper grisu \
+                  fftw3f_threads glpk glpk_wrapper gmp grisu \
                   history openlibm openlibm-extras pcre \
 		  random readline Rmath spqr suitesparse_wrapper \
 		  tk_wrapper umfpack z openblas
@@ -138,7 +138,9 @@ test-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
 
 webrepl: all
+ifeq ($(USE_SYSTEM_NGINX), 0)
 	@$(MAKE) $(QUIET_MAKE) -C deps install-nginx
+endif
 	@$(MAKE) -C ui/webserver julia-release
 
 tk:

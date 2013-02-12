@@ -179,7 +179,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_method_def(fname, bp, b, (jl_tuple_t*)atypes,
                       (jl_function_t*)meth, (jl_tuple_t*)tvars);
         JL_GC_POP();
-        return jl_nothing;
+        return *bp;
     }
     else if (ex->head == const_sym) {
         jl_value_t *sym = args[0];
@@ -280,7 +280,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == error_sym || ex->head == jl_continue_sym) {
         if (jl_is_byte_string(args[0]))
-            jl_errorf("syntax error: %s", jl_string_data(args[0]));
+            jl_errorf("syntax: %s", jl_string_data(args[0]));
         jl_throw(args[0]);
     }
     jl_errorf("unsupported or misplaced expression %s", ex->head->name);

@@ -472,7 +472,9 @@
 
 (define (replace-return e bb ret retval)
   (cond ((or (atom? e) (quoted? e)) e)
-	((eq? (car e) 'lambda) e)
+	((or (eq? (car e) 'lambda)
+	     (eq? (car e) 'function)
+	     (eq? (car e) '->)) e)
 	((eq? (car e) 'return)
 	 `(block (= ,ret true)
 		 (= ,retval ,(cadr e))
@@ -1243,8 +1245,8 @@
 		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	   (label ,initlabl)
 	   (= ,result (call (curly (top Dict)
-			    (static_typeof ,onekey)
-			    (static_typeof ,oneval))))
+				   (static_typeof ,onekey)
+				   (static_typeof ,oneval))))
 	   ,(construct-loops (reverse loopranges))
 	   ,result)))))))
 

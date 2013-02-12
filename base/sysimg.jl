@@ -114,6 +114,7 @@ include("path.jl")
 include("stat.jl")
 
 # front end & code loading
+include("repl.jl")
 include("client.jl")
 include("loading.jl")
 
@@ -188,7 +189,7 @@ compile_hint(event_loop, (Bool,))
 compile_hint(_start, ())
 compile_hint(process_options, (Array{Any,1},))
 compile_hint(run_repl, ())
-compile_hint(anyp, (Function, Array{Any,1}))
+compile_hint(any, (Function, Array{Any,1}))
 compile_hint(Dict{Any,Any}, (Int,))
 compile_hint(Set, ())
 compile_hint(assign, (Dict{Any,Any}, Bool, Cmd))
@@ -313,7 +314,7 @@ end # baremodule Base
 
 using Base
 
-let JL_PRIVATE_LIBDIR = try getenv("JL_PRIVATE_LIBDIR") catch e "lib/julia" end
+let JL_PRIVATE_LIBDIR = get(ENV, "JL_PRIVATE_LIBDIR", "lib/julia")
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},),
       "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji")

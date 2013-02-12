@@ -64,19 +64,13 @@
 # * add readline to event loop
 # * GOs/darrays on a subset of nodes
 
-type MultiCBHandles
-    work_cb::SingleAsyncWork
-    fgcm::SingleAsyncWork
-end
-const multi_cb_handles = MultiCBHandles(dummySingleAsync,dummySingleAsync)
-
 ## workers and message i/o ##
 
-function send_msg_unknown(s::Stream, kind, args)
+function send_msg_unknown(s::IO, kind, args)
     error("attempt to send to unknown socket")
 end
 
-function send_msg(s::Stream, kind, args...)
+function send_msg(s::IO, kind, args...)
     id = worker_id_from_socket(s)
     if id > -1
         return send_msg(worker_from_id(id), kind, args...)
@@ -84,7 +78,7 @@ function send_msg(s::Stream, kind, args...)
     send_msg_unknown(s, kind, args)
 end
 
-function send_msg_now(s::Stream, kind, args...)
+function send_msg_now(s::IO, kind, args...)
     id = worker_id_from_socket(s)
     if id > -1
         return send_msg_now(worker_from_id(id), kind, args...)
@@ -96,14 +90,14 @@ type Worker
     host::ByteString
     port::Uint16
     socket::TcpSocket
-    sendbuf::Buffer
+    sendbuf::IOBuffer
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     id::Int
     gcflag::Bool
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
-        new(bytestring(host), uint16(port), sock, IOString(), {}, {}, id, false)
+        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
 end
 Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
@@ -160,7 +154,7 @@ function send_msg_(w::Worker, kind, args, now::Bool)
 end
 
 function flush_gc_msgs()
-    for w = (PGRP::ProcessGroup).workers
+    for w in (PGRP::ProcessGroup).workers
         if isa(w,Worker)
             k = w::Worker
             if k.gcflag
@@ -242,7 +236,7 @@ function identify_socket(otherid, sock)
     @assert i > PGRP.myid
     d = i-length(PGRP.workers)
     if d > 0
-        grow!(PGRP.workers, d)
+        resize!(PGRP.workers, i)
         PGRP.workers[(end-d+1):end] = nothing
         PGRP.np += d
     end
@@ -263,7 +257,7 @@ type RemoteRef
 
     function RemoteRef(w, wh, id)
         r = new(w,wh,id)
-        found = key(client_refs, r, false)
+        found = getkey(client_refs, r, false)
         if !is(found,false)
             return found
         end
@@ -621,10 +615,11 @@ type WaitFor
     rr
 end
 
+global work_cb, fgcm_cb
+
 function enq_work(wi::WorkItem)
-    global Workqueue,multi_cb_handles
     unshift!(Workqueue, wi)
-    queueAsync(multi_cb_handles.work_cb)
+    queueAsync(work_cb::SingleAsyncWork)
 end
 
 enq_work(f::Function) = enq_work(WorkItem(f))
@@ -699,7 +694,7 @@ function perform_work(job::WorkItem)
     end
 end
 
-function deliver_result(sock::Stream, msg, oid, value)
+function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
     if is(msg,:fetch) || is(msg,:call_fetch)
         val = value
@@ -781,25 +776,25 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
         start_reading(sock)
         wait_connected(sock)
         if PGRP.np == 0
-                # first connection; get process group info from client
-                PGRP.myid = deserialize(sock)
-                PGRP.locs = locs = deserialize(sock)
-                #print("\nLocation: ",locs,"\nId:",PGRP.myid,"\n")
-                # joining existing process group
-                PGRP.np = length(PGRP.locs)
-                PGRP.workers = w = cell(PGRP.np)
-                w[1] = Worker("", 0, sock, 1)
-                for i = 2:(PGRP.myid-1)
-                    w[i] = Worker(locs[i][1], locs[i][2])
-                    w[i].id = i
-                    create_message_handler_loop(w[i].socket)
-                    send_msg_now(w[i], :identify_socket, PGRP.myid)
-                end
-                w[PGRP.myid] = LocalProcess()
-                for i = (PGRP.myid+1):PGRP.np
-                    w[i] = nothing
-                end
+            # first connection; get process group info from client
+            PGRP.myid = deserialize(sock)
+            PGRP.locs = locs = deserialize(sock)
+            #print("\nLocation: ",locs,"\nId:",PGRP.myid,"\n")
+            # joining existing process group
+            PGRP.np = length(PGRP.locs)
+            PGRP.workers = w = cell(PGRP.np)
+            w[1] = Worker("", 0, sock, 1)
+            for i = 2:(PGRP.myid-1)
+                w[i] = Worker(locs[i][1], locs[i][2])
+                w[i].id = i
+                create_message_handler_loop(w[i].socket)
+                send_msg_now(w[i], :identify_socket, PGRP.myid)
             end
+            w[PGRP.myid] = LocalProcess()
+            for i = (PGRP.myid+1):PGRP.np
+                w[i] = nothing
+            end
+        end
         #println("loop")
         while true
             #try
@@ -807,20 +802,20 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 #println("got msg: ",msg)
             # handle message
             if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
-                    id = deserialize(sock)
-                    f = deserialize(sock)
-                    args = deserialize(sock)
+                id = deserialize(sock)
+                f = deserialize(sock)
+                args = deserialize(sock)
                 #print("$(myid()) got call $id\n")
                 wi = schedule_call(id, f, args)
                 if is(msg, :call_fetch)
-                        wi.notify = (sock, :call_fetch, id, wi.notify)
+                    wi.notify = (sock, :call_fetch, id, wi.notify)
                 elseif is(msg, :call_wait)
-                        wi.notify = (sock, :wait, id, wi.notify)
+                    wi.notify = (sock, :wait, id, wi.notify)
                 end
             elseif is(msg, :do)
-                    f = deserialize(sock)
-                    args = deserialize(sock)
-                    #print("got args: $args\n")
+                f = deserialize(sock)
+                args = deserialize(sock)
+                #print("got args: $args\n")
                 let func=f, ar=args
                     enq_work(WorkItem(()->apply(func, ar)))
                 end
@@ -831,19 +826,19 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 val = deserialize(sock)
                 deliver_result((), mkind, oid, val)
             elseif is(msg, :identify_socket)
-                    otherid = deserialize(sock)
-                    identify_socket(otherid, sock)
+                otherid = deserialize(sock)
+                identify_socket(otherid, sock)
             else
                 # the synchronization messages
-                    oid = deserialize(sock)::(Int,Int)
+                oid = deserialize(sock)::(Int,Int)
                 wi = lookup_ref(oid)
                 if wi.done
-                        deliver_result(sock, msg, oid, work_result(wi))
+                    deliver_result(sock, msg, oid, work_result(wi))
                 else
                     # add to WorkItem's notify list
                     # TODO: should store the worker here, not the socket,
                     # so we don't need to look up the worker later
-                        wi.notify = (sock, msg, oid, wi.notify)
+                    wi.notify = (sock, msg, oid, wi.notify)
                 end
             end
             #catch e
@@ -853,13 +848,13 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             #        # TODO: remove machine from group
             #        throw(DisconnectException())
             #    else
-            #        print("deserialization error: ", e, "\n")
+            #        print("deserialization: ", e, "\n")
             #        #while nb_available(sock) > 0 #|| select(sock)
             #        #    read(sock, Uint8)
             #        #end
                 #end
             #end
-            end
+        end
     end)
 end
 
@@ -868,7 +863,7 @@ end
 # the entry point for julia worker processes. does not return.
 # argument is descriptor to write listening port # to.
 start_worker() = start_worker(STDOUT)
-function start_worker(out::Stream)
+function start_worker(out::IO)
     default_port = uint16(9009)
     (actual_port,sock) = open_any_tcp_port(accept_handler,default_port) 
     write(out, "julia_worker:")  # print header
@@ -897,11 +892,10 @@ function start_remote_workers(machines, cmds, tunnel)
     n = length(cmds)
     outs = cell(n)
     w = cell(n)
-    pps = Array(Process,n)
     for i=1:n
-        outs[i],pps[i] = read_from(cmds[i])
+        outs[i],_ = readsfrom(cmds[i])
         outs[i].line_buffered = true
-            end
+    end
     for i=1:n
         local hostname::String, port::Int16
         stream = outs[i]
@@ -935,7 +929,7 @@ function start_remote_workers(machines, cmds, tunnel)
                     catch err
                         println("\tError parsing reply from worker $(wrker.id):\t",err)
                         return false
-    end
+                    end
                 end
                 true
             end)
@@ -1010,7 +1004,7 @@ function start_sge_workers(n)
     run(`mkdir -p $sgedir`)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
     `echo $home/julia-release-basic --worker` | qsub_cmd
-    out = cmd_stdout_stream(qsub_cmd)
+    out,_ = readsfrom(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
     end
@@ -1084,8 +1078,8 @@ end
 spawnat(p, thunk) = sync_add(remote_call(p, thunk))
 
 let lastp = 1
-    global spawn
-    function spawn(thunk::Function)
+    global chooseproc
+    function chooseproc(thunk::Function)
         p = -1
         env = thunk.env
         if isa(env,Tuple)
@@ -1104,9 +1098,11 @@ let lastp = 1
                 lastp = 1
             end
         end
-        spawnat(p, thunk)
+        p
     end
 end
+
+spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
 find_vars(e) = find_vars(e, {})
 function find_vars(e, lst)
@@ -1135,7 +1131,7 @@ end
 
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawn($(esc(expr))))
+    :(spawn_somewhere($(esc(expr))))
 end
 
 function spawnlocal(thunk)
@@ -1146,18 +1142,19 @@ function spawnlocal(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
     add!(wi.clientset, rid[1])
     push!(Workqueue, wi)   # add to the *front* of the queue, work first
-    queueAsync(multi_cb_handles.work_cb)
+    queueAsync(work_cb::SingleAsyncWork)
     yield()
     rr
 end
 
-macro spawnlocal(expr)
+macro async(expr)
     expr = localize_vars(:(()->($expr)))
     :(spawnlocal($(esc(expr))))
 end
 
-macro async(expr)
-    :(@spawnlocal $(esc(expr)))
+macro spawnlocal(expr)
+    warn_once("@spawnlocal is deprecated, use @async instead.")
+    :(@async $(esc(expr)))
 end
 
 macro spawnat(p, expr)
@@ -1348,12 +1345,6 @@ end
 
 ## event processing, I/O and work scheduling ##
 
-function make_scheduled(t::Task)
-    t.parent = Scheduler
-    enq_work(WorkItem(t))
-    t
-end
-
 function yield(args...)
     ct = current_task()
     # preserve Task.last across calls to the scheduler
@@ -1363,25 +1354,22 @@ function yield(args...)
     return v
 end
 
-function _jl_work_cb()
-    global multi_cb_handles
+function _jl_work_cb(args...)
     if !isempty(Workqueue)
         perform_work()
     else
-        queueAsync(multi_cb_handles.fgcm)
+        queueAsync(fgcm_cb::SingleAsyncWork)
     end
     if !isempty(Workqueue)
-        queueAsync(multi_cb_handles.work_cb) #really this should just make process_event be non-blocking
+        # really this should just make process_event be non-blocking
+        queueAsync(work_cb::SingleAsyncWork)
     end
 end
-_jl_work_cb(args...) = _jl_work_cb()
 
 function event_loop(isclient)
-    global multi_cb_handles
-    multi_cb_handles.work_cb = SingleAsyncWork(globalEventLoop(),_jl_work_cb)
-    multi_cb_handles.fgcm = SingleAsyncWork(globalEventLoop(),(args...)->flush_gc_msgs());
-    timer = TimeoutAsyncWork(globalEventLoop(),(args...)->queueAsync(multi_cb_handles.work_cb))
-    startTimer(timer,int64(1),int64(10000)) #do work every 10s
+    global work_cb = SingleAsyncWork(eventloop(), _jl_work_cb)
+    global fgcm_cb = SingleAsyncWork(eventloop(), (args...)->flush_gc_msgs());
+    queueAsync(work_cb::SingleAsyncWork)
     iserr, lasterr = false, ()
     while true
         try

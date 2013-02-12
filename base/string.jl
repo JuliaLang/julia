@@ -154,7 +154,13 @@ end
 
 typealias Chars Union(Char,AbstractVector{Char},Set{Char})
 
-function strchr(s::String, c::Chars, i::Integer)
+function search(s::String, c::Chars, i::Integer)
+    if isempty(c)
+        return 1 <= i <= endof(s)+1 ? i :
+               i == endof(s)+2      ? 0 :
+               error(BoundsError)
+    end
+
     if i < 1 error(BoundsError) end
     i = nextind(s,i-1)
     while !done(s,i)
@@ -166,31 +172,20 @@ function strchr(s::String, c::Chars, i::Integer)
     end
     return 0
 end
-strchr(s::String, c::Chars) = strchr(s,c,start(s))
-
-contains(s::String, c::Char) = (strchr(s,c)!=0)
-
-function search(s::String, c::Chars, i::Integer)
-    if isempty(c)
-        return 1 <= i <= endof(s)+1 ? (i,i) :
-               i == endof(s)+2      ? (0,0) :
-               error(BoundsError)
-    end
-    i=strchr(s,c,i)
-    (i, nextind(s,i))
-end
 search(s::String, c::Chars) = search(s,c,start(s))
+
+contains(s::String, c::Char) = (search(s,c)!=0)
 
 function search(s::String, t::String, i::Integer)
     if isempty(t)
-        return 1 <= i <= endof(s)+1 ? (i,i) :
-               i == endof(s)+2      ? (0,0) :
+        return 1 <= i <= endof(s)+1 ? (i:i-1) :
+               i == endof(s)+2      ? (0:-1) :
                error(BoundsError)
     end
     t1, j2 = next(t,start(t))
     while true
-        i = strchr(s,t1,i)
-        if i == 0 return (0,0) end
+        i = search(s,t1,i)
+        if i == 0 return (0:-1) end
         c, ii = next(s,i)
         j = j2; k = ii
         matched = true
@@ -207,23 +202,12 @@ function search(s::String, t::String, i::Integer)
             end
         end
         if matched
-            return (i,k)
+            return i:k-1
         end
         i = ii
     end
 end
 search(s::String, t::String) = search(s,t,start(s))
-
-type EachSearch
-    string::String
-    pattern
-end
-each_search(string::String, pattern) = EachSearch(string, pattern)
-
-start(itr::EachSearch) = search(itr.string, itr.pattern)
-done(itr::EachSearch, st) = (st[1]==0)
-next(itr::EachSearch, st) =
-    (st, search(itr.string, itr.pattern, max(nextind(itr.string,st[1]),st[2])))
 
 function cmp(a::String, b::String)
     i = start(a)
@@ -288,6 +272,16 @@ strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
 strwidth(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
 # TODO: implement and use u8_strnwidth that takes a length argument
 
+## libc character class predicates ##
+
+isascii(c::Char) = c < 0x80
+
+for name = ("alnum", "alpha", "blank", "cntrl", "digit", "graph",
+            "lower", "print", "punct", "space", "upper")
+    f = symbol(string("is",name))
+    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Char,), c))
+end
+
 ## generic string uses only endof and next ##
 
 type GenericString <: String
@@ -326,7 +320,7 @@ SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offs
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
 SubString(s::String, i::Integer) = SubString(s, i, endof(s))
 
-write{T<:ByteString}(to::IOString, s::SubString{T}) = write_sub(to, s.string.data, s.offset+1, s.endof)
+write{T<:ByteString}(to::IOBuffer, s::SubString{T}) = write_sub(to, s.string.data, s.offset+1, s.endof)
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
@@ -436,35 +430,10 @@ function next(s::RopeString, i::Int)
 end
 
 endof(s::RopeString) = s.endof
-
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
-
 write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 
-## transformed strings ##
-
-type TransformedString <: String
-    transform::Function
-    string::String
-end
-
-endof(s::TransformedString) = endof(s.string)
-length(s::TransformedString) = length(s.string)
-
-function next(s::TransformedString, i::Int)
-    c, j = next(s.string,i)
-    c = s.transform(c, i)
-    return c, j
-end
-
 ## uppercase and lowercase transformations ##
-
-const _TF_U = (c,i)->uppercase(c)
-const _TF_L = (c,i)->lowercase(c)
-const _TF_u = (c,i)->i==1 ? uppercase(c) : c
-const _TF_l = (c,i)->i==1 ? lowercase(c) : c
-const _TF_C = (c,i)->i==1 ? uppercase(c) : lowercase(c)
-const _TF_c = (c,i)->i==1 ? lowercase(c) : uppercase(c)
 
 uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
 lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
@@ -472,44 +441,11 @@ lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
 uppercase(c::Uint8) = ccall(:toupper, Uint8, (Uint8,), c)
 lowercase(c::Uint8) = ccall(:tolower, Uint8, (Uint8,), c)
 
-uppercase(s::String) = TransformedString(_TF_U, s)
-lowercase(s::String) = TransformedString(_TF_L, s)
+uppercase(s::String) = map(uppercase, s)
+lowercase(s::String) = map(lowercase, s)
 
-ucfirst(s::String) = TransformedString(_TF_u, s)
-lcfirst(s::String) = TransformedString(_TF_l, s)
-
-function _transfunc_compose(f2::Function, f1::Function)
-    allf = [_TF_U, _TF_L, _TF_u, _TF_l, _TF_C, _TF_c]
-    if !contains(allf, f2) || !contains(allf, f1)
-        return nothing
-    end
-    if f2 == _TF_U || f2 == _TF_L || f2 == _TF_C || f2 == _TF_c ||
-            f2 == f1 ||
-            (f2 == _TF_u && f1 == _TF_l) ||
-            (f2 == _TF_l && f1 == _TF_u)
-        return f2
-    elseif (f2 == _TF_u && (f1 == _TF_U || f1 == _TF_C)) ||
-           (f2 == _TF_l && (f1 == _TF_L || f1 == _TF_c))
-        return f1
-    elseif (f2 == _TF_u && f1 == _TF_L)
-        return _TF_C
-    elseif (f2 == _TF_l && f1 == _TF_U)
-        return _TF_c
-    elseif (f2 == _TF_u && f1 == _TF_c)
-        return _TF_U
-    elseif (f2 == _TF_l && f1 == _TF_C)
-        return _TF_L
-    end
-    error("this is a bug")
-end
-
-function TransformedString(transform::Function, s::TransformedString)
-    newtf = _transfunc_compose(transform, s.transform)
-    if newtf === nothing
-        return invoke(TransformedString, (Function, String), transform, s)
-    end
-    TransformedString(newtf, s.string)
-end
+ucfirst(s::String) = isupper(s[1]) ? s : string(uppercase(s[1]),s[nextind(s,1):end])
+lcfirst(s::String) = islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):end])
 
 ## string map, filter, has ##
 
@@ -530,8 +466,6 @@ function filter(f::Function, s::String)
     end
     takebuf_string(out)
 end
-
-has(s::String, c::Char) = contains(s, c)
 
 ## string promotion rules ##
 
@@ -555,8 +489,8 @@ end
 escape_nul(s::String, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
 
-is_hex_digit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
-need_full_hex(s::String, i::Int) = !done(s,i) && is_hex_digit(next(s,i)[1])
+isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
+need_full_hex(s::String, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
 
 function print_escaped(io, s::String, esc::String)
     i = start(s)
@@ -567,7 +501,7 @@ function print_escaped(io, s::String, esc::String)
         c == '\\'       ? print(io, "\\\\") :
         contains(esc,c) ? print(io, '\\', c) :
         7 <= c <= 13    ? print(io, '\\', "abtnvfr"[int(c-6)]) :
-        iswprint(c)     ? print(io, c) :
+        isprint(c)      ? print(io, c) :
         c <= '\x7f'     ? print(io, L"\x", hex(c, 2)) :
         c <= '\uffff'   ? print(io, L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
                           print(io, L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
@@ -685,7 +619,7 @@ function interp_parse(s::String, unescape::Function, printer::Function)
             if !isempty(s[i:j-1])
                 push!(sx, unescape(s[i:j-1]))
             end
-            ex, j = parseatom(s,k)
+            ex, j = parse(s,k,false)
             if isa(ex,Expr) && is(ex.head,:continue)
                 throw(ParseError("incomplete expression"))
             end
@@ -721,7 +655,6 @@ end
 ## core string macros ##
 
 macro   str(s); interp_parse(s); end
-macro S_str(s); interp_parse(s); end
 macro I_str(s); interp_parse(s, x->unescape_chars(x,"\"")); end
 macro E_str(s); check_utf8(unescape_string(s)); end
 macro B_str(s); interp_parse_bytes(s); end
@@ -753,13 +686,13 @@ function shell_parse(raw::String, interp::Bool)
 
     while !done(s,j)
         c, k = next(s,j)
-        if !in_single_quotes && !in_double_quotes && iswspace(c)
+        if !in_single_quotes && !in_double_quotes && isspace(c)
             update_arg(s[i:j-1])
             append_arg()
             j = k
             while !done(s,j)
                 c, k = next(s,j)
-                if !iswspace(c)
+                if !isspace(c)
                     i = j
                     break
                 end
@@ -770,10 +703,10 @@ function shell_parse(raw::String, interp::Bool)
             if done(s,k)
                 error("\$ right before end of command")
             end
-            if iswspace(s[k])
+            if isspace(s[k])
                 error("space not allowed right after \$")
             end
-            ex, j = parseatom(s,j)
+            ex, j = parse(s,j,false)
             update_arg(esc(ex)); i = j
         else
             if !in_double_quotes && c == '\''
@@ -838,7 +771,7 @@ function print_shell_word(io, word::String)
     has_single = false
     has_special = false
     for c in word
-        if iswspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
+        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
             has_special = true
             if c == '\''
                 has_single = true
@@ -874,22 +807,24 @@ shell_escape(cmd::String, args::String...) =
 
 ## interface to parser ##
 
-function parse(s::String, pos, greedy)
+function parse(str::String, pos::Int, greedy::Bool)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8}, Int32, Int32),
-                    s, pos-1, greedy ? 1:0)
+                    str, pos-1, greedy ? 1:0)
     if isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
     if ex == (); throw(ParseError("end of input")); end
     ex, pos+1 # C is zero-based, Julia is 1-based
 end
+parse(str::String, pos::Int) = parse(str, pos, true)
 
-parse(s::String)          = parse(s, 1, true)
-parse(s::String, pos)     = parse(s, pos, true)
-parseatom(s::String)      = parse(s, 1, false)
-parseatom(s::String, pos) = parse(s, pos, false)
+function parse(str::String)
+    ex, pos = parse(str, start(str))
+    done(str, pos) || error("syntax: extra token after end of expression")
+    return ex
+end
 
 ## miscellaneous string functions ##
 
@@ -930,7 +865,8 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     strs = String[]
     i = start(str)
     n = endof(str)
-    j, k = search(str,splitter,i)
+    r = search(str,splitter,i)
+    j, k = first(r), last(r)+1
     while 0 < j <= n && length(strs) != limit-1
         if i < k
             if keep_empty || i < j
@@ -939,7 +875,8 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
             i = k
         end
         if k <= j; k = nextind(str,j) end
-        j, k = search(str,splitter,k)
+        r = search(str,splitter,k)
+        j, k = first(r), last(r)+1
     end
     if keep_empty || !done(str,i)
         push!(strs, str[i:])
@@ -958,8 +895,9 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
     rstr = ""
     i = a = start(str)
-    j, k = search(str,pattern,i)
-    out = IOString()
+    r = search(str,pattern,i)
+    j, k = first(r), last(r)+1
+    out = IOBuffer()
     while j != 0
         if i == a || i < k
             write(out, SubString(str,i,j-1))
@@ -967,7 +905,8 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
             i = k
         end
         if k <= j; k = nextind(str,j) end
-        j, k = search(str,pattern,k)
+        r = search(str,pattern,k)
+        j, k = first(r), last(r)+1
         if n == limit break end
         n += 1
     end
@@ -977,23 +916,6 @@ end
 replace(s::String, pat, f::Function, n::Integer) = replace(bytestring(s), pat, f, n)
 replace(s::String, pat, r, n::Integer) = replace(s, pat, x->r, n)
 replace(s::String, pat, r) = replace(s, pat, r, 0)
-
-function search_count(str::String, pattern, limit::Integer)
-    n = 0
-    i = a = start(str)
-    j, k = search(str,pattern,i)
-    while j != 0
-        if i == a || i < k
-            n += 1
-            if n == limit break end
-            i = k
-        end
-        if k <= j; k = nextind(str,j) end
-        j, k = search(str,pattern,k)
-    end
-    return n
-end
-search_count(s::String, pat) = search_count(s, pat, 0)
 
 function print_joined(io, strings, delim, last)
     i = start(strings)
@@ -1050,7 +972,7 @@ function lstrip(s::String)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        if !iswspace(c)
+        if !isspace(c)
             return s[i:end]
         end
         i = j
@@ -1063,7 +985,7 @@ function rstrip(s::String)
     i = start(r)
     while !done(r,i)
         c, j = next(r,i)
-        if !iswspace(c)
+        if !isspace(c)
             return s[1:end-i+1]
         end
         i = j
@@ -1085,7 +1007,7 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
             )))
         end
         c,i = next(s,i)
-        if !iswspace(c)
+        if !isspace(c)
             break
         end
     end
@@ -1113,14 +1035,14 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
             'A' <= c <= 'Z' ? c-'A'+10 :
             'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
         if d >= base
-            if !iswspace(c)
+            if !isspace(c)
                 throw(ArgumentError(string(
                     repr(c)," is not a valid digit (in ", repr(s), ")"
                 )))
             end
             while !done(s,i)
                 c,i = next(s,i)
-                if !iswspace(c)
+                if !isspace(c)
                     throw(ArgumentError(string(
                         "extra characters after whitespace (in ", repr(s), ")"
                     )))
@@ -1212,7 +1134,7 @@ end
 
 # find the index of the first occurrence of a value in a byte array
 
-function memchr(a::Array{Uint8,1}, b, i::Integer)
+function search(a::Array{Uint8,1}, b, i::Integer)
     if i < 1 error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
@@ -1220,7 +1142,7 @@ function memchr(a::Array{Uint8,1}, b, i::Integer)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
 end
-memchr(a::Array{Uint8,1}, b) = memchr(a,b,1)
+search(a::Array{Uint8,1}, b) = search(a,b,1)
 
 # return a random string (often useful for temporary filenames/dirnames)
 let

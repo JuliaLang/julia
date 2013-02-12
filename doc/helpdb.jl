@@ -246,7 +246,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"load",E"load(\"file\")
+(E"Getting Around",E"Base",E"require",E"require(\"file\")
 
    Evaluate the contents of a source file
 
@@ -426,6 +426,13 @@
 
 "),
 
+(E"Types",E"Base",E"maxintfloat",E"maxintfloat(type)
+
+   The largest integer losslessly representable by the given floating-
+   point type
+
+"),
+
 (E"Types",E"Base",E"sizeof",E"sizeof(type)
 
    Size, in bytes, of the canonical binary representation of the given
@@ -486,6 +493,15 @@
 
 "),
 
+(E"Generic Functions",E"Base",E"|",E"|()
+
+   Applies a function to the preceding argument which allows for easy
+   function chaining.
+
+   **Example**: \"[1:5] | x->x.^2 | sum | inv\"
+
+"),
+
 (E"Iteration",E"Base",E"start",E"start(iter)
 
    Get initial iteration state for an iterable object
@@ -502,6 +518,17 @@
 
    For a given iterable object and iteration state, return the current
    item and the next iteration state
+
+"),
+
+(E"Iteration",E"Base",E"zip",E"zip(iters...)
+
+   For a set of iterable objects, returns an iterable of tuples, where
+   the >>``<<i``th tuple contains the >>``<<i``th component of each
+   input iterable.
+
+   Note that \"zip\" is it's own inverse: [zip(zip(a...)...)...] ==
+   [a...]
 
 "),
 
@@ -529,6 +556,13 @@
 
    Returns the indices of elements in collection \"a\" that appear in
    collection \"b\"
+
+"),
+
+(E"Iterable Collections",E"Base",E"unique",E"unique(itr)
+
+   Returns an array containing only the unique elements of the
+   iterable \"itr\".
 
 "),
 
@@ -603,28 +637,14 @@
 
 "),
 
-(E"Iterable Collections",E"Base",E"count",E"count(itr)
-
-   Count the number of boolean elements in \"itr\" which are \"true\"
-   rather than \"false\".
-
-"),
-
-(E"Iterable Collections",E"Base",E"countp",E"countp(p, itr)
-
-   Count the number of elements in \"itr\" for which predicate \"p\"
-   is true.
-
-"),
-
-(E"Iterable Collections",E"Base",E"anyp",E"anyp(p, itr)
+(E"Iterable Collections",E"Base",E"any",E"any(p, itr)
 
    Determine whether any element of \"itr\" satisfies the given
    predicate.
 
 "),
 
-(E"Iterable Collections",E"Base",E"allp",E"allp(p, itr)
+(E"Iterable Collections",E"Base",E"all",E"all(p, itr)
 
    Determine whether all elements of \"itr\" satisfy the given
    predicate.
@@ -634,6 +654,15 @@
 (E"Iterable Collections",E"Base",E"map",E"map(f, c)
 
    Transform collection \"c\" by applying \"f\" to each element
+
+"),
+
+(E"Iterable Collections",E"Base",E"mapreduce",E"mapreduce(f, op, itr)
+
+   Applies function \"f\" to each element in \"itr\" and then reduces
+   the result using the binary function \"op\".
+
+   **Example**: \"mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14\"
 
 "),
 
@@ -653,10 +682,9 @@ collection[key...] = value
 
 "),
 
-(E"Associative Collections",E"Base",E"Dict{K,V}",E"Dict{K,V}(n)
+(E"Associative Collections",E"Base",E"Dict{K,V}",E"Dict{K,V}()
 
-   Construct a hashtable with keys of type K and values of type V and
-   intial size of n
+   Construct a hashtable with keys of type K and values of type V
 
 "),
 
@@ -673,13 +701,20 @@ collection[key...] = value
 
 "),
 
-(E"Associative Collections",E"Base",E"del",E"del(collection, key)
+(E"Associative Collections",E"Base",E"getkey",E"getkey(collection, key, default)
+
+   Return the key matching argument \"key\" if one exists in
+   \"collection\", otherwise return \"default\".
+
+"),
+
+(E"Associative Collections",E"Base",E"delete!",E"delete!(collection, key)
 
    Delete the mapping for the given key in a collection.
 
 "),
 
-(E"Associative Collections",E"Base",E"del_all",E"del_all(collection)
+(E"Associative Collections",E"Base",E"empty!",E"empty!(collection)
 
    Delete all keys from a collection.
 
@@ -697,9 +732,10 @@ collection[key...] = value
 
 "),
 
-(E"Associative Collections",E"Base",E"pairs",E"pairs(collection)
+(E"Associative Collections",E"Base",E"collect",E"collect(collection)
 
-   Return an array of all (key, value) tuples in a collection.
+   Return an array of all items in a collection. For associative
+   collections, returns (key, value) tuples.
 
 "),
 
@@ -729,9 +765,29 @@ collection[key...] = value
 
 "),
 
-(E"Set-Like Collections",E"Base",E"add",E"add(collection, key)
+(E"Associative Collections",E"Base",E"eltype",E"eltype(collection)
+
+   Returns the type tuple of the (key,value) pairs contained in
+   collection.
+
+"),
+
+(E"Associative Collections",E"Base",E"sizehint",E"sizehint(s, n)
+
+   Suggest that collection \"s\" reserve capacity for at least \"n\"
+   elements. This can improve performance.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"add!",E"add!(collection, key)
 
    Add an element to a set-like collection.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"add_each!",E"add_each!(collection, iterable)
+
+   Adds each element in iterable to the collection.
 
 "),
 
@@ -749,16 +805,17 @@ collection[key...] = value
 
 "),
 
-(E"Set-Like Collections",E"Base",E"choose",E"choose(s)
-
-   Pick an element of a set
-
-"),
-
 (E"Set-Like Collections",E"Base",E"union",E"union(s1, s2...)
 
    Construct the union of two or more sets. Maintains order with
    arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"union!",E"union!(s1, s2)
+
+   Constructs the union of IntSets s1 and s2, stores the result in
+   \"s1\".
 
 "),
 
@@ -783,47 +840,91 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"Base",E"push",E"push(collection, item)
+(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s, n)
+
+   IntSet s is destructively modified to toggle the inclusion of
+   integer \"n\".
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s, itr)
+
+   For each element in \"itr\", destructively toggle its inclusion in
+   set \"s\".
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s1, s2)
+
+   Construct the symmetric difference of IntSets \"s1\" and \"s2\",
+   storing the result in \"s1\".
+
+"),
+
+(E"Set-Like Collections",E"Base",E"complement",E"complement(s)
+
+   Returns the set-complement of IntSet s.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"complement!",E"complement!(s)
+
+   Mutates IntSet s into its set-complement.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"del_each!",E"del_each!(s, itr)
+
+   Deletes each element of itr in set s in-place.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"intersect!",E"intersect!(s1, s2)
+
+   Intersects IntSets s1 and s2 and overwrites the set s1 with the
+   result. If needed, s1 will be expanded to the size of s2.
+
+"),
+
+(E"Dequeues",E"Base",E"push!",E"push!(collection, item)
 
    Insert an item at the end of a collection.
 
 "),
 
-(E"Dequeues",E"Base",E"pop",E"pop(collection)
+(E"Dequeues",E"Base",E"pop!",E"pop!(collection)
 
    Remove the last item in a collection and return it.
 
 "),
 
-(E"Dequeues",E"Base",E"enqueue",E"enqueue(collection, item)
+(E"Dequeues",E"Base",E"unshift!",E"unshift!(collection, item)
 
-   Insert an item at the beginning of a collection. Also called
-   \"unshift\".
+   Insert an item at the beginning of a collection.
 
 "),
 
-(E"Dequeues",E"Base",E"shift",E"shift(collection)
+(E"Dequeues",E"Base",E"shift!",E"shift!(collection)
 
    Remove the first item in a collection and return it.
 
 "),
 
-(E"Dequeues",E"Base",E"insert",E"insert(collection, index, item)
+(E"Dequeues",E"Base",E"insert!",E"insert!(collection, index, item)
 
    Insert an item at the given index.
 
 "),
 
-(E"Dequeues",E"Base",E"del",E"del(collection, index)
+(E"Dequeues",E"Base",E"delete!",E"delete!(collection, index)
 
    Remove the item at the given index.
 
 "),
 
-(E"Dequeues",E"Base",E"grow",E"grow(collection, n)
+(E"Dequeues",E"Base",E"resize!",E"resize!(collection, n)
 
-   Add uninitialized space for \"n\" elements at the end of a
-   collection.
+   Resize collection to contain \"n\" elements.
 
 "),
 
@@ -833,28 +934,29 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"Base",E"strlen",E"strlen(s)
+(E"Strings",E"Base",E"length",E"length(s)
 
    The number of characters in string \"s\".
 
 "),
 
-(E"Strings",E"Base",E"length",E"length(s)
-
-   The last valid index for string \"s\". Indexes are byte offsets and
-   not character numbers.
-
-"),
-
-(E"Strings",E"Base",E"chars",E"chars(string)
+(E"Strings",E"Base",E"collect",E"collect(string)
 
    Return an array of the characters in \"string\".
 
 "),
 
-(E"Strings",E"Base",E"strcat",E"strcat(strs...)
+(E"Strings",E"",E"*, string(strs...)",E"*, string(strs...)
 
    Concatenate strings.
+
+"),
+
+(E"Strings",E"Base",E"^",E"^()
+
+   Repeat a string.
+
+   **Example**: \"\"Julia \"^3 == \"Julia Julia Julia \"\"
 
 "),
 
@@ -909,7 +1011,7 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"Base",E"strchr",E"strchr(string, char[, i])
+(E"Strings",E"Base",E"search",E"search(string, char[, i])
 
    Return the index of \"char\" in \"string\", giving 0 if not found.
    The second argument may also be a vector or a set of characters.
@@ -938,11 +1040,9 @@ collection[key...] = value
    characters, a string, or a regular expression (but regular
    expressions are only allowed on contiguous strings, such as ASCII
    or UTF-8 strings). The third argument optionally specifies a
-   starting index. The return value is a tuple with 2 integers: the
-   index of the match and the first valid index past the match (or an
-   index beyond the end of the string if the match is at the end); it
-   returns \"(0,0)\" if no match was found, and \"(start,start)\" if
-   \"chars\" is empty.
+   starting index. The return value is a range of indexes where the
+   matching sequence is found, such that \"s[search(s,x)] == x\". The
+   return value is \"0:-1\" if there is no match.
 
 "),
 
@@ -1059,19 +1159,31 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"stdout_stream",E"stdout_stream
+(E"Strings",E"Base",E"charwidth",E"charwidth(c)
+
+   Gives the number of columns needed to print a character.
+
+"),
+
+(E"Strings",E"Base",E"strwidth",E"strwidth(s)
+
+   Gives the number of columns needed to print a string.
+
+"),
+
+(E"I/O",E"Base",E"STDOUT",E"STDOUT
 
    Global variable referring to the standard out stream.
 
 "),
 
-(E"I/O",E"Base",E"stderr_stream",E"stderr_stream
+(E"I/O",E"Base",E"STDERR",E"STDERR
 
    Global variable referring to the standard error stream.
 
 "),
 
-(E"I/O",E"Base",E"stdin_stream",E"stdin_stream
+(E"I/O",E"Base",E"STDIN",E"STDIN
 
    Global variable referring to the standard input stream.
 
@@ -1108,7 +1220,16 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"memio",E"memio([size])
+(E"I/O",E"Base",E"open",E"open(f::function, args...)
+
+   Apply the function \"f\" to the result of \"open(args...)\" and
+   close the resulting file descriptor upon completion.
+
+   **Example**: \"open(readall, \"file.txt\")\"
+
+"),
+
+(E"I/O",E"Base",E"IOBuffer",E"IOBuffer([size])
 
    Create an in-memory I/O stream, optionally specifying how much
    initial space is needed.
@@ -1183,6 +1304,15 @@ collection[key...] = value
 
 "),
 
+(E"I/O",E"Base",E"eof",E"eof(stream)
+
+   Tests whether an I/O stream is at end-of-file. If the stream is not
+   yet exhausted, this function will block to wait for more data if
+   necessary, and then return \"false\". Therefore it is always safe
+   to read one byte after seeing \"eof\" return \"false\".
+
+"),
+
 (E"Text I/O",E"Base",E"show",E"show(x)
 
    Write an informative text representation of a value to the current
@@ -1243,13 +1373,13 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"Base",E"EachLine",E"EachLine(stream)
+(E"Text I/O",E"Base",E"each_line",E"each_line(stream)
 
    Create an iterable object that will yield each line from a stream.
 
 "),
 
-(E"Text I/O",E"Base",E"dlmread",E"dlmread(filename, delim::Char)
+(E"Text I/O",E"Base",E"readdlm",E"readdlm(filename, delim::Char)
 
    Read a matrix from a text file where each line gives one row, with
    elements separated by the given delimeter. If all data is numeric,
@@ -1258,7 +1388,7 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"Base",E"dlmread",E"dlmread(filename, delim::Char, T::Type)
+(E"Text I/O",E"Base",E"readdlm",E"readdlm(filename, delim::Char, T::Type)
 
    Read a matrix from a text file with a given element type. If \"T\"
    is a numeric type, the result is an array of that type, with any
@@ -1268,22 +1398,22 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"Base",E"dlmwrite",E"dlmwrite(filename, array, delim::Char)
+(E"Text I/O",E"Base",E"writedlm",E"writedlm(filename, array, delim::Char)
 
    Write an array to a text file using the given delimeter (defaults
    to comma).
 
 "),
 
-(E"Text I/O",E"Base",E"csvread",E"csvread(filename[, T::Type])
+(E"Text I/O",E"Base",E"readcsv",E"readcsv(filename[, T::Type])
 
-   Equivalent to \"dlmread\" with \"delim\" set to comma.
+   Equivalent to \"readdlm\" with \"delim\" set to comma.
 
 "),
 
-(E"Text I/O",E"Base",E"csvwrite",E"csvwrite(filename, array)
+(E"Text I/O",E"Base",E"writecsv",E"writecsv(filename, array)
 
-   Equivalent to \"dlmwrite\" with \"delim\" set to comma.
+   Equivalent to \"writedlm\" with \"delim\" set to comma.
 
 "),
 
@@ -1355,33 +1485,57 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"Base",E"div",E"div()
+(E"Mathematical Functions",E"Base",E"div",E"div(a, b)
 
-   Integer truncating division
-
-"),
-
-(E"Mathematical Functions",E"Base",E"fld",E"fld()
-
-   Integer floor division
+   Compute a/b, truncating to an integer
 
 "),
 
-(E"Mathematical Functions",E"Base",E"mod",E"mod()
+(E"Mathematical Functions",E"Base",E"fld",E"fld(a, b)
 
-   Modulus after division
+   Largest integer less than or equal to a/b
 
 "),
 
-(E"Mathematical Functions",E"",E"rem %",E"rem %
+(E"Mathematical Functions",E"Base",E"mod",E"mod(x, m)
+
+   Modulus after division, returning in the range [0,m)
+
+"),
+
+(E"Mathematical Functions",E"Base",E"rem",E"rem()
 
    Remainder after division
+
+"),
+
+(E"Mathematical Functions",E"Base",E"%",E"%()
+
+   Remainder after division
+
+"),
+
+(E"Mathematical Functions",E"Base",E"mod1",E"mod1(x, m)
+
+   Modulus after division, returning in the range (0,m]
 
 "),
 
 (E"Mathematical Functions",E"Base",E"//",E"//()
 
    Rational division
+
+"),
+
+(E"Mathematical Functions",E"Base",E"num",E"num(x)
+
+   Numerator of the rational representation of \"x\"
+
+"),
+
+(E"Mathematical Functions",E"Base",E"den",E"den(x)
+
+   Denominator of the rational representation of \"x\"
 
 "),
 
@@ -1395,6 +1549,13 @@ collection[key...] = value
 
    Comparison operators to test equals, not equals, less than, less
    than or equals, greater than, and greater than or equals
+
+"),
+
+(E"Mathematical Functions",E"Base",E"cmp",E"cmp(x, y)
+
+   Return -1, 0, or 1 depending on whether \"x<y\", \"x==y\", or
+   \"x>y\", respectively
 
 "),
 
@@ -1430,55 +1591,74 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"sin",E"sin(x)
 
-   Compute sine of \"x\"
+   Compute sine of \"x\", where \"x\" is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"cos",E"cos(x)
 
-   Compute cosine of \"x\"
+   Compute cosine of \"x\", where \"x\" is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"tan",E"tan(x)
 
-   Compute tangent of \"x\"
+   Compute tangent of \"x\", where \"x\" is in radians
+
+"),
+
+(E"Mathematical Functions",E"Base",E"sind",E"sind(x)
+
+   Compute sine of \"x\", where \"x\" is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"cosd",E"cosd(x)
+
+   Compute cosine of \"x\", where \"x\" is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"tand",E"tand(x)
+
+   Compute tangent of \"x\", where \"x\" is in degrees
 
 "),
 
 (E"Mathematical Functions",E"Base",E"sinh",E"sinh(x)
 
-   Compute hyperbolic sine of \"x\" specified in radians
+   Compute hyperbolic sine of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"cosh",E"cosh(x)
 
-   Compute hyperbolic cosine of \"x\" specified in radians
+   Compute hyperbolic cosine of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"tanh",E"tanh(x)
 
-   Compute hyperbolic tangent of \"x\" specified in radians
+   Compute hyperbolic tangent of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"asin",E"asin(x)
 
-   Compute the inverse sine of \"x\" specified in radians
+   Compute the inverse sine of \"x\", where the output is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acos",E"acos(x)
 
-   Compute the inverse cosine of \"x\" specified in radians
+   Compute the inverse cosine of \"x\", where the output is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"atan",E"atan(x)
 
-   Compute the inverse tangent of \"x\" specified in radians
+   Compute the inverse tangent of \"x\", where the output is in
+   radians
 
 "),
 
@@ -1489,96 +1669,152 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"asind",E"asind(x)
+
+   Compute the inverse sine of \"x\", where the output is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"acosd",E"acosd(x)
+
+   Compute the inverse cosine of \"x\", where the output is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"atand",E"atand(x)
+
+   Compute the inverse tangent of \"x\", where the output is in
+   degrees
+
+"),
+
 (E"Mathematical Functions",E"Base",E"sec",E"sec(x)
 
-   Compute the secant of \"x\" specified in radians
+   Compute the secant of \"x\", where \"x\" is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"csc",E"csc(x)
 
-   Compute the cosecant of \"x\" specified in radians
+   Compute the cosecant of \"x\", where \"x\" is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"cot",E"cot(x)
 
-   Compute the cotangent of \"x\" specified in radians
+   Compute the cotangent of \"x\", where \"x\" is in radians
+
+"),
+
+(E"Mathematical Functions",E"Base",E"secd",E"secd(x)
+
+   Compute the secant of \"x\", where \"x\" is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"cscd",E"cscd(x)
+
+   Compute the cosecant of \"x\", where \"x\" is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"cotd",E"cotd(x)
+
+   Compute the cotangent of \"x\", where \"x\" is in degrees
 
 "),
 
 (E"Mathematical Functions",E"Base",E"asec",E"asec(x)
 
-   Compute the inverse secant of \"x\" specified in radians
+   Compute the inverse secant of \"x\", where the output is in radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acsc",E"acsc(x)
 
-   Compute the inverse cosecant of \"x\" specified in radians
+   Compute the inverse cosecant of \"x\", where the output is in
+   radians
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acot",E"acot(x)
 
-   Compute the inverse cotangent of \"x\" specified in radians
+   Compute the inverse cotangent of \"x\", where the output is in
+   radians
+
+"),
+
+(E"Mathematical Functions",E"Base",E"asecd",E"asecd(x)
+
+   Compute the inverse secant of \"x\", where the output is in degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"acscd",E"acscd(x)
+
+   Compute the inverse cosecant of \"x\", where the output is in
+   degrees
+
+"),
+
+(E"Mathematical Functions",E"Base",E"acotd",E"acotd(x)
+
+   Compute the inverse cotangent of \"x\", where the output is in
+   degrees
 
 "),
 
 (E"Mathematical Functions",E"Base",E"sech",E"sech(x)
 
-   Compute the hyperbolic secant of \"x\" specified in radians
+   Compute the hyperbolic secant of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"csch",E"csch(x)
 
-   Compute the hyperbolic cosecant of \"x\" specified in radians
+   Compute the hyperbolic cosecant of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"coth",E"coth(x)
 
-   Compute the hyperbolic cotangent of \"x\" specified in radians
+   Compute the hyperbolic cotangent of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"asinh",E"asinh(x)
 
-   Compute the inverse hyperbolic sine of \"x\" specified in radians
+   Compute the inverse hyperbolic sine of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acosh",E"acosh(x)
 
-   Compute the inverse hyperbolic cosine of \"x\" specified in radians
+   Compute the inverse hyperbolic cosine of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"atanh",E"atanh(x)
 
-   Compute the inverse hyperbolic cotangent of \"x\" specified in
-   radians
+   Compute the inverse hyperbolic cotangent of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"asech",E"asech(x)
 
-   Compute the inverse hyperbolic secant of \"x\" specified in radians
+   Compute the inverse hyperbolic secant of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acsch",E"acsch(x)
 
-   Compute the inverse hyperbolic cosecant of \"x\" specified in
-   radians
+   Compute the inverse hyperbolic cosecant of \"x\"
 
 "),
 
 (E"Mathematical Functions",E"Base",E"acoth",E"acoth(x)
 
-   Compute the inverse hyperbolic cotangent of \"x\" specified in
-   radians
+   Compute the inverse hyperbolic cotangent of \"x\"
 
 "),
 
@@ -1591,6 +1827,18 @@ collection[key...] = value
 (E"Mathematical Functions",E"Base",E"cosc",E"cosc(x)
 
    Compute cos(\\pi x) / x
+
+"),
+
+(E"Mathematical Functions",E"Base",E"degrees2radians",E"degrees2radians(x)
+
+   Convert \"x\" from degrees to radians
+
+"),
+
+(E"Mathematical Functions",E"Base",E"radians2degrees",E"radians2degrees(x)
+
+   Convert \"x\" from radians to degrees
 
 "),
 
@@ -1664,6 +1912,12 @@ collection[key...] = value
 (E"Mathematical Functions",E"Base",E"expm1",E"expm1(x)
 
    Accurately compute e^x-1
+
+"),
+
+(E"Mathematical Functions",E"Base",E"square",E"square(x)
+
+   Compute x^2
 
 "),
 
@@ -1844,6 +2098,13 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"reim",E"reim(z)
+
+   Return both the real and imaginary parts of the complex number
+   \"z\"
+
+"),
+
 (E"Mathematical Functions",E"Base",E"conj",E"conj(z)
 
    Compute the complex conjugate of a complex number \"z\"
@@ -1881,6 +2142,18 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"factor",E"factor(n)
+
+   Compute the prime factorization of an integer \"n\". Returns a
+   dictionary. The keys of the dictionary correspond to the factors,
+   and hence are of the same type as \"n\". The value associated with
+   each key indicates the number of times the factor appears in the
+   factorization.
+
+   **Example**: 100=2*2*5*5; then, \"factor(100) -> [5=>2,2=>2]\"
+
+"),
+
 (E"Mathematical Functions",E"Base",E"gcd",E"gcd(x, y)
 
    Greatest common divisor
@@ -1893,9 +2166,28 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"gcdx",E"gcdx(x, y)
+
+   Greatest common divisor, also returning integer coefficients \"u\"
+   and \"v\" that solve \"ux+vy == gcd(x,y)\"
+
+"),
+
+(E"Mathematical Functions",E"Base",E"ispow2",E"ispow2(n)
+
+   Test whether \"n\" is a power of two
+
+"),
+
 (E"Mathematical Functions",E"Base",E"nextpow2",E"nextpow2(n)
 
    Next power of two not less than \"n\"
+
+"),
+
+(E"Mathematical Functions",E"Base",E"prevpow2",E"prevpow2(n)
+
+   Previous power of two not greater than \"n\"
 
 "),
 
@@ -1925,6 +2217,12 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"invmod",E"invmod(x, m)
+
+   Inverse of \"x\", modulo \"m\"
+
+"),
+
 (E"Mathematical Functions",E"Base",E"powermod",E"powermod(x, p, m)
 
    Compute \"mod(x^p, m)\"
@@ -1933,13 +2231,26 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"gamma",E"gamma(x)
 
+   Compute the gamma function of \"x\"
+
 "),
 
 (E"Mathematical Functions",E"Base",E"lgamma",E"lgamma(x)
 
+   Compute the logarithm of \"gamma(x)\"
+
 "),
 
 (E"Mathematical Functions",E"Base",E"lfact",E"lfact(x)
+
+   Compute the logarithmic factorial of \"x\"
+
+"),
+
+(E"Mathematical Functions",E"Base",E"digamma",E"digamma(x)
+
+   Compute the digamma function of \"x\" (the logarithmic derivative
+   of \"gamma(x)\")
 
 "),
 
@@ -2106,6 +2417,54 @@ airyaiprime(x)
 
 "),
 
+(E"Data Formats",E"Base",E"isbool",E"isbool(x)
+
+   Test whether number or array is boolean
+
+"),
+
+(E"Data Formats",E"Base",E"int",E"int(x)
+
+   Convert a number or array to the default integer type on your
+   platform. Alternatively, \"x\" can be a string, which is parsed as
+   an integer.
+
+"),
+
+(E"Data Formats",E"Base",E"uint",E"uint(x)
+
+   Convert a number or array to the default unsigned integer type on
+   your platform. Alternatively, \"x\" can be a string, which is
+   parsed as an unsigned integer.
+
+"),
+
+(E"Data Formats",E"Base",E"integer",E"integer(x)
+
+   Convert a number or array to integer type. If \"x\" is already of
+   integer type it is unchanged, otherwise it converts it to the
+   default integer type on your platform.
+
+"),
+
+(E"Data Formats",E"Base",E"isinteger",E"isinteger(x)
+
+   Test whether a number or array is of integer type
+
+"),
+
+(E"Data Formats",E"Base",E"signed",E"signed(x)
+
+   Convert a number to a signed integer
+
+"),
+
+(E"Data Formats",E"Base",E"unsigned",E"unsigned(x)
+
+   Convert a number to an unsigned integer
+
+"),
+
 (E"Data Formats",E"Base",E"int8",E"int8(x)
 
    Convert a number or array to \"Int8\" data type
@@ -2127,6 +2486,12 @@ airyaiprime(x)
 (E"Data Formats",E"Base",E"int64",E"int64(x)
 
    Convert a number or array to \"Int64\" data type
+
+"),
+
+(E"Data Formats",E"Base",E"int128",E"int128(x)
+
+   Convert a number or array to \"Int128\" data type
 
 "),
 
@@ -2154,6 +2519,12 @@ airyaiprime(x)
 
 "),
 
+(E"Data Formats",E"Base",E"uint128",E"uint128(x)
+
+   Convert a number or array to \"Uint128\" data type
+
+"),
+
 (E"Data Formats",E"Base",E"float32",E"float32(x)
 
    Convert a number or array to \"Float32\" data type
@@ -2163,6 +2534,43 @@ airyaiprime(x)
 (E"Data Formats",E"Base",E"float64",E"float64(x)
 
    Convert a number or array to \"Float64\" data type
+
+"),
+
+(E"Data Formats",E"Base",E"float",E"float(x)
+
+   Convert a number, array, or string to a \"FloatingPoint\" data
+   type. For numeric data, the smallest suitable \"FloatingPoint\"
+   type is used. For strings, it converts to \"Float64\".
+
+"),
+
+(E"Data Formats",E"Base",E"significand",E"significand(x)
+
+   Extract the significand(s) (a.k.a. mantissa), in binary
+   representation, of a floating-point number or array.
+
+   For example, \"significand(15.2)/15.2 == 0.125\", and
+   \"significand(15.2)*8 == 15.2\"
+
+"),
+
+(E"Data Formats",E"Base",E"float64_valued",E"float64_valued(x::Rational)
+
+   True if \"x\" can be losslessly represented as a \"Float64\" data
+   type
+
+"),
+
+(E"Data Formats",E"Base",E"complex64",E"complex64(r, i)
+
+   Convert to \"r+i*im\" represented as a \"Complex64\" data type
+
+"),
+
+(E"Data Formats",E"Base",E"complex128",E"complex128(r, i)
+
+   Convert to \"r+i*im\" represented as a \"Complex128\" data type
 
 "),
 
@@ -2249,9 +2657,29 @@ airyaiprime(x)
 
 "),
 
+(E"Numbers",E"Base",E"isinf",E"isinf(f)
+
+   Test whether a number is infinite
+
+"),
+
 (E"Numbers",E"Base",E"isnan",E"isnan(f)
 
    Test whether a floating point number is not a number (NaN)
+
+"),
+
+(E"Numbers",E"Base",E"inf",E"inf(f)
+
+   Returns infinity in the same floating point type as \"f\" (or \"f\"
+   can by the type itself)
+
+"),
+
+(E"Numbers",E"Base",E"nan",E"nan(f)
+
+   Returns NaN in the same floating point type as \"f\" (or \"f\" can
+   by the type itself)
 
 "),
 
@@ -2309,6 +2737,62 @@ airyaiprime(x)
 
 "),
 
+(E"Numbers",E"Base",E"count_ones",E"count_ones(x::Integer) -> Integer
+
+   Number of ones in the binary representation of \"x\".
+
+   **Example**: \"count_ones(7) -> 3\"
+
+"),
+
+(E"Numbers",E"Base",E"count_zeros",E"count_zeros(x::Integer) -> Integer
+
+   Number of zeros in the binary representation of \"x\".
+
+   **Example**: \"count_zeros(int32(2 ^ 16 - 1)) -> 16\"
+
+"),
+
+(E"Numbers",E"Base",E"leading_zeros",E"leading_zeros(x::Integer) -> Integer
+
+   Number of zeros leading the binary representation of \"x\".
+
+   **Example**: \"leading_zeros(int32(1)) -> 31\"
+
+"),
+
+(E"Numbers",E"Base",E"leading_ones",E"leading_ones(x::Integer) -> Integer
+
+   Number of ones leading the binary representation of \"x\".
+
+   **Example**: \"leading_ones(int32(2 ^ 32 - 2)) -> 31\"
+
+"),
+
+(E"Numbers",E"Base",E"trailing_zeros",E"trailing_zeros(x::Integer) -> Integer
+
+   Number of zeros trailing the binary representation of \"x\".
+
+   **Example**: \"trailing_zeros(2) -> 1\"
+
+"),
+
+(E"Numbers",E"Base",E"trailing_ones",E"trailing_ones(x::Integer) -> Integer
+
+   Number of ones trailing the binary representation of \"x\".
+
+   **Example**: \"trailing_ones(3) -> 2\"
+
+"),
+
+(E"Numbers",E"Base",E"isprime",E"isprime(x::Integer) -> Bool
+
+      Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
+
+   **Example**: \"isprime(3) -> true\"
+
+"),
+
 (E"Random Numbers",E"Base",E"srand",E"srand([rng], seed)
 
    Seed the RNG with a \"seed\", which may be an unsigned integer or a
@@ -2354,9 +2838,10 @@ airyaiprime(x)
 
 "),
 
-(E"Random Numbers",E"Base",E"rand",E"rand(Int32|Uint32|Int64|Uint64)
+(E"Random Numbers",E"Base",E"rand",E"rand(Int32|Uint32|Int64|Uint64|Int128|Uint128[, dims...])
 
-   Generate a random integer of the given type
+   Generate a random integer of the given type. Optionally, generate
+   an array of random integers of the given type by specifying dims.
 
 "),
 
@@ -2407,16 +2892,10 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"numel",E"numel(A)
-
-   Returns the number of elements in A
-
-"),
-
 (E"Arrays",E"Base",E"length",E"length(A)
 
    Returns the number of elements in A (note that this differs from
-   Matlab where \"length(A)\" is the largest dimension of \"A\")
+   MATLAB where \"length(A)\" is the largest dimension of \"A\")
 
 "),
 
@@ -2677,7 +3156,7 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"permute",E"permute(A, perm)
+(E"Arrays",E"Base",E"permutedims",E"permutedims(A, perm)
 
    Permute the dimensions of array \"A\". \"perm\" is a vector
    specifying a permutation of length \"ndims(A)\". This is a
@@ -2686,23 +3165,22 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"ipermute",E"ipermute(A, perm)
+(E"Arrays",E"Base",E"ipermutedims",E"ipermutedims(A, perm)
 
-   Like \"permute\", except the inverse of the given permutation is
-   applied.
+   Like \"permutedims\", except the inverse of the given permutation
+   is applied.
 
 "),
 
-(E"Arrays",E"Base",E"squeeze",E"squeeze(A)
+(E"Arrays",E"Base",E"squeeze",E"squeeze(A, dims)
 
-   Remove singleton dimensions from the shape of array \"A\"
+   Remove the dimensions specified by \"dims\" from array \"A\"
 
 "),
 
 (E"Arrays",E"Base",E"vec",E"vec(A)
 
-   Make a vector out of an array with only one non-singleton
-   dimension.
+   Vectorize an array using column-major convention.
 
 "),
 
@@ -2713,6 +3191,26 @@ airyaiprime(x)
    combine duplicates. If \"m\" and \"n\" are not specified, they are
    set to \"max(I)\" and \"max(J)\" respectively. If the \"combine\"
    function is not supplied, duplicates are added by default.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"sparsevec",E"sparsevec(I, V[, m, combine])
+
+   Create a sparse matrix \"S\" of size \"m x 1\" such that \"S[I[k]]
+   = V[k]\". Duplicates are combined using the \"combine\" function,
+   which defaults to *+* if it is not provided. In julia, sparse
+   vectors are really just sparse matrices with one column. Given
+   Julia's Compressed Sparse Columns (CSC) storage format, a sparse
+   column matrix with one column is sparse, whereas a sparse row
+   matrix with one row ends up being dense.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"sparsevec",E"sparsevec(D::Dict[, m])
+
+   Create a sparse matrix of size \"m x 1\" where the row values are
+   keys from the dictionary, and the nonzero values are the values
+   from the dictionary.
 
 "),
 
@@ -2731,6 +3229,14 @@ airyaiprime(x)
 (E"Sparse Matrices",E"Base",E"sparse",E"sparse(A)
 
    Convert a dense matrix \"A\" into a sparse matrix.
+
+"),
+
+(E"Sparse Matrices",E"Base",E"sparsevec",E"sparsevec(A)
+
+   Convert a dense vector \"A\" into a sparse matrix of size \"m x
+   1\". In julia, sparse vectors are really just sparse matrices with
+   one column.
 
 "),
 
@@ -2826,35 +3332,146 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"lu",E"lu(A) -> LU
+(E"Linear Algebra",E"Base",E"factors",E"factors(F)
 
-   Compute LU factorization. LU is an \"LU factorization\" type that
-   can be used as an ordinary matrix.
-
-"),
-
-(E"Linear Algebra",E"Base",E"chol",E"chol(A)
-
-   Compute Cholesky factorization
+   Return the factors of a factorization \"F\". For example, in the
+   case of an LU decomposition, factors(LU) -> L, U, P
 
 "),
 
-(E"Linear Algebra",E"Base",E"qr",E"qr(A)
+(E"Linear Algebra",E"Base",E"lu",E"lu(A) -> L, U, P
 
-   Compute QR factorization
-
-"),
-
-(E"Linear Algebra",E"Base",E"qrp",E"qrp(A)
-
-   Compute QR factorization with pivoting
+   Compute the LU factorization of \"A\", such that \"A[P,:] = L*U\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"factors",E"factors(D)
+(E"Linear Algebra",E"Base",E"lufact",E"lufact(A) -> LUDense
 
-   Return the factors of a decomposition D. For an LU decomposition,
-   factors(LU) -> L, U, p
+   Compute the LU factorization of \"A\" and return a \"LUDense\"
+   object. \"factors(lufact(A))\" returns the triangular matrices
+   containing the factorization. The following functions are available
+   for \"LUDense\" objects: \"size\", \"factors\", \"\\\", \"inv\",
+   \"det\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"lufact!",E"lufact!(A) -> LUDense
+
+   \"lufact!\" is the same as \"lufact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+(E"Linear Algebra",E"Base",E"chol",E"chol(A[, LU]) -> F
+
+   Compute Cholesky factorization of a symmetric positive-definite
+   matrix \"A\" and return the matrix \"F\". If \"LU\" is \"L\"
+   (Lower), \"A = L*L'\". If \"LU\" is \"U\" (Upper), \"A = R'*R\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"cholfact",E"cholfact(A[, LU]) -> CholeskyDense
+
+   Compute the Cholesky factorization of a symmetric positive-definite
+   matrix \"A\" and return a \"CholeskyDense\" object. \"LU\" may be
+   'L' for using the lower part or 'U' for the upper part. The default
+   is to use 'U'. \"factors(cholfact(A))\" returns the triangular
+   matrix containing the factorization. The following functions are
+   available for \"CholeskyDense\" objects: \"size\", \"factors\",
+   \"\\\", \"inv\", \"det\". A \"LAPACK.PosDefException\" error is
+   thrown in case the matrix is not positive definite.
+
+"),
+
+(E"Linear Algebra",E"Base",E"cholpfact",E"cholpfact(A[, LU]) -> CholeskyPivotedDense
+
+   Compute the pivoted Cholesky factorization of a symmetric positive
+   semi-definite matrix \"A\" and return a \"CholeskyDensePivoted\"
+   object. \"LU\" may be 'L' for using the lower part or 'U' for the
+   upper part. The default is to use 'U'. \"factors(cholpfact(A))\"
+   returns the triangular matrix containing the factorization. The
+   following functions are available for \"CholeskyDensePivoted\"
+   objects: \"size\", \"factors\", \"\\\", \"inv\", \"det\". A
+   \"LAPACK.RankDeficientException\" error is thrown in case the
+   matrix is rank deficient.
+
+"),
+
+(E"Linear Algebra",E"Base",E"cholpfact!",E"cholpfact!(A[, LU]) -> CholeskyPivotedDense
+
+   \"cholpfact!\" is the same as \"cholpfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+(E"Linear Algebra",E"Base",E"qr",E"qr(A) -> Q, R
+
+   Compute the QR factorization of \"A\" such that \"A = Q*R\". Also
+   see \"qrd\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrfact",E"qrfact(A)
+
+   Compute the QR factorization of \"A\" and return a \"QRDense\"
+   object. \"factors(qrfact(A))\" returns \"Q\" and \"R\". The
+   following functions are available for \"QRDense\" objects:
+   \"size\", \"factors\", \"qmulQR\", \"qTmulQR\", \"\\\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrfact!",E"qrfact!(A)
+
+   \"qrfact!\" is the same as \"qrfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrp",E"qrp(A) -> Q, R, P
+
+   Compute the QR factorization of \"A\" with pivoting, such that
+   \"A*I[:,P] = Q*R\", where \"I\" is the identity matrix. Also see
+   \"qrpfact\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrpfact",E"qrpfact(A) -> QRPivotedDense
+
+   Compute the QR factorization of \"A\" with pivoting and return a
+   \"QRDensePivoted\" object. \"factors(qrpfact(A))\" returns \"Q\"
+   and \"R\". The following functions are available for
+   \"QRDensePivoted\" objects: \"size\", \"factors\", \"qmulQR\",
+   \"qTmulQR\", \"\\\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"qrpfact!",E"qrpfact!(A) -> QRPivotedDense
+
+   \"qrpfact!\" is the same as \"qrpfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+(E"Linear Algebra",E"Base",E"qmulQR",E"qmulQR(QR, A)
+
+   Perform Q*A efficiently, where Q is a an orthogonal matrix defined
+   as the product of k elementary reflectors from the QR
+   decomposition.
+
+"),
+
+(E"Linear Algebra",E"Base",E"qTmulQR",E"qTmulQR(QR, A)
+
+   Perform Q'>>*<<A efficiently, where Q is a an orthogonal matrix
+   defined as the product of k elementary reflectors from the QR
+   decomposition.
+
+"),
+
+(E"Linear Algebra",E"Base",E"sqrtm",E"sqrtm(A)
+
+   Compute the matrix square root of \"A\". If \"B = sqrtm(A)\", then
+   \"B*B == A\" within roundoff error.
 
 "),
 
@@ -2870,23 +3487,73 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svd",E"svd(A) -> U, S, V
+(E"Linear Algebra",E"Base",E"svdfact",E"svdfact(A[, thin]) -> SVDDense
 
-   Compute the SVD of A, returning \"U\", \"S\", and \"V\" such that
-   \"A = U*S*V'\".
+   Compute the Singular Value Decomposition (SVD) of \"A\" and return
+   an \"SVDDense\" object. \"factors(svdfact(A))\" returns \"U\",
+   \"S\", and \"Vt\", such that \"A = U*diagm(S)*Vt\". If \"thin\" is
+   \"true\", an economy mode decomposition is returned.
 
 "),
 
-(E"Linear Algebra",E"Base",E"svdt",E"svdt(A) -> U, S, Vt
+(E"Linear Algebra",E"Base",E"svdfact!",E"svdfact!(A[, thin]) -> SVDDense
+
+   \"svdfact!\" is the same as \"svdfact\" but saves space by
+   overwriting the input A, instead of creating a copy. If \"thin\" is
+   \"true\", an economy mode decomposition is returned.
+
+"),
+
+(E"Linear Algebra",E"Base",E"svd",E"svd(A[, thin]) -> U, S, V
+
+   Compute the SVD of A, returning \"U\", \"S\", and \"V\" such that
+   \"A = U*S*V'\". If \"thin\" is \"true\", an economy mode
+   decomposition is returned.
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdt",E"svdt(A[, thin]) -> U, S, Vt
 
    Compute the SVD of A, returning \"U\", \"S\", and \"Vt\" such that
-   \"A = U*S*Vt\".
+   \"A = U*S*Vt\". If \"thin\" is \"true\", an economy mode
+   decomposition is returned.
 
 "),
 
 (E"Linear Algebra",E"Base",E"svdvals",E"svdvals(A)
 
    Returns the singular values of \"A\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdvals!",E"svdvals!(A)
+
+   Returns the singular values of \"A\", while saving space by
+   overwriting the input.
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdfact",E"svdfact(A, B) -> GSVDDense
+
+   Compute the generalized SVD of \"A\" and \"B\", returning a
+   \"GSVDDense\" Factorization object. \"factors(svdfact(A,b))\"
+   returns \"U\", \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that
+   \"A = U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"svd",E"svd(A, B) -> U, V, Q, D1, D2, R0
+
+   Compute the generalized SVD of \"A\" and \"B\", returning \"U\",
+   \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that \"A =
+   U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
+
+"),
+
+(E"Linear Algebra",E"Base",E"svdvals",E"svdvals(A, B)
+
+   Return only the singular values from the generalized singular value
+   decomposition of \"A\" and \"B\".
 
 "),
 
@@ -3046,6 +3713,22 @@ airyaiprime(x)
 
 "),
 
+(E"Combinatorics",E"Base",E"permute!",E"permute!(v, p)
+
+   Permute vector \"v\" in-place, according to permutation \"p\".  No
+   checking is done to verify that \"p\" is a permutation.
+
+   To return a new permutation, use \"v[p]\".  Note that this is
+   generally faster than \"permute!(v,p)\" for large vectors.
+
+"),
+
+(E"Combinatorics",E"Base",E"ipermute!",E"ipermute!(v, p)
+
+   Like permute!, but the inverse of the given permutation is applied.
+
+"),
+
 (E"Combinatorics",E"Base",E"randcycle",E"randcycle(n)
 
    Construct a random cyclic permutation of the given length
@@ -3166,66 +3849,10 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"histc",E"histc(v, e)
+(E"Statistics",E"Base",E"hist",E"hist(v, e)
 
    Compute the histogram of \"v\" using a vector \"e\" as the edges
    for the bins
-
-"),
-
-(E"Statistics",E"Base",E"weighted_mean",E"weighted_mean(v, w)
-
-   Compute the weighted mean of \"v\" using a vector of weights \"w\"
-
-"),
-
-(E"Statistics",E"Base",E"mad",E"mad(v, m)
-
-   Compute the median absolute deviation from the entries of a vector
-   \"v\" relative to a known median \"m\". The calculation involves an
-   adjustment factor of 1.4826 required to insure that the estimator
-   is consistent for normally distributed data.
-
-"),
-
-(E"Statistics",E"Base",E"mad",E"mad(v)
-
-   Compute the median absolute deviation from the entries of a vector
-   \"v\" relative to the median of \"v\". The calculation involves an
-   adjustment factor of 1.4826 required to insure that the estimator
-   is consistent for normally distributed data.
-
-"),
-
-(E"Statistics",E"Base",E"skewness",E"skewness(v, m)
-
-   Compute the sample skewness of a vector \"v\" relative to a known
-   mean \"m\". Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
-(E"Statistics",E"Base",E"skewness",E"skewness(v)
-
-   Compute the sample skewness of a vector \"v\" relative to the
-   sample mean. Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
-(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v, m)
-
-   Compute the sample kurtosis of a vector \"v\" relative to a known
-   mean \"m\". Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
-(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v)
-
-   Compute the sample kurtosis of a vector \"v\" relative to the
-   sample mean. Uses a maximum likelihood estimator which can be
-   biased.
 
 "),
 
@@ -3243,72 +3870,9 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"quartile",E"quartile(v)
-
-   Compute the quartiles of a vector \"v\" at the probability values
-   \"[.0, .25, .5, .75, 1.0]\".
-
-"),
-
-(E"Statistics",E"Base",E"quintile",E"quintile(v)
-
-   Compute the quintiles of a vector \"v\" at the probability values
-   \"[.0, .2, .4, .6, .8, 1.0]\".
-
-"),
-
-(E"Statistics",E"Base",E"decile",E"decile(v)
-
-   Compute the deciles of a vector \"v\" at the probability values
-   \"[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]\".
-
-"),
-
-(E"Statistics",E"Base",E"iqr",E"iqr(v)
-
-   Compute the interquantile range of a vector \"v\" at the
-   probability values \"[.25, .75]\".
-
-"),
-
-(E"Statistics",E"Base",E"tiedrank",E"tiedrank(v)
-
-   Compute the ranks of the entries of vector \"v\". Ties are resolved
-   by taking the average rank over all tied values.
-
-"),
-
-(E"Statistics",E"Base",E"cov_pearson",E"cov_pearson(v1, v2)
-
-   Compute the Pearson covariance between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"cov_spearman",E"cov_spearman(v)
-
-   Compute the Spearman covariance between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
 (E"Statistics",E"Base",E"cov",E"cov(v)
 
    Compute the Pearson covariance between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"cor_pearson",E"cor_pearson(v)
-
-   Compute the Pearson correlation between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"cor_spearman",E"cor_spearman(v)
-
-   Compute the Spearman correlation between two vectors \"v1\" and
    \"v2\".
 
 "),
@@ -3317,39 +3881,6 @@ airyaiprime(x)
 
    Compute the Pearson correlation between two vectors \"v1\" and
    \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"autocor",E"autocor(v, l)
-
-   Compute the Pearson autocorrelation of a vector \"v\" with itself
-   at lag \"l\".
-
-"),
-
-(E"Statistics",E"Base",E"autocor",E"autocor(v)
-
-   Compute the Pearson autocorrelation of a vector \"v\" with itself
-   at lag \"1\".
-
-"),
-
-(E"Statistics",E"Base",E"dist",E"dist(m)
-
-   Compute the distance matrix between all of the rows of \"m\".
-
-"),
-
-(E"Statistics",E"Base",E"rle",E"rle(v)
-
-   Compute a run-length encoding representation of a vector \"v\".
-
-"),
-
-(E"Statistics",E"Base",E"inverse_rle",E"inverse_rle(vals, lens)
-
-   Compute a vector from its run-length vector representation as
-   values \"vals\" and run lengths \"lens\".
 
 "),
 
@@ -3764,41 +4295,26 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"Base",E"darray",E"darray(init, type, dims[, distdim, procs, dist])
+(E"Distributed Arrays",E"Base",E"DArray",E"DArray(init, dims[, procs, dist])
 
-   Construct a distributed array. \"init\" is a function of three
-   arguments that will run on each processor, and should return an
-   \"Array\" holding the local data for the current processor. Its
-   arguments are \"(T,d,da)\" where \"T\" is the element type, \"d\"
-   is the dimensions of the needed local piece, and \"da\" is the new
-   \"DArray\" being constructed (though, of course, it is not fully
-   initialized). \"type\" is the element type. \"dims\" is the
-   dimensions of the entire \"DArray\". \"distdim\" is the dimension
-   to distribute in. \"procs\" is a vector of processor ids to use.
-   \"dist\" is a vector giving the first index of each contiguous
-   distributed piece, such that the nth piece consists of indexes
-   \"dist[n]\" through \"dist[n+1]-1\". If you have a vector \"v\" of
-   the sizes of the pieces, \"dist\" can be computed as
-   \"cumsum([1,v])\". Fortunately, all arguments after \"dims\" are
-   optional.
+   Construct a distributed array. \"init\" is a function accepting a
+   tuple of index ranges. This function should return a chunk of the
+   distributed array for the specified indexes. \"dims\" is the
+   overall size of the distributed array. \"procs\" optionally
+   specifies a vector of processor IDs to use. \"dist\" is an integer
+   vector specifying how many chunks the distributed array should be
+   divided into in each dimension.
 
 "),
 
-(E"Distributed Arrays",E"Base",E"darray",E"darray(f, A)
-
-   Transform \"DArray\" \"A\" to another of the same type and
-   distribution by applying function \"f\" to each block of \"A\".
-
-"),
-
-(E"Distributed Arrays",E"Base",E"dzeros",E"dzeros([type], dims, ...)
+(E"Distributed Arrays",E"Base",E"dzeros",E"dzeros(dims, ...)
 
    Construct a distributed array of zeros. Trailing arguments are the
    same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"Base",E"dones",E"dones([type], dims, ...)
+(E"Distributed Arrays",E"Base",E"dones",E"dones(dims, ...)
 
    Construct a distributed array of ones. Trailing arguments are the
    same as those accepted by \"darray\".
@@ -3826,14 +4342,7 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"Base",E"dcell",E"dcell(dims, ...)
-
-   Construct a distributed cell array. Trailing arguments are the same
-   as those accepted by \"darray\".
-
-"),
-
-(E"Distributed Arrays",E"Base",E"distribute",E"distribute(a[, distdim])
+(E"Distributed Arrays",E"Base",E"distribute",E"distribute(a)
 
    Convert a local array to distributed
 
@@ -3845,22 +4354,9 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"Base",E"changedist",E"changedist(d, distdim)
-
-   Change the distributed dimension of a \"DArray\"
-
-"),
-
 (E"Distributed Arrays",E"Base",E"myindexes",E"myindexes(d)
 
    A tuple describing the indexes owned by the local processor
-
-"),
-
-(E"Distributed Arrays",E"Base",E"owner",E"owner(d, i)
-
-   Get the id of the processor holding index \"i\" in the distributed
-   dimension
 
 "),
 
@@ -3870,15 +4366,43 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"Base",E"distdim",E"distdim(d)
+(E"System",E"Base",E"run",E"run(command)
 
-   Get the distributed dimension of \"d\"
+   Run a command object, constructed with backticks. Throws an error
+   if anything goes wrong, including the process exiting with a non-
+   zero status.
 
 "),
 
-(E"System",E"Base",E"system",E"system(\"command\")
+(E"System",E"Base",E"success",E"success(command)
 
-   Run a shell command.
+   Run a command object, constructed with backticks, and tell whether
+   it was successful (exited with a code of 0).
+
+"),
+
+(E"System",E"Base",E"readsfrom",E"readsfrom(command)
+
+   Starts running a command asynchronously, and returns a tuple
+   (stream,process). The first value is a stream reading from the
+   process' standard output.
+
+"),
+
+(E"System",E"Base",E"writesto",E"writesto(command)
+
+   Starts running a command asynchronously, and returns a tuple
+   (stream,process). The first value is a stream writing to the
+   process' standard input.
+
+"),
+
+(E"System",E"",E"> < >> .>",E"> < >> .>
+
+   \">\" \"<\" and \">>\" work exactly as in bash, and \".>\"
+   redirects STDERR.
+
+   **Example**: \"run((`ls` > \"out.log\") .> \"err.log\")\"
 
 "),
 
@@ -3905,6 +4429,13 @@ airyaiprime(x)
 
    Set the current working directory. Returns the new current
    directory.
+
+"),
+
+(E"System",E"Base",E"cd",E"cd(f[, \"dir\"])
+
+   Temporarily changes the current working directory (HOME if not
+   specified) and applies function f before returning.
 
 "),
 
@@ -5873,26 +6404,6 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortr",E"sortr(v[, dim])
-
-   Sort a vector in descending order. If \"dim\" is provided, sort
-   along the given dimension.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortr",E"sortr(alg, ...)
-
-   Sort in descending order with a specific sorting algorithm
-   (InsertionSort, QuickSort, MergeSort, or TimSort).
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortr!",E"sortr!(...)
-
-   In-place \"sortr\".
-
-"),
-
 (E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(by, v[, dim])
 
    Sort a vector according to \"by(v)\".   If \"dim\" is provided,
@@ -5913,71 +6424,31 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v)
 
-   Sort a vector in ascending order, also constructing the permutation
-   that sorts the vector.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(lessthan, v) -> s,p
-
-   Sort a vector with a custom comparison function, also constructing
-   the permutation that sorts the vector.
+   Return a permutation vector, which when applied to the input vector
+   \"v\" will sort it.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(alg, ...) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(lessthan, v)
+
+   Return a permutation vector, which when applied to the input vector
+   \"v\" will sort it, using the specified \"lessthan\" comparison
+   function.
+
+"),
+
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(alg, ...)
 
    \"sortperm\" using a specific sorting algorithm (\"InsertionSort\",
    \"QuickSort\", \"MergeSort\", or \"TimSort\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(...) -> s,p
+(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(...)
 
    In-place \"sortperm\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermr",E"sortpermr(v) -> s,p
-
-   Sort a vector in descending order, also constructing the
-   permutation that sorts the vector!
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermr",E"sortpermr(alg, ...) -> s,p
-
-   \"sortpermr\" using a specific sorting algorithm
-   (\"InsertionSort\", \"QuickSort\", \"MergeSort\", or \"TimSort\").
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermr!",E"sortpermr!(v) -> s,p
-
-   In-place \"sortpermr\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermby",E"sortpermby(by, v) -> s,p
-
-   Sort a vector according to the result of function \"by\" applied to
-   all values, also constructing the permutation that sorts the
-   vector.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermby",E"sortpermby(alg, ...) -> s,p
-
-   \"sortpermby\" using a specific sorting algorithm
-   (\"InsertionSort\", \"QuickSort\", \"MergeSort\", or \"TimSort\").
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortpermby!",E"sortpermby!(...) -> s,p
-
-   In-place \"sortpermby\".
 
 "),
 

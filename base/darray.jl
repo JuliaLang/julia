@@ -311,21 +311,21 @@ similar(d::DArray, T::Type, dims::Dims) =
 copy{T}(d::SubOrDArray{T}) =
     darray((T,lsz,da)->localize_copy(d, da), T, size(d), distdim(d), procs(d))
 
-function copy_to(d::DArray, src::SubOrDArray)
+function copy!(d::DArray, src::SubOrDArray)
     @sync begin
         for p = d.pmap
-            @spawnat p copy_to(localize(d), localize(src, d))
+            @spawnat p copy!(localize(d), localize(src, d))
         end
     end
     return d
 end
 
-function copy_to(d::DArray, src::AbstractArray)
+function copy!(d::DArray, src::AbstractArray)
     @sync begin
         for i = 1:length(d.pmap)
             p = d.pmap[i]
             block = src[pieceindexes(d, i)...]
-            @spawnat p copy_to(localize(d), block)
+            @spawnat p copy!(localize(d), block)
         end
     end
     return d
@@ -807,7 +807,7 @@ end # for
 
 function map(f, A::SubOrDArray)
     T = typeof(f(A[1]))
-    darray((T,lsz,da)->map_to(f, Array(T,lsz), localize(A, da)),
+    darray((T,lsz,da)->map!(f, Array(T,lsz), localize(A, da)),
            T, size(A), distdim(A), procs(A))
 end
 
@@ -880,7 +880,7 @@ prod(d::DArray) = reduce(*, d)
 min(d::DArray) = reduce(min, d)
 max(d::DArray) = reduce(max, d)
 
-areduce(f::Function, d::DArray, r, v0, T::Type) = error("not yet implemented")
+reducedim(f::Function, d::DArray, r, v0, T::Type) = error("not yet implemented")
 cumsum(d::DArray) = error("not yet implemented")
 cumprod(d::DArray) = error("not yet implemented")
 

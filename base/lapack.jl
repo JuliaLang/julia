@@ -16,6 +16,14 @@ type SingularException <: Exception
     info::BlasInt
 end
 
+type PosDefException <: Exception
+    info::BlasInt
+end
+
+type RankDeficientException <: Exception
+    info::BlasInt
+end
+
 type LapackDimMisMatch <: Exception
     name::ASCIIString
 end
@@ -555,11 +563,11 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
 end
 
 # (GE) general matrices eigenvalue-eigenvector and singular value decompositions
-for (geev, gesvd, gesdd, elty, relty) in
-    ((:dgeev_,:dgesvd_,:dgesdd_,:Float64,Float64),
-     (:sgeev_,:sgesvd_,:sgesdd_,:Float32,:Float32),
-     (:zgeev_,:zgesvd_,:zgesdd_,:Complex128,:Float64),
-     (:cgeev_,:cgesvd_,:cgesdd_,:Complex64,:Float32))
+for (geev, gesvd, gesdd, ggsvd, elty, relty) in
+    ((:dgeev_,:dgesvd_,:dgesdd_,:dggsvd_,:Float64,:Float64),
+     (:sgeev_,:sgesvd_,:sgesdd_,:sggsvd_,:Float32,:Float32),
+     (:zgeev_,:zgesvd_,:zgesdd_,:zggsvd_,:Complex128,:Float64),
+     (:cgeev_,:cgesvd_,:cgesdd_,:cggsvd_,:Complex64,:Float32))
     @eval begin
         #      SUBROUTINE DGEEV( JOBVL, JOBVR, N, A, LDA, WR, WI, VL, LDVL, VR,
         #      $                  LDVR, WORK, LWORK, INFO )
@@ -727,6 +735,76 @@ for (geev, gesvd, gesdd, elty, relty) in
             if jobu  == 'O' return A, S, VT end
             if jobvt == 'O' return U, S, A end
             U, S, VT
+        end
+#       SUBROUTINE ZGGSVD( JOBU, JOBV, JOBQ, M, N, P, K, L, A, LDA, B,
+#      $                   LDB, ALPHA, BETA, U, LDU, V, LDV, Q, LDQ, WORK,
+#      $                   RWORK, IWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBQ, JOBU, JOBV
+#       INTEGER            INFO, K, L, LDA, LDB, LDQ, LDU, LDV, M, N, P
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IWORK( * )
+#       DOUBLE PRECISION   ALPHA( * ), BETA( * ), RWORK( * )
+#       COMPLEX*16         A( LDA, * ), B( LDB, * ), Q( LDQ, * ),
+#      $                   U( LDU, * ), V( LDV, * ), WORK( * )
+        function ggsvd!(jobu::BlasChar, jobv::BlasChar, jobq::BlasChar, A::Matrix{$elty}, B::Matrix{$elty})
+            m, n = size(A)
+            if size(B, 2) != n; throw(LapackDimMisMatch); end
+            p = size(B, 1)
+            k = Array(BlasInt, 1)
+            l = Array(BlasInt, 1)
+            lda = max(1,stride(A, 2))
+            ldb = max(1,stride(B, 2))
+            alpha = Array($relty, n)
+            beta = Array($relty, n)
+            ldu = max(1, m)
+            U = jobu == 'U' ? Array($elty, ldu, m) : Array($elty, 0)
+            ldv = max(1, p)
+            V = jobv == 'V' ? Array($elty, ldv, p) : Array($elty, 0)
+            ldq = max(1, n)
+            Q = jobq == 'Q' ? Array($elty, ldq, n) : Array($elty, 0)
+            work = Array($elty, max(3n, m, p) + n)
+            cmplx = iscomplex(A)
+            if cmplx; rwork = Array($relty, 2n); end
+            iwork = Array(BlasInt, n)
+            info = Array(BlasInt, 1)
+            if cmplx
+                ccall(($(string(ggsvd)),liblapack), Void,
+                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
+                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    &jobu, &jobv, &jobq, &m, 
+                    &n, &p, k, l, 
+                    A, &lda, B, &ldb, 
+                    alpha, beta, U, &ldu, 
+                    V, &ldv, Q, &ldq, 
+                    work, rwork, iwork, info)
+            else
+                ccall(($(string(ggsvd)),liblapack), Void,
+                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
+                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    &jobu, &jobv, &jobq, &m, 
+                    &n, &p, k, l, 
+                    A, &lda, B, &ldb, 
+                    alpha, beta, U, &ldu, 
+                    V, &ldv, Q, &ldq, 
+                    work, iwork, info)
+            end
+            if info[1] != 0; throw(LapackException(info[1])); end
+            if m - k[1] - l[1] >= 0
+                R = triu(A[1:k[1] + l[1],n - k[1] - l[1] + 1:n])
+            else
+                R = triu([A[1:m, n - k[1] - l[1] + 1:n]; B[m - k[1] + 1:l[1], n - k[1] - l[1] + 1:n]])
+            end
+            return U, V, Q, alpha, beta, k[1], l[1], R
         end
     end
 end

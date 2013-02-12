@@ -13,7 +13,7 @@ type WaitTask
     WaitTask(task::Task) = new(task, false, nothing)
 end
 
-abstract AsyncStream <: Stream
+abstract AsyncStream <: IO
 
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
@@ -28,14 +28,14 @@ end
 
 type NamedPipe <: AsyncStream
     handle::Ptr{Void}
-    buffer::Buffer
+    buffer::IOBuffer
     open::Bool
     line_buffered::Bool
     readcb::Callback
     readnotify::Vector{WaitTask}
     closecb::Callback
     closenotify::Vector{WaitTask}
-    NamedPipe() = new(C_NULL,PipeString(),false,true,false,WaitTask[],false,
+    NamedPipe() = new(C_NULL,PipeBuffer(),false,true,false,WaitTask[],false,
                       WaitTask[])
 end
 
@@ -45,12 +45,12 @@ type TTY <: AsyncStream
     handle::Ptr{Void}
     open::Bool
     line_buffered::Bool
-    buffer::Buffer
+    buffer::IOBuffer
     readcb::Callback
     readnotify::Vector{WaitTask}
     closecb::Callback
     closenotify::Vector{WaitTask}
-    TTY(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],false,WaitTask[])
+    TTY(handle,open)=new(handle,open,true,PipeBuffer(),false,WaitTask[],false,WaitTask[])
 end
 
 show(io::IO,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
@@ -90,6 +90,7 @@ function _init_buf(stream::AsyncStream)
     end
 end
 
+flush(::TTY) = nothing
 
 ## SOCKETS ##
 
@@ -106,14 +107,14 @@ function tasknotify(waittasks::Vector{WaitTask}, args...)
             push!(newwts,wt)
         end
     end
-    grow!(waittasks,length(newwts)-length(waittasks))
+    resize!(waittasks,length(newwts))
     waittasks[:] = newwts
 end
 
 wait_connect_filter(w::AsyncStream, args...) = !w.open
 wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
 wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
-wait_readline_filter(w::AsyncStream, args...) = w.open && (memchr(w.buffer,'\n') <= 0)
+wait_readline_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
 
 macro waitfilter(fcn,notify,filter_fcn,types)
     quote
@@ -204,7 +205,7 @@ end
 
 ## BUFFER ##
 ## Allocate a simple buffer
-function alloc_request(buffer::IOString, recommended_size::Int32)
+function alloc_request(buffer::IOBuffer, recommended_size::Int32)
     ensureroom(buffer, int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
@@ -215,7 +216,7 @@ function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
     (buf,int32(size))
 end
 
-function notify_filled(buffer::IOString, nread::Int, base::Ptr{Void}, len::Int32)
+function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::Int32)
     if buffer.append
         buffer.size += nread
     else
@@ -226,7 +227,7 @@ function notify_filled(stream::AsyncStream, nread::Int)
     more = true
     while more
         if isa(stream.readcb,Function)
-            nreadable = (stream.line_buffered ? int(memchr(stream.buffer, '\n')) : nb_available(stream.buffer))
+            nreadable = (stream.line_buffered ? int(search(stream.buffer, '\n')) : nb_available(stream.buffer))
             if nreadable > 0
                 more = stream.readcb(stream, nreadable)
             else
@@ -272,6 +273,7 @@ type SingleAsyncWork <: AsyncWork
         this
     end
 end
+SingleAsyncWork(cb::Function) = SingleAsyncWork(eventloop(),cb)
 
 type IdleAsyncWork <: AsyncWork
     cb::Function
@@ -282,6 +284,7 @@ type IdleAsyncWork <: AsyncWork
         this
     end
 end
+IdleAsyncWork(cb::Function) = IdleAsyncWork(eventloop(),cb)
 
 type TimeoutAsyncWork <: AsyncWork
     cb::Function
@@ -292,8 +295,7 @@ type TimeoutAsyncWork <: AsyncWork
         this
     end
 end
-
-const dummySingleAsync = SingleAsyncWork(C_NULL,()->nothing)
+TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 
 function _uv_hook_close(uv::AsyncStream)
     uv.handle = 0
@@ -306,11 +308,11 @@ _uv_hook_close(uv::AsyncWork) = (uv.handle = 0; nothing)
 # This serves as a common callback for all async classes
 _uv_hook_asynccb(async::AsyncWork, status::Int32) = async.cb(status)
 
-function startTimer(timer::TimeoutAsyncWork,timeout::Int64,repeat::Int64)
+function start_timer(timer::TimeoutAsyncWork,timeout::Int64,repeat::Int64)
     ccall(:jl_timer_start,Int32,(Ptr{Void},Int64,Int64),timer.handle,timeout,repeat)
 end
 
-function stopTimer(timer::TimeoutAsyncWork)
+function stop_timer(timer::TimeoutAsyncWork)
     ccall(:jl_timer_stop,Int32,(Ptr{Void},),timer.handle)
 end
 
@@ -327,13 +329,13 @@ function queueAsync(work::SingleAsyncWork)
 end
 
 ## event loop ##
-globalEventLoop() = ccall(:jl_global_event_loop,Ptr{Void},())
+eventloop() = ccall(:jl_global_event_loop,Ptr{Void},())
 #mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},()) # this would be fine, but is nowhere supported
 
 function run_event_loop(loop::Ptr{Void})
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),loop)
 end
-run_event_loop() = run_event_loop(globalEventLoop())
+run_event_loop() = run_event_loop(eventloop())
 
 ##pipe functions
 malloc_pipe() = c_malloc(_sizeof_uv_pipe)
@@ -452,9 +454,9 @@ _write(s::AsyncStream, p::Ptr{Void}, nb::Integer) =
 
 ## Libuv error handling
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
-_uv_lasterror() = _uv_lasterror(globalEventLoop())
+_uv_lasterror() = _uv_lasterror(eventloop())
 _uv_lastsystemerror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
-_uv_lastsystemerror() = _uv_lasterror(globalEventLoop())
+_uv_lastsystemerror() = _uv_lasterror(eventloop())
 
 type UVError <: Exception
     prefix::String

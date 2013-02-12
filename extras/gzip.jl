@@ -389,13 +389,13 @@ function readall(s::GZipStream, bufsize::Int)
 
             # Resize buffer to exact length
             if length(buf) > len
-                grow!(buf, len-length(buf))
+                resize!(buf, len)
             end
             return bytestring(buf)
         end
         len += ret
         # Grow the buffer so that bufsize bytes will fit
-        grow!(buf, bufsize-(length(buf)-len))
+        resize!(buf, bufsize+len)
     end
 end
 readall(s::GZipStream) = readall(s, Z_BIG_BUFSIZE)
@@ -411,7 +411,7 @@ function readuntil(s::GZipStream, c::Uint8)
 
     while(true)
         # since gzgets didn't return C_NULL, there must be a \0 in the buffer
-        eos = memchr(buf, '\0', pos)
+        eos = search(buf, '\0', pos)
         if eos == 1 || buf[eos-1] == c
             return buf[1:eos-1]
         end
@@ -423,13 +423,13 @@ function readuntil(s::GZipStream, c::Uint8)
 
         # Grow the buffer so that there's room for GZ_LINE_BUFSIZE chars
         add_len = GZ_LINE_BUFSIZE - (length(buf)-eos+1)
-        grow!(buf, add_len)
+        resize!(buf, add_len+length(buf))
         pos = eos
 
         # Read in the next chunk
         if gzgets(s, pointer(buf)+pos-1, GZ_LINE_BUFSIZE) == C_NULL
             # eof(s); remove extra buffer space
-            grow!(buf, -GZ_LINE_BUFSIZE)
+            resize!(buf, -GZ_LINE_BUFSIZE+length(buf))
             return buf
         end
     end

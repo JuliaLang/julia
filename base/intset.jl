@@ -12,12 +12,12 @@ similar(s::IntSet) = IntSet()
 
 copy(s::IntSet) = union!(IntSet(), s)
 
-function resize(s::IntSet, top::Integer)
+function sizehint(s::IntSet, top::Integer)
     if top >= s.limit
         lim = ((top+31) & -32)>>>5
         olsz = length(s.bits)
         if olsz < lim
-            grow!(s.bits, lim-olsz)
+            resize!(s.bits, lim)
             fill = s.fill1s ? uint32(-1) : uint32(0)
             for i=(olsz+1):lim; s.bits[i] = fill; end
         end
@@ -32,7 +32,7 @@ function add!(s::IntSet, n::Integer)
             return s
         else
             lim = int(n + div(n,2))
-            resize(s, lim)
+            sizehint(s, lim)
         end
     end
     s.bits[n>>5 + 1] |= (uint32(1)<<(n&31))
@@ -50,7 +50,7 @@ function delete!(s::IntSet, n::Integer, deflt)
     if n >= s.limit
         if s.fill1s
             lim = int(n + div(n,2))
-            resize(s, lim)
+            sizehint(s, lim)
         else
             return deflt
         end
@@ -88,7 +88,7 @@ end
 function symdiff!(s::IntSet, n::Integer)
     if n >= s.limit
         lim = int(n + dim(n,2))
-        resize(s, lim)
+        sizehint(s, lim)
     end
     s.bits[n>>5 + 1] $= (uint32(1)<<(n&31))
     return s
@@ -96,12 +96,12 @@ end
 
 function symdiff!(s::IntSet, ns)
    for n in ns
-       toggle!(s, n)
+       symdiff!(s, n)
    end
    return s
 end
 
-function copy_to(to::IntSet, from::IntSet)
+function copy!(to::IntSet, from::IntSet)
     empty!(to)
     union!(to, from)
 end
@@ -165,7 +165,7 @@ end
 # Math functions
 function union!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
-        resize(s, s2.limit)
+        sizehint(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim
@@ -186,7 +186,7 @@ add_each!(s::IntSet, s2::IntSet) = union!(s, s2)
 
 function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
-        resize(s, s2.limit)
+        sizehint(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim
@@ -215,7 +215,7 @@ complement(s::IntSet) = complement!(copy(s))
 
 function symdiff!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
-        resize(s, s2.limit)
+        sizehint(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim

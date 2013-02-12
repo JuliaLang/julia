@@ -42,8 +42,8 @@ return a permutation,::
    30
    10
 
-  julia> (v2,p) = sortperm(v)
-  ([10, 20, 30],[3, 1, 2])
+  julia> p = sortperm(v)
+  [3, 1, 2]
 
   julia> v[p]
   3-element Int64 Array:
@@ -127,20 +127,6 @@ General Sort Functions
 
    In-place sort.
 
-.. function:: sortr(v[, dim])
-
-   Sort a vector in descending order. If ``dim`` is provided, sort
-   along the given dimension. 
-
-.. function:: sortr(alg, ...)
-
-   Sort in descending order with a specific sorting algorithm
-   (InsertionSort, QuickSort, MergeSort, or TimSort).
-
-.. function:: sortr!(...)
-
-   In-place ``sortr``.
-
 .. function:: sortby(by, v[, dim])
 
    Sort a vector according to ``by(v)``.   If ``dim`` is provided,
@@ -155,52 +141,22 @@ General Sort Functions
 
    In-place ``sortby``.
 
-.. function:: sortperm(v) -> s,p
+.. function:: sortperm(v)
 
-   Sort a vector in ascending order, also constructing the permutation
-   that sorts the vector.
+   Return a permutation vector, which when applied to the input vector ``v`` will sort it.
 
-.. function:: sortperm(lessthan, v) -> s,p
+.. function:: sortperm(lessthan, v)
 
-   Sort a vector with a custom comparison function, also constructing
-   the permutation that sorts the vector.
+   Return a permutation vector, which when applied to the input vector ``v`` will sort it, using the specified ``lessthan`` comparison function.
 
-.. function:: sortperm(alg, ...) -> s,p
+.. function:: sortperm(alg, ...)
 
    ``sortperm`` using a specific sorting algorithm (``InsertionSort``,
    ``QuickSort``, ``MergeSort``, or ``TimSort``).
 
-.. function:: sortperm!(...) -> s,p
+.. function:: sortperm!(...)
 
    In-place ``sortperm``.
-
-.. function:: sortpermr(v) -> s,p
-
-   Sort a vector in descending order, also constructing the
-   permutation that sorts the vector!
-
-.. function:: sortpermr(alg, ...) -> s,p
-
-   ``sortpermr`` using a specific sorting algorithm
-   (``InsertionSort``, ``QuickSort``, ``MergeSort``, or ``TimSort``).
-
-.. function:: sortpermr!(v) -> s,p
-
-   In-place ``sortpermr``.
-
-.. function:: sortpermby(by,v) -> s,p
-
-   Sort a vector according to the result of function ``by`` applied to
-   all values, also constructing the permutation that sorts the vector.
-
-.. function:: sortpermby(alg, ...) -> s,p
-
-   ``sortpermby`` using a specific sorting algorithm
-   (``InsertionSort``, ``QuickSort``, ``MergeSort``, or ``TimSort``).
-
-.. function:: sortpermby!(...) -> s,p
-
-   In-place ``sortpermby``.
 
 -------------------------
 Sorting-related Functions

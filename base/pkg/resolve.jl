@@ -33,7 +33,7 @@ type ResolveParams
     function ResolveParams()
         accuracy = int(get(ENV, "JULIA_PKGRESOLVE_ACCURACY", 1))
         if accuracy <= 0
-            error("error: JULIA_PKGRESOLVE_ACCURACY must be >= 1")
+            error("JULIA_PKGRESOLVE_ACCURACY must be >= 1")
         end
         nondec_iterations = accuracy * 20
         dec_interval = accuracy * 10
@@ -310,7 +310,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
         # Grow the patterns by one bit
         vmask0 = vmask[p0]
         for vm in vmask0
-            grow!(vm, 1)
+            resize!(vm, length(vm)+1)
         end
 
         # Store the dependency info in the patterns
@@ -909,7 +909,7 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
     #println("DECIMATING $n NODES")
     fld = msgs.fld
     decimated = msgs.decimated
-    fldorder = sortperm(Sort.By(secondmax), fld)
+    fldorder = sortperm(fld, Sort.By(secondmax))
     for p0 in fldorder
         if decimated[p0]
             continue
@@ -1297,7 +1297,7 @@ function sanity_check()
         p0, v0 = vdict[v]
         return -pndeps[p0][v0]
     end
-    svers = sort(Sort.By(vrank), vers)
+    svers = sort(vers, Sort.By(vrank))
 
     nv = length(svers)
     nnzv = findfirst(v->vrank(v)==0, svers) - 1
@@ -1390,7 +1390,7 @@ function sanity_check()
             end
             i += 1
         end
-        sort!(Sort.By(x->x[1]), insane)
+        sort!(insane, Sort.By(x->x[1]))
         throw(MetadataError(insane))
     end
 

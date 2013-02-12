@@ -49,16 +49,6 @@ function values(T, a::Associative)
 end
 values{K,V}(a::Associative{K,V}) = values(V,a)
 
-function pairs(T::(Union(Type,Tuple),Union(Type,Tuple)), a::Associative)
-    i = 0
-    pairz = Array(T,length(a))
-    for (k,v) in a
-        pairz[i+=1] = (k,v)
-    end
-    return pairz
-end
-pairs{K,V}(a::Associative{K,V}) = pairs((K,V),a)
-
 function copy(a::Associative)
     b = similar(a)
     for (k,v) in a
@@ -87,8 +77,7 @@ function filter!(f::Function, d::Associative)
 end
 filter(f::Function, d::Associative) = filter!(f,copy(d))
 
-keytype{K,V}(a::Associative{K, V}) = K
-valtype{K,V}(a::Associative{K, V}) = V
+eltype{K,V}(a::Associative{K,V}) = (K,V)
 
 # some support functions
 
@@ -106,8 +95,7 @@ end
 
 type ObjectIdDict <: Associative{Any,Any}
     ht::Array{Any,1}
-    ObjectIdDict(sz::Integer) = new(cell(2*_tablesz(sz)))
-    ObjectIdDict() = ObjectIdDict(0)
+    ObjectIdDict() = new(cell(32))
 end
 
 similar(d::ObjectIdDict) = ObjectIdDict()
@@ -229,22 +217,20 @@ type Dict{K,V} <: Associative{K,V}
     count::Int
     deleter::Function
 
-    Dict() = Dict{K,V}(0)
-    function Dict(n::Integer)
-        n = _tablesz(n)
+    function Dict()
+        n = 16
         new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
     function Dict(ks, vs)
         n = length(ks)
-        h = Dict{K,V}(n)
+        h = Dict{K,V}()
         for i=1:n
             h[ks[i]] = vs[i]
         end
         return h
     end
 end
-Dict() = Dict(0)
-Dict(n::Integer) = Dict{Any,Any}(n)
+Dict() = Dict{Any,Any}()
 
 Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
 Dict(ks, vs) = Dict{Any,Any}(ks, vs)
@@ -267,7 +253,7 @@ end
 
 function deserialize{K,V}(s, T::Type{Dict{K,V}})
     n = read(s, Int32)
-    t = T(n)
+    t = T(); sizehint(t, n)
     for i = 1:n
         k = deserialize(s)
         v = deserialize(s)
@@ -288,10 +274,18 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     oldv = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
+    nel = h.count
+    h.ndel = h.count = 0
+    if nel == 0
+        resize!(h.slots, newsz)
+        fill!(h.slots, 0)
+        resize!(h.keys, newsz)
+        resize!(h.vals, newsz)
+        return h
+    end
     h.slots = zeros(Uint8,newsz)
     h.keys = Array(K, newsz)
     h.vals = Array(V, newsz)
-    h.ndel = h.count = 0
 
     for i = 1:sz
         if olds[i] == 0x1
@@ -310,7 +304,7 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     return h
 end
 
-function resize(d::Dict, newsz)
+function sizehint(d::Dict, newsz)
     oldsz = length(d.slots)
     if newsz <= oldsz
         # todo: shrink
@@ -433,7 +427,7 @@ end
 
 has(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 
-function key{K,V}(h::Dict{K,V}, key, deflt)
+function getkey{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
     return (index<0) ? deflt : h.keys[index]::K
 end
@@ -516,8 +510,8 @@ WeakKeyDict() = WeakKeyDict{Any,Any}()
 
 assign{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
 
-function key{K}(wkh::WeakKeyDict{K}, kk, deflt)
-    k = key(wkh.ht, kk, secret_table_token)
+function getkey{K}(wkh::WeakKeyDict{K}, kk, deflt)
+    k = getkey(wkh.ht, kk, secret_table_token)
     if is(k, secret_table_token)
         return deflt
     end

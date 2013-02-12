@@ -60,7 +60,7 @@ function defaultdist(dims, procs)
     dims = [dims...]
     chunks = ones(Int, length(dims))
     np = length(procs)
-    f = sort!(Sort.Reverse,keys(factor(np)))
+    f = sort!(keys(factor(np)), Sort.Reverse)
     k = 1
     while np > 1
         # repeatedly allocate largest factor to largest dim
@@ -131,6 +131,8 @@ dzeros(args...) = DArray(I->zeros(map(length,I)), args...)
 dzeros(d::Int...) = dzeros(d)
 dones(args...) = DArray(I->ones(map(length,I)), args...)
 dones(d::Int...) = dones(d)
+dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)
+dfill(v, d::Int...) = dfill(v, d)
 drand(args...)  = DArray(I->rand(map(length,I)), args...)
 drand(d::Int...) = drand(d)
 drandn(args...) = DArray(I->randn(map(length,I)), args...)
@@ -252,7 +254,7 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
         for i = 1:length(d.chunks)
             K_c = {d.indexes[i]...}
             K = [ intersect(J[j],K_c[j]) for j=1:n ]
-            if !anyp(isempty, K)
+            if !any(isempty, K)
                 idxs = [ I[j][K[j]-offs[j]] for j=1:n ]
                 if isequal(K, K_c)
                     # whole chunk

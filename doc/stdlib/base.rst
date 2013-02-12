@@ -83,7 +83,7 @@ All Objects
 
 .. function:: finalizer(x, function)
 
-   Register a function to be called on ``x`` when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
+   Register a function ``f(x)`` to be called when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
 
 .. function:: copy(x)
 
@@ -128,6 +128,10 @@ Types
 
    The highest finite value representable by the given floating-point type
 
+.. function:: maxintfloat(type)
+
+   The largest integer losslessly representable by the given floating-point type
+
 .. function:: sizeof(type)
 
    Size, in bytes, of the canonical binary representation of the given type, if any.
@@ -161,6 +165,12 @@ Generic Functions
 
    Invoke a method for the given generic function matching the specified types (as a tuple), on the specified arguments. The arguments must be compatible with the specified types. This allows invoking a method other than the most specific matching method, which is useful when the behavior of a more general definition is explicitly needed (often as part of the implementation of a more specific method of the same function).
 
+.. function:: |
+   
+   Applies a function to the preceding argument which allows for easy function chaining.
+
+   **Example**: ``[1:5] | x->x.^2 | sum | inv``
+
 Iteration
 ---------
 
@@ -193,6 +203,13 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    For a given iterable object and iteration state, return the current item and the next iteration state
 
+.. function:: zip(iters...)
+
+   For a set of iterable objects, returns an iterable of tuples, where the ``i``th tuple contains the ``i``th component of each input iterable.
+
+   Note that ``zip`` is it's own inverse: [zip(zip(a...)...)...] == [a...]
+
+
 Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
 
 General Collections
@@ -224,6 +241,10 @@ Iterable Collections
 .. function:: findin(a, b)
 
    Returns the indices of elements in collection ``a`` that appear in collection ``b``
+
+.. function:: unique(itr)
+
+   Returns an array containing only the unique elements of the iterable ``itr``.
 
 .. function:: reduce(op, v0, iterable{Type})
 
@@ -278,10 +299,12 @@ Iterable Collections
    Count the number of elements in ``itr`` for which predicate ``p`` is true.
 
 .. function:: anyp(p, iterable) -> Bool
+              any(p, itr)
 
    Determine whether any element of ``itr`` satisfies the given predicate.
 
 .. function:: allp(p, iterable) -> Bool
+              all(p, itr)
 
    Determine whether all elements of ``itr`` satisfy the given predicate.
 
@@ -290,6 +313,12 @@ Iterable Collections
    Transform collection by applying to each element.
    
    **Example**: ``map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]``
+
+.. function:: mapreduce(f, op, itr)
+
+   Applies function ``f`` to each element in ``itr`` and then reduces the result using the binary function ``op``.
+
+   **Example**: ``mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14``
 
 Indexable Collections
 ---------------------
@@ -320,9 +349,9 @@ Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``. Use of curly 
 As with arrays, ``Dicts`` may be created with comprehensions. For example,
 ``{i => f(i) for i = 1:10}``.
 
-.. function:: Dict{K,V}(n)
+.. function:: Dict{K,V}()
 
-   Construct a hashtable with keys of type K and values of type V and intial size of n
+   Construct a hashtable with keys of type K and values of type V
 
 .. function:: has(collection, key)
 
@@ -332,16 +361,17 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Return the value stored for the given key, or the given default value if no mapping for the key is present.
 
+.. function:: getkey(collection, key, default)
+
+   Return the key matching argument ``key`` if one exists in ``collection``, otherwise return ``default``.
+
 .. function:: delete!(collection, key)
 
    Delete the mapping for the given key in a collection.
 
-.. function:: del_all(collection)
-              empty!(collection)
+.. function:: empty!(collection)
 
    Delete all keys from a collection.
-   
-   **Note**: Deprecated in favor of ``empty!``.
 
 .. function:: keys(collection)
 
@@ -351,9 +381,9 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Return an array of all values in a collection.
 
-.. function:: pairs(collection)
+.. function:: collect(collection)
 
-   Return an array of all (key, value) tuples in a collection.
+   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
 
 .. function:: merge(collection, others...)
 
@@ -371,6 +401,14 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Update collection, removing (key, value) pairs for which function is false.
 
+.. function:: eltype(collection)
+
+   Returns the type tuple of the (key,value) pairs contained in collection.
+
+.. function:: sizehint(s, n)
+
+   Suggest that collection ``s`` reserve capacity for at least ``n`` elements. This can improve performance.
+   
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
 Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``FDSet``, ``Array``.
@@ -378,9 +416,13 @@ Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``FDSet``, ``Array``
 Set-Like Collections
 --------------------
 
-.. function:: add(collection, key)
+.. function:: add!(collection, key)
 
    Add an element to a set-like collection.
+
+.. function:: add_each!(collection, iterable)
+
+   Adds each element in iterable to the collection.
 
 .. function:: Set(x...)
 
@@ -396,6 +438,10 @@ Set-Like Collections
 
    Construct the union of two or more sets. Maintains order with arrays.
 
+.. function:: union!(s1,s2)
+
+   Constructs the union of IntSets s1 and s2, stores the result in ``s1``.
+
 .. function:: intersect(s1,s2...)
 
    Construct the intersection of two or more sets. Maintains order with arrays.
@@ -407,6 +453,34 @@ Set-Like Collections
 .. function:: symdiff(s1,s2...)
 
    Construct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.
+
+.. function:: symdiff!(s, n)
+
+   IntSet s is destructively modified to toggle the inclusion of integer ``n``.
+
+.. function:: symdiff!(s, itr)
+
+   For each element in ``itr``, destructively toggle its inclusion in set ``s``.
+
+.. function:: symdiff!(s1, s2)
+
+   Construct the symmetric difference of IntSets ``s1`` and ``s2``, storing the result in ``s1``.
+
+.. function:: complement(s)
+
+   Returns the set-complement of IntSet s.
+
+.. function:: complement!(s)
+
+   Mutates IntSet s into its set-complement.
+
+.. function:: del_each!(s, itr)
+
+   Deletes each element of itr in set s in-place.
+
+.. function:: intersect!(s1, s2)
+
+   Intersects IntSets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.
 
 Fully implemented by: ``IntSet``, ``Set``, ``FDSet``.
 
@@ -443,9 +517,9 @@ Dequeues
    
    Remove items at specified range.
 
-.. function:: grow!(collection, n) -> collection
+.. function:: grow!(collection, n) -> collectionf
 
-   Add uninitialized space for ``n`` elements at the end of a collection.
+   Resize collection to contain ``n`` elements.
 
 .. function:: append!(collection, items) -> collection
 
@@ -458,17 +532,23 @@ Strings
 
 .. function:: length(s)
 
-   The last valid index for string ``s``. Indexes are byte offsets and not character numbers.
+   The number of characters in string ``s``.
 
-.. function:: chars(string)
+.. function:: collect(string)
 
    Return an array of the characters in ``string``.
 
-.. function:: strcat(strs...)
+.. function:: *, string(strs...)
 
    Concatenate strings.
    
    **Note**: The ``*`` operator can also be used to concatenate strings (eg. ``"Hello " * "world" == "Hello world"``).
+
+.. function:: ^
+
+   Repeat a string.
+
+   **Example**: ``"Julia "^3 == "Julia Julia Julia "``
 
 .. function:: string(char...)
 
@@ -502,7 +582,7 @@ Strings
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 
-.. function:: strchr(string, char, [i])
+.. function:: search(string, char, [i])
 
    Return the index of ``char`` in ``string``, giving 0 if not found. The second argument may also be a vector or a set of characters. The third argument optionally specifies a starting index.
 
@@ -516,7 +596,7 @@ Strings
 
 .. function:: search(string, chars, [start])
 
-   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a tuple with 2 integers: the index of the match and the first valid index past the match (or an index beyond the end of the string if the match is at the end); it returns ``(0,0)`` if no match was found, and ``(start,start)`` if ``chars`` is empty.
+   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
 
 .. function:: replace(string, pat, r[, n])
 
@@ -582,6 +662,14 @@ Strings
 
    Create a random ASCII string of length ``len``, consisting of upper- and lower-case letters and the digits 0-9
 
+.. function:: charwidth(c)
+
+   Gives the number of columns needed to print a character.
+
+.. function:: strwidth(s)
+
+   Gives the number of columns needed to print a string.
+
 I/O
 ---
 
@@ -614,9 +702,16 @@ I/O
     a+   read, write, create, append
    ==== =================================
 
+
 .. function:: open(file_name) -> IOStream
    
    Open a file in read mode.
+
+.. function:: open(f::function, args...)
+
+   Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
+
+   **Example**: ``open(readall, "file.txt")``
 
 .. function:: memio([size[, finalize::Bool]]) -> IOStream
 
@@ -663,6 +758,9 @@ I/O
 
    Seek a stream relative to the current position.
 
+.. function:: eof(stream)
+
+   Tests whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this function will block to wait for more data if necessary, and then return ``false``. Therefore it is always safe to read one byte after seeing ``eof`` return ``false``.
 
 Text I/O
 --------
@@ -704,12 +802,10 @@ Text I/O
    Read all lines as an array.
 
 .. function:: each_line(stream)
-              EachLine(stream)
 
    Create an iterable object that will yield each line from a stream.
 
 .. function:: each_search(string, pattern)
-              EachSearch(string, pattern)
 
 .. function:: readdlm(filename, delim::Char)
 
@@ -729,7 +825,7 @@ Text I/O
 
 .. function:: writecsv(filename, array)
 
-   Equivalent to ``dlmwrite`` with ``delim`` set to comma.
+   Equivalent to ``writedlm`` with ``delim`` set to comma.
 
 Memory-mapped I/O
 -----------------
@@ -778,26 +874,38 @@ Mathematical Functions
 
    The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
-.. function:: div
+.. function:: div(a,b)
 
-   Integer truncating division
+   Compute a/b, truncating to an integer
 
-.. function:: fld
+.. function:: fld(a,b)
 
-   Integer floor division
+   Largest integer less than or equal to a/b
 
-.. function:: mod 
+.. function:: mod(x,m)
 
-   Modulus after division
+   Modulus after division, returning in the range [0,m)
 
 .. function:: rem
               %
 
    Remainder after division
 
+.. function:: mod1(x,m)
+
+   Modulus after division, returning in the range (0,m]
+
 .. function:: //
 
    Rational division
+
+.. function:: num(x)
+
+   Numerator of the rational representation of ``x``
+
+.. function:: den(x)
+
+   Denominator of the rational representation of ``x``
 
 .. function:: << >>
 
@@ -806,6 +914,10 @@ Mathematical Functions
 .. function:: == != < <= > >=
 
    Comparison operators to test equals, not equals, less than, less than or equals, greater than, and greater than or equals
+
+.. function:: cmp(x,y)
+
+   Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively
 
 .. function:: !
 
@@ -829,103 +941,151 @@ Mathematical Functions
 
 .. function:: sin(x)
 
-   Compute sine of ``x``
+   Compute sine of ``x``, where ``x`` is in radians
 
 .. function:: cos(x)
 
-   Compute cosine of ``x``
+   Compute cosine of ``x``, where ``x`` is in radians
 
 .. function:: tan(x)
 
-   Compute tangent of ``x``
+   Compute tangent of ``x``, where ``x`` is in radians
+
+.. function:: sind(x)
+
+   Compute sine of ``x``, where ``x`` is in degrees
+
+.. function:: cosd(x)
+
+   Compute cosine of ``x``, where ``x`` is in degrees
+
+.. function:: tand(x)
+
+   Compute tangent of ``x``, where ``x`` is in degrees
 
 .. function:: sinh(x)
 
-   Compute hyperbolic sine of ``x`` specified in radians
+   Compute hyperbolic sine of ``x``
 
 .. function:: cosh(x)
 
-   Compute hyperbolic cosine of ``x`` specified in radians
+   Compute hyperbolic cosine of ``x``
 
 .. function:: tanh(x)
 
-   Compute hyperbolic tangent of ``x`` specified in radians
+   Compute hyperbolic tangent of ``x``
 
 .. function:: asin(x)
 
-   Compute the inverse sine of ``x`` specified in radians
+   Compute the inverse sine of ``x``, where the output is in radians
 
 .. function:: acos(x)
 
-   Compute the inverse cosine of ``x`` specified in radians
+   Compute the inverse cosine of ``x``, where the output is in radians
 
 .. function:: atan(x)
 
-   Compute the inverse tangent of ``x`` specified in radians
+   Compute the inverse tangent of ``x``, where the output is in radians
 
 .. function:: atan2(y, x)
 
    Compute the inverse tangent of ``y/x``, using the signs of both ``x`` and ``y`` to determine the quadrant of the return value.
 
+.. function:: asind(x)
+
+   Compute the inverse sine of ``x``, where the output is in degrees
+
+.. function:: acosd(x)
+
+   Compute the inverse cosine of ``x``, where the output is in degrees
+
+.. function:: atand(x)
+
+   Compute the inverse tangent of ``x``, where the output is in degrees
+
 .. function:: sec(x)
 
-   Compute the secant of ``x`` specified in radians
+   Compute the secant of ``x``, where ``x`` is in radians
 
 .. function:: csc(x)
 
-   Compute the cosecant of ``x`` specified in radians
+   Compute the cosecant of ``x``, where ``x`` is in radians
 
 .. function:: cot(x)
 
-   Compute the cotangent of ``x`` specified in radians
+   Compute the cotangent of ``x``, where ``x`` is in radians
+
+.. function:: secd(x)
+
+   Compute the secant of ``x``, where ``x`` is in degrees
+
+.. function:: cscd(x)
+
+   Compute the cosecant of ``x``, where ``x`` is in degrees
+
+.. function:: cotd(x)
+
+   Compute the cotangent of ``x``, where ``x`` is in degrees
 
 .. function:: asec(x)
 
-   Compute the inverse secant of ``x`` specified in radians
+   Compute the inverse secant of ``x``, where the output is in radians
 
 .. function:: acsc(x)
 
-   Compute the inverse cosecant of ``x`` specified in radians
+   Compute the inverse cosecant of ``x``, where the output is in radians
 
 .. function:: acot(x)
 
-   Compute the inverse cotangent of ``x`` specified in radians
+   Compute the inverse cotangent of ``x``, where the output is in radians
+
+.. function:: asecd(x)
+
+   Compute the inverse secant of ``x``, where the output is in degrees
+
+.. function:: acscd(x)
+
+   Compute the inverse cosecant of ``x``, where the output is in degrees
+
+.. function:: acotd(x)
+
+   Compute the inverse cotangent of ``x``, where the output is in degrees
 
 .. function:: sech(x)
 
-   Compute the hyperbolic secant of ``x`` specified in radians
+   Compute the hyperbolic secant of ``x``
 
 .. function:: csch(x)
 
-   Compute the hyperbolic cosecant of ``x`` specified in radians
+   Compute the hyperbolic cosecant of ``x``
 
 .. function:: coth(x)
 
-   Compute the hyperbolic cotangent of ``x`` specified in radians
+   Compute the hyperbolic cotangent of ``x``
 
 .. function:: asinh(x)
 
-   Compute the inverse hyperbolic sine of ``x`` specified in radians
+   Compute the inverse hyperbolic sine of ``x``
 
 .. function:: acosh(x)
 
-   Compute the inverse hyperbolic cosine of ``x`` specified in radians
+   Compute the inverse hyperbolic cosine of ``x``
 
 .. function:: atanh(x)
 
-   Compute the inverse hyperbolic cotangent of ``x`` specified in radians
+   Compute the inverse hyperbolic cotangent of ``x``
 
 .. function:: asech(x)
 
-   Compute the inverse hyperbolic secant of ``x`` specified in radians
+   Compute the inverse hyperbolic secant of ``x``
 
 .. function:: acsch(x)
 
-   Compute the inverse hyperbolic cosecant of ``x`` specified in radians
+   Compute the inverse hyperbolic cosecant of ``x``
 
 .. function:: acoth(x)
 
-   Compute the inverse hyperbolic cotangent of ``x`` specified in radians
+   Compute the inverse hyperbolic cotangent of ``x``
 
 .. function:: sinc(x)
 
@@ -934,6 +1094,14 @@ Mathematical Functions
 .. function:: cosc(x)
 
    Compute :math:`cos(\pi x) / x`
+
+.. function:: degrees2radians(x)
+
+   Convert ``x`` from degrees to radians
+
+.. function:: radians2degrees(x)
+
+   Convert ``x`` from radians to degrees
 
 .. function:: hypot(x, y)
 
@@ -983,6 +1151,10 @@ Mathematical Functions
 .. function:: expm1(x)
 
    Accurately compute :math:`e^x-1`
+
+.. function:: square(x)
+
+   Compute :math:`x^2`
 
 .. function:: round(x, [digits, [base]]) -> FloatingPoint
 
@@ -1096,6 +1268,10 @@ Mathematical Functions
 
    Return the imaginary part of the complex number ``z``
 
+.. function:: reim(z)
+
+   Return both the real and imaginary parts of the complex number ``z``
+
 .. function:: conj(z)
 
    Compute the complex conjugate of a complex number ``z``
@@ -1120,6 +1296,12 @@ Mathematical Functions
 
    Compute ``factorial(n)/factorial(k)``
 
+.. function:: factor(n)
+
+   Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
+
+   **Example**: :math:`100=2*2*5*5`; then, ``factor(100) -> [5=>2,2=>2]``
+
 .. function:: gcd(x,y)
 
    Greatest common divisor
@@ -1128,9 +1310,21 @@ Mathematical Functions
 
    Least common multiple
 
+.. function:: gcdx(x,y)
+
+   Greatest common divisor, also returning integer coefficients ``u`` and ``v`` that solve ``ux+vy == gcd(x,y)``
+
+.. function:: ispow2(n)
+
+   Test whether ``n`` is a power of two
+
 .. function:: nextpow2(n)
 
    Next power of two not less than ``n``
+
+.. function:: prevpow2(n)
+
+   Previous power of two not greater than ``n``
 
 .. function:: nextpow(a, n)
 
@@ -1148,13 +1342,29 @@ Mathematical Functions
 
    Previous integer not greater than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
 
+.. function:: invmod(x,m)
+
+   Inverse of ``x``, modulo ``m``
+
 .. function:: powermod(x, p, m)
 
    Compute ``mod(x^p, m)``
 
 .. function:: gamma(x)
+
+   Compute the gamma function of ``x``
+
 .. function:: lgamma(x)
+
+   Compute the logarithm of ``gamma(x)``
+
 .. function:: lfact(x)
+
+   Compute the logarithmic factorial of ``x``
+
+.. function:: digamma(x)
+
+   Compute the digamma function of ``x`` (the logarithmic derivative of ``gamma(x)``)
 
 .. function:: airy(x)
               airyai(x)
@@ -1265,6 +1475,34 @@ Data Formats
 
    Convert a number or numeric array to boolean
 
+.. function:: isbool(x)
+
+   Test whether number or array is boolean
+
+.. function:: int(x)
+
+   Convert a number or array to the default integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an integer.
+
+.. function:: uint(x)
+
+   Convert a number or array to the default unsigned integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an unsigned integer.
+
+.. function:: integer(x)
+
+   Convert a number or array to integer type. If ``x`` is already of integer type it is unchanged, otherwise it converts it to the default integer type on your platform.
+
+.. function:: isinteger(x)
+
+   Test whether a number or array is of integer type
+
+.. function:: signed(x)
+
+   Convert a number to a signed integer
+
+.. function:: unsigned(x)
+
+   Convert a number to an unsigned integer
+
 .. function:: int8(x)
 
    Convert a number or array to ``Int8`` data type
@@ -1280,6 +1518,10 @@ Data Formats
 .. function:: int64(x)
 
    Convert a number or array to ``Int64`` data type
+
+.. function:: int128(x)
+
+   Convert a number or array to ``Int128`` data type
 
 .. function:: uint8(x)
 
@@ -1297,6 +1539,10 @@ Data Formats
 
    Convert a number or array to ``Uint64`` data type
 
+.. function:: uint128(x)
+
+   Convert a number or array to ``Uint128`` data type
+
 .. function:: float32(x)
 
    Convert a number or array to ``Float32`` data type
@@ -1304,6 +1550,28 @@ Data Formats
 .. function:: float64(x)
 
    Convert a number or array to ``Float64`` data type
+
+.. function:: float(x)
+
+   Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. For strings, it converts to ``Float64``.
+
+.. function:: significand(x)
+
+   Extract the significand(s) (a.k.a. mantissa), in binary representation, of a floating-point number or array.
+   
+   For example, ``significand(15.2)/15.2 == 0.125``, and ``significand(15.2)*8 == 15.2``
+
+.. function:: float64_valued(x::Rational)
+
+   True if ``x`` can be losslessly represented as a ``Float64`` data type
+
+.. function:: complex64(r,i)
+
+   Convert to ``r+i*im`` represented as a ``Complex64`` data type
+
+.. function:: complex128(r,i)
+
+   Convert to ``r+i*im`` represented as a ``Complex128`` data type
 
 .. function:: char(x)
 
@@ -1360,11 +1628,23 @@ Numbers
 
    Test whether a number is finite
 
-.. function:: isnan(f) -> Bool
+.. function:: isinf(f)
+
+   Test whether a number is infinite
+
+.. function:: isnan(f)
 
    Test whether a floating point number is not a number (NaN)
 
-.. function:: nextfloat(f) -> Float
+.. function:: inf(f)
+
+   Returns infinity in the same floating point type as ``f`` (or ``f`` can by the type itself)
+
+.. function:: nan(f)
+
+   Returns NaN in the same floating point type as ``f`` (or ``f`` can by the type itself)
+
+.. function:: nextfloat(f)
 
    Get the next floating point number in lexicographic order
 
@@ -1436,6 +1716,24 @@ Integers
    Number of ones trailing the binary representation of ``x``.
    
    **Example**: ``trailing_ones(3) -> 2``
+
+.. function:: isprime(x::Integer) -> Bool
+
+   Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
+   
+   **Example**: ``isprime(3) -> true``
+
+.. function:: isodd(x::Integer) -> Bool
+
+   Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
+   
+   **Example**: ``isodd(9) -> false``
+
+.. function:: iseven(x::Integer) -> Bool
+
+   Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
+   
+   **Example**: ``iseven(1) -> false``
 
 
 Random Numbers
@@ -1675,21 +1973,21 @@ Indexing, Assignment, and Concatenation
 
    Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``.
 
-.. function:: permute(A,perm)
+.. function:: permutedims(A,perm)
 
    Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permute(A,[2,1])``.
 
-.. function:: ipermute(A,perm)
+.. function:: ipermutedims(A,perm)
 
-   Like :func:`permute`, except the inverse of the given permutation is applied.
+   Like :func:`permutedims`, except the inverse of the given permutation is applied.
 
-.. function:: squeeze(A)
+.. function:: squeeze(A, dims)
 
-   Remove singleton dimensions from the shape of array ``A``
+   Remove the dimensions specified by ``dims`` from array ``A``
 
 .. function:: vec(Array) -> Vector
 
-   Make a vector out of an array with only one non-singleton dimension.
+   Vectorize an array using column-major convention.
 
 Sparse Matrices
 ---------------
@@ -1782,25 +2080,77 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the norm of a ``Vector`` or a ``Matrix``
 
-.. function:: lu(A) -> LU
+.. function:: factors(F)
 
-   Compute LU factorization. LU is an "LU factorization" type that can be used as an ordinary matrix.
+   Return the factors of a factorization ``F``. For example, in the case of an LU decomposition, factors(LU) -> L, U, P
 
-.. function:: chol(A)
+.. function:: lu(A) -> L, U, P
 
-   Compute Cholesky factorization
+   Compute the LU factorization of ``A``, such that ``A[P,:] = L*U``.
 
-.. function:: qr(A)
+.. function:: lufact(A) -> LUDense
 
-   Compute QR factorization
+   Compute the LU factorization of ``A`` and return a ``LUDense`` object. ``factors(lufact(A))`` returns the triangular matrices containing the factorization. The following functions are available for ``LUDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``.
 
-.. function:: qrp(A)
+.. function:: lufact!(A) -> LUDense
 
-   Compute QR factorization with pivoting
+   ``lufact!`` is the same as ``lufact`` but saves space by overwriting the input A, instead of creating a copy.
 
-.. function:: factors(D)
+.. function:: chol(A, [LU]) -> F
 
-   Return the factors of a decomposition D. For an LU decomposition, factors(LU) -> L, U, p
+   Compute Cholesky factorization of a symmetric positive-definite matrix ``A`` and return the matrix ``F``. If ``LU`` is ``L`` (Lower), ``A = L*L'``. If ``LU`` is ``U`` (Upper), ``A = R'*R``.
+
+.. function:: cholfact(A, [LU]) -> CholeskyDense
+
+   Compute the Cholesky factorization of a symmetric positive-definite matrix ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholfact(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
+
+.. function: cholfact!(A, [LU]) -> CholeskyDense
+
+   ``cholfact!`` is the same as ``cholfact`` but saves space by overwriting the input A, instead of creating a copy.
+
+..  function:: cholpfact(A, [LU]) -> CholeskyPivotedDense
+
+   Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholpfact(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
+
+.. function:: cholpfact!(A, [LU]) -> CholeskyPivotedDense
+
+   ``cholpfact!`` is the same as ``cholpfact`` but saves space by overwriting the input A, instead of creating a copy.
+
+.. function:: qr(A) -> Q, R
+
+   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrd``.
+
+.. function:: qrfact(A)
+
+   Compute the QR factorization of ``A`` and return a ``QRDense`` object. ``factors(qrfact(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDense`` objects: ``size``, ``factors``, ``qmulQR``, ``qTmulQR``, ``\``. 
+
+.. function:: qrfact!(A)
+
+   ``qrfact!`` is the same as ``qrfact`` but saves space by overwriting the input A, instead of creating a copy.
+
+.. function:: qrp(A) -> Q, R, P
+
+   Compute the QR factorization of ``A`` with pivoting, such that ``A*I[:,P] = Q*R``, where ``I`` is the identity matrix. Also see ``qrpfact``.
+
+.. function:: qrpfact(A) -> QRPivotedDense
+
+   Compute the QR factorization of ``A`` with pivoting and return a ``QRDensePivoted`` object. ``factors(qrpfact(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``factors``, ``qmulQR``, ``qTmulQR``, ``\``. 
+
+.. function:: qrpfact!(A) -> QRPivotedDense
+
+   ``qrpfact!`` is the same as ``qrpfact`` but saves space by overwriting the input A, instead of creating a copy.
+
+.. function:: qmulQR(QR, A)
+   
+   Perform Q*A efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
+
+.. function:: qTmulQR(QR, A)
+
+   Perform Q'*A efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
+
+.. function:: sqrtm(A)
+
+   Compute the matrix square root of ``A``. If ``B = sqrtm(A)``, then ``B*B == A`` within roundoff error.
 
 .. function:: eig(A) -> D, V
 
@@ -1810,17 +2160,41 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the eigenvalues of ``A``.
 
-.. function:: svd(A) -> U, S, V
+.. function:: svdfact(A, [thin]) -> SVDDense
 
-   Compute the SVD of A, returning ``U``, ``S``, and ``V`` such that ``A = U*S*V'``.
+   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVDDense`` object. ``factors(svdfact(A))`` returns ``U``, ``S``, and ``Vt``, such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
-.. function:: svdt(A) -> U, S, Vt
+.. function:: svdfact!(A, [thin]) -> SVDDense
 
-   Compute the SVD of A, returning ``U``, ``S``, and ``Vt`` such that ``A = U*S*Vt``.
+   ``svdfact!`` is the same as ``svdfact`` but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned.
+
+.. function:: svd(A, [thin]) -> U, S, V
+
+   Compute the SVD of A, returning ``U``, ``S``, and ``V`` such that ``A = U*S*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned.
+
+.. function:: svdt(A, [thin]) -> U, S, Vt
+
+   Compute the SVD of A, returning ``U``, ``S``, and ``Vt`` such that ``A = U*S*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
 .. function:: svdvals(A)
 
    Returns the singular values of ``A``.
+
+.. function:: svdvals!(A)
+
+   Returns the singular values of ``A``, while saving space by overwriting the input.
+
+.. function:: svdfact(A, B) -> GSVDDense
+
+   Compute the generalized SVD of ``A`` and ``B``, returning a ``GSVDDense`` Factorization object. ``factors(svdfact(A,b))`` returns ``U``, ``V``, ``Q``, ``D1``, ``D2``, and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
+   
+.. function:: svd(A, B) -> U, V, Q, D1, D2, R0
+
+   Compute the generalized SVD of ``A`` and ``B``, returning ``U``, ``V``, ``Q``, ``D1``, ``D2``, and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
+ 
+.. function:: svdvals(A, B)
+
+   Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``.
 
 .. function:: triu(M)
 
@@ -1921,6 +2295,18 @@ Combinatorics
 
    Returns true if v is a valid permutation.
 
+.. function:: permute!(v, p)
+
+   Permute vector ``v`` in-place, according to permutation ``p``.  No
+   checking is done to verify that ``p`` is a permutation.
+
+   To return a new permutation, use ``v[p]``.  Note that this is
+   generally faster than ``permute!(v,p)`` for large vectors.
+
+.. function:: ipermute!(v, p)
+
+   Like permute!, but the inverse of the given permutation is applied.
+
 .. function:: randcycle(n)
 
    Construct a random cyclic permutation of the given length.
@@ -1972,37 +2358,9 @@ Statistics
 
    Compute the histogram of ``v``, optionally using ``n`` bins
 
-.. function:: histc(v, e)
+.. function:: hist(v, e)
 
    Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
-
-.. function:: weighted_mean(v, w)
-
-   Compute the weighted mean of ``v`` using a vector of weights ``w``
-
-.. function:: mad(v, m)
-
-   Compute the median absolute deviation from the entries of a vector ``v`` relative to a known median ``m``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
-
-.. function:: mad(v)
-
-   Compute the median absolute deviation from the entries of a vector ``v`` relative to the median of ``v``. The calculation involves an adjustment factor of 1.4826 required to insure that the estimator is consistent for normally distributed data.
-
-.. function:: skewness(v, m)
-
-   Compute the sample skewness of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
-
-.. function:: skewness(v)
-
-   Compute the sample skewness of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
-
-.. function:: kurtosis(v, m)
-
-   Compute the sample kurtosis of a vector ``v`` relative to a known mean ``m``. Uses a maximum likelihood estimator which can be biased.
-
-.. function:: kurtosis(v)
-
-   Compute the sample kurtosis of a vector ``v`` relative to the sample mean. Uses a maximum likelihood estimator which can be biased.
 
 .. function:: quantile(v, p)
 
@@ -2012,69 +2370,13 @@ Statistics
 
    Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
 
-.. function:: quartile(v)
-
-   Compute the quartiles of a vector ``v`` at the probability values ``[.0, .25, .5, .75, 1.0]``.
-
-.. function:: quintile(v)
-
-   Compute the quintiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
-
-.. function:: decile(v)
-
-   Compute the deciles of a vector ``v`` at the probability values ``[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]``.
-
-.. function:: iqr(v)
-
-   Compute the interquantile range of a vector ``v`` at the probability values ``[.25, .75]``.
-
-.. function:: tiedrank(v)
-
-   Compute the ranks of the entries of vector ``v``. Ties are resolved by taking the average rank over all tied values.
-
-.. function:: cov_pearson(v1, v2)
-
-   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
-
-.. function:: cov_spearman(v)
-
-   Compute the Spearman covariance between two vectors ``v1`` and ``v2``.
-
 .. function:: cov(v)
 
    Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
 
-.. function:: cor_pearson(v)
-
-   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
-
-.. function:: cor_spearman(v)
-
-   Compute the Spearman correlation between two vectors ``v1`` and ``v2``.
-
 .. function:: cor(v)
 
    Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
-
-.. function:: autocor(v, l)
-
-   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``l``.
-
-.. function:: autocor(v)
-
-   Compute the Pearson autocorrelation of a vector ``v`` with itself at lag ``1``.
-
-.. function:: dist(m)
-
-   Compute the distance matrix between all of the rows of ``m``.
-
-.. function:: rle(v)
-
-   Compute a run-length encoding representation of a vector ``v``.
-
-.. function:: inverse_rle(vals, lens)
-
-   Compute a vector from its run-length vector representation as values ``vals`` and run lengths ``lens``.
 
 Signal Processing
 -----------------
@@ -2385,19 +2687,15 @@ Parallel Computing
 Distributed Arrays
 ------------------
 
-.. function:: darray(init, type, dims, [distdim, procs, dist])
+.. function:: DArray(init, dims, [procs, dist])
 
-   Construct a distributed array. ``init`` is a function of three arguments that will run on each processor, and should return an ``Array`` holding the local data for the current processor. Its arguments are ``(T,d,da)`` where ``T`` is the element type, ``d`` is the dimensions of the needed local piece, and ``da`` is the new ``DArray`` being constructed (though, of course, it is not fully initialized). ``type`` is the element type. ``dims`` is the dimensions of the entire ``DArray``. ``distdim`` is the dimension to distribute in. ``procs`` is a vector of processor ids to use. ``dist`` is a vector giving the first index of each contiguous distributed piece, such that the nth piece consists of indexes ``dist[n]`` through ``dist[n+1]-1``. If you have a vector ``v`` of the sizes of the pieces, ``dist`` can be computed as ``cumsum([1,v])``. Fortunately, all arguments after ``dims`` are optional.
+   Construct a distributed array. ``init`` is a function accepting a tuple of index ranges. This function should return a chunk of the distributed array for the specified indexes. ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of processor IDs to use. ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
 
-.. function:: darray(f, A)
-
-   Transform ``DArray`` ``A`` to another of the same type and distribution by applying function ``f`` to each block of ``A``.
-
-.. function:: dzeros([type, ]dims, ...)
+.. function:: dzeros(dims, ...)
 
    Construct a distributed array of zeros. Trailing arguments are the same as those accepted by ``darray``.
 
-.. function:: dones([type, ]dims, ...)
+.. function:: dones(dims, ...)
 
    Construct a distributed array of ones. Trailing arguments are the same as those accepted by ``darray``.
 
@@ -2413,11 +2711,7 @@ Distributed Arrays
 
    Construct a distributed normal random array. Trailing arguments are the same as those accepted by ``darray``.
 
-.. function:: dcell(dims, ...)
-
-   Construct a distributed cell array. Trailing arguments are the same as those accepted by ``darray``.
-
-.. function:: distribute(a, [distdim])
+.. function:: distribute(a)
 
    Convert a local array to distributed
 
@@ -2425,32 +2719,38 @@ Distributed Arrays
 
    Get the local piece of a distributed array
 
-.. function:: changedist(d, distdim)
-
-   Change the distributed dimension of a ``DArray``
-
 .. function:: myindexes(d)
 
    A tuple describing the indexes owned by the local processor
-
-.. function:: owner(d, i)
-
-   Get the id of the processor holding index ``i`` in the distributed dimension
 
 .. function:: procs(d)
 
    Get the vector of processors storing pieces of ``d``
 
-.. function:: distdim(d)
-
-   Get the distributed dimension of ``d``
-
 System
 ------
 
-.. function:: system(command::String)
+.. function:: run(command)
 
-   Run a shell command.
+   Run a command object, constructed with backticks. Throws an error if anything goes wrong, including the process exiting with a non-zero status.
+
+.. function:: success(command)
+
+   Run a command object, constructed with backticks, and tell whether it was successful (exited with a code of 0).
+
+.. function:: readsfrom(command)
+
+   Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream reading from the process' standard output.
+
+.. function:: writesto(command)
+
+   Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream writing to the process' standard input.
+
+.. function:: > < >> .>
+
+   ``>`` ``<`` and ``>>`` work exactly as in bash, and ``.>`` redirects STDERR.
+
+   **Example**: ``run((`ls` > "out.log") .> "err.log")``
 
 .. function:: gethostname() -> String
 
@@ -2467,6 +2767,10 @@ System
 .. function:: cd(dir::String)
 
    Set the current working directory. Returns the new current directory.
+
+.. function:: cd(f, ["dir"])
+
+   Temporarily changes the current working directory (HOME if not specified) and applies function f before returning. 
 
 .. function:: mkdir(path, [mode])
 

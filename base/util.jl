@@ -106,6 +106,28 @@ end
 
 which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 
+macro which(ex)
+    ex = expand(ex)
+    exret = expr(:call, :error, "expression is not a function call")
+    if !isa(ex, Expr)
+        # do nothing -> error
+    elseif ex.head == :call
+        exret = expr(:call, :which, map(esc, ex.args)...)
+    elseif ex.head == :body
+        a1 = ex.args[1]
+        if isa(a1, Expr) && a1.head == :call
+            a11 = a1.args[1]
+            if isa(a11, TopNode) && a11.name == :assign
+                exret = expr(:call, :which, eval(expr(:toplevel, :assign)), map(esc, a1.args[2:end])...)
+            end
+        end
+    elseif ex.head == :thunk
+        exret = expr(:call, :error, "expression is not a function call, or is too complex for @which to analyze; "
+                                  * "break it down to simpler parts if possible")
+    end
+    exret
+end
+
 edit(file::String) = edit(file, 1)
 function edit(file::String, line::Integer)
     editor = get(ENV, "JULIA_EDITOR", "emacs")
@@ -165,7 +187,7 @@ disassemble(f::Function, types::Tuple) =
 
 function methods(f::Function)
     if !isgeneric(f)
-        error("methods: error: not a generic function")
+        error("methods: not a generic function")
     end
     f.env
 end
@@ -324,11 +346,11 @@ function apropos(txt::String)
         end
     end
     for (func, entries) in help_function_dict
-        if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
+        if ismatch(r, func) || any(e->ismatch(r,e), entries)
             for desc in entries
                 nl = search(desc,'\n')
-                if nl[1] != 0
-                    println(desc[1:(nl[1]-1)])
+                if nl != 0
+                    println(desc[1:(nl-1)])
                 else
                     println(desc)
                 end
@@ -359,6 +381,12 @@ function help(x)
     end
 end
 
-# misc
+# print a warning only once
 
-times(f::Function, n::Int) = for i=1:n f() end
+const have_warned = (ByteString=>Bool)[]
+function warn_once(msg::String...)
+    msg = bytestring(msg...)
+    has(have_warned,msg) && return
+    have_warned[msg] = true
+    warn(msg)
+end

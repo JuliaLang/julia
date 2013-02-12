@@ -667,6 +667,8 @@ function zeta(z::Number)
 end
 @vectorize_1arg Number zeta
 
+if WORD_SIZE == 64
+# TODO: complex return only on 64-bit for now
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
@@ -674,6 +676,7 @@ for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
         ($fname)(z::Complex64) = complex64(ccall(($(string("Faddeeva_",f)),openlibm_extras), ComplexPair{Float64}, (ComplexPair{Float64}, Float64), complex128(z), float64(eps(Float32))))
         ($fname)(z::Complex) = ($fname)(complex128(z))
     end
+end
 end
 for f in (:erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f

@@ -73,19 +73,19 @@ type TcpSocket <: Socket
     handle::Ptr{Void}
     open::Bool
     line_buffered::Bool
-    buffer::Buffer
+    buffer::IOBuffer
     readcb::Callback
     readnotify::Vector{WaitTask}
     ccb::Callback
     connectnotify::Vector{WaitTask}
     closecb::Callback
     closenotify::Vector{WaitTask}
-    TcpSocket(handle,open)=new(handle,open,true,PipeString(),false,
+    TcpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,
                                WaitTask[],false,WaitTask[],false,WaitTask[])
     function TcpSocket()
         this = TcpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
-                            globalEventLoop(),this)
+                            eventloop(),this)
         if (this.handle == C_NULL)
             error("Failed to start reading: ",_uv_lasterror())
         end
@@ -97,19 +97,19 @@ type UdpSocket <: Socket
     handle::Ptr{Void}
     open::Bool
     line_buffered::Bool
-    buffer::Buffer
+    buffer::IOBuffer
     readcb::Callback
     readnotify::Vector{WaitTask}
     ccb::Callback
     connectnotify::Vector{WaitTask}
     closecb::Callback
     closenotify::Vector{WaitTask}
-    UdpSocket(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],
+    UdpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,WaitTask[],
                                false,WaitTask[],false,WaitTask[])
     function UdpSocket()
         this = UdpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
-                            globalEventLoop(),this)
+                            eventloop(),this)
         this
     end
 end
@@ -144,7 +144,7 @@ function wait_accept(server::TcpSocket)
     else
         err = _uv_lasterror()
         if err != 4 #EAGAIN
-            error("accept error: ", err, "\n")
+            error("accept: ", err, "\n")
         end
     end
     ct = current_task()
@@ -158,7 +158,7 @@ function wait_accept(server::TcpSocket)
         end
         status = args[2]::Int32
         if status == -1
-            error("listen error: ", _uv_lasterror(), "\n")
+            error("listen: ", _uv_lasterror(), "\n")
         end
         err = accept(server,client)
         if err == 0
@@ -166,7 +166,7 @@ function wait_accept(server::TcpSocket)
         else
             err = _uv_lasterror()
             if err != 4 #EAGAIN
-                error("accept error: ", err, "\n")
+                error("accept: ", err, "\n")
             end
         end
     end
@@ -216,7 +216,7 @@ jl_getaddrinfo(loop::Ptr{Void}, host::ByteString, service::Ptr{Void},
 
 getaddrinfo(cb::Function,host::ASCIIString) = begin
     callback_dict[cb] = cb
-    jl_getaddrinfo(globalEventLoop(),host,C_NULL,cb)
+    jl_getaddrinfo(eventloop(),host,C_NULL,cb)
 end
 
 function getaddrinfo(host::ASCIIString)

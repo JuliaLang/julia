@@ -125,7 +125,7 @@ function sequence_parse(st, evr, sz)
             return sq
         end
         if grp != 0xFFFE || elt != 0xE000
-            error("dicom error: expected item tag in sequence")
+            error("dicom: expected item tag in sequence")
         end
         push!(sq, sequence_item(st, evr, itemlen))
         if itemlen != 0xffffffff
@@ -182,7 +182,7 @@ function pixeldata_parse(st, sz, vr, dcm)
                 return data
             end
             if grp != 0xFFFE || elt != 0xE000
-                error("dicom error: expected item tag in encapsulated pixel data")
+                error("dicom: expected item tag in encapsulated pixel data")
             end
             if is(dtype,Uint16); xr = div(xr,2); end
             push!(data, read(st, Array(dtype, xr)))
@@ -193,18 +193,18 @@ end
 
 function pixeldata_write(st, evr, el)
     if length(el) > 1
-        error("dicom error: compression not supported")
+        error("dicom: compression not supported")
     end
     d = el[1]
     nt = eltype(d)
     vr = is(nt,Uint8)  || is(nt,Int8)  ? "OB" :
          is(nt,Uint16) || is(nt,Int16) ? "OW" :
          is(nt,Float32)                ? "OF" :
-         error("dicom error: unsupported pixel format")
+         error("dicom: unsupported pixel format")
     if !is(evr,false)
         dcm_store(st, 0x7FE0, 0x0010, s->write(s,d), vr)
     elseif vr != "OW"
-        error("dicom error: implicit VR only supports 16-bit pixels")
+        error("dicom: implicit VR only supports 16-bit pixels")
     else
         dcm_store(st, 0x7FE0, 0x0010, s->write(s,d))
     end
@@ -265,7 +265,7 @@ function element(st, evr, dcm)
         vr = lookup_vr(gelt)
     end
     if is(vr,false)
-        error("dicom error: unknown tag ", gelt)
+        error("dicom: unknown tag ", gelt)
     end
     
     sz = read(st,lentype)
@@ -332,7 +332,7 @@ function element_write(st, evr, el::DcmElt)
     else
         vr = lookup_vr(el.tag)
         if is(vr,false)
-            error("dicom error: unknown tag ", gelt)
+            error("dicom: unknown tag ", gelt)
         end
     end
     if el.tag == (0x7FE0, 0x0010)
@@ -369,7 +369,7 @@ function dcm_parse(st)
     skip(st, 128)
     sig = ASCIIString(read(st,Uint8,4))
     if sig != "DICM"
-        error("dicom error: invalid file header")
+        error("dicom: invalid file header")
     end
     # a bit of a hack to detect explicit VR. seek past the first tag,
     # and check to see if a valid VR name is there
