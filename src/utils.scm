@@ -13,16 +13,9 @@
 	(else (index-p pred (cdr lst) (+ start 1)))))
 
 (define (diff s1 s2)
-  (if (or (length> s1 20) (length> s2 20))
-      (let ((t (table)))
-	(for-each (lambda (elt) (put! t elt #t))
-		  s1)
-	(for-each (lambda (elt) (if (has? t elt) (del! t elt)))
-		  s2)
-	(table.keys t))
-      (cond ((null? s1)         '())
-	    ((memq (car s1) s2) (diff (cdr s1) s2))
-	    (else               (cons (car s1) (diff (cdr s1) s2))))))
+  (cond ((null? s1)         '())
+	((memq (car s1) s2) (diff (cdr s1) s2))
+	(else               (cons (car s1) (diff (cdr s1) s2)))))
 
 (define (unique lst) (delete-duplicates lst))
 
