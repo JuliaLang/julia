@@ -81,7 +81,7 @@ All Objects
 
 .. function:: finalizer(x, function)
 
-   Register a function to be called on ``x`` when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
+   Register a function ``f(x)`` to be called when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
 
 .. function:: copy(x)
 
