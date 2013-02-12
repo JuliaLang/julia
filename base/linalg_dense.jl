@@ -803,8 +803,8 @@ function factors{T}(obj::GSVDDense{T})
         D2 = [zeros(T, obj.l, obj.k) diagm(obj.b[obj.k + 1:obj.k + obj.l]); zeros(T, p - obj.l, obj.k + obj.l)]
         R0 = [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
     else
-        D1 = [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); diagm(a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
-        D2 = [zeros(T, p, obj.k) [diagm(b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
+        D1 = [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); diagm(obj.a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
+        D2 = [zeros(T, p, obj.k) [diagm(obj.b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
         R0 = [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
     end
     return obj.U, obj.V, obj.Q, D1, D2, R0

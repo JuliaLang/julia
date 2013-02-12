@@ -802,7 +802,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             if m - k[1] - l[1] >= 0
                 R = triu(A[1:k[1] + l[1],n - k[1] - l[1] + 1:n])
             else
-                R = triu([A[1:m, n - k[1] - l[1]:n]; B[m - k[1] + 1:l[1], n - k[1] - l[1]:n]]   )
+                R = triu([A[1:m, n - k[1] - l[1] + 1:n]; B[m - k[1] + 1:l[1], n - k[1] - l[1] + 1:n]])
             end
             return U, V, Q, alpha, beta, k[1], l[1], R
         end
