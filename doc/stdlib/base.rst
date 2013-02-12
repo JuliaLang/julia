@@ -81,7 +81,7 @@ All Objects
 
 .. function:: finalizer(x, function)
 
-   Register a function to be called on ``x`` when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
+   Register a function ``f(x)`` to be called when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
 
 .. function:: copy(x)
 
@@ -850,7 +850,11 @@ Mathematical Functions
 
    Modulus after division, returning in the range [0,m)
 
-.. function:: rem %
+.. function:: rem
+
+   Remainder after division
+
+.. function:: %
 
    Remainder after division
 
@@ -1062,6 +1066,10 @@ Mathematical Functions
 
    Convert ``x`` from degrees to radians
 
+.. function:: radians2degrees(x)
+
+   Convert ``x`` from radians to degrees
+
 .. function:: hypot(x, y)
 
    Compute the :math:`\sqrt{(x^2+y^2)}` without undue overflow or underflow
@@ -1110,6 +1118,10 @@ Mathematical Functions
 .. function:: expm1(x)
 
    Accurately compute :math:`e^x-1`
+
+.. function:: square(x)
+
+   Compute :math:`x^2`
 
 .. function:: round(x, [digits, [base]]) -> FloatingPoint
 
@@ -1222,6 +1234,10 @@ Mathematical Functions
 .. function:: imag(z)
 
    Return the imaginary part of the complex number ``z``
+
+.. function:: reim(z)
+
+   Return both the real and imaginary parts of the complex number ``z``
 
 .. function:: conj(z)
 
@@ -1431,6 +1447,10 @@ Data Formats
 
    Convert a number or array to the default integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an integer.
 
+.. function:: uint(x)
+
+   Convert a number or array to the default unsigned integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an unsigned integer.
+
 .. function:: integer(x)
 
    Convert a number or array to integer type. If ``x`` is already of integer type it is unchanged, otherwise it converts it to the default integer type on your platform.
@@ -1438,6 +1458,14 @@ Data Formats
 .. function:: isinteger(x)
 
    Test whether a number or array is of integer type
+
+.. function:: signed(x)
+
+   Convert a number to a signed integer
+
+.. function:: unsigned(x)
+
+   Convert a number to an unsigned integer
 
 .. function:: int8(x)
 
@@ -1490,6 +1518,12 @@ Data Formats
 .. function:: float(x)
 
    Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. For strings, it converts to ``Float64``.
+
+.. function:: significand(x)
+
+   Extract the significand(s) (a.k.a. mantissa), in binary representation, of a floating-point number or array.
+   
+   For example, ``significand(15.2)/15.2 == 0.125``, and ``significand(15.2)*8 == 15.2``
 
 .. function:: float64_valued(x::Rational)
 
@@ -2076,6 +2110,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: qTmulQR(QR, A)
 
    Perform Q'*A efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
+
+.. function:: sqrtm(A)
+
+   Compute the matrix square root of ``A``. If ``B = sqrtm(A)``, then ``B*B == A`` within roundoff error.
 
 .. function:: eig(A) -> D, V
 
