@@ -219,13 +219,13 @@ General Collections
 
    For ordered, indexable collections, the maximum index ``i`` for which ``ref(collection, i)`` is valid. For unordered collections, the number of elements.
 
+.. function:: endof(collection) -> Integer
+
+   Returns the last index of the collection.
+   
+   **Example**: ``endof([1,2,4]) = 3``
+
 Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
-
-Partially implemented by: ``FDSet``.
-
-.. function:: endof(collection)
-
-   The last valid index in an ordered collection.
 
 Iterable Collections
 --------------------
@@ -298,9 +298,9 @@ Iterable Collections
 
    Transform collection ``c`` by applying ``f`` to each element.
 
-.. function:: map!(f, c)
+.. function:: map!(function, collection)
 
-   Transform collection ``c`` in-place by applying ``f`` to each element.
+   In-place version of :func:`map`.
 
 .. function:: mapreduce(f, op, itr)
 
@@ -499,7 +499,11 @@ Dequeues
 
    Remove the item at the given index.
 
-.. function:: resize!(collection, n)
+.. function:: delete!(collection{Type}, range) -> items{Type}
+   
+   Remove items at specified range.
+
+.. function:: resize!(collection, n) -> collection
 
    Resize collection to contain ``n`` elements.
 
@@ -565,6 +569,26 @@ Strings
 .. function:: utf8(s)
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
+
+.. function:: is_valid_ascii(s) -> Bool
+
+   Returns true if the string is valid ASCII, false otherwise.
+
+.. function:: is_valid_utf8(s) -> Bool
+
+   Returns true if the string is valid UTF-8, false otherwise.
+
+.. function:: check_ascii(s)
+
+   Calls :func:`is_valid_ascii` on string. Throws error if it is not valid.
+
+.. function:: check_utf8(s)
+
+   Calls :func:`is_valid_utf8` on string. Throws error if it is not valid.
+
+.. function:: byte_string_classify(s)
+
+   Returns 0 if the string is neither valid ASCII nor UTF-8, 1 if it is valid ASCII, and 2 if it is valid UTF-8.
 
 .. function:: search(string, char, [i])
 
