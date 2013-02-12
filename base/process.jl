@@ -295,27 +295,13 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
 end
 
 function reinit_stdio()
-    #STDIN.handle  = ccall(:jl_stdin_stream ,Ptr{Void},())
-    global STDIN
-    inhandle = ccall(:jl_stdin_stream, Ptr{Void}, ())
-    if inhandle == C_NULL
-        STDIN = fdio("",0)
-    else
-        if !isa(STDIN,AsyncStream)
-            STDIN = _uv_tty2tty(inhandle)
-        else
-            STDIN.handle = inhandle
-            STDIN.buffer = PipeBuffer()
-            ccall(:jl_uv_associate_julia_struct, Void, (Ptr{Void},Any),
-                  STDIN.handle, STDIN)
-        end
-    end
-
+    STDIN.handle  = ccall(:jl_stdin_stream ,Ptr{Void},())
     STDOUT.handle = ccall(:jl_stdout_stream,Ptr{Void},())
     STDERR.handle = ccall(:jl_stderr_stream,Ptr{Void},())
+    STDIN.buffer = PipeBuffer()
     STDOUT.buffer = PipeBuffer()
     STDERR.buffer = PipeBuffer()
-    for stream in (STDOUT,STDERR)
+    for stream in (STDIN,STDOUT,STDERR)
         ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),stream.handle,stream)
     end
 end
