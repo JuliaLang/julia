@@ -299,12 +299,16 @@ function reinit_stdio()
     global STDIN
     inhandle = ccall(:jl_stdin_stream, Ptr{Void}, ())
     if inhandle == C_NULL
-        STDIN = fdio(0)
+        STDIN = fdio("",0)
     else
-        STDIN.handle = inhandle
-        STDIN.buffer = PipeBuffer()
-        ccall(:jl_uv_associate_julia_struct, Void, (Ptr{Void},Any),
-              STDIN.handle, STDIN)
+        if !isa(STDIN,AsyncStream)
+            STDIN = _uv_tty2tty(inhandle)
+        else
+            STDIN.handle = inhandle
+            STDIN.buffer = PipeBuffer()
+            ccall(:jl_uv_associate_julia_struct, Void, (Ptr{Void},Any),
+                  STDIN.handle, STDIN)
+        end
     end
 
     STDOUT.handle = ccall(:jl_stdout_stream,Ptr{Void},())
