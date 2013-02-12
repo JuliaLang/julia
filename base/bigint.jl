@@ -110,11 +110,11 @@ end
 >>(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x>>uint(c)
 >>(x::BigInt, c::Integer) = c<0 ? throw(DomainError()) : x>>uint(c)
 
-function divmod(x::BigInt, y::BigInt)
+function divrem(x::BigInt, y::BigInt)
     z1 = BigInt()
     z2 = BigInt()
-    ccall((:__gmpz_fdiv_qr, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1, z2, x.mpz, y.mpz)
-    BigInt(z1),BigInt(z2)
+    ccall((:__gmpz_tdiv_qr, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1.mpz, z2.mpz, x.mpz, y.mpz)
+    z1, z2
 end
 
 function cmp(x::BigInt, y::BigInt)
