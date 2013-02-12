@@ -11,7 +11,7 @@ end
 
 function BigFloat(x::String)
     z = BigFloat()
-    err = ccall((:__gmpf_set_str, :libgmp), Int32, (Ptr{Void}, Ptr{Uint8}, Ptr{Int32}), z.mpf, bytestring(x), 0)
+    err = ccall((:__gmpf_set_str, :libgmp), Int32, (Ptr{Void}, Ptr{Uint8}, Int32), z.mpf, bytestring(x), 0)
     if err != 0; error("Invalid input"); end
     return z
 end

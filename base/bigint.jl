@@ -11,7 +11,7 @@ end
 
 function BigInt(x::String)
     z = BigInt()
-    err = ccall((:__gmpz_set_str, :libgmp), Int32, (Ptr{Void}, Ptr{Uint8}, Ptr{Int32}), z.mpz, bytestring(x), 0)
+    err = ccall((:__gmpz_set_str, :libgmp), Int32, (Ptr{Void}, Ptr{Uint8}, Int32), z.mpz, bytestring(x), 0)
     if err != 0; error("Invalid input"); end
     return z
 end
@@ -88,7 +88,7 @@ end
 
 function <<(x::BigInt, c::Uint)
     z = BigInt()
-    ccall((:__gmpz_lshift, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Uint), z.mpz, x.mpz, c)
+    ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Uint), z.mpz, x.mpz, c)
     return z
 end
 <<(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x<<uint(c)
@@ -96,7 +96,7 @@ end
 
 function >>(x::BigInt, c::Uint)
     z = BigInt()
-    ccall((:__gmpz_rshift, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Uint), z.mpz, x.mpz, c)
+    ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Uint), z.mpz, x.mpz, c)
     return z
 end
 >>(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x>>uint(c)
@@ -105,7 +105,7 @@ end
 function divmod(x::BigInt, y::BigInt)
     z1 = BigInt()
     z2 = BigInt()
-    ccall((:__gmpz_divmod, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1, z2, x.mpz, y.mpz)
+    ccall((:__gmpz_fdiv_qr, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1, z2, x.mpz, y.mpz)
     BigInt(z1),BigInt(z2)
 end
 
@@ -189,4 +189,4 @@ function BigInt_clear(x::BigInt)
     ccall((:__gmpz_clear, :libgmp), Void, (Ptr{Void},), x.mpz)
 end
 
-ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Int32, (Ptr{Void}, Int32), x.mpz, 10)
+ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Uint, (Ptr{Void}, Int32), x.mpz, 10)
