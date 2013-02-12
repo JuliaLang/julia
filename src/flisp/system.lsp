@@ -310,8 +310,15 @@
 (define (delete-duplicates lst)
   (if (length> lst 20)
       (let ((t (table)))
-	(for-each (lambda (elt) (put! t elt #t)) lst)
-	(table.keys t))
+	(let loop ((l lst))
+	  (if (atom? l)
+	      l
+	      (if (has? t (car l))
+		  (loop (cdr l))
+		  (begin
+		    (put! t (car l) #t)
+		    (cons (car l)
+			  (loop (cdr l))))))))
       (if (atom? lst)
 	  lst
 	  (let ((elt  (car lst))
