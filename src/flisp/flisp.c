@@ -2148,28 +2148,30 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
         lerror(ArgError, "map: too few arguments");
     if (!iscons(args[1])) return NIL;
     value_t first, last, v;
+    int64_t argSP = args-Stack;
+    assert(argSP >= 0 && argSP < N_STACK);
     if (nargs == 2) {
         if (SP+3 > N_STACK) grow_stack();
-        PUSH(args[0]);
-        PUSH(car_(args[1]));
+        PUSH(Stack[argSP]);
+        PUSH(car_(Stack[argSP+1]));
         v = _applyn(1);
         PUSH(v);
         v = mk_cons();
         car_(v) = POP(); cdr_(v) = NIL;
         last = first = v;
-        args[1] = cdr_(args[1]);
+        Stack[argSP+1] = cdr_(Stack[argSP+1]);
         fl_gc_handle(&first);
         fl_gc_handle(&last);
-        while (iscons(args[1])) {
-            Stack[SP-2] = args[0];
-            Stack[SP-1] = car_(args[1]);
+        while (iscons(Stack[argSP+1])) {
+            Stack[SP-2] = Stack[argSP];
+            Stack[SP-1] = car_(Stack[argSP+1]);
             v = _applyn(1);
             PUSH(v);
             v = mk_cons();
             car_(v) = POP(); cdr_(v) = NIL;
             cdr_(last) = v;
             last = v;
-            args[1] = cdr_(args[1]);
+            Stack[argSP+1] = cdr_(Stack[argSP+1]);
         }
         POPN(2);
         fl_free_gc_handles(2);
@@ -2177,10 +2179,10 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
     else {
         size_t i;
         while (SP+nargs+1 > N_STACK) grow_stack();
-        PUSH(args[0]);
+        PUSH(Stack[argSP]);
         for(i=1; i < nargs; i++) {
-            PUSH(car(args[i]));
-            args[i] = cdr_(args[i]);
+            PUSH(car(Stack[argSP+i]));
+            Stack[argSP+i] = cdr_(Stack[argSP+i]);
         }
         v = _applyn(nargs-1);
         PUSH(v);
@@ -2189,11 +2191,11 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
         last = first = v;
         fl_gc_handle(&first);
         fl_gc_handle(&last);
-        while (iscons(args[1])) {
-            Stack[SP-nargs] = args[0];
+        while (iscons(Stack[argSP+1])) {
+            Stack[SP-nargs] = Stack[argSP];
             for(i=1; i < nargs; i++) {
-                Stack[SP-nargs+i] = car(args[i]);
-                args[i] = cdr_(args[i]);
+                Stack[SP-nargs+i] = car(Stack[argSP+i]);
+                Stack[argSP+i] = cdr_(Stack[argSP+i]);
             }
             v = _applyn(nargs-1);
             PUSH(v);

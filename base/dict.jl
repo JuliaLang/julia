@@ -427,7 +427,7 @@ end
 
 has(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 
-function key{K,V}(h::Dict{K,V}, key, deflt)
+function getkey{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
     return (index<0) ? deflt : h.keys[index]::K
 end
@@ -510,8 +510,8 @@ WeakKeyDict() = WeakKeyDict{Any,Any}()
 
 assign{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
 
-function key{K}(wkh::WeakKeyDict{K}, kk, deflt)
-    k = key(wkh.ht, kk, secret_table_token)
+function getkey{K}(wkh::WeakKeyDict{K}, kk, deflt)
+    k = getkey(wkh.ht, kk, secret_table_token)
     if is(k, secret_table_token)
         return deflt
     end

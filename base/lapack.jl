@@ -16,6 +16,14 @@ type SingularException <: Exception
     info::BlasInt
 end
 
+type PosDefException <: Exception
+    info::BlasInt
+end
+
+type RankDeficientException <: Exception
+    info::BlasInt
+end
+
 type LapackDimMisMatch <: Exception
     name::ASCIIString
 end

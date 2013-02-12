@@ -75,7 +75,12 @@ end
 
 #macro init_stdio()
 #begin
-    const STDIN  = _uv_tty2tty(ccall(:jl_stdin_stream ,Ptr{Void},()))
+    inhandle = ccall(:jl_stdin_stream ,Ptr{Void},())
+    if inhandle == C_NULL
+        STDIN = fdio(0)
+    else
+        STDIN = _uv_tty2tty(inhandle)
+    end
     const STDOUT = _uv_tty2tty(ccall(:jl_stdout_stream,Ptr{Void},()))
     const STDERR = _uv_tty2tty(ccall(:jl_stderr_stream,Ptr{Void},()))
     OUTPUT_STREAM = STDOUT
@@ -273,6 +278,7 @@ type SingleAsyncWork <: AsyncWork
         this
     end
 end
+SingleAsyncWork(cb::Function) = SingleAsyncWork(eventloop(),cb)
 
 type IdleAsyncWork <: AsyncWork
     cb::Function
@@ -283,6 +289,7 @@ type IdleAsyncWork <: AsyncWork
         this
     end
 end
+IdleAsyncWork(cb::Function) = IdleAsyncWork(eventloop(),cb)
 
 type TimeoutAsyncWork <: AsyncWork
     cb::Function
@@ -293,6 +300,7 @@ type TimeoutAsyncWork <: AsyncWork
         this
     end
 end
+TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 
 function _uv_hook_close(uv::AsyncStream)
     uv.handle = 0

@@ -467,8 +467,6 @@ function filter(f::Function, s::String)
     takebuf_string(out)
 end
 
-has(s::String, c::Char) = contains(s, c)
-
 ## string promotion rules ##
 
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
@@ -918,25 +916,6 @@ end
 replace(s::String, pat, f::Function, n::Integer) = replace(bytestring(s), pat, f, n)
 replace(s::String, pat, r, n::Integer) = replace(s, pat, x->r, n)
 replace(s::String, pat, r) = replace(s, pat, r, 0)
-
-function search_count(str::String, pattern, limit::Integer)
-    n = 0
-    i = a = start(str)
-    r = search(str,pattern,i)
-    j, k = first(r), last(r)+1
-    while j != 0
-        if i == a || i < k
-            n += 1
-            if n == limit break end
-            i = k
-        end
-        if k <= j; k = nextind(str,j) end
-        r = search(str,pattern,k)
-        j, k = first(r), last(r)+1
-    end
-    return n
-end
-search_count(s::String, pat) = search_count(s, pat, 0)
 
 function print_joined(io, strings, delim, last)
     i = start(strings)
