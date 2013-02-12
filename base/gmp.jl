@@ -31,6 +31,7 @@ import
     Base.isinf,
     Base.isnan,
     Base.lcm,
+    Base.mod,
     Base.ndigits,
     Base.promote_rule,
     Base.rem,

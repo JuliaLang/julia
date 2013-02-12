@@ -32,8 +32,11 @@ ee = typemax(Int64)
 @test string(d) == "-246913578024691357802469135780"
 @test string(a) == "123456789012345678901234567890"
 
-@test div(BigInt(3), BigInt(2)) == BigInt(1)
-@test rem(BigInt(3), BigInt(2)) == BigInt(1)
+for i = -10:10, j = [-10:-1,1:10]
+    @test div(BigInt(i), BigInt(j)) == div(i,j)
+    @test mod(BigInt(i), BigInt(j)) == mod(i,j)
+    @test rem(BigInt(i), BigInt(j)) == rem(i,j)
+end
 
 @test a+int(1) == b
 @test a+int8(1) == b
