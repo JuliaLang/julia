@@ -252,7 +252,7 @@ function process_options(args::Array{Any,1})
             repl = false
             # remove julia's arguments
             ARGS = args[i+1:end]
-            include(args[i])
+            include(Base.find_in_path(args[i]))
             break
         else
             error("unknown option: ", args[i])
