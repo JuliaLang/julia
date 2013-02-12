@@ -34,6 +34,7 @@ ee = typemax(Int64)
 
 for i = -10:10, j = [-10:-1,1:10]
     @test div(BigInt(i), BigInt(j)) == div(i,j)
+    @test fld(BigInt(i), BigInt(j)) == fld(i,j)
     @test mod(BigInt(i), BigInt(j)) == mod(i,j)
     @test rem(BigInt(i), BigInt(j)) == rem(i,j)
 end

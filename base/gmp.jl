@@ -25,6 +25,7 @@ import
     Base.convert,
     Base.div,
     Base.factorial,
+    Base.fld,
     Base.floor,
     Base.gcd,
     Base.gcdx,
