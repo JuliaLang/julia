@@ -77,7 +77,7 @@ end
 #begin
     inhandle = ccall(:jl_stdin_stream ,Ptr{Void},())
     if inhandle == C_NULL
-        STDIN = fdio(0)
+        STDIN = fdio("",0)
     else
         STDIN = _uv_tty2tty(inhandle)
     end
