@@ -163,9 +163,9 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                 bto->imported = (explicit!=0);
             }
             else if (bto->owner != to && bto->owner != NULL) {
-                jl_printf(JL_STDERR,
-                           "Warning: ignoring conflicting import of %s.%s into %s\n",
-                           from->name->name, s->name, to->name->name);
+                // jl_printf(JL_STDERR,
+                //            "Warning: ignoring conflicting import of %s.%s into %s\n",
+                //            from->name->name, s->name, to->name->name);
             }
             else if (bto->constp || bto->value) {
                 assert(bto->owner == to);
