@@ -1002,13 +1002,12 @@ function start_sge_workers(n)
     home = JULIA_HOME
     sgedir = "$home/../../SGE"
     run(`mkdir -p $sgedir`)
-    qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
-    `echo $home/julia-release-basic --worker` | qsub_cmd
+    qsub_cmd = `echo $home/julia-release-basic --worker` | `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
     out,_ = readsfrom(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
     end
-    id = split(readline(out),'.')[1]
+    id = chomp(split(readline(out),'.')[1])
     println("job id is $id")
     print("waiting for job to start");
     workers = cell(n)
