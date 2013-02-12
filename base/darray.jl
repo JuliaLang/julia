@@ -880,7 +880,7 @@ prod(d::DArray) = reduce(*, d)
 min(d::DArray) = reduce(min, d)
 max(d::DArray) = reduce(max, d)
 
-areduce(f::Function, d::DArray, r, v0, T::Type) = error("not yet implemented")
+reducedim(f::Function, d::DArray, r, v0, T::Type) = error("not yet implemented")
 cumsum(d::DArray) = error("not yet implemented")
 cumprod(d::DArray) = error("not yet implemented")
 

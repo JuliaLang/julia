@@ -27,7 +27,7 @@ function cd_pkgdir(f::Function)
         if has(ENV,"JULIA_PKGDIR")
             error("Package directory $d doesn't exist; run Pkg.init() to create it.")
         else
-            warn("Initializing default package repository $d.")
+            info("Auto-initializing default package repository $d.")
             init()
         end
     end
@@ -116,7 +116,8 @@ add(pkgs::Vector{VersionSet}) = cd_pkgdir() do
         end
         reqs = parse_requires("REQUIRE")
         if any(req->req.package==pkg.package,reqs)
-            error("package already required: $pkg")
+            warn("You've already required $pkg, ignoring.")
+            return
         end
         open("REQUIRE","a") do io
             print(io,pkg.package)
@@ -140,11 +141,11 @@ end
 rm(pkgs::Vector{String}) = cd_pkgdir() do
     for pkg in pkgs
         if !contains(Metadata.packages(),pkg)
-            error("invalid package: $pkg")
+            error("Invalid package: $pkg")
         end
         reqs = parse_requires("REQUIRE")
         if !any(req->req.package==pkg,reqs)
-            error("package not required: $pkg")
+            error("Package not required: $pkg")
         end
         open("REQUIRE") do r
             open("REQUIRE.new","w") do w
@@ -201,7 +202,7 @@ function runbuildscript(pkg)
     if isdir(path)
         cd(path) do
             if isfile("build.jl")
-                info(string("Running build script for package ", pkg))
+                info("Running build script for package $pkg")
                 include("build.jl")
             end
         end
@@ -239,7 +240,7 @@ function _resolve()
                     oldver = Metadata.version(pkg,have[pkg])
                     newver = Metadata.version(pkg,want[pkg])
                     up = oldver <= newver ? "Up" : "Down"
-                    println("$(up)grading $pkg: v$oldver => v$newver")
+                    info("$(up)grading $pkg: v$oldver => v$newver")
                     cd(pkg) do
                         run(`git checkout -q $(want[pkg])`)
                     end
@@ -248,7 +249,7 @@ function _resolve()
                 end
             else
                 ver = Metadata.version(pkg,have[pkg])
-                println("Removing $pkg v$ver")
+                info("Removing $pkg v$ver")
                 run(`git rm -qrf --cached -- $pkg`)
                 Git.modules(`--remove-section submodule.$pkg`)
                 run(`git add .gitmodules`)
@@ -256,7 +257,7 @@ function _resolve()
             end
         else
             ver = Metadata.version(pkg,want[pkg])
-            println("Installing $pkg: v$ver")
+            info("Installing $pkg v$ver")
             if ispath(pkg)
                 # TODO: maybe if this is a git repo or submodule, just take it over?
                 error("Path $pkg already exists! Please remove to allow installation.")
@@ -337,9 +338,7 @@ function commit(f::Function, msg::String)
     assert_git_clean()
     try f()
     catch
-        print(STDERR,
-              "\n\n*** ERROR ENCOUNTERED ***\n\n",
-              "Rolling back to HEAD...\n")
+        warn("\n\n*** ERROR ENCOUNTERED ***\n\nRolling back to HEAD...\n")
         checkout()
         rethrow()
     end
@@ -348,7 +347,7 @@ function commit(f::Function, msg::String)
         run(`git diff --name-only --diff-filter=D HEAD^ HEAD` | `xargs rm -rf`)
         checkout()
     elseif !Git.dirty()
-        println(STDERR, "Nothing to commit.")
+        warn("nothing to commit.")
     else
         error("There are both staged and unstaged changes to packages.")
     end
@@ -395,7 +394,7 @@ pull() = cd_pkgdir() do
     run(`git fetch`)
 
     # see how far git gets with merging
-    if success(`git merge -m "[jul] pull (simple merge)" FETCH_HEAD`) return end
+    success(`git merge -m "[jul] pull (simple merge)" FETCH_HEAD`) && return
 
     # get info about local, remote and base trees
     L = readchomp(`git rev-parse --verify HEAD`)
@@ -411,13 +410,11 @@ pull() = cd_pkgdir() do
         Cc, conflicts, deleted = Git.merge_configs(Bc,Lc,Rc)
         # warn about config conflicts
         for (key,vals) in conflicts
-            print(STDERR,
-                "\nModules config conflict for $key:\n",
-                "  local value  = $(vals[1])\n",
-                "  remote value = $(vals[2])\n",
-                "\n",
-                "Both values written to .gitmodules -- please edit and choose one.\n\n",
-            )
+            warn("\nModules config conflict for $key:\n",
+                 "  local value  = $(vals[1])\n",
+                 "  remote value = $(vals[2])\n",
+                 "\n",
+                 "Both values written to .gitmodules -- please edit and choose one.\n\n")
             Cc[key] = vals
         end
         # remove submodules that were deleted
@@ -448,12 +445,10 @@ pull() = cd_pkgdir() do
     if Git.unstaged()
         unmerged = readall(`git ls-files -m` | `sort` | `uniq`)
         unmerged = replace(unmerged, r"^", "    ")
-        print(STDERR,
-            "\n\n*** WARNING ***\n\n",
-            "You have unresolved merge conflicts in the following files:\n\n",
-            unmerged,
-            "\nPlease resolve these conflicts, `git add` the files, and commit.\n"
-        )
+        warn("\n\n*** WARNING ***\n\n",
+             "You have unresolved merge conflicts in the following files:\n\n",
+             unmerged,
+             "\nPlease resolve these conflicts, `git add` the files, and commit.\n")
         error("pull: merge conflicts")
     end
 
@@ -648,12 +643,6 @@ obliterate(pkg::String) = cd_pkgdir() do
     run(`rm -rf $(pkg) $(joinpath("METADATA", pkg))`)
 end
 
-# If a package contains data, make it easy to find its location
-function package_directory(pkg::String)
-    warn("Pkg.package_directory is deprecated, use Pkg.dir instead.")
-    joinpath(dir(), pkg)
-end
-
 # Repository sanity check
 check_repository() = cd_pkgdir() do
     try
@@ -662,10 +651,11 @@ check_repository() = cd_pkgdir() do
         if !isa(err, Resolve.MetadataError)
             rethrow(err)
         end
-        println("Packages with unsatisfiable requirements found:")
+        warning = "Packages with unsatisfiable requirements found:"
         for (v, pp) in err.info
-            println("  $(v.package) v$(v.version) : no valid versions exist for package $pp")
+            warning *= "  $(v.package) v$(v.version) : no valid versions exist for package $pp"
         end
+        warn(warning)
         return false
     end
     return true

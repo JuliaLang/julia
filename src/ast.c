@@ -331,11 +331,12 @@ static jl_value_t *scm_to_julia_(value_t e)
 
 static value_t array_to_list(jl_array_t *a)
 {
-    long i;
+    if (jl_array_len(a) > 300000)
+        jl_error("expression too large");
     value_t lst=FL_NIL, temp=FL_NIL;
     fl_gc_handle(&lst);
     fl_gc_handle(&temp);
-    for(i=jl_array_len(a)-1; i >= 0; i--) {
+    for(long i=jl_array_len(a)-1; i >= 0; i--) {
         temp = julia_to_scm(jl_cellref(a,i));
         lst = fl_cons(temp, lst);
     }

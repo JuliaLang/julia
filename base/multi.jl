@@ -257,7 +257,7 @@ type RemoteRef
 
     function RemoteRef(w, wh, id)
         r = new(w,wh,id)
-        found = key(client_refs, r, false)
+        found = getkey(client_refs, r, false)
         if !is(found,false)
             return found
         end

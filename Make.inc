@@ -88,8 +88,9 @@ USECLANG = 0
 endif
 
 ifeq ($(OS), Darwin)
-OSVER = $(shell uname -r | cut -b 1-2)
-ifeq ($(OSVER), 10)
+DARWINVER = $(shell uname -r | cut -b 1-2)
+OSXVER = $(shell sw_vers -productVersion | cut -b 1-4)
+ifeq ($(DARWINVER), 10)
 USEGCC = 1
 USECLANG = 0
 else
@@ -160,6 +161,15 @@ USE_SYSTEM_ZLIB=0
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
+endif
+
+# Snow Leopard specific configuration
+ifeq ($(OS), Darwin)
+ifeq ($(OSXVER), 10.6)
+USE_SYSTEM_LIBM = 1
+USE_SYSTEM_BLAS = 1
+USE_SYSTEM_LAPACK = 1
+endif
 endif
 
 # ===========================================================================
@@ -371,7 +381,6 @@ JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
 else
 JULIA_EXECUTABLE = $(JULIAHOME)/julia
 endif
-
 
 # Colors for make
 ifndef USE_QUIET

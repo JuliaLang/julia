@@ -1,3 +1,5 @@
+importall Base
+
 # figure 5.2 from principles of parallel programming, ported to julia.
 # sum a vector using a tree on top of local reductions.
 function sum(v::DArray)

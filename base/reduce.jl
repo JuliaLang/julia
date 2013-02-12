@@ -151,16 +151,6 @@ min(f::Function, itr)   = mapreduce(f, min, itr)
 sum(f::Function, itr)   = mapreduce(f, +  , itr)
 prod(f::Function, itr)  = mapreduce(f, *  , itr)
 
-function count(pred::Function, itr)
-    c = 0
-    for x in itr
-        if pred(x)
-            c += 1
-        end
-    end
-    return c
-end
-
 function any(pred::Function, itr)
     for x in itr
         if pred(x)
@@ -188,9 +178,9 @@ function contains(itr, x)
     return false
 end
 
-function contains_is(itr, x::ANY)
+function contains(eq::Function, itr, x)
     for y in itr
-        if is(y,x)
+        if eq(y,x)
             return true
         end
     end

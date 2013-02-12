@@ -58,7 +58,7 @@ If you are behind a firewall and you need to use the https protocol instead of t
 
 Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
-This takes a while, but only has to be done once.
+This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
 Building julia requires 1.5GiB of diskspace and approximately 700MiB of virtual memory.
 
 **Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
@@ -89,7 +89,7 @@ GCC version 4.6 or later is recommended to build julia.
 
 If the build fails trying to compile OpenBLAS, set OPENBLAS_TARGET_ARCH to BARCELONA on AMD, or NEHALEM on Intel CPUs in Make.inc and build again.
 
-On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
+On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, set `USE_SYSTEM_READLINE=1` in `Make.user`.
 
 On Ubuntu systems, you may also need to install the package `libncurses5-dev`.
 
@@ -97,13 +97,9 @@ On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build julia.
 
 #### OS X
 
-It is essential to use a 64-bit gfortran. Download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/), if necessary. The HPC gfortran requires gcc to function properly.
+It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 compilers in brew and macports work for building julia. If you do not use brew or macports, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires gcc to function properly. 
 
-If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
-
-Clang is now used by default to build julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build julia.
-
-If you are building on a 32-bit Mac or on Snow Leopard, it may have trouble building openlibm. In such a case, use `make USE_SYSTEM_LIBM=1`. If you run into trouble building openblas, try `make USE_SYSTEM_BLAS=1 USE_SYSTEM_LAPACK=1`. These settings can even be saved in `Make.user` so that you do not have to provide them every time you compile.
+Clang is now used by default to build julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build julia. On older systems, the julia build will attempt to use gcc. The build also detects Snow Leopard and sets `USE_SYSTEM_LIBM=1`, `USE_SYSTEM_BLAS=1`, and `USE_SYSTEM_LAPACK=1`.
 
 #### FreeBSD
 
@@ -157,7 +153,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
 - **[D3]**                  — JavaScript visualization library.
 - **[double-conversion]**   — efficient number-to-text conversion.
-- **[GLPK]**                — linear programming.
 - **[Rmath]**               — basic RNGs and distributions.
 
 
@@ -186,11 +181,10 @@ Julia uses the following external libraries, which are automatically downloaded 
 [GMP]:          http://gmplib.org/
 [D3]:           http://mbostock.github.com/d3/
 [double-conversion]: http://double-conversion.googlecode.com/
-[GLPK]:         http://www.gnu.org/software/glpk/
 [Rmath]:        http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
 [libuv]:        https://github.com/JuliaLang/libuv
 
-If you already have one or more of these packages installed on your system, it is possible to pass `USE_SYSTEM_...=1` to `make` to prevent Julia from compiling duplicates of these libraries. The complete list of possible flags can be found in Make.inc (or pass `USE_DEBIAN=1` to make if you have all build dependencies and want the minimal Julia build). Please be aware that this proceedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
+If you already have one or more of these packages installed on your system, it is possible to pass `USE_SYSTEM_...=1` to `make` to prevent Julia from compiling duplicates of these libraries. The complete list of possible flags can be found in Make.inc. Please be aware that this procedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
 SuiteSparse is a special case, since it is typically only installed as a static library, while `USE_SYSTEM_SUITESPARSE=1` requires that it is a shared library. Running the script `contrib/repackage_system_suitesparse4.make` will copy your static system SuiteSparse installation into the shared library format required by Julia.
 
@@ -202,10 +196,10 @@ SuiteSparse is a special case, since it is typically only installed as a static 
     deps/          external dependencies
     examples/      example Julia programs
     extras/        useful optional libraries
-    lib/           shared libraries loaded by Julia's standard libraries
     src/           source for Julia language core
     test/          unit and functional test cases
     ui/            source for various front ends
+    usr/           binaries and shared libraries loaded by Julia's standard libraries
 
 <a name="Binary-Installation"/>
 ## Binary Installation

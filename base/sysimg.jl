@@ -114,6 +114,7 @@ include("path.jl")
 include("stat.jl")
 
 # front end & code loading
+include("repl.jl")
 include("client.jl")
 include("loading.jl")
 
