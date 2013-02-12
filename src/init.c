@@ -332,6 +332,10 @@ void *init_stdio_handle(uv_file fd,int readable)
             break;
         case UV_NAMED_PIPE:
         case UV_FILE:
+#if defined(__linux__)
+            if (readable)
+                return NULL;
+#endif
             handle = malloc(sizeof(uv_pipe_t));
             uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle,(readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE));
             uv_pipe_open((uv_pipe_t*)handle,fd);
