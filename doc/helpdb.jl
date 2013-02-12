@@ -493,6 +493,15 @@
 
 "),
 
+(E"Generic Functions",E"Base",E"|",E"|()
+
+   Applies a function to the preceding argument which allows for easy
+   function chaining.
+
+   **Example**: \"[1:5] | x->x.^2 | sum | inv\"
+
+"),
+
 (E"Iteration",E"Base",E"start",E"start(iter)
 
    Get initial iteration state for an iterable object
@@ -547,6 +556,13 @@
 
    Returns the indices of elements in collection \"a\" that appear in
    collection \"b\"
+
+"),
+
+(E"Iterable Collections",E"Base",E"unique",E"unique(itr)
+
+   Returns an array containing only the unique elements of the
+   iterable \"itr\".
 
 "),
 
@@ -641,6 +657,15 @@
 
 "),
 
+(E"Iterable Collections",E"Base",E"mapreduce",E"mapreduce(f, op, itr)
+
+   Applies function \"f\" to each element in \"itr\" and then reduces
+   the result using the binary function \"op\".
+
+   **Example**: \"mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14\"
+
+"),
+
 (E"Indexable Collections",E"Base",E"collection[key...]",E"ref(collection, key...)
 collection[key...]()
 
@@ -673,6 +698,13 @@ collection[key...] = value
 
    Return the value stored for the given key, or the given default
    value if no mapping for the key is present.
+
+"),
+
+(E"Associative Collections",E"Base",E"getkey",E"getkey(collection, key, default)
+
+   Return the key matching argument \"key\" if one exists in
+   \"collection\", otherwise return \"default\".
 
 "),
 
@@ -740,9 +772,22 @@ collection[key...] = value
 
 "),
 
+(E"Associative Collections",E"Base",E"sizehint",E"sizehint(s, n)
+
+   Suggest that collection \"s\" reserve capacity for at least \"n\"
+   elements. This can improve performance.
+
+"),
+
 (E"Set-Like Collections",E"Base",E"add!",E"add!(collection, key)
 
    Add an element to a set-like collection.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"add_each!",E"add_each!(collection, iterable)
+
+   Adds each element in iterable to the collection.
 
 "),
 
@@ -767,6 +812,13 @@ collection[key...] = value
 
 "),
 
+(E"Set-Like Collections",E"Base",E"union!",E"union!(s1, s2)
+
+   Constructs the union of IntSets s1 and s2, stores the result in
+   \"s1\".
+
+"),
+
 (E"Set-Like Collections",E"Base",E"intersect",E"intersect(s1, s2...)
 
    Construct the intersection of two or more sets. Maintains order
@@ -785,6 +837,52 @@ collection[key...] = value
 
    Construct the symmetric difference of elements in the passed in
    sets or arrays. Maintains order with arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s, n)
+
+   IntSet s is destructively modified to toggle the inclusion of
+   integer \"n\".
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s, itr)
+
+   For each element in \"itr\", destructively toggle its inclusion in
+   set \"s\".
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s1, s2)
+
+   Construct the symmetric difference of IntSets \"s1\" and \"s2\",
+   storing the result in \"s1\".
+
+"),
+
+(E"Set-Like Collections",E"Base",E"complement",E"complement(s)
+
+   Returns the set-complement of IntSet s.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"complement!",E"complement!(s)
+
+   Mutates IntSet s into its set-complement.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"del_each!",E"del_each!(s, itr)
+
+   Deletes each element of itr in set s in-place.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"intersect!",E"intersect!(s1, s2)
+
+   Intersects IntSets s1 and s2 and overwrites the set s1 with the
+   result. If needed, s1 will be expanded to the size of s2.
 
 "),
 
@@ -848,9 +946,17 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"Base",E"string",E"string(strs...)
+(E"Strings",E"",E"*, string(strs...)",E"*, string(strs...)
 
    Concatenate strings.
+
+"),
+
+(E"Strings",E"Base",E"^",E"^()
+
+   Repeat a string.
+
+   **Example**: \"\"Julia \"^3 == \"Julia Julia Julia \"\"
 
 "),
 
@@ -1111,6 +1217,15 @@ collection[key...] = value
    +------+-----------------------------------+
    | a+   | read, write, create, append       |
    +------+-----------------------------------+
+
+"),
+
+(E"I/O",E"Base",E"open",E"open(f::function, args...)
+
+   Apply the function \"f\" to the result of \"open(args...)\" and
+   close the resulting file descriptor upon completion.
+
+   **Example**: \"open(readall, \"file.txt\")\"
 
 "),
 
@@ -3359,13 +3474,17 @@ airyaiprime(x)
 (E"Linear Algebra",E"Base",E"svdfact",E"svdfact(A, B) -> GSVDDense
 
    Compute the generalized SVD of \"A\" and \"B\", returning a
-   \"GSVDDense\" Factorization object.
+   \"GSVDDense\" Factorization object. \"factors(svdfact(A,b))\"
+   returns \"U\", \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that
+   \"A = U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"svd",E"svd(A, B) -> U, V, X, C, S
+(E"Linear Algebra",E"Base",E"svd",E"svd(A, B) -> U, V, Q, D1, D2, R0
 
-   Compute the generalized SVD of \"A\" and \"B\".
+   Compute the generalized SVD of \"A\" and \"B\", returning \"U\",
+   \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that \"A =
+   U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
 
 "),
 
@@ -3675,62 +3794,6 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"weighted_mean",E"weighted_mean(v, w)
-
-   Compute the weighted mean of \"v\" using a vector of weights \"w\"
-
-"),
-
-(E"Statistics",E"Base",E"mad",E"mad(v, m)
-
-   Compute the median absolute deviation from the entries of a vector
-   \"v\" relative to a known median \"m\". The calculation involves an
-   adjustment factor of 1.4826 required to insure that the estimator
-   is consistent for normally distributed data.
-
-"),
-
-(E"Statistics",E"Base",E"mad",E"mad(v)
-
-   Compute the median absolute deviation from the entries of a vector
-   \"v\" relative to the median of \"v\". The calculation involves an
-   adjustment factor of 1.4826 required to insure that the estimator
-   is consistent for normally distributed data.
-
-"),
-
-(E"Statistics",E"Base",E"skewness",E"skewness(v, m)
-
-   Compute the sample skewness of a vector \"v\" relative to a known
-   mean \"m\". Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
-(E"Statistics",E"Base",E"skewness",E"skewness(v)
-
-   Compute the sample skewness of a vector \"v\" relative to the
-   sample mean. Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
-(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v, m)
-
-   Compute the sample kurtosis of a vector \"v\" relative to a known
-   mean \"m\". Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
-(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v)
-
-   Compute the sample kurtosis of a vector \"v\" relative to the
-   sample mean. Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
 (E"Statistics",E"Base",E"quantile",E"quantile(v, p)
 
    Compute the quantiles of a vector \"v\" at a specified set of
@@ -3745,72 +3808,9 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"quartile",E"quartile(v)
-
-   Compute the quartiles of a vector \"v\" at the probability values
-   \"[.0, .25, .5, .75, 1.0]\".
-
-"),
-
-(E"Statistics",E"Base",E"quintile",E"quintile(v)
-
-   Compute the quintiles of a vector \"v\" at the probability values
-   \"[.0, .2, .4, .6, .8, 1.0]\".
-
-"),
-
-(E"Statistics",E"Base",E"decile",E"decile(v)
-
-   Compute the deciles of a vector \"v\" at the probability values
-   \"[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]\".
-
-"),
-
-(E"Statistics",E"Base",E"iqr",E"iqr(v)
-
-   Compute the interquantile range of a vector \"v\" at the
-   probability values \"[.25, .75]\".
-
-"),
-
-(E"Statistics",E"Base",E"tiedrank",E"tiedrank(v)
-
-   Compute the ranks of the entries of vector \"v\". Ties are resolved
-   by taking the average rank over all tied values.
-
-"),
-
-(E"Statistics",E"Base",E"cov_pearson",E"cov_pearson(v1, v2)
-
-   Compute the Pearson covariance between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"cov_spearman",E"cov_spearman(v)
-
-   Compute the Spearman covariance between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
 (E"Statistics",E"Base",E"cov",E"cov(v)
 
    Compute the Pearson covariance between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"cor_pearson",E"cor_pearson(v)
-
-   Compute the Pearson correlation between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"cor_spearman",E"cor_spearman(v)
-
-   Compute the Spearman correlation between two vectors \"v1\" and
    \"v2\".
 
 "),
@@ -3819,39 +3819,6 @@ airyaiprime(x)
 
    Compute the Pearson correlation between two vectors \"v1\" and
    \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"autocor",E"autocor(v, l)
-
-   Compute the Pearson autocorrelation of a vector \"v\" with itself
-   at lag \"l\".
-
-"),
-
-(E"Statistics",E"Base",E"autocor",E"autocor(v)
-
-   Compute the Pearson autocorrelation of a vector \"v\" with itself
-   at lag \"1\".
-
-"),
-
-(E"Statistics",E"Base",E"dist",E"dist(m)
-
-   Compute the distance matrix between all of the rows of \"m\".
-
-"),
-
-(E"Statistics",E"Base",E"rle",E"rle(v)
-
-   Compute a run-length encoding representation of a vector \"v\".
-
-"),
-
-(E"Statistics",E"Base",E"inverse_rle",E"inverse_rle(vals, lens)
-
-   Compute a vector from its run-length vector representation as
-   values \"vals\" and run lengths \"lens\".
 
 "),
 
@@ -4368,6 +4335,15 @@ airyaiprime(x)
 
 "),
 
+(E"System",E"",E"> < >> .>",E"> < >> .>
+
+   \">\" \"<\" and \">>\" work exactly as in bash, and \".>\"
+   redirects STDERR.
+
+   **Example**: \"run((`ls` > \"out.log\") .> \"err.log\")\"
+
+"),
+
 (E"System",E"Base",E"gethostname",E"gethostname()
 
    Get the local machine's host name.
@@ -4391,6 +4367,13 @@ airyaiprime(x)
 
    Set the current working directory. Returns the new current
    directory.
+
+"),
+
+(E"System",E"Base",E"cd",E"cd(f[, \"dir\"])
+
+   Temporarily changes the current working directory (HOME if not
+   specified) and applies function f before returning.
 
 "),
 
