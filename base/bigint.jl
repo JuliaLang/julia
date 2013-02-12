@@ -70,8 +70,11 @@ promote_rule(::Type{BigInt}, ::Type{Uint64}) = BigInt
 promote_rule(::Type{BigInt}, ::Type{Uint128}) = BigInt
 
 # Binary ops
-for (fJ, fC) in ((:+,:add), (:-,:sub), (:*,:mul), (:div,:fdiv_q), (:rem,:fdiv_r), (:gcd, :gcd))
-    @eval begin 
+for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
+                 (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
+                 (:gcd, :gcd), (:lcm, :lcm),
+                 (:&, :and), (:|, :ior), (:$, :xor))
+    @eval begin
         function ($fJ)(x::BigInt, y::BigInt)
             z = BigInt()
             ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z.mpz, x.mpz, y.mpz)
@@ -80,10 +83,15 @@ for (fJ, fC) in ((:+,:add), (:-,:sub), (:*,:mul), (:div,:fdiv_q), (:rem,:fdiv_r)
     end
 end
 
-function -(x::BigInt)
-    z = BigInt()
-    ccall((:__gmpz_neg, :libgmp), Void, (Ptr{Void}, Ptr{Void}), z.mpz, x.mpz)
-    return z
+# unary ops
+for (fJ, fC) in ((:-, :neg), (:~, :com))
+    @eval begin
+        function ($fJ)(x::BigInt)
+            z = BigInt()
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{Void}, Ptr{Void}), z.mpz, x.mpz)
+            return z
+        end
+    end
 end
 
 function <<(x::BigInt, c::Uint)
@@ -102,11 +110,11 @@ end
 >>(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x>>uint(c)
 >>(x::BigInt, c::Integer) = c<0 ? throw(DomainError()) : x>>uint(c)
 
-function divmod(x::BigInt, y::BigInt)
+function divrem(x::BigInt, y::BigInt)
     z1 = BigInt()
     z2 = BigInt()
-    ccall((:__gmpz_fdiv_qr, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1, z2, x.mpz, y.mpz)
-    BigInt(z1),BigInt(z2)
+    ccall((:__gmpz_tdiv_qr, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1.mpz, z2.mpz, x.mpz, y.mpz)
+    z1, z2
 end
 
 function cmp(x::BigInt, y::BigInt)

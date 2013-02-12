@@ -6,7 +6,7 @@
 # A straight port from the Java version
 # 
 
-load("timing")
+include("timing.jl")
 
 # Constants
 const solar_mass = 4 * pi * pi

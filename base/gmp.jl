@@ -3,7 +3,7 @@ module GMP
 export BigInt, BigFloat
 
 import
-    Base.*,
+    Base.(*),
     Base.+,
     Base.-,
     Base./,
@@ -15,6 +15,10 @@ import
     Base.>,
     Base.>=,
     Base.^,
+    Base.(~),
+    Base.(&),
+    Base.(|),
+    Base.($),
     Base.binomial,
     Base.ceil,
     Base.cmp,
@@ -26,6 +30,8 @@ import
     Base.gcdx,
     Base.isinf,
     Base.isnan,
+    Base.lcm,
+    Base.mod,
     Base.ndigits,
     Base.promote_rule,
     Base.rem,
