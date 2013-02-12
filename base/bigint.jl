@@ -71,7 +71,7 @@ promote_rule(::Type{BigInt}, ::Type{Uint128}) = BigInt
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
-                 (:div, :fdiv_q), (:rem, :fdiv_r),
+                 (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
                  (:&, :and), (:|, :ior), (:$, :xor))
     @eval begin
