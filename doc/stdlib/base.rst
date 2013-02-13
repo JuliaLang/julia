@@ -2043,6 +2043,47 @@ Indexing, Assignment, and Concatenation
 
    Vectorize an array using column-major convention.
 
+Array functions
+~~~~~~~~~~~~~~~
+
+.. function:: cumprod(A, [dim])
+
+   Cumulative product along a dimension.
+
+.. function:: cumsum(A, [dim])
+
+   Cumulative sum along a dimension.
+
+.. function:: cummin(A, [dim])
+
+   Cumulative minimum along a dimension.
+
+.. function:: cummax(A, [dim])
+
+   Cumulative maximum along a dimension.
+
+.. function:: diff(A, [dim])
+
+   Finite difference operator of matrix or vector.
+
+.. function:: rot180(A)
+
+   Rotate matrix ``A`` 180 degrees.
+
+.. function:: rotl90(A)
+
+   Rotate matrix ``A`` left 90 degrees.
+
+.. function:: rotr90(A)
+
+   Rotate matrix ``A`` right 90 degrees.
+
+.. function:: reducedim(f, A, dims, initial)
+
+   Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
+   vector specifying the dimensions to reduce, and ``initial`` is the initial
+   value to use in the reductions.
+
 Sparse Matrices
 ---------------
 
