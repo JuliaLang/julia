@@ -1503,7 +1503,13 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"",E"rem %",E"rem %
+(E"Mathematical Functions",E"Base",E"rem",E"rem()
+
+   Remainder after division
+
+"),
+
+(E"Mathematical Functions",E"Base",E"%",E"%()
 
    Remainder after division
 
@@ -1830,6 +1836,12 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"radians2degrees",E"radians2degrees(x)
+
+   Convert \"x\" from radians to degrees
+
+"),
+
 (E"Mathematical Functions",E"Base",E"hypot",E"hypot(x, y)
 
    Compute the \\sqrt{(x^2+y^2)} without undue overflow or underflow
@@ -1900,6 +1912,12 @@ collection[key...] = value
 (E"Mathematical Functions",E"Base",E"expm1",E"expm1(x)
 
    Accurately compute e^x-1
+
+"),
+
+(E"Mathematical Functions",E"Base",E"square",E"square(x)
+
+   Compute x^2
 
 "),
 
@@ -2077,6 +2095,13 @@ collection[key...] = value
 (E"Mathematical Functions",E"Base",E"imag",E"imag(z)
 
    Return the imaginary part of the complex number \"z\"
+
+"),
+
+(E"Mathematical Functions",E"Base",E"reim",E"reim(z)
+
+   Return both the real and imaginary parts of the complex number
+   \"z\"
 
 "),
 
@@ -2406,6 +2431,14 @@ airyaiprime(x)
 
 "),
 
+(E"Data Formats",E"Base",E"uint",E"uint(x)
+
+   Convert a number or array to the default unsigned integer type on
+   your platform. Alternatively, \"x\" can be a string, which is
+   parsed as an unsigned integer.
+
+"),
+
 (E"Data Formats",E"Base",E"integer",E"integer(x)
 
    Convert a number or array to integer type. If \"x\" is already of
@@ -2417,6 +2450,18 @@ airyaiprime(x)
 (E"Data Formats",E"Base",E"isinteger",E"isinteger(x)
 
    Test whether a number or array is of integer type
+
+"),
+
+(E"Data Formats",E"Base",E"signed",E"signed(x)
+
+   Convert a number to a signed integer
+
+"),
+
+(E"Data Formats",E"Base",E"unsigned",E"unsigned(x)
+
+   Convert a number to an unsigned integer
 
 "),
 
@@ -2497,6 +2542,16 @@ airyaiprime(x)
    Convert a number, array, or string to a \"FloatingPoint\" data
    type. For numeric data, the smallest suitable \"FloatingPoint\"
    type is used. For strings, it converts to \"Float64\".
+
+"),
+
+(E"Data Formats",E"Base",E"significand",E"significand(x)
+
+   Extract the significand(s) (a.k.a. mantissa), in binary
+   representation, of a floating-point number or array.
+
+   For example, \"significand(15.2)/15.2 == 0.125\", and
+   \"significand(15.2)*8 == 15.2\"
 
 "),
 
@@ -3410,6 +3465,13 @@ airyaiprime(x)
    Perform Q'>>*<<A efficiently, where Q is a an orthogonal matrix
    defined as the product of k elementary reflectors from the QR
    decomposition.
+
+"),
+
+(E"Linear Algebra",E"Base",E"sqrtm",E"sqrtm(A)
+
+   Compute the matrix square root of \"A\". If \"B = sqrtm(A)\", then
+   \"B*B == A\" within roundoff error.
 
 "),
 
