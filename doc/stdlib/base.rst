@@ -536,6 +536,10 @@ Strings
 
 .. function:: string(x)
 
+   Create a string from any value using the ``print`` function.
+
+.. function:: repr(x)
+
    Create a string from any value using the ``show`` function.
 
 .. function:: bytestring(::Ptr{Uint8})
@@ -637,6 +641,24 @@ Strings
 .. function:: chr2ind(string, i)
 
    Convert a character index to a byte index
+
+.. function:: isvalid(str, i)
+
+   Tells whether index ``i`` is valid for the given string
+
+.. function:: nextind(str, i)
+
+   Get the next valid string index after ``i``. Returns ``endof(str)+1`` at
+   the end of the string.
+
+.. function:: prevind(str, i)
+
+   Get the previous valid string index before ``i``. Returns ``0`` at
+   the beginning of the string.
+
+.. function:: thisind(str, i)
+
+   Adjust ``i`` downwards until it reaches a valid index for the given string.
 
 .. function:: randstring(len)
 
@@ -1429,6 +1451,10 @@ Mathematical Functions
    Hash two integers into a single integer. Useful for constructing hash
    functions.
 
+.. function:: ndigits(n, b)
+
+   Compute the number of digits in number ``n`` written in base ``b``.
+
 Data Formats
 ------------
 
@@ -1452,9 +1478,29 @@ Data Formats
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 
-.. function:: parse_int(type, str, base)
+.. function:: bits(n)
 
-   Parse a string as an integer in the given base, yielding a number of the specified type.
+   A string giving the literal bit representation of a number.
+
+.. function:: parse_int(type, str, [base])
+
+   Parse a string as an integer in the given base (default 10), yielding a number of the specified type.
+
+.. function:: parse_bin(type, str)
+
+   Parse a string as an integer in base 2, yielding a number of the specified type.
+
+.. function:: parse_oct(type, str)
+
+   Parse a string as an integer in base 8, yielding a number of the specified type.
+
+.. function:: parse_hex(type, str)
+
+   Parse a string as an integer in base 16, yielding a number of the specified type.
+
+.. function:: parse_float(type, str)
+
+   Parse a string as a decimal floating point number, yielding a number of the specified type.
 
 .. function:: bool(x)
 
