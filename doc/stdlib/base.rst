@@ -399,7 +399,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
    
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
-Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``FDSet``, ``Array``.
+Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``Array``.
 
 Set-Like Collections
 --------------------
@@ -468,7 +468,7 @@ Set-Like Collections
 
    Intersects IntSets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.
 
-Fully implemented by: ``IntSet``, ``Set``, ``FDSet``.
+Fully implemented by: ``IntSet``, ``Set``.
 
 Partially implemented by: ``Array``.
 
