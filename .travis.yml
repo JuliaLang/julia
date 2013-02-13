@@ -10,7 +10,7 @@ before_install:
     - sudo apt-get install zlib1g-dev
     - sudo add-apt-repository ppa:staticfloat/julia-deps -y
     - sudo apt-get update -qq -y
-    - sudo apt-get install gfortran llvm-3.2-dev libsuitesparse-dev libncurses5-dev libopenblas-dev libarpack2-dev libfftw3-dev libpcre3-dev libglpk-dev lighttpd libgmp-dev libunwind7-dev libreadline-dev -y
+    - sudo apt-get install gfortran llvm-3.2-dev libsuitesparse-dev libncurses5-dev libopenblas-dev libarpack2-dev libfftw3-dev libpcre3-dev lighttpd libgmp-dev libunwind7-dev libreadline-dev -y
 script:
     - make $BUILDOPTS PREFIX=/tmp/julia install
     - cd .. && mv julia julia2

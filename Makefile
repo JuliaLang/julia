@@ -49,9 +49,9 @@ JL_LIBS = julia-release julia-debug
 
 # private libraries, that are installed in $(PREFIX)/lib/julia
 JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
-                  fftw3f_threads glpk glpk_wrapper gmp grisu \
-                  history openlibm openlibm-extras pcre \
-		  random readline Rmath spqr suitesparse_wrapper \
+                  fftw3f_threads gmp grisu \
+                  openlibm openlibm-extras pcre \
+		  random Rmath spqr suitesparse_wrapper \
 		  tk_wrapper umfpack z openblas
 
 PREFIX ?= julia-$(JULIA_COMMIT)
