@@ -69,7 +69,7 @@ support/libsupport.a: support/*.h support/*.c
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
-$(BUILD)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
+$(BUILD)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a $(BUILD)/lib/libuv.a
 	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(LIBS)
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
@@ -83,7 +83,7 @@ else
   SONAME =
 endif
 
-$(BUILD)/$(JL_LIBDIR)/libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
+$(BUILD)/$(JL_LIBDIR)/libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a $(BUILD)/lib/libuv.a
 	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(LIBS) $(SONAME)
 	$(INSTALL_NAME_CMD)libjulia-release.$(SHLIB_EXT) $@
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a

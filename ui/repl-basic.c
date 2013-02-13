@@ -45,7 +45,7 @@ void jl_input_line_callback(char *input)
 
 void repl_callback_enable()
 {
-    jl_printf(jl_uv_stdout, prompt_string);
+    jl_write(jl_uv_stdout, prompt_string, strlen(prompt_string));
     jl_prep_terminal(1);
 }
 

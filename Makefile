@@ -34,12 +34,14 @@ $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl $(BUILD)/share/julia/helpdb.jl
+	@#echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
 	$(QUIET_JULIA) cd base && \
 	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make clean'. If the error persists, 'make cleanall' may help."
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
 run-julia:
+	#winedbg --gdb
 	$(JULIA_EXECUTABLE)
 
 # public libraries, that are installed in $(PREFIX)/lib
@@ -74,8 +76,8 @@ install: release webrepl
 ifeq ($(OS), WINNT)
 	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
 	-cp -R $(BUILD)/sbin $(PREFIX)
-	[ -e dist-extras/7za.exe ] && cp dist-extras/7za.exe $(PREFIX)/bin/7z.exe
-	[ -e dist-extras/PortableGit-1.8.0-preview20121022.7z ] && \
+	-[ -e dist-extras/7za.exe ] && cp dist-extras/7za.exe $(PREFIX)/bin/7z.exe
+	-[ -e dist-extras/PortableGit-1.8.0-preview20121022.7z ] && \
 	  mkdir $(PREFIX)/Git && \
 	  7z x dist-extras/PortableGit-1.8.0-preview20121022.7z -o"$(PREFIX)/Git"
 ifeq ($(shell uname),MINGW32_NT-6.1)
