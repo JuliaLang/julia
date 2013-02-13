@@ -313,6 +313,8 @@ function _start()
             ".", # TODO: should we really look here?
             abspath(Pkg.dir()),
             abspath(JULIA_HOME,"..","share","julia","extras"),
+            abspath(JULIA_HOME,"..","local","share","julia","nonpkg"),
+            abspath(JULIA_HOME,"..","share","julia","nonpkg"),
         ]
 
         (quiet,repl,startup,color_set) = process_options(ARGS)

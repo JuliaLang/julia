@@ -57,7 +57,7 @@ JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release webrepl
 	@-$(MAKE) $(QUIET_MAKE) tk
-	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" ; do \
+	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/julia/nonpkg"; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
