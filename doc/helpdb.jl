@@ -342,7 +342,7 @@
 
 (E"All Objects",E"Base",E"finalizer",E"finalizer(x, function)
 
-   Register a function to be called on \"x\" when there are no
+   Register a function \"f(x)\" to be called when there are no
    program-accessible references to \"x\". The behavior of this
    function is unpredictable if \"x\" is of a bits type.
 
@@ -6378,23 +6378,13 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(v[, dim])
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(v[, alg[, ord]])
 
-   Sort a vector in ascending order.  If \"dim\" is provided, sort
-   along the given dimension.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(lessthan, v[, dim])
-
-   Sort with a custom comparison function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(alg, ...)
-
-   Sort using a specific sorting algorithm (InsertionSort, QuickSort,
-   MergeSort, or TimSort).
+   Sort a vector in ascending order.  Specify \"alg\" to choose a
+   particular sorting algorithm (\"Sort.InsertionSort\",
+   \"Sort.QuickSort\", \"Sort.MergeSort\", or \"Sort.TimSort\"), and
+   \"ord\" to sort with a custom ordering (e.g., Sort.Reverse or a
+   comparison function).
 
 "),
 
@@ -6404,17 +6394,11 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(by, v[, dim])
+(E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(v, by[, alg])
 
-   Sort a vector according to \"by(v)\".   If \"dim\" is provided,
-   sort along the given dimension.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(alg, ...)
-
-   \"sortby\" using a specific sorting algorithm (\"InsertionSort\",
-   \"QuickSort\", \"MergeSort\", or \"TimSort\").
+   Sort a vector according to \"by(v)\".  Specify \"alg\" to choose a
+   particular sorting algorithm (\"Sort.InsertionSort\",
+   \"Sort.QuickSort\", \"Sort.MergeSort\", or \"Sort.TimSort\").
 
 "),
 
@@ -6424,221 +6408,59 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v)
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v[, alg[, ord]])
 
    Return a permutation vector, which when applied to the input vector
-   \"v\" will sort it.
+   \"v\" will sort it.  Specify \"alg\" to choose a particular sorting
+   algorithm (\"Sort.InsertionSort\", \"Sort.QuickSort\",
+   \"Sort.MergeSort\", or \"Sort.TimSort\"), and \"ord\" to sort with
+   a custom ordering (e.g., Sort.Reverse or a comparison function).
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(lessthan, v)
+(E"Base.Sort",E"Base.Sort",E"issorted",E"issorted(v[, ord])
 
-   Return a permutation vector, which when applied to the input vector
-   \"v\" will sort it, using the specified \"lessthan\" comparison
-   function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(alg, ...)
-
-   \"sortperm\" using a specific sorting algorithm (\"InsertionSort\",
-   \"QuickSort\", \"MergeSort\", or \"TimSort\").
+   Test whether a vector is in ascending sorted order.  If specified,
+   \"ord\" gives the ordering to test.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(...)
+(E"Base.Sort",E"Base.Sort",E"searchsorted",E"searchsorted(a, x[, ord])
 
-   In-place \"sortperm\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"issorted",E"issorted(v)
-
-   Test whether a vector is in ascending sorted order
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"issortedr",E"issortedr(v)
-
-   Test whether a vector is in descending sorted order
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"issortedby",E"issortedby(by, v)
-
-   Test whether a vector is sorted according to \"by(v)\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsorted",E"searchsorted(a, x[, lo, hi])
-
-   For \"a\" sorted low to high, returns the index of the first value
-   \">=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
+   Returns the index of the first value of \"a\" equal to or
+   succeeding \"x\", according to ordering \"ord\" (default:
+   \"Sort.Forward\").
 
    Alias for \"searchsortedfirst()\"
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"searchsorted",E"searchsorted(lt, a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedfirst",E"searchsortedfirst(a, x[, ord])
 
-   For \"a\" sorted using \"lt(x,y)\", returns the index of the first
-   value \">=x\" according to the induced order
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedfirst()\"
+   Returns the index of the first value of \"a\" equal to or
+   succeeding \"x\", according to ordering \"ord\" (default:
+   \"Sort.Forward\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"searchsortedr",E"searchsortedr(a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedlast",E"searchsortedlast(a, x[, ord])
 
-   For \"a\" sorted high to low, returns the index of the first value
-   \"<=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedfirstr()\"
+   Returns the index of the last value of \"a\" preceding or equal to
+   \"x\", according to ordering \"ord\" (default: \"Sort.Forward\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"searchsortedby",E"searchsortedby(by, a, x[, lo, hi])
-
-   For \"a\" sorted according to \"by(a)\", returns the index of the
-   first value \">=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedfirstby()\"
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedfirst",E"searchsortedfirst(a, x[, lo, hi])
-
-   For \"a\" sorted low to high, returns the index of the first value
-   \">=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedfirst",E"searchsortedfirst(lt, a, x[, lo, hi])
-
-   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
-   index of the first value \">=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedfirst()\"
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedfirstr",E"searchsortedfirstr(a, x[, lo, hi])
-
-   For \"a\" sorted high to low, returns the index of the first value
-   \"<=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedfirstby",E"searchsortedfirstby(by, a, x[, lo, hi])
-
-   For \"a\" sorted according to \"by(a)\", returns the index of the
-   first value \">=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedlast",E"searchsortedlast(a, x[, lo, hi])
-
-   For \"a\" sorted low to high, returns the index of the last value
-   \"<=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedlast",E"searchsortedlast(lt, a, x[, lo, hi])
-
-   For \"a\" sorted low to high, returns the index of the last value
-   \"<=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedlast()\"
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedlastr",E"searchsortedlastr(a, x[, lo, hi])
-
-   For \"a\" sorted high to low, returns the index of the last value
-   \">=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedlastby",E"searchsortedlastby(by, a, x[, lo, hi])
-
-   For \"a\" sorted according to \"by(a)\", returns the index of the
-   last value \"<=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"select",E"select(v, k)
+(E"Base.Sort",E"Base.Sort",E"select",E"select(v, k[, ord])
 
    Find the element in position \"k\" in the sorted vector \"v\"
-   without sorting
+   without sorting, according to ordering \"ord\" (default:
+   \"Sort.Forward\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"select!",E"select!(v, k)
+(E"Base.Sort",E"Base.Sort",E"select!",E"select!(v, k[, ord])
 
    Version of \"select\" which permutes the input vector in place.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"select",E"select(lt, v, k)
-
-   Find the element in position \"k\" in the vector \"v\" ordered by
-   \"lt\", without sorting.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"select!",E"select!(lt, v, k)
-
-   Version of \"select\" which permutes the input vector in place.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"selectr",E"selectr(v, k)
-
-   Find the element in position \"k\" in the reverse sorted vector
-   \"v\", without sorting.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"selectr!",E"selectr!(v, k)
-
-   Version of \"selectr\" which permutes the input vector in place.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"selectby",E"selectby(by, v, k)
-
-   Find the element in position \"k\" in the vector \"v\" as if sorted
-   by sortby, without sorting.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"selectby!",E"selectby!(by, v, k)
-
-   Version of \"selectby\" which permutes the input vector in place.
 
 "),
 
