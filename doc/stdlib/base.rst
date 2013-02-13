@@ -1115,6 +1115,11 @@ Mathematical Functions
 
    Compute :math:`x \times 2^n`
 
+.. function:: modf(x)
+
+   Return a tuple (fpart,ipart) of the fractional and integral parts of a
+   number. Both parts have the same sign as the argument.
+
 .. function:: expm1(x)
 
    Accurately compute :math:`e^x-1`
@@ -1189,7 +1194,11 @@ Mathematical Functions
 
 .. function:: signbit(x)
 
-   Returns non-zero if the value of the sign of ``x`` is negative, otherwise ``0``.
+   Returns ``1`` if the value of the sign of ``x`` is negative, otherwise ``0``.
+
+.. function:: flipsign(x, y)
+
+   Return ``x`` with its sign flipped if ``y`` is negative. For example ``abs(x) = flipsign(x,x)``.
 
 .. function:: sqrt(x)
    
@@ -1407,6 +1416,10 @@ Mathematical Functions
 
    Riemann zeta function :math:`\zeta(s)`.
 
+.. function:: bitmix(x, y)
+
+   Hash two integers into a single integer. Useful for constructing hash
+   functions.
 
 Data Formats
 ------------
@@ -2289,6 +2302,28 @@ Combinatorics
 .. function:: reverse!(v)
 
    Reverse vector ``v`` in-place
+
+.. function:: combinations(array, n)
+
+   Generate all combinations of ``n`` elements from a given array. Because
+   the number of combinations can be very large, this function runs inside
+   a Task to produce values on demand. Write ``c = @task combinations(a,n)``,
+   then iterate ``c`` or call ``consume`` on it.
+
+.. function:: integer_partitions(n, m)
+
+   Generate all arrays of ``m`` integers that sum to ``n``. Because
+   the number of partitions can be very large, this function runs inside
+   a Task to produce values on demand. Write
+   ``c = @task integer_partitions(n,m)``, then iterate ``c`` or call
+   ``consume`` on it.
+
+.. function:: partitions(array)
+
+   Generate all set partitions of the elements of an array, represented as
+   arrays of arrays. Because the number of partitions can be very large, this
+   function runs inside a Task to produce values on demand. Write
+   ``c = @task partitions(a)``, then iterate ``c`` or call ``consume`` on it.
 
 Statistics
 ----------
