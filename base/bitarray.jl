@@ -1995,35 +1995,7 @@ end
 
 # hvcat -> use fallbacks in abstractarray.jl
 
-## Reductions and scans ##
-
 isequal(A::BitArray, B::BitArray) = (A == B)
-
-function cumsum(v::BitVector)
-    n = length(v)
-    c = trues(n)
-    for i=1:n
-        if !v[i]
-            c[i] = false
-        else
-            break
-        end
-    end
-    return c
-end
-
-function cumprod(v::BitVector)
-    n = length(v)
-    c = falses(n)
-    for i=1:n
-        if v[i]
-            c[i] = true
-        else
-            break
-        end
-    end
-    return c
-end
 
 # Hashing
 
