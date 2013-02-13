@@ -546,6 +546,14 @@
 
 "),
 
+(E"General Collections",E"Base",E"endof",E"endof(collection) -> Integer
+
+   Returns the last index of the collection.
+
+   **Example**: \"endof([1,2,4]) = 3\"
+
+"),
+
 (E"Iterable Collections",E"Base",E"contains",E"contains(itr, x)
 
    Determine whether a collection contains the given value, \"x\".
@@ -653,7 +661,13 @@
 
 (E"Iterable Collections",E"Base",E"map",E"map(f, c)
 
-   Transform collection \"c\" by applying \"f\" to each element
+   Transform collection \"c\" by applying \"f\" to each element.
+
+"),
+
+(E"Iterable Collections",E"Base",E"map!",E"map!(function, collection)
+
+   In-place version of \"map()\".
 
 "),
 
@@ -922,7 +936,13 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"Base",E"resize!",E"resize!(collection, n)
+(E"Dequeues",E"Base",E"delete!",E"delete!(collection{Type}, range) -> items{Type}
+
+   Remove items at specified range.
+
+"),
+
+(E"Dequeues",E"Base",E"resize!",E"resize!(collection, n) -> collection
 
    Resize collection to contain \"n\" elements.
 
@@ -968,6 +988,12 @@ collection[key...] = value
 
 (E"Strings",E"Base",E"string",E"string(x)
 
+   Create a string from any value using the \"print\" function.
+
+"),
+
+(E"Strings",E"Base",E"repr",E"repr(x)
+
    Create a string from any value using the \"show\" function.
 
 "),
@@ -1008,6 +1034,39 @@ collection[key...] = value
 
    Convert a string to a contiguous UTF-8 string (all characters must
    be valid UTF-8 characters).
+
+"),
+
+(E"Strings",E"Base",E"is_valid_ascii",E"is_valid_ascii(s) -> Bool
+
+   Returns true if the string is valid ASCII, false otherwise.
+
+"),
+
+(E"Strings",E"Base",E"is_valid_utf8",E"is_valid_utf8(s) -> Bool
+
+   Returns true if the string is valid UTF-8, false otherwise.
+
+"),
+
+(E"Strings",E"Base",E"check_ascii",E"check_ascii(s)
+
+   Calls \"is_valid_ascii()\" on string. Throws error if it is not
+   valid.
+
+"),
+
+(E"Strings",E"Base",E"check_utf8",E"check_utf8(s)
+
+   Calls \"is_valid_utf8()\" on string. Throws error if it is not
+   valid.
+
+"),
+
+(E"Strings",E"Base",E"byte_string_classify",E"byte_string_classify(s)
+
+   Returns 0 if the string is neither valid ASCII nor UTF-8, 1 if it
+   is valid ASCII, and 2 if it is valid UTF-8.
 
 "),
 
@@ -1149,6 +1208,33 @@ collection[key...] = value
 (E"Strings",E"Base",E"chr2ind",E"chr2ind(string, i)
 
    Convert a character index to a byte index
+
+"),
+
+(E"Strings",E"Base",E"isvalid",E"isvalid(str, i)
+
+   Tells whether index \"i\" is valid for the given string
+
+"),
+
+(E"Strings",E"Base",E"nextind",E"nextind(str, i)
+
+   Get the next valid string index after \"i\". Returns
+   \"endof(str)+1\" at the end of the string.
+
+"),
+
+(E"Strings",E"Base",E"prevind",E"prevind(str, i)
+
+   Get the previous valid string index before \"i\". Returns \"0\" at
+   the beginning of the string.
+
+"),
+
+(E"Strings",E"Base",E"thisind",E"thisind(str, i)
+
+   Adjust \"i\" downwards until it reaches a valid index for the given
+   string.
 
 "),
 
@@ -1909,6 +1995,13 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"modf",E"modf(x)
+
+   Return a tuple (fpart,ipart) of the fractional and integral parts
+   of a number. Both parts have the same sign as the argument.
+
+"),
+
 (E"Mathematical Functions",E"Base",E"expm1",E"expm1(x)
 
    Accurately compute e^x-1
@@ -2031,8 +2124,15 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"signbit",E"signbit(x)
 
-   Returns non-zero if the value of the sign of \"x\" is negative,
+   Returns \"1\" if the value of the sign of \"x\" is negative,
    otherwise \"0\".
+
+"),
+
+(E"Mathematical Functions",E"Base",E"flipsign",E"flipsign(x, y)
+
+   Return \"x\" with its sign flipped if \"y\" is negative. For
+   example \"abs(x) = flipsign(x,x)\".
 
 "),
 
@@ -2369,6 +2469,19 @@ airyaiprime(x)
 
 "),
 
+(E"Mathematical Functions",E"Base",E"bitmix",E"bitmix(x, y)
+
+   Hash two integers into a single integer. Useful for constructing
+   hash functions.
+
+"),
+
+(E"Mathematical Functions",E"Base",E"ndigits",E"ndigits(n, b)
+
+   Compute the number of digits in number \"n\" written in base \"b\".
+
+"),
+
 (E"Data Formats",E"Base",E"bin",E"bin(n[, pad])
 
    Convert an integer to a binary string, optionally specifying a
@@ -2404,10 +2517,44 @@ airyaiprime(x)
 
 "),
 
-(E"Data Formats",E"Base",E"parse_int",E"parse_int(type, str, base)
+(E"Data Formats",E"Base",E"bits",E"bits(n)
 
-   Parse a string as an integer in the given base, yielding a number
-   of the specified type.
+   A string giving the literal bit representation of a number.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_int",E"parse_int(type, str[, base])
+
+   Parse a string as an integer in the given base (default 10),
+   yielding a number of the specified type.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_bin",E"parse_bin(type, str)
+
+   Parse a string as an integer in base 2, yielding a number of the
+   specified type.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_oct",E"parse_oct(type, str)
+
+   Parse a string as an integer in base 8, yielding a number of the
+   specified type.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_hex",E"parse_hex(type, str)
+
+   Parse a string as an integer in base 16, yielding a number of the
+   specified type.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_float",E"parse_float(type, str)
+
+   Parse a string as a decimal floating point number, yielding a
+   number of the specified type.
 
 "),
 
@@ -3184,6 +3331,62 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"cumprod",E"cumprod(A[, dim])
+
+   Cumulative product along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"cumsum",E"cumsum(A[, dim])
+
+   Cumulative sum along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"cummin",E"cummin(A[, dim])
+
+   Cumulative minimum along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"cummax",E"cummax(A[, dim])
+
+   Cumulative maximum along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"diff",E"diff(A[, dim])
+
+   Finite difference operator of matrix or vector.
+
+"),
+
+(E"Arrays",E"Base",E"rot180",E"rot180(A)
+
+   Rotate matrix \"A\" 180 degrees.
+
+"),
+
+(E"Arrays",E"Base",E"rotl90",E"rotl90(A)
+
+   Rotate matrix \"A\" left 90 degrees.
+
+"),
+
+(E"Arrays",E"Base",E"rotr90",E"rotr90(A)
+
+   Rotate matrix \"A\" right 90 degrees.
+
+"),
+
+(E"Arrays",E"Base",E"reducedim",E"reducedim(f, A, dims, initial)
+
+   Reduce 2-argument function \"f\" along dimensions of \"A\".
+   \"dims\" is a vector specifying the dimensions to reduce, and
+   \"initial\" is the initial value to use in the reductions.
+
+"),
+
 (E"Sparse Matrices",E"Base",E"sparse",E"sparse(I, J, V[, m, n, combine])
 
    Create a sparse matrix \"S\" of dimensions \"m x n\" such that
@@ -3582,6 +3785,14 @@ airyaiprime(x)
 
 "),
 
+(E"Linear Algebra",E"Base",E"diagmm",E"diagmm(matrix, vector)
+
+   Multiply matrices, interpreting the vector argument as a diagonal
+   matrix. The arguments may occur in the other order to multiply with
+   the diagonal matrix on the left.
+
+"),
+
 (E"Linear Algebra",E"Base",E"Tridiagonal",E"Tridiagonal(dl, d, du)
 
    Construct a tridiagonal matrix from the lower diagonal, diagonal,
@@ -3683,6 +3894,54 @@ airyaiprime(x)
 
 "),
 
+(E"Linear Algebra",E"Base",E"expm",E"expm(A)
+
+   Matrix exponential.
+
+"),
+
+(E"Linear Algebra",E"Base",E"issym",E"issym(A)
+
+   Test whether a matrix is symmetric.
+
+"),
+
+(E"Linear Algebra",E"Base",E"isposdef",E"isposdef(A)
+
+   Test whether a matrix is positive-definite.
+
+"),
+
+(E"Linear Algebra",E"Base",E"istril",E"istril(A)
+
+   Test whether a matrix is lower-triangular.
+
+"),
+
+(E"Linear Algebra",E"Base",E"istriu",E"istriu(A)
+
+   Test whether a matrix is upper-triangular.
+
+"),
+
+(E"Linear Algebra",E"Base",E"ishermitian",E"ishermitian(A)
+
+   Test whether a matrix is hermitian.
+
+"),
+
+(E"Linear Algebra",E"Base",E"transpose",E"transpose(A)
+
+   The transpose operator (.').
+
+"),
+
+(E"Linear Algebra",E"Base",E"ctranspose",E"ctranspose(A)
+
+   The conjugate transpose operator (').
+
+"),
+
 (E"Combinatorics",E"Base",E"nthperm",E"nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
@@ -3756,6 +4015,35 @@ airyaiprime(x)
 (E"Combinatorics",E"Base",E"reverse!",E"reverse!(v)
 
    Reverse vector \"v\" in-place
+
+"),
+
+(E"Combinatorics",E"Base",E"combinations",E"combinations(array, n)
+
+   Generate all combinations of \"n\" elements from a given array.
+   Because the number of combinations can be very large, this function
+   runs inside a Task to produce values on demand. Write \"c = @task
+   combinations(a,n)\", then iterate \"c\" or call \"consume\" on it.
+
+"),
+
+(E"Combinatorics",E"Base",E"integer_partitions",E"integer_partitions(n, m)
+
+   Generate all arrays of \"m\" integers that sum to \"n\". Because
+   the number of partitions can be very large, this function runs
+   inside a Task to produce values on demand. Write \"c = @task
+   integer_partitions(n,m)\", then iterate \"c\" or call \"consume\"
+   on it.
+
+"),
+
+(E"Combinatorics",E"Base",E"partitions",E"partitions(array)
+
+   Generate all set partitions of the elements of an array,
+   represented as arrays of arrays. Because the number of partitions
+   can be very large, this function runs inside a Task to produce
+   values on demand. Write \"c = @task partitions(a)\", then iterate
+   \"c\" or call \"consume\" on it.
 
 "),
 
