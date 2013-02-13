@@ -223,6 +223,10 @@ Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractAr
 
 Partially implemented by: ``FDSet``.
 
+.. function:: endof(collection)
+
+   The last valid index in an ordered collection.
+
 Iterable Collections
 --------------------
 
@@ -292,7 +296,11 @@ Iterable Collections
 
 .. function:: map(f, c)
 
-   Transform collection ``c`` by applying ``f`` to each element
+   Transform collection ``c`` by applying ``f`` to each element.
+
+.. function:: map!(f, c)
+
+   Transform collection ``c`` in-place by applying ``f`` to each element.
 
 .. function:: mapreduce(f, op, itr)
 
@@ -2188,6 +2196,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
 
+.. function:: diagmm(matrix, vector)
+
+   Multiply matrices, interpreting the vector argument as a diagonal matrix.
+   The arguments may occur in the other order to multiply with the diagonal
+   matrix on the left.
+
 .. function:: Tridiagonal(dl, d, du)
 
    Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal
@@ -2247,6 +2261,38 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: linreg(x, y, w)
 
    Weighted least-squares linear regression
+
+.. function:: expm(A)
+
+   Matrix exponential.
+
+.. function:: issym(A)
+
+   Test whether a matrix is symmetric.
+
+.. function:: isposdef(A)
+
+   Test whether a matrix is positive-definite.
+
+.. function:: istril(A)
+
+   Test whether a matrix is lower-triangular.
+
+.. function:: istriu(A)
+
+   Test whether a matrix is upper-triangular.
+
+.. function:: ishermitian(A)
+
+   Test whether a matrix is hermitian.
+
+.. function:: transpose(A)
+
+   The transpose operator (.').
+
+.. function:: ctranspose(A)
+
+   The conjugate transpose operator (').
 
 Combinatorics
 -------------
