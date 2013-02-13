@@ -333,7 +333,7 @@ endif
 readline-$(READLINE_VER)/config.status: readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
 	chmod a+x ./configure && \
-	./configure $(CONFIGURE_COMMON) $(READLINE_OPTS)a
+	./configure $(CONFIGURE_COMMON) $(READLINE_OPTS)
 	touch -c $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/config.status
 	cd readline-$(READLINE_VER) && \
