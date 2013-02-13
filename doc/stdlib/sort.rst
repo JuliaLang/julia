@@ -8,17 +8,12 @@ The `Sort` module contains algorithms and other functions related to
 sorting.  Default sort functions and standard versions of the various
 sort algorithm are available by default. 
 Specific sort algorithms can be used by importing
-`Sort`, or for finer grain control, importing the fully qualified
-algorithm name, e.g.,::
+`Sort` or using the fully qualified algorithm name, e.g.,::
 
   # Julia code
-  import Sort.TimSort
+  sort(v, Sort.TimSort)
 
-will allow use of timsort with the various sort functions.  All of the
-sorting algorithms can be made available directly with::
-
-  # Julia code
-  using Sort
+will sort ``v`` using ``TimSort``.
 
 
 Overview
@@ -31,7 +26,7 @@ allow sorting in ascending or descending order,::
   julia> sort([2,3,1]) == [1,2,3]
   true
 
-  julia> sort(Sort.Reverse, [2,3,1]) == [3,2,1]
+  julia> sort([2,3,1], Sort.Reverse) == [3,2,1]
   true
 
 return a permutation,::
@@ -64,9 +59,9 @@ and use a custom extractor function to order inputs::
    "New York"  
 
 Note that none of the variants above modify the original arrays.  To
-sort in-place (which is often more efficient), each sort function has
-a mutating version which ends with an exclamation point (:func:`sort!`
-and :func:`sortby!`).
+sort in-place (which is often more efficient), :func:`sort` and 
+:func:`sortby` have mutating versions which end with an exclamation 
+point (:func:`sort!` and :func:`sortby!`).
 
 These sort functions use reasonable default algorithms, but if you
 want more control or want to see if a different sort algorithm will
@@ -101,17 +96,13 @@ the type of the target array.  To force a specific algorithm to be
 used, append ``Sort.<algorithm>`` to the argument list (e.g., use 
 ``sort!(v, Sort.TimSort)`` to force the use of the Timsort algorithm).
 
-Mutating and non-mutating versions of the sort functions using each
-of the algorithms above are exported and available for use by
-default.
-
 
 Functions
 ---------
 
-----------------------
-General Sort Functions
-----------------------
+--------------
+Sort Functions
+--------------
 .. function:: sort(v[, alg[, ord]])
 
    Sort a vector in ascending order.  Specify ``alg`` to choose a
