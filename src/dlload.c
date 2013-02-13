@@ -17,7 +17,7 @@ static char *extensions[] = { "", ".dylib" };
 #define N_EXTENSIONS 2
 #elif defined(_WIN32)
 static char *extensions[] = { "", ".dll" };
-#define N_EXTENSIONS 1
+#define N_EXTENSIONS 2
 #else
 static char *extensions[] = { ".so", "" };
 #define N_EXTENSIONS 2
