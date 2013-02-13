@@ -1,5 +1,5 @@
 
-local time = require 'time'
+local ffi = require 'ffi'
 local bit = require 'bit'
 local gsl = require 'gsl'
 
@@ -8,11 +8,30 @@ local cabs = complex.abs
 local rshift = bit.rshift
 local format = string.format
 
+local gettime
+do 
+    ffi.cdef[[
+         struct timeval {
+            long tv_sec;
+            long tv_usec;
+         };
+
+         int gettimeofday(struct timeval * tp, void *tzp);
+       ]]
+
+    local tv = ffi.new('struct timeval[1]')
+
+    gettime = function()
+      ffi.C.gettimeofday(tv, nil)
+      return tv[0].tv_sec, tv[0].tv_usec
+    end
+end
+
 -- return the elapsed time in ms
 local function elapsed(f)
-    local s0, us0 = time.get()
+    local s0, us0 = gettime()
     f()
-    local s1, us1 = time.get()
+    local s1, us1 = gettime()
     return (s1 - s0) * 1000 + (us1 - us0) / 1000
 end
 
@@ -22,7 +41,7 @@ local function timeit(f, name)
         local tx = elapsed(f)
         t = t and min(t, tx) or tx
     end
-    print(format("gsl_shell, %s, %g", name, t))
+    print(format("gsl_shell,%s,%g", name, t))
 end
 
 local function fib(n)
@@ -33,35 +52,23 @@ local function fib(n)
     end
 end
 
+assert(fib(20) == 6765)
 timeit(|| fib(20), "fib")
 
 local function parseint()
     local r = rng.new('rand')
     local lmt = 2^32 - 1
+    local n, m
     for i = 1, 1000 do
-        local n = r:getint(lmt)
+        n = r:getint(lmt)
         local s = format('0x%x', n)
-        local m = tonumber(s)
-        -- assert(m == n)
+        m = tonumber(s)
     end
+    assert(m == n)
+    return n
 end
 
 timeit(parseint, "parse_int")
-
---[[
-local function mandel_real(x, y)
-    local cx, cy = x, y
-    local maxiter = 80
-    for n = 1, maxiter do
-        if abs(x*x + y*y) > 2 then
-            return n-1
-        end
-        local xs = x
-        x, y = x*x - y*y + cx, 2*x*y + cy
-    end
-    return maxiter
-end
-]]
 
 local function mandel(z)
     local c = z
@@ -74,15 +81,25 @@ local function mandel(z)
     end
     return maxiter
 end
-
-local function mandelperf()
-  sum = 0
-  for x = -20, 5 do
-    for y = -10, 10 do
-      sum = sum + mandel(0.1 * x + 0.1i * y)
+function mandelperf() 
+    local a, re, im, z
+    a = ffi.new("double[?]", 546)
+    r = 0
+    for r = -20, 5 do
+        re = r*0.1
+        for i=-10, 10 do
+            im = i*0.1
+            a[r*21+i+430] = mandel(cx(re,im))
+        end
     end
-  end
-  return sum
+    return a
+end
+
+do 
+    local a = mandelperf()
+    local sum = 0
+    for i = 0, 545 do sum = sum + a[i] end
+    assert(sum == 14791)
 end
 
 timeit(mandelperf, "mandel")
@@ -107,8 +124,8 @@ end
 
 local function sortperf()
     local n = 5000
-  local r = rng.new('rand')
-  local v = iter.ilist(|| r:get(), n)
+    local r = rng.new('rand')
+    local v = iter.ilist(|| r:get(), n)
     qsort(v, 1, n)
 end
 
@@ -193,6 +210,12 @@ local function randmatstat(t)
     end
 
     return stat(v), stat(w)
+end
+
+do
+    local s1, s2 = randmatstat(1000)
+    assert( 0.5 < s1 and s1 < 1.0 
+        and 0.5 < s2 and s2 < 1.0 )
 end
 
 local function randmatmult(n)
