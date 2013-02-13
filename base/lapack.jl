@@ -8,7 +8,7 @@ import Base.BlasChar
 import Base.BlasInt
 import Base.blas_int
 
-type LapackException <: Exception
+type LAPACKException <: Exception
     info::BlasInt
 end
 
@@ -24,7 +24,7 @@ type RankDeficientException <: Exception
     info::BlasInt
 end
 
-type LapackDimMisMatch <: Exception
+type DimensionMismatch <: Exception
     name::ASCIIString
 end
 
@@ -64,7 +64,7 @@ for (gbtrf, gbtrs, elty) in
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &m, &n, &kl, &ku, AB, &stride(AB,2), ipiv, info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             AB, ipiv
         end
         # SUBROUTINE DGBTRS( TRANS, N, KL, KU, NRHS, AB, LDAB, IPIV, B, LDB, INFO)
@@ -80,14 +80,14 @@ for (gbtrf, gbtrs, elty) in
             chkstride1(AB, B)
             info = Array(BlasInt, 1)
             n    = size(AB,2)
-            if m != n || m != size(B,1) throw(LapackDimMisMatch("gbtrs!")) end
+            if m != n || m != size(B,1) throw(DimensionMismatch("gbtrs!")) end
             ccall(($(string(gbtrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},   Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &trans, &n, &kl, &ku, &size(B,2), AB, &stride(AB,2), ipiv,
                   B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
     end
@@ -118,7 +118,7 @@ for (gebal, gebak, elty, relty) in
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                   &job, &n, A, &stride(A,2), ilo, ihi, scale, info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             ilo[1], ihi[1], scale
         end
         #     SUBROUTINE DGEBAK( JOB, SIDE, N, ILO, IHI, SCALE, M, V, LDV, INFO )
@@ -137,7 +137,7 @@ for (gebal, gebak, elty, relty) in
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &job, &side, &size(V,1), &ilo, &ihi, scale, &n, V, &stride(V,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             V
         end
     end
@@ -182,7 +182,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &stride(A,2), d, s, tauq, taup, work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -208,7 +208,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -235,7 +235,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -273,7 +273,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                            Ptr{BlasInt}),
                           &m, &n, A, &stride(A,2), jpvt, tau, work, &lwork, info)
                 end
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work  = Array($elty, lwork)
@@ -314,7 +314,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &stride(A,2), tau, work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -339,7 +339,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &stride(A,2), tau, work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -363,7 +363,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &m, &n, A, &lda, ipiv, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             A, ipiv, info[1]
         end
     end
@@ -384,7 +384,7 @@ for (gels, gesv, getrs, getri, elty) in
             chkstride1(A, B)
             btrn  = trans == 'T'
             m, n  = size(A)
-            if size(B,1) != (btrn ? n : m)  throw(LapackDimMisMatch("gels!")) end
+            if size(B,1) != (btrn ? n : m)  throw(DimensionMismatch("gels!")) end
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
@@ -395,7 +395,7 @@ for (gels, gesv, getrs, getri, elty) in
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &(btrn?'T':'N'), &m, &n, &size(B,2), A, &stride(A,2),
                       B, &stride(B,2), work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -416,14 +416,14 @@ for (gels, gesv, getrs, getri, elty) in
             chkstride1(A, B)
             chksquare(A)
             n     = size(A,1)
-            if size(B,1) != n throw(LapackDimMisMatch("gesv!")) end
+            if size(B,1) != n throw(DimensionMismatch("gesv!")) end
             ipiv    = Array(BlasInt, n)
             info    = Array(BlasInt, 1)
             ccall(($(string(gesv)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             B, A, ipiv, info[1]
         end
         #     SUBROUTINE DGETRS( TRANS, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
@@ -443,7 +443,7 @@ for (gels, gesv, getrs, getri, elty) in
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &trans, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
         #     SUBROUTINE DGETRI( N, A, LDA, IPIV, WORK, LWORK, INFO )
@@ -490,7 +490,7 @@ for (gelsd, elty) in ((:dgelsd_, :Float64),
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
             LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B, 1) != m; throw(LAPACK.LapackDimMisMatch("gelsd!")); end
+            if size(B, 1) != m; throw(LAPACK.DimensionMismatch("gelsd!")); end
             if size(B, 1) < n
                 newB = Array($elty, n, size(B, 2))
                 newB[1:size(B, 1), :] = B
@@ -511,7 +511,7 @@ for (gelsd, elty) in ((:dgelsd_, :Float64),
                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, iwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -539,7 +539,7 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
             LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B,1) != m; throw(LAPACK.LapackDimMisMatch("gelsd!")); end
+            if size(B,1) != m; throw(LAPACK.DimensionMismatch("gelsd!")); end
             if size(B, 1) < n
                 newB = Array($elty, n, size(B, 2))
                 newB[1:size(B, 1), :] = B
@@ -561,7 +561,7 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
                        Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -627,13 +627,13 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           &jobvl, &jobvr, &n, A, &stride(A,2), WR, WI, VL, &n,
                           VR, &n, work, &lwork, info)
                 end
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            cmplx ? (VL, W, VR) : (VL, WR, WI, VR)
+            cmplx ? (W, VL, VR) : (WR, WI, VL, VR)
         end
         #    SUBROUTINE DGESDD( JOBZ, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK,
         #                   LWORK, IWORK, INFO )
@@ -689,7 +689,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           &job, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, iwork, info)
                 end
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -739,7 +739,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, info)
                 end
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -763,7 +763,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
 #      $                   U( LDU, * ), V( LDV, * ), WORK( * )
         function ggsvd!(jobu::BlasChar, jobv::BlasChar, jobq::BlasChar, A::Matrix{$elty}, B::Matrix{$elty})
             m, n = size(A)
-            if size(B, 2) != n; throw(LapackDimMisMatch); end
+            if size(B, 2) != n; throw(DimensionMismatch); end
             p = size(B, 1)
             k = Array(BlasInt, 1)
             l = Array(BlasInt, 1)
@@ -811,7 +811,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                     V, &ldv, Q, &ldq, 
                     work, iwork, info)
             end
-            if info[1] != 0; throw(LapackException(info[1])); end
+            if info[1] != 0; throw(LAPACKException(info[1])); end
             if m - k[1] - l[1] >= 0
                 R = triu(A[1:k[1] + l[1],n - k[1] - l[1] + 1:n])
             else
@@ -839,15 +839,15 @@ for (gtsv, gttrf, gttrs, elty) in
             chkstride1(B)
             n    = length(d)
             if length(dl) != n - 1 || length(du) != n - 1
-                throw(LapackDimMisMatch("gtsv!"))
+                throw(DimensionMismatch("gtsv!"))
             end
-            if n != size(B,1) throw(LapackDimMisMatch("gtsv!")) end
+            if n != size(B,1) throw(DimensionMismatch("gtsv!")) end
             info = Array(BlasInt, 1)
             ccall(($(string(gtsv)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), dl, d, du, B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
         #       SUBROUTINE DGTTRF( N, DL, D, DU, DU2, IPIV, INFO )
@@ -859,7 +859,7 @@ for (gtsv, gttrf, gttrs, elty) in
         function gttrf!(dl::Vector{$elty}, d::Vector{$elty}, du::Vector{$elty})
             n    = length(d)
             if length(dl) != (n-1) || length(du) != (n-1)
-                throw(LapackDimMisMatch("gttrf!"))
+                throw(DimensionMismatch("gttrf!"))
             end
             du2  = Array($elty, n-2)
             ipiv = Array(BlasInt, n)
@@ -868,7 +868,7 @@ for (gtsv, gttrf, gttrs, elty) in
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, dl, d, du, du2, ipiv, info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             dl, d, du, du2, ipiv
         end
         #       SUBROUTINE DGTTRS( TRANS, N, NRHS, DL, D, DU, DU2, IPIV, B, LDB, INFO )
@@ -883,15 +883,15 @@ for (gtsv, gttrf, gttrs, elty) in
                         B::StridedVecOrMat{$elty})
             chkstride1(B)
             n    = length(d)
-            if length(dl) != n - 1 || length(du) != n - 1 throw(LapackDimMisMatch("gttrs!")) end
-            if n != size(B,1) throw(LapackDimMisMatch("gttrs!")) end
+            if length(dl) != n - 1 || length(du) != n - 1 throw(DimensionMismatch("gttrs!")) end
+            if n != size(B,1) throw(DimensionMismatch("gttrs!")) end
             info = Array(BlasInt, 1)
             ccall(($(string(gttrs)),liblapack), Void,
                    (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                    &trans, &n, &size(B,2), dl, d, du, du2, ipiv, B, &stride(B,2), info)
-             if info[1] != 0 throw(LapackException(info[1])) end
+             if info[1] != 0 throw(LAPACKException(info[1])) end
              B
          end
     end
@@ -919,7 +919,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &size(A,1), &size(A,2), &k, A, &stride(A,2), tau, work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0 
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -932,8 +932,11 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function orgqr!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer)
+        function orgqr!(A::StridedMatrix{$elty}, tau::Vector{$elty})
             chkstride1(A)
+            m, n = size(A)
+            k = length(tau)
+            if k > n throw(DimensionMismatch("Wrong number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -941,10 +944,12 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                 ccall(($(string(orgqr)),liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &size(A,1), &size(A,2), &k, A, &stride(A,2), tau, work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                      &m, &n, &k, A, 
+                      &max(1,stride(A,2)), tau, work, &lwork, 
+                      info)
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0 
-                    lwork = blas_int(real(work[1]))
+                    lwork = blas_int(work[1])
                     work = Array($elty, lwork)
                 end
             end
@@ -972,7 +977,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &side, &trans, &m, &n, &k, A, &stride(A,2), tau,
                       C, &stride(C,2), work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0 
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -988,21 +993,29 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
         function ormqr!(side::BlasChar, trans::BlasChar, A::StridedMatrix{$elty},
-                        k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+                        tau::Vector{$elty}, C::StridedVecOrMat{$elty})
             chkstride1(A, C)
             m     = size(C, 1)
             n     = size(C, 2) # m, n = size(C) won't work if C is a Vector
+            mA    = size(A, 1)
+            k     = length(tau)
+            if side == 'L' && m != mA throw(DimensionMismatch("")) end
+            if side == 'R' && n != mA throw(DimensionMismatch("")) end            
+            if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("Wrong number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(string(ormqr)),liblapack), Void,
-                      (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
-                       Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &side, &trans, &m, &n, &k, A, &stride(A,2), tau,
-                      C, &stride(C,2), work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                      (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, 
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                       Ptr{BlasInt}),
+                      &side, &trans, &m, &n, 
+                      &k, A, &max(1,stride(A,2)), tau,
+                      C, &max(1, stride(C,2)), work, &lwork, 
+                      info)
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0 
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -1060,13 +1073,13 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkstride1(A, B)
             chksquare(A)
             n     = size(A,1)
-            if size(B,1) != n throw(LapackDimMisMatch("posv!")) end
+            if size(B,1) != n throw(DimensionMismatch("posv!")) end
             info    = Array(BlasInt, 1)
             ccall(($(string(posv)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             A, B, info[1]
         end
         ## Caller should check if returned info[1] is zero,
@@ -1084,7 +1097,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             ccall(($(string(potrf)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &size(A,1), A, &stride(A,2), info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             A, info[1]
         end
         ## Caller should check if returned info[1] is zero,
@@ -1101,7 +1114,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             ccall(($(string(potri)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &size(A,1), A, &stride(A,2), info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             A, info[1]
         end
         #     SUBROUTINE DPOTRS( UPLO, N, NRHS, A, LDA, B, LDB, INFO )
@@ -1120,7 +1133,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
         #       SUBROUTINE DPSTRF( UPLO, N, A, LDA, PIV, RANK, TOL, WORK, INFO )
@@ -1143,7 +1156,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}),
                   &uplo, &n, A, &stride(A,2), piv, rank, &tol, work, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             A, piv, rank[1], info[1]
         end
     end
@@ -1165,13 +1178,13 @@ for (ptsv, pttrf, pttrs, elty, relty) in
         function ptsv!(D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(B)
             n    = length(D)
-            if length(E) != n - 1 || n != size(B,1) throw(LapackDimMismatch("ptsv!")) end
+            if length(E) != n - 1 || n != size(B,1) throw(DimensionMismatch("ptsv!")) end
             info = Array(BlasInt, 1)
             ccall(($(string(ptsv)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), D, E, B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
         #       SUBROUTINE DPTTRF( N, D, E, INFO )
@@ -1181,12 +1194,12 @@ for (ptsv, pttrf, pttrs, elty, relty) in
         #       DOUBLE PRECISION   D( * ), E( * )
         function pttrf!(D::Vector{$relty}, E::Vector{$elty})
             n    = length(D)
-            if length(E) != (n-1) throw(LapackDimMisMatch("pttrf!")) end
+            if length(E) != (n-1) throw(DimensionMismatch("pttrf!")) end
             info = Array(BlasInt, 1)
             ccall(($(string(pttrf)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}),
                   &n, D, E, info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             D, E
         end
     end
@@ -1203,13 +1216,13 @@ for (pttrs, elty, relty) in
         function pttrs!(D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(B)
             n    = length(D)
-            if length(E) != (n-1) || size(B,1) != n throw(LapackDimMisMatch("pttrs!")) end
+            if length(E) != (n-1) || size(B,1) != n throw(DimensionMismatch("pttrs!")) end
             info = Array(BlasInt, 1)
             ccall(($(string(pttrs)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), D, E, B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
     end
@@ -1229,13 +1242,13 @@ for (pttrs, elty, relty) in
         function pttrs!(uplo::BlasChar, D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(B)
             n    = length(D)
-            if length(E) != (n-1) || size(B,1) != n throw(LapackDimMisMatch("pttrs!")) end
+            if length(E) != (n-1) || size(B,1) != n throw(DimensionMismatch("pttrs!")) end
             info = Array(BlasInt, 1)
             ccall(($(string(pttrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), D, E, B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
     end
@@ -1257,10 +1270,10 @@ for (trtri, trtrs, elty) in
         function trtri!(uplo::BlasChar, diag::BlasChar, A::StridedMatrix{$elty})
             chkstride1(A)
             m, n    = size(A)
-            if m != n error("trtri!: dimension mismatch") end
+            if m != n throw(DimensionMismatch("")) end
             lda     = stride(A, 2)
             info    = Array(BlasInt, 1)
-            ccall(($trtri,liblapack), Void,
+            ccall(($(string(trtri)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &uplo, &diag, &n, A, &lda, info)
@@ -1278,14 +1291,14 @@ for (trtri, trtrs, elty) in
             chkstride1(A)
             chksquare(A)
             n    = size(A,2)
-            if size(B,1) != n throw(LapackDimMisMatch("trtrs!")) end
+            if size(B,1) != n throw(DimensionMismatch("trtrs!")) end
             info    = Array(BlasInt, 1)
             ccall(($(string(trtrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &trans, &diag, &n, &size(B,2), A, &stride(A,2),
                   B, &stride(B,2), info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             B, info[1]
         end
     end
@@ -1376,6 +1389,8 @@ for (stev, stebz, stegr, elty) in
         end
     end
 end
+stegr!(jobz::BlasChar, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
+stegr!(dv::Vector, ev::Vector) = stegr!('N', 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
 
 ## (SY) symmetric matrices - eigendecomposition, Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
@@ -1402,7 +1417,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &'C', &n, A, &stride(A,2), ipiv, work, info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             A, work
         end
         #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
@@ -1435,7 +1450,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
                           Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                           &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, info)
                 end
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -1455,7 +1470,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
             chkstride1(A,B)
             chksquare(A)
             n     = size(A,1)
-            if n != size(B,1) throw(LapackDimMismatch("sysv!")) end
+            if n != size(B,1) throw(DimensionMismatch("sysv!")) end
             ipiv  = Array(BlasInt, n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
@@ -1466,7 +1481,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2),
                       work, &lwork, info)
-                if info[1] < 0 throw(LapackException(info[1])) end
+                if info[1] < 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -1494,7 +1509,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
                       (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -1521,7 +1536,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
 #                       (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
 #                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
 #                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
-#                 if info[1] != 0 throw(LapackException(info[1])) end
+#                 if info[1] != 0 throw(LAPACKException(info[1])) end
 #                 if lwork < 0
 #                     lwork = blas_int(real(work[1]))
 #                     work = Array($elty, lwork)
@@ -1546,7 +1561,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &n, A, &stride(A,2), ipiv, work, info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             A
         end
         #       SUBROUTINE DSYTRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
@@ -1562,13 +1577,13 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
             chkstride1(A,B)
             chksquare(A)
             n     = size(A,1)
-            if n != size(B,1) throw(LapackDimMismatch("sytrs!")) end
+            if n != size(B,1) throw(DimensionMismatch("sytrs!")) end
             info  = Array(BlasInt, 1)
             ccall(($(string(sytrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
     end
@@ -1579,7 +1594,7 @@ for (syevr, elty) in
     ((:dsyevr_,:Float64),
      (:ssyevr_,:Float32))
     @eval begin
-        function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, Z::StridedMatrix{$elty}, abstol::FloatingPoint)
+        function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
         #       SUBROUTINE DSYEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
         #      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
         #      $                   IWORK, LIWORK, INFO )
@@ -1591,20 +1606,20 @@ for (syevr, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            ISUPPZ( * ), IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )    
-            chkstride1(A, Z)
-            chksquare(A)                    
+            chkstride1(A)
+            chksquare(A)                   
             n = size(A, 2)
             lda = max(1,stride(A,2))
             m = Array(BlasInt, 1)
             w = Array($elty, n)
             if jobz == 'N'
                 ldz = 1
+                Z = Array($elty, ldz, 0)
             elseif jobz == 'V'
-                if stride(Z, 2) < n; error("Z has too few rows"); end
-                if size(Z, 2) < n; error("Z has too few columns"); end
-                ldz = max(1, stride(Z, 2))
+                ldz = n
+                Z = Array($elty, ldz, n)
             else
-                error("joz must be 'N' of 'V'")
+                error("jobz must be 'N' of 'V'")
             end
             isuppz = Array(BlasInt, 2*n)
             work  = Array($elty, 1)
@@ -1626,7 +1641,7 @@ for (syevr, elty) in
                     w, Z, &ldz, isuppz,
                     work, &lwork, iwork, &liwork, 
                     info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(work[1])
                     work = Array($elty, lwork)
@@ -1634,7 +1649,7 @@ for (syevr, elty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            return w[1:m[1]]
+            return w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
         end
     end
 end
@@ -1642,7 +1657,7 @@ for (syevr, elty, relty) in
     ((:zheevr_,:Complex128,:Float64),
      (:cheevr_,:Complex64,:Float32))
     @eval begin
-        function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, Z::StridedMatrix{$elty}, abstol::FloatingPoint)
+        function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
 #       SUBROUTINE ZHEEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
 #      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
 #      $                   RWORK, LRWORK, IWORK, LIWORK, INFO )
@@ -1656,7 +1671,7 @@ for (syevr, elty, relty) in
 #       INTEGER            ISUPPZ( * ), IWORK( * )
 #       DOUBLE PRECISION   RWORK( * ), W( * )
 #       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * ) 
-            chkstride1(A, Z)
+            chkstride1(A)
             chksquare(A)
             n = size(A, 2)
             lda = max(1,stride(A,2))
@@ -1664,12 +1679,12 @@ for (syevr, elty, relty) in
             w = Array($relty, n)
             if jobz == 'N'
                 ldz = 1
+                Z = Array($elty, ldz, 0)
             elseif jobz == 'V'
-                if stride(Z, 2) < n; error("Z has too few rows"); end
-                if size(Z, 2) < n; error("Z has too few columns"); end
-                ldz = max(1, stride(Z, 2))
+                ldz = n
+                Z = Array($elty, ldz, n)
             else
-                error("joz must be 'N' of 'V'")
+                error("jobz must be 'N' of 'V'")
             end
             isuppz = Array(BlasInt, 2*n)
             work  = Array($elty, 1)
@@ -1693,7 +1708,7 @@ for (syevr, elty, relty) in
                     w, Z, &ldz, isuppz,
                     work, &lwork, rwork, &lrwork,
                     iwork, &liwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
@@ -1703,12 +1718,11 @@ for (syevr, elty, relty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            return w[1:m[1]]
+            return w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
         end
     end
 end
-syevr!(A::StridedMatrix, Z::StridedMatrix) = syevr!('V', 'A', 'U', A, 0.0, 0.0, 0, 0, Z, -1.0)
-syevr!{T}(A::StridedMatrix{T}) = syevr!('N', 'A', 'U', A, 0.0, 0.0, 0, 0, zeros(T,0,0), -1.0)
+syevr!(jobz::Char, A::StridedMatrix) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
 
 # Estimate condition number
 for (gecon, elty) in
@@ -1739,7 +1753,7 @@ for (gecon, elty) in
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, iwork,
                   info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             return rcond[1]
         end
     end
@@ -1773,7 +1787,7 @@ for (gecon, elty, relty) in
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, rwork,
                   info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return rcond[1]
         end
     end
@@ -1807,7 +1821,7 @@ for (gehrd, elty) in
                     &n, &ilo, &ihi, A, 
                     &max(1,n), tau, work, &lwork, 
                     info)
-                if info[1] < 0 throw(LapackException(info[1])) end
+                if info[1] < 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(work[1])
                     work = Array($elty, lwork)
@@ -1817,7 +1831,7 @@ for (gehrd, elty) in
         end
     end
 end
-gehrd!(A::StridedMatrix) = gehrd!(blas_int(1), blas_int(size(A, 1)), A)
+gehrd!(A::StridedMatrix) = gehrd!(1, size(A, 1), A)
 
 # construct Q from Hessenberg
 for (orghr, elty) in
@@ -1835,7 +1849,7 @@ for (orghr, elty) in
             chkstride1(A)
             chksquare(A)
             n = size(A, 1)
-            if n - length(tau) != 1 throw(LapackDimMismatch) end
+            if n - length(tau) != 1 throw(DimensionMismatch) end
             work = Array($elty, 1)
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
@@ -1847,7 +1861,7 @@ for (orghr, elty) in
                     &n, &ilo, &ihi, A, 
                     &max(1,n), tau, work, &lwork, 
                     info)
-                if info[1] < 0 throw(LapackException(info[1])) end
+                if info[1] < 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(work[1])
                     work = Array($elty, lwork)
@@ -1893,7 +1907,7 @@ for (gees, elty) in
                         A, &max(1, n), sdim, wr,
                         wi, vs, &ldvs, work, 
                         &lwork, [], info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(work[1])
                     work = Array($elty, lwork)
@@ -1942,7 +1956,7 @@ for (gees, elty, relty) in
                         A, &max(1, n), sdim, w,
                         vs, &ldvs, work, &lwork, 
                         rwork, [], info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(work[1])
                     work = Array($elty, lwork)
