@@ -316,66 +316,55 @@ function exp(z::Complex)
 end
 
 function ^{T<:Complex}(z::T, p::T)
-    realp = real(p)
-    if imag(p) == 0
-        if realp == 0
-            return one(z)
-        elseif realp == 1
-            return z
-        elseif realp == 2
-            return z*z
-        elseif realp == 0.5
-            return sqrt(z)
-        end
-    end
+    realp = real(p); imagp = imag(p)
+    realz = real(z); imagz = imag(z)
     r = abs(z)
     rp = r^realp
-    realz = real(z)
-    zer = zero(r)
-    if imag(p) == 0
+    theta = atan2(imagz, realz)
+    ntheta = realp*theta
+    if imagp != 0 && r != 0
+        rp = rp*exp(-imagp*theta)
+        ntheta = ntheta + imagp*log(r)
+    end
+    cosntheta = cos(ntheta)
+    sinntheta = sin(ntheta)
+    re, im = rp*cosntheta, rp*sinntheta
+    if isinf(rp)
+        if isnan(re)
+            re = copysign(zero(re), cosntheta)
+        end
+        if isnan(im)
+            im = copysign(zero(im), sinntheta)
+        end
+    end
+
+    # apply some corrections to force known zeros
+    if imagp == 0
         ip = itrunc(realp)
         if ip == realp
-            # integer multiples of pi/2
-            if imag(z) == 0 && realz < 0
-                return complex(isodd(ip) ? -rp : rp, zer)
-            elseif realz == 0 && imag(z) < 0
+            if imagz == 0
+                im = copysign(zero(im), im)
+            elseif realz == 0
                 if isodd(ip)
-                    return complex(zer, isodd(div(ip-1,2)) ? rp : -rp)
+                    re = copysign(zero(re), re)
                 else
-                    return complex(isodd(div(ip,2)) ? -rp : rp, zer)
-                end
-            elseif realz == 0 && imag(z) > 0
-                if isodd(ip)
-                    return complex(zer, isodd(div(ip-1,2)) ? -rp : rp)
-                else
-                    return complex(isodd(div(ip,2)) ? -rp : rp, zer)
+                    im = copysign(zero(im), im)
                 end
             end
         else
             dr = realp*2
             ip = itrunc(dr)
-            # 1/2 multiples of pi
-            if ip == dr && imag(z) == 0
+            if ip == dr && imagz == 0
                 if realz < 0
-                    return complex(zer, isodd(div(ip-1,2)) ? -rp : rp)
-                elseif realz >= 0
-                    return complex(rp, zer)
+                    re = copysign(zero(re), re)
+                else
+                    im = copysign(zero(im), im)
                 end
             end
         end
     end
-    imagz = imag(z)
-    if imagz==0 && realz>=0
-        ntheta = imag(p)*log(r)
-    else
-        theta = atan2(imagz, realz)
-        ntheta = realp*theta
-        if imag(p) != 0
-            rp = rp*exp(-imag(p)*theta)
-            ntheta = ntheta + imag(p)*log(r)
-        end
-    end
-    complex(rp*cos(ntheta), rp*sin(ntheta))
+
+    complex(re, im)
 end
 
 function tan(z::Complex)
