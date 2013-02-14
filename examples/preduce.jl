@@ -11,7 +11,7 @@ function sum(v::DArray)
     for i=0:np-1
         @spawnat P[i+1] begin
             stride=1
-            tally = sum(localize(v))
+            tally = sum(localpart(v))
             while stride < np
                 if i%(2*stride) == 0
                     tally = tally + take(nodeval[i+stride])
@@ -31,7 +31,7 @@ end
 
 function reduce(f, v::DArray)
     mapreduce(fetch, f,
-              { @spawnat p reduce(f,localize(v)) for p = procs(v) })
+              { @spawnat p reduce(f,localpart(v)) for p = procs(v) })
 end
 
 # possibly-useful abstraction:

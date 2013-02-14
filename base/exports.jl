@@ -1005,7 +1005,7 @@ export
     drand,
     drandn,
     dzeros,
-    localize,
+    localpart,
     myindexes,
     procs,
 
