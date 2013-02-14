@@ -113,16 +113,21 @@
 ; --- lexer ---
 
 (define special-char?
-  (let ((chrs (string->list "()[]{},;\"`@")))
+  (let ((chrs (string->list "()[]{},;\"`@«»")))
     (lambda (c) (memv c chrs))))
 (define (newline? c) (eqv? c #\newline))
+; also defined in flisp/julia_extensions.c
 (define (identifier-char? c) (or (and (char>=? c #\A)
 				      (char<=? c #\Z))
 				 (and (char>=? c #\a)
 				      (char<=? c #\z))
 				 (and (char>=? c #\0)
 				      (char<=? c #\9))
-				 (char>=? c #\uA1)
+                                 (and (char>=? c #\uA1)
+                                      (char<=? c #\uAA))
+                                 (and (char>=? c #\uAC)
+                                      (char<=? c #\uBA))
+				 (char>=? c #\uBC)
 				 (eqv? c #\_)))
 ;; characters that can be in an operator
 (define (opchar? c) (string.find op-chars c))
@@ -430,7 +435,7 @@
 
 (define (invalid-initial-token? tok)
   (or (eof-object? tok)
-      (memv tok '(#\) #\] #\} else elseif catch finally =))))
+      (memv tok '(#\) #\] #\} #\» else elseif catch finally =))))
 
 (define (line-number-node s)
   `(line ,(input-port-line (ts:port s))))
@@ -627,7 +632,7 @@
 (define (closing-token? tok)
   (or (eof-object? tok)
       (and (eq? tok 'end) (not end-symbol))
-      (memv tok '(#\, #\) #\] #\} #\; else elseif catch finally))))
+      (memv tok '(#\, #\) #\] #\} #\; #\» else elseif catch finally))))
 
 (define (maybe-negate op num)
   (if (eq? op '-) (- num) num))
@@ -751,7 +756,7 @@
 	(let loop ((ex ex))
 	  (let ((t (peek-token s)))
 	    (if (or (and space-sensitive (ts:space? s)
-			 (memv t '(#\( #\[ #\{ |'| #\")))
+			 (memv t '(#\( #\[ #\{ |'| #\" #\«)))
 		    (and (number? ex)  ;; 2(...) is multiply, not call
 			 (eqv? t #\()))
 		ex
@@ -796,12 +801,12 @@
 		  ((#\{ )   (take-token s)
 		   (loop (list* 'curly ex
 				(map subtype-syntax (parse-arglist s #\} )))))
-		  ((#\")
+		  ((#\« #\")
 		   (if (and (symbol? ex) (not (operator? ex))
 			    (not (ts:space? s)))
 		       ;; custom prefixed string literals, x"s" => @x_str "s"
 		       (let ((str (begin (take-token s)
-					 (parse-string-literal s)))
+					 (parse-string-literal s t)))
 			     (macname (symbol (string #\@ ex '_str))))
 			 (let ((nxt (peek-token s)))
 			   (if (and (symbol? nxt) (not (operator? nxt))
@@ -1314,12 +1319,13 @@
 ; reads a raw string literal with no processing.
 ; quote can be escaped with \, but the \ is left in place.
 ; returns ("str" . b), b is a boolean telling whether interpolation is used
-(define (parse-string-literal s)
+(define (parse-string-literal s first)
   (let ((b (open-output-string))
 	(p (ts:port s))
+        (closer (if (eqv? first #\«) #\» #\"))
 	(interpolate #f))
     (let loop ((c (read-char p)))
-      (if (eqv? c #\")
+      (if (eqv? c closer)
 	  #t
 	  (begin (if (eqv? c #\\)
 		     (let ((nextch (read-char p)))
@@ -1328,6 +1334,8 @@
 		     (begin
 		       (if (eqv? c #\$)
 			   (set! interpolate #t))
+                       (if (eqv? c #\")
+                           (write-char #\\ b))
 		       (write-char (not-eof-3 c) b)))
 		 (loop (read-char p)))))
     (cons (io.tostring! b) interpolate)))
@@ -1503,9 +1511,9 @@
 		 vex))))
 
 	  ;; string literal
-	  ((eqv? t #\")
+	  ((or (eqv? t #\") (eqv? t #\«))
 	   (take-token s)
-	   (let ((ps (parse-string-literal s)))
+	   (let ((ps (parse-string-literal s t)))
 	     (if (cdr ps)
 		 `(macrocall @str ,(car ps))
 		 (let ((str (unescape-string (car ps))))

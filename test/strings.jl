@@ -501,3 +501,8 @@ str_a = [str...]
 
 str = "s\u2200"
 @test str[1:end] == str
+
+# guillemet delimited strings
+@test «abcd» == "abcd"
+@test «ab"cd"e» == "ab\"cd\"e"
+

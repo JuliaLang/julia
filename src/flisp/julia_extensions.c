@@ -33,7 +33,8 @@ value_t fl_skipws(value_t *args, u_int32_t nargs)
 static int jl_id_char(uint32_t wc)
 {
     return ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') ||
-            (wc >= '0' && wc <= '9') || (wc >= 0xA1) ||
+            (wc >= '0' && wc <= '9') || (wc >= 0xA1 && wc <= 0xAA) ||
+            (wc >= 0xAC && wc <= 0xBA) || wc >= 0xBC ||
             wc == '!' || wc == '_');
 }
 
