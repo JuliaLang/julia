@@ -1125,7 +1125,7 @@ function localize_vars(expr)
     # requires a special feature of the front end that knows how to insert
     # the correct variables. the list of free variables cannot be computed
     # from a macro.
-    Expr(:localize, {:(()->($expr)), v...}, Any)
+    Expr(:localize, {:(()->($expr)), map(esc,v)...}, Any)
 end
 
 macro spawn(expr)
