@@ -113,16 +113,21 @@
 ; --- lexer ---
 
 (define special-char?
-  (let ((chrs (string->list "()[]{},;\"`@")))
+  (let ((chrs (string->list "()[]{},;\"`@«»")))
     (lambda (c) (memv c chrs))))
 (define (newline? c) (eqv? c #\newline))
+; also defined in flisp/julia_extensions.c
 (define (identifier-char? c) (or (and (char>=? c #\A)
 				      (char<=? c #\Z))
 				 (and (char>=? c #\a)
 				      (char<=? c #\z))
 				 (and (char>=? c #\0)
 				      (char<=? c #\9))
-				 (char>=? c #\uA1)
+                                 (and (char>=? c #\uA1)
+                                      (char<=? c #\uAA))
+                                 (and (char>=? c #\uAC)
+                                      (char<=? c #\uBA))
+				 (char>=? c #\uBC)
 				 (eqv? c #\_)))
 ;; characters that can be in an operator
 (define (opchar? c) (string.find op-chars c))
@@ -430,7 +435,7 @@
 
 (define (invalid-initial-token? tok)
   (or (eof-object? tok)
-      (memv tok '(#\) #\] #\} else elseif catch finally =))))
+      (memv tok '(#\) #\] #\} #\» else elseif catch finally =))))
 
 (define (line-number-node s)
   `(line ,(input-port-line (ts:port s))))
@@ -627,7 +632,7 @@
 (define (closing-token? tok)
   (or (eof-object? tok)
       (and (eq? tok 'end) (not end-symbol))
-      (memv tok '(#\, #\) #\] #\} #\; else elseif catch finally))))
+      (memv tok '(#\, #\) #\] #\} #\; #\» else elseif catch finally))))
 
 (define (maybe-negate op num)
   (if (eq? op '-) (- num) num))
@@ -751,7 +756,7 @@
 	(let loop ((ex ex))
 	  (let ((t (peek-token s)))
 	    (if (or (and space-sensitive (ts:space? s)
-			 (memv t '(#\( #\[ #\{ |'| #\")))
+			 (memv t '(#\( #\[ #\{ |'| #\" #\«)))
 		    (and (number? ex)  ;; 2(...) is multiply, not call
 			 (eqv? t #\()))
 		ex
@@ -796,12 +801,12 @@
 		  ((#\{ )   (take-token s)
 		   (loop (list* 'curly ex
 				(map subtype-syntax (parse-arglist s #\} )))))
-		  ((#\")
+		  ((#\« #\")
 		   (if (and (symbol? ex) (not (operator? ex))
 			    (not (ts:space? s)))
 		       ;; custom prefixed string literals, x"s" => @x_str "s"
 		       (let ((str (begin (take-token s)
-					 (parse-string-literal s)))
+					 (parse-string-literal s t)))
 			     (macname (symbol (string #\@ ex '_str))))
 			 (let ((nxt (peek-token s)))
 			   (if (and (symbol? nxt) (not (operator? nxt))
@@ -1311,16 +1316,56 @@
       (error "incomplete: invalid string syntax")
       c))
 
+(define (take-char p)
+  (begin (read-char p) p))
+
 ; reads a raw string literal with no processing.
 ; quote can be escaped with \, but the \ is left in place.
 ; returns ("str" . b), b is a boolean telling whether interpolation is used
-(define (parse-string-literal s)
+(define (parse-string-literal s first)
+  (let ((p (ts:port s)))
+    (if (eqv? first #\«)
+        (parse-string-literal-1 p #\»)
+        (if (eqv? (peek-char p) #\")
+            (if (eqv? (peek-char (take-char p)) #\")
+                (parse-string-literal-3 (take-char p))
+                (cons "" #f))
+            (parse-string-literal-1 p #\")))))
+
+(define (parse-string-literal-1 p closer)
   (let ((b (open-output-string))
-	(p (ts:port s))
+	(interpolate #f))
+    (let loop ((c (read-char p)))
+      (if (eqv? c closer)
+	  #t
+	  (begin (if (eqv? c #\\)
+		     (let ((nextch (read-char p)))
+		       (begin (write-char #\\ b)
+			      (write-char (not-eof-3 nextch) b)))
+		     (begin
+		       (if (eqv? c #\$)
+			   (set! interpolate #t))
+                       (if (eqv? c #\")
+                           (write-char #\\ b))
+		       (write-char (not-eof-3 c) b)))
+		 (loop (read-char p)))))
+    (cons (io.tostring! b) interpolate)))
+
+(define (parse-string-literal-3 p)
+  (let ((b (open-output-string))
 	(interpolate #f))
     (let loop ((c (read-char p)))
       (if (eqv? c #\")
-	  #t
+          (let ((nextch (read-char p)))
+            (if (eqv? nextch #\")
+                (let ((nextch2 (read-char p)))
+                  (if (eqv? nextch2 #\")
+                      #t
+                      (begin (write-char #\\ b) (write-char #\" b)
+                             (write-char #\\ b) (write-char #\" b)
+                             (loop nextch2))))
+                (begin (write-char #\\ b) (write-char #\" b)
+                       (loop nextch))))
 	  (begin (if (eqv? c #\\)
 		     (let ((nextch (read-char p)))
 		       (begin (write-char #\\ b)
@@ -1503,9 +1548,9 @@
 		 vex))))
 
 	  ;; string literal
-	  ((eqv? t #\")
+	  ((or (eqv? t #\") (eqv? t #\«))
 	   (take-token s)
-	   (let ((ps (parse-string-literal s)))
+	   (let ((ps (parse-string-literal s t)))
 	     (if (cdr ps)
 		 `(macrocall @str ,(car ps))
 		 (let ((str (unescape-string (car ps))))

@@ -501,3 +501,15 @@ str_a = [str...]
 
 str = "s\u2200"
 @test str[1:end] == str
+
+# triple-quote delimited strings
+@test """abc""" == "abc"
+@test """ab"c""" == "ab\"c"
+@test """ab""c""" == "ab\"\"c"
+@test """ab"\"c""" == "ab\"\"c"
+@test """abc\"""" == "abc\""
+
+# guillemet delimited strings
+@test «abcd» == "abcd"
+@test «ab"cd"e» == "ab\"cd\"e"
+
