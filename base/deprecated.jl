@@ -22,6 +22,8 @@ macro deprecate(old,new)
     end
 end
 
+# 0.1
+
 @deprecate  push            push!
 @deprecate  pop             pop!
 @deprecate  grow            grow!
@@ -137,3 +139,7 @@ for (fun,typ) in {(:randexp,:Exponential), (:randg,:Gamma), (:randbeta,:Beta), (
     rand(",$(expr(:quote,typ)),"())
 ")
 end
+
+# 0.2
+
+@deprecate  localize         localpart
