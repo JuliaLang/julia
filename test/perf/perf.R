@@ -125,7 +125,8 @@ timeit("pi_sum", pisum, times=1)
 ## pi_sum_vec ##
 
 pisumvec = function() {
-	return(replicate(500, sum(1/((1:10000)^2)))[1])
+    r = 1:10000
+	return(replicate(500, sum(1/((r)^2)))[1])
 }
 
 #assert(abs(pisumvec()-1.644834071848065) < 1e-12);
