@@ -3,7 +3,7 @@ local ffi = require 'ffi'
 local bit = require 'bit'
 local gsl = require 'gsl'
 
-local min, max, abs, sqrt = math.min, math.max, math.abs, math.sqrt
+local min, max, abs, sqrt, random, floor = math.min, math.max, math.abs, math.sqrt, math.random, math.floor
 local cabs = complex.abs
 local rshift = bit.rshift
 local format = string.format
@@ -32,7 +32,7 @@ local function elapsed(f)
     local s0, us0 = gettime()
     f()
     local s1, us1 = gettime()
-    return (s1 - s0) * 1000 + (us1 - us0) / 1000
+    return tonumber(s1 - s0) * 1000 + tonumber(us1 - us0) / 1000
 end
 
 local function timeit(f, name)
@@ -61,7 +61,7 @@ local function parseint()
     local n, m
     for i = 1, 1000 do
         n = r:getint(lmt)
-        local s = format('0x%x', n)
+        local s = format('0x%x', tonumber(n))
         m = tonumber(s)
     end
     assert(m == n)
@@ -69,6 +69,19 @@ local function parseint()
 end
 
 timeit(parseint, "parse_int")
+
+local function parseint2()
+    local n, m
+    for j = 1, 1000 do
+        n = floor(4294967295*random())
+        local s = format("0x%x",n)
+        m = tonumber(s)
+    end
+    assert(m == n)
+    return n
+end
+
+timeit(function()return parseint2()end,"parse_int2")
 
 local function mandel(z)
     local c = z
@@ -127,6 +140,23 @@ local function sortperf()
     local r = rng.new('rand')
     local v = iter.ilist(|| r:get(), n)
     qsort(v, 1, n)
+end
+
+function rand(n) 
+    local v, i
+    -- v = {}
+    v = ffi.new("double[?]", n)
+    
+    for i = 0, n - 1 do
+        v[i] = math.random()
+    end
+    return v
+end
+
+function sortperf2(n) 
+    local v = rand(n)
+    qsort(v, 0, n - 1)
+    return v
 end
 
 local function pisum()
@@ -236,7 +266,8 @@ end
 
 
 timeit(sortperf, "quicksort")
+timeit(function()sortperf2(5000)end,"quicksort2")
 timeit(pisum, "pi_sum")
 timeit(|| randmatstat(1000), "rand_mat_stat")
 timeit(|| randmatmult(1000), "rand_mat_mul")
-timeit(|| printfd(100000), "printfd")
+-- timeit(|| printfd(100000), "printfd")
