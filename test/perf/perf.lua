@@ -89,7 +89,7 @@ function mandelperf()
         re = r*0.1
         for i=-10, 10 do
             im = i*0.1
-            a[r*21+i+430] = mandel(cx(re,im))
+            a[r*21+i+430] = mandel(re + 1i * im)
         end
     end
     return a
