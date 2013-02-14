@@ -235,8 +235,6 @@ General Collections
 
 Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
 
-Partially implemented by: ``FDSet``.
-
 Iterable Collections
 --------------------
 
@@ -314,9 +312,9 @@ Iterable Collections
 
    Determine whether all elements of ``itr`` satisfy the given predicate.
 
-.. function:: map(function, collection) -> collection
+.. function:: map(f, c) -> collection
 
-   Transform collection by applying to each element.
+   Transform collection ``c`` by applying ``f`` to each element.
    
    **Example**: ``map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]``
 
@@ -421,7 +419,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
    
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
-Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``FDSet``, ``Array``.
+Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``Array``.
 
 Set-Like Collections
 --------------------
@@ -492,7 +490,7 @@ Set-Like Collections
 
    Intersects IntSets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.
 
-Fully implemented by: ``IntSet``, ``Set``, ``FDSet``.
+Fully implemented by: ``IntSet``, ``Set``.
 
 Partially implemented by: ``Array``.
 
@@ -565,6 +563,10 @@ Strings
    Create a string with the given characters.
 
 .. function:: string(x)
+
+   Create a string from any value using the ``print`` function.
+
+.. function:: repr(x)
 
    Create a string from any value using the ``show`` function.
 
@@ -687,6 +689,24 @@ Strings
 .. function:: chr2ind(string, i)
 
    Convert a character index to a byte index
+
+.. function:: isvalid(str, i)
+
+   Tells whether index ``i`` is valid for the given string
+
+.. function:: nextind(str, i)
+
+   Get the next valid string index after ``i``. Returns ``endof(str)+1`` at
+   the end of the string.
+
+.. function:: prevind(str, i)
+
+   Get the previous valid string index before ``i``. Returns ``0`` at
+   the beginning of the string.
+
+.. function:: thisind(str, i)
+
+   Adjust ``i`` downwards until it reaches a valid index for the given string.
 
 .. function:: randstring(len)
 
@@ -1178,6 +1198,11 @@ Mathematical Functions
 
    Compute :math:`x \times 2^n`
 
+.. function:: modf(x)
+
+   Return a tuple (fpart,ipart) of the fractional and integral parts of a
+   number. Both parts have the same sign as the argument.
+
 .. function:: expm1(x)
 
    Accurately compute :math:`e^x-1`
@@ -1252,7 +1277,11 @@ Mathematical Functions
 
 .. function:: signbit(x)
 
-   Returns non-zero if the value of the sign of ``x`` is negative, otherwise ``0``.
+   Returns ``1`` if the value of the sign of ``x`` is negative, otherwise ``0``.
+
+.. function:: flipsign(x, y)
+
+   Return ``x`` with its sign flipped if ``y`` is negative. For example ``abs(x) = flipsign(x,x)``.
 
 .. function:: sqrt(x)
    
@@ -1470,6 +1499,14 @@ Mathematical Functions
 
    Riemann zeta function :math:`\zeta(s)`.
 
+.. function:: bitmix(x, y)
+
+   Hash two integers into a single integer. Useful for constructing hash
+   functions.
+
+.. function:: ndigits(n, b)
+
+   Compute the number of digits in number ``n`` written in base ``b``.
 
 Data Formats
 ------------
@@ -1494,12 +1531,29 @@ Data Formats
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 
-.. function:: parse_int(Type, String, base::Integer) -> Integer
-              parse_int(Type, String)
-              parse_int(String)
-              parse_int(String, base::Integer)
+.. function:: bits(n)
 
-   Parse a string as an integer in the given base, yielding a number of the specified type.
+   A string giving the literal bit representation of a number.
+
+.. function:: parse_int(type, str, [base])
+
+   Parse a string as an integer in the given base (default 10), yielding a number of the specified type.
+
+.. function:: parse_bin(type, str)
+
+   Parse a string as an integer in base 2, yielding a number of the specified type.
+
+.. function:: parse_oct(type, str)
+
+   Parse a string as an integer in base 8, yielding a number of the specified type.
+
+.. function:: parse_hex(type, str)
+
+   Parse a string as an integer in base 16, yielding a number of the specified type.
+
+.. function:: parse_float(type, str)
+
+   Parse a string as a decimal floating point number, yielding a number of the specified type.
 
 .. function:: bool(x)
 
@@ -2019,6 +2073,47 @@ Indexing, Assignment, and Concatenation
 
    Vectorize an array using column-major convention.
 
+Array functions
+~~~~~~~~~~~~~~~
+
+.. function:: cumprod(A, [dim])
+
+   Cumulative product along a dimension.
+
+.. function:: cumsum(A, [dim])
+
+   Cumulative sum along a dimension.
+
+.. function:: cummin(A, [dim])
+
+   Cumulative minimum along a dimension.
+
+.. function:: cummax(A, [dim])
+
+   Cumulative maximum along a dimension.
+
+.. function:: diff(A, [dim])
+
+   Finite difference operator of matrix or vector.
+
+.. function:: rot180(A)
+
+   Rotate matrix ``A`` 180 degrees.
+
+.. function:: rotl90(A)
+
+   Rotate matrix ``A`` left 90 degrees.
+
+.. function:: rotr90(A)
+
+   Rotate matrix ``A`` right 90 degrees.
+
+.. function:: reducedim(f, A, dims, initial)
+
+   Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
+   vector specifying the dimensions to reduce, and ``initial`` is the initial
+   value to use in the reductions.
+
 Sparse Matrices
 ---------------
 
@@ -2242,6 +2337,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
 
+.. function:: diagmm(matrix, vector)
+
+   Multiply matrices, interpreting the vector argument as a diagonal matrix.
+   The arguments may occur in the other order to multiply with the diagonal
+   matrix on the left.
+
 .. function:: Tridiagonal(dl, d, du)
 
    Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal
@@ -2302,6 +2403,38 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Weighted least-squares linear regression.
 
+.. function:: expm(A)
+
+   Matrix exponential.
+
+.. function:: issym(A)
+
+   Test whether a matrix is symmetric.
+
+.. function:: isposdef(A)
+
+   Test whether a matrix is positive-definite.
+
+.. function:: istril(A)
+
+   Test whether a matrix is lower-triangular.
+
+.. function:: istriu(A)
+
+   Test whether a matrix is upper-triangular.
+
+.. function:: ishermitian(A)
+
+   Test whether a matrix is hermitian.
+
+.. function:: transpose(A)
+
+   The transpose operator (.').
+
+.. function:: ctranspose(A)
+
+   The conjugate transpose operator (').
+
 Combinatorics
 -------------
 
@@ -2356,6 +2489,28 @@ Combinatorics
 .. function:: reverse!(v) -> v
 
    In-place version of :func:`reverse`.
+
+.. function:: combinations(array, n)
+
+   Generate all combinations of ``n`` elements from a given array. Because
+   the number of combinations can be very large, this function runs inside
+   a Task to produce values on demand. Write ``c = @task combinations(a,n)``,
+   then iterate ``c`` or call ``consume`` on it.
+
+.. function:: integer_partitions(n, m)
+
+   Generate all arrays of ``m`` integers that sum to ``n``. Because
+   the number of partitions can be very large, this function runs inside
+   a Task to produce values on demand. Write
+   ``c = @task integer_partitions(n,m)``, then iterate ``c`` or call
+   ``consume`` on it.
+
+.. function:: partitions(array)
+
+   Generate all set partitions of the elements of an array, represented as
+   arrays of arrays. Because the number of partitions can be very large, this
+   function runs inside a Task to produce values on demand. Write
+   ``c = @task partitions(a)``, then iterate ``c`` or call ``consume`` on it.
 
 Statistics
 ----------

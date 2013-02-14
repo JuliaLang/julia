@@ -14,7 +14,8 @@ export
     Pkg,
     Operators,
     Errno,
-
+    Meta,
+    
 # Types
     AbstractMatrix,
     AbstractSparseMatrix,

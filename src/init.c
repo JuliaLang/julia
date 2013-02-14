@@ -64,7 +64,7 @@ static void jl_find_stack_bottom(void)
 }
 
 #ifdef __WIN32__
-void fpe_handler(int arg,int num)
+void __cdecl fpe_handler(int arg,int num)
 #else
 void fpe_handler(int arg)
 #endif
@@ -77,12 +77,13 @@ void fpe_handler(int arg)
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 #else
     fpreset();
+    signal(SIGFPE, (void (__cdecl *)(int))fpe_handler);
     switch(num) {
     case _FPE_INVALID:
     case _FPE_OVERFLOW:
     case _FPE_UNDERFLOW:
     default:
-        jl_errorf("Unexpected FPE Error");
+        jl_errorf("Unexpected FPE Error 0x%X", num);
         break;
     case _FPE_ZERODIVIDE:
 #endif

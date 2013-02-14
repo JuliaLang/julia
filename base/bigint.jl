@@ -185,7 +185,7 @@ binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(
 function string(x::BigInt)
     lng = ndigits(x) + 2
     z = Array(Uint8, lng)
-    lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{Void}), z, lng, "%Zd", x.mpz)
+    lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{Void}...), z, lng, "%Zd", x.mpz)
     return bytestring(convert(Ptr{Uint8}, z[1:lng]))
 end
 

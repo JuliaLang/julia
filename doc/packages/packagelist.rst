@@ -109,6 +109,12 @@ ___________________________________________________
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
+    .. image:: https://secure.gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: rened
+        :target: https://github.com/rened
+
 ----
 
 `BloomFilters <https://github.com/johnmyleswhite/BloomFilters.jl>`_
@@ -194,6 +200,12 @@ ________________________________________________
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
+    .. image:: https://secure.gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Viral B. Shah
+        :target: https://github.com/ViralBShah
+
     .. image:: https://secure.gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -242,6 +254,12 @@ ___________________________________________________________
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
+    .. image:: https://secure.gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: rened
+        :target: https://github.com/rened
+
 ----
 
 `Calendar <https://github.com/nolta/Calendar.jl>`_
@@ -277,6 +295,12 @@ __________________________________________________
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
+
+    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
 
 ----
 
@@ -446,11 +470,53 @@ __________________________________________________
         :alt: Tim Holy
         :target: https://github.com/timholy
 
+    .. image:: https://secure.gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Ian Fiske
+        :target: https://github.com/ianfiske
+
+    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
+
     .. image:: https://secure.gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
+
+----
+
+`ContinuedFractions <https://github.com/johnmyleswhite/ContinuedFractions.jl>`_
+_______________________________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+     :target: https://github.com/johnmyleswhite
+
+  Current Version: ``0.0.0``
+
+  Types and functions for working with continued fractions in Julia 
+
+  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
 
 ----
 
@@ -473,6 +539,7 @@ ________________________________________________________
   Dependencies::
 
       Options        Any Version
+      Stats          Any Version
 
   Contributors:
 
@@ -500,29 +567,17 @@ ________________________________________________________
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Stefan Karpinski
-        :target: https://github.com/StefanKarpinski
-
     .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
 
-    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Tim Holy
-        :target: https://github.com/timholy
-
-    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: dmbates
-        :target: https://github.com/dmbates
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
 
     .. image:: https://secure.gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -530,17 +585,11 @@ ________________________________________________________
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://secure.gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: pao
-        :target: https://github.com/pao
-
-    .. image:: https://secure.gravatar.com/avatar/2cbc175271c0dbdaf0aa8f68af6c13d4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Glen Hertz
-        :target: https://github.com/GlenHertz
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
     .. image:: https://secure.gravatar.com/avatar/903acb22f47a901577ee48d3962d5858?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -548,11 +597,23 @@ ________________________________________________________
         :alt: Tom Short
         :target: https://github.com/tshort
 
-    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Jameson Nash
-        :target: https://github.com/vtjnash
+        :alt: dmbates
+        :target: https://github.com/dmbates
+
+    .. image:: https://secure.gravatar.com/avatar/2cbc175271c0dbdaf0aa8f68af6c13d4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Glen Hertz
+        :target: https://github.com/GlenHertz
+
+    .. image:: https://secure.gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: pao
+        :target: https://github.com/pao
 
     .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -560,17 +621,29 @@ ________________________________________________________
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
     .. image:: https://secure.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Miles Lubin
-        :target: https://github.com/mlubin
+        :alt: Ian Fiske
+        :target: https://github.com/ianfiske
+
+    .. image:: https://secure.gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Andreas Noack Jensen
+        :target: https://github.com/andreasnoackjensen
 
     .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -584,17 +657,11 @@ ________________________________________________________
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://secure.gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Andreas Noack Jensen
-        :target: https://github.com/andreasnoackjensen
-
-    .. image:: https://secure.gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Ian Fiske
-        :target: https://github.com/ianfiske
+        :alt: Miles Lubin
+        :target: https://github.com/mlubin
 
 ----
 
@@ -626,7 +693,7 @@ _____________________________________________
         :alt: toivoh
         :target: https://github.com/toivoh
 
-    .. image:: https://secure.gravatar.com/avatar/baa0794eff39982a6d08f34be8374b25?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: rened
@@ -665,7 +732,7 @@ _______________________________________________________________
 ----
 
 `Devectorize <https://github.com/lindahua/Devectorize.jl>`_
-_________________________________________________
+___________________________________________________________
 
   .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
@@ -676,7 +743,7 @@ _________________________________________________
 
   Current Version: ``0.0.0``
 
-  A Julia framework for de-vectorized evaluation 
+  A Julia framework for delayed expression evaluation 
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -724,6 +791,36 @@ ________________________________________________________________________________
 
 ----
 
+`Distance <https://github.com/lindahua/Distance.jl>`_
+_____________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Dahua Lin
+     :target: https://github.com/lindahua
+
+  Current Version: ``0.0.0``
+
+  Julia module for Distance evaluation 
+
+  Maintainer: `Dahua Lin <https://github.com/lindahua>`_
+
+  Dependencies::
+
+      Devectorize    Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
+----
+
 `Distributions <https://github.com/JuliaStats/Distributions.jl>`_
 _________________________________________________________________
 
@@ -752,17 +849,17 @@ _________________________________________________________________
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: dmbates
-        :target: https://github.com/dmbates
-
     .. image:: https://secure.gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Andreas Noack Jensen
         :target: https://github.com/andreasnoackjensen
+
+    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: dmbates
+        :target: https://github.com/dmbates
 
 ----
 
@@ -1031,11 +1128,17 @@ ________________________________________________
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: milktrader
-        :target: https://github.com/milktrader
+        :alt: Robert Ennis
+        :target: https://github.com/rennis250
+
+    .. image:: https://secure.gravatar.com/avatar/b1f06f732d86e562563db728b2875eb2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jason Merrill
+        :target: https://github.com/jwmerrill
 
     .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1043,29 +1146,23 @@ ________________________________________________
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Tim Holy
-        :target: https://github.com/timholy
-
-    .. image:: https://secure.gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Robert Ennis
-        :target: https://github.com/rennis250
-
     .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: dmbates
         :target: https://github.com/dmbates
 
-    .. image:: https://secure.gravatar.com/avatar/b1f06f732d86e562563db728b2875eb2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Jason Merrill
-        :target: https://github.com/jwmerrill
+        :alt: milktrader
+        :target: https://github.com/milktrader
+
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
 ----
 
@@ -1159,6 +1256,36 @@ ____________________________________________
 
 ----
 
+`Gtk <https://github.com/vtjnash/Gtk.jl>`_
+__________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jameson Nash
+     :target: https://github.com/vtjnash
+
+  Current Version: ``0.0.0``
+
+  Julia interface to Gtk windowing toolkit. 
+
+  Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
+
+  Dependencies::
+
+      Cairo          Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
+----
+
 `HDF5 <https://github.com/timholy/HDF5.jl>`_
 ____________________________________________
 
@@ -1222,6 +1349,30 @@ _________________________________________
         :width: 40px
         :alt: Dirk Gadsden
         :target: https://github.com/dirk
+
+----
+
+`Hadamard <https://github.com/stevengj/Hadamard.jl>`_
+_____________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Steven G. Johnson
+     :target: https://github.com/stevengj
+
+  Current Version: ``0.0.0``
+
+  Fast Walsh-Hadamard transforms for the Julia language 
+
+  Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
 
 ----
 
@@ -1324,6 +1475,12 @@ ____________________________________________________
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
+
+    .. image:: https://secure.gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jeff Bezanson
+        :target: https://github.com/JeffBezanson
 
     .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1466,11 +1623,11 @@ __________________________________________
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://secure.gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Westley Argentum Hennigh
-        :target: https://github.com/WestleyArgentum
+        :alt: Jeff Bezanson
+        :target: https://github.com/JeffBezanson
 
     .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1478,17 +1635,17 @@ __________________________________________
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://secure.gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Jeff Bezanson
-        :target: https://github.com/JeffBezanson
-
     .. image:: https://secure.gravatar.com/avatar/fa183b064e6ddfafab783d3de300c72a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: S Wade
         :target: https://github.com/swadey
+
+    .. image:: https://secure.gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Westley Argentum Hennigh
+        :target: https://github.com/WestleyArgentum
 
 ----
 
@@ -1713,6 +1870,18 @@ ____________________________________________
         :alt: Tim Holy
         :target: https://github.com/timholy
 
+    .. image:: https://secure.gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: rened
+        :target: https://github.com/rened
+
+    .. image:: https://secure.gravatar.com/avatar/d5eaa24d3d504aebc34d72ed352c344e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Geoffrey K. Adams
+        :target: https://github.com/biogeo
+
 ----
 
 `MCMC <https://github.com/doobwa/MCMC.jl>`_
@@ -1754,6 +1923,71 @@ ___________________________________________
         :width: 40px
         :alt: nfoti
         :target: https://github.com/nfoti
+
+----
+
+`MLBase <https://github.com/lindahua/MLBase.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Dahua Lin
+     :target: https://github.com/lindahua
+
+  Current Version: ``0.0.0``
+
+  A set of functions to support the development of machine learning algorithms 
+
+  Maintainer: `Dahua Lin <https://github.com/lindahua>`_
+
+  Dependencies::
+
+      Devectorize    Any Version
+      Distance       Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
+----
+
+`MarketTechnicals <https://github.com/milktrader/MarketTechnicals.jl>`_
+_______________________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: milktrader
+     :target: https://github.com/milktrader
+
+  Current Version: ``0.0.0``
+
+  Technical analysis of financial time series 
+
+  Maintainer: `milktrader <https://github.com/milktrader>`_
+
+  Dependencies::
+
+      Calendar       Any Version
+      DataFrames     Any Version
+      Stats          Any Version
+      TimeSeries     Any Version
+      UTF16          Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: milktrader
+        :target: https://github.com/milktrader
 
 ----
 
@@ -1950,39 +2184,6 @@ ______________________________________________
 
 ----
 
-`Oil <https://github.com/milktrader/Oil.jl>`_
-_____________________________________________
-
-  .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-     :height: 80px
-     :width: 80px
-     :align: right
-     :alt: milktrader
-     :target: https://github.com/milktrader
-
-  Current Version: ``0.0.0``
-
-  Technical analysis of financial time series 
-
-  Maintainer: `milktrader <https://github.com/milktrader>`_
-
-  Dependencies::
-
-      Calendar       Any Version
-      DataFrames     Any Version
-      Thyme          Any Version
-      UTF16          Any Version
-
-  Contributors:
-
-    .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: milktrader
-        :target: https://github.com/milktrader
-
-----
-
 `OpenGL <https://github.com/rennis250/OpenGL.jl>`_
 __________________________________________________
 
@@ -2087,17 +2288,17 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Tim Holy
-        :target: https://github.com/timholy
-
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
+
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
     .. image:: https://secure.gravatar.com/avatar/9f1a68b9e623be5da422b44e733fa8bc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -2177,7 +2378,7 @@ _________________________________________________________________
         :alt: toivoh
         :target: https://github.com/toivoh
 
-    .. image:: https://secure.gravatar.com/avatar/baa0794eff39982a6d08f34be8374b25?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: rened
@@ -2213,17 +2414,17 @@ __________________________________________________
         :alt: Tim Holy
         :target: https://github.com/timholy
 
+    .. image:: https://secure.gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: rened
+        :target: https://github.com/rened
+
     .. image:: https://secure.gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
-
-    .. image:: https://secure.gravatar.com/avatar/baa0794eff39982a6d08f34be8374b25?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: rened
-        :target: https://github.com/rened
 
 ----
 
@@ -2391,6 +2592,36 @@ ____________________________________________
 
 ----
 
+`Seq <https://github.com/dcjones/Seq.jl>`_
+__________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Daniel Jones
+     :target: https://github.com/dcjones
+
+  Current Version: ``0.0.0``
+
+  Lazy sequences. 
+
+  Maintainer: `Daniel Jones <https://github.com/dcjones>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Daniel Jones
+        :target: https://github.com/dcjones
+
+----
+
 `Sims <https://github.com/tshort/Sims.jl>`_
 ___________________________________________
 
@@ -2418,6 +2649,36 @@ ___________________________________________
         :width: 40px
         :alt: Tom Short
         :target: https://github.com/tshort
+
+----
+
+`Stats <https://github.com/JuliaStats/Stats.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: JuliaStats
+     :target: https://github.com/JuliaStats
+
+  Current Version: ``0.0.0``
+
+  Basic statistics for Julia 
+
+  Maintainer: `JuliaStats <https://github.com/JuliaStats>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
 
 ----
 
@@ -2518,8 +2779,8 @@ __________________________________________________________
 
 ----
 
-`Thyme <https://github.com/milktrader/Thyme.jl>`_
-_________________________________________________
+`TimeSeries <https://github.com/milktrader/TimeSeries.jl>`_
+___________________________________________________________
 
   .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
@@ -2530,7 +2791,7 @@ _________________________________________________
 
   Current Version: ``0.0.0``
 
-  Data transformations toolkit for time series data in Julia 
+  Time series toolkit for Julia 
 
   Maintainer: `milktrader <https://github.com/milktrader>`_
 
@@ -2538,6 +2799,7 @@ _________________________________________________
 
       Calendar       Any Version
       DataFrames     Any Version
+      Stats          Any Version
       UTF16          Any Version
 
   Contributors:
@@ -2585,17 +2847,17 @@ __________________________________________
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Mike Nolta
-        :target: https://github.com/nolta
-
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
+
+    .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Mike Nolta
+        :target: https://github.com/nolta
 
     .. image:: https://secure.gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -2780,6 +3042,18 @@ ________________________________________
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
+    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
+
+    .. image:: https://secure.gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: rened
+        :target: https://github.com/rened
+
 ----
 
 `kNN <https://github.com/johnmyleswhite/kNN.jl>`_
@@ -2812,5 +3086,5 @@ _________________________________________________
 
 ----
 
-.. footer: 75 packages, generated 6 Feb 2013 19:29:48 GMT 
+.. footer: 82 packages, generated 14 Feb 2013 00:02:42 GMT 
 
