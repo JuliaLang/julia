@@ -925,21 +925,38 @@ end
 
 ## Binary arithmetic operators ##
 
-for (f,t) in ((:+,Int), (:-,Int), (:./,Float64))
+for f in (:+, :-)
     @eval begin
         function ($f)(A::BitArray, B::BitArray)
             shp = promote_shape(size(A),size(B))
-            reshape(($t)[ ($f)(A[i], B[i]) for i=1:length(A) ], shp)
+            reshape(Int[ ($f)(A[i], B[i]) for i=1:length(A) ], shp)
+        end
+        function ($f)(B::BitArray, x::Bool)
+            reshape([ ($f)(B[i], x) for i = 1:length(B) ], size(B))
         end
         function ($f)(B::BitArray, x::Number)
-            pt = typeof(($f)(true, one(x)))
-            reshape(pt[ ($f)(B[i], x) for i = 1:length(B) ], size(B))
+            pt = promote_array_type(typeof(x), Bool)
+            reshape((pt)[ ($f)(B[i], x) for i = 1:length(B) ], size(B))
+        end
+        function ($f)(x::Bool, B::BitArray)
+            reshape([ ($f)(x, B[i]) for i = 1:length(B) ], size(B))
         end
         function ($f)(x::Number, B::BitArray)
-            pt = typeof(($f)(true, one(x)))
-            reshape(pt[ ($f)(x, B[i]) for i = 1:length(B) ], size(B))
+            pt = promote_array_type(typeof(x), Bool)
+            reshape((pt)[ ($f)(x, B[i]) for i = 1:length(B) ], size(B))
         end
     end
+end
+
+function (./)(A::BitArray, B::BitArray)
+    shp = promote_shape(size(A),size(B))
+    reshape([ A[i] ./ B[i] for i=1:length(A) ], shp)
+end
+function (./)(B::BitArray, x::Number)
+    reshape([ B[i] ./ x for i = 1:length(B) ], size(B))
+end
+function (./)(x::Number, B::BitArray)
+    reshape([ x ./ B[i] for i = 1:length(B) ], size(B))
 end
 
 for f in (:/, :\)
@@ -950,39 +967,72 @@ end
 (/)(B::BitArray, x::Number) = (/)(bitunpack(B), x)
 (/)(x::Number, B::BitArray) = (/)(x, bitunpack(B))
 
-# TODO: don't unpack
+function div(A::BitArray, B::BitArray)
+    shp = promote_shape(size(A), size(B))
+    all(B) || throw(DivideByZeroError())
+    return reshape(copy(A), shp)
+end
+div(A::BitArray, B::Array{Bool}) = div(A, bitpack(B))
+div(A::Array{Bool}, B::BitArray) = div(bitpack(A), B)
+function div(B::BitArray, x::Bool)
+    return x ? copy(B) : throw(DivideByZeroError())
+end
+function div(x::Bool, B::BitArray)
+    all(B) || throw(DivideByZeroError())
+    return x ? trues(size(B)) : falses(size(B))
+end
+function div(x::Number, B::BitArray)
+    all(B) || throw(DivideByZeroError)
+    pt = promote_array_type(typeof(x), Bool)
+    y = div(x, true)
+    reshape(pt[ y for i = 1:length(B) ], size(B))
+end
+
+function mod(A::BitArray, B::BitArray)
+    shp = promote_shape(size(A), size(B))
+    all(B) || throw(DivideByZeroError())
+    return falses(shp)
+end
+mod(A::BitArray, B::Array{Bool}) = mod(A, bitpack(B))
+mod(A::Array{Bool}, B::BitArray) = mod(bitpack(A), B)
+function mod(B::BitArray, x::Bool)
+    return x ? falses(size(B)) : throw(DivideByZeroError())
+end
+function mod(x::Bool, B::BitArray)
+    all(B) || throw(DivideByZeroError())
+    return falses(size(B))
+end
+function mod(x::Number, B::BitArray)
+    all(B) || throw(DivideByZeroError)
+    pt = promote_array_type(typeof(x), Bool)
+    y = mod(x, true)
+    reshape(pt[ y for i = 1:length(B) ], size(B))
+end
+
 for f in (:div, :mod)
     @eval begin
-        ($f)(A::BitArray, B::BitArray) = ($f)(bitunpack(A), bitunpack(B))
-        ($f)(B::BitArray, x::Number) = ($f)(bitunpack(B), x)
-        ($f)(x::Number, B::BitArray) = ($f)(x, bitunpack(B))
+        function ($f)(B::BitArray, x::Number)
+            F = Array(promote_array_type(typeof(x), Bool), size(B))
+            for i = 1:length(F)
+                F[i] = ($f)(B[i], x)
+            end
+            return F
+        end
     end
 end
 
 function (&)(B::BitArray, x::Bool)
-    if x
-        return copy(B)
-    else
-        return falses(size(B))
-    end
+    x ? copy(B) : falses(size(B))
 end
 (&)(x::Bool, B::BitArray) = B & x
 
 function (|)(B::BitArray, x::Bool)
-    if x
-        return trues(size(B))
-    else
-        return copy(B)
-    end
+    x ? trues(size(B)) : copy(B)
 end
 (|)(x::Bool, B::BitArray) = B | x
 
 function ($)(B::BitArray, x::Bool)
-    if x
-        return ~B
-    else
-        return copy(B)
-    end
+    x ? ~B : copy(B)
 end
 ($)(x::Bool, B::BitArray) = B $ x
 
@@ -1026,18 +1076,10 @@ end
 (.^)(A::Array{Bool}, B::BitArray) = (.^)(bitpack(A), B)
 (.^)(B::BitArray, A::Array{Bool}) = (.^)(B, bitpack(A))
 function (.^)(B::BitArray, x::Bool)
-    if x
-        return copy(B)
-    else
-        return trues(size(B))
-    end
+    x ? copy(B) : trues(size(B))
 end
 function (.^)(x::Bool, B::BitArray)
-    if x
-        return trues(size(B))
-    else
-        return ~B
-    end
+    x ? trues(size(B)) : ~B
 end
 function (.^){T<:Number}(x::T, B::BitArray)
     u = one(T)
@@ -1109,8 +1151,10 @@ end
 (.*)(A::BitArray, B::BitArray) = A & B
 (.*)(A::Array{Bool}, B::BitArray) = A & B
 (.*)(B::BitArray, A::Array{Bool}) = A & B
+(.*)(x::Bool, B::BitArray) = x & B
+(.*)(B::BitArray, x::Bool) = B & x
 (.*)(x::Number, B::BitArray) = x .* bitunpack(B)
-(.*)(B::BitArray, x::Number) = x .* B
+(.*)(B::BitArray, x::Number) = bitunpack(B) .* x
 
 for f in (:+, :-, :div, :mod, :./, :.^, :.*, :&, :|, :$)
     @eval begin
@@ -1951,35 +1995,7 @@ end
 
 # hvcat -> use fallbacks in abstractarray.jl
 
-## Reductions and scans ##
-
 isequal(A::BitArray, B::BitArray) = (A == B)
-
-function cumsum(v::BitVector)
-    n = length(v)
-    c = trues(n)
-    for i=1:n
-        if !v[i]
-            c[i] = false
-        else
-            break
-        end
-    end
-    return c
-end
-
-function cumprod(v::BitVector)
-    n = length(v)
-    c = falses(n)
-    for i=1:n
-        if v[i]
-            c[i] = true
-        else
-            break
-        end
-    end
-    return c
-end
 
 # Hashing
 

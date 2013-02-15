@@ -96,7 +96,7 @@ end
 
 function symdiff!(s::IntSet, ns)
    for n in ns
-       toggle!(s, n)
+       symdiff!(s, n)
    end
    return s
 end

@@ -252,11 +252,11 @@ _unit_gen_dict(utable[2:end])
 end
 
 # Rate units
-type Herz <: UnitBase end
+type Hertz <: UnitBase end
 let
   # Unit       RefUnit     ToRef        show      pshow     lshow   fshow
 const utable = {
-  (Herz,       Herz,        1,          "Hz",     "Hz",     "Hz",   "Herz")
+  (Hertz,      Hertz,      1,           "Hz",     "Hz",     "Hz",   "Hertz")
 }
 _unit_gen_func_multiplicative(utable)
 _unit_gen_dict_with_prefix(utable)

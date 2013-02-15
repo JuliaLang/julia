@@ -18,7 +18,7 @@ nil() = nil(Any)
 head(x::Cons) = x.head
 tail(x::Cons) = x.tail
 
-function show{T}(io, l::List{T})
+function show{T}(io::IO, l::List{T})
     if isa(l,Nil)
         if is(T,Any)
             print(io, "nil()")

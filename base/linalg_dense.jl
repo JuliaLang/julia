@@ -789,7 +789,7 @@ end
 
 function svdfact(A::StridedMatrix, B::StridedMatrix)
     U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', copy(A), copy(B))
-    return GSVDDense(U, V, Q, a, b, k, l, R)
+    return GSVDDense(U, V, Q, a, b, int(k), int(l), R)
 end
 
 svd(A::StridedMatrix, B::StridedMatrix) = factors(svdfact(A, B))
@@ -803,14 +803,17 @@ function factors{T}(obj::GSVDDense{T})
         D2 = [zeros(T, obj.l, obj.k) diagm(obj.b[obj.k + 1:obj.k + obj.l]); zeros(T, p - obj.l, obj.k + obj.l)]
         R0 = [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
     else
-        D1 = [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); diagm(a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
-        D2 = [zeros(T, p, obj.k) [diagm(b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
+        D1 = [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); diagm(obj.a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
+        D2 = [zeros(T, p, obj.k) [diagm(obj.b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
         R0 = [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
     end
     return obj.U, obj.V, obj.Q, D1, D2, R0
 end
 
-svdvals(A::StridedMatrix, B::StridedMatrix) = LAPACK.ggsvd!('N', 'N', 'N', copy(A), copy(B))[4:5]
+function svdvals(A::StridedMatrix, B::StridedMatrix)
+    _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', copy(A), copy(B))
+    return a[1:k + l] ./ b[1:k + l]
+end
 
 schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 

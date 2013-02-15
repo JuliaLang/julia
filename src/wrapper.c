@@ -245,9 +245,11 @@ DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only,
 
 DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
-    if (handle) uv_close(handle,&closeHandle);
+    if (!handle)
+       return;
     if (handle->type==UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
+    uv_close(handle,&closeHandle);
 }
 
 DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data)

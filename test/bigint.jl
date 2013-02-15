@@ -21,7 +21,6 @@ d = BigInt("-246913578024691357802469135780")
 @test typeof(d) == BigInt
 @test d == -c
 
-
 ee = typemax(Int64)
 @test typeof(BigInt(ee)) == BigInt
 @test BigInt(ee)+1 == BigInt("9223372036854775808")
@@ -33,14 +32,31 @@ ee = typemax(Int64)
 @test string(d) == "-246913578024691357802469135780"
 @test string(a) == "123456789012345678901234567890"
 
-@test div(BigInt(3), BigInt(2)) == BigInt(1)
-@test rem(BigInt(3), BigInt(2)) == BigInt(1)
+for i = -10:10, j = [-10:-1,1:10]
+    @test div(BigInt(i), BigInt(j)) == div(i,j)
+    @test fld(BigInt(i), BigInt(j)) == fld(i,j)
+    @test mod(BigInt(i), BigInt(j)) == mod(i,j)
+    @test rem(BigInt(i), BigInt(j)) == rem(i,j)
+end
 
 @test a+int(1) == b
 @test a+int8(1) == b
 @test a+int16(1) == b
 @test a+int32(1) == b
 @test a+int64(1) == b
+
+@test BigInt(5) << 3 == 40
+@test BigInt(5) >> 1 == 2
+@test BigInt(-5) << 3 == -40
+@test BigInt(-5) >> 1 == -3
+
+@test ~BigInt(123) == -124
+@test BigInt(123) & BigInt(234) == 106
+@test BigInt(123) | BigInt(234) == 251
+@test BigInt(123) $ BigInt(234) == 145
+
+@test gcd(BigInt(48), BigInt(180)) == 12
+@test lcm(BigInt(48), BigInt(180)) == 720
 
 @test factorial(BigInt(40)) == BigInt("815915283247897734345611269596115894272000000000")
 @test binomial(BigInt(-53), 42) == BigInt("959509335087854414441273718")

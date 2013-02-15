@@ -333,7 +333,7 @@ endif
 readline-$(READLINE_VER)/config.status: readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
 	chmod a+x ./configure && \
-	./configure $(CONFIGURE_COMMON) $(READLINE_OPTS)a
+	./configure $(CONFIGURE_COMMON) $(READLINE_OPTS)
 	touch -c $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/config.status
 	cd readline-$(READLINE_VER) && \
@@ -830,7 +830,7 @@ else
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libarpack.so* ; do \
-		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 endif
@@ -904,7 +904,7 @@ else ifeq ($(OS),WINNT)
 	mv $(BUILD)/bin/libfftw3f-3.dll $(BUILD)/lib/libfftw3f.dll
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libfftw3f_threads.so* ; do \
-		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -942,7 +942,7 @@ else ifeq ($(OS),WINNT)
 	mv $(BUILD)/bin/libfftw3-3.dll $(BUILD)/lib/libfftw3.dll
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libfftw3_threads.so* ; do \
-		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
