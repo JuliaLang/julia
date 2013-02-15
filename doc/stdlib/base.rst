@@ -12,7 +12,7 @@ Getting Around
    Print information about global variables in a module, optionally restricted
    to those matching ``pattern``.
 
-.. function:: edit("file", [line])
+.. function:: edit(file, [line])
 
    Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor. If the file name ends in ".jl" it is reloaded when the editor closes the file.
 
@@ -20,25 +20,27 @@ Getting Around
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit. When the editor exits, the source file containing the definition is reloaded.
 
-.. function:: require("file")
+.. function:: require(file::String...)
 
-   Evaluate the contents of a source file
+   Evaluate the contents of a source file.
+   
+   **Note**: :func:`load` is now deprecated in favor of :func:`require`.
 
-.. function:: help("name" or object)
+.. function:: help(name::String or object)
 
    Get help for a function
 
-.. function:: apropos("string")
+.. function:: apropos(substring::String)
 
    Search help for a substring
 
 .. function:: which(f, args...)
 
-   Show which method of ``f`` will be called for the given arguments
+   Show which method of ``f`` will be called for the given arguments.
 
 .. function:: methods(f)
 
-   Show all methods of ``f`` with their argument types
+   Show all methods of ``f`` with their argument types.
 
 All Objects
 -----------
@@ -149,9 +151,11 @@ Types
 Generic Functions
 -----------------
 
-.. function:: method_exists(f, tuple)
+.. function:: method_exists(f, tuple) -> Bool
 
    Determine whether the given generic function has a method matching the given tuple of argument types.
+   
+   **Example**: ``method_exists(length, (Array,)) = true``
 
 .. function:: applicable(f, args...)
 
@@ -187,11 +191,11 @@ is translated to::
 
 The ``state`` object may be anything, and should be chosen appropriately for each iterable type.
 
-.. function:: start(iter)
+.. function:: start(iter) -> state
 
    Get initial iteration state for an iterable object
 
-.. function:: done(iter, state)
+.. function:: done(iter, state) -> Bool
 
    Test whether we are done iterating
 
@@ -211,11 +215,15 @@ Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, `
 General Collections
 -------------------
 
-.. function:: isempty(collection)
+.. function:: isempty(collection) -> Bool
 
    Determine whether a collection is empty (has no elements).
 
-.. function:: length(collection)
+.. function:: empty!(collection) -> collection
+   
+   Remove all elements from a collection.
+
+.. function:: length(collection) -> Integer
 
    For ordered, indexable collections, the maximum index ``i`` for which ``ref(collection, i)`` is valid. For unordered collections, the number of elements.
 
@@ -230,7 +238,7 @@ Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractAr
 Iterable Collections
 --------------------
 
-.. function:: contains(itr, x)
+.. function:: contains(iterable, x) -> Bool
 
    Determine whether a collection contains the given value, ``x``.
 
@@ -242,61 +250,73 @@ Iterable Collections
 
    Returns an array containing only the unique elements of the iterable ``itr``.
 
-.. function:: reduce(op, v0, itr)
+.. function:: reduce(op, v0, iterable{Type})
 
    Reduce the given collection with the given operator, i.e. accumulate ``v = op(v,elt)`` for each element, where ``v`` starts as ``v0``. Reductions for certain commonly-used operators are available in a more convenient 1-argument form: ``max(itr)``, ``min(itr)``, ``sum(itr)``, ``prod(itr)``, ``any(itr)``, ``all(itr)``.
 
-.. function:: max(itr)
+.. function:: max(iterable{Type}) -> element::Type
 
    Determine maximum element in a collection
 
-.. function:: min(itr)
+.. function:: min(iterable{Type}) -> element::Type
 
    Determine minimum element in a collection
 
-.. function:: indmax(itr)
+.. function:: indmax(iterable) -> Integer
 
    Returns the index of the maximum element in a collection
 
-.. function:: indmin(itr)
+.. function:: indmin(iterable) -> Integer
 
    Returns the index of the minimum element in a collection
 
-.. function:: findmax(iter)
+.. function:: findmax(iterable{Type}) -> (element::Type, index::Int)
 
    Returns a tuple of the maximum element and its index
 
-.. function:: findmin(iter)
+.. function:: findmin(iterable{Type}) -> (element::Type, index::Int)
 
    Returns a tuple of the minimum element and its index
 
-.. function:: sum(itr)
+.. function:: sum(iterable{Type}) -> sum::Type
 
    Sum elements of a collection
 
-.. function:: prod(itr)
+.. function:: prod(iterable{Type}) -> prod::Type
 
    Multiply elements of a collection
 
-.. function:: any(itr)
+.. function:: any(iterable{Type}) -> Bool
 
    Test whether any elements of a boolean collection are true
 
-.. function:: all(itr)
+.. function:: all(iterable{Type}) -> Bool
 
    Test whether all elements of a boolean collection are true
 
-.. function:: any(p, itr)
+.. function:: count(iterable) -> Integer
+
+   Count the number of boolean elements in ``itr`` which are ``true`` rather than ``false``.
+
+.. function:: countp(p, iterable) -> Integer
+
+   Count the number of elements in ``itr`` for which predicate ``p`` is true.
+
+.. function:: anyp(p, iterable) -> Bool
+              any(p, itr)
 
    Determine whether any element of ``itr`` satisfies the given predicate.
 
-.. function:: all(p, itr)
+.. function:: allp(p, iterable) -> Bool
+              all(p, itr)
 
    Determine whether all elements of ``itr`` satisfy the given predicate.
 
-.. function:: map(f, c)
+.. function:: map(f, c) -> collection
 
    Transform collection ``c`` by applying ``f`` to each element.
+   
+   **Example**: ``map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]``
 
 .. function:: map!(function, collection)
 
@@ -420,6 +440,8 @@ Set-Like Collections
 
    Construct an ``IntSet`` of the given integers. Implemented as a bit string, and therefore good for dense integer sets.
 
+.. function:: choose(s::Set{Type}) -> element::Type
+
 .. function:: union(s1,s2...)
 
    Construct the union of two or more sets. Maintains order with arrays.
@@ -475,27 +497,27 @@ Partially implemented by: ``Array``.
 Dequeues
 --------
 
-.. function:: push!(collection, item)
+.. function:: push!(collection, item) -> collection
 
    Insert an item at the end of a collection.
 
-.. function:: pop!(collection)
+.. function:: pop!(collection{Type}) -> item::Type
 
    Remove the last item in a collection and return it.
 
-.. function:: unshift!(collection, item)
-
+.. function:: unshift!(collection, item) -> collection
+   
    Insert an item at the beginning of a collection.
 
-.. function:: shift!(collection)
+.. function:: shift!(collection{Type}) -> item::Type
 
-   Remove the first item in a collection and return it.
+   Remove the first item in a collection.
 
 .. function:: insert!(collection, index, item)
 
    Insert an item at the given index.
 
-.. function:: delete!(collection, index)
+.. function:: delete!(collection{Type}, index) -> item_at_index::Type
 
    Remove the item at the given index.
 
@@ -507,7 +529,7 @@ Dequeues
 
    Resize collection to contain ``n`` elements.
 
-.. function:: append!(collection, items)
+.. function:: append!(collection, items) -> collection
 
    Add the elements of ``items`` to the end of a collection.
 
@@ -527,6 +549,8 @@ Strings
 .. function:: *, string(strs...)
 
    Concatenate strings.
+   
+   **Note**: The ``*`` operator can also be used to concatenate strings (eg. ``"Hello " * "world" == "Hello world"``).
 
 .. function:: ^
 
@@ -711,11 +735,11 @@ I/O
 
    Global variable referring to the standard input stream.
 
-.. function:: open(file_name, [read, write, create, truncate, append])
+.. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
-.. function:: open(file_name, [mode])
+.. function:: open(file_name, [mode]) -> IOStream
 
    Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
 
@@ -728,17 +752,23 @@ I/O
     a+   read, write, create, append
    ==== =================================
 
+
+.. function:: open(file_name) -> IOStream
+   
+   Open a file in read mode.
+
 .. function:: open(f::function, args...)
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
 
    **Example**: ``open(readall, "file.txt")``
 
-.. function:: IOBuffer([size])
+.. function:: memio([size[, finalize::Bool]]) -> IOStream
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
-.. function:: fdio(descriptor, [own])
+.. function:: fdio(name[, fd::Integer[, own::Bool]]) -> IOStream
+              fdio(name[, own::Bool]) -> IOStream
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected.
 
@@ -795,7 +825,7 @@ Text I/O
 
 .. function:: println(x)
 
-   Print (using ``print``) ``x`` followed by a newline
+   Print (using :func:`print`) ``x`` followed by a newline
 
 .. function:: showall(x)
 
@@ -824,6 +854,8 @@ Text I/O
 .. function:: each_line(stream)
 
    Create an iterable object that will yield each line from a stream.
+
+.. function:: each_search(string, pattern)
 
 .. function:: readdlm(filename, delim::Char)
 
@@ -856,7 +888,7 @@ Memory-mapped I/O
 
    The file is specified via the stream.  When you initialize the stream, use "r" for a "read-only" array, and "w+" to create a new array used to write values to disk. Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file.
 
-   Example:  A = mmap_array(Int64, (25,30000), s)
+   **Example**:  A = mmap_array(Int64, (25,30000), s)
 
    This would create a 25-by-30000 array of Int64s, linked to the file associated with stream s.
 
@@ -905,10 +937,7 @@ Mathematical Functions
    Modulus after division, returning in the range [0,m)
 
 .. function:: rem
-
-   Remainder after division
-
-.. function:: %
+              %
 
    Remainder after division
 
@@ -1640,11 +1669,11 @@ Data Formats
 
    Convert real numbers or arrays to complex
 
-.. function:: iscomplex(x)
+.. function:: iscomplex(x) -> Bool
 
    Test whether a number or array is of a complex type
 
-.. function:: isreal(x)
+.. function:: isreal(x) -> Bool
 
    Test whether a number or array is of a real type
 
@@ -1675,11 +1704,11 @@ Numbers
 
    The constant pi
 
-.. function:: isdenormal(f)
+.. function:: isdenormal(f) -> Bool
 
    Test whether a floating point number is denormal
 
-.. function:: isfinite(f)
+.. function:: isfinite(f) -> Bool
 
    Test whether a number is finite
 
@@ -1703,7 +1732,7 @@ Numbers
 
    Get the next floating point number in lexicographic order
 
-.. function:: prevfloat(f)
+.. function:: prevfloat(f) -> Float
 
    Get the previous floating point number in lexicographic order
 
@@ -1775,20 +1804,21 @@ Integers
 .. function:: isprime(x::Integer) -> Bool
 
    Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
+   
+   **Example**: ``isprime(3) -> true``
 
-  **Example**: ``isprime(3) -> true``
-
-.. function: isodd(x::Integer) -> Bool
+.. function:: isodd(x::Integer) -> Bool
 
    Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
-
+   
    **Example**: ``isodd(9) -> false``
 
-.. function: iseven(x::Integer) -> Bool
+.. function:: iseven(x::Integer) -> Bool
 
    Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
-
+   
    **Example**: ``iseven(1) -> false``
+
 
 Random Numbers
 --------------
@@ -1845,7 +1875,7 @@ Arrays
 Basic functions
 ~~~~~~~~~~~~~~~
 
-.. function:: ndims(A)
+.. function:: ndims(A) -> Integer
 
    Returns the number of dimensions of A
 
@@ -1857,7 +1887,7 @@ Basic functions
 
    Returns the type of the elements contained in A
 
-.. function:: length(A)
+.. function:: length(A) -> Integer
 
    Returns the number of elements in A (note that this differs from MATLAB where ``length(A)`` is the largest dimension of ``A``)
 
@@ -2033,13 +2063,13 @@ Indexing, Assignment, and Concatenation
 
 .. function:: ipermutedims(A,perm)
 
-   Like ``permutedims``, except the inverse of the given permutation is applied.
+   Like :func:`permutedims`, except the inverse of the given permutation is applied.
 
 .. function:: squeeze(A, dims)
 
    Remove the dimensions specified by ``dims`` from array ``A``
 
-.. function:: vec(A)
+.. function:: vec(Array) -> Vector
 
    Vectorize an array using column-major convention.
 
@@ -2355,7 +2385,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: null(M)
 
-   Basis for null space of M
+   Basis for null space of M.
 
 .. function:: repmat(A, n, m)
 
@@ -2371,7 +2401,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: linreg(x, y, w)
 
-   Weighted least-squares linear regression
+   Weighted least-squares linear regression.
 
 .. function:: expm(A)
 
@@ -2410,23 +2440,23 @@ Combinatorics
 
 .. function:: nthperm(v, k)
 
-   Compute the kth lexicographic permutation of a vector
+   Compute the kth lexicographic permutation of a vector.
 
 .. function:: nthperm!(v, k)
 
-   In-place version of ``nthperm``
+   In-place version of :func:`nthperm`.
 
 .. function:: randperm(n)
 
-   Construct a random permutation of the given length
+   Construct a random permutation of the given length.
 
-.. function:: invperm(v)
+.. function:: invperm(v) -> Bool
 
-   Return the inverse permtation of v
+   Return the inverse permutation of v.
 
-.. function:: isperm(v)
+.. function:: isperm(v) -> Bool
 
-   Returns true if v is a valid permutation
+   Returns true if v is a valid permutation.
 
 .. function:: permute!(v, p)
 
@@ -2442,23 +2472,23 @@ Combinatorics
 
 .. function:: randcycle(n)
 
-   Construct a random cyclic permutation of the given length
+   Construct a random cyclic permutation of the given length.
 
-.. function:: shuffle(v)
+.. function:: shuffle(v) -> Vector
 
-   Randomly rearrange the elements of a vector
+   Randomly rearrange the elements of a vector.
 
-.. function:: shuffle!(v)
+.. function:: shuffle!(v) -> v
 
-   In-place version of ``shuffle``
+   In-place version of :func:`shuffle`.
 
-.. function:: reverse(v)
+.. function:: reverse(v) -> Vector
 
-   Reverse vector ``v``
+   Reverse vector ``v``.
 
-.. function:: reverse!(v)
+.. function:: reverse!(v) -> v
 
-   Reverse vector ``v`` in-place
+   In-place version of :func:`reverse`.
 
 .. function:: combinations(array, n)
 
@@ -2907,19 +2937,19 @@ System
 
    **Example**: ``run((`ls` > "out.log") .> "err.log")``
 
-.. function:: gethostname()
+.. function:: gethostname() -> String
 
    Get the local machine's host name.
 
-.. function:: getipaddr()
+.. function:: getipaddr() -> String
 
    Get the IP address of the local machine, as a string of the form "x.x.x.x".
 
-.. function:: pwd()
+.. function:: pwd() -> String
 
    Get the current working directory.
 
-.. function:: cd("dir")
+.. function:: cd(dir::String)
 
    Set the current working directory. Returns the new current directory.
 
@@ -2936,7 +2966,7 @@ System
 
    Remove the directory named ``path``.
 
-.. function:: getpid()
+.. function:: getpid() -> Int32
 
    Get julia's process ID.
 
@@ -2950,21 +2980,25 @@ System
 
 .. function:: tic()
 
-   Set a timer to be read by the next call to ``toc`` or ``toq``. The macro call ``@time expr`` can also be used to time evaluation.
+   Set a timer to be read by the next call to :func:`toc` or :func:`toq`. The macro call ``@time expr`` can also be used to time evaluation.
 
 .. function:: toc()
 
-   Print and return the time elapsed since the last ``tic``
+   Print and return the time elapsed since the last :func:`tic`.
 
 .. function:: toq()
 
-   Return, but do not print, the time elapsed since the last ``tic``
+   Return, but do not print, the time elapsed since the last :func:`tic`.
 
-.. function:: EnvHash()
+.. function:: EnvHash() -> EnvHash
 
-   A singleton of this type, ``ENV``, provides a hash table interface to environment variables.
+   A singleton of this type provides a hash table interface to environment variables.
 
-.. function:: dlopen(libfile)
+.. data:: ENV
+
+   Reference to the singleton ``EnvHash``.
+
+.. function:: dlopen(libfile::String)
 
    Load a shared library, returning an opaque handle
 
@@ -2975,7 +3009,8 @@ System
 Errors
 ------
 
-.. function:: error(message)
+.. function:: error(message::String)
+              error(Any{Exception})
 
    Raise an error with the given message
 
