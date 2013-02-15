@@ -78,7 +78,7 @@ include("inference.jl")
 
 # I/O, strings & printing
 include("io.jl")
-include("iostring.jl")
+include("iobuffer.jl")
 include("stream.jl")
 include("socket.jl")
 include("fs.jl")
