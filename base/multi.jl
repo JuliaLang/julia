@@ -646,7 +646,7 @@ function perform_work(job::WorkItem)
         end
     catch err
         print("exception on ", myid(), ": ")
-        show(add_backtrace(err,backtrace()))
+        display_error(err,backtrace())
         println()
         result = err
     end
@@ -1369,12 +1369,12 @@ function event_loop(isclient)
     global work_cb = SingleAsyncWork(eventloop(), _jl_work_cb)
     global fgcm_cb = SingleAsyncWork(eventloop(), (args...)->flush_gc_msgs());
     queueAsync(work_cb::SingleAsyncWork)
-    iserr, lasterr = false, ()
+    iserr, lasterr, bt = false, nothing, {}
     while true
         try
             if iserr
-                show(lasterr)
-                iserr, lasterr = false, ()
+                display_error(lasterr, bt)
+                iserr, lasterr, bt = false, nothing, {}
             else
                 run_event_loop()
             end
@@ -1390,7 +1390,7 @@ function event_loop(isclient)
                 # to interrupt.
                 interrupt_waiting_task(roottask_wi,err)
             end
-            iserr, lasterr = true, add_backtrace(err,bt)
+            iserr, lasterr = true, err
         end
     end
 end

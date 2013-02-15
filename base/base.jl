@@ -64,14 +64,7 @@ type MethodError <: Exception
     args
 end
 
-type BackTrace <: Exception
-    e
-    trace::Array{Any,1}
-end
-
 type EOFError <: Exception end
-
-show(io::IO, bt::BackTrace) = show(io,bt.e)
 
 type WeakRef
     value
