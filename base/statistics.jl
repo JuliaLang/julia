@@ -156,7 +156,7 @@ function center(x::AbstractVector)
 end
 
 function cov(x::AbstractVecOrMat, y::AbstractVecOrMat, corrected::Bool)
-    if size(x) != size(y)
+    if size(x, 1) != size(y, 1)
         error("incompatible matrices")
     end
     n = size(x, 1)
@@ -164,18 +164,23 @@ function cov(x::AbstractVecOrMat, y::AbstractVecOrMat, corrected::Bool)
     yc = center(y)
     conj(xc' * yc / (n - (corrected ? 1 : 0)))
 end
+cov(x::AbstractVector, y::AbstractVector, corrected::Bool) = cov(x'', y, corrected)[1]
 
 function cov(x::AbstractVecOrMat, corrected::Bool)
     n = size(x, 1)
     xc = center(x)
     conj(xc' * xc / (n - (corrected ? 1 : 0)))
 end
+cov(x::AbstractVector, corrected::Bool) = cov(x'', corrected)[1]
 
 function cor(x::AbstractVecOrMat, y::AbstractVecOrMat, corrected::Bool)
     z = cov(x, y, corrected)
     scale = Base.amap(std, x, 2) * Base.amap(std, y, 2)'
     z ./ scale
 end
+cor(x::AbstractVector, y::AbstractVector, corrected::Bool) =
+    cov(x, y, corrected) / std(x) / std(y)
+    
 
 function cor(x::AbstractVecOrMat, corrected::Bool)
     res = cov(x, corrected)
@@ -190,6 +195,7 @@ function cor(x::AbstractVecOrMat, corrected::Bool)
     end
     res 
 end
+cor(x::AbstractVector, corrected::Bool) = cor(x'', corrected)[1]
 
 cov(x::AbstractVecOrMat) = cov(x, true)
 cov(x::AbstractVecOrMat, y::AbstractVecOrMat) = cov(x, y, true)
