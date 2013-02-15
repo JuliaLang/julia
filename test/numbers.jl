@@ -619,6 +619,27 @@ end
 
 @test typemax(Uint64) != 2.0^64
 
+@test float64(int128(0)) == 0.0
+@test float32(int128(0)) == 0.0f0
+@test float64(int128(-1)) == -1.0
+@test float32(int128(-1)) == -1.0f0
+@test float64(int128(3)) == 3.0
+@test float32(int128(3)) == 3.0f0
+@test float64(uint128(10121)) == 10121.0
+@test float32(uint128(10121)) == 10121.0f0
+@test float64(typemin(Int128)) == -2.0^127
+@test float32(typemin(Int128)) == -2.0f0^127
+@test float64(typemax(Int128)) == 2.0^127
+@test float32(typemax(Int128)) == 2.0f0^127
+@test float64(typemin(Uint128)) == 0.0
+@test float32(typemin(Uint128)) == 0.0f0
+@test float64(typemax(Uint128)) == 2.0^128
+@test float32(typemax(Uint128)) == 2.0f0^128
+
+@test int128(-2.0^127) == typemin(Int128)
+@test float64(uint128(3.7e19)) == 3.7e19
+@test float64(uint128(3.7e30)) == 3.7e30
+
 @test !(NaN <= 1)
 @test !(NaN >= 1)
 @test !(NaN < 1)
