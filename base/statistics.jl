@@ -132,58 +132,70 @@ end
 
 ## pearson covariance functions ##
 
-function cov(x::AbstractVector, y::AbstractVector, corrected::Bool)
-    n = length(x)
-    if n != length(y); error("vectors must have same length"); end
-    meanx = x[1]
-    meany = y[1]
-    C = zero(float(x[1]))
-    for i = 2:n
-        meanx += (x[i] - meanx) / i
-        C += (x[i] - meanx)*(y[i] - meany)
-        if i < n; meany += (y[i] - meany) / i; end
-    end
-    return C / (n - (corrected ? 1 : 0))
-end
-cov(X::AbstractMatrix, Y::AbstractMatrix, corrected::Bool) = [cov(X[:,i], Y[:,j], corrected) for i = 1:size(X, 2), j = 1:size(Y,2)]
-cov(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = [cov(x, Y[:,i], corrected) for i = 1:size(Y, 2)]
-cov(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = [cov(X[:,i], y, corrected) for i = 1:size(X, 2)]
-function cov(X::AbstractMatrix, corrected::Bool)
-    n = size(X, 2)
-    C = Array(typeof(float(X[1])), n, n)
-    for i = 1:n
-        for j = i:n
-            if i == j
-                C[i,i] = var(X[:,i], corrected)
-            else
-                C[i,j] = cov(X[:,i], X[:,j], corrected)
-                C[j,i] = C[i,j]
-            end
+typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
+
+function center(x::AbstractMatrix)
+    m,n = size(x)
+    res = Array(promote_type(eltype(x),Float64), size(x))
+    for j in 1:n
+        colmean = mean(x[:,j])
+        for i in 1:m
+            res[i,j] = x[i,j] - colmean 
         end
     end
-    return C
-end
-cov(x) = cov(x, true)
-cov(x, y) = cov(x, y, true)
-
-## pearson correlation functions ##
-
-# pearson correlation between two vectors
-cor(x::AbstractVector, y::AbstractVector, corrected::Bool) = cov(x, y, corrected) / (std(x, corrected)*std(y, corrected))
-
-# pearson correlation over all pairs of columns of two matrices
-cor(X::AbstractMatrix, Y::AbstractMatrix, corrected::Bool) = [cor(X[:,i], Y[:,j], corrected) for i = 1:size(X, 2), j = 1:size(Y,2)]
-cor(x::AbstractVector, Y::AbstractMatrix, corrected::Bool) = [cor(x, Y[:,i], corrected) for i = 1:size(Y, 2)]
-cor(X::AbstractMatrix, y::AbstractVector, corrected::Bool) = [cor(X[:,i], y, corrected) for i = 1:size(X, 2)]
-
-# pearson correlation over all pairs of columns of a matrix
-function cor(X::AbstractMatrix, corrected::Bool) 
-    vsd = amap(x -> std(x, corrected), X, 2)
-    return cov(X, corrected) ./ (vsd*vsd')
+    res
 end
 
-cor(x) = cor(x, true)
-cor(x, y) = cor(x, y, true)
+function center(x::AbstractVector)
+    colmean = mean(x)
+    res = Array(promote_type(eltype(x),Float64), size(x))
+    for i in 1:length(x)
+        res[i] = x[i] - colmean 
+    end
+    res
+end
+
+function cov(x::AbstractVecOrMat, y::AbstractVecOrMat, corrected::Bool)
+    if size(x) != size(y)
+        error("incompatible matrices")
+    end
+    n = size(x, 1)
+    xc = center(x)
+    yc = center(y)
+    conj(xc' * yc / (n - (corrected ? 1 : 0)))
+end
+
+function cov(x::AbstractVecOrMat, corrected::Bool)
+    n = size(x, 1)
+    xc = center(x)
+    conj(xc' * xc / (n - (corrected ? 1 : 0)))
+end
+
+function cor(x::AbstractVecOrMat, y::AbstractVecOrMat, corrected::Bool)
+    z = cov(x, y, corrected)
+    scale = Base.amap(std, x, 2) * Base.amap(std, y, 2)'
+    z ./ scale
+end
+
+function cor(x::AbstractVecOrMat, corrected::Bool)
+    res = cov(x, corrected)
+    n = size(res, 1)
+    scale = 1 / sqrt(diag(res))
+    for j in 1:n
+        for i in 1 : j - 1
+            res[i,j] *= scale[i] * scale[j] 
+            res[j,i] = res[i,j]
+        end
+        res[j,j] = 1.0
+    end
+    res 
+end
+
+cov(x::AbstractVecOrMat) = cov(x, true)
+cov(x::AbstractVecOrMat, y::AbstractVecOrMat) = cov(x, y, true)
+cor(x::AbstractVecOrMat) = cor(x, true)
+cor(x::AbstractVecOrMat, y::AbstractVecOrMat) = cor(x, y, true)
+
 
 ## quantiles ##
 
