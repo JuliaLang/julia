@@ -34,11 +34,15 @@ extern char *julia_home;
 char *jl_lookup_soname(char *pfx, size_t n);
 #endif
 
-int jl_uv_dlopen(const char* filename, uv_lib_t* lib)
+int jl_uv_dlopen(const char* filename, uv_lib_t* lib, int global)
 {
-#ifdef RTLD_DEEPBIND
+#if defined(RTLD_GLOBAL) && defined(RTLD_LOCAL)
     dlerror(); /* Reset error status. */
-    lib->handle = dlopen(filename, RTLD_LAZY|RTLD_DEEPBIND);
+    lib->handle = dlopen(filename, RTLD_LAZY
+#  ifdef RTLD_DEEPBIND
+                         | RTLD_DEEPBIND
+#  endif
+                         | (global ? RTLD_GLOBAL : RTLD_LOCAL));
     if (lib->handle) {
         lib->errmsg = NULL;
         return 0;
@@ -51,7 +55,10 @@ int jl_uv_dlopen(const char* filename, uv_lib_t* lib)
 #endif
 }
 
-uv_lib_t *jl_load_dynamic_library(char *modname)
+/* load the dynamic library modname.  If global is true, try to
+   load into the global namespace, so that the libraries symbols
+   are available for resolution by subsequent library loads */
+uv_lib_t *jl_load_dynamic_library(char *modname, int global)
 {
     int error;
     char *ext;
@@ -76,7 +83,7 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
 #else
     else if (modname[0] == '/') {
 #endif
-        error = jl_uv_dlopen(modname,handle);
+        error = jl_uv_dlopen(modname,handle,global);
         if (!error) goto done;
     }
 
@@ -86,12 +93,12 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
         handle->handle = NULL;
         /* try loading from standard library path */
         snprintf(path, PATHBUF, "%s%s", modname, ext);
-        error = jl_uv_dlopen(path, handle);
+        error = jl_uv_dlopen(path, handle, global);
         if (!error) goto done;
     }
 #if defined(__linux__)
     char *soname = jl_lookup_soname(modname, strlen(modname));
-    error = (soname==NULL) || jl_uv_dlopen(soname, handle);
+    error = (soname==NULL) || jl_uv_dlopen(soname, handle, global);
     if (!error) goto done;
 #endif
 

@@ -3007,9 +3007,16 @@ C Interface
 
    Load a shared library, returning an opaque handle.
 
+   Optionally, one can pass a second argument via
+   ``dlopen(libfile::String, isglobal::Bool)``, which specifies whether
+   the libraries symbols are to be made available globally to other
+   shared libraries, corresponding to the ``RTLD_GLOBAL`` flag on Unix
+   systems.
+
 .. function:: dlsym(handle, sym)
 
-   Look up a symbol from a shared library handle, return callable function pointer on success.
+   Look up a symbol from a shared library handle, return callable
+   function pointer (via :func:`ccall`) on success.
 
 .. function:: dlsym_e(handle, sym)
    
