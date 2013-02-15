@@ -996,6 +996,7 @@ export
     remote_call_wait,
     remote_do,
     take,
+    take_noblock,
     wait,
 
 # distributed arrays
