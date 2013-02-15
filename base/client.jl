@@ -81,7 +81,8 @@ function eval_user_input(ast::ANY, show_value)
                     else
                         try repl_show(value)
                         catch err
-                            throw(ShowError(value,err))
+                            println("Error showing value of type ", typeof(value), ":")
+                            rethrow(err)
                         end
                     end
                     println()
