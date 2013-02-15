@@ -123,8 +123,14 @@ convert(::Type{Int128}, x::Uint32 ) = box(Int128,zext_int(Uint128,unbox(Uint32,x
 convert(::Type{Int128}, x::Int64  ) = box(Int128,sext_int(Int128,unbox(Int64,x)))
 convert(::Type{Int128}, x::Uint64 ) = box(Int128,zext_int(Uint128,unbox(Uint64,x)))
 convert(::Type{Int128}, x::Uint128) = box(Int128,unbox(Uint128,x))
-# TODO: convert(::Type{Int128}, x::Float32)
-# TODO: convert(::Type{Int128}, x::Float64)
+function convert(::Type{Int128}, x::Float64)
+    ax = abs(x)
+    top = trunc(ldexp(ax,-64))
+    bot = ax - ldexp(top,64)
+    n = int128(convert(Uint64,top))<<64 + int128(convert(Uint64,bot))
+    return x<0 ? -n : n
+end
+convert(::Type{Int128}, x::Float32) = convert(Int128, float64(x))
 
 convert(::Type{Uint128}, x::Bool   ) = box(Uint128,zext_int(Int128,unbox(Bool,x)))
 convert(::Type{Uint128}, x::Int8   ) = box(Uint128,sext_int(Int128,unbox(Int8,x)))
@@ -137,8 +143,14 @@ convert(::Type{Uint128}, x::Uint32 ) = box(Uint128,zext_int(Uint128,unbox(Uint32
 convert(::Type{Uint128}, x::Int64  ) = box(Uint128,sext_int(Int128,unbox(Int64,x)))
 convert(::Type{Uint128}, x::Uint64 ) = box(Uint128,zext_int(Uint128,unbox(Uint64,x)))
 convert(::Type{Uint128}, x::Int128 ) = box(Uint128,unbox(Int128,x))
-# TODO: convert(::Type{Uint128}, x::Float32)
-# TODO: convert(::Type{Uint128}, x::Float64)
+function convert(::Type{Uint128}, x::Float64)
+    ax = abs(x)
+    top = trunc(ldexp(ax,-64))
+    bot = ax - ldexp(top,64)
+    n = uint128(convert(Uint64,top))<<64 + uint128(convert(Uint64,bot))
+    return x<0 ? -n : n
+end
+convert(::Type{Uint128}, x::Float32) = convert(Uint128, float64(x))
 
 convert(::Type{Signed}, x::Uint8  ) = convert(Int,x)
 convert(::Type{Signed}, x::Uint16 ) = convert(Int,x)
