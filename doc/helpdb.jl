@@ -230,7 +230,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"edit",E"edit(\"file\"[, line])
+(E"Getting Around",E"Base",E"edit",E"edit(file::String[, line])
 
    Edit a file optionally providing a line number to edit at. Returns
    to the julia prompt when you quit the editor. If the file name ends
@@ -246,33 +246,33 @@
 
 "),
 
-(E"Getting Around",E"Base",E"require",E"require(\"file\")
+(E"Getting Around",E"Base",E"require",E"require(file::String...)
 
-   Evaluate the contents of a source file
-
-"),
-
-(E"Getting Around",E"Base",E"help",E"help(\"name\" or object)
-
-   Get help for a function
+   Evaluate the contents of a source file.
 
 "),
 
-(E"Getting Around",E"Base",E"apropos",E"apropos(\"string\")
+(E"Getting Around",E"Base",E"help",E"help(name)
 
-   Search help for a substring
+   Get help for a function. \"name\" can be an object or a string.
+
+"),
+
+(E"Getting Around",E"Base",E"apropos",E"apropos(string)
+
+   Search documentation for functions related to \"string\".
 
 "),
 
 (E"Getting Around",E"Base",E"which",E"which(f, args...)
 
-   Show which method of \"f\" will be called for the given arguments
+   Show which method of \"f\" will be called for the given arguments.
 
 "),
 
 (E"Getting Around",E"Base",E"methods",E"methods(f)
 
-   Show all methods of \"f\" with their argument types
+   Show all methods of \"f\" with their argument types.
 
 "),
 
@@ -467,10 +467,12 @@
 
 "),
 
-(E"Generic Functions",E"Base",E"method_exists",E"method_exists(f, tuple)
+(E"Generic Functions",E"Base",E"method_exists",E"method_exists(f, tuple) -> Bool
 
    Determine whether the given generic function has a method matching
    the given tuple of argument types.
+
+   **Example**: \"method_exists(length, (Array,)) = true\"
 
 "),
 
@@ -502,13 +504,13 @@
 
 "),
 
-(E"Iteration",E"Base",E"start",E"start(iter)
+(E"Iteration",E"Base",E"start",E"start(iter) -> state
 
    Get initial iteration state for an iterable object
 
 "),
 
-(E"Iteration",E"Base",E"done",E"done(iter, state)
+(E"Iteration",E"Base",E"done",E"done(iter, state) -> Bool
 
    Test whether we are done iterating
 
@@ -532,13 +534,19 @@
 
 "),
 
-(E"General Collections",E"Base",E"isempty",E"isempty(collection)
+(E"General Collections",E"Base",E"isempty",E"isempty(collection) -> Bool
 
    Determine whether a collection is empty (has no elements).
 
 "),
 
-(E"General Collections",E"Base",E"length",E"length(collection)
+(E"General Collections",E"Base",E"empty!",E"empty!(collection) -> collection
+
+   Remove all elements from a collection.
+
+"),
+
+(E"General Collections",E"Base",E"length",E"length(collection) -> Integer
 
    For ordered, indexable collections, the maximum index \"i\" for
    which \"ref(collection, i)\" is valid. For unordered collections,
@@ -554,7 +562,7 @@
 
 "),
 
-(E"Iterable Collections",E"Base",E"contains",E"contains(itr, x)
+(E"Iterable Collections",E"Base",E"contains",E"contains(itr, x) -> Bool
 
    Determine whether a collection contains the given value, \"x\".
 
@@ -587,81 +595,96 @@
 
 (E"Iterable Collections",E"Base",E"max",E"max(itr)
 
-   Determine maximum element in a collection
+   Returns the largest element in a collection
 
 "),
 
 (E"Iterable Collections",E"Base",E"min",E"min(itr)
 
-   Determine minimum element in a collection
+   Returns the smallest element in a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"indmax",E"indmax(itr)
+(E"Iterable Collections",E"Base",E"indmax",E"indmax(itr) -> Integer
 
    Returns the index of the maximum element in a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"indmin",E"indmin(itr)
+(E"Iterable Collections",E"Base",E"indmin",E"indmin(itr) -> Integer
 
    Returns the index of the minimum element in a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"findmax",E"findmax(iter)
+(E"Iterable Collections",E"Base",E"findmax",E"findmax(itr) -> (x, index)
 
-   Returns a tuple of the maximum element and its index
+   Returns the maximum element and its index
 
 "),
 
-(E"Iterable Collections",E"Base",E"findmin",E"findmin(iter)
+(E"Iterable Collections",E"Base",E"findmin",E"findmin(itr) -> (x, index)
 
-   Returns a tuple of the minimum element and its index
+   Returns the minimum element and its index
 
 "),
 
 (E"Iterable Collections",E"Base",E"sum",E"sum(itr)
 
-   Sum elements of a collection
+   Returns the sum of all elements in a collection
 
 "),
 
 (E"Iterable Collections",E"Base",E"prod",E"prod(itr)
 
-   Multiply elements of a collection
+   Returns the product of all elements of a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"any",E"any(itr)
+(E"Iterable Collections",E"Base",E"any",E"any(itr) -> Bool
 
    Test whether any elements of a boolean collection are true
 
 "),
 
-(E"Iterable Collections",E"Base",E"all",E"all(itr)
+(E"Iterable Collections",E"Base",E"all",E"all(itr) -> Bool
 
    Test whether all elements of a boolean collection are true
 
 "),
 
-(E"Iterable Collections",E"Base",E"any",E"any(p, itr)
+(E"Iterable Collections",E"Base",E"count",E"count(itr) -> Integer
+
+   Count the number of boolean elements in \"itr\" which are true.
+
+"),
+
+(E"Iterable Collections",E"Base",E"countp",E"countp(p, itr) -> Integer
+
+   Count the number of elements in \"itr\" for which predicate \"p\"
+   is true.
+
+"),
+
+(E"Iterable Collections",E"Base",E"any",E"any(p, itr) -> Bool
 
    Determine whether any element of \"itr\" satisfies the given
    predicate.
 
 "),
 
-(E"Iterable Collections",E"Base",E"all",E"all(p, itr)
+(E"Iterable Collections",E"Base",E"all",E"all(p, itr) -> Bool
 
    Determine whether all elements of \"itr\" satisfy the given
    predicate.
 
 "),
 
-(E"Iterable Collections",E"Base",E"map",E"map(f, c)
+(E"Iterable Collections",E"Base",E"map",E"map(f, c) -> collection
 
    Transform collection \"c\" by applying \"f\" to each element.
+
+   **Example**: \"map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]\"
 
 "),
 
@@ -900,27 +923,27 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"Base",E"push!",E"push!(collection, item)
+(E"Dequeues",E"Base",E"push!",E"push!(collection, item) -> collection
 
    Insert an item at the end of a collection.
 
 "),
 
-(E"Dequeues",E"Base",E"pop!",E"pop!(collection)
+(E"Dequeues",E"Base",E"pop!",E"pop!(collection) -> item
 
    Remove the last item in a collection and return it.
 
 "),
 
-(E"Dequeues",E"Base",E"unshift!",E"unshift!(collection, item)
+(E"Dequeues",E"Base",E"unshift!",E"unshift!(collection, item) -> collection
 
    Insert an item at the beginning of a collection.
 
 "),
 
-(E"Dequeues",E"Base",E"shift!",E"shift!(collection)
+(E"Dequeues",E"Base",E"shift!",E"shift!(collection) -> item
 
-   Remove the first item in a collection and return it.
+   Remove the first item in a collection.
 
 "),
 
@@ -930,15 +953,16 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"Base",E"delete!",E"delete!(collection, index)
+(E"Dequeues",E"Base",E"delete!",E"delete!(collection, index) -> item
 
-   Remove the item at the given index.
+   Remove the item at the given index, and return the deleted item.
 
 "),
 
-(E"Dequeues",E"Base",E"delete!",E"delete!(collection{Type}, range) -> items{Type}
+(E"Dequeues",E"Base",E"delete!",E"delete!(collection, range) -> items
 
-   Remove items at specified range.
+   Remove items at specified range, and return a collection containing
+   the deleted items.
 
 "),
 
@@ -948,7 +972,7 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"Base",E"append!",E"append!(collection, items)
+(E"Dequeues",E"Base",E"append!",E"append!(collection, items) -> collection
 
    Add the elements of \"items\" to the end of a collection.
 
@@ -966,9 +990,12 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"",E"*, string(strs...)",E"*, string(strs...)
+(E"Strings",E"Base",E"string",E"*()
+string(strs...)
 
    Concatenate strings.
+
+   **Example**: \"\"Hello \" * \"world\" == \"Hello world\"\"
 
 "),
 
@@ -1275,7 +1302,7 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"open",E"open(file_name[, read, write, create, truncate, append])
+(E"I/O",E"Base",E"open",E"open(file_name[, read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The
    default is to open files for reading only. Returns a stream for
@@ -1283,7 +1310,7 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"open",E"open(file_name[, mode])
+(E"I/O",E"Base",E"open",E"open(file_name[, mode]) -> IOStream
 
    Alternate syntax for open, where a string-based mode specifier is
    used instead of the five booleans. The values of \"mode\"
@@ -1306,6 +1333,12 @@ collection[key...] = value
 
 "),
 
+(E"I/O",E"Base",E"open",E"open(file_name) -> IOStream
+
+   Open a file in read mode.
+
+"),
+
 (E"I/O",E"Base",E"open",E"open(f::function, args...)
 
    Apply the function \"f\" to the result of \"open(args...)\" and
@@ -1315,19 +1348,21 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"Base",E"IOBuffer",E"IOBuffer([size])
+(E"I/O",E"Base",E"memio",E"memio([size[, finalize::Bool]]) -> IOStream
 
    Create an in-memory I/O stream, optionally specifying how much
    initial space is needed.
 
 "),
 
-(E"I/O",E"Base",E"fdio",E"fdio(descriptor[, own])
+(E"I/O",E"Base",E"fdio",E"fdio(fd::Integer[, own::Bool]) -> IOStream
+fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
    Create an \"IOStream\" object from an integer file descriptor. If
    \"own\" is true, closing this object will close the underlying
    descriptor. By default, an \"IOStream\" is closed when it is
-   garbage collected.
+   garbage collected. \"name\" allows you to associate the descriptor
+   with a named file.
 
 "),
 
@@ -1417,7 +1452,7 @@ collection[key...] = value
 
 (E"Text I/O",E"Base",E"println",E"println(x)
 
-   Print (using \"print\") \"x\" followed by a newline
+   Print (using \"print()\") \"x\" followed by a newline
 
 "),
 
@@ -1519,7 +1554,7 @@ collection[key...] = value
    an offset (in bytes) if, for example, you want to skip over a
    header in the file.
 
-   Example:  A = mmap_array(Int64, (25,30000), s)
+   **Example**:  A = mmap_array(Int64, (25,30000), s)
 
    This would create a 25-by-30000 array of Int64s, linked to the file
    associated with stream s.
@@ -1589,13 +1624,8 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"Base",E"rem",E"rem()
-
-   Remainder after division
-
-"),
-
-(E"Mathematical Functions",E"Base",E"%",E"%()
+(E"Mathematical Functions",E"Base",E"%",E"rem()
+%()
 
    Remainder after division
 
@@ -2739,13 +2769,13 @@ airyaiprime(x)
 
 "),
 
-(E"Data Formats",E"Base",E"iscomplex",E"iscomplex(x)
+(E"Data Formats",E"Base",E"iscomplex",E"iscomplex(x) -> Bool
 
    Test whether a number or array is of a complex type
 
 "),
 
-(E"Data Formats",E"Base",E"isreal",E"isreal(x)
+(E"Data Formats",E"Base",E"isreal",E"isreal(x) -> Bool
 
    Test whether a number or array is of a real type
 
@@ -2792,13 +2822,13 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"isdenormal",E"isdenormal(f)
+(E"Numbers",E"Base",E"isdenormal",E"isdenormal(f) -> Bool
 
    Test whether a floating point number is denormal
 
 "),
 
-(E"Numbers",E"Base",E"isfinite",E"isfinite(f)
+(E"Numbers",E"Base",E"isfinite",E"isfinite(f) -> Bool
 
    Test whether a number is finite
 
@@ -2836,7 +2866,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"prevfloat",E"prevfloat(f)
+(E"Numbers",E"Base",E"prevfloat",E"prevfloat(f) -> Float
 
    Get the previous floating point number in lexicographic order
 
@@ -2934,9 +2964,27 @@ airyaiprime(x)
 
 (E"Numbers",E"Base",E"isprime",E"isprime(x::Integer) -> Bool
 
-      Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
+   Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
 
    **Example**: \"isprime(3) -> true\"
+
+"),
+
+(E"Numbers",E"Base",E"isodd",E"isodd(x::Integer) -> Bool
+
+   Returns \"true\" if \"x\" is odd (that is, not divisible by 2), and
+   \"false\" otherwise.
+
+   **Example**: \"isodd(9) -> false\"
+
+"),
+
+(E"Numbers",E"Base",E"iseven",E"iseven(x::Integer) -> Bool
+
+   Returns \"true\" is \"x\" is even (that is, divisible by 2), and
+   \"false\" otherwise.
+
+   **Example**: \"iseven(1) -> false\"
 
 "),
 
@@ -3021,7 +3069,7 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"ndims",E"ndims(A)
+(E"Arrays",E"Base",E"ndims",E"ndims(A) -> Integer
 
    Returns the number of dimensions of A
 
@@ -3039,7 +3087,7 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"length",E"length(A)
+(E"Arrays",E"Base",E"length",E"length(A) -> Integer
 
    Returns the number of elements in A (note that this differs from
    MATLAB where \"length(A)\" is the largest dimension of \"A\")
@@ -3314,7 +3362,7 @@ airyaiprime(x)
 
 (E"Arrays",E"Base",E"ipermutedims",E"ipermutedims(A, perm)
 
-   Like \"permutedims\", except the inverse of the given permutation
+   Like \"permutedims()\", except the inverse of the given permutation
    is applied.
 
 "),
@@ -3325,7 +3373,7 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"vec",E"vec(A)
+(E"Arrays",E"Base",E"vec",E"vec(Array) -> Vector
 
    Vectorize an array using column-major convention.
 
@@ -3864,7 +3912,7 @@ airyaiprime(x)
 
 (E"Linear Algebra",E"Base",E"null",E"null(M)
 
-   Basis for null space of M
+   Basis for null space of M.
 
 "),
 
@@ -3890,7 +3938,7 @@ airyaiprime(x)
 
 (E"Linear Algebra",E"Base",E"linreg",E"linreg(x, y, w)
 
-   Weighted least-squares linear regression
+   Weighted least-squares linear regression.
 
 "),
 
@@ -3944,31 +3992,31 @@ airyaiprime(x)
 
 (E"Combinatorics",E"Base",E"nthperm",E"nthperm(v, k)
 
-   Compute the kth lexicographic permutation of a vector
+   Compute the kth lexicographic permutation of a vector.
 
 "),
 
 (E"Combinatorics",E"Base",E"nthperm!",E"nthperm!(v, k)
 
-   In-place version of \"nthperm\"
+   In-place version of \"nthperm()\".
 
 "),
 
 (E"Combinatorics",E"Base",E"randperm",E"randperm(n)
 
-   Construct a random permutation of the given length
+   Construct a random permutation of the given length.
 
 "),
 
 (E"Combinatorics",E"Base",E"invperm",E"invperm(v)
 
-   Return the inverse permtation of v
+   Return the inverse permutation of v.
 
 "),
 
-(E"Combinatorics",E"Base",E"isperm",E"isperm(v)
+(E"Combinatorics",E"Base",E"isperm",E"isperm(v) -> Bool
 
-   Returns true if v is a valid permutation
+   Returns true if v is a valid permutation.
 
 "),
 
@@ -3990,31 +4038,31 @@ airyaiprime(x)
 
 (E"Combinatorics",E"Base",E"randcycle",E"randcycle(n)
 
-   Construct a random cyclic permutation of the given length
+   Construct a random cyclic permutation of the given length.
 
 "),
 
 (E"Combinatorics",E"Base",E"shuffle",E"shuffle(v)
 
-   Randomly rearrange the elements of a vector
+   Randomly rearrange the elements of a vector.
 
 "),
 
 (E"Combinatorics",E"Base",E"shuffle!",E"shuffle!(v)
 
-   In-place version of \"shuffle\"
+   In-place version of \"shuffle()\".
 
 "),
 
 (E"Combinatorics",E"Base",E"reverse",E"reverse(v)
 
-   Reverse vector \"v\"
+   Reverse vector \"v\".
 
 "),
 
-(E"Combinatorics",E"Base",E"reverse!",E"reverse!(v)
+(E"Combinatorics",E"Base",E"reverse!",E"reverse!(v) -> v
 
-   Reverse vector \"v\" in-place
+   In-place version of \"reverse()\".
 
 "),
 
@@ -4694,26 +4742,26 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"gethostname",E"gethostname()
+(E"System",E"Base",E"gethostname",E"gethostname() -> String
 
    Get the local machine's host name.
 
 "),
 
-(E"System",E"Base",E"getipaddr",E"getipaddr()
+(E"System",E"Base",E"getipaddr",E"getipaddr() -> String
 
    Get the IP address of the local machine, as a string of the form
    \"x.x.x.x\".
 
 "),
 
-(E"System",E"Base",E"pwd",E"pwd()
+(E"System",E"Base",E"pwd",E"pwd() -> String
 
    Get the current working directory.
 
 "),
 
-(E"System",E"Base",E"cd",E"cd(\"dir\")
+(E"System",E"Base",E"cd",E"cd(dir::String)
 
    Set the current working directory. Returns the new current
    directory.
@@ -4741,7 +4789,7 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"getpid",E"getpid()
+(E"System",E"Base",E"getpid",E"getpid() -> Int32
 
    Get julia's process ID.
 
@@ -4763,31 +4811,38 @@ airyaiprime(x)
 
 (E"System",E"Base",E"tic",E"tic()
 
-   Set a timer to be read by the next call to \"toc\" or \"toq\". The
-   macro call \"@time expr\" can also be used to time evaluation.
+   Set a timer to be read by the next call to \"toc()\" or \"toq()\".
+   The macro call \"@time expr\" can also be used to time evaluation.
 
 "),
 
 (E"System",E"Base",E"toc",E"toc()
 
-   Print and return the time elapsed since the last \"tic\"
+   Print and return the time elapsed since the last \"tic()\".
 
 "),
 
 (E"System",E"Base",E"toq",E"toq()
 
-   Return, but do not print, the time elapsed since the last \"tic\"
+   Return, but do not print, the time elapsed since the last
+   \"tic()\".
 
 "),
 
-(E"System",E"Base",E"EnvHash",E"EnvHash()
+(E"System",E"Base",E"EnvHash",E"EnvHash() -> EnvHash
 
-   A singleton of this type, \"ENV\", provides a hash table interface
-   to environment variables.
+   A singleton of this type provides a hash table interface to
+   environment variables.
 
 "),
 
-(E"System",E"Base",E"dlopen",E"dlopen(libfile)
+(E"System",E"Base",E"ENV",E"ENV
+
+   Reference to the singleton \"EnvHash\".
+
+"),
+
+(E"System",E"Base",E"dlopen",E"dlopen(libfile::String)
 
    Load a shared library, returning an opaque handle
 
@@ -4799,7 +4854,8 @@ airyaiprime(x)
 
 "),
 
-(E"Errors",E"Base",E"error",E"error(message)
+(E"Errors",E"Base",E"error",E"error(message::String)
+error(Exception)
 
    Raise an error with the given message
 
