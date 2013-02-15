@@ -64,6 +64,20 @@
 # * add readline to event loop
 # * GOs/darrays on a subset of nodes
 
+
+type WorkItem
+    thunk::Function
+    task   # the Task working on this item, or ()
+    done::Bool
+    result
+    notify::Tuple
+    argument  # value to pass task next time it is restarted
+    clientset::IntSet
+
+    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet())
+    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet())
+end
+
 ## workers and message i/o ##
 
 function send_msg_unknown(s::IO, kind, args)
@@ -572,6 +586,19 @@ function take_ref(rid)
     while !wi.done
         wait(RemoteRef(myid(), rid[1], rid[2]))
     end
+    take_ref_noblock(wi)
+end
+
+function take_ref_noblock(rid)
+    wi = lookup_ref(rid)
+    take_ref_noblock(wi)
+end
+
+function take_ref_noblock(wi::WorkItem)
+    if !wi.done
+        return nothing
+    end
+
     val = wi.result
     wi.done = false
     notify_empty(wi)
@@ -587,20 +614,16 @@ function take(rr::RemoteRef)
     end
 end
 
-## work queue ##
-
-type WorkItem
-    thunk::Function
-    task   # the Task working on this item, or ()
-    done::Bool
-    result
-    notify::Tuple
-    argument  # value to pass task next time it is restarted
-    clientset::IntSet
-
-    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet())
-    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet())
+function take_noblock(rr::RemoteRef)
+    rid = rr2id(rr)
+    if rr.where == myid()
+        take_ref_noblock(rid)
+    else
+        remote_call_fetch(rr.where, take_ref_noblock, rid)
+    end
 end
+
+## work queue ##
 
 function work_result(w::WorkItem)
     v = w.result
