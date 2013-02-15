@@ -1311,12 +1311,22 @@
       (error "incomplete: invalid string syntax")
       c))
 
+(define (take-char p)
+    (begin (read-char p) p))
+
 ; reads a raw string literal with no processing.
 ; quote can be escaped with \, but the \ is left in place.
 ; returns ("str" . b), b is a boolean telling whether interpolation is used
 (define (parse-string-literal s)
+  (let ((p (ts:port s)))
+    (if (eqv? (peek-char p) #\")
+        (if (eqv? (peek-char (take-char p)) #\")
+            (parse-string-literal-3 (take-char p))
+            (cons "" #f))
+        (parse-string-literal-1 p))))
+
+(define (parse-string-literal-1 p)
   (let ((b (open-output-string))
-	(p (ts:port s))
 	(interpolate #f))
     (let loop ((c (read-char p)))
       (if (eqv? c #\")
@@ -1330,6 +1340,32 @@
 			   (set! interpolate #t))
 		       (write-char (not-eof-3 c) b)))
 		 (loop (read-char p)))))
+    (cons (io.tostring! b) interpolate)))
+
+(define (parse-string-literal-3 p)
+  (let ((b (open-output-string))
+        (interpolate #f))
+    (let loop ((c (read-char p)))
+      (if (eqv? c #\")
+          (let ((nextch (read-char p)))
+            (if (eqv? nextch #\")
+                (let ((nextch2 (read-char p)))
+                  (if (eqv? nextch2 #\")
+                      #t
+                      (begin (write-char #\\ b) (write-char #\" b)
+                             (write-char #\\ b) (write-char #\" b)
+                             (loop nextch2))))
+                (begin (write-char #\\ b) (write-char #\" b)
+                       (loop nextch))))
+          (begin (if (eqv? c #\\)
+                     (let ((nextch (read-char p)))
+                       (begin (write-char #\\ b)
+                              (write-char (not-eof-3 nextch) b)))
+                     (begin
+                       (if (eqv? c #\$)
+                           (set! interpolate #t))
+                       (write-char (not-eof-3 c) b)))
+                 (loop (read-char p)))))
     (cons (io.tostring! b) interpolate)))
 
 (define (not-eof-1 c)
