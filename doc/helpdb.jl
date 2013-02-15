@@ -342,7 +342,7 @@
 
 (E"All Objects",E"Base",E"finalizer",E"finalizer(x, function)
 
-   Register a function to be called on \"x\" when there are no
+   Register a function \"f(x)\" to be called when there are no
    program-accessible references to \"x\". The behavior of this
    function is unpredictable if \"x\" is of a bits type.
 
@@ -493,6 +493,15 @@
 
 "),
 
+(E"Generic Functions",E"Base",E"|",E"|()
+
+   Applies a function to the preceding argument which allows for easy
+   function chaining.
+
+   **Example**: \"[1:5] | x->x.^2 | sum | inv\"
+
+"),
+
 (E"Iteration",E"Base",E"start",E"start(iter)
 
    Get initial iteration state for an iterable object
@@ -537,6 +546,14 @@
 
 "),
 
+(E"General Collections",E"Base",E"endof",E"endof(collection) -> Integer
+
+   Returns the last index of the collection.
+
+   **Example**: \"endof([1,2,4]) = 3\"
+
+"),
+
 (E"Iterable Collections",E"Base",E"contains",E"contains(itr, x)
 
    Determine whether a collection contains the given value, \"x\".
@@ -547,6 +564,13 @@
 
    Returns the indices of elements in collection \"a\" that appear in
    collection \"b\"
+
+"),
+
+(E"Iterable Collections",E"Base",E"unique",E"unique(itr)
+
+   Returns an array containing only the unique elements of the
+   iterable \"itr\".
 
 "),
 
@@ -637,7 +661,22 @@
 
 (E"Iterable Collections",E"Base",E"map",E"map(f, c)
 
-   Transform collection \"c\" by applying \"f\" to each element
+   Transform collection \"c\" by applying \"f\" to each element.
+
+"),
+
+(E"Iterable Collections",E"Base",E"map!",E"map!(function, collection)
+
+   In-place version of \"map()\".
+
+"),
+
+(E"Iterable Collections",E"Base",E"mapreduce",E"mapreduce(f, op, itr)
+
+   Applies function \"f\" to each element in \"itr\" and then reduces
+   the result using the binary function \"op\".
+
+   **Example**: \"mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14\"
 
 "),
 
@@ -673,6 +712,13 @@ collection[key...] = value
 
    Return the value stored for the given key, or the given default
    value if no mapping for the key is present.
+
+"),
+
+(E"Associative Collections",E"Base",E"getkey",E"getkey(collection, key, default)
+
+   Return the key matching argument \"key\" if one exists in
+   \"collection\", otherwise return \"default\".
 
 "),
 
@@ -740,9 +786,22 @@ collection[key...] = value
 
 "),
 
+(E"Associative Collections",E"Base",E"sizehint",E"sizehint(s, n)
+
+   Suggest that collection \"s\" reserve capacity for at least \"n\"
+   elements. This can improve performance.
+
+"),
+
 (E"Set-Like Collections",E"Base",E"add!",E"add!(collection, key)
 
    Add an element to a set-like collection.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"add_each!",E"add_each!(collection, iterable)
+
+   Adds each element in iterable to the collection.
 
 "),
 
@@ -767,6 +826,13 @@ collection[key...] = value
 
 "),
 
+(E"Set-Like Collections",E"Base",E"union!",E"union!(s1, s2)
+
+   Constructs the union of IntSets s1 and s2, stores the result in
+   \"s1\".
+
+"),
+
 (E"Set-Like Collections",E"Base",E"intersect",E"intersect(s1, s2...)
 
    Construct the intersection of two or more sets. Maintains order
@@ -785,6 +851,52 @@ collection[key...] = value
 
    Construct the symmetric difference of elements in the passed in
    sets or arrays. Maintains order with arrays.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s, n)
+
+   IntSet s is destructively modified to toggle the inclusion of
+   integer \"n\".
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s, itr)
+
+   For each element in \"itr\", destructively toggle its inclusion in
+   set \"s\".
+
+"),
+
+(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s1, s2)
+
+   Construct the symmetric difference of IntSets \"s1\" and \"s2\",
+   storing the result in \"s1\".
+
+"),
+
+(E"Set-Like Collections",E"Base",E"complement",E"complement(s)
+
+   Returns the set-complement of IntSet s.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"complement!",E"complement!(s)
+
+   Mutates IntSet s into its set-complement.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"del_each!",E"del_each!(s, itr)
+
+   Deletes each element of itr in set s in-place.
+
+"),
+
+(E"Set-Like Collections",E"Base",E"intersect!",E"intersect!(s1, s2)
+
+   Intersects IntSets s1 and s2 and overwrites the set s1 with the
+   result. If needed, s1 will be expanded to the size of s2.
 
 "),
 
@@ -824,7 +936,13 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"Base",E"resize!",E"resize!(collection, n)
+(E"Dequeues",E"Base",E"delete!",E"delete!(collection{Type}, range) -> items{Type}
+
+   Remove items at specified range.
+
+"),
+
+(E"Dequeues",E"Base",E"resize!",E"resize!(collection, n) -> collection
 
    Resize collection to contain \"n\" elements.
 
@@ -848,9 +966,17 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"Base",E"string",E"string(strs...)
+(E"Strings",E"",E"*, string(strs...)",E"*, string(strs...)
 
    Concatenate strings.
+
+"),
+
+(E"Strings",E"Base",E"^",E"^()
+
+   Repeat a string.
+
+   **Example**: \"\"Julia \"^3 == \"Julia Julia Julia \"\"
 
 "),
 
@@ -861,6 +987,12 @@ collection[key...] = value
 "),
 
 (E"Strings",E"Base",E"string",E"string(x)
+
+   Create a string from any value using the \"print\" function.
+
+"),
+
+(E"Strings",E"Base",E"repr",E"repr(x)
 
    Create a string from any value using the \"show\" function.
 
@@ -902,6 +1034,39 @@ collection[key...] = value
 
    Convert a string to a contiguous UTF-8 string (all characters must
    be valid UTF-8 characters).
+
+"),
+
+(E"Strings",E"Base",E"is_valid_ascii",E"is_valid_ascii(s) -> Bool
+
+   Returns true if the string is valid ASCII, false otherwise.
+
+"),
+
+(E"Strings",E"Base",E"is_valid_utf8",E"is_valid_utf8(s) -> Bool
+
+   Returns true if the string is valid UTF-8, false otherwise.
+
+"),
+
+(E"Strings",E"Base",E"check_ascii",E"check_ascii(s)
+
+   Calls \"is_valid_ascii()\" on string. Throws error if it is not
+   valid.
+
+"),
+
+(E"Strings",E"Base",E"check_utf8",E"check_utf8(s)
+
+   Calls \"is_valid_utf8()\" on string. Throws error if it is not
+   valid.
+
+"),
+
+(E"Strings",E"Base",E"byte_string_classify",E"byte_string_classify(s)
+
+   Returns 0 if the string is neither valid ASCII nor UTF-8, 1 if it
+   is valid ASCII, and 2 if it is valid UTF-8.
 
 "),
 
@@ -1046,6 +1211,33 @@ collection[key...] = value
 
 "),
 
+(E"Strings",E"Base",E"isvalid",E"isvalid(str, i)
+
+   Tells whether index \"i\" is valid for the given string
+
+"),
+
+(E"Strings",E"Base",E"nextind",E"nextind(str, i)
+
+   Get the next valid string index after \"i\". Returns
+   \"endof(str)+1\" at the end of the string.
+
+"),
+
+(E"Strings",E"Base",E"prevind",E"prevind(str, i)
+
+   Get the previous valid string index before \"i\". Returns \"0\" at
+   the beginning of the string.
+
+"),
+
+(E"Strings",E"Base",E"thisind",E"thisind(str, i)
+
+   Adjust \"i\" downwards until it reaches a valid index for the given
+   string.
+
+"),
+
 (E"Strings",E"Base",E"randstring",E"randstring(len)
 
    Create a random ASCII string of length \"len\", consisting of
@@ -1111,6 +1303,15 @@ collection[key...] = value
    +------+-----------------------------------+
    | a+   | read, write, create, append       |
    +------+-----------------------------------+
+
+"),
+
+(E"I/O",E"Base",E"open",E"open(f::function, args...)
+
+   Apply the function \"f\" to the result of \"open(args...)\" and
+   close the resulting file descriptor upon completion.
+
+   **Example**: \"open(readall, \"file.txt\")\"
 
 "),
 
@@ -1388,7 +1589,13 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"",E"rem %",E"rem %
+(E"Mathematical Functions",E"Base",E"rem",E"rem()
+
+   Remainder after division
+
+"),
+
+(E"Mathematical Functions",E"Base",E"%",E"%()
 
    Remainder after division
 
@@ -1715,6 +1922,12 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"radians2degrees",E"radians2degrees(x)
+
+   Convert \"x\" from radians to degrees
+
+"),
+
 (E"Mathematical Functions",E"Base",E"hypot",E"hypot(x, y)
 
    Compute the \\sqrt{(x^2+y^2)} without undue overflow or underflow
@@ -1782,9 +1995,22 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"Base",E"modf",E"modf(x)
+
+   Return a tuple (fpart,ipart) of the fractional and integral parts
+   of a number. Both parts have the same sign as the argument.
+
+"),
+
 (E"Mathematical Functions",E"Base",E"expm1",E"expm1(x)
 
    Accurately compute e^x-1
+
+"),
+
+(E"Mathematical Functions",E"Base",E"square",E"square(x)
+
+   Compute x^2
 
 "),
 
@@ -1898,8 +2124,15 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"Base",E"signbit",E"signbit(x)
 
-   Returns non-zero if the value of the sign of \"x\" is negative,
+   Returns \"1\" if the value of the sign of \"x\" is negative,
    otherwise \"0\".
+
+"),
+
+(E"Mathematical Functions",E"Base",E"flipsign",E"flipsign(x, y)
+
+   Return \"x\" with its sign flipped if \"y\" is negative. For
+   example \"abs(x) = flipsign(x,x)\".
 
 "),
 
@@ -1962,6 +2195,13 @@ collection[key...] = value
 (E"Mathematical Functions",E"Base",E"imag",E"imag(z)
 
    Return the imaginary part of the complex number \"z\"
+
+"),
+
+(E"Mathematical Functions",E"Base",E"reim",E"reim(z)
+
+   Return both the real and imaginary parts of the complex number
+   \"z\"
 
 "),
 
@@ -2229,6 +2469,19 @@ airyaiprime(x)
 
 "),
 
+(E"Mathematical Functions",E"Base",E"bitmix",E"bitmix(x, y)
+
+   Hash two integers into a single integer. Useful for constructing
+   hash functions.
+
+"),
+
+(E"Mathematical Functions",E"Base",E"ndigits",E"ndigits(n, b)
+
+   Compute the number of digits in number \"n\" written in base \"b\".
+
+"),
+
 (E"Data Formats",E"Base",E"bin",E"bin(n[, pad])
 
    Convert an integer to a binary string, optionally specifying a
@@ -2264,10 +2517,44 @@ airyaiprime(x)
 
 "),
 
-(E"Data Formats",E"Base",E"parse_int",E"parse_int(type, str, base)
+(E"Data Formats",E"Base",E"bits",E"bits(n)
 
-   Parse a string as an integer in the given base, yielding a number
-   of the specified type.
+   A string giving the literal bit representation of a number.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_int",E"parse_int(type, str[, base])
+
+   Parse a string as an integer in the given base (default 10),
+   yielding a number of the specified type.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_bin",E"parse_bin(type, str)
+
+   Parse a string as an integer in base 2, yielding a number of the
+   specified type.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_oct",E"parse_oct(type, str)
+
+   Parse a string as an integer in base 8, yielding a number of the
+   specified type.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_hex",E"parse_hex(type, str)
+
+   Parse a string as an integer in base 16, yielding a number of the
+   specified type.
+
+"),
+
+(E"Data Formats",E"Base",E"parse_float",E"parse_float(type, str)
+
+   Parse a string as a decimal floating point number, yielding a
+   number of the specified type.
 
 "),
 
@@ -2291,6 +2578,14 @@ airyaiprime(x)
 
 "),
 
+(E"Data Formats",E"Base",E"uint",E"uint(x)
+
+   Convert a number or array to the default unsigned integer type on
+   your platform. Alternatively, \"x\" can be a string, which is
+   parsed as an unsigned integer.
+
+"),
+
 (E"Data Formats",E"Base",E"integer",E"integer(x)
 
    Convert a number or array to integer type. If \"x\" is already of
@@ -2302,6 +2597,18 @@ airyaiprime(x)
 (E"Data Formats",E"Base",E"isinteger",E"isinteger(x)
 
    Test whether a number or array is of integer type
+
+"),
+
+(E"Data Formats",E"Base",E"signed",E"signed(x)
+
+   Convert a number to a signed integer
+
+"),
+
+(E"Data Formats",E"Base",E"unsigned",E"unsigned(x)
+
+   Convert a number to an unsigned integer
 
 "),
 
@@ -2382,6 +2689,16 @@ airyaiprime(x)
    Convert a number, array, or string to a \"FloatingPoint\" data
    type. For numeric data, the smallest suitable \"FloatingPoint\"
    type is used. For strings, it converts to \"Float64\".
+
+"),
+
+(E"Data Formats",E"Base",E"significand",E"significand(x)
+
+   Extract the significand(s) (a.k.a. mantissa), in binary
+   representation, of a floating-point number or array.
+
+   For example, \"significand(15.2)/15.2 == 0.125\", and
+   \"significand(15.2)*8 == 15.2\"
 
 "),
 
@@ -3014,6 +3331,62 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"cumprod",E"cumprod(A[, dim])
+
+   Cumulative product along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"cumsum",E"cumsum(A[, dim])
+
+   Cumulative sum along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"cummin",E"cummin(A[, dim])
+
+   Cumulative minimum along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"cummax",E"cummax(A[, dim])
+
+   Cumulative maximum along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"diff",E"diff(A[, dim])
+
+   Finite difference operator of matrix or vector.
+
+"),
+
+(E"Arrays",E"Base",E"rot180",E"rot180(A)
+
+   Rotate matrix \"A\" 180 degrees.
+
+"),
+
+(E"Arrays",E"Base",E"rotl90",E"rotl90(A)
+
+   Rotate matrix \"A\" left 90 degrees.
+
+"),
+
+(E"Arrays",E"Base",E"rotr90",E"rotr90(A)
+
+   Rotate matrix \"A\" right 90 degrees.
+
+"),
+
+(E"Arrays",E"Base",E"reducedim",E"reducedim(f, A, dims, initial)
+
+   Reduce 2-argument function \"f\" along dimensions of \"A\".
+   \"dims\" is a vector specifying the dimensions to reduce, and
+   \"initial\" is the initial value to use in the reductions.
+
+"),
+
 (E"Sparse Matrices",E"Base",E"sparse",E"sparse(I, J, V[, m, n, combine])
 
    Create a sparse matrix \"S\" of dimensions \"m x n\" such that
@@ -3298,6 +3671,13 @@ airyaiprime(x)
 
 "),
 
+(E"Linear Algebra",E"Base",E"sqrtm",E"sqrtm(A)
+
+   Compute the matrix square root of \"A\". If \"B = sqrtm(A)\", then
+   \"B*B == A\" within roundoff error.
+
+"),
+
 (E"Linear Algebra",E"Base",E"eig",E"eig(A) -> D, V
 
    Compute eigenvalues and eigenvectors of A
@@ -3359,13 +3739,17 @@ airyaiprime(x)
 (E"Linear Algebra",E"Base",E"svdfact",E"svdfact(A, B) -> GSVDDense
 
    Compute the generalized SVD of \"A\" and \"B\", returning a
-   \"GSVDDense\" Factorization object.
+   \"GSVDDense\" Factorization object. \"factors(svdfact(A,b))\"
+   returns \"U\", \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that
+   \"A = U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"svd",E"svd(A, B) -> U, V, X, C, S
+(E"Linear Algebra",E"Base",E"svd",E"svd(A, B) -> U, V, Q, D1, D2, R0
 
-   Compute the generalized SVD of \"A\" and \"B\".
+   Compute the generalized SVD of \"A\" and \"B\", returning \"U\",
+   \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that \"A =
+   U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
 
 "),
 
@@ -3398,6 +3782,14 @@ airyaiprime(x)
 
    Construct a diagonal matrix and place \"v\" on the \"k\"-th
    diagonal
+
+"),
+
+(E"Linear Algebra",E"Base",E"diagmm",E"diagmm(matrix, vector)
+
+   Multiply matrices, interpreting the vector argument as a diagonal
+   matrix. The arguments may occur in the other order to multiply with
+   the diagonal matrix on the left.
 
 "),
 
@@ -3502,6 +3894,54 @@ airyaiprime(x)
 
 "),
 
+(E"Linear Algebra",E"Base",E"expm",E"expm(A)
+
+   Matrix exponential.
+
+"),
+
+(E"Linear Algebra",E"Base",E"issym",E"issym(A)
+
+   Test whether a matrix is symmetric.
+
+"),
+
+(E"Linear Algebra",E"Base",E"isposdef",E"isposdef(A)
+
+   Test whether a matrix is positive-definite.
+
+"),
+
+(E"Linear Algebra",E"Base",E"istril",E"istril(A)
+
+   Test whether a matrix is lower-triangular.
+
+"),
+
+(E"Linear Algebra",E"Base",E"istriu",E"istriu(A)
+
+   Test whether a matrix is upper-triangular.
+
+"),
+
+(E"Linear Algebra",E"Base",E"ishermitian",E"ishermitian(A)
+
+   Test whether a matrix is hermitian.
+
+"),
+
+(E"Linear Algebra",E"Base",E"transpose",E"transpose(A)
+
+   The transpose operator (.').
+
+"),
+
+(E"Linear Algebra",E"Base",E"ctranspose",E"ctranspose(A)
+
+   The conjugate transpose operator (').
+
+"),
+
 (E"Combinatorics",E"Base",E"nthperm",E"nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
@@ -3575,6 +4015,35 @@ airyaiprime(x)
 (E"Combinatorics",E"Base",E"reverse!",E"reverse!(v)
 
    Reverse vector \"v\" in-place
+
+"),
+
+(E"Combinatorics",E"Base",E"combinations",E"combinations(array, n)
+
+   Generate all combinations of \"n\" elements from a given array.
+   Because the number of combinations can be very large, this function
+   runs inside a Task to produce values on demand. Write \"c = @task
+   combinations(a,n)\", then iterate \"c\" or call \"consume\" on it.
+
+"),
+
+(E"Combinatorics",E"Base",E"integer_partitions",E"integer_partitions(n, m)
+
+   Generate all arrays of \"m\" integers that sum to \"n\". Because
+   the number of partitions can be very large, this function runs
+   inside a Task to produce values on demand. Write \"c = @task
+   integer_partitions(n,m)\", then iterate \"c\" or call \"consume\"
+   on it.
+
+"),
+
+(E"Combinatorics",E"Base",E"partitions",E"partitions(array)
+
+   Generate all set partitions of the elements of an array,
+   represented as arrays of arrays. Because the number of partitions
+   can be very large, this function runs inside a Task to produce
+   values on demand. Write \"c = @task partitions(a)\", then iterate
+   \"c\" or call \"consume\" on it.
 
 "),
 
@@ -3675,62 +4144,6 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"weighted_mean",E"weighted_mean(v, w)
-
-   Compute the weighted mean of \"v\" using a vector of weights \"w\"
-
-"),
-
-(E"Statistics",E"Base",E"mad",E"mad(v, m)
-
-   Compute the median absolute deviation from the entries of a vector
-   \"v\" relative to a known median \"m\". The calculation involves an
-   adjustment factor of 1.4826 required to insure that the estimator
-   is consistent for normally distributed data.
-
-"),
-
-(E"Statistics",E"Base",E"mad",E"mad(v)
-
-   Compute the median absolute deviation from the entries of a vector
-   \"v\" relative to the median of \"v\". The calculation involves an
-   adjustment factor of 1.4826 required to insure that the estimator
-   is consistent for normally distributed data.
-
-"),
-
-(E"Statistics",E"Base",E"skewness",E"skewness(v, m)
-
-   Compute the sample skewness of a vector \"v\" relative to a known
-   mean \"m\". Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
-(E"Statistics",E"Base",E"skewness",E"skewness(v)
-
-   Compute the sample skewness of a vector \"v\" relative to the
-   sample mean. Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
-(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v, m)
-
-   Compute the sample kurtosis of a vector \"v\" relative to a known
-   mean \"m\". Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
-(E"Statistics",E"Base",E"kurtosis",E"kurtosis(v)
-
-   Compute the sample kurtosis of a vector \"v\" relative to the
-   sample mean. Uses a maximum likelihood estimator which can be
-   biased.
-
-"),
-
 (E"Statistics",E"Base",E"quantile",E"quantile(v, p)
 
    Compute the quantiles of a vector \"v\" at a specified set of
@@ -3745,72 +4158,9 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"quartile",E"quartile(v)
-
-   Compute the quartiles of a vector \"v\" at the probability values
-   \"[.0, .25, .5, .75, 1.0]\".
-
-"),
-
-(E"Statistics",E"Base",E"quintile",E"quintile(v)
-
-   Compute the quintiles of a vector \"v\" at the probability values
-   \"[.0, .2, .4, .6, .8, 1.0]\".
-
-"),
-
-(E"Statistics",E"Base",E"decile",E"decile(v)
-
-   Compute the deciles of a vector \"v\" at the probability values
-   \"[.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]\".
-
-"),
-
-(E"Statistics",E"Base",E"iqr",E"iqr(v)
-
-   Compute the interquantile range of a vector \"v\" at the
-   probability values \"[.25, .75]\".
-
-"),
-
-(E"Statistics",E"Base",E"tiedrank",E"tiedrank(v)
-
-   Compute the ranks of the entries of vector \"v\". Ties are resolved
-   by taking the average rank over all tied values.
-
-"),
-
-(E"Statistics",E"Base",E"cov_pearson",E"cov_pearson(v1, v2)
-
-   Compute the Pearson covariance between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"cov_spearman",E"cov_spearman(v)
-
-   Compute the Spearman covariance between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
 (E"Statistics",E"Base",E"cov",E"cov(v)
 
    Compute the Pearson covariance between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"cor_pearson",E"cor_pearson(v)
-
-   Compute the Pearson correlation between two vectors \"v1\" and
-   \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"cor_spearman",E"cor_spearman(v)
-
-   Compute the Spearman correlation between two vectors \"v1\" and
    \"v2\".
 
 "),
@@ -3819,39 +4169,6 @@ airyaiprime(x)
 
    Compute the Pearson correlation between two vectors \"v1\" and
    \"v2\".
-
-"),
-
-(E"Statistics",E"Base",E"autocor",E"autocor(v, l)
-
-   Compute the Pearson autocorrelation of a vector \"v\" with itself
-   at lag \"l\".
-
-"),
-
-(E"Statistics",E"Base",E"autocor",E"autocor(v)
-
-   Compute the Pearson autocorrelation of a vector \"v\" with itself
-   at lag \"1\".
-
-"),
-
-(E"Statistics",E"Base",E"dist",E"dist(m)
-
-   Compute the distance matrix between all of the rows of \"m\".
-
-"),
-
-(E"Statistics",E"Base",E"rle",E"rle(v)
-
-   Compute a run-length encoding representation of a vector \"v\".
-
-"),
-
-(E"Statistics",E"Base",E"inverse_rle",E"inverse_rle(vals, lens)
-
-   Compute a vector from its run-length vector representation as
-   values \"vals\" and run lengths \"lens\".
 
 "),
 
@@ -4368,6 +4685,15 @@ airyaiprime(x)
 
 "),
 
+(E"System",E"",E"> < >> .>",E"> < >> .>
+
+   \">\" \"<\" and \">>\" work exactly as in bash, and \".>\"
+   redirects STDERR.
+
+   **Example**: \"run((`ls` > \"out.log\") .> \"err.log\")\"
+
+"),
+
 (E"System",E"Base",E"gethostname",E"gethostname()
 
    Get the local machine's host name.
@@ -4391,6 +4717,13 @@ airyaiprime(x)
 
    Set the current working directory. Returns the new current
    directory.
+
+"),
+
+(E"System",E"Base",E"cd",E"cd(f[, \"dir\"])
+
+   Temporarily changes the current working directory (HOME if not
+   specified) and applies function f before returning.
 
 "),
 
@@ -4681,6 +5014,13 @@ airyaiprime(x)
 
    Returns \"alpha*A*B\" or the other three variants according to
    \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+(E"Constants",E"Base",E"OS_NAME",E"OS_NAME
+
+   A symbol representing the name of the operating system. Possible
+   values are \":Linux\", \":Darwin\" (OS X), or \":Windows\".
 
 "),
 
@@ -6333,23 +6673,13 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(v[, dim])
+(E"Base.Sort",E"Base.Sort",E"sort",E"sort(v[, alg[, ord]])
 
-   Sort a vector in ascending order.  If \"dim\" is provided, sort
-   along the given dimension.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(lessthan, v[, dim])
-
-   Sort with a custom comparison function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(alg, ...)
-
-   Sort using a specific sorting algorithm (InsertionSort, QuickSort,
-   MergeSort, or TimSort).
+   Sort a vector in ascending order.  Specify \"alg\" to choose a
+   particular sorting algorithm (\"Sort.InsertionSort\",
+   \"Sort.QuickSort\", \"Sort.MergeSort\", or \"Sort.TimSort\"), and
+   \"ord\" to sort with a custom ordering (e.g., Sort.Reverse or a
+   comparison function).
 
 "),
 
@@ -6359,17 +6689,11 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(by, v[, dim])
+(E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(v, by[, alg])
 
-   Sort a vector according to \"by(v)\".   If \"dim\" is provided,
-   sort along the given dimension.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(alg, ...)
-
-   \"sortby\" using a specific sorting algorithm (\"InsertionSort\",
-   \"QuickSort\", \"MergeSort\", or \"TimSort\").
+   Sort a vector according to \"by(v)\".  Specify \"alg\" to choose a
+   particular sorting algorithm (\"Sort.InsertionSort\",
+   \"Sort.QuickSort\", \"Sort.MergeSort\", or \"Sort.TimSort\").
 
 "),
 
@@ -6379,221 +6703,59 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v)
+(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v[, alg[, ord]])
 
    Return a permutation vector, which when applied to the input vector
-   \"v\" will sort it.
+   \"v\" will sort it.  Specify \"alg\" to choose a particular sorting
+   algorithm (\"Sort.InsertionSort\", \"Sort.QuickSort\",
+   \"Sort.MergeSort\", or \"Sort.TimSort\"), and \"ord\" to sort with
+   a custom ordering (e.g., Sort.Reverse or a comparison function).
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(lessthan, v)
+(E"Base.Sort",E"Base.Sort",E"issorted",E"issorted(v[, ord])
 
-   Return a permutation vector, which when applied to the input vector
-   \"v\" will sort it, using the specified \"lessthan\" comparison
-   function.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(alg, ...)
-
-   \"sortperm\" using a specific sorting algorithm (\"InsertionSort\",
-   \"QuickSort\", \"MergeSort\", or \"TimSort\").
+   Test whether a vector is in ascending sorted order.  If specified,
+   \"ord\" gives the ordering to test.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm!",E"sortperm!(...)
+(E"Base.Sort",E"Base.Sort",E"searchsorted",E"searchsorted(a, x[, ord])
 
-   In-place \"sortperm\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"issorted",E"issorted(v)
-
-   Test whether a vector is in ascending sorted order
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"issortedr",E"issortedr(v)
-
-   Test whether a vector is in descending sorted order
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"issortedby",E"issortedby(by, v)
-
-   Test whether a vector is sorted according to \"by(v)\".
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsorted",E"searchsorted(a, x[, lo, hi])
-
-   For \"a\" sorted low to high, returns the index of the first value
-   \">=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
+   Returns the index of the first value of \"a\" equal to or
+   succeeding \"x\", according to ordering \"ord\" (default:
+   \"Sort.Forward\").
 
    Alias for \"searchsortedfirst()\"
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"searchsorted",E"searchsorted(lt, a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedfirst",E"searchsortedfirst(a, x[, ord])
 
-   For \"a\" sorted using \"lt(x,y)\", returns the index of the first
-   value \">=x\" according to the induced order
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedfirst()\"
+   Returns the index of the first value of \"a\" equal to or
+   succeeding \"x\", according to ordering \"ord\" (default:
+   \"Sort.Forward\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"searchsortedr",E"searchsortedr(a, x[, lo, hi])
+(E"Base.Sort",E"Base.Sort",E"searchsortedlast",E"searchsortedlast(a, x[, ord])
 
-   For \"a\" sorted high to low, returns the index of the first value
-   \"<=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedfirstr()\"
+   Returns the index of the last value of \"a\" preceding or equal to
+   \"x\", according to ordering \"ord\" (default: \"Sort.Forward\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"searchsortedby",E"searchsortedby(by, a, x[, lo, hi])
-
-   For \"a\" sorted according to \"by(a)\", returns the index of the
-   first value \">=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedfirstby()\"
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedfirst",E"searchsortedfirst(a, x[, lo, hi])
-
-   For \"a\" sorted low to high, returns the index of the first value
-   \">=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedfirst",E"searchsortedfirst(lt, a, x[, lo, hi])
-
-   For \"a\" sorted using ordering function \"lt(x,y)\", returns the
-   index of the first value \">=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedfirst()\"
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedfirstr",E"searchsortedfirstr(a, x[, lo, hi])
-
-   For \"a\" sorted high to low, returns the index of the first value
-   \"<=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedfirstby",E"searchsortedfirstby(by, a, x[, lo, hi])
-
-   For \"a\" sorted according to \"by(a)\", returns the index of the
-   first value \">=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedlast",E"searchsortedlast(a, x[, lo, hi])
-
-   For \"a\" sorted low to high, returns the index of the last value
-   \"<=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedlast",E"searchsortedlast(lt, a, x[, lo, hi])
-
-   For \"a\" sorted low to high, returns the index of the last value
-   \"<=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-   Alias for \"searchsortedlast()\"
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedlastr",E"searchsortedlastr(a, x[, lo, hi])
-
-   For \"a\" sorted high to low, returns the index of the last value
-   \">=x\".
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"searchsortedlastby",E"searchsortedlastby(by, a, x[, lo, hi])
-
-   For \"a\" sorted according to \"by(a)\", returns the index of the
-   last value \"<=x\" according to the induced order.
-
-   \"lo\" and \"hi\" optionally limit the search range.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"select",E"select(v, k)
+(E"Base.Sort",E"Base.Sort",E"select",E"select(v, k[, ord])
 
    Find the element in position \"k\" in the sorted vector \"v\"
-   without sorting
+   without sorting, according to ordering \"ord\" (default:
+   \"Sort.Forward\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"select!",E"select!(v, k)
+(E"Base.Sort",E"Base.Sort",E"select!",E"select!(v, k[, ord])
 
    Version of \"select\" which permutes the input vector in place.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"select",E"select(lt, v, k)
-
-   Find the element in position \"k\" in the vector \"v\" ordered by
-   \"lt\", without sorting.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"select!",E"select!(lt, v, k)
-
-   Version of \"select\" which permutes the input vector in place.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"selectr",E"selectr(v, k)
-
-   Find the element in position \"k\" in the reverse sorted vector
-   \"v\", without sorting.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"selectr!",E"selectr!(v, k)
-
-   Version of \"selectr\" which permutes the input vector in place.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"selectby",E"selectby(by, v, k)
-
-   Find the element in position \"k\" in the vector \"v\" as if sorted
-   by sortby, without sorting.
-
-"),
-
-(E"Base.Sort",E"Base.Sort",E"selectby!",E"selectby!(by, v, k)
-
-   Version of \"selectby\" which permutes the input vector in place.
 
 "),
 

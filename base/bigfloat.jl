@@ -1,7 +1,7 @@
 type BigFloat <: FloatingPoint
     mpf::Vector{Int32}
     function BigFloat() 
-        z = Array(Int32, 5)
+        z = Array(Int32, 6)
         ccall((:__gmpf_init,:libgmp), Void, (Ptr{Void},), z)
         b = new(z)
         finalizer(b, BigFloat_clear)
@@ -11,7 +11,7 @@ end
 
 function BigFloat(x::String)
     z = BigFloat()
-    err = ccall((:__gmpf_set_str, :libgmp), Int32, (Ptr{Void}, Ptr{Uint8}, Ptr{Int32}), z.mpf, bytestring(x), 0)
+    err = ccall((:__gmpf_set_str, :libgmp), Int32, (Ptr{Void}, Ptr{Uint8}, Int32), z.mpf, bytestring(x), 0)
     if err != 0; error("Invalid input"); end
     return z
 end
@@ -120,7 +120,7 @@ function string(x::BigFloat)
     lng = 128
     for i = 1:2
         z = Array(Uint8, lng)
-        lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Int32, Ptr{Uint8}, Ptr{Void}), z, lng, "%.Fe", x.mpf)
+        lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{Void}...), z, lng, "%.Fe", x.mpf)
         if lng < 128 || i == 2; return bytestring(convert(Ptr{Uint8}, z[1:lng])); end
     end
 end

@@ -148,8 +148,8 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
     jl_binding_t *b = jl_get_binding(from, s);
     if (b == NULL) {
         jl_printf(JL_STDERR,
-                   "Warning: could not import %s.%s into %s\n",
-                   from->name->name, s->name, to->name->name);
+                  "Warning: could not import %s.%s into %s\n",
+                  from->name->name, s->name, to->name->name);
     }
     else {
         jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&to->bindings, s);
@@ -163,20 +163,27 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                 bto->imported = (explicit!=0);
             }
             else if (bto->owner != to && bto->owner != NULL) {
-                jl_printf(JL_STDERR,
-                           "Warning: ignoring conflicting import of %s.%s into %s\n",
-                           from->name->name, s->name, to->name->name);
-            }
-            else if (bto->constp || bto->value) {
-                assert(bto->owner == to);
-                if (bto->constp && bto->value && b->constp &&
-                    b->value == bto->value) {
-                    // import of equivalent binding
+                // already imported from somewhere else
+                jl_binding_t *bval = jl_get_binding(to, s);
+                if (bval->constp && bval->value && b->constp && b->value == bval->value) {
+                    // equivalent binding
+                    bto->imported = (explicit!=0);
                     return;
                 }
                 jl_printf(JL_STDERR,
-                           "Warning: import of %s.%s into %s conflicts with an existing identifier; ignored.\n",
-                           from->name->name, s->name, to->name->name);
+                          "Warning: ignoring conflicting import of %s.%s into %s\n",
+                          from->name->name, s->name, to->name->name);
+            }
+            else if (bto->constp || bto->value) {
+                // conflict with name owned by destination module
+                assert(bto->owner == to);
+                if (bto->constp && bto->value && b->constp && b->value == bto->value) {
+                    // equivalent binding
+                    return;
+                }
+                jl_printf(JL_STDERR,
+                          "Warning: import of %s.%s into %s conflicts with an existing identifier; ignored.\n",
+                          from->name->name, s->name, to->name->name);
             }
             else {
                 bto->owner = b->owner;

@@ -29,5 +29,5 @@
 # Test covariance
 X = [1 0; 2 1; 3 0; 4 1; 5 10]
 y = [5, 3, 4, 2, 5]
-@assert_approx_eq cov(X[:,1], X[:,2]) cov(X)[1,2]
+@test_approx_eq cov(X[:,1], X[:,2]) cov(X)[1,2]
 @assert issym(cov(X))
