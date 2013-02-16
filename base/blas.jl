@@ -15,6 +15,7 @@ export copy!,
        scal!,
        scal,
        dot,
+       asum,
        nrm2,
        axpy!,
        syrk!,
@@ -109,7 +110,7 @@ function dot{T<:BlasFloat}(DX::Array{T}, DY::Array{T})
     return dot(n, DX, 1, DY, 1)
 end
 
-# DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
+# SUBROUTINE DNRM2(N,X,INCX)
 for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:snrm2_,:Float32,:Float32),
                                 (:dznrm2_,:Complex128,:Float64),
@@ -124,6 +125,22 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
 end
 
 nrm2(A::Array) = nrm2(length(A), A, 1)
+
+# SUBROUTINE ASUM(N, X, INCX)
+for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
+                                (:sasum_,:Float32,:Float32),
+                                (:dzasum_,:Complex128,:Float64),
+                                (:scasum_,:Complex64,:Float32))
+    @eval begin
+        function asum(n::Integer, X::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+            ccall(($(string(fname)),libblas), $ret_type,
+                  (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                  &n, X, &incx)
+        end
+    end
+end
+
+asum(A::Array) = asum(length(A), A, 1)
 
 # SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
 # DY <- DA*DX + DY
