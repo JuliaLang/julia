@@ -140,6 +140,8 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
     end
 end
 
+asum(A::Array) = asum(length(A), A, 1)
+
 # SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
 # DY <- DA*DX + DY
 #*     .. Scalar Arguments ..
