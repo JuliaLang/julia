@@ -2991,13 +2991,37 @@ System
 
    Reference to the singleton ``EnvHash``.
 
+C Interface
+-----------
+
+.. function:: ccall( (symbol, library), RetType, (ArgType1, ...), ArgVar1, ...)
+              ccall( fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
+
+   Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively, ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
+
+.. function:: cfunction(fun::Function, RetType::Type, (ArgTypes...))
+   
+   Generate C-callable function pointer from Julia function.
+
 .. function:: dlopen(libfile::String)
 
-   Load a shared library, returning an opaque handle
+   Load a shared library, returning an opaque handle.
 
 .. function:: dlsym(handle, sym)
 
-   Look up a symbol from a shared library handle
+   Look up a symbol from a shared library handle, return callable function pointer on success.
+
+.. function:: dlsym_e(handle, sym)
+   
+   Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
+
+.. function:: dlclose(handle)
+
+   Close shared library referenced by handle.
+
+.. function:: c_free(addr::Ptr)
+  
+   Call free() from C standard library.
 
 Errors
 ------
