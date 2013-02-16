@@ -26,6 +26,32 @@ function norm{T<:BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Rang
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
+function norm{T<:BlasFloat}(x::Vector{T}, p::Number)
+    n = length(x)
+    if n == 0
+        a = zero(T)
+    elseif p == 2
+        BLAS.nrm2(n, x, 1)
+    elseif p == 1
+        BLAS.asum(n, x, 1)
+    elseif p == Inf
+        max(abs(x))  
+    elseif p == -Inf
+        min(abs(x))
+    elseif p == 0
+        convert(T, nnz(x))
+    else
+        absx = abs(x)
+        dx = max(absx)
+        if dx != zero(T)
+            scale!(absx, 1/dx)
+            a = dx * (sum(absx.^p).^(1/p))
+        else
+            zero(T)
+        end
+    end
+end
+
 function triu!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)
     idx = 1
