@@ -3011,7 +3011,7 @@ C Interface
 
    Look up a symbol from a shared library handle, return callable function pointer on success.
 
-.. funciton:: dlsym_e(handle, sym)
+.. function:: dlsym_e(handle, sym)
    
    Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
 
