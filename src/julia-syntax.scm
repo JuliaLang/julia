@@ -2121,7 +2121,8 @@ So far only the second case can actually occur.
 
 (define (julia-expand-strs e)
   (cond ((not (pair? e))     e)
-	((and (eq? (car e) 'macrocall) (eq? (cadr e) '@str))
+	((and (eq? (car e) 'macrocall) (or (eq? (cadr e) '@str)
+                                           (eq? (cadr e) '@mstr)))
 	 ;; expand macro
 	 (let ((form
 		(apply invoke-julia-macro (cadr e) (cddr e))))
