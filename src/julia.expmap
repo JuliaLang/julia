@@ -294,6 +294,7 @@
     repl_callback_enable;
     restore_signals;
     rl_clear_input;
+    SC_CLK_TCK;
     u8_isvalid;
     u8_strlen;
     u8_strwidth;
