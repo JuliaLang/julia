@@ -508,3 +508,22 @@ str = "s\u2200"
 @test """ab""c""" == "ab\"\"c"
 @test """ab"\"c""" == "ab\"\"c"
 @test """abc\"""" == "abc\""
+n = 3
+@test """$n""" == "$n"
+@test E"""$n""" == E"$n"
+@test """
+     a
+     b
+
+     c
+    """ == "a\nb\n\nc"
+@test """x
+     a
+    """ == "x\n     a\n    "
+@test """
+     $n
+   """ == "3"
+@test E"""
+     $n
+   """ == E"$n"
+

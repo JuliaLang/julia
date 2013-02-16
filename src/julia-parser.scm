@@ -800,16 +800,19 @@
 		   (if (and (symbol? ex) (not (operator? ex))
 			    (not (ts:space? s)))
 		       ;; custom prefixed string literals, x"s" => @x_str "s"
-		       (let ((str (begin (take-token s)
-					 (parse-string-literal s)))
-			     (macname (symbol (string #\@ ex '_str))))
-			 (let ((nxt (peek-token s)))
-			   (if (and (symbol? nxt) (not (operator? nxt))
-				    (not (ts:space? s)))
-			       ;; string literal suffix, "s"x
-			       (loop `(macrocall ,macname ,(car str)
-						 ,(string (take-token s))))
-			       (loop `(macrocall ,macname ,(car str))))))
+                       (let* ((str (begin (take-token s)
+                                          (parse-string-literal s)))
+                              (nxt (peek-token s))
+                              (macname (symbol (string #\@ ex '_str)))
+                              (macstr (if (triplequote-string-literal? str)
+                                          `(macrocall @mstr ,(car str))
+                                          (car str))))
+                         (if (and (symbol? nxt) (not (operator? nxt))
+                                  (not (ts:space? s)))
+                             ;; string literal suffix, "s"x
+                             (loop `(macrocall ,macname ,macstr
+                                               ,(string (take-token s))))
+                             (loop `(macrocall ,macname ,macstr))))
 		       ex))
 		  (else ex))))))))
 
@@ -1312,7 +1315,7 @@
       c))
 
 (define (take-char p)
-    (begin (read-char p) p))
+  (begin (read-char p) p))
 
 ; reads a raw string literal with no processing.
 ; quote can be escaped with \, but the \ is left in place.
@@ -1322,7 +1325,7 @@
     (if (eqv? (peek-char p) #\")
         (if (eqv? (peek-char (take-char p)) #\")
             (parse-string-literal-3 (take-char p))
-            (cons "" #f))
+            (cons "" (cons #f #f)))
         (parse-string-literal-1 p))))
 
 (define (parse-string-literal-1 p)
@@ -1340,7 +1343,7 @@
 			   (set! interpolate #t))
 		       (write-char (not-eof-3 c) b)))
 		 (loop (read-char p)))))
-    (cons (io.tostring! b) interpolate)))
+    (cons (io.tostring! b) (cons interpolate #f))))
 
 (define (parse-string-literal-3 p)
   (let ((b (open-output-string))
@@ -1366,7 +1369,10 @@
                            (set! interpolate #t))
                        (write-char (not-eof-3 c) b)))
                  (loop (read-char p)))))
-    (cons (io.tostring! b) interpolate)))
+    (cons (io.tostring! b) (cons interpolate #t))))
+
+(define (interpolate-string-literal? s) (cadr s))
+(define (triplequote-string-literal? s) (cddr s))
 
 (define (not-eof-1 c)
   (if (eof-object? c)
@@ -1542,12 +1548,16 @@
 	  ((eqv? t #\")
 	   (take-token s)
 	   (let ((ps (parse-string-literal s)))
-	     (if (cdr ps)
-		 `(macrocall @str ,(car ps))
-		 (let ((str (unescape-string (car ps))))
-		   (if (not (string.isutf8 str))
-		       (error "invalid UTF-8 sequence"))
-		   str))))
+             (if (interpolate-string-literal? ps)
+                 (if (triplequote-string-literal? ps)
+                     `(macrocall @imstr ,(car ps))
+                     `(macrocall @str ,(car ps)))
+                 (let ((str (unescape-string (car ps))))
+                   (if (not (string.isutf8 str))
+                       (error "invalid UTF-8 sequence"))
+                   (if (triplequote-string-literal? ps)
+                       `(macrocall @mstr ,str)
+                       str)))))
 
 	  ;; macro call
 	  ((eqv? t #\@)

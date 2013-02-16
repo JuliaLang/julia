@@ -652,9 +652,53 @@ function interp_parse_bytes(s::String)
     interp_parse(s, unescape_string, writer)
 end
 
+## multiline strings ##
+
+function multiline_lstrip(s::String)
+    if length(s) == 0 || !isspace(s[1])
+        return s
+    end
+    lines = split(s, '\n')
+
+    # trim leading,trailing whitespace
+    a,b = 1,length(lines)
+    if b == 1 return s end
+    if lstrip(lines[a]) == "" a += 1 end
+    if lstrip(lines[b]) == "" b -= 1 end
+    if a > b return s end
+
+    # find prefix
+    first_line = lines[a]
+    n = 0
+    for c in first_line
+        if isspace(c)
+            n += 1
+        else
+            break
+        end
+    end
+    prefix = (n == 0) ? "" : first_line[1:n]
+
+    # output string
+    prefix_len = length(prefix)
+    buf = memio(length(s) - (b-a+1)*prefix_len, false)
+    for i = a:b
+        line = lines[i]
+        if begins_with(line, prefix)
+            print(buf, line[prefix_len+1:end])
+        else
+            print(buf, line)
+        end
+        if i != b print(buf, '\n') end
+    end
+    takebuf_string(buf)
+end
+
 ## core string macros ##
 
 macro   str(s); interp_parse(s); end
+macro  mstr(s); multiline_lstrip(s); end
+macro imstr(s); interp_parse(multiline_lstrip(s)); end
 macro I_str(s); interp_parse(s, x->unescape_chars(x,"\"")); end
 macro E_str(s); check_utf8(unescape_string(s)); end
 macro B_str(s); interp_parse_bytes(s); end
