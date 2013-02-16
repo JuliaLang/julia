@@ -34,7 +34,7 @@ function cd_pkgdir(f::Function)
     cd(f,d)
 end
 
-function print_pkg_status(pkg::String, path::String)
+function print_pkg_status(io::IO, pkg::String, path::String)
     if !isdir(path)
       error("Package repository $path doesn't exist")
     end
@@ -45,18 +45,19 @@ function print_pkg_status(pkg::String, path::String)
             Metadata.version(pkg,head)
         end
         dirty = Git.dirty() ? " (dirty)" : ""
-        println("$(rpad(pkg,16)) $ver$dirty")
+        println(io,"$(rpad(pkg,16)) $ver$dirty")
     end
 end
 
 # show the status packages in the repo
-
-status() = cd_pkgdir() do
+status() = status(OUTPUT_STREAM)
+status(io::IO) = cd_pkgdir() do
     Git.each_submodule(false) do pkg, path, sha1
-        print_pkg_status(pkg, path)
+        print_pkg_status(io, pkg, path)
     end
 end
-status(pkg::String) = print_pkg_status(pkg, joinpath(dir(),pkg))
+status(pkg::String) = status(OUTPUT_STREAM, pkg)
+status(io::IO, pkg::String) = print_pkg_status(io, pkg, joinpath(dir(),pkg))
 
 # create a new empty packge repository
 
