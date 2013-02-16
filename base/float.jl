@@ -59,22 +59,22 @@ else
     itrunc(x::Float64) = int32(box(Int64,fptosi64(unbox(Float64,x))))
 end
 
-iround(::Type{Int8}, x::Float32) = box(Int8,trunc8(fpsiround32(unbox(Float32,x))))
-iround(::Type{Int8}, x::Float64) = box(Int8,trunc8(fpsiround64(unbox(Float64,x))))
-iround(::Type{Uint8}, x::Float32) = box(Uint8,trunc8(fpuiround32(unbox(Float32,x))))
-iround(::Type{Uint8}, x::Float64) = box(Uint8,trunc8(fpuiround64(unbox(Float64,x))))
-iround(::Type{Int16}, x::Float32) = box(Int16,trunc16(fpsiround32(unbox(Float32,x))))
-iround(::Type{Int16}, x::Float64) = box(Int16,trunc16(fpsiround64(unbox(Float64,x))))
-iround(::Type{Uint16}, x::Float32) = box(Uint16,trunc16(fpuiround32(unbox(Float32,x))))
-iround(::Type{Uint16}, x::Float64) = box(Uint16,trunc16(fpuiround64(unbox(Float64,x))))
+for to in (Int8, Uint8, Int16, Uint16)
+    @eval begin
+        iround(::Type{$to}, x::Float32) = box($to,trunc_int($to,fpsiround32(unbox(Float32,x))))
+        iround(::Type{$to}, x::Float64) = box($to,trunc_int($to,fpsiround64(unbox(Float64,x))))
+    end
+end
+
 iround(::Type{Int32}, x::Float32) = box(Int32,fpsiround32(unbox(Float32,x)))
-iround(::Type{Int32}, x::Float64) = box(Int32,trunc32(fpsiround64(unbox(Float64,x))))
+iround(::Type{Int32}, x::Float64) = box(Int32,trunc_int(Int32,fpsiround64(unbox(Float64,x))))
 iround(::Type{Uint32}, x::Float32) = box(Uint32,fpuiround32(unbox(Float32,x)))
-iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc32(fpuiround64(unbox(Float64,x))))
+iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc_int(Uint32,fpuiround64(unbox(Float64,x))))
 iround(::Type{Int64}, x::Float32) = box(Int64,fpsiround64(fpext64(unbox(Float32,x))))
 iround(::Type{Int64}, x::Float64) = box(Int64,fpsiround64(unbox(Float64,x)))
 iround(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround64(fpext64(unbox(Float32,x))))
 iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround64(unbox(Float64,x)))
+
 iround(::Type{Int128}, x::Float32) = convert(Int128,round(x))
 iround(::Type{Int128}, x::Float64) = convert(Int128,round(x))
 iround(::Type{Uint128}, x::Float32) = convert(Uint128,round(x))
