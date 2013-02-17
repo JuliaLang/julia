@@ -252,7 +252,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_check_type_tuple(st->types, st->name->name, "type definition");
         super = eval(args[4], locals, nl);
         jl_set_tag_type_super((jl_tag_type_t*)st, super);
-        jl_compute_struct_offsets(st);
+        jl_compute_field_offsets(st);
         jl_add_constructors(st);
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
