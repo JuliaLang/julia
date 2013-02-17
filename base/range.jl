@@ -71,8 +71,10 @@ function colon{T<:Real}(start::T, step::T, stop::T)
             if abs(n-nf) < eps(n)*3
                 # adjust step to try to hit stop exactly
                 step = (stop-start)/(n-1)
+                len = itrunc(n)
+            else
+                len = itrunc(nf)
             end
-            len = itrunc(n)
         else
             n = nf
             len = iround(n)
