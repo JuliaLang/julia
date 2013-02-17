@@ -125,6 +125,15 @@ let
     @test isa(repr(d), String)  # check that printable without error
 end
 
+# issue #2344
+let
+    bestkey(d, key) = key
+    bestkey{K<:String,V}(d::Associative{K,V}, key) = string(key)
+    bar(x) = bestkey(x, :y)
+    @test bar([:x => [1,2,5]]) == :y
+    @test bar(["x" => [1,2,5]]) == "y"
+end
+
 # issue #1438
 type I1438T
     id
