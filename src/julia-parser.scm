@@ -640,6 +640,7 @@
        (not (memq t reserved-words))
        (not (closing-token? t))
        (not (newline? t))
+       (not (and (pair? expr) (eq? (car expr) '...)))
        (or (number? expr)
 	   (not (memv t '(#\( #\[ #\{))))))
 
