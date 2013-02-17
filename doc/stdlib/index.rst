@@ -16,6 +16,7 @@ Built-ins
    :maxdepth: 1
 
    base
+   constants
 
 ****************
 Built-in Modules

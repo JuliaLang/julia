@@ -91,7 +91,7 @@ value back to a ``Char`` just as easily::
 Not all integer values are valid Unicode code points, but for
 performance, the ``char`` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
-value code point, use the ``safe_char`` conversion instead::
+valid code point, use the ``safe_char`` conversion instead::
 
     julia> char(0x110000)
     '\U110000'

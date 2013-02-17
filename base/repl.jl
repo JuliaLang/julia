@@ -40,8 +40,14 @@ function error_show(io::IO, e::TypeError)
     end
 end
 
-function error_show(io::IO, e::LoadError)
-    error_show(io, e.error)
+function error_show(io::IO, e, bt)
+    error_show(io, e)
+    show_backtrace(io, bt)
+end
+
+error_show(io::IO, e::LoadError) = error_show(io, e, {})
+function error_show(io::IO, e::LoadError, bt)
+    error_show(io, e.error, bt)
     print(io, "\nat $(e.file):$(e.line)")
 end
 
@@ -56,16 +62,14 @@ error_show(io::IO, e::InterruptException) = print(io, "interrupt")
 
 function error_show(io::IO, e::MethodError)
     name = e.f.env.name
-    if is(e.f,convert)
+    if is(e.f,convert) && length(e.args)==2
         print(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
     else
         print(io, "no method $(name)$(typeof(e.args))")
     end
 end
 
-function error_show(io::IO, bt::BackTrace)
-    error_show(io, bt.e)
-    t = bt.trace
+function show_backtrace(io::IO, t)
     # we may not declare :eval_user_input
     # directly so that we get a compile error
     # in case its name changes in the future
@@ -82,10 +86,10 @@ function error_show(io::IO, bt::BackTrace)
         print(io, " in ", t[i], " at ", t[i+1])
         if lno >= 1
             try
-            print(io, ":", lno)
+                print(io, ":", lno)
             catch
-                print('?') #for when dec is not yet defined
+                print(io, '?') #for when dec is not yet defined
+            end
         end
     end
-end
 end

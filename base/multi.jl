@@ -646,7 +646,7 @@ function perform_work(job::WorkItem)
         end
     catch err
         print("exception on ", myid(), ": ")
-        show(add_backtrace(err,backtrace()))
+        display_error(err,backtrace())
         println()
         result = err
     end
@@ -1002,13 +1002,12 @@ function start_sge_workers(n)
     home = JULIA_HOME
     sgedir = "$home/../../SGE"
     run(`mkdir -p $sgedir`)
-    qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
-    `echo $home/julia-release-basic --worker` | qsub_cmd
+    qsub_cmd = `echo $home/julia-release-basic --worker` | `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
     out,_ = readsfrom(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
     end
-    id = split(readline(out),'.')[1]
+    id = chomp(split(readline(out),'.')[1])
     println("job id is $id")
     print("waiting for job to start");
     workers = cell(n)
@@ -1126,7 +1125,7 @@ function localize_vars(expr)
     # requires a special feature of the front end that knows how to insert
     # the correct variables. the list of free variables cannot be computed
     # from a macro.
-    Expr(:localize, {:(()->($expr)), v...}, Any)
+    Expr(:localize, {:(()->($expr)), map(esc,v)...}, Any)
 end
 
 macro spawn(expr)
@@ -1370,12 +1369,12 @@ function event_loop(isclient)
     global work_cb = SingleAsyncWork(eventloop(), _jl_work_cb)
     global fgcm_cb = SingleAsyncWork(eventloop(), (args...)->flush_gc_msgs());
     queueAsync(work_cb::SingleAsyncWork)
-    iserr, lasterr = false, ()
+    iserr, lasterr, bt = false, nothing, {}
     while true
         try
             if iserr
-                show(lasterr)
-                iserr, lasterr = false, ()
+                display_error(lasterr, bt)
+                iserr, lasterr, bt = false, nothing, {}
             else
                 run_event_loop()
             end
@@ -1391,7 +1390,7 @@ function event_loop(isclient)
                 # to interrupt.
                 interrupt_waiting_task(roottask_wi,err)
             end
-            iserr, lasterr = true, add_backtrace(err,bt)
+            iserr, lasterr = true, err
         end
     end
 end

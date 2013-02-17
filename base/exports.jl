@@ -14,7 +14,8 @@ export
     Pkg,
     Operators,
     Errno,
-
+    Meta,
+    
 # Types
     AbstractMatrix,
     AbstractSparseMatrix,
@@ -1004,7 +1005,7 @@ export
     drand,
     drandn,
     dzeros,
-    localize,
+    localpart,
     myindexes,
     procs,
 

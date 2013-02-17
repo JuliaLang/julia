@@ -62,18 +62,40 @@ colon(start::Char, stop::Char) =
     OrdinalRange(start, 1, max(0, stop-start+1))
 
 function colon{T<:Real}(start::T, step::T, stop::T)
-    len = (stop-start)/step
-    if len >= typemax(Int)
-        error("Range: length ",len," is too large")
+    if (step<0) != (stop<start)
+        len = 0
+    else
+        nf = (stop-start)/step + 1
+        if T <: FloatingPoint
+            n = round(nf)
+            if abs(n-nf) < eps(n)*3
+                # adjust step to try to hit stop exactly
+                step = (stop-start)/(n-1)
+                len = itrunc(n)
+            else
+                len = itrunc(nf)
+            end
+        else
+            n = nf
+            len = iround(n)
+        end
+        if n >= typemax(Int)
+            error("Range: length ",n," is too large")
+        end
     end
-    Range(start, step, max(0, ifloor(len)+1))
+    Range(start, step, len)
 end
 function colon{T<:Real}(start::T, stop::T)
-    len = stop-start
-    if len >= typemax(Int)
-    error("Range: length ",len," is too large")
+    if stop < start
+        len = 0
+    else
+        n = round(stop-start+1)
+        if n >= typemax(Int)
+            error("Range: length ",n," is too large")
+        end
+        len = itrunc(n)
     end
-    Range1(start, max(0, ifloor(len)+1))
+    Range1(start, len)
 end
 
 colon(start::Real, step::Real, stop::Real) = colon(promote(start, step, stop)...)

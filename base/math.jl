@@ -112,7 +112,7 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
-for f in (:logb, :expm1, :ceil, :trunc, :round, :significand) # :rint, :nearbyint
+for f in (:logb, :expm1, :ceil, :trunc, :floor, :significand) # :rint, :nearbyint
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -121,9 +121,9 @@ for f in (:logb, :expm1, :ceil, :trunc, :round, :significand) # :rint, :nearbyin
     end
 end
 
-floor(x::Float32) = ccall((:floorf, libm), Float32, (Float32,), x)
-floor(x::Real) = floor(float(x))
-@vectorize_1arg Real floor
+round(x::Float32) = ccall((:roundf, libm), Float32, (Float32,), x)
+round(x::Real) = round(float(x))
+@vectorize_1arg Real round
 
 atan2(x::Real, y::Real) = atan2(float64(x), float64(y))
 

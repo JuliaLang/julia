@@ -8,17 +8,12 @@ The `Sort` module contains algorithms and other functions related to
 sorting.  Default sort functions and standard versions of the various
 sort algorithm are available by default. 
 Specific sort algorithms can be used by importing
-`Sort`, or for finer grain control, importing the fully qualified
-algorithm name, e.g.,::
+`Sort` or using the fully qualified algorithm name, e.g.,::
 
   # Julia code
-  import Sort.TimSort
+  sort(v, Sort.TimSort)
 
-will allow use of timsort with the various sort functions.  All of the
-sorting algorithms can be made available directly with::
-
-  # Julia code
-  using Sort
+will sort ``v`` using ``TimSort``.
 
 
 Overview
@@ -31,7 +26,7 @@ allow sorting in ascending or descending order,::
   julia> sort([2,3,1]) == [1,2,3]
   true
 
-  julia> sortr([2,3,1]) == [3,2,1]
+  julia> sort([2,3,1], Sort.Reverse) == [3,2,1]
   true
 
 return a permutation,::
@@ -55,7 +50,7 @@ and use a custom extractor function to order inputs::
 
   julia> canonicalize(s) = filter(c -> ('A'<=c<='Z' || 'a'<=c<='z'), s) | uppercase
 
-  julia> sortby(canonicalize, ["New York", "New Jersey", "Nevada", "Nebraska", "Newark"])
+  julia> sortby(["New York", "New Jersey", "Nevada", "Nebraska", "Newark"], canonicalize)
   5-element ASCIIString Array:
    "Nebraska"  
    "Nevada"    
@@ -63,9 +58,10 @@ and use a custom extractor function to order inputs::
    "New Jersey"
    "New York"  
 
-Note that none of the variants above modify the original arrays.  To sort in-place (which is often more efficient), each sort function has a mutating version which ends with an exclamation point (``sort!``, ``sortr!``, and ``sortby!``).
-
-There are also versions of these functions which, in addition to returning a sorted array, will return the permutation of original indices which create the sorted array.  These are ``sortperm``, ``sortpermr``, and ``sortpermby``, along with mutating versions ``sortperm!``, ``sortpermr!``, and ``sortpermby!``.
+Note that none of the variants above modify the original arrays.  To
+sort in-place (which is often more efficient), :func:`sort` and 
+:func:`sortby` have mutating versions which end with an exclamation 
+point (:func:`sort!` and :func:`sortby!`).
 
 These sort functions use reasonable default algorithms, but if you
 want more control or want to see if a different sort algorithm will
@@ -96,197 +92,81 @@ takes advantage of sorted runs which exist in many real world
 datasets.  
 
 The sort functions select a reasonable default algorithm, depending on
-the type of the target array.
-
-Mutating and non-mutating versions of the sort functions using each
-of the algorithms above are exported and available for use by
-default.
+the type of the target array.  To force a specific algorithm to be
+used, append ``Sort.<algorithm>`` to the argument list (e.g., use 
+``sort!(v, Sort.TimSort)`` to force the use of the Timsort algorithm).
 
 
 Functions
 ---------
 
-----------------------
-General Sort Functions
-----------------------
-.. function:: sort(v[, dim])
+--------------
+Sort Functions
+--------------
+.. function:: sort(v[, alg[, ord]])
 
-   Sort a vector in ascending order.  If ``dim`` is provided, sort
-   along the given dimension. 
-
-.. function:: sort(lessthan, v[, dim])
-
-   Sort with a custom comparison function.
-
-.. function:: sort(alg, ...)
-
-   Sort using a specific sorting algorithm (InsertionSort, QuickSort,
-   MergeSort, or TimSort). 
+   Sort a vector in ascending order.  Specify ``alg`` to choose a
+   particular sorting algorithm (``Sort.InsertionSort``,
+   ``Sort.QuickSort``, ``Sort.MergeSort``, or ``Sort.TimSort``), and
+   ``ord`` to sort with a custom ordering (e.g., Sort.Reverse or a
+   comparison function).
 
 .. function:: sort!(...)
 
    In-place sort.
 
-.. function:: sortby(by, v[, dim])
+.. function:: sortby(v, by[, alg])
 
-   Sort a vector according to ``by(v)``.   If ``dim`` is provided,
-   sort along the given dimension. 
-
-.. function:: sortby(alg, ...)
-
-   ``sortby`` using a specific sorting algorithm (``InsertionSort``,
-   ``QuickSort``, ``MergeSort``, or ``TimSort``). 
+   Sort a vector according to ``by(v)``.  Specify ``alg`` to choose a
+   particular sorting algorithm (``Sort.InsertionSort``,
+   ``Sort.QuickSort``, ``Sort.MergeSort``, or ``Sort.TimSort``).
 
 .. function:: sortby!(...)
 
    In-place ``sortby``.
 
-.. function:: sortperm(v)
+.. function:: sortperm(v, [alg[, ord]])
 
-   Return a permutation vector, which when applied to the input vector ``v`` will sort it.
-
-.. function:: sortperm(lessthan, v)
-
-   Return a permutation vector, which when applied to the input vector ``v`` will sort it, using the specified ``lessthan`` comparison function.
-
-.. function:: sortperm(alg, ...)
-
-   ``sortperm`` using a specific sorting algorithm (``InsertionSort``,
-   ``QuickSort``, ``MergeSort``, or ``TimSort``).
-
-.. function:: sortperm!(...)
-
-   In-place ``sortperm``.
+   Return a permutation vector, which when applied to the input vector
+   ``v`` will sort it.  Specify ``alg`` to choose a particular sorting
+   algorithm (``Sort.InsertionSort``, ``Sort.QuickSort``,
+   ``Sort.MergeSort``, or ``Sort.TimSort``), and ``ord`` to sort with
+   a custom ordering (e.g., Sort.Reverse or a comparison function).
 
 -------------------------
 Sorting-related Functions
 -------------------------
 
-.. function:: issorted(v)
+.. function:: issorted(v[, ord])
 
-   Test whether a vector is in ascending sorted order
+   Test whether a vector is in ascending sorted order.  If specified,
+   ``ord`` gives the ordering to test.
 
-.. function:: issortedr(v)
+.. function:: searchsorted(a, x[, ord])
 
-   Test whether a vector is in descending sorted order
-
-.. function:: issortedby(by,v)
-
-   Test whether a vector is sorted according to ``by(v)``.
-
-.. function:: searchsorted(a, x[, lo, hi])
-
-   For ``a`` sorted low to high, returns the index of the first value ``>=x``.
-
-   ``lo`` and ``hi`` optionally limit the search range.
+   Returns the index of the first value of ``a`` equal to or
+   succeeding ``x``, according to ordering ``ord`` (default:
+   ``Sort.Forward``).
 
    Alias for ``searchsortedfirst()``
 
-.. function:: searchsorted(lt, a, x[, lo, hi])
+.. function:: searchsortedfirst(a, x[, ord])
 
-   For ``a`` sorted using ``lt(x,y)``, returns the index of the first value ``>=x`` according to the induced order
+   Returns the index of the first value of ``a`` equal to or
+   succeeding ``x``, according to ordering ``ord`` (default:
+   ``Sort.Forward``).
 
-   ``lo`` and ``hi`` optionally limit the search range.
+.. function:: searchsortedlast(a, x[, ord])
 
-   Alias for ``searchsortedfirst()``
+   Returns the index of the last value of ``a`` preceding or equal to
+   ``x``, according to ordering ``ord`` (default: ``Sort.Forward``).
 
-.. function:: searchsortedr(a, x[, lo, hi])
+.. function:: select(v, k[, ord])
 
-   For ``a`` sorted high to low, returns the index of the first value ``<=x``.
+   Find the element in position ``k`` in the sorted vector ``v``
+   without sorting, according to ordering ``ord`` (default:
+   ``Sort.Forward``).
 
-   ``lo`` and ``hi`` optionally limit the search range.
-
-   Alias for ``searchsortedfirstr()``
-
-.. function:: searchsortedby(by, a, x[, lo, hi])
-
-   For ``a`` sorted according to ``by(a)``, returns the index of the first value ``>=x`` according to the induced order.
-
-   ``lo`` and ``hi`` optionally limit the search range.
-
-   Alias for ``searchsortedfirstby()``
-
-.. function:: searchsortedfirst(a, x[, lo, hi])
-
-   For ``a`` sorted low to high, returns the index of the first value ``>=x``.
-
-   ``lo`` and ``hi`` optionally limit the search range.
-
-.. function:: searchsortedfirst(lt, a, x[, lo, hi])
-
-   For ``a`` sorted using ordering function ``lt(x,y)``, returns the index of the first value ``>=x`` according to the induced order.
-
-   ``lo`` and ``hi`` optionally limit the search range.
-
-   Alias for ``searchsortedfirst()``
-
-.. function:: searchsortedfirstr(a, x[, lo, hi])
-
-   For ``a`` sorted high to low, returns the index of the first value ``<=x``.
-
-   ``lo`` and ``hi`` optionally limit the search range.
-
-.. function:: searchsortedfirstby(by, a, x[, lo, hi])
-
-   For ``a`` sorted according to ``by(a)``, returns the index of the first value ``>=x`` according to the induced order.
-
-   ``lo`` and ``hi`` optionally limit the search range.
-
-.. function:: searchsortedlast(a, x[, lo, hi])
-
-   For ``a`` sorted low to high, returns the index of the last value ``<=x``.
-
-   ``lo`` and ``hi`` optionally limit the search range.
-
-.. function:: searchsortedlast(lt, a, x[, lo, hi])
-
-   For ``a`` sorted low to high, returns the index of the last value ``<=x`` according to the induced order.
-
-   ``lo`` and ``hi`` optionally limit the search range.
-
-   Alias for ``searchsortedlast()``
-
-.. function:: searchsortedlastr(a, x[, lo, hi])
-
-   For ``a`` sorted high to low, returns the index of the last value ``>=x``.
-
-   ``lo`` and ``hi`` optionally limit the search range.
-
-.. function:: searchsortedlastby(by, a, x[, lo, hi])
-
-   For ``a`` sorted according to ``by(a)``, returns the index of the last value ``<=x`` according to the induced order.
-
-   ``lo`` and ``hi`` optionally limit the search range.
-
-.. function:: select(v, k)
-
-   Find the element in position ``k`` in the sorted vector ``v`` without sorting
-
-.. function:: select!(v, k)
+.. function:: select!(v, k[, ord])
 
    Version of ``select`` which permutes the input vector in place.
-
-.. function:: select(lt, v, k)
-
-   Find the element in position ``k`` in the vector ``v`` ordered by ``lt``, without sorting.
-
-.. function:: select!(lt, v, k)
-
-   Version of ``select`` which permutes the input vector in place.
-
-.. function:: selectr(v, k)
-
-   Find the element in position ``k`` in the reverse sorted vector ``v``, without sorting.
-
-.. function:: selectr!(v, k)
-
-   Version of ``selectr`` which permutes the input vector in place.
-
-.. function:: selectby(by, v, k)
-
-   Find the element in position ``k`` in the vector ``v`` as if sorted by sortby, without sorting.
-
-.. function:: selectby!(by, v, k)
-
-   Version of ``selectby`` which permutes the input vector in place.
-
