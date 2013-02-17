@@ -499,7 +499,9 @@ void *allocobj(size_t sz);
 #define jl_is_abstracttype(t) (jl_is_datatype(t)&&(((jl_datatype_t*)t)->abstract))
 #define jl_datatype_size(t)  (((jl_datatype_t*)t)->size)
 #define jl_ismutable(t)      (((jl_datatype_t*)t)->mutable)
+#define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutable)
 #define jl_isimmutable(t)    (!((jl_datatype_t*)t)->mutable)
+#define jl_is_immutable(t)   (!((jl_datatype_t*)t)->mutable)
 #define jl_is_uniontype(v)   jl_typeis(v,jl_uniontype_type)
 #define jl_is_typevar(v)     jl_typeis(v,jl_tvar_type)
 #define jl_is_typector(v)    jl_typeis(v,jl_typector_type)
@@ -718,6 +720,7 @@ int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
 int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err);
+int jl_is_pointerfree(jl_datatype_t *dt);
 
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);

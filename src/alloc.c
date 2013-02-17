@@ -543,6 +543,15 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     st->size = LLT_ALIGN(sz, alignm);
 }
 
+int jl_is_pointerfree(jl_datatype_t *dt)
+{
+    for(size_t i=0; i < jl_tuple_len(dt->types); i++) {
+        if (dt->fields[i].isptr)
+            return 0;
+    }
+    return 1;
+}
+
 extern int jl_boot_file_loaded;
 
 jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
