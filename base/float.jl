@@ -81,7 +81,7 @@ iround(::Type{Uint128}, x::Float32) = convert(Uint128,round(x))
 iround(::Type{Uint128}, x::Float64) = convert(Uint128,round(x))
 
 # this is needed very early because it is used by Range and colon
-floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
+round(x::Float64) = ccall((:round, Base.libm_name), Float64, (Float64,), x)
 
 iceil(x::FloatingPoint)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
 ifloor(x::FloatingPoint) = itrunc(floor(x)) # TOOD: fast primitive for ifloor

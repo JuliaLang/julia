@@ -26,6 +26,10 @@ r = [5:-1:1]
 @test r[4]==2
 @test r[5]==1
 
+@test length(.1:.1:.3) == 3
+@test length(1.1:1.1:3.3) == 3
+@test length(1.1:1.3:3) == 2
+
 let
     span = 5:20
     r = -7:3:42
