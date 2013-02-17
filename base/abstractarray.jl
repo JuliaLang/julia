@@ -903,7 +903,7 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
         B = $(op===:+ ? (:(similar(A,typeof(+zero(eltype(A)))))) :
                         (:(similar(A))))
 
-        if axis_size <= 1
+        if axis_size < 1
             return B
         end
 
@@ -943,7 +943,7 @@ for (f, op) = ((:cummin, :min), (:cummax, :max))
             axis_stride *= size(A,i)
         end
 
-        if axis_size <= 1
+        if axis_size < 1
             return A
         end
 
