@@ -11,6 +11,11 @@
 
 // array constructors ---------------------------------------------------------
 
+static inline int store_unboxed(jl_type_t *el_type)
+{
+    return jl_is_datatype(el_type) && jl_is_leaf_type(el_type) && jl_is_immutable(el_type) && jl_is_pointerfree(el_type);
+}
+
 static jl_array_t *_new_array(jl_type_t *atype,
                               uint32_t ndims, size_t *dims)
 {
@@ -26,9 +31,9 @@ static jl_array_t *_new_array(jl_type_t *atype,
     }
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
 
-    isunboxed = jl_is_bits_type(el_type);
+    isunboxed = store_unboxed(el_type);
     if (isunboxed) {
-        elsz = jl_bitstype_nbits(el_type)/8;
+        elsz = jl_datatype_size(el_type);
         tot = elsz * nel;
         if (elsz == 1) {
             // hidden 0 terminator for all byte arrays
@@ -134,8 +139,8 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
 
     if (a->data == NULL) a->data = data->data;
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
-    if (jl_is_bits_type(el_type)) {
-        a->elsize = jl_bitstype_nbits(el_type)/8;
+    if (store_unboxed(el_type)) {
+        a->elsize = jl_datatype_size(el_type);
         a->ptrarray = 0;
     }
     else {
@@ -173,9 +178,9 @@ jl_array_t *jl_ptr_to_array_1d(jl_type_t *atype, void *data, size_t nel,
     jl_array_t *a;
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
 
-    int isunboxed = jl_is_bits_type(el_type);
+    int isunboxed = store_unboxed(el_type);
     if (isunboxed)
-        elsz = jl_bitstype_nbits(el_type)/8;
+        elsz = jl_datatype_size(el_type);
     else
         elsz = sizeof(void*);
 
@@ -215,9 +220,9 @@ jl_array_t *jl_ptr_to_array(jl_type_t *atype, void *data, jl_tuple_t *dims,
     }
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
 
-    int isunboxed = jl_is_bits_type(el_type);
+    int isunboxed = store_unboxed(el_type);
     if (isunboxed)
-        elsz = jl_bitstype_nbits(el_type)/8;
+        elsz = jl_datatype_size(el_type);
     else
         elsz = sizeof(void*);
 
@@ -362,7 +367,7 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(a));
     jl_value_t *elt;
-    if (jl_is_bits_type(el_type)) {
+    if (!a->ptrarray) {
         elt = jl_new_bits((jl_bits_type_t*)el_type,
                           &((char*)a->data)[i*a->elsize]);
     }
@@ -424,7 +429,7 @@ void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
         if (!jl_subtype(rhs, el_type, 1))
             jl_type_error("arrayset", el_type, rhs);
     }
-    if (jl_is_bits_type(el_type)) {
+    if (!a->ptrarray) {
         jl_assign_bits(&((char*)a->data)[i*a->elsize], rhs);
     }
     else {
