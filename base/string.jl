@@ -659,6 +659,7 @@ function multiline_lstrip(s::String)
         return s
     end
     lines = split(s, '\n')
+    last_line = lines[end]
 
     # trim leading,trailing whitespace
     a,b = 1,length(lines)
@@ -667,17 +668,16 @@ function multiline_lstrip(s::String)
     if lstrip(lines[b]) == "" b -= 1 end
     if a > b return s end
 
-    # find prefix
-    first_line = lines[a]
+    # find prefix using last line
     n = 0
-    for c in first_line
+    for c in last_line
         if isspace(c)
             n += 1
         else
             break
         end
     end
-    prefix = (n == 0) ? "" : first_line[1:n]
+    prefix = (n == 0) ? "" : last_line[1:n]
 
     # output string
     prefix_len = length(prefix)
