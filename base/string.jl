@@ -968,11 +968,11 @@ function chomp!(s::ByteString)
 end
 chomp!(s::String) = chomp(s) # copying fallback for other string types
 
-function lstrip(s::String)
+function lstrip(s::String, chars::String)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        if !isspace(c)
+        if !contains(chars, c)
             return s[i:end]
         end
         i = j
@@ -980,12 +980,12 @@ function lstrip(s::String)
     ""
 end
 
-function rstrip(s::String)
+function rstrip(s::String, chars::String)
     r = reverse(s)
     i = start(r)
     while !done(r,i)
         c, j = next(r,i)
-        if !isspace(c)
+        if !contains(chars, c)
             return s[1:end-i+1]
         end
         i = j
@@ -993,7 +993,12 @@ function rstrip(s::String)
     ""
 end
 
+for stripfn in {:lstrip, :rstrip}
+    @eval ($stripfn)(s::String) = ($stripfn)(s, " \f\n\r\t\v")
+end
+
 strip(s::String) = lstrip(rstrip(s))
+strip(s::String, chars::String) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
