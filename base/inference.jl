@@ -1511,6 +1511,8 @@ function exprtype(x::ANY)
             return Any
         end
         return abstract_eval(x, (), sv)
+    elseif isa(x,QuoteNode)
+        return typeof(x.value)
     elseif isa(x,Type)
         return Type{x}
     elseif isa(x,LambdaStaticData)

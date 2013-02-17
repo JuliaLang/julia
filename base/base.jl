@@ -64,24 +64,7 @@ type MethodError <: Exception
     args
 end
 
-type BackTrace <: Exception
-    e
-    trace::Array{Any,1}
-end
-
-type ShowError <: Exception
-    val
-    err::Exception
-end
-
 type EOFError <: Exception end
-
-show(io::IO, bt::BackTrace) = show(io,bt.e)
-
-function show(io::IO, se::ShowError)
-    println("Error showing value of type ", typeof(se.val), ":")
-    show(io, se.err)
-end
 
 type WeakRef
     value

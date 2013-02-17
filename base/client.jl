@@ -38,23 +38,11 @@ function repl_callback(ast::ANY, show_value)
     put(repl_channel, (ast, show_value))
 end
 
-function add_backtrace(e, bt)
-    if isa(e,LoadError)
-        if isa(e.error,LoadError)
-            add_backtrace(e.error,bt)
-        else
-            e.error = BackTrace(e.error, bt)
-            e
-        end
-    else
-        BackTrace(e, bt)
-    end
-end
-
-function display_error(er)
+display_error(er) = display_error(er, {})
+function display_error(er, bt)
     with_output_color(:red, OUTPUT_STREAM) do io
         print(io, "ERROR: ")
-        error_show(io, er)
+        error_show(io, er, bt)
     end
 end
 
@@ -66,7 +54,7 @@ function eval_user_input(ast::ANY, show_value)
                 print(color_normal)
             end
             if iserr
-                display_error(add_backtrace(lasterr,bt))
+                display_error(lasterr,bt)
                 println()
                 iserr, lasterr = false, ()
             else
@@ -81,7 +69,8 @@ function eval_user_input(ast::ANY, show_value)
                     else
                         try repl_show(value)
                         catch err
-                            throw(ShowError(value,err))
+                            println("Error showing value of type ", typeof(value), ":")
+                            rethrow(err)
                         end
                     end
                     println()
@@ -336,7 +325,7 @@ function _start()
             run_repl()
         end
     catch err
-        display_error(add_backtrace(err,backtrace()))
+        display_error(err,backtrace())
         println()
         exit(1)
     end

@@ -127,7 +127,7 @@ function __socket_callback(fd)
             __input_so_far = string(__input_so_far, __lines[i], "\n")
 
             # try to parse it
-            __expr = parse_input_line(__input_so_far)
+            __expr = Base.parse_input_line(__input_so_far)
             
             # if there was nothing to parse, just keep going
             if __expr == nothing
