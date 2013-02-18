@@ -100,3 +100,14 @@ function <=(l::Set, r::Set)
 end
 
 unique(C) = collect(add_each!(Set{eltype(C)}(), C))
+
+function filter!(f::Function, s::Set)
+    for x in s
+        if !f(x)
+            delete!(s, x)
+        end
+    end
+    return s
+end
+filter(f::Function, s::Set) = filter!(f, copy(s))
+
