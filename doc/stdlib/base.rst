@@ -1484,22 +1484,6 @@ Mathematical Functions
 
    Natural logarithm of the beta function :math:`\log(\operatorname{B}(x,y))`.
 
-.. function:: elliptice(phi, m)
-
-   Elliptic integral of the second kind :math:`E(\phi|m) = \int_0^\phi{d\theta\,(1-m\sin^2\theta)^{1/2}`.
-
-.. function:: elliptice(m)
-
-   Complete elliptic integral of the second kind :math:`E(m) = E(\pi/2|m)`.
-
-.. function:: ellipticf(phi, m)
-
-   Elliptic integral of the first kind :math:`F(\phi|m) = \int_0^\phi{d\theta\,(1-m\sin^2\theta)^{-1/2}`.
-
-.. function:: elliptick(m)
-
-   Complete elliptic integral of the first kind :math:`K(m) = F(\pi/2|m)`.
-
 .. function:: eta(x)
 
    Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}`.
