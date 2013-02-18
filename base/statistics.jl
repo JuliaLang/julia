@@ -125,7 +125,7 @@ function hist(A::StridedMatrix, edg::AbstractVector)
     m, n = size(A)
     h = Array(Int, length(edg), n)
     for j=1:n
-        h[:,j] = histc(sub(A, 1:m, j), edg)
+        h[:,j] = hist(sub(A, 1:m, j), edg)
     end
     h
 end

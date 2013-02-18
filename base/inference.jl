@@ -58,8 +58,8 @@ is_global(sv::StaticVarInfo, s::Symbol) =
 
 typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 
-methods(f::Union(Function,CompositeKind),t) = methods(f,t,-1)::Array{Any,1}
-methods(f::Union(Function,CompositeKind),t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
+methods(f::Union(Function,CompositeKind),t::Tuple) = _methods(f,t,-1)::Array{Any,1}
+_methods(f::Union(Function,CompositeKind),t::Tuple,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
 typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
 
@@ -525,7 +525,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     # function, so we can still know that error() is always None.
     # here I picked 4.
     argtypes = limit_tuple_type(argtypes)
-    applicable = methods(f, argtypes, 4)
+    applicable = _methods(f, argtypes, 4)
     rettype = None
     if is(applicable,false)
         # this means too many methods matched
