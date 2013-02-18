@@ -102,16 +102,3 @@ end
 @test_approx_eq zeta(0) -0.5
 @test_approx_eq zeta(2) pi^2/6
 @test_approx_eq zeta(4) pi^4/90
-
-# elliptic[efk]
-@test_approx_eq elliptice(0) pi/2
-@test_approx_eq elliptice(1) 1
-@test_approx_eq elliptice(0,0.5) 0
-@test_approx_eq elliptice(0.5,0) 0.5
-@test_approx_eq elliptice(0.5,1) sin(0.5)
-@test_approx_eq ellipticf(0,0.5) 0
-@test_approx_eq ellipticf(0.5,0) 0.5
-@test_approx_eq ellipticf(0.5,1) log(sec(0.5) + tan(0.5))
-@test_approx_eq elliptick(0) pi/2
-@test_approx_eq elliptick(0.5) (0.25/sqrt(pi))*gamma(0.25)^2
-@test           elliptick(1) == Inf
