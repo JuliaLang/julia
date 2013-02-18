@@ -884,7 +884,7 @@ specifying the dimension::
 
 However, there is no way to equally simply restrict just the dimension
 but not the element type. Yet, one often needs to ensure an object
-is a vectors or matrices (restrictions on the number of dimension). For 
+is a vector or a matrix (imposing restrictions on the number of dimensions). For 
 that reason, the following type aliases are provided::
 
     typealias Vector{T} Array{T,1}
