@@ -279,7 +279,7 @@ declaration of ``Bool`` above therefore means that a boolean value takes
 eight bits to store, and has ``Integer`` as its immediate supertype.
 Currently, only sizes that are multiples of 8 bits are supported.
 Therefore, boolean values, although they really need just a single bit,
-cannot be declared to be any smaller then eight bits.
+cannot be declared to be any smaller than eight bits.
 
 The types ``Bool``, ``Int8`` and ``Uint8`` all have identical
 representations: they are eight-bit chunks of memory. Since Julia's type
@@ -291,7 +291,7 @@ All other differences between ``Bool``, ``Int8``, and ``Uint8`` are
 matters of behavior — the way functions are defined to act when given
 objects of these types as arguments. This is why a nominative type
 system is necessary: if structure determined type, which in turn
-dictates behavior, it would be impossible to make ``Bool`` behave any
+dictates behavior, then it would be impossible to make ``Bool`` behave any
 differently than ``Int8`` or ``Uint8``.
 
 .. _man-composite-types:
@@ -883,9 +883,9 @@ specifying the dimension::
     true
 
 However, there is no way to equally simply restrict just the dimension
-but not the element type. Yet, one often needs to program to just
-vectors or matrices. For that reason, the following type aliases are
-provided::
+but not the element type. Yet, one often needs to ensure an object
+is a vectors or matrices (restrictions on the number of dimension). For 
+that reason, the following type aliases are provided::
 
     typealias Vector{T} Array{T,1}
     typealias Matrix{T} Array{T,2}
