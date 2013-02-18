@@ -319,9 +319,15 @@ function clean_gensym(s::Symbol)
 end
 
 function argtype_decl_string(n, t)
+    if isa(n,Expr)
+        n = n.args[1]  # handle n::T in arg list
+    end
     n = clean_gensym(n)
     if t === Any
         return n
+    end
+    if t <: Vararg && t.parameters[1] === Any
+        return string(n, "...")
     end
     return string(n, "::", t)
 end
