@@ -695,7 +695,7 @@ endif
 
 atlas/configure:
 	git clone git://github.com/vtjnash/atlas-3.10.0.git atlas
-ifeq "$(MAKECMDGOALS)" "build-atlas"
+ifeq "$(MAKECMDGOALS)" "compile-atlas"
 # only allow building atlas as the sole target (without -jN)
 # since it internally handles parallelism, for tuning timing accuracy
 atlas/build/Make.top: atlas/configure lapack-$(LAPACK_VER).tgz

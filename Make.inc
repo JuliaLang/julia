@@ -53,7 +53,7 @@ endif
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
 
-# ATLAS must have been previously built with "make -C deps build-atlas" (without -jN),
+# ATLAS must have been previously built with "make -C deps compile-atlas" (without -jN),
 # or installed to usr/lib/libatlas from some another source (built as
 # a shared library, for your platform, single threaded)
 USE_ATLAS = 0
