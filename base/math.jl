@@ -697,4 +697,55 @@ for f in (:erfcx, :erfi, :Dawson)
     end
 end
 
+include("slatec.jl")
+export elliptice, ellipticf, elliptick
+
+function elliptice(phi::Float64, m::Float64)
+    if m < 0. || m > 1. throw(DomainError()) end
+    sinphi = sin(phi)
+    sinphi2 = sinphi^2
+    cosphi2 = 1. - sinphi2
+    y = 1. - m*sinphi2
+    drf,ierr1 = SLATEC.DRF(cosphi2, y, 1.)
+    drd,ierr2 = SLATEC.DRD(cosphi2, y, 1.)
+    @assert ierr1 == 0 && ierr2 == 0
+    sinphi*(drf - m*sinphi2*drd/3)
+end
+elliptice(phi::Real, m::Real) = elliptice(float64(phi), float64(m))
+@vectorize_2arg Real elliptice
+
+function elliptice(m::Float64)
+    if m < 0. || m > 1. throw(DomainError()) end
+    if m == 1. return 1. end
+    y = 1. - m
+    drf,ierr1 = SLATEC.DRF(0., y, 1.)
+    drd,ierr2 = SLATEC.DRD(0., y, 1.)
+    @assert ierr1 == 0 && ierr2 == 0
+    drf - m*drd/3
+end
+elliptice(x::Float32) = float32(elliptice(float64(x)))
+elliptice(x::Real) = elliptice(float64(x))
+@vectorize_1arg Real elliptice
+
+function ellipticf(phi::Float64, m::Float64)
+    if m < 0. || m > 1. throw(DomainError()) end
+    sinphi = sin(phi)
+    drf,ierr = SLATEC.DRF(cos(phi)^2, 1. - m*sinphi^2, 1.)
+    @assert ierr == 0
+    sinphi*drf
+end
+ellipticf(phi::Real, m::Real) = ellipticf(float64(phi), float64(m))
+@vectorize_2arg Real ellipticf
+
+function elliptick(m::Float64)
+    if m < 0. || m > 1. throw(DomainError()) end
+    if m == 1. return Inf end
+    drf,ierr = SLATEC.DRF(0., 1. - m, 1.)
+    @assert ierr == 0
+    drf
+end
+elliptick(x::Float32) = float32(elliptick(float64(x)))
+elliptick(x::Real) = elliptick(float64(x))
+@vectorize_1arg Real elliptick
+
 end # module
