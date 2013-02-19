@@ -1120,16 +1120,20 @@ function find_vars(e, lst)
 end
 
 # wrap an expression in "let a=a,b=b,..." for each var it references
-function localize_vars(expr)
+localize_vars(expr) = localize_vars(expr, true)
+function localize_vars(expr, esca)
     v = find_vars(expr)
     # requires a special feature of the front end that knows how to insert
     # the correct variables. the list of free variables cannot be computed
     # from a macro.
-    Expr(:localize, {:(()->($expr)), map(esc,v)...}, Any)
+    if esca
+        v = map(esc,v)
+    end
+    Expr(:localize, {:(()->($expr)), v...}, Any)
 end
 
 macro spawn(expr)
-    expr = localize_vars(:(()->($expr)))
+    expr = localize_vars(:(()->($expr)), false)
     :(spawn_somewhere($(esc(expr))))
 end
 
@@ -1147,7 +1151,7 @@ function spawnlocal(thunk)
 end
 
 macro async(expr)
-    expr = localize_vars(:(()->($expr)))
+    expr = localize_vars(:(()->($expr)), false)
     :(spawnlocal($(esc(expr))))
 end
 
@@ -1157,7 +1161,7 @@ macro spawnlocal(expr)
 end
 
 macro spawnat(p, expr)
-    expr = localize_vars(:(()->($expr)))
+    expr = localize_vars(:(()->($expr)), false)
     :(spawnat($(esc(p)), $(esc(expr))))
 end
 

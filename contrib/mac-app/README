@@ -1,0 +1,9 @@
+To build the Julia.app OS X application bundle:
+
+1. `make dist` in the topelvel
+2. Untar julia-<commit>.tar.gz into this directory and rename julia-<commit>/ to julia/
+3. Update the Julia.platypus profile file to reflect your local paths
+4. Use Platypus (http://sveinbjorn.org/platypus) using the `Julia.platypus` profile to create the app bundle. 
+5. Use dmgCreator (http://dmgcreator.sourceforge.net) with `Julia.dmged` to create the dmg file.
+
+The `julia.icns` file provides the Julia icon, and the `script` file launches julia in a terminal.
