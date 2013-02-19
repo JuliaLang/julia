@@ -2121,7 +2121,8 @@ So far only the second case can actually occur.
 
 (define (julia-expand-strs e)
   (cond ((not (pair? e))     e)
-	((and (eq? (car e) 'macrocall) (eq? (cadr e) '@str))
+	((and (eq? (car e) 'macrocall) (or (eq? (cadr e) '@str)
+                                           (eq? (cadr e) '@mstr)))
 	 ;; expand macro
 	 (let ((form
 		(apply invoke-julia-macro (cadr e) (cddr e))))
@@ -2160,6 +2161,11 @@ So far only the second case can actually occur.
 (define (pair-with-gensyms v)
   (map (lambda (s) (cons s (named-gensy s))) v))
 
+(define (unescape e)
+  (if (and (pair? e) (eq? (car e) 'escape))
+      (cadr e)
+      e))
+
 (define (resolve-expansion-vars- e env m)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
 	 e)
@@ -2177,6 +2183,18 @@ So far only the second case can actually occur.
 	    `(macrocall ,@(map (lambda (x)
 				 (resolve-expansion-vars- x env m))
 			       (cdr e))))
+	   ((type)
+	    `(type ,(unescape (cadr e))
+		   ;; type has special behavior: identifiers inside are
+		   ;; field names, not expressions.
+		   ,(map (lambda (x)
+			   (cond ((atom? x) x)
+				 ((and (pair? x) (eq? (car x) '|::|))
+				  `(|::| ,(cadr x)
+				    ,(resolve-expansion-vars- (caddr x) env m)))
+				 (else
+				  (resolve-expansion-vars- x env m))))
+			 (caddr e))))
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)
