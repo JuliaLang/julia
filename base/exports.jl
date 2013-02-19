@@ -1100,6 +1100,8 @@ export
 
 # Macros
     @str,
+    @mstr,
+    @imstr,
     @I_str,
     @E_str,
     @B_str,
