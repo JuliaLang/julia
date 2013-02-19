@@ -616,3 +616,10 @@ let
     i2169{T}(a::Array{T}) = typemin(T)
     @test invoke(i2169,(Array,),Int8[1]) === int8(-128)
 end
+
+# issue #2365
+type B{T}
+     v::Union(T, Nothing)
+end
+@test B{Int}(nothing).v === nothing
+@test B{Int}(0).v === 0
