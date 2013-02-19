@@ -3,17 +3,29 @@ unicodedir = mktempdir()
 
 # Use perl to generate the primary data
 primary_encoding = "UTF-32BE"
-primary_path = joinpath(unicodedir, primary_encoding*".unicode")
-run(`perl -e 'print pack "N*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' ` > primary_path )
+primary_path = replace(joinpath(unicodedir, primary_encoding*".unicode"),"\\","\\\\\\\\")
+run(`perl -e "
+$$fname = \"$primary_path\";
+open(UNICODEF, \">\", \"$$fname\")         or die \"can\'t open $$fname: $$!\";
+binmode(UNICODEF);
+print UNICODEF pack \"N*\", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff;
+close(UNICODEF);"` )
 
 # Use iconv to generate the other data
 for encoding in ["UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
     output_path = joinpath(unicodedir, encoding*".unicode")
-    run(`iconv -f $primary_encoding -t $encoding $primary_path` > output_path)
+    f = Base.FS.open(output_path,Base.JL_O_WRONLY|Base.JL_O_CREAT,Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IROTH)
+    run(`iconv -f $primary_encoding -t $encoding $primary_path` > f)
+    Base.FS.close(f)
 end
 
-str1 = CharString(reinterpret(Char, read(open(joinpath(unicodedir,"UTF-32LE.unicode")), Uint32, 1112065)[2:]))
-str2 = UTF8String(read(open(joinpath(unicodedir,"UTF-8.unicode")), Uint8, 4382595)[4:])
+f=open(joinpath(unicodedir,"UTF-32LE.unicode"))
+str1 = CharString(reinterpret(Char, read(f, Uint32, 1112065)[2:]))
+close(f)
+
+f=open(joinpath(unicodedir,"UTF-8.unicode"))
+str2 = UTF8String(read(f, Uint8, 4382595)[4:])
+close(f)
 @test str1 == str2
 
 str1 = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
