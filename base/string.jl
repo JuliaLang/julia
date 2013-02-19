@@ -654,45 +654,68 @@ end
 
 ## multiline strings ##
 
-function multiline_lstrip(s::String)
-    if length(s) == 0 || !isspace(s[1])
-        return s
-    end
-    lines = split(s, '\n')
-    last_line = lines[end]
+let
+global multiline_lstrip
 
-    # trim leading,trailing whitespace
-    a,b = 1,length(lines)
-    if b == 1 return s end
-    if lstrip(lines[a]) == "" a += 1 end
-    if lstrip(lines[b]) == "" b -= 1 end
-    if a > b return s end
+function space_width(c::Char)
+    c == ' '   ? 1 :
+    c == '\t'  ? 8 :
+    isspace(c) ? 0 :
+    error("not a space-like character")
+end
 
-    # find prefix using last line
-    n = 0
-    for c in last_line
+# width of leading space, also check if string is blank
+function indent_width(s::String)
+    count = 0
+    for c in s
         if isspace(c)
-            n += 1
+            count += space_width(c)
         else
-            break
+            return count, false
         end
     end
-    prefix = (n == 0) ? "" : last_line[1:n]
+    count, true
+end
 
-    # output string
-    prefix_len = length(prefix)
-    buf = memio(length(s) - (b-a+1)*prefix_len, false)
-    for i = a:b
-        line = lines[i]
-        if begins_with(line, prefix)
-            print(buf, line[prefix_len+1:end])
-        else
-            print(buf, line)
+function multiline_lstrip(s::String)
+    lines = split(s, '\n')
+    num_lines = length(lines)
+    if num_lines == 1 return s end
+
+    # discard first line if blank
+    first_line = lstrip(lines[1]) == "" ? 2 : 1
+
+    indent,blank = indent_width(lines[end])
+    if !blank
+        indent = typemax(Int)
+        for line in lines[first_line:end]
+            n,blank = indent_width(line)
+            if !blank
+                indent = min(indent, n)
+            end
         end
-        if i != b print(buf, '\n') end
+    end
+
+    buf = memio(endof(s), false)
+    for k in first_line:num_lines
+        line = lines[k]
+        cut = 0
+        i = start(line)
+        while !done(line,i)
+            c, j = next(line,i)
+            if !isspace(c) || cut >= indent
+                for _ = (indent+1):cut write(buf, ' ') end
+                print(buf, line[i:end])
+                break
+            end
+            cut += space_width(c)
+            i = j
+        end
+        if k != num_lines println(buf) end
     end
     takebuf_string(buf)
 end
+end # let
 
 ## core string macros ##
 

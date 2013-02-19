@@ -516,14 +516,27 @@ n = 3
      b
 
      c
-     """ == "a\nb\n\nc"
+     """ == "a\nb\n\nc\n"
+@test """
+      """ == ""
 @test """x
      a
-    """ == "x\n     a\n    "
+    """ == "x\n a\n"
 @test """
      $n
-   """ == "  $n"
+   """ == "  $n\n"
 @test E"""
      $n
-   """ == E"  $n"
-
+   """ == E"  $n\n"
+@test """
+      a
+     b
+       c""" == " a\nb\n  c"
+# note tab/space mixing
+@test """
+	a
+     b
+     """ == "   a\nb\n"
+@test """
+      a
+       """ == "a\n"
