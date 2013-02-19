@@ -68,6 +68,7 @@ ifeq ($(OS), WINNT)
 fPIC = 
 PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia
 EXE = .exe
+export OPENBLAS_NUM_THREADS=1
 else
 fPIC = -fPIC
 EXE =
