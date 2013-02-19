@@ -617,6 +617,13 @@ let
     @test invoke(i2169,(Array,),Int8[1]) === int8(-128)
 end
 
+# issue #2365
+type B{T}
+     v::Union(T, Nothing)
+end
+@test B{Int}(nothing).v === nothing
+@test B{Int}(0).v === 0
+
 # issue #2352
 Sum=0.0; for n=1:2:10000
 Sum += -1/n + 1/(n+1)
