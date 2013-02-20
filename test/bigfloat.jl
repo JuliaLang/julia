@@ -51,8 +51,10 @@ d = BigFloat("-24.69135780242")
 @test typeof(BigFloat(1//1)) == BigFloat
 @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
 
-f = BigFloat("1234567890123.456789012345")
-g = BigFloat("1234567890124.456789012345")
+f = BigFloat("1234567890.123")
+g = BigFloat("1234567891.123")
+
+tol = 1e-3
 
 @test_approx_eq_eps f+int8(1) g tol
 @test_approx_eq_eps f+int16(1) g tol
