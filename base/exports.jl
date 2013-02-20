@@ -122,6 +122,25 @@ export
     MergeSort,
     TimSort,
 
+# Ccall types
+    Cchar,
+    Cuchar,
+    Cshort,
+    Cushort,
+    Cint,
+    Cuint,
+    Clong,
+    Culong,
+    Cptrdiff_t,
+    Csize_t,
+    Clonglong,
+    Culonglong,
+    Cfloat,
+    Cdouble,
+    Ccomplex_float,
+    Ccomplex_double,
+    Cstring,
+
 # Exceptions
     ArgumentError,
     DisconnectException,
