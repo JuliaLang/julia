@@ -121,7 +121,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         jl_serialize_value(s, dt->names);
         jl_serialize_value(s, dt->types);
     }
-    write_uint8(s, dt->abstract | (dt->mutabl<<1));
+    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2));
     if (!dt->abstract)
         write_int32(s, dt->uid);
 
@@ -433,6 +433,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     uint8_t flags = read_uint8(s);
     dt->abstract = flags&1;
     dt->mutabl = (flags>>1)&1;
+    dt->pointerfree = (flags>>2)&1;
     if (!dt->abstract)
         dt->uid = read_int32(s);
     else
@@ -445,6 +446,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
     dt->fptr = jl_deserialize_fptr(s);
     dt->struct_decl = NULL;
+    dt->instance = NULL;
     if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
         dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
         dt->name == jl_abstractarray_type->name) {
