@@ -1694,6 +1694,8 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             ndt->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack);
             if (!isabstract)
                 jl_compute_field_offsets(ndt);
+            if (tn == jl_array_typename)
+                ndt->pointerfree = 0;
             if (ftypes->length == 0) {
                 ndt->size = dt->size;
             }
@@ -2329,7 +2331,7 @@ void jl_init_types(void)
                                        jl_symbol("types"),
                                        jl_symbol("ctor_factory"),
                                        jl_symbol("instance"),
-                                       jl_symbol("sizeof"),
+                                       jl_symbol("size"),
                                        jl_symbol("abstract"),
                                        jl_symbol("mutable"),
                                        jl_symbol("pointerfree"));
@@ -2360,7 +2362,7 @@ void jl_init_types(void)
                                        jl_symbol("module"),
                                        jl_symbol("primary"), jl_symbol(""));
     jl_typename_type->types = jl_tuple(4, jl_sym_type, jl_any_type,
-                                       jl_type_type, jl_tuple_type);
+                                       jl_type_type, jl_any_type);
     jl_typename_type->uid = jl_assign_type_uid();
     jl_typename_type->fptr = jl_f_no_function;
     jl_typename_type->env = (jl_value_t*)jl_null;
@@ -2484,18 +2486,19 @@ void jl_init_types(void)
                         jl_null, jl_null, 0, 1);
     jl_array_typename = jl_array_type->name;
     jl_array_type->linfo = NULL;
+    jl_array_type->pointerfree = 0;
     jl_initialize_generic_function((jl_function_t*)jl_array_type,
                                    jl_array_typename->name);
 
     jl_array_any_type =
         (jl_value_t*)jl_apply_type((jl_value_t*)jl_array_type,
-                                  jl_tuple(2, jl_any_type,
-                                           jl_box_long(1)));
+                                   jl_tuple(2, jl_any_type,
+                                            jl_box_long(1)));
     
     jl_array_symbol_type =
         (jl_value_t*)jl_apply_type((jl_value_t*)jl_array_type,
-                                  jl_tuple(2, jl_symbol_type,
-                                           jl_box_long(1)));
+                                   jl_tuple(2, jl_symbol_type,
+                                            jl_box_long(1)));
     
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"),
@@ -2588,7 +2591,7 @@ void jl_init_types(void)
                                  jl_symbol("code")),
                         jl_tuple(3, jl_any_type, jl_any_type,
                                  jl_lambda_info_type),
-                        0, 0);
+                        0, 1);
     jl_function_type->fptr = jl_f_no_function;
 
     jl_tupleset(jl_method_type->types, 3, jl_function_type);

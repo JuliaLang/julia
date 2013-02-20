@@ -471,7 +471,7 @@ static void push_root(jl_value_t *v)
 #endif
     gc_setmark(v);
     if (vt == (jl_value_t*)jl_weakref_type ||
-        (jl_is_datatype(vt) && jl_tuple_len(((jl_datatype_t*)vt)->names)==0)) {
+        (jl_is_datatype(vt) && ((jl_datatype_t*)vt)->pointerfree)) {
         return;
     }
     if (mark_sp >= mark_stack_size) {

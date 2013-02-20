@@ -123,7 +123,7 @@ zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
 
 sizeof(T::Type) = error(string("size of type ",T," unknown"))
-sizeof(T::DataType) = if isleaftype(T) T.sizeof else error("type does not have a native size") end
+sizeof(T::DataType) = if isleaftype(T) T.size else error("type does not have a native size") end
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
