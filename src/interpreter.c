@@ -248,6 +248,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         fnames = eval(args[2], locals, nl);
         dt = jl_new_datatype((jl_sym_t*)name, jl_any_type, (jl_tuple_t*)para,
                              (jl_tuple_t*)fnames, NULL, 0, 1);
+        dt->fptr = jl_f_ctor_trampoline;
         dt->ctor_factory = eval(args[3], locals, nl);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         jl_checked_assignment(b, (jl_value_t*)dt);

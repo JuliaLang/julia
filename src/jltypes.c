@@ -108,8 +108,12 @@ int jl_has_typevars(jl_value_t *v)
 DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
 {
     if (jl_is_datatype(v)) {
-        if (((jl_datatype_t*)v)->abstract)
+        if (((jl_datatype_t*)v)->abstract) {
+            if (jl_is_type_type(v)) {
+                return !jl_is_typevar(jl_tparam0(v));
+            }
             return 0;
+        }
         jl_tuple_t *t = ((jl_datatype_t*)v)->parameters;
         for(int i=0; i < jl_tuple_len(t); i++) {
             if (jl_is_typevar(jl_tupleref(t,i)))
@@ -124,9 +128,6 @@ DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
                 return 0;
         }
         return 1;
-    }
-    if (jl_is_type_type(v)) {
-        return !jl_is_typevar(jl_tparam0(v));
     }
     return 0;
 }
@@ -1675,7 +1676,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         ndt->parameters = iparams_tuple;
         ndt->names = dt->names;
         ndt->types = jl_null; // to be filled in below
-        if (isabstract)
+        if (isabstract || !jl_is_function(dt->ctor_factory))
             ndt->fptr = jl_f_no_function;
         else
             ndt->fptr = jl_f_ctor_trampoline;

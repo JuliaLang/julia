@@ -295,7 +295,7 @@ const getfield_tfunc = function (A, s, name)
             return Any
         end
     end
-    if !isa(s,DataType)
+    if !isa(s,DataType) || s.abstract
         return Any
     end
     if isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
@@ -391,7 +391,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     tf = get(t_func::ObjectIdDict, f, false)
     if is(tf,false)
         # struct constructor
-        if isa(f, DataType)
+        if isstructtype(f)
             return f
         end
         # unknown/unhandled builtin
@@ -631,7 +631,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                 if isa(st,TypeVar)
                     st = st.ub
                 end
-                if isa(st,DataType) && !st.abstract
+                if isstructtype(st)
                     return st
                 end
             end
@@ -777,6 +777,9 @@ function abstract_eval_constant(x::ANY)
         end
         return Type{x}
     end
+    #if isa(x,Tuple) && all(e->isa(e,Type), x)
+    #    return Type{x}
+    #end
     return typeof(x)
 end
 
@@ -1563,7 +1566,7 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 function inlineable(f, e::Expr, sv, enclosing_ast)
-    if !(isa(f,Function)||isa(f,DataType)||isa(f,IntrinsicFunction))
+    if !(isa(f,Function) || isstructtype(f) || isa(f,IntrinsicFunction))
         return NF
     end
     argexprs = e.args[2:]
