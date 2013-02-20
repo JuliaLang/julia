@@ -355,8 +355,8 @@ end
 b2 = randbool(n1, n2)
 @check_bit_operation (.^) BitMatrix (false, b2)
 @check_bit_operation (.^) BitMatrix (true, b2)
-@check_bit_operation (.^) Matrix{Uint8} (0x0, b2) skiptc
-@check_bit_operation (.^) Matrix{Uint8} (0x1, b2) skiptc
+@check_bit_operation (.^) Matrix{Uint8} (0x0, b2)
+@check_bit_operation (.^) Matrix{Uint8} (0x1, b2)
 @check_bit_operation (.^) Matrix{Int} (-1, b2)
 @check_bit_operation (.^) Matrix{Int} (0, b2)
 @check_bit_operation (.^) Matrix{Int} (1, b2)
@@ -366,8 +366,8 @@ b2 = randbool(n1, n2)
 @check_bit_operation (.^) Matrix{Complex128} (1.0im, b2)
 @check_bit_operation (.^) Matrix{ComplexPair{Int}} (0im, b2)
 @check_bit_operation (.^) Matrix{ComplexPair{Int}} (1im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint8}} (0x0im, b2) skiptc
-@check_bit_operation (.^) Matrix{ComplexPair{Uint8}} (0x1im, b2) skiptc
+@check_bit_operation (.^) Matrix{ComplexPair{Uint64}} (0x0im, b2)
+@check_bit_operation (.^) Matrix{ComplexPair{Uint64}} (0x1im, b2)
 
 # Matrix/Number
 b1 = randbool(n1, n2)
@@ -447,14 +447,14 @@ cf2 = complex(f2)
 @check_bit_operation (.^) Matrix{Float64} (b1, 0.0)
 @check_bit_operation (.^) Matrix{Float64} (b1, 1.0)
 @check_bit_operation (.^) Matrix{Complex128} (b1, 0.0im)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint8}} (b1, 0x0im) skiptc
-@check_bit_operation (.^) Matrix{ComplexPair{Int}} (b1, 0im) skiptc
+@check_bit_operation (.^) Matrix{Complex128} (b1, 0x0im) skiptc
+@check_bit_operation (.^) Matrix{Complex128} (b1, 0im)
 
 b1 = trues(n1, n2)
 @check_bit_operation (.^) Matrix{Complex128} (b1, -1.0im)
 @check_bit_operation (.^) Matrix{Complex128} (b1, 1.0im)
-@check_bit_operation (.^) Matrix{Complex128} (b1, -1im) skiptc
-@check_bit_operation (.^) Matrix{Complex128} (b1, 1im) skiptc
+@check_bit_operation (.^) Matrix{Complex128} (b1, -1im)
+@check_bit_operation (.^) Matrix{Complex128} (b1, 1im)
 @check_bit_operation (.^) Matrix{Complex128} (b1, 0x1im) skiptc
 
 timesofar("binary arithmetic")
