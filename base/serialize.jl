@@ -435,6 +435,13 @@ function deserialize(s, t::DataType)
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
+    elseif nf == 1 && !t.mutable
+        return ccall(:jl_new_struct, Any, (Any,Any...), t, deserialize(s))
+    elseif nf == 2 && !t.mutable
+        f1 = deserialize(s)
+        f2 = deserialize(s)
+        return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2)
+        # TODO: handle immutable
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         for n in t.names

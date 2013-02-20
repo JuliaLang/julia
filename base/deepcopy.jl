@@ -27,7 +27,7 @@ function deepcopy_internal(x, stackdict::ObjectIdDict)
 end
 
 function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
-    if T.names===()
+    if T.names===() || !T.mutable
         return x
     end
     ret = ccall(:jl_new_struct_uninit, Any, (Any,), T)
@@ -39,8 +39,6 @@ function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
     end
     return ret
 end
-_deepcopy_t(x, T, stackdict::ObjectIdDict) =
-    error("deepcopy of objects of type ", T, " not supported")
 
 
 function deepcopy_internal(x::Array, stackdict::ObjectIdDict)
