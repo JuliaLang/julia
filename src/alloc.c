@@ -452,7 +452,9 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_tuple_t *parameters)
 {
-    return jl_new_datatype((jl_sym_t*)name, super, parameters, jl_null, jl_null, 1, 0);
+    jl_datatype_t *dt = jl_new_datatype((jl_sym_t*)name, super, parameters, jl_null, jl_null, 1, 0);
+    dt->pointerfree = 0;
+    return dt;
 }
 
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
@@ -542,7 +544,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     }
     st->alignment = alignm;
     st->size = LLT_ALIGN(sz, alignm);
-    st->pointerfree = ptrfree;
+    st->pointerfree = ptrfree && !st->abstract;
 }
 
 extern int jl_boot_file_loaded;
