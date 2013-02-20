@@ -620,20 +620,21 @@ with the correct remote name for your repository."
             catch
                 error("Unable to initialize contents of new package")
             end
-            println(
-"
-You have created a new package in
+            println("""
 
-  $(newpath)
+                    You have created a new package in
 
-When the package is ready to submit, push it to a public repository, set it as
-the remote \"origin\", then run:
+                      $(newpath)
 
-  > Pkg.pkg_origin($(pkg))
-  > Pkg.patch($(pkg))
+                    When the package is ready to submit, push it to a public repository, set it as
+                    the remote \"origin\", then run:
 
-to prepare METADATA with the details for your package."
-                )
+                      > Pkg.pkg_origin("$(pkg)")
+                      > Pkg.patch("$(pkg)")
+
+                    to prepare METADATA with the details for your package.
+                    """
+            )
         end
     end
 end
