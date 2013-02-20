@@ -38,8 +38,8 @@ end
 BigInt(x::Bool) = BigInt(uint(x))
 BigInt(x::Signed) = BigInt(int(x))
 BigInt(x::Unsigned) = BigInt(uint(x))
-BigInt(x::Int128) = BigInt(string(x))
-BigInt(x::Uint128) = BigInt(string(x))
+#BigInt(x::Int128) = BigInt(string(x))
+#BigInt(x::Uint128) = BigInt(string(x))
 if WORD_SIZE == 32
     BigInt(x::Int64) = BigInt(string(x))
     BigInt(x::Uint64) = BigInt(string(x))
