@@ -142,4 +142,9 @@ end
 
 # 0.2
 
-@deprecate  localize         localpart
+@deprecate  localize           localpart
+@deprecate  cholfact           chol
+@deprecate  cholpfact          cholp
+@deprecate  lufact             lu
+@deprecate  qrfact             qr
+@deprecate  qrpfact            qrp

@@ -10,12 +10,12 @@ scale!(X::Array{Complex128}, s::Real) = (ccall(("dscal_",Base.libblas_name), Voi
 
 #Test whether a matrix is positive-definite
 
-isposdef!{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = LAPACK.potrf!(UL, A)[2] == 0
+isposdef!{T<:BlasFloat}(A::Matrix{T}, UL::Char) = LAPACK.potrf!(UL, A)[2] == 0
 isposdef!(A::Matrix) = ishermitian(A) && isposdef!(A, 'U')
 
-isposdef{T<:BlasFloat}(A::Matrix{T}, UL::BlasChar) = isposdef!(copy(A), UL)
+isposdef{T<:BlasFloat}(A::Matrix{T}, UL::Char) = isposdef!(copy(A), UL)
 isposdef{T<:BlasFloat}(A::Matrix{T}) = isposdef!(copy(A))
-isposdef{T<:Number}(A::Matrix{T}, UL::BlasChar) = isposdef!(float64(A), UL)
+isposdef{T<:Number}(A::Matrix{T}, UL::Char) = isposdef!(float64(A), UL)
 isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
 
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
@@ -385,15 +385,14 @@ abstract Factorization{T}
 type BunchKaufman{T<:BlasFloat} <: Factorization{T}
     LD::Matrix{T}
     ipiv::Vector{BlasInt}
-    uplo::BlasChar
-    function BunchKaufman(A::Matrix{T}, uplo::BlasChar)
+    uplo::Char
+    function BunchKaufman(A::Matrix{T}, uplo::Char)
         LD, ipiv = LAPACK.sytrf!(uplo , copy(A))
         new(LD, ipiv, uplo)
     end
 end
-
-BunchKaufman{T<:BlasFloat}(A::StridedMatrix{T}, uplo::BlasChar) = BunchKaufman{T}(A, uplo)
-BunchKaufman{T<:Real}(A::StridedMatrix{T}, uplo::BlasChar) = BunchKaufman(float64(A), uplo)
+BunchKaufman{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Char) = BunchKaufman{T}(A, uplo)
+BunchKaufman{T<:Real}(A::StridedMatrix{T}, uplo::Char) = BunchKaufman(float64(A), uplo)
 BunchKaufman{T<:Number}(A::StridedMatrix{T}) = BunchKaufman(A, 'U')
 
 size(B::BunchKaufman) = size(B.LD)
@@ -416,9 +415,11 @@ type CholeskyDense{T<:BlasFloat} <: Factorization{T}
     end
 end
 CholeskyDense{T<:BlasFloat}(A::Matrix{T}, uplo::Char) = CholeskyDense{T}(A, uplo)
-CholeskyDense(A::Matrix, uplo::Symbol) = CholeskyDense(A, string(uplo)[1])
-CholeskyDense(A::Matrix) = CholeskyDense(A, :U)
-CholeskyDense{T<:Integer}(A::Matrix{T}, args...) = CholeskyDense(float64(A), args...)
+
+chol(A::Matrix, uplo::Symbol) = CholeskyDense(copy(A), string(uplo)[1])
+chol(A::Matrix) = chol(A, :U)
+chol{T<:Integer}(A::Matrix{T}, args...) = chol(float64(A), args...)
+chol(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
 
 size(C::CholeskyDense) = size(C.UL)
 size(C::CholeskyDense,d::Integer) = size(C.UL,d)
@@ -426,14 +427,11 @@ size(C::CholeskyDense,d::Integer) = size(C.UL,d)
 function ref(C::CholeskyDense, d::Symbol)
     if d == :U || d == :L
         return symbol(C.uplo) == d ? C.UL : C.UL'
+    elseif d == :UL
+        return Triangular(C.UL, C.uplo)
     end
     error("No such property")
 end
-
-## Matlab (and R) compatible
-chol(A::Matrix, uplo::Symbol) = CholeskyDense(copy(A), uplo)[uplo]
-chol(A::Matrix) = chol(A, :U)
-chol(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
 
 \{T<:BlasFloat}(C::CholeskyDense{T}, B::StridedVecOrMat{T}) =
     LAPACK.potrs!(C.uplo, C.UL, copy(B))
@@ -453,20 +451,21 @@ end
 ## Pivoted Cholesky
 type CholeskyPivotedDense{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}
-    uplo::BlasChar
+    uplo::Char
     piv::Vector{BlasInt}
     rank::BlasInt
     tol::Real
     info::BlasInt
 end
-function CholeskyPivotedDense{T<:BlasFloat}(A::Matrix{T}, uplo::BlasChar, tol::Real)
+function CholeskyPivotedDense{T<:BlasFloat}(A::Matrix{T}, uplo::Char, tol::Real)
     A, piv, rank, info = LAPACK.pstrf!(uplo, A, tol)
     CholeskyPivotedDense{T}(uplo == 'U' ? triu!(A) : tril!(A), uplo, piv, rank, tol, info)
 end
-CholeskyPivotedDense(A::Matrix, uplo::Symbol, tol::Real) = CholeskyPivotedDense(A, string(uplo)[1], tol)
-CholeskyPivotedDense(A::Matrix, tol::Real) = CholeskyPivotedDense(A, 'U', tol)
-CholeskyPivotedDense(A::Matrix) = CholeskyPivotedDense(A, 'U', -1.)
-CholeskyPivotedDense{T<:Int}(A::Matrix{T}, args...) = CholeskyPivotedDense(float64(A), args...)
+
+cholp(A::Matrix, uplo::Symbol, tol::Real) = CholeskyPivotedDense(copy(A), string(uplo)[1], tol)
+cholp(A::Matrix, tol::Real) = cholp(A, :U, tol)
+cholp(A::Matrix) = cholp(A, -1.)
+cholp{T<:Int}(A::Matrix{T}, args...) = cholp(float64(A), args...)
 
 size(C::CholeskyPivotedDense) = size(C.UL)
 size(C::CholeskyPivotedDense,d::Integer) = size(C.UL,d)
@@ -530,7 +529,10 @@ function LUDense{T<:BlasFloat}(A::Matrix{T})
     LU, ipiv, info = LAPACK.getrf!(A)
     LUDense{T}(LU, ipiv, info)
 end
-LUDense{T<:Real}(A::Matrix{T}) = LUDense(float(A))
+
+lu(A::Matrix) = LUDense(copy(A))
+lu{T<:Integer}(A::Matrix{T}) = lu(float(A))
+lu(x::Number) = (one(x), x, [1])
 
 size(A::LUDense) = size(A.LU)
 size(A::LUDense,n) = size(A.LU,n)
@@ -560,13 +562,6 @@ function ref{T}(A::LUDense{T}, d::Symbol)
     error("No such property")
 end
 
-## Matlab-compatible
-function lu(A::Matrix)
-    LU = LUDense(copy(A))
-    return LU[:L], LU[:U], LU[:p]
-end
-lu(x::Number) = (one(x), x, [1])
-
 function det{T}(A::LUDense{T})
     m, n = size(A)
     if A.info > 0; return zero(typeof(A.LU[1])); end
@@ -583,75 +578,71 @@ function inv(A::LUDense)
     LAPACK.getri!(copy(A.LU), A.ipiv)
 end
 
-## QR decomposition without column pivots
-type QRDense{T} <: Factorization{T}
-    hh::Matrix{T}                       # Householder transformations and R
-    tau::Vector{T}                      # Scalar factors of transformations
+## QR decomposition without column pivots. By the faster geqrt3
+type QRDense{S} <: Factorization{S}
+    vs::Matrix{S}                     # the elements on and above the diagonal contain the N-by-N upper triangular matrix R; the elements below the diagonal are the columns of V
+    T::Matrix{S}                      # upper triangular factor of the block reflector.
 end
-QRDense(A::StridedMatrix) = QRDense(LAPACK.geqrf!(A)...)
-QRDense{T<:Integer}(A::StridedMatrix{T}) = QRDense(float(A))
+QRDense(A::Matrix) = QRDense(LAPACK.geqrt3!(A)...)
 
-type QRDenseQ{T}  <: AbstractMatrix{T}
-    hh::Matrix{T}                       # Householder transformations and R
-    tau::Vector{T}                      # Scalar factors of transformations
-end
-QRDenseQ(A::QRDense) = QRDenseQ(A.hh, A.tau)
+qr(A::Matrix) = QRDense(copy(A))
+qr{T<:Integer}(A::Matrix{T}) = qr(float(A))
+qr(x::Number) = (one(x), x)
 
-size(A::QRDense, args::Integer...) = size(A.hh, args...)
-size(A::QRDenseQ, args::Integer...) = size(A.hh, args...)
+size(A::QRDense, args::Integer...) = size(A.vs, args...)
 
 function ref(A::QRDense, d::Symbol)
-    if d == :R; return triu(A.hh[1:min(size(A)),:]); end;
+    if d == :R; return triu(A.vs[1:min(size(A)),:]); end;
     if d == :Q; return QRDenseQ(A); end
     error("No such property")
 end
+
+type QRDenseQ{S}  <: AbstractMatrix{S} 
+    vs::Matrix{S}                      
+    T::Matrix{S}                       
+end
+QRDenseQ(A::QRDense) = QRDenseQ(A.vs, A.T)
+
+size(A::QRDenseQ, args::Integer...) = size(A.vs, args...)
+
 function full{T<:BlasFloat}(A::QRDenseQ{T}, thin::Bool)
-    if !thin
-        Q = Array(T, size(A, 1), size(A, 1))
-        Q[:,1:size(A, 2)] = copy(A.hh)
-        return LAPACK.orgqr!(Q, A.tau)
-    else
-        return LAPACK.orgqr!(copy(A.hh), A.tau)
-    end
+    if thin return A * eye(T, size(A.T, 1)) end
+    return A * eye(T, size(A, 1))
 end
 full(A::QRDenseQ) = full(A, true)
 
-function qr(A::StridedMatrix)
-    QR = QRDense(copy(A))
-    return full(QR[:Q]), QR[:R]
-end
-qr(x::Number) = (one(x), x)
+print_matrix(io::IO, A::QRDenseQ) = print_matrix(io, full(A))
 
 ## Multiplication by Q from the QR decomposition
 function *{T<:BlasFloat}(A::QRDenseQ{T}, B::StridedVecOrMat{T})
     m = size(B, 1)
     n = size(B, 2)
-    if m == size(A.hh, 1)
+    if m == size(A.vs, 1)
         Bc = copy(B)
-    elseif m == size(A.hh, 2)
-        Bc = [B; zeros(T, size(A.hh, 1) - m, n)]
+    elseif m == size(A.vs, 2)
+        Bc = [B; zeros(T, size(A.vs, 1) - m, n)]
     else
         throw(LAPACK.DimensionMismatch(""))
     end
-    LAPACK.ormqr!('L', 'N', A.hh, A.tau, Bc)
+    LAPACK.gemqrt!('L', 'N', A.vs, A.T, Bc)
 end
-Ac_mul_B(A::QRDenseQ, B::StridedVecOrMat) = LAPACK.ormqr!('L', iscomplex(A.hh[1]) ? 'C' : 'T', A.hh, A.tau, copy(B))
-*(A::StridedVecOrMat, B::QRDenseQ) = LAPACK.ormqr!('R', 'N', B.hh, B.tau, copy(A))
+Ac_mul_B(A::QRDenseQ, B::StridedVecOrMat) = LAPACK.gemqrt!('L', iscomplex(A.vs[1]) ? 'C' : 'T', A.vs, A.T, copy(B))
+*(A::StridedVecOrMat, B::QRDenseQ) = LAPACK.gemqrt!('R', 'N', B.vs, B.T, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRDenseQ{T})
     m = size(A, 1)
     n = size(A, 2)
-    if n == size(B.hh, 1)
+    if n == size(B.vs, 1)
         Ac = copy(A)
-    elseif n == size(B.hh, 2)
-        Ac = [B zeros(T, m, size(B.hh, 1) - n)]
+    elseif n == size(B.vs, 2)
+        Ac = [B zeros(T, m, size(B.vs, 1) - n)]
     else
         throw(LAPACK.DimensionMismatch(""))
     end
-    LAPACK.ormqr!('R', iscomplex(B.hh[1]) ? 'C' : 'T', B.hh, B.tau, Ac)
+    LAPACK.gemqrt!('R', iscomplex(B.vs[1]) ? 'C' : 'T', B.vs, B.T, Ac)
 end
 ## Least squares solution.  Should be more careful about cases with m < n
-(\)(A::QRDense, B::StridedVector) = A[:R]\(A[:Q]'B)[1:size(A, 2)]
-(\)(A::QRDense, B::StridedMatrix) = A[:R]\(A[:Q]'B)[1:size(A, 2),:]
+(\)(A::QRDense, B::StridedVector) = Triangular(A[:R], 'U')\(A[:Q]'B)[1:size(A, 2)]
+(\)(A::QRDense, B::StridedMatrix) = Triangular(A[:R], 'U')\(A[:Q]'B)[1:size(A, 2),:]
 
 type QRPivotedDense{T} <: Factorization{T}
     hh::Matrix{T}
@@ -666,13 +657,14 @@ type QRPivotedDense{T} <: Factorization{T}
     end
 end
 QRPivotedDense{T<:BlasFloat}(A::Matrix{T}) = QRPivotedDense{T}(LAPACK.geqp3!(A)...)
-QRDenseQ(A::QRPivotedDense) = QRDenseQ(A.hh, A.tau)
+qrp(A::Matrix) = QRPivotedDense(copy(A))
+# QRDenseQ(A::QRPivotedDense) = QRDenseQ(A.hh, A.tau)
 
 size(A::QRPivotedDense, args::Integer...) = size(A.hh, args...)
 
 function ref{T<:BlasFloat}(A::QRPivotedDense{T}, d::Symbol)
     if d == :R; return triu(A.hh[1:min(size(A)),:]); end;
-    if d == :Q; return QRDenseQ(A); end
+    if d == :Q; return QRDensePivotedQ(A); end
     if d == :p; return A.jpvt; end
     if d == :P
         p = A[:p]
@@ -686,8 +678,55 @@ function ref{T<:BlasFloat}(A::QRPivotedDense{T}, d::Symbol)
     error("No such property")
 end
 
-(\)(A::QRPivotedDense, B::StridedVector) = (A[:R]\(A[:Q]'B)[1:size(A, 2)])[invperm(A.jpvt)]
-(\)(A::QRPivotedDense, B::StridedMatrix) = A[:R]\(A[:Q]'B)[1:size(A, 2),:][invperm(A.jpvt),:]
+(\)(A::QRPivotedDense, B::StridedVector) = (Triangular(A[:R])\(A[:Q]'B)[1:size(A, 2)])[invperm(A.jpvt)]
+(\)(A::QRPivotedDense, B::StridedMatrix) = (Triangular(A[:R])\(A[:Q]'B)[1:size(A, 2),:])[invperm(A.jpvt),:]
+
+type QRDensePivotedQ{T}  <: AbstractMatrix{T}
+    hh::Matrix{T}                       # Householder transformations and R
+    tau::Vector{T}                      # Scalar factors of transformations
+end
+QRDensePivotedQ(A::QRPivotedDense) = QRDensePivotedQ(A.hh, A.tau)
+
+size(A::QRDensePivotedQ, args...) = size(A.hh, args...)
+
+function full{T<:BlasFloat}(A::QRDensePivotedQ{T}, thin::Bool)
+    if !thin
+        Q = Array(T, size(A, 1), size(A, 1))
+        Q[:,1:size(A, 2)] = copy(A.hh)
+        return LAPACK.orgqr!(Q, A.tau)
+    else
+        return LAPACK.orgqr!(copy(A.hh), A.tau)
+    end
+end
+full(A::QRDensePivotedQ) = full(A, true)
+
+## Multiplication by Q from the Pivoted QR decomposition
+function *{T<:BlasFloat}(A::QRDensePivotedQ{T}, B::StridedVecOrMat{T})
+    m = size(B, 1)
+    n = size(B, 2)
+    if m == size(A.hh, 1)
+        Bc = copy(B)
+    elseif m == size(A.hh, 2)
+        Bc = [B; zeros(T, size(A.hh, 1) - m, n)]
+    else
+        throw(LAPACK.DimensionMismatch(""))
+    end
+    LAPACK.ormqr!('L', 'N', A.hh, A.tau, Bc)
+end
+Ac_mul_B(A::QRDensePivotedQ, B::StridedVecOrMat) = LAPACK.ormqr!('L', iscomplex(A.hh[1]) ? 'C' : 'T', A.hh, A.tau, copy(B))
+*(A::StridedVecOrMat, B::QRDensePivotedQ) = LAPACK.ormqr!('R', 'N', B.hh, B.tau, copy(A))
+function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRDensePivotedQ{T})
+    m = size(A, 1)
+    n = size(A, 2)
+    if n == size(B.hh, 1)
+        Ac = copy(A)
+    elseif n == size(B.hh, 2)
+        Ac = [B zeros(T, m, size(B.hh, 1) - n)]
+    else
+        throw(LAPACK.DimensionMismatch(""))
+    end
+    LAPACK.ormqr!('R', iscomplex(B.hh[1]) ? 'C' : 'T', B.hh, B.tau, Ac)
+end
 
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
 ##       Add rcond methods for Cholesky, LU, QR and QRP types
@@ -705,6 +744,8 @@ end
 Hessenberg{T<:BlasFloat}(hh::Matrix{T}, tau::Vector{T}) = Hessenberg{T}(hh, tau)
 Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 
+hess(A::StridedMatrix) = Hessenberg(copy(A))
+
 type HessenbergQ{T} <: AbstractMatrix{T}
     hh::Matrix{T}
     tau::Vector{T}
@@ -720,8 +761,6 @@ function ref(A::Hessenberg, d::Symbol)
 end
 
 full(A::HessenbergQ) = LAPACK.orghr!(1, size(A.hh, 1), copy(A.hh), A.tau)
-
-hess(A::StridedMatrix) = Hessenberg(copy(A))[:H]
 
 ### Linear algebra for general matrices
 
@@ -794,6 +833,8 @@ function SVDDense(A::StridedMatrix, thin::Bool)
     return SVDDense(u,s,vt)
 end
 SVDDense(A::StridedMatrix) = SVDDense(A, false)
+svd(A::StridedMatrix, args...) = SVDDense(copy(A), args...)
+svd(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
 
 function ref(F::SVDDense, d::Symbol)
     if d == :U return F.U end
@@ -810,13 +851,6 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T})
 end
 
 svdvals(A) = svdvals!(copy(A))
-
-function svd(A::StridedMatrix, thin::Bool)
-    SVD = SVDDense(copy(A), thin)
-    return SVD[:U], SVD[:S], SVD[:V]
-end
-svd(A::StridedMatrix) = svd(A, false)
-svd(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
 
 # SVD least squares
 function \{T<:BlasFloat}(A::SVDDense{T}, B::StridedVecOrMat{T})
@@ -843,10 +877,7 @@ function GSVDDense(A::StridedMatrix, B::StridedMatrix)
     return GSVDDense(U, V, Q, a, b, int(k), int(l), R)
 end
 
-function svd(A::StridedMatrix, B::StridedMatrix) 
-    G = GSVDDense(copy(A), copy(B))
-    return G[:U], G[:V], G[:Q], G[:D1], G[:D2], G[:R0]
-end
+svd(A::StridedMatrix, B::StridedMatrix) = GSVDDense(copy(A), copy(B))
 
 function ref{T}(obj::GSVDDense{T}, d::Symbol)
     if d == :U return obj.U end
@@ -895,21 +926,8 @@ schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 function sqrtm(A::StridedMatrix, cond::Bool)
     m, n = size(A)
     if m != n error("DimentionMismatch") end
-    if ishermitian(A)
-        z = similar(A)
-        v = LAPACK.syevr!(copy(A),z)
-        vsqrt = sqrt(complex(v))
-        if all(imag(vsqrt) .== 0)
-            retmat = symmetrize!(diagmm(z, real(vsqrt)) * z')
-        else
-            zc = complex(z)
-            retmat = symmetrize!(diagmm(zc, vsqrt) * zc')
-        end
-        if cond
-            return retmat, norm(vsqrt, Inf)^2/norm(v, Inf)
-        else
-            return retmat
-        end
+    if ishermitian(A) 
+        return sqrtm(Hermitian(A), cond)
     else
         T,Q,_ = schur(complex(A))
         R = zeros(eltype(T), n, n)
@@ -924,7 +942,6 @@ function sqrtm(A::StridedMatrix, cond::Bool)
                     R[i,j] = r / (R[i,i] + R[j,j])
                 end
             end
-            R[i,j] = (T[i,j] - r) / (R[i,i] + R[j,j])
         end
     end
     retmat = Q*R*Q'
@@ -1443,8 +1460,31 @@ function Triangular(A::Matrix)
     error("Matrix is not triangular")
 end
 
+size(A::Triangular, args...) = size(A.UL, args...)
+function full(A::Triangular)
+    if 
+        istril(A) return tril(A.UL)
+    else
+        return triu(A.UL)
+    end
+end
+print_matrix(io::IO, A::Triangular) = print_matrix(io, full(A))
+
 istril(A::Triangular) = A.uplo == 'L'
 istriu(A::Triangular) = A.uplo == 'U'
+
+# Vector multiplication
+*(A::Triangular, b::Vector) = BLAS.trmv(A.uplo, 'N', A.unitdiag, A.UL, b)
+Ac_mul_B{T<:Union(Complex128, Complex64)}(A::Triangular{T}, b::Vector{T}) = BLAS.trmv(A.uplo, 'C', A.unitdiag, A.UL, b)
+At_mul_B{T<:Union(Float64, Float32)}(A::Triangular{T}, b::Vector{T}) = BLAS.trmv(A.uplo, 'T', A.unitdiag, A.UL, b)
+
+# Matrix multiplication
+*(A::Triangular, B::StridedMatrix) = BLAS.trmm('L', A.uplo, 'N', A.unitdiag, 1.0, A.UL, B)
+*(A::StridedMatrix, B::Triangular) = BLAS.trmm('R', B.uplo, 'N', B.unitdiag, 1.0, A, B.UL)
+Ac_mul_B{T<:Union(Complex128, Complex64)}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'C', A.unitdiag, 1.0, A.UL, B)
+Ac_mul_B{T<:Union(Float64, Float32)}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'T', A.unitdiag, 1.0, A.UL, B)
+A_mul_Bc{T<:Union(Complex128, Complex64)}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'C', B.unitdiag, 1.0, A, B.UL)
+A_mul_Bc{T<:Union(Float64, Float32)}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'T', B.unitdiag, 1.0, A, B.UL)
 
 function \(A::Triangular, B::StridedVecOrMat)
     r, info = LAPACK.trtrs!(A.uplo, 'N', A.unitdiag, A.UL, copy(B))
@@ -1479,6 +1519,8 @@ Hermitian{T<:BlasFloat}(S::Matrix{T}, uplo::Char) = Hermitian{T}(S, uplo)
 Hermitian(A::StridedMatrix) = Hermitian(A, 'U')
 
 size(A::Hermitian, args...) = size(A.S, args...)
+print_matrix(io::IO, A::Hermitian) = print_matrix(io, full(A))
+full(A::Hermitian) = symmetrize!(copy(A.S), A.uplo)
 ishermitian(A::Hermitian) = true
 issym{T<:Union(Float64, Float32)}(A::Hermitian{T}) = true
 
@@ -1510,4 +1552,54 @@ function sqrtm(A::Hermitian, cond::Bool)
     else
         return retmat
     end
+end
+
+# Rectangular Full Packed Matrices
+
+type SymmetricRFP{T<:BlasFloat} <: AbstractMatrix{T}
+    data::Vector{T}
+    transr::Char
+    uplo::Char
+end
+
+function Ac_mul_A_RFP{T<:BlasFloat}(A::Matrix{T})
+    n = size(A, 2)
+    C = LAPACK.sfrk!('N', 'U', 'T', 1.0, A, 0.0, Array(T, div(n*(n+1),2)))
+    return SymmetricRFP(C, 'N', 'U')
+end
+
+type TriangularRFP{T<:BlasFloat} <: AbstractMatrix{T}
+    data::Vector{T}
+    transr::Char
+    uplo::Char
+end
+TriangularRFP(A::Matrix) = TriangularRFP(trttf!('N', 'U', A)[1], 'N', 'U')
+
+function full(A::TriangularRFP)
+    B = LAPACK.tfttr!(A.transr, A.uplo, A.data)[1]
+    if A.uplo == 'U' 
+        return triu!(B)
+    else
+        return tril!(B)
+    end
+end
+
+type CholeskyDenseRFP{T<:BlasFloat} <: Factorization{T}
+    data::Vector{T}
+    transr::Char
+    uplo::Char
+end
+
+function chol(A::SymmetricRFP)
+    C, info = LAPACK.pftrf!(A.transr, A.uplo, copy(A.data))
+    return CholeskyDenseRFP(C, A.transr, A.uplo)
+end
+
+# Least squares
+\(A::CholeskyDenseRFP, B::VecOrMat) = LAPACK.pftrs!(A.transr, A.uplo, A.data, copy(B))
+
+function inv(A::CholeskyDenseRFP)
+    B, info = LAPACK.pftri!(A.transr, A.uplo, copy(A.data))
+    if info > 0 throw(LAPACK.SingularException(info)) end
+    return B
 end
