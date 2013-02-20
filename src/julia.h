@@ -492,9 +492,6 @@ void *allocobj(size_t sz);
 #define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 #define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
-#define jl_is_bitstype(v)    (jl_is_datatype(v)&&jl_isimmutable(v)&&jl_tuple_len(((jl_datatype_t*)(v))->names)==0&&(!((jl_datatype_t*)(v))->abstract))
-#define jl_is_structtype(v)  (jl_is_datatype(v)&&jl_tuple_len(((jl_datatype_t*)(v))->names)>0&&(!((jl_datatype_t*)(v))->abstract))
-#define jl_is_abstracttype(t) (jl_is_datatype(t)&&(((jl_datatype_t*)t)->abstract))
 #define jl_datatype_size(t)  (((jl_datatype_t*)t)->size)
 #define jl_is_pointerfree(t) (((jl_datatype_t*)t)->pointerfree)
 #define jl_ismutable(t)      (((jl_datatype_t*)t)->mutabl)
@@ -548,6 +545,27 @@ void *allocobj(size_t sz);
 
 // get a pointer to the data in a datatype
 #define jl_data_ptr(v)  (&((void**)(v))[1])
+
+static inline int jl_is_bitstype(void *v)
+{
+    return (jl_is_datatype(v) && jl_isimmutable(v) &&
+            jl_tuple_len(((jl_datatype_t*)(v))->names)==0 &&
+            !((jl_datatype_t*)(v))->abstract &&
+            ((jl_datatype_t*)(v))->size > 0);
+}
+
+static inline int jl_is_structtype(void *v)
+{
+    return (jl_is_datatype(v) &&
+            (jl_tuple_len(((jl_datatype_t*)(v))->names) > 0 ||
+             ((jl_datatype_t*)(v))->size == 0) &&
+            !((jl_datatype_t*)(v))->abstract);
+}
+
+static inline int jl_is_abstracttype(void *v)
+{
+    return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->abstract);
+}
 
 static inline int jl_is_array_type(void *t)
 {
