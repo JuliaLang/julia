@@ -45,7 +45,7 @@ size(B::BitArray) = tuple(B.dims...)
 
 ## Aux functions ##
 
-get_chunks_id(i::Integer) = @_div64(int(i-1))+1, @_mod64(int(i-1))
+get_chunks_id(i::Integer) = @_div64(int(i)-1)+1, @_mod64(int(i)-1)
 
 function glue_src_bitchunks(src::Vector{Uint64}, k::Int, ks1::Int, msk_s0::Uint64, ls0::Int)
     chunk = ((src[k] & msk_s0) >>> ls0)
@@ -248,16 +248,22 @@ end
 
 ## Indexing: ref ##
 
-function ref(B::BitArray, i::Integer)
+function ref_unchecked(Bc::Vector{Uint64}, i::Integer)
+    i1, i2 = get_chunks_id(i)
+    u = uint64(1)
+    return (Bc[i1] >>> i2) & u == u
+end
+
+function ref(B::BitArray, i::Real)
+    i = to_index(i)
     if i < 1 || i > length(B)
         throw(BoundsError())
     end
-    i1, i2 = get_chunks_id(i)
-    return (B.chunks[i1] >>> i2) & one(Uint64) == one(Uint64)
+    ref_unchecked(B.chunks, i)
 end
 
 # 0d bitarray
-ref(B::BitArray{0}) = B[1]
+ref(B::BitArray{0}) = ref_unchecked(B.chunks, 1)
 
 ref(B::BitArray, i0::Real, i1::Real) = B[to_index(i0) + size(B,1)*(to_index(i1)-1)]
 ref(B::BitArray, i0::Real, i1::Real, i2::Real) =
@@ -348,9 +354,17 @@ end
 #       (which is fine)
 function ref{T<:Real}(B::BitArray, I::AbstractVector{T})
     X = BitArray(length(I))
+    lB = length(B)
+    Xc = X.chunks
+    Bc = B.chunks
     ind = 1
     for i in I
-        X[ind] = B[i]
+        # faster X[ind] = B[i]
+        i = to_index(i)
+        if i < 1 || i > lB
+            throw(BoundsError())
+        end
+        assign_unchecked(Xc, ref_unchecked(Bc, i), ind)
         ind += 1
     end
     return X
@@ -361,14 +375,16 @@ let ref_cache = nothing
     function ref(B::BitArray, I::Union(Real,AbstractArray)...)
         I = indices(I)
         X = BitArray(ref_shape(I...))
+        Xc = X.chunks
 
         if is(ref_cache,nothing)
             ref_cache = Dict()
         end
         gen_cartesian_map(ref_cache, ivars -> quote
-                X[storeind] = B[$(ivars...)]
-                storeind += 1
-            end, I, (:B, :X, :storeind), B, X, 1)
+                #faster X[storeind] = B[$(ivars...)]
+                assign_unchecked(Xc, B[$(ivars...)], ind)
+                ind += 1
+            end, I, (:B, :Xc, :ind), B, Xc, 1)
         return X
     end
 end
@@ -377,15 +393,22 @@ end
 
 function ref_bool_1d(B::BitArray, I::AbstractArray{Bool})
     n = sum(I)
-    out = BitArray(n)
-    c = 1
+    X = BitArray(n)
+    lI = length(I)
+    if lI != length(B)
+        throw(BoundsError())
+    end
+    Xc = X.chunks
+    Bc = B.chunks
+    ind = 1
     for i = 1:length(I)
         if I[i]
-            out[c] = B[i]
-            c += 1
+            # faster X[ind] = B[i]
+            assign_unchecked(Xc, ref_unchecked(Bc, i), ind)
+            ind += 1
         end
     end
-    out
+    return X
 end
 
 ref(B::BitVector, I::AbstractVector{Bool}) = ref_bool_1d(B, I)
@@ -402,19 +425,23 @@ ref{T<:Real}(B::BitMatrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = B[fi
 
 ## Indexing: assign ##
 
+function assign_unchecked(Bc::Array{Uint64}, x, i::Integer)
+    x = convert(Bool, x)
+    i1, i2 = get_chunks_id(i)
+    u = uint64(1) << i2
+    if x
+        Bc[i1] |= u
+    else
+        Bc[i1] &= ~u
+    end
+end
+
 function assign(B::BitArray, x, i::Real)
     i = to_index(i)
     if i < 1 || i > length(B)
         throw(BoundsError())
     end
-    i1, i2 = get_chunks_id(i)
-    u = uint64(1)
-    y = convert(Bool, x)
-    if !y
-        B.chunks[i1] &= ~(u << i2)
-    else
-        B.chunks[i1] |= (u << i2)
-    end
+    assign_unchecked(B.chunks, x, i)
     return B
 end
 
@@ -598,21 +625,29 @@ end
 # logical indexing
 
 function assign_bool_scalar_1d(A::BitArray, x, I::AbstractArray{Bool})
-    n = sum(I)
+    if length(I) > length(A)
+        throw(BoundsError())
+    end
+    Ac = A.chunks
     for i = 1:length(I)
         if I[i]
-            A[i] = x
+            # faster A[i] = x
+            assign_unchecked(Ac, x, i)
         end
     end
     A
 end
 
 function assign_bool_vector_1d(A::BitArray, X::AbstractArray, I::AbstractArray{Bool})
-    n = sum(I)
+    if length(I) > length(A)
+        throw(BoundsError())
+    end
+    Ac = A.chunks
     c = 1
     for i = 1:length(I)
         if I[i]
-            A[i] = X[c]
+            # faster A[i] = X[c]
+            assign_unchecked(Ac, X[c], i)
             c += 1
         end
     end
