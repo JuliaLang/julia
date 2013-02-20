@@ -584,13 +584,13 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->abstract = abstract;
     t->mutabl = mutabl;
     t->pointerfree = 0;
-    t->fptr = jl_f_ctor_trampoline;
+    t->fptr = jl_f_no_function;
     t->env = (jl_value_t*)t;
     t->linfo = NULL;
     t->ctor_factory = (jl_value_t*)jl_null;
     t->instance = NULL;
     t->size = 0;
-    if (!jl_is_leaf_type((jl_value_t*)t)) {
+    if (abstract || parameters->length > 0) {
         t->uid = 0;
     }
     else {
