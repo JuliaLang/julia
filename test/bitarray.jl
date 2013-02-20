@@ -362,8 +362,8 @@ b2 = randbool(n1, n2)
 @check_bit_operation (.^) Matrix{Complex128} (1.0im, b2)
 @check_bit_operation (.^) Matrix{ComplexPair{Int}} (0im, b2)
 @check_bit_operation (.^) Matrix{ComplexPair{Int}} (1im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint64}} (0x0im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint64}} (0x1im, b2)
+@check_bit_operation (.^) Matrix{ComplexPair{Uint}} (0x0im, b2)
+@check_bit_operation (.^) Matrix{ComplexPair{Uint}} (0x1im, b2)
 
 # Matrix/Number
 b1 = randbool(n1, n2)
