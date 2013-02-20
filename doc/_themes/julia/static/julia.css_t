@@ -1,7 +1,7 @@
 {% set sidebar_width = '250px' %}
 
 @import url("basic.css");
-@import url(http://fonts.googleapis.com/css?family=Rokkitt:400,700|Lato:400,400italic);
+@import url(http://fonts.googleapis.com/css?family=Lato:400,400italic,700);
 
 /* general site formatting */
 
@@ -12,32 +12,25 @@
 
 body {
   background-color: #fff;
-  color: #000;
-  font: 11.5pt 'Helvetica Neue', helvetica, arial, freesans, clean, sans-serif;
+  font: 11.5pt Georgia, serif;
   line-height: 1.5;
 }
 
-@media screen {
-  body {
-    color: #222;
-  }
-}
-
 h1,h2,h3,h4,h5,h6 {
-  font-family: Rokkitt, sans-serif;
+  font-family: helvetica, arial, freesans clean, sans-serif;
 }
 
 div.related {
-  background: #000;
+  background: #f6f6f6;
+  border-bottom: 1px solid #e6e6e6;
+  color: #444;
+  font-weight: bold;
   overflow: hidden; /* enclose all child floats */
   padding: 0.5em 0;
 }
 
-div.related,
-div.related a,
-div.related a:visited {
-  color: #fff;
-}
+div.related a         { color: #a44; }
+div.related a:visited { color: #544; }
 
 div.related li {
   display: block;
@@ -242,4 +235,14 @@ div.sphinxsidebar #searchbox input[type="submit"] {
   border: 0;
   padding: 1px;
   background-color: #ddd;
+}
+
+.logo {
+  padding: 0 0 1em 0;
+}
+.logo img {
+  margin: 0;
+  padding: 0;
+  width: 133px;
+  height: 88px;
 }
