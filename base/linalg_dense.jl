@@ -843,7 +843,7 @@ end
 
 schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 
-function sqrtm(A::Matrix, cond::Bool)
+function sqrtm(A::StridedMatrix, cond::Bool)
     m, n = size(A)
     if m != n error("DimentionMismatch") end
     if ishermitian(A)
@@ -867,11 +867,13 @@ function sqrtm(A::Matrix, cond::Bool)
         for j = 1:n
             R[j,j] = sqrt(T[j,j])
             for i = j - 1:-1:1
-                r = zero(A[1])
+                r = T[i,j]
                 for k = i + 1:j - 1
-                    r += R[i,k]*R[k,j]
+                    r -= R[i,k]*R[k,j]
                 end
-                R[i,j] = (T[i,j] - r) / (R[i,i] + R[j,j])
+                if r != 0
+                    R[i,j] = r / (R[i,i] + R[j,j])
+                end
             end
         end
         retmat = Q*R*Q'
@@ -883,7 +885,9 @@ function sqrtm(A::Matrix, cond::Bool)
         end
     end
 end
-sqrtm(A::Matrix) = sqrtm(A, false)
+sqrtm{T<:Integer}(A::StridedMatrix{T}, cond::Bool) = sqrtm(float(A), cond)
+sqrtm{T<:Integer}(A::StridedMatrix{ComplexPair{T}}, cond::Bool) = sqrtm(complex128(A), cond)
+sqrtm(A::StridedMatrix) = sqrtm(A, false)
 sqrtm(a::Number) = isreal(a) ? (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)  : sqrt(a)
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})

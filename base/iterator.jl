@@ -17,19 +17,18 @@ done(e::Enumerate, state) = done(e.itr, state[2])
 
 type Zip
     itrs::Vector{Any}
-    Zip(itrs...) = new({itrs...})
+    vals::Vector{Any}  # temp storage for use by next()
+    Zip(itrs...) = new({itrs...}, Array(Any, length(itrs)))
 end
 zip(itrs...) = Zip(itrs...)
 
 length(z::Zip) = min(length, z.itrs)
 start(z::Zip) = { start(itr) for itr in z.itrs }
 function next(z::Zip, state)
-    v = Array(Any, length(z.itrs))
-    s = Array(Any, length(z.itrs))
     for i = 1:length(z.itrs)
-        v[i], s[i] = next(z.itrs[i], state[i])
+        z.vals[i], state[i] = next(z.itrs[i], state[i])
     end
-    tuple(v...), s
+    tuple(z.vals...), state
 end
 function done(z::Zip, state)
     if isempty(z.itrs)
