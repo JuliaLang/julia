@@ -587,6 +587,10 @@ static void NORETURN throw_internal(jl_value_t *e)
         jl_longjmp(jl_current_task->eh->eh_ctx, 1);
     }
     else {
+        if (jl_current_task == jl_root_task) {
+            JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
+            exit(1);
+        }
         jl_task_t *cont = jl_current_task->on_exit;
         while (cont->done)
             cont = cont->on_exit;
