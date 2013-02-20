@@ -319,7 +319,7 @@ memio() = memio(0, true)
 write(s::IOStream, b::Uint8) = int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, s.ios))
 
 function write{T}(s::IOStream, a::Array{T})
-    if isa(T,BitsKind)
+    if isbits(T)
         ccall(:ios_write, Int, (Ptr{Void}, Ptr{Void}, Uint),
               s.ios, a, length(a)*sizeof(T))
     else
@@ -332,7 +332,7 @@ function write(s::IOStream, p::Ptr, nb::Integer)
 end
 
 function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
-    if !isa(T,BitsKind) || stride(a,1)!=1
+    if !isbits(T) || stride(a,1)!=1
         return invoke(write, (Any, AbstractArray), s, a)
     end
     colsz = size(a,1)*sizeof(T)
@@ -357,7 +357,7 @@ function read(s::IOStream, ::Type{Uint8})
 end
 
 function read{T}(s::IOStream, a::Array{T})
-    if isa(T,BitsKind)
+    if isbits(T)
         nb = length(a)*sizeof(T)
         if ccall(:ios_readall, Uint,
                  (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb

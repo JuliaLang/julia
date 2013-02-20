@@ -228,6 +228,7 @@ typedef struct _jl_datatype_t {
     int32_t size;
     uint8_t abstract;
     uint8_t mutabl;
+    uint8_t pointerfree;
     // hidden fields:
     uint32_t alignment;  // strictest alignment over all fields
     uint32_t uid;
@@ -495,6 +496,7 @@ void *allocobj(size_t sz);
 #define jl_is_structtype(v)  (jl_is_datatype(v)&&jl_tuple_len(((jl_datatype_t*)(v))->names)>0&&(!((jl_datatype_t*)(v))->abstract))
 #define jl_is_abstracttype(t) (jl_is_datatype(t)&&(((jl_datatype_t*)t)->abstract))
 #define jl_datatype_size(t)  (((jl_datatype_t*)t)->size)
+#define jl_is_pointerfree(t) (((jl_datatype_t*)t)->pointerfree)
 #define jl_ismutable(t)      (((jl_datatype_t*)t)->mutabl)
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutabl)
 #define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->mutabl))
@@ -719,7 +721,6 @@ int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
 int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err);
-int jl_is_pointerfree(jl_datatype_t *dt);
 
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims);

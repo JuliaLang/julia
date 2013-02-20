@@ -6,7 +6,7 @@
 deepcopy(x) = deepcopy_internal(x, ObjectIdDict())
 
 deepcopy_internal(x::Union(Symbol,LambdaStaticData,TopNode,QuoteNode,
-                  BitsKind,CompositeKind,AbstractKind,UnionKind),
+                           DataType,UnionType),
                   stackdict::ObjectIdDict) = x
 deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
     ntuple(length(x), i->deepcopy_internal(x[i], stackdict))
@@ -26,8 +26,10 @@ function deepcopy_internal(x, stackdict::ObjectIdDict)
     _deepcopy_t(x, typeof(x), stackdict)
 end
 
-_deepcopy_t(x, T::BitsKind, stackdict::ObjectIdDict) = x
-function _deepcopy_t(x, T::CompositeKind, stackdict::ObjectIdDict)
+function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
+    if T.names===()
+        return x
+    end
     ret = ccall(:jl_new_struct_uninit, Any, (Any,), T)
     stackdict[x] = ret
     for f in T.names
@@ -48,8 +50,10 @@ function deepcopy_internal(x::Array, stackdict::ObjectIdDict)
     _deepcopy_array_t(x, eltype(x), stackdict)
 end
 
-_deepcopy_array_t(x, T::BitsKind, stackdict::ObjectIdDict) = copy(x)
 function _deepcopy_array_t(x, T, stackdict::ObjectIdDict)
+    if isbits(T)
+        return copy(x)
+    end
     dest = similar(x)
     stackdict[x] = dest
     for i=1:length(x)

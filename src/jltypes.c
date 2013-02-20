@@ -1694,9 +1694,9 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             ndt->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack);
             if (!isabstract)
                 jl_compute_field_offsets(ndt);
-        }
-        else if (ftypes->length == 0) {
-            ndt->size = dt->size;
+            if (ftypes->length == 0) {
+                ndt->size = dt->size;
+            }
         }
         if (cacheable) cache_type_((jl_value_t*)ndt);
         result = (jl_value_t*)ndt;
@@ -2297,7 +2297,7 @@ extern void jl_init_int32_int64_cache(void);
 void jl_init_types(void)
 {
     // create base objects
-    jl_datatype_type = jl_new_uninitialized_datatype(13);
+    jl_datatype_type = jl_new_uninitialized_datatype(14);
     jl_datatype_type->type = (jl_value_t*)jl_datatype_type;
     jl_typename_type = jl_new_uninitialized_datatype(4);
     jl_sym_type = jl_new_uninitialized_datatype(0);
@@ -2319,7 +2319,7 @@ void jl_init_types(void)
     jl_datatype_type->name->primary = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = jl_type_type;
     jl_datatype_type->parameters = jl_null;
-    jl_datatype_type->names = jl_tuple(13, jl_symbol("fptr"),
+    jl_datatype_type->names = jl_tuple(14, jl_symbol("fptr"),
                                        jl_symbol("env"),
                                        jl_symbol("code"),
                                        jl_symbol("name"),
@@ -2331,13 +2331,14 @@ void jl_init_types(void)
                                        jl_symbol("instance"),
                                        jl_symbol("sizeof"),
                                        jl_symbol("abstract"),
-                                       jl_symbol("mutable"));
-    jl_datatype_type->types = jl_tuple(13, jl_any_type,jl_any_type,jl_any_type,
+                                       jl_symbol("mutable"),
+                                       jl_symbol("pointerfree"));
+    jl_datatype_type->types = jl_tuple(14, jl_any_type,jl_any_type,jl_any_type,
                                        jl_typename_type, jl_type_type,
                                        jl_tuple_type, jl_tuple_type,
                                        jl_tuple_type, jl_any_type, jl_any_type,
                                        jl_any_type, //types will be fixed later
-                                       jl_any_type, jl_any_type);
+                                       jl_any_type, jl_any_type, jl_any_type);
     jl_datatype_type->fptr = jl_f_no_function;
     jl_datatype_type->env = (jl_value_t*)jl_null;
     jl_datatype_type->linfo = NULL;
@@ -2346,6 +2347,7 @@ void jl_init_types(void)
     jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->struct_decl = NULL;
     jl_datatype_type->abstract = 0;
+    jl_datatype_type->pointerfree = 0;
     // NOTE: types should not really be mutable, but the instance and
     // struct_decl fields are basically caches, which are mutated.
     jl_datatype_type->mutabl = 1;
@@ -2367,6 +2369,7 @@ void jl_init_types(void)
     jl_typename_type->instance = NULL;
     jl_typename_type->struct_decl = NULL;
     jl_typename_type->abstract = 0;
+    jl_typename_type->pointerfree = 0;
     jl_typename_type->mutabl = 1;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
@@ -2382,7 +2385,9 @@ void jl_init_types(void)
     jl_sym_type->instance = NULL;
     jl_sym_type->uid = jl_assign_type_uid();
     jl_sym_type->struct_decl = NULL;
+    jl_sym_type->size = 0;
     jl_sym_type->abstract = 0;
+    jl_sym_type->pointerfree = 0;
     jl_sym_type->mutabl = 1;
 
     // now they can be used to create the remaining base kinds and types
@@ -2616,6 +2621,7 @@ void jl_init_types(void)
     jl_tupleset(jl_datatype_type->types, 10, jl_int32_type);
     jl_tupleset(jl_datatype_type->types, 11, (jl_value_t*)jl_bool_type);
     jl_tupleset(jl_datatype_type->types, 12, (jl_value_t*)jl_bool_type);
+    jl_tupleset(jl_datatype_type->types, 13, (jl_value_t*)jl_bool_type);
     jl_tupleset(jl_function_type->types, 0, pointer_void);
 
     jl_compute_field_offsets(jl_datatype_type);

@@ -86,11 +86,11 @@ names(m::Module, all::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int3
 names(m::Module) = names(m,false)
 module_name(m::Module) = ccall(:jl_module_name, Any, (Any,), m)::Symbol
 module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
+names(t::DataType) = t.names
 function names(v)
-    if typeof(v) === CompositeKind
-        return v.names
-    elseif typeof(typeof(v)) === CompositeKind
-        return typeof(v).names
+    t = typeof(v)
+    if isa(t,DataType)
+        return names(t)
     else
         error("cannot call names() on a non-composite type")
     end
@@ -117,8 +117,11 @@ bytestring(str::ByteString) = str
 # return an integer such that object_id(x)==object_id(y) if is(x,y)
 object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
 
-const isimmutable = x->(isa(x,Tuple) || isa(x,Symbol) ||
-                        isa(typeof(x),BitsKind))
+const isimmutable = x->(isa(x,Tuple) || !typeof(x).mutable)
+isbits(t::DataType) = !t.mutable && t.pointerfree && isleaftype(t)
+isbits(t::Tuple) = false
+isbits(t::Type) = false
+isbits(x) = isbits(typeof(x))
 
 dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
