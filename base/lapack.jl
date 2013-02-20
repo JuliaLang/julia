@@ -1023,15 +1023,18 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             end
             C
         end
-        function gemqrt!(side::Char, trans::Char, V::Matrix{$elty}, T::Matrix{$elty}, C::StridedMatrix{$elty})
-            m, n = size(C)
+        function gemqrt!(side::Char, trans::Char, V::Matrix{$elty}, T::Matrix{$elty}, C::StridedVecOrMat{$elty})
+            m = size(C, 1)
+            n = size(C, 2)
             k = size(T, 1)
             if side == 'L'
                 ldv = max(1, m)
                 wss = n*k
+                if m != size(V, 1) throw(DimensionMismatch("")) end
             elseif side == 'R'
                 ldv = max(1, n)
                 wss = m*k
+                if n != size(V, 1) throw(DimensionMismatch("")) end
             else
                 error("side must be either 'L' or 'R'")
             end
@@ -2042,7 +2045,7 @@ for (fn, elty) in ((:dpftrs_, :Float64),
                    (:zpftrs_, :Complex128),
                    (:cpftrs_, :Complex64))
     @eval begin
-        function pftrs!(transr::Char, uplo::Char, A::StridedVector{$elty}, B::StridedMatrix{$elty})
+        function pftrs!(transr::Char, uplo::Char, A::StridedVector{$elty}, B::StridedVecOrMat{$elty})
             n = int(div(sqrt(8length(A)), 2))
             if n != size(B, 1) throw(DimensionMismatch("A and B must have the same number of rows")) end
             nhrs = size(B, 2)
@@ -2051,10 +2054,10 @@ for (fn, elty) in ((:dpftrs_, :Float64),
             ccall(($(string(fn)), liblapack), Void,
                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                &transr, &uplo, &n, &nrhs,
+                &transr, &uplo, &n, &nhrs,
                 A, B, &ldb, info)
             if info[1] < 0 throw(LapackException(info[1])) end
-            return B, info[1]
+            return B
         end
     end
 end

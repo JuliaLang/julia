@@ -239,6 +239,7 @@ export
     A_rdiv_Bt,
     Ac_ldiv_B,
     Ac_ldiv_Bc,
+    Ac_mul_b_RFP,
     Ac_mul_B,
     Ac_mul_Bc,
     Ac_rdiv_B,
@@ -548,10 +549,7 @@ export
 
 # linear algebra
     chol,
-    cholfact,
-    cholfact!,
-    cholpfact,
-    cholpfact!,
+    cholp,
     cond,
     cross,
     ctranspose,

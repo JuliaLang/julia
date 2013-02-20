@@ -8,7 +8,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         apd   = a'*a                    # symmetric positive-definite
         b     = convert(Vector{elty}, b)
         
-        capd  = CholeskyDense(copy(apd))              # upper Cholesky factor
+        capd  = chol(apd)              # upper Cholesky factor
         r     = capd[:U]
         @test_approx_eq r'*r apd
         @test_approx_eq b apd * (capd\b)
@@ -16,10 +16,10 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq a*(capd\(a'*b)) b # least squares soln for square a
         @test_approx_eq det(capd) det(apd)
 
-        l     = CholeskyDense(copy(apd), 'L')[:L] # lower Cholesky factor
+        l     = chol(apd, :L)[:L] # lower Cholesky factor
         @test_approx_eq l*l' apd
 
-        cpapd = CholeskyPivotedDense(copy(apd))           # pivoted Choleksy decomposition
+        cpapd = cholp(apd)                          # pivoted Choleksy decomposition
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
         @test_approx_eq b apd * (cpapd\b)
@@ -32,27 +32,21 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq inv(bc2) * apd eye(elty, n)
         @test_approx_eq apd * (bc2\b) b
 
-        lua   = LUDense(copy(a))                  # LU decomposition
-        l,u,p = lu(a)
-        L,U,P = lua[:L], lua[:U], lua[:p]
-        @test l == L && u == U && p == P
+        lua   = lu(a)                  # LU decomposition
+        l,u,p = lua[:L], lua[:U], lua[:p]
         @test_approx_eq l*u a[p,:]
         @test_approx_eq l[invperm(p),:]*u a
         @test_approx_eq a * inv(lua) eye(elty, n)
         @test_approx_eq a*(lua\b) b
 
-        qra   = QRDense(copy(a))                  # QR decomposition
+        qra   = qr(a)                  # QR decomposition
         q,r   = qra[:Q], qra[:R]
         @test_approx_eq q'*full(q, false) eye(elty, n)
         @test_approx_eq q*full(q, false)' eye(elty, n)
-        Q,R   = qr(a)
-        @test full(q) == Q && r == R
         @test_approx_eq q*r a
-        @test_approx_eq q*b Q*b
-        @test_approx_eq q'b Q'*b
         @test_approx_eq a*(qra\b) b
 
-        qrpa  = QRPivotedDense(copy(a))                 # pivoted QR decomposition
+        qrpa  = qrp(a)                 # pivoted QR decomposition
         q,r,p = qrpa[:Q], qrpa[:R], qrpa[:p]
         @test_approx_eq q'*full(q, false) eye(elty, n)
         @test_approx_eq q*full(q, false)' eye(elty, n)
@@ -73,12 +67,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq sort(imag(v)) sort(imag(d))
         @test istriu(u) || isreal(a)
 
-        u,s,v = svd(a)                # singular value decomposition
-        @test_approx_eq u*diagmm(s,v') a
+        usv = svd(a)                # singular value decomposition
+        @test_approx_eq usv[:U]*diagmm(usv[:S],usv[:Vt]) a
     
         gsvd = svd(a,a[1:5,:])         # Generalized svd
-        @test_approx_eq gsvd[1]*gsvd[4]*gsvd[6]*gsvd[3]' a
-        @test_approx_eq gsvd[2]*gsvd[5]*gsvd[6]*gsvd[3]' a[1:5,:]
+        @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
+        @test_approx_eq gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' a[1:5,:]
 
         x = a \ b
         @test_approx_eq a*x b
@@ -249,7 +243,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq expm(A3) eA3
 
                                         # Hessenberg
-        @test_approx_eq hess(A1) convert(Matrix{elty}, 
+        @test_approx_eq hess(A1)[:H] convert(Matrix{elty}, 
                         [4.000000000000000  -1.414213562373094  -1.414213562373095
                         -1.414213562373095   4.999999999999996  -0.000000000000000
                                          0  -0.000000000000002   3.000000000000000])
