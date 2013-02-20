@@ -394,7 +394,7 @@ function readall(stream::AsyncStream)
 end
 
 function read{T}(this::AsyncStream, a::Array{T})
-    if isa(T, BitsKind)
+    if isbits(T)
         nb = length(a)*sizeof(T)
         buf = this.buffer
         assert(buf.seekable == false)
@@ -441,7 +441,7 @@ write(s::AsyncStream, b::Uint8) =
 write(s::AsyncStream, c::Char) =
     int(ccall(:jl_pututf8, Int32, (Ptr{Void},Char), handle(s), c))
 function write{T}(s::AsyncStream, a::Array{T})
-    if(isa(T,BitsKind))
+    if isbits(T)
         ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint32), handle(s), a, uint(length(a)*sizeof(T)))
     else
         invoke(write,(IO,Array),s,a)

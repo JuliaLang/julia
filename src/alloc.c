@@ -517,6 +517,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields)
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     size_t sz = 0, alignm = 0;
+    int ptrfree = 1;
 
     for(size_t i=0; i < jl_tuple_len(st->types); i++) {
         jl_value_t *ty = jl_tupleref(st->types, i);
@@ -530,6 +531,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             fsz = sizeof(void*);
             al = fsz;
             st->fields[i].isptr = 1;
+            ptrfree = 0;
         }
         sz = LLT_ALIGN(sz, al);
         if (al > alignm)
@@ -540,15 +542,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     }
     st->alignment = alignm;
     st->size = LLT_ALIGN(sz, alignm);
-}
-
-int jl_is_pointerfree(jl_datatype_t *dt)
-{
-    for(size_t i=0; i < jl_tuple_len(dt->types); i++) {
-        if (dt->fields[i].isptr)
-            return 0;
-    }
-    return 1;
+    st->pointerfree = ptrfree;
 }
 
 extern int jl_boot_file_loaded;
