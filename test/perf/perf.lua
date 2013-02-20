@@ -70,19 +70,6 @@ end
 
 timeit(parseint, "parse_int")
 
-local function parseint2()
-    local n, m
-    for j = 1, 1000 do
-        n = floor(4294967295*random())
-        local s = format("0x%x",n)
-        m = tonumber(s)
-    end
-    assert(m == n)
-    return n
-end
-
-timeit(function()return parseint2()end,"parse_int2")
-
 local function mandel(z)
     local c = z
     local maxiter = 80
@@ -142,22 +129,7 @@ local function sortperf()
     qsort(v, 1, n)
 end
 
-function rand(n) 
-    local v, i
-    -- v = {}
-    v = ffi.new("double[?]", n)
-    
-    for i = 0, n - 1 do
-        v[i] = math.random()
-    end
-    return v
-end
 
-function sortperf2(n) 
-    local v = rand(n)
-    qsort(v, 0, n - 1)
-    return v
-end
 
 local function pisum()
     local sum
@@ -250,7 +222,8 @@ end
 
 local function randmatmult(n)
     local r = rng.new('rand')
-    local rand = || r:get()
+    --local rand = || r:get()
+    local rand = random
     local a = matrix.new(n, n, rand)
     local b = matrix.new(n, n, rand)
     return a*b
@@ -266,7 +239,6 @@ end
 
 
 timeit(sortperf, "quicksort")
-timeit(function()sortperf2(5000)end,"quicksort2")
 timeit(pisum, "pi_sum")
 timeit(|| randmatstat(1000), "rand_mat_stat")
 timeit(|| randmatmult(1000), "rand_mat_mul")
