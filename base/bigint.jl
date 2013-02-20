@@ -36,11 +36,13 @@ function BigInt(x::Uint)
 end
 
 BigInt(x::Bool) = BigInt(uint(x))
-BigInt{T<:Signed}(x::T) = BigInt(int(x))
-BigInt{T<:Unsigned}(x::T) = BigInt(uint(x))
-BigInt{T<:Union(Int128,Uint128)}(x::T) = BigInt(string(x))
+BigInt(x::Signed) = BigInt(int(x))
+BigInt(x::Unsigned) = BigInt(uint(x))
+#BigInt(x::Int128) = BigInt(string(x))
+#BigInt(x::Uint128) = BigInt(string(x))
 if WORD_SIZE == 32
-    BigInt{T<:Union(Int64,Uint64)}(l::T) = BigInt(string(l))
+    BigInt(x::Int64) = BigInt(string(x))
+    BigInt(x::Uint64) = BigInt(string(x))
 end
 
 convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)

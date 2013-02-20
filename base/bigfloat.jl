@@ -47,17 +47,19 @@ function BigFloat(x::BigInt)
 end
 
 BigFloat(x::Bool) = BigFloat(uint(x))
-BigFloat{T<:Signed}(x::T) = BigFloat(int(x))
-BigFloat{T<:Unsigned}(x::T) = BigFloat(uint(x))
-BigFloat{T<:Union(Int128,Uint128)}(x::T) = BigFloat(string(x))
+BigFloat(x::Signed) = BigFloat(int(x))
+BigFloat(x::Unsigned) = BigFloat(uint(x))
+#BigFloat(x::Int128) = BigFloat(BigInt(x))
+#BigFloat(x::Uint128) = BigFloat(BigInt(x))
 if WORD_SIZE == 32
-    BigFloat{T<:Union(Int64,Uint64)}(x::T) = BigFloat(string(x))
+    BigFloat(x::Int64) = BigFloat(string(x))
+    BigFloat(x::Uint64) = BigFloat(BigInt(x))
 end
 BigFloat(x::Float32) = BigFloat(float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
 convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
-convert{T<:Real}(::Type{BigFloat}, x::T) = BigFloat(x)
+convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 
 convert(::Type{Float64}, x::BigFloat) = ccall((:__gmpf_get_d,:libgmp), Float64, (Ptr{Void},), x.mpf)
 
