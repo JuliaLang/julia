@@ -300,7 +300,7 @@ end
 for (sb,s) in {(:sortby!, :sort!), (:sortby, :sort), (:sortpermby, :sortperm)}
     @eval begin
         $sb{A<:Algorithm}(v::AbstractVector, a::Union(A,Type{A}), by::Function) = $s(v, a, Sort.By(by))
-        $sb{A<:Algorithm}(v::AbstractVector, by::Function, a::Union(A,Type{A})) = $s(v, a, by)
+        $sb{A<:Algorithm}(v::AbstractVector, by::Function, a::Union(A,Type{A})) = $s(v, a, Sort.By(by))
         $sb              (v::AbstractVector, by::Function)                      = $s(v, Sort.By(by))
         $sb              (by::Function, v::AbstractVector, args...)             = $s(v, Sort.By(by), args...)
     end
