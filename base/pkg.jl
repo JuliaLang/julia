@@ -110,25 +110,31 @@ end
 # add and remove packages by name
 
 add(pkgs::Vector{VersionSet}) = cd_pkgdir() do
-    for pkg in pkgs
-        if !contains(Metadata.packages(),pkg.package)
-            error("Unknown package $(pkg.package); Perhaps you need to Pkg.update() for new metadata?")
-        end
-        reqs = parse_requires("REQUIRE")
-        if any(req->req.package==pkg.package,reqs)
-            warn("You've already required $pkg, ignoring.")
-            return
-        end
-        open("REQUIRE","a") do io
-            print(io,pkg.package)
-            for ver in pkg.versions
-                print(io,"\t$ver")
+    run(`git add REQUIRE`)
+    try
+        for pkg in pkgs
+            if !contains(Metadata.packages(),pkg.package)
+                error("Unknown package $(pkg.package); Perhaps you need to Pkg.update() for new metadata?")
             end
-            println(io)
+            reqs = parse_requires("REQUIRE")
+            if any(req->req.package==pkg.package,reqs)
+                warn("You've already required $pkg, ignoring.")
+                return
+            end
+            open("REQUIRE","a") do io
+                print(io,pkg.package)
+                for ver in pkg.versions
+                    print(io,"\t$ver")
+                end
+                println(io)
+            end
         end
+        _resolve()
+    catch
+        run(`git checkout -- REQUIRE`)
+        rethrow()
     end
     run(`git add REQUIRE`)
-    _resolve()
 end
 function add(pkgs::Union(String,VersionSet)...)
     pkgs_ = VersionSet[]
@@ -139,28 +145,34 @@ function add(pkgs::Union(String,VersionSet)...)
 end
 
 rm(pkgs::Vector{String}) = cd_pkgdir() do
-    for pkg in pkgs
-        if !contains(Metadata.packages(),pkg)
-            error("Invalid package: $pkg")
-        end
-        reqs = parse_requires("REQUIRE")
-        if !any(req->req.package==pkg,reqs)
-            error("Package not required: $pkg")
-        end
-        open("REQUIRE") do r
-            open("REQUIRE.new","w") do w
-                for line in each_line(r)
-                    fields = split(line)
-                    if isempty(fields) || fields[1]!=pkg
-                        print(w,line)
+    run(`git add REQUIRE`)
+    try
+        for pkg in pkgs
+            if !contains(Metadata.packages(),pkg)
+                error("Invalid package: $pkg")
+            end
+            reqs = parse_requires("REQUIRE")
+            if !any(req->req.package==pkg,reqs)
+                error("Package not required: $pkg")
+            end
+            open("REQUIRE") do r
+                open("REQUIRE.new","w") do w
+                    for line in each_line(r)
+                        fields = split(line)
+                        if isempty(fields) || fields[1]!=pkg
+                            print(w,line)
+                        end
                     end
                 end
             end
+            run(`mv REQUIRE.new REQUIRE`)
         end
-        run(`mv REQUIRE.new REQUIRE`)
+        _resolve()
+    catch
+        run(`git checkout -- REQUIRE`)
+        rethrow()
     end
     run(`git add REQUIRE`)
-    _resolve()
 end
 rm(pkgs::String...) = rm(String[pkgs...])
 
