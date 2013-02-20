@@ -12,7 +12,7 @@ jl_module_t *jl_current_module=NULL;
 jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)allocobj(sizeof(jl_module_t));
-    m->type = (jl_type_t*)jl_module_type;
+    m->type = (jl_value_t*)jl_module_type;
     m->name = name;
     htable_new(&m->bindings, 0);
     jl_set_const(m, name, (jl_value_t*)m);
@@ -30,7 +30,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
     b->name = name;
     b->value = NULL;
-    b->type = (jl_type_t*)jl_any_type;
+    b->type = (jl_value_t*)jl_any_type;
     b->owner = NULL;
     b->constp = 0;
     b->exportp = 0;

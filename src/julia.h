@@ -44,7 +44,7 @@
 
 
 #define JL_DATA_TYPE \
-    struct _jl_type_t *type;
+    struct _jl_value_t *type;
 
 typedef struct _jl_value_t {
     JL_DATA_TYPE
@@ -136,10 +136,6 @@ static inline void *jl_array_inline_data_area(jl_array_t *a)
     return &a->_space[0] + jl_array_ndimwords(jl_array_ndims(a))*sizeof(size_t);
 }
 
-typedef struct _jl_type_t {
-    JL_DATA_TYPE
-} jl_type_t;
-
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 
 typedef struct _jl_lambda_info_t {
@@ -192,7 +188,7 @@ typedef struct _jl_function_t {
 typedef struct {
     JL_DATA_TYPE
     jl_tuple_t *parameters;
-    jl_type_t *body;
+    jl_value_t *body;
 } jl_typector_t;
 
 typedef struct {
@@ -231,7 +227,7 @@ typedef struct _jl_datatype_t {
     jl_value_t *instance;  // for singletons
     int32_t size;
     uint8_t abstract;
-    uint8_t mutable;
+    uint8_t mutabl;
     // hidden fields:
     uint32_t alignment;  // strictest alignment over all fields
     uint32_t uid;
@@ -259,7 +255,7 @@ typedef struct {
     // not first-class
     jl_sym_t *name;
     jl_value_t *value;
-    jl_type_t *type;
+    jl_value_t *type;
     struct _jl_module_t *owner;  // for individual imported bindings
     unsigned constp:1;
     unsigned exportp:1;
@@ -343,7 +339,7 @@ extern jl_datatype_t *jl_task_type;
 extern jl_datatype_t *jl_uniontype_type;
 extern jl_datatype_t *jl_datatype_type;
 
-extern jl_type_t *jl_bottom_type;
+extern jl_value_t *jl_bottom_type;
 extern jl_value_t *jl_top_type;
 extern jl_datatype_t *jl_lambda_info_type;
 extern DLLEXPORT jl_datatype_t *jl_module_type;
@@ -371,7 +367,7 @@ extern jl_value_t *jl_bounds_exception;
 extern jl_value_t *jl_an_empty_cell;
 
 extern jl_datatype_t *jl_box_type;
-extern jl_type_t *jl_box_any_type;
+extern jl_value_t *jl_box_any_type;
 extern jl_typename_t *jl_box_typename;
 
 extern jl_datatype_t *jl_bool_type;
@@ -389,9 +385,9 @@ extern jl_datatype_t *jl_float64_type;
 extern jl_datatype_t *jl_voidpointer_type;
 extern jl_datatype_t *jl_pointer_type;
 
-extern jl_type_t *jl_array_uint8_type;
-extern jl_type_t *jl_array_any_type;
-extern jl_type_t *jl_array_symbol_type;
+extern jl_value_t *jl_array_uint8_type;
+extern jl_value_t *jl_array_any_type;
+extern jl_value_t *jl_array_symbol_type;
 extern DLLEXPORT jl_datatype_t *jl_expr_type;
 extern jl_datatype_t *jl_symbolnode_type;
 extern jl_datatype_t *jl_getfieldnode_type;
@@ -490,18 +486,21 @@ void *allocobj(size_t sz);
 #define jl_tparam1(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 1)
 
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
-#define jl_typeis(v,t) (jl_typeof(v)==(jl_type_t*)(t))
+#define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
 #define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 #define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
-#define jl_is_bitstype(v)    (jl_is_datatype(v)&&jl_isimmutable(v)&&((jl_datatype_t*)(v))->names->length==0)
+#define jl_is_bitstype(v)    (jl_is_datatype(v)&&jl_isimmutable(v)&&jl_tuple_len(((jl_datatype_t*)(v))->names)==0&&(!((jl_datatype_t*)(v))->abstract))
+#define jl_is_structtype(v)  (jl_is_datatype(v)&&jl_tuple_len(((jl_datatype_t*)(v))->names)>0&&(!((jl_datatype_t*)(v))->abstract))
 #define jl_is_abstracttype(t) (jl_is_datatype(t)&&(((jl_datatype_t*)t)->abstract))
 #define jl_datatype_size(t)  (((jl_datatype_t*)t)->size)
-#define jl_ismutable(t)      (((jl_datatype_t*)t)->mutable)
-#define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutable)
-#define jl_isimmutable(t)    (!((jl_datatype_t*)t)->mutable)
-#define jl_is_immutable(t)   (!((jl_datatype_t*)t)->mutable)
+#define jl_ismutable(t)      (((jl_datatype_t*)t)->mutabl)
+#define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutabl)
+#define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->mutabl))
+#define jl_isimmutable(t)    (!((jl_datatype_t*)t)->mutabl)
+#define jl_is_immutable(t)   (!((jl_datatype_t*)t)->mutabl)
+#define jl_is_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->mutabl))
 #define jl_is_uniontype(v)   jl_typeis(v,jl_uniontype_type)
 #define jl_is_typevar(v)     jl_typeis(v,jl_tvar_type)
 #define jl_is_typector(v)    jl_typeis(v,jl_typector_type)
@@ -556,13 +555,13 @@ static inline int jl_is_array_type(void *t)
 
 static inline int jl_is_array(void *v)
 {
-    jl_type_t *t = jl_typeof(v);
+    jl_value_t *t = jl_typeof(v);
     return jl_is_array_type(t);
 }
 
 static inline int jl_is_box(void *v)
 {
-    jl_type_t *t = jl_typeof(v);
+    jl_value_t *t = jl_typeof(v);
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_box_typename);
 }
@@ -623,10 +622,10 @@ int jl_args_morespecific(jl_value_t *a, jl_value_t *b);
 // type constructors
 jl_typename_t *jl_new_typename(jl_sym_t *name);
 jl_tvar_t *jl_new_typevar(jl_sym_t *name,jl_value_t *lb,jl_value_t *ub);
-jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);
+jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_value_t *body);
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params);
 jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n);
-jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
+jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_tuple_t *parameters);
@@ -634,7 +633,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields);
 jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
                                jl_tuple_t *parameters,
                                jl_tuple_t *fnames, jl_tuple_t *ftypes,
-                               int abstract, int mutable);
+                               int abstract, int mutabl);
 jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
                                jl_tuple_t *parameters, size_t nbits);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
@@ -723,19 +722,20 @@ int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err);
 int jl_is_pointerfree(jl_datatype_t *dt);
 
 // arrays
-DLLEXPORT jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
-DLLEXPORT jl_array_t *jl_new_arrayv(jl_type_t *atype, ...);
-jl_array_t *jl_new_array_(jl_type_t *atype, uint32_t ndims, size_t *dims);
-DLLEXPORT jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
+DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims);
+DLLEXPORT jl_array_t *jl_new_arrayv(jl_value_t *atype, ...);
+jl_array_t *jl_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims);
+DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
                                        jl_tuple_t *dims);
-DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_type_t *atype, void *data,
+DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                                          size_t nel, int own_buffer);
-DLLEXPORT jl_array_t *jl_ptr_to_array(jl_type_t *atype, void *data,
+DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
                                       jl_tuple_t *dims, int own_buffer);
+int jl_array_store_unboxed(jl_value_t *el_type);
 
-DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
-DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc);
-DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_type_t *atype, size_t nr, size_t nc,
+DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr);
+DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc);
+DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc,
                                         size_t z);
 DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len);
 DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len);

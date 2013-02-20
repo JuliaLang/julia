@@ -141,8 +141,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == new_sym) {
         jl_value_t *thetype = eval(args[0], locals, nl);
         JL_GC_PUSH(&thetype);
-        assert(jl_is_struct_type(thetype));
-        jl_value_t *v = jl_new_struct_uninit((jl_struct_type_t*)thetype);
+        assert(jl_is_structtype(thetype));
+        jl_value_t *v = jl_new_struct_uninit((jl_datatype_t*)thetype);
         JL_GC_POP();
         return v;
     }
@@ -207,11 +207,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_value_t *para = eval(args[1], locals, nl);
         jl_value_t *super = NULL;
         JL_GC_PUSH(&para, &super);
-        jl_tag_type_t *tt=jl_new_tagtype(name, jl_any_type, (jl_tuple_t*)para);
+        jl_datatype_t *dt =
+            jl_new_abstracttype(name, jl_any_type, (jl_tuple_t*)para);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
-        jl_checked_assignment(b, (jl_value_t*)tt);
+        jl_checked_assignment(b, (jl_value_t*)dt);
         super = eval(args[2], locals, nl);
-        jl_set_tag_type_super(tt, super);
+        jl_set_datatype_super(dt, super);
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
@@ -227,36 +228,37 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
                       ((jl_sym_t*)name)->name);
-        jl_bits_type_t *bt = jl_new_bits_type(name, jl_any_type, (jl_tuple_t*)para, nb);
+        jl_datatype_t *dt =
+            jl_new_bitstype(name, jl_any_type, (jl_tuple_t*)para, nb);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
-        jl_checked_assignment(b, (jl_value_t*)bt);
+        jl_checked_assignment(b, (jl_value_t*)dt);
         super = eval(args[3], locals, nl);
-        jl_set_tag_type_super((jl_tag_type_t*)bt, super);
+        jl_set_datatype_super(dt, super);
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == compositetype_sym) {
-        void jl_add_constructors(jl_struct_type_t *t);
+        void jl_add_constructors(jl_datatype_t *t);
         jl_value_t *name = args[0];
         jl_value_t *para = eval(args[1], locals, nl);
         jl_value_t *fnames = NULL;
         jl_value_t *super = NULL;
-        jl_struct_type_t *st = NULL;
-        JL_GC_PUSH(&para, &super, &fnames, &st);
+        jl_datatype_t *dt = NULL;
+        JL_GC_PUSH(&para, &super, &fnames, &dt);
         fnames = eval(args[2], locals, nl);
-        st = jl_new_struct_type((jl_sym_t*)name, jl_any_type, (jl_tuple_t*)para,
-                                (jl_tuple_t*)fnames, NULL);
-        st->ctor_factory = eval(args[3], locals, nl);
+        dt = jl_new_datatype((jl_sym_t*)name, jl_any_type, (jl_tuple_t*)para,
+                             (jl_tuple_t*)fnames, NULL, 0, 1);
+        dt->ctor_factory = eval(args[3], locals, nl);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
-        jl_checked_assignment(b, (jl_value_t*)st);
+        jl_checked_assignment(b, (jl_value_t*)dt);
         inside_typedef = 1;
-        st->types = (jl_tuple_t*)eval(args[5], locals, nl);
+        dt->types = (jl_tuple_t*)eval(args[5], locals, nl);
         inside_typedef = 0;
-        jl_check_type_tuple(st->types, st->name->name, "type definition");
+        jl_check_type_tuple(dt->types, dt->name->name, "type definition");
         super = eval(args[4], locals, nl);
-        jl_set_tag_type_super((jl_tag_type_t*)st, super);
-        jl_compute_field_offsets(st);
-        jl_add_constructors(st);
+        jl_set_datatype_super(dt, super);
+        jl_compute_field_offsets(dt);
+        jl_add_constructors(dt);
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }

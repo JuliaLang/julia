@@ -134,7 +134,7 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
         return 1;
     }
     jl_datatype_t *dt = (jl_datatype_t*)ta;
-    if (dt->mutable) return 0;
+    if (dt->mutabl) return 0;
     size_t sz = dt->size;
     if (sz == 0) return 1;
     size_t nf = dt->names->length;
@@ -331,8 +331,8 @@ JL_CALLABLE(jl_f_isdefined)
         s = (jl_sym_t*)args[1];
         if (!jl_is_module(args[0])) {
             jl_value_t *vt = (jl_value_t*)jl_typeof(args[0]);
-            if (!jl_is_struct_type(vt)) {
-                jl_type_error("isdefined", (jl_value_t*)jl_struct_kind, args[0]);
+            if (!jl_is_datatype(vt)) {
+                jl_type_error("isdefined", (jl_value_t*)jl_datatype_type, args[0]);
             }
             return jl_field_isdefined(args[0], s, 1) ? jl_true : jl_false;
         }
@@ -408,7 +408,7 @@ JL_CALLABLE(jl_f_set_field)
     if (!jl_is_datatype(vt))
         jl_type_error("setfield", (jl_value_t*)jl_datatype_type, v);
     jl_datatype_t *st = (jl_datatype_t*)vt;
-    if (!st->mutable)
+    if (!st->mutabl)
         jl_errorf("type %s is immutable", st->name->name->name);
     jl_sym_t *fld = (jl_sym_t*)args[1];
     size_t i = jl_field_index(st, fld, 1);
@@ -437,7 +437,7 @@ JL_CALLABLE(jl_f_field_type)
 
 // conversion -----------------------------------------------------------------
 
-static jl_value_t *convert(jl_type_t *to, jl_value_t *x, jl_function_t *conv_f)
+static jl_value_t *convert(jl_value_t *to, jl_value_t *x, jl_function_t *conv_f)
 {
     jl_value_t *args[2];
     if (jl_subtype(x, (jl_value_t*)to, 1))
@@ -474,7 +474,7 @@ JL_CALLABLE(jl_f_convert_tuple)
             break;
         }
         assert(pe != NULL);
-        jl_tupleset(out, i, convert((jl_type_t*)pe, ce, f));
+        jl_tupleset(out, i, convert((jl_value_t*)pe, ce, f));
     }
     JL_GC_POP();
     if (out == NULL)
@@ -484,7 +484,7 @@ JL_CALLABLE(jl_f_convert_tuple)
 
 JL_CALLABLE(jl_f_convert_default)
 {
-    jl_type_t *to = (jl_type_t*)args[0];
+    jl_value_t *to = args[0];
     jl_value_t *x = args[1];
     if (!jl_subtype(x, (jl_value_t*)to, 1)) {
         jl_no_method_error((jl_function_t*)args[2], args, 2);
@@ -657,7 +657,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
         show_function(s, v);
     }
     else if (jl_typeis(v,jl_intrinsic_type)) {
-        JL_PRINTF(s, "# intrinsic function %d", *(uint32_t*)jl_bits_data(v));
+        JL_PRINTF(s, "# intrinsic function %d", *(uint32_t*)jl_data_ptr(v));
     }
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
@@ -734,7 +734,7 @@ JL_CALLABLE(jl_f_new_type_constructor)
     if (!jl_is_type(args[1]))
         jl_type_error("typealias", (jl_value_t*)jl_type_type, args[1]);
     jl_tuple_t *p = (jl_tuple_t*)args[0];
-    return (jl_value_t*)jl_new_type_ctor(p, (jl_type_t*)args[1]);
+    return (jl_value_t*)jl_new_type_ctor(p, args[1]);
 }
 
 JL_CALLABLE(jl_f_typevar)
@@ -867,7 +867,7 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
     if (jl_is_symbol(v))
         return ((jl_sym_t*)v)->hash;
     jl_value_t *tv = (jl_value_t*)jl_typeof(v);
-    if (tv == jl_tuple_type) {
+    if (tv == (jl_value_t*)jl_tuple_type) {
         uptrint_t h = 0;
         size_t l = jl_tuple_len(v);
         for(size_t i = 0; i < l; i++) {
@@ -877,7 +877,7 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
         return h;
     }
     jl_datatype_t *dt = (jl_datatype_t*)tv;
-    if (dt->mutable) return inthash((uptrint_t)v);
+    if (dt->mutabl) return inthash((uptrint_t)v);
     size_t sz = jl_datatype_size(tv);
     uptrint_t h = inthash((uptrint_t)tv);
     if (sz == 0) return ~h;
