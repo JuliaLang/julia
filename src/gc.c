@@ -132,7 +132,7 @@ void jl_gc_unpreserve(void)
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
     jl_weakref_t *wr = (jl_weakref_t*)alloc_2w();
-    wr->type = (jl_type_t*)jl_weakref_type;
+    wr->type = (jl_value_t*)jl_weakref_type;
     wr->value = value;
     arraylist_push(&weak_refs, wr);
     return wr;
@@ -470,8 +470,8 @@ static void push_root(jl_value_t *v)
         (*((ptrint_t*)bp))++;
 #endif
     gc_setmark(v);
-    if (gc_typeof(vt) == (jl_value_t*)jl_bits_kind ||
-        vt == (jl_value_t*)jl_weakref_type) {
+    if (vt == (jl_value_t*)jl_weakref_type ||
+        (jl_is_datatype(vt) && jl_tuple_len(((jl_datatype_t*)vt)->names)==0)) {
         return;
     }
     if (mark_sp >= mark_stack_size) {
@@ -550,7 +550,7 @@ static void gc_mark_all()
                 gc_push_root(elt);
         }
     }
-    else if (((jl_struct_type_t*)(vt))->name == jl_array_typename) {
+    else if (((jl_datatype_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         char *data = a->data;
         if (data == NULL) continue;
@@ -613,11 +613,11 @@ static void gc_mark_all()
         }
     }
     else {
-        jl_struct_type_t *st = (jl_struct_type_t*)vt;
-        int nf = (int)jl_tuple_len(st->names);
+        jl_datatype_t *dt = (jl_datatype_t*)vt;
+        int nf = (int)jl_tuple_len(dt->names);
         for(int i=0; i < nf; i++) {
-            if (st->fields[i].isptr) {
-                jl_value_t *fld = *(jl_value_t**)((char*)v + st->fields[i].offset + sizeof(void*));
+            if (dt->fields[i].isptr) {
+                jl_value_t *fld = *(jl_value_t**)((char*)v + dt->fields[i].offset + sizeof(void*));
                 if (fld)
                     gc_push_root(fld);
             }

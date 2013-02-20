@@ -440,8 +440,8 @@ void julia_init(char *imageFile)
     for(i=1; i < jl_core_module->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->value && jl_is_some_tag_type(b->value)) {
-                jl_tag_type_t *tt = (jl_tag_type_t*)b->value;
+            if (b->value && jl_is_datatype(b->value)) {
+                jl_datatype_t *tt = (jl_datatype_t*)b->value;
                 tt->name->module = jl_core_module;
             }
         }
@@ -558,16 +558,16 @@ void jl_get_builtin_hooks(void)
     jl_root_task->tls = jl_nothing;
     jl_root_task->consumers = jl_nothing;
 
-    jl_char_type    = (jl_bits_type_t*)core("Char");
-    jl_int8_type    = (jl_bits_type_t*)core("Int8");
-    jl_uint8_type   = (jl_bits_type_t*)core("Uint8");
-    jl_int16_type   = (jl_bits_type_t*)core("Int16");
-    jl_uint16_type  = (jl_bits_type_t*)core("Uint16");
-    jl_uint32_type  = (jl_bits_type_t*)core("Uint32");
-    jl_uint64_type  = (jl_bits_type_t*)core("Uint64");
+    jl_char_type    = (jl_datatype_t*)core("Char");
+    jl_int8_type    = (jl_datatype_t*)core("Int8");
+    jl_uint8_type   = (jl_datatype_t*)core("Uint8");
+    jl_int16_type   = (jl_datatype_t*)core("Int16");
+    jl_uint16_type  = (jl_datatype_t*)core("Uint16");
+    jl_uint32_type  = (jl_datatype_t*)core("Uint32");
+    jl_uint64_type  = (jl_datatype_t*)core("Uint64");
 
-    jl_float32_type = (jl_bits_type_t*)core("Float32");
-    jl_float64_type = (jl_bits_type_t*)core("Float64");
+    jl_float32_type = (jl_datatype_t*)core("Float32");
+    jl_float64_type = (jl_datatype_t*)core("Float64");
 
     jl_stackovf_exception =
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
@@ -588,24 +588,23 @@ void jl_get_builtin_hooks(void)
     jl_memory_exception =
         jl_apply((jl_function_t*)core("MemoryError"),NULL,0);
 
-    jl_ascii_string_type = (jl_struct_type_t*)core("ASCIIString");
-    jl_utf8_string_type = (jl_struct_type_t*)core("UTF8String");
-    jl_symbolnode_type = (jl_struct_type_t*)core("SymbolNode");
-    jl_getfieldnode_type = (jl_struct_type_t*)core("GetfieldNode");
+    jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
+    jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
+    jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
+    jl_getfieldnode_type = (jl_datatype_t*)core("GetfieldNode");
 
-    jl_array_uint8_type =
-        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
-                                  jl_tuple2(jl_uint8_type,
-                                            jl_box_long(1)));
+    jl_array_uint8_type = jl_apply_type((jl_value_t*)jl_array_type,
+                                        jl_tuple2(jl_uint8_type,
+                                                  jl_box_long(1)));
 }
 
 DLLEXPORT void jl_get_system_hooks(void)
 {
     if (jl_errorexception_type) return; // only do this once
 
-    jl_errorexception_type = (jl_struct_type_t*)basemod("ErrorException");
-    jl_typeerror_type = (jl_struct_type_t*)basemod("TypeError");
-    jl_methoderror_type = (jl_struct_type_t*)basemod("MethodError");
-    jl_loaderror_type = (jl_struct_type_t*)basemod("LoadError");
-    jl_weakref_type = (jl_struct_type_t*)basemod("WeakRef");
+    jl_errorexception_type = (jl_datatype_t*)basemod("ErrorException");
+    jl_typeerror_type = (jl_datatype_t*)basemod("TypeError");
+    jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
+    jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
+    jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
 }

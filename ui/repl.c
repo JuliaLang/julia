@@ -160,13 +160,13 @@ static int exec_program(void)
             }
             else {
                 while (1) {
-                    if (jl_typeof(e) == (jl_type_t*)jl_loaderror_type) {
+                    if (jl_typeof(e) == (jl_value_t*)jl_loaderror_type) {
                         e = jl_fieldref(e, 2);
                         // TODO: show file and line
                     }
                     else break;
                 }
-                if (jl_typeof(e) == (jl_type_t*)jl_errorexception_type) {
+                if (jl_typeof(e) == (jl_value_t*)jl_errorexception_type) {
                     jl_printf(JL_STDERR, "error during bootstrap: %s\n",
                                jl_string_data(jl_fieldref(e,0)));
                 }

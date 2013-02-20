@@ -135,9 +135,9 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     else if (e == jl_false) {
         return ConstantInt::get(T_int1, 0);
     }
-    else if (jl_is_bits_type(jl_typeof(e))) {
-        jl_bits_type_t *bt = (jl_bits_type_t*)jl_typeof(e);
-        int nb = jl_bitstype_nbits(bt);
+    else if (jl_is_bitstype(jl_typeof(e))) {
+        jl_datatype_t *bt = (jl_datatype_t*)jl_typeof(e);
+        int nb = jl_datatype_size(bt)*8;
         if (nb == 8)
             return mark_julia_type(ConstantInt::get(T_int8, jl_unbox_int8(e)),
                                    (jl_value_t*)bt);
@@ -186,11 +186,11 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
         return v;
     }
     jl_value_t *bt = expr_type(x, ctx);
-    if (!jl_is_bits_type(bt)) {
+    if (!jl_is_bitstype(bt)) {
         if (jl_is_symbol(x)) {
             bt = (*ctx->declTypes)[((jl_sym_t*)x)->name];
         }
-        if (bt == NULL || !jl_is_bits_type(bt)) {
+        if (bt == NULL || !jl_is_bitstype(bt)) {
             // TODO: make sure this code is valid; hopefully it is
             // unreachable but it should still be well-formed.
             emit_error("auto_unbox: unable to determine argument type", ctx);
@@ -199,7 +199,7 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
     }
     Type *to = julia_type_to_llvm(bt);
     if (to == NULL || to == jl_pvalue_llvmt) {
-        unsigned int nb = jl_bitstype_nbits(bt);
+        unsigned int nb = jl_datatype_size(bt)*8;
         to = IntegerType::get(jl_LLVMContext, nb);
     }
     return emit_unbox(to, PointerType::get(to, 0), v);
@@ -213,12 +213,12 @@ static int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
         jl_value_t *p = jl_tparam0(et);
         if (p == (jl_value_t*)jl_bool_type)
             return 1;
-        if (jl_is_bits_type(p))
-            return jl_bitstype_nbits(p);
+        if (jl_is_bitstype(p))
+            return jl_datatype_size(p)*8;
         if (jl_is_typevar(p)) {
             jl_value_t *ub = ((jl_tvar_t*)p)->ub;
-            if (jl_is_bits_type(ub))
-                return jl_bitstype_nbits(ub);
+            if (jl_is_bitstype(ub))
+                return jl_datatype_size(ub)*8;
         }
     }
     return -1;
@@ -245,9 +245,9 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         }
         JL_CATCH {
         }
-        if (bt == NULL || !jl_is_bits_type(bt))
+        if (bt == NULL || !jl_is_bitstype(bt))
             jl_error("unbox: could not determine argument size");
-        nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_bitstype_nbits(bt);
+        nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
     Type *to = IntegerType::get(jl_LLVMContext, nb);
     return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx));
@@ -261,7 +261,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     jl_value_t *bt = NULL;
     jl_value_t *et = expr_type(targ, ctx);
     if (jl_is_type_type(et) && jl_is_leaf_type(jl_tparam0(et)) &&
-        jl_is_bits_type(jl_tparam0(et))) {
+        jl_is_bitstype(jl_tparam0(et))) {
         bt = jl_tparam0(et);
     }
     else {
@@ -276,13 +276,13 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 
     if (bt == NULL) {
     }
-    else if (!jl_is_bits_type(bt)) {
+    else if (!jl_is_bitstype(bt)) {
         jl_error("box: expected bits type as first argument");
     }
     else {
         llvmt = julia_type_to_llvm(bt);
         if (nb == -1)
-            nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_bitstype_nbits(bt);
+            nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
 
     if (nb == -1)
@@ -330,11 +330,11 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_interpret_toplevel_expr_in(ctx->module, targ,
                                       &jl_tupleref(ctx->sp,0),
                                       jl_tuple_len(ctx->sp)/2);
-    if (!jl_is_bits_type(bt))
+    if (!jl_is_bitstype(bt))
         jl_error("trunc_int: expected bits type as first argument");
     Type *to = julia_type_to_llvm(bt);
     if (to == NULL) {
-        unsigned int nb = jl_bitstype_nbits(bt);
+        unsigned int nb = jl_datatype_size(bt)*8;
         to = IntegerType::get(jl_LLVMContext, nb);
     }
     return builder.CreateTrunc(JL_INT(auto_unbox(x,ctx)), to);
@@ -346,9 +346,9 @@ static Value *generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_interpret_toplevel_expr_in(ctx->module, targ,
                                       &jl_tupleref(ctx->sp,0),
                                       jl_tuple_len(ctx->sp)/2);
-    if (!jl_is_bits_type(bt))
+    if (!jl_is_bitstype(bt))
         jl_error("sext_int: expected bits type as first argument");
-    unsigned int nb = jl_bitstype_nbits(bt);
+    unsigned int nb = jl_datatype_size(bt)*8;
     Type *to = IntegerType::get(jl_LLVMContext, nb);
     return builder.CreateSExt(JL_INT(auto_unbox(x,ctx)), to);
 }
@@ -359,9 +359,9 @@ static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_interpret_toplevel_expr_in(ctx->module, targ,
                                       &jl_tupleref(ctx->sp,0),
                                       jl_tuple_len(ctx->sp)/2);
-    if (!jl_is_bits_type(bt))
+    if (!jl_is_bitstype(bt))
         jl_error("zext_int: expected bits type as first argument");
-    unsigned int nb = jl_bitstype_nbits(bt);
+    unsigned int nb = jl_datatype_size(bt)*8;
     Type *to = IntegerType::get(jl_LLVMContext, nb);
     return builder.CreateZExt(JL_INT(auto_unbox(x,ctx)), to);
 }
@@ -396,16 +396,16 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     jl_value_t *ety = jl_tparam0(aty);
     if(jl_is_typevar(ety))
         jl_error("pointerref: invalid pointer");
-    if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
+    if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type) {
         jl_error("pointerref: invalid index type");
     }
     Value *thePtr = auto_unbox(e,ctx);
     Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
-    if (!jl_is_bits_type(ety)) {
-        if (!jl_is_struct_type(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety))
+    if (!jl_is_bitstype(ety)) {
+        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety))
             jl_error("pointerref: invalid pointer type");
-        uint64_t size = ((jl_struct_type_t*)ety)->size;
+        uint64_t size = ((jl_datatype_t*)ety)->size;
         Value *strct =
             builder.CreateCall(jlallocobj_func,
                                ConstantInt::get(T_size,
@@ -421,7 +421,8 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     return typed_load(thePtr, im1, ety, ctx);
 }
 
-static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx) {
+static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
+{
     jl_value_t *aty = expr_type(e, ctx);
     if (!jl_is_cpointer_type(aty))
         jl_error("pointerset: expected pointer type as first argument");
@@ -431,10 +432,10 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     jl_value_t *xty = expr_type(x, ctx);    
     if (!jl_subtype(xty, ety, 0))
         jl_error("pointerset: type mismatch in assign");
-    if (!jl_is_bits_type(ety)) {
+    if (!jl_is_bitstype(ety)) {
         jl_error("pointerset: invalid pointer type"); //ety = (jl_value_t*)jl_any_type;
     }
-    if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
+    if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type) {
         jl_error("pointerset: invalid index type");
     }
     Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
