@@ -22,7 +22,7 @@
 #    types::Tuple
 #    ctor
 #    instance
-#    sizeof::Int32
+#    size::Int32
 #    abstract::Bool
 #    mutable::Bool
 #    pointerfree::Bool

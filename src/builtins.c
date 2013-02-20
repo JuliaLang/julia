@@ -146,10 +146,16 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
         char *ao = (char*)jl_data_ptr(a) + offs;
         char *bo = (char*)jl_data_ptr(b) + offs;
         int eq;
-        if (dt->fields[f].isptr)
-            eq = jl_egal(*(jl_value_t**)ao, *(jl_value_t**)bo);
-        else
+        if (dt->fields[f].isptr) {
+            jl_value_t *af = *(jl_value_t**)ao;
+            jl_value_t *bf = *(jl_value_t**)bo;
+            if (af == bf) eq = 1;
+            else if (af==NULL || bf==NULL) eq = 0;
+            else eq = jl_egal(af, bf);
+        }
+        else {
             eq = bits_equal(ao, bo, dt->fields[f].size);
+        }
         if (!eq) return 0;
     }
     return 1;
@@ -889,10 +895,13 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
         size_t offs = dt->fields[f].offset;
         char *vo = (char*)jl_data_ptr(v) + offs;
         uptrint_t u;
-        if (dt->fields[f].isptr)
-            u = jl_object_id(*(jl_value_t**)vo);
-        else
+        if (dt->fields[f].isptr) {
+            jl_value_t *f = *(jl_value_t**)vo;
+            u = f==NULL ? 0 : jl_object_id(f);
+        }
+        else {
             u = bits_hash(vo, dt->fields[f].size);
+        }
         h = bitmix(h, u);
     }
     return h;

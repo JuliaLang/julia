@@ -256,7 +256,7 @@ function serialize(s, x)
     end
     t = typeof(x)
     serialize_type(s, t)
-    if length(t.names)==0 && t.sizeof>0
+    if length(t.names)==0 && t.size>0
         write(s, x)
     else
         serialize(s, length(t.names))
@@ -427,7 +427,7 @@ end
 
 # default DataType deserializer
 function deserialize(s, t::DataType)
-    if length(t.names)==0 && t.sizeof>0
+    if length(t.names)==0 && t.size>0
         # bits type
         return read(s, t)
     end

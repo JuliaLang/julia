@@ -24,6 +24,7 @@ static const ptrint_t LongExpr_tag   = 25;
 static const ptrint_t LiteralVal_tag = 26;
 static const ptrint_t SmallInt64_tag = 27;
 static const ptrint_t IdTable_tag    = 28;
+static const ptrint_t Int32_tag      = 29;
 static const ptrint_t Null_tag         = 253;
 static const ptrint_t ShortBackRef_tag = 254;
 static const ptrint_t BackRef_tag      = 255;
@@ -103,14 +104,14 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
 {
     writetag(s, (jl_value_t*)jl_datatype_type);
     jl_serialize_value(s, (jl_value_t*)jl_datatype_type);
+    int tag = 0;
     if (dt == jl_int32_type)
-        write_uint8(s, 2);
+        tag = 2;
     else if (dt == jl_bool_type)
-        write_uint8(s, 3);
+        tag = 3;
     else if (dt == jl_int64_type)
-        write_uint8(s, 4);
-    else
-        write_uint8(s, 0);
+        tag = 4;
+    write_uint8(s, tag);
     size_t nf = jl_tuple_len(dt->names);
     write_uint16(s, nf);
     write_int32(s, dt->size);
@@ -343,6 +344,18 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
     else {
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+        void *data = jl_data_ptr(v);
+        if (t == jl_int64_type &&
+            *(int64_t*)data >= S32_MIN && *(int64_t*)data <= S32_MAX) {
+            writetag(s, (jl_value_t*)SmallInt64_tag);
+            write_int32(s, (int32_t)*(int64_t*)data);
+            return;
+        }
+        if (t == jl_int32_type) {
+            writetag(s, (jl_value_t*)Int32_tag);
+            write_int32(s, (int32_t)*(int32_t*)data);
+            return;
+        }
         if ((jl_value_t*)t == jl_idtable_type)
             writetag(s, (jl_value_t*)IdTable_tag);
         else
@@ -350,15 +363,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, t);
         size_t nf = jl_tuple_len(t->names);
         if (nf == 0 && jl_datatype_size(t)>0) {
-            void *data = jl_data_ptr(v);
-            if (t == jl_int64_type &&
-                *(int64_t*)data >= S32_MIN && *(int64_t*)data <= S32_MAX) {
-                writetag(s, (jl_value_t*)SmallInt64_tag);
-                write_int32(s, (int32_t)*(int64_t*)data);
-            }
-            else {
-                ios_write(s, data, jl_datatype_size(t));
-            }
+            ios_write(s, data, jl_datatype_size(t));
         }
         else {
             if ((jl_value_t*)t == jl_idtable_type) {
@@ -412,6 +417,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
         dt = jl_new_uninitialized_datatype(nf);
     dt->size = size;
 
+    assert(tree_literal_values==NULL);
     ptrhash_put(&backref_table, (void*)(ptrint_t)pos, dt);
 
     if (nf > 0) {
@@ -623,6 +629,12 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     }
     else if (vtag == (jl_value_t*)SmallInt64_tag) {
         jl_value_t *v = jl_box_int64(read_int32(s));
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
+        return v;
+    }
+    else if (vtag == (jl_value_t*)Int32_tag) {
+        jl_value_t *v = jl_box_int32(read_int32(s));
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         return v;
@@ -871,6 +883,7 @@ void jl_init_serializer(void)
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, (void*)IdTable_tag,
+                     (void*)Int32_tag,
                      jl_module_type, jl_tvar_type, jl_lambda_info_type,
 
                      jl_null, jl_false, jl_true, jl_any_type, jl_symbol("Any"),
