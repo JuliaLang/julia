@@ -1165,21 +1165,27 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"strip",E"strip(string)
+(E"Strings",E"Base",E"strip",E"strip(string[, chars])
 
    Return \"string\" with any leading and trailing whitespace removed.
+   If a string \"chars\" is provided, instead remove characters
+   contained in that string.
 
 "),
 
-(E"Strings",E"Base",E"lstrip",E"lstrip(string)
+(E"Strings",E"Base",E"lstrip",E"lstrip(string[, chars])
 
-   Return \"string\" with any leading whitespace removed.
+   Return \"string\" with any leading whitespace removed. If a string
+   \"chars\" is provided, instead remove characters contained in that
+   string.
 
 "),
 
-(E"Strings",E"Base",E"rstrip",E"rstrip(string)
+(E"Strings",E"Base",E"rstrip",E"rstrip(string[, chars])
 
-   Return \"string\" with any trailing whitespace removed.
+   Return \"string\" with any trailing whitespace removed. If a string
+   \"chars\" is provided, instead remove characters contained in that
+   string.
 
 "),
 
@@ -4842,15 +4848,52 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"dlopen",E"dlopen(libfile::String)
+(E"C Interface",E"Base",E"ccall",E"ccall((symbol, library), RetType, (ArgType1, ...), ArgVar1, ...)
+ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 
-   Load a shared library, returning an opaque handle
+   Call function in C-exported shared library, specified by (function
+   name, library) tuple (String or :Symbol). Alternatively, ccall may
+   be used to call a function pointer returned by dlsym, but note that
+   this usage is generally discouraged to facilitate future static
+   compilation.
 
 "),
 
-(E"System",E"Base",E"dlsym",E"dlsym(handle, sym)
+(E"C Interface",E"Base",E"cfunction",E"cfunction(fun::Function, RetType::Type, (ArgTypes...))
 
-   Look up a symbol from a shared library handle
+   Generate C-callable function pointer from Julia function.
+
+"),
+
+(E"C Interface",E"Base",E"dlopen",E"dlopen(libfile::String)
+
+   Load a shared library, returning an opaque handle.
+
+"),
+
+(E"C Interface",E"Base",E"dlsym",E"dlsym(handle, sym)
+
+   Look up a symbol from a shared library handle, return callable
+   function pointer on success.
+
+"),
+
+(E"C Interface",E"Base",E"dlsym_e",E"dlsym_e(handle, sym)
+
+   Look up a symbol from a shared library handle, silently return NULL
+   pointer on lookup failure.
+
+"),
+
+(E"C Interface",E"Base",E"dlclose",E"dlclose(handle)
+
+   Close shared library referenced by handle.
+
+"),
+
+(E"C Interface",E"Base",E"c_free",E"c_free(addr::Ptr)
+
+   Call free() from C standard library.
 
 "),
 
