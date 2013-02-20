@@ -77,11 +77,12 @@ function hypot(x::Real, y::Real)
         r = y/x
         return x*sqrt(one(r)+r*r)
     end
-    if y == 0
-        return sqrt(y)  # to give same type as other cases
-    end
     r = x/y
-    return y*sqrt(one(r)+r*r)
+    s = y*sqrt(one(r)+r*r)
+    if y == 0
+        return zero(s)
+    end
+    return s
 end
 
 square(x::Number) = x*x
