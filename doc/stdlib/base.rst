@@ -637,17 +637,17 @@ Strings
 
    Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``include_empty`` is taken to be false. The last two arguments are also optional: they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
 
-.. function:: strip(string)
+.. function:: strip(string, [chars])
 
-   Return ``string`` with any leading and trailing whitespace removed.
+   Return ``string`` with any leading and trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
-.. function:: lstrip(string)
+.. function:: lstrip(string, [chars])
 
-   Return ``string`` with any leading whitespace removed.
+   Return ``string`` with any leading whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
-.. function:: rstrip(string)
+.. function:: rstrip(string, [chars])
 
-   Return ``string`` with any trailing whitespace removed.
+   Return ``string`` with any trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
 .. function:: begins_with(string, prefix)
 
