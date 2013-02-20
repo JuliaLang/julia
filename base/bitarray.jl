@@ -271,7 +271,6 @@ ref(B::BitArray, i0::Real, i1::Real, i2::Real) =
 ref(B::BitArray, i0::Real, i1::Real, i2::Real, i3::Real) =
     B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*((to_index(i2)-1) + size(B,3)*(to_index(i3)-1)))]
 
-#       ref(::BitArray, ::Real) is shadowed (?)
 function ref(B::BitArray, I::Real...)
     ndims = length(I)
     index = to_index(I[1])
@@ -415,13 +414,6 @@ ref(B::BitVector, I::AbstractVector{Bool}) = ref_bool_1d(B, I)
 ref(B::BitVector, I::AbstractArray{Bool}) = ref_bool_1d(B, I)
 ref(B::BitArray, I::AbstractVector{Bool}) = ref_bool_1d(B, I)
 ref(B::BitArray, I::AbstractArray{Bool}) = ref_bool_1d(B, I)
-
-ref(B::BitMatrix, I::Real, J::AbstractVector{Bool}) = B[I, find(J)]
-ref(B::BitMatrix, I::AbstractVector{Bool}, J::Real) = B[find(I), J]
-ref(B::BitMatrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = B[find(I), find(J)]
-ref(B::BitMatrix, I::Range1{Int}, J::AbstractVector{Bool}) = B[I, find(J)]
-ref{T<:Real}(B::BitMatrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = B[I, find(J)]
-ref{T<:Real}(B::BitMatrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = B[find(I), J]
 
 ## Indexing: assign ##
 
