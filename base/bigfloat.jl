@@ -53,7 +53,7 @@ BigFloat(x::Unsigned) = BigFloat(uint(x))
 #BigFloat(x::Uint128) = BigFloat(BigInt(x))
 if WORD_SIZE == 32
     BigFloat(x::Int64) = BigFloat(string(x))
-    BigFloat(x::Uint64) = BigFloat(string(x))
+    BigFloat(x::Uint64) = BigFloat(BigInt(x))
 end
 BigFloat(x::Float32) = BigFloat(float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
