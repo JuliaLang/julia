@@ -1109,8 +1109,9 @@ function (.^)(x::Bool, B::BitArray)
     x ? trues(size(B)) : ~B
 end
 function (.^){T<:Number}(x::T, B::BitArray)
-    u = one(T)
-    reshape(T[ B[i] ? x : u for i = 1:length(B) ], size(B))
+    z = x ^ false
+    u = x ^ true
+    reshape([ B[i] ? u : z for i = 1:length(B) ], size(B))
 end
 function (.^){T<:Integer}(B::BitArray, x::T)
     if x == 0
@@ -1123,7 +1124,7 @@ function (.^){T<:Integer}(B::BitArray, x::T)
 end
 function (.^){T<:Number}(B::BitArray, x::T)
     if x == 0
-        return ones(T, size(B))
+        return ones(typeof(true ^ x), size(B))
     elseif T <: Real && x > 0
         return convert(Array{T}, B)
     else
