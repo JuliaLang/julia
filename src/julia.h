@@ -896,7 +896,12 @@ DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 void jl_add_standard_imports(jl_module_t *m);
 
 // external libraries
-DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
+enum JL_RTLD_CONSTANT {
+     JL_RTLD_LOCAL=0U, JL_RTLD_GLOBAL=1U, JL_RTLD_LAZY=2U, JL_RTLD_NOW=4U,
+     JL_RTLD_NODELETE=8U, JL_RTLD_NOLOAD=16U, JL_RTLD_DEEPBIND=32U
+};
+#define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
+DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
 DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
