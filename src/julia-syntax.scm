@@ -2119,10 +2119,9 @@ So far only the second case can actually occur.
 			 (cons `(cell1d ,(expand-backquote (car p)))
 			       q))))))))
 
-(define (julia-expand-strs e)
+(define (julia-expand-strs s e)
   (cond ((not (pair? e))     e)
-	((and (eq? (car e) 'macrocall) (or (eq? (cadr e) '@str)
-                                           (eq? (cadr e) '@mstr)))
+	((and (eq? (car e) 'macrocall) (eq? (cadr e) s))
 	 ;; expand macro
 	 (let ((form
 		(apply invoke-julia-macro (cadr e) (cddr e))))
@@ -2135,7 +2134,7 @@ So far only the second case can actually occur.
 	     ;; m is the macro's def module, or #f if def env === use env
 	     (resolve-expansion-vars form m))))
 	(else
-	 (map julia-expand-strs e))))
+	 (map (lambda (x) (julia-expand-strs s x)) e))))
 
 (define (julia-expand-macros e)
   (cond ((not (pair? e))     e)
@@ -2145,7 +2144,9 @@ So far only the second case can actually occur.
 	((eq? (car e) 'macrocall)
 	 ;; expand macro
 	 (let ((form
-		(apply invoke-julia-macro (cadr e) (cddr e))))
+               (apply invoke-julia-macro
+                      (cadr e)
+                      (julia-expand-strs '@mstr (cddr e)))))
 	   (if (not form)
 	       (error (string "macro " (cadr e) " not defined")))
 	   (if (and (pair? form) (eq? (car form) 'error))
@@ -2154,7 +2155,7 @@ So far only the second case can actually occur.
 		 (m    (cdr form)))
 	     ;; m is the macro's def module, or #f if def env === use env
 	     (julia-expand-macros
-	      (resolve-expansion-vars (julia-expand-strs form) m)))))
+	      (resolve-expansion-vars (julia-expand-strs '@str form) m)))))
 	(else
 	 (map julia-expand-macros e))))
 
