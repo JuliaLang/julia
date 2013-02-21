@@ -3003,9 +3003,20 @@ C Interface
    
    Generate C-callable function pointer from Julia function.
 
-.. function:: dlopen(libfile::String)
+.. function:: dlopen(libfile::String [, flags::Integer])
 
    Load a shared library, returning an opaque handle.
+
+   The optional flags argument is a bitwise-or of zero or more of
+   RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE,
+   RTLD_NOLOAD, and RTLD_DEEPBIND.  These are converted to the corresponding
+   flags of the POSIX and/or GNU libc dlopen command, if possible, or
+   are ignored if the specified functionality is not available on the
+   current platform.  The default is RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL.
+   An important usage of these flags, on POSIX platforms, is to
+   specify RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL in order for the
+   library's symbols to be available for usage in other shared libraries,
+   in situations where there are dependencies between shared libraries.
 
 .. function:: dlsym(handle, sym)
 

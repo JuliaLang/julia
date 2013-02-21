@@ -34,11 +34,25 @@ extern char *julia_home;
 char *jl_lookup_soname(char *pfx, size_t n);
 #endif
 
-int jl_uv_dlopen(const char* filename, uv_lib_t* lib)
+#define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
+
+int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
 {
-#ifdef RTLD_DEEPBIND
+#if defined(RTLD_GLOBAL) && defined(RTLD_LAZY) /* POSIX flags available */
     dlerror(); /* Reset error status. */
-    lib->handle = dlopen(filename, RTLD_LAZY|RTLD_DEEPBIND);
+    lib->handle = dlopen(filename, 
+                         (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
+                         | JL_RTLD(flags, GLOBAL) | JL_RTLD(flags, LOCAL)
+#ifdef RTLD_NODELETE
+                         | JL_RTLD(flags, NODELETE)
+#endif
+#ifdef RTLD_NOLOAD
+                         | JL_RTLD(flags, NOLOAD)
+#endif
+#ifdef RTLD_DEEPBIND
+                         | JL_RTLD(flags, DEEPBIND)
+#endif
+	 );
     if (lib->handle) {
         lib->errmsg = NULL;
         return 0;
@@ -51,7 +65,7 @@ int jl_uv_dlopen(const char* filename, uv_lib_t* lib)
 #endif
 }
 
-uv_lib_t *jl_load_dynamic_library(char *modname)
+uv_lib_t *jl_load_dynamic_library(char *modname, unsigned flags)
 {
     int error;
     char *ext;
@@ -76,7 +90,7 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
 #else
     else if (modname[0] == '/') {
 #endif
-        error = jl_uv_dlopen(modname,handle);
+        error = jl_uv_dlopen(modname,handle,flags);
         if (!error) goto done;
     }
 
@@ -86,12 +100,12 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
         handle->handle = NULL;
         /* try loading from standard library path */
         snprintf(path, PATHBUF, "%s%s", modname, ext);
-        error = jl_uv_dlopen(path, handle);
+        error = jl_uv_dlopen(path, handle,flags);
         if (!error) goto done;
     }
 #if defined(__linux__)
     char *soname = jl_lookup_soname(modname, strlen(modname));
-    error = (soname==NULL) || jl_uv_dlopen(soname, handle);
+    error = (soname==NULL) || jl_uv_dlopen(soname, handle, flags);
     if (!error) goto done;
 #endif
 
