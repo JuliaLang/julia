@@ -29,8 +29,8 @@ div.related {
   padding: 0.5em 0;
 }
 
-div.related a         { color: #a44; }
-div.related a:visited { color: #544; }
+div.related a         { color: #a30; }
+div.related a:visited { color: #510; }
 
 div.related li {
   display: block;
@@ -92,10 +92,10 @@ p {
 }
 
 a {
-  color: #aa0000;
+  color: #03a;
   text-decoration: none;
 }
-  a:visited { color: #550000; }
+  a:visited { color: #025; }
   a:hover   { text-decoration: underline; }
 
 ol,ul {
