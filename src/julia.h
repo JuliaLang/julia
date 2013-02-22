@@ -562,6 +562,12 @@ static inline int jl_is_structtype(void *v)
             !((jl_datatype_t*)(v))->abstract);
 }
 
+static inline int jl_isbits(void *t)   // corresponding to isbits() in julia
+{
+    return (jl_is_datatype(t) && !((jl_datatype_t*)t)->mutabl &&
+            ((jl_datatype_t*)t)->pointerfree && !((jl_datatype_t*)t)->abstract);
+}
+
 static inline int jl_is_abstracttype(void *v)
 {
     return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->abstract);
@@ -663,8 +669,8 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super);
 jl_value_t *jl_new_bits(jl_datatype_t *bt, void *data);
 void jl_assign_bits(void *dest, jl_value_t *bits);
 DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
+DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
 DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
-DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_tuple_t *t);
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
                               jl_lambda_info_t *li);
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);

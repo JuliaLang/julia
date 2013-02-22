@@ -1693,13 +1693,17 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         if (ftypes != NULL) {
             // recursively instantiate the types of the fields
             ndt->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack);
-            if (!isabstract)
+            if (!isabstract) {
                 jl_compute_field_offsets(ndt);
+            }
+            else {
+                ndt->size = 0;
+                ndt->pointerfree = 0;
+            }
             if (tn == jl_array_typename)
                 ndt->pointerfree = 0;
-            if (ftypes->length == 0) {
+            if (ftypes->length == 0)
                 ndt->size = dt->size;
-            }
         }
         if (cacheable) cache_type_((jl_value_t*)ndt);
         result = (jl_value_t*)ndt;
@@ -2214,7 +2218,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     int super = 0;
     while (tta != (jl_datatype_t*)jl_any_type) {
         if (tta->name == ttb->name) {
-            // note: CompositeKind <: Type, but Type{T} <: CompositeKind
+            // note: DataType <: Type, but Type{T} <: DataType
             // for any specific T.
             if (super && morespecific && tta->name != jl_type_type->name)
                 return jl_true;
