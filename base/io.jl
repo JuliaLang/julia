@@ -95,6 +95,7 @@ end
 read(s::IO, ::Type{Bool})    = (read(s,Uint8)!=0)
 read(s::IO, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
 read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
+read(s::IO, c::CompositeKind) = c(ntuple(length(c.types), x->read(s, c.types[x]))...)
 
 read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) =
     read(s, t, tuple(d1,dims...))
