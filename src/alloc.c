@@ -130,8 +130,7 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
 int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
 {
     jl_tuple_t *fn = t->names;
-    size_t i;
-    for(i=0; i < jl_tuple_len(fn); i++) {
+    for(size_t i=0; i < jl_tuple_len(fn); i++) {
         if (jl_tupleref(fn,i) == (jl_value_t*)fld) {
             return (int)i;
         }
@@ -182,14 +181,29 @@ DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
     if (type->instance != NULL) return type->instance;
     va_list args;
     size_t nf = jl_tuple_len(type->names);
-    size_t i;
     va_start(args, type);
     jl_value_t *jv = newstruct(type);
-    for(i=0; i < nf; i++) {
+    for(size_t i=0; i < nf; i++) {
         jl_set_nth_field(jv, i, va_arg(args, jl_value_t*));
     }
     if (type->size == 0) type->instance = jv;
     va_end(args);
+    return jv;
+}
+
+DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
+{
+    if (type->instance != NULL) return type->instance;
+    size_t nf = jl_tuple_len(type->names);
+    jl_value_t *jv = newstruct(type);
+    for(size_t i=0; i < na; i++) {
+        jl_set_nth_field(jv, i, args[i]);
+    }
+    for(size_t i=na; i < nf; i++) {
+        if (type->fields[i].isptr)
+            *(jl_value_t**)((char*)jv+jl_field_offset(type,i)+sizeof(void*)) = NULL;
+    }
+    if (type->size == 0) type->instance = jv;
     return jv;
 }
 
@@ -202,25 +216,14 @@ DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
-DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_tuple_t *t)
-{
-    assert(jl_tuple_len(type->names) == jl_tuple_len(t));
-    jl_value_t *jv = jl_new_struct_uninit(type);
-    for(size_t i=0; i < jl_tuple_len(t); i++) {
-        jl_set_nth_field(jv, i, jl_tupleref(t, i));
-    }
-    return jv;
-}
-
 jl_tuple_t *jl_tuple(size_t n, ...)
 {
     va_list args;
-    size_t i;
     if (n == 0) return jl_null;
     va_start(args, n);
     jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, n+1);
     jl_tuple_set_len_unsafe(jv, n);
-    for(i=0; i < n; i++) {
+    for(size_t i=0; i < n; i++) {
         jl_tupleset(jv, i, va_arg(args, jl_value_t*));
     }
     va_end(args);
@@ -258,8 +261,7 @@ jl_tuple_t *jl_alloc_tuple(size_t n)
 {
     if (n == 0) return jl_null;
     jl_tuple_t *jv = jl_alloc_tuple_uninit(n);
-    size_t i;
-    for(i=0; i < n; i++) {
+    for(size_t i=0; i < n; i++) {
         jl_tupleset(jv, i, NULL);
     }
     return jv;
@@ -284,8 +286,7 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v)
 {
     if (n==0) return jl_null;
     jl_tuple_t *tup = jl_alloc_tuple_uninit(n);
-    size_t i;
-    for(i=0; i < n; i++) {
+    for(size_t i=0; i < n; i++) {
         jl_tupleset(tup, i, v);
     }
     return tup;
@@ -482,8 +483,7 @@ void jl_add_constructors(jl_datatype_t *t)
             jl_tuple_t *sparams = jl_alloc_tuple_uninit(np*2);
             jl_function_t *cfactory = NULL;
             JL_GC_PUSH(&sparams, &cfactory);
-            size_t i;
-            for(i=0; i < np; i++) {
+            for(size_t i=0; i < np; i++) {
                 jl_tupleset(sparams, i*2+0,
                             jl_tupleref(((jl_datatype_t*)t->name->primary)->parameters, i));
                 jl_tupleset(sparams, i*2+1,

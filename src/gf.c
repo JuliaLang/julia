@@ -627,7 +627,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               Type{TC} nor TypeConstructor is more specific.
               
               To solve this, we identify "kind slots", which are slots
-              for which some definition specifies a kind (e.g. AbstractKind).
+              for which some definition specifies a kind (e.g. DataType).
               Those tend to be in reflective functions that look at types
               themselves. For these slots we specialize on jl_typeof(T) instead
               of Type{T}, i.e. the kind of the type rather than the specific

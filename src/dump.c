@@ -890,8 +890,7 @@ void jl_init_serializer(void)
 
                      jl_null, jl_false, jl_true, jl_any_type, jl_symbol("Any"),
                      jl_symbol("Array"), jl_symbol("TypeVar"),
-                     jl_symbol("FuncKind"), jl_symbol("Box"),
-                     jl_symbol("apply"),
+                     jl_symbol("Box"), jl_symbol("apply"),
                      lambda_sym, body_sym, return_sym, call_sym, colons_sym,
                      null_sym, goto_ifnot_sym, assign_sym,
 

@@ -120,7 +120,7 @@ object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
 const isimmutable = x->(isa(x,Tuple) || !typeof(x).mutable)
 isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
 isstructtype(x) = false
-isbits(t::DataType) = !t.mutable && t.pointerfree && isleaftype(t)
+isbits(t::DataType) = !t.mutable && t.pointerfree
 isbits(t::Tuple) = false
 isbits(t::Type) = false
 isbits(x) = isbits(typeof(x))
