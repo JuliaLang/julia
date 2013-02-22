@@ -805,8 +805,8 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     jl_datatype_t *sty = (jl_datatype_t*)expr_type(expr, ctx);
     JL_GC_PUSH(&sty);
     if (jl_is_structtype(sty) && sty != jl_module_type && sty->uid != 0) {
-        size_t idx = jl_field_index(sty, name, 0);
-        if (idx != (size_t)-1) {
+        unsigned idx = jl_field_index(sty, name, 0);
+        if (idx != (unsigned)-1) {
             jl_value_t *jfty = jl_tupleref(sty->types, idx);
             Value *strct = emit_expr(expr, ctx);
             if (strct->getType() == jl_pvalue_llvmt) {
@@ -819,7 +819,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
             }
             else {
                 Value *fldv = builder.
-                    CreateExtractElement(strct,ConstantInt::get(T_int32, idx));
+                    CreateExtractValue(strct, ArrayRef<unsigned>(&idx,1));
                 if (jfty == (jl_value_t*)jl_bool_type) {
                     fldv = builder.CreateTrunc(fldv, T_int1);
                 }
@@ -1333,7 +1333,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             emit_func_check(theFunc, ctx);
         }
         // extract pieces of the function object
-        // TODO: try extractelement instead
+        // TODO: try extractvalue instead
         theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
         theF = theFunc;
     }
@@ -1739,7 +1739,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                                     emit_nthptr_addr(strct, (size_t)0));
                 for(size_t i=0; i < nf; i++) {
                     if (sty->fields[i].isptr) {
-                        emit_setfield(sty, strct, i, V_null, ctx);
+                        emit_setfield(sty, strct, i, V_null, ctx, false);
                     }
                 }
                 make_gcroot(strct, ctx);
