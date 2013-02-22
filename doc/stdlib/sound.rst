@@ -23,7 +23,7 @@ Here is a quick example that copies an existing file::
 
     julia> y, Fs, nbits, extra = wavread(in_filename)
 
-    julia> wavwrite(y, Fs, nbits, strcat("out-", in_filename))
+    julia> wavwrite(y, Fs, nbits, string("out-", in_filename))
 
 .. note:: This implementation only supports little endian machines right now.
 
