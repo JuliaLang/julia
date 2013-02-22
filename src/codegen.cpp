@@ -1733,7 +1733,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                         strct = builder.
                             CreateInsertValue(strct, fval, ArrayRef<unsigned>(&idx,1));
                     }
-                    return strct;
+                    return mark_julia_type(strct,ty);
                 }
                 Value *strct =
                     builder.CreateCall(jlallocobj_func,
@@ -1971,7 +1971,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         // no captured vars and not vararg
         // consider specialized signature
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
-            if (jl_is_bitstype(jl_tupleref(lam->specTypes, i))) {
+            if (jl_isbits(jl_tupleref(lam->specTypes, i))) {
                 specsig = true;
                 break;
             }

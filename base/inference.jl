@@ -628,11 +628,16 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             if isType(ft)
                 # TODO: improve abstract_call_constructor
                 st = ft.parameters[1]
-                if isa(st,TypeVar)
-                    st = st.ub
-                end
-                if isstructtype(st)
-                    return st
+                if isstructtype(st) && isleaftype(st)
+                    f = st
+                    _methods(f,(),0)
+                else
+                    if isa(st,TypeVar)
+                        st = st.ub
+                    end
+                    if isstructtype(st)
+                        return st
+                    end
                 end
             end
         end
@@ -694,6 +699,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
                 st = st.ub
             end
             if isa(st,DataType)
+                _methods(st,(),0)
                 if isgeneric(st) && isleaftype(st)
                     return abstract_call_gf(st, fargs, argtypes, e)
                 end
