@@ -283,7 +283,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         }
         //TODO: check instead that prefix matches
         //if (!jl_is_structtype(aty))
-        //    emit_typecheck(emit_typeof(jv), (jl_value_t*)jl_struct_kind, "ccall: Struct argument called with something that isn't a CompositeKind", ctx);
+        //    emit_typecheck(emit_typeof(jv), (jl_value_t*)jl_struct_kind, "ccall: Struct argument called with something that isn't a struct", ctx);
         // //safe thing would be to also check that jl_typeof(aty)->size > sizeof(ty) here and/or at runtime
         Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), PointerType::get(ty,0));
         return builder.CreateLoad(pjv, false);
@@ -294,7 +294,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
     msg << "ccall argument ";
     msg << argn;
     emit_typecheck(jv, jt, msg.str(), ctx);
-    Value *p = bitstype_pointer(jv);
+    Value *p = data_pointer(jv);
     return builder.CreateLoad(builder.CreateBitCast(p,
                                                     PointerType::get(ty,0)),
                               false);
@@ -436,7 +436,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             std::stringstream msg;
             msg << "ccall: the type of argument ";
             msg << i+1;
-            msg << " doesn't correspond to a C type containing only BitsKinds";
+            msg << " doesn't correspond to a C type";
             emit_error(msg.str(), ctx);
             return literal_pointer_val(jl_nothing);
         }

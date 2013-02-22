@@ -137,17 +137,17 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     }
     else if (jl_is_bitstype(jl_typeof(e))) {
         jl_datatype_t *bt = (jl_datatype_t*)jl_typeof(e);
-        int nb = jl_datatype_size(bt)*8;
-        if (nb == 8)
+        int nb = jl_datatype_size(bt);
+        if (nb == 1)
             return mark_julia_type(ConstantInt::get(T_int8, jl_unbox_int8(e)),
                                    (jl_value_t*)bt);
-        if (nb == 16)
+        if (nb == 2)
             return mark_julia_type(ConstantInt::get(T_int16, jl_unbox_int16(e)),
                                    (jl_value_t*)bt);
-        if (nb == 32)
+        if (nb == 4)
             return mark_julia_type(ConstantInt::get(T_int32, jl_unbox_int32(e)),
                                    (jl_value_t*)bt);
-        if (nb == 64)
+        if (nb == 8)
             return mark_julia_type(ConstantInt::get(T_int64, jl_unbox_int64(e)),
                                    (jl_value_t*)bt);
         // TODO: bigger sizes
@@ -167,7 +167,7 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x)
         if (x->getType() != to) jl_error("unbox: T != typeof(x)");
         return x;
     }
-    Value *p = bitstype_pointer(x);
+    Value *p = data_pointer(x);
     if (to == T_int1) {
         // bools stored as int8, so an extra Trunc is needed to get an int1
         return builder.CreateTrunc(builder.
@@ -321,7 +321,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     }
 
     // dynamically-determined type; evaluate.
-    return allocate_box_dynamic(emit_expr(targ, ctx), nb, vx);
+    return allocate_box_dynamic(emit_expr(targ, ctx), (nb+7)/8, vx);
 }
 
 static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
