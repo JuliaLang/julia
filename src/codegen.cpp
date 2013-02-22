@@ -1727,8 +1727,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                     for(size_t i=0; i < nf; i++) {
                         unsigned idx = i;
                         Type *fty = julia_type_to_llvm(jl_tupleref(sty->types,i));
+                        Value *fval = emit_unbox(fty, PointerType::get(fty,0), emit_unboxed(args[i+1],ctx));
+                        if (fty == T_int1)
+                            fval = builder.CreateZExt(fval, T_int8);
                         strct = builder.
-                            CreateInsertValue(strct, emit_unbox(fty, PointerType::get(fty,0), emit_unboxed(args[i+1],ctx)), ArrayRef<unsigned>(&idx,1));
+                            CreateInsertValue(strct, fval, ArrayRef<unsigned>(&idx,1));
                     }
                     return strct;
                 }
