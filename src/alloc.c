@@ -591,6 +591,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->linfo = NULL;
     t->ctor_factory = (jl_value_t*)jl_null;
     t->instance = NULL;
+    t->struct_decl = NULL;
     t->size = 0;
     if (abstract || parameters->length > 0) {
         t->uid = 0;
