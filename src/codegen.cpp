@@ -823,6 +823,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                 if (jfty == (jl_value_t*)jl_bool_type) {
                     fldv = builder.CreateTrunc(fldv, T_int1);
                 }
+                JL_GC_POP();
                 return mark_julia_type(fldv, jfty);
             }
         }
