@@ -722,6 +722,9 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
         else
             t = Any
         end
+        for i = 2:length(e.args)
+            abstract_eval(e.args[i], vtypes, sv)
+        end
     elseif is(e.head,:&)
         abstract_eval(e.args[1], vtypes, sv)
         t = Any

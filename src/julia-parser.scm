@@ -87,7 +87,7 @@
 
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
-			 abstract typealias type bitstype ccall do
+			 abstract typealias type bitstype immutable ccall do
 			 module baremodule using import export importall))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
@@ -915,10 +915,15 @@
        (list word def body)))
     ((abstract)
      (list 'abstract (parse-subtype-spec s)))
-    ((type)
-     (let ((sig (parse-subtype-spec s)))
-       (begin0 (list word sig (parse-block s))
-	       (expect-end s))))
+    ((type immutable)
+     (let ((immu? (eq? word 'immutable)))
+       (if (and immu? (eq? (peek-token s) 'type))
+	   ;; allow "immutable type"
+	   (take-token s))
+       (let ((sig (parse-subtype-spec s)))
+	 (begin0 (list 'type (if (eq? word 'type) 'true 'false)
+		       sig (parse-block s))
+		 (expect-end s)))))
     ((bitstype)
      (list 'bitstype (with-space-sensitive (parse-cond s))
 	   (parse-subtype-spec s)))
