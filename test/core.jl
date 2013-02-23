@@ -616,3 +616,9 @@ let
     i2169{T}(a::Array{T}) = typemin(T)
     @test invoke(i2169,(Array,),Int8[1]) === int8(-128)
 end
+
+# issue #2352
+Sum=0.0; for n=1:2:10000
+Sum += -1/n + 1/(n+1)
+end
+@test Sum < -0.69

@@ -108,7 +108,10 @@
 
 (define (expand-toplevel-expr e)
   (if (and (pair? e) (eq? (car e) 'toplevel))
-      `(toplevel ,@(map expand-toplevel-expr (cdr e)))
+      ;;`(toplevel ,@(map expand-toplevel-expr (cdr e)))
+      ;; delay expansion so defined global variables take effect for later
+      ;; toplevel expressions.
+      e
       (let ((last *in-expand*))
 	(if (not last)
 	    (begin (reset-gensyms)
