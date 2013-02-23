@@ -921,13 +921,13 @@
 			  (tuple ,@(map caddr args))))
 
    ;; typed dict syntax
-   (pattern-lambda (typed-dict atypes . args)
+   (pattern-lambda (typed_dict atypes . args)
 		   (if (and (length= atypes 3)
 			    (eq? (car atypes) '=>))
 		       `(call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))
 			      (tuple ,@(map cadr  args))
 			      (tuple ,@(map caddr args)))
-		       (error (string "invalid typed-dict syntax " atypes))))
+		       (error (string "invalid typed_dict syntax " atypes))))
 
    ;; cell array syntax
    (pattern-lambda (cell1d . args)
@@ -1178,7 +1178,7 @@
 
    ;; typed array comprehensions
    (pattern-lambda
-    (typed-comprehension atype expr . ranges)
+    (typed_comprehension atype expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
 	(lower-nd-comprehension atype expr ranges)
     (let ( (result (gensy))
@@ -1213,7 +1213,7 @@
 
    ;; dict comprehensions
    (pattern-lambda
-    (dict-comprehension expr . ranges)
+    (dict_comprehension expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
 	(error "invalid iteration syntax")
     (let ((result   (gensy))
@@ -1252,12 +1252,12 @@
 
    ;; typed dict comprehensions
    (pattern-lambda
-    (typed-dict-comprehension atypes expr . ranges)
+    (typed_dict_comprehension atypes expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
 	(error "invalid iteration syntax")
     (if (not (and (length= atypes 3)
 		  (eq? (car atypes) '=>)))
-	(error "invalid typed-dict-comprehension syntax")
+	(error "invalid typed_dict_comprehension syntax")
     (let ( (result (gensy))
 	   (rs (map (lambda (x) (gensy)) ranges)) )
 
