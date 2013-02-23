@@ -121,13 +121,14 @@ const isimmutable = x->(isa(x,Tuple) || isa(x,Symbol) ||
                         isa(typeof(x),BitsKind))
 
 # constants to match JL_RTLD_* in src/julia.h
-const RTLD_LOCAL = 0x00000000
-const RTLD_GLOBAL = 0x00000001
-const RTLD_LAZY = 0x00000002
-const RTLD_NOW = 0x00000004
-const RTLD_NODELETE = 0x00000008
-const RTLD_NOLOAD = 0x00000010
-const RTLD_DEEPBIND = 0x00000020
+const RTLD_LOCAL     = 0x00000000
+const RTLD_GLOBAL    = 0x00000001
+const RTLD_LAZY      = 0x00000002
+const RTLD_NOW       = 0x00000004
+const RTLD_NODELETE  = 0x00000008
+const RTLD_NOLOAD    = 0x00000010
+const RTLD_DEEPBIND  = 0x00000020
+const RTLD_FIRST     = 0x00000040
 
 dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)

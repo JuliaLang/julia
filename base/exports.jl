@@ -156,6 +156,7 @@ export
     RTLD_NOW,
     RTLD_NODELETE,
     RTLD_DEEPBIND,
+    RTLD_FIRST,
     STDERR,
     STDIN,
     STDOUT,
