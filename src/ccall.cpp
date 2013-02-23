@@ -70,7 +70,7 @@ static void *add_library_sym(char *name, char *lib)
     else {
         hnd = libMap[lib];
         if (hnd == NULL) {
-            hnd = jl_load_dynamic_library(lib);
+            hnd = jl_load_dynamic_library(lib, 0);
             if (hnd != NULL)
             libMap[lib] = hnd;
             else

@@ -123,7 +123,8 @@ const isimmutable = x->(isa(x,Tuple) || isa(x,Symbol) ||
 dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym_e(hnd, s::Union(Symbol,String)) = ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
-dlopen(s::String) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), s)
+dlopen(s::String) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},Int32), s, 0)
+dlopen_global(s::String) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},Int32), s, 1)
 dlclose(p::Ptr) = ccall(:uv_dlclose,Void,(Ptr{Void},),p)
 
 cfunction(f::Function, r, a) =

@@ -897,7 +897,7 @@ DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 void jl_add_standard_imports(jl_module_t *m);
 
 // external libraries
-DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
+DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, int global);
 DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
