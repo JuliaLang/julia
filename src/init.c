@@ -370,7 +370,7 @@ void julia_init(char *imageFile)
 {
     jl_page_size = getPageSize();
     jl_find_stack_bottom();
-    jl_dl_handle = jl_load_dynamic_library(NULL);
+    jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
 #ifdef __WIN32__
     uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
     uv_dlopen("Kernel32.dll",jl_kernel32_handle);
