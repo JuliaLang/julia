@@ -204,6 +204,11 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
     module_import_(to, from, s, 1);
 }
 
+void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
+{
+    module_import_(to, from, s, 0);
+}
+
 void jl_module_importall(jl_module_t *to, jl_module_t *from)
 {
     void **table = from->bindings.table;
