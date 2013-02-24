@@ -365,6 +365,17 @@ for data_in in ((7,8,4,5),
     end
 end
 
+# zip
+let i = 0
+x = 1:2:8
+y = 2:2:8
+xy = 1:8
+for (thisx, thisy) in zip(x, y)
+    @test thisx == xy[i+=1]
+    @test thisy == xy[i+=1]
+end
+end
+
 # pop!
 origs = Set(1,2,3,"apple")
 s = copy(origs)

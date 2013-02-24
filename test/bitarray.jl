@@ -1,16 +1,12 @@
-macro check_bit_operation(func, RetT, args, opts...)
+macro check_bit_operation(func, RetT, args)
     quote
-        if length($opts) > 0 && $opts[1] == :skiptc
-            tc(r1,r2) = true
-        else
-            function tc(r1, r2)
-                if isa(r1, Tuple) && isa(r2, Tuple) && length(r1) == length(r2)
-                    return all(map(x->tc(x...), [zip(r1,r2)...]))
-                elseif isa(r1,BitArray)
-                    return isa(r2, Union(BitArray,Array{Bool}))
-                else
-                    return typeof(r1) == typeof(r2)
-                end
+        function tc(r1, r2)
+            if isa(r1, Tuple) && isa(r2, Tuple) && length(r1) == length(r2)
+                return all(map(x->tc(x...), [zip(r1,r2)...]))
+            elseif isa(r1,BitArray)
+                return isa(r2, Union(BitArray,Array{Bool}))
+            else
+                return typeof(r1) == typeof(r2)
             end
         end
         r1 = ($func)($args...)
@@ -355,8 +351,8 @@ end
 b2 = randbool(n1, n2)
 @check_bit_operation (.^) BitMatrix (false, b2)
 @check_bit_operation (.^) BitMatrix (true, b2)
-@check_bit_operation (.^) Matrix{Uint8} (0x0, b2) skiptc
-@check_bit_operation (.^) Matrix{Uint8} (0x1, b2) skiptc
+@check_bit_operation (.^) Matrix{Uint8} (0x0, b2)
+@check_bit_operation (.^) Matrix{Uint8} (0x1, b2)
 @check_bit_operation (.^) Matrix{Int} (-1, b2)
 @check_bit_operation (.^) Matrix{Int} (0, b2)
 @check_bit_operation (.^) Matrix{Int} (1, b2)
@@ -366,8 +362,8 @@ b2 = randbool(n1, n2)
 @check_bit_operation (.^) Matrix{Complex128} (1.0im, b2)
 @check_bit_operation (.^) Matrix{ComplexPair{Int}} (0im, b2)
 @check_bit_operation (.^) Matrix{ComplexPair{Int}} (1im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint8}} (0x0im, b2) skiptc
-@check_bit_operation (.^) Matrix{ComplexPair{Uint8}} (0x1im, b2) skiptc
+@check_bit_operation (.^) Matrix{ComplexPair{Uint}} (0x0im, b2)
+@check_bit_operation (.^) Matrix{ComplexPair{Uint}} (0x1im, b2)
 
 # Matrix/Number
 b1 = randbool(n1, n2)
@@ -447,15 +443,15 @@ cf2 = complex(f2)
 @check_bit_operation (.^) Matrix{Float64} (b1, 0.0)
 @check_bit_operation (.^) Matrix{Float64} (b1, 1.0)
 @check_bit_operation (.^) Matrix{Complex128} (b1, 0.0im)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint8}} (b1, 0x0im) skiptc
-@check_bit_operation (.^) Matrix{ComplexPair{Int}} (b1, 0im) skiptc
+@check_bit_operation (.^) Matrix{Complex128} (b1, 0x0im)
+@check_bit_operation (.^) Matrix{Complex128} (b1, 0im)
 
 b1 = trues(n1, n2)
 @check_bit_operation (.^) Matrix{Complex128} (b1, -1.0im)
 @check_bit_operation (.^) Matrix{Complex128} (b1, 1.0im)
-@check_bit_operation (.^) Matrix{Complex128} (b1, -1im) skiptc
-@check_bit_operation (.^) Matrix{Complex128} (b1, 1im) skiptc
-@check_bit_operation (.^) Matrix{Complex128} (b1, 0x1im) skiptc
+@check_bit_operation (.^) Matrix{Complex128} (b1, -1im)
+@check_bit_operation (.^) Matrix{Complex128} (b1, 1im)
+@check_bit_operation (.^) Matrix{Complex128} (b1, 0x1im)
 
 timesofar("binary arithmetic")
 

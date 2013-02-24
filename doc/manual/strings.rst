@@ -332,11 +332,11 @@ One of the most common and useful string operations is concatenation::
     julia> whom = "world"
     "world"
 
-    julia> strcat(greet, ", ", whom, ".\n")
+    julia> string(greet, ", ", whom, ".\n")
     "Hello, world.\n"
 
 Constructing strings like this can become a bit cumbersome, however. To
-reduce the need for these verbose calls to ``strcat``, Julia allows
+reduce the need for these verbose calls to ``string``, Julia allows
 interpolation into string literals using ``$``, as in Perl::
 
     julia> "$greet, $whom.\n"

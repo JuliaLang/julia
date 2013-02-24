@@ -149,13 +149,14 @@ end
 # geqlf - unpivoted QL decomposition
 # geqrf - unpivoted QR decomposition
 # gegp3 - pivoted QR decomposition
+# geqrt3! - recursive algorithm producing compact WY representation of Q
 # gerqf - unpivoted RQ decomposition
 # getrf - LU decomposition
-for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty, relty) in
-    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgerqf_,:dgetrf_,:Float64,:Float64),
-     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgerqf_,:sgetrf_,:Float32,:Float32),
-     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
-     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
+for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
+    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgeqrt3_,:dgerqf_,:dgetrf_,:Float64,:Float64),
+     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgeqrt3_,:sgerqf_,:sgetrf_,:Float32,:Float32),
+     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgeqrt3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
+     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgeqrt3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
     @eval begin
         # SUBROUTINE DGEBRD( M, N, A, LDA, D, E, TAUQ, TAUP, WORK, LWORK,
         #                    INFO )
@@ -280,10 +281,22 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty, relty) in
             end
             A, tau, jpvt
         end
+        function geqrt3!(A::StridedMatrix{$elty})
+            m, n = size(A)
+            lda = max(1, stride(A, 2))
+            T = Array($elty, n, n)
+            info = Array(BlasInt, 1)
+            ccall(($(string(geqrt3)), liblapack), Void, 
+                (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                &m, &n, A, &lda,
+                T, &n, info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            return A, T
+        end
         ## Several variants of geqrf! could be defined.
         ## geqrfp! - positive elements on diagonal of R
         ## geqrt!  - compact WY representation of Q (blocked algorithm)
-        ## geqrt3! - recursive algorithm producing compact WY representation of Q
         # SUBROUTINE DGEQRF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
@@ -885,11 +898,11 @@ for (gtsv, gttrf, gttrs, elty) in
 end
 
 ## (OR) orthogonal (or UN, unitary) matrices, extractors and multiplication
-for (orglq, orgqr, ormlq, ormqr, elty) in
-    ((:dorglq_,:dorgqr_,:dormlq_,:dormqr_,:Float64),
-     (:sorglq_,:sorgqr_,:sormlq_,:sormqr_,:Float32),
-     (:zunglq_,:zungqr_,:zunmlq_,:zunmqr_,:Complex128),
-     (:cunglq_,:cungqr_,:cunmlq_,:cunmqr_,:Complex64))
+for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
+    ((:dorglq_,:dorgqr_,:dormlq_,:dormqr_,:dgemqrt_,:Float64),
+     (:sorglq_,:sorgqr_,:sormlq_,:sormqr_,:sgemqrt_,:Float32),
+     (:zunglq_,:zungqr_,:zunmlq_,:zunmqr_,:zgemqrt_,:Complex128),
+     (:cunglq_,:cungqr_,:cunmlq_,:cunmqr_,:cgemqrt_,:Complex64))
     @eval begin
         # SUBROUTINE DORGLQ( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
@@ -996,6 +1009,33 @@ for (orglq, orgqr, ormlq, ormqr, elty) in
                 end
             end
             C
+        end
+        function gemqrt!(side::Char, trans::Char, V::Matrix{$elty}, T::Matrix{$elty}, C::StridedMatrix{$elty})
+            m, n = size(C)
+            k = size(T, 1)
+            if side == 'L'
+                ldv = max(1, m)
+                wss = n*k
+            elseif side == 'R'
+                ldv = max(1, n)
+                wss = m*k
+            else
+                error("side must be either 'L' or 'R'")
+            end
+            ldc = max(1, stride(C, 2))
+            work = Array($elty, wss)
+            info = Array(BlasInt, 1)
+            ccall(($(string(gemqrt)), liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
+                 Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                 Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                 Ptr{$elty}, Ptr{BlasInt}),
+                &side, &trans, &m, &n,
+                &k, &k, V, &ldv,
+                T, &k, C, &ldc,
+                work, info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            return C
         end
     end
 end
@@ -1252,16 +1292,16 @@ for (trtri, trtrs, elty) in
 end
 
 ## (ST) Symmetric tridiagonal - eigendecomposition
-for (stev, elty) in
-    ((:dstev_,:Float64),
-     (:sstev_,:Float32)
+for (stev, stebz, stegr, elty) in
+    ((:dstev_,:dstebz_,:dstegr_,:Float64),
+     (:sstev_,:sstebz_,:sstegr_,:Float32)
 #     , (:zstev_,:Complex128)  Need to rewrite for ZHEEV, rwork, etc.
 #     , (:cstev_,:Complex64)
      )
     @eval begin
         function stev!(job::BlasChar, dv::Vector{$elty}, ev::Vector{$elty})
             n    = length(dv)
-            if length(ev) != (n-1) throw(LapackDimMisMatch("stev!")) end
+            if length(ev) != (n-1) throw(DimensionMismatch("stev!")) end
             Zmat = Array($elty, (n, job != 'N' ? n : 0))
             work = Array($elty, max(1, 2n-2))
             info = Array(BlasInt, 1)
@@ -1269,8 +1309,70 @@ for (stev, elty) in
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &job, &n, dv, ev, Zmat, &n, work, info)
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             dv, Zmat
+        end
+        function stebz!(range::Char, order::Char, vl::$elty, vu::$elty, il::Integer, iu::Integer, abstol::Real, dv::Vector{$elty}, ev::Vector{$elty})
+            n = length(dv)
+            if length(ev) != (n-1) throw(LapackDimMisMatch("stebz!")) end
+            m = Array(BlasInt,1)
+            nsplit = Array(BlasInt,1)
+            w = Array($elty, n)
+            tmp = 0.0
+            iblock = Array(BlasInt,n)
+            isplit = Array(BlasInt,n)
+            work = Array($elty, 4*n)
+            iwork = Array(BlasInt,3*n)
+            info = Array(BlasInt, 1)
+            ccall(($(string(stebz)),liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                Ptr{BlasInt}, Ptr{BlasInt}),
+                &range, &order, &n, &vl, 
+                &vu, &il, &iu, &abstol, 
+                dv, ev, m, nsplit,
+                w, iblock, isplit, work, 
+                iwork, info)
+                if info[1] != 0 throw(LapackException(info[1])) end
+            w[1:m[1]], isplit[1:m[1]], isplit[1:nsplit[1]], info[1]
+        end
+        function stegr!(jobz::BlasChar, range::BlasChar, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer, abstol::Real)
+            n = length(dv)
+            if length(ev) != (n-1) throw(LapackDimMisMatch("stebz!")) end
+            eev = [ev, zero($elty)]
+            m = Array(BlasInt, 1)
+            w = Array($elty, n)
+            ldz = jobz == 'N' ? 1 : n
+            Z = Array($elty, ldz, n)
+            isuppz = Array(BlasInt, 2n)
+            work = Array($elty, 1)
+            lwork = -one(BlasInt)
+            iwork = Array(BlasInt, 1)
+            liwork = -one(BlasInt)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(stegr)), liblapack), Void, 
+                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    &jobz, &range, &n, dv,
+                    eev, &vl, &vu, &il,
+                    &iu, &abstol, m, w,
+                    Z, &ldz, isuppz, work,
+                    &lwork, iwork, &liwork, info)
+                if i == 1
+                    lwork = int(work[1])
+                    work = Array($elty, lwork)
+                    liwork = iwork[1]
+                    iwork = Array(BlasInt, liwork)
+                end
+            end
+            if info[1] != 0 throw(LapackException(info[1])) end
+            return w[1:m[1]], Z[:,1:m[1]]
         end
     end
 end
@@ -1847,6 +1949,183 @@ for (gees, elty, relty) in
                 end
             end
             return A, vs, w
+        end
+    end
+end
+
+### Rectangular full packed format
+
+# Symmetric rank-k operation for matrix in RFP format.
+for (fn, elty, relty) in ((:dsfrk_, :Float64, :Float64),
+                   (:ssfrk_, :Float32, :Float32),
+                   (:zhfrk_, :Complex128, :Float64),
+                   (:chfrk_, :Complex64, :Float32))
+    @eval begin
+        function sfrk!(transr::Char, uplo::Char, trans::Char, alpha::Real, A::StridedMatrix{$elty}, beta::Real, C::StridedVector{$elty})
+            if trans == 'N'
+                n, k = size(A)
+            elseif trans == 'T'
+                k, n = size(A)
+            else
+                throw(LapackException(0))
+            end
+            lda = max(1, stride(A, 2))
+            ccall(($(string(fn)), liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
+                 Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
+                 Ptr{$relty}, Ptr{$elty}),
+                &transr, &uplo, &trans, &n,
+                &k, &alpha, A, &lda,
+                &beta, C)
+            return C
+        end
+    end
+end
+
+# Cholesky factorization of a real symmetric positive definite matrix A
+for (fn, elty) in ((:dpftrf_, :Float64),
+                   (:spftrf_, :Float32),
+                   (:zpftrf_, :Complex128),
+                   (:cpftrf_, :Complex64))
+    @eval begin
+        function pftrf!(transr::Char, uplo::Char, A::StridedVector{$elty})
+            n = int(div(sqrt(8length(A)), 2))
+            info = Array(BlasInt, 1)
+            ccall(($(string(fn)), liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{BlasInt}),
+                &transr, &uplo, &n, A,
+                info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            return A, info[1]
+        end
+    end
+end
+
+# Computes the inverse of a (real) symmetric positive definite matrix A using the Cholesky factorization
+for (fn, elty) in ((:dpftri_, :Float64),
+                   (:spftri_, :Float32),
+                   (:zpftri_, :Complex128),
+                   (:cpftri_, :Complex64))
+    @eval begin
+        function pftri!(transr::Char, uplo::Char, A::StridedVector{$elty})
+            n = int(div(sqrt(8length(A)), 2))
+            info = Array(BlasInt, 1)
+            ccall(($(string(fn)), liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{BlasInt}),
+                &transr, &uplo, &n, A, 
+                info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            return A, info[1]
+        end
+    end
+end
+
+# DPFTRS solves a system of linear equations A*X = B with a symmetric positive definite matrix A using the Cholesky factorization
+for (fn, elty) in ((:dpftrs_, :Float64),
+                   (:spftrs_, :Float32),
+                   (:zpftrs_, :Complex128),
+                   (:cpftrs_, :Complex64))
+    @eval begin
+        function pftrs!(transr::Char, uplo::Char, A::StridedVector{$elty}, B::StridedMatrix{$elty})
+            n = int(div(sqrt(8length(A)), 2))
+            if n != size(B, 1) throw(DimensionMismatch("A and B must have the same number of rows")) end
+            nhrs = size(B, 2)
+            ldb = max(1, stride(B, 2))
+            info = Array(BlasInt, 1)
+            ccall(($(string(fn)), liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
+                 Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                &transr, &uplo, &n, &nrhs,
+                A, B, &ldb, info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            return B, info[1]
+        end
+    end
+end
+
+# Solves a matrix equation (one operand is a triangular matrix in RFP format)
+for (fn, elty) in ((:dtfsm_, :Float64),
+                   (:stfsm_, :Float32),
+                   (:ztfsm_, :Complex128),
+                   (:ctfsm_, :Complex64))
+    @eval begin
+        function pftrs!(transr::Char, side::Char, uplo::Char, trans::Char, diag::Char, alpha::Real, A::StridedVector{$elty}, B::StridedMatrix{$elty})
+            m, n = size(B)
+            if int(div(sqrt(8length(A)), 2)) != m throw(DimensionMismatch("")) end
+            ldb = max(1, stride(B, 2))
+            ccall(($(string(fn)), liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
+                 Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
+                &transr, &side, &uplo, &trans,
+                &diag, &m, &n, &alpha,
+                A, B, &ldb)
+            return B
+        end
+    end
+end
+
+# Computes the inverse of a triangular matrix A stored in RFP format.
+for (fn, elty) in ((:dtftri_, :Float64),
+                   (:stftri_, :Float32),
+                   (:ztftri_, :Complex128),
+                   (:ctftri_, :Complex64))
+    @eval begin
+        function tftri!(transr::Char, uplo::Char, diag::Char, A::StridedVector{$elty})
+            n = int(div(sqrt(8length(A)), 2))
+            info = Array(BlasInt, 1)
+            ccall(($(string(fn)), liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, 
+                 Ptr{$elty}, Ptr{BlasInt}),
+                &transr, &uplo, &diag, &n, 
+                A, info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            return A, info[1]
+        end
+    end
+end
+
+# Copies a triangular matrix from the rectangular full packed format (TF) to the standard full format (TR)
+for (fn, elty) in ((:dtfttr_, :Float64),
+                   (:stfttr_, :Float32),
+                   (:ztfttr_, :Complex128),
+                   (:ctfttr_, :Complex64))
+    @eval begin
+        function tfttr!(transr::Char, uplo::Char, Arf::StridedVector{$elty})
+            n = int(div(sqrt(8length(Arf)), 2))
+            info = Array(BlasInt, 1)
+            A = Array($elty, n, n)
+            ccall(($(string(fn)), liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                &transr, &uplo, &n, Arf,
+                A, &n, info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            return A, info[1]
+        end
+    end
+end
+
+# Copies a triangular matrix from the standard full format (TR) to the rectangular full packed format (TF).
+for (fn, elty) in ((:dtrttf_, :Float64),
+                   (:strttf_, :Float32),
+                   (:ztrttf_, :Complex128),
+                   (:ctrttf_, :Complex64))
+    @eval begin
+        function trttf!(transr::Char, uplo::Char, A::StridedMatrix{$elty})
+            n = size(A, 1)
+            lda = max(1, stride(A, 2))
+            info = Array(BlasInt, 1)
+            Arf = Array($elty, div(n*(n+1), 2))
+            ccall(($(string(fn)), liblapack), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                &transr, &uplo, &n, A,
+                &lda, Arf, info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            return Arf, info[1]
         end
     end
 end

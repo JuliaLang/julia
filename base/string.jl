@@ -652,9 +652,76 @@ function interp_parse_bytes(s::String)
     interp_parse(s, unescape_string, writer)
 end
 
+## multiline strings ##
+
+let
+global multiline_lstrip
+
+function space_width(c::Char)
+    c == ' '   ? 1 :
+    c == '\t'  ? 8 :
+    isspace(c) ? 0 :
+    error("not a space-like character")
+end
+
+# width of leading space, also check if string is blank
+function indent_width(s::String)
+    count = 0
+    for c in s
+        if isspace(c)
+            count += space_width(c)
+        else
+            return count, false
+        end
+    end
+    count, true
+end
+
+function multiline_lstrip(s::String)
+    lines = split(s, '\n')
+    num_lines = length(lines)
+    if num_lines == 1 return s end
+
+    # discard first line if blank
+    first_line = lstrip(lines[1]) == "" ? 2 : 1
+
+    indent,blank = indent_width(lines[end])
+    if !blank
+        indent = typemax(Int)
+        for line in lines[first_line:end]
+            n,blank = indent_width(line)
+            if !blank
+                indent = min(indent, n)
+            end
+        end
+    end
+
+    buf = memio(endof(s), false)
+    for k in first_line:num_lines
+        line = lines[k]
+        cut = 0
+        i = start(line)
+        while !done(line,i)
+            c, j = next(line,i)
+            if !isspace(c) || cut >= indent
+                for _ = (indent+1):cut write(buf, ' ') end
+                print(buf, line[i:end])
+                break
+            end
+            cut += space_width(c)
+            i = j
+        end
+        if k != num_lines println(buf) end
+    end
+    takebuf_string(buf)
+end
+end # let
+
 ## core string macros ##
 
 macro   str(s); interp_parse(s); end
+macro  mstr(s); multiline_lstrip(s); end
+macro imstr(s); interp_parse(multiline_lstrip(s)); end
 macro I_str(s); interp_parse(s, x->unescape_chars(x,"\"")); end
 macro E_str(s); check_utf8(unescape_string(s)); end
 macro B_str(s); interp_parse_bytes(s); end
@@ -968,11 +1035,11 @@ function chomp!(s::ByteString)
 end
 chomp!(s::String) = chomp(s) # copying fallback for other string types
 
-function lstrip(s::String)
+function lstrip(s::String, chars::String)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        if !isspace(c)
+        if !contains(chars, c)
             return s[i:end]
         end
         i = j
@@ -980,12 +1047,12 @@ function lstrip(s::String)
     ""
 end
 
-function rstrip(s::String)
+function rstrip(s::String, chars::String)
     r = reverse(s)
     i = start(r)
     while !done(r,i)
         c, j = next(r,i)
-        if !isspace(c)
+        if !contains(chars, c)
             return s[1:end-i+1]
         end
         i = j
@@ -993,7 +1060,12 @@ function rstrip(s::String)
     ""
 end
 
+for stripfn in {:lstrip, :rstrip}
+    @eval ($stripfn)(s::String) = ($stripfn)(s, " \f\n\r\t\v")
+end
+
 strip(s::String) = lstrip(rstrip(s))
+strip(s::String, chars::String) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 

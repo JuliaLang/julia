@@ -196,6 +196,10 @@ static int union_elt_morespecific(const void *a, const void *b)
     return jl_object_id(va) < jl_object_id(vb) ? -1 : 1;
 }
 
+// NOTE: this is a hack to avoid simplifying type unions too early inside
+// type definitions. (issue #2365)
+int inside_typedef = 0;
+
 DLLEXPORT
 jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
 {
@@ -212,6 +216,8 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
                 if (temp[i] == temp[j] ||
                     (!jl_has_typevars(temp[i]) &&
                      !jl_has_typevars(temp[j]) &&
+                     !(inside_typedef && (jl_is_typevar(temp[i]) ||
+                                          jl_is_typevar(temp[j]))) &&
                      (type_eqv_(temp[i], temp[j]) ||
                       jl_subtype(temp[i], temp[j], 0)))) {
                     temp[i] = NULL;

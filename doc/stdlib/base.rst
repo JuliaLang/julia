@@ -637,17 +637,17 @@ Strings
 
    Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``include_empty`` is taken to be false. The last two arguments are also optional: they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
 
-.. function:: strip(string)
+.. function:: strip(string, [chars])
 
-   Return ``string`` with any leading and trailing whitespace removed.
+   Return ``string`` with any leading and trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
-.. function:: lstrip(string)
+.. function:: lstrip(string, [chars])
 
-   Return ``string`` with any leading whitespace removed.
+   Return ``string`` with any leading whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
-.. function:: rstrip(string)
+.. function:: rstrip(string, [chars])
 
-   Return ``string`` with any trailing whitespace removed.
+   Return ``string`` with any trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
 .. function:: begins_with(string, prefix)
 
@@ -3003,9 +3003,21 @@ C Interface
    
    Generate C-callable function pointer from Julia function.
 
-.. function:: dlopen(libfile::String)
+.. function:: dlopen(libfile::String [, flags::Integer])
 
    Load a shared library, returning an opaque handle.
+
+   The optional flags argument is a bitwise-or of zero or more of
+   RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE,
+   RTLD_NOLOAD, RTLD_DEEPBIND, and RTLD_FIRST.  These are converted to
+   the corresponding flags of the POSIX (and/or GNU libc and/or MacOS)
+   dlopen command, if possible, or are ignored if the specified
+   functionality is not available on the current platform.  The
+   default is RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL.  An important usage
+   of these flags, on POSIX platforms, is to specify
+   RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL in order for the library's
+   symbols to be available for usage in other shared libraries, in
+   situations where there are dependencies between shared libraries.
 
 .. function:: dlsym(handle, sym)
 
