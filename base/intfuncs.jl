@@ -70,8 +70,10 @@ function invmod(n, m)
 end
 
 # ^ for any x supporting *
+to_power_type(x::Number) = oftype(x*x, x)
+to_power_type(x) = x
 function power_by_squaring(x, p::Integer)
-    x = oftype(x*x, x)
+    x = to_power_type(x)
     if p == 1
         return x
     elseif p == 0

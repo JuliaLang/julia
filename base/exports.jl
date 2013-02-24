@@ -150,6 +150,13 @@ export
     NaN,
     NaN32,
     OUTPUT_STREAM,
+    RTLD_LOCAL,
+    RTLD_GLOBAL,
+    RTLD_LAZY,
+    RTLD_NOW,
+    RTLD_NODELETE,
+    RTLD_DEEPBIND,
+    RTLD_FIRST,
     STDERR,
     STDIN,
     STDOUT,
@@ -1100,6 +1107,8 @@ export
 
 # Macros
     @str,
+    @mstr,
+    @imstr,
     @I_str,
     @E_str,
     @B_str,

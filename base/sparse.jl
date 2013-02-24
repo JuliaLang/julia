@@ -216,6 +216,8 @@ function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector
                                         V::AbstractVector,
                                         m::Integer, n::Integer, combine::Function)
 
+    m = m < 0 ? 0 : m
+    n = n < 0 ? 0 : n
     if length(V) == 0; return spzeros(m,n); end
 
     cols = zeros(Ti, n+1)

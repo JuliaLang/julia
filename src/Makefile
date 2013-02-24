@@ -6,7 +6,7 @@ override CXXFLAGS += $(JCXXFLAGS)
 
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \
-	alloc dlload sys init task array dump toplevel wrapper
+	alloc dlload sys init task array dump toplevel jl_uv
 
 FLAGS = \
 	-D_GNU_SOURCE \

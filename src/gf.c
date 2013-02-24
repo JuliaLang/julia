@@ -1552,6 +1552,7 @@ DLLEXPORT jl_tuple_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
     return result;
 }
 
+// returns a match as (argtypes, static_params, lambdainfo, cloenv)
 static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
                                 jl_tuple_t *sig, jl_tuple_t *tvars)
 {
@@ -1576,7 +1577,6 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
     return result;
 }
 
-// returns linked tuples (argtypes, static_params, lambdainfo, cloenv, next)
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim)
 {
@@ -1623,9 +1623,12 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 void jl_add_constructors(jl_struct_type_t *t);
 JL_CALLABLE(jl_f_ctor_trampoline);
 
-// return linked tuples (t1, M1, (t2, M2, (... ()))) of types and methods.
+// return a cell array of tuples, each describing a method match:
+// {(t, spvals, li, cenv), ...}
 // t is the intersection of the type argument and the method signature,
-// and M is the corresponding LambdaStaticData (jl_lambda_info_t)
+// spvals is any matched static parameter values, li is the LambdaStaticData,
+// and cenv is the closure environment or ().
+//
 // lim is the max # of methods to return. if there are more return jl_false.
 // -1 for no limit.
 DLLEXPORT

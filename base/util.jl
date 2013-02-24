@@ -139,33 +139,35 @@ function edit(file::String, line::Integer)
                 file = file2
             end
         end
-        if editor == "emacs"
+    end
+    if editor == "emacs"
+        if issrc
             jmode = "$JULIA_HOME/../../contrib/julia-mode.el"
             run(`emacs $file --eval "(progn
                                      (require 'julia-mode \"$jmode\")
                                      (julia-mode)
                                      (goto-line $line))"`)
-        elseif editor == "vim"
-            run(`vim $file +$line`)
-        elseif editor == "textmate"
-            run(`mate $file -l $line`)
-        elseif editor == "subl"
-            run(`subl $file:$line`)
         else
-            error("Invalid JULIA_EDITOR value: $(repr(editor))")
+            run(`emacs $file --eval "(goto-line $line)"`)
+        end
+    elseif editor == "vim"
+        run(`vim $file +$line`)
+    elseif editor == "textmate"
+        run(`mate $file -l $line`)
+    elseif editor == "subl"
+        run(`subl $file:$line`)
+    elseif editor == "notepad"
+        run(`notepad $file`)
+    elseif editor == "start" || editor == "open"
+        if OS_NAME == :Windows
+            run(`start /b $file`)
+        elseif OS_NAME == :Darwin
+            run(`open -t $file`)
+        else
+            error("Don't know how to launch the default editor on your platform")
         end
     else
-        if editor == "emacs"
-            run(`emacs $file --eval "(goto-line $line)"`)
-        elseif editor == "vim"
-            run(`vim $file +$line`)
-        elseif editor == "textmate"
-            run(`mate $file -l $line`)
-        elseif editor == "subl"
-            run(`subl $file:$line`)
-        else
-            error("Invalid JULIA_EDITOR value: $(repr(editor))")
-        end
+        error("Invalid JULIA_EDITOR value: $(repr(editor))")
     end
     nothing
 end
