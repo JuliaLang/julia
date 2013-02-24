@@ -623,3 +623,9 @@ type B2365{T}
 end
 @test B2365{Int}(nothing).v === nothing
 @test B2365{Int}(0).v === 0
+
+# issue #2352
+Sum=0.0; for n=1:2:10000
+Sum += -1/n + 1/(n+1)
+end
+@test Sum < -0.69

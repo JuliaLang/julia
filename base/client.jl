@@ -58,6 +58,7 @@ function eval_user_input(ast::ANY, show_value)
                 println()
                 iserr, lasterr = false, ()
             else
+                ast = expand(ast)
                 value = eval(Main,ast)
                 global ans = value
                 if !is(value,nothing) && show_value
