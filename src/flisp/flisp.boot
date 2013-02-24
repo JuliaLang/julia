@@ -191,9 +191,9 @@
   #fn("8000r2~}|\\;" []) bcode:ctable]) #fn(vector.alloc) bcode:nconst] const-to-idx-vec)
 	  count #fn("7000r2c0q]41;" [#fn("9000r1c0qm02|~\x7f`43;" [#fn(":000r3}\x8550g2;~|}N|}M31690g2aw540g243;" [] count-)])] count)
 	  delete-duplicates #fn("8000r1e0|bD326<0c1qc23041;|?640|;c3|M|N42;" [length>
-  #fn("7000r1c0q]31~41;" [#fn("6000r1c0qm02|;" [#fn("9000r1|?640|;c0i10|M32680~|N41;c1i10|M]332|M~|N31K;" [#fn(has?)
-  #fn(put!)])])]) #fn(table) #fn("8000r2e0|}32680e1}41;|e1}31K;" [member
-								  delete-duplicates])] delete-duplicates)
+  #fn("8000r1c0q]31~_42;" [#fn("6000r1c0qm02|;" [#fn("9000r2|?680e0}41;c1i10|M32690~|N}42;c2i10|M]332~|N|M}K42;" [reverse!
+  #fn(has?) #fn(put!)])])]) #fn(table) #fn("8000r2e0|}32680e1}41;|e1}31K;" [member
+  delete-duplicates])] delete-duplicates)
 	  div #fn("8000r2|}V|`X16C02}`X16402a17502b/17402`w;" [] div) emit
 	  #fn("G000s2g2\x85b0}c0<16C02|`[F16:02|`[Mc1<6;0|`[c2O5:0|`}|`[K\\5\xe20c3}c4326A0e5|g2M32L1m2530]2c6qc7}c832312c9qc7}c:32312}c;\x82\\0g2c<>6=0c=m12_m25F0g2c>>6=0c?m12_m2530^530]2}c@\x82\\0g2cA>6=0cBm12_m25F0g2cC>6=0cDm12_m2530^530]2cEq|`[F690|`[M530_|`[322|;" [car
   cdr cadr #fn(memq) (loadv loadg setg) bcode:indexfor #fn("8000r1|16=02e0i02Mc132680|\x84o01;];" [>
