@@ -310,15 +310,14 @@
 (define (delete-duplicates lst)
   (if (length> lst 20)
       (let ((t (table)))
-	(let loop ((l lst))
+	(let loop ((l lst) (acc '()))
 	  (if (atom? l)
-	      l
+	      (reverse! acc)
 	      (if (has? t (car l))
-		  (loop (cdr l))
+		  (loop (cdr l) acc)
 		  (begin
 		    (put! t (car l) #t)
-		    (cons (car l)
-			  (loop (cdr l))))))))
+		    (loop (cdr l) (cons (car l) acc)))))))
       (if (atom? lst)
 	  lst
 	  (let ((elt  (car lst))
