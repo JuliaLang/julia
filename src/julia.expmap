@@ -102,6 +102,8 @@
     jl_exit;
     jl_expand;
     jl_expr_type;
+    jl_eval_string;
+    jl_init;
     jl_ascii_string_type;
     jl_utf8_string_type;
     jl_fd_clr;

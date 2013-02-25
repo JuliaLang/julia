@@ -609,3 +609,43 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_loaderror_type = (jl_struct_type_t*)basemod("LoadError");
     jl_weakref_type = (jl_struct_type_t*)basemod("WeakRef");
 }
+
+DLLEXPORT char *jl_locate_sysimg()
+{
+    char *julia_path = (char*)malloc(512);
+    size_t path_size = 512;
+    char path[512];
+    char *julia_home;
+    uv_exepath(julia_path, &path_size);
+    julia_home = strdup(dirname(julia_path));
+    jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
+                 jl_cstr_to_string(julia_home));
+    jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
+    free(julia_path);
+    char *image_file = JL_SYSTEM_IMAGE_PATH;
+    snprintf(path, sizeof(path), "%s%s..%slib%sjulia%s%s",
+             julia_home, PATHSEPSTRING, PATHSEPSTRING,
+             PATHSEPSTRING, PATHSEPSTRING, image_file);
+    image_file = strdup(path);
+    return image_file;
+}
+
+DLLEXPORT void jl_init()
+{
+    libsupport_init();
+    char *image_file = jl_locate_sysimg();
+    julia_init(image_file);
+}
+
+DLLEXPORT void *jl_eval_string(char *str)
+{
+    jl_root_task->stackbase = (char*)&str;
+    if (jl_setjmp(jl_root_task->base_ctx, 1)) {
+        jl_switch_stack(jl_current_task, jl_jmp_target);
+    }
+    jl_value_t *ast = jl_parse_string(str, 0, 1);
+    JL_GC_PUSH(&ast);
+    jl_value_t *r = jl_toplevel_eval(jl_t0(ast));
+    JL_GC_POP();
+    return r;
+}
