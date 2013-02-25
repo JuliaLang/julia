@@ -245,6 +245,32 @@
 	 (error "malformed type parameter list"))))
 
 (define (method-def-expr name sparams argl body)
+  (if (and (pair? argl)
+           (pair? (car argl))
+           (eqv? (caar argl) 'keywords))
+      (let* ((keys (map cadr (cdar argl)))
+             (vals (map cddr (cdar argl)))
+             (accepts-all (and (pair? (cdr argl))
+                               (eqv? (arg-type (cadr argl)) 'Keywords)))
+             (pargl (if accepts-all
+                        (cdr argl)
+                        `((:: ,(gensy) Keywords) ,@(cdr argl))))
+             (kw (arg-name (car pargl)))
+             (check (if accepts-all '()
+                        (let ((g (gensy)) (i (gensy)) (j (gensy)))
+                          `(block (= ,g (call (top Set) ,@(map (lambda (k) `(quote ,k)) keys)))
+                                  (for (= (tuple ,i ,j) ,kw)
+                                       (if (call (top !) (call (top has) ,g ,i))
+                                           (call (top error) "unrecognized keyword " ,i)))))))
+             (newbody `(block ,@check
+                              ,@(map (lambda (k v)
+                                       `(= ,k (call (top get) ,kw (quote ,k) ,@v)))
+                                     keys vals)
+                              ,@(cdr body))))
+        (method-def-expr- name sparams pargl newbody))
+      (method-def-expr- name sparams argl body)))
+
+(define (method-def-expr- name sparams argl body)
   (if (has-dups (llist-vars argl))
       (error "function argument names not unique"))
   (if (not (symbol? name))
@@ -913,6 +939,12 @@
 				       `(curly Vararg ,(cadr x))
 				       x))
 				 args)))
+
+   ;; keywords syntax
+   (pattern-lambda (keywords . args)
+                   `(call (top Keywords)
+                          (tuple ,@(map (lambda (x) `(quote ,(cadr x))) args))
+                          (tuple ,@(map caddr args))))
 
    ;; dict syntax
    (pattern-lambda (dict . args)
