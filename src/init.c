@@ -663,9 +663,33 @@ DLLEXPORT void *jl_eval_string(char *str)
     return r;
 }
 
-DLLEXPORT char *jl_typeof_str(jl_value_t *v)
+// get the name of a type as a string
+DLLEXPORT char *jl_typename_str(jl_value_t *v)
 {
     if (jl_is_tuple(v))
         return "Tuple";
-    return ((jl_tag_type_t*)jl_typeof(v))->name->name->name;
+    return ((jl_tag_type_t*)v)->name->name->name;
 }
+
+// get the name of typeof(v) as a string
+DLLEXPORT char *jl_typeof_str(jl_value_t *v)
+{
+    return jl_typename_str((jl_value_t*)jl_typeof(v));
+}
+
+DLLEXPORT void *jl_array_eltype(jl_value_t *a)
+{
+    return jl_tparam0(jl_typeof(a));
+}
+
+DLLEXPORT int jl_array_rank(jl_value_t *a)
+{
+    return jl_array_ndims(a);
+}
+
+DLLEXPORT long jl_array_size(jl_value_t *a, int d)
+{
+    return jl_array_dim(a, d);
+}
+
+DLLEXPORT void *jl_array_ptr(jl_array_t *a);

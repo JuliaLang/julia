@@ -108,6 +108,10 @@
     jl_expr_type;
     jl_eval_string;
     jl_typeof_str;
+    jl_typename_str;
+    jl_array_eltype;
+    jl_array_rank;
+    jl_array_size;
     jl_init;
     jl_ascii_string_type;
     jl_utf8_string_type;
