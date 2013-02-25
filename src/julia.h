@@ -706,18 +706,18 @@ jl_value_t *jl_box8 (jl_bits_type_t *t, int8_t  x);
 jl_value_t *jl_box16(jl_bits_type_t *t, int16_t x);
 jl_value_t *jl_box32(jl_bits_type_t *t, int32_t x);
 jl_value_t *jl_box64(jl_bits_type_t *t, int64_t x);
-int8_t jl_unbox_bool(jl_value_t *v);
-int8_t jl_unbox_int8(jl_value_t *v);
-uint8_t jl_unbox_uint8(jl_value_t *v);
-int16_t jl_unbox_int16(jl_value_t *v);
-uint16_t jl_unbox_uint16(jl_value_t *v);
-int32_t jl_unbox_int32(jl_value_t *v);
-uint32_t jl_unbox_uint32(jl_value_t *v);
-int64_t jl_unbox_int64(jl_value_t *v);
-uint64_t jl_unbox_uint64(jl_value_t *v);
-float jl_unbox_float32(jl_value_t *v);
-double jl_unbox_float64(jl_value_t *v);
-void *jl_unbox_voidpointer(jl_value_t *v);
+DLLEXPORT int8_t jl_unbox_bool(jl_value_t *v);
+DLLEXPORT int8_t jl_unbox_int8(jl_value_t *v);
+DLLEXPORT uint8_t jl_unbox_uint8(jl_value_t *v);
+DLLEXPORT int16_t jl_unbox_int16(jl_value_t *v);
+DLLEXPORT uint16_t jl_unbox_uint16(jl_value_t *v);
+DLLEXPORT int32_t jl_unbox_int32(jl_value_t *v);
+DLLEXPORT uint32_t jl_unbox_uint32(jl_value_t *v);
+DLLEXPORT int64_t jl_unbox_int64(jl_value_t *v);
+DLLEXPORT uint64_t jl_unbox_uint64(jl_value_t *v);
+DLLEXPORT float jl_unbox_float32(jl_value_t *v);
+DLLEXPORT double jl_unbox_float64(jl_value_t *v);
+DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 
 #ifdef __LP64__
 #define jl_box_long(x)   jl_box_int64(x)
