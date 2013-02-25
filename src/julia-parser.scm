@@ -1125,11 +1125,13 @@
 (define (separate-keywords argl)
   (receive
    (kws args) (separate (lambda (x)
-			  (and (pair? x) (eq? (car x) '=)))
+			  (and (pair? x)
+			       (eq? (car x) '=)
+			       (symbol? (cadr x))))
 			argl)
    (if (null? kws)
        args
-       `(,@args (keywords ,@kws)))))
+       `((keywords ,@kws) ,@args))))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed

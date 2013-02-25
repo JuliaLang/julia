@@ -71,6 +71,7 @@ include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
+include("keywords.jl")
 
 # compiler
 import Core.Undef  # used internally by compiler
