@@ -136,7 +136,7 @@ end
 
 bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) =
     ccall(:int64to32hash, Uint32, (Uint64,),
-          or_int(shl_int(zext64(unbox(Uint32,a)), 32), zext64(unbox(Uint32,b))))
+          or_int(shl_int(zext_int(Uint64,unbox(Uint32,a)), 32), zext_int(Uint64,unbox(Uint32,b))))
 
 bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
     ccall(:int64hash, Uint64, (Uint64,),

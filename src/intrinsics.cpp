@@ -24,8 +24,7 @@ namespace JL_I {
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int, ctpop_int, ctlz_int, cttz_int,
         // conversion
-        sext16, zext16, sext32, zext32, sext64, zext64, sext_int, zext_int,
-        trunc8, trunc16, trunc32, trunc64, trunc_int,
+        sext_int, zext_int, trunc_int,
         fptoui32, fptosi32, fptoui64, fptosi64,
         fpsiround32, fpsiround64, fpuiround32, fpuiround64,
         uitofp32, sitofp32, uitofp64, sitofp64,
@@ -825,16 +824,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 #endif
 
-    HANDLE(sext16,1) return builder.CreateSExt(JL_INT(x), T_int16);
-    HANDLE(zext16,1) return builder.CreateZExt(JL_INT(x), T_int16);
-    HANDLE(sext32,1) return builder.CreateSExt(JL_INT(x), T_int32);
-    HANDLE(zext32,1) return builder.CreateZExt(JL_INT(x), T_int32);
-    HANDLE(sext64,1) return builder.CreateSExt(JL_INT(x), T_int64);
-    HANDLE(zext64,1) return builder.CreateZExt(JL_INT(x), T_int64);
-    HANDLE(trunc8,1) return builder.CreateTrunc(JL_INT(x), T_int8);
-    HANDLE(trunc16,1) return builder.CreateTrunc(JL_INT(x), T_int16);
-    HANDLE(trunc32,1) return builder.CreateTrunc(JL_INT(x), T_int32);
-    HANDLE(trunc64,1) return builder.CreateTrunc(JL_INT(x), T_int64);
     HANDLE(fptoui32,1) return builder.CreateFPToUI(FP(x), T_int32);
     HANDLE(fptosi32,1) return builder.CreateFPToSI(FP(x), T_int32);
     HANDLE(fptoui64,1) return builder.CreateFPToUI(FP(x), T_int64);
@@ -1083,10 +1072,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
-    ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
-    ADD_I(sext64); ADD_I(zext64); ADD_I(sext_int); ADD_I(zext_int);
-    ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32); ADD_I(trunc64);
-    ADD_I(trunc_int);
+    ADD_I(sext_int); ADD_I(zext_int); ADD_I(trunc_int);
     ADD_I(fptoui32); ADD_I(fptosi32); ADD_I(fptoui64); ADD_I(fptosi64);
     ADD_I(fpsiround32); ADD_I(fpsiround64);
     ADD_I(fpuiround32); ADD_I(fpuiround64);

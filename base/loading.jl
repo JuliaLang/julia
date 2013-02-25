@@ -107,4 +107,13 @@ function reload_path(path)
     nothing
 end
 
-evalfile(fname::String) = eval(Main, parse(readall(fname)))
+function evalfile(path::String)
+    s = readall(path)
+    v = nothing
+    i = 1
+    while !done(s,i)
+        ex, i = parse(s,i)
+        v = eval(ex)
+    end
+    return v
+end

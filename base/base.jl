@@ -64,24 +64,7 @@ type MethodError <: Exception
     args
 end
 
-type BackTrace <: Exception
-    e
-    trace::Array{Any,1}
-end
-
-type ShowError <: Exception
-    val
-    err::Exception
-end
-
 type EOFError <: Exception end
-
-show(io::IO, bt::BackTrace) = show(io,bt.e)
-
-function show(io::IO, se::ShowError)
-    println("Error showing value of type ", typeof(se.val), ":")
-    show(io, se.err)
-end
 
 type WeakRef
     value
@@ -137,10 +120,21 @@ object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
 const isimmutable = x->(isa(x,Tuple) || isa(x,Symbol) ||
                         isa(typeof(x),BitsKind))
 
+# constants to match JL_RTLD_* in src/julia.h
+const RTLD_LOCAL     = 0x00000000
+const RTLD_GLOBAL    = 0x00000001
+const RTLD_LAZY      = 0x00000002
+const RTLD_NOW       = 0x00000004
+const RTLD_NODELETE  = 0x00000008
+const RTLD_NOLOAD    = 0x00000010
+const RTLD_DEEPBIND  = 0x00000020
+const RTLD_FIRST     = 0x00000040
+
 dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym_e(hnd, s::Union(Symbol,String)) = ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
-dlopen(s::String) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), s)
+dlopen(s::String, flags::Integer) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
+dlopen(s::String) = dlopen(s, RTLD_LAZY | RTLD_DEEPBIND)
 dlclose(p::Ptr) = ccall(:uv_dlclose,Void,(Ptr{Void},),p)
 
 cfunction(f::Function, r, a) =

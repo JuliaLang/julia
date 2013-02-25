@@ -4,13 +4,7 @@
  Getting Started  
 *****************
 
-Mac and Windows binaries are available for download at `http://code.google.com/p/julialang/downloads/list <http://code.google.com/p/julialang/downloads/list>`_. Installation is straightforward, whether using precompiled binaries or compiling from source:
-
-1. On a Mac, download the tar.gz file from the downloads page. Double-click on the downloaded file to uncompress and extract it into a directory. Start Julia by double-clicking the `julia` executable in the julia directory.
-
-2. On Windows, download the zip file from the downloads page. Double-click on the downloaded file to uncompress and extract it into a directory. Start Julia by double-clicking julia.bat in the julia directory.
-
-3. Julia can be built from source by following the instructions on the `main GitHub page <https://github.com/JuliaLang/julia#readme>`_ or in README.md. This is the recommended method for linux and FreeBSD users.
+Julia installation is straightforward, whether using precompiled binaries or compiling from source. Download and install Julia by following the instructions at [http://julialang.org/downloads/](http://julialang.org/downloads/).
 
 The easiest way to learn and experiment with Julia is by starting an
 interactive session (also known as a read-eval-print loop or "repl")::

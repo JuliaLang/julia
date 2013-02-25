@@ -9,6 +9,12 @@ type BigFloat <: FloatingPoint
     end
 end
 
+function BigFloat(x::BigFloat)
+    z = BigFloat()
+    ccall((:__gmpf_set, :libgmp), Void, (Ptr{Void}, Ptr{Void}), z.mpf, x.mpf)
+    return z
+end
+
 function BigFloat(x::String)
     z = BigFloat()
     err = ccall((:__gmpf_set_str, :libgmp), Int32, (Ptr{Void}, Ptr{Uint8}, Int32), z.mpf, bytestring(x), 0)
@@ -40,34 +46,24 @@ function BigFloat(x::BigInt)
     return z
 end
 
-convert(::Type{BigFloat}, x::Int8)   = BigFloat(int(x))
-convert(::Type{BigFloat}, x::Int16)  = BigFloat(int(x))
-convert(::Type{BigFloat}, x::Int)  = BigFloat(x)
-if WORD_SIZE == 64
-    convert(::Type{BigFloat}, x::Int32) = BigFloat(int(x))
-    convert(::Type{BigFloat}, x::Uint32) = BigFloat(int(x))
-else
-    convert(::Type{BigFloat}, x::Int64) = BigFloat(string(x))
-    convert(::Type{BigFloat}, x::Uint64) = BigFloat(string(x))
+BigFloat(x::Bool) = BigFloat(uint(x))
+BigFloat(x::Signed) = BigFloat(int(x))
+BigFloat(x::Unsigned) = BigFloat(uint(x))
+#BigFloat(x::Int128) = BigFloat(BigInt(x))
+#BigFloat(x::Uint128) = BigFloat(BigInt(x))
+if WORD_SIZE == 32
+    BigFloat(x::Int64) = BigFloat(string(x))
+    BigFloat(x::Uint64) = BigFloat(BigInt(x))
 end
-convert(::Type{BigFloat}, x::Uint8)  = BigFloat(int(x))
-convert(::Type{BigFloat}, x::Uint16) = BigFloat(int(x))
-convert(::Type{BigFloat}, x::Float64) = BigFloat(x)
-convert(::Type{BigFloat}, x::Float32) = BigFloat(float64(x))
-convert(::Type{BigFloat}, x::BigInt) = BigFloat(x)
+BigFloat(x::Float32) = BigFloat(float64(x))
+BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
+
+convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
+convert(::Type{BigFloat}, x::Real) = BigFloat(x)
+
 convert(::Type{Float64}, x::BigFloat) = ccall((:__gmpf_get_d,:libgmp), Float64, (Ptr{Void},), x.mpf)
 
-promote_rule(::Type{BigFloat}, ::Type{Float32}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Float64}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Int8}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Int16}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Int32}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Int64}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Uint8}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Uint16}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Uint32}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Uint64}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{BigInt})  = BigFloat
+promote_rule{T<:Union(Integer,FloatingPoint)}(::Type{BigFloat}, ::Type{T}) = BigFloat
 
 # mpf doesn't have inf or nan
 isnan(x::BigFloat) = false
@@ -116,11 +112,13 @@ end
 <(x::BigFloat, y::BigFloat) = cmp(x,y) < 0
 >(x::BigFloat, y::BigFloat) = cmp(x,y) > 0
 
+complex(x::BigFloat, y::BigFloat) = ComplexPair(x, y)
+
 function string(x::BigFloat)
     lng = 128
     for i = 1:2
         z = Array(Uint8, lng)
-        lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{Void}), z, lng, "%.Fe", x.mpf)
+        lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{Void}...), z, lng, "%.Fe", x.mpf)
         if lng < 128 || i == 2; return bytestring(convert(Ptr{Uint8}, z[1:lng])); end
     end
 end

@@ -24,7 +24,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Homepage:** <http://julialang.org>
 - **Binaries:** <http://code.google.com/p/julialang/downloads/list>
 - **Packages:** <http://docs.julialang.org/en/latest/packages/packagelist/>
-- **Mailing lists:** <http://julialang.org/mailing_lists>
+- **Mailing lists:** <http://julialang.org/community/>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
@@ -136,7 +136,7 @@ Building Julia requires that the following software be installed:
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
-- **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.1.
+- **[LLVM]**                — compiler infrastructure.
 - **[FemtoLisp]**           — packaged with julia source, and used to implement the compiler front-end.
 - **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 - **[libuv]**               — portable, high-performance event-based I/O library

@@ -113,8 +113,6 @@
 
 (defun julia-in-comment ()
   (save-excursion
-    (end-of-line)
-    (backward-char 1)
     (julia-find-comment-open (line-beginning-position))))
 
 (defun julia-strcount (str chr)

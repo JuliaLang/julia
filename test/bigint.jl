@@ -39,11 +39,35 @@ for i = -10:10, j = [-10:-1,1:10]
     @test rem(BigInt(i), BigInt(j)) == rem(i,j)
 end
 
-@test a+int(1) == b
+@test typeof(BigInt(typemax(Int8))) == BigInt
+@test typeof(BigInt(typemax(Int16))) == BigInt
+@test typeof(BigInt(typemax(Int32))) == BigInt
+@test typeof(BigInt(typemax(Int64))) == BigInt
+#@test typeof(BigInt(typemax(Int128))) == BigInt
+
+@test typeof(BigInt(true)) == BigInt
+@test typeof(BigInt(typemax(Uint8))) == BigInt
+@test typeof(BigInt(typemax(Uint16))) == BigInt
+@test typeof(BigInt(typemax(Uint32))) == BigInt
+@test typeof(BigInt(typemax(Uint64))) == BigInt
+#@test typeof(BigInt(typemax(Uint128))) == BigInt
+
+@test typeof(BigInt(BigInt(1))) == BigInt
+
 @test a+int8(1) == b
 @test a+int16(1) == b
 @test a+int32(1) == b
 @test a+int64(1) == b
+#@test a+int128(1) == b
+
+@test a+true == b
+@test a+uint8(1) == b
+@test a+uint16(1) == b
+@test a+uint32(1) == b
+@test a+uint64(1) == b
+#@test a+uint128(1) == b
+
+@test a+BigInt(1) == b
 
 @test BigInt(5) << 3 == 40
 @test BigInt(5) >> 1 == 2

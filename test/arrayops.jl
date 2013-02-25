@@ -308,6 +308,9 @@ end
 
 @test (1:5)[[true,false,true,false,true]] == [1,3,5]
 
+# issue #2342
+@test isequal(cumsum([1 2 3]), [1 2 3])
+
 # set-like operations
 @test isequal(union([1,2,3], [4,3,4]), [1,2,3,4])
 @test isequal(union(['e','c','a'], ['b','a','d']), ['e','c','a','b','d'])

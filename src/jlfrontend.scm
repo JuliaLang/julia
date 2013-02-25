@@ -108,7 +108,10 @@
 
 (define (expand-toplevel-expr e)
   (if (and (pair? e) (eq? (car e) 'toplevel))
-      `(toplevel ,@(map expand-toplevel-expr (cdr e)))
+      ;;`(toplevel ,@(map expand-toplevel-expr (cdr e)))
+      ;; delay expansion so defined global variables take effect for later
+      ;; toplevel expressions.
+      e
       (let ((last *in-expand*))
 	(if (not last)
 	    (begin (reset-gensyms)
@@ -132,7 +135,10 @@
   (parser-wrap (lambda ()
 		 (let* ((inp  (make-token-stream (open-input-string s)))
 			(expr (julia-parse inp)))
-		   (expand-toplevel-expr expr)))))
+		   ;; delay expansion so macros run in the Task executing
+		   ;; the input, not the task parsing it (issue #2378)
+		   expr
+		   #;(expand-toplevel-expr expr)))))
 
 ;; parse file-in-a-string
 (define (jl-parse-string-stream str)
@@ -163,7 +169,7 @@
   (let ((e (parser-wrap (lambda ()
 			  (julia-parse current-token-stream)))))
     (if (eof-object? e)
-	#f
+	e
 	(cons (+ (input-port-line (ts:port current-token-stream))
 		 (if (eqv? (peek-token current-token-stream) #\newline)
 		     -1 0))

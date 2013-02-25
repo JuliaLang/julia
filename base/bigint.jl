@@ -9,6 +9,12 @@ type BigInt <: Integer
     end
 end
 
+function BigInt(x::BigInt)
+    z = BigInt()
+    ccall((:__gmpz_set, :libgmp), Void, (Ptr{Void}, Ptr{Void}), z.mpz, x.mpz)
+    return z
+end
+
 function BigInt(x::String)
     z = BigInt()
     err = ccall((:__gmpz_set_str, :libgmp), Int32, (Ptr{Void}, Ptr{Uint8}, Int32), z.mpz, bytestring(x), 0)
@@ -21,8 +27,6 @@ function BigInt(x::Int)
     ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{Void}, Int), z.mpz, x)
     return z
 end
-BigInt{T<:Signed}(x::T) = BigInt(int(x))
-BigInt(x::Int128) = BigInt(string(x))
 
 function BigInt(x::Uint)
     z = BigInt()
@@ -30,26 +34,18 @@ function BigInt(x::Uint)
         (Ptr{Void}, Uint), z.mpz, x)
     return z
 end
-BigInt{T<:Unsigned}(x::T) = BigInt(uint(x))
-BigInt(x::Uint128) = BigInt(string(x))
 
-convert(::Type{BigInt}, x::Int8) = BigInt(int(x))
-convert(::Type{BigInt}, x::Int16) = BigInt(int(x))
-convert(::Type{BigInt}, x::Int) = BigInt(x)
-
-convert(::Type{BigInt}, x::Uint8) = BigInt(uint(x))
-convert(::Type{BigInt}, x::Uint16) = BigInt(uint(x))
-convert(::Type{BigInt}, x::Uint) = BigInt(x)
-
-if WORD_SIZE == 64
-    convert(::Type{BigInt}, x::Int32) = BigInt(int(x))
-    convert(::Type{BigInt}, x::Uint32) = BigInt(uint(x))
-else
-    BigInt(l::Int64) = BigInt(string(l))
-    BigInt(l::Uint64) = BigInt(string(l))
-    convert(::Type{BigInt}, x::Int64) = BigInt(string(x))
-    convert(::Type{BigInt}, x::Uint64) = BigInt(string(x))
+BigInt(x::Bool) = BigInt(uint(x))
+BigInt(x::Signed) = BigInt(int(x))
+BigInt(x::Unsigned) = BigInt(uint(x))
+#BigInt(x::Int128) = BigInt(string(x))
+#BigInt(x::Uint128) = BigInt(string(x))
+if WORD_SIZE == 32
+    BigInt(x::Int64) = BigInt(string(x))
+    BigInt(x::Uint64) = BigInt(string(x))
 end
+
+convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
 
 convert(::Type{Int}, n::BigInt) =
     ccall((:__gmpz_get_si, :libgmp), Int, (Ptr{Void},), n.mpz)
@@ -57,17 +53,7 @@ convert(::Type{Int}, n::BigInt) =
 convert(::Type{Uint}, n::BigInt) =
     ccall((:__gmpz_get_ui, :libgmp), Uint, (Ptr{Void},), n.mpz)
 
-promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
-promote_rule(::Type{BigInt}, ::Type{Int16}) = BigInt
-promote_rule(::Type{BigInt}, ::Type{Int32}) = BigInt
-promote_rule(::Type{BigInt}, ::Type{Int64}) = BigInt
-promote_rule(::Type{BigInt}, ::Type{Int128}) = BigInt
-
-promote_rule(::Type{BigInt}, ::Type{Uint8}) = BigInt
-promote_rule(::Type{BigInt}, ::Type{Uint16}) = BigInt
-promote_rule(::Type{BigInt}, ::Type{Uint32}) = BigInt
-promote_rule(::Type{BigInt}, ::Type{Uint64}) = BigInt
-promote_rule(::Type{BigInt}, ::Type{Uint128}) = BigInt
+promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
@@ -185,7 +171,7 @@ binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(
 function string(x::BigInt)
     lng = ndigits(x) + 2
     z = Array(Uint8, lng)
-    lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{Void}), z, lng, "%Zd", x.mpz)
+    lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{Void}...), z, lng, "%Zd", x.mpz)
     return bytestring(convert(Ptr{Uint8}, z[1:lng]))
 end
 
