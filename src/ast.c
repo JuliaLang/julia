@@ -409,7 +409,7 @@ DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
 {
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")),
                           cvalue_static_cstring(str));
-    if (e == FL_T || e == FL_F || e == FL_EOF)
+    if (e == FL_EOF)
         return jl_nothing;
     
     return scm_to_julia(e,0);
@@ -426,7 +426,7 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
     JL_GC_PUSH(&expr, &pos1);
 
     value_t e = car_(p);
-    if (e == FL_T || e == FL_F || e == FL_EOF) {
+    if (e == FL_EOF) {
         expr = (jl_value_t*)jl_null;
     }
     else {
@@ -455,7 +455,7 @@ extern int jl_lineno;
 jl_value_t *jl_parse_next()
 {
     value_t c = fl_applyn(0, symbol_value(symbol("jl-parser-next")));
-    if (c == FL_F)
+    if (c == FL_EOF)
         return NULL;
     if (iscons(c)) {
         value_t a = car_(c);
@@ -481,13 +481,7 @@ jl_value_t *jl_expand(jl_value_t *expr)
     int np = jl_gc_n_preserved_values();
     value_t arg = julia_to_scm(expr);
     value_t e = fl_applyn(1, symbol_value(symbol("jl-expand-to-thunk")), arg);
-    jl_value_t *result;
-    if (e == FL_T || e == FL_F || e == FL_EOF) {
-        result = NULL;
-    }
-    else {
-        result = scm_to_julia(e,0);
-    }
+    jl_value_t *result = scm_to_julia(e,0);
     while (jl_gc_n_preserved_values() > np) {
         jl_gc_unpreserve();
     }
