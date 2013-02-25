@@ -610,31 +610,37 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_weakref_type = (jl_struct_type_t*)basemod("WeakRef");
 }
 
+extern char *julia_home;
+
 DLLEXPORT char *jl_locate_sysimg()
 {
     char *julia_path = (char*)malloc(512);
-    size_t path_size = 512;
+    //size_t path_size = 512;
     char path[512];
-    char *julia_home;
-    uv_exepath(julia_path, &path_size);
-    julia_home = strdup(dirname(julia_path));
-    jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
-                 jl_cstr_to_string(julia_home));
-    jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
+    //uv_exepath(julia_path, &path_size);
+    //julia_home = strdup(dirname(julia_path));
+    julia_home = "/home/jeff/src/julia/usr/bin";
     free(julia_path);
     char *image_file = JL_SYSTEM_IMAGE_PATH;
+    snprintf(path, sizeof(path), "%s%s%s",
+             julia_home, PATHSEPSTRING, JL_SYSTEM_IMAGE_PATH);
+    /*
     snprintf(path, sizeof(path), "%s%s..%slib%sjulia%s%s",
              julia_home, PATHSEPSTRING, PATHSEPSTRING,
              PATHSEPSTRING, PATHSEPSTRING, image_file);
+    */
     image_file = strdup(path);
     return image_file;
 }
 
-DLLEXPORT void jl_init()
+DLLEXPORT void jl_init(void)
 {
     libsupport_init();
     char *image_file = jl_locate_sysimg();
     julia_init(image_file);
+    jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
+                 jl_cstr_to_string(julia_home));
+    jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
 }
 
 DLLEXPORT void *jl_eval_string(char *str)
