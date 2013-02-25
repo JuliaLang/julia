@@ -106,7 +106,12 @@ isequal(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
 isequal(w::WeakRef, v) = isequal(w.value, v)
 isequal(w, v::WeakRef) = isequal(w, v.value)
 
-finalizer(o, f::Function) = ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
+function finalizer(o, f::Function)
+    if isimmutable(o)
+        error("objects of type ", typeof(o), " cannot be finalized")
+    end
+    ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
+end
 
 gc() = ccall(:jl_gc_collect, Void, ())
 gc_enable() = ccall(:jl_gc_enable, Void, ())
