@@ -880,7 +880,8 @@ end
 for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
     @eval function ($f)(v::AbstractVector)
         n = length(v)
-        c = similar(v, n)
+        c = $(op===:+ ? (:(similar(v,typeof(+zero(eltype(v)))))) :
+                        (:(similar(v))))
         if n == 0; return c; end
 
         c[1] = v[1]
@@ -899,11 +900,12 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
             axis_stride *= size(A,i)
         end
 
-        if axis_size <= 1
-            return A
-        end
+        B = $(op===:+ ? (:(similar(A,typeof(+zero(eltype(A)))))) :
+                        (:(similar(A))))
 
-        B = similar(A)
+        if axis_size < 1
+            return B
+        end
 
         for i = 1:length(A)
             if div(i-1, axis_stride) % axis_size == 0
@@ -941,7 +943,7 @@ for (f, op) = ((:cummin, :min), (:cummax, :max))
             axis_stride *= size(A,i)
         end
 
-        if axis_size <= 1
+        if axis_size < 1
             return A
         end
 

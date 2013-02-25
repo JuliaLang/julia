@@ -257,9 +257,9 @@ A ``(name, library)`` function specification must be a constant expression.
 However, it is possible to use computed values as function names by staging
 through ``eval`` as follows:
 
-    @eval ccall(($(strcat("a","b")),"lib"), ...
+    @eval ccall(($(string("a","b")),"lib"), ...
 
-This expression constructs a name using ``strcat``, then substitutes this
+This expression constructs a name using ``string``, then substitutes this
 name into a new ``ccall`` expression, which is then evaluated. Keep in mind that
 ``eval`` only operates at the top level, so within this expression local
 variables will not be available (unless their values are substituted with

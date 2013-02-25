@@ -6,10 +6,12 @@ convert(::Type{Float32}, x::Int8)    = box(Float32,sitofp32(unbox(Int8,x)))
 convert(::Type{Float32}, x::Int16)   = box(Float32,sitofp32(unbox(Int16,x)))
 convert(::Type{Float32}, x::Int32)   = box(Float32,sitofp32(unbox(Int32,x)))
 convert(::Type{Float32}, x::Int64)   = box(Float32,sitofp32(unbox(Int64,x)))
+convert(::Type{Float32}, x::Int128)  = float32(uint128(abs(x)))*(1-2(x<0))
 convert(::Type{Float32}, x::Uint8)   = box(Float32,uitofp32(unbox(Uint8,x)))
 convert(::Type{Float32}, x::Uint16)  = box(Float32,uitofp32(unbox(Uint16,x)))
 convert(::Type{Float32}, x::Uint32)  = box(Float32,uitofp32(unbox(Uint32,x)))
 convert(::Type{Float32}, x::Uint64)  = box(Float32,uitofp32(unbox(Uint64,x)))
+convert(::Type{Float32}, x::Uint128) = float32(uint64(x)) + ldexp(float32(uint64(x>>>64)),64)
 convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc32(unbox(Float64,x)))
 
 convert(::Type{Float64}, x::Bool)    = box(Float64,uitofp64(unbox(Bool,x)))
@@ -18,22 +20,26 @@ convert(::Type{Float64}, x::Int8)    = box(Float64,sitofp64(unbox(Int8,x)))
 convert(::Type{Float64}, x::Int16)   = box(Float64,sitofp64(unbox(Int16,x)))
 convert(::Type{Float64}, x::Int32)   = box(Float64,sitofp64(unbox(Int32,x)))
 convert(::Type{Float64}, x::Int64)   = box(Float64,sitofp64(unbox(Int64,x)))
+convert(::Type{Float64}, x::Int128)  = float64(uint128(abs(x)))*(1-2(x<0))
 convert(::Type{Float64}, x::Uint8)   = box(Float64,uitofp64(unbox(Uint8,x)))
 convert(::Type{Float64}, x::Uint16)  = box(Float64,uitofp64(unbox(Uint16,x)))
 convert(::Type{Float64}, x::Uint32)  = box(Float64,uitofp64(unbox(Uint32,x)))
 convert(::Type{Float64}, x::Uint64)  = box(Float64,uitofp64(unbox(Uint64,x)))
+convert(::Type{Float64}, x::Uint128) = float64(uint64(x)) + ldexp(float64(uint64(x>>>64)),64)
 convert(::Type{Float64}, x::Float32) = box(Float64,fpext64(unbox(Float32,x)))
 
-convert(::Type{FloatingPoint}, x::Bool)   = convert(Float32, x)
-convert(::Type{FloatingPoint}, x::Char)   = convert(Float32, x)
-convert(::Type{FloatingPoint}, x::Int8)   = convert(Float32, x)
-convert(::Type{FloatingPoint}, x::Int16)  = convert(Float32, x)
-convert(::Type{FloatingPoint}, x::Int32)  = convert(Float64, x)
-convert(::Type{FloatingPoint}, x::Int64)  = convert(Float64, x) # LOSSY
-convert(::Type{FloatingPoint}, x::Uint8)  = convert(Float32, x)
-convert(::Type{FloatingPoint}, x::Uint16) = convert(Float32, x)
-convert(::Type{FloatingPoint}, x::Uint32) = convert(Float64, x)
-convert(::Type{FloatingPoint}, x::Uint64) = convert(Float64, x) # LOSSY
+convert(::Type{FloatingPoint}, x::Bool)    = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Char)    = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Int8)    = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Int16)   = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Int32)   = convert(Float64, x)
+convert(::Type{FloatingPoint}, x::Int64)   = convert(Float64, x) # LOSSY
+convert(::Type{FloatingPoint}, x::Int128)  = convert(Float64, x) # LOSSY
+convert(::Type{FloatingPoint}, x::Uint8)   = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Uint16)  = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Uint32)  = convert(Float64, x)
+convert(::Type{FloatingPoint}, x::Uint64)  = convert(Float64, x) # LOSSY
+convert(::Type{FloatingPoint}, x::Uint128) = convert(Float64, x) # LOSSY
 
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
@@ -53,25 +59,29 @@ else
     itrunc(x::Float64) = int32(box(Int64,fptosi64(unbox(Float64,x))))
 end
 
-iround(::Type{Int8}, x::Float32) = box(Int8,trunc8(fpsiround32(unbox(Float32,x))))
-iround(::Type{Int8}, x::Float64) = box(Int8,trunc8(fpsiround64(unbox(Float64,x))))
-iround(::Type{Uint8}, x::Float32) = box(Uint8,trunc8(fpuiround32(unbox(Float32,x))))
-iround(::Type{Uint8}, x::Float64) = box(Uint8,trunc8(fpuiround64(unbox(Float64,x))))
-iround(::Type{Int16}, x::Float32) = box(Int16,trunc16(fpsiround32(unbox(Float32,x))))
-iround(::Type{Int16}, x::Float64) = box(Int16,trunc16(fpsiround64(unbox(Float64,x))))
-iround(::Type{Uint16}, x::Float32) = box(Uint16,trunc16(fpuiround32(unbox(Float32,x))))
-iround(::Type{Uint16}, x::Float64) = box(Uint16,trunc16(fpuiround64(unbox(Float64,x))))
+for to in (Int8, Uint8, Int16, Uint16)
+    @eval begin
+        iround(::Type{$to}, x::Float32) = box($to,trunc_int($to,fpsiround32(unbox(Float32,x))))
+        iround(::Type{$to}, x::Float64) = box($to,trunc_int($to,fpsiround64(unbox(Float64,x))))
+    end
+end
+
 iround(::Type{Int32}, x::Float32) = box(Int32,fpsiround32(unbox(Float32,x)))
-iround(::Type{Int32}, x::Float64) = box(Int32,trunc32(fpsiround64(unbox(Float64,x))))
+iround(::Type{Int32}, x::Float64) = box(Int32,trunc_int(Int32,fpsiround64(unbox(Float64,x))))
 iround(::Type{Uint32}, x::Float32) = box(Uint32,fpuiround32(unbox(Float32,x)))
-iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc32(fpuiround64(unbox(Float64,x))))
+iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc_int(Uint32,fpuiround64(unbox(Float64,x))))
 iround(::Type{Int64}, x::Float32) = box(Int64,fpsiround64(fpext64(unbox(Float32,x))))
 iround(::Type{Int64}, x::Float64) = box(Int64,fpsiround64(unbox(Float64,x)))
 iround(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround64(fpext64(unbox(Float32,x))))
 iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround64(unbox(Float64,x)))
-# TODO: Int128
+
+iround(::Type{Int128}, x::Float32) = convert(Int128,round(x))
+iround(::Type{Int128}, x::Float64) = convert(Int128,round(x))
+iround(::Type{Uint128}, x::Float32) = convert(Uint128,round(x))
+iround(::Type{Uint128}, x::Float64) = convert(Uint128,round(x))
 
 # this is needed very early because it is used by Range and colon
+round(x::Float64) = ccall((:round, Base.libm_name), Float64, (Float64,), x)
 floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
 
 iceil(x::FloatingPoint)  = itrunc(ceil(x))  # TODO: fast primitive for iceil

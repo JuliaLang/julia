@@ -12,11 +12,19 @@ end
 type Error <: Result
     expr
     err
+    backtrace
 end
 
 default_handler(r::Success) = nothing
 default_handler(r::Failure) = error("test failed: $(r.expr)")
-default_handler(r::Error)   = error("test error during $(r.expr)\n$(r.err)")
+default_handler(r::Error)   = rethrow(r)
+
+import Base.error_show
+
+function error_show(io::IO, r::Error)
+    println(io, "test error during $(r.expr)")
+    error_show(io, r.err)
+end
 
 const handlers = [default_handler]
 
@@ -24,7 +32,7 @@ function do_test(thk, qex)
     handlers[end](try
         thk() ? Success(qex) : Failure(qex)
     catch err
-        Error(qex,err)
+        Error(qex,err,backtrace())
     end)
 end
 

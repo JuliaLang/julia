@@ -39,12 +39,14 @@ function show(io::IO, m::Module)
     end
 end
 
+uncompress_ast(l::LambdaStaticData) = ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
+
 function show(io::IO, l::LambdaStaticData)
     print(io, "AST(")
     if isa(l.ast,Expr)
         show(io, l.ast)
     else
-        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
+        ast = uncompress_ast(l)
         show(io, ast)
     end
     print(io, ")")
@@ -307,6 +309,29 @@ function show_unquoted(io::IO, ex::SymbolNode)
     show_expr_type(io, ex.typ)
 end
 
+function clean_gensym(s::Symbol)
+    s = string(s)
+    i = search(s,'#')
+    if i > 0
+        return s[1:i-1]
+    end
+    return s
+end
+
+function argtype_decl_string(n, t)
+    if isa(n,Expr)
+        n = n.args[1]  # handle n::T in arg list
+    end
+    n = clean_gensym(n)
+    if t === Any
+        return n
+    end
+    if t <: Vararg && t.parameters[1] === Any
+        return string(n, "...")
+    end
+    return string(n, "::", t)
+end
+
 function show(io::IO, m::Method)
     tv = m.tvars
     if !isa(tv,Tuple)
@@ -315,8 +340,16 @@ function show(io::IO, m::Method)
     if !isempty(tv)
         show_delim_array(io, tv, '{', ',', '}', false)
     end
-    show(io, m.sig)
     li = m.func.code
+    e = li.ast
+    if !isa(e,Expr)
+        e = uncompress_ast(li)
+    end
+    argnames = e.args[1]
+    decls = map(argtype_decl_string, argnames, {m.sig...})
+    print(io, "(")
+    print_joined(io, decls, ",", ",")
+    print(io, ")")
     if li.line > 0
         print(io, " at ", li.file, ":", li.line)
     end
