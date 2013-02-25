@@ -166,7 +166,7 @@
   (let ((e (parser-wrap (lambda ()
 			  (julia-parse current-token-stream)))))
     (if (eof-object? e)
-	#f
+	e
 	(cons (+ (input-port-line (ts:port current-token-stream))
 		 (if (eqv? (peek-token current-token-stream) #\newline)
 		     -1 0))
