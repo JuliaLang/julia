@@ -649,9 +649,23 @@ DLLEXPORT void *jl_eval_string(char *str)
     if (jl_setjmp(jl_root_task->base_ctx, 1)) {
         jl_switch_stack(jl_current_task, jl_jmp_target);
     }
-    jl_value_t *ast = jl_parse_string(str, 0, 1);
-    JL_GC_PUSH(&ast);
-    jl_value_t *r = jl_toplevel_eval(jl_t0(ast));
-    JL_GC_POP();
+    jl_value_t *r;
+    JL_TRY {
+        jl_value_t *ast = jl_parse_string(str, 0, 1);
+        JL_GC_PUSH(&ast);
+        r = jl_toplevel_eval(jl_t0(ast));
+        JL_GC_POP();
+    }
+    JL_CATCH {
+        jl_show(jl_stderr_obj(), jl_exception_in_transit);
+        return jl_box_int64(0);
+    }
     return r;
+}
+
+DLLEXPORT char *jl_typeof_str(jl_value_t *v)
+{
+    if (jl_is_tuple(v))
+        return "Tuple";
+    return ((jl_tag_type_t*)jl_typeof(v))->name->name->name;
 }
