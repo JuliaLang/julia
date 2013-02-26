@@ -9,6 +9,14 @@ typealias StridedVector{T,A<:Array}   Union(Vector{T} , SubArray{T,1,A})
 typealias StridedMatrix{T,A<:Array}   Union(Matrix{T} , SubArray{T,2,A})
 typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
+type Dim{A<:AbstractVector{Int}}
+    region::A
+end
+Dim(i::Int) = Dim([i])
+Dim(A::AbstractArray{Int}) = Dim(vec(A))
+Dim(R::Range) = Dim(vec(R))
+Dim(A...) = Dim([A...])
+
 ## Basic functions ##
 
 size(a::Array) = arraysize(a)
@@ -1425,19 +1433,19 @@ function reducedim(f::Function, A, region, v0, R)
 end
 end
 
-max{T}(A::AbstractArray{T}, b::(), region) = reducedim(max,A,region,typemin(T))
-min{T}(A::AbstractArray{T}, b::(), region) = reducedim(min,A,region,typemax(T))
-sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
-prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
+max{T}(A::AbstractArray{T}, d::Dim) = reducedim(max,A,d.region,typemin(T))
+min{T}(A::AbstractArray{T}, d::Dim) = reducedim(min,A,d.region,typemax(T))
+sum{T}(A::AbstractArray{T}, d::Dim)  = reducedim(+,A,d.region,zero(T))
+prod{T}(A::AbstractArray{T}, d::Dim) = reducedim(*,A,d.region,one(T))
 
-all(A::AbstractArray{Bool}, region) = reducedim(all,A,region,true)
-any(A::AbstractArray{Bool}, region) = reducedim(any,A,region,false)
-sum(A::AbstractArray{Bool}, region) = reducedim(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
-sum(A::AbstractArray{Bool}) = sum(A, [1:ndims(A)])[1]
-sum(A::StridedArray{Bool})  = sum(A, [1:ndims(A)])[1]
+all(A::AbstractArray{Bool}, d::Dim) = reducedim(all,A,d.region,true)
+any(A::AbstractArray{Bool}, d::Dim) = reducedim(any,A,d.region,false)
+sum(A::AbstractArray{Bool}, d::Dim) = reducedim(+,A,d.region,0,similar(A,Int,reduced_dims(A,d.region)))
+sum(A::AbstractArray{Bool}) = sum(A, Dim(1:ndims(A)) )[1]
+sum(A::StridedArray{Bool})  = sum(A, Dim(1:ndims(A)) )[1]
 prod(A::AbstractArray{Bool}) =
     error("use all() instead of prod() for boolean arrays")
-prod(A::AbstractArray{Bool}, region) =
+prod(A::AbstractArray{Bool}, d::Dim) =
     error("use all() instead of prod() for boolean arrays")
 
 function sum{T}(A::StridedArray{T})

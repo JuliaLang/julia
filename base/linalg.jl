@@ -60,11 +60,11 @@ function norm(A::AbstractMatrix, p::Number)
     elseif m == 1 || n == 1
         a = norm(reshape(A, length(A)), p)
     elseif p == 1
-        a = max(sum(abs(A),1))
+        a = max(sum(abs(A),Dim(1)))
     elseif p == 2
         a = max(svdvals(A))
     elseif p == Inf
-        a = max(sum(abs(A),2))
+        a = max(sum(abs(A),Dim(2)))
     else
         error("invalid parameter p given to compute matrix norm")
     end

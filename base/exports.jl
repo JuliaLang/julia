@@ -38,6 +38,7 @@ export
     ComplexPair,
     DArray,
     Dict,
+    Dim,
     Dims,
     EachLine,
     Enumerate,
