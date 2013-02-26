@@ -1,7 +1,9 @@
 function perf()
 
 warning off;
-maxNumCompThreads(1);
+if exist('OCTAVE_VERSION') == 0
+    maxNumCompThreads(1);
+end
 
 function assert(bool)
    if ~bool
