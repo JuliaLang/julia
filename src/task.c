@@ -633,7 +633,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->ssize = ssize;
     t->on_exit = NULL;
     t->last = jl_current_task;
-    t->tls = jl_current_task->tls;
+    t->tls = jl_nothing;
     t->consumers = jl_nothing;
     t->done = 0;
     t->runnable = 1;
