@@ -74,6 +74,9 @@
 (define (assignment? e)
   (and (pair? e) (eq? (car e) '=)))
 
+(define (assertion? e)
+  (and (length= e 3) (eq? (car e) |::|) (symbol? (cadr e))))
+
 (define unary-ops '(+ - ! ~ |<:| |>:|))
 
 ; operators that are both unary and binary
@@ -1125,9 +1128,9 @@
 (define (separate-keywords argl)
   (receive
    (kws args) (separate (lambda (x)
-			  (and (pair? x)
-			       (eq? (car x) '=)
-			       (symbol? (cadr x))))
+			  (and (assignment? x)
+			       (or (symbol? (cadr x))
+                                   (assertion? (cadr x)))))
 			argl)
    (if (null? kws)
        args
