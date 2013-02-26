@@ -641,7 +641,6 @@ function perform_work(job::WorkItem)
             result = is(arg,()) ? yieldto(job.task) : yieldto(job.task, arg)
         else
             job.task = Task(job.thunk)
-            job.task.storage = nothing
             result = yieldto(job.task)
         end
     catch err
