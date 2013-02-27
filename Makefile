@@ -98,6 +98,7 @@ dist:
 #	-$(MAKE) -C deps clean-openblas
 	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
 ifeq ($(OS), Darwin)
+	$(MAKE) -C deps install-git
 	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 ifeq ($(OS), WINNT)
