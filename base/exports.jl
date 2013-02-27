@@ -139,7 +139,6 @@ export
     Cdouble,
     Ccomplex_float,
     Ccomplex_double,
-    Cstring,
 
 # Exceptions
     ArgumentError,
