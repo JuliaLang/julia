@@ -43,6 +43,7 @@ end
 
 include("base.jl")
 include("build_h.jl")
+include("c.jl")
 
 # core operations & types
 include("range.jl")
@@ -63,29 +64,6 @@ include("float.jl")
 include("reduce.jl")
 include("complex.jl")
 include("rational.jl")
-
-typealias Cchar Int8
-typealias Cuchar Int8
-typealias Cshort Int16
-typealias Cushort Uint16
-typealias Cint Int32
-typealias Cuint Uint32
-if OS_NAME == :Windows
-    typealias Clong Int32
-    typealias Culong Uint32
-else
-    typealias Clong Int
-    typealias Culong Int
-end
-typealias Cptrdiff_t Int
-typealias Csize_t Uint
-typealias Clonglong Int64
-typealias Culonglong Uint64
-typealias Cfloat Float32
-typealias Cdouble Float64
-#typealias Ccomplex_float Complex64
-#typealias Ccomplex_double Complex128
-typealias Cstring Ptr{Uint8}
 
 # core data structures (used by type inference)
 include("abstractarray.jl")
