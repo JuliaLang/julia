@@ -256,5 +256,3 @@ $(jl)|__/$(tx)                   |
 
 \033[0m"
 end # begin
-
-branch() = VersionNumber(0,2,0,["pre"],Int[])
