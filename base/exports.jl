@@ -137,8 +137,8 @@ export
     Culonglong,
     Cfloat,
     Cdouble,
-    Ccomplex_float,
-    Ccomplex_double,
+    #Ccomplex_float,
+    #Ccomplex_double,
 
 # Exceptions
     ArgumentError,
