@@ -6,7 +6,7 @@ macro timeit(ex,name)
     quote
         t = Inf
         for i=1:5
-            t = min(t, @elapsed $ex)
+            t = minof(t, @elapsed $ex)
         end
         if print_output
             println("julia,", $name, ",", t*1000)

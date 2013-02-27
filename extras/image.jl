@@ -853,7 +853,7 @@ function rgb2hsi{T}(img::Array{T})
     H /= 2*pi
     rgb_sum = R + G + B
     rgb_sum[rgb_sum .== 0] = eps(T)
-    S = 1 - 3./(rgb_sum).*min(R, G, B)
+    S = 1 - 3./(rgb_sum).*minof(R, G, B)
     H[S .== 0] = 0
     I = 1/3*(R + G + B)
     return cat(3, H, S, I)

@@ -15,7 +15,7 @@ const ZERO_INDEX = 9
 const MAX_INDEX = 17
 
 function show{p}(io::IO, x::TimeDelta{p})
-    k = max(1,min(MAX_INDEX,fld(p,3)+ZERO_INDEX))
+    k = maxof(1,minof(MAX_INDEX,fld(p,3)+ZERO_INDEX))
     r = p-3(k-ZERO_INDEX)
     prefix = PREFIXES[k]
     if r == 0
@@ -31,7 +31,7 @@ end
 convert{p,q}(::Type{TimeDelta{p}}, x::TimeDelta{q}) =
     TimeDelta{p}(p <= q ? x.v*10^(q-p) : div(x.v,10^(p-q)))
 
-promote_rule{p,q}(::Type{TimeDelta{p}}, ::Type{TimeDelta{q}}) = TimeDelta{min(p,q)}
+promote_rule{p,q}(::Type{TimeDelta{p}}, ::Type{TimeDelta{q}}) = TimeDelta{minof(p,q)}
 
 -{p}(x::TimeDelta{p}) = TimeDelta{p}(-x.v)
 +{p}(x::TimeDelta{p}, y::TimeDelta{p}) = TimeDelta{p}(x.v+y.v)

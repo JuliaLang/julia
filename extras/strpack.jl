@@ -393,7 +393,7 @@ align_packed = DataAlign(_ -> 1, _ -> 1)
 # equivalent to #pragma pack(n)
 align_packmax(da::DataAlign, n::Integer) = DataAlign(
     da.ttable,
-    _ -> min(type_alignment_default(_), n),
+    _ -> minof(type_alignment_default(_), n),
     da.aggregate,
     )
 
@@ -483,14 +483,14 @@ function show_struct_layout(s::Struct, strategy::DataAlign, width, bytesize)
     for (typ, dims) in pad(s, strategy)
         for i in 1:prod(dims)
             tstr = string(typ)
-            tstr = tstr[1:min(sizeof(typ)*bytesize-2, length(tstr))]
+            tstr = tstr[1:minof(sizeof(typ)*bytesize-2, length(tstr))]
             str = @sprintf("[%s%s]", tstr, "-"^(bytesize*sizeof(typ)-2-length(tstr)))
             typsize = sizeof(typ)
             while !isempty(str)
                 if offset % width == 0
                     @printf("0x%04X ", offset)
                 end
-                len_prn = min(width - (offset % width), typsize)
+                len_prn = minof(width - (offset % width), typsize)
                 nprint = bytesize*len_prn
                 print(str[1:nprint])
                 str = str[nprint+1:end]

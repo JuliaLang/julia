@@ -1,7 +1,7 @@
 #ISAPPROX Check for nearly equal values.
 #   ISAPPROX(x::T1, y::T2) checks if x and y are nearly equal. The default tolerance is
-#   determined by the types. If tol = max(eps(T1), eps(T2)), then the values need to be
-#   within sqrt(tol)+tol^(1/3)*max(abs(x), abs(y)).
+#   determined by the types. If tol = maxof(eps(T1), eps(T2)), then the values need to be
+#   within sqrt(tol)+tol^(1/3)*maxof(abs(x), abs(y)).
 #
 #   ISAPPROX(x, y, rtol, atol) provides specific values in place of tol^(1/3) and sqrt(tol),
 #   respectively.
@@ -11,7 +11,7 @@ function isapprox(x, y, rtol, atol)
     if isinf(x) || isinf(y)
         return x == y
     end
-    abs(x-y) <= atol+rtol.*max(abs(x), abs(y))
+    abs(x-y) <= atol+rtol.*maxof(abs(x), abs(y))
 end
 
 #ISAPPROXN Check for nearly equal values, treating NaNs as mutually equal.
@@ -26,7 +26,7 @@ isapproxn(x, y, rtol, atol) = isapprox(x, y, rtol, atol) || (isnan(x) && isnan(y
 for fun in (:isapprox, :isapproxn)
     @eval begin
         function ($fun){T1<:FloatingPoint, T2<:FloatingPoint}(x::T1, y::T2)
-            tol = max(eps(T1), eps(T2))
+            tol = maxof(eps(T1), eps(T2))
             ($fun)(x, y, tol^(1/3), sqrt(tol))
         end
         ($fun){T1<:Integer, T2<:FloatingPoint}(x::T1, y::T2) = ($fun)(float(x), y)
