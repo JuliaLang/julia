@@ -9,7 +9,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        log, log2, log10, log1p, logb, exp, exp2, expm1, 
        cbrt, sqrt, square, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
-       lgamma, hypot, gamma, lfact, max, min, ilogb, ldexp, frexp,
+       lgamma, hypot, gamma, lfact, maxof, minof, ilogb, ldexp, frexp,
        clamp, modf, ^, 
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
@@ -18,7 +18,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 
 import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
        Base.tanh, Base.asin, Base.acos, Base.atan, Base.asinh, Base.acosh,
-       Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.max, Base.min,
+       Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.maxof, Base.minof,
        Base.ceil, Base.floor, Base.trunc, Base.round, Base.^
 
 import Intrinsics.nan_dom_err
@@ -157,13 +157,13 @@ gamma(x::Integer) = gamma(float(x))
 lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
 @vectorize_1arg Number lfact
 
-max(x::Float64, y::Float64) = ccall((:fmax,libm),  Float64, (Float64,Float64), x, y)
-max(x::Float32, y::Float32) = ccall((:fmaxf,libm), Float32, (Float32,Float32), x, y)
-@vectorize_2arg Real max
+maxof(x::Float64, y::Float64) = ccall((:fmax,libm),  Float64, (Float64,Float64), x, y)
+maxof(x::Float32, y::Float32) = ccall((:fmaxf,libm), Float32, (Float32,Float32), x, y)
+@vectorize_2arg Real maxof
 
-min(x::Float64, y::Float64) = ccall((:fmin,libm),  Float64, (Float64,Float64), x, y)
-min(x::Float32, y::Float32) = ccall((:fminf,libm), Float32, (Float32,Float32), x, y)
-@vectorize_2arg Real min
+minof(x::Float64, y::Float64) = ccall((:fmin,libm),  Float64, (Float64,Float64), x, y)
+minof(x::Float32, y::Float32) = ccall((:fminf,libm), Float32, (Float32,Float32), x, y)
+@vectorize_2arg Real minof
 
 function ilogb(x::Float64)
     if x==0 || !isfinite(x)

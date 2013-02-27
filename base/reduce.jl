@@ -34,7 +34,7 @@ function max(itr)
     (v, s) = next(itr, s)
     while !done(itr, s)
         (x, s) = next(itr, s)
-        v = max(v,x)
+        v = maxof(v,x)
     end
     return v
 end
@@ -47,7 +47,7 @@ function min(itr)
     (v, s) = next(itr, s)
     while !done(itr, s)
         (x, s) = next(itr, s)
-        v = min(v,x)
+        v = minof(v,x)
     end
     return v
 end
@@ -82,11 +82,11 @@ function reduce(op::Function, v0, itr)
     v = v0
     if is(op,max)
         for x in itr
-            v = max(v,x)
+            v = maxof(v,x)
         end
     elseif is(op,min)
         for x in itr
-            v = min(v,x)
+            v = minof(v,x)
         end
     elseif is(op,+)
         for x in itr
@@ -146,8 +146,8 @@ function all(itr)
     return true
 end
 
-max(f::Function, itr)   = mapreduce(f, max, itr)
-min(f::Function, itr)   = mapreduce(f, min, itr)
+max(f::Function, itr)   = mapreduce(f, maxof, itr)
+min(f::Function, itr)   = mapreduce(f, minof, itr)
 sum(f::Function, itr)   = mapreduce(f, +  , itr)
 prod(f::Function, itr)  = mapreduce(f, *  , itr)
 

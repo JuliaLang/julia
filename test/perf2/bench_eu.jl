@@ -19,7 +19,7 @@ function bench_eu_devec(numPaths)
         end
     end
 
-    V = mean( exp(-r*T)*max(K-S,0) )
+    V = mean( exp(-r*T)*maxof(K-S,0) )
 end
 
 function bench_eu_vec(numPaths)
@@ -38,5 +38,5 @@ function bench_eu_vec(numPaths)
         S = S .* exp(t1+t2*randn(numPaths))
     end
 
-    V = mean( exp(-r*T)*max(K-S,0) )
+    V = mean( exp(-r*T)*maxof(K-S,0) )
 end

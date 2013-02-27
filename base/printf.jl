@@ -241,7 +241,7 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push!(blk.args, :(pt  = POINT[1]))
     # calculate padding
     width -= length(prefix)
-    space_pad = width > max(1,precision) && contains(flags,'-') ||
+    space_pad = width > maxof(1,precision) && contains(flags,'-') ||
                 precision < 0 && width > 1 && !contains(flags,'0') ||
                 precision >= 0 && width > precision
     padding = nothing
@@ -364,7 +364,7 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = _special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    ndigits = min(precision+1,BUFLEN-1)
+    ndigits = minof(precision+1,BUFLEN-1)
     push!(blk.args, :(_ini_dec($x,$ndigits)))
     push!(blk.args, :(neg = NEG[1]))
     push!(blk.args, :(exp = POINT[1]-1))

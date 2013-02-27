@@ -34,7 +34,7 @@ function DArray(init, dims, procs, dist)
     for i = 1:np
         chunks[i] = remote_call(procs[i], init, idxs[i])
     end
-    p = max(1, localpartindex(procs))
+    p = maxof(1, localpartindex(procs))
     A = remote_call_fetch(procs[p], r->typeof(fetch(r)), chunks[p])
     DArray{eltype(A),length(dims),A}(dims, chunks, procs, idxs, cuts)
 end
@@ -45,7 +45,7 @@ function DArray(init, dims, procs)
     end
     DArray(init, dims, procs, defaultdist(dims,procs))
 end
-DArray(init, dims) = DArray(init, dims, [1:min(nprocs(),max(dims))])
+DArray(init, dims) = DArray(init, dims, [1:minof(nprocs(),max(dims))])
 
 size(d::DArray) = d.dims
 procs(d::DArray) = d.pmap

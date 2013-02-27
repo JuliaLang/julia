@@ -267,7 +267,7 @@ isequal(a::ByteString, b::ByteString) = endof(a)==endof(b) && cmp(a,b)==0
 
 ## character column width function ##
 
-charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Char,), c)))
+charwidth(c::Char) = maxof(0,int(ccall(:wcwidth, Int32, (Char,), c)))
 strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
 strwidth(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
 # TODO: implement and use u8_strnwidth that takes a length argument
@@ -399,7 +399,7 @@ type RopeString <: String
     RopeString(h::RopeString, t::RopeString) =
         strdepth(h.tail) + strdepth(t) < strdepth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            new(h, t, max(h.depth,t.depth)+1, endof(h)+endof(t))
+            new(h, t, maxof(h.depth,t.depth)+1, endof(h)+endof(t))
 
     RopeString(h::RopeString, t::String) =
         strdepth(h.tail) < strdepth(h.head) ?
@@ -691,7 +691,7 @@ function multiline_lstrip(s::String)
         for line in lines[first_line:end]
             n,blank = indent_width(line)
             if !blank
-                indent = min(indent, n)
+                indent = minof(indent, n)
             end
         end
     end

@@ -46,7 +46,7 @@ function gallop_last(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
         i += inc
         inc <<= 1
     end
-    hi = min(i+1, hi)
+    hi = minof(i+1, hi)
     # Binary search
     while lo < hi-1
         i = (lo+hi)>>>1
@@ -71,7 +71,7 @@ function rgallop_last(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
         i -= dec
         dec <<= 1
     end
-    lo = max(lo, i-1)
+    lo = maxof(lo, i-1)
     # Binary search
     while lo < hi-1
         i = (lo+hi)>>>1
@@ -96,7 +96,7 @@ function gallop_first(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
         i += inc
         inc <<= 1
     end
-    hi = min(i+1, hi)
+    hi = minof(i+1, hi)
     # Binary search
     while lo < hi-1
         i = (lo+hi)>>>1
@@ -121,7 +121,7 @@ function rgallop_first(o::Ordering, v::AbstractVector, x, lo::Int, hi::Int)
         i -= dec
         dec <<= 1
     end
-    lo = max(lo, i-1)
+    lo = maxof(lo, i-1)
     # Binary search
     while lo < hi-1
         i = (lo+hi)>>>1
@@ -298,7 +298,7 @@ function merge_lo(o::Ordering, v::AbstractVector, a::Run, b::Run, state::MergeSt
             if mode == :galloping
                 mode = :finalize
             end
-            state.min_gallop = max(state.min_gallop,0) + 2  # penalty for leaving gallop mode
+            state.min_gallop = maxof(state.min_gallop,0) + 2  # penalty for leaving gallop mode
         end
 
         if mode == :finalize
@@ -393,7 +393,7 @@ function merge_hi(o::Ordering, v::AbstractVector, a::Run, b::Run, state::MergeSt
             if mode == :galloping
                 mode = :finalize
             end
-            state.min_gallop = max(state.min_gallop, 0) + 2  # penalty for leaving gallop mode
+            state.min_gallop = maxof(state.min_gallop, 0) + 2  # penalty for leaving gallop mode
         end
 
         if mode == :finalize
@@ -415,7 +415,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, ::TimSort, o::Ordering)
         count = length(run_range)
         if count < minrun
             # Make a run of length minrun
-            count = min(minrun, hi-i+1)
+            count = minof(minrun, hi-i+1)
             run_range = i:i+count-1
             sort!(v, i, i+count-1, SMALL_ALGORITHM, o)
         else

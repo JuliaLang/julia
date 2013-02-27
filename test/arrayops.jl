@@ -229,6 +229,9 @@ v[2,2,1,1] = 40.0
 
 @test isequal(v,sum(z,(3,4)))
 
+@test max([1 2 3 4; 5 6 7 8], 1) == [5 6 7 8]
+@test max([1 2 3 4; 5 6 7 8], 2) == [4 8]'
+
 ## large matrices transpose ##
 
 for i = 1 : 5

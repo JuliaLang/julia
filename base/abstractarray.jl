@@ -649,7 +649,7 @@ function cat(catdim::Integer, X...)
         end
     end
 
-    ndimsC = max(catdim, d_max)
+    ndimsC = maxof(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
     typeC = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
     C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, dimsC)
@@ -716,7 +716,7 @@ function cat_t(catdim::Integer, typeC, A::AbstractArray...)
         end
     end
 
-    ndimsC = max(catdim, d_max)
+    ndimsC = maxof(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
     C = similar(full(A[1]), typeC, dimsC)
 
@@ -842,7 +842,7 @@ end
 
 function cmp(A::AbstractArray, B::AbstractArray)
     nA, nB = length(A), length(B)
-    for i = 1:min(nA, nB)
+    for i = 1:minof(nA, nB)
         a, b = A[i], B[i]
         if !isequal(a, b)
             return isless(a, b) ? -1 : +1
@@ -921,7 +921,7 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
 
-for (f, op) = ((:cummin, :min), (:cummax, :max))
+for (f, op) = ((:cummin, :minof), (:cummax, :maxof))
     @eval function ($f)(v::AbstractVector)
         n = length(v)
         cur_val = v[1]
@@ -1152,7 +1152,7 @@ function cartesian_map(body, t::(Int,Int,Int))
 end
 
 function bsxfun(f, a::AbstractArray, b::AbstractArray)
-    nd = max(ndims(a),ndims(b))
+    nd = maxof(ndims(a),ndims(b))
     shp = Array(Int,nd)
     range = ()
     xa, xb = false, false

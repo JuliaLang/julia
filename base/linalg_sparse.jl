@@ -62,7 +62,7 @@ function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
     # TODO: Need better estimation of result space
-    nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
+    nnzC = minof(mA*nB, length(nzvalA) + length(nzvalB))
     colptrC = Array(Ti, nB+1)
     rowvalC = Array(Ti, nnzC)
     nzvalC = Array(Tv, nnzC)
@@ -72,8 +72,8 @@ function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     x  = zeros(Tv, mA)
     for i in 1:nB
         if ip + mA - 1 > nnzC
-            resize!(rowvalC, nnzC + max(nnzC,mA))
-            resize!(nzvalC, nnzC + max(nnzC,mA))
+            resize!(rowvalC, nnzC + maxof(nnzC,mA))
+            resize!(nzvalC, nnzC + maxof(nnzC,mA))
             nnzC = length(nzvalC)
         end
         colptrC[i] = ip
@@ -112,10 +112,10 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     m,n = size(S)
     colptr = Array(Ti, n+1)
     nnz = 0
-    for col = 1 : min(max(k+1,1), n+1)
+    for col = 1 : minof(maxof(k+1,1), n+1)
         colptr[col] = 1
     end
-    for col = max(k+1,1) : n
+    for col = maxof(k+1,1) : n
         for c1 = S.colptr[col] : S.colptr[col+1]-1
             if S.rowval[c1] > col - k
                 break;
@@ -127,7 +127,7 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     rowval = Array(Ti, nnz)
     nzval = Array(Tv, nnz)
     A = SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
-    for col = max(k+1,1) : n
+    for col = maxof(k+1,1) : n
         c1 = S.colptr[col]
         for c2 = A.colptr[col] : A.colptr[col+1]-1
             A.rowval[c2] = S.rowval[c1]
@@ -144,7 +144,7 @@ function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     colptr = Array(Ti, n+1)
     nnz = 0
     colptr[1] = 1
-    for col = 1 : min(n, m+k)
+    for col = 1 : minof(n, m+k)
         l1 = S.colptr[col+1]-1
         for c1 = 0 : (l1 - S.colptr[col])
             if S.rowval[l1 - c1] < col - k
@@ -154,13 +154,13 @@ function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
         end
         colptr[col+1] = nnz+1
     end
-    for col = max(min(n, m+k)+2,1) : n+1
+    for col = maxof(minof(n, m+k)+2,1) : n+1
         colptr[col] = nnz+1
     end
     rowval = Array(Ti, nnz)
     nzval = Array(Tv, nnz)
     A = SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
-    for col = 1 : min(n, m+k)
+    for col = 1 : minof(n, m+k)
         c1 = S.colptr[col+1]-1
         l2 = A.colptr[col+1]-1
         for c2 = 0 : l2 - A.colptr[col]
@@ -222,7 +222,7 @@ end
 function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
 
     m,n = size(a)
-    colptr = Array(Ti, max(n,1))
+    colptr = Array(Ti, maxof(n,1))
     numnz = 2 * nnz(a) # upper bound; will shrink later
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
@@ -501,7 +501,7 @@ function ishermitian(A::SparseMatrixCSC)
 end
 
 function istriu(A::SparseMatrixCSC)
-    for col = 1:min(A.n,A.m-1)
+    for col = 1:minof(A.n,A.m-1)
         l1 = A.colptr[col+1]-1
         for i = 0 : (l1 - A.colptr[col])
             if A.rowval[l1-i] <= col

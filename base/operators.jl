@@ -22,8 +22,8 @@ isequal(x,y) = is(x,y)
 isequal(x::Number, y::Number) = x==y
 isless(x::Real, y::Real) = x<y
 
-max(x,y) = y < x ? x : y
-min(x,y) = x < y ? x : y
+maxof(x,y) = y < x ? x : y
+minof(x,y) = x < y ? x : y
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -39,7 +39,7 @@ min(x,y) = x < y ? x : y
 (|)(x::Integer) = x
 ($)(x::Integer) = x
 
-for op = (:+, :*, :&, :|, :$, :min, :max)
+for op = (:+, :*, :&, :|, :$, :minof, :maxof)
     @eval begin
         ($op)(a,b,c) = ($op)(($op)(a,b),c)
         ($op)(a,b,c,d) = ($op)(($op)(($op)(a,b),c),d)

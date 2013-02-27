@@ -29,8 +29,8 @@ type BitArray{N} <: AbstractArray{Bool, N}
 end
 
 BitArray() = BitArray(0)
-BitArray(dims::Dims) = BitArray{max(length(dims), 1)}(dims...)
-BitArray(dims::Int...) = BitArray{max(length(dims), 1)}(dims...)
+BitArray(dims::Dims) = BitArray{maxof(length(dims), 1)}(dims...)
+BitArray(dims::Int...) = BitArray{maxof(length(dims), 1)}(dims...)
 
 typealias BitVector BitArray{1}
 typealias BitMatrix BitArray{2}
@@ -149,7 +149,7 @@ trues(args...) = fill!(BitArray(args...), true)
 function one(x::BitMatrix)
     m, n = size(x)
     a = falses(size(x))
-    for i = 1 : min(m,n)
+    for i = 1 : minof(m,n)
         a[i,i] = true
     end
     return a
@@ -159,7 +159,7 @@ function copy!(dest::BitArray, src::BitArray)
     destc = dest.chunks; srcc = src.chunks
     nc_d = length(destc)
     nc_s = length(srcc)
-    nc = min(nc_s, nc_d)
+    nc = minof(nc_s, nc_d)
     if nc == 0
         return dest
     end
@@ -1999,7 +1999,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
         end
     end
 
-    ndimsC = max(catdim, d_max)
+    ndimsC = maxof(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
     typeC = promote_type(map(x->isa(x,BitArray) ? eltype(x) : typeof(x), X)...)
     if !has_integer || typeC == Bool

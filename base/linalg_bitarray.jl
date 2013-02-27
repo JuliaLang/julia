@@ -40,9 +40,9 @@ end
 function triu(B::BitMatrix, k::Int)
     m,n = size(B)
     A = falses(m,n)
-    for i = max(k+1,1):n
+    for i = maxof(k+1,1):n
         j = clamp((i - 1) * m + 1, 1, i * m)
-        copy_chunks(A.chunks, j, B.chunks, j, min(i-k, m))
+        copy_chunks(A.chunks, j, B.chunks, j, minof(i-k, m))
     end
     return A
 end
@@ -51,9 +51,9 @@ triu(B::BitMatrix, k::Integer) = triu(B, int(k))
 function tril(B::BitMatrix, k::Int)
     m,n = size(B)
     A = falses(m, n)
-    for i = 1:min(n, m+k)
+    for i = 1:minof(n, m+k)
         j = clamp((i - 1) * m + i - k, 1, i * m)
-        copy_chunks(A.chunks, j, B.chunks, j, max(m-i+k+1, 0))
+        copy_chunks(A.chunks, j, B.chunks, j, maxof(m-i+k+1, 0))
     end
     return A
 end
@@ -199,7 +199,7 @@ end
 
 function istriu(A::BitMatrix)
     m, n = size(A)
-    for j = 1:min(n,m-1)
+    for j = 1:minof(n,m-1)
         stride = (j-1)*m
         if nonzero_chunks(A.chunks, stride+j+1, stride+m)
             return false
@@ -215,7 +215,7 @@ function istril(A::BitMatrix)
     end
     for j = 2:n
         stride = (j-1)*m
-        if nonzero_chunks(A.chunks, stride+1, stride+min(j-1,m))
+        if nonzero_chunks(A.chunks, stride+1, stride+minof(j-1,m))
             return false
         end
     end

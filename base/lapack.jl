@@ -58,7 +58,7 @@ for (gbtrf, gbtrs, elty) in
             chkstride1(AB)
             info = Array(BlasInt, 1)
             n    = size(AB, 2)
-            mnmn = min(m, n)
+            mnmn = minof(m, n)
             ipiv = Array(BlasInt, mnmn)
             ccall(($(string(gbtrf)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -168,7 +168,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
         function gebrd!(A::StridedMatrix{$elty})
             chkstride1(A)
             m, n  = size(A)
-            k     = min(m, n)
+            k     = minof(m, n)
             d     = Array($elty, k)
             s     = Array($elty, k)
             tauq  = Array($elty, k)
@@ -283,7 +283,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
         end
         function geqrt3!(A::StridedMatrix{$elty})
             m, n = size(A)
-            lda = max(1, stride(A, 2))
+            lda = maxof(1, stride(A, 2))
             T = Array($elty, n, n)
             info = Array(BlasInt, 1)
             ccall(($(string(geqrt3)), liblapack), Void, 
@@ -358,7 +358,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             info = Array(BlasInt, 1)
             m, n = size(A)
             lda  = stride(A, 2)
-            ipiv = Array(BlasInt, min(m,n))
+            ipiv = Array(BlasInt, minof(m,n))
             ccall(($(string(getrf)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -401,7 +401,7 @@ for (gels, gesv, getrs, getri, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            k   = min(m, n)
+            k   = minof(m, n)
             F   = m < n ? tril(A[1:k, 1:k]) : triu(A[1:k, 1:k])
             F, isa(B, Vector) ? B[1:k] : B[1:k,:], [sum(B[(k+1):size(B,1), i].^2) for i=1:size(B,2)]
         end
@@ -497,7 +497,7 @@ for (gelsd, elty) in ((:dgelsd_, :Float64),
             else
                 newB = B
             end
-            s     = Array($elty, min(m, n))
+            s     = Array($elty, minof(m, n))
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
@@ -509,8 +509,8 @@ for (gelsd, elty) in ((:dgelsd_, :Float64),
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, &size(B,2), A, &max(1,stride(A,2)),
-                      newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, iwork, info)
+                      &m, &n, &size(B,2), A, &maxof(1,stride(A,2)),
+                      newB, &maxof(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, iwork, info)
                 if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -546,7 +546,7 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
             else
                 newB = B
             end
-            s     = Array($elty, min(m, n))
+            s     = Array($elty, minof(m, n))
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
@@ -559,8 +559,8 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
                        Ptr{$relty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, &size(B,2), A, &max(1,stride(A,2)),
-                      newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
+                      &m, &n, &size(B,2), A, &maxof(1,stride(A,2)),
+                      newB, &maxof(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
                 if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -648,7 +648,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         function gesdd!(job::BlasChar, A::StridedMatrix{$elty})
             chkstride1(A)
             m, n   = size(A)
-            minmn  = min(m, n)
+            minmn  = minof(m, n)
             if job == 'A'
                 U  = Array($elty, (m, m))
                 VT = Array($elty, (n, n))
@@ -678,7 +678,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                          &job, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
+                          &job, &m, &n, A, &stride(A,2), S, U, &maxof(1,stride(U,2)), VT, &maxof(1,stride(VT,2)),
                           work, &lwork, rwork, iwork, info)
                 else
                     ccall(($(string(gesdd)),liblapack), Void,
@@ -686,7 +686,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{BlasInt}),
-                          &job, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
+                          &job, &m, &n, A, &stride(A,2), S, U, &maxof(1,stride(U,2)), VT, &maxof(1,stride(VT,2)),
                           work, &lwork, iwork, info)
                 end
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -712,7 +712,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         function gesvd!(jobu::BlasChar, jobvt::BlasChar, A::StridedMatrix{$elty})
             chkstride1(A)
             m, n   = size(A)
-            minmn  = min(m, n)
+            minmn  = minof(m, n)
             S      = Array($relty, minmn)
             U      = Array($elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
             VT     = Array($elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
@@ -728,7 +728,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
+                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &maxof(1,stride(U,2)), VT, &maxof(1,stride(VT,2)),
                           work, &lwork, rwork, info)
                 else
                     ccall(($(string(gesvd)),liblapack), Void,
@@ -736,7 +736,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{BlasInt}),
-                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
+                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &maxof(1,stride(U,2)), VT, &maxof(1,stride(VT,2)),
                           work, &lwork, info)
                 end
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -767,17 +767,17 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             p = size(B, 1)
             k = Array(BlasInt, 1)
             l = Array(BlasInt, 1)
-            lda = max(1,stride(A, 2))
-            ldb = max(1,stride(B, 2))
+            lda = maxof(1,stride(A, 2))
+            ldb = maxof(1,stride(B, 2))
             alpha = Array($relty, n)
             beta = Array($relty, n)
-            ldu = max(1, m)
+            ldu = maxof(1, m)
             U = jobu == 'U' ? Array($elty, ldu, m) : Array($elty, 0)
-            ldv = max(1, p)
+            ldv = maxof(1, p)
             V = jobv == 'V' ? Array($elty, ldv, p) : Array($elty, 0)
-            ldq = max(1, n)
+            ldq = maxof(1, n)
             Q = jobq == 'Q' ? Array($elty, ldq, n) : Array($elty, 0)
-            work = Array($elty, max(3n, m, p) + n)
+            work = Array($elty, maxof(3n, m, p) + n)
             cmplx = iscomplex(A)
             if cmplx; rwork = Array($relty, 2n); end
             iwork = Array(BlasInt, n)
@@ -1014,15 +1014,15 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             m, n = size(C)
             k = size(T, 1)
             if side == 'L'
-                ldv = max(1, m)
+                ldv = maxof(1, m)
                 wss = n*k
             elseif side == 'R'
-                ldv = max(1, n)
+                ldv = maxof(1, n)
                 wss = m*k
             else
                 error("side must be either 'L' or 'R'")
             end
-            ldc = max(1, stride(C, 2))
+            ldc = maxof(1, stride(C, 2))
             work = Array($elty, wss)
             info = Array(BlasInt, 1)
             ccall(($(string(gemqrt)), liblapack), Void,
@@ -1303,7 +1303,7 @@ for (stev, stebz, stegr, elty) in
             n    = length(dv)
             if length(ev) != (n-1) throw(DimensionMismatch("stev!")) end
             Zmat = Array($elty, (n, job != 'N' ? n : 0))
-            work = Array($elty, max(1, 2n-2))
+            work = Array($elty, maxof(1, 2n-2))
             info = Array(BlasInt, 1)
             ccall(($(string(stev)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
@@ -1420,7 +1420,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             if cmplx
-                rwork = Array($relty, max(1, 3n-2))
+                rwork = Array($relty, maxof(1, 3n-2))
             end
             info  = Array(BlasInt, 1)
             for i in 1:2
@@ -1594,7 +1594,7 @@ for (syevr, elty) in
             chkstride1(A, Z)
             chksquare(A)                    
             n = size(A, 2)
-            lda = max(1,stride(A,2))
+            lda = maxof(1,stride(A,2))
             m = Array(BlasInt, 1)
             w = Array($elty, n)
             if jobz == 'N'
@@ -1602,7 +1602,7 @@ for (syevr, elty) in
             elseif jobz == 'V'
                 if stride(Z, 2) < n; error("Z has too few rows"); end
                 if size(Z, 2) < n; error("Z has too few columns"); end
-                ldz = max(1, stride(Z, 2))
+                ldz = maxof(1, stride(Z, 2))
             else
                 error("joz must be 'N' of 'V'")
             end
@@ -1659,7 +1659,7 @@ for (syevr, elty, relty) in
             chkstride1(A, Z)
             chksquare(A)
             n = size(A, 2)
-            lda = max(1,stride(A,2))
+            lda = maxof(1,stride(A,2))
             m = Array(BlasInt, 1)
             w = Array($relty, n)
             if jobz == 'N'
@@ -1667,7 +1667,7 @@ for (syevr, elty, relty) in
             elseif jobz == 'V'
                 if stride(Z, 2) < n; error("Z has too few rows"); end
                 if size(Z, 2) < n; error("Z has too few columns"); end
-                ldz = max(1, stride(Z, 2))
+                ldz = maxof(1, stride(Z, 2))
             else
                 error("joz must be 'N' of 'V'")
             end
@@ -1728,7 +1728,7 @@ for (gecon, elty) in
 #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
             chkstride1(A)
             n = size(A, 2)
-            lda = max(1, size(A, 1))
+            lda = maxof(1, size(A, 1))
             rcond = Array($elty, 1)
             work = Array($elty, 4n)
             iwork = Array(BlasInt, n)
@@ -1762,7 +1762,7 @@ for (gecon, elty, relty) in
 #       COMPLEX*16         A( LDA, * ), WORK( * )
             chkstride1(A)
             n = size(A, 2)
-            lda = max(1, size(A, 1))
+            lda = maxof(1, size(A, 1))
             rcond = Array($relty, 1)
             work = Array($elty, 2n)
             rwork = Array($relty, 2n)
@@ -1805,7 +1805,7 @@ for (gehrd, elty) in
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
                     &n, &ilo, &ihi, A, 
-                    &max(1,n), tau, work, &lwork, 
+                    &maxof(1,n), tau, work, &lwork, 
                     info)
                 if info[1] < 0 throw(LapackException(info[1])) end
                 if lwork < 0
@@ -1845,7 +1845,7 @@ for (orghr, elty) in
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
                     &n, &ilo, &ihi, A, 
-                    &max(1,n), tau, work, &lwork, 
+                    &maxof(1,n), tau, work, &lwork, 
                     info)
                 if info[1] < 0 throw(LapackException(info[1])) end
                 if lwork < 0
@@ -1890,7 +1890,7 @@ for (gees, elty) in
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{Void}, Ptr{BlasInt}),
                     &jobvs, &sort, [], &n, 
-                        A, &max(1, n), sdim, wr,
+                        A, &maxof(1, n), sdim, wr,
                         wi, vs, &ldvs, work, 
                         &lwork, [], info)
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -1939,7 +1939,7 @@ for (gees, elty, relty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                         Ptr{$relty}, Ptr{Void}, Ptr{BlasInt}),
                     &jobvs, &sort, [], &n, 
-                        A, &max(1, n), sdim, w,
+                        A, &maxof(1, n), sdim, w,
                         vs, &ldvs, work, &lwork, 
                         rwork, [], info)
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -1969,7 +1969,7 @@ for (fn, elty, relty) in ((:dsfrk_, :Float64, :Float64),
             else
                 throw(LapackException(0))
             end
-            lda = max(1, stride(A, 2))
+            lda = maxof(1, stride(A, 2))
             ccall(($(string(fn)), liblapack), Void,
                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
@@ -2032,7 +2032,7 @@ for (fn, elty) in ((:dpftrs_, :Float64),
             n = int(div(sqrt(8length(A)), 2))
             if n != size(B, 1) throw(DimensionMismatch("A and B must have the same number of rows")) end
             nhrs = size(B, 2)
-            ldb = max(1, stride(B, 2))
+            ldb = maxof(1, stride(B, 2))
             info = Array(BlasInt, 1)
             ccall(($(string(fn)), liblapack), Void,
                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -2054,7 +2054,7 @@ for (fn, elty) in ((:dtfsm_, :Float64),
         function pftrs!(transr::Char, side::Char, uplo::Char, trans::Char, diag::Char, alpha::Real, A::StridedVector{$elty}, B::StridedMatrix{$elty})
             m, n = size(B)
             if int(div(sqrt(8length(A)), 2)) != m throw(DimensionMismatch("")) end
-            ldb = max(1, stride(B, 2))
+            ldb = maxof(1, stride(B, 2))
             ccall(($(string(fn)), liblapack), Void,
                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
                  Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
@@ -2116,7 +2116,7 @@ for (fn, elty) in ((:dtrttf_, :Float64),
     @eval begin
         function trttf!(transr::Char, uplo::Char, A::StridedMatrix{$elty})
             n = size(A, 1)
-            lda = max(1, stride(A, 2))
+            lda = maxof(1, stride(A, 2))
             info = Array(BlasInt, 1)
             Arf = Array($elty, div(n*(n+1), 2))
             ccall(($(string(fn)), liblapack), Void,

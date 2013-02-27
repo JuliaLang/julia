@@ -431,7 +431,7 @@ xdump(fn::Function, io::IO, x::UnionKind, n::Int, indent) = println(io, x)
 function xdump(fn::Function, io::IO, x::CompositeKind, n::Int, indent)
     println(io, x, "::", typeof(x), " ", " <: ", super(x))
     if n > 0
-        for idx in 1:min(10,length(x.names))
+        for idx in 1:minof(10,length(x.names))
             if x.names[idx] != symbol("")    # prevents segfault if symbol is blank
                 print(io, indent, "  ", x.names[idx], "::")
                 if isa(x.types[idx], CompositeKind) 
@@ -580,8 +580,8 @@ function alignment(
             else
                 aij = undef_ref_alignment
             end
-            l = max(l, aij[1])
-            r = max(r, aij[2])
+            l = maxof(l, aij[1])
+            r = maxof(r, aij[2])
         end
         push!(a, (l, r))
         if length(a) > 1 && sum(map(sum,a)) + sep*length(a) >= cols_if_complete
@@ -624,8 +624,8 @@ function print_matrix_vdots(io,
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m
-            l = repeat(" ", max(0, A[k][1]-length(vdots)))
-            r = repeat(" ", max(0, w-length(vdots)-length(l)))
+            l = repeat(" ", maxof(0, A[k][1]-length(vdots)))
+            r = repeat(" ", maxof(0, w-length(vdots)-length(l)))
             print(io, l, vdots, r)
         else
             print(io, repeat(" ", w))
