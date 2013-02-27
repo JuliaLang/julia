@@ -558,6 +558,7 @@ export
     ldltd!,
     ldltd,
     linreg,
+    logdet,
     lu,
     lufact,
     lufact!,

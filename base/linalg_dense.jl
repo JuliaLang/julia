@@ -704,6 +704,8 @@ function det(A::Matrix)
 end
 det(x::Number) = x
 
+logdet(A::Matrix) = 2.0 * sum(log(diag(chol(A))))
+
 function eig{T<:BlasFloat}(A::StridedMatrix{T}, vecs::Bool)
     n = size(A, 2)
     if n == 0; return vecs ? (zeros(T, 0), zeros(T, 0, 0)) : zeros(T, 0, 0); end
