@@ -6,7 +6,7 @@ override CXXFLAGS += $(JCXXFLAGS)
 
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv
+	alloc dlload sys init task array dump toplevel jl_uv jlapi
 
 FLAGS = \
 	-D_GNU_SOURCE \
@@ -114,4 +114,3 @@ h2j: h2j.cpp
 		-lclangRewrite -lclangSerialization -lclangStaticAnalyzerCheckers \
 		-lclangStaticAnalyzerCore -lclangStaticAnalyzerFrontend -lclangTooling \
 		-lclangCodeGen -lclangARCMigrate -lclang  $(LIBS) $(LDFLAGS)
-	
