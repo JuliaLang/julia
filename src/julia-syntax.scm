@@ -253,25 +253,36 @@
                       `(quote ,(if (and (pair? x) (eqv? (car x) |::|))
                                    (cadr x)
                                    x)))
-                    vars))
-         (accepts-all (and (pair? pargl)
-                           (eqv? (arg-type (car pargl)) 'Keywords)))
-         (kw (if accepts-all (arg-name (car pargl)) (gensy)))
-         (setvars (map (lambda (x k v)
-                         `(= ,x (call (top get) ,kw ,k ,v)))
-                       vars keys vals)))
-    (if accepts-all
-        (method-def-expr- name sparams pargl `(block ,@setvars ,@(cdr body)))
-        (let ((chkkeys
-               (let ((g (gensy)) (i (gensy)) (j (gensy)))
-                 `(block (= ,g (call (top Set) ,@keys))
-                         (for (= (tuple ,i ,j) ,kw)
-                              (if (call (top !) (call (top has) ,g ,i))
-                                  (call (top error) "unrecognized keyword " ,i)))))))
-          `(block ,(method-def-expr- name sparams (cons `(:: ,kw Keywords) pargl)
-                                     `(block ,@chkkeys ,@setvars ,@(cdr body)))
-                  ,(method-def-expr- name sparams pargl
-                                     `(block ,@kargl ,@(cdr body))))))))
+                    vars)))
+    (let ((rest (gensy)) (nkw (gensy)) (i (gensy)) (o (gensy)) (ii (gensy)))
+      `(block
+	,(method-def-expr-
+	  name sparams pargl
+	  `(block
+	    (return (call ,name (call (top nkeywords) 0) ,@pargl))))
+	,(method-def-expr-
+	  name sparams
+	  `((:: ,nkw (top NKeywords)) ,@pargl (... ,rest))
+	  `(block
+	    ,@(map make-assignment vars vals)
+	    (= ,o (call (top +) 1
+			(call (top -)
+			      (call (top length) ,rest)
+			      (call (top *) 2 (call (top int) ,nkw)))))
+	    (for (= ,i (: 0 (call (top -) (call (top int) ,nkw) 1)))
+		 (block
+		  (= ,ii (call (top +) ,o (call (top *) ,i 2)))
+		  ,(foldl (lambda (k else)
+			    `(if (comparison (call (top ref) ,rest ,ii) ===
+					     (quote ,(cadr k)))
+				 (= ,(cadr k)
+				    (:: (call (top ref) ,rest
+					      (call (top +) ,ii 1))
+					(call (top typeof) ,(cadr k))))
+				 ,else))
+			  'nothing
+			  keys)))
+	    ,@(cdr body)))))))
 
 (define (method-def-expr name sparams argl body)
   (if (and (pair? argl)
@@ -939,6 +950,15 @@
 				 (tuple-wrap (cdr a) (cons x run))))))
 		     `(call (top apply) ,f ,@(tuple-wrap argl '()))))
 
+   ;; call with keywords
+   (pattern-lambda (call f (keywords . args) ...)
+		   `(call ,f (call (top nkeywords) ,(length args))
+			  ,@(cdddr __)
+			  ,@(apply append
+				   (map (lambda (kw)
+					  `((quote ,(cadr kw)) ,(caddr kw)))
+					args))))
+
    ; tuple syntax (a, b...)
    ; note, directly inside tuple ... means Vararg type
    (pattern-lambda (tuple . args)
@@ -951,7 +971,7 @@
 				 args)))
 
    ;; keywords syntax
-   (pattern-lambda (keywords . args)
+   #;(pattern-lambda (keywords . args)
                    `(call (top Keywords)
                           (tuple ,@(map (lambda (x) `(quote ,(cadr x))) args))
                           (tuple ,@(map caddr args))))
