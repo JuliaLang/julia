@@ -1346,7 +1346,7 @@ install-patchelf: $(PATCHELF_TARGET)
 ## Git
 
 GIT_SOURCE = git-$(GIT_VER)/src/git
-GIT_TARGET = $(BUILD)/bin-wrappers/git
+GIT_TARGET = $(BUILD)/git
 
 compile-git: install-git
 install-git: $(GIT_TARGET)
