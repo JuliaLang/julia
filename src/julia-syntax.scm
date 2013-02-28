@@ -245,22 +245,25 @@
 	 (error "malformed type parameter list"))))
 
 (define (keywords-method-def-expr name sparams argl body)
-  (let* ((kargl (cdar argl))
-         (pargl (cdr argl))
+  (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
+         (pargl (cdr argl))   ;; positional args
+	 ;; 1-element list of vararg argument, or empty if none
 	 (vararg (let ((l (last pargl)))
 		   (if (and (pair? l) (eq? (car l) '...))
 		       (list l) '())))
+	 ;; positional args without vararg
 	 (pargl (if (null? vararg) pargl (butlast pargl)))
-         (vars (map cadr kargl))
-         (vals (map caddr kargl))
-         (keys (map (lambda (x)
-                      `(quote ,(if (and (pair? x) (eqv? (car x) |::|))
-                                   (cadr x)
-                                   x)))
-                    vars))
+	 ;; the keyword::Type expressions
+         (vars     (map cadr kargl))
+	 ;; keyword default values
+         (vals     (map caddr kargl))
+	 ;; just the keyword names
+	 (keynames (map decl-var vars))
+	 ;; 1-element list of function's line number node, or empty if none
 	 (lno  (if (and (pair? (cadr body)) (eq? (caadr body) 'line))
 		   (list (cadr body))
 		   '()))
+	 ;; body statements, minus line number node
 	 (stmts (if (null? lno) (cdr body) (cddr body))))
     (let ((rest (gensy)) (nkw (gensy)) (i (gensy)) (o (gensy)) (ii (gensy))
 	  (elt  (gensy)))
@@ -269,15 +272,16 @@
 	,(method-def-expr-
 	  name sparams (append pargl vararg)
 	  `(block
+	    ;; call name(SortedKeywords(), pargs..., vals..., [vararg]...)
 	    (return (call ,name (call (top SortedKeywords))
 			  ,@(map arg-name pargl)
 			  ,@vals
 			  ,@(if (null? vararg) '()
 				(list `(... ,(arg-name (car vararg)))))))))
-	;; call with keyword args pre-sorted
+	;; call with keyword args pre-sorted - original method code goes here
 	,(method-def-expr-
 	  name sparams
-	  `((:: ,nkw (top SortedKeywords)) ,@pargl ,@(map cadr kargl) ,@vararg)
+	  `((:: ,nkw (top SortedKeywords)) ,@pargl ,@vars ,@vararg)
 	  `(block
 	    ,@lno
 	    ,@stmts))
@@ -287,11 +291,14 @@
 	  `((:: ,nkw (top NKeywords)) ,@pargl (... ,rest))
 	  `(block
 	    ,@lno
-	    ,@(map make-assignment vars vals)
+	    ;; initialize keyword args to their defaults
+	    ,@(map make-assignment keynames vals)
+	    ;; o = length(rest) - 2*int(nkw) + 1
 	    (= ,o (call (top +) 1
 			(call (top -)
 			      (call (top length) ,rest)
 			      (call (top *) 2 (call (top int) ,nkw)))))
+	    ;; set user's vararg to rest[1:(o-1)]
 	    ,(if (null? vararg) 'nothing
 		 `(= ,(arg-name (car vararg))
 		     (call (top ref) ,rest (: 1 (call (top -) ,o 1)))))
@@ -300,14 +307,21 @@
 		  (= ,ii (call (top +) ,o (call (top *) ,i 2)))
 		  (= ,elt (call (top ref) ,rest ,ii))
 		  ,(foldl (lambda (k else)
-			    `(if (comparison ,elt === ,k)
-				 (= ,(cadr k) (call (top ref) ,rest
-						    (call (top +) ,ii 1)))
-				 ,else))
+			    (let ((rval `(call (top ref) ,rest
+					       (call (top +) ,ii 1))))
+			      ;; if rest[ii] == 'k; k = rest[ii+1]::Type; end
+			      `(if (comparison ,elt === (quote ,(decl-var k)))
+				   (= ,(decl-var k)
+				      ,(if (decl? k)
+					   `(call (top typeassert)
+						  ,rval
+						  ,(caddr k))
+					   rval))
+				   ,else)))
 			  `(call (top error) "unrecognized keyword " ,elt)
-			  keys)))
+			  vars)))
 	    (return (call ,name (call (top SortedKeywords))
-			  ,@(map arg-name pargl) ,@(map cadr keys)
+			  ,@(map arg-name pargl) ,@keynames
 			  ,@(if (null? vararg) '()
 				(list `(... ,(arg-name (car vararg)))))))))))))
 
