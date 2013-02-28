@@ -247,42 +247,69 @@
 (define (keywords-method-def-expr name sparams argl body)
   (let* ((kargl (cdar argl))
          (pargl (cdr argl))
+	 (vararg (let ((l (last pargl)))
+		   (if (and (pair? l) (eq? (car l) '...))
+		       (list l) '())))
+	 (pargl (if (null? vararg) pargl (butlast pargl)))
          (vars (map cadr kargl))
          (vals (map caddr kargl))
          (keys (map (lambda (x)
                       `(quote ,(if (and (pair? x) (eqv? (car x) |::|))
                                    (cadr x)
                                    x)))
-                    vars)))
-    (let ((rest (gensy)) (nkw (gensy)) (i (gensy)) (o (gensy)) (ii (gensy)))
+                    vars))
+	 (lno  (if (and (pair? (cadr body)) (eq? (caadr body) 'line))
+		   (list (cadr body))
+		   '()))
+	 (stmts (if (null? lno) (cdr body) (cddr body))))
+    (let ((rest (gensy)) (nkw (gensy)) (i (gensy)) (o (gensy)) (ii (gensy))
+	  (elt  (gensy)))
       `(block
+	;; call with no keyword args
 	,(method-def-expr-
-	  name sparams pargl
+	  name sparams (append pargl vararg)
 	  `(block
-	    (return (call ,name (call (top nkeywords) 0) ,@pargl))))
+	    (return (call ,name (call (top SortedKeywords))
+			  ,@(map arg-name pargl)
+			  ,@vals
+			  ,@(if (null? vararg) '()
+				(list `(... ,(arg-name (car vararg)))))))))
+	;; call with keyword args pre-sorted
+	,(method-def-expr-
+	  name sparams
+	  `((:: ,nkw (top SortedKeywords)) ,@pargl ,@(map cadr kargl) ,@vararg)
+	  `(block
+	    ,@lno
+	    ,@stmts))
+	;; call with unsorted keyword args. this just sorts and re-dispatches.
 	,(method-def-expr-
 	  name sparams
 	  `((:: ,nkw (top NKeywords)) ,@pargl (... ,rest))
 	  `(block
+	    ,@lno
 	    ,@(map make-assignment vars vals)
 	    (= ,o (call (top +) 1
 			(call (top -)
 			      (call (top length) ,rest)
 			      (call (top *) 2 (call (top int) ,nkw)))))
+	    ,(if (null? vararg) 'nothing
+		 `(= ,(arg-name (car vararg))
+		     (call (top ref) ,rest (: 1 (call (top -) ,o 1)))))
 	    (for (= ,i (: 0 (call (top -) (call (top int) ,nkw) 1)))
 		 (block
 		  (= ,ii (call (top +) ,o (call (top *) ,i 2)))
+		  (= ,elt (call (top ref) ,rest ,ii))
 		  ,(foldl (lambda (k else)
-			    `(if (comparison (call (top ref) ,rest ,ii) ===
-					     (quote ,(cadr k)))
-				 (= ,(cadr k)
-				    (:: (call (top ref) ,rest
-					      (call (top +) ,ii 1))
-					(call (top typeof) ,(cadr k))))
+			    `(if (comparison ,elt === ,k)
+				 (= ,(cadr k) (call (top ref) ,rest
+						    (call (top +) ,ii 1)))
 				 ,else))
-			  'nothing
+			  `(call (top error) "unrecognized keyword " ,elt)
 			  keys)))
-	    ,@(cdr body)))))))
+	    (return (call ,name (call (top SortedKeywords))
+			  ,@(map arg-name pargl) ,@(map cadr keys)
+			  ,@(if (null? vararg) '()
+				(list `(... ,(arg-name (car vararg)))))))))))))
 
 (define (method-def-expr name sparams argl body)
   (if (and (pair? argl)

@@ -33,6 +33,11 @@ function show(io::IO, k::Keywords)
     print(io, ')')
 end
 
+# type to specify that a call is suffixed with n symbol-value keyword pairs
 bitstype 64 NKeywords
 int(x::NKeywords) = box(Int,unbox(NKeywords,x))
 nkeywords(x::Int) = box(NKeywords,unbox(Int,x))
+
+# singleton used to select a version of a method with keywords pre-sorted
+type SortedKeywords
+end
