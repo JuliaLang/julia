@@ -32,3 +32,7 @@ function show(io::IO, k::Keywords)
     end
     print(io, ')')
 end
+
+bitstype 64 NKeywords
+int(x::NKeywords) = box(Int,unbox(NKeywords,x))
+nkeywords(x::Int) = box(NKeywords,unbox(Int,x))
