@@ -196,8 +196,8 @@ end
 eye(m::Int, n::Int) = eye(Float64, m, n)
 eye(T::Type, n::Int) = eye(T, n, n)
 eye(n::Int) = eye(Float64, n)
-eye{T}(x::StridedMatrix{T}) = eye(T, size(x, 1), size(x, 2))
-function one{T}(x::StridedMatrix{T})
+eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
+function one{T}(x::AbstractMatrix{T})
     m,n = size(x)
     if m != n; error("Multiplicative identity only defined for square matrices!"); end;
     eye(T, m)
@@ -778,7 +778,7 @@ end
 
 ## Unary operators ##
 
-function conj!{T<:Number}(A::StridedArray{T})
+function conj!{T<:Number}(A::AbstractArray{T})
     for i=1:length(A)
         A[i] = conj(A[i])
     end
@@ -787,7 +787,7 @@ end
 
 for f in (:-, :~, :conj, :sign)
     @eval begin
-        function ($f)(A::StridedArray)
+        function ($f)(A::AbstractArray)
             F = similar(A)
             for i=1:length(A)
                 F[i] = ($f)(A[i])
@@ -801,7 +801,7 @@ end
 
 for f in (:real, :imag)
     @eval begin
-        function ($f){T}(A::StridedArray{T})
+        function ($f){T}(A::AbstractArray{T})
             S = typeof(($f)(zero(T)))
             F = similar(A, S)
             for i=1:length(A)
@@ -812,7 +812,7 @@ for f in (:real, :imag)
     end
 end
 
-function !(A::StridedArray{Bool})
+function !(A::AbstractArray{Bool})
     F = similar(A)
     for i=1:length(A)
         F[i] = !A[i]
@@ -1047,7 +1047,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
     return B
 end
 
-function rotl90(A::StridedMatrix)
+function rotl90(A::AbstractMatrix)
     m,n = size(A)
     B = similar(A,(n,m))
     for i=1:m, j=1:n
@@ -1055,7 +1055,7 @@ function rotl90(A::StridedMatrix)
     end
     return B
 end
-function rotr90(A::StridedMatrix)
+function rotr90(A::AbstractMatrix)
     m,n = size(A)
     B = similar(A,(n,m))
     for i=1:m, j=1:n
@@ -1063,7 +1063,7 @@ function rotr90(A::StridedMatrix)
     end
     return B
 end
-function rot180(A::StridedMatrix)
+function rot180(A::AbstractMatrix)
     m,n = size(A)
     B = similar(A)
     for i=1:m, j=1:n
@@ -1081,7 +1081,7 @@ rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
-function reverse!(v::StridedVector)
+function reverse!(v::AbstractVector)
     n = length(v)
     r = n
     for i=1:div(n,2)
@@ -1156,7 +1156,7 @@ function findnext(testf::Function, A, start::Integer)
 end
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
-function find(testf::Function, A::StridedArray)
+function find(testf::Function, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
@@ -1170,7 +1170,7 @@ function find(testf::Function, A::StridedArray)
     I
 end
 
-function find(A::StridedArray)
+function find(A::AbstractArray)
     nnzA = nnz(A)
     I = Array(Int, nnzA)
     count = 1
@@ -1186,9 +1186,9 @@ end
 find(x::Number) = x == 0 ? Array(Int,0) : [1]
 find(testf::Function, x) = find(testf(x))
 
-findn(A::StridedVector) = find(A)
+findn(A::AbstractVector) = find(A)
 
-function findn(A::StridedMatrix)
+function findn(A::AbstractMatrix)
     nnzA = nnz(A)
     I = Array(Int, nnzA)
     J = Array(Int, nnzA)
@@ -1216,7 +1216,7 @@ function findn_one(ivars)
 end
 
 global findn
-function findn{T}(A::StridedArray{T})
+function findn{T}(A::AbstractArray{T})
     ndimsA = ndims(A)
     nnzA = nnz(A)
     I = ntuple(ndimsA, x->Array(Int, nnzA))
@@ -1234,7 +1234,7 @@ function findn{T}(A::StridedArray{T})
 end
 end
 
-function findn_nzs{T}(A::StridedMatrix{T})
+function findn_nzs{T}(A::AbstractMatrix{T})
     nnzA = nnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
@@ -1254,7 +1254,7 @@ function findn_nzs{T}(A::StridedMatrix{T})
     return (I, J, NZs)
 end
 
-function nonzeros{T}(A::StridedArray{T})
+function nonzeros{T}(A::AbstractArray{T})
     nnzA = nnz(A)
     V = Array(T, nnzA)
     count = 1
@@ -1440,7 +1440,7 @@ prod(A::AbstractArray{Bool}) =
 prod(A::AbstractArray{Bool}, region) =
     error("use all() instead of prod() for boolean arrays")
 
-function sum{T}(A::StridedArray{T})
+function sum{T}(A::AbstractArray{T})
     if isempty(A)
         return zero(T)
     end
@@ -1451,7 +1451,7 @@ function sum{T}(A::StridedArray{T})
     v
 end
 
-function sum_kbn{T<:FloatingPoint}(A::StridedArray{T})
+function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
     n = length(A)
     if (n == 0)
         return zero(T)
@@ -1473,7 +1473,7 @@ function sum_kbn{T<:FloatingPoint}(A::StridedArray{T})
 end
 
 # Uses K-B-N summation
-function cumsum_kbn{T<:FloatingPoint}(v::StridedVector{T})
+function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
     n = length(v)
     r = similar(v, n)
     if n == 0; return r; end
@@ -1495,7 +1495,7 @@ function cumsum_kbn{T<:FloatingPoint}(v::StridedVector{T})
 end
 
 # Uses K-B-N summation
-function cumsum_kbn{T<:FloatingPoint}(A::StridedArray{T}, axis::Integer)
+function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer)
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
@@ -1530,7 +1530,7 @@ function cumsum_kbn{T<:FloatingPoint}(A::StridedArray{T}, axis::Integer)
     return B + C
 end
 
-function prod{T}(A::StridedArray{T})
+function prod{T}(A::AbstractArray{T})
     if isempty(A)
         return one(T)
     end
@@ -1541,7 +1541,7 @@ function prod{T}(A::StridedArray{T})
     v
 end
 
-function min{T<:Integer}(A::StridedArray{T})
+function min{T<:Integer}(A::AbstractArray{T})
     v = typemax(T)
     for i=1:length(A)
         x = A[i]
@@ -1552,7 +1552,7 @@ function min{T<:Integer}(A::StridedArray{T})
     v
 end
 
-function max{T<:Integer}(A::StridedArray{T})
+function max{T<:Integer}(A::AbstractArray{T})
     v = typemin(T)
     for i=1:length(A)
         x = A[i]
@@ -1566,7 +1566,7 @@ end
 ## map over arrays ##
 
 ## along an axis
-function amap(f::Function, A::StridedArray, axis::Integer)
+function amap(f::Function, A::AbstractArray, axis::Integer)
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
@@ -1590,7 +1590,7 @@ end
 
 
 ## 1 argument
-function map_to2(f, first, dest::StridedArray, A::StridedArray)
+function map_to2(f, first, dest::AbstractArray, A::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i])
@@ -1598,7 +1598,7 @@ function map_to2(f, first, dest::StridedArray, A::StridedArray)
     return dest
 end
 
-function map(f, A::StridedArray)
+function map(f, A::AbstractArray)
     if isempty(A); return A; end
     first = f(A[1])
     dest = similar(A, typeof(first))
@@ -1606,7 +1606,7 @@ function map(f, A::StridedArray)
 end
 
 ## 2 argument
-function map_to2(f, first, dest::StridedArray, A::StridedArray, B::StridedArray)
+function map_to2(f, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i], B[i])
@@ -1614,7 +1614,7 @@ function map_to2(f, first, dest::StridedArray, A::StridedArray, B::StridedArray)
     return dest
 end
 
-function map(f, A::StridedArray, B::StridedArray)
+function map(f, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if isempty(A)
         return similar(A, eltype(A), shp)
@@ -1625,7 +1625,7 @@ function map(f, A::StridedArray, B::StridedArray)
 end
 
 ## N argument
-function map_to2(f, first, dest::StridedArray, As::StridedArray...)
+function map_to2(f, first, dest::AbstractArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
@@ -1636,7 +1636,7 @@ function map_to2(f, first, dest::StridedArray, As::StridedArray...)
     return dest
 end
 
-function map(f, As::StridedArray...)
+function map(f, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
         return similar(As[1], eltype(As[1]), shape)
