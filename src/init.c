@@ -366,7 +366,7 @@ void init_stdio()
     JL_STDIN = init_stdio_handle(0,1);
 }
 
-void real_julia_init(char *imageFile)
+void julia_init(char *imageFile)
 {
     jl_page_size = getPageSize();
     jl_find_stack_bottom();
@@ -497,19 +497,6 @@ void real_julia_init(char *imageFile)
     jl_gc_enable();
 #endif
 }
-extern void * __stack_chk_guard;
-void julia_init(char *imageFile)
-{
-    unsigned char * p = (unsigned char *) &__stack_chk_guard;
-    /* If you have the ability to generate random numbers in your kernel then use them */
-    p[sizeof(__stack_chk_guard)-1] = 255;
-    p[sizeof(__stack_chk_guard)-2] = '\n';
-    p[0] = 0;
-    real_julia_init(imageFile);
-    p[sizeof(__stack_chk_guard)-1] = 0;
-    p[sizeof(__stack_chk_guard)-2] = 0;
-    p[0] = 0;
-}
 
 DLLEXPORT void jl_install_sigint_handler()
 {
@@ -532,9 +519,17 @@ DLLEXPORT void jl_install_sigint_handler()
     //printf("sigint installed\n");
 }
 
-DLLEXPORT
-int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]))
+extern void * __stack_chk_guard;
+DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]))
 {
+    unsigned char * p = (unsigned char *) &__stack_chk_guard;
+    char a = p[sizeof(__stack_chk_guard)-1];
+    char b = p[sizeof(__stack_chk_guard)-2];
+    char c = p[0];
+    /* If you have the ability to generate random numbers in your kernel then use them */
+    p[sizeof(__stack_chk_guard)-1] = 255;
+    p[sizeof(__stack_chk_guard)-2] = '\n';
+    p[0] = 0;
 #ifdef COPY_STACKS
     // initialize base context of root task
     jl_root_task->stackbase = (char*)&argc;
@@ -542,7 +537,11 @@ int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]))
         jl_switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif
-    return pmain(argc, argv);
+    int ret = pmain(argc, argv);
+    p[sizeof(__stack_chk_guard)-1] = a;
+    p[sizeof(__stack_chk_guard)-2] = b;
+    p[0] = c;
+    return ret;
 }
 
 jl_function_t *jl_typeinf_func=NULL;
