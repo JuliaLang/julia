@@ -1541,19 +1541,28 @@ function effect_free(e)
         isa(e,TopNode) || isa(e,QuoteNode)
         return true
     end
-    if isa(e,Expr) && (e.head === :call || e.head === :call1)
+    if isa(e,Expr)
         ea = e.args
-        for a in ea
-            if !effect_free(a)
-                return false
+        if e.head === :call || e.head === :call1
+            for a in ea
+                if !effect_free(a)
+                    return false
+                end
             end
-        end
-        if isa(ea[1],TopNode)
-            n = ea[1].name
-            if (n === :getfield || n === :tuple || n === :tupleref ||
-                n === :tuplelen || n === :fieldtype)
-                return true
+            if isa(ea[1],TopNode)
+                n = ea[1].name
+                if (n === :getfield || n === :tuple || n === :tupleref ||
+                    n === :tuplelen || n === :fieldtype)
+                    return true
+                end
             end
+        elseif e.head === :new
+            for a in ea
+                if !effect_free(a)
+                    return false
+                end
+            end
+            return true
         end
     end
     return false
