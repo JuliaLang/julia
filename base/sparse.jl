@@ -680,7 +680,7 @@ end # macro
 
 # TODO: Should the results of sparse reductions be sparse?
 function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
-    if region == [1]
+    if region == 1 || vec(region) == [1]
 
         S = Array(Tv, 1, A.n)
         for i = 1 : A.n
@@ -695,7 +695,7 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
         end
         return S
 
-    elseif region == [2]
+    elseif region == 2 || vec(region) == [2]
 
         S = fill(v0, A.m, 1)
         rcounts = zeros(Ti, A.m)
@@ -709,7 +709,7 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
         end
         return S
 
-    elseif region == [1,2]
+    elseif region == (1,2) || vec(region) == [1,2]
 
         S = v0
         for i = 1 : A.n, j = A.colptr[i] : A.colptr[i+1]-1

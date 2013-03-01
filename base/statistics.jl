@@ -12,7 +12,6 @@ function mean(iterable)
     end
     return total/count
 end
-mean(v::AbstractArray, d::Dim) = sum(v, d) / prod(size(v)[d.region])
 
 function median!{T<:Real}(v::AbstractVector{T})
     isempty(v) && error("median of an empty array is undefined")
@@ -21,7 +20,6 @@ function median!{T<:Real}(v::AbstractVector{T})
     isodd(length(v)) ? float(v[div(end+1,2)]) : (v[div(end,2)]+v[div(end,2)+1])/2
 end
 median{T<:Real}(v::AbstractArray{T}) = median!(copy(reshape(v, length(v))))
-#median{T<:Real}(v::AbstractArray{T}, d::Dim) = # ?? TODO
 
 ## variance with known mean
 function var(v::AbstractVector, m::Number, corrected::Bool)
@@ -35,7 +33,6 @@ end
 var(v::AbstractVector, m::Number) = var(v, m, true)
 var(v::AbstractArray, m::Number, corrected::Bool) = var(reshape(v, length(v)), m, corrected)
 var(v::AbstractArray, m::Number) = var(v, m, true)
-#var(v::AbstractArray, m::Number, d::Dim) = # ?? TODO
 function var(v::Ranges, m::Number, corrected::Bool)
     f = first(v) - m
     s = step(v)
@@ -62,20 +59,15 @@ function var(v::Ranges, corrected::Bool)
 end
 var(v::AbstractVector, corrected::Bool) = var(v, mean(v), corrected)
 var(v::AbstractArray, corrected::Bool) = var(reshape(v, length(v)), corrected)
-#var(v::AbstractArray, d::Dim, corrected::Bool) = # ?? TODO
-#var(v::AbstractArray, d::Dim) = var(v, d, true)
 var(v::AbstractArray) = var(v, true)
 
 ## standard deviation with known mean
 std(v::AbstractArray, m::Number, corrected::Bool) = sqrt(var(v, m, corrected))
 std(v::AbstractArray, m::Number) = std(v, m, true)
-# std(v::AbstractArray, m::Number, d::Dim) = sqrt(var(v, m, d, true))
-# std(v::AbstractArray, m::Number, d::Dim, corrected::Bool) = sqrt(var(v, m, d, corrected))
 
 ## standard deviation
 std(v::AbstractArray, corrected::Bool) = std(v, mean(v), corrected)
 std(v::AbstractArray) = std(v, true)
-# std(v::AbstractArray, d::Dim) = std(v, mean(v, d), d, corrected)
 std(v::Ranges, corrected::Bool) = sqrt(var(v, corrected))
 std(v::Ranges) = std(v, true)
 

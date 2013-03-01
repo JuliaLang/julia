@@ -12,10 +12,8 @@ typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 type Dim{A<:AbstractVector{Int}}
     region::A
 end
-Dim(i::Int) = Dim([i])
-Dim(A::AbstractArray{Int}) = Dim(vec(A))
-Dim(R::Range) = Dim(vec(R))
-Dim(A...) = Dim([A...])
+Dim(d) = Dim(Int[d[i] for i=1:length(d)])
+Dim(d1, d2...) = Dim([d1, d2...])
 
 ## Basic functions ##
 
