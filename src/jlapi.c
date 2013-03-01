@@ -42,6 +42,10 @@ DLLEXPORT void jl_init(char *julia_home_dir)
     jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
     jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
+    jl_eval_string("Base.reinit_stdio()");
+    jl_eval_string("Base.librandom_init()");
+    jl_eval_string("Base.init_sched()");
+    jl_eval_string("Base.init_head_sched()");
     jl_eval_string("Base.init_load_path()");
 }
 
