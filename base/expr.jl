@@ -27,9 +27,12 @@ esc(e::ANY) = expr(:escape, {e})
 
 ## expressions ##
 
-expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)
-expr(hd::Symbol, args::Array{Any,1}) = Expr(hd, args, Any)
-copy(e::Expr) = Expr(e.head, isempty(e.args) ? e.args : astcopy(e.args), e.typ)
+expr(hd::Symbol, args::ANY...) = Expr(hd, args...)
+expr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
+copy(e::Expr) = (n = Expr(e.head);
+                 n.args = astcopy(e.args);
+                 n.typ = e.typ;
+                 n)
 copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 copy(n::GetfieldNode) = GetfieldNode(n.value, n.name, n.typ)
 
