@@ -2104,7 +2104,7 @@ So far only the second case can actually occur.
 	((not (any (lambda (x)
 		     (match '($ (tuple (... x))) x))
 		   e))
-	 `(call (top expr) ,@(map expand-backquote e)))
+	 `(call (top Expr) ,@(map expand-backquote e)))
 	(else
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
