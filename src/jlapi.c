@@ -29,6 +29,8 @@ DLLEXPORT char *jl_locate_sysimg(char *jlhome)
     return strdup(path);
 }
 
+DLLEXPORT void *jl_eval_string(char *str);
+
 // argument is the usr/lib directory where libjulia is, or NULL to guess.
 // if that doesn't work, try the full path to the "lib" directory that
 // contains lib/julia/sys.ji
@@ -40,6 +42,7 @@ DLLEXPORT void jl_init(char *julia_home_dir)
     jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
     jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
+    jl_eval_string("Base.init_load_path()");
 }
 
 #ifdef COPY_STACKS

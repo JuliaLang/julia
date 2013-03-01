@@ -258,6 +258,13 @@ const roottask_wi = WorkItem(roottask)
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
+function init_load_path()
+    global const LOAD_PATH = ByteString[
+        ".", # TODO: should we really look here?
+        abspath(Pkg.dir()),
+        abspath(JULIA_HOME,"..","share","julia","extras"),
+    ]
+end
 
 function _start()
     # set up standard streams
@@ -299,11 +306,7 @@ function _start()
             yield()
         end
 
-        global const LOAD_PATH = ByteString[
-            ".", # TODO: should we really look here?
-            abspath(Pkg.dir()),
-            abspath(JULIA_HOME,"..","share","julia","extras"),
-        ]
+        init_load_path()
 
         (quiet,repl,startup,color_set) = process_options(ARGS)
 
