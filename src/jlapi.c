@@ -104,3 +104,22 @@ DLLEXPORT char *jl_bytestring_ptr(jl_value_t *s)
 {
     return jl_string_data(s);
 }
+
+DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
+{
+    return jl_apply(f, &a, 1);
+}
+
+DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b)
+{
+    jl_value_t *args[2] = {a,b};
+    return jl_apply(f, args, 2);
+}
+
+JL_CALLABLE(jl_f_get_field);
+DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld)
+{
+    jl_value_t *s = (jl_value_t*)jl_symbol(fld);
+    jl_value_t *args[2] = {o, s};
+    return jl_f_get_field(NULL, args, 2);
+}
