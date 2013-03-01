@@ -70,6 +70,7 @@
     jl_unbox_int64;
     jl_unbox_float32;
     jl_unbox_float64;
+    jl_unbox_voidpointer;
     jl_callback;
     jl_clear_input;
     jl_close_uv;
