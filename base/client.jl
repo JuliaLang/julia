@@ -258,6 +258,32 @@ const roottask_wi = WorkItem(roottask)
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
+function init_load_path()
+    global const LOAD_PATH = ByteString[
+        ".", # TODO: should we really look here?
+        abspath(Pkg.dir()),
+        abspath(JULIA_HOME,"..","share","julia","extras"),
+    ]
+end
+
+function init_sched()
+    global const Workqueue = WorkItem[]
+    global const Waiting = Dict()
+end
+
+function init_head_sched()
+    # start in "head node" mode
+    global const Scheduler = Task(()->event_loop(true), 1024*1024)
+    global PGRP
+    PGRP.myid = 1
+    assert(PGRP.np == 0)
+    push!(PGRP.workers,LocalProcess())
+    push!(PGRP.locs,("",0))
+    PGRP.np = 1
+    # make scheduler aware of current (root) task
+    unshift!(Workqueue, roottask_wi)
+    yield()
+end
 
 function _start()
     # set up standard streams
@@ -282,28 +308,12 @@ function _start()
 
     #atexit(()->flush(STDOUT))
     try
-        global const Workqueue = WorkItem[]
-        global const Waiting = Dict()
-
+        init_sched()
         if !any(a->(a=="--worker"), ARGS)
-            # start in "head node" mode
-            global const Scheduler = Task(()->event_loop(true), 1024*1024)
-            global PGRP
-            PGRP.myid = 1
-            assert(PGRP.np == 0)
-            push!(PGRP.workers,LocalProcess())
-            push!(PGRP.locs,("",0))
-            PGRP.np = 1
-            # make scheduler aware of current (root) task
-            unshift!(Workqueue, roottask_wi)
-            yield()
+            init_head_sched()
         end
 
-        global const LOAD_PATH = ByteString[
-            ".", # TODO: should we really look here?
-            abspath(Pkg.dir()),
-            abspath(JULIA_HOME,"..","share","julia","extras"),
-        ]
+        init_load_path()
 
         (quiet,repl,startup,color_set) = process_options(ARGS)
 

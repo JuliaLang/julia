@@ -29,6 +29,8 @@ DLLEXPORT char *jl_locate_sysimg(char *jlhome)
     return strdup(path);
 }
 
+DLLEXPORT void *jl_eval_string(char *str);
+
 // argument is the usr/lib directory where libjulia is, or NULL to guess.
 // if that doesn't work, try the full path to the "lib" directory that
 // contains lib/julia/sys.ji
@@ -40,6 +42,11 @@ DLLEXPORT void jl_init(char *julia_home_dir)
     jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
     jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
+    jl_eval_string("Base.reinit_stdio()");
+    jl_eval_string("Base.librandom_init()");
+    jl_eval_string("Base.init_sched()");
+    jl_eval_string("Base.init_head_sched()");
+    jl_eval_string("Base.init_load_path()");
 }
 
 #ifdef COPY_STACKS
@@ -103,4 +110,29 @@ DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 DLLEXPORT char *jl_bytestring_ptr(jl_value_t *s)
 {
     return jl_string_data(s);
+}
+
+DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
+{
+    JL_GC_PUSH(&f,&a);
+    jl_value_t *v = jl_apply(f, &a, 1);
+    JL_GC_POP();
+    return v;
+}
+
+DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b)
+{
+    JL_GC_PUSH(&f,&a,&b);
+    jl_value_t *args[2] = {a,b};
+    jl_value_t *v = jl_apply(f, args, 2);
+    JL_GC_POP();
+    return v;
+}
+
+JL_CALLABLE(jl_f_get_field);
+DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld)
+{
+    jl_value_t *s = (jl_value_t*)jl_symbol(fld);
+    jl_value_t *args[2] = {o, s};
+    return jl_f_get_field(NULL, args, 2);
 }

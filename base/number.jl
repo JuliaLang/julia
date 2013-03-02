@@ -13,6 +13,7 @@ isbool(x::Number) = false
 isbool(x::Bool) = true
 
 size(x::Number) = ()
+size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
 eltype(x::Number) = typeof(x)
 eltype{T<:Number}(::Type{T}) = T
 ndims(x::Number) = 0
