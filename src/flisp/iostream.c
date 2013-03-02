@@ -215,7 +215,7 @@ value_t fl_ioseek(value_t *args, u_int32_t nargs)
 {
     argcount("io.seek", nargs, 2);
     ios_t *s = toiostream(args[0], "io.seek");
-    size_t pos = toulong(args[1], "io.seek");
+    size_t pos = tosize(args[1], "io.seek");
     off_t res = ios_seek(s, (off_t)pos);
     if (res == -1)
         return FL_F;
@@ -255,7 +255,7 @@ value_t fl_ioread(value_t *args, u_int32_t nargs)
     if (nargs == 3) {
         // form (io.read s type count)
         ft = get_array_type(args[1]);
-        n = toulong(args[2], "io.read") * ft->elsz;
+        n = tosize(args[2], "io.read") * ft->elsz;
     }
     else {
         ft = get_type(args[1]);
@@ -279,9 +279,9 @@ static void get_start_count_args(value_t *args, uint32_t nargs, size_t sz,
                                  size_t *offs, size_t *nb, char *fname)
 {
     if (nargs > 1) {
-        *offs = toulong(args[1], fname);
+        *offs = tosize(args[1], fname);
         if (nargs > 2)
-            *nb = toulong(args[2], fname);
+            *nb = tosize(args[2], fname);
         else
             *nb = sz - *offs;
         if (*offs >= sz || *offs + *nb > sz)
@@ -314,7 +314,7 @@ value_t fl_iowrite(value_t *args, u_int32_t nargs)
 
 static char get_delim_arg(value_t arg, char *fname)
 {
-    size_t uldelim = toulong(arg, fname);
+    size_t uldelim = tosize(arg, fname);
     if (uldelim > 0x7f) {
         // wchars > 0x7f, or anything else > 0xff, are out of range
         if ((iscprim(arg) && cp_class((cprim_t*)ptr(arg))==wchartype) ||
@@ -364,7 +364,7 @@ value_t fl_iocopy(value_t *args, u_int32_t nargs)
     ios_t *dest = toiostream(args[0], "io.copy");
     ios_t *src = toiostream(args[1], "io.copy");
     if (nargs == 3) {
-        size_t n = toulong(args[2], "io.copy");
+        size_t n = tosize(args[2], "io.copy");
         return size_wrap(ios_copy(dest, src, n));
     }
     return size_wrap(ios_copyall(dest, src));

@@ -10,7 +10,7 @@
 
 #include "dtypes.h"
 
-#ifdef WIN32
+#ifdef __WIN32__
 #include <malloc.h>
 #include <sys/timeb.h>
 #include <windows.h>
@@ -22,7 +22,7 @@
 
 #include "timefuncs.h"
 
-#ifdef WIN32
+#ifdef __WIN32__
 double floattime(void)
 {
     struct timeb tstruct;

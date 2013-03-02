@@ -19,30 +19,14 @@
 #  define jl_jmp_buf sigjmp_buf
 #else
 #  define jl_jmp_buf jmp_buf
+#  include <malloc.h> //for _resetstkoflw
 #endif
 
-// Check windows
-#if _WIN32 || _WIN64
-#if _WIN64
-#define ENVIRONMENT64
-#else
-#define ENVIRONMENT32
-#endif
-#include <malloc.h> //for _resetstkoflw
-#endif
-
-// Check GCC
 #if __GNUC__
 #define NORETURN __attribute__ ((noreturn))
-#if __x86_64__ || __ppc64__
-#define ENVIRONMENT64
-#else
-#define ENVIRONMENT32
-#endif
 #else
 #define NORETURN
 #endif
-
 
 #define JL_STRUCT_TYPE \
     struct _jl_type_t *type;
@@ -123,7 +107,7 @@ typedef struct {
 // compute # of extra words needed to store dimensions
 static inline int jl_array_ndimwords(uint32_t ndims)
 {
-#ifdef __LP64__
+#ifdef _P64
     // on 64-bit, ndimwords must be even to give 16-byte alignment
     return (ndims == 0 ? 0 : ((ndims-1) & -2));
 #else
@@ -336,7 +320,7 @@ typedef struct {
 } jl_expr_t;
 
 enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_INT64 };
-#ifdef ENVIRONMENT64
+#ifdef _P64
 #define CB_INT CB_INT64
 #else
 #define CB_INT CB_INT32
@@ -473,7 +457,7 @@ extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 
 
 
-#ifdef __LP64__
+#ifdef _P64
 #define NWORDS(sz) (((sz)+7)>>3)
 #else
 #define NWORDS(sz) (((sz)+3)>>2)
@@ -720,7 +704,7 @@ DLLEXPORT float jl_unbox_float32(jl_value_t *v);
 DLLEXPORT double jl_unbox_float64(jl_value_t *v);
 DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 
-#ifdef __LP64__
+#ifdef _P64
 #define jl_box_long(x)   jl_box_int64(x)
 #define jl_box_ulong(x)   jl_box_uint64(x)
 #define jl_unbox_long(x) jl_unbox_int64(x)
@@ -1205,7 +1189,6 @@ __declspec(noreturn) __attribute__ ((__nothrow__)) void jl_longjmp(jmp_buf _Buf,
 #define JL_EH_POP() jl_eh_restore_state(&__eh)
 
 #ifdef __WIN32__
-#include <stdio.h>
 #define JL_CATCH                                                \
     else                                                        \
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0) \

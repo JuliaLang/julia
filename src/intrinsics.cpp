@@ -158,13 +158,15 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 // emit code to unpack a raw value from a box
 static Value *emit_unbox(Type *to, Type *pto, Value *x)
 {
-    if (x->getType() != jl_pvalue_llvmt) {
+    Type *ty = x->getType();
+    if (ty != jl_pvalue_llvmt) {
         // bools are stored internally as int8 (for now)
-        if (x->getType() == T_int1 && to == T_int8)
+        if (ty == T_int1 && to == T_int8)
             return builder.CreateZExt(x, T_int8);
-        if (x->getType()->isPointerTy() && !to->isPointerTy())
+        if (ty->isPointerTy() && !to->isPointerTy())
             return builder.CreatePtrToInt(x, to);
-        if (x->getType() != to) jl_error("unbox: T != typeof(x)");
+        if (ty != to)
+            jl_error("unbox: T != typeof(x)");
         return x;
     }
     Value *p = bitstype_pointer(x);
