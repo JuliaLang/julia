@@ -136,7 +136,7 @@ round(x::Float32) = ccall((:roundf, libm), Float32, (Float32,), x)
 floor(x::Float32) = ccall((:floorf, libm), Float32, (Float32,), x)
 @vectorize_1arg Real floor
 
-atan2(x::Real, y::Real) = atan2(float64(x), float64(y))
+atan2(x::Real, y::Real) = atan2(float(x), float(y))
 
 hypot(x::Float32, y::Float64) = hypot(float64(x), y)
 hypot(x::Float64, y::Float32) = hypot(x, float64(y))

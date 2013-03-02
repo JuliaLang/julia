@@ -37,8 +37,8 @@
 *(x::Int64,   y::Int64)   = box(Int64,mul_int(unbox(Int64,x),unbox(Int64,y)))
 *(x::Uint64,  y::Uint64)  = box(Uint64,mul_int(unbox(Uint64,x),unbox(Uint64,y)))
 
-/(x::Integer, y::Integer) = float64(x)/float64(y)
-inv(x::Integer) = 1.0/float64(x)
+/(x::Integer, y::Integer) = float(x)/float(y)
+inv(x::Integer) = float(one(x))/float(x)
 
 div{T<:Signed}(x::T, y::T) = div(int(x),int(y))
 rem{T<:Signed}(x::T, y::T) = rem(int(x),int(y))

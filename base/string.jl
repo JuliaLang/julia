@@ -720,12 +720,15 @@ end # let
 ## core string macros ##
 
 macro   str(s); interp_parse(s); end
-macro  mstr(s); multiline_lstrip(s); end
-macro imstr(s); interp_parse(multiline_lstrip(s)); end
 macro I_str(s); interp_parse(s, x->unescape_chars(x,"\"")); end
 macro E_str(s); check_utf8(unescape_string(s)); end
 macro B_str(s); interp_parse_bytes(s); end
 macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
+
+macro   mstr(s...); :(multiline_lstrip(unescape_string(string($(map(esc,s)...))))); end
+macro L_mstr(s); s; end
+macro I_mstr(s); interp_parse(multiline_lstrip(s), x->unescape_chars(x,"\"")); end
+macro E_mstr(s); multiline_lstrip(check_utf8(unescape_string(s))); end
 
 ## shell-like command parsing ##
 

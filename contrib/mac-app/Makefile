@@ -5,7 +5,7 @@
 all: clean copyfiles rewritepaths
 
 copyfiles:
-	make -C ../.. dist
+#	make -C ../.. dist
 	tar zxf ../../julia-*.tar.gz 
 	mv julia-* julia
 	cp -a ~/.julia/Cairo/deps/usr/* ./julia/
@@ -18,5 +18,5 @@ rewritepaths:
 	(cd julia/lib && for lib in *.dylib; do install_name_tool -id @executable_path/../lib/$$lib $$lib; done)
 
 clean:
-	rm -fr julia Julia.app julia.dmgCreator_build julia*.dmg
+	rm -fr julia *.app julia.dmgCreator_build *.dmg
 	mkdir julia.dmgCreator_build
