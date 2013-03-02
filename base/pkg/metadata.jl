@@ -144,7 +144,7 @@ function parse_requires(file::String)
     sort!(reqs)
 end
 
-function dependencies(pkgs,vers)
+function dependencies(pkgs)
     deps = Array((Version,VersionSet),0)
     for pkg in each_package()
         for (ver,dir) in each_tagged_version(pkg)
@@ -153,7 +153,7 @@ function dependencies(pkgs,vers)
             if isfile(file)
                 for d in parse_requires("$dir/requires")
                     if !contains(pkgs,d.package)
-                        error("Unknown dependency for $pkg: $(d.package)")
+                        error("unknown dependency for $pkg: $(d.package)")
                     end
                     push!(deps,(v,d))
                 end

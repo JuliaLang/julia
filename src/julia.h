@@ -712,18 +712,18 @@ jl_value_t *jl_box8 (jl_datatype_t *t, int8_t  x);
 jl_value_t *jl_box16(jl_datatype_t *t, int16_t x);
 jl_value_t *jl_box32(jl_datatype_t *t, int32_t x);
 jl_value_t *jl_box64(jl_datatype_t *t, int64_t x);
-int8_t jl_unbox_bool(jl_value_t *v);
-int8_t jl_unbox_int8(jl_value_t *v);
-uint8_t jl_unbox_uint8(jl_value_t *v);
-int16_t jl_unbox_int16(jl_value_t *v);
-uint16_t jl_unbox_uint16(jl_value_t *v);
-int32_t jl_unbox_int32(jl_value_t *v);
-uint32_t jl_unbox_uint32(jl_value_t *v);
-int64_t jl_unbox_int64(jl_value_t *v);
-uint64_t jl_unbox_uint64(jl_value_t *v);
-float jl_unbox_float32(jl_value_t *v);
-double jl_unbox_float64(jl_value_t *v);
-void *jl_unbox_voidpointer(jl_value_t *v);
+DLLEXPORT int8_t jl_unbox_bool(jl_value_t *v);
+DLLEXPORT int8_t jl_unbox_int8(jl_value_t *v);
+DLLEXPORT uint8_t jl_unbox_uint8(jl_value_t *v);
+DLLEXPORT int16_t jl_unbox_int16(jl_value_t *v);
+DLLEXPORT uint16_t jl_unbox_uint16(jl_value_t *v);
+DLLEXPORT int32_t jl_unbox_int32(jl_value_t *v);
+DLLEXPORT uint32_t jl_unbox_uint32(jl_value_t *v);
+DLLEXPORT int64_t jl_unbox_int64(jl_value_t *v);
+DLLEXPORT uint64_t jl_unbox_uint64(jl_value_t *v);
+DLLEXPORT float jl_unbox_float32(jl_value_t *v);
+DLLEXPORT double jl_unbox_float64(jl_value_t *v);
+DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 
 #ifdef __LP64__
 #define jl_box_long(x)   jl_box_int64(x)
@@ -862,6 +862,7 @@ void jl_restore_system_image(char *fname);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
+DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy);
 void jl_start_parsing_file(const char *fname);
 void jl_stop_parsing();
 jl_value_t *jl_parse_next();
@@ -921,7 +922,7 @@ void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
 void *jl_dlsym_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
-//event loop
+// event loop
 DLLEXPORT void jl_runEventLoop();
 DLLEXPORT void jl_processEvents();
 
@@ -1135,6 +1136,7 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
+DLLEXPORT void NORETURN jl_throw_with_superfluous_argument(jl_value_t *e, int);
 DLLEXPORT void NORETURN jl_rethrow();
 DLLEXPORT void NORETURN jl_rethrow_other(jl_value_t *e);
 

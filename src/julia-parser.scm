@@ -1281,7 +1281,7 @@
 		     (begin (take-token s) (parse-comprehension s nxt closer))
 		     (error "invalid comprehension syntax")))
 		  (else
-		   (error "invalid ref syntax"))))))))
+		   (error (string "unexpected " c " in X[] expression")))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)

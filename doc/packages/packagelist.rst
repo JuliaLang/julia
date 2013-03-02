@@ -73,6 +73,12 @@ _____________________________________________________________
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
+    .. image:: https://secure.gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Patrick O'Leary
+        :target: https://github.com/pao
+
     .. image:: https://secure.gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -144,6 +150,12 @@ _________________________________________________
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
+
+    .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Kevin Squire
+        :target: https://github.com/kmsquire
 
 ----
 
@@ -337,6 +349,36 @@ __________________________________________________
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
+
+----
+
+`Catalan <https://github.com/andrioni/Catalan.jl>`_
+___________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Alessandro Andrioni Silva
+     :target: https://github.com/andrioni
+
+  Current Version: ``0.0.0``
+
+  Catalan: a combinatorics library for Julia 
+
+  Maintainer: `Alessandro Andrioni Silva <https://github.com/andrioni>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Alessandro Andrioni Silva
+        :target: https://github.com/andrioni
 
 ----
 
@@ -590,6 +632,90 @@ _______________________________________________________________________________
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
+
+----
+
+`Curl <https://github.com/forio/Curl.jl>`_
+__________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/bd2a3d33c3dcc6f25e61382f81689f33?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Forio Online Simulations
+     :target: https://github.com/forio
+
+  Current Version: ``0.0.0``
+
+  a Julia HTTP curl library 
+
+  Maintainer: `Forio Online Simulations <https://github.com/forio>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/d1206b7851de49f51e710c88a15547f4?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: PLHW
+        :target: https://github.com/pauladam
+
+----
+
+`DICOM <https://github.com/ihnorton/DICOM.jl>`_
+_______________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Isaiah
+     :target: https://github.com/ihnorton
+
+  Current Version: ``0.0.0``
+
+  DICOM for Julia 
+
+  Maintainer: `Isaiah <https://github.com/ihnorton>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Isaiah
+        :target: https://github.com/ihnorton
+
+    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
+
+    .. image:: https://secure.gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jeff Bezanson
+        :target: https://github.com/JeffBezanson
+
+    .. image:: https://secure.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Carlo Baldassi
+        :target: https://github.com/carlobaldassi
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
 ----
 
@@ -982,6 +1108,12 @@ _________________________________________________________________
         :alt: dmbates
         :target: https://github.com/dmbates
 
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
 ----
 
 `Elliptic <https://github.com/nolta/Elliptic.jl>`_
@@ -1241,6 +1373,36 @@ ______________________________________________
         :width: 40px
         :alt: Robert Ennis
         :target: https://github.com/rennis250
+
+----
+
+`GZip <https://github.com/kmsquire/GZip.jl>`_
+_____________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Kevin Squire
+     :target: https://github.com/kmsquire
+
+  Current Version: ``0.0.0``
+
+  A Julia interface for gzip functions in zlib 
+
+  Maintainer: `Kevin Squire <https://github.com/kmsquire>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Kevin Squire
+        :target: https://github.com/kmsquire
 
 ----
 
@@ -1771,6 +1933,36 @@ ________________________________________
 
 ----
 
+`Itostat <https://github.com/mschauer/Itostat.jl>`_
+___________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b3ce82c50576d090da69fc77bc2ee79f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: M. Schauer
+     :target: https://github.com/mschauer
+
+  Current Version: ``0.0.0``
+
+  Simulation and inference for Ito processes and diffusions. 
+
+  Maintainer: `M. Schauer <https://github.com/mschauer>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/b3ce82c50576d090da69fc77bc2ee79f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: M. Schauer
+        :target: https://github.com/mschauer
+
+----
+
 `JSON <https://github.com/aviks/JSON.jl>`_
 __________________________________________
 
@@ -2240,6 +2432,7 @@ ___________________________________________________
   Dependencies::
 
       Clp            Any Version
+      CoinMP         Any Version
 
   Contributors:
 
@@ -2269,9 +2462,11 @@ ____________________________________________
 
   Current Version: ``0.0.0``
 
-  nothing 
+  Monadic expressions and sequences for Julia 
 
   Maintainer: `Patrick O'Leary <https://github.com/pao>`_
+
+  More Info: `<https://monadsjl.readthedocs.org/>`_ 
 
   Dependencies::
 
@@ -2441,6 +2636,36 @@ ______________________________________________
         :width: 40px
         :alt: Jacob Quinn
         :target: https://github.com/karbarcca
+
+----
+
+`ODE <https://github.com/vtjnash/ODE.jl>`_
+__________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jameson Nash
+     :target: https://github.com/vtjnash
+
+  Current Version: ``0.0.0``
+
+  Assorted basic Ordinary Differential Equation solvers 
+
+  Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
+
+  Dependencies::
+
+      Polynomial     Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
 
 ----
 
@@ -2646,6 +2871,36 @@ _________________________________________________________________
 
 ----
 
+`Polynomial <https://github.com/vtjnash/Polynomial.jl>`_
+________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jameson Nash
+     :target: https://github.com/vtjnash
+
+  Current Version: ``0.0.0``
+
+  Polynomial manipulations 
+
+  Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
+----
+
 `Profile <https://github.com/timholy/Profile.jl>`_
 __________________________________________________
 
@@ -2741,17 +2996,23 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Jameson Nash
-        :target: https://github.com/vtjnash
-
     .. image:: https://secure.gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
+
+    .. image:: https://secure.gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Diego Javier Zea
+        :target: https://github.com/diegozea
+
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
 
 ----
 
@@ -2767,9 +3028,11 @@ ____________________________________________________
 
   Current Version: ``0.0.0``
 
-  QuickCheck for Julia 
+  QuickCheck specification-based testing for Julia 
 
   Maintainer: `Patrick O'Leary <https://github.com/pao>`_
+
+  More Info: `<https://quickcheckjl.readthedocs.org/>`_ 
 
   Dependencies::
 
@@ -3035,6 +3298,8 @@ ______________________________________________
   Swiss Army Knife for encoding and decoding binary streams 
 
   Maintainer: `Patrick O'Leary <https://github.com/pao>`_
+
+  More Info: `<https://strpackjl.readthedocs.org/>`_ 
 
   Dependencies::
 
@@ -3420,6 +3685,12 @@ ________________________________________________
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
     .. image:: https://secure.gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -3512,5 +3783,5 @@ _________________________________________________
 
 ----
 
-.. footer: 93 packages, generated 24 Feb 2013 23:45:57 GMT 
+.. footer: 100 packages, generated 1 Mar 2013 13:43:06 GMT 
 

@@ -2583,6 +2583,7 @@ static void init_julia_llvm_env(Module *m)
         (Function*)jl_Module->getOrInsertFunction("jl_throw_with_superfluous_argument",
                                                   FunctionType::get(T_void, args2_throw, false));
     jlthrow_line_func->setDoesNotReturn();
+    jl_ExecutionEngine->addGlobalMapping(jlthrow_line_func, (void*)&jl_throw_with_superfluous_argument);
 
     jlnew_func =
         Function::Create(jl_func_sig, Function::ExternalLinkage,

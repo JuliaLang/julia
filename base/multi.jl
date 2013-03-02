@@ -1128,7 +1128,7 @@ function localize_vars(expr, esca)
     if esca
         v = map(esc,v)
     end
-    Expr(:localize, {:(()->($expr)), v...}, Any)
+    Expr(:localize, :(()->($expr)), v...)
 end
 
 macro spawn(expr)

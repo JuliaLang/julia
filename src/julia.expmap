@@ -66,6 +66,11 @@
     jl_defines_or_exports_p;
     jl_box_int32;
     jl_box_int64;
+    jl_unbox_int32;
+    jl_unbox_int64;
+    jl_unbox_float32;
+    jl_unbox_float64;
+    jl_unbox_voidpointer;
     jl_callback;
     jl_clear_input;
     jl_close_uv;
@@ -102,6 +107,16 @@
     jl_exit;
     jl_expand;
     jl_expr_type;
+    jl_eval_string;
+    jl_typeof_str;
+    jl_typename_str;
+    jl_array_eltype;
+    jl_array_rank;
+    jl_array_size;
+    jl_get_field;
+    jl_call1;
+    jl_call2;
+    jl_init;
     jl_ascii_string_type;
     jl_utf8_string_type;
     jl_fd_clr;
