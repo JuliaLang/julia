@@ -137,11 +137,11 @@ void restore_signals()
 {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
 }
-void win_raise_sigint()
-{
-    jl_throw(jl_interrupt_exception);
+static void __fastcall win_raise_exception(void* excpt)
+{ //why __fastcall? because the first two arguments are passed in registers, making this easier
+    jl_throw(excpt);
 }
-BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
+static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {   
     int sig;
     //windows signals use different numbers from unix
@@ -165,7 +165,8 @@ BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __
             printf("error: GetThreadContext failed\n");
             return 0;
         }
-        ctxThread.Eip = (DWORD)&win_raise_sigint; //on win64, use .Rip = (DWORD64)...
+        ctxThread.Eip = (DWORD)&win_raise_exception; //on win64, use .Rip = (DWORD64)...
+        ctxThread.Ecx = (DWORD)jl_interrupt_exception; //on win64, use .Rcx = (DWORD64)...
         if (!SetThreadContext(hMainThread,&ctxThread)) {
             printf("error: SetThreadContext failed\n");
             //error
@@ -178,6 +179,21 @@ BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __
         }
     }
     return 1;
+}
+static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) {
+    //fprintf(stderr,"arrived in exception_handler!\n");
+    if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
+        switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
+        case EXCEPTION_STACK_OVERFLOW:
+            ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception; //on win64, use .Rip = (DWORD64)...
+            ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception; //on win64, use .Rcx = (DWORD64)...
+            return EXCEPTION_CONTINUE_EXECUTION;
+        default:
+            puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\n");
+            break;
+        }
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 #else
 void restore_signals()
@@ -519,9 +535,12 @@ DLLEXPORT void jl_install_sigint_handler()
     //printf("sigint installed\n");
 }
 
-DLLEXPORT
-int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]))
+
+DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {
+#ifdef __WIN32__
+    SetUnhandledExceptionFilter(exception_handler);
+#endif
 #ifdef COPY_STACKS
     // initialize base context of root task
     jl_root_task->stackbase = (char*)&argc;
