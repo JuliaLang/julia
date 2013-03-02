@@ -52,11 +52,10 @@ JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
                   fftw3f_threads gmp grisu \
                   openlibm openlibm-extras pcre \
 		  random Rmath spqr suitesparse_wrapper \
-		  tk_wrapper umfpack z openblas
+		  umfpack z openblas
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release webrepl
-	@-$(MAKE) $(QUIET_MAKE) tk
 	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
@@ -71,24 +70,10 @@ install: release webrepl
 	# Copy system image
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well
-	-cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
+	cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
 	-cp $(BUILD)/etc/nginx.conf $(PREFIX)/etc/
 ifeq ($(OS), WINNT)
 	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
-	-cp -R $(BUILD)/sbin $(PREFIX)
-	-[ -e dist-extras/7za.exe ] && cp dist-extras/7za.exe $(PREFIX)/bin/7z.exe
-	-[ -e dist-extras/PortableGit-1.8.0-preview20121022.7z ] && \
-	  mkdir $(PREFIX)/Git && \
-	  7z x dist-extras/PortableGit-1.8.0-preview20121022.7z -o"$(PREFIX)/Git"
-ifeq ($(shell uname),MINGW32_NT-6.1)
-	-for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
-		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
-	done
-else
-	-for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_sjlj-1" "libstdc++-6" ; do \
-		cp /usr/lib/gcc/i686-w64-mingw32/4.6/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
-	done
-endif
 endif
 	cp $(JULIAHOME)/VERSION $(PREFIX)/share/julia/VERSION
 	echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > $(PREFIX)/share/julia/COMMIT
@@ -102,6 +87,20 @@ ifeq ($(OS), Darwin)
 	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 ifeq ($(OS), WINNT)
+	cp -R $(BUILD)/sbin $(PREFIX)
+	-[ -e dist-extras/7za.exe ] && cp dist-extras/7za.exe $(PREFIX)/bin/7z.exe
+	-[ -e dist-extras/PortableGit-1.8.0-preview20121022.7z ] && \
+	  mkdir $(PREFIX)/Git && \
+	  7z x dist-extras/PortableGit-1.8.0-preview20121022.7z -o"$(PREFIX)/Git"
+ifeq ($(shell uname),MINGW32_NT-6.1)
+	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
+		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
+	done
+else
+	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_sjlj-1" "libstdc++-6" ; do \
+		cp /usr/lib/gcc/i686-w64-mingw32/4.6/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
+	done
+endif
 	zip -r -9 julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).zip julia-$(JULIA_COMMIT)
 else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
@@ -145,9 +144,6 @@ ifeq ($(USE_SYSTEM_NGINX), 0)
 	@$(MAKE) $(QUIET_MAKE) -C deps install-nginx
 endif
 	@$(MAKE) -C ui/webserver julia-release
-
-tk:
-	@$(MAKE) -C deps install-tk-wrapper
 
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras

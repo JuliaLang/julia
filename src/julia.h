@@ -1205,10 +1205,11 @@ __declspec(noreturn) __attribute__ ((__nothrow__)) void jl_longjmp(jmp_buf _Buf,
 #define JL_EH_POP() jl_eh_restore_state(&__eh)
 
 #ifdef __WIN32__
+#include <stdio.h>
 #define JL_CATCH                                                \
     else                                                        \
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0) \
-            for (i__ca=(jl_exception_in_transit==jl_stackovf_exception); i__ca; _resetstkoflw())
+            if (((jl_exception_in_transit==jl_stackovf_exception) && _resetstkoflw()) || 1)
 #else
 #define JL_CATCH                                                \
     else                                                        \
