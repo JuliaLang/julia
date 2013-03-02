@@ -64,19 +64,3 @@ ENTRY(jl_setjmp)
     ret
 END(jl_setjmp)
 
-ENTRY(jl_longjmp)
-    movl    4(%esp),%edx
-    movl    8(%esp),%eax
-    movl    0(%edx),%ebp
-    movl    4(%edx),%ebx
-    movl    8(%edx),%edi
-    movl    12(%edx),%esi
-    movl    16(%edx),%esp
-    movl    20(%edx),%ecx
-    testl   %eax,%eax
-    jnz 1f
-    incl    %eax
-1:  movl    %ecx,0(%esp)
-    ret
-END(jl_longjmp)
-

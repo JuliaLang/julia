@@ -15,7 +15,7 @@
 #include "arraylist.h"
 
 #include <setjmp.h>
-#if defined(__FreeBSD__)
+#ifndef __WIN32__
 #  define jl_jmp_buf sigjmp_buf
 #else
 #  define jl_jmp_buf jmp_buf
@@ -28,6 +28,7 @@
 #else
 #define ENVIRONMENT32
 #endif
+#include <malloc.h> //for _resetstkoflw
 #endif
 
 // Check GCC
@@ -1203,8 +1204,15 @@ __declspec(noreturn) __attribute__ ((__nothrow__)) void jl_longjmp(jmp_buf _Buf,
 
 #define JL_EH_POP() jl_eh_restore_state(&__eh)
 
+#ifdef __WIN32__
+#define JL_CATCH                                                \
+    else                                                        \
+        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0) \
+            for (i__ca=(jl_exception_in_transit==jl_stackovf_exception); i__ca; _resetstkoflw())
+#else
 #define JL_CATCH                                                \
     else                                                        \
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
+#endif
 
 #endif
