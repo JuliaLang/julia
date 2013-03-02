@@ -42,6 +42,8 @@ end
 ## Load essential files and libraries
 
 include("base.jl")
+include("build_h.jl")
+include("c.jl")
 
 # core operations & types
 include("range.jl")
@@ -104,7 +106,6 @@ include("serialize.jl")
 include("multi.jl")
 
 # system & environment
-include("build_h.jl")
 include("osutils.jl")
 include("libc.jl")
 include("env.jl")

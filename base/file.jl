@@ -10,8 +10,8 @@ end
 
 
 function cd(dir::String) 
-	@windows_only system_error(:_chdir, ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
-	@unix_only system_error(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+    @windows_only system_error(:_chdir, ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
+    @unix_only system_error(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
 end
 cd() = cd(ENV["HOME"])
 

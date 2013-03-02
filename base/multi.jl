@@ -641,7 +641,6 @@ function perform_work(job::WorkItem)
             result = is(arg,()) ? yieldto(job.task) : yieldto(job.task, arg)
         else
             job.task = Task(job.thunk)
-            job.task.storage = nothing
             result = yieldto(job.task)
         end
     catch err
@@ -1129,7 +1128,7 @@ function localize_vars(expr, esca)
     if esca
         v = map(esc,v)
     end
-    Expr(:localize, {:(()->($expr)), v...}, Any)
+    Expr(:localize, :(()->($expr)), v...)
 end
 
 macro spawn(expr)
