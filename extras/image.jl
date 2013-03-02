@@ -505,11 +505,11 @@ function imwrite(I, file::String)
     end
     h, w = size(I)
     cmd = `convert -size $(w)x$(h) -depth 8 rgb: $file`
-    stream = fdio(writesto(cmd).fd, true)
+    stream, _ = writesto(cmd)
     spawn(cmd)
     write_bitmap_data(stream, I)
     close(stream)
-    wait(cmd)
+    #wait(cmd) # currently missing?
 end
 
 function imshow(img, range)
@@ -517,10 +517,19 @@ function imshow(img, range)
         # only makes sense for gray scale images
         img = imadjustintensity(img, range)
     end
-    tmp::String = "./tmp.ppm"
-    imwrite(img, tmp)
-    cmd = `feh $tmp`
-    spawn(cmd)
+    imgout_path, imgout = mktemp()
+    close(imgout) # just want the path
+    imgout_path = imgout_path * ".tiff"
+    imwrite(img, imgout_path)
+    @osx_only spawn(`open $imgout_path`)
+    @linux_only begin
+        for checkcmd in (:feh, :gwenview)
+            if success(`which $checkcmd` > SpawnNullStream())
+                spawn(`$checkcmd $imgout_path`)
+                break
+            end
+        end
+    end
 end
 
 imshow(img) = imshow(img, [])

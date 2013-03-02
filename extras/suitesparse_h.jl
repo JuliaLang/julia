@@ -4,33 +4,33 @@ const CHOLMOD_TRUE  = int32(1)
 const CHOLMOD_FALSE = int32(0)
 
 # Types of systems to solve
-const CHOLMOD_A    = int32(0)          # solve Ax=b 
-const CHOLMOD_LDLt = int32(1)          # solve LDL'x=b 
-const CHOLMOD_LD   = int32(2)          # solve LDx=b 
-const CHOLMOD_DLt  = int32(3)          # solve DL'x=b 
-const CHOLMOD_L    = int32(4)          # solve Lx=b 
-const CHOLMOD_Lt   = int32(5)          # solve L'x=b 
-const CHOLMOD_D    = int32(6)          # solve Dx=b 
-const CHOLMOD_P    = int32(7)          # permute x=Px 
-const CHOLMOD_Pt   = int32(8)          # permute x=P'x 
+const CHOLMOD_A    = int32(0)         # solve Ax=b 
+const CHOLMOD_LDLt = int32(1)         # solve LDL'x=b 
+const CHOLMOD_LD   = int32(2)         # solve LDx=b 
+const CHOLMOD_DLt  = int32(3)         # solve DL'x=b 
+const CHOLMOD_L    = int32(4)         # solve Lx=b 
+const CHOLMOD_Lt   = int32(5)         # solve L'x=b 
+const CHOLMOD_D    = int32(6)         # solve Dx=b 
+const CHOLMOD_P    = int32(7)         # permute x=Px 
+const CHOLMOD_Pt   = int32(8)         # permute x=P'x 
 
 # itype defines the types of integer used:
 const CHOLMOD_INT  = int32(0)  # all integer arrays are int 
 const CHOLMOD_LONG = int32(2)  # all integer arrays are UF_long 
 
 # dtype defines what the numerical type is (double or float):
-const CHOLMOD_DOUBLE = int32(0)        # all numerical values are double 
-const CHOLMOD_SINGLE = int32(1)        # all numerical values are float 
+const CHOLMOD_DOUBLE = int32(0)       # all numerical values are double 
+const CHOLMOD_SINGLE = int32(1)       # all numerical values are float 
 
 # xtype defines the kind of numerical values used:
-const CHOLMOD_PATTERN = int32(0)       # pattern only, no numerical values 
-const CHOLMOD_REAL    = int32(1)       # a real matrix 
-const CHOLMOD_COMPLEX = int32(2)       # a complex matrix (ANSI C99 compatible) 
-const CHOLMOD_ZOMPLEX = int32(3)       # a complex matrix (MATLAB compatible) 
+const CHOLMOD_PATTERN = int32(0)      # pattern only, no numerical values 
+const CHOLMOD_REAL    = int32(1)      # a real matrix 
+const CHOLMOD_COMPLEX = int32(2)      # a complex matrix (ANSI C99 compatible) 
+const CHOLMOD_ZOMPLEX = int32(3)      # a complex matrix (MATLAB compatible) 
 
 # Definitions for cholmod_common: 
-const CHOLMOD_MAXMETHODS = int32(9)    # maximum number of different methods that 
-                                    # cholmod_analyze can try. Must be >= 9. 
+const CHOLMOD_MAXMETHODS = int32(9)  # maximum number of different methods that 
+                                     # cholmod_analyze can try. Must be >= 9. 
 
 # Common->status values.  zero means success, negative means a fatal error, positive is a warning. 
 const CHOLMOD_OK            = int32(0)    # success 
@@ -47,8 +47,8 @@ const CHOLMOD_GIVEN   = int32(1)     # use given permutation
 const CHOLMOD_AMD     = int32(2)     # use minimum degree (AMD) 
 const CHOLMOD_METIS   = int32(3)     # use METIS' nested dissection 
 const CHOLMOD_NESDIS  = int32(4)     # use CHOLMOD's version of nested dissection:
-                                         # node bisector applied recursively, followed
-                                         # by constrained minimum degree (CSYMAMD or CCOLAMD) 
+                                       # node bisector applied recursively, followed
+                                       # by constrained minimum degree (CSYMAMD or CCOLAMD) 
 const CHOLMOD_COLAMD  = int32(5)     # use AMD for A, COLAMD for A*A' 
 
 # POSTORDERED is not a method, but a result of natural ordering followed by a
@@ -59,6 +59,12 @@ const CHOLMOD_POSTORDERED  = int32(6)   # natural ordering, postordered.
 const CHOLMOD_SIMPLICIAL = int32(0)    # always do simplicial 
 const CHOLMOD_AUTO       = int32(1)    # select simpl/super depending on matrix 
 const CHOLMOD_SUPERNODAL = int32(2)    # always do supernodal 
+
+# scaling modes, selected by the scale input parameter:
+const CHOLMOD_SCALAR     = int32(0)    # A = s*A
+const CHOLMOD_ROW        = int32(1)    # A = diag(s)*A
+const CHOLMOD_COL        = int32(2)    # A = A*diag(s)
+const CHOLMOD_SYM        = int32(3)    # A = diag(s)*A*diag(s)
 
 ## UMFPACK
 
@@ -132,4 +138,3 @@ const SPQR_RX_EQUALS_B    = int32(0)    # solve R*X=B      or X = R\B
 const SPQR_RETX_EQUALS_B  = int32(1)    # solve R*E'*X=B   or X = E*(R\B)
 const SPQR_RTX_EQUALS_B   = int32(2)    # solve R'*X=B     or X = R'\B
 const SPQR_RTX_EQUALS_ETB = int32(3)    # solve R'*X=E'*B  or X = R'\(E'*B)
-

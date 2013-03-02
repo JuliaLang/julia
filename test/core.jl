@@ -629,3 +629,8 @@ Sum=0.0; for n=1:2:10000
 Sum += -1/n + 1/(n+1)
 end
 @test Sum < -0.69
+
+# source path in tasks
+path = Base.source_path()
+@test ends_with(path,"/core.jl")
+@test yieldto(@task Base.source_path()) == path

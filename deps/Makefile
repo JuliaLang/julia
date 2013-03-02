@@ -1343,6 +1343,43 @@ compile-patchelf: $(PATCHELF_SOURCE)
 check-patchelf: patchelf-$(PATCHELF_VER)/checked
 install-patchelf: $(PATCHELF_TARGET)
 
+## Git
+
+GIT_SOURCE = git-$(GIT_VER)/src/git
+GIT_TARGET = $(BUILD)/git
+
+compile-git: install-git
+install-git: $(GIT_TARGET)
+
+git-$(GIT_VER).tar.gz:
+	$(WGET) http://git-core.googlecode.com/files/$@
+git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
+	tar zxf $<
+	touch -c $@
+git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
+	cd git-$(GIT_VER) && \
+	./configure $(CONFIGURE_COMMON)
+	touch -c $@
+$(GIT_SOURCE): git-$(GIT_VER)/config.status
+	$(MAKE) -C git-$(GIT_VER)
+	touch -c $@
+git-$(GIT_VER)/checked: $(GIT_SOURCE)
+	echo 1 > $@
+$(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
+	$(MAKE) -C git-$(GIT_VER) install
+	touch -c $@
+
+clean-git:
+	-$(MAKE) -C git-$(GIT_VER) clean
+	-rm -f $(GIT_OBJ_TARGET)
+distclean-git:
+	-rm -rf git-$(GIT_VER).tar.gz git-$(GIT_VER)
+
+get-git: git-$(GIT_VER).tar.gz
+configure-git: git-$(GIT_VER)/config.status
+compile-git: $(GIT_SOURCE)
+check-git: git-$(GIT_VER)/checked
+install-git: $(GIT_TARGET)
 
 ## phony targets ##
 
