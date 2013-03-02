@@ -352,6 +352,12 @@ function writesto(cmds::AbstractCmd, stdout::UVStream)
     (in, processes)
 end
 
+function readandwrite(cmds::AbstractCmd)
+    in = NamedPipe()
+    (out, processes) = readsfrom(cmds, in)
+    return (out, in, processes)
+end
+
 readall(cmd::AbstractCmd) = readall(cmd, null_handle)
 function readall(cmd::AbstractCmd,stdin::AsyncStream)
     (out,pc) = readsfrom(cmd, stdin)

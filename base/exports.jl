@@ -1104,6 +1104,7 @@ export
     #process_stopped,
     process_term_signal,
     readsfrom,
+    readandwrite,
     run,
     spawn,
     spawn_nostdin,
