@@ -632,5 +632,5 @@ end
 
 # source path in tasks
 path = Base.source_path()
-@test ends_with(path,"/core.jl")
+@test ends_with(path, joinpath("test","core.jl"))
 @test yieldto(@task Base.source_path()) == path
