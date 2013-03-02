@@ -2469,11 +2469,10 @@ static void init_julia_llvm_env(Module *m)
     T_pint64 = PointerType::get(T_int64, 0);
     T_uint8 = T_int8;   T_uint16 = T_int16;
     T_uint32 = T_int32; T_uint64 = T_int64;
-#ifdef __LP64__
-    T_size = T_uint64;
-#else
-    T_size = T_uint32;
-#endif
+    if (sizeof(size_t) == 8)
+        T_size = T_uint64;
+    else
+        T_size = T_uint32;
     T_psize = PointerType::get(T_size, 0);
     T_float32 = Type::getFloatTy(getGlobalContext());
     T_pfloat32 = PointerType::get(T_float32, 0);

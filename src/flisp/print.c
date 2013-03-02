@@ -614,8 +614,8 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
         }
     }
     else if (type == uint64sym
-#ifdef __LP64__
-             || type == ulongsym
+#ifdef _P64
+             || type == sizesym
 #endif
              ) {
         uint64_t ui64 = *(uint64_t*)data;
@@ -638,7 +638,7 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
             value_t eltype = car(cdr_(type));
             size_t cnt, elsize;
             if (iscons(cdr_(cdr_(type)))) {
-                cnt = toulong(car_(cdr_(cdr_(type))), "length");
+                cnt = tosize(car_(cdr_(cdr_(type))), "length");
                 elsize = cnt ? len/cnt : 0;
             }
             else {
@@ -707,8 +707,8 @@ static void cvalue_print(ios_t *f, value_t v)
         void *fptr = *(void**)data;
         label = (value_t)ptrhash_get(&reverse_dlsym_lookup_table, cv);
         if (label == (value_t)HT_NOTFOUND) {
-            HPOS += ios_printf(f, "#<builtin @0x%08lx>",
-                               (unsigned long)(builtin_t)fptr);
+            HPOS += ios_printf(f, "#<builtin @0x%08zx>",
+                               (size_t)(builtin_t)fptr);
         }
         else {
             if (print_princ) {

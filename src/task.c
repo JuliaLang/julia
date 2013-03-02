@@ -402,7 +402,7 @@ static void init_task(jl_task_t *t)
     // this runs when the task is created
     ptrint_t local_sp = (ptrint_t)&t;
     ptrint_t new_sp = (ptrint_t)t->stack + t->ssize - _frame_offset;
-#ifdef __LP64__
+#ifdef _P64
     // SP must be 16-byte aligned
     new_sp = new_sp&-16;
     local_sp = local_sp&-16;

@@ -25,6 +25,7 @@ endif
 
 # Cross-compile
 #XC_HOST = i686-w64-mingw32
+#XC_HOST = x86_64-w64-mingw32
 
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
@@ -32,6 +33,12 @@ else
 ifeq ($(XC_HOST),i686-w64-mingw32)
 override OS = WINNT
 override ARCH = i686
+override OPENBLAS_DYNAMIC_ARCH = 1
+override CROSS_COMPILE=$(XC_HOST)-
+export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin'
+else ifeq ($(XC_HOST),x86_64-w64-mingw32)
+override OS = WINNT
+override ARCH = x86_64
 override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
 export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin'
