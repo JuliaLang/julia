@@ -16,13 +16,19 @@ const text_colors = {
 
 have_color = false
 @unix_only default_color_answer = text_colors[:bold]
+@unix_only default_color_input = text_colors[:bold]
 @windows_only default_color_answer = text_colors[:normal]
-color_answer = default_color_answer
+@windows_only default_color_input = text_colors[:normal]
 color_normal = text_colors[:normal]
 
 function answer_color()
     c = symbol(get(ENV, "JULIA_ANSWER_COLOR", ""))
     return get(text_colors, c, default_color_answer)
+end
+
+function input_color()
+    c = symbol(get(ENV, "JULIA_INPUT_COLOR", ""))
+    return get(text_colors, c, default_color_input)
 end
 
 banner() = print(have_color ? banner_color : banner_plain)
@@ -128,6 +134,9 @@ function run_repl()
         ccall(:repl_callback_enable, Void, ())
         global _repl_enough_stdin = false
         start_reading(STDIN, readBuffer)
+        if have_color
+            print(input_color())
+        end
         (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
