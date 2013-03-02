@@ -39,7 +39,7 @@ function show(io::IO, S::SparseMatrixCSC)
     println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
 
     half_screen_rows = div(tty_rows() - 8, 2)
-    pad = ndigits(max(S.m,S.n))
+    pad = ndigits(maxof(S.m,S.n))
     k = 0
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
@@ -281,7 +281,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
 
     # Work array
-    Wj = Array(Ti, max(nrow,ncol)+1)
+    Wj = Array(Ti, maxof(nrow,ncol)+1)
 
     # Allocate sparse matrix data structure
     # Count entries in each row
@@ -459,7 +459,7 @@ speye(m::Integer, n::Integer) = speye(Float64, m, n)
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 
 function speye(T::Type, m::Integer, n::Integer)
-    x = min(m,n)
+    x = minof(m,n)
     rowval = [1:x]
     colptr = [rowval, fill(int(x+1), n+1-x)]
     nzval  = ones(T, x)
@@ -726,11 +726,11 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
     end
 end
 
-max{T}(A::SparseMatrixCSC{T}) = reducedim(max,A,(1,2),typemin(T))
-max{T}(A::SparseMatrixCSC{T}, b::(), region) = reducedim(max,A,region,typemin(T))
+max{T}(A::SparseMatrixCSC{T}) = reducedim(maxof,A,(1,2),typemin(T))
+max{T}(A::SparseMatrixCSC{T}, region) = reducedim(maxof,A,region,typemin(T))
 
-min{T}(A::SparseMatrixCSC{T}) = reducedim(min,A,(1,2),typemax(T))
-min{T}(A::SparseMatrixCSC{T}, b::(), region) = reducedim(min,A,region,typemax(T))
+min{T}(A::SparseMatrixCSC{T}) = reducedim(minof,A,(1,2),typemax(T))
+min{T}(A::SparseMatrixCSC{T}, region) = reducedim(minof,A,region,typemax(T))
 
 sum{T}(A::SparseMatrixCSC{T}) = reducedim(+,A,(1,2),zero(T))
 sum{T}(A::SparseMatrixCSC{T}, region)  = reducedim(+,A,region,zero(T))

@@ -188,7 +188,7 @@ ones(args...)               = fill!(Array(Float64, args...), float64(1))
 
 function eye(T::Type, m::Int, n::Int)
     a = zeros(T,m,n)
-    for i = 1:min(m,n)
+    for i = 1:minof(m,n)
         a[i,i] = one(T)
     end
     return a
@@ -950,7 +950,7 @@ end
 # use memcmp for cmp on byte arrays
 function cmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c = ccall(:memcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              a, b, min(length(a),length(b)))
+              a, b, minof(length(a),length(b)))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
@@ -1425,8 +1425,8 @@ function reducedim(f::Function, A, region, v0, R)
 end
 end
 
-max{T}(A::AbstractArray{T}, b::(), region) = reducedim(max,A,region,typemin(T))
-min{T}(A::AbstractArray{T}, b::(), region) = reducedim(min,A,region,typemax(T))
+max{T}(A::AbstractArray{T}, region) = reducedim(maxof,A,region,typemin(T))
+min{T}(A::AbstractArray{T}, region) = reducedim(minof,A,region,typemax(T))
 sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
 prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
 

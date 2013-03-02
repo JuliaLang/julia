@@ -56,7 +56,7 @@ function triu!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)
     idx = 1
     for j = 0:n-1
-        ii = min(max(0, j+1-k), m)
+        ii = minof(maxof(0, j+1-k), m)
         for i = (idx+ii):(idx+m-1)
             M[i] = zero(T)
         end
@@ -71,7 +71,7 @@ function tril!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)
     idx = 1
     for j = 0:n-1
-        ii = min(max(0, j-k), m)
+        ii = minof(maxof(0, j-k), m)
         for i = idx:(idx+ii-1)
             M[i] = zero(T)
             end
@@ -112,9 +112,9 @@ end
 function diag{T}(A::Matrix{T}, k::Integer)
     m, n = size(A)
     if k >= 0 && k < n
-        nV = min(m, n-k)
+        nV = minof(m, n-k)
     elseif k < 0 && -k < m
-        nV = min(m+k, n)
+        nV = minof(m+k, n)
     else
         throw(BoundsError())
     end
@@ -548,7 +548,7 @@ function factors{T}(lu::LUDense{T})
     L = m >= n ? tril(LU, -1) + eye(T,m,n) : tril(LU, -1)[:, 1:m] + eye(T,m)
     U = m <= n ? triu(LU) : triu(LU)[1:n, :]
     P = [1:m]
-    for i = 1:min(m,n)
+    for i = 1:minof(m,n)
         t = P[i]
         P[i] = P[ipiv[i]]
         P[ipiv[i]] = t
@@ -632,7 +632,7 @@ type QRPivotedDense{T} <: Factorization{T}
     jpvt::Vector{BlasInt}
     function QRPivotedDense(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{BlasInt})
         m, n = size(hh)
-        if length(tau) != min(m,n) || length(jpvt) != n
+        if length(tau) != minof(m,n) || length(jpvt) != n
             error("QRPivotedDense: mismatched dimensions")
         end
         new(hh,tau,jpvt)
@@ -946,7 +946,7 @@ function null{T<:BlasFloat}(A::StridedMatrix{T})
     m,n = size(A)
     _,s,vt = svdt(A)
     if m == 0; return eye(T, n); end
-    indstart = sum(s .> max(m,n)*max(s)*eps(eltype(s))) + 1
+    indstart = sum(s .> maxof(m,n)*max(s)*eps(eltype(s))) + 1
     vt[indstart:,:]'
 end
 null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))

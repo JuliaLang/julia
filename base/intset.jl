@@ -244,7 +244,7 @@ function isequal(s1::IntSet, s2::IntSet)
     end
     lim1 = length(s1.bits)
     lim2 = length(s2.bits)
-    for i = 1:min(lim1,lim2)
+    for i = 1:minof(lim1,lim2)
         if s1.bits[i] != s2.bits[i]
             return false
         end

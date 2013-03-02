@@ -64,10 +64,10 @@ read{T}(from::IOBuffer, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
 # This should maybe be sizeof() instead.
 #length(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 nb_available(io::IOBuffer) = io.size - io.ptr + 1
-skip(io::IOBuffer, n::Integer) = (io.ptr = min(io.ptr + n, io.size+1))
+skip(io::IOBuffer, n::Integer) = (io.ptr = minof(io.ptr + n, io.size+1))
 function seek(io::IOBuffer, n::Integer)
     if !io.seekable error("seek failed") end
-    io.ptr = min(n+1, io.size+1)
+    io.ptr = minof(n+1, io.size+1)
     return true
 end
 function seek_end(io::IOBuffer)
@@ -84,7 +84,7 @@ function truncate(io::IOBuffer, n::Integer)
     end
     io.data[io.size+1:end] = 0
     io.size = n
-    io.ptr = min(io.ptr, n+1)
+    io.ptr = minof(io.ptr, n+1)
     return true
 end
 function compact(io::IOBuffer)
@@ -110,7 +110,7 @@ function ensureroom(io::IOBuffer, nshort::Int)
             compact(io)
         end
     end
-    n = min(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
+    n = minof(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
     if n > length(io.data)
         resize!(io.data, n)
     end
@@ -168,9 +168,9 @@ function write_sub{T}(to::IOBuffer, a::Array{T}, offs, nel)
         nb = nel*sizeof(T)
         ensureroom(to, nb)
         ptr = (to.append ? to.size+1 : to.ptr)
-        nb = min(nb, length(to.data) - ptr + 1)
+        nb = minof(nb, length(to.data) - ptr + 1)
         ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Int), pointer(to.data,ptr), pointer(a,offs), nb)
-        to.size = max(to.size, ptr - 1 + nb)
+        to.size = maxof(to.size, ptr - 1 + nb)
         if !to.append; to.ptr += nb; end
     else
         error("Write to IOBuffer only supports bits types or arrays of bits types; got "*string(T)*".")
@@ -189,7 +189,7 @@ function write(to::IOBuffer, a::Uint8)
     else
         to.data[ptr] = a
     end
-    to.size = max(to.size, ptr)
+    to.size = maxof(to.size, ptr)
     if !to.append; to.ptr += 1; end
     sizeof(Uint8)
 end

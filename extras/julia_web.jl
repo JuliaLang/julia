@@ -130,7 +130,7 @@ function plot(x::Array, y::Array, plottype::String)
         cy = (ymax+ymin)/2.0
 
         # determine how big the window is
-        w = max(xmax-xmin, ymax-ymin)/2.0
+        w = maxof(xmax-xmin, ymax-ymin)/2.0
         wx = w+2.0*w*__HORIZONTAL_PADDING
         wy = w+2.0*w*__VERTICAL_PADDING
 
@@ -183,7 +183,7 @@ function plot(y::Array, plottype)
         cy = (ymax+ymin)/2.0
 
         # determine how big the window is
-        w = max(xmax-xmin, ymax-ymin)/2.0
+        w = maxof(xmax-xmin, ymax-ymin)/2.0
         wx = w+2.0*w*__HORIZONTAL_PADDING
         wy = w+2.0*w*__VERTICAL_PADDING
 

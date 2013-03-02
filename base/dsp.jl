@@ -15,7 +15,7 @@ function filt(b,a,x)
         error("filt: a[1] must be nonzero")
     end
 
-    sz = max(size(a,1),size(b,1))
+    sz = maxof(size(a,1),size(b,1))
 
     if sz == 1
         return (b[1]/a[1]).*x

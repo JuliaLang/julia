@@ -2,7 +2,7 @@ macro timeit(ex,name)
     quote
         t = Inf
         for i=1:5
-            t = min(t, @elapsed $ex)
+            t = minof(t, @elapsed $ex)
         end
         println($name, "\t", t*1000)
     end

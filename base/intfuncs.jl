@@ -225,7 +225,7 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 const dig_syms = uint8(['0':'9','a':'z','A':'Z'])
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
+    i = neg + maxof(pad,sizeof(x)<<3-leading_zeros(x))
     a = Array(Uint8,i)
     while i > neg
         a[i] = '0'+(x&0x1)
@@ -237,7 +237,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
+    i = neg + maxof(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
     a = Array(Uint8,i)
     while i > neg
         a[i] = '0'+(x&0x7)
@@ -249,7 +249,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + max(pad,ndigits0z(x))
+    i = neg + maxof(pad,ndigits0z(x))
     a = Array(Uint8,i)
     while i > neg
         a[i] = '0'+rem(x,10)
@@ -261,7 +261,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
+    i = neg + maxof(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = Array(Uint8,i)
     while i > neg
         a[i] = dig_syms[(x&0xf)+1]
@@ -276,7 +276,7 @@ num2hex(n::Integer) = hex(n, sizeof(n)*2)
 
 function base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
     if !(2 <= b <= length(symbols)) error("invalid base: $b") end
-    i = neg + max(pad,ndigits0z(x,b))
+    i = neg + maxof(pad,ndigits0z(x,b))
     a = Array(Uint8,i)
     while i > neg
         a[i] = symbols[rem(x,b)+1]

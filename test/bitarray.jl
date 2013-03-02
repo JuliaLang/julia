@@ -85,7 +85,7 @@ b2 = randbool(m1)
 
 for p1 = [rand(1:v1) 1 63 64 65 191 192 193]
     for p2 = [rand(1:v1) 1 63 64 65 191 192 193]
-        for n = 0 : min(v1 - p1 + 1, v1 - p2 + 1)
+        for n = 0 : minof(v1 - p1 + 1, v1 - p2 + 1)
             b1 = randbool(v1)
             b2 = randbool(v1)
             @check_bit_operation copy! BitVector (b1, p1, b2, p2, n)
@@ -530,8 +530,8 @@ timesofar("nnz&find")
 b1 = randbool(s1, s2, s3, s4)
 m1 = 1
 m2 = 3
-@check_bit_operation max BitArray{4} (b1, (), (m1, m2))
-@check_bit_operation min BitArray{4} (b1, (), (m1, m2))
+@check_bit_operation max BitArray{4} (b1, (m1, m2))
+@check_bit_operation min BitArray{4} (b1, (m1, m2))
 @check_bit_operation sum Array{Int,4} (b1, (m1, m2))
 
 @check_bit_operation max Bool (b1,)
@@ -623,7 +623,7 @@ b2 = randbool(v1)
 @check_bit_operation dot Int (b1, b2)
 
 b1 = randbool(n1, n2)
-for k = -max(n1,n2) : max(n1,n2)
+for k = -maxof(n1,n2) : maxof(n1,n2)
     @check_bit_operation tril BitMatrix (b1, k)
     @check_bit_operation triu BitMatrix (b1, k)
 end

@@ -841,7 +841,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         for v1 = 1:spp1
             for v0 = 1:spp0
                 if bm1[v0, v1]
-                    newmsg[v1] = max(newmsg[v1], cavmsg[v0])
+                    newmsg[v1] = maxof(newmsg[v1], cavmsg[v0])
                 end
             end
             if dir1 == 1 && v1 != spp1
@@ -850,7 +850,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
                 #       mutate cavmsg
                 newmsg[v1] += FieldValue(0,0,0,v1)
             end
-            m = max(m, newmsg[v1])
+            m = maxof(m, newmsg[v1])
         end
         if !validmax(m)
             # No state available without violating some
@@ -865,7 +865,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
 
         diff = newmsg - oldmsg
         maxabsdiff = max(abs(diff))
-        maxdiff = max(maxdiff, maxabsdiff)
+        maxdiff = maxof(maxdiff, maxabsdiff)
 
         # update the field of p1
         fld1 = fld[p1]
@@ -907,7 +907,7 @@ function iterate(graph::Graph, msgs::Messages)
     perm = graph.perm
     for p0 in perm
         maxdiff0 = update(p0, graph, msgs)
-        maxdiff = max(maxdiff, maxdiff0)
+        maxdiff = maxof(maxdiff, maxdiff0)
     end
     return maxdiff
 end

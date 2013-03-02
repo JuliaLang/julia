@@ -51,7 +51,7 @@ function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
     # Compute initial step size.
 
     s1 = F(t, y)
-    r = norm(s1./max(abs(y), threshold), Inf) + realmin() # TODO: fix type bug in max()
+    r = norm(s1./maxof(abs(y), threshold), Inf) + realmin() # TODO: fix type bug in max()
     h = tdir*0.8*rtol^(1/3)/r
 
     # The main loop.
@@ -79,7 +79,7 @@ function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
         # Estimate the error.
 
         e = h*(-5*s1 + 6*s2 + 8*s3 - 9*s4)/72
-        err = norm(e./max(max(abs(y), abs(ynew)), threshold), Inf) + realmin()
+        err = norm(e./maxof(maxof(abs(y), abs(ynew)), threshold), Inf) + realmin()
 
         # Accept the solution if the estimated error is less than the tolerance.
 
@@ -93,7 +93,7 @@ function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
             
         # Compute a new step size.
         
-        h = h*min(5, 0.8*(rtol/err)^(1/3))
+        h = h*minof(5, 0.8*(rtol/err)^(1/3))
         
         # Exit early if step size is too small.
         
@@ -219,7 +219,7 @@ function oderkf{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, a,
                 
         # Estimate the error and the acceptable error
         delta = norm(gamma1, Inf)       # actual error
-        tau = tol*max(norm(x,Inf), 1.0) # allowable error
+        tau = tol*maxof(norm(x,Inf), 1.0) # allowable error
         
         # Update the solution only if the error is acceptable
         if (delta <= tau)
@@ -233,7 +233,7 @@ function oderkf{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, a,
         if delta == 0.0
             delta = 1e-16
         end
-        h = min(hmax, 0.8*h*(tau/delta)^pow)
+        h = minof(hmax, 0.8*h*(tau/delta)^pow)
     end # while (t < tfinal) & (h >= hmin)
 
     if (t < tfinal)
@@ -422,7 +422,7 @@ function ode_ms{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, or
     xdot = similar(x)
     for i = 1:length(tspan)-1
         # Need to run the first several steps at reduced order
-        steporder = min(i, order)
+        steporder = minof(i, order)
         xdot[i,:] = F(tspan[i], x[i,:]')
         x[i+1,:] = x[i,:] + b[steporder,1:steporder]*xdot[i-(steporder-1):i,:].*h[i]
     end

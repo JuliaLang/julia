@@ -21,7 +21,7 @@ for (T, saupd, seupd, naupd, neupd) in
             sym    = issym(A)
             if n <= nev nev = n - 1 end
 
-            ncv = min(max(nev*2, 20), n)
+            ncv = minof(maxof(nev*2, 20), n)
 #           if ncv-nev < 2 || ncv > n error("Compute fewer eigenvalues using eigs(A, k)") end
 
            bmat   = "I"
@@ -124,7 +124,7 @@ for (T, TR, naupd, neupd) in
            if m  != n error("eigs: matrix A is $m by $n but must be square") end
            if n <= nev nev = n - 1 end
 
-           ncv = min(max(nev*2, 20), n)
+           ncv = minof(maxof(nev*2, 20), n)
 #           if ncv-nev < 2 || ncv > n error("Compute fewer eigenvalues using eigs(A, k)") end
 
            bmat   = "I"
@@ -201,7 +201,7 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
 
            At = isa(A, StridedMatrix) ? BLAS.syrk('U','T',1.,A) : A'
     
-           ncv    = min(max(nev*2, 20), n)
+           ncv    = minof(maxof(nev*2, 20), n)
            lworkl = ncv*(ncv+8)
 
            v      = Array($T, n, ncv)

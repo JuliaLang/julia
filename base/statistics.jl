@@ -236,5 +236,5 @@ function bound_quantiles(qs::AbstractVector)
     if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
         error("quantiles out of [0,1] range")
     end
-    [min(1,max(0,q)) for q = qs]
+    [minof(1,maxof(0,q)) for q = qs]
 end

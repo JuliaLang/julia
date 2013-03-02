@@ -128,7 +128,7 @@ ishermitian(x::Number) = (x == conj(x))
 
 function istriu(A::AbstractMatrix)
     m, n = size(A)
-    for j = 1:min(n,m-1), i = j+1:m
+    for j = 1:minof(n,m-1), i = j+1:m
         if A[i,j] != 0
             return false
         end
@@ -138,7 +138,7 @@ end
 
 function istril(A::AbstractMatrix)
     m, n = size(A)
-    for j = 2:n, i = 1:min(j-1,m)
+    for j = 2:n, i = 1:minof(j-1,m)
         if A[i,j] != 0
             return false
         end

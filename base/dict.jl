@@ -338,7 +338,7 @@ function sizehint(d::Dict, newsz)
         return d
     end
     # grow at least 25%
-    newsz = max(newsz, (oldsz*5)>>2)
+    newsz = maxof(newsz, (oldsz*5)>>2)
     rehash(d, newsz)
 end
 
@@ -365,7 +365,7 @@ function assign{K,V}(h::Dict{K,V}, v, key)
     end
 
     iter = 0
-    maxprobe = max(16, sz>>6)
+    maxprobe = maxof(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     avail = -1  # an available slot
@@ -417,7 +417,7 @@ end
 function ht_keyindex{K,V}(h::Dict{K,V}, key)
     sz = length(h.keys)
     iter = 0
-    maxprobe = max(16, sz>>6)
+    maxprobe = maxof(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     keys = h.keys

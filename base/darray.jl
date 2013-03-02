@@ -34,7 +34,7 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     end
 
     function DArray(initializer::Function, dims)
-        procs = [1:min(nprocs(),dims[distdim])]
+        procs = [1:minof(nprocs(),dims[distdim])]
         dist = defaultdist(distdim, dims, length(procs))
         DArray{T,N,distdim}(initializer, dims, procs, dist)
     end
@@ -222,7 +222,7 @@ function locate(d::DArray, I::Range1{Int})
             j += 1
         else
             push!(pmap,j)
-            i = min(imax+1,d.dist[j+1])
+            i = minof(imax+1,d.dist[j+1])
             push!(dist,i)
             j += 1
         end
@@ -247,7 +247,7 @@ function locate(d::DArray, I::AbstractVector{Int})
             j += 1
         else
             push!(pmap,j)
-            i = min(imax+1,d.dist[j+1])
+            i = minof(imax+1,d.dist[j+1])
             push!(dist,i)
             j += 1
         end
@@ -283,7 +283,7 @@ function darray{T}(init, ::Type{T}, dims::Dims, distdim, procs)
 end
 
 function darray{T}(init, ::Type{T}, dims::Dims, distdim)
-    procs = [1:min(nprocs(),dims[distdim])]
+    procs = [1:minof(nprocs(),dims[distdim])]
     darray(init, T, dims, distdim, procs,
            defaultdist(distdim, dims, length(procs)))
 end
@@ -877,8 +877,8 @@ end
 
 sum(d::DArray) = reduce(+, d)
 prod(d::DArray) = reduce(*, d)
-min(d::DArray) = reduce(min, d)
-max(d::DArray) = reduce(max, d)
+min(d::DArray) = reduce(minof, d)
+max(d::DArray) = reduce(maxof, d)
 
 reducedim(f::Function, d::DArray, r, v0, T::Type) = error("not yet implemented")
 cumsum(d::DArray) = error("not yet implemented")

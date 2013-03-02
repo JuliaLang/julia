@@ -47,19 +47,19 @@ end
 OrdinalRange{T}(start::T, step::Integer, len::Integer) = OrdinalRange{T}(start, step, len)
 
 colon{T<:Integer}(start::T, step::T, stop::T) =
-    Range(start, step, max(0, div(stop-start+step, step)))
+    Range(start, step, maxof(0, div(stop-start+step, step)))
 colon{T<:Integer}(start::T, stop::T) =
-    Range1(start, max(0, stop-start+1))
+    Range1(start, maxof(0, stop-start+1))
 
 colon{T}(start::T, step, stop::T) =
-    OrdinalRange(start, step, max(0, div(stop-start+step, step)))
+    OrdinalRange(start, step, maxof(0, div(stop-start+step, step)))
 colon{T}(start::T, stop::T) =
-    OrdinalRange(start, 1, max(0, stop-start+1))
+    OrdinalRange(start, 1, maxof(0, stop-start+1))
 
 colon(start::Char, step::Int, stop::Char) =
-    OrdinalRange(start, step, max(0, div(stop-start+step, step)))
+    OrdinalRange(start, step, maxof(0, div(stop-start+step, step)))
 colon(start::Char, stop::Char) =
-    OrdinalRange(start, 1, max(0, stop-start+1))
+    OrdinalRange(start, 1, maxof(0, stop-start+1))
 
 function colon{T<:Real}(start::T, step::T, stop::T)
     if (step<0) != (stop<start)
@@ -159,7 +159,7 @@ isequal(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
 
 # TODO: isless?
 
-intersect(r::Range1, s::Range1) = max(r.start,s.start):min(last(r),last(s))
+intersect(r::Range1, s::Range1) = maxof(r.start,s.start):minof(last(r),last(s))
 
 intersect{T<:Integer}(i::Integer, r::Range1{T}) =
     i < first(r) ? (first(r):i) :
@@ -174,10 +174,10 @@ function intersect(r::Range1, s::Range)
     sto = last(s)
     lo = first(r)
     hi = last(r)
-    i0 = max(lo, sta + ste*div((lo-sta)+ste-1, ste))
-    i1 = min(hi, sta + ste*div((hi-sta), ste))
-    i0 = max(i0, sta)
-    i1 = min(i1, sto)
+    i0 = maxof(lo, sta + ste*div((lo-sta)+ste-1, ste))
+    i1 = minof(hi, sta + ste*div((hi-sta), ste))
+    i0 = maxof(i0, sta)
+    i1 = minof(i1, sto)
     i0:ste:i1
 end
 intersect(r::Range, s::Range1) = intersect(s, r)

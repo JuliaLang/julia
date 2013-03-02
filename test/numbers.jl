@@ -50,7 +50,7 @@
 @test 2*3 == 6
 @test 2.*3 == 6
 @test 2. * 3. == 6.
-@test min(1.0,1) == 1
+@test minof(1.0,1) == 1
 
 # definition and printing of extreme integers
 @test bin(typemin(Uint8)) == "0"

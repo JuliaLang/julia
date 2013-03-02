@@ -424,14 +424,14 @@ function generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{
         else
             Ctile = pointer_to_array(convert(Ptr{R}, pointer(Cbuf)), sz)
             for jb = 1:tile_size:nB
-                jlim = min(jb+tile_size-1,nB)
+                jlim = minof(jb+tile_size-1,nB)
                 jlen = jlim-jb+1
                 for ib = 1:tile_size:mA
-                    ilim = min(ib+tile_size-1,mA)
+                    ilim = minof(ib+tile_size-1,mA)
                     ilen = ilim-ib+1
                     fill!(Ctile, z)
                     for kb = 1:tile_size:nA
-                        klim = min(kb+tile_size-1,mB)
+                        klim = minof(kb+tile_size-1,mB)
                         klen = klim-kb+1
                         copy_transpose!(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
                         copy!(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
