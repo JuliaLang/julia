@@ -5,7 +5,8 @@ module Meta
 
 export quot, 
        isexpr, 
-       show_sexpr
+       show_sexpr,
+       @usingif
 
 quot(ex) = expr(:quote, {ex})
 
@@ -42,6 +43,16 @@ function show_sexpr(io::IO, ex::Expr, indent::Int)
     if length(ex.args) == 0; print(io, ",)")
     else print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
     end
+end
+
+# ---- Module/package utilities ----
+
+#  @usingif have_winston Winston
+macro usingif(status, sym)
+    if Pkg.installed(string(sym)) != nothing
+        return expr(:toplevel, {expr(:using, {sym}), :($(esc(status)) = true)})
+    end
+    :($(esc(status)) = false)
 end
 
 end # module
