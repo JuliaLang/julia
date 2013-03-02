@@ -832,16 +832,18 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 // do anything without being able to make Exprs.
 JL_CALLABLE(jl_f_new_expr)
 {
-    JL_NARGS(Expr, 3, 3);
+    JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);
-    if (!jl_typeis(args[1], (jl_value_t*)jl_array_any_type)) {
-        jl_type_error("Expr", (jl_value_t*)jl_array_any_type, args[1]);
-    }
+    jl_array_t *ar = jl_alloc_cell_1d(nargs-1);
+    JL_GC_PUSH(&ar);
+    for(size_t i=1; i < nargs; i++)
+        jl_cellset(ar, i-1, args[i]);
     jl_expr_t *ex = (jl_expr_t*)alloc_4w();
     ex->type = (jl_type_t*)jl_expr_type;
     ex->head = (jl_sym_t*)args[0];
-    ex->args = (jl_array_t*)args[1];
-    ex->etype = args[2];
+    ex->args = ar;
+    ex->etype = (jl_value_t*)jl_any_type;
+    JL_GC_POP();
     return (jl_value_t*)ex;
 }
 

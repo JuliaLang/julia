@@ -239,7 +239,7 @@ function _resolve()
         end
     end
     sort!(reqs)
-    want = Resolve.resolve(reqs)
+    want = Resolve.resolve(reqs,["julia"=>VERSION])
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
         if has(have,pkg)

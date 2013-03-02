@@ -388,3 +388,8 @@ let
     A2sq = sqrtm(A2)
     @test_approx_eq A2sq*A2sq A2
 end
+
+let
+    N = 3
+    @test_approx_eq log(det(eye(N))) logdet(eye(N))
+end

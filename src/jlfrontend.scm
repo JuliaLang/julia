@@ -133,12 +133,20 @@
 
 (define (jl-parse-string s)
   (parser-wrap (lambda ()
-		 (let* ((inp  (make-token-stream (open-input-string s)))
-			(expr (julia-parse inp)))
-		   ;; delay expansion so macros run in the Task executing
-		   ;; the input, not the task parsing it (issue #2378)
-		   expr
-		   #;(expand-toplevel-expr expr)))))
+		 (let ((inp  (make-token-stream (open-input-string s))))
+		   ;; parse all exprs into a (toplevel ...) form
+		   (let loop ((exprs '()))
+		     ;; delay expansion so macros run in the Task executing
+		     ;; the input, not the task parsing it (issue #2378)
+		     ;; used to be (expand-toplevel-expr expr)
+		     (let ((expr (julia-parse inp)))
+		       (if (eof-object? expr)
+			   (cond ((null? exprs)     expr)
+				 ((length= exprs 1) (car exprs))
+				 (else (cons 'toplevel (reverse! exprs))))
+			   (if (and (pair? expr) (eq? (car expr) 'toplevel))
+			       (loop (nreconc (cdr expr) exprs))
+			       (loop (cons expr exprs))))))))))
 
 ;; parse file-in-a-string
 (define (jl-parse-string-stream str)

@@ -102,7 +102,7 @@ cond(x::Number, p) = cond(x)
 
 function issym(A::AbstractMatrix)
     m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    if m != n; return false; end
     for i = 1:(n-1), j = (i+1):n
         if A[i,j] != A[j,i]
             return false
@@ -115,7 +115,7 @@ issym(x::Number) = true
 
 function ishermitian(A::AbstractMatrix)
     m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    if m != n; return false; end
     for i = 1:n, j = i:n
         if A[i,j] != conj(A[j,i])
             return false

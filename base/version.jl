@@ -158,53 +158,44 @@ let
                                               # this point in the bootstrapping, conflicts between old and new
                                               # defintions for write, TTY, ASCIIString, and STDOUT make it fail
     ver = string(VERSION)
-    (outver,ps) = readsfrom(`git rev-parse HEAD`)
+
+    outctim,ps = readsfrom(`git log -1 --pretty=format:%ct`)
     ps.closecb = function(proc)
         if !success(proc)
-            #acceptable.msg = "failed process: $proc [$(proc.exit_code)]"
+            #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
             error(acceptable)
         end
-        commit = readchomp(proc.out.buffer)
-        (outtag,ps) = readsfrom(`git rev-parse --verify --quiet v$ver`)
+
+        ctim = int(readall(proc.out.buffer))
+
+        outdesc,ps = readsfrom(`git describe --tags --dirty --long --abbrev=10`)
         ps.closecb = function(proc)
-            tagged = if success(proc)
-                readchomp(proc.out.buffer)
-            elseif proc.exit_code == 1 && proc.term_signal == 0
-                "doesn't reference a commit"
-            else
-                #acceptable.msg = "failed process: $proc [$(proc.exit_code)]"
+            if !success(proc)
+                #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
                 error(acceptable)
             end
-            tagged = success(proc) ? readchomp(proc.out.buffer) : "doesn't reference a commit"
-            (outctim,ps) = readsfrom(`git log -1 --pretty=format:%ct`)
-            ps.closecb = function(proc)
-                if !success(proc)
-                    #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
-                    error(acceptable)
-                end
-                ctim = int(readall(proc.out.buffer))
-                if commit != tagged
-                    # 1250998746: ctime of first commit (Sat Aug 23 3:39:06 2009 UTC)
-                    push!(VERSION.build, ctim - 1250998746)
-                    push!(VERSION.build, "r$(commit[1:4])")
-                end
-                ps = spawn(`git diff --quiet HEAD`)
-                ps.closecb = function(proc)
-                    clean = if success(proc)
-                        ""
-                    elseif proc.exit_code == 1 && proc.term_signal == 0
-                        push!(VERSION.build, "dirty")
-                        "*" 
-                    else
-                        #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
-                        error(acceptable)
-                    end
-                    isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
-                    global const commit_string = "Commit $(commit[1:10]) ($isotime)$clean"
-                    global const VERSION_COMMIT = commit[1:10]
-                    error(expected)
-                end
+
+            description = readchomp(proc.out.buffer)
+            m = match(r"^(v\d+(?:\.\d+)+)-(\d+)-g([0-9a-f]{10})(-dirty)?$", description)
+            if m == nothing
+                error(acceptable)
             end
+            tag = convert(VersionNumber, m.captures[1])
+            commits_after_tag = int(m.captures[2])
+            commit = m.captures[3]
+            dirty = m.captures[4] != nothing
+
+            if commits_after_tag > 0
+                field = tag < VERSION ? VERSION.prerelease : VERSION.build
+                push!(field, commits_after_tag)
+                push!(field, "r$(commit[1:4])")
+                if dirty push!(field, "dirty") end
+            end
+
+            isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
+            global const commit_string = "Commit $commit $isotime" * (dirty ? "*" : "")
+            global const VERSION_COMMIT = commit
+            error(expected)
         end
     end
     try
@@ -256,5 +247,3 @@ $(jl)|__/$(tx)                   |
 
 \033[0m"
 end # begin
-
-branch() = VersionNumber(0,2,0,["pre"],Int[])
