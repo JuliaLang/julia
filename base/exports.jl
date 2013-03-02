@@ -1104,6 +1104,7 @@ export
     #process_stopped,
     process_term_signal,
     readsfrom,
+    readandwrite,
     run,
     spawn,
     spawn_nostdin,
@@ -1126,8 +1127,6 @@ export
 
 # Macros
     @str,
-    @mstr,
-    @imstr,
     @I_str,
     @E_str,
     @B_str,
@@ -1135,6 +1134,10 @@ export
     @L_str,
     @r_str,
     @v_str,
+    @mstr,
+    @L_mstr,
+    @I_mstr,
+    @E_mstr,
     @unexpected,
     @assert,
     @cmd,
