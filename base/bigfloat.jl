@@ -62,8 +62,11 @@ convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
 convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 
 convert(::Type{Float64}, x::BigFloat) = ccall((:__gmpf_get_d,:libgmp), Float64, (Ptr{Void},), x.mpf)
+convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
 
 promote_rule{T<:Union(Integer,FloatingPoint)}(::Type{BigFloat}, ::Type{T}) = BigFloat
+promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
+
 
 # mpf doesn't have inf or nan
 isnan(x::BigFloat) = false
@@ -105,6 +108,9 @@ function ^(x::BigFloat, y::Uint)
     ccall((:__gmpf_pow_ui, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Uint), z.mpf, x.mpf, y)
     return z
 end
+
+^(x::Float32, y::BigInt) = BigFloat(x)^y
+^(x::Float64, y::BigInt) = BigFloat(x)^y
 
 ==(x::BigFloat, y::BigFloat) = cmp(x,y) == 0
 <=(x::BigFloat, y::BigFloat) = cmp(x,y) <= 0
