@@ -561,7 +561,7 @@ void jl_array_del_beg(jl_array_t *a, size_t dec)
     if (offset >= 13*a->maxsize/20) {
         newoffs = 17*(a->maxsize - a->length)/100;
     }
-#ifdef __LP64__
+#ifdef _P64
     while (newoffs > (size_t)((uint32_t)-1)) {
         newoffs = newoffs/2;
     }

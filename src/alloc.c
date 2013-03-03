@@ -350,7 +350,7 @@ static jl_sym_t *mk_symbol(const char *str)
     sym = (jl_sym_t*)malloc((sizeof(jl_sym_t)-sizeof(void*)+len+1+7)&-8);
     sym->type = (jl_type_t*)jl_sym_type;
     sym->left = sym->right = NULL;
-#ifdef __LP64__
+#ifdef _P64
     sym->hash = memhash(str, len)^0xAAAAAAAAAAAAAAAAL;
 #else
     sym->hash = memhash32(str, len)^0xAAAAAAAA;
@@ -670,7 +670,7 @@ jl_value_t *jl_box##nb(jl_bits_type_t *t, int##nb##_t x)        \
 BOXN_FUNC(8,  2)
 BOXN_FUNC(16, 2)
 BOXN_FUNC(32, 2)
-#ifdef __LP64__
+#ifdef _P64
 BOXN_FUNC(64, 2)
 #else
 BOXN_FUNC(64, 3)
@@ -706,7 +706,7 @@ jl_value_t *pfx##_##typ(c_type x)               \
 }
 BOX_FUNC(float32, float,  jl_box, 2)
 BOX_FUNC(voidpointer, void*,  jl_box, 2) //2 pointers == two words on all platforms
-#ifdef __LP64__
+#ifdef _P64
 BOX_FUNC(float64, double, jl_box, 2)
 #else
 BOX_FUNC(float64, double, jl_box, 3)
@@ -742,7 +742,7 @@ SIBOX_FUNC(int32,  int32_t, 2)
 UIBOX_FUNC(uint16, uint16_t, 2)
 UIBOX_FUNC(uint32, uint32_t, 2)
 UIBOX_FUNC(char,   uint32_t, 2)
-#ifdef __LP64__
+#ifdef _P64
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
 #else

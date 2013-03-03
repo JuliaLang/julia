@@ -1370,7 +1370,7 @@ static value_t apply_cl(uint32_t nargs)
                 if (fits_fixnum(s))
                     v = fixnum(s);
                 else
-                    v = mk_long(s);
+                    v = mk_ptrdiff(s);
             }
             else {
                 v = fl_add_any(&Stack[SP-2], 2, 0);
@@ -1408,7 +1408,7 @@ static value_t apply_cl(uint32_t nargs)
                 if (fits_fixnum(s))
                     v = fixnum(s);
                 else
-                    v = mk_long(s);
+                    v = mk_ptrdiff(s);
             }
             else {
                 Stack[SP-1] = fl_neg(Stack[SP-1]);
@@ -1513,7 +1513,7 @@ static value_t apply_cl(uint32_t nargs)
                 if (isfixnum(e))
                     i = numval(e);
                 else
-                    i = (uint32_t)toulong(e, "aref");
+                    i = (uint32_t)tosize(e, "aref");
                 if ((unsigned)i >= vector_size(v))
                     bounds_error("aref", v, e);
                 v = vector_elt(v, i);
@@ -2298,7 +2298,7 @@ static void lisp_init(size_t initial_heapsize)
 
 #ifdef __linux__
     set(symbol("*os-name*"), symbol("linux"));
-#elif defined(WIN32) || defined(WIN64)
+#elif defined(_WIN32) || defined(_WIN64)
     set(symbol("*os-name*"), symbol("win32"));
 #elif defined(__APPLE__)
     set(symbol("*os-name*"), symbol("macos"));
