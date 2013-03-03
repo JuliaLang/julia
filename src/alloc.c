@@ -580,6 +580,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->linfo = NULL;
     t->ctor_factory = (jl_value_t*)jl_null;
     t->instance = NULL;
+    t->struct_decl = NULL;
     if (!jl_is_leaf_type((jl_value_t*)t)) {
         t->uid = 0;
     }

@@ -2,6 +2,12 @@
 #define __STDC_LIMIT_MACROS
 #define __STDC_CONSTANT_MACROS
 #endif
+
+#pragma push_macro("DEBUG")
+#pragma push_macro("NDEBUG")
+#undef DEBUG
+#undef NDEBUG
+
 #include "llvm/DerivedTypes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
@@ -43,9 +49,6 @@
 #include <vector>
 #include <set>
 #include <cstdio>
-#ifdef DEBUG
-#undef NDEBUG
-#endif
 #include <cassert>
 using namespace llvm;
 
@@ -65,8 +68,51 @@ static ExecutionEngine *jl_ExecutionEngine;
 static DIBuilder *dbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
+static TargetOptions options;
 
-// types
+// clang state
+#undef B0 //rom termios
+#include <clang/Frontend/CompilerInstance.h>
+#include <clang/Frontend/CodeGenOptions.h>
+#include <clang/AST/ASTContext.h>
+#include <clang/AST/DeclTemplate.h>
+#include <clang/Basic/Specifiers.h>
+#include <CodeGen/CodeGenModule.h>
+#include <CodeGen/CodeGenTypes.h>
+#include <CodeGen/CodeGenFunction.h>
+static clang::ASTContext *clang_astcontext;
+static clang::CompilerInstance *clang_compiler;
+static clang::CodeGen::CodeGenModule *clang_cgm;
+static clang::CodeGen::CodeGenTypes *clang_cgt;
+static clang::CodeGen::CodeGenFunction *clang_cgf;
+// clang types
+static clang::CanQualType cT_int1;
+static clang::CanQualType cT_int8;
+static clang::CanQualType cT_uint8;
+static clang::CanQualType cT_int16;
+static clang::CanQualType cT_uint16;
+static clang::CanQualType cT_int32;
+static clang::CanQualType cT_uint32;
+static clang::CanQualType cT_int64;
+static clang::CanQualType cT_uint64;
+static clang::CanQualType cT_char;
+static clang::CanQualType cT_size;
+static clang::CanQualType cT_int128;
+static clang::CanQualType cT_uint128;
+static clang::CanQualType cT_complex64;
+static clang::CanQualType cT_complex128;
+static clang::CanQualType cT_float32;
+static clang::CanQualType cT_float64;
+static clang::CanQualType cT_void;
+static clang::CanQualType cT_pvoid;
+
+#pragma pop_macro("DEBUG")
+#pragma pop_macro("NDEBUG")
+#ifdef DEBUG
+#undef NDEBUG
+#endif
+
+// llvm types
 static Type *jl_value_llvmt;
 static Type *jl_pvalue_llvmt;
 static Type *jl_ppvalue_llvmt;
@@ -85,6 +131,8 @@ static Type *T_uint32;
 static Type *T_int64;
 static Type *T_pint64;
 static Type *T_uint64;
+static Type *T_int128;
+static Type *T_uint128;
 static Type *T_char;
 static Type *T_size;
 static Type *T_psize;
@@ -2467,8 +2515,10 @@ static void init_julia_llvm_env(Module *m)
     T_pint32 = PointerType::get(T_int32, 0);
     T_int64 = Type::getInt64Ty(getGlobalContext());
     T_pint64 = PointerType::get(T_int64, 0);
+    T_int128 = Type::getIntNTy(getGlobalContext(),128);
     T_uint8 = T_int8;   T_uint16 = T_int16;
     T_uint32 = T_int32; T_uint64 = T_int64;
+    T_uint128 = T_int128;
 #ifdef __LP64__
     T_size = T_uint64;
 #else
@@ -2761,6 +2811,57 @@ static void init_julia_llvm_env(Module *m)
     FPM->doInitialization();
 }
 
+void init_julia_clang_env(StringRef TT) {
+    //copied from http://www.ibm.com/developerworks/library/os-createcompilerllvm2/index.html
+    clang_compiler = new clang::CompilerInstance;
+    clang_compiler->createDiagnostics(0,NULL);
+    clang::TargetOptions *to = new clang::TargetOptions();
+    to->Triple = TT;
+    clang::TargetInfo *tin = clang::TargetInfo::CreateTargetInfo(clang_compiler->getDiagnostics(), *to);
+    clang_compiler->setTarget(tin);
+    clang_compiler->createFileManager();
+    clang_compiler->createSourceManager(clang_compiler->getFileManager());
+    clang_compiler->createPreprocessor();
+    clang_compiler->createASTContext();
+    clang_astcontext = &clang_compiler->getASTContext();
+    DataLayout *TD = new DataLayout(tin->getTargetDescription());
+    clang_cgm = new clang::CodeGen::CodeGenModule(
+            *clang_astcontext,
+            clang_compiler->getCodeGenOpts(),
+            *jl_Module,
+            *TD,
+            clang_compiler->getDiagnostics());
+    clang_cgt = new clang::CodeGen::CodeGenTypes(*clang_cgm);
+    clang_cgf = new clang::CodeGen::CodeGenFunction(*clang_cgm);
+    
+    cT_int1  = clang_astcontext->BoolTy;
+    cT_int8  = clang_astcontext->SignedCharTy;
+    cT_uint8 = clang_astcontext->UnsignedCharTy;
+    cT_int16 = clang_astcontext->ShortTy;
+    cT_uint16 = clang_astcontext->UnsignedShortTy;
+    cT_int32 = clang_astcontext->IntTy;
+    cT_uint32 = clang_astcontext->UnsignedIntTy;
+    cT_char = clang_astcontext->IntTy;
+#ifdef __LP64__
+    cT_int64 = clang_astcontext->LongTy;
+    cT_uint64 = clang_astcontext->UnsignedLongTy;
+#else
+    cT_int64 = clang_astcontext->LongLongTy;
+    cT_uint64 = clang_astcontext->UnsignedLongLongTy;
+#endif
+    cT_size = clang_astcontext->getSizeType();
+    cT_int128 = clang_astcontext->Int128Ty;
+    cT_uint128 = clang_astcontext->UnsignedInt128Ty;
+    cT_complex64 = clang_astcontext->FloatComplexTy;
+    cT_complex128 = clang_astcontext->DoubleComplexTy;
+
+    cT_float32 = clang_astcontext->FloatTy;
+    cT_float64 = clang_astcontext->DoubleTy;
+    cT_void = clang_astcontext->VoidTy;
+
+    cT_pvoid = clang_astcontext->getPointerType(cT_void);
+}
+
 extern "C" void jl_init_codegen(void)
 {
     
@@ -2779,7 +2880,6 @@ extern "C" void jl_init_codegen(void)
 #error "only maintaining support for LLVM 3.1 on Windows"
 #endif
 #elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
-    TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
 #ifdef DEBUG
     options.JITEmitDebugInfo = true;
@@ -2792,7 +2892,9 @@ extern "C" void jl_init_codegen(void)
 #ifdef __APPLE__
     options.JITExceptionHandling = 1;
 #endif
-    jl_ExecutionEngine = EngineBuilder(jl_Module)
+    EngineBuilder eb(jl_Module);
+    StringRef TT = eb.selectTarget()->getTargetTriple();
+    jl_ExecutionEngine = eb
         .setEngineKind(EngineKind::JIT)
         .setTargetOptions(options)
         .create();
@@ -2850,6 +2952,8 @@ extern "C" void jl_init_codegen(void)
                          jl_Module);
     jl_ExecutionEngine->addGlobalMapping(restore_arg_area_loc_func,
                                          (void*)&restore_arg_area_loc);
+
+    init_julia_clang_env(TT);
 }
 
 /*

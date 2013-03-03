@@ -10,6 +10,7 @@ random math functional bigint bigfloat sorting \
 statistics poly file Rmath remote zlib image \
 iostring gzip integers spawn ccall parallel pkg
 
+ccall extra :: libccalltest.$(SHLIB_EXT)
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
 
