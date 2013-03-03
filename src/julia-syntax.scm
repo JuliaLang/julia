@@ -2109,7 +2109,7 @@ So far only the second case can actually occur.
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
 	       (let ((forms (reverse q)))
-		 `(call (top expr) ,(expand-backquote (car e))
+		 `(call (top splicedexpr) ,(expand-backquote (car e))
 			(call (top append_any) ,@forms)))
 	       ;; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (match '($ (tuple (... x))) (car p))

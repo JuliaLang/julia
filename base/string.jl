@@ -808,11 +808,11 @@ function shell_parse(raw::String, interp::Bool)
     end
 
     # construct an expression
-    exprs = {}
+    ex = Expr(:tuple)
     for arg in args
-        push!(exprs, expr(:tuple, arg))
+        push!(ex.args, Expr(:tuple, arg...))
     end
-    expr(:tuple,exprs)
+    ex
 end
 shell_parse(s::String) = shell_parse(s,true)
 
