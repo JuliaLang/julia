@@ -2160,10 +2160,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == enter_sym) {
             int labl = jl_unbox_long(jl_exprarg(stmt,0));
-            Value *handlr =
+            AllocaInst *handlr =
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
                                                       sizeof(jl_handler_t)));
+            handlr->setAlignment(128); // bits == 16 bytes
             handlers[labl] = handlr;
         }
     }
