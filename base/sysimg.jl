@@ -42,6 +42,8 @@ end
 ## Load essential files and libraries
 
 include("base.jl")
+include("build_h.jl")
+include("c.jl")
 
 # core operations & types
 include("range.jl")
@@ -78,7 +80,7 @@ include("inference.jl")
 
 # I/O, strings & printing
 include("io.jl")
-include("iostring.jl")
+include("iobuffer.jl")
 include("stream.jl")
 include("socket.jl")
 include("fs.jl")
@@ -103,7 +105,6 @@ include("serialize.jl")
 include("multi.jl")
 
 # system & environment
-include("build_h.jl")
 include("osutils.jl")
 include("libc.jl")
 include("env.jl")
@@ -140,12 +141,13 @@ include("combinatorics.jl")
 include("darray2.jl")
 include("mmap.jl")
 
-# utilities - version, timing, help, edit
+# utilities - version, timing, help, edit, metaprogramming
 include("version.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
 include("util.jl")
 include("test.jl")
+include("meta.jl")
 
 # linear algebra
 include("blas.jl")

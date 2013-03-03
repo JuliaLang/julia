@@ -1,0 +1,45 @@
+#!/bin/sh
+# Copyright (C) 2007, Thomas Treichl and Paul Kienzle
+# Copyright (C) 2008-2009, Thomas Treichl
+# Copyright (C) 2013, Viral B. Shah (Adapted for Julia from Octave)
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; If not, see <http://www.gnu.org/licenses/>.
+
+ROOT="${0%/script}"
+
+# This is the startup procedure written as AppleScript to open a
+# Terminal.app (if the Terminal.app is not already running) and start
+# the Julia program.
+# 20071007 removed: open -a /Applications/Utilities/Terminal.app
+osascript 2>&1>/dev/null <<EOF
+  tell application "System Events" to set ProcessList to get name of every process
+  tell application "Terminal" 
+    activate
+    if ProcessList contains "Terminal" then
+      do script ("PATH=${ROOT}/julia/bin:${PATH} exec '${ROOT}/julia/bin/julia'")
+    else
+      do script ("PATH=${ROOT}/julia/bin:${PATH} exec '${ROOT}/julia/bin/julia'") in front window
+    end if
+  end tell
+EOF
+
+# Quit the Julia.application immediately after startup (ie. quitting
+# it in the taskbar) because once it is started it cannot be restarted
+# a second time. If Julia.app stays (eg. because of a crash) opened
+# then restarting is not possible.
+osascript 2>&1>/dev/null <<EOF
+  tell application "julia"
+    quit
+  end tell
+EOF

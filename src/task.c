@@ -587,6 +587,10 @@ static void NORETURN throw_internal(jl_value_t *e)
         jl_longjmp(jl_current_task->eh->eh_ctx, 1);
     }
     else {
+        if (jl_current_task == jl_root_task) {
+            JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
+            exit(1);
+        }
         jl_task_t *cont = jl_current_task->on_exit;
         while (cont->done)
             cont = cont->on_exit;
@@ -629,7 +633,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->ssize = ssize;
     t->on_exit = NULL;
     t->last = jl_current_task;
-    t->tls = jl_current_task->tls;
+    t->tls = jl_nothing;
     t->consumers = jl_nothing;
     t->done = 0;
     t->runnable = 1;

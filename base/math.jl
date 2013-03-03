@@ -77,11 +77,12 @@ function hypot(x::Real, y::Real)
         r = y/x
         return x*sqrt(one(r)+r*r)
     end
-    if y == 0
-        return sqrt(y)  # to give same type as other cases
-    end
     r = x/y
-    return y*sqrt(one(r)+r*r)
+    s = y*sqrt(one(r)+r*r)
+    if y == 0
+        return zero(s)
+    end
+    return s
 end
 
 square(x::Number) = x*x
@@ -96,7 +97,7 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        ($f)(x::Real) = ($f)(float(x))
+        ($f)(x::Integer) = ($f)(float(x))
         @vectorize_1arg Number $f
     end
 end
@@ -107,25 +108,35 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     @eval begin
         ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
         ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
-        ($f)(x::Real) = ($f)(float(x))
+        ($f)(x::Integer) = ($f)(float(x))
         @vectorize_1arg Number $f
     end
 end
 
-for f in (:logb, :expm1, :ceil, :trunc, :round, :significand) # :rint, :nearbyint
+for f in (:logb, :expm1, :significand)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        ($f)(x::Real) = ($f)(float(x))
+        ($f)(x::Integer) = ($f)(float(x))
         @vectorize_1arg Real $f
     end
 end
 
+for f in (:ceil, :trunc) # :rint, :nearbyint
+    @eval begin
+        ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
+        ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
+        @vectorize_1arg Real $f
+    end
+end
+
+round(x::Float32) = ccall((:roundf, libm), Float32, (Float32,), x)
+@vectorize_1arg Real round
+
 floor(x::Float32) = ccall((:floorf, libm), Float32, (Float32,), x)
-floor(x::Real) = floor(float(x))
 @vectorize_1arg Real floor
 
-atan2(x::Real, y::Real) = atan2(float64(x), float64(y))
+atan2(x::Real, y::Real) = atan2(float(x), float(y))
 
 hypot(x::Float32, y::Float64) = hypot(float64(x), y)
 hypot(x::Float64, y::Float32) = hypot(x, float64(y))
@@ -140,10 +151,10 @@ end
 
 gamma(x::Float64) = nan_dom_err(ccall((:tgamma,libm),  Float64, (Float64,), x), x)
 gamma(x::Float32) = float32(gamma(float64(x)))
-gamma(x::Real) = gamma(float(x))
+gamma(x::Integer) = gamma(float(x))
 @vectorize_1arg Number gamma
 
-lfact(x::Real) = (x<=1 ? zero(x) : lgamma(x+one(x)))
+lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
 @vectorize_1arg Number lfact
 
 max(x::Float64, y::Float64) = ccall((:fmax,libm),  Float64, (Float64,Float64), x, y)
@@ -271,7 +282,7 @@ airybiprime(z) = airy(3,z)
 @vectorize_1arg Number airybiprime
 
 airy(k::Number, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
-airy(k::Number, x::Real) = airy(k, float(x))
+airy(k::Number, x::Integer) = airy(k, float(x))
 airy(k::Number, z::Complex64) = complex64(airy(k, complex128(z)))
 airy(k::Number, z::Complex) = airy(convert(Int,k), complex128(z))
 @vectorize_2arg Number airy
@@ -406,8 +417,7 @@ end
 
 besselj(nu::Real, z::Complex64) = complex64(besselj(float64(nu), complex128(z)))
 besselj(nu::Real, z::Complex) = besselj(float64(nu), complex128(z))
-besselj(nu::Integer, x::Real) = besselj(nu, float(x))
-besselj(nu::Real, x::Real) = besselj(float(nu), float(x))
+besselj(nu::Integer, x::Integer) = besselj(nu, float(x))
 @vectorize_2arg Number besselj
 
 besselk(nu::Real, z::Complex64) = complex64(besselk(float64(nu), complex128(z)))
@@ -683,7 +693,7 @@ for f in (:erfcx, :erfi, :Dawson)
     @eval begin
         ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),openlibm_extras), Float64, (Float64,), x)
         ($fname)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),openlibm_extras), Float64, (Float64,), float64(x)))
-        ($fname)(x::Real) = ($fname)(float(x))
+        ($fname)(x::Integer) = ($fname)(float(x))
         @vectorize_1arg Number $fname
     end
 end

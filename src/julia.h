@@ -706,18 +706,18 @@ jl_value_t *jl_box8 (jl_bits_type_t *t, int8_t  x);
 jl_value_t *jl_box16(jl_bits_type_t *t, int16_t x);
 jl_value_t *jl_box32(jl_bits_type_t *t, int32_t x);
 jl_value_t *jl_box64(jl_bits_type_t *t, int64_t x);
-int8_t jl_unbox_bool(jl_value_t *v);
-int8_t jl_unbox_int8(jl_value_t *v);
-uint8_t jl_unbox_uint8(jl_value_t *v);
-int16_t jl_unbox_int16(jl_value_t *v);
-uint16_t jl_unbox_uint16(jl_value_t *v);
-int32_t jl_unbox_int32(jl_value_t *v);
-uint32_t jl_unbox_uint32(jl_value_t *v);
-int64_t jl_unbox_int64(jl_value_t *v);
-uint64_t jl_unbox_uint64(jl_value_t *v);
-float jl_unbox_float32(jl_value_t *v);
-double jl_unbox_float64(jl_value_t *v);
-void *jl_unbox_voidpointer(jl_value_t *v);
+DLLEXPORT int8_t jl_unbox_bool(jl_value_t *v);
+DLLEXPORT int8_t jl_unbox_int8(jl_value_t *v);
+DLLEXPORT uint8_t jl_unbox_uint8(jl_value_t *v);
+DLLEXPORT int16_t jl_unbox_int16(jl_value_t *v);
+DLLEXPORT uint16_t jl_unbox_uint16(jl_value_t *v);
+DLLEXPORT int32_t jl_unbox_int32(jl_value_t *v);
+DLLEXPORT uint32_t jl_unbox_uint32(jl_value_t *v);
+DLLEXPORT int64_t jl_unbox_int64(jl_value_t *v);
+DLLEXPORT uint64_t jl_unbox_uint64(jl_value_t *v);
+DLLEXPORT float jl_unbox_float32(jl_value_t *v);
+DLLEXPORT double jl_unbox_float64(jl_value_t *v);
+DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 
 #ifdef __LP64__
 #define jl_box_long(x)   jl_box_int64(x)
@@ -784,10 +784,10 @@ DLLEXPORT jl_value_t *jl_env_done(char *pos);
 #endif
 
 DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
-                                 uv_process_t *proc, jl_value_t *julia_struct,
-                                 uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
-                                 uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
-                                 uv_handle_type stderr_type,uv_pipe_t *stderr_pipe);
+                       uv_process_t *proc, jl_value_t *julia_struct,
+                       uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
+                       uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
+                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT void jl_process_events(uv_loop_t *loop);
 
@@ -855,6 +855,7 @@ void jl_restore_system_image(char *fname);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
+DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy);
 void jl_start_parsing_file(const char *fname);
 void jl_stop_parsing();
 jl_value_t *jl_parse_next();
@@ -890,13 +891,23 @@ DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 void jl_declare_constant(jl_binding_t *b);
 void jl_module_using(jl_module_t *to, jl_module_t *from);
+void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 void jl_module_importall(jl_module_t *to, jl_module_t *from);
 DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 void jl_add_standard_imports(jl_module_t *m);
 
 // external libraries
-DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
+enum JL_RTLD_CONSTANT {
+     JL_RTLD_LOCAL=0U, JL_RTLD_GLOBAL=1U, /* LOCAL=0 since it is the default */
+     JL_RTLD_LAZY=2U, JL_RTLD_NOW=4U,
+     /* Linux/glibc and MacOS X: */
+     JL_RTLD_NODELETE=8U, JL_RTLD_NOLOAD=16U, 
+     /* Linux/glibc: */ JL_RTLD_DEEPBIND=32U,
+     /* MacOS X 10.5+: */ JL_RTLD_FIRST=64U
+};
+#define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
+DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
 DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
@@ -904,7 +915,7 @@ void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
 void *jl_dlsym_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
-//event loop
+// event loop
 DLLEXPORT void jl_runEventLoop();
 DLLEXPORT void jl_processEvents();
 
@@ -1118,6 +1129,7 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
+DLLEXPORT void NORETURN jl_throw_with_superfluous_argument(jl_value_t *e, int);
 DLLEXPORT void NORETURN jl_rethrow();
 DLLEXPORT void NORETURN jl_rethrow_other(jl_value_t *e);
 

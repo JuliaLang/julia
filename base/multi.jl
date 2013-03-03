@@ -641,12 +641,11 @@ function perform_work(job::WorkItem)
             result = is(arg,()) ? yieldto(job.task) : yieldto(job.task, arg)
         else
             job.task = Task(job.thunk)
-            job.task.storage = nothing
             result = yieldto(job.task)
         end
     catch err
         print("exception on ", myid(), ": ")
-        show(add_backtrace(err,backtrace()))
+        display_error(err,backtrace())
         println()
         result = err
     end
@@ -1000,9 +999,9 @@ addprocs_local(np::Integer) =
 
 function start_sge_workers(n)
     home = JULIA_HOME
-    sgedir = "$home/../../SGE"
+    sgedir = joinpath(pwd(),"SGE")
     run(`mkdir -p $sgedir`)
-    qsub_cmd = `echo $home/julia-release-basic --worker` | `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
+    qsub_cmd = `echo $home/julia-release-basic --worker` | `qsub -N JULIA -terse -cwd -j y -o $sgedir -t 1:$n`
     out,_ = readsfrom(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
@@ -1120,16 +1119,20 @@ function find_vars(e, lst)
 end
 
 # wrap an expression in "let a=a,b=b,..." for each var it references
-function localize_vars(expr)
+localize_vars(expr) = localize_vars(expr, true)
+function localize_vars(expr, esca)
     v = find_vars(expr)
     # requires a special feature of the front end that knows how to insert
     # the correct variables. the list of free variables cannot be computed
     # from a macro.
-    Expr(:localize, {:(()->($expr)), v...}, Any)
+    if esca
+        v = map(esc,v)
+    end
+    Expr(:localize, :(()->($expr)), v...)
 end
 
 macro spawn(expr)
-    expr = localize_vars(:(()->($expr)))
+    expr = localize_vars(:(()->($expr)), false)
     :(spawn_somewhere($(esc(expr))))
 end
 
@@ -1147,7 +1150,7 @@ function spawnlocal(thunk)
 end
 
 macro async(expr)
-    expr = localize_vars(:(()->($expr)))
+    expr = localize_vars(:(()->($expr)), false)
     :(spawnlocal($(esc(expr))))
 end
 
@@ -1157,7 +1160,7 @@ macro spawnlocal(expr)
 end
 
 macro spawnat(p, expr)
-    expr = localize_vars(:(()->($expr)))
+    expr = localize_vars(:(()->($expr)), false)
     :(spawnat($(esc(p)), $(esc(expr))))
 end
 
@@ -1369,12 +1372,12 @@ function event_loop(isclient)
     global work_cb = SingleAsyncWork(eventloop(), _jl_work_cb)
     global fgcm_cb = SingleAsyncWork(eventloop(), (args...)->flush_gc_msgs());
     queueAsync(work_cb::SingleAsyncWork)
-    iserr, lasterr = false, ()
+    iserr, lasterr, bt = false, nothing, {}
     while true
         try
             if iserr
-                show(lasterr)
-                iserr, lasterr = false, ()
+                display_error(lasterr, bt)
+                iserr, lasterr, bt = false, nothing, {}
             else
                 run_event_loop()
             end
@@ -1390,7 +1393,7 @@ function event_loop(isclient)
                 # to interrupt.
                 interrupt_waiting_task(roottask_wi,err)
             end
-            iserr, lasterr = true, add_backtrace(err,bt)
+            iserr, lasterr = true, err
         end
     end
 end

@@ -501,3 +501,54 @@ str_a = [str...]
 
 str = "s\u2200"
 @test str[1:end] == str
+
+# triple-quote delimited strings
+@test """abc""" == "abc"
+@test """ab"c""" == "ab\"c"
+@test """ab""c""" == "ab\"\"c"
+@test """ab"\"c""" == "ab\"\"c"
+@test """abc\"""" == "abc\""
+n = 3
+@test """$n\n""" == "$n\n"
+@test L"""$n\n""" == L"$n\n"
+@test I"""$n\n""" == I"$n\n"
+@test E"""$n\n""" == E"$n\n"
+@test """$(n)""" == "3"
+@test """$(2n)""" == "6"
+@test """$(n+4)""" == "7"
+@test """$("string")""" == "string"
+a = [3,1,2]
+@test """$(a[2])""" == "1"
+@test """$(a[3]+7)""" == "9"
+@test """$(ifloor(4.5))""" == "4"
+@test L"""
+      """ == "\n      "
+@test """
+     a
+     b
+
+     c
+     """ == "a\nb\n\nc\n"
+@test """
+      """ == ""
+@test """x
+     a
+    """ == "x\n a\n"
+@test """
+     $n
+   """ == "  $n\n"
+@test E"""
+     $n
+   """ == E"  $n\n"
+@test """
+      a
+     b
+       c""" == " a\nb\n  c"
+# note tab/space mixing
+@test """
+	a
+     b
+     """ == "   a\nb\n"
+@test """
+      a
+       """ == "a\n"

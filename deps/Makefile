@@ -333,7 +333,7 @@ endif
 readline-$(READLINE_VER)/config.status: readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
 	chmod a+x ./configure && \
-	./configure $(CONFIGURE_COMMON) $(READLINE_OPTS)a
+	./configure $(CONFIGURE_COMMON) $(READLINE_OPTS)
 	touch -c $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/config.status
 	cd readline-$(READLINE_VER) && \
@@ -695,7 +695,7 @@ endif
 
 atlas/configure:
 	git clone git://github.com/vtjnash/atlas-3.10.0.git atlas
-ifeq "$(MAKECMDGOALS)" "build-atlas"
+ifeq "$(MAKECMDGOALS)" "compile-atlas"
 # only allow building atlas as the sole target (without -jN)
 # since it internally handles parallelism, for tuning timing accuracy
 atlas/build/Make.top: atlas/configure lapack-$(LAPACK_VER).tgz
@@ -830,7 +830,7 @@ else
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libarpack.so* ; do \
-		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 endif
@@ -904,7 +904,7 @@ else ifeq ($(OS),WINNT)
 	mv $(BUILD)/bin/libfftw3f-3.dll $(BUILD)/lib/libfftw3f.dll
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libfftw3f_threads.so* ; do \
-		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -942,7 +942,7 @@ else ifeq ($(OS),WINNT)
 	mv $(BUILD)/bin/libfftw3-3.dll $(BUILD)/lib/libfftw3.dll
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libfftw3_threads.so* ; do \
-		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -1343,6 +1343,43 @@ compile-patchelf: $(PATCHELF_SOURCE)
 check-patchelf: patchelf-$(PATCHELF_VER)/checked
 install-patchelf: $(PATCHELF_TARGET)
 
+## Git
+
+GIT_SOURCE = git-$(GIT_VER)/src/git
+GIT_TARGET = $(BUILD)/git
+
+compile-git: install-git
+install-git: $(GIT_TARGET)
+
+git-$(GIT_VER).tar.gz:
+	$(WGET) http://git-core.googlecode.com/files/$@
+git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
+	tar zxf $<
+	touch -c $@
+git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
+	cd git-$(GIT_VER) && \
+	./configure $(CONFIGURE_COMMON)
+	touch -c $@
+$(GIT_SOURCE): git-$(GIT_VER)/config.status
+	$(MAKE) -C git-$(GIT_VER)
+	touch -c $@
+git-$(GIT_VER)/checked: $(GIT_SOURCE)
+	echo 1 > $@
+$(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
+	$(MAKE) -C git-$(GIT_VER) install
+	touch -c $@
+
+clean-git:
+	-$(MAKE) -C git-$(GIT_VER) clean
+	-rm -f $(GIT_OBJ_TARGET)
+distclean-git:
+	-rm -rf git-$(GIT_VER).tar.gz git-$(GIT_VER)
+
+get-git: git-$(GIT_VER).tar.gz
+configure-git: git-$(GIT_VER)/config.status
+compile-git: $(GIT_SOURCE)
+check-git: git-$(GIT_VER)/checked
+install-git: $(GIT_TARGET)
 
 ## phony targets ##
 

@@ -13,6 +13,7 @@ isbool(x::Number) = false
 isbool(x::Bool) = true
 
 size(x::Number) = ()
+size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
 eltype(x::Number) = typeof(x)
 eltype{T<:Number}(::Type{T}) = T
 ndims(x::Number) = 0
@@ -36,11 +37,11 @@ ctranspose(x::Number) = conj(x)
 inv(x::Number) = one(x)/x
 angle(z::Real) = atan2(zero(z), z)
 
-start(a::Real) = a
-next(a::Real, i) = (a, a+1)
-done(a::Real, i) = (i > a)
-isempty(a::Number) = false
-contains(s::Number, n::Number) = (s == n)
+start(x::Number) = false
+next(x::Number, state) = (x, true)
+done(x::Number, state) = state
+isempty(x::Number) = false
+contains(x::Number, y::Number) = x == y
 
 reinterpret{T<:Real}(::Type{T}, x::Real) = box(T,x)
 

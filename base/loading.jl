@@ -64,12 +64,25 @@ end
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
 
-source_path() = get(task_local_storage(), :SOURCE_PATH, "")
+function source_path(default)
+    t = current_task()
+    while true
+        s = t.storage
+        if !is(s, nothing) && has(s, :SOURCE_PATH)
+            return s[:SOURCE_PATH]
+        end
+        if is(t, t.parent)
+            return default
+        end
+        t = t.parent
+    end
+end
+source_path() = source_path("")
 
 function include_from_node1(path)
-    tls = task_local_storage()
-    prev = get(tls, :SOURCE_PATH, nothing)
+    prev = source_path(nothing)
     path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
+    tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     try
         if myid()==1
@@ -88,9 +101,9 @@ function include_from_node1(path)
 end
 
 function reload_path(path)
-    tls = task_local_storage()
     had = has(package_list, path)
     package_list[path] = time()
+    tls = task_local_storage()
     prev = delete!(tls, :SOURCE_PATH, nothing)
     try
         eval(Main, :(Base.include_from_node1($path)))
@@ -107,4 +120,13 @@ function reload_path(path)
     nothing
 end
 
-evalfile(fname::String) = eval(Main, parse(readall(fname)))
+function evalfile(path::String)
+    s = readall(path)
+    v = nothing
+    i = 1
+    while !done(s,i)
+        ex, i = parse(s,i)
+        v = eval(ex)
+    end
+    return v
+end

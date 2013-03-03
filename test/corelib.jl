@@ -26,6 +26,11 @@ r = [5:-1:1]
 @test r[4]==2
 @test r[5]==1
 
+@test length(.1:.1:.3) == 3
+@test length(1.1:1.1:3.3) == 3
+@test length(1.1:1.3:3) == 2
+@test length(1:1:1.8) == 1
+
 let
     span = 5:20
     r = -7:3:42
@@ -123,6 +128,15 @@ let
     d["a"] = [1, 2]
     @test_fails d["b"] = 1
     @test isa(repr(d), String)  # check that printable without error
+end
+
+# issue #2344
+let
+    bestkey(d, key) = key
+    bestkey{K<:String,V}(d::Associative{K,V}, key) = string(key)
+    bar(x) = bestkey(x, :y)
+    @test bar([:x => [1,2,5]]) == :y
+    @test bar(["x" => [1,2,5]]) == "y"
 end
 
 # issue #1438
@@ -349,6 +363,17 @@ for data_in in ((7,8,4,5),
     for e in t
         @test has(s,e)
     end
+end
+
+# zip
+let i = 0
+x = 1:2:8
+y = 2:2:8
+xy = 1:8
+for (thisx, thisy) in zip(x, y)
+    @test thisx == xy[i+=1]
+    @test thisy == xy[i+=1]
+end
 end
 
 # pop!

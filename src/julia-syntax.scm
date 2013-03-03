@@ -921,13 +921,13 @@
 			  (tuple ,@(map caddr args))))
 
    ;; typed dict syntax
-   (pattern-lambda (typed-dict atypes . args)
+   (pattern-lambda (typed_dict atypes . args)
 		   (if (and (length= atypes 3)
 			    (eq? (car atypes) '=>))
 		       `(call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))
 			      (tuple ,@(map cadr  args))
 			      (tuple ,@(map caddr args)))
-		       (error (string "invalid typed-dict syntax " atypes))))
+		       (error (string "invalid typed_dict syntax " atypes))))
 
    ;; cell array syntax
    (pattern-lambda (cell1d . args)
@@ -1178,7 +1178,7 @@
 
    ;; typed array comprehensions
    (pattern-lambda
-    (typed-comprehension atype expr . ranges)
+    (typed_comprehension atype expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
 	(lower-nd-comprehension atype expr ranges)
     (let ( (result (gensy))
@@ -1213,7 +1213,7 @@
 
    ;; dict comprehensions
    (pattern-lambda
-    (dict-comprehension expr . ranges)
+    (dict_comprehension expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
 	(error "invalid iteration syntax")
     (let ((result   (gensy))
@@ -1252,12 +1252,12 @@
 
    ;; typed dict comprehensions
    (pattern-lambda
-    (typed-dict-comprehension atypes expr . ranges)
+    (typed_dict_comprehension atypes expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
 	(error "invalid iteration syntax")
     (if (not (and (length= atypes 3)
 		  (eq? (car atypes) '=>)))
-	(error "invalid typed-dict-comprehension syntax")
+	(error "invalid typed_dict_comprehension syntax")
     (let ( (result (gensy))
 	   (rs (map (lambda (x) (gensy)) ranges)) )
 
@@ -2104,7 +2104,7 @@ So far only the second case can actually occur.
 	((not (any (lambda (x)
 		     (match '($ (tuple (... x))) x))
 		   e))
-	 `(call (top expr) ,@(map expand-backquote e)))
+	 `(call (top Expr) ,@(map expand-backquote e)))
 	(else
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
@@ -2144,7 +2144,7 @@ So far only the second case can actually occur.
 	((eq? (car e) 'macrocall)
 	 ;; expand macro
 	 (let ((form
-		(apply invoke-julia-macro (cadr e) (cddr e))))
+               (apply invoke-julia-macro (cadr e) (cddr e))))
 	   (if (not form)
 	       (error (string "macro " (cadr e) " not defined")))
 	   (if (and (pair? form) (eq? (car form) 'error))
@@ -2159,6 +2159,11 @@ So far only the second case can actually occur.
 
 (define (pair-with-gensyms v)
   (map (lambda (s) (cons s (named-gensy s))) v))
+
+(define (unescape e)
+  (if (and (pair? e) (eq? (car e) 'escape))
+      (cadr e)
+      e))
 
 (define (resolve-expansion-vars- e env m)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
@@ -2177,6 +2182,18 @@ So far only the second case can actually occur.
 	    `(macrocall ,@(map (lambda (x)
 				 (resolve-expansion-vars- x env m))
 			       (cdr e))))
+	   ((type)
+	    `(type ,(unescape (cadr e))
+		   ;; type has special behavior: identifiers inside are
+		   ;; field names, not expressions.
+		   ,(map (lambda (x)
+			   (cond ((atom? x) x)
+				 ((and (pair? x) (eq? (car x) '|::|))
+				  `(|::| ,(cadr x)
+				    ,(resolve-expansion-vars- (caddr x) env m)))
+				 (else
+				  (resolve-expansion-vars- x env m))))
+			 (caddr e))))
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)

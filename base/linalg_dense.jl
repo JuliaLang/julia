@@ -26,6 +26,32 @@ function norm{T<:BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Rang
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
+function norm{T<:BlasFloat}(x::Vector{T}, p::Number)
+    n = length(x)
+    if n == 0
+        a = zero(T)
+    elseif p == 2
+        BLAS.nrm2(n, x, 1)
+    elseif p == 1
+        BLAS.asum(n, x, 1)
+    elseif p == Inf
+        max(abs(x))  
+    elseif p == -Inf
+        min(abs(x))
+    elseif p == 0
+        convert(T, nnz(x))
+    else
+        absx = abs(x)
+        dx = max(absx)
+        if dx != zero(T)
+            scale!(absx, 1/dx)
+            a = dx * (sum(absx.^p).^(1/p))
+        else
+            zero(T)
+        end
+    end
+end
+
 function triu!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)
     idx = 1
@@ -678,6 +704,8 @@ function det(A::Matrix)
 end
 det(x::Number) = x
 
+logdet(A::Matrix) = 2.0 * sum(log(diag(chol(A))))
+
 function eig{T<:BlasFloat}(A::StridedMatrix{T}, vecs::Bool)
     n = size(A, 2)
     if n == 0; return vecs ? (zeros(T, 0), zeros(T, 0, 0)) : zeros(T, 0, 0); end
@@ -817,7 +845,7 @@ end
 
 schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 
-function sqrtm(A::Matrix, cond::Bool)
+function sqrtm(A::StridedMatrix, cond::Bool)
     m, n = size(A)
     if m != n error("DimentionMismatch") end
     if ishermitian(A)
@@ -841,11 +869,13 @@ function sqrtm(A::Matrix, cond::Bool)
         for j = 1:n
             R[j,j] = sqrt(T[j,j])
             for i = j - 1:-1:1
-                r = zero(A[1])
+                r = T[i,j]
                 for k = i + 1:j - 1
-                    r += R[i,k]*R[k,j]
+                    r -= R[i,k]*R[k,j]
                 end
-                R[i,j] = (T[i,j] - r) / (R[i,i] + R[j,j])
+                if r != 0
+                    R[i,j] = r / (R[i,i] + R[j,j])
+                end
             end
         end
         retmat = Q*R*Q'
@@ -857,7 +887,9 @@ function sqrtm(A::Matrix, cond::Bool)
         end
     end
 end
-sqrtm(A::Matrix) = sqrtm(A, false)
+sqrtm{T<:Integer}(A::StridedMatrix{T}, cond::Bool) = sqrtm(float(A), cond)
+sqrtm{T<:Integer}(A::StridedMatrix{ComplexPair{T}}, cond::Bool) = sqrtm(complex128(A), cond)
+sqrtm(A::StridedMatrix) = sqrtm(A, false)
 sqrtm(a::Number) = isreal(a) ? (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)  : sqrt(a)
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})

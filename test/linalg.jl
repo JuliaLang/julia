@@ -115,6 +115,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                         # Matrix square root
         asq = sqrtm(a)
         @test_approx_eq asq*asq a
+        asymsq = sqrtm(asym)
+        @test_approx_eq asymsq*asymsq asym
 end
 
 ## Least squares solutions
@@ -375,4 +377,19 @@ let
     for i = 1:4
         @test_approx_eq A[i] B[i]
     end
+end
+
+# issue 2246
+let
+    A = [1 2 0 0; 0 1 0 0; 0 0 0 0; 0 0 0 0]
+    Asq = sqrtm(A)
+    @test_approx_eq Asq*Asq A
+    A2 = sub(A, 1:2, 1:2)
+    A2sq = sqrtm(A2)
+    @test_approx_eq A2sq*A2sq A2
+end
+
+let
+    N = 3
+    @test_approx_eq log(det(eye(N))) logdet(eye(N))
 end

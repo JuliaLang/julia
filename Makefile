@@ -1,4 +1,14 @@
 JULIAHOME = $(abspath .)
+
+# TODO: Code bundled with Julia should be installed into a versioned directory,
+# PREFIX/share/julia/VERSDIR, so that in the future one can have multiple
+# major versions of Julia installed concurrently.  Third-party code that
+# is not controlled by Pkg should be installed into
+# PREFIX/share/julia/lib/VERSDIR (not PREFIX/share/julia/VERSDIR/lib ...
+# so that PREFIX/share/julia/VERSDIR can be overwritten without touching
+# third-party code).
+VERSDIR = v0 # should be updated with major VERSION
+
 include $(JULIAHOME)/Make.inc
 
 all: default
@@ -49,18 +59,18 @@ JL_LIBS = julia-release julia-debug
 
 # private libraries, that are installed in $(PREFIX)/lib/julia
 JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
-                  fftw3f_threads glpk glpk_wrapper gmp grisu \
-                  history openlibm openlibm-extras pcre \
-		  random readline Rmath spqr suitesparse_wrapper \
+                  fftw3f_threads gmp grisu \
+                  openlibm openlibm-extras pcre \
+		  random Rmath spqr suitesparse_wrapper \
 		  tk_wrapper umfpack z openblas
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release webrepl
 	@-$(MAKE) $(QUIET_MAKE) tk
-	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/julia/nonpkg"; do \
+	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/julia/lib/"$(VERSDIR) ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
-	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
+	cp -a $(BUILD)/bin $(PREFIX)
 	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
 		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
@@ -98,6 +108,7 @@ dist:
 #	-$(MAKE) -C deps clean-openblas
 	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
 ifeq ($(OS), Darwin)
+	$(MAKE) -C deps install-git
 	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 ifeq ($(OS), WINNT)

@@ -108,6 +108,20 @@ end
 @test abs(pisum()-1.644834071848065) < 1e-12
 @timeit pisum() "pi_sum"
 
+## slow pi series, vectorized ##
+
+function pisumvec()
+    s = 0.0
+    a = [1:10000]
+    for j = 1:500
+        s = sum(1./(a.^2))
+    end
+    s
+end
+
+#@test abs(pisumvec()-1.644834071848065) < 1e-12
+#@timeit pisumvec() "pi_sum_vec"
+
 ## random matrix statistics ##
 
 function randmatstat(t)

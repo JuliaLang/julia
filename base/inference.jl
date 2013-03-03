@@ -58,8 +58,8 @@ is_global(sv::StaticVarInfo, s::Symbol) =
 
 typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 
-methods(f::Union(Function,CompositeKind),t) = methods(f,t,-1)::Array{Any,1}
-methods(f::Union(Function,CompositeKind),t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
+methods(f::Union(Function,CompositeKind),t::Tuple) = _methods(f,t,-1)::Array{Any,1}
+_methods(f::Union(Function,CompositeKind),t::Tuple,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
 typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
 
@@ -330,7 +330,6 @@ const fieldtype_tfunc = function (A, s, name)
     Type{t}
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
-t_func[Expr] = (3, 3, (a,b,c)->Expr)
 t_func[Box] = (1, 1, (a,)->Box)
 
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
@@ -387,6 +386,12 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
         a = argtypes[1]
         return (isa(a,CompositeKind) && subtype(a,Array) ?
                 a.parameters[1] : Any)
+    end
+    if is(f,Expr)
+        if length(argtypes) < 1
+            return None
+        end
+        return Expr
     end
     tf = get(t_func::ObjectIdDict, f, false)
     if is(tf,false)
@@ -525,7 +530,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     # function, so we can still know that error() is always None.
     # here I picked 4.
     argtypes = limit_tuple_type(argtypes)
-    applicable = methods(f, argtypes, 4)
+    applicable = _methods(f, argtypes, 4)
     rettype = None
     if is(applicable,false)
         # this means too many methods matched
@@ -1511,6 +1516,8 @@ function exprtype(x::ANY)
             return Any
         end
         return abstract_eval(x, (), sv)
+    elseif isa(x,QuoteNode)
+        return typeof(x.value)
     elseif isa(x,Type)
         return Type{x}
     elseif isa(x,LambdaStaticData)
@@ -1539,19 +1546,28 @@ function effect_free(e)
         isa(e,TopNode) || isa(e,QuoteNode)
         return true
     end
-    if isa(e,Expr) && (e.head === :call || e.head === :call1)
+    if isa(e,Expr)
         ea = e.args
-        for a in ea
-            if !effect_free(a)
-                return false
+        if e.head === :call || e.head === :call1
+            for a in ea
+                if !effect_free(a)
+                    return false
+                end
             end
-        end
-        if isa(ea[1],TopNode)
-            n = ea[1].name
-            if (n === :getfield || n === :tuple || n === :tupleref ||
-                n === :tuplelen || n === :fieldtype)
-                return true
+            if isa(ea[1],TopNode)
+                n = ea[1].name
+                if (n === :getfield || n === :tuple || n === :tupleref ||
+                    n === :tuplelen || n === :fieldtype)
+                    return true
+                end
             end
+        elseif e.head === :new
+            for a in ea
+                if !effect_free(a)
+                    return false
+                end
+            end
+            return true
         end
     end
     return false
@@ -1662,7 +1678,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
                 if occ > 1
                     vnew = unique_name(enclosing_ast)
                     add_variable(enclosing_ast, vnew, aeitype)
-                    push!(stmts, Expr(:(=), {vnew, aei}, Any))
+                    push!(stmts, Expr(:(=), vnew, aei))
                     argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
                 elseif !isType(aeitype) && !effect_free(aei)
                     push!(stmts, aei)
@@ -1694,7 +1710,9 @@ function mk_tupleref(texpr, i)
 end
 
 function mk_tuplecall(args)
-    Expr(:call1, {top_tuple, args...}, tuple(map(exprtype, args)...))
+    e = Expr(:call1, top_tuple, args...)
+    e.typ = tuple(map(exprtype, args)...)
+    e
 end
 
 const basenumtype = Union(Int32,Int64,Float32,Float64,Complex64,Complex128,Rational)
@@ -1947,7 +1965,7 @@ function tuple_elim_pass(ast::Expr)
                 else
                     elty = exprtype(tupelt)
                     tmpv = unique_name(ast)
-                    tmp = Expr(:(=), {tmpv,tupelt}, Any)
+                    tmp = Expr(:(=), tmpv, tupelt)
                     add_variable(ast, tmpv, elty)
                     insert!(body, i+n_ins, tmp)
                     vals[j] = SymbolNode(tmpv, elty)

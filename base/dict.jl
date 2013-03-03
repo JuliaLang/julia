@@ -79,6 +79,31 @@ filter(f::Function, d::Associative) = filter!(f,copy(d))
 
 eltype{K,V}(a::Associative{K,V}) = (K,V)
 
+function hash(d::Associative)
+    h = 0
+    for (k,v) in d
+        h $= bitmix(hash(k),~hash(v))
+    end
+    h
+end
+
+# Used as default value arg to get in isequal: something that will
+# never be found in any dictionary.
+const _MISSING = gensym()
+
+function isequal(l::Associative, r::Associative)
+    if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
+        return false
+    end
+    if length(l) != length(r) return false end
+    for (key, value) in l
+        if !isequal(value, get(r, key, _MISSING))
+            return false
+        end
+    end
+    true
+end
+
 # some support functions
 
 _tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
@@ -136,7 +161,7 @@ end
 
 bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) =
     ccall(:int64to32hash, Uint32, (Uint64,),
-          or_int(shl_int(zext64(unbox(Uint32,a)), 32), zext64(unbox(Uint32,b))))
+          or_int(shl_int(zext_int(Uint64,unbox(Uint32,a)), 32), zext_int(Uint64,unbox(Uint32,b))))
 
 bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
     ccall(:int64hash, Uint64, (Uint64,),
@@ -466,20 +491,6 @@ next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
-
-# Used as default value arg to get in isequal: something that will
-# never be found in any dictionary.
-const _MISSING = gensym()
-
-function isequal(l::Dict, r::Dict)
-    if ! (length(l) == length(r))  return false end
-    for (key, value) in l
-        if ! isequal(value, get(r, key, _MISSING))
-            return false
-        end
-    end
-    true
-end
 
 # weak key dictionaries
 

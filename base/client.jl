@@ -16,13 +16,19 @@ const text_colors = {
 
 have_color = false
 @unix_only default_color_answer = text_colors[:bold]
+@unix_only default_color_input = text_colors[:bold]
 @windows_only default_color_answer = text_colors[:normal]
-color_answer = default_color_answer
+@windows_only default_color_input = text_colors[:normal]
 color_normal = text_colors[:normal]
 
 function answer_color()
     c = symbol(get(ENV, "JULIA_ANSWER_COLOR", ""))
     return get(text_colors, c, default_color_answer)
+end
+
+function input_color()
+    c = symbol(get(ENV, "JULIA_INPUT_COLOR", ""))
+    return get(text_colors, c, default_color_input)
 end
 
 banner() = print(have_color ? banner_color : banner_plain)
@@ -38,23 +44,11 @@ function repl_callback(ast::ANY, show_value)
     put(repl_channel, (ast, show_value))
 end
 
-function add_backtrace(e, bt)
-    if isa(e,LoadError)
-        if isa(e.error,LoadError)
-            add_backtrace(e.error,bt)
-        else
-            e.error = BackTrace(e.error, bt)
-            e
-        end
-    else
-        BackTrace(e, bt)
-    end
-end
-
-function display_error(er)
+display_error(er) = display_error(er, {})
+function display_error(er, bt)
     with_output_color(:red, OUTPUT_STREAM) do io
         print(io, "ERROR: ")
-        error_show(io, er)
+        error_show(io, er, bt)
     end
 end
 
@@ -66,23 +60,21 @@ function eval_user_input(ast::ANY, show_value)
                 print(color_normal)
             end
             if iserr
-                display_error(add_backtrace(lasterr,bt))
+                display_error(lasterr,bt)
                 println()
                 iserr, lasterr = false, ()
             else
+                ast = expand(ast)
                 value = eval(Main,ast)
                 global ans = value
                 if !is(value,nothing) && show_value
                     if have_color
                         print(answer_color())
                     end
-                    if isgeneric(value) && !isa(value,CompositeKind) && isa(ast,Expr) && ast.head === :method
-                        print("# method added to generic function ", value.env.name)
-                    else
-                        try repl_show(value)
-                        catch err
-                            throw(ShowError(value,err))
-                        end
+                    try repl_show(value)
+                    catch err
+                        println("Error showing value of type ", typeof(value), ":")
+                        rethrow(err)
                     end
                     println()
                 end
@@ -138,6 +130,9 @@ function run_repl()
         ccall(:repl_callback_enable, Void, ())
         global _repl_enough_stdin = false
         start_reading(STDIN, readBuffer)
+        if have_color
+            print(input_color())
+        end
         (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
@@ -268,6 +263,35 @@ const roottask_wi = WorkItem(roottask)
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
+function init_load_path()
+    vers="v$(VERSION.major)"
+    global const LOAD_PATH = ByteString[
+        ".", # TODO: should we really look here?
+        abspath(Pkg.dir()),
+        abspath(JULIA_HOME,"..","share","julia","extras"),
+        abspath(JULIA_HOME,"..","local","share","julia","lib",vers),
+        abspath(JULIA_HOME,"..","share","julia","lib",vers)
+    ]
+end
+
+function init_sched()
+    global const Workqueue = WorkItem[]
+    global const Waiting = Dict()
+end
+
+function init_head_sched()
+    # start in "head node" mode
+    global const Scheduler = Task(()->event_loop(true), 1024*1024)
+    global PGRP
+    PGRP.myid = 1
+    assert(PGRP.np == 0)
+    push!(PGRP.workers,LocalProcess())
+    push!(PGRP.locs,("",0))
+    PGRP.np = 1
+    # make scheduler aware of current (root) task
+    unshift!(Workqueue, roottask_wi)
+    yield()
+end
 
 function _start()
     # set up standard streams
@@ -292,30 +316,12 @@ function _start()
 
     #atexit(()->flush(STDOUT))
     try
-        global const Workqueue = WorkItem[]
-        global const Waiting = Dict()
-
+        init_sched()
         if !any(a->(a=="--worker"), ARGS)
-            # start in "head node" mode
-            global const Scheduler = Task(()->event_loop(true), 1024*1024)
-            global PGRP
-            PGRP.myid = 1
-            assert(PGRP.np == 0)
-            push!(PGRP.workers,LocalProcess())
-            push!(PGRP.locs,("",0))
-            PGRP.np = 1
-            # make scheduler aware of current (root) task
-            unshift!(Workqueue, roottask_wi)
-            yield()
+            init_head_sched()
         end
 
-        global const LOAD_PATH = ByteString[
-            ".", # TODO: should we really look here?
-            abspath(Pkg.dir()),
-            abspath(JULIA_HOME,"..","share","julia","extras"),
-            abspath(JULIA_HOME,"..","local","share","julia","nonpkg"),
-            abspath(JULIA_HOME,"..","share","julia","nonpkg"),
-        ]
+        init_load_path()
 
         (quiet,repl,startup,color_set) = process_options(ARGS)
 
@@ -338,7 +344,7 @@ function _start()
             run_repl()
         end
     catch err
-        display_error(add_backtrace(err,backtrace()))
+        display_error(err,backtrace())
         println()
         exit(1)
     end

@@ -616,3 +616,21 @@ let
     i2169{T}(a::Array{T}) = typemin(T)
     @test invoke(i2169,(Array,),Int8[1]) === int8(-128)
 end
+
+# issue #2365
+type B2365{T}
+     v::Union(T, Nothing)
+end
+@test B2365{Int}(nothing).v === nothing
+@test B2365{Int}(0).v === 0
+
+# issue #2352
+Sum=0.0; for n=1:2:10000
+Sum += -1/n + 1/(n+1)
+end
+@test Sum < -0.69
+
+# source path in tasks
+path = Base.source_path()
+@test ends_with(path, joinpath("test","core.jl"))
+@test yieldto(@task Base.source_path()) == path
