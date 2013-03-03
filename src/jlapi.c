@@ -64,9 +64,9 @@ DLLEXPORT void *jl_eval_string(char *str)
 #endif
     jl_value_t *r;
     JL_TRY {
-        jl_value_t *ast = jl_parse_string(str, 0, 1);
+        jl_value_t *ast = jl_parse_input_line(str);
         JL_GC_PUSH(&ast);
-        r = jl_toplevel_eval(jl_t0(ast));
+        r = jl_toplevel_eval(ast);
         JL_GC_POP();
     }
     JL_CATCH {
