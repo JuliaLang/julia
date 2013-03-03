@@ -15,7 +15,7 @@ html, body {
 
 body {
   background-color: {{ theme_bgcolor }};
-  font: 11.5pt Georgia, Arial, sans-serif;
+  font: 11.5pt Georgia, 'DejaVu Serif', serif;
   width: 100%;
   text-align: left;
   line-height: 1.5;
