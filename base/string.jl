@@ -654,22 +654,18 @@ end
 
 ## multiline strings ##
 
-let
-global multiline_lstrip
-
-function space_width(c::Char)
+function blank_width(c::Char)
     c == ' '   ? 1 :
     c == '\t'  ? 8 :
-    isspace(c) ? 0 :
-    error("not a space-like character")
+    error("not a blank character")
 end
 
-# width of leading space, also check if string is blank
-function indent_width(s::String)
+# width of leading blank space, also check if string is blank
+function indentation(s::String)
     count = 0
     for c in s
-        if isspace(c)
-            count += space_width(c)
+        if isblank(c)
+            count += blank_width(c)
         else
             return count, false
         end
@@ -677,6 +673,7 @@ function indent_width(s::String)
     count, true
 end
 
+# deprecated by triplequoted
 function multiline_lstrip(s::String)
     lines = split(s, '\n')
     num_lines = length(lines)
@@ -685,11 +682,11 @@ function multiline_lstrip(s::String)
     # discard first line if blank
     first_line = lstrip(lines[1]) == "" ? 2 : 1
 
-    indent,blank = indent_width(lines[end])
+    indent,blank = indentation(lines[end])
     if !blank
         indent = typemax(Int)
         for line in lines[first_line:end]
-            n,blank = indent_width(line)
+            n,blank = indentation(line)
             if !blank
                 indent = min(indent, n)
             end
@@ -708,14 +705,80 @@ function multiline_lstrip(s::String)
                 print(buf, line[i:end])
                 break
             end
-            cut += space_width(c)
+            cut += blank_width(c)
             i = j
         end
         if k != num_lines println(buf) end
     end
     takebuf_string(buf)
 end
-end # let
+
+function unindent(s::String, indent::Int)
+    buf = memio(endof(s), false)
+    a = i = start(s)
+    cutting = false
+    cut = 0
+    while !done(s,i)
+        c,i_ = next(s,i)
+        if cutting && isblank(c)
+            a = i_
+            cut += blank_width(c)
+            if cut > indent
+                cutting = false
+                for _ = (indent+1):cut write(buf, ' ') end
+            end
+        elseif c == '\n'
+            print(buf, s[a:i])
+            a = i_
+            cutting = true
+            cut = 0
+        else
+            cutting = false
+        end
+        i = i_
+    end
+    print(buf, s[a:end])
+    takebuf_string(buf)
+end
+
+function triplequoted(unescape::Function, args...)
+    sx = { isa(arg,ByteString) ? arg : esc(arg) for arg in args }
+
+    indent = 0
+    rlines = split(reverse(sx[end]), '\n', 2)
+    last_line = rlines[1]
+    if length(rlines) > 1 && lstrip(last_line) == ""
+        indent,_ = indentation(last_line)
+    else
+        indent = typemax(Int)
+        for s in sx
+            if isa(s,ByteString)
+                lines = split(s,'\n')
+                for line in lines[2:end]
+                    n,blank = indentation(line)
+                    if !blank
+                        indent = min(indent, n)
+                    end
+                end
+            end
+        end
+    end
+
+    for i in 1:length(sx)
+        if isa(sx[i],ByteString)
+            sx[i] = unescape(unindent(sx[i], indent))
+        end
+    end
+
+    # strip leading blank line
+    s = sx[1]
+    j = search(s,'\n')
+    if j != 0 && lstrip(s[1:j]) == ""
+        sx[1] = s[j+1:end]
+    end
+
+    Expr(:call, :string, sx...)
+end
 
 ## core string macros ##
 
@@ -725,10 +788,12 @@ macro E_str(s); check_utf8(unescape_string(s)); end
 macro B_str(s); interp_parse_bytes(s); end
 macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
 
-macro   mstr(s...); :(multiline_lstrip(unescape_string(string($(map(esc,s)...))))); end
+macro   mstr(s...); triplequoted(unescape_string, s...); end
 macro L_mstr(s); s; end
+# TBD: move I into parser
+#macro I_mstr(s...); triplequoted(x->unescape_chars(x,"\""), s...); end
 macro I_mstr(s); interp_parse(multiline_lstrip(s), x->unescape_chars(x,"\"")); end
-macro E_mstr(s); multiline_lstrip(check_utf8(unescape_string(s))); end
+macro E_mstr(s); triplequoted(unescape_string, s); end
 
 ## shell-like command parsing ##
 
