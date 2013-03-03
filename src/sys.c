@@ -370,7 +370,7 @@ jl_value_t *jl_env_done(char *pos)
 #endif
 // -- child process status --
 
-#if defined _MSC_VER || defined __MINGW32__
+#if defined _MSC_VER || defined __WIN32__
 
 /* Native Woe32 API.  */
 #include <process.h>

@@ -165,8 +165,15 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             printf("error: GetThreadContext failed\n");
             return 0;
         }
-        ctxThread.Eip = (DWORD)&win_raise_exception; //on win64, use .Rip = (DWORD64)...
-        ctxThread.Ecx = (DWORD)jl_interrupt_exception; //on win64, use .Rcx = (DWORD64)...
+#ifdef _WIN64
+        ctxThread.Rip = (DWORD64)&win_raise_exception;
+        ctxThread.Rcx = (DWORD64)jl_interrupt_exception;
+#elif _WIN32
+        ctxThread.Eip = (DWORD)&win_raise_exception;
+        ctxThread.Ecx = (DWORD)jl_interrupt_exception;
+#else
+#error WIN16 not supported :P
+#endif
         if (!SetThreadContext(hMainThread,&ctxThread)) {
             printf("error: SetThreadContext failed\n");
             //error
@@ -185,8 +192,15 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) 
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_STACK_OVERFLOW:
-            ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception; //on win64, use .Rip = (DWORD64)...
-            ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception; //on win64, use .Rcx = (DWORD64)...
+#ifdef _WIN64
+            ExceptionInfo->ContextRecord->Rip = (DWORD)&win_raise_exception;
+            ExceptionInfo->ContextRecord->Rcx = (DWORD)jl_stackovf_exception;
+#elif _WIN32
+            ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception;
+            ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception;
+#else
+#error WIN16 not supported :P
+#endif
             return EXCEPTION_CONTINUE_EXECUTION;
         default:
             puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\n");
@@ -544,7 +558,7 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
 #ifdef COPY_STACKS
     // initialize base context of root task
     jl_root_task->stackbase = (char*)&argc;
-    if (jl_setjmp(jl_root_task->base_ctx, 1)) {
+    if (jl_setjmp(jl_root_task->base_ctx, 0)) {
         jl_switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif

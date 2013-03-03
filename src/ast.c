@@ -204,7 +204,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
         }
         if (isfixnum(e)) {
             int64_t ne = numval(e);
-#ifdef __LP64__
+#ifdef _P64
             return (jl_value_t*)jl_box_int64(ne);
 #else
             if (ne > S32_MAX || ne < S32_MIN)
@@ -212,8 +212,8 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
             return (jl_value_t*)jl_box_int32((int32_t)ne);
 #endif
         }
-        uint64_t n = toulong(e, "scm_to_julia");
-#ifdef __LP64__
+        size_t n = tosize(e, "scm_to_julia");
+#ifdef _P64
         return (jl_value_t*)jl_box_int64((int64_t)n);
 #else
         if (n > S32_MAX)
@@ -431,7 +431,7 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
         expr = scm_to_julia(e,0);
     }
 
-    pos1 = jl_box_long(toulong(cdr_(p),"parse"));
+    pos1 = jl_box_long(tosize(cdr_(p),"parse"));
     jl_value_t *result = (jl_value_t*)jl_tuple2(expr, pos1);
     JL_GC_POP();
     return result;
