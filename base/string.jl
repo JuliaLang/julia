@@ -276,11 +276,13 @@ strwidth(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
 
 isascii(c::Char) = c < 0x80
 
-for name = ("alnum", "alpha", "blank", "cntrl", "digit", "graph",
+for name = ("alnum", "alpha", "cntrl", "digit", "graph",
             "lower", "print", "punct", "space", "upper")
     f = symbol(string("is",name))
     @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Char,), c))
 end
+
+isblank(c) = c==' ' || c=='\t'
 
 ## generic string uses only endof and next ##
 
