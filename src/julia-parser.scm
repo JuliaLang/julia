@@ -802,19 +802,17 @@
 			    (not (ts:space? s)))
 		       ;; custom prefixed string literals, x"s" => @x_str "s"
                        (let* ((str (begin (take-token s)
-                                          (parse-string-literal s #f)))
+                                          (parse-string-literal s (memq ex '(b B I)))))
                               (nxt (peek-token s))
                               (suffix (if (triplequote-string-literal? str) '_mstr '_str))
                               (macname (symbol (string #\@ ex suffix)))
-                              (macstr (if (triplequote-string-literal? str)
-                                          (cadr str)
-                                          (car str))))
+                              (macstr (cdr str)))
                          (if (and (symbol? nxt) (not (operator? nxt))
                                   (not (ts:space? s)))
                              ;; string literal suffix, "s"x
-                             (loop `(macrocall ,macname ,macstr
+                             (loop `(macrocall ,macname ,@macstr
                                                ,(string (take-token s))))
-                             (loop `(macrocall ,macname ,macstr))))
+                             (loop `(macrocall ,macname ,@macstr))))
 		       ex))
 		  (else ex))))))))
 
@@ -1351,26 +1349,9 @@
   (let ((p (ts:port s)))
     (if (eqv? (peek-char p) #\")
         (if (eqv? (peek-char (take-char p)) #\")
-            (parse-string-literal-3 (take-char p) s interpolate)
-            (cons "" (cons #f #f)))
-        (parse-string-literal-1 p))))
-
-(define (parse-string-literal-1 p)
-  (let ((b (open-output-string))
-	(interpolate #f))
-    (let loop ((c (read-char p)))
-      (if (eqv? c #\")
-	  #t
-	  (begin (if (eqv? c #\\)
-		     (let ((nextch (read-char p)))
-		       (begin (write-char #\\ b)
-			      (write-char (not-eof-3 nextch) b)))
-		     (begin
-		       (if (eqv? c #\$)
-			   (set! interpolate #t))
-		       (write-char (not-eof-3 c) b)))
-		 (loop (read-char p)))))
-    (cons (io.tostring! b) (cons interpolate #f))))
+            (parse-string-literal- 'triple_quoted_string 2 (take-char p) s interpolate)
+            '(single_quoted_string ""))
+        (parse-string-literal- 'single_quoted_string 0 p s interpolate))))
 
 (define (parse-interpolate s)
   (let* ((p (ts:port s))
@@ -1387,14 +1368,14 @@
                    (else (error "invalid interpolation syntax")))))
           (else (error (string "invalid interpolation syntax: " c))))))
 
-(define (parse-string-literal-3 p s interpolate)
+(define (parse-string-literal- head n p s interpolate)
   (let loop ((c (read-char p))
              (b (open-output-string))
-             (e '(triple_quoted_string))
+             (e (list head))
              (quotes 0))
     (cond
       ((eqv? c #\")
-       (if (< quotes 2)
+       (if (< quotes n)
            (loop (read-char p) b e (+ quotes 1))
            (reverse (cons (io.tostring! b) e))))
 
@@ -1419,14 +1400,11 @@
                (list* ex (io.tostring! b) e)
                0)))
 
-      ((eof-object? c)
-       (error "incomplete: invalid string syntax"))
-
       (else
-       (write-char c b)
+       (write-char (not-eof-3 c) b)
        (loop (read-char p) b e 0)))))
 
-(define (interpolate-string-literal? s) (cadr s))
+(define (interpolate-string-literal? s) (> (length s) 2))
 (define (triplequote-string-literal? s) (eqv? (car s) 'triple_quoted_string))
 
 (define (not-eof-1 c)
@@ -1606,8 +1584,8 @@
              (if (triplequote-string-literal? ps)
                  `(macrocall @mstr ,@(cdr ps))
                  (if (interpolate-string-literal? ps)
-                     `(macrocall @str ,(car ps))
-                     (let ((str (unescape-string (car ps))))
+                     `(macrocall @str ,@(cdr ps))
+                     (let ((str (unescape-string (cadr ps))))
                        (if (not (string.isutf8 str))
                            (error "invalid UTF-8 sequence")
                            str))))))
