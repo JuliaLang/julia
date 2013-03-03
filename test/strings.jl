@@ -132,13 +132,6 @@ end
 @test "\x0f" == unescape_string("\\x0f")
 @test "\x0F" == unescape_string("\\x0F")
 
-# TODO: more Unicode testing here.
-macro S_str(s); Base.interp_parse(s); end
-
-@test S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
-
-# TODO: the above is only one of many needed tests
-
 # integer parsing
 @test parse_int(Int32,"0",36) == 0
 @test parse_int(Int32,"1",36) == 1
