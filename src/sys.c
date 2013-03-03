@@ -18,6 +18,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#define __STDC_CONSTANT_MACROS
+#define __STDC_LIMIT_MACROS
+#include <llvm-c/Target.h>
+
 #ifdef __SSE__
 #include <xmmintrin.h>
 #endif
@@ -426,3 +430,16 @@ DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
 #endif
 }
 
+// -- processor native alignment information --
+
+DLLEXPORT void jl_native_alignment(uint_t* int8align, uint_t* int16align, uint_t* int32align, uint_t* int64align, uint_t* float32align, uint_t* float64align)
+{
+    LLVMTargetDataRef tgtdata = LLVMCreateTargetData("");
+    *int8align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt8Type());
+    *int16align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt16Type());
+    *int32align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt32Type());
+    *int64align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt64Type());
+    *float32align = LLVMPreferredAlignmentOfType(tgtdata, LLVMFloatType());
+    *float64align = LLVMPreferredAlignmentOfType(tgtdata, LLVMDoubleType());
+    LLVMDisposeTargetData(tgtdata);
+}
