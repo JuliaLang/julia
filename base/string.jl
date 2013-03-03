@@ -608,50 +608,6 @@ is_valid_utf8 (s::ByteString) = byte_string_classify(s) != 0
 check_ascii(s::ByteString) = is_valid_ascii(s) ? s : error("invalid ASCII sequence")
 check_utf8 (s::ByteString) = is_valid_utf8(s)  ? s : error("invalid UTF-8 sequence")
 
-## string interpolation parsing ##
-
-function interp_parse(s::String, unescape::Function, printer::Function)
-    sx = {}
-    i = j = start(s)
-    while !done(s,j)
-        c, k = next(s,j)
-        if c == '$'
-            if !isempty(s[i:j-1])
-                push!(sx, unescape(s[i:j-1]))
-            end
-            ex, j = parse(s,k,false)
-            if isa(ex,Expr) && is(ex.head,:continue)
-                throw(ParseError("incomplete expression"))
-            end
-            push!(sx, esc(ex))
-            i = j
-        elseif c == '\\' && !done(s,k)
-            if s[k] == '$'
-                if !isempty(s[i:j-1])
-                    push!(sx, unescape(s[i:j-1]))
-                end
-                i = k
-            end
-            c, j = next(s,k)
-        else
-            j = k
-        end
-    end
-    if !isempty(s[i:])
-        push!(sx, unescape(s[i:j-1]))
-    end
-    length(sx) == 1 && isa(sx[1],ByteString) ? sx[1] :
-        expr(:call, :sprint, printer, sx...)
-end
-
-interp_parse(s::String, u::Function) = interp_parse(s, u, print)
-interp_parse(s::String) = interp_parse(s, x->check_utf8(unescape_string(x)))
-
-function interp_parse_bytes(s::String)
-    writer(io,x...) = for w=x; write(io,w); end
-    interp_parse(s, unescape_string, writer)
-end
-
 ## multiline strings ##
 
 function blank_width(c::Char)
@@ -671,46 +627,6 @@ function indentation(s::String)
         end
     end
     count, true
-end
-
-# deprecated by triplequoted
-function multiline_lstrip(s::String)
-    lines = split(s, '\n')
-    num_lines = length(lines)
-    if num_lines == 1 return s end
-
-    # discard first line if blank
-    first_line = lstrip(lines[1]) == "" ? 2 : 1
-
-    indent,blank = indentation(lines[end])
-    if !blank
-        indent = typemax(Int)
-        for line in lines[first_line:end]
-            n,blank = indentation(line)
-            if !blank
-                indent = min(indent, n)
-            end
-        end
-    end
-
-    buf = memio(endof(s), false)
-    for k in first_line:num_lines
-        line = lines[k]
-        cut = 0
-        i = start(line)
-        while !done(line,i)
-            c, j = next(line,i)
-            if !isspace(c) || cut >= indent
-                for _ = (indent+1):cut write(buf, ' ') end
-                print(buf, line[i:end])
-                break
-            end
-            cut += blank_width(c)
-            i = j
-        end
-        if k != num_lines println(buf) end
-    end
-    takebuf_string(buf)
 end
 
 function unindent(s::String, indent::Int)
@@ -782,17 +698,27 @@ end
 
 ## core string macros ##
 
-macro   str(s); interp_parse(s); end
-macro I_str(s); interp_parse(s, x->unescape_chars(x,"\"")); end
+function singlequoted(unescape::Function, args...)
+    sx = { isa(arg,ByteString) ? unescape(arg) : esc(arg) for arg in args }
+    Expr(:call, :string, sx...)
+end
+
+macro   str(s...); singlequoted(unescape_string, s...); end
+macro I_str(s...); singlequoted(x->unescape_chars(x,"\""), s...); end
 macro E_str(s); check_utf8(unescape_string(s)); end
-macro B_str(s); interp_parse_bytes(s); end
-macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
+
+function byteliteral(args...)
+    sx = { isa(arg,ByteString) ? unescape_string(arg) : esc(arg) for arg in args }
+    writer(io,x...) = for w=x; write(io,w); end
+    Expr(:call, :sprint, writer, sx...)
+end
+
+macro B_str(s...); byteliteral(s...); end
+macro b_str(s...); ex = byteliteral(s...); :(($ex).data); end
 
 macro   mstr(s...); triplequoted(unescape_string, s...); end
 macro L_mstr(s); s; end
-# TBD: move I into parser
-#macro I_mstr(s...); triplequoted(x->unescape_chars(x,"\""), s...); end
-macro I_mstr(s); interp_parse(multiline_lstrip(s), x->unescape_chars(x,"\"")); end
+macro I_mstr(s...); triplequoted(x->unescape_chars(x,"\""), s...); end
 macro E_mstr(s); triplequoted(unescape_string, s); end
 
 ## shell-like command parsing ##
