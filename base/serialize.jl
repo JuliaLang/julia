@@ -390,7 +390,8 @@ deserialize(s, ::Type{LongExpr}) = deserialize_expr(s, read(s, Int32))
 function deserialize_expr(s, len)
     hd = deserialize(s)::Symbol
     ty = deserialize(s)
-    e = expr(hd, { deserialize(s) for i=1:len })
+    e = Expr(hd)
+    e.args = { deserialize(s) for i=1:len }
     e.typ = ty
     e
 end

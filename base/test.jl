@@ -46,11 +46,11 @@ function do_test_fails(thk, qex)
 end
 
 macro test(ex)
-    :(do_test(()->($(esc(ex))),$(expr(:quote,ex))))
+    :(do_test(()->($(esc(ex))),$(Expr(:quote,ex))))
 end
 
 macro test_fails(ex)
-    :(do_test_fails(()->($(esc(ex))),$(expr(:quote,ex))))
+    :(do_test_fails(()->($(esc(ex))),$(Expr(:quote,ex))))
 end
 
 function test_approx_eq(va, vb, Eps, astr, bstr)

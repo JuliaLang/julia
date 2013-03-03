@@ -9,7 +9,7 @@ showcompact(io::IO, x) = show(io, x)
 showcompact(x) = showcompact(OUTPUT_STREAM::IO, x)
 
 macro show(exs...)
-    blk = expr(:block)
+    blk = Expr(:block)
     for ex in exs
         push!(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),
                                  repr(begin value=$(esc(ex)) end))))
@@ -286,7 +286,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif is(head, :null)
         print(io, "nothing")
     else
-        print(io, "\$(expr(")
+        print(io, "\$(Expr(")
         show_indented(io, ex.head, indent)
         for arg in args
             print(io, ", ")

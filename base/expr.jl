@@ -15,7 +15,7 @@ gensym(a::Array{Uint8,1}) =
 gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
 
 macro gensym(names...)
-    blk = expr(:block)
+    blk = Expr(:block)
     for name in names
         push!(blk.args, :($(esc(name)) = gensym($(string(name)))))
     end
@@ -23,12 +23,11 @@ macro gensym(names...)
     return blk
 end
 
-esc(e::ANY) = expr(:escape, {e})
+esc(e::ANY) = Expr(:escape, e)
 
 ## expressions ##
 
-expr(hd::Symbol, args::ANY...) = Expr(hd, args...)
-expr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
+splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
 copy(e::Expr) = (n = Expr(e.head);
                  n.args = astcopy(e.args);
                  n.typ = e.typ;
@@ -64,5 +63,5 @@ macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
 ## misc syntax ##
 
 macro eval(x)
-    :($(esc(:eval))($(expr(:quote,x))))
+    :($(esc(:eval))($(Expr(:quote,x))))
 end

@@ -898,7 +898,6 @@ export
     expand,
     macroexpand,
     esc,
-    expr,
     gensym,
     parse,
     symbol,

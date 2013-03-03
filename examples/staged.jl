@@ -1,5 +1,5 @@
 function add_method(gf, an, at, body)
-    argexs = { expr(symbol("::"), an[i], at[i]) for i=1:length(an) }
+    argexs = { Expr(symbol("::"), an[i], at[i]) for i=1:length(an) }
     def = quote
         let __F__=($gf)
             function __F__($(argexs...))
@@ -17,7 +17,7 @@ macro staged(fdef)
     fname = fdef.args[1].args[1]
     argspec = fdef.args[1].args[2:]
     argnames = map(x->(isa(x,Expr) ? x.args[1] : x), argspec)
-    qargnames = map(x->expr(:quote,{x}), argnames)
+    qargnames = map(x->Expr(:quote,x), argnames)
     fbody = fdef.args[2]
     @gensym gengf argtypes expander genbody
     quote

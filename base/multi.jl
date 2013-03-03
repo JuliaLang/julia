@@ -1173,7 +1173,7 @@ end
 macro everywhere(ex)
     quote
         @sync begin
-            at_each(()->eval(Main,$(expr(:quote,ex))))
+            at_each(()->eval(Main,$(Expr(:quote,ex))))
         end
     end
 end
