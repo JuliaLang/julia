@@ -15,7 +15,7 @@
 #include "arraylist.h"
 
 #include <setjmp.h>
-#if defined(__FreeBSD__)
+#ifndef __WIN32__
 #  define jl_jmp_buf sigjmp_buf
 #else
 #  define jl_jmp_buf jmp_buf
@@ -28,6 +28,7 @@
 #else
 #define ENVIRONMENT32
 #endif
+#include <malloc.h> //for _resetstkoflw
 #endif
 
 // Check GCC
@@ -1179,9 +1180,11 @@ DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
 DLLEXPORT void jl_pop_handler(int n);
 
 #if defined(__WIN32__)
-#define jl_setjmp_f    _setjmp
-#define jl_setjmp(a,b) setjmp(a)
-#define jl_longjmp(a,b) longjmp(a,b)
+int __attribute__ ((__nothrow__,__returns_twice__)) jl_setjmp(jmp_buf _Buf);
+__declspec(noreturn) __attribute__ ((__nothrow__)) void jl_longjmp(jmp_buf _Buf,int _Value);
+#define jl_setjmp_f    jl_setjmp
+#define jl_setjmp(a,b) jl_setjmp(a)
+#define jl_longjmp(a,b) jl_longjmp(a,b)
 #else
 // determine actual entry point name
 #if defined(sigsetjmp)
@@ -1201,8 +1204,16 @@ DLLEXPORT void jl_pop_handler(int n);
 
 #define JL_EH_POP() jl_eh_restore_state(&__eh)
 
+#ifdef __WIN32__
+#include <stdio.h>
+#define JL_CATCH                                                \
+    else                                                        \
+        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0) \
+            if (((jl_exception_in_transit==jl_stackovf_exception) && _resetstkoflw()) || 1)
+#else
 #define JL_CATCH                                                \
     else                                                        \
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
+#endif
 
 #endif
