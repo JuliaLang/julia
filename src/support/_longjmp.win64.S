@@ -57,7 +57,7 @@
 
 ENTRY(jl_longjmp)
     movq    8(%rcx),%rbx
-    movq    16(%rcx),%r8
+    movq    16(%rcx),%rsp
     movq    24(%rcx),%rbp
     movq    32(%rcx),%rsi
     movq    40(%rcx),%rdi
@@ -65,6 +65,7 @@ ENTRY(jl_longjmp)
     movq    56(%rcx),%r13
     movq    64(%rcx),%r14
     movq    72(%rcx),%r15
+    movq    80(%rcx),%r8
     movaps  96(%rcx),%xmm6
     movaps  112(%rcx),%xmm7
     movaps  128(%rcx),%xmm8
