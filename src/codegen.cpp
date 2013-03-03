@@ -150,6 +150,9 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
+#ifdef __WIN32__
+static Function *resetstkoflw_func;
+#endif
 
 /*
   stuff to fix up:
@@ -1728,13 +1731,31 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         Value *jbuf = builder.CreateGEP((*ctx->handlers)[labl],
                                         ConstantInt::get(T_size,0));
         builder.CreateCall(jlenter_func, jbuf);
+#ifndef __WIN32__
         Value *sj = builder.CreateCall2(setjmp_func, jbuf, ConstantInt::get(T_int32,0));
+#else
+        Value *sj = builder.CreateCall(setjmp_func, jbuf);
+#endif
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
         BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
                                                 ctx->f);
         BasicBlock *handlr = (*ctx->labels)[labl];
         assert(handlr);
+#ifdef __WIN32__
+        BasicBlock *cond_resetstkoflw_blk = BasicBlock::Create(getGlobalContext(), "cond_resetstkoflw", ctx->f);
+        BasicBlock *resetstkoflw_blk = BasicBlock::Create(getGlobalContext(), "resetstkoflw", ctx->f);
+        builder.CreateCondBr(isz, tryblk, cond_resetstkoflw_blk);
+        builder.SetInsertPoint(cond_resetstkoflw_blk);
+        builder.CreateCondBr(builder.CreateICmpEQ(
+                    literal_pointer_val(jl_stackovf_exception),
+                    builder.CreateLoad(jlexc_var, true)),
+                resetstkoflw_blk, handlr);
+        builder.SetInsertPoint(resetstkoflw_blk);
+        builder.CreateCall(resetstkoflw_func);
+        builder.CreateBr(handlr);
+#else
         builder.CreateCondBr(isz, tryblk, handlr);
+#endif
         builder.SetInsertPoint(tryblk);
     }
     else {
@@ -2544,7 +2565,9 @@ static void init_julia_llvm_env(Module *m)
 
     std::vector<Type*> args2(0);
     args2.push_back(T_pint8);
+#ifndef __WIN32__
     args2.push_back(T_int32);
+#endif
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args2, false),
                          Function::ExternalLinkage, "sigsetjmp", jl_Module);
@@ -2640,6 +2663,12 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_enter_handler", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlenter_func, (void*)&jl_enter_handler);
+
+#ifdef __WIN32__
+    resetstkoflw_func = Function::Create(FunctionType::get(T_void, false),
+            Function::ExternalLinkage, "_resetstkoflw", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(resetstkoflw_func, (void*)&_resetstkoflw);
+#endif
 
     std::vector<Type*> lhargs(0);
     lhargs.push_back(T_int32);

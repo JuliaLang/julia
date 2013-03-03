@@ -2924,6 +2924,10 @@ System
 
    Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream writing to the process' standard input.
 
+.. function:: readandwrite(command)
+
+   Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the output stream and input stream of the process, and the process object itself.
+
 .. function:: > < >> .>
 
    ``>`` ``<`` and ``>>`` work exactly as in bash, and ``.>`` redirects STDERR.

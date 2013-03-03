@@ -68,7 +68,6 @@ ifeq ($(OS), WINNT)
 fPIC = 
 PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia
 EXE = .exe
-export OPENBLAS_NUM_THREADS=1
 else
 fPIC = -fPIC
 EXE =
@@ -316,6 +315,7 @@ OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.e
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
 LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
+JLDFLAGS = -Wl,--stack,8388608
 endif
 
 # MKL
