@@ -1,8 +1,6 @@
-require("arpack")
+import ARPACK.eigs
+import ARPACK.svds
 
-using ARPACK
-
-# arpack
 begin
 	local n,a,asym,d,v
 	n = 10

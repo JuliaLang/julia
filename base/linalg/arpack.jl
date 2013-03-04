@@ -1,8 +1,8 @@
 module ARPACK 
 
-export eigs, svds
-
 const libarpack = "libarpack"
+
+export eigs, svds
 
 import Base.BlasInt
 import Base.blas_int
@@ -260,4 +260,4 @@ svds(A::AbstractMatrix, rvec::Bool) = svds(A, 6, "LA", rvec)
 svds(A::AbstractMatrix, nev::Integer) = svds(A, nev, "LA", true)
 svds(A::AbstractMatrix) = svds(A, 6, "LA", true)
 
-end #module ARPACK
+end # module ARPACK
