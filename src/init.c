@@ -564,11 +564,21 @@ DLLEXPORT void jl_install_sigint_handler()
 }
 
 
+extern void * __stack_chk_guard;
+
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {
 #if defined(_WIN32) //&& !defined(_WIN64)
     SetUnhandledExceptionFilter(exception_handler);
 #endif
+    unsigned char * p = (unsigned char *) &__stack_chk_guard;
+    char a = p[sizeof(__stack_chk_guard)-1];
+    char b = p[sizeof(__stack_chk_guard)-2];
+    char c = p[0];
+    /* If you have the ability to generate random numbers in your kernel then use them */
+    p[sizeof(__stack_chk_guard)-1] = 255;
+    p[sizeof(__stack_chk_guard)-2] = '\n';
+    p[0] = 0;
 #ifdef COPY_STACKS
     // initialize base context of root task
     jl_root_task->stackbase = (char*)&argc;
@@ -576,7 +586,11 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
         jl_switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif
-    return pmain(argc, argv);
+    int ret = pmain(argc, argv);
+    p[sizeof(__stack_chk_guard)-1] = a;
+    p[sizeof(__stack_chk_guard)-2] = b;
+    p[0] = c;
+    return ret;
 }
 
 jl_function_t *jl_typeinf_func=NULL;
