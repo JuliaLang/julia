@@ -2985,7 +2985,7 @@ System
 
 .. function:: time()
 
-   Get the time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 
 .. function:: time_ns()
 

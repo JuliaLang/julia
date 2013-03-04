@@ -1,22 +1,26 @@
 # timing
 
+# system date in seconds
 time() = ccall(:clock_now, Float64, ())
 
+# high-resolution relative time, in nanoseconds
+time_ns() = ccall(:jl_hrtime, Uint64, ())
+
 function tic()
-    t0 = time()
+    t0 = time_ns()
     task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
     return t0
 end
 
 function toq()
-    t1 = time()
+    t1 = time_ns()
     timers = get(task_local_storage(), :TIMERS, ())
     if is(timers,())
         error("toc() without tic()")
     end
     t0 = timers[1]
     task_local_storage(:TIMERS, timers[2])
-    t1-t0
+    (t1-t0)/1e9
 end
 
 function toc()
@@ -25,19 +29,13 @@ function toc()
     return t
 end
 
-# high-resolution time
-# returns in nanoseconds
-function time_ns()
-    return ccall(:jl_hrtime, Uint64, ())
-end
-
 # print elapsed time, return expression value
 macro time(ex)
     quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $(esc(ex))
-        local t1 = time()
-        println("elapsed time: ", t1-t0, " seconds")
+        local t1 = time_ns()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds")
         val
     end
 end
@@ -45,18 +43,18 @@ end
 # print nothing, return elapsed time
 macro elapsed(ex)
     quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $(esc(ex))
-        time()-t0
+        (time_ns()-t0)/1e9
     end
 end
 
 # print nothing, return value & elapsed time
 macro timed(ex)
     quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $(esc(ex))
-        val, time()-t0
+        val, (time_ns()-t0)/1e9
     end
 end
 
