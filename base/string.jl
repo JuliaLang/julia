@@ -890,6 +890,35 @@ function parse(str::String)
     return ex
 end
 
+function parse_lines(str::String, line_delim::Char)
+    lines = split(str, line_delim)
+    parsed_exprs = {}
+    curr_str = ""
+
+    for i = 1:length(lines)
+      curr_str = string(curr_str, lines[i], "\n")
+      ex = Base.parse_input_line(curr_str)
+
+      if ex == nothing
+         continue
+
+      elseif isa(ex, Expr)
+
+        if ex.head == :error
+          return {ex}
+        elseif ex.head == :continue
+          continue
+        end
+
+      end
+
+      curr_str = ""
+      push!(parsed_exprs, ex)
+    end
+
+    return parsed_exprs
+end
+
 ## miscellaneous string functions ##
 
 function lpad(s::String, n::Integer, p::String)
