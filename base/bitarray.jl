@@ -916,12 +916,6 @@ function (-)(B::BitArray)
 end
 sign(B::BitArray) = copy(B)
 
-real(B::BitArray) = copy(B)
-imag(B::BitArray) = falses(size(B))
-
-conj!(B::BitArray) = B
-conj(B::BitArray) = copy(B)
-
 function (~)(B::BitArray)
     C = similar(B)
     Bc = B.chunks
@@ -1341,31 +1335,6 @@ function flipdim(A::BitArray, d::Integer)
                 copy_chunks(B.chunks, boffs, A.chunks, offs, M)
             end
         end
-    end
-    return B
-end
-
-function rotl90(A::BitMatrix)
-    m,n = size(A)
-    B = BitArray(n,m)
-    for i=1:m, j=1:n
-        B[n-j+1,i] = A[i,j]
-    end
-    return B
-end
-function rotr90(A::BitMatrix)
-    m,n = size(A)
-    B = BitArray(n,m)
-    for i=1:m, j=1:n
-        B[j,m-i+1] = A[i,j]
-    end
-    return B
-end
-function rot180(A::BitMatrix)
-    m,n = size(A)
-    B = similar(A)
-    for i=1:m, j=1:n
-        B[m-i+1,n-j+1] = A[i,j]
     end
     return B
 end
