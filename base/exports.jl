@@ -908,6 +908,7 @@ export
     function_loc,
     edit,
     methods,
+    methodswith,
     help,
     less,
     names,
