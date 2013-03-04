@@ -66,14 +66,15 @@ DLLEXPORT int jl_ios_eof(ios_t *s)
 // --- dir/file stuff ---
 
 DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
-DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t* req) {
-  uv_fs_req_cleanup(req);
+DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t* req)
+{
+    uv_fs_req_cleanup(req);
 }
 
 DLLEXPORT int jl_readdir(const char* path, uv_fs_t* readdir_req)
 {
-  // Note that the flags field is mostly ignored by libuv
-  return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
+    // Note that the flags field is mostly ignored by libuv
+    return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
 }
 
 DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) {return req->ptr; }
@@ -85,97 +86,97 @@ DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_statbuf_t); }
 
 DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
 {
-  uv_fs_t req;
-  int ret;
+    uv_fs_t req;
+    int ret;
 
-  // Ideally one would use the statbuf for the storage in req, but
-  // it's not clear that this is possible using libuv
-  ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
-  if (ret == 0)
-    memcpy(statbuf, req.ptr, sizeof(uv_statbuf_t));
-  uv_fs_req_cleanup(&req);
-  return ret;
+    // Ideally one would use the statbuf for the storage in req, but
+    // it's not clear that this is possible using libuv
+    ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
+    if (ret == 0)
+        memcpy(statbuf, req.ptr, sizeof(uv_statbuf_t));
+    uv_fs_req_cleanup(&req);
+    return ret;
 }
 
 DLLEXPORT int32_t jl_lstat(const char* path, char* statbuf)
 {
-  uv_fs_t req;
-  int ret;
+    uv_fs_t req;
+    int ret;
 
-  ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
-  if (ret == 0)
-    memcpy(statbuf, req.ptr, sizeof(uv_statbuf_t));
-  uv_fs_req_cleanup(&req);
-  return ret;
+    ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
+    if (ret == 0)
+        memcpy(statbuf, req.ptr, sizeof(uv_statbuf_t));
+    uv_fs_req_cleanup(&req);
+    return ret;
 }
 
 DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
 {
-  uv_fs_t req;
-  int ret;
+    uv_fs_t req;
+    int ret;
 
-  ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
-  if (ret == 0)
-    memcpy(statbuf, req.ptr, sizeof(uv_statbuf_t));
-  uv_fs_req_cleanup(&req);
-  return ret;
+    ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
+    if (ret == 0)
+        memcpy(statbuf, req.ptr, sizeof(uv_statbuf_t));
+    uv_fs_req_cleanup(&req);
+    return ret;
 }
 
 DLLEXPORT unsigned int jl_stat_dev(char *statbuf)
 {
-  return ((uv_statbuf_t*) statbuf)->st_dev;
+    return ((uv_statbuf_t*) statbuf)->st_dev;
 }
 
 DLLEXPORT unsigned int jl_stat_ino(char *statbuf)
 {
-  return ((uv_statbuf_t*) statbuf)->st_ino;
+    return ((uv_statbuf_t*) statbuf)->st_ino;
 }
 
 DLLEXPORT unsigned int jl_stat_mode(char *statbuf)
 {
-  return ((uv_statbuf_t*) statbuf)->st_mode;
+    return ((uv_statbuf_t*) statbuf)->st_mode;
 }
 
 DLLEXPORT unsigned int jl_stat_nlink(char *statbuf)
 {
-  return ((uv_statbuf_t*) statbuf)->st_nlink;
+    return ((uv_statbuf_t*) statbuf)->st_nlink;
 }
 
 DLLEXPORT unsigned int jl_stat_uid(char *statbuf)
 {
-  return ((uv_statbuf_t*) statbuf)->st_uid;
+    return ((uv_statbuf_t*) statbuf)->st_uid;
 }
 
 DLLEXPORT unsigned int jl_stat_gid(char *statbuf)
 {
-  return ((uv_statbuf_t*) statbuf)->st_gid;
+    return ((uv_statbuf_t*) statbuf)->st_gid;
 }
 
 DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
 {
-  return ((uv_statbuf_t*) statbuf)->st_rdev;
+    return ((uv_statbuf_t*) statbuf)->st_rdev;
 }
 
 DLLEXPORT off_t jl_stat_size(char *statbuf)
 {
-  return ((uv_statbuf_t*) statbuf)->st_size;
+    return ((uv_statbuf_t*) statbuf)->st_size;
 }
 
 DLLEXPORT unsigned int jl_stat_blksize(char *statbuf)
 {
 #if defined(__WIN32__)
-  return 0;
+    return 0;
 #else
-  return ((uv_statbuf_t*) statbuf)->st_blksize;
+    return ((uv_statbuf_t*) statbuf)->st_blksize;
 #endif
 }
 
 DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
 {
 #if defined(__WIN32__)
-  return 0;
+    return 0;
 #else
-  return ((uv_statbuf_t*) statbuf)->st_blocks;
+    return ((uv_statbuf_t*) statbuf)->st_blocks;
 #endif
 }
 
@@ -333,7 +334,8 @@ DLLEXPORT int jl_cpu_cores(void)
 
     if (gapc) {
         return gapc(ALL_PROCESSOR_GROUPS);
-    } else { //fall back on GetSystemInfo
+    }
+    else { //fall back on GetSystemInfo
         SYSTEM_INFO info;
         GetSystemInfo(&info);
         return info.dwNumberOfProcessors;
@@ -442,29 +444,23 @@ DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
     int32_t info[4];
 
     cpuid(info, 0);
-    if (info[0] >= 1)
-    {
+    if (info[0] >= 1) {
         cpuid(info, 0x00000001);
-        if ((info[3] & ((int)1 << 26)) != 0)
-        {
+        if ((info[3] & ((int)1 << 26)) != 0) {
             // SSE2 supports both FZ and DAZ
             flags = 0x00008040;
         }
-        else if ((info[3] & ((int)1 << 25)) != 0)
-        {
+        else if ((info[3] & ((int)1 << 25)) != 0) {
             // SSE supports only the FZ flag
             flags = 0x00008000;
         }
     }
 
-    if (flags)
-    {
-        if (isZero)
-        {
+    if (flags) {
+        if (isZero) {
             _mm_setcsr(_mm_getcsr() | flags);
         }
-        else
-        {
+        else {
             _mm_setcsr(_mm_getcsr() & ~flags);
         }
         return 1;
