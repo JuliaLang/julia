@@ -179,8 +179,8 @@ function ilogb(x::Float32)
 end
 @vectorize_1arg Real ilogb
 
-ldexp(x::Float64,e::Int) = ccall((:ldexp,libm),  Float64, (Float64,Int32), x, int32(e))
-ldexp(x::Float32,e::Int) = ccall((:ldexpf,libm), Float32, (Float32,Int32), x, int32(e))
+ldexp(x::Float64,e::Int) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, int32(e))
+ldexp(x::Float32,e::Int) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, int32(e))
 # TODO: vectorize ldexp
 
 begin
