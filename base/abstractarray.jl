@@ -1233,7 +1233,6 @@ all(A::AbstractArray{Bool}, region) = reducedim(all,A,region,true)
 any(A::AbstractArray{Bool}, region) = reducedim(any,A,region,false)
 sum(A::AbstractArray{Bool}, region) = reducedim(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
 sum(A::AbstractArray{Bool}) = sum(A, [1:ndims(A)])[1]
-sum(A::StridedArray{Bool})  = sum(A, [1:ndims(A)])[1]
 prod(A::AbstractArray{Bool}) =
     error("use all() instead of prod() for boolean arrays")
 prod(A::AbstractArray{Bool}, region) =
