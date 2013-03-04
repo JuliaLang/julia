@@ -1,4 +1,4 @@
-#ifdef __LP64__
+#ifdef _P64
 #define NWORDS(sz) (((sz)+7)>>3)
 #else
 #define NWORDS(sz) (((sz)+3)>>2)
@@ -8,7 +8,7 @@ static int ALIGN2, ALIGN4, ALIGN8, ALIGNPTR;
 
 value_t int8sym, uint8sym, int16sym, uint16sym, int32sym, uint32sym;
 value_t int64sym, uint64sym;
-value_t longsym, ulongsym, bytesym, wcharsym;
+value_t ptrdiffsym, sizesym, bytesym, wcharsym;
 value_t floatsym, doublesym;
 value_t gftypesym, stringtypesym, wcstringtypesym;
 value_t emptystringsym;
@@ -21,7 +21,7 @@ static fltype_t *int8type, *uint8type;
 static fltype_t *int16type, *uint16type;
 static fltype_t *int32type, *uint32type;
 static fltype_t *int64type, *uint64type;
-static fltype_t *longtype, *ulongtype;
+static fltype_t *ptrdifftype, *sizetype;
 static fltype_t *floattype, *doubletype;
        fltype_t *bytetype, *wchartype;
        fltype_t *stringtype, *wcstringtype;
@@ -302,12 +302,12 @@ num_ctor(int64, int64, T_INT64)
 num_ctor(uint64, uint64, T_UINT64)
 num_ctor(byte,  uint8, T_UINT8)
 num_ctor(wchar, int32, T_INT32)
-#ifdef __LP64__
-num_ctor(long, int64, T_INT64)
-num_ctor(ulong, uint64, T_UINT64)
+#ifdef _P64
+num_ctor(ptrdiff, int64, T_INT64)
+num_ctor(size, uint64, T_UINT64)
 #else
-num_ctor(long, int32, T_INT32)
-num_ctor(ulong, uint32, T_UINT32)
+num_ctor(ptrdiff, int32, T_INT32)
+num_ctor(size, uint32, T_UINT32)
 #endif
 num_ctor(float, float, T_FLOAT)
 num_ctor(double, double, T_DOUBLE)
@@ -317,16 +317,16 @@ value_t size_wrap(size_t sz)
     if (fits_fixnum(sz))
         return fixnum(sz);
     assert(sizeof(void*) == sizeof(size_t));
-    return mk_ulong(sz);
+    return mk_size(sz);
 }
 
-size_t toulong(value_t n, char *fname)
+size_t tosize(value_t n, char *fname)
 {
     if (isfixnum(n))
         return numval(n);
     if (iscprim(n)) {
         cprim_t *cp = (cprim_t*)ptr(n);
-        return conv_to_ulong(cp_data(cp), cp_numtype(cp));
+        return conv_to_size(cp_data(cp), cp_numtype(cp));
     }
     type_error(fname, "number", n);
     return 0;
@@ -360,7 +360,7 @@ static int cvalue_array_init(fltype_t *ft, value_t arg, void *dest)
     cnt = predict_arraylen(arg);
 
     if (iscons(cdr_(cdr_(type)))) {
-        size_t tc = toulong(car_(cdr_(cdr_(type))), "array");
+        size_t tc = tosize(car_(cdr_(cdr_(type))), "array");
         if (tc != cnt)
             lerror(ArgError, "array: size mismatch");
     }
@@ -460,8 +460,8 @@ size_t ctype_sizeof(value_t type, int *palign)
         *palign = ALIGN8;
         return 8;
     }
-    if (type == longsym || type == ulongsym) {
-#ifdef __LP64__
+    if (type == ptrdiffsym || type == sizesym) {
+#ifdef _P64
         *palign = ALIGN8;
         return 8;
 #else
@@ -480,7 +480,7 @@ size_t ctype_sizeof(value_t type, int *palign)
             if (!iscons(cdr_(cdr_(type))))
                 lerror(ArgError, "sizeof: incomplete type");
             value_t n = car_(cdr_(cdr_(type)));
-            size_t sz = toulong(n, "sizeof");
+            size_t sz = tosize(n, "sizeof");
             return sz * ctype_sizeof(t, palign);
         }
     }
@@ -638,26 +638,26 @@ static numerictype_t sym_to_numtype(value_t type)
         return T_INT16;
     else if (type == uint16sym)
         return T_UINT16;
-#ifdef __LP64__
+#ifdef _P64
     else if (type == int32sym || type == wcharsym)
 #else
-    else if (type == int32sym || type == wcharsym || type == longsym)
+    else if (type == int32sym || type == wcharsym || type == ptrdiffsym)
 #endif
         return T_INT32;
-#ifdef __LP64__
+#ifdef _P64
     else if (type == uint32sym)
 #else
-    else if (type == uint32sym || type == ulongsym)
+    else if (type == uint32sym || type == sizesym)
 #endif
         return T_UINT32;
-#ifdef __LP64__
-    else if (type == int64sym || type == longsym)
+#ifdef _P64
+    else if (type == int64sym || type == ptrdiffsym)
 #else
     else if (type == int64sym)
 #endif
         return T_INT64;
-#ifdef __LP64__
-    else if (type == uint64sym || type == ulongsym)
+#ifdef _P64
+    else if (type == uint64sym || type == sizesym)
 #else
     else if (type == uint64sym)
 #endif
@@ -687,7 +687,7 @@ value_t cvalue_new(value_t *args, u_int32_t nargs)
         size_t cnt;
 
         if (iscons(cdr_(cdr_(type))))
-            cnt = toulong(car_(cdr_(cdr_(type))), "array");
+            cnt = tosize(car_(cdr_(cdr_(type))), "array");
         else if (nargs == 2)
             cnt = predict_arraylen(args[1]);
         else
@@ -725,20 +725,20 @@ value_t cvalue_compare(value_t a, value_t b)
 }
 
 static void check_addr_args(char *fname, value_t arr, value_t ind,
-                            char **data, ulong_t *index)
+                            char **data, size_t *index)
 {
     size_t numel;
     cvalue_t *cv = (cvalue_t*)ptr(arr);
     *data = cv_data(cv);
     numel = cv_len(cv)/(cv_class(cv)->elsz);
-    *index = toulong(ind, fname);
+    *index = tosize(ind, fname);
     if (*index >= numel)
         bounds_error(fname, arr, ind);
 }
 
 static value_t cvalue_array_aref(value_t *args)
 {
-    char *data; ulong_t index;
+    char *data; size_t index;
     fltype_t *eltype = cv_class((cvalue_t*)ptr(args[0]))->eltype;
     value_t el = 0;
     numerictype_t nt = eltype->numtype;
@@ -771,7 +771,7 @@ static value_t cvalue_array_aref(value_t *args)
 
 static value_t cvalue_array_aset(value_t *args)
 {
-    char *data; ulong_t index;
+    char *data; size_t index;
     fltype_t *eltype = cv_class((cvalue_t*)ptr(args[0]))->eltype;
     check_addr_args("aset!", args[0], args[1], &data, &index);
     char *dest = data + index*eltype->size;
@@ -861,8 +861,8 @@ static void cvalues_init(void)
     ctor_cv_intern(uint64);
     ctor_cv_intern(byte);
     ctor_cv_intern(wchar);
-    ctor_cv_intern(long);
-    ctor_cv_intern(ulong);
+    ctor_cv_intern(ptrdiff);
+    ctor_cv_intern(size);
     ctor_cv_intern(float);
     ctor_cv_intern(double);
 
@@ -887,12 +887,12 @@ static void cvalues_init(void)
     mk_primtype(uint32);
     mk_primtype(int64);
     mk_primtype(uint64);
-#ifdef __LP64__
-    mk_primtype_(long,int64);
-    mk_primtype_(ulong,uint64);
+#ifdef _P64
+    mk_primtype_(ptrdiff,int64);
+    mk_primtype_(size,uint64);
 #else
-    mk_primtype_(long,int32);
-    mk_primtype_(ulong,uint32);
+    mk_primtype_(ptrdiff,int32);
+    mk_primtype_(size,uint32);
 #endif
     mk_primtype_(byte,uint8);
     mk_primtype_(wchar,int32);

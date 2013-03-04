@@ -2109,7 +2109,7 @@ So far only the second case can actually occur.
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
 	       (let ((forms (reverse q)))
-		 `(call (top expr) ,(expand-backquote (car e))
+		 `(call (top splicedexpr) ,(expand-backquote (car e))
 			(call (top append_any) ,@forms)))
 	       ;; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (match '($ (tuple (... x))) (car p))
@@ -2119,23 +2119,6 @@ So far only the second case can actually occur.
 			 (cons `(cell1d ,(expand-backquote (car p)))
 			       q))))))))
 
-(define (julia-expand-strs s e)
-  (cond ((not (pair? e))     e)
-	((and (eq? (car e) 'macrocall) (eq? (cadr e) s))
-	 ;; expand macro
-	 (let ((form
-		(apply invoke-julia-macro (cadr e) (cddr e))))
-	   (if (not form)
-	       (error (string "macro " (cadr e) " not defined")))
-	   (if (and (pair? form) (eq? (car form) 'error))
-	       (error (cadr form)))
-	   (let ((form (car form))
-		 (m    (cdr form)))
-	     ;; m is the macro's def module, or #f if def env === use env
-	     (resolve-expansion-vars form m))))
-	(else
-	 (map (lambda (x) (julia-expand-strs s x)) e))))
-
 (define (julia-expand-macros e)
   (cond ((not (pair? e))     e)
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
@@ -2144,9 +2127,7 @@ So far only the second case can actually occur.
 	((eq? (car e) 'macrocall)
 	 ;; expand macro
 	 (let ((form
-               (apply invoke-julia-macro
-                      (cadr e)
-                      (julia-expand-strs '@mstr (cddr e)))))
+               (apply invoke-julia-macro (cadr e) (cddr e))))
 	   (if (not form)
 	       (error (string "macro " (cadr e) " not defined")))
 	   (if (and (pair? form) (eq? (car form) 'error))
@@ -2155,7 +2136,7 @@ So far only the second case can actually occur.
 		 (m    (cdr form)))
 	     ;; m is the macro's def module, or #f if def env === use env
 	     (julia-expand-macros
-	      (resolve-expansion-vars (julia-expand-strs '@str form) m)))))
+	      (resolve-expansion-vars form m)))))
 	(else
 	 (map julia-expand-macros e))))
 

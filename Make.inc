@@ -25,6 +25,7 @@ endif
 
 # Cross-compile
 #XC_HOST = i686-w64-mingw32
+#XC_HOST = x86_64-w64-mingw32
 
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
@@ -34,7 +35,12 @@ override OS = WINNT
 override ARCH = i686
 override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
-export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin'
+else ifeq ($(XC_HOST),x86_64-w64-mingw32)
+override OS = WINNT
+override ARCH = x86_64
+override OPENBLAS_DYNAMIC_ARCH = 1
+override CROSS_COMPILE=$(XC_HOST)-
+export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin;$(BUILD)/Git/bin'
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -68,7 +74,6 @@ ifeq ($(OS), WINNT)
 fPIC = 
 PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia
 EXE = .exe
-export OPENBLAS_NUM_THREADS=1
 else
 fPIC = -fPIC
 EXE =
@@ -105,7 +110,7 @@ CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -ggdb3 -DDEBUG
+DEBUGFLAGS = -ggdb3 -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3 -DNDEBUG -falign-functions
 ifneq ($(ARCH), ppc64)
   SHIPFLAGS += -momit-leaf-frame-pointer
@@ -117,7 +122,7 @@ CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -g -DDEBUG
+DEBUGFLAGS = -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3 -DNDEBUG
 ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=10.6
@@ -316,6 +321,7 @@ OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.e
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
 LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
+JLDFLAGS = -Wl,--stack,8388608
 endif
 
 # MKL

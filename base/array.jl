@@ -675,6 +675,11 @@ function resize!(a::Vector, nl::Integer)
     return a
 end
 
+function sizehint(a::Vector, sz::Integer)
+    ccall(:jl_array_sizehint, Void, (Any, Uint), a, sz)
+    a
+end
+
 function pop!(a::Vector)
     if isempty(a)
         error("pop!: array is empty")

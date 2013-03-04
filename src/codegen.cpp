@@ -52,6 +52,14 @@ using namespace llvm;
 extern "C" {
 #include "julia.h"
 #include "builtin_proto.h"
+void * __stack_chk_guard = NULL;
+void __attribute__(()) __stack_chk_fail()
+{
+    /* put your panic function or similar in here */
+    fprintf(stderr, "warning: stack corruption detected\n");
+    //assert(0 && "stack corruption detected");
+    //abort();
+}
 }
 
 #define CONDITION_REQUIRES_BOOL
@@ -150,6 +158,9 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
+#ifdef __WIN32__
+static Function *resetstkoflw_func;
+#endif
 
 /*
   stuff to fix up:
@@ -1728,13 +1739,31 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         Value *jbuf = builder.CreateGEP((*ctx->handlers)[labl],
                                         ConstantInt::get(T_size,0));
         builder.CreateCall(jlenter_func, jbuf);
+#ifndef __WIN32__
         Value *sj = builder.CreateCall2(setjmp_func, jbuf, ConstantInt::get(T_int32,0));
+#else
+        Value *sj = builder.CreateCall(setjmp_func, jbuf);
+#endif
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
         BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
                                                 ctx->f);
         BasicBlock *handlr = (*ctx->labels)[labl];
         assert(handlr);
+#ifdef __WIN32__
+        BasicBlock *cond_resetstkoflw_blk = BasicBlock::Create(getGlobalContext(), "cond_resetstkoflw", ctx->f);
+        BasicBlock *resetstkoflw_blk = BasicBlock::Create(getGlobalContext(), "resetstkoflw", ctx->f);
+        builder.CreateCondBr(isz, tryblk, cond_resetstkoflw_blk);
+        builder.SetInsertPoint(cond_resetstkoflw_blk);
+        builder.CreateCondBr(builder.CreateICmpEQ(
+                    literal_pointer_val(jl_stackovf_exception),
+                    builder.CreateLoad(jlexc_var, true)),
+                resetstkoflw_blk, handlr);
+        builder.SetInsertPoint(resetstkoflw_blk);
+        builder.CreateCall(resetstkoflw_func);
+        builder.CreateBr(handlr);
+#else
         builder.CreateCondBr(isz, tryblk, handlr);
+#endif
         builder.SetInsertPoint(tryblk);
     }
     else {
@@ -1960,7 +1989,15 @@ static Function *emit_function(jl_lambda_info_t *lam)
     //TODO: this seems to cause problems, but should be made to work eventually
     //if (jlrettype == (jl_value_t*)jl_bottom_type)
     //    f->setDoesNotReturn();
-
+#ifdef DEBUG
+#ifdef __WIN32__
+    AttrBuilder *attr = new AttrBuilder();
+    attr->addStackAlignmentAttr(16);
+    attr->addAlignmentAttr(16);
+    f->addAttribute(~0U, Attributes::get(f->getContext(), *attr));
+#endif
+    f->addFnAttr(Attributes::StackProtectReq);
+#endif
     ctx.f = f;
 
     // step 5. set up debug info context and create first basic block
@@ -2139,10 +2176,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == enter_sym) {
             int labl = jl_unbox_long(jl_exprarg(stmt,0));
-            Value *handlr =
+            AllocaInst *handlr =
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
                                                       sizeof(jl_handler_t)));
+            handlr->setAlignment(128); // bits == 16 bytes
             handlers[labl] = handlr;
         }
     }
@@ -2448,11 +2486,10 @@ static void init_julia_llvm_env(Module *m)
     T_pint64 = PointerType::get(T_int64, 0);
     T_uint8 = T_int8;   T_uint16 = T_int16;
     T_uint32 = T_int32; T_uint64 = T_int64;
-#ifdef __LP64__
-    T_size = T_uint64;
-#else
-    T_size = T_uint32;
-#endif
+    if (sizeof(size_t) == 8)
+        T_size = T_uint64;
+    else
+        T_size = T_uint32;
     T_psize = PointerType::get(T_size, 0);
     T_float32 = Type::getFloatTy(getGlobalContext());
     T_pfloat32 = PointerType::get(T_float32, 0);
@@ -2485,6 +2522,14 @@ static void init_julia_llvm_env(Module *m)
                            NULL, "jl_pgcstack");
     jl_ExecutionEngine->addGlobalMapping(jlpgcstack_var, (void*)&jl_pgcstack);
 #endif
+
+    global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard);
+    Function *jl__stack_chk_fail =
+        Function::Create(FunctionType::get(T_void, false),
+                         Function::ExternalLinkage,
+                         "__stack_chk_fail", jl_Module);
+    //jl__stack_chk_fail->setDoesNotReturn();
+    jl_ExecutionEngine->addGlobalMapping(jl__stack_chk_fail, (void*)&__stack_chk_fail);
 
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true);
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false);
@@ -2544,7 +2589,9 @@ static void init_julia_llvm_env(Module *m)
 
     std::vector<Type*> args2(0);
     args2.push_back(T_pint8);
+#ifndef __WIN32__
     args2.push_back(T_int32);
+#endif
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args2, false),
                          Function::ExternalLinkage, "sigsetjmp", jl_Module);
@@ -2640,6 +2687,12 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_enter_handler", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlenter_func, (void*)&jl_enter_handler);
+
+#ifdef __WIN32__
+    resetstkoflw_func = Function::Create(FunctionType::get(T_void, false),
+            Function::ExternalLinkage, "_resetstkoflw", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(resetstkoflw_func, (void*)&_resetstkoflw);
+#endif
 
     std::vector<Type*> lhargs(0);
     lhargs.push_back(T_int32);

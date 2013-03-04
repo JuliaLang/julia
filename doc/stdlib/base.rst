@@ -2288,11 +2288,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svd(A, [thin]) -> U, S, V
 
-   Compute the SVD of A, returning ``U``, ``S``, and ``V`` such that ``A = U*S*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned.
+   Compute the SVD of A, returning ``U``, vector ``S``, and ``V`` such that ``A == U*diagm(S)*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
 .. function:: svdt(A, [thin]) -> U, S, Vt
 
-   Compute the SVD of A, returning ``U``, ``S``, and ``Vt`` such that ``A = U*S*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
+   Compute the SVD of A, returning ``U``, vector ``S``, and ``Vt`` such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
 .. function:: svdvals(A)
 
@@ -2923,6 +2923,10 @@ System
 .. function:: writesto(command)
 
    Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream writing to the process' standard input.
+
+.. function:: readandwrite(command)
+
+   Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the output stream and input stream of the process, and the process object itself.
 
 .. function:: > < >> .>
 

@@ -39,7 +39,7 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 static Value *literal_pointer_val(void *p, Type *t)
 {
-#ifdef __LP64__
+#if defined(_P64)
     return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p),
                                      t);
 #else
@@ -524,7 +524,7 @@ type_of_constant:
 static Value *emit_tuplelen(Value *t)
 {
     Value *lenbits = emit_nthptr(t, 1);
-#ifdef __LP64__
+#ifdef _P64
     return builder.CreatePtrToInt(lenbits, T_int64);
 #else
     return builder.CreatePtrToInt(lenbits, T_int32);
@@ -537,7 +537,7 @@ static Value *emit_n_varargs(jl_codectx_t *ctx)
     int nreq = ctx->nReqArgs;
     Value *valen = builder.CreateSub((Value*)ctx->argCount,
                                      ConstantInt::get(T_int32, nreq));
-#ifdef __LP64__
+#ifdef _P64
     return builder.CreateSExt(valen, T_int64);
 #else
     return valen;
@@ -546,7 +546,7 @@ static Value *emit_n_varargs(jl_codectx_t *ctx)
 
 static Value *emit_arraysize(Value *t, Value *dim)
 {
-#ifdef __LP64__
+#ifdef _P64
     int o = 3;
 #else
     int o = 4;
@@ -679,7 +679,7 @@ static Value *boxed(Value *v, jl_value_t *jt)
     //if (jb == jl_float64_type) return builder.CreateCall(box_float64_func, v);
     if (jb == jl_float64_type) {
         // manually inline alloc & init of Float64 box. cheap, I know.
-#ifdef __LP64__
+#ifdef _P64
         Value *newv = builder.CreateCall(jlalloc2w_func);
 #else
         Value *newv = builder.CreateCall(jlalloc3w_func);

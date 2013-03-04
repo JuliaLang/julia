@@ -132,13 +132,6 @@ end
 @test "\x0f" == unescape_string("\\x0f")
 @test "\x0F" == unescape_string("\\x0F")
 
-# TODO: more Unicode testing here.
-macro S_str(s); Base.interp_parse(s); end
-
-@test S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
-
-# TODO: the above is only one of many needed tests
-
 # integer parsing
 @test parse_int(Int32,"0",36) == 0
 @test parse_int(Int32,"1",36) == 1
@@ -509,8 +502,20 @@ str = "s\u2200"
 @test """ab"\"c""" == "ab\"\"c"
 @test """abc\"""" == "abc\""
 n = 3
-@test """$n""" == "$n"
-@test E"""$n""" == E"$n"
+@test """$n\n""" == "$n\n"
+@test L"""$n\n""" == L"$n\n"
+@test I"""$n\n""" == I"$n\n"
+@test E"""$n\n""" == E"$n\n"
+@test """$(n)""" == "3"
+@test """$(2n)""" == "6"
+@test """$(n+4)""" == "7"
+@test """$("string")""" == "string"
+a = [3,1,2]
+@test """$(a[2])""" == "1"
+@test """$(a[3]+7)""" == "9"
+@test """$(ifloor(4.5))""" == "4"
+@test L"""
+      """ == "\n      "
 @test """
      a
      b
@@ -540,3 +545,9 @@ n = 3
 @test """
       a
        """ == "a\n"
+s = "   p"
+@test """
+      $s""" == "$s"
+@test """
+       $s
+      """ == " $s\n"
