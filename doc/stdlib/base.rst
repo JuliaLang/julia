@@ -340,6 +340,14 @@ Iterable Collections
 
    **Example**: ``mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14``
 
+.. function:: first(coll)
+
+   Get the first element of an ordered collection.
+
+.. function:: last(coll)
+
+   Get the last element of an ordered collection.
+
 Indexable Collections
 ---------------------
 
@@ -730,6 +738,58 @@ Strings
 .. function:: strwidth(s)
 
    Gives the number of columns needed to print a string.
+
+.. function:: isalnum(c::Char)
+
+   Tests whether a character is alphanumeric.
+
+.. function:: isalpha(c::Char)
+
+   Tests whether a character is alphabetic.
+
+.. function:: isascii(c::Char)
+
+   Tests whether a character belongs to the ASCII character set.
+
+.. function:: isblank(c::Char)
+
+   Tests whether a character is a tab or space.
+
+.. function:: iscntrl(c::Char)
+
+   Tests whether a character is a control character.
+
+.. function:: isdigit(c::Char)
+
+   Tests whether a character is a numeric digit (0-9).
+
+.. function:: isgraph(c::Char)
+
+   Tests whether a character is printable, and not a space.
+
+.. function:: islower(c::Char)
+
+   Tests whether a character is a lowercase letter.
+
+.. function:: isprint(c::Char)
+
+   Tests whether a character is printable, including space.
+
+.. function:: ispunct(c::Char)
+
+   Tests whether a character is printable, and not a space or alphanumeric.
+
+.. function:: isspace(c::Char)
+
+   Tests whether a character is any whitespace character.
+
+.. function:: isupper(c::Char)
+
+   Tests whether a character is an uppercase letter.
+
+.. function:: isxdigit(c::Char)
+
+   Tests whether a character is a valid hexadecimal digit.
 
 I/O
 ---
@@ -1907,6 +1967,10 @@ Basic functions
 .. function:: scale!(A, k)
 
    Scale the contents of an array A with k (in-place)
+
+.. function:: conj!(A)
+
+   Convert an array to its complex conjugate in-place
 
 .. function:: stride(A, k)
 
