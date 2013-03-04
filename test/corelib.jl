@@ -408,3 +408,7 @@ end
 @test !isequal(Set{Int}(1,2,3,4), Set{Any}(1,2,3))
 
 # ########## end of set tests ##########
+
+# Ensure denormal flags functions don't segfault
+@test any(ccall("jl_zero_denormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
+@test any(ccall("jl_zero_denormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
