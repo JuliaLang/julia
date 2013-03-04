@@ -53,6 +53,7 @@
     jl_array_del_end;
     jl_array_grow_beg;
     jl_array_grow_end;
+    jl_array_sizehint;
     jl_array_ptr;
     jl_arrayref;
     jl_arrayset;
