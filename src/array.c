@@ -502,6 +502,15 @@ void jl_array_del_end(jl_array_t *a, size_t dec)
     a->length -= dec; a->nrows -= dec;
 }
 
+void jl_array_sizehint(jl_array_t *a, size_t sz)
+{
+    if (sz <= jl_array_len(a))
+        return;
+    size_t inc = sz - jl_array_len(a);
+    jl_array_grow_end(a, inc);
+    a->length -= inc; a->nrows -= inc;
+}
+
 void jl_array_grow_beg(jl_array_t *a, size_t inc)
 {
     // designed to handle the case of growing and shrinking at both ends
