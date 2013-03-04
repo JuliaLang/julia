@@ -132,7 +132,7 @@ volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef __WIN32__
-volatile HANDLE hMainThread;
+volatile HANDLE hMainThread = NULL;
 void restore_signals()
 {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
@@ -156,31 +156,40 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     else {
         jl_signal_pending = 0;
-        SuspendThread(hMainThread);
+        if ((DWORD)-1 == SuspendThread(hMainThread)) {
+            //error
+            fputs("error: SuspendThread failed\n",stderr);
+            return 0;
+        }
         CONTEXT ctxThread;
         memset(&ctxThread,0,sizeof(CONTEXT));
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!GetThreadContext(hMainThread, &ctxThread)) {
             //error
-            printf("error: GetThreadContext failed\n");
+            fputs("error: GetThreadContext failed\n",stderr);
             return 0;
         }
 #ifdef _WIN64
         ctxThread.Rip = (DWORD64)&win_raise_exception;
         ctxThread.Rcx = (DWORD64)jl_interrupt_exception;
+        ctxThread.Rsp &= (DWORD64)-16;
+        ctxThread.Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
 #elif _WIN32
         ctxThread.Eip = (DWORD)&win_raise_exception;
         ctxThread.Ecx = (DWORD)jl_interrupt_exception;
+        ctxThread.Esp &= (DWORD)-16;
+        ctxThread.Esp -= 4; //fix up the stack pointer
 #else
 #error WIN16 not supported :P
 #endif
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread,&ctxThread)) {
-            printf("error: SetThreadContext failed\n");
+            fputs("error: SetThreadContext failed\n",stderr);
             //error
             return 0;
         }
-        if ((DWORD)-1 == ResumeThread (hMainThread)) {
-            printf("error: ResumeThread failed\n");
+        if ((DWORD)-1 == ResumeThread(hMainThread)) {
+            fputs("error: ResumeThread failed\n",stderr);
             //error
             return 0;
         }
@@ -188,16 +197,19 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     return 1;
 }
 static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) {
-    //fprintf(stderr,"arrived in exception_handler!\n");
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_STACK_OVERFLOW:
 #ifdef _WIN64
-            ExceptionInfo->ContextRecord->Rip = (DWORD)&win_raise_exception;
-            ExceptionInfo->ContextRecord->Rcx = (DWORD)jl_stackovf_exception;
+            ExceptionInfo->ContextRecord->Rip = (DWORD64)&win_raise_exception;
+            ExceptionInfo->ContextRecord->Rcx = (DWORD64)jl_stackovf_exception;
+            ExceptionInfo->ContextRecord->Rsp &= (DWORD64)-16;
+            ExceptionInfo->ContextRecord->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
 #elif _WIN32
             ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception;
             ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception;
+            ExceptionInfo->ContextRecord->Esp &= (DWORD)-16;
+            ExceptionInfo->ContextRecord->Esp -= 4; //fix up the stack pointer
 #else
 #error WIN16 not supported :P
 #endif
@@ -531,9 +543,11 @@ void julia_init(char *imageFile)
 DLLEXPORT void jl_install_sigint_handler()
 {
 #ifdef __WIN32__
-    DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
+    if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
         GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
-        TRUE, DUPLICATE_SAME_ACCESS );
+        TRUE, DUPLICATE_SAME_ACCESS )) {
+        JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
+    }
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 #else
     struct sigaction act;
@@ -552,7 +566,7 @@ DLLEXPORT void jl_install_sigint_handler()
 
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {
-#ifdef __WIN32__
+#if defined(_WIN32) //&& !defined(_WIN64)
     SetUnhandledExceptionFilter(exception_handler);
 #endif
 #ifdef COPY_STACKS
