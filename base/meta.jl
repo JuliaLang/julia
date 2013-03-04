@@ -7,7 +7,7 @@ export quot,
        isexpr, 
        show_sexpr
 
-quot(ex) = expr(:quote, {ex})
+quot(ex) = Expr(:quote, ex)
 
 isexpr(ex::Expr, head)          = ex.head === head
 isexpr(ex::Expr, heads::Set)    = has(heads,      ex.head)
