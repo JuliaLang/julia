@@ -139,7 +139,6 @@ LLVM_LIB_FILE = libLLVMJIT.a
 LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/$(LLVM_LIB_FILE)
 LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 
-
 ifeq ($(LLVM_VER), 3.0)
 LLVM_TAR=llvm-$(LLVM_VER).tar.gz
 else
@@ -235,11 +234,13 @@ llvm-$(LLVM_VER)/build/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	../configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
 	touch -c $@
+
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build/config.status | $(llvm_python_workaround)
 	cd llvm-$(LLVM_VER)/build && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) $(LLVM_MFLAGS)
 	touch -c $@
+
 llvm-$(LLVM_VER)/build/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd llvm-$(LLVM_VER)/build && \
@@ -247,10 +248,10 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) $(LLVM_MFLAGS) check 
 endif
 	echo 1 > $@
+
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build install
-	$(INSTALL_NAME_CMD)$(LLVM_LIB_FILE) $(BUILD)/lib/$(LLVM_LIB_FILE)
 	$(AUTOTOOLS_PATH_CORRECT) 
 	touch -c $@
 
