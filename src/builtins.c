@@ -831,7 +831,7 @@ JL_CALLABLE(jl_f_invoke)
 
 // hashing --------------------------------------------------------------------
 
-#ifdef __LP64__
+#ifdef _P64
 #define bitmix(a,b) int64hash((a)^bswap_64(b))
 #define hash64(a)   int64hash(a)
 #else
@@ -857,7 +857,7 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
         case 8:
             return hash64(*(int64_t*)jl_bits_data(v) ^ h);
         default:
-#ifdef __LP64__
+#ifdef _P64
             return h ^ memhash((char*)jl_bits_data(v), nb);
 #else
             return h ^ memhash32((char*)jl_bits_data(v), nb);
@@ -865,7 +865,7 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
         }
     }
     if (tv == (jl_value_t*)jl_union_kind) {
-#ifdef __LP64__
+#ifdef _P64
         return jl_object_id(jl_fieldref(v,0))^0xA5A5A5A5A5A5A5A5L;
 #else
         return jl_object_id(jl_fieldref(v,0))^0xA5A5A5A5;
@@ -970,7 +970,7 @@ void jl_init_primitives(void)
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("TopNode", (jl_value_t*)jl_topnode_type);
 
-#ifdef __LP64__
+#ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);
 #else
     add_builtin("Int", (jl_value_t*)jl_int32_type);

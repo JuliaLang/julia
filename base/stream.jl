@@ -137,7 +137,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                             a = a[1]
                         end
                         if $(esc(filter_fcn))(a)
-                            push!(getfield(a,$(expr(:quote,notify))),tw)
+                            push!(getfield(a,$(Expr(:quote,notify))),tw)
                         end
                     end
                 else
@@ -145,7 +145,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                     if isa(a,Tuple)
                         a = a[1]
                     end
-                    push!(getfield(a,$(expr(:quote,notify))),tw)
+                    push!(getfield(a,$(Expr(:quote,notify))),tw)
                 end
                 ct.runnable = false
                 args = yield()
@@ -154,7 +154,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                         if isa(a,Tuple)
                             a = a[1]
                         end
-                        a = getfield(a,$(expr(:quote,notify)))
+                        a = getfield(a,$(Expr(:quote,notify)))
                         i = findfirst(a, tw)
                         if i > 0 delete!(a, i) end
                     end
@@ -163,7 +163,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                     if isa(a,Tuple)
                         a = a[1]
                     end
-                    a = getfield(a,$(expr(:quote,notify)))
+                    a = getfield(a,$(Expr(:quote,notify)))
                     i = findfirst(a, tw)
                     if i > 0 delete!(a, i) end
                 end
@@ -458,18 +458,23 @@ _uv_lasterror() = _uv_lasterror(eventloop())
 _uv_lastsystemerror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
 _uv_lastsystemerror() = _uv_lasterror(eventloop())
 
-type UVError <: Exception
-    prefix::String
+type UV_error_t
     uv_code::Int32
     system_code::Int32
-    UVError(p::String)=new(p,_uv_lasterror(),_uv_lastsystemerror())
-    UVError(p::String,uv::Integer,system::Integer)=new(p,uv,system)
 end
+type UVError <: Exception
+    prefix::String
+    s::UV_error_t
+    UVError(p::String,e::UV_error_t)=new(p,e)
+end
+UVError(p::String) = UVError(p,_uv_lasterror(),_uv_lastsystemerror())
+UVError(p::String,uv::Integer,system::Integer) = UVError(p,UV_error_t(uv,system))
 
-struverror(err::UVError) = bytestring(ccall(:jl_uv_strerror,Ptr{Uint8},(Int32,Int32),err.uv_code,err.system_code))
-uverrorname(err::UVError) = bytestring(ccall(:jl_uv_err_name,Ptr{Uint8},(Int32,Int32),err.uv_code,err.system_code))
+struverror(err::UVError) = bytestring(ccall(:jl_uv_strerror,Ptr{Uint8},(Int32,Int32),err.s.uv_code,err.s.system_code))
+uverrorname(err::UVError) = bytestring(ccall(:jl_uv_err_name,Ptr{Uint8},(Int32,Int32),err.s.uv_code,err.s.system_code))
 
-uv_error(prefix, b::Bool) = b?throw(UVError(string(prefix))):nothing
+uv_error(prefix, e::UV_error_t) = e.uv_code != 0 ? throw(UVError(string(prefix),e)) : nothing
+uv_error(prefix, b::Bool) = b ? throw(UVError(string(prefix))) : nothing
 uv_error(prefix) = uv_error(prefix, _uv_lasterror() != 0)
 
 show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")

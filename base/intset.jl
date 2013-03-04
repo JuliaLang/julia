@@ -23,7 +23,7 @@ function sizehint(s::IntSet, top::Integer)
         end
         s.limit = top
     end
-    s.limit
+    s
 end
 
 function add!(s::IntSet, n::Integer)
