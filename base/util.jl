@@ -545,3 +545,37 @@ end
 free_memory() = ccall(:uv_get_free_memory, Uint64, ())
 total_memory() = ccall(:uv_get_total_memory, Uint64, ())
 
+
+# `methodswith` -- shows a list of methods using the type given
+
+function methodswith(io::IO, t::Type, m::Module)
+    for nm in names(m)
+        try
+           mt = eval(nm)
+           d = mt.env.defs
+           while !is(d,())
+               if any(map(x -> x == t, d.sig)) 
+                   print(io, nm)
+                   show(io, d)
+                   println(io)
+               end
+               d = d.next
+           end
+        end
+    end
+end
+
+methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m)
+methodswith(t::Type) = methodswith(OUTPUT_STREAM, t)
+function methodswith(io::IO, t::Type)
+    mainmod = ccall(:jl_get_current_module, Any, ())::Module
+    # find modules in Main
+    for nm in names(mainmod)
+        if isdefined(mainmod,nm)
+            mod = eval(mainmod, nm)
+            if isa(mod, Module)
+                methodswith(io, t, mod)
+            end
+        end
+    end
+end

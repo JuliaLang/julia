@@ -40,6 +40,10 @@ Getting Around
 
    Show all methods of ``f`` with their argument types.
 
+.. function:: methodswith(t)
+
+   Show all methods with an argument of type ``typ``.
+
 All Objects
 -----------
 
