@@ -1399,7 +1399,7 @@
        (write-char (not-eof-3 c) b)
        (loop (read-char p) b e 0)))))
 
-(define (interpolate-string-literal? s) (> (length s) 2))
+(define (interpolate-string-literal? s) (length> s 2))
 (define (triplequote-string-literal? s) (eqv? (car s) 'triple_quoted_string))
 
 (define (not-eof-1 c)
