@@ -183,6 +183,7 @@
     jl_module_name;
     jl_module_parent;
     jl_module_type;
+    jl_native_alignment;
     jl_nb_available;
     jl_new_array;
     jl_new_closure;
@@ -238,6 +239,7 @@
     jl_set_current_output_stream_obj;
     jl_set_global;
     jl_set_timeval;
+    jl_setjmp;
     jl_show;
     jl_show_any;
     jl_signal_pending;
@@ -248,6 +250,7 @@
     jl_sockaddr_host4;
     jl_tcp4_connect;
     jl_spawn;
+    jl_stackovf_exception;
     jl_start_io_thread;
     jl_start_reading;
     jl_stat;

@@ -18,6 +18,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#define __STDC_CONSTANT_MACROS
+#define __STDC_LIMIT_MACROS
+#include <llvm-c/Target.h>
+
 #ifdef __SSE__
 #include <xmmintrin.h>
 #endif
@@ -370,7 +374,7 @@ jl_value_t *jl_env_done(char *pos)
 #endif
 // -- child process status --
 
-#if defined _MSC_VER || defined __MINGW32__
+#if defined _MSC_VER || defined __WIN32__
 
 /* Native Woe32 API.  */
 #include <process.h>
@@ -403,26 +407,90 @@ JL_STREAM *jl_stdin_stream(void)  { return (JL_STREAM*) JL_STDIN; }
 JL_STREAM *jl_stdout_stream(void) { return (JL_STREAM*) JL_STDOUT; }
 JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*) JL_STDERR; }
 
-DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
-{
-#ifdef __SSE2__
-    // SSE2 supports both FZ and DAZ
-    uint32_t flags = 0x8040;
-#elif __SSE__
-    // SSE supports only the FZ flag
-    uint32_t flags = 0x8000;
-#endif
+// -- set/clear the FZ/DAZ flags on x86 & x86-64 --
 
 #ifdef __SSE__
-    if (isZero) {
-	_mm_setcsr(_mm_getcsr() | flags);
-    }
-    else {
-	_mm_setcsr(_mm_getcsr() & ~flags);
-    }
-    return 1;
+
+#ifdef _WIN32
+#define cpuid    __cpuid
 #else
-    return 0;
-#endif
+
+void cpuid(int32_t CPUInfo[4], int32_t InfoType)
+{
+    __asm__ __volatile__ (
+        #if defined(__i386__) && defined(__PIC__)
+        "xchg %%ebx, %%esi;"
+        "cpuid;"
+        "xchg %%esi, %%ebx;":
+        "=S" (CPUInfo[1]) ,
+        #else
+        "cpuid":
+        "=b" (CPUInfo[1]),
+        #endif
+        "=a" (CPUInfo[0]),
+        "=c" (CPUInfo[2]),
+        "=d" (CPUInfo[3]) :
+        "a" (InfoType)
+    );
 }
 
+#endif
+
+DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
+{
+    uint32_t flags = 0x00000000;
+    int32_t info[4];
+
+    cpuid(info, 0);
+    if (info[0] >= 1)
+    {
+        cpuid(info, 0x00000001);
+        if ((info[3] & ((int)1 << 26)) != 0)
+        {
+            // SSE2 supports both FZ and DAZ
+            flags = 0x00008040;
+        }
+        else if ((info[3] & ((int)1 << 25)) != 0)
+        {
+            // SSE supports only the FZ flag
+            flags = 0x00008000;
+        }
+    }
+
+    if (flags)
+    {
+        if (isZero)
+        {
+            _mm_setcsr(_mm_getcsr() | flags);
+        }
+        else
+        {
+            _mm_setcsr(_mm_getcsr() & ~flags);
+        }
+        return 1;
+    }
+    return 0;
+}
+
+#else
+
+DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
+{
+    return 0;
+}
+
+#endif
+
+// -- processor native alignment information --
+
+DLLEXPORT void jl_native_alignment(uint_t* int8align, uint_t* int16align, uint_t* int32align, uint_t* int64align, uint_t* float32align, uint_t* float64align)
+{
+    LLVMTargetDataRef tgtdata = LLVMCreateTargetData("");
+    *int8align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt8Type());
+    *int16align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt16Type());
+    *int32align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt32Type());
+    *int64align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt64Type());
+    *float32align = LLVMPreferredAlignmentOfType(tgtdata, LLVMFloatType());
+    *float64align = LLVMPreferredAlignmentOfType(tgtdata, LLVMDoubleType());
+    LLVMDisposeTargetData(tgtdata);
+}

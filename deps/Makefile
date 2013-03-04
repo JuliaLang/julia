@@ -20,7 +20,7 @@ endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp patchelf
 #custom configure-driven script: zlib nginx
-#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
+#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -135,13 +135,8 @@ else
 LLVM_BUILDDIR = build/Release
 endif
 
-ifeq ($(OS),WINNT)
-LLVM_LIB_FILE = LLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
-LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/$(LLVM_LIB_FILE)
-else
-LLVM_LIB_FILE = libLLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
+LLVM_LIB_FILE = libLLVMJIT.a
 LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/$(LLVM_LIB_FILE)
-endif
 LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 
 
@@ -164,7 +159,7 @@ LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
 endif
 
-LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-targets=host --disable-bindings --disable-docs
+LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-static --enable-targets=host --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions --enable-optimized
@@ -491,13 +486,7 @@ install-double-conversion: $(BUILD)/lib/libgrisu.$(SHLIB_EXT)
 
 ## openlibm && openlibm-extras ##
 
-ifeq ($(OS), WINNT) #needs more advanced detection once 64bit build is possible
-OPENLIBM_FLAGS = ARCH=i386
-else
-OPENLIBM_FLAGS = ARCH="$(ARCH)"
-endif
-
-OPENLIBM_FLAGS += CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 OPENLIBM_OBJ_TARGET = $(BUILD)/lib/libopenlibm.$(SHLIB_EXT)
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
@@ -643,6 +632,8 @@ ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 
 ifeq ($(ARCH),i686)
 OPENBLAS_BUILD_OPTS += BINARY=32
+else ifeq ($(ARCH),x86_64)
+OPENBLAS_BUILD_OPTS += BINARY=64
 else
 $(error "unknown arch for openblas cross-compile")
 endif
@@ -1261,44 +1252,6 @@ configure-zlib: zlib-$(ZLIB_VER)/config.status
 compile-zlib: $(ZLIB_SRC_TARGET)
 check-zlib: zlib-$(ZLIB_VER)/checked
 install-zlib: $(ZLIB_OBJ_TARGET)
-
-
-## Tk wrapper ##
-
-TKW_INC = -I $(BUILD)/include -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
-TKW_LIB =
-ifeq ($(OS), Darwin)
-  ifneq ($(wildcard /opt/local/bin/port),)
-    TKW_INC += -I/opt/local/include
-    TKW_LIB += -L/opt/local/lib
-  else ifneq ($(wildcard /usr/local/bin/brew),)
-    TKW_INC += -I/usr/local/include
-    TKW_LIB += -L/usr/local/lib
-  endif
-  TKW_INC += -I/opt/X11/include -I/usr/X11/include
-else
-  TKW_INC += -I/usr/include/tcl
-endif
-ifeq ($(OS), Linux)
-TKW_LIB += -ltcl8.5 -ltk8.5 -L$(BUILD)/lib/
-else
-TKW_LIB += -ltcl -ltk -L$(BUILD)/lib/
-endif
-
-$(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
-	$(INSTALL_NAME_CMD)libtk_wrapper.$(SHLIB_EXT) $@
-	touch -c $@
-
-clean-tk-wrapper:
-	-rm -f $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
-distclean-tk-wrapper: clean-tk-wrapper
-
-get-tk-wrapper: 
-configure-tk-wrapper: 
-compile-tk-wrapper: 
-check-tk-wrapper:
-install-tk-wrapper: $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
 
 
 ## patchelf ##

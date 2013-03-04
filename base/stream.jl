@@ -137,7 +137,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                             a = a[1]
                         end
                         if $(esc(filter_fcn))(a)
-                            push!(getfield(a,$(expr(:quote,notify))),tw)
+                            push!(getfield(a,$(Expr(:quote,notify))),tw)
                         end
                     end
                 else
@@ -145,7 +145,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                     if isa(a,Tuple)
                         a = a[1]
                     end
-                    push!(getfield(a,$(expr(:quote,notify))),tw)
+                    push!(getfield(a,$(Expr(:quote,notify))),tw)
                 end
                 ct.runnable = false
                 args = yield()
@@ -154,7 +154,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                         if isa(a,Tuple)
                             a = a[1]
                         end
-                        a = getfield(a,$(expr(:quote,notify)))
+                        a = getfield(a,$(Expr(:quote,notify)))
                         i = findfirst(a, tw)
                         if i > 0 delete!(a, i) end
                     end
@@ -163,7 +163,7 @@ macro waitfilter(fcn,notify,filter_fcn,types)
                     if isa(a,Tuple)
                         a = a[1]
                     end
-                    a = getfield(a,$(expr(:quote,notify)))
+                    a = getfield(a,$(Expr(:quote,notify)))
                     i = findfirst(a, tw)
                     if i > 0 delete!(a, i) end
                 end

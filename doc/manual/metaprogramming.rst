@@ -485,20 +485,14 @@ is, well, invaluable.
 The mechanism for user-defined string literals is deeply, profoundly
 powerful. Not only are Julia's non-standard literals implemented using
 it, but also the command literal syntax (```echo "Hello, $person"```)
-and regular string interpolation are implemented using it. These two
-powerful facilities are implemented with the following innocuous-looking
-pair of macros::
+is implemented with the following innocuous-looking macro::
 
     macro cmd(str)
       :(cmd_gen($shell_parse(str)))
     end
 
-    macro str(s)
-      interp_parse(s)
-    end
-
 Of course, a large amount of complexity is hidden in the functions used
-in these macro definitions, but they are just functions, written
+in this macro definition, but they are just functions, written
 entirely in Julia. You can read their source and see precisely what they
 do — and all they do is construct expression objects to be inserted into
 your program's syntax tree.

@@ -24,13 +24,13 @@
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE
 
-#ifdef __LP64__
+#ifdef _P64
 # define BVOFFS 2
 #else
 # define BVOFFS 4
 #endif
 
-#ifdef __LP64__
+#ifdef _P64
 #define GC_PAGE_SZ (1536*sizeof(void*))//bytes
 #else
 #define GC_PAGE_SZ (2048*sizeof(void*))//bytes
@@ -62,7 +62,7 @@ typedef struct _pool_t {
 typedef struct _bigval_t {
     struct _bigval_t *next;
     size_t sz;
-#ifndef __LP64__
+#ifndef _P64
     uptrint_t _pad0;
     uptrint_t _pad1;
 #endif
@@ -92,7 +92,7 @@ static size_t allocd_bytes = 0;
 static size_t freed_bytes = 0;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t collect_interval = default_collect_interval;
-#ifdef __LP64__
+#ifdef _P64
 # define max_collect_interval 1250000000UL
 #else
 # define max_collect_interval 500000000UL
@@ -209,7 +209,7 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 
 static int szclass(size_t sz)
 {
-#ifndef __LP64__
+#ifndef _P64
     if     (sz <=    8) return 0;
 #endif
     if     (sz <=   56) return ((sz+3)/4) - 2;
@@ -811,7 +811,7 @@ void *alloc_2w(void)
 #ifdef MEMDEBUG
     return alloc_big(2*sizeof(void*));
 #endif
-#ifdef __LP64__
+#ifdef _P64
     return pool_alloc(&pools[2]);
 #else
     return pool_alloc(&pools[0]);
@@ -823,7 +823,7 @@ void *alloc_3w(void)
 #ifdef MEMDEBUG
     return alloc_big(3*sizeof(void*));
 #endif
-#ifdef __LP64__
+#ifdef _P64
     return pool_alloc(&pools[4]);
 #else
     return pool_alloc(&pools[1]);
@@ -835,7 +835,7 @@ void *alloc_4w(void)
 #ifdef MEMDEBUG
     return alloc_big(4*sizeof(void*));
 #endif
-#ifdef __LP64__
+#ifdef _P64
     return pool_alloc(&pools[6]);
 #else
     return pool_alloc(&pools[2]);
