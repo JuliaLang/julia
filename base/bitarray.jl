@@ -1604,7 +1604,7 @@ nonzeros(B::BitArray) = trues(nnz(B))
 
 ## Reductions ##
 
-sum(A::BitArray, region) = reducedim(+,A,region,0,Array(Int,reduced_dims(A,region)))
+sum(A::BitArray, d::Dim) = reducedim(+,A,d.region,0,Array(Int,reduced_dims(A,d.region)))
 
 sum(B::BitArray) = nnz(B)
 

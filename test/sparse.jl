@@ -63,8 +63,8 @@ end
 
 # reductions
 @test sum(se33)[1] == 3.0
-@test sum(se33, 1) == [1.0 1.0 1.0]
-@test sum(se33, 2) == [1.0 1.0 1.0]'
+@test sum(se33, Dim(1)) == [1.0 1.0 1.0]
+@test sum(se33, Dim(2)) == [1.0 1.0 1.0]'
 @test prod(se33)[1] == 0.0
-@test prod(se33, 1) == [0.0 0.0 0.0]
-@test prod(se33, 2) == [0.0 0.0 0.0]'
+@test prod(se33, Dim(1)) == [0.0 0.0 0.0]
+@test prod(se33, Dim(2)) == [0.0 0.0 0.0]'

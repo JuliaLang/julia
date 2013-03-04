@@ -219,7 +219,7 @@ for i=1:16
     z[i] = i
 end
 
-@test sum(z) == sum(z,(1,2,3,4))[1] == 136
+@test sum(z) == sum(z,Dim(1,2,3,4))[1] == 136
 
 v = cell(2,2,1,1)
 v[1,1,1,1] = 28.0
@@ -227,7 +227,7 @@ v[1,2,1,1] = 36.0
 v[2,1,1,1] = 32.0
 v[2,2,1,1] = 40.0
 
-@test isequal(v,sum(z,(3,4)))
+@test isequal(v,sum(z,Dim(3,4)))
 
 ## large matrices transpose ##
 

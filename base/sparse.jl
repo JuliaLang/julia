@@ -680,7 +680,7 @@ end # macro
 
 # TODO: Should the results of sparse reductions be sparse?
 function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
-    if region == 1
+    if region == 1 || vec(region) == [1]
 
         S = Array(Tv, 1, A.n)
         for i = 1 : A.n
@@ -695,7 +695,7 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
         end
         return S
 
-    elseif region == 2
+    elseif region == 2 || vec(region) == [2]
 
         S = fill(v0, A.m, 1)
         rcounts = zeros(Ti, A.m)
@@ -709,7 +709,7 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
         end
         return S
 
-    elseif region == (1,2)
+    elseif region == (1,2) || vec(region) == [1,2]
 
         S = v0
         for i = 1 : A.n, j = A.colptr[i] : A.colptr[i+1]-1
@@ -726,17 +726,17 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
     end
 end
 
-max{T}(A::SparseMatrixCSC{T}) = reducedim(max,A,(1,2),typemin(T))
-max{T}(A::SparseMatrixCSC{T}, b::(), region) = reducedim(max,A,region,typemin(T))
+max{T}(A::SparseMatrixCSC{T}) = reducedim(max,A,[1,2],typemin(T))
+max{T}(A::SparseMatrixCSC{T}, d::Dim) = reducedim(max,A,d.region,typemin(T))
 
-min{T}(A::SparseMatrixCSC{T}) = reducedim(min,A,(1,2),typemax(T))
-min{T}(A::SparseMatrixCSC{T}, b::(), region) = reducedim(min,A,region,typemax(T))
+min{T}(A::SparseMatrixCSC{T}) = reducedim(min,A,[1,2],typemax(T))
+min{T}(A::SparseMatrixCSC{T}, d::Dim) = reducedim(min,A,d.region,typemax(T))
 
-sum{T}(A::SparseMatrixCSC{T}) = reducedim(+,A,(1,2),zero(T))
-sum{T}(A::SparseMatrixCSC{T}, region)  = reducedim(+,A,region,zero(T))
+sum{T}(A::SparseMatrixCSC{T}) = reducedim(+,A,[1,2],zero(T))
+sum{T}(A::SparseMatrixCSC{T}, d::Dim)  = reducedim(+,A,d.region,zero(T))
 
-prod{T}(A::SparseMatrixCSC{T}) = reducedim(*,A,(1,2),one(T))
-prod{T}(A::SparseMatrixCSC{T}, region) = reducedim(*,A,region,one(T))
+prod{T}(A::SparseMatrixCSC{T}) = reducedim(*,A,[1,2],one(T))
+prod{T}(A::SparseMatrixCSC{T}, d::Dim) = reducedim(*,A,d.region,one(T))
 
 #all(A::SparseMatrixCSC{Bool}, region) = reducedim(all,A,region,true)
 #any(A::SparseMatrixCSC{Bool}, region) = reducedim(any,A,region,false)
