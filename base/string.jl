@@ -282,7 +282,7 @@ for name = ("alnum", "alpha", "cntrl", "digit", "graph",
     @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Char,), c))
 end
 
-isblank(c) = c==' ' || c=='\t'
+isblank(c::Char) = c==' ' || c=='\t'
 
 ## generic string uses only endof and next ##
 
@@ -695,12 +695,13 @@ function triplequoted(unescape::Function, args...)
         sx[1] = s[j+1:end]
     end
 
-    Expr(:call, :string, sx...)
+    length(sx) == 1 ? sx[1] : Expr(:call, :string, sx...)
 end
 
 ## core string macros ##
 
 function singlequoted(unescape::Function, args...)
+    if length(args) == 1 return unescape(args[1]) end
     sx = { isa(arg,ByteString) ? unescape(arg) : esc(arg) for arg in args }
     Expr(:call, :string, sx...)
 end

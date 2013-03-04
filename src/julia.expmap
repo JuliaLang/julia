@@ -183,6 +183,7 @@
     jl_module_name;
     jl_module_parent;
     jl_module_type;
+    jl_native_alignment;
     jl_nb_available;
     jl_new_array;
     jl_new_closure;
@@ -311,6 +312,7 @@
     repl_callback_enable;
     restore_signals;
     rl_clear_input;
+    SC_CLK_TCK;
     u8_isvalid;
     u8_strlen;
     u8_strwidth;
