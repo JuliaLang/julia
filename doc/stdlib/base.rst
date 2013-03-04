@@ -637,6 +637,10 @@ Strings
 
    Return the index of ``char`` in ``string``, giving 0 if not found. The second argument may also be a vector or a set of characters. The third argument optionally specifies a starting index.
 
+.. function:: ismatch(r::Regex, s::String)
+
+   Test whether a string contains a match of the given regular expression.
+
 .. function:: lpad(string, n, p)
 
    Make a string at least ``n`` characters long by padding on the left with copies of ``p``.
@@ -2130,6 +2134,22 @@ Indexing, Assignment, and Concatenation
 
    Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``.
 
+.. function:: nonzeros(A)
+
+   Return a vector of the non-zero values in array ``A``.
+
+.. function:: findfirst(A)
+
+   Return the index of the first non-zero value in ``A``.
+
+.. function:: findfirst(A,v)
+
+   Return the index of the first element equal to ``v`` in ``A``.
+
+.. function:: findfirst(predicate, A)
+
+   Return the index of the first element that satisfies the given predicate in ``A``.
+
 .. function:: permutedims(A,perm)
 
    Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permute(A,[2,1])``.
@@ -2156,6 +2176,10 @@ Array functions
 .. function:: cumsum(A, [dim])
 
    Cumulative sum along a dimension.
+
+.. function:: cumsum_kbn(A, [dim])
+
+   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
 
 .. function:: cummin(A, [dim])
 
@@ -2186,6 +2210,10 @@ Array functions
    Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
    vector specifying the dimensions to reduce, and ``initial`` is the initial
    value to use in the reductions.
+
+.. function:: sum_kbn(A)
+
+   Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
 
 Sparse Matrices
 ---------------

@@ -248,7 +248,50 @@
 
 (E"Getting Around",E"Base",E"require",E"require(file::String...)
 
-   Evaluate the contents of a source file.
+   Load source files once, in the context of the \"Main\" module, on
+   every active node, searching the system-wide \"LOAD_PATH\" for
+   files. \"require\" is considered a top-level operation, so it sets
+   the current \"include\" path but does not use it to search for
+   files (see help for \"include\"). This function is typically used
+   to load library code, and is implicitly called by \"using\" to load
+   packages.
+
+"),
+
+(E"Getting Around",E"Base",E"reload",E"reload(file::String)
+
+   Like \"require\", except forces loading of files regardless of
+   whether they have been loaded before. Typically used when
+   interactively developing libraries.
+
+"),
+
+(E"Getting Around",E"Base",E"include",E"include(path::String)
+
+   Evaluate the contents of a source file in the current context.
+   During including, a task-local include path is set to the directory
+   containing the file. Nested calls to \"include\" will search
+   relative to that path. All paths refer to files on node 1 when
+   running in parallel, and files will be fetched from node 1. This
+   function is typically used to load source interactively, or to
+   combine files in packages that are broken into multiple source
+   files.
+
+"),
+
+(E"Getting Around",E"Base",E"include_string",E"include_string(code::String)
+
+   Like \"include\", except reads code from the given string rather
+   than from a file. Since there is no file path involved, no path
+   processing or fetching from node 1 is done.
+
+"),
+
+(E"Getting Around",E"Base",E"evalfile",E"evalfile(path::String)
+
+   Evaluate all expressions in the given file, and return the value of
+   the last one. No other processing (path searching, fetching from
+   node 1, etc.) is performed.
 
 "),
 
@@ -703,6 +746,18 @@
 
 "),
 
+(E"Iterable Collections",E"Base",E"first",E"first(coll)
+
+   Get the first element of an ordered collection.
+
+"),
+
+(E"Iterable Collections",E"Base",E"last",E"last(coll)
+
+   Get the last element of an ordered collection.
+
+"),
+
 (E"Indexable Collections",E"Base",E"collection[key...]",E"ref(collection, key...)
 collection[key...]()
 
@@ -1105,6 +1160,13 @@ string(strs...)
 
 "),
 
+(E"Strings",E"Base",E"ismatch",E"ismatch(r::Regex, s::String)
+
+   Test whether a string contains a match of the given regular
+   expression.
+
+"),
+
 (E"Strings",E"Base",E"lpad",E"lpad(string, n, p)
 
    Make a string at least \"n\" characters long by padding on the left
@@ -1287,6 +1349,85 @@ string(strs...)
 (E"Strings",E"Base",E"strwidth",E"strwidth(s)
 
    Gives the number of columns needed to print a string.
+
+"),
+
+(E"Strings",E"Base",E"isalnum",E"isalnum(c::Char)
+
+   Tests whether a character is alphanumeric.
+
+"),
+
+(E"Strings",E"Base",E"isalpha",E"isalpha(c::Char)
+
+   Tests whether a character is alphabetic.
+
+"),
+
+(E"Strings",E"Base",E"isascii",E"isascii(c::Char)
+
+   Tests whether a character belongs to the ASCII character set.
+
+"),
+
+(E"Strings",E"Base",E"isblank",E"isblank(c::Char)
+
+   Tests whether a character is a tab or space.
+
+"),
+
+(E"Strings",E"Base",E"iscntrl",E"iscntrl(c::Char)
+
+   Tests whether a character is a control character.
+
+"),
+
+(E"Strings",E"Base",E"isdigit",E"isdigit(c::Char)
+
+   Tests whether a character is a numeric digit (0-9).
+
+"),
+
+(E"Strings",E"Base",E"isgraph",E"isgraph(c::Char)
+
+   Tests whether a character is printable, and not a space.
+
+"),
+
+(E"Strings",E"Base",E"islower",E"islower(c::Char)
+
+   Tests whether a character is a lowercase letter.
+
+"),
+
+(E"Strings",E"Base",E"isprint",E"isprint(c::Char)
+
+   Tests whether a character is printable, including space.
+
+"),
+
+(E"Strings",E"Base",E"ispunct",E"ispunct(c::Char)
+
+   Tests whether a character is printable, and not a space or
+   alphanumeric.
+
+"),
+
+(E"Strings",E"Base",E"isspace",E"isspace(c::Char)
+
+   Tests whether a character is any whitespace character.
+
+"),
+
+(E"Strings",E"Base",E"isupper",E"isupper(c::Char)
+
+   Tests whether a character is an uppercase letter.
+
+"),
+
+(E"Strings",E"Base",E"isxdigit",E"isxdigit(c::Char)
+
+   Tests whether a character is a valid hexadecimal digit.
 
 "),
 
@@ -3112,6 +3253,12 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"conj!",E"conj!(A)
+
+   Convert an array to its complex conjugate in-place
+
+"),
+
 (E"Arrays",E"Base",E"stride",E"stride(A, k)
 
    Returns the distance in memory (in number of elements) between
@@ -3357,6 +3504,31 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"nonzeros",E"nonzeros(A)
+
+   Return a vector of the non-zero values in array \"A\".
+
+"),
+
+(E"Arrays",E"Base",E"findfirst",E"findfirst(A)
+
+   Return the index of the first non-zero value in \"A\".
+
+"),
+
+(E"Arrays",E"Base",E"findfirst",E"findfirst(A, v)
+
+   Return the index of the first element equal to \"v\" in \"A\".
+
+"),
+
+(E"Arrays",E"Base",E"findfirst",E"findfirst(predicate, A)
+
+   Return the index of the first element that satisfies the given
+   predicate in \"A\".
+
+"),
+
 (E"Arrays",E"Base",E"permutedims",E"permutedims(A, perm)
 
    Permute the dimensions of array \"A\". \"perm\" is a vector
@@ -3394,6 +3566,13 @@ airyaiprime(x)
 (E"Arrays",E"Base",E"cumsum",E"cumsum(A[, dim])
 
    Cumulative sum along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"cumsum_kbn",E"cumsum_kbn(A[, dim])
+
+   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier
+   compensated summation algorithm for additional accuracy.
 
 "),
 
@@ -3438,6 +3617,13 @@ airyaiprime(x)
    Reduce 2-argument function \"f\" along dimensions of \"A\".
    \"dims\" is a vector specifying the dimensions to reduce, and
    \"initial\" is the initial value to use in the reductions.
+
+"),
+
+(E"Arrays",E"Base",E"sum_kbn",E"sum_kbn(A)
+
+   Returns the sum of all array elements, using the Kahan-Babuska-
+   Neumaier compensated summation algorithm for additional accuracy.
 
 "),
 
@@ -3763,17 +3949,17 @@ airyaiprime(x)
 
 (E"Linear Algebra",E"Base",E"svd",E"svd(A[, thin]) -> U, S, V
 
-   Compute the SVD of A, returning \"U\", \"S\", and \"V\" such that
-   \"A = U*S*V'\". If \"thin\" is \"true\", an economy mode
-   decomposition is returned.
+   Compute the SVD of A, returning \"U\", vector \"S\", and \"V\" such
+   that \"A == U*diagm(S)*V'\". If \"thin\" is \"true\", an economy
+   mode decomposition is returned.
 
 "),
 
 (E"Linear Algebra",E"Base",E"svdt",E"svdt(A[, thin]) -> U, S, Vt
 
-   Compute the SVD of A, returning \"U\", \"S\", and \"Vt\" such that
-   \"A = U*S*Vt\". If \"thin\" is \"true\", an economy mode
-   decomposition is returned.
+   Compute the SVD of A, returning \"U\", vector \"S\", and \"Vt\"
+   such that \"A = U*diagm(S)*Vt\". If \"thin\" is \"true\", an
+   economy mode decomposition is returned.
 
 "),
 
@@ -4739,6 +4925,14 @@ airyaiprime(x)
 
 "),
 
+(E"System",E"Base",E"readandwrite",E"readandwrite(command)
+
+   Starts running a command asynchronously, and returns a tuple
+   (stdout,stdin,process) of the output stream and input stream of the
+   process, and the process object itself.
+
+"),
+
 (E"System",E"",E"> < >> .>",E"> < >> .>
 
    \">\" \"<\" and \">>\" work exactly as in bash, and \".>\"
@@ -4803,7 +4997,7 @@ airyaiprime(x)
 
 (E"System",E"Base",E"time",E"time()
 
-   Get the time in seconds since the epoch, with fairly high
+   Get the system time in seconds since the epoch, with fairly high
    (typically, microsecond) resolution.
 
 "),
@@ -4865,9 +5059,21 @@ ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 
 "),
 
-(E"C Interface",E"Base",E"dlopen",E"dlopen(libfile::String)
+(E"C Interface",E"Base",E"dlopen",E"dlopen(libfile::String[, flags::Integer])
 
    Load a shared library, returning an opaque handle.
+
+   The optional flags argument is a bitwise-or of zero or more of
+   RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE,
+   RTLD_NOLOAD, RTLD_DEEPBIND, and RTLD_FIRST.  These are converted to
+   the corresponding flags of the POSIX (and/or GNU libc and/or MacOS)
+   dlopen command, if possible, or are ignored if the specified
+   functionality is not available on the current platform.  The
+   default is RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL.  An important usage
+   of these flags, on POSIX platforms, is to specify
+   RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL in order for the library's
+   symbols to be available for usage in other shared libraries, in
+   situations where there are dependencies between shared libraries.
 
 "),
 
