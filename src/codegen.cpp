@@ -52,6 +52,14 @@ using namespace llvm;
 extern "C" {
 #include "julia.h"
 #include "builtin_proto.h"
+void * __stack_chk_guard = NULL;
+void __attribute__(()) __stack_chk_fail()
+{
+    /* put your panic function or similar in here */
+    fprintf(stderr, "warning: stack corruption detected\n");
+    //assert(0 && "stack corruption detected");
+    //abort();
+}
 }
 
 #define CONDITION_REQUIRES_BOOL
@@ -1981,7 +1989,15 @@ static Function *emit_function(jl_lambda_info_t *lam)
     //TODO: this seems to cause problems, but should be made to work eventually
     //if (jlrettype == (jl_value_t*)jl_bottom_type)
     //    f->setDoesNotReturn();
-
+#ifdef DEBUG
+#ifdef __WIN32__
+    AttrBuilder *attr = new AttrBuilder();
+    attr->addStackAlignmentAttr(16);
+    attr->addAlignmentAttr(16);
+    f->addAttribute(~0U, Attributes::get(f->getContext(), *attr));
+#endif
+    f->addFnAttr(Attributes::StackProtectReq);
+#endif
     ctx.f = f;
 
     // step 5. set up debug info context and create first basic block
@@ -2160,10 +2176,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == enter_sym) {
             int labl = jl_unbox_long(jl_exprarg(stmt,0));
-            Value *handlr =
+            AllocaInst *handlr =
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
                                                       sizeof(jl_handler_t)));
+            handlr->setAlignment(128); // bits == 16 bytes
             handlers[labl] = handlr;
         }
     }
@@ -2469,11 +2486,10 @@ static void init_julia_llvm_env(Module *m)
     T_pint64 = PointerType::get(T_int64, 0);
     T_uint8 = T_int8;   T_uint16 = T_int16;
     T_uint32 = T_int32; T_uint64 = T_int64;
-#ifdef __LP64__
-    T_size = T_uint64;
-#else
-    T_size = T_uint32;
-#endif
+    if (sizeof(size_t) == 8)
+        T_size = T_uint64;
+    else
+        T_size = T_uint32;
     T_psize = PointerType::get(T_size, 0);
     T_float32 = Type::getFloatTy(getGlobalContext());
     T_pfloat32 = PointerType::get(T_float32, 0);
@@ -2506,6 +2522,14 @@ static void init_julia_llvm_env(Module *m)
                            NULL, "jl_pgcstack");
     jl_ExecutionEngine->addGlobalMapping(jlpgcstack_var, (void*)&jl_pgcstack);
 #endif
+
+    global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard);
+    Function *jl__stack_chk_fail =
+        Function::Create(FunctionType::get(T_void, false),
+                         Function::ExternalLinkage,
+                         "__stack_chk_fail", jl_Module);
+    //jl__stack_chk_fail->setDoesNotReturn();
+    jl_ExecutionEngine->addGlobalMapping(jl__stack_chk_fail, (void*)&__stack_chk_fail);
 
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true);
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false);

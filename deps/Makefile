@@ -135,13 +135,8 @@ else
 LLVM_BUILDDIR = build/Release
 endif
 
-ifeq ($(OS),WINNT)
-LLVM_LIB_FILE = LLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
-LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/$(LLVM_LIB_FILE)
-else
-LLVM_LIB_FILE = libLLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
+LLVM_LIB_FILE = libLLVMJIT.a
 LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/$(LLVM_LIB_FILE)
-endif
 LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 
 
@@ -164,7 +159,7 @@ LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
 endif
 
-LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-targets=host --disable-bindings --disable-docs
+LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-static --enable-targets=host --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions --enable-optimized
@@ -491,13 +486,7 @@ install-double-conversion: $(BUILD)/lib/libgrisu.$(SHLIB_EXT)
 
 ## openlibm && openlibm-extras ##
 
-ifeq ($(OS), WINNT) #needs more advanced detection once 64bit build is possible
-OPENLIBM_FLAGS = ARCH=i386
-else
-OPENLIBM_FLAGS = ARCH="$(ARCH)"
-endif
-
-OPENLIBM_FLAGS += CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 OPENLIBM_OBJ_TARGET = $(BUILD)/lib/libopenlibm.$(SHLIB_EXT)
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
@@ -643,6 +632,8 @@ ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 
 ifeq ($(ARCH),i686)
 OPENBLAS_BUILD_OPTS += BINARY=32
+else ifeq ($(ARCH),x86_64)
+OPENBLAS_BUILD_OPTS += BINARY=64
 else
 $(error "unknown arch for openblas cross-compile")
 endif

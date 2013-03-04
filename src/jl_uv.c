@@ -409,7 +409,7 @@ static void jl_free_buffer(uv_write_t* req, int status)
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
-    if(stream!=0) {
+    if (stream!=0) {
         if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
             uv_write_t *uvw = malloc(sizeof(uv_write_t));
             uvw->data=0;
@@ -676,7 +676,13 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
     return lib;
 }
 
-//#include "os_detect.h"
+DLLEXPORT long SC_CLK_TCK() {
+#ifndef __WIN32__
+    return sysconf(_SC_CLK_TCK);
+#else
+    return 0;
+#endif
+}
 
 #ifdef __cplusplus
 }
