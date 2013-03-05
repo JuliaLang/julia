@@ -7,9 +7,15 @@
     :copyright: Copyright 2007-2011 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 #}
-{%- if display_toc %}
-  <h3><a href="{{ pathto(master_doc) }}">{{ _('Table Of Contents') }}</a></h3>
-  {{ toc }}
+{%- if "manual"==current_page_name[0:6] and "manual/index"!=current_page_name %}
+  <h3><a href="{{ pathto(master_doc) }}/../manual/">{{ _('Table Of Contents') }}</a></h3>
+{%- elif "stdlib"==current_page_name[0:6] and "stdlib/index"!=current_page_name %}
+  <h3><a href="{{ pathto(master_doc) }}/../stdlib/">{{ _('Table Of Contents') }}</a></h3>
 {%- else %}
   <h3><a href="{{ pathto(master_doc) }}">{{ _('Main page') }}</a></h3>
 {%- endif %}
+
+{%- if display_toc %}
+  {{ toc }}
+{%- endif %}
+
