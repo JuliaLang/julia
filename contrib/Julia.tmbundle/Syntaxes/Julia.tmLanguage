@@ -95,7 +95,7 @@
 			<array>
 				<dict>
 					<key>begin</key>
-					<string>([a-zA-Z0-9_]+)\w*\(</string>
+					<string>([a-zA-Z0-9_]+!?)\w*\(</string>
 					<key>beginCaptures</key>
 					<dict>
 						<key>1</key>
@@ -130,7 +130,7 @@
 			<array>
 				<dict>
 					<key>begin</key>
-					<string>(function|macro)\s*([a-zA-Z0-9_\{]+)\w*([(\\{])</string>
+					<string>(function|macro)\s*([a-zA-Z0-9_\{]+!?)\w*([(\\{])</string>
 					<key>beginCaptures</key>
 					<dict>
 						<key>1</key>
