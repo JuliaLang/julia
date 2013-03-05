@@ -33,7 +33,7 @@ namespace JL_I {
         abs_float, copysign_float,
         flipsign_int,
         // pointer access
-        pointerref, pointerset,
+        pointerref, pointerset, pointerany,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
@@ -487,6 +487,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (nargs!=3)
             jl_error("pointerset: wrong number of arguments");
         return emit_pointerset(args[1], args[2], args[3], ctx);
+    }
+    if (f == pointerany) {
+        if (nargs != 1)
+            jl_error("pointerany: wrong number of arguments");
+        if (!jl_is_cpointer_type(expr_type(args[1], ctx)))
+            jl_error("pointerany: argument must be pointer type");
+        return builder.CreateBitCast(emit_unboxed(args[1], ctx),
+                                     jl_pvalue_llvmt);
     }
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = auto_unbox(args[1], ctx);
@@ -1082,7 +1090,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(fptrunc32); ADD_I(fpext64);
     ADD_I(abs_float); ADD_I(copysign_float);
     ADD_I(flipsign_int);
-    ADD_I(pointerref); ADD_I(pointerset);
+    ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointerany);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);
