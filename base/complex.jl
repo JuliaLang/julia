@@ -15,10 +15,10 @@ real(x::Real) = x
 imag(x::Real) = zero(x)
 
 convert{T<:Real}(::Type{Complex{T}}, x::Real) =
-    Complex(convert(T,x), convert(T,0))
+    Complex{T}(convert(T,x), convert(T,0))
 convert{T<:Real}(::Type{Complex{T}}, z::Complex{T}) = z
 convert{T<:Real}(::Type{Complex{T}}, z::Complex) =
-    Complex(convert(T,real(z)),convert(T,imag(z)))
+    Complex{T}(convert(T,real(z)),convert(T,imag(z)))
 
 convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                            throw(InexactError()))
