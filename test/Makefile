@@ -7,7 +7,7 @@ TESTS = default all extra \
 core numbers strings unicode corelib hashing remote \
 arrayops blas linalg fft dct sparse bitarray suitesparse arpack \
 random math functional bigint bigfloat sorting \
-statistics poly file Rmath remote zlib image \
+statistics file remote zlib image \
 iostring gzip integers spawn ccall parallel pkg
 
 $(TESTS) ::
