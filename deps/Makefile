@@ -1302,9 +1302,6 @@ install-patchelf: $(PATCHELF_TARGET)
 GIT_SOURCE = git-$(GIT_VER)/src/git
 GIT_TARGET = $(BUILD)/git
 
-compile-git: install-git
-install-git: $(GIT_TARGET)
-
 git-$(GIT_VER).tar.gz:
 	$(WGET) http://git-core.googlecode.com/files/$@
 git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
