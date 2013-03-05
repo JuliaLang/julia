@@ -5,7 +5,7 @@
 all: clean copyfiles rewritepaths
 
 copyfiles:
-#	make -C ../.. dist
+	make -C ../.. dist
 	tar zxf ../../julia-*.tar.gz 
 	mv julia-* julia
 	cp -a ~/.julia/Cairo/deps/usr/* ./julia/
