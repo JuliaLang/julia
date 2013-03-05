@@ -551,3 +551,7 @@ s = "   p"
 @test """
        $s
       """ == " $s\n"
+
+# issue #2474
+ss = fill("a",2,2)
+@test findin(ss, "a") == [1,2,3,4]
