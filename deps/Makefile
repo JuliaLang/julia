@@ -1366,7 +1366,7 @@ $(GIT_SOURCE): git-$(GIT_VER)/config.status
 git-$(GIT_VER)/checked: $(GIT_SOURCE)
 	echo 1 > $@
 $(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
-	$(MAKE) -C git-$(GIT_VER) install
+	$(MAKE) -C git-$(GIT_VER) install NO_INSTALL_HARDLINKS=1
 	touch -c $@
 
 clean-git:
