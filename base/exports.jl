@@ -858,6 +858,7 @@ export
     object_id,
     sizeof,
     isimmutable,
+    isbits,
 
 # tasks
     consume,

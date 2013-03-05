@@ -25,7 +25,7 @@
 static jl_methtable_t *new_method_table(jl_sym_t *name)
 {
     jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
-    mt->type = (jl_type_t*)jl_methtable_type;
+    mt->type = (jl_value_t*)jl_methtable_type;
     mt->name = name;
     mt->defs = JL_NULL;
     mt->cache = JL_NULL;
@@ -67,9 +67,9 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
             if (!jl_subtype(a, decl, 0))
                 return 0;
         }
-        else if (jl_is_tag_type(a) && jl_is_tag_type(decl) &&
-                 ((jl_tag_type_t*)decl)->name == jl_type_type->name &&
-                 ((jl_tag_type_t*)a   )->name == jl_type_type->name) {
+        else if (jl_is_datatype(a) && jl_is_datatype(decl) &&
+                 ((jl_datatype_t*)decl)->name == jl_type_type->name &&
+                 ((jl_datatype_t*)a   )->name == jl_type_type->name) {
             jl_value_t *tp0 = jl_tparam0(decl);
             if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
@@ -150,8 +150,7 @@ static inline
 jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
 {
     uptrint_t uid;
-    if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
-        (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
+    if (jl_is_datatype(ty) && (uid = ((jl_datatype_t*)ty)->uid)) {
         jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->nrows-1));
         if (ml && ml!=JL_NULL) {
             jl_value_t *t = jl_tupleref(ml->sig, 0);
@@ -176,11 +175,7 @@ static void mtcache_rehash(jl_array_t **pa)
             jl_value_t *t = jl_tupleref(ml->sig,0);
             if (jl_is_type_type(t))
                 t = jl_tparam0(t);
-            uptrint_t uid;
-            if (jl_is_struct_type(t))
-                uid = ((jl_struct_type_t*)t)->uid;
-            else
-                uid = ((jl_bits_type_t*)t)->uid;
+            uptrint_t uid = ((jl_datatype_t*)t)->uid;
             nd[uid & (len*2-1)] = (jl_value_t*)ml;
         }
     }
@@ -191,8 +186,7 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
                                        int tparam)
 {
     uptrint_t uid;
-    if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
-        (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
+    if (jl_is_datatype(ty) && (uid = ((jl_datatype_t*)ty)->uid)) {
         while (1) {
             jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->nrows-1));
             if (*pml == NULL || *pml == JL_NULL) {
@@ -254,8 +248,7 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
     if (n > 0) {
         jl_value_t *a0 = args[0];
         jl_value_t *ty = (jl_value_t*)jl_typeof(a0);
-        if (ty == (jl_value_t*)jl_struct_kind ||
-            ty == (jl_value_t*)jl_bits_kind) {
+        if (ty == (jl_value_t*)jl_datatype_type) {
             if (mt->cache_targ != JL_NULL) {
                 ml = mtcache_hash_lookup(mt->cache_targ, a0, 1);
                 if (ml != JL_NULL)
@@ -351,10 +344,8 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
         // the table indexed for that purpose.
         if (t0 != (jl_value_t*)jl_typetype_type && jl_is_type_type(t0)) {
             jl_value_t *a0 = jl_tparam0(t0);
-            if (jl_is_struct_type(a0))
-                uid = ((jl_struct_type_t*)a0)->uid;
-            else if (jl_is_bits_type(a0))
-                uid = ((jl_bits_type_t*)a0)->uid;
+            if (jl_is_datatype(a0))
+                uid = ((jl_datatype_t*)a0)->uid;
             if (uid > 0) {
                 if (mt->cache_targ == JL_NULL)
                     mt->cache_targ = jl_alloc_cell_1d(16);
@@ -362,10 +353,8 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
                 goto ml_do_insert;
             }
         }
-        if (jl_is_struct_type(t0))
-            uid = ((jl_struct_type_t*)t0)->uid;
-        else if (jl_is_bits_type(t0))
-            uid = ((jl_bits_type_t*)t0)->uid;
+        if (jl_is_datatype(t0))
+            uid = ((jl_datatype_t*)t0)->uid;
         if (uid > 0) {
             if (mt->cache_arg1 == JL_NULL)
                 mt->cache_arg1 = jl_alloc_cell_1d(16);
@@ -380,8 +369,8 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
 static char *type_summary(jl_value_t *t)
 {
     if (jl_is_tuple(t)) return "Tuple";
-    if (jl_is_some_tag_type(t))
-        return ((jl_tag_type_t*)t)->name->name->name;
+    if (jl_is_datatype(t))
+        return ((jl_datatype_t*)t)->name->name->name;
     JL_PRINTF(JL_STDERR, "unexpected argument type: ");
     jl_show(jl_stderr_obj(), t);
     JL_PRINTF(JL_STDERR, "\n");
@@ -481,9 +470,9 @@ static int tuple_all_Any(jl_tuple_t *t)
 
 static int is_kind(jl_value_t *v)
 {
-    return (v==(jl_value_t*)jl_union_kind || v==(jl_value_t*)jl_struct_kind ||
-            v==(jl_value_t*)jl_bits_kind || v==(jl_value_t*)jl_typector_type ||
-            v==(jl_value_t*)jl_tag_kind);
+    return (v==(jl_value_t*)jl_uniontype_type ||
+            v==(jl_value_t*)jl_datatype_type ||
+            v==(jl_value_t*)jl_typector_type);
 }
 
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
@@ -638,7 +627,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               Type{TC} nor TypeConstructor is more specific.
               
               To solve this, we identify "kind slots", which are slots
-              for which some definition specifies a kind (e.g. AbstractKind).
+              for which some definition specifies a kind (e.g. DataType).
               Those tend to be in reflective functions that look at types
               themselves. For these slots we specialize on jl_typeof(T) instead
               of Type{T}, i.e. the kind of the type rather than the specific
@@ -745,7 +734,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             jl_value_t *lastdeclt = jl_tupleref(decl,jl_tuple_len(decl)-1);
             if (jl_tuple_len(sparams) > 0) {
                 lastdeclt = (jl_value_t*)
-                    jl_instantiate_type_with((jl_type_t*)lastdeclt,
+                    jl_instantiate_type_with((jl_value_t*)lastdeclt,
                                              sparams->data,
                                              jl_tuple_len(sparams)/2);
             }
@@ -934,7 +923,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
             break;
     }
     if (i < jl_tuple_len(tt)) {
-        newsig = (jl_tuple_t*)jl_instantiate_type_with((jl_type_t*)m->sig,
+        newsig = (jl_tuple_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
                                                        &jl_tupleref(env,0),
                                                        jl_tuple_len(env)/2);
     }
@@ -951,7 +940,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     return nf;
 }
 
-jl_tag_type_t *jl_wrap_Type(jl_value_t *t);
+jl_datatype_t *jl_wrap_Type(jl_value_t *t);
 
 static int sigs_eq(jl_value_t *a, jl_value_t *b)
 {
@@ -1061,8 +1050,8 @@ static int has_unions(jl_tuple_t *type)
     int i;
     for(i=0; i < jl_tuple_len(type); i++) {
         jl_value_t *t = jl_tupleref(type,i);
-        if (jl_is_union_type(t) ||
-            (jl_is_vararg_type(t) && jl_is_union_type(jl_tparam0(t))))
+        if (jl_is_uniontype(t) ||
+            (jl_is_vararg_type(t) && jl_is_uniontype(jl_tparam0(t))))
             return 1;
     }
     return 0;
@@ -1124,7 +1113,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         l = l->next;
     }
     jl_methlist_t *newrec = (jl_methlist_t*)allocobj(sizeof(jl_methlist_t));
-    newrec->type = (jl_type_t*)jl_method_type;
+    newrec->type = (jl_value_t*)jl_method_type;
     newrec->sig = type;
     newrec->tvars = tvars;
     newrec->va = (jl_tuple_len(type) > 0 &&
@@ -1448,7 +1437,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
             }
             if (i < jl_tuple_len(tt)) {
                 newsig =
-                    (jl_tuple_t*)jl_instantiate_type_with((jl_type_t*)m->sig,
+                    (jl_tuple_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
                                                           &jl_tupleref(tpenv,0),
                                                           jl_tuple_len(tpenv)/2);
             }
@@ -1620,7 +1609,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
     return (jl_value_t*)t;
 }
 
-void jl_add_constructors(jl_struct_type_t *t);
+void jl_add_constructors(jl_datatype_t *t);
 JL_CALLABLE(jl_f_ctor_trampoline);
 
 // return a cell array of tuples, each describing a method match:
@@ -1638,7 +1627,7 @@ jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim)
     if (gf->fptr == jl_f_no_function)
         return (jl_value_t*)jl_an_empty_cell;
     if (gf->fptr == jl_f_ctor_trampoline)
-        jl_add_constructors((jl_struct_type_t*)gf);
+        jl_add_constructors((jl_datatype_t*)gf);
     if (!jl_is_gf(gf)) {
         return (jl_value_t*)jl_an_empty_cell;
     }

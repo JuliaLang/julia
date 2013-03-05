@@ -438,7 +438,7 @@ end
 write(s::GZipStream, b::Uint8) = gzputc(s, b)
 
 function write{T}(s::GZipStream, a::Array{T})
-    if isa(T,BitsKind)
+    if isbits(T)
         return gzwrite(s, pointer(a), length(a)*sizeof(T))
     else
         invoke(write, (Any, Array), s, a)
@@ -448,7 +448,7 @@ end
 write(s::GZipStream, p::Ptr, nb::Integer) = gzwrite(s, p, nb)
 
 function write{T,N}(s::GZipStream, a::SubArray{T,N,Array})
-    if !isa(T,BitsKind) || stride(a,1)!=1
+    if !isbits(T) || stride(a,1)!=1
         return invoke(write, (Any, AbstractArray), s, a)
     end
     colsz = size(a,1)*sizeof(T)

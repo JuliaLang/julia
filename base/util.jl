@@ -192,8 +192,8 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
-                             t.env)
+methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
+                        t.env)
 
 # help
 
@@ -370,13 +370,13 @@ function help(f::Function)
     help_for(string(f), f)
 end
 
-help(t::CompositeKind) = help_for(string(t.name),t)
+help(t::DataType) = help_for(string(t.name),t)
 
 function help(x)
     show(x)
     t = typeof(x)
     println(" is of type $t")
-    if isa(t,CompositeKind)
+    if isa(t,DataType) && length(t.names)>0
         println("  which has fields $(t.names)")
     end
 end
