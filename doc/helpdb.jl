@@ -1746,7 +1746,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Mathematical Functions",E"",E".* ./ .\\ .^",E".* ./ .\\ .^
+(E"Mathematical Functions",E"",E".+ .- .* ./ .\\ .^",E".+ .- .* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left
    division, right division, and exponentiation operators
