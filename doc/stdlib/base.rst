@@ -56,6 +56,10 @@ Getting Around
 
    Show all methods of ``f`` with their argument types.
 
+.. function:: methodswith(t)
+
+   Show all methods with an argument of type ``typ``.
+
 All Objects
 -----------
 
@@ -993,7 +997,7 @@ Mathematical Functions
 
    The binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
-.. function:: .* ./ .\\ .^
+.. function:: .+ .- .* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
