@@ -276,9 +276,9 @@ const _inttypes = (Bool, Int8, Uint8, Int16, Uint16, Int32, Uint32, Char,
 
 for to in _inttypes, from in _inttypes
     if !(to===from) && !(to===Bool)
-        if to.nbits < from.nbits
+        if to.size < from.size
             @eval convert(::Type{$to}, x::($from)) = box($to,trunc_int($to,unbox($from,x)))
-        elseif from.nbits < to.nbits || from===Bool
+        elseif from.size < to.size || from===Bool
             if subtype(from, Signed)
                 @eval convert(::Type{$to}, x::($from)) = box($to,sext_int($to,unbox($from,x)))
             else
@@ -378,7 +378,7 @@ ifloor(x::Integer) = x
 
 ## system word size ##
 
-const WORD_SIZE = int(Int.nbits)
+const WORD_SIZE = int(Int.size)*8
 
 ## integer promotions ##
 

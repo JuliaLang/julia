@@ -81,7 +81,7 @@ DLLEXPORT char *jl_typename_str(jl_value_t *v)
 {
     if (jl_is_tuple(v))
         return "Tuple";
-    return ((jl_tag_type_t*)v)->name->name->name;
+    return ((jl_datatype_t*)v)->name->name->name;
 }
 
 // get the name of typeof(v) as a string

@@ -56,9 +56,9 @@ function serialize{T,N,dd}(s, d::DArray{T,N,dd})
         emptylocl = Array(T, ntuple(length(sz), i->(i==d.distdim ? 0 : sz[i])))
         invoke(serialize, (Any, Any),
                s,
-               ccall(:jl_new_structt, Any, (Any, Any),
+               ccall(:jl_new_struct, Any, (Any, Any...),
                      DArray{T,N,dd},
-                     (sz, emptylocl, d.pmap, d.dist, d.distdim, 0, d.go)))
+                     sz, emptylocl, d.pmap, d.dist, d.distdim, 0, d.go))
     else
         serialize(s, d.go)
     end
