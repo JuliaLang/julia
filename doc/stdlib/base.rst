@@ -993,7 +993,7 @@ Mathematical Functions
 
    The binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
-.. function:: .* ./ .\\ .^
+.. function:: .+ .- .* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
