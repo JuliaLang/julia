@@ -1334,6 +1334,16 @@ function findin(a, b)
     ind
 end
 
+function findin(a, b::String)
+    ind = Array(Int, 0)
+    for i = 1:length(a)
+        if a[i] == b
+            push!(ind, i)
+        end
+    end
+    ind
+end
+
 # Copying subregions
 function indcopy(sz::Dims, I::RangeVecIntList)
     n = length(I)
