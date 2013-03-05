@@ -104,7 +104,7 @@ end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = int(div(length(a)*sizeof(S),sizeof(T)))
-    ccall(:jl_reshape_array, Array{T,1}, (Any, Any, Any), Array{T,1}, a, (nel,))
+    return reinterpret(T, a, (nel,))
 end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
@@ -115,6 +115,12 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
 end
 
 function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
+    if !isbits(T)
+        error("cannot reinterpret to type ", T)
+    end
+    if !isbits(S)
+        error("cannot reinterpret Array of type ", S)
+    end
     nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
         error("reinterpret: invalid dimensions")
