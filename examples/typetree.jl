@@ -117,7 +117,7 @@ show_tree(root) = show_tree(root, "", "")
 
 ## main ##
 all_types = list_all(Type, [Core, Base, Main], (x)->isa(x, Type))
-children_map = Dict{String, Set{String}}(length(all_types))
+children_map = Dict{String, Set{String}}()
 mk_tree()
 println("\n\nType Tree:")
 show_tree("Any") #todo: generalize this to be every item without a parent in all_types
