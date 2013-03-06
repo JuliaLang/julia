@@ -1100,6 +1100,20 @@
 				,@(apply nconc rows)))
 		       `(call (top vcat) ,@a)))
 
+   (pattern-lambda (typed_hcat t . a)
+                   `(call (top typed_hcat) ,t ,@a))
+
+   (pattern-lambda (typed_vcat t . a)
+                   ;; convert nested hcat inside vcat to hvcat
+                   (let ((rows (map (lambda (x)
+                                      (if (and (pair? x) (eq? (car x) 'row))
+                                          (cdr x)
+                                          (list x)))
+                                    a)))
+                     `(call (top typed_hvcat) ,t
+                            (tuple ,@(map length rows))
+                            ,@(apply nconc rows))))
+
    ;; transpose operator
    (pattern-lambda (|'| a) `(call ctranspose ,a))
    (pattern-lambda (|.'| a) `(call transpose ,a))
