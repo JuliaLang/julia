@@ -319,6 +319,12 @@
 
 "),
 
+(E"Getting Around",E"Base",E"methodswith",E"methodswith(t)
+
+   Show all methods with an argument of type \"typ\".
+
+"),
+
 (E"All Objects",E"Base",E"is",E"is(x, y)
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
@@ -569,8 +575,8 @@
 (E"Iteration",E"Base",E"zip",E"zip(iters...)
 
    For a set of iterable objects, returns an iterable of tuples, where
-   the \"i\"th tuple contains the \"i\"th component of each
-   input iterable.
+   the \"i\"th tuple contains the \"i\"th component of each input
+   iterable.
 
    Note that \"zip\" is it's own inverse: [zip(zip(a...)...)...] ==
    [a...]
@@ -1082,7 +1088,8 @@ string(strs...)
 
 (E"Strings",E"Base",E"bytestring",E"bytestring(::Ptr{Uint8})
 
-   Create a string from the address of a C (0-terminated) string.
+   Create a string from the address of a C (0-terminated) string. A
+   copy is made; the ptr can be safely freed.
 
 "),
 
@@ -3897,15 +3904,15 @@ airyaiprime(x)
 
 (E"Linear Algebra",E"Base",E"qmulQR",E"qmulQR(QR, A)
 
-   Perform Q*A efficiently, where Q is a an orthogonal matrix defined
-   as the product of k elementary reflectors from the QR
+   Perform \"Q*A\" efficiently, where Q is a an orthogonal matrix
+   defined as the product of k elementary reflectors from the QR
    decomposition.
 
 "),
 
 (E"Linear Algebra",E"Base",E"qTmulQR",E"qTmulQR(QR, A)
 
-   Perform Q'>>*<<A efficiently, where Q is a an orthogonal matrix
+   Perform \"Q'*A\" efficiently, where Q is a an orthogonal matrix
    defined as the product of k elementary reflectors from the QR
    decomposition.
 
@@ -4660,8 +4667,8 @@ airyaiprime(x)
 
    The optional \"dims\" argument specifies an iterable subset of
    dimensions (e.g. an integer, range, tuple, or array) to transform
-   along. \"kind[i]\" is then the transform type for \"dims[i]\",
-   with \"kind[end]\" being used for \"i > length(kind)\".
+   along. \"kind[i]\" is then the transform type for \"dims[i]\", with
+   \"kind[end]\" being used for \"i > length(kind)\".
 
    See also \"FFTW.plan_r2r()\" to pre-plan optimized r2r transforms.
 
@@ -5100,6 +5107,20 @@ ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 (E"C Interface",E"Base",E"c_free",E"c_free(addr::Ptr)
 
    Call free() from C standard library.
+
+"),
+
+(E"C Interface",E"Base",E"unsafe_ref",E"unsafe_ref(p::Ptr{T}, i::Integer)
+
+   Dereference the pointer \"p[i]\" or \"*p\", returning a copy of
+   type T.
+
+"),
+
+(E"C Interface",E"Base",E"unsafe_assign",E"unsafe_assign(p::Ptr{T}, x, i::Integer)
+
+   Assign to the pointer \"p[i] = x\" or \"*p = x\", making a copy of
+   object x into the memory at p.
 
 "),
 
