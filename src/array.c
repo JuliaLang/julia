@@ -107,20 +107,20 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
     if (d == jl_array_inline_data_area(data)) {
         if (data->ndims == 1) {
             // data might resize, so switch it to shared representation.
-            // problem: we'd like to do that, but it might not be valid,
-            // since the buffer might be used from C in a way that it's
-            // assumed not to move. for now, just copy the data (note this
-            // case only happens for sizes <= ARRAY_INLINE_NBYTES)
+            // problem: the buffer might be used from C in a way that it's
+            // assumed not to move. for now just hope this doesn't happen.
             size_t datalen = jl_array_len(data);
             jl_mallocptr_t *mp = array_new_buffer(data, datalen);
             memcpy(mp->ptr, data->data, datalen * data->elsize);
             a->data = mp->ptr;
             jl_array_data_owner(a) = (jl_value_t*)mp;
             a->ismalloc = 1;
-            //data->data = mp->ptr;
-            //data->offset = 0;
-            //data->maxsize = datalen;
-            //jl_array_data_owner(data) = (jl_value_t*)mp;
+
+            data->data = mp->ptr;
+            data->offset = 0;
+            data->maxsize = datalen;
+            jl_array_data_owner(data) = (jl_value_t*)mp;
+            data->ismalloc = 1;
         }
         else {
             a->ismalloc = 0;
