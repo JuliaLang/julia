@@ -406,9 +406,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     if (!jl_is_bitstype(ety)) {
         if (ety == (jl_value_t*)jl_any_type)
-            return builder.CreateLoad(builder.CreateGEP(
-                        builder.CreateBitCast(thePtr, jl_ppvalue_llvmt),
-                        im1));
+            return builder.CreateGEP(builder.CreateBitCast(thePtr, jl_pvalue_llvmt), im1);
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety))
             jl_error("pointerref: invalid pointer type");
         uint64_t size = ((jl_datatype_t*)ety)->size;
