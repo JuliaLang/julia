@@ -260,6 +260,12 @@ ________________________________________________
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
+
 ----
 
 `Calculus <https://github.com/johnmyleswhite/Calculus.jl>`_
@@ -359,14 +365,14 @@ ___________________________________________________
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Alessandro Andrioni Silva
+     :alt: Alessandro Andrioni
      :target: https://github.com/andrioni
 
   Current Version: ``0.0.0``
 
   Catalan: a combinatorics library for Julia 
 
-  Maintainer: `Alessandro Andrioni Silva <https://github.com/andrioni>`_
+  Maintainer: `Alessandro Andrioni <https://github.com/andrioni>`_
 
   Dependencies::
 
@@ -377,7 +383,7 @@ ___________________________________________________
     .. image:: https://secure.gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Alessandro Andrioni Silva
+        :alt: Alessandro Andrioni
         :target: https://github.com/andrioni
 
 ----
@@ -632,6 +638,30 @@ _______________________________________________________________________________
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
+
+----
+
+`Cubature <https://github.com/stevengj/Cubature.jl>`_
+_____________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Steven G. Johnson
+     :target: https://github.com/stevengj
+
+  Current Version: ``0.0.0``
+
+  One- and multi-dimensional adaptive integration routines for the Julia language 
+
+  Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
+
+  Dependencies::
+
+      BinDeps        Any Version
+
+  Contributors:
 
 ----
 
@@ -1392,6 +1422,8 @@ _____________________________________________
 
   Maintainer: `Kevin Squire <https://github.com/kmsquire>`_
 
+  Documentation: `<https://gzipjl.readthedocs.org/en/latest/>`_ 
+
   Dependencies::
 
       None
@@ -1422,7 +1454,7 @@ ________________________________________________
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
 
-  More Info: `<http://dcjones.github.com/Gadfly.jl/doc>`_ 
+  Documentation: `<http://dcjones.github.com/Gadfly.jl/doc>`_ 
 
   Dependencies::
 
@@ -1477,6 +1509,42 @@ ________________________________________________
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
+
+----
+
+`Gaston <https://github.com/mbaz/Gaston.jl>`_
+_____________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/ec325e7c3c35e354f2ea5ead5b0ec745?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: mbaz
+     :target: https://github.com/mbaz
+
+  Current Version: ``0.0.0``
+
+  A julia front-end for gnuplot. 
+
+  Maintainer: `mbaz <https://github.com/mbaz>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/ec325e7c3c35e354f2ea5ead5b0ec745?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: mbaz
+        :target: https://github.com/mbaz
+
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
 
 ----
 
@@ -1688,7 +1756,7 @@ _________________________________________
      :alt: Dirk Gadsden
      :target: https://github.com/dirk
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.2``
 
   HTTP library (server, client, parser) for the Julia language 
 
@@ -1804,6 +1872,42 @@ ________________________________________
 
 ----
 
+`Images <https://github.com/timholy/Images.jl>`_
+________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tim Holy
+     :target: https://github.com/timholy
+
+  Current Version: ``0.0.0``
+
+  An image library for Julia 
+
+  Maintainer: `Tim Holy <https://github.com/timholy>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
+
+    .. image:: https://secure.gravatar.com/avatar/d04d5b6e71776eb13d195ba7cc94b995?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Waldir
+        :target: https://github.com/waldir
+
+----
+
 `IniFile <https://github.com/JuliaLang/IniFile.jl>`_
 ____________________________________________________
 
@@ -1910,7 +2014,7 @@ ________________________________________
 
   Maintainer: `Avik Sengupta <https://github.com/aviks>`_
 
-  More Info: `<http://aviks.github.com/Ito.jl/>`_ 
+  Documentation: `<http://aviks.github.com/Ito.jl/>`_ 
 
   Dependencies::
 
@@ -2450,6 +2554,36 @@ ___________________________________________________
 
 ----
 
+`Meshes <https://github.com/twadleigh/Meshes.jl>`_
+__________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/9553bee3aa95ce13310db4f5f70acc62?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tracy Wadleigh
+     :target: https://github.com/twadleigh
+
+  Current Version: ``0.0.0``
+
+  Generation and manipulation of triangular meshes. 
+
+  Maintainer: `Tracy Wadleigh <https://github.com/twadleigh>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/9553bee3aa95ce13310db4f5f70acc62?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tracy Wadleigh
+        :target: https://github.com/twadleigh
+
+----
+
 `Monads <https://github.com/pao/Monads.jl>`_
 ____________________________________________
 
@@ -2466,7 +2600,7 @@ ____________________________________________
 
   Maintainer: `Patrick O'Leary <https://github.com/pao>`_
 
-  More Info: `<https://monadsjl.readthedocs.org/>`_ 
+  Documentation: `<https://monadsjl.readthedocs.org/>`_ 
 
   Dependencies::
 
@@ -2546,6 +2680,12 @@ _____________________________________________________
         :width: 40px
         :alt: john verzani
         :target: https://github.com/jverzani
+
+    .. image:: https://secure.gravatar.com/avatar/d9c8c5a29b60871d14846a382d50626a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dirk Gadsden
+        :target: https://github.com/dirk
 
 ----
 
@@ -2715,7 +2855,7 @@ _____________________________________________________
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
-  More Info: `<http://johnmyleswhite.com>`_ 
+  Documentation: `<http://johnmyleswhite.com>`_ 
 
   Dependencies::
 
@@ -3032,7 +3172,7 @@ ____________________________________________________
 
   Maintainer: `Patrick O'Leary <https://github.com/pao>`_
 
-  More Info: `<https://quickcheckjl.readthedocs.org/>`_ 
+  Documentation: `<https://quickcheckjl.readthedocs.org/>`_ 
 
   Dependencies::
 
@@ -3186,6 +3326,36 @@ ___________________________________________
 
 ----
 
+`Rmath <https://github.com/dmbates/Rmath.jl>`_
+______________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: dmbates
+     :target: https://github.com/dmbates
+
+  Current Version: ``0.0.0``
+
+  Archive of functions that emulate R's d-p-q-r functions for probability distributions 
+
+  Maintainer: `dmbates <https://github.com/dmbates>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: dmbates
+        :target: https://github.com/dmbates
+
+----
+
 `SDL <https://github.com/rennis250/SDL.jl>`_
 ____________________________________________
 
@@ -3299,7 +3469,7 @@ ______________________________________________
 
   Maintainer: `Patrick O'Leary <https://github.com/pao>`_
 
-  More Info: `<https://strpackjl.readthedocs.org/>`_ 
+  Documentation: `<https://strpackjl.readthedocs.org/>`_ 
 
   Dependencies::
 
@@ -3342,6 +3512,37 @@ ________________________________________________________
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
+
+----
+
+`TOML <https://github.com/pygy/TOML.jl>`_
+_________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/e38cd950767e62fd3250795bbd208cf6?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: pygy
+     :target: https://github.com/pygy
+
+  Current Version: ``0.0.0``
+
+  A TOML parser for Julia. 
+
+  Maintainer: `pygy <https://github.com/pygy>`_
+
+  Dependencies::
+
+      Calendar       Any Version
+      JSON           Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/e38cd950767e62fd3250795bbd208cf6?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: pygy
+        :target: https://github.com/pygy
 
 ----
 
@@ -3510,6 +3711,12 @@ __________________________________________
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
+
 ----
 
 `TradingInstrument <https://github.com/milktrader/TradingInstrument.jl>`_
@@ -3609,6 +3816,36 @@ ____________________________________________
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
+
+----
+
+`Units <https://github.com/timholy/Units.jl>`_
+______________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tim Holy
+     :target: https://github.com/timholy
+
+  Current Version: ``0.0.0``
+
+  Infrastructure for handling physical units for the Julia programming language 
+
+  Maintainer: `Tim Holy <https://github.com/timholy>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
 ----
 
@@ -3783,5 +4020,5 @@ _________________________________________________
 
 ----
 
-.. footer: 100 packages, generated 1 Mar 2013 13:43:06 GMT 
+.. footer: 107 packages, generated 5 Mar 2013 16:13:57 GMT 
 

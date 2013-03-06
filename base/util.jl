@@ -1,22 +1,26 @@
 # timing
 
+# system date in seconds
 time() = ccall(:clock_now, Float64, ())
 
+# high-resolution relative time, in nanoseconds
+time_ns() = ccall(:jl_hrtime, Uint64, ())
+
 function tic()
-    t0 = time()
+    t0 = time_ns()
     task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
     return t0
 end
 
 function toq()
-    t1 = time()
+    t1 = time_ns()
     timers = get(task_local_storage(), :TIMERS, ())
     if is(timers,())
         error("toc() without tic()")
     end
     t0 = timers[1]
     task_local_storage(:TIMERS, timers[2])
-    t1-t0
+    (t1-t0)/1e9
 end
 
 function toc()
@@ -25,19 +29,13 @@ function toc()
     return t
 end
 
-# high-resolution time
-# returns in nanoseconds
-function time_ns()
-    return ccall(:jl_hrtime, Uint64, ())
-end
-
 # print elapsed time, return expression value
 macro time(ex)
     quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $(esc(ex))
-        local t1 = time()
-        println("elapsed time: ", t1-t0, " seconds")
+        local t1 = time_ns()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds")
         val
     end
 end
@@ -45,18 +43,18 @@ end
 # print nothing, return elapsed time
 macro elapsed(ex)
     quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $(esc(ex))
-        time()-t0
+        (time_ns()-t0)/1e9
     end
 end
 
 # print nothing, return value & elapsed time
 macro timed(ex)
     quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $(esc(ex))
-        val, time()-t0
+        val, (time_ns()-t0)/1e9
     end
 end
 
@@ -194,8 +192,8 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
-                             t.env)
+methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
+                        t.env)
 
 # help
 
@@ -372,13 +370,13 @@ function help(f::Function)
     help_for(string(f), f)
 end
 
-help(t::CompositeKind) = help_for(string(t.name),t)
+help(t::DataType) = help_for(string(t.name),t)
 
 function help(x)
     show(x)
     t = typeof(x)
     println(" is of type $t")
-    if isa(t,CompositeKind)
+    if isa(t,DataType) && length(t.names)>0
         println("  which has fields $(t.names)")
     end
 end
@@ -545,3 +543,37 @@ end
 free_memory() = ccall(:uv_get_free_memory, Uint64, ())
 total_memory() = ccall(:uv_get_total_memory, Uint64, ())
 
+
+# `methodswith` -- shows a list of methods using the type given
+
+function methodswith(io::IO, t::Type, m::Module)
+    for nm in names(m)
+        try
+           mt = eval(nm)
+           d = mt.env.defs
+           while !is(d,())
+               if any(map(x -> x == t, d.sig)) 
+                   print(io, nm)
+                   show(io, d)
+                   println(io)
+               end
+               d = d.next
+           end
+        end
+    end
+end
+
+methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m)
+methodswith(t::Type) = methodswith(OUTPUT_STREAM, t)
+function methodswith(io::IO, t::Type)
+    mainmod = ccall(:jl_get_current_module, Any, ())::Module
+    # find modules in Main
+    for nm in names(mainmod)
+        if isdefined(mainmod,nm)
+            mod = eval(mainmod, nm)
+            if isa(mod, Module)
+                methodswith(io, t, mod)
+            end
+        end
+    end
+end

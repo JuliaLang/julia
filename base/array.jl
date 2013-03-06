@@ -43,7 +43,7 @@ function copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
 end
 
 function copy_unsafe!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
-    if isa(T, BitsKind)
+    if isbits(T)
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
               pointer(dest, dsto), pointer(src, so), N*sizeof(T))
     else
@@ -104,7 +104,7 @@ end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = int(div(length(a)*sizeof(S),sizeof(T)))
-    ccall(:jl_reshape_array, Array{T,1}, (Any, Any, Any), Array{T,1}, a, (nel,))
+    return reinterpret(T, a, (nel,))
 end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
@@ -115,6 +115,12 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
 end
 
 function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
+    if !isbits(T)
+        error("cannot reinterpret to type ", T)
+    end
+    if !isbits(S)
+        error("cannot reinterpret Array of type ", S)
+    end
     nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
         error("reinterpret: invalid dimensions")
@@ -167,7 +173,7 @@ function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     return a
 end
 function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
-    if isa(T,BitsKind) && convert(T,x) == 0
+    if isbits(T) && convert(T,x) == 0
         ccall(:memset, Ptr{T}, (Ptr{T}, Int32, Int32), a,0,length(a)*sizeof(T))
     else
         for i = 1:length(a)
@@ -1027,7 +1033,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
             end
         end
     else
-        if isa(T,BitsKind) && M>200
+        if isbits(T) && M>200
             for i = 1:sd
                 ri = sd+1-i
                 for j=0:stride:(N-stride)
@@ -1104,7 +1110,7 @@ function vcat{T}(arrays::Array{T,1}...)
     arr = Array(T, n)
     ptr = pointer(arr)
     offset = 0
-    if isa(T,BitsKind)
+    if isbits(T)
         elsz = sizeof(T)
     else
         elsz = div(WORD_SIZE,8)

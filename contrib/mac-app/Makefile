@@ -5,7 +5,7 @@
 all: clean copyfiles rewritepaths
 
 copyfiles:
-#	make -C ../.. dist
+	make -C ../.. dist
 	tar zxf ../../julia-*.tar.gz 
 	mv julia-* julia
 	cp -a ~/.julia/Cairo/deps/usr/* ./julia/
@@ -15,6 +15,7 @@ copyfiles:
 
 rewritepaths:
 	(for lib in julia/lib/*.dylib; do ./run-install-name-tool-change.sh $$lib $$HOME/.julia/Cairo/deps/usr/lib/ lib/ change; done)
+	(for lib in julia/lib/*.dylib; do ./run-install-name-tool-change.sh $$lib $$HOME/.julia/Tk/deps/usr/lib/ lib/ change; done)
 	(cd julia/lib && for lib in *.dylib; do install_name_tool -id @executable_path/../lib/$$lib $$lib; done)
 
 clean:

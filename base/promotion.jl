@@ -17,9 +17,9 @@ function typejoin(a::ANY, b::ANY)
     if isa(b,TypeVar)
         return typejoin(a, b.ub)
     end
-    if isa(a,UnionKind) || isa(b,UnionKind)
+    if isa(a,UnionType) || isa(b,UnionType)
         u = Union(a, b)
-        if !isa(u,UnionKind)
+        if !isa(u,UnionType)
             return u
         end
         return reduce(typejoin, None, u.types)
