@@ -5,8 +5,6 @@ testnames = ["core", "numbers", "strings", "unicode", "corelib", "hashing",
              "suitesparse", "arpack", "bigfloat", "file", "zlib", "image",
              "perf"]
 
-@unix_only push!(testnames, "gzip")
-
 if ARGS == ["all"]
     tests = testnames
 else
