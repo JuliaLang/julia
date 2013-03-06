@@ -1,4 +1,4 @@
-type Rational{T<:Integer} <: Real
+immutable Rational{T<:Integer} <: Real
     num::T
     den::T
 
