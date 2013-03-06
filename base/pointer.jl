@@ -38,6 +38,9 @@ unsafe_assign(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, int(i))
 unsafe_assign{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T, x), int(i))
 unsafe_assign{T}(p::Ptr{T}, x) = unsafe_assign(p, convert(T,x), 1)
 
+# convert a boxed jl_value_t* to Any
+unsafe_pointer_to_any(p::Ptr) = pointerany(p)
+
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)
 
