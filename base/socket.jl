@@ -147,12 +147,10 @@ function wait_accept(server::TcpSocket)
             error("accept: ", err, "\n")
         end
     end
-    ct = current_task()
-    tw = WaitTask(ct)
+    wt = WaitTask()
     while true
-        push!(server.connectnotify,tw)
-        ct.runnable = false
-        args = yield()
+        push!(server.connectnotify,wt)
+        args = yield(wt)
         if isa(args,InterruptException)
             error(args)
         end
@@ -220,13 +218,11 @@ getaddrinfo(cb::Function,host::ASCIIString) = begin
 end
 
 function getaddrinfo(host::ASCIIString)
-    ct=current_task()
-    wt=WaitTask(ct)
+    wt = WaitTask()
     getaddrinfo(host) do IP
 	tasknotify([wt],IP)
     end
-    ct.runnable = false
-    (ip,) = yield()
+    (ip,) = yield(wt)
     return ip
 end
 

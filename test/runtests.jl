@@ -1,24 +1,22 @@
-using Test
+testnames = ["core", "numbers", "strings", "unicode", "corelib", "hashing",
+             "remote", "iostring", "arrayops", "linalg", "blas", "fft",
+             "dct", "sparse", "bitarray", "random", "math", "functional",
+             "bigint", "sorting", "statistics", "spawn", "parallel",
+             "suitesparse", "arpack", "bigfloat", "file", "zlib", "image",
+             "perf"]
 
-function runtests(name)
-    println("     \033[1m*\033[0m \033[31m$(name)\033[0m")
-    #flush(OUTPUT_STREAM)
-    include("$name.jl")
+if ARGS == ["all"]
+    tests = testnames
+else
+    tests = ARGS
 end
 
-macro timeit(ex,name)
-    quote
-        t = Inf
-        for i = 1:5
-            t = min(t, @elapsed $(esc(ex)))
-        end
-        println(rpad(string($name,":"), 20), t)
-    end
+if CPU_CORES > 1 && length(tests)>2
+    addprocs_local(2)
 end
 
-shift!(LOAD_PATH) # looking in . messes things up badly
+require("testdefs.jl")
 
-for t in ARGS
-    runtests(t)
-end
+reduce(propagate_errors, pmap(runtests, tests))
+
 println("    \033[32;1mSUCCESS\033[0m")

@@ -154,11 +154,13 @@ example computes a dot product using a BLAS function.
     end
 
 The meaning of prefix ``&`` is not quite the same as in C. In
-particular, any changes to the referenced variables will not be visible
-in Julia. However, it will not cause any harm for called functions to
-attempt such modifications (that is, writing through the passed
-pointers). Since this ``&`` is not a real address operator, it may be
-used with any syntax, such as ``&0`` or ``&f(x)``.
+particular, any changes to the referenced variables may not be visible
+in Julia (the goal is to make any changes visible in the spirit of C, but
+this is not currently implemented for immutable types). However, it will
+never cause any harm for called functions to attempt such modifications
+(that is, writing through the passed pointers). Since this ``&`` is not
+a real address operator, it may be used with any syntax, such as
+``&0`` or ``&f(x)``.
 
 Note that no C header files are used anywhere in the process. Currently,
 it is not possible to pass structs and other non-primitive types from
@@ -203,23 +205,60 @@ Type correspondences
 ~~~~~~~~~~~~~~~~~~~~
 
 On all systems we currently support, basic C/C++ value types may be
-translated to Julia types as follows.
+translated to Julia types as follows. Every C type also has a corresponding
+Julia type with the same name, prefixed by C. This can help for writing portable code (and remembering that an int in C is not the same as an Int in Julia).
 
 **System-independent:**
 
--  ``bool`` ⟺ ``Bool``
--  ``char`` ⟺ ``Uint8``
--  ``signed char`` ⟺ ``Int8``
--  ``unsigned char`` ⟺ ``Uint8``
--  ``short`` ⟺ ``Int16``
--  ``unsigned short`` ⟺ ``Uint16``
--  ``int`` ⟺ ``Int32``
--  ``unsigned int`` ⟺ ``Uint32``
--  ``long long`` ⟺ ``Int64``
--  ``unsigned long long`` ⟺ ``Uint64``
--  ``float`` ⟺ ``Float32``
--  ``double`` ⟺ ``Float64``
--  ``void`` ⟺ ``Void``
++------------------------+-------------------+--------------------------------+
+| ``bool`` (8 bits)      | ``Cbool``         | ``Bool``                       |
++------------------------+-------------------+--------------------------------+
+| ``signed char``        |                   | ``Int8``                       |
++------------------------+-------------------+--------------------------------+
+| ``unsigned char``      | ``Cuchar``        | ``Uint8``                      |
++------------------------+-------------------+--------------------------------+
+| ``short``              | ``Cshort``        | ``Int16``                      |
++------------------------+-------------------+--------------------------------+
+| ``unsigned short``     | ``Cushort``       | ``Uint16``                     |
++------------------------+-------------------+--------------------------------+
+| ``int``                | ``Cint``          | ``Int32``                      |
++------------------------+-------------------+--------------------------------+
+| ``unsigned int``       | ``Cuint``         | ``Uint32``                     |
++------------------------+-------------------+--------------------------------+
+| ``long long``          | ``Clonglong``     | ``Int64``                      |
++------------------------+-------------------+--------------------------------+
+| ``unsigned long long`` | ``Culonglong``    | ``Uint64``                     |
++------------------------+-------------------+--------------------------------+
+| ``float``              | ``Cfloat``        | ``Float32``                    |
++------------------------+-------------------+--------------------------------+
+| ``double``             | ``Cdouble``       | ``Float64``                    |
++------------------------+-------------------+--------------------------------+
+| ``ptrdiff_t``          | ``Cptrdiff_t``    | ``Int``                        |
++------------------------+-------------------+--------------------------------+
+| ``size_t``             | ``Csize_t``       | ``Uint``                       |
++------------------------+-------------------+--------------------------------+
+| ``complex float``      | ``Ccomplex_float`` (future addition)               |
++------------------------+-------------------+--------------------------------+
+| ``complex double``     | ``Ccomplex_double`` (future addition)              |
++------------------------+-------------------+--------------------------------+
+| ``void``               |                   | ``Void``                       |
++------------------------+-------------------+--------------------------------+
+| ``void*``              |                   | ``Ptr{Void}``                  |
++------------------------+-------------------+--------------------------------+
+| ``char*`` (or ``char[]``, e.g. a string)   | ``Ptr{Uint8}``                 |
++------------------------+-------------------+--------------------------------+
+| ``char**`` (or ``*char[]``)                | ``Ptr{Ptr{Uint8}}``            |
++------------------------+-------------------+--------------------------------+
+| ``struct T*`` (where T represents an       | ``Ptr{T}`` (call using         |
+| appropriately defined bits type)           | &variable_name in the          |
+|                                            | parameter list)                |
++------------------------+-------------------+--------------------------------+
+| ``struct T`` (where T represents  an       | ``T`` (call using              |
+| appropriately defined bits type)           | &variable_name in the          |
+|                                            | parameter list)                |
++------------------------+-------------------+--------------------------------+
+| ``jl_value_t*`` (any Julia Type)           | ``Ptr{Any}``                   |
++------------------------+-------------------+--------------------------------+
 
 *Note:* the ``bool`` type is only defined by C++, where it is 8 bits
 wide. In C, however, ``int`` is often used for boolean values. Since
@@ -230,13 +269,21 @@ A C function declared to return ``void`` will give ``nothing`` in Julia.
 
 **System-dependent:**
 
--  ``long`` ⟺ ``Int``
--  ``unsigned long`` ⟺ ``Uint``
--  ``size_t`` ⟺ ``Uint``
--  ``wchar_t`` ⟺ ``Char``
+======================  ==============  =======
+``char``                ``Cchar``       ``Int8`` (x86, x86_64)
 
-*Note:* Although ``wchar_t`` is technically system-dependent, on all the
-systems we currently support (UNIX), it is 32-bit.
+                                        ``Uint8`` (powerpc, arm)
+``long``                ``Clong``       ``Int`` (UNIX)
+
+                                        ``Int32`` (Windows)
+``unsigned long``       ``Culong``      ``Uint`` (UNIX)
+
+                                        ``Int32`` (Windows)
+``wchar_t``             ``Char``        Although ``wchar_t`` is technically
+                                        system-dependent, on all the
+                                        systems we currently support (UNIX),
+                                        it is 32-bit.
+======================  ==============  =======
 
 For string arguments (``char*``) the Julia type should be ``Ptr{Uint8}``,
 not ``ASCIIString``. C functions that take an argument of the type ``char**``
@@ -249,6 +296,66 @@ can be called via the following Julia code::
 
     argv = [ "a.out", "arg1", "arg2" ]
     ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
+
+
+Accessing Data through a Pointer
+--------------------------------
+The following methods are described as "unsafe" because they can cause Julia
+to terminate abruptly or corrupt arbitrary process memory due to a bad pointer
+or type declaration.
+
+Given a ``Ptr{T}``, the contents of type ``T`` can generally be copied from
+the referenced memory into a Julia type using ``unsafe_ref(ptr, [index])``. The
+index argument is optional (default is 1), and performs 1-based indexing. This
+function is intentionally similar to the behavior of ``ref()`` and ``assign()``
+(e.g. ``[]`` access syntax).
+
+If T is a bitstype, the return value will be that number.
+
+If T is a type or immutable, the return value will be a new object initialized
+to contain a copy of the contents of the referenced memory. The referenced
+memory can safely be freed or released.
+
+If T is Any, then the referenced memory is assumed to contain some
+``jl_value_t*`` and is not copied. You must be careful in this case to ensure
+that the object was always visible to the garbage collector (pointers do not
+count, but the new object does) to ensure the memory is not prematurely freed.
+Note that if the object was not originally allocated by Julia, the new object
+will never be finalized by Julia's garbage collector.
+
+The reverse operation (writing data to a Ptr{T}), can be performed using
+``unsafe_assign(ptr, value, [index])``.
+
+Any operation that throws an error is probably currently unimplemented
+and should be posted as a bug so that it can be resolved.
+
+If the pointer of interest is an array of bits (bitstype or immutable), the
+function ``pointer_to_array(ptr,dims,[own])`` may be more more useful. The final
+parameter should be true if Julia should "take ownership" of the underlying
+buffer and call ``free(ptr)`` when the returned ``Array`` object is finalized.
+If the ``own`` parameter is omitted or false, the caller must ensure the
+buffer remains in existence until all access is complete.
+
+
+Garbage Collection Safety
+--------------------------------
+When passing data to a ccall, it is best to avoid using the ``pointer()``
+function. Instead define a convert method and pass the variables directly to
+the ccall. ccall automatically arranges that all of its arguments will be
+preserved from garbage collection until the call returns. If a C API will
+store a reference to memory allocated by Julia, after the ccall returns, you
+must arrange that the object remains visible to the garbage collector. The
+suggested way to handle this is to make a global variable of type 
+``Array{Any,1}`` to hold these values, until C interface notifies you that
+it is finished with them.
+
+Whenever you have created a pointer to Julia data, you must ensure the original data
+exists until you are done with using the pointer. Many methods in Julia such as
+``unsafe_ref()`` and ``bytestring()`` make copies of data instead of taking ownership
+of the buffer, so that it is safe to free (or alter) the original data without
+affecting Julia. A notable exception is ``pointer_to_array()`` which, for performance
+reasons, shares (or can be told to take ownership of) the underlying buffer.
+
 
 Non-constant Function Specifications
 ------------------------------------
@@ -279,4 +386,4 @@ to non-constants, such as local variables or function arguments.
 C++
 ---
 
-Limited support for C++ is provided by the :mod:`cpp.jl` module in extras.
+Limited support for C++ is provided by the :mod:`Cpp` package.

@@ -19,6 +19,7 @@ convert{T}(::Type{Ptr{T}}, a::Array) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
 convert(::Type{Ptr{Uint8}}, s::ByteString) = convert(Ptr{Uint8}, s.data)
 
 pointer{T}(::Type{T}, x::Uint) = convert(Ptr{T}, x)
+pointer{T}(::Type{T}, x::Ptr) = convert(Ptr{T}, x)
 # note: these definitions don't mean any AbstractArray is convertible to
 # pointer. they just map the array element type to the pointer type for
 # convenience in cases that work.

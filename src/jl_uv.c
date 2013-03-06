@@ -66,7 +66,7 @@ int base_module_conflict = 0; //set to 1 if Base is getting redefined since it m
             /* jl_puts(#hook " original succeeded\n",jl_uv_stderr); */ \
         } \
         JL_CATCH { \
-            if (jl_typeof(jl_exception_in_transit) == (jl_type_t*)jl_methoderror_type) { \
+            if (jl_typeof(jl_exception_in_transit) == (jl_value_t*)jl_methoderror_type) { \
                 /* jl_puts("\n" #hook " being retried with new Base bindings --> ",jl_uv_stderr); */ \
                 jl_function_t *cb_func = JULIA_HOOK_((jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base")), hook); \
                 ret = jl_callback_call(cb_func,args); \

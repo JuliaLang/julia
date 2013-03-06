@@ -248,7 +248,50 @@
 
 (E"Getting Around",E"Base",E"require",E"require(file::String...)
 
-   Evaluate the contents of a source file.
+   Load source files once, in the context of the \"Main\" module, on
+   every active node, searching the system-wide \"LOAD_PATH\" for
+   files. \"require\" is considered a top-level operation, so it sets
+   the current \"include\" path but does not use it to search for
+   files (see help for \"include\"). This function is typically used
+   to load library code, and is implicitly called by \"using\" to load
+   packages.
+
+"),
+
+(E"Getting Around",E"Base",E"reload",E"reload(file::String)
+
+   Like \"require\", except forces loading of files regardless of
+   whether they have been loaded before. Typically used when
+   interactively developing libraries.
+
+"),
+
+(E"Getting Around",E"Base",E"include",E"include(path::String)
+
+   Evaluate the contents of a source file in the current context.
+   During including, a task-local include path is set to the directory
+   containing the file. Nested calls to \"include\" will search
+   relative to that path. All paths refer to files on node 1 when
+   running in parallel, and files will be fetched from node 1. This
+   function is typically used to load source interactively, or to
+   combine files in packages that are broken into multiple source
+   files.
+
+"),
+
+(E"Getting Around",E"Base",E"include_string",E"include_string(code::String)
+
+   Like \"include\", except reads code from the given string rather
+   than from a file. Since there is no file path involved, no path
+   processing or fetching from node 1 is done.
+
+"),
+
+(E"Getting Around",E"Base",E"evalfile",E"evalfile(path::String)
+
+   Evaluate all expressions in the given file, and return the value of
+   the last one. No other processing (path searching, fetching from
+   node 1, etc.) is performed.
 
 "),
 
@@ -273,6 +316,12 @@
 (E"Getting Around",E"Base",E"methods",E"methods(f)
 
    Show all methods of \"f\" with their argument types.
+
+"),
+
+(E"Getting Around",E"Base",E"methodswith",E"methodswith(t)
+
+   Show all methods with an argument of type \"typ\".
 
 "),
 
@@ -526,8 +575,8 @@
 (E"Iteration",E"Base",E"zip",E"zip(iters...)
 
    For a set of iterable objects, returns an iterable of tuples, where
-   the >>``<<i``th tuple contains the >>``<<i``th component of each
-   input iterable.
+   the \"i\"th tuple contains the \"i\"th component of each input
+   iterable.
 
    Note that \"zip\" is it's own inverse: [zip(zip(a...)...)...] ==
    [a...]
@@ -700,6 +749,18 @@
    the result using the binary function \"op\".
 
    **Example**: \"mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14\"
+
+"),
+
+(E"Iterable Collections",E"Base",E"first",E"first(coll)
+
+   Get the first element of an ordered collection.
+
+"),
+
+(E"Iterable Collections",E"Base",E"last",E"last(coll)
+
+   Get the last element of an ordered collection.
 
 "),
 
@@ -1027,7 +1088,8 @@ string(strs...)
 
 (E"Strings",E"Base",E"bytestring",E"bytestring(::Ptr{Uint8})
 
-   Create a string from the address of a C (0-terminated) string.
+   Create a string from the address of a C (0-terminated) string. A
+   copy is made; the ptr can be safely freed.
 
 "),
 
@@ -1102,6 +1164,13 @@ string(strs...)
    Return the index of \"char\" in \"string\", giving 0 if not found.
    The second argument may also be a vector or a set of characters.
    The third argument optionally specifies a starting index.
+
+"),
+
+(E"Strings",E"Base",E"ismatch",E"ismatch(r::Regex, s::String)
+
+   Test whether a string contains a match of the given regular
+   expression.
 
 "),
 
@@ -1287,6 +1356,85 @@ string(strs...)
 (E"Strings",E"Base",E"strwidth",E"strwidth(s)
 
    Gives the number of columns needed to print a string.
+
+"),
+
+(E"Strings",E"Base",E"isalnum",E"isalnum(c::Char)
+
+   Tests whether a character is alphanumeric.
+
+"),
+
+(E"Strings",E"Base",E"isalpha",E"isalpha(c::Char)
+
+   Tests whether a character is alphabetic.
+
+"),
+
+(E"Strings",E"Base",E"isascii",E"isascii(c::Char)
+
+   Tests whether a character belongs to the ASCII character set.
+
+"),
+
+(E"Strings",E"Base",E"isblank",E"isblank(c::Char)
+
+   Tests whether a character is a tab or space.
+
+"),
+
+(E"Strings",E"Base",E"iscntrl",E"iscntrl(c::Char)
+
+   Tests whether a character is a control character.
+
+"),
+
+(E"Strings",E"Base",E"isdigit",E"isdigit(c::Char)
+
+   Tests whether a character is a numeric digit (0-9).
+
+"),
+
+(E"Strings",E"Base",E"isgraph",E"isgraph(c::Char)
+
+   Tests whether a character is printable, and not a space.
+
+"),
+
+(E"Strings",E"Base",E"islower",E"islower(c::Char)
+
+   Tests whether a character is a lowercase letter.
+
+"),
+
+(E"Strings",E"Base",E"isprint",E"isprint(c::Char)
+
+   Tests whether a character is printable, including space.
+
+"),
+
+(E"Strings",E"Base",E"ispunct",E"ispunct(c::Char)
+
+   Tests whether a character is printable, and not a space or
+   alphanumeric.
+
+"),
+
+(E"Strings",E"Base",E"isspace",E"isspace(c::Char)
+
+   Tests whether a character is any whitespace character.
+
+"),
+
+(E"Strings",E"Base",E"isupper",E"isupper(c::Char)
+
+   Tests whether a character is an uppercase letter.
+
+"),
+
+(E"Strings",E"Base",E"isxdigit",E"isxdigit(c::Char)
+
+   Tests whether a character is a valid hexadecimal digit.
 
 "),
 
@@ -1605,7 +1753,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Mathematical Functions",E"",E".* ./ .\\ .^",E".* ./ .\\ .^
+(E"Mathematical Functions",E"",E".+ .- .* ./ .\\ .^",E".+ .- .* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left
    division, right division, and exponentiation operators
@@ -3112,6 +3260,12 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"conj!",E"conj!(A)
+
+   Convert an array to its complex conjugate in-place
+
+"),
+
 (E"Arrays",E"Base",E"stride",E"stride(A, k)
 
    Returns the distance in memory (in number of elements) between
@@ -3357,6 +3511,31 @@ airyaiprime(x)
 
 "),
 
+(E"Arrays",E"Base",E"nonzeros",E"nonzeros(A)
+
+   Return a vector of the non-zero values in array \"A\".
+
+"),
+
+(E"Arrays",E"Base",E"findfirst",E"findfirst(A)
+
+   Return the index of the first non-zero value in \"A\".
+
+"),
+
+(E"Arrays",E"Base",E"findfirst",E"findfirst(A, v)
+
+   Return the index of the first element equal to \"v\" in \"A\".
+
+"),
+
+(E"Arrays",E"Base",E"findfirst",E"findfirst(predicate, A)
+
+   Return the index of the first element that satisfies the given
+   predicate in \"A\".
+
+"),
+
 (E"Arrays",E"Base",E"permutedims",E"permutedims(A, perm)
 
    Permute the dimensions of array \"A\". \"perm\" is a vector
@@ -3394,6 +3573,13 @@ airyaiprime(x)
 (E"Arrays",E"Base",E"cumsum",E"cumsum(A[, dim])
 
    Cumulative sum along a dimension.
+
+"),
+
+(E"Arrays",E"Base",E"cumsum_kbn",E"cumsum_kbn(A[, dim])
+
+   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier
+   compensated summation algorithm for additional accuracy.
 
 "),
 
@@ -3438,6 +3624,13 @@ airyaiprime(x)
    Reduce 2-argument function \"f\" along dimensions of \"A\".
    \"dims\" is a vector specifying the dimensions to reduce, and
    \"initial\" is the initial value to use in the reductions.
+
+"),
+
+(E"Arrays",E"Base",E"sum_kbn",E"sum_kbn(A)
+
+   Returns the sum of all array elements, using the Kahan-Babuska-
+   Neumaier compensated summation algorithm for additional accuracy.
 
 "),
 
@@ -3711,15 +3904,15 @@ airyaiprime(x)
 
 (E"Linear Algebra",E"Base",E"qmulQR",E"qmulQR(QR, A)
 
-   Perform Q*A efficiently, where Q is a an orthogonal matrix defined
-   as the product of k elementary reflectors from the QR
+   Perform \"Q*A\" efficiently, where Q is a an orthogonal matrix
+   defined as the product of k elementary reflectors from the QR
    decomposition.
 
 "),
 
 (E"Linear Algebra",E"Base",E"qTmulQR",E"qTmulQR(QR, A)
 
-   Perform Q'>>*<<A efficiently, where Q is a an orthogonal matrix
+   Perform \"Q'*A\" efficiently, where Q is a an orthogonal matrix
    defined as the product of k elementary reflectors from the QR
    decomposition.
 
@@ -3763,17 +3956,17 @@ airyaiprime(x)
 
 (E"Linear Algebra",E"Base",E"svd",E"svd(A[, thin]) -> U, S, V
 
-   Compute the SVD of A, returning \"U\", \"S\", and \"V\" such that
-   \"A = U*S*V'\". If \"thin\" is \"true\", an economy mode
-   decomposition is returned.
+   Compute the SVD of A, returning \"U\", vector \"S\", and \"V\" such
+   that \"A == U*diagm(S)*V'\". If \"thin\" is \"true\", an economy
+   mode decomposition is returned.
 
 "),
 
 (E"Linear Algebra",E"Base",E"svdt",E"svdt(A[, thin]) -> U, S, Vt
 
-   Compute the SVD of A, returning \"U\", \"S\", and \"Vt\" such that
-   \"A = U*S*Vt\". If \"thin\" is \"true\", an economy mode
-   decomposition is returned.
+   Compute the SVD of A, returning \"U\", vector \"S\", and \"Vt\"
+   such that \"A = U*diagm(S)*Vt\". If \"thin\" is \"true\", an
+   economy mode decomposition is returned.
 
 "),
 
@@ -4460,7 +4653,7 @@ airyaiprime(x)
    Performs a multidimensional real-input/real-output (r2r) transform
    of type \"kind\" of the array \"A\", as defined in the FFTW manual.
    \"kind\" specifies either a discrete cosine transform of various
-   types (\"FFTW.REDFT00\", \"FFTW.REDFT01\",``FFTW.REDFT10``, or
+   types (\"FFTW.REDFT00\", \"FFTW.REDFT01\", \"FFTW.REDFT10\", or
    \"FFTW.REDFT11\"), a discrete sine transform of various types
    (\"FFTW.RODFT00\", \"FFTW.RODFT01\", \"FFTW.RODFT10\", or
    \"FFTW.RODFT11\"), a real-input DFT with halfcomplex-format output
@@ -4472,10 +4665,10 @@ airyaiprime(x)
    definitions of these transform types, at
    *<http://www.fftw.org/doc>*.
 
-   The optional \"dims``argument specifies an iterable subset of
+   The optional \"dims\" argument specifies an iterable subset of
    dimensions (e.g. an integer, range, tuple, or array) to transform
-   along.  ``kind[i]\" is then the transform type for \"dims[i]\",
-   with \"kind[end]\" being used for \"i > length(kind)\".
+   along. \"kind[i]\" is then the transform type for \"dims[i]\", with
+   \"kind[end]\" being used for \"i > length(kind)\".
 
    See also \"FFTW.plan_r2r()\" to pre-plan optimized r2r transforms.
 
@@ -4739,6 +4932,14 @@ airyaiprime(x)
 
 "),
 
+(E"System",E"Base",E"readandwrite",E"readandwrite(command)
+
+   Starts running a command asynchronously, and returns a tuple
+   (stdout,stdin,process) of the output stream and input stream of the
+   process, and the process object itself.
+
+"),
+
 (E"System",E"",E"> < >> .>",E"> < >> .>
 
    \">\" \"<\" and \">>\" work exactly as in bash, and \".>\"
@@ -4803,7 +5004,7 @@ airyaiprime(x)
 
 (E"System",E"Base",E"time",E"time()
 
-   Get the time in seconds since the epoch, with fairly high
+   Get the system time in seconds since the epoch, with fairly high
    (typically, microsecond) resolution.
 
 "),
@@ -4865,9 +5066,21 @@ ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 
 "),
 
-(E"C Interface",E"Base",E"dlopen",E"dlopen(libfile::String)
+(E"C Interface",E"Base",E"dlopen",E"dlopen(libfile::String[, flags::Integer])
 
    Load a shared library, returning an opaque handle.
+
+   The optional flags argument is a bitwise-or of zero or more of
+   RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE,
+   RTLD_NOLOAD, RTLD_DEEPBIND, and RTLD_FIRST.  These are converted to
+   the corresponding flags of the POSIX (and/or GNU libc and/or MacOS)
+   dlopen command, if possible, or are ignored if the specified
+   functionality is not available on the current platform.  The
+   default is RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL.  An important usage
+   of these flags, on POSIX platforms, is to specify
+   RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL in order for the library's
+   symbols to be available for usage in other shared libraries, in
+   situations where there are dependencies between shared libraries.
 
 "),
 
@@ -4894,6 +5107,20 @@ ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 (E"C Interface",E"Base",E"c_free",E"c_free(addr::Ptr)
 
    Call free() from C standard library.
+
+"),
+
+(E"C Interface",E"Base",E"unsafe_ref",E"unsafe_ref(p::Ptr{T}, i::Integer)
+
+   Dereference the pointer \"p[i]\" or \"*p\", returning a copy of
+   type T.
+
+"),
+
+(E"C Interface",E"Base",E"unsafe_assign",E"unsafe_assign(p::Ptr{T}, x, i::Integer)
+
+   Assign to the pointer \"p[i] = x\" or \"*p = x\", making a copy of
+   object x into the memory at p.
 
 "),
 

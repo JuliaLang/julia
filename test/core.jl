@@ -22,7 +22,7 @@
 @test is(None, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
 
 @test !isa(Array,Type{Any})
-@test subtype(Type{ComplexPair},CompositeKind)
+@test subtype(Type{ComplexPair},DataType)
 @test isa(ComplexPair,Type{ComplexPair})
 @test !subtype(Type{Ptr{None}},Type{Ptr})
 @test !subtype(Type{Rational{Int}}, Type{Rational})
@@ -66,14 +66,14 @@ end
 @test is(None, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
 @test !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
 @test !subtype(Type{Array{Integer}},Type{Array{TypeVar(:T,Integer)}})
-@test is(None, typeintersect(Type{Function},BitsKind))
-@test is(Type{Int32}, typeintersect(Type{Int32},BitsKind))
+@test is(None, typeintersect(Type{Function},UnionType))
+@test is(Type{Int32}, typeintersect(Type{Int32},DataType))
 @test !subtype(Type,TypeVar)
-@test !is(None, typeintersect(BitsKind, Type))
-@test !is(None, typeintersect(BitsKind, Type{Int}))
-@test is(None, typeintersect(BitsKind, Type{Integer}))
-@test !is(None, typeintersect(BitsKind, Type{TypeVar(:T,Int)}))
-@test !is(None, typeintersect(BitsKind, Type{TypeVar(:T,Integer)}))
+@test !is(None, typeintersect(DataType, Type))
+@test !is(None, typeintersect(UnionType, Type))
+@test !is(None, typeintersect(DataType, Type{Int}))
+@test !is(None, typeintersect(DataType, Type{TypeVar(:T,Int)}))
+@test !is(None, typeintersect(DataType, Type{TypeVar(:T,Integer)}))
 
 # join
 @test typejoin(Int8,Int16) === Signed
@@ -312,10 +312,10 @@ end
 begin
     local mytype
     function mytype(vec)
-        convert(Vector{(ASCIIString, BitsKind)}, vec)
+        convert(Vector{(ASCIIString, DataType)}, vec)
     end
     some_data = {("a", Int32), ("b", Int32)}
-    @test isa(mytype(some_data),Vector{(ASCIIString, BitsKind)})
+    @test isa(mytype(some_data),Vector{(ASCIIString, DataType)})
 end
 
 type MyArray{N} <: AbstractArray{Int, N}
@@ -421,8 +421,8 @@ end
 begin
     local baar, foor, boor
     # issue #1131
-    baar(x::CompositeKind) = 0
-    baar(x::UnionKind) = 1
+    baar(x::DataType) = 0
+    baar(x::UnionType) = 1
     baar(x::TypeConstructor) = 2
     @test baar(StridedArray) == 2
     @test baar(StridedArray.body) == 1
@@ -430,12 +430,12 @@ begin
     @test baar(Vector.body) == 0
 
     boor(x) = 0
-    boor(x::UnionKind) = 1
+    boor(x::UnionType) = 1
     @test boor(StridedArray) == 0
     @test boor(StridedArray.body) == 1
 
     # issue #1202
-    foor(x::UnionKind) = 1
+    foor(x::UnionType) = 1
     @test_fails foor(StridedArray)
     @test foor(StridedArray.body) == 1
     @test_fails foor(StridedArray)
@@ -468,7 +468,7 @@ begin
     @test a == [11,99,13]
     a2 = Any[101,102,103]
     p2 = pointer(a2)
-    @test_fails unsafe_ref(p2) == 101
+    @test unsafe_ref(p2) == 101
     @test_fails unsafe_assign(p2, 909, 3)
     @test a2 == [101,102,103]
 end
@@ -500,11 +500,11 @@ end
 
 begin
     local f1442
-    f1442(::CompositeKind) = 1
+    f1442(::DataType) = 1
     f1442{T}(::Type{S1442{T}}) = 2
 
     @test f1442(S1442{Int}) == 2
-    @test f1442(CompositeKind) == 1
+    @test f1442(DataType) == 1
 end
 
 # issue #1727
@@ -577,19 +577,19 @@ type I1628{X}
 end
 let
     # here the potential problem is that the run-time value of static
-    # parameter X in the I1628 constructor is (AbstractKind,BitsKind),
+    # parameter X in the I1628 constructor is (DataType,DataType),
     # but type inference will track it more accurately as
     # (Type{Integer}, Type{Int}).
     f1628() = I1628((Integer,Int))
-    @test isa(f1628(), I1628{(AbstractKind,BitsKind)})
+    @test isa(f1628(), I1628{(DataType,DataType)})
 end
 
 let
     fT{T}(x::T) = T
-    @test fT(Any) === AbstractKind
-    @test fT(Int) === BitsKind
-    @test fT(Type{Any}) === AbstractKind
-    @test fT(Type{Int}) === AbstractKind
+    @test fT(Any) === DataType
+    @test fT(Int) === DataType
+    @test fT(Type{Any}) === DataType
+    @test fT(Type{Int}) === DataType
 
     ff{T}(x::Type{T}) = T
     @test ff(Type{Any}) === Type{Any}
@@ -630,7 +630,4 @@ Sum += -1/n + 1/(n+1)
 end
 @test Sum < -0.69
 
-# source path in tasks
-path = Base.source_path()
-@test ends_with(path, joinpath("test","core.jl"))
-@test yieldto(@task Base.source_path()) == path
+include("test_sourcepath.jl")

@@ -231,17 +231,11 @@ v[2,2,1,1] = 40.0
 
 ## large matrices transpose ##
 
-for i = 1 : 5
+for i = 1 : 3
     a = rand(200, 300)
 
     @test isequal(a', permutedims(a, (2, 1)))
 end
-
-## basic darray ##
-
-d = drand(10,10)
-#@test isequal(d'', d)
-@test isequal(convert(Array,d), d)
 
 ## cumsum, cummin, cummax
 

@@ -860,6 +860,7 @@ export
     object_id,
     sizeof,
     isimmutable,
+    isbits,
 
 # tasks
     consume,
@@ -910,6 +911,7 @@ export
     function_loc,
     edit,
     methods,
+    methodswith,
     help,
     less,
     names,

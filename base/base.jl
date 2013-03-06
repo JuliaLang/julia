@@ -76,11 +76,11 @@ names(m::Module, all::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int3
 names(m::Module) = names(m,false)
 module_name(m::Module) = ccall(:jl_module_name, Any, (Any,), m)::Symbol
 module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
+names(t::DataType) = t.names
 function names(v)
-    if typeof(v) === CompositeKind
-        return v.names
-    elseif typeof(typeof(v)) === CompositeKind
-        return typeof(v).names
+    t = typeof(v)
+    if isa(t,DataType)
+        return names(t)
     else
         error("cannot call names() on a non-composite type")
     end
@@ -96,7 +96,12 @@ isequal(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
 isequal(w::WeakRef, v) = isequal(w.value, v)
 isequal(w, v::WeakRef) = isequal(w, v.value)
 
-finalizer(o, f::Function) = ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
+function finalizer(o, f::Function)
+    if isimmutable(o)
+        error("objects of type ", typeof(o), " cannot be finalized")
+    end
+    ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
+end
 
 gc() = ccall(:jl_gc_collect, Void, ())
 gc_enable() = ccall(:jl_gc_enable, Void, ())
@@ -107,8 +112,13 @@ bytestring(str::ByteString) = str
 # return an integer such that object_id(x)==object_id(y) if is(x,y)
 object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
 
-const isimmutable = x->(isa(x,Tuple) || isa(x,Symbol) ||
-                        isa(typeof(x),BitsKind))
+const isimmutable = x->(isa(x,Tuple) || !typeof(x).mutable)
+isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
+isstructtype(x) = false
+isbits(t::DataType) = !t.mutable && t.pointerfree
+isbits(t::Tuple) = false
+isbits(t::Type) = false
+isbits(x) = isbits(typeof(x))
 
 identity(x) = x
 
