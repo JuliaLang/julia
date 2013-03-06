@@ -89,7 +89,8 @@ const im = ImaginaryUnit()
 
 iscomplex(::ImaginaryUnit) = true
 
-convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex(zero(T),one(T))
+convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex{T}(zero(T),one(T))
+convert(::Type{Complex}, ::ImaginaryUnit) = Complex(real(im),imag(im))
 
 real(::ImaginaryUnit) = int32(0)
 imag(::ImaginaryUnit) = int32(1)
