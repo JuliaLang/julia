@@ -486,6 +486,11 @@ for i1 = 1:length(u8str2)
     end
 end
 
+# quotes + interpolation (issue #455)
+@test "$("string")" == "string"
+arr = ["a","b","c"]
+@test "[$(join(arr, " - "))]" == "[a - b - c]"
+
 # string iteration, and issue #1454
 str = "é"
 str_a = [str...]
