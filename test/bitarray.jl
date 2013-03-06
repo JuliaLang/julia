@@ -517,6 +517,20 @@ b1 = randbool(v1)
 
 @check_bit_operation find Vector{Int} (b1,)
 
+b1 = trues(v1)
+for i = 0:v1-1
+    @test findfirst(b1 >> i) == i+1
+    @test Base.findfirstnot(~(b1 >> i)) == i+1
+end
+
+for i = 3:v1-1
+    for j = 2:i
+        submask = b1 << (v1-j+1)
+        @test findnext((b1 >> i) | submask,j) == i+1
+        @test Base.findnextnot((~(b1 >> i)) $ submask,j) == i+1
+    end
+end
+
 b1 = randbool(n1, n2)
 @check_bit_operation findn_nzs (Vector{Int}, Vector{Int}, BitArray) (b1,)
 

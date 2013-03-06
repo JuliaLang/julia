@@ -1477,7 +1477,16 @@ end
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
     Bc = B.chunks
-    for i = div(start-1,64)+1:length(Bc)
+
+    chunk_start = div(start-1, 64)+1
+    within_chunk_start = start-1-chunk_start*64
+    mask = _msk64-((1<<within_chunk_start)-1)
+
+    if Bc[chunk_start] & mask != 0
+        return (chunk_start-1) << 6 + trailing_zeros(Bc[chunk_start] & mask) + 1
+    end
+
+    for i = chunk_start+1:length(Bc)
         if Bc[i] != 0
             return (i-1) << 6 + trailing_zeros(Bc[i]) + 1
         end
@@ -1493,7 +1502,16 @@ function findnextnot(B::BitArray, start::Integer)
     if l == 0
         return 0
     end
-    for i = div(start-1,64)+1:l-1
+
+    chunk_start = div(start-1, 64)+1
+    within_chunk_start = start-1-chunk_start*64
+    mask = (1<<within_chunk_start)-1
+
+    if Bc[chunk_start] | mask != _msk64
+        return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
+    end
+
+    for i = chunk_start+1:l-1
         if Bc[i] != _msk64
             return (i-1) << 6 + trailing_ones(Bc[i]) + 1
         end
