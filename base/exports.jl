@@ -1126,7 +1126,7 @@ export
     strerror,
     unsafe_ref,
     unsafe_assign,
-    unsafe_pointer_to_any,
+    unsafe_pointer_to_objref,
 
 # Macros
     @str,
