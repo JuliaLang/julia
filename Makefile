@@ -63,6 +63,7 @@ install: release webrepl
 ifeq ($(OS), Darwin)
 	$(MAKE) -C deps install-git
 	-cp -a $(BUILD)/libexec $(PREFIX)
+	-cp -a $(BUILD)/share $(PREFIX)
 endif
 	cp -a $(BUILD)/bin $(PREFIX)
 	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
