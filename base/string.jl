@@ -65,7 +65,7 @@ print(io::IO, s::String) = for c in s write(io, c) end
 write(io::IO, s::String) = print(io, s)
 show(io::IO, s::String) = print_quoted(io, s)
 
-(*)(s::Union(String,Char)...) = string(s...)
+(*)(s::String...) = string(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
 
 length(s::DirectIndexString) = endof(s)
