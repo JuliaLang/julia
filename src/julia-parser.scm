@@ -786,7 +786,7 @@
                             (loop (list* 'typed_comprehension ex (cdr al))))
                            ((dict-comprehension)
                             (loop (list* 'typed_dict_comprehension ex (cdr al))))
-                           (else (error "urk"))))))
+                           (else (error "unknown parse-cat result (internal error)"))))))
 		  ((|.|)
 		   (take-token s)
 		   (if (eqv? (peek-token s) #\()
@@ -1279,28 +1279,6 @@
                  (parse-comprehension s first closer))
                 (else
                  (parse-matrix s first closer)))))))))
-
-(define (parse-ref s closer)
-  (with-normal-ops
-   (with-inside-ref
-    (parse-ref- s closer))))
-(define (parse-ref- s closer)
-  (let loop ((lst '()))
-    (let ((t (require-token s)))
-      (if (equal? t closer)
-	  (begin (take-token s)
-		 (reverse lst))
-	  (let* ((nxt (parse-eq* s))
-		 (c (require-token s)))
-	    (cond ((eqv? c #\,)
-		   (begin (take-token s) (loop (cons nxt lst))))
-		  ((equal? c closer)     (loop (cons nxt lst)))
-		  ((eqv? c 'for)
-		   (if (null? lst)
-		     (begin (take-token s) (parse-comprehension s nxt closer))
-		     (error "invalid comprehension syntax")))
-		  (else
-		   (error (string "unexpected " c " in X[] expression")))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)
