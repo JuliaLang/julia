@@ -1126,6 +1126,7 @@ export
     strerror,
     unsafe_ref,
     unsafe_assign,
+    unsafe_pointer_to_any,
 
 # Macros
     @str,
