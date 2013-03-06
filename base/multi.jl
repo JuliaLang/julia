@@ -688,6 +688,10 @@ function perform_work(job::WorkItem)
                 push!(waiters, waitinfo)
             end
         end
+    elseif isa(result,WaitTask)
+        job.task.runnable = false
+        wt::WaitTask = result
+        wt.job = job
     elseif job.task.runnable
         # otherwise return to queue
         enq_work(job)

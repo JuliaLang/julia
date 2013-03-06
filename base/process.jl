@@ -150,7 +150,7 @@ uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 
 function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
-        in, out, err)
+                   in, out, err)
     proc = c_malloc(ccall(:jl_sizeof_uv_process_t,Int64,()))
     error = ccall(:jl_spawn, Int32,
         (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
@@ -204,8 +204,8 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     ptrs = _jl_pre_exec(cmd.exec)
     pp.exitcb = exitcb
     pp.closecb = closecb
-    pp.handle=_jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
-        in,out,err)
+    pp.handle = _jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
+                          in,out,err)
     if pc != false
         push!(pc.processes, pp)
     end
@@ -505,16 +505,13 @@ end
 # Filters
 wait_exit_filter(p::Process, args...) = !process_exited(p)
 wait_close_filter(w::Union(AsyncStream,Process), args...) = w.open
-@waitfilter wait_exit closenotify wait_exit_filter Process
-@waitfilter wait_close closenotify wait_close_filter Union(AsyncStream,Process)
+
+wait_exit(x::Union(Process,Vector)) = wait(x, :closenotify, wait_exit_filter)
+wait_close(x) = wait(x, :closenotify, wait_close_filter)
 
 wait_exit(x::ProcessChain) = wait_exit(x.processes)
 function wait_read(x::AsyncStream)
-    ct = current_task()
-    tw = WaitTask(ct)
-    push!(x.readnotify,tw)
-    ct.runnable = false
-    yield()
+    wait(x, :readnotify, false)
 end
 wait_success(x::ProcessChain) = wait_success(x.processes)
 function wait_success(x::Union(Process,Vector{Process}))
