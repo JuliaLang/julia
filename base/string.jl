@@ -716,7 +716,6 @@ function byteliteral(args...)
     Expr(:call, :sprint, writer, sx...)
 end
 
-macro B_str(s...); byteliteral(s...); end
 macro b_str(s...); ex = byteliteral(s...); :(($ex).data); end
 
 macro   mstr(s...); triplequoted(unescape_string, s...); end
