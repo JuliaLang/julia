@@ -14,16 +14,16 @@ type Stat
 end
 
 Stat(buf::Vector{Uint8}) = Stat(
-    ccall(:jl_stat_dev,     Uint,    (Ptr{Uint8},), buf),
-    ccall(:jl_stat_ino,     Uint,    (Ptr{Uint8},), buf),
-    ccall(:jl_stat_mode,    Uint,    (Ptr{Uint8},), buf),
-    ccall(:jl_stat_nlink,   Int,     (Ptr{Uint8},), buf),
-    ccall(:jl_stat_uid,     Uint,    (Ptr{Uint8},), buf),
-    ccall(:jl_stat_uid,     Uint,    (Ptr{Uint8},), buf),
-    ccall(:jl_stat_rdev,    Uint,    (Ptr{Uint8},), buf),
+    uint(ccall(:jl_stat_dev,     Uint32,  (Ptr{Uint8},), buf)),
+    uint(ccall(:jl_stat_ino,     Uint32,  (Ptr{Uint8},), buf)),
+    uint(ccall(:jl_stat_mode,    Uint32,  (Ptr{Uint8},), buf)),
+     int(ccall(:jl_stat_nlink,   Uint32,  (Ptr{Uint8},), buf)),
+    uint(ccall(:jl_stat_uid,     Uint32,  (Ptr{Uint8},), buf)),
+    uint(ccall(:jl_stat_gid,     Uint32,  (Ptr{Uint8},), buf)),
+    uint(ccall(:jl_stat_rdev,    Uint32,  (Ptr{Uint8},), buf)),
     ccall(:jl_stat_size,    Int,     (Ptr{Uint8},), buf),
-    ccall(:jl_stat_blksize, Int,     (Ptr{Uint8},), buf),
-    ccall(:jl_stat_blocks,  Int,     (Ptr{Uint8},), buf),
+     int(ccall(:jl_stat_blksize, Uint32,  (Ptr{Uint8},), buf)),
+     int(ccall(:jl_stat_blocks,  Uint32,  (Ptr{Uint8},), buf)),
     ccall(:jl_stat_mtime,   Float64, (Ptr{Uint8},), buf),
     ccall(:jl_stat_ctime,   Float64, (Ptr{Uint8},), buf),
 )
@@ -32,7 +32,7 @@ show(io::IO, st::Stat) = print("Stat(mode=$(oct(st.mode,6)), size=$(st.size))")
 
 # stat & lstat functions
 
-const stat_buf = Array(Uint8, ccall(:jl_sizeof_stat, Int, ()))
+const stat_buf = Array(Uint8, ccall(:jl_sizeof_stat, Int32, ()))
 macro stat_call(sym,arg)
     quote
         fill!(stat_buf,0)

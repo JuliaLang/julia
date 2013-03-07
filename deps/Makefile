@@ -355,11 +355,6 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
-uname_S=$(OS)
-ifeq ($(uname_S),WINNT)
-uname_S=MINGW
-endif
-
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
 UV_OBJ_SOURCE = libuv/libuv.a
 
@@ -371,11 +366,11 @@ endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
 $(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
-LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)" uname_S=$(uname_S)
-$(UV_OBJ_SOURCE): libuv/Makefile
-ifneq ($(OS), WINNT)
-	$(MAKE) libuv.${SHLIB_EXT} $(LIBUV_MAKE_FLAGS)
+LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)"
+ifeq ($(OS),WINNT)
+LIBUV_MAKE_FLAGS += OS=mingw
 endif
+$(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
 	touch -c $@
 libuv/checked: $(LIBUV_OBJ_SOURCE)
@@ -1000,7 +995,7 @@ endif
 #todo: rpath is missing on mac for tests
 $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
+	$(MAKE) library CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
 	touch -c $@

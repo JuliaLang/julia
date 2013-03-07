@@ -139,11 +139,7 @@ function reshape(a::AbstractArray, dims::Dims)
     if prod(dims) != length(a)
         error("reshape: invalid dimensions")
     end
-    b = similar(a, dims)
-    for i = 1:length(a)
-        b[i] = a[i]
-    end
-    return b
+    copy!(similar(a, dims), a)
 end
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
