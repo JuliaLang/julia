@@ -125,26 +125,25 @@ end
 
 hash(s::VersionSet) = hash([s.(n) for n in VersionSet.names])
 
-function parse_requires(file::String)
+function parse_requires(readable)
     reqs = VersionSet[]
-    open(file) do io
-        for line in each_line(io)
-            if ismatch(r"^\s*(?:#|$)", line) continue end
-            line = replace(line, r"#.*$", "")
-            fields = split(line)
-            pkg = shift!(fields)
-            vers = [ convert(VersionNumber,x) for x=fields ]
-            if !issorted(vers)
-                error("invalid requires entry for $pkg in $file: $vers")
-            end
-            # TODO: merge version sets instead of appending?
-            push!(reqs,VersionSet(pkg,vers))
+    for line in each_line(readable)
+        if ismatch(r"^\s*(?:#|$)", line) continue end
+        line = replace(line, r"#.*$", "")
+        fields = split(line)
+        pkg = shift!(fields)
+        vers = [ convert(VersionNumber,x) for x=fields ]
+        if !issorted(vers)
+            error("invalid requires entry for $pkg: $vers")
         end
+        # TODO: merge version sets instead of appending?
+        push!(reqs,VersionSet(pkg,vers))
     end
     sort!(reqs)
 end
+parse_requires(file::String) = open(parse_requires,file)
 
-function dependencies(pkgs,vers)
+function dependencies(pkgs)
     deps = Array((Version,VersionSet),0)
     for pkg in each_package()
         for (ver,dir) in each_tagged_version(pkg)
@@ -153,7 +152,7 @@ function dependencies(pkgs,vers)
             if isfile(file)
                 for d in parse_requires("$dir/requires")
                     if !contains(pkgs,d.package)
-                        error("Unknown dependency for $pkg: $(d.package)")
+                        error("unknown dependency for $pkg: $(d.package)")
                     end
                     push!(deps,(v,d))
                 end
