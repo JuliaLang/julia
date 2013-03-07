@@ -29,7 +29,7 @@ julia-debug julia-release:
 	@$(MAKE) $(QUIET_MAKE) -C ui $@
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
 
-$(BUILD)/share/julia/help/helpdb_en.jl: doc/helpdb_en.jl | $(BUILD)/share/julia/help/
+$(BUILD)/share/julia/help/helpdb_en.jl: doc/helpdb_en.jl | $(BUILD)/share/julia/help
 	@cp $< $@
 
 # use sys.ji if it exists, otherwise run two stages
