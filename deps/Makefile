@@ -355,11 +355,6 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
-uname_S=$(OS)
-ifeq ($(uname_S),WINNT)
-uname_S=MINGW
-endif
-
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
 UV_OBJ_SOURCE = libuv/libuv.a
 
@@ -371,7 +366,10 @@ endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
 $(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
-LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)" uname_S=$(uname_S)
+LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)"
+ifeq ($(OS),WINNT)
+LIBUV_MAKE_FLAGS += OS=mingw
+endif
 $(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
 	touch -c $@
