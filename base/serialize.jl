@@ -57,6 +57,8 @@ end
 
 serialize(s, x::Bool) = write_as_tag(s, x)
 
+serialize(s, ::Ptr) = error("cannot serialize a pointer")
+
 serialize(s, ::()) = write_as_tag(s, ())
 
 function serialize(s, t::Tuple)
@@ -425,6 +427,8 @@ function deserialize(s, ::Type{DataType})
     end
     deserialize(s, t)
 end
+
+deserialize{T}(s, ::Type{Ptr{T}}) = pointer(T, 0)
 
 # default DataType deserializer
 function deserialize(s, t::DataType)
