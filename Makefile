@@ -81,7 +81,6 @@ ifeq ($(OS), WINNT)
 	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
 endif
 	cp $(JULIAHOME)/VERSION $(PREFIX)/share/julia/VERSION
-	cp $(JULIAHOME)/LOCALE $(PREFIX)/share/julia/LOCALE
 	echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > $(PREFIX)/share/julia/COMMIT
 
 dist: 
