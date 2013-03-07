@@ -7,7 +7,7 @@ default: release
 DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,extras base test doc examples ui,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
+$(foreach link,extras base test doc examples ui help,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
 QUIET_MAKE =
 ifeq ($(USE_QUIET), 1)
