@@ -130,13 +130,16 @@ v = pop!(l)
 # typed array literals
 X = Float64[1 2 3]
 Y = [1. 2. 3.]
+@test size(X) == size(Y)
 for i = 1:3 @test X[i] === Y[i] end
 X = Float64[1;2;3]
 Y = [1.,2.,3.]
+@test size(X) == size(Y)
 for i = 1:3 @test X[i] === Y[i] end
-X = Float64[1 2;3 4]
-Y = [1. 2.; 3. 4.]
-for i = 1:4 @test X[i] === Y[i] end
+X = Float64[1 2 3; 4 5 6]
+Y = [1. 2. 3.; 4. 5. 6.]
+@test size(X) == size(Y)
+for i = 1:length(X) @test X[i] === Y[i] end
 
 # "end"
 X = [ i+2j for i=1:5, j=1:5 ]

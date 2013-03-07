@@ -1101,18 +1101,38 @@
 		       `(call (top vcat) ,@a)))
 
    (pattern-lambda (typed_hcat t . a)
-                   `(call (top typed_hcat) ,t ,@a))
+                   (let ((result (gensy))
+                         (ncols (length a)))
+                     `(block
+                       (if (call (top !) (call (top isa) ,t Type))
+                           (call error "invalid array index"))
+                       (= ,result (call (top Array) ,t 1 ,ncols))
+                       ,@(map (lambda (x i) `(call (top assign) ,result ,x ,i))
+                              a (cdr (iota (+ ncols 1))))
+                       ,result)))
 
-   (pattern-lambda (typed_vcat t . a)
-                   ;; convert nested hcat inside vcat to hvcat
-                   (let ((rows (map (lambda (x)
-                                      (if (and (pair? x) (eq? (car x) 'row))
-                                          (cdr x)
-                                          (list x)))
-                                    a)))
-                     `(call (top typed_hvcat) ,t
-                            (tuple ,@(map length rows))
-                            ,@(apply nconc rows))))
+   (pattern-lambda (typed_vcat t . rows)
+     (if (any (lambda (x) (not (and (pair? x) (eq? 'row (car x))))) rows)
+         (error "invalid array literal")
+         (let ((result (gensy))
+               (nrows (length rows))
+               (ncols (length (cdar rows))))
+           (if (any (lambda (x) (not (= (length (cdr x)) ncols))) rows)
+               (error "invalid array literal")
+               `(block
+                 (if (call (top !) (call (top isa) ,t Type))
+                     (call error "invalid array index"))
+                 (= ,result (call (top Array) ,t ,nrows ,ncols))
+                 ,@(apply nconc
+                     (map
+                       (lambda (row i)
+                         (map
+                           (lambda (x j) `(call (top assign) ,result ,x ,i ,j))
+                           (cdr row)
+                           (cdr (iota (+ ncols 1)))))
+                       rows
+                       (cdr (iota (+ nrows 1)))))
+                 ,result)))))
 
    ;; transpose operator
    (pattern-lambda (|'| a) `(call ctranspose ,a))
