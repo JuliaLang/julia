@@ -887,7 +887,6 @@ export
     names,
     module_name,
     module_parent,
-    versioninfo,
     which,
     whicht,
     whos,
