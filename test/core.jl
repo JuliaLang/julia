@@ -473,6 +473,9 @@ begin
     @test a2 == [101,102,103]
 end
 
+@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
+                                     x -> x+1, 314158)) == 314159
+
 # issue #1287, combinations of try, catch, return
 begin
     local f, g

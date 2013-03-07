@@ -802,7 +802,7 @@
 			    (not (ts:space? s)))
 		       ;; custom prefixed string literals, x"s" => @x_str "s"
                        (let* ((str (begin (take-token s)
-                                          (parse-string-literal s (memq ex '(b B I)))))
+                                          (parse-string-literal s (memq ex '(b I)))))
                               (nxt (peek-token s))
                               (suffix (if (triplequote-string-literal? str) '_mstr '_str))
                               (macname (symbol (string #\@ ex suffix)))
