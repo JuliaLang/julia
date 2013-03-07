@@ -277,7 +277,7 @@ int true_main(int argc, char *argv[])
             jl_printf(JL_STDERR, "\n\n");
             iserr = 0;
         }
-    uv_run(jl_global_event_loop());
+    uv_run(jl_global_event_loop(),UV_RUN_DEFAULT);
     }
     JL_CATCH {
         iserr = 1;
