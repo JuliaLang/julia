@@ -618,11 +618,11 @@ let
 end
 
 # issue #2365
-type B{T}
+type B2365{T}
      v::Union(T, Nothing)
 end
-@test B{Int}(nothing).v === nothing
-@test B{Int}(0).v === 0
+@test B2365{Int}(nothing).v === nothing
+@test B2365{Int}(0).v === 0
 
 # issue #2352
 Sum=0.0; for n=1:2:10000
