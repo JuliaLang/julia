@@ -826,23 +826,6 @@ function hvcat(rows::(Int...), xs::Number...)
     hvcat_fill(Array(T, nr, nc), xs)
 end
 
-## typed hcat/vcat
-
-typed_hcat{T<:Number}(::Type{T}, X...) = T[ X[j] for i=1, j=1:length(X) ]
-typed_hcat(::ANY, X...) = error("malformed X[] expression")
-
-function typed_hvcat{T<:Number}(::Type{T}, rows::(Int...), xs::Number...)
-    nr = length(rows)
-    nc = rows[1]
-    #error check
-    for i = 2:nr
-        if nc != rows[i]
-            error("hvcat: row ", i, " has mismatched number of columns")
-        end
-    end
-    hvcat_fill(Array(T, nr, nc), xs)
-end
-
 ## Reductions and scans ##
 
 function isequal(A::AbstractArray, B::AbstractArray)
