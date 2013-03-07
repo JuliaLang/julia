@@ -219,7 +219,7 @@ function init_help()
            help_module_dict, help_function_dict
     if help_category_dict == nothing
         println("Loading help data...")
-        HELP_LOCALE = evalfile("$JULIA_HOME/../share/julia/help/LOCALE")
+        HELP_LOCALE = evalfile("$JULIA_HOME/../share/julia/LOCALE")
         helpdb = evalfile("$JULIA_HOME/../share/julia/help/helpdb_$(HELP_LOCALE).jl")
         help_category_list = {}
         help_category_dict = Dict()
