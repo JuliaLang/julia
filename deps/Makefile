@@ -373,9 +373,6 @@ $(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)" uname_S=$(uname_S)
 $(UV_OBJ_SOURCE): libuv/Makefile
-ifneq ($(OS), WINNT)
-	$(MAKE) libuv.${SHLIB_EXT} $(LIBUV_MAKE_FLAGS)
-endif
 	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
 	touch -c $@
 libuv/checked: $(LIBUV_OBJ_SOURCE)
