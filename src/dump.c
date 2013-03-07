@@ -363,7 +363,15 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, t);
         size_t nf = jl_tuple_len(t->names);
         if (nf == 0 && jl_datatype_size(t)>0) {
-            ios_write(s, data, jl_datatype_size(t));
+            if (t->name == jl_pointer_type->name) {
+                write_int32(s, 0);
+#ifdef _P64
+                write_int32(s, 0);
+#endif
+            }
+            else {
+                ios_write(s, data, jl_datatype_size(t));
+            }
         }
         else {
             if ((jl_value_t*)t == jl_idtable_type) {
