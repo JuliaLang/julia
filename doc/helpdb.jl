@@ -1564,7 +1564,7 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"",E".* ./ .\\ .^",E".* ./ .\\ .^
+(E"Mathematical Functions",E"",E".+ .- .* ./ .\\ .^",E".+ .- .* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left
    division, right division, and exponentiation operators
