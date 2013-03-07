@@ -107,6 +107,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
                 Type *lty = ty==(jl_value_t*)jl_bool_type ? T_int8 : julia_type_to_llvm(ty);
                 if (lty == jl_pvalue_llvmt)
                     return NULL;
+                if (jst->fields[i].isptr)
+                    lty = jl_pvalue_llvmt;
                 latypes.push_back(lty);
             }
             jst->struct_decl = (void*)StructType::create(latypes, jst->name->name->name);
