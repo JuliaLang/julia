@@ -663,7 +663,7 @@ void run_server(int port, callback cb)
     err = uv_listen((uv_stream_t*)&server, 128, &handle_request_and_release_socket);
     //assert(r == 0)
 
-    uv_run(uv_default_loop());
+    uv_run(uv_default_loop(),UV_RUN_DEFAULT);
 }
 
 }
