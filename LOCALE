@@ -1,0 +1,32 @@
+# Uncomment to enable 
+# Comment to disable
+# A for Available, U for Unavailable
+
+#	"bn""	# Bengali						U
+#	"ca"	# Catalan						U
+#	"cs"	# Czech							U
+#	"da"	# Danish						U
+#	"de"	# German						U
+	"en"	# English						A
+#	"es"	# Spanish						U
+#	"et"	# Estonian						U
+#	"fa"	# Iranian						U
+#	"fi"	# Finnish						U
+#	"fr"	# French						U
+#	"hr"	# Croatian						U
+#	"it"	# Italian						U
+#	"ja"	# Japanese						U
+#	"ko"	# Korean						U
+#	"lt"	# Lithuanian					U
+#	"lv"	# Latvian						U
+#	"ne"	# Nepali						U
+#	"nl"	# Dutch							U
+#	"pl"	# Polish						U
+#	"pt_BR"	# Brazilian Portuguese			U
+#	"ru"	# Russian						U
+#	"sl"	# Slovenian						U
+#	"sv"	# Swedish						U
+#	"tr"	# Turkish						U
+#	"uk_UA"	# Ukrainian						U
+#	"zh_CN"	# Simplified Chinese			A
+#	"zh_TW"	# Traditional Chinese			U

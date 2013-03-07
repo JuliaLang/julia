@@ -24,7 +24,7 @@ WGET = $(abspath ../deps)/jldownload
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
-	@echo "  helpdb.jl  to make the REPL help db"
+	@echo "  helpdb_en.jl  to make the REPL help db"
 	@echo "  html       to make standalone HTML files"
 	@echo "  dirhtml    to make HTML files named index.html in directories"
 	@echo "  singlehtml to make a single large HTML file"
@@ -171,9 +171,9 @@ doctest:
 	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in $(BUILDDIR)/doctest/output.txt."
 
-helpdb.jl: stdlib/*.rst sphinx/jlhelp.py sphinx/julia.py
+helpdb_en.jl: stdlib/*.rst sphinx/jlhelp.py sphinx/julia.py
 	$(SPHINXBUILD) -b jlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/jlhelp
-	mv $(BUILDDIR)/jlhelp/jlhelp.jl helpdb.jl
+	mv $(BUILDDIR)/jlhelp/jlhelp.jl helpdb_en.jl
 
 listpkg: 
 	$(JULIA) listpkg.jl
