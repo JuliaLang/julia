@@ -282,7 +282,7 @@ for name = ("alnum", "alpha", "cntrl", "digit", "graph",
     @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Char,), c))
 end
 
-isblank(c) = c==' ' || c=='\t'
+isblank(c::Char) = c==' ' || c=='\t'
 
 ## generic string uses only endof and next ##
 
