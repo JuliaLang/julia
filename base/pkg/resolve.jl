@@ -92,6 +92,9 @@ function ReqsStruct(reqs::Vector{VersionSet}, fixed::Dict)
             true # keep
         end
     end
+    for u in unsatisfiable
+        filter!(p->p!=u.package, pkgs)
+    end
     filter!(vers) do v
         !contains(unsatisfiable, v)
     end
