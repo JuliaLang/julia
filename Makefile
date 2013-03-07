@@ -6,6 +6,8 @@ default: release
 
 DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia
 
+mkdir -p $(BUILD)/share/julia/help
+
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,extras base test doc examples ui help,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
@@ -81,6 +83,7 @@ ifeq ($(OS), WINNT)
 	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
 endif
 	cp $(JULIAHOME)/VERSION $(PREFIX)/share/julia/VERSION
+	cp $(JULIAHOME)/LOCALE $(PREFIX)/share/julia/LOCALE
 	echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > $(PREFIX)/share/julia/COMMIT
 
 dist: 
