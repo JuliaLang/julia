@@ -95,6 +95,10 @@ function ReqsStruct(reqs::Vector{VersionSet}, fixed::Dict)
     for u in unsatisfiable
         filter!(p->p!=u.package, pkgs)
     end
+    for r in reqs
+        contains(pkgs, r.package) && continue
+        error("$(r.package) has no versions compatible with your fixed requirements (e.g. julia version).")
+    end
     filter!(vers) do v
         !contains(unsatisfiable, v)
     end
