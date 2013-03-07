@@ -20,7 +20,7 @@ endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp patchelf
 #custom configure-driven script: zlib nginx
-#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv tk-wrapper
+#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -1008,7 +1008,7 @@ endif
 #todo: rpath is missing on mac for tests
 $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
+	$(MAKE) library CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
 	touch -c $@
@@ -1262,45 +1262,6 @@ compile-zlib: $(ZLIB_SRC_TARGET)
 check-zlib: zlib-$(ZLIB_VER)/checked
 install-zlib: $(ZLIB_OBJ_TARGET)
 
-
-## Tk wrapper ##
-
-TKW_INC = -I $(BUILD)/include -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
-TKW_LIB =
-ifeq ($(OS), Darwin)
-  ifneq ($(wildcard /opt/local/bin/port),)
-    TKW_INC += -I/opt/local/include
-    TKW_LIB += -L/opt/local/lib
-  else ifneq ($(wildcard /usr/local/bin/brew),)
-    TKW_INC += -I/usr/local/include
-    TKW_LIB += -L/usr/local/lib
-  endif
-  TKW_INC += -I/opt/X11/include -I/usr/X11/include
-else
-  TKW_INC += -I/usr/include/tcl
-endif
-ifeq ($(OS), Linux)
-TKW_LIB += -ltcl8.5 -ltk8.5 -L$(BUILD)/lib/
-else
-TKW_LIB += -ltcl -ltk -L$(BUILD)/lib/
-endif
-
-$(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
-	$(INSTALL_NAME_CMD)libtk_wrapper.$(SHLIB_EXT) $@
-	touch -c $@
-
-clean-tk-wrapper:
-	-rm -f $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
-distclean-tk-wrapper: clean-tk-wrapper
-
-get-tk-wrapper: 
-configure-tk-wrapper: 
-compile-tk-wrapper: 
-check-tk-wrapper:
-install-tk-wrapper: $(BUILD)/lib/libtk_wrapper.$(SHLIB_EXT)
-
-
 ## patchelf ##
 
 PATCHELF_SOURCE = patchelf-$(PATCHELF_VER)/src/patchelf
@@ -1366,7 +1327,7 @@ $(GIT_SOURCE): git-$(GIT_VER)/config.status
 git-$(GIT_VER)/checked: $(GIT_SOURCE)
 	echo 1 > $@
 $(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
-	$(MAKE) -C git-$(GIT_VER) install
+	$(MAKE) -C git-$(GIT_VER) install NO_INSTALL_HARDLINKS=1
 	touch -c $@
 
 clean-git:
