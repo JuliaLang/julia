@@ -130,15 +130,8 @@ sizeof(x) = sizeof(typeof(x))
 copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
 
-# function composition & pipelining
-one(f::Function) = identity
-one(::Type{Function}) = identity
-*(f::Function, g::Function) = x->f(g(x))
+# function pipelining
 |(x, f::Function) = f(x)
-
-# currying of map, filter, etc.
-map(f::Function) = (x...)->map(f, x...)
-filter(f::Function) = (x...)->filter(f, x...)
 
 # array shape rules
 

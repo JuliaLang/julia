@@ -34,12 +34,34 @@ function cd_pkgdir(f::Function)
     cd(f,d)
 end
 
-function print_pkg_status(io::IO, pkg::String, path::String)
-    if !isdir(path)
-      error("Package repository $path doesn't exist")
+function packages(reqs::Vector{VersionSet})
+    pkgs = sort!(map(r->r.package, reqs))
+    for pkg in pkgs
+        isdir(pkg) || continue
+        head = cd(Git.head,pkg)
+        ver = Metadata.version(pkg,head)
+        meta = isa(ver,VersionNumber) && cd(pkg) do
+            !Git.attached() && success(`git diff --quiet HEAD -- REQUIRE`)
+        end
+        reqfile = meta ? "METADATA/$pkg/versions/$ver/requires" : "$pkg/REQUIRE"
+        # TODO: I thought we had a union! function to do this...
+        #       this is just union!(pkgs, map(r->r.package, parse_requires(reqfile)))
+        isfile(reqfile) || continue
+        for r in sort!(parse_requires(reqfile))
+            if !contains(pkgs,r.package) && isdir(r.package)
+                push!(pkgs,r.package)
+            end
+        end
     end
+    return pkgs
+end
+packages() = packages(parse_requires("REQUIRE"))
 
-    cd(path) do
+function print_pkg_status(io::IO, pkg::String)
+    if !isdir(pkg)
+      error("Package repository $pkg doesn't exist")
+    end
+    cd(pkg) do
         head = Git.head()
         ver = Git.attached() ? Git.branch() : cd("..") do
             Metadata.version(pkg,head)
@@ -52,12 +74,12 @@ end
 # show the status packages in the repo
 status() = status(OUTPUT_STREAM)
 status(io::IO) = cd_pkgdir() do
-    Git.each_submodule(false) do pkg, path, sha1
-        print_pkg_status(io, pkg, path)
+    for pkg in packages()
+        print_pkg_status(io, pkg)
     end
 end
+status(io::IO, pkg::String) = print_pkg_status(io, pkg)
 status(pkg::String) = status(OUTPUT_STREAM, pkg)
-status(io::IO, pkg::String) = print_pkg_status(io, pkg, joinpath(dir(),pkg))
 
 # create a new empty packge repository
 
@@ -198,10 +220,10 @@ end
 
 installed() = cd_pkgdir() do
     h = Dict{String,Union(VersionNumber,String)}()
-    Git.each_submodule(false) do name, path, sha1
-        if name != "METADATA"
-            h[name] = Metadata.version(name,sha1)
-        end
+    for pkg in packages()
+        isdir(pkg) || continue
+        sha1 = cd(Git.head,pkg)
+        h[pkg] = Metadata.version(pkg,sha1)
     end
     return h
 end
@@ -227,20 +249,20 @@ end
 function _resolve()
     have = (String=>ASCIIString)[]
     reqs = parse_requires("REQUIRE")
-    Git.each_submodule(false) do pkg, path, sha1
-        if pkg != "METADATA"
-            have[pkg] = sha1
-            if cd(Git.attached,path) && isfile("$path/REQUIRE")
-                append!(reqs,parse_requires("$path/REQUIRE"))
-                if isfile("$path/VERSION")
-                    ver = convert(VersionNumber,readchomp("$path/VERSION"))
-                    Base.push!(reqs,VersionSet(pkg,[ver]))
-                end
+    fixed = (String=>VersionNumber)["julia"=>VERSION]
+    index = readchomp(`git write-tree`)
+    for pkg in packages(parse_requires(`git cat-file blob $index:REQUIRE`))
+        isdir(pkg) || continue
+        have[pkg] = cd(Git.head,pkg)
+        if cd(Git.attached,pkg) && isfile("$pkg/REQUIRE")
+            if isfile("$pkg/VERSION")
+                fixed[pkg] = convert(VersionNumber,readchomp("$pkg/VERSION"))
             end
+            append!(reqs,parse_requires("$pkg/REQUIRE"))
         end
     end
     sort!(reqs)
-    want = Resolve.resolve(reqs,["julia"=>VERSION])
+    want = Resolve.resolve(reqs,fixed)
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
         if has(have,pkg)
@@ -307,8 +329,9 @@ function clone(url::String)
     run(`git clone $url $tmpdir`)
     cd(tmpdir) do
         gitdir = abspath(readchomp(`git rev-parse --git-dir`))
-        Git.each_submodule(false) do name, path, sha1
-            cd(path) do
+        for pkg in packages()
+            cd(pkg) do
+                sha1 = Git.head()
                 run(`git fetch-pack $gitdir $sha1`)
             end
         end
@@ -497,11 +520,11 @@ update() = cd_pkgdir() do
     Metadata.gen_hashes()
     run(`git add METADATA`)
     # TODO: handle package deletions
-    Git.each_submodule(false) do pkg, path, sha1
+    for pkg in packages()
         url = Metadata.pkg_url(pkg)
         if url != nothing
             Git.modules(`submodule.$pkg.url $url`)
-            cd(path) do
+            cd(pkg) do
                 if !Git.dirty()
                     if Git.attached()
                         run(ignorestatus(`git pull --ff-only`))

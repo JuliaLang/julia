@@ -841,7 +841,12 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                                       ConstantInt::get(T_size,
                                                        sty->fields[idx].offset + sizeof(void*)));
                 JL_GC_POP();
-                return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx);
+                if (sty->fields[idx].isptr) {
+                    return builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt));
+                }
+                else {
+                    return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx);
+                }
             }
             else {
                 Value *fldv = builder.
@@ -879,7 +884,13 @@ static void emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx,
             builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
                               ConstantInt::get(T_size, sty->fields[idx].offset + sizeof(void*)));
         jl_value_t *jfty = jl_tupleref(sty->types, idx);
-        typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx);
+        if (sty->fields[idx].isptr) {
+            builder.CreateStore(boxed(rhs),
+                                builder.CreateBitCast(addr, jl_ppvalue_llvmt));
+        }
+        else {
+            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx);
+        }
     }
     else {
         // TODO: better error

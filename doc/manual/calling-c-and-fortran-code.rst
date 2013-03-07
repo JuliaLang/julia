@@ -321,7 +321,9 @@ If T is Any, then the referenced memory is assumed to contain some
 that the object was always visible to the garbage collector (pointers do not
 count, but the new object does) to ensure the memory is not prematurely freed.
 Note that if the object was not originally allocated by Julia, the new object
-will never be finalized by Julia's garbage collector.
+will never be finalized by Julia's garbage collector.  If the `Ptr` itself
+is actually a ``jl_value_t*``, it can be converted back to a Julia object
+reference by ``unsafe_pointer_to_objref(ptr)``.
 
 The reverse operation (writing data to a Ptr{T}), can be performed using
 ``unsafe_assign(ptr, value, [index])``.

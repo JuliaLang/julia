@@ -64,6 +64,16 @@ function ReqsStruct(reqs::Vector{VersionSet}, fixed::Dict)
     vers = versions(pkgs)
     deps = dependencies(union(pkgs,keys(fixed)))
 
+    filter!(reqs) do r
+        if has(fixed, r.package)
+            if !contains(r, Version(r.package,fixed[r.package]))
+                warn("$(r.package) is fixed at $(repr(fixed[r.package])) which doesn't satisfy $(r.versions).")
+            end
+            false
+        else
+            true
+        end
+    end
     filter!(pkgs) do p
         !has(fixed, p)
     end
