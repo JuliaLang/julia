@@ -187,10 +187,10 @@ end
 
 function readdir(path::String)
   # Allocate space for uv_fs_t struct
-  uv_readdir_req = zeros(Uint8, ccall(:jl_sizeof_uv_fs_t, Int, ()))
+  uv_readdir_req = zeros(Uint8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
   # defined in sys.c, to call uv_fs_readdir
-  file_count = ccall(:jl_readdir, Int, (Ptr{Uint8}, Ptr{Uint8}), 
+  file_count = ccall(:jl_readdir, Int32, (Ptr{Uint8}, Ptr{Uint8}),
                      bytestring(path), uv_readdir_req)
 
   if file_count < 0
