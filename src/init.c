@@ -286,7 +286,7 @@ DLLEXPORT void uv_atexit_hook()
         }
         item = item->next;
     }
-    uv_run(loop); //let libuv spin until everything has finished closing
+    uv_run(loop,UV_RUN_DEFAULT); //let libuv spin until everything has finished closing
 }
 
 void jl_get_builtin_hooks(void);
