@@ -314,7 +314,7 @@ end
 
 end # baremodule Base
 
-using Base.@str, Base.get, Base.ENV
+using Base.get, Base.ENV
 
 let JL_PRIVATE_LIBDIR = get(ENV, "JL_PRIVATE_LIBDIR", "lib/julia")
 # create system image file

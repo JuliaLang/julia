@@ -219,16 +219,17 @@ end
 begin
 const version_string = "Version $VERSION"
 const banner_plain =
-I"               _
+"""
+               _
    _       _ _(_)_     |  A fresh approach to technical computing
   (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-   _ _   _| |_  __ _   |  Type \"help()\" to list help topics
+   _ _   _| |_  __ _   |  Type "help()" to list help topics
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  $version_string
- _/ |\__'_|_|_|\__'_|  |  $commit_string
+ _/ |\\__'_|_|_|\\__'_|  |  $commit_string
 |__/                   |
 
-"
+"""
 local tx = "\033[0m\033[1m" # text
 local jl = "\033[0m\033[1m" # julia
 local d1 = "\033[34m" # first dot

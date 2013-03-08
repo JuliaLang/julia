@@ -806,9 +806,9 @@
 			    (not (ts:space? s)))
 		       ;; custom prefixed string literals, x"s" => @x_str "s"
                        (let* ((str (begin (take-token s)
-                                          (parse-string-literal s (memq ex '(b I)))))
-                              (nxt (peek-token s))
-                              (suffix (if (triplequote-string-literal? str) '_mstr '_str))
+                                          (parse-string-literal s #t)))
+			      (nxt (peek-token s))
+			      (suffix (if (triplequote-string-literal? str) '_mstr '_str))
                               (macname (symbol (string #\@ ex suffix)))
                               (macstr (cdr str)))
                          (if (and (symbol? nxt) (not (operator? nxt))
@@ -1340,16 +1340,13 @@
 (define (take-char p)
   (begin (read-char p) p))
 
-; reads a raw string literal with no processing.
-; quote can be escaped with \, but the \ is left in place.
-; returns ("str" . b), b is a boolean telling whether interpolation is used
-(define (parse-string-literal s interpolate)
+(define (parse-string-literal s custom)
   (let ((p (ts:port s)))
     (if (eqv? (peek-char p) #\")
         (if (eqv? (peek-char (take-char p)) #\")
-            (parse-string-literal- 'triple_quoted_string 2 (take-char p) s interpolate)
+            (parse-string-literal- 'triple_quoted_string 2 (take-char p) s custom)
             '(single_quoted_string ""))
-        (parse-string-literal- 'single_quoted_string 0 p s interpolate))))
+        (parse-string-literal- 'single_quoted_string 0 p s custom))))
 
 (define (parse-interpolate s)
   (let* ((p (ts:port s))
@@ -1366,7 +1363,18 @@
                    (else (error "invalid interpolation syntax")))))
           (else (error (string "invalid interpolation syntax: " c))))))
 
-(define (parse-string-literal- head n p s interpolate)
+(define (tostr custom io)
+  (if custom
+      (io.tostring! io)
+      (let ((str (unescape-string (io.tostring! io))))
+	(if (not (string.isutf8 str))
+	    (error "invalid UTF-8 sequence")
+	    str))))
+
+;; custom = custom string literal
+;; when custom is #t, unescape only \\ and \"
+;; otherwise do full unescaping, and parse interpolations too
+(define (parse-string-literal- head n p s custom)
   (let loop ((c (read-char p))
              (b (open-output-string))
              (e (list head))
@@ -1375,27 +1383,33 @@
       ((eqv? c #\")
        (if (< quotes n)
            (loop (read-char p) b e (+ quotes 1))
-           (reverse (cons (io.tostring! b) e))))
+           (reverse (cons (tostr custom b) e))))
 
       ((= quotes 1)
-       (write-char #\\ b) (write-char #\" b)
+       (if (not custom) (write-char #\\ b))
+       (write-char #\" b)
        (loop c b e 0))
 
       ((= quotes 2)
-       (write-char #\\ b) (write-char #\" b)
-       (write-char #\\ b) (write-char #\" b)
+       (if (not custom) (write-char #\\ b))
+       (write-char #\" b)
+       (if (not custom) (write-char #\\ b))
+       (write-char #\" b)
        (loop c b e 0))
 
       ((eqv? c #\\)
-       (write-char #\\ b)
-       (write-char (not-eof-3 (read-char p)) b)
-       (loop (read-char p) b e 0))
+       (let ((nxch (not-eof-3 (read-char p))))
+	 (if (or (not custom)
+		 (not (or (eqv? nxch #\") (eqv? nxch #\\))))
+	     (write-char #\\ b))
+	 (write-char nxch b)
+	 (loop (read-char p) b e 0)))
 
-      ((and (eqv? c #\$) interpolate)
+      ((and (eqv? c #\$) (not custom))
        (let ((ex (parse-interpolate s)))
          (loop (read-char p)
                (open-output-string)
-               (list* ex (io.tostring! b) e)
+               (list* ex (tostr custom b) e)
                0)))
 
       (else
@@ -1570,15 +1584,12 @@
 	  ;; string literal
 	  ((eqv? t #\")
 	   (take-token s)
-	   (let ((ps (parse-string-literal s #t)))
+	   (let ((ps (parse-string-literal s #f)))
              (if (triplequote-string-literal? ps)
                  `(macrocall @mstr ,@(cdr ps))
                  (if (interpolate-string-literal? ps)
-                     `(macrocall @str ,@(cdr ps))
-                     (let ((str (unescape-string (cadr ps))))
-                       (if (not (string.isutf8 str))
-                           (error "invalid UTF-8 sequence")
-                           str))))))
+                     `(call (top string) ,@(cdr ps))
+		     (cadr ps)))))
 
 	  ;; macro call
 	  ((eqv? t #\@)
