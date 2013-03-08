@@ -2,7 +2,7 @@
 
 include("pcre.jl")
 
-const DEFAULT_OPTS = PCRE.UTF8
+const DEFAULT_OPTS = PCRE.JAVASCRIPT_COMPAT | PCRE.UTF8
 
 type Regex
     pattern::ByteString
