@@ -1132,7 +1132,6 @@ export
     @str,
     @I_str,
     @E_str,
-    @B_str,
     @b_str,
     @L_str,
     @r_str,

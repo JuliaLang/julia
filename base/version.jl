@@ -94,7 +94,7 @@ ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
 ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
 
 function ident_cmp(A::Vector{Union(Int,ASCIIString)},
-                       B::Vector{Union(Int,ASCIIString)})
+                   B::Vector{Union(Int,ASCIIString)})
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)
@@ -140,9 +140,9 @@ hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
 if(isfile("$JULIA_HOME/../../VERSION"))
 const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
 elseif(isfile("$JULIA_HOME/../share/julia/VERSION"))
-	const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../share/julia/VERSION"))
+    const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../share/julia/VERSION"))
 else
-	const VERSION = convert(VersionNumber,"0.0.0")
+    const VERSION = convert(VersionNumber,"0.0.0")
 end
 if(isfile("$JULIA_HOME/../../COMMIT"))
     const VERSION_COMMIT = ""
