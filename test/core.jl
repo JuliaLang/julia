@@ -475,6 +475,7 @@ end
 
 @test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
                                      x -> x+1, 314158)) == 314159
+@test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
 
 immutable FooBar
     foo::Int

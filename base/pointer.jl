@@ -38,8 +38,9 @@ unsafe_assign(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, int(i))
 unsafe_assign{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T, x), int(i))
 unsafe_assign{T}(p::Ptr{T}, x) = unsafe_assign(p, convert(T,x), 1)
 
-# convert a raw Ptr to an object reference
+# convert a raw Ptr to an object reference, and vice-versa
 unsafe_pointer_to_objref(p::Ptr) = pointertoref(unbox(Ptr{Void},p))
+pointer_from_objref(x::Any) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)
