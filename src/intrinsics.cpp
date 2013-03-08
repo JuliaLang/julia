@@ -404,7 +404,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     Value *thePtr = auto_unbox(e,ctx);
     Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
-    if (!jl_is_bitstype(ety)) {
+    if (!jl_isbits(ety)) {
         if (ety == (jl_value_t*)jl_any_type)
             return builder.CreateLoad(builder.CreateGEP(
                         builder.CreateBitCast(thePtr, jl_ppvalue_llvmt),
@@ -438,7 +438,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     jl_value_t *xty = expr_type(x, ctx);    
     if (!jl_subtype(xty, ety, 0))
         jl_error("pointerset: type mismatch in assign");
-    if (!jl_is_bitstype(ety)) {
+    if (!jl_isbits(ety)) {
         jl_error("pointerset: invalid pointer type"); //ety = (jl_value_t*)jl_any_type;
     }
     if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type) {

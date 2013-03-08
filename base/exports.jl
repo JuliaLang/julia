@@ -1127,6 +1127,7 @@ export
     unsafe_ref,
     unsafe_assign,
     unsafe_pointer_to_objref,
+    pointer_from_objref,
 
 # Macros
     @b_str,
