@@ -21,9 +21,10 @@ default_handler(r::Error)   = rethrow(r)
 
 import Base.error_show
 
-function error_show(io::IO, r::Error)
+error_show(io::IO, r::Error) = error_show(io, r, {})
+function error_show(io::IO, r::Error, bt)
     println(io, "test error during $(r.expr)")
-    error_show(io, r.err)
+    error_show(io, r.err, r.backtrace)
 end
 
 const handlers = [default_handler]
@@ -46,11 +47,11 @@ function do_test_fails(thk, qex)
 end
 
 macro test(ex)
-    :(do_test(()->($(esc(ex))),$(expr(:quote,ex))))
+    :(do_test(()->($(esc(ex))),$(Expr(:quote,ex))))
 end
 
 macro test_fails(ex)
-    :(do_test_fails(()->($(esc(ex))),$(expr(:quote,ex))))
+    :(do_test_fails(()->($(esc(ex))),$(Expr(:quote,ex))))
 end
 
 function test_approx_eq(va, vb, Eps, astr, bstr)

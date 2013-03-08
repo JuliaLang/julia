@@ -127,6 +127,20 @@ v = pop!(l)
 @test isequal([ones(2,2)  2*ones(2,1)], [1 1 2; 1 1 2])
 @test isequal([ones(2,2), 2*ones(1,2)], [1 1; 1 1; 2 2])
 
+# typed array literals
+X = Float64[1 2 3]
+Y = [1. 2. 3.]
+@test size(X) == size(Y)
+for i = 1:3 @test X[i] === Y[i] end
+X = Float64[1;2;3]
+Y = [1.,2.,3.]
+@test size(X) == size(Y)
+for i = 1:3 @test X[i] === Y[i] end
+X = Float64[1 2 3; 4 5 6]
+Y = [1. 2. 3.; 4. 5. 6.]
+@test size(X) == size(Y)
+for i = 1:length(X) @test X[i] === Y[i] end
+
 # "end"
 X = [ i+2j for i=1:5, j=1:5 ]
 @test X[end,end] == 15
@@ -231,17 +245,11 @@ v[2,2,1,1] = 40.0
 
 ## large matrices transpose ##
 
-for i = 1 : 5
+for i = 1 : 3
     a = rand(200, 300)
 
     @test isequal(a', permutedims(a, (2, 1)))
 end
-
-## basic darray ##
-
-d = drand(10,10)
-#@test isequal(d'', d)
-@test isequal(convert(Array,d), d)
 
 ## cumsum, cummin, cummax
 

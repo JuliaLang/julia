@@ -2,7 +2,7 @@
 
 const (<:) = subtype
 
-super(T::Union(CompositeKind,BitsKind,AbstractKind)) = T.super
+super(T::DataType) = T.super
 
 ## comparison ##
 
@@ -123,24 +123,15 @@ zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
 
 sizeof(T::Type) = error(string("size of type ",T," unknown"))
-sizeof(T::BitsKind) = div(T.nbits,8)
-sizeof(T::CompositeKind) = if isleaftype(T) T.sizeof else error("type does not have a native sizeof") end
+sizeof(T::DataType) = if isleaftype(T) T.size else error("type does not have a native size") end
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
 copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
-              TopNode,QuoteNode,BitsKind,CompositeKind,AbstractKind,
-              UnionKind)) = x
+              TopNode,QuoteNode,DataType,UnionType)) = x
 
-# function composition & pipelining
-one(f::Function) = identity
-one(::Type{Function}) = identity
-*(f::Function, g::Function) = x->f(g(x))
+# function pipelining
 |(x, f::Function) = f(x)
-
-# currying of map, filter, etc.
-map(f::Function) = (x...)->map(f, x...)
-filter(f::Function) = (x...)->filter(f, x...)
 
 # array shape rules
 

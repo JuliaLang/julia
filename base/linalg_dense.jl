@@ -235,8 +235,13 @@ end
 
 function rref{T}(A::Matrix{T})
     nr, nc = size(A)
-    U = copy!(similar(A, T <: Complex ? Complex128 : Float64), A)
-    e = eps(norm(U,Inf))
+    if T <: Rational
+        U = copy(A)
+        e = 0
+    else
+        U = copy!(similar(A, T <: Complex ? Complex128 : Float64), A)
+        e = eps(norm(U,Inf))
+    end
     i = j = 1
     while i <= nr && j <= nc
         (m, mi) = findmax(abs(U[i:nr,j]))

@@ -114,7 +114,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 static int is_intrinsic(jl_module_t *m, jl_sym_t *s)
 {
     jl_value_t *v = jl_get_global(m, s);
-    return (v != NULL && jl_typeof(v)==(jl_type_t*)jl_intrinsic_type);
+    return (v != NULL && jl_typeof(v)==(jl_value_t*)jl_intrinsic_type);
 }
 
 // module referenced by TopNode from within m
@@ -446,7 +446,7 @@ DLLEXPORT void jl_load_(jl_value_t *str)
 
 // type definition ------------------------------------------------------------
 
-void jl_reinstantiate_inner_types(jl_tag_type_t *t);
+void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
 {
@@ -458,23 +458,24 @@ void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
     }
 }
 
-void jl_set_tag_type_super(jl_tag_type_t *tt, jl_value_t *super)
+void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
-    if (!jl_is_tag_type(super) || super == (jl_value_t*)jl_undef_type ||
+    if (!jl_is_datatype(super) || super == (jl_value_t*)jl_undef_type ||
+        !jl_is_abstracttype(super) ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
         jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
     }
-    tt->super = (jl_tag_type_t*)super;
+    tt->super = (jl_datatype_t*)super;
     if (jl_tuple_len(tt->parameters) > 0) {
         tt->name->cache = (jl_value_t*)jl_null;
-        jl_reinstantiate_inner_types((jl_tag_type_t*)tt);
+        jl_reinstantiate_inner_types(tt);
     }
 }
 
 // method definition ----------------------------------------------------------
 
 extern int jl_boot_file_loaded;
-void jl_add_constructors(jl_struct_type_t *t);
+void jl_add_constructors(jl_datatype_t *t);
 
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f, jl_tuple_t *t)
@@ -495,9 +496,9 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     else {
         gf = *bp;
         if (!jl_is_gf(gf)) {
-            if (jl_is_struct_type(gf) &&
+            if (jl_is_datatype(gf) &&
                 ((jl_function_t*)gf)->fptr == jl_f_ctor_trampoline) {
-                jl_add_constructors((jl_struct_type_t*)gf);
+                jl_add_constructors((jl_datatype_t*)gf);
             }
             if (!jl_is_gf(gf)) {
                 jl_error("invalid method definition: not a generic function");

@@ -128,7 +128,7 @@ static void _probe_arch(void)
 */
 
 extern size_t jl_page_size;
-jl_struct_type_t *jl_task_type;
+jl_datatype_t *jl_task_type;
 DLLEXPORT jl_task_t * volatile jl_current_task;
 jl_task_t *jl_root_task;
 jl_value_t * volatile jl_task_arg_in_transit;
@@ -402,7 +402,7 @@ static void init_task(jl_task_t *t)
     // this runs when the task is created
     ptrint_t local_sp = (ptrint_t)&t;
     ptrint_t new_sp = (ptrint_t)t->stack + t->ssize - _frame_offset;
-#ifdef __LP64__
+#ifdef _P64
     // SP must be 16-byte aligned
     new_sp = new_sp&-16;
     local_sp = local_sp&-16;
@@ -628,7 +628,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;
     jl_task_t *t = (jl_task_t*)allocobj(sizeof(jl_task_t));
-    t->type = (jl_type_t*)jl_task_type;
+    t->type = (jl_value_t*)jl_task_type;
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
     t->on_exit = NULL;
@@ -727,27 +727,28 @@ jl_function_t *jl_unprotect_stack_func;
 void jl_init_tasks(void *stack, size_t ssize)
 {
     _probe_arch();
-    jl_task_type = jl_new_struct_type(jl_symbol("Task"),
-                                      jl_any_type,
-                                      jl_null,
-                                      jl_tuple(7,
-                                               jl_symbol("parent"),
-                                               jl_symbol("last"),
-                                               jl_symbol("storage"),
-                                               jl_symbol("consumers"),
-                                               jl_symbol("done"),
-                                               jl_symbol("runnable"),
-                                               jl_symbol("result")),
-                                      jl_tuple(7,
-                                               jl_any_type, jl_any_type,
-                                               jl_any_type, jl_any_type,
-                                               jl_bool_type, jl_bool_type,
-                                               jl_any_type));
+    jl_task_type = jl_new_datatype(jl_symbol("Task"),
+                                   jl_any_type,
+                                   jl_null,
+                                   jl_tuple(7,
+                                            jl_symbol("parent"),
+                                            jl_symbol("last"),
+                                            jl_symbol("storage"),
+                                            jl_symbol("consumers"),
+                                            jl_symbol("done"),
+                                            jl_symbol("runnable"),
+                                            jl_symbol("result")),
+                                   jl_tuple(7,
+                                            jl_any_type, jl_any_type,
+                                            jl_any_type, jl_any_type,
+                                            jl_bool_type, jl_bool_type,
+                                            jl_any_type),
+                                   0, 1);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;
 
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
-    jl_current_task->type = (jl_type_t*)jl_task_type;
+    jl_current_task->type = (jl_value_t*)jl_task_type;
 #ifdef COPY_STACKS
     jl_current_task->stackbase = stack+ssize;
     jl_current_task->ssize = 0;  // size of saved piece

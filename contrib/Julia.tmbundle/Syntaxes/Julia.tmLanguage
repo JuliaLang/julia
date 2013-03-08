@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+	<!-- TODO:
+	Syntax types, tuple types, union
+	take out '::Type' -->
 <dict>
 	<key>fileTypes</key>
 	<array>
@@ -92,7 +95,7 @@
 			<array>
 				<dict>
 					<key>begin</key>
-					<string>([a-zA-Z0-9_]+)\w*\(</string>
+					<string>([a-zA-Z0-9_]+!?)\w*\(</string>
 					<key>beginCaptures</key>
 					<dict>
 						<key>1</key>
@@ -127,7 +130,7 @@
 			<array>
 				<dict>
 					<key>begin</key>
-					<string>(function)\w*([a-zA-Z0-9_]+)\w*\(</string>
+					<string>(function|macro)\s*([a-zA-Z0-9_\{]+!?)\w*([(\\{])</string>
 					<key>beginCaptures</key>
 					<dict>
 						<key>1</key>
@@ -142,7 +145,7 @@
 						</dict>
 					</dict>
 					<key>end</key>
-					<string>\)</string>
+					<string>([)\\}])</string>
 					<key>name</key>
 					<string>meta.function.julia</string>
 					<key>patterns</key>
@@ -161,7 +164,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(?:function|type|macro|quote|abstract|bitstype|typealias|module|baremodule|new)\b</string>
+					<string>\b(?:function|type|macro|quote|abstract|bitstype|Base|Main|Core|typealias|module|baremodule|new)\b</string>
 					<key>name</key>
 					<string>keyword.other.julia</string>
 				</dict>
@@ -181,7 +184,13 @@
 					<key>match</key>
 					<string>@\w+\b</string>
 					<key>name</key>
-					<string>support.macro.julia</string>
+					<string>variable.macro.julia</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>\b(true|false|nothing|NA)\b</string>
+					<key>name</key>
+					<string>constant.language.julia</string>
 				</dict>
 			</array>
 		</dict>
@@ -191,7 +200,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>((\b0(x|X)[0-9a-fA-F]*)|((\b[0-9]+\.?[0-9]*)|(\.[0-9]+))((e|E)(\+|-)?[0-9]*)?(im)?|\bInf(32)?\b|\bNaN(32)?\b)</string>
+					<string>((\b0(x|X)[0-9a-fA-F]*)|((\b[0-9]+\.?[0-9]*)|(\.[0-9]+))((e|E)(\+|-)?[0-9]*)?(im)?|\bInf(32)?\b|\bNaN(32)?\b|\be\b|\bpi\b)</string>
 					<key>name</key>
 					<string>constant.numeric.julia</string>
 				</dict>
@@ -266,6 +275,12 @@
 					<string>(?:\.(?=[a-zA-Z])|\.\.+)</string>
 					<key>name</key>
 					<string>keyword.operator.dots.julia</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>(?:\$(?=.+))</string>
+					<key>name</key>
+					<string>keyword.operator.interpolation.julia</string>
 				</dict>
 				<dict>
 					<key>captures</key>
@@ -518,6 +533,12 @@
 					<string>meta.type.julia</string>
 				</dict>
 				<dict>
+					<key>match</key>
+					<string>\b(Int8|Int16|Int32|Int64|Int128|Uint8|Uint16|Uint32|Uint64|Uint128|Float32|Float64|Bool|Char|Int|Uint|Void|Any)\b</string>
+					<key>name</key>
+					<string>support.other.bit-types.julia</string>
+				</dict>
+				<dict>
 					<key>captures</key>
 					<dict>
 						<key>2</key>
@@ -529,7 +550,7 @@
 					<key>comments</key>
 					<string>Matches a typed variable, such as 'id::String'</string>
 					<key>match</key>
-					<string>([a-zA-Z0-9_]+)(::[a-zA-Z0-9_]+)</string>
+					<string>([a-zA-Z0-9_]+)(::[a-zA-Z0-9_{}]+)</string>
 					<key>name</key>
 					<string>other.typed-variable.julia</string>
 				</dict>

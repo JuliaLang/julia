@@ -31,11 +31,11 @@ value_t fl_string_count(value_t *args, u_int32_t nargs)
     size_t len = cv_len((cvalue_t*)ptr(args[0]));
     size_t stop = len;
     if (nargs > 1) {
-        start = toulong(args[1], "string.count");
+        start = tosize(args[1], "string.count");
         if (start > len)
             bounds_error("string.count", args[0], args[1]);
         if (nargs > 2) {
-            stop = toulong(args[2], "string.count");
+            stop = tosize(args[2], "string.count");
             if (stop > len)
                 bounds_error("string.count", args[0], args[2]);
             if (stop <= start)
@@ -197,11 +197,11 @@ value_t fl_string_sub(value_t *args, u_int32_t nargs)
     char *s = tostring(args[0], "string.sub");
     size_t len = cv_len((cvalue_t*)ptr(args[0]));
     size_t i1, i2;
-    i1 = toulong(args[1], "string.sub");
+    i1 = tosize(args[1], "string.sub");
     if (i1 > len)
         bounds_error("string.sub", args[0], args[1]);
     if (nargs == 3) {
-        i2 = toulong(args[2], "string.sub");
+        i2 = tosize(args[2], "string.sub");
         if (i2 > len)
             bounds_error("string.sub", args[0], args[2]);
     }
@@ -220,7 +220,7 @@ value_t fl_string_char(value_t *args, u_int32_t nargs)
     argcount("string.char", nargs, 2);
     char *s = tostring(args[0], "string.char");
     size_t len = cv_len((cvalue_t*)ptr(args[0]));
-    size_t i = toulong(args[1], "string.char");
+    size_t i = tosize(args[1], "string.char");
     if (i >= len)
         bounds_error("string.char", args[0], args[1]);
     size_t sl = u8_seqlen(&s[i]);
@@ -259,7 +259,7 @@ value_t fl_string_find(value_t *args, u_int32_t nargs)
     char cbuf[8];
     size_t start = 0;
     if (nargs == 3)
-        start = toulong(args[2], "string.find");
+        start = tosize(args[2], "string.find");
     else
         argcount("string.find", nargs, 2);
     char *s = tostring(args[0], "string.find");
@@ -310,10 +310,10 @@ value_t fl_string_inc(value_t *args, u_int32_t nargs)
         argcount("string.inc", nargs, 2);
     char *s = tostring(args[0], "string.inc");
     size_t len = cv_len((cvalue_t*)ptr(args[0]));
-    size_t i = toulong(args[1], "string.inc");
+    size_t i = tosize(args[1], "string.inc");
     size_t cnt = 1;
     if (nargs == 3)
-        cnt = toulong(args[2], "string.inc");
+        cnt = tosize(args[2], "string.inc");
     while (cnt--) {
         if (i >= len)
             bounds_error("string.inc", args[0], args[1]);
@@ -328,10 +328,10 @@ value_t fl_string_dec(value_t *args, u_int32_t nargs)
         argcount("string.dec", nargs, 2);
     char *s = tostring(args[0], "string.dec");
     size_t len = cv_len((cvalue_t*)ptr(args[0]));
-    size_t i = toulong(args[1], "string.dec");
+    size_t i = tosize(args[1], "string.dec");
     size_t cnt = 1;
     if (nargs == 3)
-        cnt = toulong(args[2], "string.dec");
+        cnt = tosize(args[2], "string.dec");
     // note: i is allowed to start at index len
     if (i > len)
         bounds_error("string.dec", args[0], args[1]);
@@ -345,7 +345,7 @@ value_t fl_string_dec(value_t *args, u_int32_t nargs)
 
 static unsigned long get_radix_arg(value_t arg, char *fname)
 {
-    unsigned long radix = toulong(arg, fname);
+    unsigned long radix = (unsigned long)tosize(arg, fname);
     if (radix < 2 || radix > 36)
         lerrorf(ArgError, "%s: invalid radix", fname);
     return radix;

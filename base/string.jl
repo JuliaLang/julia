@@ -65,7 +65,7 @@ print(io::IO, s::String) = for c in s write(io, c) end
 write(io::IO, s::String) = print(io, s)
 show(io::IO, s::String) = print_quoted(io, s)
 
-(*)(s::Union(String,Char)...) = string(s...)
+(*)(s::String...) = string(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
 
 length(s::DirectIndexString) = endof(s)
@@ -276,11 +276,13 @@ strwidth(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
 
 isascii(c::Char) = c < 0x80
 
-for name = ("alnum", "alpha", "blank", "cntrl", "digit", "graph",
+for name = ("alnum", "alpha", "cntrl", "digit", "graph",
             "lower", "print", "punct", "space", "upper")
     f = symbol(string("is",name))
     @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Char,), c))
 end
+
+isblank(c::Char) = c==' ' || c=='\t'
 
 ## generic string uses only endof and next ##
 
@@ -487,7 +489,7 @@ end
 ## string escaping & unescaping ##
 
 escape_nul(s::String, i::Int) =
-    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
+    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
 isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 need_full_hex(s::String, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
@@ -497,14 +499,14 @@ function print_escaped(io, s::String, esc::String)
     while !done(s,i)
         c, j = next(s,i)
         c == '\0'       ? print(io, escape_nul(s,j)) :
-        c == '\e'       ? print(io, L"\e") :
+        c == '\e'       ? print(io, "\\e") :
         c == '\\'       ? print(io, "\\\\") :
         contains(esc,c) ? print(io, '\\', c) :
         7 <= c <= 13    ? print(io, '\\', "abtnvfr"[int(c-6)]) :
         isprint(c)      ? print(io, c) :
-        c <= '\x7f'     ? print(io, L"\x", hex(c, 2)) :
-        c <= '\uffff'   ? print(io, L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
-                          print(io, L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
+        c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
+        c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
+                          print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
         i = j
     end
 end
@@ -657,7 +659,7 @@ function unindent(s::String, indent::Int)
     takebuf_string(buf)
 end
 
-function triplequoted(unescape::Function, args...)
+function triplequoted(args...)
     sx = { isa(arg,ByteString) ? arg : esc(arg) for arg in args }
 
     indent = 0
@@ -682,7 +684,7 @@ function triplequoted(unescape::Function, args...)
 
     for i in 1:length(sx)
         if isa(sx[i],ByteString)
-            sx[i] = unescape(unindent(sx[i], indent))
+            sx[i] = unindent(sx[i], indent)
         end
     end
 
@@ -693,33 +695,14 @@ function triplequoted(unescape::Function, args...)
         sx[1] = s[j+1:end]
     end
 
-    Expr(:call, :string, sx...)
+    length(sx) == 1 ? sx[1] : Expr(:call, :string, sx...)
 end
 
 ## core string macros ##
 
-function singlequoted(unescape::Function, args...)
-    sx = { isa(arg,ByteString) ? unescape(arg) : esc(arg) for arg in args }
-    Expr(:call, :string, sx...)
-end
+macro b_str(s); :($(unescape_string(s)).data); end
 
-macro   str(s...); singlequoted(unescape_string, s...); end
-macro I_str(s...); singlequoted(x->unescape_chars(x,"\""), s...); end
-macro E_str(s); check_utf8(unescape_string(s)); end
-
-function byteliteral(args...)
-    sx = { isa(arg,ByteString) ? unescape_string(arg) : esc(arg) for arg in args }
-    writer(io,x...) = for w=x; write(io,w); end
-    Expr(:call, :sprint, writer, sx...)
-end
-
-macro B_str(s...); byteliteral(s...); end
-macro b_str(s...); ex = byteliteral(s...); :(($ex).data); end
-
-macro   mstr(s...); triplequoted(unescape_string, s...); end
-macro L_mstr(s); s; end
-macro I_mstr(s...); triplequoted(x->unescape_chars(x,"\""), s...); end
-macro E_mstr(s); triplequoted(unescape_string, s); end
+macro mstr(s...); triplequoted(s...); end
 
 ## shell-like command parsing ##
 
@@ -808,11 +791,11 @@ function shell_parse(raw::String, interp::Bool)
     end
 
     # construct an expression
-    exprs = {}
+    ex = Expr(:tuple)
     for arg in args
-        push!(exprs, expr(:tuple, arg))
+        push!(ex.args, Expr(:tuple, arg...))
     end
-    expr(:tuple,exprs)
+    ex
 end
 shell_parse(s::String) = shell_parse(s,true)
 
@@ -868,17 +851,24 @@ shell_escape(cmd::String, args::String...) =
 
 ## interface to parser ##
 
-function parse(str::String, pos::Int, greedy::Bool)
+function parse(str::String, pos::Int, greedy::Bool, err::Bool)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8}, Int32, Int32),
                     str, pos-1, greedy ? 1:0)
-    if isa(ex,Expr) && is(ex.head,:error)
+    if err && isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
-    if ex == (); throw(ParseError("end of input")); end
+    if ex == ()
+        if err
+            throw(ParseError("end of input"))
+        else
+            ex = Expr(:error, "end of input")
+        end
+    end
     ex, pos+1 # C is zero-based, Julia is 1-based
 end
+parse(str::String, pos::Int, greedy::Bool) = parse(str, pos, greedy, true)
 parse(str::String, pos::Int) = parse(str, pos, true)
 
 function parse(str::String)

@@ -66,7 +66,7 @@ int base_module_conflict = 0; //set to 1 if Base is getting redefined since it m
             /* jl_puts(#hook " original succeeded\n",jl_uv_stderr); */ \
         } \
         JL_CATCH { \
-            if (jl_typeof(jl_exception_in_transit) == (jl_type_t*)jl_methoderror_type) { \
+            if (jl_typeof(jl_exception_in_transit) == (jl_value_t*)jl_methoderror_type) { \
                 /* jl_puts("\n" #hook " being retried with new Base bindings --> ",jl_uv_stderr); */ \
                 jl_function_t *cb_func = JULIA_HOOK_((jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base")), hook); \
                 ret = jl_callback_call(cb_func,args); \
@@ -222,14 +222,12 @@ DLLEXPORT uv_tcp_t *jl_make_tcp(uv_loop_t* loop, jl_value_t *julia_struct)
 
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
-    restore_signals();
-    if (loop) uv_run(loop);
+    if (loop) uv_run(loop,UV_RUN_DEFAULT);
 }
 
 DLLEXPORT void jl_process_events(uv_loop_t *loop)
 {
-    restore_signals();
-    if (loop) uv_run_once(loop);
+    if (loop) uv_run(loop,UV_RUN_NOWAIT);
 }
 
 DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only, jl_value_t *julia_struct)
@@ -409,7 +407,7 @@ static void jl_free_buffer(uv_write_t* req, int status)
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
-    if(stream!=0) {
+    if (stream!=0) {
         if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
             uv_write_t *uvw = malloc(sizeof(uv_write_t));
             uvw->data=0;
@@ -676,7 +674,13 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
     return lib;
 }
 
-//#include "os_detect.h"
+DLLEXPORT long SC_CLK_TCK() {
+#ifndef __WIN32__
+    return sysconf(_SC_CLK_TCK);
+#else
+    return 0;
+#endif
+}
 
 #ifdef __cplusplus
 }

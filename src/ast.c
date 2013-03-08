@@ -93,6 +93,9 @@ static builtinspec_t julia_flisp_ast_ext[] = {
     { NULL, NULL }
 };
 
+static value_t true_sym;
+static value_t false_sym;
+
 DLLEXPORT void jl_init_frontend(void)
 {
     fl_init(2*512*1024);
@@ -111,6 +114,8 @@ DLLEXPORT void jl_init_frontend(void)
                                 NULL, NULL);
 
     assign_global_builtins(julia_flisp_ast_ext);
+    true_sym = symbol("true");
+    false_sym = symbol("false");
 }
 
 static jl_sym_t *scmsym_to_julia(value_t s)
@@ -204,7 +209,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
         }
         if (isfixnum(e)) {
             int64_t ne = numval(e);
-#ifdef __LP64__
+#ifdef _P64
             return (jl_value_t*)jl_box_int64(ne);
 #else
             if (ne > S32_MAX || ne < S32_MIN)
@@ -212,8 +217,8 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
             return (jl_value_t*)jl_box_int32((int32_t)ne);
 #endif
         }
-        uint64_t n = toulong(e, "scm_to_julia");
-#ifdef __LP64__
+        size_t n = tosize(e, "scm_to_julia");
+#ifdef _P64
         return (jl_value_t*)jl_box_int64((int64_t)n);
 #else
         if (n > S32_MAX)
@@ -222,13 +227,10 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
 #endif
     }
     if (issymbol(e)) {
-        if (!fl_isgensym(e)) {
-            char *sn = symbol_name(e);
-            if (!strcmp(sn, "true"))
-                return jl_true;
-            else if (!strcmp(sn, "false"))
-                return jl_false;
-        }
+        if (e == true_sym)
+            return jl_true;
+        else if (e == false_sym)
+            return jl_false;
         return (jl_value_t*)scmsym_to_julia(e);
     }
     if (fl_isstring(e)) {
@@ -431,7 +433,7 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
         expr = scm_to_julia(e,0);
     }
 
-    pos1 = jl_box_long(toulong(cdr_(p),"parse"));
+    pos1 = jl_box_long(tosize(cdr_(p),"parse"));
     jl_value_t *result = (jl_value_t*)jl_tuple2(expr, pos1);
     JL_GC_POP();
     return result;

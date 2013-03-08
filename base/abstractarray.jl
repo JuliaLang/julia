@@ -139,11 +139,7 @@ function reshape(a::AbstractArray, dims::Dims)
     if prod(dims) != length(a)
         error("reshape: invalid dimensions")
     end
-    b = similar(a, dims)
-    for i = 1:length(a)
-        b[i] = a[i]
-    end
-    return b
+    copy!(similar(a, dims), a)
 end
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
@@ -1221,3 +1217,226 @@ bsxfun(f, a, b) = f(a, b)
 bsxfun(f, a::AbstractArray, b) = f(a, b)
 bsxfun(f, a, b::AbstractArray) = f(a, b)
 bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)
+
+# Basic AbstractArray functions
+
+max{T}(A::AbstractArray{T}, b::(), region) = reducedim(max,A,region,typemin(T))
+min{T}(A::AbstractArray{T}, b::(), region) = reducedim(min,A,region,typemax(T))
+sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
+prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
+
+all(A::AbstractArray{Bool}, region) = reducedim(all,A,region,true)
+any(A::AbstractArray{Bool}, region) = reducedim(any,A,region,false)
+sum(A::AbstractArray{Bool}, region) = reducedim(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
+sum(A::AbstractArray{Bool}) = sum(A, [1:ndims(A)])[1]
+prod(A::AbstractArray{Bool}) =
+    error("use all() instead of prod() for boolean arrays")
+prod(A::AbstractArray{Bool}, region) =
+    error("use all() instead of prod() for boolean arrays")
+
+function sum{T}(A::AbstractArray{T})
+    if isempty(A)
+        return zero(T)
+    end
+    v = A[1]
+    for i=2:length(A)
+        v += A[i]
+    end
+    v
+end
+
+function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
+    n = length(A)
+    if (n == 0)
+        return zero(T)
+    end
+    s = A[1]
+    c = zero(T)
+    for i in 2:n
+        Ai = A[i]
+        t = s + Ai
+        if abs(s) >= abs(Ai)
+            c += ((s-t) + Ai)
+        else
+            c += ((Ai-t) + s)
+        end
+        s = t
+    end
+
+    s + c
+end
+
+# Uses K-B-N summation
+function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
+    n = length(v)
+    r = similar(v, n)
+    if n == 0; return r; end
+
+    s = r[1] = v[1]
+    c = zero(T)
+    for i=2:n
+        vi = v[i]
+        t = s + vi
+        if abs(s) >= abs(vi)
+            c += ((s-t) + vi)
+        else
+            c += ((vi-t) + s)
+        end
+        s = t
+        r[i] = s+c
+    end
+    return r
+end
+
+# Uses K-B-N summation
+function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer)
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+    axis_stride = 1
+    for i = 1:(axis-1)
+        axis_stride *= size(A,i)
+    end
+
+    if axis_size <= 1
+        return A
+    end
+
+    B = similar(A)
+    C = similar(A)
+
+    for i = 1:length(A)
+        if div(i-1, axis_stride) % axis_size == 0
+            B[i] = A[i]
+            C[i] = zero(T)
+        else
+            s = B[i-axis_stride]
+            Ai = A[i]
+            B[i] = t = s + Ai
+            if abs(s) >= abs(Ai)
+                C[i] = C[i-axis_stride] + ((s-t) + Ai)
+            else
+                C[i] = C[i-axis_stride] + ((Ai-t) + s)
+            end
+        end
+    end
+
+    return B + C
+end
+
+function prod{T}(A::AbstractArray{T})
+    if isempty(A)
+        return one(T)
+    end
+    v = A[1]
+    for i=2:length(A)
+        v *= A[i]
+    end
+    v
+end
+
+function min{T<:Integer}(A::AbstractArray{T})
+    v = typemax(T)
+    for i=1:length(A)
+        x = A[i]
+        if x < v
+            v = x
+        end
+    end
+    v
+end
+
+function max{T<:Integer}(A::AbstractArray{T})
+    v = typemin(T)
+    for i=1:length(A)
+        x = A[i]
+        if x > v
+            v = x
+        end
+    end
+    v
+end
+
+## map over arrays ##
+
+## along an axis
+function amap(f::Function, A::AbstractArray, axis::Integer)
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+
+    if axis_size == 0
+        return f(A)
+    end
+
+    idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
+    r = f(sub(A, idx))
+    R = Array(typeof(r), axis_size)
+    R[1] = r
+
+    for i = 2:axis_size
+        idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
+        R[i] = f(sub(A, idx))
+    end
+
+    return R
+end
+
+
+## 1 argument
+function map_to2(f, first, dest::AbstractArray, A::AbstractArray)
+    dest[1] = first
+    for i=2:length(A)
+        dest[i] = f(A[i])
+    end
+    return dest
+end
+
+function map(f, A::AbstractArray)
+    if isempty(A); return A; end
+    first = f(A[1])
+    dest = similar(A, typeof(first))
+    return map_to2(f, first, dest, A)
+end
+
+## 2 argument
+function map_to2(f, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+    dest[1] = first
+    for i=2:length(A)
+        dest[i] = f(A[i], B[i])
+    end
+    return dest
+end
+
+function map(f, A::AbstractArray, B::AbstractArray)
+    shp = promote_shape(size(A),size(B))
+    if isempty(A)
+        return similar(A, eltype(A), shp)
+    end
+    first = f(A[1], B[1])
+    dest = similar(A, typeof(first), shp)
+    return map_to2(f, first, dest, A, B)
+end
+
+## N argument
+function map_to2(f, first, dest::AbstractArray, As::AbstractArray...)
+    n = length(As[1])
+    i = 1
+    ith = a->a[i]
+    dest[1] = first
+    for i=2:n
+        dest[i] = f(map(ith, As)...)
+    end
+    return dest
+end
+
+function map(f, As::AbstractArray...)
+    shape = mapreduce(size, promote_shape, As)
+    if prod(shape) == 0
+        return similar(As[1], eltype(As[1]), shape)
+    end
+    first = f(map(a->a[1], As)...)
+    dest = similar(As[1], typeof(first), shape)
+    return map_to2(f, first, dest, As...)
+end
+

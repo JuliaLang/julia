@@ -135,15 +135,9 @@ else
 LLVM_BUILDDIR = build/Release
 endif
 
-ifeq ($(OS),WINNT)
-LLVM_LIB_FILE = LLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
-LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/bin/$(LLVM_LIB_FILE)
-else
-LLVM_LIB_FILE = libLLVM-$(LLVM_VER)$(LLVM_LIB_SUFFIX).$(SHLIB_EXT)
+LLVM_LIB_FILE = libLLVMJIT.a
 LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/$(LLVM_LIB_FILE)
-endif
 LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
-
 
 ifeq ($(LLVM_VER), 3.0)
 LLVM_TAR=llvm-$(LLVM_VER).tar.gz
@@ -164,7 +158,7 @@ LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
 endif
 
-LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-targets=host --disable-bindings --disable-docs
+LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-static --enable-targets=host --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions --enable-optimized
@@ -240,11 +234,13 @@ llvm-$(LLVM_VER)/build/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	../configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
 	touch -c $@
+
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build/config.status | $(llvm_python_workaround)
 	cd llvm-$(LLVM_VER)/build && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) $(LLVM_MFLAGS)
 	touch -c $@
+
 llvm-$(LLVM_VER)/build/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd llvm-$(LLVM_VER)/build && \
@@ -252,10 +248,10 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) $(LLVM_MFLAGS) check 
 endif
 	echo 1 > $@
+
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build install
-	$(INSTALL_NAME_CMD)$(LLVM_LIB_FILE) $(BUILD)/lib/$(LLVM_LIB_FILE)
 	$(AUTOTOOLS_PATH_CORRECT) 
 	touch -c $@
 
@@ -359,11 +355,6 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
-uname_S=$(OS)
-ifeq ($(uname_S),WINNT)
-uname_S=MINGW
-endif
-
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
 UV_OBJ_SOURCE = libuv/libuv.a
 
@@ -375,11 +366,11 @@ endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
 $(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
-LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)" uname_S=$(uname_S)
-$(UV_OBJ_SOURCE): libuv/Makefile
-ifneq ($(OS), WINNT)
-	$(MAKE) libuv.${SHLIB_EXT} $(LIBUV_MAKE_FLAGS)
+LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)"
+ifeq ($(OS),WINNT)
+LIBUV_MAKE_FLAGS += OS=mingw
 endif
+$(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
 	touch -c $@
 libuv/checked: $(LIBUV_OBJ_SOURCE)
@@ -491,13 +482,7 @@ install-double-conversion: $(BUILD)/lib/libgrisu.$(SHLIB_EXT)
 
 ## openlibm && openlibm-extras ##
 
-ifeq ($(OS), WINNT) #needs more advanced detection once 64bit build is possible
-OPENLIBM_FLAGS = ARCH=i386
-else
-OPENLIBM_FLAGS = ARCH="$(ARCH)"
-endif
-
-OPENLIBM_FLAGS += CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 OPENLIBM_OBJ_TARGET = $(BUILD)/lib/libopenlibm.$(SHLIB_EXT)
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
@@ -643,6 +628,8 @@ ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 
 ifeq ($(ARCH),i686)
 OPENBLAS_BUILD_OPTS += BINARY=32
+else ifeq ($(ARCH),x86_64)
+OPENBLAS_BUILD_OPTS += BINARY=64
 else
 $(error "unknown arch for openblas cross-compile")
 endif
@@ -1008,7 +995,7 @@ endif
 #todo: rpath is missing on mac for tests
 $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
+	$(MAKE) library CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(BUILD)/lib" INSTALL_INCLUDE="$(BUILD)/include" LIB="$(SUITE_SPARSE_LIB)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
 	touch -c $@
@@ -1310,9 +1297,6 @@ install-patchelf: $(PATCHELF_TARGET)
 GIT_SOURCE = git-$(GIT_VER)/src/git
 GIT_TARGET = $(BUILD)/git
 
-compile-git: install-git
-install-git: $(GIT_TARGET)
-
 git-$(GIT_VER).tar.gz:
 	$(WGET) http://git-core.googlecode.com/files/$@
 git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
@@ -1328,7 +1312,7 @@ $(GIT_SOURCE): git-$(GIT_VER)/config.status
 git-$(GIT_VER)/checked: $(GIT_SOURCE)
 	echo 1 > $@
 $(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
-	$(MAKE) -C git-$(GIT_VER) install
+	$(MAKE) -C git-$(GIT_VER) install NO_INSTALL_HARDLINKS=1
 	touch -c $@
 
 clean-git:

@@ -12,7 +12,7 @@ jl_module_t *jl_current_module=NULL;
 jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)allocobj(sizeof(jl_module_t));
-    m->type = (jl_type_t*)jl_module_type;
+    m->type = (jl_value_t*)jl_module_type;
     m->name = name;
     htable_new(&m->bindings, 0);
     jl_set_const(m, name, (jl_value_t*)m);
@@ -30,7 +30,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
     b->name = name;
     b->value = NULL;
-    b->type = (jl_type_t*)jl_any_type;
+    b->type = (jl_value_t*)jl_any_type;
     b->owner = NULL;
     b->constp = 0;
     b->exportp = 0;
@@ -140,6 +140,14 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
     return jl_get_binding_(m, var, NULL);
 }
 
+static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
+{
+    if (a==b) return 1;
+    if (a->name == b->name && a->owner == b->owner) return 1;
+    if (a->constp && a->value && b->constp && b->value == a->value) return 1;
+    return 0;
+}
+
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                            int explicit)
 {
@@ -229,6 +237,26 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
         if (from == to->usings.items[i])
             return;
     }
+    // print a warning if something visible via this "using" conflicts with
+    // an existing identifier. note that an identifier added later may still
+    // silently override a "using" name.
+    void **table = from->bindings.table;
+    for(size_t i=1; i < from->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->exportp && (b->owner==from || b->imported)) {
+                //jl_module_import(to, from, b->name);
+                jl_sym_t *var = (jl_sym_t*)table[i-1];
+                jl_binding_t **tobp = (jl_binding_t**)ptrhash_bp(&to->bindings, var);
+                if (*tobp != HT_NOTFOUND && !eq_bindings(jl_get_binding(to,var), b)) {
+                    jl_printf(JL_STDERR,
+                              "Warning: using %s.%s in module %s conflicts with an existing identifier.\n",
+                              from->name->name, var->name, to->name->name);
+                }
+            }
+        }
+    }
+
     arraylist_push(&to->usings, from);
 }
 
