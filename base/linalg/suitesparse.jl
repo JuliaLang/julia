@@ -31,15 +31,20 @@ export ChmCommon,
        increment!,
        indtype,
        show_umf_ctrl,
-       show_umf_info
+       show_umf_info,
+       umf_extract,
+       umf_lunz
 
 import Base.(\)
 import Base.Ac_ldiv_B
 import Base.At_ldiv_B
 import Base.SparseMatrixCSC
+import Base.chol
 import Base.copy
+import Base.det             
 import Base.diagmm
 import Base.findn_nzs
+import Base.lu
 import Base.nnz
 import Base.show
 import Base.size
@@ -99,21 +104,24 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:CHMITypes} <: Factorization{Tv}
     nzval::Vector{Tv}
 end
 
-function lud{Tv<:UMFVTypes,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
+function lu{Tv<:UMFVTypes,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
     zerobased = S.colptr[1] == 0
-    lu = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
-                   zerobased ? copy(S.colptr) : decrement(S.colptr),
-                   zerobased ? copy(S.rowval) : decrement(S.rowval),
-                   copy(S.nzval))
-    umfpack_numeric!(lu)
+    res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
+                    zerobased ? copy(S.colptr) : decrement(S.colptr),
+                    zerobased ? copy(S.rowval) : decrement(S.rowval),
+                    copy(S.nzval))
+    finalizer(res, umfpack_free_symbolic)
+    umfpack_numeric!(res)
 end
 
-function lud!{Tv<:UMFVTypes,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
+function lu!{Tv<:UMFVTypes,Ti<:CHMITypes}(S::SparseMatrixCSC{Tv,Ti})
     zerobased = S.colptr[1] == 0
-    UmfpackLU(C_NULL, C_NULL, S.m, S.n,
-              zerobased ? S.colptr : decrement!(S.colptr),
-              zerobased ? S.rowval : decrement!(S.rowval),
-              S.nzval)
+    res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
+                    zerobased ? S.colptr : decrement!(S.colptr),
+                    zerobased ? S.rowval : decrement!(S.rowval),
+                    S.nzval)
+    finalizer(res, umfpack_free_symbolic)
+    umfpack_numeric!(res)
 end
 
 function show(io::IO, f::UmfpackLU)
@@ -129,13 +137,13 @@ end
 
 ### Solve directly with matrix
 
-(\)(S::SparseMatrixCSC, b::Vector) = lud(S) \ b
-At_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = umfpack_solve(lud(S), b, UMFPACK_Aat)
+(\)(S::SparseMatrixCSC, b::Vector) = lu(S) \ b
+At_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = umfpack_solve(lu(S), b, UMFPACK_Aat)
 function At_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb})
     ## should be more careful here in case Ts<:Real and Tb<:Complex
     At_ldiv_B(S, convert(Vector{Ts}, b))
 end
-Ac_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = umfpack_solve(lud(S), b, UMFPACK_At)
+Ac_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = umfpack_solve(lu(S), b, UMFPACK_At)
 function Ac_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb})
     ## should be more careful here in case Ts<:Real and Tb<:Complex
     Ac_ldiv_B(S, convert(Vector{Ts}, b))
@@ -157,7 +165,7 @@ for (f_sym_r, f_num_r, f_sym_c, f_num_c, itype) in
                            umf_ctrl, umf_info)
             if status != UMFPACK_OK; error("Error code $status from symbolic factorization"); end
             U.symbolic = tmp[1]
-            finalizer(U.symbolic,umfpack_free_symbolic)
+#            finalizer(U.symbolic,umfpack_free_symbolic)
             U
         end
 
@@ -171,7 +179,7 @@ for (f_sym_r, f_num_r, f_sym_c, f_num_c, itype) in
                            umf_ctrl, umf_info)
             if status != UMFPACK_OK; error("Error code $status from symbolic factorization"); end
             U.symbolic = tmp[1]
-            finalizer(U.symbolic,umfpack_free_symbolic)
+#            finalizer(U.symbolic,umfpack_free_symbolic)
             U
         end
 
@@ -187,7 +195,7 @@ for (f_sym_r, f_num_r, f_sym_c, f_num_c, itype) in
             if status > 0; throw(MatrixIllConditionedException); end
             if status != UMFPACK_OK; error("Error code $status from numeric factorization"); end
             U.numeric = tmp[1]
-            finalizer(U.numeric,umfpack_free_numeric)
+#            finalizer(U.numeric,umfpack_free_numeric)
             U
         end
 
@@ -203,7 +211,7 @@ for (f_sym_r, f_num_r, f_sym_c, f_num_c, itype) in
             if status > 0; throw(MatrixIllConditionedException); end
             if status != UMFPACK_OK; error("Error code $status from numeric factorization"); end
             U.numeric = tmp[1]
-            finalizer(U.numeric,umfpack_free_numeric)
+#            finalizer(U.numeric,umfpack_free_numeric)
             U
         end
     end
@@ -243,6 +251,82 @@ show_umf_ctrl() = show_umf_ctrl(2.)
 
 umfpack_solve(lu::UmfpackLU, b::Vector) = umfpack_solve(lu, b, UMFPACK_A)
 
+for (det_r,det_z,itype) in
+    (("umfpack_di_get_determinant","umfpack_zi_get_determinant",:Int32),
+     ("umfpack_dl_get_determinant","umfpack_zl_get_determinant",:Int64))
+    @eval begin
+        function det{Tv<:Float64,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
+            mx = Array(Tv,1)
+            status = ccall(($det_r,:libumfpack), Ti,
+                           (Ptr{Tv},Ptr{Tv},Ptr{Void},Ptr{Float64}),
+                           mx, C_NULL, lu.numeric, umf_info)
+            if status != UMFPACK_OK error("Error code $status from umfpack_get_determinant") end
+            mx[1]
+        end
+        function det{Tv<:Complex128,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
+            mx = Array(Float64,1)
+            mz = Array(Float64,1)
+            status = ccall(($det_z,:libumfpack), Ti,
+                           (Ptr{Float64},Ptr{Float64},Ptr{Float64},Ptr{Void},Ptr{Float64}),
+                           mx, mz, C_NULL, lu.numeric, umf_info)
+            if status != UMFPACK_OK error("Error code $status from umfpack_get_determinant") end
+            complex(mx[1], mz[1])
+        end
+    end
+end
+
+for (lunz,itype) in
+    (("umfpack_di_get_lunz", :Int32),    # no distinction between real and complex here
+     ("umfpack_dl_get_lunz", :Int64))
+    @eval begin
+        function umf_lunz{Tv<:UMFVTypes,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
+            lnz = Array(Ti, 1)
+            unz = Array(Ti, 1)
+            n_row = Array(Ti, 1)
+            n_col = Array(Ti, 1)
+            nz_diag = Array(Ti, 1)
+            status = ccall(($lunz,:libumfpack), Ti,
+                           (Ptr{Ti},Ptr{Ti},Ptr{Ti},Ptr{Ti},Ptr{Ti},Ptr{Void}),
+                           lnz, unz, n_row, n_col, nz_diag, lu.numeric)
+            if status != UMFPACK_OK error("Error code $status from umfpack_get_lunz") end
+            (lnz[1], unz[1], n_row[1], n_col[1], nz_diag[1])
+        end
+    end
+end
+
+for (get_numeric_r,get_numeric_z,itype) in
+    (("umfpack_di_get_numeric","umfpack_zi_get_numeric",:Int32),
+     ("umfpack_dl_get_numeric","umfpack_zl_get_numeric",:Int64))
+    @eval begin
+        function umf_extract{Tv<:Float64,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
+            umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+            (lnz,unz,n_row,n_col,nz_diag) = umf_lunz(lu)
+            Lp = Array(Ti, n_col + 1)
+            Lj = Array(Ti, lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Array(Tv, lnz)
+            Up = Array(Ti, n_col + 1)
+            Ui = Array(Ti, unz)
+            Ux = Array(Tv, unz)
+            P  = Array(Ti, n_row)
+            Q  = Array(Ti, n_col)
+            Rs = Array(Tv, n_row)
+            status = ccall(($get_numeric_r,:libumfpack), Ti,
+                           (Ptr{Ti},Ptr{Ti},Ptr{Tv},
+                            Ptr{Ti},Ptr{Ti},Ptr{Tv},
+                            Ptr{Ti},Ptr{Ti},Ptr{Void},
+                            Ptr{Ti},Ptr{Tv},Ptr{Void}),
+                           Lp,Lj,Lx,
+                           Up,Ui,Ux,
+                           P, Q, C_NULL,
+                           &0, Rs, lu.numeric)
+            if status != UMFPACK_OK error("Error code $status from numeric") end
+            (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment(Lj),Lx)),
+             SparseMatrixCSC(n_row,n_col,increment!(Up),increment(Ui),Ux),
+             increment!(P), increment!(Q), Rs)
+        end
+    end
+end
+            
 ## The C functions called by these Julia functions do not depend on
 ## the numeric and index types, even though the umfpack names indicate
 ## they do.  The umfpack_free_* functions can be called on C_NULL without harm.
@@ -265,7 +349,7 @@ function umfpack_free_numeric(num::Ptr{Void})
     ccall((:umfpack_dl_free_numeric, :libumfpack), Void, (Ptr{Void},), tmp)
 end
 
-function umfpack_free_symbolic(lu::UmfpackLU)
+function umfpack_free_numeric(lu::UmfpackLU)
     if lu.numeric == C_NULL return lu end
     umfpack_free_numeric(lu.numeric)
     lu.numeric = C_NULL
