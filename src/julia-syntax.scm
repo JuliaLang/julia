@@ -297,12 +297,12 @@
 	    (= ,o (call (top +) 1
 			(call (top -)
 			      (call (top length) ,rest)
-			      (call (top *) 2 (call (top int) ,nkw)))))
+			      (call (top *) 2 (|.| ,nkw 'n)))))
 	    ;; set user's vararg to rest[1:(o-1)]
 	    ,(if (null? vararg) 'nothing
 		 `(= ,(arg-name (car vararg))
 		     (call (top ref) ,rest (: 1 (call (top -) ,o 1)))))
-	    (for (= ,i (: 0 (call (top -) (call (top int) ,nkw) 1)))
+	    (for (= ,i (: 0 (call (top -) (|.| ,nkw 'n) 1)))
 		 (block
 		  (= ,ii (call (top +) ,o (call (top *) ,i 2)))
 		  (= ,elt (call (top ref) ,rest ,ii))
@@ -995,7 +995,7 @@
 
    ;; call with keywords
    (pattern-lambda (call f (keywords . args) ...)
-		   `(call ,f (call (top nkeywords) ,(length args))
+		   `(call ,f (call (top NKeywords) ,(length args))
 			  ,@(cdddr __)
 			  ,@(apply append
 				   (map (lambda (kw)
