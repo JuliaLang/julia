@@ -235,6 +235,10 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
     }
     else {
         jl_signal_pending = 0;
+        sigset_t sset;
+        sigemptyset(&sset);
+        sigaddset(&sset, SIGINT);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_interrupt_exception);
     }
 }

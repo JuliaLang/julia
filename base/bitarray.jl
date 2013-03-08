@@ -292,6 +292,7 @@ let ref_cache = nothing
         if ndims(B) < 1 + length(I)
             error("wrong number of dimensions in ref")
         end
+        check_bounds(B, I0, I...)
         X = BitArray(ref_shape(I0, I...))
         nI = 1 + length(I)
 

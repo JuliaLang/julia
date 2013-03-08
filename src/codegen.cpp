@@ -898,6 +898,79 @@ static void emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx,
     }
 }
 
+// emit code for is (===). rt1 and rt2 are the julia types of the arguments,
+// arg1 and arg2 are expressions for the arguments if we have them, or NULL,
+// and varg1 and varg2 are LLVM values for the arguments if we have them.
+static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
+                        jl_value_t *arg1, jl_value_t *arg2,
+                        Value *varg1, Value *varg2, jl_codectx_t *ctx)
+{
+    if (jl_is_type_type(rt1) && jl_is_type_type(rt2) &&
+        !jl_is_typevar(jl_tparam0(rt1)) && !jl_is_typevar(jl_tparam0(rt2)) &&
+        (!arg1 || is_constant(arg1, ctx)) &&
+        (!arg2 || is_constant(arg2, ctx))) {
+        if (jl_tparam0(rt1) == jl_tparam0(rt2))
+            return ConstantInt::get(T_int1, 1);
+        return ConstantInt::get(T_int1, 0);
+    }
+    int ptr_comparable = 0;
+    if (rt1==(jl_value_t*)jl_sym_type || rt2==(jl_value_t*)jl_sym_type ||
+        jl_is_mutable_datatype(rt1) || jl_is_mutable_datatype(rt2))
+        ptr_comparable = 1;
+    int last_depth = ctx->argDepth;
+    if (arg1 && !varg1) {
+        varg1 = emit_expr(arg1, ctx);
+        if (arg2 && !varg2 && varg1->getType() == jl_pvalue_llvmt) {
+            make_gcroot(varg1, ctx);
+        }
+    }
+    Value *answer;
+    if (arg2 && !varg2)
+        varg2 = emit_expr(arg2, ctx);
+    Type *at1 = varg1->getType();
+    Type *at2 = varg2->getType();
+    if (at1 != jl_pvalue_llvmt && at2 != jl_pvalue_llvmt) {
+        if (julia_type_of(varg1) != julia_type_of(varg2)) {
+            answer = ConstantInt::get(T_int1, 0);
+            goto done;
+        }
+        if (at1 == at2) {
+            if (at1->isIntegerTy() || at1->isPointerTy() ||
+                at1->isFloatingPointTy()) {
+                answer = builder.CreateICmpEQ(JL_INT(varg1),JL_INT(varg2));
+                goto done;
+            }
+            if (at1->isStructTy() && !ptr_comparable) {
+                // TODO: tuples
+                jl_datatype_t *sty = (jl_datatype_t*)rt1;
+                assert(jl_is_datatype(sty));
+                answer = ConstantInt::get(T_int1, 1);
+                for(unsigned i=0; i < jl_tuple_len(sty->names); i++) {
+                    Value *subAns =
+                        emit_f_is(jl_tupleref(sty->types,i),
+                                  jl_tupleref(sty->types,i),
+                                  NULL, NULL,
+                                  builder.
+                                  CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
+                                  builder.
+                                  CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
+                                  ctx);
+                    answer = builder.CreateAnd(answer, subAns);
+                }
+                goto done;
+            }
+        }
+    }
+    varg1 = boxed(varg1); varg2 = boxed(varg2);
+    if (ptr_comparable)
+        answer = builder.CreateICmpEQ(varg1, varg2);
+    else
+        answer = builder.CreateTrunc(builder.CreateCall2(jlegal_func, varg1, varg2), T_int1);
+ done:
+    ctx->argDepth = last_depth;
+    return answer;
+}
+
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
                               Value **theFptr, jl_function_t **theF,
@@ -938,36 +1011,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_is && nargs==2) {
-        jl_value_t *rt1 = expr_type(args[1], ctx);
-        jl_value_t *rt2 = expr_type(args[2], ctx);
-        if (jl_is_type_type(rt1) && jl_is_type_type(rt2) &&
-            !jl_is_typevar(jl_tparam0(rt1)) &&
-            !jl_is_typevar(jl_tparam0(rt2)) &&
-            is_constant(args[1], ctx) && is_constant(args[2], ctx)) {
-            JL_GC_POP();
-            if (jl_tparam0(rt1) == jl_tparam0(rt2))
-                return ConstantInt::get(T_int1, 1);
-            return ConstantInt::get(T_int1, 0);
-        }
+        rt1 = expr_type(args[1], ctx);
+        rt2 = expr_type(args[2], ctx);
+        Value *ans = emit_f_is(rt1,rt2, args[1],args[2], NULL,NULL, ctx);
         JL_GC_POP();
-        int ptr_comparable = 0;
-        if (rt1==(jl_value_t*)jl_sym_type || rt2==(jl_value_t*)jl_sym_type ||
-            jl_is_mutable_datatype(rt1) || jl_is_mutable_datatype(rt2))
-            ptr_comparable = 1;
-        Value *arg1 = emit_expr(args[1], ctx);
-        Value *arg2 = emit_expr(args[2], ctx);
-        if (arg1->getType() != jl_pvalue_llvmt &&
-            arg2->getType() != jl_pvalue_llvmt) {
-            if (julia_type_of(arg1) != julia_type_of(arg2)) {
-                return ConstantInt::get(T_int1, 0);
-            }
-            return builder.CreateICmpEQ(JL_INT(arg1),JL_INT(arg2));
-        }
-        arg1 = boxed(arg1); arg2 = boxed(arg2);
-        if (ptr_comparable)
-            return builder.CreateICmpEQ(arg1, arg2);
-        else
-            return builder.CreateTrunc(builder.CreateCall2(jlegal_func, arg1, arg2), T_int1);
+        return ans;
     }
     else if (f->fptr == &jl_f_typeof && nargs==1) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
