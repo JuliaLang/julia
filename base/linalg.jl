@@ -1,6 +1,6 @@
 ## linalg.jl: Some generic Linear Algebra definitions
 
-function scale!{T<:Number}(X::StridedArray{T}, s::Real)
+function scale!{T<:Number}(X::AbstractArray{T}, s::Real)
     # FIXME: could use BLAS in more cases
     for i in 1:length(X)
         X[i] *= s;
@@ -8,7 +8,7 @@ function scale!{T<:Number}(X::StridedArray{T}, s::Real)
     return X
 end
 
-cross(a::Vector, b::Vector) =
+cross(a::AbstractVector, b::AbstractVector) =
     [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
 triu(M::AbstractMatrix) = triu(M,0)
@@ -96,6 +96,10 @@ trace(x::Number) = x
 
 #det(a::AbstractMatrix)
 inv(a::AbstractMatrix) = a \ one(a)
+
+inv(a::AbstractVector) = inv(reshape(a, length(a), 1))
+
+\(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)

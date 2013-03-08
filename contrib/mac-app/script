@@ -27,9 +27,9 @@ osascript 2>&1>/dev/null <<EOF
   tell application "Terminal" 
     activate
     if ProcessList contains "Terminal" then
-      do script ("PATH=${ROOT}/julia/bin:${PATH} exec '${ROOT}/julia/bin/julia'")
+      do script ("PATH=${ROOT}/julia/bin:${PATH} GIT_EXEC_PATH=${ROOT}/julia/libexec/git-core GIT_TEMPLATE_DIR={ROOT}/julia/share/git-core exec '${ROOT}/julia/bin/julia'")
     else
-      do script ("PATH=${ROOT}/julia/bin:${PATH} exec '${ROOT}/julia/bin/julia'") in front window
+      do script ("PATH=${ROOT}/julia/bin:${PATH} GIT_EXEC_PATH=${ROOT}/julia/libexec/git-core GIT_TEMPLATE_DIR={ROOT}/julia/share/git-core exec '${ROOT}/julia/bin/julia'") in front window
     end if
   end tell
 EOF

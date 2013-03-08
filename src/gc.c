@@ -24,13 +24,13 @@
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE
 
-#ifdef __LP64__
+#ifdef _P64
 # define BVOFFS 2
 #else
 # define BVOFFS 4
 #endif
 
-#ifdef __LP64__
+#ifdef _P64
 #define GC_PAGE_SZ (1536*sizeof(void*))//bytes
 #else
 #define GC_PAGE_SZ (2048*sizeof(void*))//bytes
@@ -62,7 +62,7 @@ typedef struct _pool_t {
 typedef struct _bigval_t {
     struct _bigval_t *next;
     size_t sz;
-#ifndef __LP64__
+#ifndef _P64
     uptrint_t _pad0;
     uptrint_t _pad1;
 #endif
@@ -92,7 +92,7 @@ static size_t allocd_bytes = 0;
 static size_t freed_bytes = 0;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t collect_interval = default_collect_interval;
-#ifdef __LP64__
+#ifdef _P64
 # define max_collect_interval 1250000000UL
 #else
 # define max_collect_interval 500000000UL
@@ -132,7 +132,7 @@ void jl_gc_unpreserve(void)
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
     jl_weakref_t *wr = (jl_weakref_t*)alloc_2w();
-    wr->type = (jl_type_t*)jl_weakref_type;
+    wr->type = (jl_value_t*)jl_weakref_type;
     wr->value = value;
     arraylist_push(&weak_refs, wr);
     return wr;
@@ -209,7 +209,7 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 
 static int szclass(size_t sz)
 {
-#ifndef __LP64__
+#ifndef _P64
     if     (sz <=    8) return 0;
 #endif
     if     (sz <=   56) return ((sz+3)/4) - 2;
@@ -470,8 +470,8 @@ static void push_root(jl_value_t *v)
         (*((ptrint_t*)bp))++;
 #endif
     gc_setmark(v);
-    if (gc_typeof(vt) == (jl_value_t*)jl_bits_kind ||
-        vt == (jl_value_t*)jl_weakref_type) {
+    if (vt == (jl_value_t*)jl_weakref_type ||
+        (jl_is_datatype(vt) && ((jl_datatype_t*)vt)->pointerfree)) {
         return;
     }
     if (mark_sp >= mark_stack_size) {
@@ -550,7 +550,7 @@ static void gc_mark_all()
                 gc_push_root(elt);
         }
     }
-    else if (((jl_struct_type_t*)(vt))->name == jl_array_typename) {
+    else if (((jl_datatype_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         char *data = a->data;
         if (data == NULL) continue;
@@ -613,11 +613,11 @@ static void gc_mark_all()
         }
     }
     else {
-        jl_struct_type_t *st = (jl_struct_type_t*)vt;
-        int nf = (int)jl_tuple_len(st->names);
+        jl_datatype_t *dt = (jl_datatype_t*)vt;
+        int nf = (int)jl_tuple_len(dt->names);
         for(int i=0; i < nf; i++) {
-            if (st->fields[i].isptr) {
-                jl_value_t *fld = *(jl_value_t**)((char*)v + st->fields[i].offset + sizeof(void*));
+            if (dt->fields[i].isptr) {
+                jl_value_t *fld = *(jl_value_t**)((char*)v + dt->fields[i].offset + sizeof(void*));
                 if (fld)
                     gc_push_root(fld);
             }
@@ -811,7 +811,7 @@ void *alloc_2w(void)
 #ifdef MEMDEBUG
     return alloc_big(2*sizeof(void*));
 #endif
-#ifdef __LP64__
+#ifdef _P64
     return pool_alloc(&pools[2]);
 #else
     return pool_alloc(&pools[0]);
@@ -823,7 +823,7 @@ void *alloc_3w(void)
 #ifdef MEMDEBUG
     return alloc_big(3*sizeof(void*));
 #endif
-#ifdef __LP64__
+#ifdef _P64
     return pool_alloc(&pools[4]);
 #else
     return pool_alloc(&pools[1]);
@@ -835,7 +835,7 @@ void *alloc_4w(void)
 #ifdef MEMDEBUG
     return alloc_big(4*sizeof(void*));
 #endif
-#ifdef __LP64__
+#ifdef _P64
     return pool_alloc(&pools[6]);
 #else
     return pool_alloc(&pools[2]);

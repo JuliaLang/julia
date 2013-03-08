@@ -78,68 +78,40 @@
 #define LLT_REALLOC(p,n) realloc((p),(n))
 #define LLT_FREE(x) free(x)
 
-typedef int bool_t;
-
 #if defined(__INTEL_COMPILER) && defined(WIN32)
 # define STATIC_INLINE static
 # define INLINE
-# ifdef __LP64__
-typedef unsigned long size_t;
-# else
-typedef unsigned int size_t;
-# endif
 #else
 # define STATIC_INLINE static inline
 # define INLINE inline
 #endif
 
+#include <stdint.h>
+#include <stddef.h>
+typedef int bool_t;
 typedef unsigned char  byte_t;   /* 1 byte */
-#if defined(WIN32)
-typedef short int16_t;
-typedef int int32_t;
-typedef long long int64_t;
-typedef unsigned char u_int8_t;
-typedef unsigned short u_int16_t;
-typedef unsigned int u_int32_t;
-#ifdef __LP64__
-typedef unsigned long u_int64_t;
-#else
-typedef unsigned long long u_int64_t;
-#endif
-#ifdef __INTEL_COMPILER
-typedef signed char int8_t;
-typedef short int16_t;
-typedef int int32_t;
-#endif
-#else
-#include <sys/types.h>
-#endif
 
-#ifdef __LP64__
+#ifdef _P64
 #define TOP_BIT 0x8000000000000000
 #define NBITS 64
-typedef unsigned long uint_t;  // preferred int type on platform
-typedef long int_t;
-typedef int64_t offset_t;
-typedef u_int64_t index_t;
-typedef int64_t ptrint_t; // pointer-size int
-typedef u_int64_t u_ptrint_t;
+typedef uint64_t uint_t;  // preferred int type on platform
+typedef int64_t int_t;
 #else
 #define TOP_BIT 0x80000000
 #define NBITS 32
-typedef unsigned long uint_t;
-typedef long int_t;
-typedef int32_t offset_t;
-typedef u_int32_t index_t;
-typedef int32_t ptrint_t;
-typedef u_int32_t u_ptrint_t;
+typedef uint32_t uint_t;
+typedef int32_t int_t;
 #endif
+typedef ptrdiff_t ptrint_t; // pointer-size int
+typedef size_t uptrint_t;
+typedef ptrdiff_t offset_t;
+typedef size_t index_t;
 
-typedef u_int8_t  uint8_t;
-typedef u_int16_t uint16_t;
-typedef u_int32_t uint32_t;
-typedef u_int64_t uint64_t;
-typedef u_ptrint_t uptrint_t;
+typedef uint8_t  u_int8_t;
+typedef uint16_t u_int16_t;
+typedef uint32_t u_int32_t;
+typedef uint64_t u_int64_t;
+typedef uptrint_t u_ptrint_t;
 
 #define LLT_ALIGN(x, sz) (((x) + (sz-1)) & (-sz))
 
@@ -191,12 +163,12 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 
 #define N_NUMTYPES ((int)T_DOUBLE+1)
 
-#ifdef __LP64__
-# define T_LONG T_INT64
-# define T_ULONG T_UINT64
+#ifdef _P64
+# define T_PTRDIFF T_INT64
+# define T_SIZE T_UINT64
 #else
-# define T_LONG T_INT32
-# define T_ULONG T_UINT32
+# define T_PTRDIFF T_INT32
+# define T_SIZE T_UINT32
 #endif
 
 #endif

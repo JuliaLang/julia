@@ -22,7 +22,23 @@ Getting Around
 
 .. function:: require(file::String...)
 
-   Evaluate the contents of a source file.
+   Load source files once, in the context of the ``Main`` module, on every active node, searching the system-wide ``LOAD_PATH`` for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+
+.. function:: reload(file::String)
+
+   Like ``require``, except forces loading of files regardless of whether they have been loaded before. Typically used when interactively developing libraries.
+
+.. function:: include(path::String)
+
+   Evaluate the contents of a source file in the current context. During including, a task-local include path is set to the directory containing the file. Nested calls to ``include`` will search relative to that path. All paths refer to files on node 1 when running in parallel, and files will be fetched from node 1. This function is typically used to load source interactively, or to combine files in packages that are broken into multiple source files.
+
+.. function:: include_string(code::String)
+
+   Like ``include``, except reads code from the given string rather than from a file. Since there is no file path involved, no path processing or fetching from node 1 is done.
+
+.. function:: evalfile(path::String)
+
+   Evaluate all expressions in the given file, and return the value of the last one. No other processing (path searching, fetching from node 1, etc.) is performed.
 
 .. function:: help(name)
 
@@ -39,6 +55,10 @@ Getting Around
 .. function:: methods(f)
 
    Show all methods of ``f`` with their argument types.
+
+.. function:: methodswith(t)
+
+   Show all methods with an argument of type ``typ``.
 
 All Objects
 -----------
@@ -203,7 +223,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
 .. function:: zip(iters...)
 
-   For a set of iterable objects, returns an iterable of tuples, where the ``i``th tuple contains the ``i``th component of each input iterable.
+   For a set of iterable objects, returns an iterable of tuples, where the ``i``\ th tuple contains the ``i``\ th component of each input iterable.
 
    Note that ``zip`` is it's own inverse: [zip(zip(a...)...)...] == [a...]
 
@@ -323,6 +343,14 @@ Iterable Collections
    Applies function ``f`` to each element in ``itr`` and then reduces the result using the binary function ``op``.
 
    **Example**: ``mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14``
+
+.. function:: first(coll)
+
+   Get the first element of an ordered collection.
+
+.. function:: last(coll)
+
+   Get the last element of an ordered collection.
 
 Indexable Collections
 ---------------------
@@ -567,7 +595,7 @@ Strings
 
 .. function:: bytestring(::Ptr{Uint8})
 
-   Create a string from the address of a C (0-terminated) string.
+   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed.
 
 .. function:: bytestring(s)
 
@@ -612,6 +640,10 @@ Strings
 .. function:: search(string, char, [i])
 
    Return the index of ``char`` in ``string``, giving 0 if not found. The second argument may also be a vector or a set of characters. The third argument optionally specifies a starting index.
+
+.. function:: ismatch(r::Regex, s::String)
+
+   Test whether a string contains a match of the given regular expression.
 
 .. function:: lpad(string, n, p)
 
@@ -714,6 +746,58 @@ Strings
 .. function:: strwidth(s)
 
    Gives the number of columns needed to print a string.
+
+.. function:: isalnum(c::Char)
+
+   Tests whether a character is alphanumeric.
+
+.. function:: isalpha(c::Char)
+
+   Tests whether a character is alphabetic.
+
+.. function:: isascii(c::Char)
+
+   Tests whether a character belongs to the ASCII character set.
+
+.. function:: isblank(c::Char)
+
+   Tests whether a character is a tab or space.
+
+.. function:: iscntrl(c::Char)
+
+   Tests whether a character is a control character.
+
+.. function:: isdigit(c::Char)
+
+   Tests whether a character is a numeric digit (0-9).
+
+.. function:: isgraph(c::Char)
+
+   Tests whether a character is printable, and not a space.
+
+.. function:: islower(c::Char)
+
+   Tests whether a character is a lowercase letter.
+
+.. function:: isprint(c::Char)
+
+   Tests whether a character is printable, including space.
+
+.. function:: ispunct(c::Char)
+
+   Tests whether a character is printable, and not a space or alphanumeric.
+
+.. function:: isspace(c::Char)
+
+   Tests whether a character is any whitespace character.
+
+.. function:: isupper(c::Char)
+
+   Tests whether a character is an uppercase letter.
+
+.. function:: isxdigit(c::Char)
+
+   Tests whether a character is a valid hexadecimal digit.
 
 I/O
 ---
@@ -913,7 +997,7 @@ Mathematical Functions
 
    The binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
-.. function:: .* ./ .\\ .^
+.. function:: .+ .- .* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
@@ -1892,6 +1976,10 @@ Basic functions
 
    Scale the contents of an array A with k (in-place)
 
+.. function:: conj!(A)
+
+   Convert an array to its complex conjugate in-place
+
 .. function:: stride(A, k)
 
    Returns the distance in memory (in number of elements) between adjacent elements in dimension k
@@ -2050,6 +2138,22 @@ Indexing, Assignment, and Concatenation
 
    Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``.
 
+.. function:: nonzeros(A)
+
+   Return a vector of the non-zero values in array ``A``.
+
+.. function:: findfirst(A)
+
+   Return the index of the first non-zero value in ``A``.
+
+.. function:: findfirst(A,v)
+
+   Return the index of the first element equal to ``v`` in ``A``.
+
+.. function:: findfirst(predicate, A)
+
+   Return the index of the first element that satisfies the given predicate in ``A``.
+
 .. function:: permutedims(A,perm)
 
    Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permute(A,[2,1])``.
@@ -2076,6 +2180,10 @@ Array functions
 .. function:: cumsum(A, [dim])
 
    Cumulative sum along a dimension.
+
+.. function:: cumsum_kbn(A, [dim])
+
+   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
 
 .. function:: cummin(A, [dim])
 
@@ -2106,6 +2214,10 @@ Array functions
    Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
    vector specifying the dimensions to reduce, and ``initial`` is the initial
    value to use in the reductions.
+
+.. function:: sum_kbn(A)
+
+   Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
 
 Sparse Matrices
 ---------------
@@ -2260,11 +2372,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qmulQR(QR, A)
    
-   Perform Q*A efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
+   Perform ``Q*A`` efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
 
 .. function:: qTmulQR(QR, A)
 
-   Perform Q'*A efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
+   Perform ``Q'*A`` efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
 
 .. function:: sqrtm(A)
 
@@ -2288,11 +2400,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svd(A, [thin]) -> U, S, V
 
-   Compute the SVD of A, returning ``U``, ``S``, and ``V`` such that ``A = U*S*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned.
+   Compute the SVD of A, returning ``U``, vector ``S``, and ``V`` such that ``A == U*diagm(S)*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
 .. function:: svdt(A, [thin]) -> U, S, Vt
 
-   Compute the SVD of A, returning ``U``, ``S``, and ``Vt`` such that ``A = U*S*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
+   Compute the SVD of A, returning ``U``, vector ``S``, and ``Vt`` such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
 .. function:: svdvals(A)
 
@@ -2743,7 +2855,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
    ``kind`` specifies either a discrete cosine transform of various types
-   (``FFTW.REDFT00``, ``FFTW.REDFT01``,``FFTW.REDFT10``, or
+   (``FFTW.REDFT00``, ``FFTW.REDFT01``, ``FFTW.REDFT10``, or
    ``FFTW.REDFT11``), a discrete sine transform of various types 
    (``FFTW.RODFT00``, ``FFTW.RODFT01``, ``FFTW.RODFT10``, or
    ``FFTW.RODFT11``), a real-input DFT with halfcomplex-format output
@@ -2754,9 +2866,9 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    for any unspecified dimensions.  See the FFTW manual for precise
    definitions of these transform types, at `<http://www.fftw.org/doc>`.
 
-   The optional ``dims``argument specifies an iterable subset of
+   The optional ``dims`` argument specifies an iterable subset of
    dimensions (e.g. an integer, range, tuple, or array) to transform
-   along.  ``kind[i]`` is then the transform type for ``dims[i]``,
+   along. ``kind[i]`` is then the transform type for ``dims[i]``,
    with ``kind[end]`` being used for ``i > length(kind)``.
 
    See also :func:`FFTW.plan_r2r` to pre-plan optimized r2r transforms.
@@ -2969,7 +3081,7 @@ System
 
 .. function:: time()
 
-   Get the time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 
 .. function:: time_ns()
 
@@ -3038,6 +3150,15 @@ C Interface
 .. function:: c_free(addr::Ptr)
   
    Call free() from C standard library.
+
+.. function:: unsafe_ref(p::Ptr{T},i::Integer)
+
+   Dereference the pointer ``p[i]`` or ``*p``, returning a copy of type T.
+
+.. function:: unsafe_assign(p::Ptr{T},x,i::Integer)
+
+   Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
+
 
 Errors
 ------

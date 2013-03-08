@@ -6,7 +6,7 @@ export @printf, @sprintf
 
 function _gen(s::String)
     args = {:(out::IO)}
-    blk = expr(:block, :(local neg, pt, len, exp))
+    blk = Expr(:block, :(local neg, pt, len, exp))
     for x in _parse(s)
         if isa(x,String)
             push!(blk.args, :(write(out, $(length(x)==1 ? x[1] : x))))
@@ -133,7 +133,7 @@ end
 
 function _special_handler(flags::ASCIIString, width::Int)
     @gensym x
-    blk = expr(:block)
+    blk = Expr(:block)
     pad = contains(flags,'-') ? rpad : lpad
     pos = contains(flags,'+') ? "+" :
           contains(flags,' ') ? " " : ""
@@ -429,7 +429,7 @@ function _gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  (-): left justify
     #
     @gensym x
-    blk = expr(:block, :($x = char($x)))
+    blk = Expr(:block, :($x = char($x)))
     if width > 1 && !contains(flags,'-')
         p = contains(flags,'0') ? '0' : ' '
         push!(blk.args, _pad(width-1, :($width-charwidth($x)), p))
@@ -450,7 +450,7 @@ function _gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  (-): left justify
     #
     @gensym x
-    blk = expr(:block)
+    blk = Expr(:block)
     if width > 0
         if !contains(flags,'#')
             push!(blk.args, :($x = string($x)))
@@ -481,7 +481,7 @@ function _gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  [p]: the only option
     #
     @gensym x
-    blk = expr(:block)
+    blk = Expr(:block)
     ptrwidth = WORD_SIZE>>2
     width -= ptrwidth+2
     if width > 0 && !contains(flags,'-')

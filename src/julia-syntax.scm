@@ -349,10 +349,10 @@
 		  ,@(symbols->typevars names bounds #t)
 		  ,body))))))
 
-(define (struct-def-expr name params super fields)
+(define (struct-def-expr name params super fields mut)
   (receive
    (params bounds) (sparam-name-bounds params '() '())
-   (struct-def-expr- name params bounds super (flatten-blocks fields))))
+   (struct-def-expr- name params bounds super (flatten-blocks fields) mut)))
 
 (define (default-inner-ctor name field-names field-types)
   `(function (call ,name
@@ -368,19 +368,16 @@
 	     (block
 	      (call (curly ,name ,@params) ,@field-names))))
 
-(define (new-call Texpr args field-names)
-  (cond ((> (length args) (length field-names))
+(define (new-call Texpr args field-names field-types mutabl)
+  (cond ((length> args (length field-names))
 	 `(call (top error) "new: too many arguments"))
-	((null? args)
-	 `(new ,Texpr))
 	(else
-	 (let ((g (gensy)))
-	   `(block (= ,g (new ,Texpr))
-		   ,@(map (lambda (fld val) `(= (|.| ,g (quote ,fld)) ,val))
-			  (list-head field-names (length args)) args)
-		   ,g)))))
+	 `(new ,Texpr
+	       ,@(map (lambda (fty val)
+			`(call (top convert) ,fty ,val))
+		      (list-head field-types (length args)) args)))))
 
-(define (rewrite-ctor ctor Tname params field-names)
+(define (rewrite-ctor ctor Tname params field-names field-types mutabl)
   (define (ctor-body body)
     `(block ;; make type name global
 	    (global ,Tname)
@@ -391,7 +388,9 @@
 					      Tname
 					      `(curly ,Tname ,@params))
 					  args
-					  field-names)))
+					  field-names
+					  field-types
+					  mutabl)))
 			      body)))
   (let ((ctor2
 	 (pattern-replace
@@ -419,7 +418,7 @@
 			  (else (list x))))
 		  e))))
 
-(define (struct-def-expr- name params bounds super fields)
+(define (struct-def-expr- name params bounds super fields mut)
   (receive
    (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
 			   fields)
@@ -434,14 +433,15 @@
 	   (const ,name)
 	   (composite_type ,name (tuple ,@params)
 			   (tuple ,@(map (lambda (x) `',x) field-names))
-			   (null) ,super (tuple ,@field-types))
+			   (null) ,super (tuple ,@field-types)
+			   ,mut)
 	   (call
 	    (lambda ()
 	      (scope-block
 	       (block
 		(global ,name)
 		,@(map (lambda (c)
-			 (rewrite-ctor c name '() field-names))
+			 (rewrite-ctor c name '() field-names field-types mut))
 		       defs2)))))
 	   (null))
 	 ;; parametric case
@@ -462,10 +462,12 @@
 				 (global ,@params)
 				 ,@(map
 				    (lambda (c)
-				      (rewrite-ctor c name params field-names))
+				      (rewrite-ctor c name params field-names
+						    field-types mut))
 				    defs2)
 				 ,name)))
-			     ,super (tuple ,@field-types))))
+			     ,super (tuple ,@field-types)
+			     ,mut)))
 	   (scope-block
 	    (block
 	     (global ,@params)
@@ -658,9 +660,9 @@
 		      (-> (tuple ,@argl) ,body)))
 
    ;; type definition
-   (pattern-lambda (type sig (block . fields))
+   (pattern-lambda (type mut sig (block . fields))
 		   (receive (name params super) (analyze-type-sig sig)
-			    (struct-def-expr name params super fields)))
+			    (struct-def-expr name params super fields mut)))
 
    ;; try with finally
    (pattern-lambda (try tryb var catchb finalb)
@@ -1200,6 +1202,40 @@
 				(tuple ,@(map length rows))
 				,@(apply nconc rows)))
 		       `(call (top vcat) ,@a)))
+
+   (pattern-lambda (typed_hcat t . a)
+                   (let ((result (gensy))
+                         (ncols (length a)))
+                     `(block
+                       (if (call (top !) (call (top isa) ,t Type))
+                           (call error "invalid array index"))
+                       (= ,result (call (top Array) ,t 1 ,ncols))
+                       ,@(map (lambda (x i) `(call (top assign) ,result ,x ,i))
+                              a (cdr (iota (+ ncols 1))))
+                       ,result)))
+
+   (pattern-lambda (typed_vcat t . rows)
+     (if (any (lambda (x) (not (and (pair? x) (eq? 'row (car x))))) rows)
+         (error "invalid array literal")
+         (let ((result (gensy))
+               (nrows (length rows))
+               (ncols (length (cdar rows))))
+           (if (any (lambda (x) (not (= (length (cdr x)) ncols))) rows)
+               (error "invalid array literal")
+               `(block
+                 (if (call (top !) (call (top isa) ,t Type))
+                     (call error "invalid array index"))
+                 (= ,result (call (top Array) ,t ,nrows ,ncols))
+                 ,@(apply nconc
+                     (map
+                       (lambda (row i)
+                         (map
+                           (lambda (x j) `(call (top assign) ,result ,x ,i ,j))
+                           (cdr row)
+                           (cdr (iota (+ ncols 1)))))
+                       rows
+                       (cdr (iota (+ nrows 1)))))
+                 ,result)))))
 
    ;; transpose operator
    (pattern-lambda (|'| a) `(call ctranspose ,a))
@@ -2212,7 +2248,7 @@ So far only the second case can actually occur.
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
 	       (let ((forms (reverse q)))
-		 `(call (top expr) ,(expand-backquote (car e))
+		 `(call (top splicedexpr) ,(expand-backquote (car e))
 			(call (top append_any) ,@forms)))
 	       ;; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (match '($ (tuple (... x))) (car p))
@@ -2269,7 +2305,7 @@ So far only the second case can actually occur.
 				 (resolve-expansion-vars- x env m))
 			       (cdr e))))
 	   ((type)
-	    `(type ,(unescape (cadr e))
+	    `(type ,(cadr e) ,(unescape (caddr e))
 		   ;; type has special behavior: identifiers inside are
 		   ;; field names, not expressions.
 		   ,(map (lambda (x)
@@ -2279,7 +2315,7 @@ So far only the second case can actually occur.
 				    ,(resolve-expansion-vars- (caddr x) env m)))
 				 (else
 				  (resolve-expansion-vars- x env m))))
-			 (caddr e))))
+			 (cadddr e))))
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)

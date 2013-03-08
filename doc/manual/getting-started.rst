@@ -134,6 +134,8 @@ differences that may trip up Julia users accustomed to MATLAB:
    operators, ``<``, ``>``, ``!=``, etc.
 -  The elements of a collection can be passed as arguments to a function
    using ``...``, as in ``xs=[1,2]; f(xs...)``.
+-  Julia's ``svd`` returns singular values as a vector instead of as a
+   full diagonal matrix.
 
 Noteworthy differences from R
 -----------------------------

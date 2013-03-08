@@ -1,10 +1,9 @@
 To build the Julia.app OS X application bundle:
 
 1. First install Winston, and compile all the relevant libraries with Pkg.add("Winston"). The libraries are copied from ~/.julia/{Cairo,Tk} in here.
-2. In the top-level, run `make dist`.
-3. Run `make` here to create a self-sufficient julia distribution with Cairo and Tk.
-4. Update the Julia.platypus profile file to reflect your local paths
-5. Use Platypus (http://sveinbjorn.org/platypus) using the `Julia.platypus` profile to create the app bundle. 
-6. Use dmgCreator (http://dmgcreator.sourceforge.net) with `Julia.dmged` to create the dmg file.
+2. Run `make` here to create a self-sufficient julia distribution with Cairo and Tk.
+3. Update the Julia.platypus profile file to reflect your local paths
+4. Use Platypus (http://sveinbjorn.org/platypus) using the `Julia.platypus` profile to create the app bundle. 
+5. Use dmgCreator (http://dmgcreator.sourceforge.net) with `Julia.dmged` to create the dmg file.
 
 The `julia.icns` file provides the Julia icon, and the `script` file launches julia in a terminal.

@@ -132,7 +132,7 @@ volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef __WIN32__
-volatile HANDLE hMainThread;
+volatile HANDLE hMainThread = NULL;
 void restore_signals()
 {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
@@ -156,24 +156,40 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     else {
         jl_signal_pending = 0;
-        SuspendThread(hMainThread);
+        if ((DWORD)-1 == SuspendThread(hMainThread)) {
+            //error
+            fputs("error: SuspendThread failed\n",stderr);
+            return 0;
+        }
         CONTEXT ctxThread;
         memset(&ctxThread,0,sizeof(CONTEXT));
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!GetThreadContext(hMainThread, &ctxThread)) {
             //error
-            printf("error: GetThreadContext failed\n");
+            fputs("error: GetThreadContext failed\n",stderr);
             return 0;
         }
-        ctxThread.Eip = (DWORD)&win_raise_exception; //on win64, use .Rip = (DWORD64)...
-        ctxThread.Ecx = (DWORD)jl_interrupt_exception; //on win64, use .Rcx = (DWORD64)...
+#ifdef _WIN64
+        ctxThread.Rip = (DWORD64)&win_raise_exception;
+        ctxThread.Rcx = (DWORD64)jl_interrupt_exception;
+        ctxThread.Rsp &= (DWORD64)-16;
+        ctxThread.Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
+#elif _WIN32
+        ctxThread.Eip = (DWORD)&win_raise_exception;
+        ctxThread.Ecx = (DWORD)jl_interrupt_exception;
+        ctxThread.Esp &= (DWORD)-16;
+        ctxThread.Esp -= 4; //fix up the stack pointer
+#else
+#error WIN16 not supported :P
+#endif
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread,&ctxThread)) {
-            printf("error: SetThreadContext failed\n");
+            fputs("error: SetThreadContext failed\n",stderr);
             //error
             return 0;
         }
-        if ((DWORD)-1 == ResumeThread (hMainThread)) {
-            printf("error: ResumeThread failed\n");
+        if ((DWORD)-1 == ResumeThread(hMainThread)) {
+            fputs("error: ResumeThread failed\n",stderr);
             //error
             return 0;
         }
@@ -181,12 +197,22 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     return 1;
 }
 static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) {
-    //fprintf(stderr,"arrived in exception_handler!\n");
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_STACK_OVERFLOW:
-            ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception; //on win64, use .Rip = (DWORD64)...
-            ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception; //on win64, use .Rcx = (DWORD64)...
+#ifdef _WIN64
+            ExceptionInfo->ContextRecord->Rip = (DWORD64)&win_raise_exception;
+            ExceptionInfo->ContextRecord->Rcx = (DWORD64)jl_stackovf_exception;
+            ExceptionInfo->ContextRecord->Rsp &= (DWORD64)-16;
+            ExceptionInfo->ContextRecord->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
+#elif _WIN32
+            ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception;
+            ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception;
+            ExceptionInfo->ContextRecord->Esp &= (DWORD)-16;
+            ExceptionInfo->ContextRecord->Esp -= 4; //fix up the stack pointer
+#else
+#error WIN16 not supported :P
+#endif
             return EXCEPTION_CONTINUE_EXECUTION;
         default:
             puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\n");
@@ -209,6 +235,10 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
     }
     else {
         jl_signal_pending = 0;
+        sigset_t sset;
+        sigemptyset(&sset);
+        sigaddset(&sset, SIGINT);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_interrupt_exception);
     }
 }
@@ -302,7 +332,7 @@ DLLEXPORT void uv_atexit_hook()
         }
         item = item->next;
     }
-    uv_run(loop); //let libuv spin until everything has finished closing
+    uv_run(loop,UV_RUN_DEFAULT); //let libuv spin until everything has finished closing
 }
 
 void jl_get_builtin_hooks(void);
@@ -456,8 +486,8 @@ void julia_init(char *imageFile)
     for(i=1; i < jl_core_module->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->value && jl_is_some_tag_type(b->value)) {
-                jl_tag_type_t *tt = (jl_tag_type_t*)b->value;
+            if (b->value && jl_is_datatype(b->value)) {
+                jl_datatype_t *tt = (jl_datatype_t*)b->value;
                 tt->name->module = jl_core_module;
             }
         }
@@ -517,9 +547,11 @@ void julia_init(char *imageFile)
 DLLEXPORT void jl_install_sigint_handler()
 {
 #ifdef __WIN32__
-    DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
+    if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
         GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
-        TRUE, DUPLICATE_SAME_ACCESS );
+        TRUE, DUPLICATE_SAME_ACCESS )) {
+        JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
+    }
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 #else
     struct sigaction act;
@@ -536,19 +568,33 @@ DLLEXPORT void jl_install_sigint_handler()
 }
 
 
+extern void * __stack_chk_guard;
+
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {
-#ifdef __WIN32__
+#if defined(_WIN32) //&& !defined(_WIN64)
     SetUnhandledExceptionFilter(exception_handler);
 #endif
+    unsigned char * p = (unsigned char *) &__stack_chk_guard;
+    char a = p[sizeof(__stack_chk_guard)-1];
+    char b = p[sizeof(__stack_chk_guard)-2];
+    char c = p[0];
+    /* If you have the ability to generate random numbers in your kernel then use them */
+    p[sizeof(__stack_chk_guard)-1] = 255;
+    p[sizeof(__stack_chk_guard)-2] = '\n';
+    p[0] = 0;
 #ifdef COPY_STACKS
     // initialize base context of root task
     jl_root_task->stackbase = (char*)&argc;
-    if (jl_setjmp(jl_root_task->base_ctx, 1)) {
+    if (jl_setjmp(jl_root_task->base_ctx, 0)) {
         jl_switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif
-    return pmain(argc, argv);
+    int ret = pmain(argc, argv);
+    p[sizeof(__stack_chk_guard)-1] = a;
+    p[sizeof(__stack_chk_guard)-2] = b;
+    p[0] = c;
+    return ret;
 }
 
 jl_function_t *jl_typeinf_func=NULL;
@@ -577,16 +623,16 @@ void jl_get_builtin_hooks(void)
     jl_root_task->tls = jl_nothing;
     jl_root_task->consumers = jl_nothing;
 
-    jl_char_type    = (jl_bits_type_t*)core("Char");
-    jl_int8_type    = (jl_bits_type_t*)core("Int8");
-    jl_uint8_type   = (jl_bits_type_t*)core("Uint8");
-    jl_int16_type   = (jl_bits_type_t*)core("Int16");
-    jl_uint16_type  = (jl_bits_type_t*)core("Uint16");
-    jl_uint32_type  = (jl_bits_type_t*)core("Uint32");
-    jl_uint64_type  = (jl_bits_type_t*)core("Uint64");
+    jl_char_type    = (jl_datatype_t*)core("Char");
+    jl_int8_type    = (jl_datatype_t*)core("Int8");
+    jl_uint8_type   = (jl_datatype_t*)core("Uint8");
+    jl_int16_type   = (jl_datatype_t*)core("Int16");
+    jl_uint16_type  = (jl_datatype_t*)core("Uint16");
+    jl_uint32_type  = (jl_datatype_t*)core("Uint32");
+    jl_uint64_type  = (jl_datatype_t*)core("Uint64");
 
-    jl_float32_type = (jl_bits_type_t*)core("Float32");
-    jl_float64_type = (jl_bits_type_t*)core("Float64");
+    jl_float32_type = (jl_datatype_t*)core("Float32");
+    jl_float64_type = (jl_datatype_t*)core("Float64");
 
     jl_stackovf_exception =
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
@@ -607,24 +653,23 @@ void jl_get_builtin_hooks(void)
     jl_memory_exception =
         jl_apply((jl_function_t*)core("MemoryError"),NULL,0);
 
-    jl_ascii_string_type = (jl_struct_type_t*)core("ASCIIString");
-    jl_utf8_string_type = (jl_struct_type_t*)core("UTF8String");
-    jl_symbolnode_type = (jl_struct_type_t*)core("SymbolNode");
-    jl_getfieldnode_type = (jl_struct_type_t*)core("GetfieldNode");
+    jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
+    jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
+    jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
+    jl_getfieldnode_type = (jl_datatype_t*)core("GetfieldNode");
 
-    jl_array_uint8_type =
-        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
-                                  jl_tuple2(jl_uint8_type,
-                                            jl_box_long(1)));
+    jl_array_uint8_type = jl_apply_type((jl_value_t*)jl_array_type,
+                                        jl_tuple2(jl_uint8_type,
+                                                  jl_box_long(1)));
 }
 
 DLLEXPORT void jl_get_system_hooks(void)
 {
     if (jl_errorexception_type) return; // only do this once
 
-    jl_errorexception_type = (jl_struct_type_t*)basemod("ErrorException");
-    jl_typeerror_type = (jl_struct_type_t*)basemod("TypeError");
-    jl_methoderror_type = (jl_struct_type_t*)basemod("MethodError");
-    jl_loaderror_type = (jl_struct_type_t*)basemod("LoadError");
-    jl_weakref_type = (jl_struct_type_t*)basemod("WeakRef");
+    jl_errorexception_type = (jl_datatype_t*)basemod("ErrorException");
+    jl_typeerror_type = (jl_datatype_t*)basemod("TypeError");
+    jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
+    jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
+    jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
 }

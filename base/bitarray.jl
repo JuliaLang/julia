@@ -292,6 +292,7 @@ let ref_cache = nothing
         if ndims(B) < 1 + length(I)
             error("wrong number of dimensions in ref")
         end
+        check_bounds(B, I0, I...)
         X = BitArray(ref_shape(I0, I...))
         nI = 1 + length(I)
 
@@ -916,12 +917,6 @@ function (-)(B::BitArray)
 end
 sign(B::BitArray) = copy(B)
 
-real(B::BitArray) = copy(B)
-imag(B::BitArray) = falses(size(B))
-
-conj!(B::BitArray) = B
-conj(B::BitArray) = copy(B)
-
 function (~)(B::BitArray)
     C = similar(B)
     Bc = B.chunks
@@ -1345,31 +1340,6 @@ function flipdim(A::BitArray, d::Integer)
     return B
 end
 
-function rotl90(A::BitMatrix)
-    m,n = size(A)
-    B = BitArray(n,m)
-    for i=1:m, j=1:n
-        B[n-j+1,i] = A[i,j]
-    end
-    return B
-end
-function rotr90(A::BitMatrix)
-    m,n = size(A)
-    B = BitArray(n,m)
-    for i=1:m, j=1:n
-        B[j,m-i+1] = A[i,j]
-    end
-    return B
-end
-function rot180(A::BitMatrix)
-    m,n = size(A)
-    B = similar(A)
-    for i=1:m, j=1:n
-        B[m-i+1,n-j+1] = A[i,j]
-    end
-    return B
-end
-
 function reverse_bits(src::Uint64)
     z    = src
     z    = ((z >>>  1) & 0x5555555555555555) | ((z <<  1) & 0xaaaaaaaaaaaaaaaa)
@@ -1477,7 +1447,16 @@ end
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
     Bc = B.chunks
-    for i = div(start-1,64)+1:length(Bc)
+
+    chunk_start = @_div64(start-1)+1
+    within_chunk_start = @_mod64(start-1)
+    mask = _msk64 << within_chunk_start
+
+    if Bc[chunk_start] & mask != 0
+        return (chunk_start-1) << 6 + trailing_zeros(Bc[chunk_start] & mask) + 1
+    end
+
+    for i = chunk_start+1:length(Bc)
         if Bc[i] != 0
             return (i-1) << 6 + trailing_zeros(Bc[i]) + 1
         end
@@ -1493,7 +1472,16 @@ function findnextnot(B::BitArray, start::Integer)
     if l == 0
         return 0
     end
-    for i = div(start-1,64)+1:l-1
+
+    chunk_start = @_div64(start-1)+1
+    within_chunk_start = @_mod64(start-1)
+    mask = ~(_msk64 << within_chunk_start)
+
+    if Bc[chunk_start] | mask != _msk64
+        return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
+    end
+
+    for i = chunk_start+1:l-1
         if Bc[i] != _msk64
             return (i-1) << 6 + trailing_ones(Bc[i]) + 1
         end

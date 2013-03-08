@@ -161,10 +161,10 @@ getminmax(::Type{Float32}) = [typemin(Float32),typemax(Float32)]
 getminmax(::Type{Float64}) = [typemin(Float64),typemax(Float64)]
 
 # An image type with all data held in memory
-type ImageArray{DataType<:Number} <: Image
-    data::Array{DataType}         # the raw data
+type ImageArray{DType<:Number} <: Image
+    data::Array{DType}         # the raw data
     arrayi_order::ASCIIString     # storage order of data array, e.g. "yxc"
-    minmax::Vector{DataType}      # min and max possible values
+    minmax::Vector{DType}      # min and max possible values
     size_ancestor::Vector{Int}    # size of the _original_ array (pre-snip)
     arrayi_range::Vector{Range1{Int}} # vector of ranges (snipping out blocks)
     arrayi2physc::Matrix{Float64} # transform matrix
@@ -177,10 +177,10 @@ type ImageArray{DataType<:Number} <: Image
     metadata       # arbitrary metadata, like acquisition date&time, etc.
 end
 # Empty constructor (doesn't seem to work now, for unknown reason)
-ImageArray{DataType<:Number}() =
-    ImageArray{DataType}(Array(DataType,0),
+ImageArray{DType<:Number}() =
+    ImageArray{DType}(Array(DType,0),
                          "",
-                         getminmax(DataType),
+                         getminmax(DType),
                          Array(Int,0),
                          Array(Range1,0),
                          zeros(0,0),
@@ -193,7 +193,7 @@ ImageArray{DataType<:Number}() =
                          "")
 # Construct from a data array, providing defaults for everything
 # except the storage order
-function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIString)
+function ImageArray{DType<:Number}(data::Array{DType},arrayi_order::ASCIIString)
     sz = size(data)
     szv = vcat(sz...)
     n_dims = length(sz)
@@ -231,7 +231,7 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
             color_space = CSCMYK
         end
     end
-    ImageArray{DataType}(data,arrayi_order,getminmax(DataType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
+    ImageArray{DType}(data,arrayi_order,getminmax(DType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
 end
 
 ### Copy and ref functions ###
@@ -270,12 +270,12 @@ function copy_pfields(img::ImageArray)
 end
 
 # Copy just the data
-function copy_data{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+function copy_data{DType}(image_out::ImageArray{DType},image_in::ImageArray{DType})
     image_out.data = image_in.data[image_out.arrayi_range...]
 end
 
 # Copy just the metadata
-function copy_metadata{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+function copy_metadata{DType}(image_out::ImageArray{DType},image_in::ImageArray{DType})
     image_out.metadata = copy(image_in.metadata)
 end
 
@@ -376,7 +376,7 @@ end
 
 
 ### Manipulations
-function permutedims!{DataType}(img::ImageArray{DataType},perm)
+function permutedims!{DType}(img::ImageArray{DType},perm)
     img.data = permutedims(img.data,perm)
     img.size_ancestor = img.size_ancestor[perm]
     img.arrayi_range = img.arrayi_range[perm]

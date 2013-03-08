@@ -399,7 +399,7 @@ function serialize(s, rr::RemoteRef)
 end
 
 function deserialize(s, t::Type{RemoteRef})
-    rr = invoke(deserialize, (Any, CompositeKind), s, t)
+    rr = invoke(deserialize, (Any, DataType), s, t)
     where = rr.where
     if where == myid()
         add_client(rr2id(rr), myid())
@@ -687,6 +687,10 @@ function perform_work(job::WorkItem)
                 push!(waiters, waitinfo)
             end
         end
+    elseif isa(result,WaitTask)
+        job.task.runnable = false
+        wt::WaitTask = result
+        wt.job = job
     elseif job.task.runnable
         # otherwise return to queue
         enq_work(job)
@@ -1173,7 +1177,7 @@ end
 macro everywhere(ex)
     quote
         @sync begin
-            at_each(()->eval(Main,$(expr(:quote,ex))))
+            at_each(()->eval(Main,$(Expr(:quote,ex))))
         end
     end
 end

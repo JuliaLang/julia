@@ -73,7 +73,7 @@ std(v::Ranges) = std(v, true)
 
 ## hist ##
 
-function hist(v::StridedVector, nbins::Integer)
+function hist(v::AbstractVector, nbins::Integer)
     h = zeros(Int, nbins)
     if nbins == 0
         return h
@@ -95,7 +95,7 @@ end
 
 hist(x) = hist(x, 10)
 
-function hist(A::StridedMatrix, nbins::Integer)
+function hist(A::AbstractMatrix, nbins::Integer)
     m, n = size(A)
     h = Array(Int, nbins, n)
     for j=1:n
@@ -104,7 +104,7 @@ function hist(A::StridedMatrix, nbins::Integer)
     h
 end
 
-function hist(v::StridedVector, edg::AbstractVector)
+function hist(v::AbstractVector, edg::AbstractVector)
     n = length(edg)
     h = zeros(Int, n)
     if n == 0
@@ -121,7 +121,7 @@ function hist(v::StridedVector, edg::AbstractVector)
     h
 end
 
-function hist(A::StridedMatrix, edg::AbstractVector)
+function hist(A::AbstractMatrix, edg::AbstractVector)
     m, n = size(A)
     h = Array(Int, length(edg), n)
     for j=1:n

@@ -6,11 +6,12 @@ include("uv_constants.jl")
 typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
 type WaitTask 
-    task::Task
     filter::Callback #runs task only if false
     localdata::Any
-    WaitTask(task::Task,test::Callback,localdata) = new(task,test,localdata)
-    WaitTask(task::Task) = new(task, false, nothing)
+    job
+
+    WaitTask(forwhat, test::Callback) = new(test, forwhat)
+    WaitTask() = new(false, nothing)
 end
 
 abstract AsyncStream <: IO
@@ -92,15 +93,13 @@ end
 
 flush(::TTY) = nothing
 
-## SOCKETS ##
-
 function tasknotify(waittasks::Vector{WaitTask}, args...)
     newwts = WaitTask[]
     ct = current_task()
     for wt in waittasks
         f = wt.filter
         if (isa(f, Function) ? f(wt.localdata, args...) : f) === false
-            work = WorkItem(wt.task)
+            work = wt.job
             work.argument = args
             enq_work(work)
         else
@@ -116,75 +115,34 @@ wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
 wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
 wait_readline_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
 
-macro waitfilter(fcn,notify,filter_fcn,types)
-    quote
-        function $(esc(filter_fcn))(x::Vector, args...)
-            for a=x
-                if $(esc(filter_fcn))(a, args...)
-                    return true
-                end
-            end
-            return false
-        end
-        function $(esc(fcn))(x::Union($(esc(types)),Vector))
-            ct = current_task()
-            tw = WaitTask(ct, $(esc(filter_fcn)), x)
-            args = ()
-            while $(esc(filter_fcn))(x)
-                if isa(x,Vector)
-                    for a = x
-                        if isa(a,Tuple)
-                            a = a[1]
-                        end
-                        if $(esc(filter_fcn))(a)
-                            push!(getfield(a,$(expr(:quote,notify))),tw)
-                        end
-                    end
-                else
-                    a = x
-                    if isa(a,Tuple)
-                        a = a[1]
-                    end
-                    push!(getfield(a,$(expr(:quote,notify))),tw)
-                end
-                ct.runnable = false
-                args = yield()
-                if isa(x,Vector)
-                    for a = x
-                        if isa(a,Tuple)
-                            a = a[1]
-                        end
-                        a = getfield(a,$(expr(:quote,notify)))
-                        i = findfirst(a, tw)
-                        if i > 0 delete!(a, i) end
-                    end
-                else
-                    a = x
-                    if isa(a,Tuple)
-                        a = a[1]
-                    end
-                    a = getfield(a,$(expr(:quote,notify)))
-                    i = findfirst(a, tw)
-                    if i > 0 delete!(a, i) end
-                end
-                if isa(args,InterruptException)
-                    error(args)
-                end
-            end
-            args
-        end
+function wait(forwhat::Vector, notify_list_name, filter_fcn)
+    args = ()
+    for x in forwhat
+        args = wait(x, notify_list_name, filter_fcn)
     end
+    args
 end
 
-wait_readnb(a::AsyncStream,b::Int) = wait_readnb((a,b))
+function wait(forwhat, notify_list_name, filter_fcn)
+    args = ()
+    while filter_fcn(forwhat)
+        thing = isa(forwhat,Tuple) ? forwhat[1] : forwhat
+        wt = WaitTask(forwhat, filter_fcn)
+        push!(thing.(notify_list_name), wt)
+        args = yield(wt)
+        if isa(args,InterruptException)
+            error(args)
+        end
+    end
+    args
+end
 
-#general form of generated calls is: wait_<for_event>(o::NotificationObject, [args::AsRequired...])
-@waitfilter wait_connected connectnotify wait_connect_filter AsyncStream
-@waitfilter wait_readable readnotify wait_readable_filter AsyncStream
-@waitfilter wait_readline readnotify wait_readline_filter AsyncStream
-@waitfilter wait_readnb readnotify wait_readnb_filter (AsyncStream,Int)
+wait_connected(x) = wait(x, :connectnotify, wait_connect_filter)
+wait_readable(x) = wait(x, :readnotify, wait_readable_filter)
+wait_readline(x) = wait(x, :readnotify, wait_readline_filter)
+wait_readnb(x::(AsyncStream,Int)) = wait(x, :readnotify, wait_readnb_filter)
+wait_readnb(x::AsyncStream,b::Int) = wait_readnb((x,b))
 
-    
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     if status != -1
@@ -343,7 +301,7 @@ function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{
     #make the pipe an unbuffered stream for now
     ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,Any), read_end, 0, readable_julia_only, pipe)
     ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,Any), write_end, 1, readable_julia_only, pipe)
-    error = ccall(:uv_pipe_link, Int, (Ptr{Void}, Ptr{Void}), read_end, write_end)
+    error = ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end)
     if error != 0 # don't use assert here as $string isn't be defined yet
         error("uv_pipe_link failed")
     end
@@ -394,7 +352,7 @@ function readall(stream::AsyncStream)
 end
 
 function read{T}(this::AsyncStream, a::Array{T})
-    if isa(T, BitsKind)
+    if isbits(T)
         nb = length(a)*sizeof(T)
         buf = this.buffer
         assert(buf.seekable == false)
@@ -441,7 +399,7 @@ write(s::AsyncStream, b::Uint8) =
 write(s::AsyncStream, c::Char) =
     int(ccall(:jl_pututf8, Int32, (Ptr{Void},Char), handle(s), c))
 function write{T}(s::AsyncStream, a::Array{T})
-    if(isa(T,BitsKind))
+    if isbits(T)
         ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint32), handle(s), a, uint(length(a)*sizeof(T)))
     else
         invoke(write,(IO,Array),s,a)
@@ -458,18 +416,23 @@ _uv_lasterror() = _uv_lasterror(eventloop())
 _uv_lastsystemerror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
 _uv_lastsystemerror() = _uv_lasterror(eventloop())
 
-type UVError <: Exception
-    prefix::String
+type UV_error_t
     uv_code::Int32
     system_code::Int32
-    UVError(p::String)=new(p,_uv_lasterror(),_uv_lastsystemerror())
-    UVError(p::String,uv::Integer,system::Integer)=new(p,uv,system)
 end
+type UVError <: Exception
+    prefix::String
+    s::UV_error_t
+    UVError(p::String,e::UV_error_t)=new(p,e)
+end
+UVError(p::String) = UVError(p,_uv_lasterror(),_uv_lastsystemerror())
+UVError(p::String,uv::Integer,system::Integer) = UVError(p,UV_error_t(uv,system))
 
-struverror(err::UVError) = bytestring(ccall(:jl_uv_strerror,Ptr{Uint8},(Int32,Int32),err.uv_code,err.system_code))
-uverrorname(err::UVError) = bytestring(ccall(:jl_uv_err_name,Ptr{Uint8},(Int32,Int32),err.uv_code,err.system_code))
+struverror(err::UVError) = bytestring(ccall(:jl_uv_strerror,Ptr{Uint8},(Int32,Int32),err.s.uv_code,err.s.system_code))
+uverrorname(err::UVError) = bytestring(ccall(:jl_uv_err_name,Ptr{Uint8},(Int32,Int32),err.s.uv_code,err.s.system_code))
 
-uv_error(prefix, b::Bool) = b?throw(UVError(string(prefix))):nothing
+uv_error(prefix, e::UV_error_t) = e.uv_code != 0 ? throw(UVError(string(prefix),e)) : nothing
+uv_error(prefix, b::Bool) = b ? throw(UVError(string(prefix))) : nothing
 uv_error(prefix) = uv_error(prefix, _uv_lasterror() != 0)
 
 show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
