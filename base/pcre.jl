@@ -69,7 +69,7 @@ function compile(pattern::String, options::Integer)
                         (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
                         pattern, options, errstr, erroff, C_NULL))()
     if re_ptr == C_NULL
-        error("compile: $(errstr[1])",
+        error("compile: $(bytestring(errstr[1]))",
               " at position $(erroff[1]+1)",
               " in $(quote_string(pattern))")
     end
@@ -86,7 +86,7 @@ function study(regex::Array{Uint8}, options::Integer)
                   (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
                   regex, options, errstr)
     if errstr[1] != C_NULL
-        error("study: $(errstr[1])")
+        error("study: $(bytestring(errstr[1]))")
     end
     extra
 end
