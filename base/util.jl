@@ -195,6 +195,23 @@ end
 methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
                         t.env)
 
+# locale
+
+let LOCALE = nothing
+    global locale
+    function locale()
+        if LOCALE === nothing
+            # XXX:TBD return default locale
+            return ""
+        end
+        LOCALE
+    end
+    function locale(s::ByteString)
+        LOCALE = s
+        # XXX:TBD call setlocale
+    end
+end
+
 # help
 
 help_category_list = nothing
@@ -214,12 +231,24 @@ function decor_help_desc(func::String, mfunc::String, desc::String)
     return join(sd, '\n')
 end
 
+function helpdb_filename()
+    root = "$JULIA_HOME/../share/julia"
+    file = "helpdb.jl"
+    for loc in [locale()]
+        fn = joinpath(root, loc, file)
+        if isfile(fn)
+            return fn
+        end
+    end
+    joinpath(root, file)
+end
+
 function init_help()
     global help_category_list, help_category_dict,
            help_module_dict, help_function_dict
     if help_category_dict == nothing
         println("Loading help data...")
-        helpdb = evalfile("$JULIA_HOME/../share/julia/helpdb.jl")
+        helpdb = evalfile(helpdb_filename())
         help_category_list = {}
         help_category_dict = Dict()
         help_module_dict = Dict()
