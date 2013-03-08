@@ -97,6 +97,10 @@ trace(x::Number) = x
 #det(a::AbstractMatrix)
 inv(a::AbstractMatrix) = a \ one(a)
 
+inv(a::AbstractVector) = inv(reshape(a, length(a), 1))
+
+\(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
+
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
