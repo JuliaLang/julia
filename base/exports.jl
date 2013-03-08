@@ -1129,17 +1129,10 @@ export
     unsafe_pointer_to_objref,
 
 # Macros
-    @str,
-    @I_str,
-    @E_str,
     @b_str,
-    @L_str,
     @r_str,
     @v_str,
     @mstr,
-    @L_mstr,
-    @I_mstr,
-    @E_mstr,
     @unexpected,
     @assert,
     @cmd,
