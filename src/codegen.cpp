@@ -946,14 +946,11 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
                 assert(jl_is_datatype(sty));
                 answer = ConstantInt::get(T_int1, 1);
                 for(unsigned i=0; i < jl_tuple_len(sty->names); i++) {
+                    jl_value_t *fldty = jl_tupleref(sty->types,i);
                     Value *subAns =
-                        emit_f_is(jl_tupleref(sty->types,i),
-                                  jl_tupleref(sty->types,i),
-                                  NULL, NULL,
-                                  builder.
-                                  CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
-                                  builder.
-                                  CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
+                        emit_f_is(fldty, fldty, NULL, NULL,
+                                  builder.CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
+                                  builder.CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
                                   ctx);
                     answer = builder.CreateAnd(answer, subAns);
                 }
