@@ -286,7 +286,7 @@ isblank(c::Char) = c==' ' || c=='\t'
 
 ## generic string uses only endof and next ##
 
-type GenericString <: String
+immutable GenericString <: String
     string::String
 end
 
@@ -295,7 +295,7 @@ next(s::GenericString, i::Int) = next(s.string, i)
 
 ## plain old character arrays ##
 
-type CharString <: DirectIndexString
+immutable CharString <: DirectIndexString
     chars::Array{Char,1}
 
     CharString(a::Array{Char,1}) = new(a)
@@ -309,7 +309,7 @@ length(s::CharString) = length(s.chars)
 
 ## substrings reference original strings ##
 
-type SubString{T<:String} <: String
+immutable SubString{T<:String} <: String
     string::T
     offset::Int
     endof::Int
@@ -347,7 +347,7 @@ end
 
 ## efficient representation of repeated strings ##
 
-type RepString <: String
+immutable RepString <: String
     string::String
     repeat::Integer
 end
@@ -375,7 +375,7 @@ convert(::Type{RepString}, s::String) = RepString(s,1)
 
 ## reversed strings without data movement ##
 
-type RevString <: String
+immutable RevString <: String
     string::String
 end
 
@@ -392,7 +392,7 @@ reverse(s::RevString) = s.string
 
 ## ropes for efficient concatenation, etc. ##
 
-type RopeString <: String
+immutable RopeString <: String
     head::String
     tail::String
     depth::Int32
