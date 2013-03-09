@@ -653,3 +653,9 @@ include("test_sourcepath.jl")
 immutable Foo2509; foo::Int; end
 @test Foo2509(1) != Foo2509(2)
 @test Foo2509(42) == Foo2509(42)
+
+# issue #2517
+immutable Foo2517; end
+@test repr(Foo2517()) == "Foo2517()"
+@test repr(Array(Foo2517,1)) == "[Foo2517()]"
+@test Foo2517() === Foo2517()
