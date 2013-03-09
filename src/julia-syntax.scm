@@ -99,18 +99,71 @@
 		,(expand-update-operator- op nuref rhs)))
       (expand-update-operator- op lhs rhs)))
 
-; (a > b > c) => (call & (call > a b) (call > b c))
+(define (dotop? o) (eqv? (string.char (string o) 0) #\.))
+
+;; accumulate a series of comparisons, with the given "and" constructor,
+;; exit criteria, and "take" function that consumes part of a list,
+;; returning (expression . rest)
+(define (comp-accum e make-and done? take)
+  (let loop ((e e)
+	     (expr '()))
+    (if (done? e) (cons expr e)
+	(let ((ex_rest (take e)))
+	  (loop (cdr ex_rest)
+		(if (null? expr)
+		    (car ex_rest)
+		    (make-and expr (car ex_rest))))))))
+
+(define (add-init arg arg2 expr)
+  (if (eq? arg arg2) expr
+      `(block (= ,arg2 ,arg) ,expr)))
+
+;; generate a comparison from e.g. (a < b ...)
+;; returning (expr . rest)
+(define (compare-one e)
+  (let* ((arg   (caddr e))
+	 (arg2  (if (and (pair? arg)
+			 (pair? (cdddr e)))
+		    (gensy) arg)))
+    (if (and (not (dotop? (cadr e)))
+	     (length> e 5)
+	     (pair? (cadddr (cdr e)))
+	     (dotop? (cadddr (cddr e))))
+	;; look ahead: if the 2nd argument of the next comparison is also
+	;; an argument to an eager (dot) op, make sure we don't skip the
+	;; initialization of its variable by short-circuiting
+	(let ((s (gensy)))
+	  (cons `(block
+		  ,@(if (eq? arg arg2) '() `((= ,arg2 ,arg)))
+		  (= ,s ,(cadddr (cdr e)))
+		  (call ,(cadr e) ,(car e) ,arg2))
+		(list* arg2 (cadddr e) s (cddddr (cdr e)))))
+	(cons
+	 (add-init arg arg2
+		   `(call ,(cadr e) ,(car e) ,arg2))
+	 (cons arg2 (cdddr e))))))
+
+;; convert a series of scalar comparisons into && expressions
+(define (expand-scalar-compare e)
+  (comp-accum e
+	      (lambda (a b) `(&& ,a ,b))
+	      (lambda (x) (or (not (length> x 2)) (dotop? (cadr x))))
+	      compare-one))
+
+;; convert a series of scalar and vector comparisons into & calls,
+;; combining as many scalar comparisons as possible into short-circuit
+;; && sequences.
+(define (expand-vector-compare e)
+  (comp-accum e
+	      (lambda (a b) `(call & ,a ,b))
+	      (lambda (x) (not (length> x 2)))
+	      (lambda (e)
+		(if (dotop? (cadr e))
+		    (compare-one e)
+		    (expand-scalar-compare e)))))
+
 (define (expand-compare-chain e)
-  (if (length> e 3)
-      (let ((arg2 (caddr e)))
-	(if (pair? arg2)
-	    (let ((g (gensy)))
-	      `(block (= ,g ,arg2)
-		      (call & (call ,(cadr e) ,(car e) ,g)
-			    ,(expand-compare-chain (cons g (cdddr e))))))
-	    `(call & (call ,(cadr e) ,(car e) ,arg2)
-		   ,(expand-compare-chain (cddr e)))))
-      `(call ,(cadr e) ,(car e) ,(caddr e))))
+  (car (expand-vector-compare e)))
 
 ;; last = is this last index?
 (define (end-val a n tuples last)
