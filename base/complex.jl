@@ -84,7 +84,7 @@ end
 
 ## singleton type for imaginary unit constant ##
 
-type ImaginaryUnit <: Number; end
+type ImaginaryUnit <: Number end
 const im = ImaginaryUnit()
 
 iscomplex(::ImaginaryUnit) = true
