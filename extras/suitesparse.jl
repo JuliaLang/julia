@@ -2,6 +2,7 @@ module SuiteSparse
 
 import Base.SparseMatrixCSC, Base.size, Base.nnz, Base.eltype, Base.show
 import Base.triu, Base.norm, Base.solve, Base.(\), Base.ctranspose, Base.transpose
+import Base.convert
 
 import Base.BlasInt
 import Base.blas_int

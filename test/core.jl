@@ -475,6 +475,20 @@ end
 
 @test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
                                      x -> x+1, 314158)) == 314159
+@test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
+
+immutable FooBar
+    foo::Int
+    bar::Int
+end
+begin
+    local X, p
+    X = FooBar[ FooBar(3,1), FooBar(4,4) ]
+    p = convert(Ptr{FooBar}, X)
+    @test unsafe_ref(p, 2) == FooBar(4,4)
+    unsafe_assign(p, FooBar(7,3), 1)
+    @test X[1] == FooBar(7,3)
+end
 
 # issue #1287, combinations of try, catch, return
 begin
@@ -639,3 +653,9 @@ include("test_sourcepath.jl")
 immutable Foo2509; foo::Int; end
 @test Foo2509(1) != Foo2509(2)
 @test Foo2509(42) == Foo2509(42)
+
+# issue #2517
+immutable Foo2517; end
+@test repr(Foo2517()) == "Foo2517()"
+@test repr(Array(Foo2517,1)) == "[Foo2517()]"
+@test Foo2517() === Foo2517()

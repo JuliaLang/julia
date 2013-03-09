@@ -4,7 +4,7 @@ typealias Dims (Int...)
 
 abstract Ranges{T} <: AbstractArray{T,1}
 
-type Range{T<:Real} <: Ranges{T}
+immutable Range{T<:Real} <: Ranges{T}
     start::T
     step::T
     len::Int
@@ -20,7 +20,7 @@ type Range{T<:Real} <: Ranges{T}
 end
 Range{T}(start::T, step, len::Integer) = Range{T}(start, step, len)
 
-type Range1{T<:Real} <: Ranges{T}
+immutable Range1{T<:Real} <: Ranges{T}
     start::T
     len::Int
 
@@ -32,7 +32,7 @@ type Range1{T<:Real} <: Ranges{T}
 end
 Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 
-type OrdinalRange{T} <: Ranges{T}
+immutable OrdinalRange{T} <: Ranges{T}
     start::T
     step::Int
     len::Int

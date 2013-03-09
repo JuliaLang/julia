@@ -84,6 +84,12 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
         else          return Type::getIntNTy(getGlobalContext(), nb);
     }
     if (jl_isbits(jt)) {
+        if (((jl_datatype_t*)jt)->size == 0) {
+            // TODO: come up with a representation for a 0-size value,
+            // and make this 0 size everywhere. as an argument, simply
+            // skip passing it.
+            return jl_pvalue_llvmt;
+        }
         return julia_struct_to_llvm(jt);
     }
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
@@ -105,8 +111,6 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
             for(i = 0; i < ntypes; i++) {
                 jl_value_t *ty = jl_tupleref(jst->types, i);
                 Type *lty = ty==(jl_value_t*)jl_bool_type ? T_int8 : julia_type_to_llvm(ty);
-                if (lty == jl_pvalue_llvmt)
-                    return NULL;
                 if (jst->fields[i].isptr)
                     lty = jl_pvalue_llvmt;
                 latypes.push_back(lty);
@@ -440,7 +444,7 @@ static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
     if (elty==T_int1) { elty = T_int8; }
-    if (jl_isbits(jltype))
+    if (jl_isbits(jltype) && ((jl_datatype_t*)jltype)->size > 0)
         rhs = emit_unbox(elty, PointerType::get(elty,0), rhs);
     else
         rhs = boxed(rhs);
@@ -676,6 +680,7 @@ static Value *boxed(Value *v, jl_value_t *jt)
     if (jt == NULL)
         jt = julia_type_of(v);
     jl_datatype_t *jb = (jl_datatype_t*)jt;
+    assert(jl_is_datatype(jb));
     if (jb == jl_int8_type)
         return builder.CreateCall(box_int8_func,
                                   builder.CreateSExt(v, T_int32));
@@ -704,6 +709,12 @@ static Value *boxed(Value *v, jl_value_t *jt)
     if (!jl_isbits(jt)) {
         assert("Don't know how to box this type" && false);
         return NULL;
+    }
+    if (!jb->abstract && jb->size == 0) {
+        if (jb->instance == NULL)
+            jl_new_struct_uninit(jb);
+        assert(jb->instance != NULL);
+        return literal_pointer_val(jb->instance);
     }
     return allocate_box_dynamic(literal_pointer_val(jt),jl_datatype_size(jt),v);
 }
