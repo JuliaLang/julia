@@ -543,7 +543,7 @@ function show(io::IO, cpu::Array{CPUinfo})
     end
     cpu_summary(io,cpu,first,length(cpu))
 end
-repl_show(io, cpu::Array{CPUinfo}) = show(io, cpu)
+repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
 function cpu_info()
     SC_CLK_TCK = ccall(:SC_CLK_TCK, Int, ())
     UVcpus = Array(Ptr{UV_cpu_info_t},1)
