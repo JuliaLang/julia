@@ -192,9 +192,8 @@ function solve(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
         error("dimension mismatch in output")
     end
     m, n = size(B)
-    r = 1:m
     for j = 1:n
-        r.start = (j-1)*m+1
+        r = Range1((j-1)*m+1,m)
         solve(X, r, M, B, r)
     end
     return X
@@ -239,9 +238,8 @@ function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
         error("dimension mismatch in output")
     end
     m, n = size(B)
-    r = 1:m
     for j = 1:n
-        r.start = (j-1)*m+1
+        r = Range1((j-1)*m+1,m)
         mult(X, r, M, B, r)
     end
     return X
