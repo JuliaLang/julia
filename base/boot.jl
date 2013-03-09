@@ -226,11 +226,11 @@ type GetfieldNode
     typ
 end
 
-type ASCIIString <: DirectIndexString
+immutable ASCIIString <: DirectIndexString
     data::Array{Uint8,1}
 end
 
-type UTF8String <: String
+immutable UTF8String <: String
     data::Array{Uint8,1}
 end
 
