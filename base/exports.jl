@@ -20,6 +20,7 @@ export
     AbstractMatrix,
     AbstractSparseMatrix,
     AbstractVector,
+    AbstractHashDict,
     Array,
     Associative,
     AsyncStream,
