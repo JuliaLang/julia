@@ -91,7 +91,7 @@ function readdlm_auto(a, io, dlm, nr, nc, row, eol)
     a
 end
 
-countlines(io) = countlines(io, '\n')
+countlines(io::IO) = countlines(io, '\n')
 function countlines(filename::String, eol::Char)
     open(filename) do io
         countlines(io, eol)
@@ -155,11 +155,11 @@ function readdlm(fname::String, dlm, eol::Char)
     return a
 end
 
-readcsv(io)          = readdlm(io, ',')
-readcsv(io, T::Type) = readdlm(io, ',', T)
+readcsv(io::IO)          = readdlm(io, ',')
+readcsv(io::IO, T::Type) = readdlm(io, ',', T)
 
 # todo: keyword argument for # of digits to print
-function writedlm(io, a::Matrix, dlm::Char)
+function writedlm(io::IO, a::Matrix, dlm::Char)
     nr, nc = size(a)
     for i = 1:nr
         for j = 1:nc
@@ -178,7 +178,7 @@ function writedlm(io, a::Matrix, dlm::Char)
     nothing
 end
 
-writedlm(io, a::Vector, dlm::Char) = writedlm(io, reshape(a,length(a),1), dlm)
+writedlm(io::IO, a::Vector, dlm::Char) = writedlm(io, reshape(a,length(a),1), dlm)
 
 function writedlm(fname::String, a::Matrix, dlm::Char)
     open(fname, "w") do io
@@ -186,5 +186,5 @@ function writedlm(fname::String, a::Matrix, dlm::Char)
     end
 end
 
-writedlm(io, a) = writedlm(io, a, '\t')
-writecsv(io, a) = writedlm(io, a, ',')
+writedlm(io::IO, a) = writedlm(io, a, '\t')
+writecsv(io::IO, a) = writedlm(io, a, ',')
