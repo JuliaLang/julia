@@ -1,6 +1,6 @@
 ## from base/boot.jl:
 #
-# type UTF8String <: String
+# immutable UTF8String <: String
 #     data::Array{Uint8,1}
 # end
 #

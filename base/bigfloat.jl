@@ -1,10 +1,12 @@
-type BigFloat <: FloatingPoint
+BigFloat_clear(mpf::Vector{Int32}) = ccall((:__gmpf_clear, :libgmp), Void, (Ptr{Void},), mpf)
+
+immutable BigFloat <: FloatingPoint
     mpf::Vector{Int32}
     function BigFloat() 
         z = Array(Int32, 6)
         ccall((:__gmpf_init,:libgmp), Void, (Ptr{Void},), z)
         b = new(z)
-        finalizer(b, BigFloat_clear)
+        finalizer(b.mpf, BigFloat_clear)
         return b
     end
 end
@@ -131,7 +133,3 @@ end
 
 show(io::IO, b::BigFloat) = print(io, string(b))
 showcompact(io::IO, b::BigFloat) = print(io, string(b))
-
-function BigFloat_clear(x::BigFloat)
-    ccall((:__gmpf_clear, :libgmp), Void, (Ptr{Void},), x.mpf)
-end
