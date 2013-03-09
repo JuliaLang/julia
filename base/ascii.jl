@@ -1,6 +1,6 @@
 ## from base/boot.jl:
 #
-# type ASCIIString <: DirectIndexString
+# immutable ASCIIString <: DirectIndexString
 #     data::Array{Uint8,1}
 # end
 #

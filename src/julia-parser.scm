@@ -1405,7 +1405,7 @@
       ((eqv? c #\\)
        (let ((nxch (not-eof-3 (read-char p))))
 	 (if (or (not custom)
-		 (not (or (eqv? nxch #\") (eqv? nxch #\\))))
+		 (not (or (eqv? nxch #\") #;(eqv? nxch #\\))))
 	     (write-char #\\ b))
 	 (write-char nxch b)
 	 (loop (read-char p) b e 0)))
