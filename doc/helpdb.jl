@@ -2,7 +2,7 @@
 
 {
 
-(E"ArgParse",E"ArgParse",E"parse_args",E"parse_args([args], settings)
+("ArgParse","ArgParse","parse_args","parse_args([args], settings)
 
    This is the central function of the \"ArgParse\" module. It takes a
    \"Vector\" of arguments and an \"ArgParseSettings\" objects (see
@@ -54,7 +54,7 @@
 
 "),
 
-(E"ArgParse",E"ArgParse",E"@add_arg_table",E"@add_arg_table(settings, table...)
+("ArgParse","ArgParse","@add_arg_table","@add_arg_table(settings, table...)
 
    This macro adds a table of arguments and options to the given
    \"settings\". It can be invoked multiple times. The arguments
@@ -98,7 +98,7 @@
 
 "),
 
-(E"ArgParse",E"ArgParse",E"add_arg_table",E"add_arg_table(settings, [arg_name [,arg_options]]...)
+("ArgParse","ArgParse","add_arg_table","add_arg_table(settings, [arg_name [,arg_options]]...)
 
    This function is almost equivalent to the macro version. Its syntax
    is stricter (tuples and blocks are not allowed and argument options
@@ -125,7 +125,7 @@
 
 "),
 
-(E"ArgParse",E"ArgParse",E"add_arg_group",E"add_arg_group(settings, description[, name[, set_as_default]])
+("ArgParse","ArgParse","add_arg_group","add_arg_group(settings, description[, name[, set_as_default]])
 
    This function adds an argument group to the argument table in
    \"settings\". The \"description\" is a \"String\" used in the help
@@ -169,7 +169,7 @@
 
 "),
 
-(E"ArgParse",E"ArgParse",E"set_default_arg_group",E"set_default_arg_group(settings[, name])
+("ArgParse","ArgParse","set_default_arg_group","set_default_arg_group(settings[, name])
 
    Set the default group for subsequent invocations of the
    \"@add_arg_table\" macro and \"add_arg_table\" function. \"name\"
@@ -185,7 +185,7 @@
 
 "),
 
-(E"ArgParse",E"ArgParse",E"import_settings",E"import_settings(settings, other_settings[, args_only])
+("ArgParse","ArgParse","import_settings","import_settings(settings, other_settings[, args_only])
 
    Imports \"other_settings\" into \"settings\", where both are
    \"ArgParseSettings\" objects. If \"args_only\" is \"true\" (this is
@@ -216,21 +216,21 @@
 
 "),
 
-(E"Getting Around",E"Base",E"exit",E"exit([code])
+("Getting Around","Base","exit","exit([code])
 
    Quit (or control-D at the prompt). The default exit code is zero,
    indicating that the processes completed successfully.
 
 "),
 
-(E"Getting Around",E"Base",E"whos",E"whos([Module,] [pattern::Regex])
+("Getting Around","Base","whos","whos([Module,] [pattern::Regex])
 
    Print information about global variables in a module, optionally
    restricted to those matching \"pattern\".
 
 "),
 
-(E"Getting Around",E"Base",E"edit",E"edit(file::String[, line])
+("Getting Around","Base","edit","edit(file::String[, line])
 
    Edit a file optionally providing a line number to edit at. Returns
    to the julia prompt when you quit the editor. If the file name ends
@@ -238,7 +238,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"edit",E"edit(function[, types])
+("Getting Around","Base","edit","edit(function[, types])
 
    Edit the definition of a function, optionally specifying a tuple of
    types to indicate which method to edit. When the editor exits, the
@@ -246,7 +246,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"require",E"require(file::String...)
+("Getting Around","Base","require","require(file::String...)
 
    Load source files once, in the context of the \"Main\" module, on
    every active node, searching the system-wide \"LOAD_PATH\" for
@@ -258,7 +258,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"reload",E"reload(file::String)
+("Getting Around","Base","reload","reload(file::String)
 
    Like \"require\", except forces loading of files regardless of
    whether they have been loaded before. Typically used when
@@ -266,7 +266,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"include",E"include(path::String)
+("Getting Around","Base","include","include(path::String)
 
    Evaluate the contents of a source file in the current context.
    During including, a task-local include path is set to the directory
@@ -279,7 +279,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"include_string",E"include_string(code::String)
+("Getting Around","Base","include_string","include_string(code::String)
 
    Like \"include\", except reads code from the given string rather
    than from a file. Since there is no file path involved, no path
@@ -287,7 +287,7 @@
 
 "),
 
-(E"Getting Around",E"Base",E"evalfile",E"evalfile(path::String)
+("Getting Around","Base","evalfile","evalfile(path::String)
 
    Evaluate all expressions in the given file, and return the value of
    the last one. No other processing (path searching, fetching from
@@ -295,50 +295,50 @@
 
 "),
 
-(E"Getting Around",E"Base",E"help",E"help(name)
+("Getting Around","Base","help","help(name)
 
    Get help for a function. \"name\" can be an object or a string.
 
 "),
 
-(E"Getting Around",E"Base",E"apropos",E"apropos(string)
+("Getting Around","Base","apropos","apropos(string)
 
    Search documentation for functions related to \"string\".
 
 "),
 
-(E"Getting Around",E"Base",E"which",E"which(f, args...)
+("Getting Around","Base","which","which(f, args...)
 
    Show which method of \"f\" will be called for the given arguments.
 
 "),
 
-(E"Getting Around",E"Base",E"methods",E"methods(f)
+("Getting Around","Base","methods","methods(f)
 
    Show all methods of \"f\" with their argument types.
 
 "),
 
-(E"Getting Around",E"Base",E"methodswith",E"methodswith(t)
+("Getting Around","Base","methodswith","methodswith(t)
 
    Show all methods with an argument of type \"typ\".
 
 "),
 
-(E"All Objects",E"Base",E"is",E"is(x, y)
+("All Objects","Base","is","is(x, y)
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
    no program could distinguish them.
 
 "),
 
-(E"All Objects",E"Base",E"isa",E"isa(x, type)
+("All Objects","Base","isa","isa(x, type)
 
    Determine whether \"x\" is of the given type.
 
 "),
 
-(E"All Objects",E"Base",E"isequal",E"isequal(x, y)
+("All Objects","Base","isequal","isequal(x, y)
 
    True if and only if \"x\" and \"y\" have the same contents. Loosely
    speaking, this means \"x\" and \"y\" would look the same when
@@ -346,7 +346,7 @@
 
 "),
 
-(E"All Objects",E"Base",E"isless",E"isless(x, y)
+("All Objects","Base","isless","isless(x, y)
 
    Test whether \"x\" is less than \"y\". Provides a total order
    consistent with \"isequal\". Values that are normally unordered,
@@ -356,40 +356,40 @@
 
 "),
 
-(E"All Objects",E"Base",E"typeof",E"typeof(x)
+("All Objects","Base","typeof","typeof(x)
 
    Get the concrete type of \"x\".
 
 "),
 
-(E"All Objects",E"Base",E"tuple",E"tuple(xs...)
+("All Objects","Base","tuple","tuple(xs...)
 
    Construct a tuple of the given objects.
 
 "),
 
-(E"All Objects",E"Base",E"ntuple",E"ntuple(n, f::Function)
+("All Objects","Base","ntuple","ntuple(n, f::Function)
 
    Create a tuple of length \"n\", computing each element as \"f(i)\",
    where \"i\" is the index of the element.
 
 "),
 
-(E"All Objects",E"Base",E"object_id",E"object_id(x)
+("All Objects","Base","object_id","object_id(x)
 
    Get a unique integer id for \"x\". \"object_id(x)==object_id(y)\"
    if and only if \"is(x,y)\".
 
 "),
 
-(E"All Objects",E"Base",E"hash",E"hash(x)
+("All Objects","Base","hash","hash(x)
 
    Compute an integer hash code such that \"isequal(x,y)\" implies
    \"hash(x)==hash(y)\".
 
 "),
 
-(E"All Objects",E"Base",E"finalizer",E"finalizer(x, function)
+("All Objects","Base","finalizer","finalizer(x, function)
 
    Register a function \"f(x)\" to be called when there are no
    program-accessible references to \"x\". The behavior of this
@@ -397,7 +397,7 @@
 
 "),
 
-(E"All Objects",E"Base",E"copy",E"copy(x)
+("All Objects","Base","copy","copy(x)
 
    Create a shallow copy of \"x\": the outer structure is copied, but
    not all internal values. For example, copying an array produces a
@@ -405,7 +405,7 @@
 
 "),
 
-(E"All Objects",E"Base",E"deepcopy",E"deepcopy(x)
+("All Objects","Base","deepcopy","deepcopy(x)
 
    Create a deep copy of \"x\": everything is copied recursively,
    resulting in a fully independent object. For example, deep-copying
@@ -428,20 +428,20 @@
 
 "),
 
-(E"All Objects",E"Base",E"convert",E"convert(type, x)
+("All Objects","Base","convert","convert(type, x)
 
    Try to convert \"x\" to the given type.
 
 "),
 
-(E"All Objects",E"Base",E"promote",E"promote(xs...)
+("All Objects","Base","promote","promote(xs...)
 
    Convert all arguments to their common promotion type (if any), and
    return them all (as a tuple).
 
 "),
 
-(E"Types",E"Base",E"subtype",E"subtype(type1, type2)
+("Types","Base","subtype","subtype(type1, type2)
 
    True if and only if all values of \"type1\" are also of \"type2\".
    Can also be written using the \"<:\" infix operator as \"type1 <:
@@ -449,47 +449,47 @@
 
 "),
 
-(E"Types",E"Base",E"typemin",E"typemin(type)
+("Types","Base","typemin","typemin(type)
 
    The lowest value representable by the given (real) numeric type.
 
 "),
 
-(E"Types",E"Base",E"typemax",E"typemax(type)
+("Types","Base","typemax","typemax(type)
 
    The highest value representable by the given (real) numeric type.
 
 "),
 
-(E"Types",E"Base",E"realmin",E"realmin(type)
+("Types","Base","realmin","realmin(type)
 
    The smallest in absolute value non-denormal value representable by
    the given floating-point type
 
 "),
 
-(E"Types",E"Base",E"realmax",E"realmax(type)
+("Types","Base","realmax","realmax(type)
 
    The highest finite value representable by the given floating-point
    type
 
 "),
 
-(E"Types",E"Base",E"maxintfloat",E"maxintfloat(type)
+("Types","Base","maxintfloat","maxintfloat(type)
 
    The largest integer losslessly representable by the given floating-
    point type
 
 "),
 
-(E"Types",E"Base",E"sizeof",E"sizeof(type)
+("Types","Base","sizeof","sizeof(type)
 
    Size, in bytes, of the canonical binary representation of the given
    type, if any.
 
 "),
 
-(E"Types",E"Base",E"eps",E"eps([type])
+("Types","Base","eps","eps([type])
 
    The distance between 1.0 and the next larger representable
    floating-point value of \"type\". The only types that are sensible
@@ -498,14 +498,14 @@
 
 "),
 
-(E"Types",E"Base",E"eps",E"eps(x)
+("Types","Base","eps","eps(x)
 
    The distance between \"x\" and the next larger representable
    floating-point value of the same type as \"x\".
 
 "),
 
-(E"Types",E"Base",E"promote_type",E"promote_type(type1, type2)
+("Types","Base","promote_type","promote_type(type1, type2)
 
    Determine a type big enough to hold values of each argument type
    without loss, whenever possible. In some cases, where no type
@@ -516,7 +516,7 @@
 
 "),
 
-(E"Generic Functions",E"Base",E"method_exists",E"method_exists(f, tuple) -> Bool
+("Generic Functions","Base","method_exists","method_exists(f, tuple) -> Bool
 
    Determine whether the given generic function has a method matching
    the given tuple of argument types.
@@ -525,14 +525,14 @@
 
 "),
 
-(E"Generic Functions",E"Base",E"applicable",E"applicable(f, args...)
+("Generic Functions","Base","applicable","applicable(f, args...)
 
    Determine whether the given generic function has a method
    applicable to the given arguments.
 
 "),
 
-(E"Generic Functions",E"Base",E"invoke",E"invoke(f, (types...), args...)
+("Generic Functions","Base","invoke","invoke(f, (types...), args...)
 
    Invoke a method for the given generic function matching the
    specified types (as a tuple), on the specified arguments. The
@@ -544,7 +544,7 @@
 
 "),
 
-(E"Generic Functions",E"Base",E"|",E"|()
+("Generic Functions","Base","|","|()
 
    Applies a function to the preceding argument which allows for easy
    function chaining.
@@ -553,26 +553,26 @@
 
 "),
 
-(E"Iteration",E"Base",E"start",E"start(iter) -> state
+("Iteration","Base","start","start(iter) -> state
 
    Get initial iteration state for an iterable object
 
 "),
 
-(E"Iteration",E"Base",E"done",E"done(iter, state) -> Bool
+("Iteration","Base","done","done(iter, state) -> Bool
 
    Test whether we are done iterating
 
 "),
 
-(E"Iteration",E"Base",E"next",E"next(iter, state) -> item, state
+("Iteration","Base","next","next(iter, state) -> item, state
 
    For a given iterable object and iteration state, return the current
    item and the next iteration state
 
 "),
 
-(E"Iteration",E"Base",E"zip",E"zip(iters...)
+("Iteration","Base","zip","zip(iters...)
 
    For a set of iterable objects, returns an iterable of tuples, where
    the \"i\"th tuple contains the \"i\"th component of each input
@@ -583,19 +583,19 @@
 
 "),
 
-(E"General Collections",E"Base",E"isempty",E"isempty(collection) -> Bool
+("General Collections","Base","isempty","isempty(collection) -> Bool
 
    Determine whether a collection is empty (has no elements).
 
 "),
 
-(E"General Collections",E"Base",E"empty!",E"empty!(collection) -> collection
+("General Collections","Base","empty!","empty!(collection) -> collection
 
    Remove all elements from a collection.
 
 "),
 
-(E"General Collections",E"Base",E"length",E"length(collection) -> Integer
+("General Collections","Base","length","length(collection) -> Integer
 
    For ordered, indexable collections, the maximum index \"i\" for
    which \"ref(collection, i)\" is valid. For unordered collections,
@@ -603,7 +603,7 @@
 
 "),
 
-(E"General Collections",E"Base",E"endof",E"endof(collection) -> Integer
+("General Collections","Base","endof","endof(collection) -> Integer
 
    Returns the last index of the collection.
 
@@ -611,27 +611,27 @@
 
 "),
 
-(E"Iterable Collections",E"Base",E"contains",E"contains(itr, x) -> Bool
+("Iterable Collections","Base","contains","contains(itr, x) -> Bool
 
    Determine whether a collection contains the given value, \"x\".
 
 "),
 
-(E"Iterable Collections",E"Base",E"findin",E"findin(a, b)
+("Iterable Collections","Base","findin","findin(a, b)
 
    Returns the indices of elements in collection \"a\" that appear in
    collection \"b\"
 
 "),
 
-(E"Iterable Collections",E"Base",E"unique",E"unique(itr)
+("Iterable Collections","Base","unique","unique(itr)
 
    Returns an array containing only the unique elements of the
    iterable \"itr\".
 
 "),
 
-(E"Iterable Collections",E"Base",E"reduce",E"reduce(op, v0, itr)
+("Iterable Collections","Base","reduce","reduce(op, v0, itr)
 
    Reduce the given collection with the given operator, i.e.
    accumulate \"v = op(v,elt)\" for each element, where \"v\" starts
@@ -642,94 +642,94 @@
 
 "),
 
-(E"Iterable Collections",E"Base",E"max",E"max(itr)
+("Iterable Collections","Base","max","max(itr)
 
    Returns the largest element in a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"min",E"min(itr)
+("Iterable Collections","Base","min","min(itr)
 
    Returns the smallest element in a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"indmax",E"indmax(itr) -> Integer
+("Iterable Collections","Base","indmax","indmax(itr) -> Integer
 
    Returns the index of the maximum element in a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"indmin",E"indmin(itr) -> Integer
+("Iterable Collections","Base","indmin","indmin(itr) -> Integer
 
    Returns the index of the minimum element in a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"findmax",E"findmax(itr) -> (x, index)
+("Iterable Collections","Base","findmax","findmax(itr) -> (x, index)
 
    Returns the maximum element and its index
 
 "),
 
-(E"Iterable Collections",E"Base",E"findmin",E"findmin(itr) -> (x, index)
+("Iterable Collections","Base","findmin","findmin(itr) -> (x, index)
 
    Returns the minimum element and its index
 
 "),
 
-(E"Iterable Collections",E"Base",E"sum",E"sum(itr)
+("Iterable Collections","Base","sum","sum(itr)
 
    Returns the sum of all elements in a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"prod",E"prod(itr)
+("Iterable Collections","Base","prod","prod(itr)
 
    Returns the product of all elements of a collection
 
 "),
 
-(E"Iterable Collections",E"Base",E"any",E"any(itr) -> Bool
+("Iterable Collections","Base","any","any(itr) -> Bool
 
    Test whether any elements of a boolean collection are true
 
 "),
 
-(E"Iterable Collections",E"Base",E"all",E"all(itr) -> Bool
+("Iterable Collections","Base","all","all(itr) -> Bool
 
    Test whether all elements of a boolean collection are true
 
 "),
 
-(E"Iterable Collections",E"Base",E"count",E"count(itr) -> Integer
+("Iterable Collections","Base","count","count(itr) -> Integer
 
    Count the number of boolean elements in \"itr\" which are true.
 
 "),
 
-(E"Iterable Collections",E"Base",E"countp",E"countp(p, itr) -> Integer
+("Iterable Collections","Base","countp","countp(p, itr) -> Integer
 
    Count the number of elements in \"itr\" for which predicate \"p\"
    is true.
 
 "),
 
-(E"Iterable Collections",E"Base",E"any",E"any(p, itr) -> Bool
+("Iterable Collections","Base","any","any(p, itr) -> Bool
 
    Determine whether any element of \"itr\" satisfies the given
    predicate.
 
 "),
 
-(E"Iterable Collections",E"Base",E"all",E"all(p, itr) -> Bool
+("Iterable Collections","Base","all","all(p, itr) -> Bool
 
    Determine whether all elements of \"itr\" satisfy the given
    predicate.
 
 "),
 
-(E"Iterable Collections",E"Base",E"map",E"map(f, c) -> collection
+("Iterable Collections","Base","map","map(f, c) -> collection
 
    Transform collection \"c\" by applying \"f\" to each element.
 
@@ -737,13 +737,13 @@
 
 "),
 
-(E"Iterable Collections",E"Base",E"map!",E"map!(function, collection)
+("Iterable Collections","Base","map!","map!(function, collection)
 
    In-place version of \"map()\".
 
 "),
 
-(E"Iterable Collections",E"Base",E"mapreduce",E"mapreduce(f, op, itr)
+("Iterable Collections","Base","mapreduce","mapreduce(f, op, itr)
 
    Applies function \"f\" to each element in \"itr\" and then reduces
    the result using the binary function \"op\".
@@ -752,19 +752,19 @@
 
 "),
 
-(E"Iterable Collections",E"Base",E"first",E"first(coll)
+("Iterable Collections","Base","first","first(coll)
 
    Get the first element of an ordered collection.
 
 "),
 
-(E"Iterable Collections",E"Base",E"last",E"last(coll)
+("Iterable Collections","Base","last","last(coll)
 
    Get the last element of an ordered collection.
 
 "),
 
-(E"Indexable Collections",E"Base",E"collection[key...]",E"ref(collection, key...)
+("Indexable Collections","Base","collection[key...]","ref(collection, key...)
 collection[key...]()
 
    Retrieve the value(s) stored at the given key or index within a
@@ -772,7 +772,7 @@ collection[key...]()
 
 "),
 
-(E"Indexable Collections",E"",E"collection[key...] = value",E"assign(collection, value, key...)
+("Indexable Collections","","collection[key...] = value","assign(collection, value, key...)
 collection[key...] = value
 
    Store the given value at the given key or index within a
@@ -780,278 +780,278 @@ collection[key...] = value
 
 "),
 
-(E"Associative Collections",E"Base",E"Dict{K,V}",E"Dict{K,V}()
+("Associative Collections","Base","Dict{K,V}","Dict{K,V}()
 
    Construct a hashtable with keys of type K and values of type V
 
 "),
 
-(E"Associative Collections",E"Base",E"has",E"has(collection, key)
+("Associative Collections","Base","has","has(collection, key)
 
    Determine whether a collection has a mapping for a given key.
 
 "),
 
-(E"Associative Collections",E"Base",E"get",E"get(collection, key, default)
+("Associative Collections","Base","get","get(collection, key, default)
 
    Return the value stored for the given key, or the given default
    value if no mapping for the key is present.
 
 "),
 
-(E"Associative Collections",E"Base",E"getkey",E"getkey(collection, key, default)
+("Associative Collections","Base","getkey","getkey(collection, key, default)
 
    Return the key matching argument \"key\" if one exists in
    \"collection\", otherwise return \"default\".
 
 "),
 
-(E"Associative Collections",E"Base",E"delete!",E"delete!(collection, key)
+("Associative Collections","Base","delete!","delete!(collection, key)
 
    Delete the mapping for the given key in a collection.
 
 "),
 
-(E"Associative Collections",E"Base",E"empty!",E"empty!(collection)
+("Associative Collections","Base","empty!","empty!(collection)
 
    Delete all keys from a collection.
 
 "),
 
-(E"Associative Collections",E"Base",E"keys",E"keys(collection)
+("Associative Collections","Base","keys","keys(collection)
 
    Return an array of all keys in a collection.
 
 "),
 
-(E"Associative Collections",E"Base",E"values",E"values(collection)
+("Associative Collections","Base","values","values(collection)
 
    Return an array of all values in a collection.
 
 "),
 
-(E"Associative Collections",E"Base",E"collect",E"collect(collection)
+("Associative Collections","Base","collect","collect(collection)
 
    Return an array of all items in a collection. For associative
    collections, returns (key, value) tuples.
 
 "),
 
-(E"Associative Collections",E"Base",E"merge",E"merge(collection, others...)
+("Associative Collections","Base","merge","merge(collection, others...)
 
    Construct a merged collection from the given collections.
 
 "),
 
-(E"Associative Collections",E"Base",E"merge!",E"merge!(collection, others...)
+("Associative Collections","Base","merge!","merge!(collection, others...)
 
    Update collection with pairs from the other collections
 
 "),
 
-(E"Associative Collections",E"Base",E"filter",E"filter(function, collection)
+("Associative Collections","Base","filter","filter(function, collection)
 
    Return a copy of collection, removing (key, value) pairs for which
    function is false.
 
 "),
 
-(E"Associative Collections",E"Base",E"filter!",E"filter!(function, collection)
+("Associative Collections","Base","filter!","filter!(function, collection)
 
    Update collection, removing (key, value) pairs for which function
    is false.
 
 "),
 
-(E"Associative Collections",E"Base",E"eltype",E"eltype(collection)
+("Associative Collections","Base","eltype","eltype(collection)
 
    Returns the type tuple of the (key,value) pairs contained in
    collection.
 
 "),
 
-(E"Associative Collections",E"Base",E"sizehint",E"sizehint(s, n)
+("Associative Collections","Base","sizehint","sizehint(s, n)
 
    Suggest that collection \"s\" reserve capacity for at least \"n\"
    elements. This can improve performance.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"add!",E"add!(collection, key)
+("Set-Like Collections","Base","add!","add!(collection, key)
 
    Add an element to a set-like collection.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"add_each!",E"add_each!(collection, iterable)
+("Set-Like Collections","Base","add_each!","add_each!(collection, iterable)
 
    Adds each element in iterable to the collection.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"Set",E"Set(x...)
+("Set-Like Collections","Base","Set","Set(x...)
 
    Construct a \"Set\" with the given elements. Should be used instead
    of \"IntSet\" for sparse integer sets.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"IntSet",E"IntSet(i...)
+("Set-Like Collections","Base","IntSet","IntSet(i...)
 
    Construct an \"IntSet\" of the given integers. Implemented as a bit
    string, and therefore good for dense integer sets.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"union",E"union(s1, s2...)
+("Set-Like Collections","Base","union","union(s1, s2...)
 
    Construct the union of two or more sets. Maintains order with
    arrays.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"union!",E"union!(s1, s2)
+("Set-Like Collections","Base","union!","union!(s1, s2)
 
    Constructs the union of IntSets s1 and s2, stores the result in
    \"s1\".
 
 "),
 
-(E"Set-Like Collections",E"Base",E"intersect",E"intersect(s1, s2...)
+("Set-Like Collections","Base","intersect","intersect(s1, s2...)
 
    Construct the intersection of two or more sets. Maintains order
    with arrays.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"setdiff",E"setdiff(s1, s2)
+("Set-Like Collections","Base","setdiff","setdiff(s1, s2)
 
    Construct the set of elements in \"s1\" but not \"s2\". Maintains
    order with arrays.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"symdiff",E"symdiff(s1, s2...)
+("Set-Like Collections","Base","symdiff","symdiff(s1, s2...)
 
    Construct the symmetric difference of elements in the passed in
    sets or arrays. Maintains order with arrays.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s, n)
+("Set-Like Collections","Base","symdiff!","symdiff!(s, n)
 
    IntSet s is destructively modified to toggle the inclusion of
    integer \"n\".
 
 "),
 
-(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s, itr)
+("Set-Like Collections","Base","symdiff!","symdiff!(s, itr)
 
    For each element in \"itr\", destructively toggle its inclusion in
    set \"s\".
 
 "),
 
-(E"Set-Like Collections",E"Base",E"symdiff!",E"symdiff!(s1, s2)
+("Set-Like Collections","Base","symdiff!","symdiff!(s1, s2)
 
    Construct the symmetric difference of IntSets \"s1\" and \"s2\",
    storing the result in \"s1\".
 
 "),
 
-(E"Set-Like Collections",E"Base",E"complement",E"complement(s)
+("Set-Like Collections","Base","complement","complement(s)
 
    Returns the set-complement of IntSet s.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"complement!",E"complement!(s)
+("Set-Like Collections","Base","complement!","complement!(s)
 
    Mutates IntSet s into its set-complement.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"del_each!",E"del_each!(s, itr)
+("Set-Like Collections","Base","del_each!","del_each!(s, itr)
 
    Deletes each element of itr in set s in-place.
 
 "),
 
-(E"Set-Like Collections",E"Base",E"intersect!",E"intersect!(s1, s2)
+("Set-Like Collections","Base","intersect!","intersect!(s1, s2)
 
    Intersects IntSets s1 and s2 and overwrites the set s1 with the
    result. If needed, s1 will be expanded to the size of s2.
 
 "),
 
-(E"Dequeues",E"Base",E"push!",E"push!(collection, item) -> collection
+("Dequeues","Base","push!","push!(collection, item) -> collection
 
    Insert an item at the end of a collection.
 
 "),
 
-(E"Dequeues",E"Base",E"pop!",E"pop!(collection) -> item
+("Dequeues","Base","pop!","pop!(collection) -> item
 
    Remove the last item in a collection and return it.
 
 "),
 
-(E"Dequeues",E"Base",E"unshift!",E"unshift!(collection, item) -> collection
+("Dequeues","Base","unshift!","unshift!(collection, item) -> collection
 
    Insert an item at the beginning of a collection.
 
 "),
 
-(E"Dequeues",E"Base",E"shift!",E"shift!(collection) -> item
+("Dequeues","Base","shift!","shift!(collection) -> item
 
    Remove the first item in a collection.
 
 "),
 
-(E"Dequeues",E"Base",E"insert!",E"insert!(collection, index, item)
+("Dequeues","Base","insert!","insert!(collection, index, item)
 
    Insert an item at the given index.
 
 "),
 
-(E"Dequeues",E"Base",E"delete!",E"delete!(collection, index) -> item
+("Dequeues","Base","delete!","delete!(collection, index) -> item
 
    Remove the item at the given index, and return the deleted item.
 
 "),
 
-(E"Dequeues",E"Base",E"delete!",E"delete!(collection, range) -> items
+("Dequeues","Base","delete!","delete!(collection, range) -> items
 
    Remove items at specified range, and return a collection containing
    the deleted items.
 
 "),
 
-(E"Dequeues",E"Base",E"resize!",E"resize!(collection, n) -> collection
+("Dequeues","Base","resize!","resize!(collection, n) -> collection
 
    Resize collection to contain \"n\" elements.
 
 "),
 
-(E"Dequeues",E"Base",E"append!",E"append!(collection, items) -> collection
+("Dequeues","Base","append!","append!(collection, items) -> collection
 
    Add the elements of \"items\" to the end of a collection.
 
 "),
 
-(E"Strings",E"Base",E"length",E"length(s)
+("Strings","Base","length","length(s)
 
    The number of characters in string \"s\".
 
 "),
 
-(E"Strings",E"Base",E"collect",E"collect(string)
+("Strings","Base","collect","collect(string)
 
    Return an array of the characters in \"string\".
 
 "),
 
-(E"Strings",E"Base",E"string",E"*()
+("Strings","Base","string","*()
 string(strs...)
 
    Concatenate strings.
@@ -1060,7 +1060,7 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"^",E"^()
+("Strings","Base","^","^()
 
    Repeat a string.
 
@@ -1068,98 +1068,98 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"string",E"string(char...)
+("Strings","Base","string","string(char...)
 
    Create a string with the given characters.
 
 "),
 
-(E"Strings",E"Base",E"string",E"string(x)
+("Strings","Base","string","string(x)
 
    Create a string from any value using the \"print\" function.
 
 "),
 
-(E"Strings",E"Base",E"repr",E"repr(x)
+("Strings","Base","repr","repr(x)
 
    Create a string from any value using the \"show\" function.
 
 "),
 
-(E"Strings",E"Base",E"bytestring",E"bytestring(::Ptr{Uint8})
+("Strings","Base","bytestring","bytestring(::Ptr{Uint8})
 
    Create a string from the address of a C (0-terminated) string. A
    copy is made; the ptr can be safely freed.
 
 "),
 
-(E"Strings",E"Base",E"bytestring",E"bytestring(s)
+("Strings","Base","bytestring","bytestring(s)
 
    Convert a string to a contiguous byte array representation
    appropriate for passing it to C functions.
 
 "),
 
-(E"Strings",E"Base",E"ascii",E"ascii(::Array{Uint8, 1})
+("Strings","Base","ascii","ascii(::Array{Uint8, 1})
 
    Create an ASCII string from a byte array.
 
 "),
 
-(E"Strings",E"Base",E"ascii",E"ascii(s)
+("Strings","Base","ascii","ascii(s)
 
    Convert a string to a contiguous ASCII string (all characters must
    be valid ASCII characters).
 
 "),
 
-(E"Strings",E"Base",E"utf8",E"utf8(::Array{Uint8, 1})
+("Strings","Base","utf8","utf8(::Array{Uint8, 1})
 
    Create a UTF-8 string from a byte array.
 
 "),
 
-(E"Strings",E"Base",E"utf8",E"utf8(s)
+("Strings","Base","utf8","utf8(s)
 
    Convert a string to a contiguous UTF-8 string (all characters must
    be valid UTF-8 characters).
 
 "),
 
-(E"Strings",E"Base",E"is_valid_ascii",E"is_valid_ascii(s) -> Bool
+("Strings","Base","is_valid_ascii","is_valid_ascii(s) -> Bool
 
    Returns true if the string is valid ASCII, false otherwise.
 
 "),
 
-(E"Strings",E"Base",E"is_valid_utf8",E"is_valid_utf8(s) -> Bool
+("Strings","Base","is_valid_utf8","is_valid_utf8(s) -> Bool
 
    Returns true if the string is valid UTF-8, false otherwise.
 
 "),
 
-(E"Strings",E"Base",E"check_ascii",E"check_ascii(s)
+("Strings","Base","check_ascii","check_ascii(s)
 
    Calls \"is_valid_ascii()\" on string. Throws error if it is not
    valid.
 
 "),
 
-(E"Strings",E"Base",E"check_utf8",E"check_utf8(s)
+("Strings","Base","check_utf8","check_utf8(s)
 
    Calls \"is_valid_utf8()\" on string. Throws error if it is not
    valid.
 
 "),
 
-(E"Strings",E"Base",E"byte_string_classify",E"byte_string_classify(s)
+("Strings","Base","byte_string_classify","byte_string_classify(s)
 
    Returns 0 if the string is neither valid ASCII nor UTF-8, 1 if it
    is valid ASCII, and 2 if it is valid UTF-8.
 
 "),
 
-(E"Strings",E"Base",E"search",E"search(string, char[, i])
+("Strings","Base","search","search(string, char[, i])
 
    Return the index of \"char\" in \"string\", giving 0 if not found.
    The second argument may also be a vector or a set of characters.
@@ -1167,28 +1167,28 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"ismatch",E"ismatch(r::Regex, s::String)
+("Strings","Base","ismatch","ismatch(r::Regex, s::String)
 
    Test whether a string contains a match of the given regular
    expression.
 
 "),
 
-(E"Strings",E"Base",E"lpad",E"lpad(string, n, p)
+("Strings","Base","lpad","lpad(string, n, p)
 
    Make a string at least \"n\" characters long by padding on the left
    with copies of \"p\".
 
 "),
 
-(E"Strings",E"Base",E"rpad",E"rpad(string, n, p)
+("Strings","Base","rpad","rpad(string, n, p)
 
    Make a string at least \"n\" characters long by padding on the
    right with copies of \"p\".
 
 "),
 
-(E"Strings",E"Base",E"search",E"search(string, chars[, start])
+("Strings","Base","search","search(string, chars[, start])
 
    Search for the given characters within the given string. The second
    argument may be a single character, a vector or a set of
@@ -1201,7 +1201,7 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"replace",E"replace(string, pat, r[, n])
+("Strings","Base","replace","replace(string, pat, r[, n])
 
    Search for the given pattern \"pat\", and replace each occurance
    with \"r\". If \"n\" is provided, replace at most \"n\" occurances.
@@ -1210,7 +1210,7 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"replace",E"replace(string, pat, f[, n])
+("Strings","Base","replace","replace(string, pat, f[, n])
 
    Search for the given pattern \"pat\", and replace each occurance
    with \"f(pat)\". If \"n\" is provided, replace at most \"n\"
@@ -1220,7 +1220,7 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"split",E"split(string, [chars, [limit,] [include_empty]])
+("Strings","Base","split","split(string, [chars, [limit,] [include_empty]])
 
    Return an array of strings by splitting the given string on
    occurrences of the given character delimiters, which may be
@@ -1234,7 +1234,7 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"strip",E"strip(string[, chars])
+("Strings","Base","strip","strip(string[, chars])
 
    Return \"string\" with any leading and trailing whitespace removed.
    If a string \"chars\" is provided, instead remove characters
@@ -1242,7 +1242,7 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"lstrip",E"lstrip(string[, chars])
+("Strings","Base","lstrip","lstrip(string[, chars])
 
    Return \"string\" with any leading whitespace removed. If a string
    \"chars\" is provided, instead remove characters contained in that
@@ -1250,7 +1250,7 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"rstrip",E"rstrip(string[, chars])
+("Strings","Base","rstrip","rstrip(string[, chars])
 
    Return \"string\" with any trailing whitespace removed. If a string
    \"chars\" is provided, instead remove characters contained in that
@@ -1258,205 +1258,205 @@ string(strs...)
 
 "),
 
-(E"Strings",E"Base",E"begins_with",E"begins_with(string, prefix)
+("Strings","Base","begins_with","begins_with(string, prefix)
 
    Returns \"true\" if \"string\" starts with \"prefix\".
 
 "),
 
-(E"Strings",E"Base",E"ends_with",E"ends_with(string, suffix)
+("Strings","Base","ends_with","ends_with(string, suffix)
 
    Returns \"true\" if \"string\" ends with \"suffix\".
 
 "),
 
-(E"Strings",E"Base",E"uppercase",E"uppercase(string)
+("Strings","Base","uppercase","uppercase(string)
 
    Returns \"string\" with all characters converted to uppercase.
 
 "),
 
-(E"Strings",E"Base",E"lowercase",E"lowercase(string)
+("Strings","Base","lowercase","lowercase(string)
 
    Returns \"string\" with all characters converted to lowercase.
 
 "),
 
-(E"Strings",E"Base",E"join",E"join(strings, delim)
+("Strings","Base","join","join(strings, delim)
 
    Join an array of strings into a single string, inserting the given
    delimiter between adjacent strings.
 
 "),
 
-(E"Strings",E"Base",E"chop",E"chop(string)
+("Strings","Base","chop","chop(string)
 
    Remove the last character from a string
 
 "),
 
-(E"Strings",E"Base",E"chomp",E"chomp(string)
+("Strings","Base","chomp","chomp(string)
 
    Remove a trailing newline from a string
 
 "),
 
-(E"Strings",E"Base",E"ind2chr",E"ind2chr(string, i)
+("Strings","Base","ind2chr","ind2chr(string, i)
 
    Convert a byte index to a character index
 
 "),
 
-(E"Strings",E"Base",E"chr2ind",E"chr2ind(string, i)
+("Strings","Base","chr2ind","chr2ind(string, i)
 
    Convert a character index to a byte index
 
 "),
 
-(E"Strings",E"Base",E"isvalid",E"isvalid(str, i)
+("Strings","Base","isvalid","isvalid(str, i)
 
    Tells whether index \"i\" is valid for the given string
 
 "),
 
-(E"Strings",E"Base",E"nextind",E"nextind(str, i)
+("Strings","Base","nextind","nextind(str, i)
 
    Get the next valid string index after \"i\". Returns
    \"endof(str)+1\" at the end of the string.
 
 "),
 
-(E"Strings",E"Base",E"prevind",E"prevind(str, i)
+("Strings","Base","prevind","prevind(str, i)
 
    Get the previous valid string index before \"i\". Returns \"0\" at
    the beginning of the string.
 
 "),
 
-(E"Strings",E"Base",E"thisind",E"thisind(str, i)
+("Strings","Base","thisind","thisind(str, i)
 
    Adjust \"i\" downwards until it reaches a valid index for the given
    string.
 
 "),
 
-(E"Strings",E"Base",E"randstring",E"randstring(len)
+("Strings","Base","randstring","randstring(len)
 
    Create a random ASCII string of length \"len\", consisting of
    upper- and lower-case letters and the digits 0-9
 
 "),
 
-(E"Strings",E"Base",E"charwidth",E"charwidth(c)
+("Strings","Base","charwidth","charwidth(c)
 
    Gives the number of columns needed to print a character.
 
 "),
 
-(E"Strings",E"Base",E"strwidth",E"strwidth(s)
+("Strings","Base","strwidth","strwidth(s)
 
    Gives the number of columns needed to print a string.
 
 "),
 
-(E"Strings",E"Base",E"isalnum",E"isalnum(c::Char)
+("Strings","Base","isalnum","isalnum(c::Char)
 
    Tests whether a character is alphanumeric.
 
 "),
 
-(E"Strings",E"Base",E"isalpha",E"isalpha(c::Char)
+("Strings","Base","isalpha","isalpha(c::Char)
 
    Tests whether a character is alphabetic.
 
 "),
 
-(E"Strings",E"Base",E"isascii",E"isascii(c::Char)
+("Strings","Base","isascii","isascii(c::Char)
 
    Tests whether a character belongs to the ASCII character set.
 
 "),
 
-(E"Strings",E"Base",E"isblank",E"isblank(c::Char)
+("Strings","Base","isblank","isblank(c::Char)
 
    Tests whether a character is a tab or space.
 
 "),
 
-(E"Strings",E"Base",E"iscntrl",E"iscntrl(c::Char)
+("Strings","Base","iscntrl","iscntrl(c::Char)
 
    Tests whether a character is a control character.
 
 "),
 
-(E"Strings",E"Base",E"isdigit",E"isdigit(c::Char)
+("Strings","Base","isdigit","isdigit(c::Char)
 
    Tests whether a character is a numeric digit (0-9).
 
 "),
 
-(E"Strings",E"Base",E"isgraph",E"isgraph(c::Char)
+("Strings","Base","isgraph","isgraph(c::Char)
 
    Tests whether a character is printable, and not a space.
 
 "),
 
-(E"Strings",E"Base",E"islower",E"islower(c::Char)
+("Strings","Base","islower","islower(c::Char)
 
    Tests whether a character is a lowercase letter.
 
 "),
 
-(E"Strings",E"Base",E"isprint",E"isprint(c::Char)
+("Strings","Base","isprint","isprint(c::Char)
 
    Tests whether a character is printable, including space.
 
 "),
 
-(E"Strings",E"Base",E"ispunct",E"ispunct(c::Char)
+("Strings","Base","ispunct","ispunct(c::Char)
 
    Tests whether a character is printable, and not a space or
    alphanumeric.
 
 "),
 
-(E"Strings",E"Base",E"isspace",E"isspace(c::Char)
+("Strings","Base","isspace","isspace(c::Char)
 
    Tests whether a character is any whitespace character.
 
 "),
 
-(E"Strings",E"Base",E"isupper",E"isupper(c::Char)
+("Strings","Base","isupper","isupper(c::Char)
 
    Tests whether a character is an uppercase letter.
 
 "),
 
-(E"Strings",E"Base",E"isxdigit",E"isxdigit(c::Char)
+("Strings","Base","isxdigit","isxdigit(c::Char)
 
    Tests whether a character is a valid hexadecimal digit.
 
 "),
 
-(E"I/O",E"Base",E"STDOUT",E"STDOUT
+("I/O","Base","STDOUT","STDOUT
 
    Global variable referring to the standard out stream.
 
 "),
 
-(E"I/O",E"Base",E"STDERR",E"STDERR
+("I/O","Base","STDERR","STDERR
 
    Global variable referring to the standard error stream.
 
 "),
 
-(E"I/O",E"Base",E"STDIN",E"STDIN
+("I/O","Base","STDIN","STDIN
 
    Global variable referring to the standard input stream.
 
 "),
 
-(E"I/O",E"Base",E"open",E"open(file_name[, read, write, create, truncate, append]) -> IOStream
+("I/O","Base","open","open(file_name[, read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The
    default is to open files for reading only. Returns a stream for
@@ -1464,7 +1464,7 @@ string(strs...)
 
 "),
 
-(E"I/O",E"Base",E"open",E"open(file_name[, mode]) -> IOStream
+("I/O","Base","open","open(file_name[, mode]) -> IOStream
 
    Alternate syntax for open, where a string-based mode specifier is
    used instead of the five booleans. The values of \"mode\"
@@ -1487,13 +1487,13 @@ string(strs...)
 
 "),
 
-(E"I/O",E"Base",E"open",E"open(file_name) -> IOStream
+("I/O","Base","open","open(file_name) -> IOStream
 
    Open a file in read mode.
 
 "),
 
-(E"I/O",E"Base",E"open",E"open(f::function, args...)
+("I/O","Base","open","open(f::function, args...)
 
    Apply the function \"f\" to the result of \"open(args...)\" and
    close the resulting file descriptor upon completion.
@@ -1502,14 +1502,14 @@ string(strs...)
 
 "),
 
-(E"I/O",E"Base",E"memio",E"memio([size[, finalize::Bool]]) -> IOStream
+("I/O","Base","memio","memio([size[, finalize::Bool]]) -> IOStream
 
    Create an in-memory I/O stream, optionally specifying how much
    initial space is needed.
 
 "),
 
-(E"I/O",E"Base",E"fdio",E"fdio(fd::Integer[, own::Bool]) -> IOStream
+("I/O","Base","fdio","fdio(fd::Integer[, own::Bool]) -> IOStream
 fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
    Create an \"IOStream\" object from an integer file descriptor. If
@@ -1520,33 +1520,33 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"I/O",E"Base",E"flush",E"flush(stream)
+("I/O","Base","flush","flush(stream)
 
    Commit all currently buffered writes to the given stream.
 
 "),
 
-(E"I/O",E"Base",E"close",E"close(stream)
+("I/O","Base","close","close(stream)
 
    Close an I/O stream. Performs a \"flush\" first.
 
 "),
 
-(E"I/O",E"Base",E"write",E"write(stream, x)
+("I/O","Base","write","write(stream, x)
 
    Write the canonical binary representation of a value to the given
    stream.
 
 "),
 
-(E"I/O",E"Base",E"read",E"read(stream, type)
+("I/O","Base","read","read(stream, type)
 
    Read a value of the given type from a stream, in canonical binary
    representation.
 
 "),
 
-(E"I/O",E"Base",E"read",E"read(stream, type, dims)
+("I/O","Base","read","read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in
    canonical binary representation. \"dims\" is either a tuple or a
@@ -1555,31 +1555,31 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"I/O",E"Base",E"position",E"position(s)
+("I/O","Base","position","position(s)
 
    Get the current position of a stream.
 
 "),
 
-(E"I/O",E"Base",E"seek",E"seek(s, pos)
+("I/O","Base","seek","seek(s, pos)
 
    Seek a stream to the given position.
 
 "),
 
-(E"I/O",E"Base",E"seek_end",E"seek_end(s)
+("I/O","Base","seek_end","seek_end(s)
 
    Seek a stream to the end.
 
 "),
 
-(E"I/O",E"Base",E"skip",E"skip(s, offset)
+("I/O","Base","skip","skip(s, offset)
 
    Seek a stream relative to the current position.
 
 "),
 
-(E"I/O",E"Base",E"eof",E"eof(stream)
+("I/O","Base","eof","eof(stream)
 
    Tests whether an I/O stream is at end-of-file. If the stream is not
    yet exhausted, this function will block to wait for more data if
@@ -1588,7 +1588,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Text I/O",E"Base",E"show",E"show(x)
+("Text I/O","Base","show","show(x)
 
    Write an informative text representation of a value to the current
    output stream. New types should overload \"show(io, x)\" where the
@@ -1596,7 +1596,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Text I/O",E"Base",E"print",E"print(x)
+("Text I/O","Base","print","print(x)
 
    Write (to the default output stream) a canonical (un-decorated)
    text representation of a value if there is one, otherwise call
@@ -1604,57 +1604,57 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Text I/O",E"Base",E"println",E"println(x)
+("Text I/O","Base","println","println(x)
 
    Print (using \"print()\") \"x\" followed by a newline
 
 "),
 
-(E"Text I/O",E"Base",E"showall",E"showall(x)
+("Text I/O","Base","showall","showall(x)
 
    Show x, printing all elements of arrays
 
 "),
 
-(E"Text I/O",E"Base",E"dump",E"dump(x)
+("Text I/O","Base","dump","dump(x)
 
    Write a thorough text representation of a value to the current
    output stream.
 
 "),
 
-(E"Text I/O",E"Base",E"readall",E"readall(stream)
+("Text I/O","Base","readall","readall(stream)
 
    Read the entire contents of an I/O stream as a string.
 
 "),
 
-(E"Text I/O",E"Base",E"readline",E"readline(stream)
+("Text I/O","Base","readline","readline(stream)
 
    Read a single line of text, including a trailing newline character
    (if one is reached before the end of the input).
 
 "),
 
-(E"Text I/O",E"Base",E"readuntil",E"readuntil(stream, delim)
+("Text I/O","Base","readuntil","readuntil(stream, delim)
 
    Read a string, up to and including the given delimiter byte.
 
 "),
 
-(E"Text I/O",E"Base",E"readlines",E"readlines(stream)
+("Text I/O","Base","readlines","readlines(stream)
 
    Read all lines as an array.
 
 "),
 
-(E"Text I/O",E"Base",E"each_line",E"each_line(stream)
+("Text I/O","Base","each_line","each_line(stream)
 
    Create an iterable object that will yield each line from a stream.
 
 "),
 
-(E"Text I/O",E"Base",E"readdlm",E"readdlm(filename, delim::Char)
+("Text I/O","Base","readdlm","readdlm(filename, delim::Char)
 
    Read a matrix from a text file where each line gives one row, with
    elements separated by the given delimeter. If all data is numeric,
@@ -1663,7 +1663,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Text I/O",E"Base",E"readdlm",E"readdlm(filename, delim::Char, T::Type)
+("Text I/O","Base","readdlm","readdlm(filename, delim::Char, T::Type)
 
    Read a matrix from a text file with a given element type. If \"T\"
    is a numeric type, the result is an array of that type, with any
@@ -1673,26 +1673,26 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Text I/O",E"Base",E"writedlm",E"writedlm(filename, array, delim::Char)
+("Text I/O","Base","writedlm","writedlm(filename, array, delim::Char)
 
    Write an array to a text file using the given delimeter (defaults
    to comma).
 
 "),
 
-(E"Text I/O",E"Base",E"readcsv",E"readcsv(filename[, T::Type])
+("Text I/O","Base","readcsv","readcsv(filename[, T::Type])
 
    Equivalent to \"readdlm\" with \"delim\" set to comma.
 
 "),
 
-(E"Text I/O",E"Base",E"writecsv",E"writecsv(filename, array)
+("Text I/O","Base","writecsv","writecsv(filename, array)
 
    Equivalent to \"writedlm\" with \"delim\" set to comma.
 
 "),
 
-(E"Memory-mapped I/O",E"Base",E"mmap_array",E"mmap_array(type, dims, stream[, offset])
+("Memory-mapped I/O","Base","mmap_array","mmap_array(type, dims, stream[, offset])
 
    Create an array whose values are linked to a file, using memory-
    mapping. This provides a convenient way of working with data too
@@ -1715,7 +1715,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Memory-mapped I/O",E"Base",E"msync",E"msync(array)
+("Memory-mapped I/O","Base","msync","msync(array)
 
    Forces synchronization between the in-memory version of a memory-
    mapped array and the on-disk version. You may not need to call this
@@ -1726,13 +1726,13 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Memory-mapped I/O",E"Base",E"mmap",E"mmap(len, prot, flags, fd, offset)
+("Memory-mapped I/O","Base","mmap","mmap(len, prot, flags, fd, offset)
 
    Low-level interface to the mmap system call. See the man page.
 
 "),
 
-(E"Memory-mapped I/O",E"Base",E"munmap",E"munmap(pointer, len)
+("Memory-mapped I/O","Base","munmap","munmap(pointer, len)
 
    Low-level interface for unmapping memory (see the man page). With
    mmap_array you do not need to call this directly; the memory is
@@ -1740,465 +1740,465 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Mathematical Functions",E"Base",E"-",E"-()
+("Mathematical Functions","Base","-","-()
 
    Unary minus
 
 "),
 
-(E"Mathematical Functions",E"",E"+ - * / \\ ^",E"+ - * / \\ ^
+("Mathematical Functions","","+ - * / \\ ^","+ - * / \\ ^
 
    The binary addition, subtraction, multiplication, left division,
    right division, and exponentiation operators
 
 "),
 
-(E"Mathematical Functions",E"",E".+ .- .* ./ .\\ .^",E".+ .- .* ./ .\\ .^
+("Mathematical Functions","",".+ .- .* ./ .\\ .^",".+ .- .* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left
    division, right division, and exponentiation operators
 
 "),
 
-(E"Mathematical Functions",E"Base",E"div",E"div(a, b)
+("Mathematical Functions","Base","div","div(a, b)
 
    Compute a/b, truncating to an integer
 
 "),
 
-(E"Mathematical Functions",E"Base",E"fld",E"fld(a, b)
+("Mathematical Functions","Base","fld","fld(a, b)
 
    Largest integer less than or equal to a/b
 
 "),
 
-(E"Mathematical Functions",E"Base",E"mod",E"mod(x, m)
+("Mathematical Functions","Base","mod","mod(x, m)
 
    Modulus after division, returning in the range [0,m)
 
 "),
 
-(E"Mathematical Functions",E"Base",E"%",E"rem()
+("Mathematical Functions","Base","%","rem()
 %()
 
    Remainder after division
 
 "),
 
-(E"Mathematical Functions",E"Base",E"mod1",E"mod1(x, m)
+("Mathematical Functions","Base","mod1","mod1(x, m)
 
    Modulus after division, returning in the range (0,m]
 
 "),
 
-(E"Mathematical Functions",E"Base",E"//",E"//()
+("Mathematical Functions","Base","//","//()
 
    Rational division
 
 "),
 
-(E"Mathematical Functions",E"Base",E"num",E"num(x)
+("Mathematical Functions","Base","num","num(x)
 
    Numerator of the rational representation of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"den",E"den(x)
+("Mathematical Functions","Base","den","den(x)
 
    Denominator of the rational representation of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"<< >>",E"<< >>
+("Mathematical Functions","","<< >>","<< >>
 
    Left and right shift operators
 
 "),
 
-(E"Mathematical Functions",E"",E"== != < <= > >=",E"== != < <= > >=
+("Mathematical Functions","","== != < <= > >=","== != < <= > >=
 
    Comparison operators to test equals, not equals, less than, less
    than or equals, greater than, and greater than or equals
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cmp",E"cmp(x, y)
+("Mathematical Functions","Base","cmp","cmp(x, y)
 
    Return -1, 0, or 1 depending on whether \"x<y\", \"x==y\", or
    \"x>y\", respectively
 
 "),
 
-(E"Mathematical Functions",E"Base",E"!",E"!()
+("Mathematical Functions","Base","!","!()
 
    Boolean not
 
 "),
 
-(E"Mathematical Functions",E"Base",E"~",E"~()
+("Mathematical Functions","Base","~","~()
 
    Boolean or bitwise not
 
 "),
 
-(E"Mathematical Functions",E"Base",E"&",E"&()
+("Mathematical Functions","Base","&","&()
 
    Bitwise and
 
 "),
 
-(E"Mathematical Functions",E"Base",E"|",E"|()
+("Mathematical Functions","Base","|","|()
 
    Bitwise or
 
 "),
 
-(E"Mathematical Functions",E"Base",E"$",E"$()
+("Mathematical Functions","Base","\$","\$()
 
    Bitwise exclusive or
 
 "),
 
-(E"Mathematical Functions",E"Base",E"sin",E"sin(x)
+("Mathematical Functions","Base","sin","sin(x)
 
    Compute sine of \"x\", where \"x\" is in radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cos",E"cos(x)
+("Mathematical Functions","Base","cos","cos(x)
 
    Compute cosine of \"x\", where \"x\" is in radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"tan",E"tan(x)
+("Mathematical Functions","Base","tan","tan(x)
 
    Compute tangent of \"x\", where \"x\" is in radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"sind",E"sind(x)
+("Mathematical Functions","Base","sind","sind(x)
 
    Compute sine of \"x\", where \"x\" is in degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cosd",E"cosd(x)
+("Mathematical Functions","Base","cosd","cosd(x)
 
    Compute cosine of \"x\", where \"x\" is in degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"tand",E"tand(x)
+("Mathematical Functions","Base","tand","tand(x)
 
    Compute tangent of \"x\", where \"x\" is in degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"sinh",E"sinh(x)
+("Mathematical Functions","Base","sinh","sinh(x)
 
    Compute hyperbolic sine of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cosh",E"cosh(x)
+("Mathematical Functions","Base","cosh","cosh(x)
 
    Compute hyperbolic cosine of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"tanh",E"tanh(x)
+("Mathematical Functions","Base","tanh","tanh(x)
 
    Compute hyperbolic tangent of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"asin",E"asin(x)
+("Mathematical Functions","Base","asin","asin(x)
 
    Compute the inverse sine of \"x\", where the output is in radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"acos",E"acos(x)
+("Mathematical Functions","Base","acos","acos(x)
 
    Compute the inverse cosine of \"x\", where the output is in radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"atan",E"atan(x)
+("Mathematical Functions","Base","atan","atan(x)
 
    Compute the inverse tangent of \"x\", where the output is in
    radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"atan2",E"atan2(y, x)
+("Mathematical Functions","Base","atan2","atan2(y, x)
 
    Compute the inverse tangent of \"y/x\", using the signs of both
    \"x\" and \"y\" to determine the quadrant of the return value.
 
 "),
 
-(E"Mathematical Functions",E"Base",E"asind",E"asind(x)
+("Mathematical Functions","Base","asind","asind(x)
 
    Compute the inverse sine of \"x\", where the output is in degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"acosd",E"acosd(x)
+("Mathematical Functions","Base","acosd","acosd(x)
 
    Compute the inverse cosine of \"x\", where the output is in degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"atand",E"atand(x)
+("Mathematical Functions","Base","atand","atand(x)
 
    Compute the inverse tangent of \"x\", where the output is in
    degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"sec",E"sec(x)
+("Mathematical Functions","Base","sec","sec(x)
 
    Compute the secant of \"x\", where \"x\" is in radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"csc",E"csc(x)
+("Mathematical Functions","Base","csc","csc(x)
 
    Compute the cosecant of \"x\", where \"x\" is in radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cot",E"cot(x)
+("Mathematical Functions","Base","cot","cot(x)
 
    Compute the cotangent of \"x\", where \"x\" is in radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"secd",E"secd(x)
+("Mathematical Functions","Base","secd","secd(x)
 
    Compute the secant of \"x\", where \"x\" is in degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cscd",E"cscd(x)
+("Mathematical Functions","Base","cscd","cscd(x)
 
    Compute the cosecant of \"x\", where \"x\" is in degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cotd",E"cotd(x)
+("Mathematical Functions","Base","cotd","cotd(x)
 
    Compute the cotangent of \"x\", where \"x\" is in degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"asec",E"asec(x)
+("Mathematical Functions","Base","asec","asec(x)
 
    Compute the inverse secant of \"x\", where the output is in radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"acsc",E"acsc(x)
+("Mathematical Functions","Base","acsc","acsc(x)
 
    Compute the inverse cosecant of \"x\", where the output is in
    radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"acot",E"acot(x)
+("Mathematical Functions","Base","acot","acot(x)
 
    Compute the inverse cotangent of \"x\", where the output is in
    radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"asecd",E"asecd(x)
+("Mathematical Functions","Base","asecd","asecd(x)
 
    Compute the inverse secant of \"x\", where the output is in degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"acscd",E"acscd(x)
+("Mathematical Functions","Base","acscd","acscd(x)
 
    Compute the inverse cosecant of \"x\", where the output is in
    degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"acotd",E"acotd(x)
+("Mathematical Functions","Base","acotd","acotd(x)
 
    Compute the inverse cotangent of \"x\", where the output is in
    degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"sech",E"sech(x)
+("Mathematical Functions","Base","sech","sech(x)
 
    Compute the hyperbolic secant of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"csch",E"csch(x)
+("Mathematical Functions","Base","csch","csch(x)
 
    Compute the hyperbolic cosecant of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"coth",E"coth(x)
+("Mathematical Functions","Base","coth","coth(x)
 
    Compute the hyperbolic cotangent of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"asinh",E"asinh(x)
+("Mathematical Functions","Base","asinh","asinh(x)
 
    Compute the inverse hyperbolic sine of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"acosh",E"acosh(x)
+("Mathematical Functions","Base","acosh","acosh(x)
 
    Compute the inverse hyperbolic cosine of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"atanh",E"atanh(x)
+("Mathematical Functions","Base","atanh","atanh(x)
 
    Compute the inverse hyperbolic cotangent of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"asech",E"asech(x)
+("Mathematical Functions","Base","asech","asech(x)
 
    Compute the inverse hyperbolic secant of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"acsch",E"acsch(x)
+("Mathematical Functions","Base","acsch","acsch(x)
 
    Compute the inverse hyperbolic cosecant of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"acoth",E"acoth(x)
+("Mathematical Functions","Base","acoth","acoth(x)
 
    Compute the inverse hyperbolic cotangent of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"sinc",E"sinc(x)
+("Mathematical Functions","Base","sinc","sinc(x)
 
    Compute sin(\\pi x) / x
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cosc",E"cosc(x)
+("Mathematical Functions","Base","cosc","cosc(x)
 
    Compute cos(\\pi x) / x
 
 "),
 
-(E"Mathematical Functions",E"Base",E"degrees2radians",E"degrees2radians(x)
+("Mathematical Functions","Base","degrees2radians","degrees2radians(x)
 
    Convert \"x\" from degrees to radians
 
 "),
 
-(E"Mathematical Functions",E"Base",E"radians2degrees",E"radians2degrees(x)
+("Mathematical Functions","Base","radians2degrees","radians2degrees(x)
 
    Convert \"x\" from radians to degrees
 
 "),
 
-(E"Mathematical Functions",E"Base",E"hypot",E"hypot(x, y)
+("Mathematical Functions","Base","hypot","hypot(x, y)
 
    Compute the \\sqrt{(x^2+y^2)} without undue overflow or underflow
 
 "),
 
-(E"Mathematical Functions",E"Base",E"log",E"log(x)
+("Mathematical Functions","Base","log","log(x)
 
    Compute the natural logarithm of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"log2",E"log2(x)
+("Mathematical Functions","Base","log2","log2(x)
 
    Compute the natural logarithm of \"x\" to base 2
 
 "),
 
-(E"Mathematical Functions",E"Base",E"log10",E"log10(x)
+("Mathematical Functions","Base","log10","log10(x)
 
    Compute the natural logarithm of \"x\" to base 10
 
 "),
 
-(E"Mathematical Functions",E"Base",E"log1p",E"log1p(x)
+("Mathematical Functions","Base","log1p","log1p(x)
 
    Accurate natural logarithm of \"1+x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"logb",E"logb(x)
+("Mathematical Functions","Base","logb","logb(x)
 
    Return the exponent of x, represented as a floating-point number
 
 "),
 
-(E"Mathematical Functions",E"Base",E"ilogb",E"ilogb(x)
+("Mathematical Functions","Base","ilogb","ilogb(x)
 
    Return the exponent of x, represented as a signed integer value
 
 "),
 
-(E"Mathematical Functions",E"Base",E"frexp",E"frexp(val, exp)
+("Mathematical Functions","Base","frexp","frexp(val, exp)
 
    Return a number \"x\" such that it has a magnitude in the interval
    \"[1/2, 1)\" or 0, and val = x \\times 2^{exp}.
 
 "),
 
-(E"Mathematical Functions",E"Base",E"exp",E"exp(x)
+("Mathematical Functions","Base","exp","exp(x)
 
    Compute e^x
 
 "),
 
-(E"Mathematical Functions",E"Base",E"exp2",E"exp2(x)
+("Mathematical Functions","Base","exp2","exp2(x)
 
    Compute 2^x
 
 "),
 
-(E"Mathematical Functions",E"Base",E"ldexp",E"ldexp(x, n)
+("Mathematical Functions","Base","ldexp","ldexp(x, n)
 
    Compute x \\times 2^n
 
 "),
 
-(E"Mathematical Functions",E"Base",E"modf",E"modf(x)
+("Mathematical Functions","Base","modf","modf(x)
 
    Return a tuple (fpart,ipart) of the fractional and integral parts
    of a number. Both parts have the same sign as the argument.
 
 "),
 
-(E"Mathematical Functions",E"Base",E"expm1",E"expm1(x)
+("Mathematical Functions","Base","expm1","expm1(x)
 
    Accurately compute e^x-1
 
 "),
 
-(E"Mathematical Functions",E"Base",E"square",E"square(x)
+("Mathematical Functions","Base","square","square(x)
 
    Compute x^2
 
 "),
 
-(E"Mathematical Functions",E"Base",E"round",E"round(x[, digits[, base]]) -> FloatingPoint
+("Mathematical Functions","Base","round","round(x[, digits[, base]]) -> FloatingPoint
 
    \"round(x)\" returns the nearest integer to \"x\". \"round(x,
    digits)\" rounds to the specified number of digits after the
@@ -2208,52 +2208,52 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Mathematical Functions",E"Base",E"ceil",E"ceil(x[, digits[, base]]) -> FloatingPoint
+("Mathematical Functions","Base","ceil","ceil(x[, digits[, base]]) -> FloatingPoint
 
    Returns the nearest integer not less than \"x\". \"digits\" and
    \"base\" work as above.
 
 "),
 
-(E"Mathematical Functions",E"Base",E"floor",E"floor(x[, digits[, base]]) -> FloatingPoint
+("Mathematical Functions","Base","floor","floor(x[, digits[, base]]) -> FloatingPoint
 
    Returns the nearest integer not greater than \"x\". \"digits\" and
    \"base\" work as above.
 
 "),
 
-(E"Mathematical Functions",E"Base",E"trunc",E"trunc(x[, digits[, base]]) -> FloatingPoint
+("Mathematical Functions","Base","trunc","trunc(x[, digits[, base]]) -> FloatingPoint
 
    Returns the nearest integer not greater in magnitude than \"x\".
    \"digits\" and \"base\" work as above.
 
 "),
 
-(E"Mathematical Functions",E"Base",E"iround",E"iround(x) -> Integer
+("Mathematical Functions","Base","iround","iround(x) -> Integer
 
    Returns the nearest integer to \"x\".
 
 "),
 
-(E"Mathematical Functions",E"Base",E"iceil",E"iceil(x) -> Integer
+("Mathematical Functions","Base","iceil","iceil(x) -> Integer
 
    Returns the nearest integer not less than \"x\".
 
 "),
 
-(E"Mathematical Functions",E"Base",E"ifloor",E"ifloor(x) -> Integer
+("Mathematical Functions","Base","ifloor","ifloor(x) -> Integer
 
    Returns the nearest integer not greater than \"x\".
 
 "),
 
-(E"Mathematical Functions",E"Base",E"itrunc",E"itrunc(x) -> Integer
+("Mathematical Functions","Base","itrunc","itrunc(x) -> Integer
 
    Returns the nearest integer not greater in magnitude than \"x\".
 
 "),
 
-(E"Mathematical Functions",E"Base",E"signif",E"signif(x, digits[, base]) -> FloatingPoint
+("Mathematical Functions","Base","signif","signif(x, digits[, base]) -> FloatingPoint
 
    Rounds (in the sense of \"round\") \"x\" so that there are
    \"digits\" significant digits, under a base \"base\"
@@ -2262,77 +2262,77 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Mathematical Functions",E"Base",E"min",E"min(x, y)
+("Mathematical Functions","Base","min","min(x, y)
 
    Return the minimum of \"x\" and \"y\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"max",E"max(x, y)
+("Mathematical Functions","Base","max","max(x, y)
 
    Return the maximum of \"x\" and \"y\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"clamp",E"clamp(x, lo, hi)
+("Mathematical Functions","Base","clamp","clamp(x, lo, hi)
 
    Return x if \"lo <= x <= y\". If \"x < lo\", return \"lo\". If \"x
    > hi\", return \"hi\".
 
 "),
 
-(E"Mathematical Functions",E"Base",E"abs",E"abs(x)
+("Mathematical Functions","Base","abs","abs(x)
 
    Absolute value of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"abs2",E"abs2(x)
+("Mathematical Functions","Base","abs2","abs2(x)
 
    Squared absolute value of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"copysign",E"copysign(x, y)
+("Mathematical Functions","Base","copysign","copysign(x, y)
 
    Return \"x\" such that it has the same sign as \"y\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"sign",E"sign(x)
+("Mathematical Functions","Base","sign","sign(x)
 
    Return \"+1\" if \"x\" is positive, \"0\" if \"x == 0\", and \"-1\"
    if \"x\" is negative.
 
 "),
 
-(E"Mathematical Functions",E"Base",E"signbit",E"signbit(x)
+("Mathematical Functions","Base","signbit","signbit(x)
 
    Returns \"1\" if the value of the sign of \"x\" is negative,
    otherwise \"0\".
 
 "),
 
-(E"Mathematical Functions",E"Base",E"flipsign",E"flipsign(x, y)
+("Mathematical Functions","Base","flipsign","flipsign(x, y)
 
    Return \"x\" with its sign flipped if \"y\" is negative. For
    example \"abs(x) = flipsign(x,x)\".
 
 "),
 
-(E"Mathematical Functions",E"Base",E"sqrt",E"sqrt(x)
+("Mathematical Functions","Base","sqrt","sqrt(x)
 
    Return \\sqrt{x}
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cbrt",E"cbrt(x)
+("Mathematical Functions","Base","cbrt","cbrt(x)
 
    Return x^{1/3}
 
 "),
 
-(E"Mathematical Functions",E"Base",E"erf",E"erf(x)
+("Mathematical Functions","Base","erf","erf(x)
 
    Compute the error function of \"x\", defined by
    \\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt for arbitrary complex
@@ -2340,14 +2340,14 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Mathematical Functions",E"Base",E"erfc",E"erfc(x)
+("Mathematical Functions","Base","erfc","erfc(x)
 
    Compute the complementary error function of \"x\", defined by 1 -
    \\operatorname{erf}(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"erfcx",E"erfcx(x)
+("Mathematical Functions","Base","erfcx","erfcx(x)
 
    Compute the scaled complementary error function of \"x\", defined
    by e^{x^2} \\operatorname{erfc}(x).  Note also that
@@ -2355,14 +2355,14 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Mathematical Functions",E"Base",E"erfi",E"erfi(x)
+("Mathematical Functions","Base","erfi","erfi(x)
 
    Compute the imaginary error function of \"x\", defined by -i
    \\operatorname{erf}(ix).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"dawson",E"dawson(x)
+("Mathematical Functions","Base","dawson","dawson(x)
 
    Compute the Dawson function (scaled imaginary error function) of
    \"x\", defined by \\frac{\\sqrt{\\pi}}{2} e^{-x^2}
@@ -2370,63 +2370,63 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Mathematical Functions",E"Base",E"real",E"real(z)
+("Mathematical Functions","Base","real","real(z)
 
    Return the real part of the complex number \"z\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"imag",E"imag(z)
+("Mathematical Functions","Base","imag","imag(z)
 
    Return the imaginary part of the complex number \"z\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"reim",E"reim(z)
+("Mathematical Functions","Base","reim","reim(z)
 
    Return both the real and imaginary parts of the complex number
    \"z\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"conj",E"conj(z)
+("Mathematical Functions","Base","conj","conj(z)
 
    Compute the complex conjugate of a complex number \"z\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"angle",E"angle(z)
+("Mathematical Functions","Base","angle","angle(z)
 
    Compute the phase angle of a complex number \"z\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"cis",E"cis(z)
+("Mathematical Functions","Base","cis","cis(z)
 
    Return \"cos(z) + i*sin(z)\" if z is real. Return \"(cos(real(z)) +
    i*sin(real(z)))/exp(imag(z))\" if \"z\" is complex
 
 "),
 
-(E"Mathematical Functions",E"Base",E"binomial",E"binomial(n, k)
+("Mathematical Functions","Base","binomial","binomial(n, k)
 
    Number of ways to choose \"k\" out of \"n\" items
 
 "),
 
-(E"Mathematical Functions",E"Base",E"factorial",E"factorial(n)
+("Mathematical Functions","Base","factorial","factorial(n)
 
    Factorial of n
 
 "),
 
-(E"Mathematical Functions",E"Base",E"factorial",E"factorial(n, k)
+("Mathematical Functions","Base","factorial","factorial(n, k)
 
    Compute \"factorial(n)/factorial(k)\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"factor",E"factor(n)
+("Mathematical Functions","Base","factor","factor(n)
 
    Compute the prime factorization of an integer \"n\". Returns a
    dictionary. The keys of the dictionary correspond to the factors,
@@ -2438,323 +2438,323 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-(E"Mathematical Functions",E"Base",E"gcd",E"gcd(x, y)
+("Mathematical Functions","Base","gcd","gcd(x, y)
 
    Greatest common divisor
 
 "),
 
-(E"Mathematical Functions",E"Base",E"lcm",E"lcm(x, y)
+("Mathematical Functions","Base","lcm","lcm(x, y)
 
    Least common multiple
 
 "),
 
-(E"Mathematical Functions",E"Base",E"gcdx",E"gcdx(x, y)
+("Mathematical Functions","Base","gcdx","gcdx(x, y)
 
    Greatest common divisor, also returning integer coefficients \"u\"
    and \"v\" that solve \"ux+vy == gcd(x,y)\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"ispow2",E"ispow2(n)
+("Mathematical Functions","Base","ispow2","ispow2(n)
 
    Test whether \"n\" is a power of two
 
 "),
 
-(E"Mathematical Functions",E"Base",E"nextpow2",E"nextpow2(n)
+("Mathematical Functions","Base","nextpow2","nextpow2(n)
 
    Next power of two not less than \"n\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"prevpow2",E"prevpow2(n)
+("Mathematical Functions","Base","prevpow2","prevpow2(n)
 
    Previous power of two not greater than \"n\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"nextpow",E"nextpow(a, n)
+("Mathematical Functions","Base","nextpow","nextpow(a, n)
 
    Next power of \"a\" not less than \"n\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"prevpow",E"prevpow(a, n)
+("Mathematical Functions","Base","prevpow","prevpow(a, n)
 
    Previous power of \"a\" not greater than \"n\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"nextprod",E"nextprod([a, b, c], n)
+("Mathematical Functions","Base","nextprod","nextprod([a, b, c], n)
 
    Next integer not less than \"n\" that can be written \"a^i1 * b^i2
    * c^i3\" for integers \"i1\", \"i2\", \"i3\".
 
 "),
 
-(E"Mathematical Functions",E"Base",E"prevprod",E"prevprod([a, b, c], n)
+("Mathematical Functions","Base","prevprod","prevprod([a, b, c], n)
 
    Previous integer not greater than \"n\" that can be written \"a^i1
    * b^i2 * c^i3\" for integers \"i1\", \"i2\", \"i3\".
 
 "),
 
-(E"Mathematical Functions",E"Base",E"invmod",E"invmod(x, m)
+("Mathematical Functions","Base","invmod","invmod(x, m)
 
    Inverse of \"x\", modulo \"m\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"powermod",E"powermod(x, p, m)
+("Mathematical Functions","Base","powermod","powermod(x, p, m)
 
    Compute \"mod(x^p, m)\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"gamma",E"gamma(x)
+("Mathematical Functions","Base","gamma","gamma(x)
 
    Compute the gamma function of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"lgamma",E"lgamma(x)
+("Mathematical Functions","Base","lgamma","lgamma(x)
 
    Compute the logarithm of \"gamma(x)\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"lfact",E"lfact(x)
+("Mathematical Functions","Base","lfact","lfact(x)
 
    Compute the logarithmic factorial of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"Base",E"digamma",E"digamma(x)
+("Mathematical Functions","Base","digamma","digamma(x)
 
    Compute the digamma function of \"x\" (the logarithmic derivative
    of \"gamma(x)\")
 
 "),
 
-(E"Mathematical Functions",E"Base",E"airyai",E"airy(x)
+("Mathematical Functions","Base","airyai","airy(x)
 airyai(x)
 
    Airy function \\operatorname{Ai}(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"airyaiprime",E"airyprime(x)
+("Mathematical Functions","Base","airyaiprime","airyprime(x)
 airyaiprime(x)
 
    Airy function derivative \\operatorname{Ai}'(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"airybi",E"airybi(x)
+("Mathematical Functions","Base","airybi","airybi(x)
 
    Airy function \\operatorname{Bi}(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"airybiprime",E"airybiprime(x)
+("Mathematical Functions","Base","airybiprime","airybiprime(x)
 
    Airy function derivative \\operatorname{Bi}'(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"besselj0",E"besselj0(x)
+("Mathematical Functions","Base","besselj0","besselj0(x)
 
    Bessel function of the first kind of order 0, J_0(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"besselj1",E"besselj1(x)
+("Mathematical Functions","Base","besselj1","besselj1(x)
 
    Bessel function of the first kind of order 1, J_1(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"besselj",E"besselj(nu, x)
+("Mathematical Functions","Base","besselj","besselj(nu, x)
 
    Bessel function of the first kind of order \"nu\", J_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"bessely0",E"bessely0(x)
+("Mathematical Functions","Base","bessely0","bessely0(x)
 
    Bessel function of the second kind of order 0, Y_0(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"bessely1",E"bessely1(x)
+("Mathematical Functions","Base","bessely1","bessely1(x)
 
    Bessel function of the second kind of order 1, Y_1(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"bessely",E"bessely(nu, x)
+("Mathematical Functions","Base","bessely","bessely(nu, x)
 
    Bessel function of the second kind of order \"nu\", Y_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"hankelh1",E"hankelh1(nu, x)
+("Mathematical Functions","Base","hankelh1","hankelh1(nu, x)
 
    Bessel function of the third kind of order \"nu\", H^{(1)}_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"hankelh2",E"hankelh2(nu, x)
+("Mathematical Functions","Base","hankelh2","hankelh2(nu, x)
 
    Bessel function of the third kind of order \"nu\", H^{(2)}_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"besseli",E"besseli(nu, x)
+("Mathematical Functions","Base","besseli","besseli(nu, x)
 
    Modified Bessel function of the first kind of order \"nu\",
    I_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"besselk",E"besselk(nu, x)
+("Mathematical Functions","Base","besselk","besselk(nu, x)
 
    Modified Bessel function of the second kind of order \"nu\",
    K_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"beta",E"beta(x, y)
+("Mathematical Functions","Base","beta","beta(x, y)
 
    Euler integral of the first kind \\operatorname{B}(x,y) =
    \\Gamma(x)\\Gamma(y)/\\Gamma(x+y).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"lbeta",E"lbeta(x, y)
+("Mathematical Functions","Base","lbeta","lbeta(x, y)
 
    Natural logarithm of the beta function
    \\log(\\operatorname{B}(x,y)).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"eta",E"eta(x)
+("Mathematical Functions","Base","eta","eta(x)
 
    Dirichlet eta function \\eta(s) =
    \\sum^\\infty_{n=1}(-)^{n-1}/n^{s}.
 
 "),
 
-(E"Mathematical Functions",E"Base",E"zeta",E"zeta(x)
+("Mathematical Functions","Base","zeta","zeta(x)
 
    Riemann zeta function \\zeta(s).
 
 "),
 
-(E"Mathematical Functions",E"Base",E"bitmix",E"bitmix(x, y)
+("Mathematical Functions","Base","bitmix","bitmix(x, y)
 
    Hash two integers into a single integer. Useful for constructing
    hash functions.
 
 "),
 
-(E"Mathematical Functions",E"Base",E"ndigits",E"ndigits(n, b)
+("Mathematical Functions","Base","ndigits","ndigits(n, b)
 
    Compute the number of digits in number \"n\" written in base \"b\".
 
 "),
 
-(E"Data Formats",E"Base",E"bin",E"bin(n[, pad])
+("Data Formats","Base","bin","bin(n[, pad])
 
    Convert an integer to a binary string, optionally specifying a
    number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"Base",E"hex",E"hex(n[, pad])
+("Data Formats","Base","hex","hex(n[, pad])
 
    Convert an integer to a hexadecimal string, optionally specifying a
    number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"Base",E"dec",E"dec(n[, pad])
+("Data Formats","Base","dec","dec(n[, pad])
 
    Convert an integer to a decimal string, optionally specifying a
    number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"Base",E"oct",E"oct(n[, pad])
+("Data Formats","Base","oct","oct(n[, pad])
 
    Convert an integer to an octal string, optionally specifying a
    number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"Base",E"base",E"base(b, n[, pad])
+("Data Formats","Base","base","base(b, n[, pad])
 
    Convert an integer to a string in the given base, optionally
    specifying a number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"Base",E"bits",E"bits(n)
+("Data Formats","Base","bits","bits(n)
 
    A string giving the literal bit representation of a number.
 
 "),
 
-(E"Data Formats",E"Base",E"parse_int",E"parse_int(type, str[, base])
+("Data Formats","Base","parse_int","parse_int(type, str[, base])
 
    Parse a string as an integer in the given base (default 10),
    yielding a number of the specified type.
 
 "),
 
-(E"Data Formats",E"Base",E"parse_bin",E"parse_bin(type, str)
+("Data Formats","Base","parse_bin","parse_bin(type, str)
 
    Parse a string as an integer in base 2, yielding a number of the
    specified type.
 
 "),
 
-(E"Data Formats",E"Base",E"parse_oct",E"parse_oct(type, str)
+("Data Formats","Base","parse_oct","parse_oct(type, str)
 
    Parse a string as an integer in base 8, yielding a number of the
    specified type.
 
 "),
 
-(E"Data Formats",E"Base",E"parse_hex",E"parse_hex(type, str)
+("Data Formats","Base","parse_hex","parse_hex(type, str)
 
    Parse a string as an integer in base 16, yielding a number of the
    specified type.
 
 "),
 
-(E"Data Formats",E"Base",E"parse_float",E"parse_float(type, str)
+("Data Formats","Base","parse_float","parse_float(type, str)
 
    Parse a string as a decimal floating point number, yielding a
    number of the specified type.
 
 "),
 
-(E"Data Formats",E"Base",E"bool",E"bool(x)
+("Data Formats","Base","bool","bool(x)
 
    Convert a number or numeric array to boolean
 
 "),
 
-(E"Data Formats",E"Base",E"isbool",E"isbool(x)
+("Data Formats","Base","isbool","isbool(x)
 
    Test whether number or array is boolean
 
 "),
 
-(E"Data Formats",E"Base",E"int",E"int(x)
+("Data Formats","Base","int","int(x)
 
    Convert a number or array to the default integer type on your
    platform. Alternatively, \"x\" can be a string, which is parsed as
@@ -2762,7 +2762,7 @@ airyaiprime(x)
 
 "),
 
-(E"Data Formats",E"Base",E"uint",E"uint(x)
+("Data Formats","Base","uint","uint(x)
 
    Convert a number or array to the default unsigned integer type on
    your platform. Alternatively, \"x\" can be a string, which is
@@ -2770,7 +2770,7 @@ airyaiprime(x)
 
 "),
 
-(E"Data Formats",E"Base",E"integer",E"integer(x)
+("Data Formats","Base","integer","integer(x)
 
    Convert a number or array to integer type. If \"x\" is already of
    integer type it is unchanged, otherwise it converts it to the
@@ -2778,97 +2778,97 @@ airyaiprime(x)
 
 "),
 
-(E"Data Formats",E"Base",E"isinteger",E"isinteger(x)
+("Data Formats","Base","isinteger","isinteger(x)
 
    Test whether a number or array is of integer type
 
 "),
 
-(E"Data Formats",E"Base",E"signed",E"signed(x)
+("Data Formats","Base","signed","signed(x)
 
    Convert a number to a signed integer
 
 "),
 
-(E"Data Formats",E"Base",E"unsigned",E"unsigned(x)
+("Data Formats","Base","unsigned","unsigned(x)
 
    Convert a number to an unsigned integer
 
 "),
 
-(E"Data Formats",E"Base",E"int8",E"int8(x)
+("Data Formats","Base","int8","int8(x)
 
    Convert a number or array to \"Int8\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"int16",E"int16(x)
+("Data Formats","Base","int16","int16(x)
 
    Convert a number or array to \"Int16\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"int32",E"int32(x)
+("Data Formats","Base","int32","int32(x)
 
    Convert a number or array to \"Int32\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"int64",E"int64(x)
+("Data Formats","Base","int64","int64(x)
 
    Convert a number or array to \"Int64\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"int128",E"int128(x)
+("Data Formats","Base","int128","int128(x)
 
    Convert a number or array to \"Int128\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"uint8",E"uint8(x)
+("Data Formats","Base","uint8","uint8(x)
 
    Convert a number or array to \"Uint8\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"uint16",E"uint16(x)
+("Data Formats","Base","uint16","uint16(x)
 
    Convert a number or array to \"Uint16\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"uint32",E"uint32(x)
+("Data Formats","Base","uint32","uint32(x)
 
    Convert a number or array to \"Uint32\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"uint64",E"uint64(x)
+("Data Formats","Base","uint64","uint64(x)
 
    Convert a number or array to \"Uint64\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"uint128",E"uint128(x)
+("Data Formats","Base","uint128","uint128(x)
 
    Convert a number or array to \"Uint128\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"float32",E"float32(x)
+("Data Formats","Base","float32","float32(x)
 
    Convert a number or array to \"Float32\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"float64",E"float64(x)
+("Data Formats","Base","float64","float64(x)
 
    Convert a number or array to \"Float64\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"float",E"float(x)
+("Data Formats","Base","float","float(x)
 
    Convert a number, array, or string to a \"FloatingPoint\" data
    type. For numeric data, the smallest suitable \"FloatingPoint\"
@@ -2876,7 +2876,7 @@ airyaiprime(x)
 
 "),
 
-(E"Data Formats",E"Base",E"significand",E"significand(x)
+("Data Formats","Base","significand","significand(x)
 
    Extract the significand(s) (a.k.a. mantissa), in binary
    representation, of a floating-point number or array.
@@ -2886,76 +2886,76 @@ airyaiprime(x)
 
 "),
 
-(E"Data Formats",E"Base",E"float64_valued",E"float64_valued(x::Rational)
+("Data Formats","Base","float64_valued","float64_valued(x::Rational)
 
    True if \"x\" can be losslessly represented as a \"Float64\" data
    type
 
 "),
 
-(E"Data Formats",E"Base",E"complex64",E"complex64(r, i)
+("Data Formats","Base","complex64","complex64(r, i)
 
    Convert to \"r+i*im\" represented as a \"Complex64\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"complex128",E"complex128(r, i)
+("Data Formats","Base","complex128","complex128(r, i)
 
    Convert to \"r+i*im\" represented as a \"Complex128\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"char",E"char(x)
+("Data Formats","Base","char","char(x)
 
    Convert a number or array to \"Char\" data type
 
 "),
 
-(E"Data Formats",E"Base",E"safe_char",E"safe_char(x)
+("Data Formats","Base","safe_char","safe_char(x)
 
    Convert to \"Char\", checking for invalid code points
 
 "),
 
-(E"Data Formats",E"Base",E"complex",E"complex(r, i)
+("Data Formats","Base","complex","complex(r, i)
 
    Convert real numbers or arrays to complex
 
 "),
 
-(E"Data Formats",E"Base",E"iscomplex",E"iscomplex(x) -> Bool
+("Data Formats","Base","iscomplex","iscomplex(x) -> Bool
 
    Test whether a number or array is of a complex type
 
 "),
 
-(E"Data Formats",E"Base",E"isreal",E"isreal(x) -> Bool
+("Data Formats","Base","isreal","isreal(x) -> Bool
 
    Test whether a number or array is of a real type
 
 "),
 
-(E"Data Formats",E"Base",E"bswap",E"bswap(n)
+("Data Formats","Base","bswap","bswap(n)
 
    Byte-swap an integer
 
 "),
 
-(E"Data Formats",E"Base",E"num2hex",E"num2hex(f)
+("Data Formats","Base","num2hex","num2hex(f)
 
    Get a hexadecimal string of the binary representation of a floating
    point number
 
 "),
 
-(E"Data Formats",E"Base",E"hex2num",E"hex2num(str)
+("Data Formats","Base","hex2num","hex2num(str)
 
    Convert a hexadecimal string to the floating point number it
    represents
 
 "),
 
-(E"Numbers",E"Base",E"one",E"one(x)
+("Numbers","Base","one","one(x)
 
    Get the multiplicative identity element for the type of x (x can
    also specify the type itself). For matrices, returns an identity
@@ -2963,94 +2963,94 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"zero",E"zero(x)
+("Numbers","Base","zero","zero(x)
 
    Get the additive identity element for the type of x (x can also
    specify the type itself).
 
 "),
 
-(E"Numbers",E"Base",E"pi",E"pi
+("Numbers","Base","pi","pi
 
    The constant pi
 
 "),
 
-(E"Numbers",E"Base",E"isdenormal",E"isdenormal(f) -> Bool
+("Numbers","Base","isdenormal","isdenormal(f) -> Bool
 
    Test whether a floating point number is denormal
 
 "),
 
-(E"Numbers",E"Base",E"isfinite",E"isfinite(f) -> Bool
+("Numbers","Base","isfinite","isfinite(f) -> Bool
 
    Test whether a number is finite
 
 "),
 
-(E"Numbers",E"Base",E"isinf",E"isinf(f)
+("Numbers","Base","isinf","isinf(f)
 
    Test whether a number is infinite
 
 "),
 
-(E"Numbers",E"Base",E"isnan",E"isnan(f)
+("Numbers","Base","isnan","isnan(f)
 
    Test whether a floating point number is not a number (NaN)
 
 "),
 
-(E"Numbers",E"Base",E"inf",E"inf(f)
+("Numbers","Base","inf","inf(f)
 
    Returns infinity in the same floating point type as \"f\" (or \"f\"
    can by the type itself)
 
 "),
 
-(E"Numbers",E"Base",E"nan",E"nan(f)
+("Numbers","Base","nan","nan(f)
 
    Returns NaN in the same floating point type as \"f\" (or \"f\" can
    by the type itself)
 
 "),
 
-(E"Numbers",E"Base",E"nextfloat",E"nextfloat(f)
+("Numbers","Base","nextfloat","nextfloat(f)
 
    Get the next floating point number in lexicographic order
 
 "),
 
-(E"Numbers",E"Base",E"prevfloat",E"prevfloat(f) -> Float
+("Numbers","Base","prevfloat","prevfloat(f) -> Float
 
    Get the previous floating point number in lexicographic order
 
 "),
 
-(E"Numbers",E"Base",E"integer_valued",E"integer_valued(x)
+("Numbers","Base","integer_valued","integer_valued(x)
 
    Test whether \"x\" is numerically equal to some integer
 
 "),
 
-(E"Numbers",E"Base",E"real_valued",E"real_valued(x)
+("Numbers","Base","real_valued","real_valued(x)
 
    Test whether \"x\" is numerically equal to some real number
 
 "),
 
-(E"Numbers",E"Base",E"exponent",E"exponent(f)
+("Numbers","Base","exponent","exponent(f)
 
    Get the exponent of a floating-point number
 
 "),
 
-(E"Numbers",E"Base",E"mantissa",E"mantissa(f)
+("Numbers","Base","mantissa","mantissa(f)
 
    Get the mantissa of a floating-point number
 
 "),
 
-(E"Numbers",E"Base",E"BigInt",E"BigInt(x)
+("Numbers","Base","BigInt","BigInt(x)
 
    Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
    anything that can be converted to an \"Int\") or a \"String\". The
@@ -3059,7 +3059,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"BigFloat",E"BigFloat(x)
+("Numbers","Base","BigFloat","BigFloat(x)
 
    Create an arbitrary precision floating point number. \"x\" may be
    an \"Integer\", a \"Float64\", a \"String\" or a \"BigInt\". The
@@ -3068,7 +3068,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"count_ones",E"count_ones(x::Integer) -> Integer
+("Numbers","Base","count_ones","count_ones(x::Integer) -> Integer
 
    Number of ones in the binary representation of \"x\".
 
@@ -3076,7 +3076,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"count_zeros",E"count_zeros(x::Integer) -> Integer
+("Numbers","Base","count_zeros","count_zeros(x::Integer) -> Integer
 
    Number of zeros in the binary representation of \"x\".
 
@@ -3084,7 +3084,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"leading_zeros",E"leading_zeros(x::Integer) -> Integer
+("Numbers","Base","leading_zeros","leading_zeros(x::Integer) -> Integer
 
    Number of zeros leading the binary representation of \"x\".
 
@@ -3092,7 +3092,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"leading_ones",E"leading_ones(x::Integer) -> Integer
+("Numbers","Base","leading_ones","leading_ones(x::Integer) -> Integer
 
    Number of ones leading the binary representation of \"x\".
 
@@ -3100,7 +3100,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"trailing_zeros",E"trailing_zeros(x::Integer) -> Integer
+("Numbers","Base","trailing_zeros","trailing_zeros(x::Integer) -> Integer
 
    Number of zeros trailing the binary representation of \"x\".
 
@@ -3108,7 +3108,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"trailing_ones",E"trailing_ones(x::Integer) -> Integer
+("Numbers","Base","trailing_ones","trailing_ones(x::Integer) -> Integer
 
    Number of ones trailing the binary representation of \"x\".
 
@@ -3116,7 +3116,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"isprime",E"isprime(x::Integer) -> Bool
+("Numbers","Base","isprime","isprime(x::Integer) -> Bool
 
    Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
 
@@ -3124,7 +3124,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"isodd",E"isodd(x::Integer) -> Bool
+("Numbers","Base","isodd","isodd(x::Integer) -> Bool
 
    Returns \"true\" if \"x\" is odd (that is, not divisible by 2), and
    \"false\" otherwise.
@@ -3133,7 +3133,7 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"Base",E"iseven",E"iseven(x::Integer) -> Bool
+("Numbers","Base","iseven","iseven(x::Integer) -> Bool
 
    Returns \"true\" is \"x\" is even (that is, divisible by 2), and
    \"false\" otherwise.
@@ -3142,7 +3142,7 @@ airyaiprime(x)
 
 "),
 
-(E"Random Numbers",E"Base",E"srand",E"srand([rng], seed)
+("Random Numbers","Base","srand","srand([rng], seed)
 
    Seed the RNG with a \"seed\", which may be an unsigned integer or a
    vector of unsigned integers. \"seed\" can even be a filename, in
@@ -3151,7 +3151,7 @@ airyaiprime(x)
 
 "),
 
-(E"Random Numbers",E"Base",E"MersenneTwister",E"MersenneTwister([seed])
+("Random Numbers","Base","MersenneTwister","MersenneTwister([seed])
 
    Create a \"MersenneTwister\" RNG object. Different RNG objects can
    have their own seeds, which may be useful for generating different
@@ -3159,20 +3159,20 @@ airyaiprime(x)
 
 "),
 
-(E"Random Numbers",E"Base",E"rand",E"rand()
+("Random Numbers","Base","rand","rand()
 
    Generate a \"Float64\" random number in (0,1)
 
 "),
 
-(E"Random Numbers",E"Base",E"rand!",E"rand!([rng], A)
+("Random Numbers","Base","rand!","rand!([rng], A)
 
    Populate the array A with random number generated from the
    specified RNG.
 
 "),
 
-(E"Random Numbers",E"Base",E"rand",E"rand(rng::AbstractRNG[, dims...])
+("Random Numbers","Base","rand","rand(rng::AbstractRNG[, dims...])
 
    Generate a random \"Float64\" number or array of the size specified
    by dims, using the specified RNG object. Currently,
@@ -3181,41 +3181,41 @@ airyaiprime(x)
 
 "),
 
-(E"Random Numbers",E"Base",E"rand",E"rand(dims...)
+("Random Numbers","Base","rand","rand(dims...)
 
    Generate a random \"Float64\" array of the size specified by dims
 
 "),
 
-(E"Random Numbers",E"Base",E"rand",E"rand(Int32|Uint32|Int64|Uint64|Int128|Uint128[, dims...])
+("Random Numbers","Base","rand","rand(Int32|Uint32|Int64|Uint64|Int128|Uint128[, dims...])
 
    Generate a random integer of the given type. Optionally, generate
    an array of random integers of the given type by specifying dims.
 
 "),
 
-(E"Random Numbers",E"Base",E"rand",E"rand(r[, dims...])
+("Random Numbers","Base","rand","rand(r[, dims...])
 
    Generate a random integer from \"1\":\"n\" inclusive. Optionally,
    generate a random integer array.
 
 "),
 
-(E"Random Numbers",E"Base",E"randbool",E"randbool([dims...])
+("Random Numbers","Base","randbool","randbool([dims...])
 
    Generate a random boolean value. Optionally, generate an array of
    random boolean values.
 
 "),
 
-(E"Random Numbers",E"Base",E"randbool!",E"randbool!(A)
+("Random Numbers","Base","randbool!","randbool!(A)
 
    Fill an array with random boolean values. A may be an \"Array\" or
    a \"BitArray\".
 
 "),
 
-(E"Random Numbers",E"Base",E"randn",E"randn([dims...])
+("Random Numbers","Base","randn","randn([dims...])
 
    Generate a normally-distributed random number with mean 0 and
    standard deviation 1. Optionally generate an array of normally-
@@ -3223,70 +3223,70 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"ndims",E"ndims(A) -> Integer
+("Arrays","Base","ndims","ndims(A) -> Integer
 
    Returns the number of dimensions of A
 
 "),
 
-(E"Arrays",E"Base",E"size",E"size(A)
+("Arrays","Base","size","size(A)
 
    Returns a tuple containing the dimensions of A
 
 "),
 
-(E"Arrays",E"Base",E"eltype",E"eltype(A)
+("Arrays","Base","eltype","eltype(A)
 
    Returns the type of the elements contained in A
 
 "),
 
-(E"Arrays",E"Base",E"length",E"length(A) -> Integer
+("Arrays","Base","length","length(A) -> Integer
 
    Returns the number of elements in A (note that this differs from
    MATLAB where \"length(A)\" is the largest dimension of \"A\")
 
 "),
 
-(E"Arrays",E"Base",E"nnz",E"nnz(A)
+("Arrays","Base","nnz","nnz(A)
 
    Counts the number of nonzero values in A
 
 "),
 
-(E"Arrays",E"Base",E"scale!",E"scale!(A, k)
+("Arrays","Base","scale!","scale!(A, k)
 
    Scale the contents of an array A with k (in-place)
 
 "),
 
-(E"Arrays",E"Base",E"conj!",E"conj!(A)
+("Arrays","Base","conj!","conj!(A)
 
    Convert an array to its complex conjugate in-place
 
 "),
 
-(E"Arrays",E"Base",E"stride",E"stride(A, k)
+("Arrays","Base","stride","stride(A, k)
 
    Returns the distance in memory (in number of elements) between
    adjacent elements in dimension k
 
 "),
 
-(E"Arrays",E"Base",E"strides",E"strides(A)
+("Arrays","Base","strides","strides(A)
 
    Returns a tuple of the memory strides in each dimension
 
 "),
 
-(E"Arrays",E"Base",E"Array",E"Array(type, dims)
+("Arrays","Base","Array","Array(type, dims)
 
    Construct an uninitialized dense array. \"dims\" may be a tuple or
    a series of integer arguments.
 
 "),
 
-(E"Arrays",E"Base",E"ref",E"ref(type)
+("Arrays","Base","ref","ref(type)
 
    Construct an empty 1-d array of the specified type. This is usually
    called with the syntax \"Type[]\". Element values can be specified
@@ -3294,50 +3294,50 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"cell",E"cell(dims)
+("Arrays","Base","cell","cell(dims)
 
    Construct an uninitialized cell array (heterogeneous array).
    \"dims\" can be either a tuple or a series of integer arguments.
 
 "),
 
-(E"Arrays",E"Base",E"zeros",E"zeros(type, dims)
+("Arrays","Base","zeros","zeros(type, dims)
 
    Create an array of all zeros of specified type
 
 "),
 
-(E"Arrays",E"Base",E"ones",E"ones(type, dims)
+("Arrays","Base","ones","ones(type, dims)
 
    Create an array of all ones of specified type
 
 "),
 
-(E"Arrays",E"Base",E"trues",E"trues(dims)
+("Arrays","Base","trues","trues(dims)
 
    Create a Bool array with all values set to true
 
 "),
 
-(E"Arrays",E"Base",E"falses",E"falses(dims)
+("Arrays","Base","falses","falses(dims)
 
    Create a Bool array with all values set to false
 
 "),
 
-(E"Arrays",E"Base",E"fill",E"fill(v, dims)
+("Arrays","Base","fill","fill(v, dims)
 
    Create an array filled with \"v\"
 
 "),
 
-(E"Arrays",E"Base",E"fill!",E"fill!(A, x)
+("Arrays","Base","fill!","fill!(A, x)
 
    Fill array \"A\" with value \"x\"
 
 "),
 
-(E"Arrays",E"Base",E"reshape",E"reshape(A, dims)
+("Arrays","Base","reshape","reshape(A, dims)
 
    Create an array with the same data as the given array, but with
    different dimensions. An implementation for a particular type of
@@ -3345,13 +3345,13 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"copy",E"copy(A)
+("Arrays","Base","copy","copy(A)
 
    Create a copy of \"A\"
 
 "),
 
-(E"Arrays",E"Base",E"similar",E"similar(array, element_type, dims)
+("Arrays","Base","similar","similar(array, element_type, dims)
 
    Create an uninitialized array of the same type as the given array,
    but with the specified element type and dimensions. The second and
@@ -3360,73 +3360,73 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"reinterpret",E"reinterpret(type, A)
+("Arrays","Base","reinterpret","reinterpret(type, A)
 
    Construct an array with the same binary data as the given array,
    but with the specified element type
 
 "),
 
-(E"Arrays",E"Base",E"rand",E"rand(dims)
+("Arrays","Base","rand","rand(dims)
 
    Create a random array with Float64 random values in (0,1)
 
 "),
 
-(E"Arrays",E"Base",E"randf",E"randf(dims)
+("Arrays","Base","randf","randf(dims)
 
    Create a random array with Float32 random values in (0,1)
 
 "),
 
-(E"Arrays",E"Base",E"randn",E"randn(dims)
+("Arrays","Base","randn","randn(dims)
 
    Create a random array with Float64 normally-distributed random
    values with a mean of 0 and standard deviation of 1
 
 "),
 
-(E"Arrays",E"Base",E"eye",E"eye(n)
+("Arrays","Base","eye","eye(n)
 
    n-by-n identity matrix
 
 "),
 
-(E"Arrays",E"Base",E"eye",E"eye(m, n)
+("Arrays","Base","eye","eye(m, n)
 
    m-by-n identity matrix
 
 "),
 
-(E"Arrays",E"Base",E"linspace",E"linspace(start, stop, n)
+("Arrays","Base","linspace","linspace(start, stop, n)
 
    Construct a vector of \"n\" linearly-spaced elements from \"start\"
    to \"stop\".
 
 "),
 
-(E"Arrays",E"Base",E"logspace",E"logspace(start, stop, n)
+("Arrays","Base","logspace","logspace(start, stop, n)
 
    Construct a vector of \"n\" logarithmically-spaced numbers from
    \"10^start\" to \"10^stop\".
 
 "),
 
-(E"Arrays",E"Base",E"bsxfun",E"bsxfun(fn, A, B[, C...])
+("Arrays","Base","bsxfun","bsxfun(fn, A, B[, C...])
 
    Apply binary function \"fn\" to two or more arrays, with singleton
    dimensions expanded.
 
 "),
 
-(E"Arrays",E"Base",E"ref",E"ref(A, ind)
+("Arrays","Base","ref","ref(A, ind)
 
    Returns a subset of \"A\" as specified by \"ind\", which may be an
    \"Int\", a \"Range\", or a \"Vector\".
 
 "),
 
-(E"Arrays",E"Base",E"sub",E"sub(A, ind)
+("Arrays","Base","sub","sub(A, ind)
 
    Returns a SubArray, which stores the input \"A\" and \"ind\" rather
    than computing the result immediately. Calling \"ref\" on a
@@ -3434,7 +3434,7 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"slicedim",E"slicedim(A, d, i)
+("Arrays","Base","slicedim","slicedim(A, d, i)
 
    Return all the data of \"A\" where the index for dimension \"d\"
    equals \"i\". Equivalent to \"A[:,:,...,i,:,:,...]\" where \"i\" is
@@ -3442,101 +3442,101 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"assign",E"assign(A, X, ind)
+("Arrays","Base","assign","assign(A, X, ind)
 
    Store an input array \"X\" within some subset of \"A\" as specified
    by \"ind\".
 
 "),
 
-(E"Arrays",E"Base",E"cat",E"cat(dim, A...)
+("Arrays","Base","cat","cat(dim, A...)
 
    Concatenate the input arrays along the specified dimension
 
 "),
 
-(E"Arrays",E"Base",E"vcat",E"vcat(A...)
+("Arrays","Base","vcat","vcat(A...)
 
    Concatenate along dimension 1
 
 "),
 
-(E"Arrays",E"Base",E"hcat",E"hcat(A...)
+("Arrays","Base","hcat","hcat(A...)
 
    Concatenate along dimension 2
 
 "),
 
-(E"Arrays",E"Base",E"hvcat",E"hvcat()
+("Arrays","Base","hvcat","hvcat()
 
    Horizontal and vertical concatenation in one call
 
 "),
 
-(E"Arrays",E"Base",E"flipdim",E"flipdim(A, d)
+("Arrays","Base","flipdim","flipdim(A, d)
 
    Reverse \"A\" in dimension \"d\".
 
 "),
 
-(E"Arrays",E"Base",E"flipud",E"flipud(A)
+("Arrays","Base","flipud","flipud(A)
 
    Equivalent to \"flipdim(A,1)\".
 
 "),
 
-(E"Arrays",E"Base",E"fliplr",E"fliplr(A)
+("Arrays","Base","fliplr","fliplr(A)
 
    Equivalent to \"flipdim(A,2)\".
 
 "),
 
-(E"Arrays",E"Base",E"circshift",E"circshift(A, shifts)
+("Arrays","Base","circshift","circshift(A, shifts)
 
    Circularly shift the data in an array. The second argument is a
    vector giving the amount to shift in each dimension.
 
 "),
 
-(E"Arrays",E"Base",E"find",E"find(A)
+("Arrays","Base","find","find(A)
 
    Return a vector of the linear indexes of the non-zeros in \"A\".
 
 "),
 
-(E"Arrays",E"Base",E"findn",E"findn(A)
+("Arrays","Base","findn","findn(A)
 
    Return a vector of indexes for each dimension giving the locations
    of the non-zeros in \"A\".
 
 "),
 
-(E"Arrays",E"Base",E"nonzeros",E"nonzeros(A)
+("Arrays","Base","nonzeros","nonzeros(A)
 
    Return a vector of the non-zero values in array \"A\".
 
 "),
 
-(E"Arrays",E"Base",E"findfirst",E"findfirst(A)
+("Arrays","Base","findfirst","findfirst(A)
 
    Return the index of the first non-zero value in \"A\".
 
 "),
 
-(E"Arrays",E"Base",E"findfirst",E"findfirst(A, v)
+("Arrays","Base","findfirst","findfirst(A, v)
 
    Return the index of the first element equal to \"v\" in \"A\".
 
 "),
 
-(E"Arrays",E"Base",E"findfirst",E"findfirst(predicate, A)
+("Arrays","Base","findfirst","findfirst(predicate, A)
 
    Return the index of the first element that satisfies the given
    predicate in \"A\".
 
 "),
 
-(E"Arrays",E"Base",E"permutedims",E"permutedims(A, perm)
+("Arrays","Base","permutedims","permutedims(A, perm)
 
    Permute the dimensions of array \"A\". \"perm\" is a vector
    specifying a permutation of length \"ndims(A)\". This is a
@@ -3545,81 +3545,81 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"ipermutedims",E"ipermutedims(A, perm)
+("Arrays","Base","ipermutedims","ipermutedims(A, perm)
 
    Like \"permutedims()\", except the inverse of the given permutation
    is applied.
 
 "),
 
-(E"Arrays",E"Base",E"squeeze",E"squeeze(A, dims)
+("Arrays","Base","squeeze","squeeze(A, dims)
 
    Remove the dimensions specified by \"dims\" from array \"A\"
 
 "),
 
-(E"Arrays",E"Base",E"vec",E"vec(Array) -> Vector
+("Arrays","Base","vec","vec(Array) -> Vector
 
    Vectorize an array using column-major convention.
 
 "),
 
-(E"Arrays",E"Base",E"cumprod",E"cumprod(A[, dim])
+("Arrays","Base","cumprod","cumprod(A[, dim])
 
    Cumulative product along a dimension.
 
 "),
 
-(E"Arrays",E"Base",E"cumsum",E"cumsum(A[, dim])
+("Arrays","Base","cumsum","cumsum(A[, dim])
 
    Cumulative sum along a dimension.
 
 "),
 
-(E"Arrays",E"Base",E"cumsum_kbn",E"cumsum_kbn(A[, dim])
+("Arrays","Base","cumsum_kbn","cumsum_kbn(A[, dim])
 
    Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier
    compensated summation algorithm for additional accuracy.
 
 "),
 
-(E"Arrays",E"Base",E"cummin",E"cummin(A[, dim])
+("Arrays","Base","cummin","cummin(A[, dim])
 
    Cumulative minimum along a dimension.
 
 "),
 
-(E"Arrays",E"Base",E"cummax",E"cummax(A[, dim])
+("Arrays","Base","cummax","cummax(A[, dim])
 
    Cumulative maximum along a dimension.
 
 "),
 
-(E"Arrays",E"Base",E"diff",E"diff(A[, dim])
+("Arrays","Base","diff","diff(A[, dim])
 
    Finite difference operator of matrix or vector.
 
 "),
 
-(E"Arrays",E"Base",E"rot180",E"rot180(A)
+("Arrays","Base","rot180","rot180(A)
 
    Rotate matrix \"A\" 180 degrees.
 
 "),
 
-(E"Arrays",E"Base",E"rotl90",E"rotl90(A)
+("Arrays","Base","rotl90","rotl90(A)
 
    Rotate matrix \"A\" left 90 degrees.
 
 "),
 
-(E"Arrays",E"Base",E"rotr90",E"rotr90(A)
+("Arrays","Base","rotr90","rotr90(A)
 
    Rotate matrix \"A\" right 90 degrees.
 
 "),
 
-(E"Arrays",E"Base",E"reducedim",E"reducedim(f, A, dims, initial)
+("Arrays","Base","reducedim","reducedim(f, A, dims, initial)
 
    Reduce 2-argument function \"f\" along dimensions of \"A\".
    \"dims\" is a vector specifying the dimensions to reduce, and
@@ -3627,14 +3627,14 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"Base",E"sum_kbn",E"sum_kbn(A)
+("Arrays","Base","sum_kbn","sum_kbn(A)
 
    Returns the sum of all array elements, using the Kahan-Babuska-
    Neumaier compensated summation algorithm for additional accuracy.
 
 "),
 
-(E"Sparse Matrices",E"Base",E"sparse",E"sparse(I, J, V[, m, n, combine])
+("Sparse Matrices","Base","sparse","sparse(I, J, V[, m, n, combine])
 
    Create a sparse matrix \"S\" of dimensions \"m x n\" such that
    \"S[I[k], J[k]] = V[k]\". The \"combine\" function is used to
@@ -3644,7 +3644,7 @@ airyaiprime(x)
 
 "),
 
-(E"Sparse Matrices",E"Base",E"sparsevec",E"sparsevec(I, V[, m, combine])
+("Sparse Matrices","Base","sparsevec","sparsevec(I, V[, m, combine])
 
    Create a sparse matrix \"S\" of size \"m x 1\" such that \"S[I[k]]
    = V[k]\". Duplicates are combined using the \"combine\" function,
@@ -3656,7 +3656,7 @@ airyaiprime(x)
 
 "),
 
-(E"Sparse Matrices",E"Base",E"sparsevec",E"sparsevec(D::Dict[, m])
+("Sparse Matrices","Base","sparsevec","sparsevec(D::Dict[, m])
 
    Create a sparse matrix of size \"m x 1\" where the row values are
    keys from the dictionary, and the nonzero values are the values
@@ -3664,25 +3664,25 @@ airyaiprime(x)
 
 "),
 
-(E"Sparse Matrices",E"Base",E"issparse",E"issparse(S)
+("Sparse Matrices","Base","issparse","issparse(S)
 
    Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
 
 "),
 
-(E"Sparse Matrices",E"Base",E"nnz",E"nnz(S)
+("Sparse Matrices","Base","nnz","nnz(S)
 
    Return the number of nonzeros in \"S\".
 
 "),
 
-(E"Sparse Matrices",E"Base",E"sparse",E"sparse(A)
+("Sparse Matrices","Base","sparse","sparse(A)
 
    Convert a dense matrix \"A\" into a sparse matrix.
 
 "),
 
-(E"Sparse Matrices",E"Base",E"sparsevec",E"sparsevec(A)
+("Sparse Matrices","Base","sparsevec","sparsevec(A)
 
    Convert a dense vector \"A\" into a sparse matrix of size \"m x
    1\". In julia, sparse vectors are really just sparse matrices with
@@ -3690,25 +3690,25 @@ airyaiprime(x)
 
 "),
 
-(E"Sparse Matrices",E"Base",E"dense",E"dense(S)
+("Sparse Matrices","Base","dense","dense(S)
 
    Convert a sparse matrix \"S\" into a dense matrix.
 
 "),
 
-(E"Sparse Matrices",E"Base",E"full",E"full(S)
+("Sparse Matrices","Base","full","full(S)
 
    Convert a sparse matrix \"S\" into a dense matrix.
 
 "),
 
-(E"Sparse Matrices",E"Base",E"spzeros",E"spzeros(m, n)
+("Sparse Matrices","Base","spzeros","spzeros(m, n)
 
    Create an empty sparse matrix of size \"m x n\".
 
 "),
 
-(E"Sparse Matrices",E"Base",E"speye",E"speye(type, m[, n])
+("Sparse Matrices","Base","speye","speye(type, m[, n])
 
    Create a sparse identity matrix of specified type of size \"m x
    m\". In case \"n\" is supplied, create a sparse identity matrix of
@@ -3716,14 +3716,14 @@ airyaiprime(x)
 
 "),
 
-(E"Sparse Matrices",E"Base",E"spones",E"spones(S)
+("Sparse Matrices","Base","spones","spones(S)
 
    Create a sparse matrix with the same structure as that of \"S\",
    but with every nonzero element having the value \"1.0\".
 
 "),
 
-(E"Sparse Matrices",E"Base",E"sprand",E"sprand(m, n, density[, rng])
+("Sparse Matrices","Base","sprand","sprand(m, n, density[, rng])
 
    Create a random sparse matrix with the specified density. Nonzeros
    are sampled from the distribution specified by \"rng\". The uniform
@@ -3731,26 +3731,26 @@ airyaiprime(x)
 
 "),
 
-(E"Sparse Matrices",E"Base",E"sprandn",E"sprandn(m, n, density)
+("Sparse Matrices","Base","sprandn","sprandn(m, n, density)
 
    Create a random sparse matrix of specified density with nonzeros
    sampled from the normal distribution.
 
 "),
 
-(E"Sparse Matrices",E"Base",E"sprandbool",E"sprandbool(m, n, density)
+("Sparse Matrices","Base","sprandbool","sprandbool(m, n, density)
 
    Create a random sparse boolean matrix with the specified density.
 
 "),
 
-(E"Linear Algebra",E"Base",E"*",E"*()
+("Linear Algebra","Base","*","*()
 
    Matrix multiplication
 
 "),
 
-(E"Linear Algebra",E"Base",E"\\",E"\\()
+("Linear Algebra","Base","\\","\\()
 
    Matrix division using a polyalgorithm. For input matrices \"A\" and
    \"B\", the result \"X\" is such that \"A*X == B\". For rectangular
@@ -3764,38 +3764,38 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"dot",E"dot()
+("Linear Algebra","Base","dot","dot()
 
    Compute the dot product
 
 "),
 
-(E"Linear Algebra",E"Base",E"cross",E"cross()
+("Linear Algebra","Base","cross","cross()
 
    Compute the cross product of two 3-vectors
 
 "),
 
-(E"Linear Algebra",E"Base",E"norm",E"norm()
+("Linear Algebra","Base","norm","norm()
 
    Compute the norm of a \"Vector\" or a \"Matrix\"
 
 "),
 
-(E"Linear Algebra",E"Base",E"factors",E"factors(F)
+("Linear Algebra","Base","factors","factors(F)
 
    Return the factors of a factorization \"F\". For example, in the
    case of an LU decomposition, factors(LU) -> L, U, P
 
 "),
 
-(E"Linear Algebra",E"Base",E"lu",E"lu(A) -> L, U, P
+("Linear Algebra","Base","lu","lu(A) -> L, U, P
 
    Compute the LU factorization of \"A\", such that \"A[P,:] = L*U\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"lufact",E"lufact(A) -> LUDense
+("Linear Algebra","Base","lufact","lufact(A) -> LUDense
 
    Compute the LU factorization of \"A\" and return a \"LUDense\"
    object. \"factors(lufact(A))\" returns the triangular matrices
@@ -3805,14 +3805,14 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"lufact!",E"lufact!(A) -> LUDense
+("Linear Algebra","Base","lufact!","lufact!(A) -> LUDense
 
    \"lufact!\" is the same as \"lufact\" but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
 
-(E"Linear Algebra",E"Base",E"chol",E"chol(A[, LU]) -> F
+("Linear Algebra","Base","chol","chol(A[, LU]) -> F
 
    Compute Cholesky factorization of a symmetric positive-definite
    matrix \"A\" and return the matrix \"F\". If \"LU\" is \"L\"
@@ -3820,7 +3820,7 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"cholfact",E"cholfact(A[, LU]) -> CholeskyDense
+("Linear Algebra","Base","cholfact","cholfact(A[, LU]) -> CholeskyDense
 
    Compute the Cholesky factorization of a symmetric positive-definite
    matrix \"A\" and return a \"CholeskyDense\" object. \"LU\" may be
@@ -3833,7 +3833,7 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"cholpfact",E"cholpfact(A[, LU]) -> CholeskyPivotedDense
+("Linear Algebra","Base","cholpfact","cholpfact(A[, LU]) -> CholeskyPivotedDense
 
    Compute the pivoted Cholesky factorization of a symmetric positive
    semi-definite matrix \"A\" and return a \"CholeskyDensePivoted\"
@@ -3847,21 +3847,21 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"cholpfact!",E"cholpfact!(A[, LU]) -> CholeskyPivotedDense
+("Linear Algebra","Base","cholpfact!","cholpfact!(A[, LU]) -> CholeskyPivotedDense
 
    \"cholpfact!\" is the same as \"cholpfact\" but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
 
-(E"Linear Algebra",E"Base",E"qr",E"qr(A) -> Q, R
+("Linear Algebra","Base","qr","qr(A) -> Q, R
 
    Compute the QR factorization of \"A\" such that \"A = Q*R\". Also
    see \"qrd\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"qrfact",E"qrfact(A)
+("Linear Algebra","Base","qrfact","qrfact(A)
 
    Compute the QR factorization of \"A\" and return a \"QRDense\"
    object. \"factors(qrfact(A))\" returns \"Q\" and \"R\". The
@@ -3870,14 +3870,14 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"qrfact!",E"qrfact!(A)
+("Linear Algebra","Base","qrfact!","qrfact!(A)
 
    \"qrfact!\" is the same as \"qrfact\" but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
 
-(E"Linear Algebra",E"Base",E"qrp",E"qrp(A) -> Q, R, P
+("Linear Algebra","Base","qrp","qrp(A) -> Q, R, P
 
    Compute the QR factorization of \"A\" with pivoting, such that
    \"A*I[:,P] = Q*R\", where \"I\" is the identity matrix. Also see
@@ -3885,7 +3885,7 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"qrpfact",E"qrpfact(A) -> QRPivotedDense
+("Linear Algebra","Base","qrpfact","qrpfact(A) -> QRPivotedDense
 
    Compute the QR factorization of \"A\" with pivoting and return a
    \"QRDensePivoted\" object. \"factors(qrpfact(A))\" returns \"Q\"
@@ -3895,14 +3895,14 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"qrpfact!",E"qrpfact!(A) -> QRPivotedDense
+("Linear Algebra","Base","qrpfact!","qrpfact!(A) -> QRPivotedDense
 
    \"qrpfact!\" is the same as \"qrpfact\" but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
 
-(E"Linear Algebra",E"Base",E"qmulQR",E"qmulQR(QR, A)
+("Linear Algebra","Base","qmulQR","qmulQR(QR, A)
 
    Perform \"Q*A\" efficiently, where Q is a an orthogonal matrix
    defined as the product of k elementary reflectors from the QR
@@ -3910,7 +3910,7 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"qTmulQR",E"qTmulQR(QR, A)
+("Linear Algebra","Base","qTmulQR","qTmulQR(QR, A)
 
    Perform \"Q'*A\" efficiently, where Q is a an orthogonal matrix
    defined as the product of k elementary reflectors from the QR
@@ -3918,26 +3918,26 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"sqrtm",E"sqrtm(A)
+("Linear Algebra","Base","sqrtm","sqrtm(A)
 
    Compute the matrix square root of \"A\". If \"B = sqrtm(A)\", then
    \"B*B == A\" within roundoff error.
 
 "),
 
-(E"Linear Algebra",E"Base",E"eig",E"eig(A) -> D, V
+("Linear Algebra","Base","eig","eig(A) -> D, V
 
    Compute eigenvalues and eigenvectors of A
 
 "),
 
-(E"Linear Algebra",E"Base",E"eigvals",E"eigvals(A)
+("Linear Algebra","Base","eigvals","eigvals(A)
 
    Returns the eigenvalues of \"A\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"svdfact",E"svdfact(A[, thin]) -> SVDDense
+("Linear Algebra","Base","svdfact","svdfact(A[, thin]) -> SVDDense
 
    Compute the Singular Value Decomposition (SVD) of \"A\" and return
    an \"SVDDense\" object. \"factors(svdfact(A))\" returns \"U\",
@@ -3946,7 +3946,7 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svdfact!",E"svdfact!(A[, thin]) -> SVDDense
+("Linear Algebra","Base","svdfact!","svdfact!(A[, thin]) -> SVDDense
 
    \"svdfact!\" is the same as \"svdfact\" but saves space by
    overwriting the input A, instead of creating a copy. If \"thin\" is
@@ -3954,7 +3954,7 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svd",E"svd(A[, thin]) -> U, S, V
+("Linear Algebra","Base","svd","svd(A[, thin]) -> U, S, V
 
    Compute the SVD of A, returning \"U\", vector \"S\", and \"V\" such
    that \"A == U*diagm(S)*V'\". If \"thin\" is \"true\", an economy
@@ -3962,7 +3962,7 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svdt",E"svdt(A[, thin]) -> U, S, Vt
+("Linear Algebra","Base","svdt","svdt(A[, thin]) -> U, S, Vt
 
    Compute the SVD of A, returning \"U\", vector \"S\", and \"Vt\"
    such that \"A = U*diagm(S)*Vt\". If \"thin\" is \"true\", an
@@ -3970,20 +3970,20 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svdvals",E"svdvals(A)
+("Linear Algebra","Base","svdvals","svdvals(A)
 
    Returns the singular values of \"A\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"svdvals!",E"svdvals!(A)
+("Linear Algebra","Base","svdvals!","svdvals!(A)
 
    Returns the singular values of \"A\", while saving space by
    overwriting the input.
 
 "),
 
-(E"Linear Algebra",E"Base",E"svdfact",E"svdfact(A, B) -> GSVDDense
+("Linear Algebra","Base","svdfact","svdfact(A, B) -> GSVDDense
 
    Compute the generalized SVD of \"A\" and \"B\", returning a
    \"GSVDDense\" Factorization object. \"factors(svdfact(A,b))\"
@@ -3992,7 +3992,7 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svd",E"svd(A, B) -> U, V, Q, D1, D2, R0
+("Linear Algebra","Base","svd","svd(A, B) -> U, V, Q, D1, D2, R0
 
    Compute the generalized SVD of \"A\" and \"B\", returning \"U\",
    \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that \"A =
@@ -4000,39 +4000,39 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"svdvals",E"svdvals(A, B)
+("Linear Algebra","Base","svdvals","svdvals(A, B)
 
    Return only the singular values from the generalized singular value
    decomposition of \"A\" and \"B\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"triu",E"triu(M)
+("Linear Algebra","Base","triu","triu(M)
 
    Upper triangle of a matrix
 
 "),
 
-(E"Linear Algebra",E"Base",E"tril",E"tril(M)
+("Linear Algebra","Base","tril","tril(M)
 
    Lower triangle of a matrix
 
 "),
 
-(E"Linear Algebra",E"Base",E"diag",E"diag(M[, k])
+("Linear Algebra","Base","diag","diag(M[, k])
 
    The \"k\"-th diagonal of a matrix, as a vector
 
 "),
 
-(E"Linear Algebra",E"Base",E"diagm",E"diagm(v[, k])
+("Linear Algebra","Base","diagm","diagm(v[, k])
 
    Construct a diagonal matrix and place \"v\" on the \"k\"-th
    diagonal
 
 "),
 
-(E"Linear Algebra",E"Base",E"diagmm",E"diagmm(matrix, vector)
+("Linear Algebra","Base","diagmm","diagmm(matrix, vector)
 
    Multiply matrices, interpreting the vector argument as a diagonal
    matrix. The arguments may occur in the other order to multiply with
@@ -4040,27 +4040,27 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"Tridiagonal",E"Tridiagonal(dl, d, du)
+("Linear Algebra","Base","Tridiagonal","Tridiagonal(dl, d, du)
 
    Construct a tridiagonal matrix from the lower diagonal, diagonal,
    and upper diagonal
 
 "),
 
-(E"Linear Algebra",E"Base",E"Woodbury",E"Woodbury(A, U, C, V)
+("Linear Algebra","Base","Woodbury","Woodbury(A, U, C, V)
 
    Construct a matrix in a form suitable for applying the Woodbury
    matrix identity
 
 "),
 
-(E"Linear Algebra",E"Base",E"rank",E"rank(M)
+("Linear Algebra","Base","rank","rank(M)
 
    Compute the rank of a matrix
 
 "),
 
-(E"Linear Algebra",E"Base",E"norm",E"norm(A[, p])
+("Linear Algebra","Base","norm","norm(A[, p])
 
    Compute the \"p\"-norm of a vector or a matrix. \"p\" is \"2\" by
    default, if not provided. If \"A\" is a vector, \"norm(A, p)\"
@@ -4071,13 +4071,13 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"normfro",E"normfro(A)
+("Linear Algebra","Base","normfro","normfro(A)
 
    Compute the Frobenius norm of a matrix \"A\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"cond",E"cond(M[, p])
+("Linear Algebra","Base","cond","cond(M[, p])
 
    Matrix condition number, computed using the p-norm. \"p\" is 2 by
    default, if not provided. Valid values for \"p\" are \"1\", \"2\",
@@ -4085,141 +4085,141 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"Base",E"trace",E"trace(M)
+("Linear Algebra","Base","trace","trace(M)
 
    Matrix trace
 
 "),
 
-(E"Linear Algebra",E"Base",E"det",E"det(M)
+("Linear Algebra","Base","det","det(M)
 
    Matrix determinant
 
 "),
 
-(E"Linear Algebra",E"Base",E"inv",E"inv(M)
+("Linear Algebra","Base","inv","inv(M)
 
    Matrix inverse
 
 "),
 
-(E"Linear Algebra",E"Base",E"pinv",E"pinv(M)
+("Linear Algebra","Base","pinv","pinv(M)
 
    Moore-Penrose inverse
 
 "),
 
-(E"Linear Algebra",E"Base",E"null",E"null(M)
+("Linear Algebra","Base","null","null(M)
 
    Basis for null space of M.
 
 "),
 
-(E"Linear Algebra",E"Base",E"repmat",E"repmat(A, n, m)
+("Linear Algebra","Base","repmat","repmat(A, n, m)
 
    Construct a matrix by repeating the given matrix \"n\" times in
    dimension 1 and \"m\" times in dimension 2.
 
 "),
 
-(E"Linear Algebra",E"Base",E"kron",E"kron(A, B)
+("Linear Algebra","Base","kron","kron(A, B)
 
    Kronecker tensor product of two vectors or two matrices.
 
 "),
 
-(E"Linear Algebra",E"Base",E"linreg",E"linreg(x, y)
+("Linear Algebra","Base","linreg","linreg(x, y)
 
    Determine parameters \"[a, b]\" that minimize the squared error
    between \"y\" and \"a+b*x\".
 
 "),
 
-(E"Linear Algebra",E"Base",E"linreg",E"linreg(x, y, w)
+("Linear Algebra","Base","linreg","linreg(x, y, w)
 
    Weighted least-squares linear regression.
 
 "),
 
-(E"Linear Algebra",E"Base",E"expm",E"expm(A)
+("Linear Algebra","Base","expm","expm(A)
 
    Matrix exponential.
 
 "),
 
-(E"Linear Algebra",E"Base",E"issym",E"issym(A)
+("Linear Algebra","Base","issym","issym(A)
 
    Test whether a matrix is symmetric.
 
 "),
 
-(E"Linear Algebra",E"Base",E"isposdef",E"isposdef(A)
+("Linear Algebra","Base","isposdef","isposdef(A)
 
    Test whether a matrix is positive-definite.
 
 "),
 
-(E"Linear Algebra",E"Base",E"istril",E"istril(A)
+("Linear Algebra","Base","istril","istril(A)
 
    Test whether a matrix is lower-triangular.
 
 "),
 
-(E"Linear Algebra",E"Base",E"istriu",E"istriu(A)
+("Linear Algebra","Base","istriu","istriu(A)
 
    Test whether a matrix is upper-triangular.
 
 "),
 
-(E"Linear Algebra",E"Base",E"ishermitian",E"ishermitian(A)
+("Linear Algebra","Base","ishermitian","ishermitian(A)
 
    Test whether a matrix is hermitian.
 
 "),
 
-(E"Linear Algebra",E"Base",E"transpose",E"transpose(A)
+("Linear Algebra","Base","transpose","transpose(A)
 
    The transpose operator (.').
 
 "),
 
-(E"Linear Algebra",E"Base",E"ctranspose",E"ctranspose(A)
+("Linear Algebra","Base","ctranspose","ctranspose(A)
 
    The conjugate transpose operator (').
 
 "),
 
-(E"Combinatorics",E"Base",E"nthperm",E"nthperm(v, k)
+("Combinatorics","Base","nthperm","nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector.
 
 "),
 
-(E"Combinatorics",E"Base",E"nthperm!",E"nthperm!(v, k)
+("Combinatorics","Base","nthperm!","nthperm!(v, k)
 
    In-place version of \"nthperm()\".
 
 "),
 
-(E"Combinatorics",E"Base",E"randperm",E"randperm(n)
+("Combinatorics","Base","randperm","randperm(n)
 
    Construct a random permutation of the given length.
 
 "),
 
-(E"Combinatorics",E"Base",E"invperm",E"invperm(v)
+("Combinatorics","Base","invperm","invperm(v)
 
    Return the inverse permutation of v.
 
 "),
 
-(E"Combinatorics",E"Base",E"isperm",E"isperm(v) -> Bool
+("Combinatorics","Base","isperm","isperm(v) -> Bool
 
    Returns true if v is a valid permutation.
 
 "),
 
-(E"Combinatorics",E"Base",E"permute!",E"permute!(v, p)
+("Combinatorics","Base","permute!","permute!(v, p)
 
    Permute vector \"v\" in-place, according to permutation \"p\".  No
    checking is done to verify that \"p\" is a permutation.
@@ -4229,43 +4229,43 @@ airyaiprime(x)
 
 "),
 
-(E"Combinatorics",E"Base",E"ipermute!",E"ipermute!(v, p)
+("Combinatorics","Base","ipermute!","ipermute!(v, p)
 
    Like permute!, but the inverse of the given permutation is applied.
 
 "),
 
-(E"Combinatorics",E"Base",E"randcycle",E"randcycle(n)
+("Combinatorics","Base","randcycle","randcycle(n)
 
    Construct a random cyclic permutation of the given length.
 
 "),
 
-(E"Combinatorics",E"Base",E"shuffle",E"shuffle(v)
+("Combinatorics","Base","shuffle","shuffle(v)
 
    Randomly rearrange the elements of a vector.
 
 "),
 
-(E"Combinatorics",E"Base",E"shuffle!",E"shuffle!(v)
+("Combinatorics","Base","shuffle!","shuffle!(v)
 
    In-place version of \"shuffle()\".
 
 "),
 
-(E"Combinatorics",E"Base",E"reverse",E"reverse(v)
+("Combinatorics","Base","reverse","reverse(v)
 
    Reverse vector \"v\".
 
 "),
 
-(E"Combinatorics",E"Base",E"reverse!",E"reverse!(v) -> v
+("Combinatorics","Base","reverse!","reverse!(v) -> v
 
    In-place version of \"reverse()\".
 
 "),
 
-(E"Combinatorics",E"Base",E"combinations",E"combinations(array, n)
+("Combinatorics","Base","combinations","combinations(array, n)
 
    Generate all combinations of \"n\" elements from a given array.
    Because the number of combinations can be very large, this function
@@ -4274,7 +4274,7 @@ airyaiprime(x)
 
 "),
 
-(E"Combinatorics",E"Base",E"integer_partitions",E"integer_partitions(n, m)
+("Combinatorics","Base","integer_partitions","integer_partitions(n, m)
 
    Generate all arrays of \"m\" integers that sum to \"n\". Because
    the number of partitions can be very large, this function runs
@@ -4284,7 +4284,7 @@ airyaiprime(x)
 
 "),
 
-(E"Combinatorics",E"Base",E"partitions",E"partitions(array)
+("Combinatorics","Base","partitions","partitions(array)
 
    Generate all set partitions of the elements of an array,
    represented as arrays of arrays. Because the number of partitions
@@ -4294,14 +4294,14 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"mean",E"mean(v[, dim])
+("Statistics","Base","mean","mean(v[, dim])
 
    Compute the mean of whole array \"v\", or optionally along
    dimension \"dim\"
 
 "),
 
-(E"Statistics",E"Base",E"std",E"std(v[, corrected])
+("Statistics","Base","std","std(v[, corrected])
 
    Compute the sample standard deviation of a vector \"v\". If the
    optional argument \"corrected\" is either left unspecified or is
@@ -4320,7 +4320,7 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"std",E"std(v, m[, corrected])
+("Statistics","Base","std","std(v, m[, corrected])
 
    Compute the sample standard deviation of a vector \"v\" with known
    mean \"m\". If the optional argument \"corrected\" is either left
@@ -4338,7 +4338,7 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"var",E"var(v[, corrected])
+("Statistics","Base","var","var(v[, corrected])
 
    Compute the sample variance of a vector \"v\". If the optional
    argument \"corrected\" is either left unspecified or is explicitly
@@ -4355,7 +4355,7 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"var",E"var(v, m[, corrected])
+("Statistics","Base","var","var(v, m[, corrected])
 
    Compute the sample variance of a vector \"v\" with known mean
    \"m\". If the optional argument \"corrected\" is either left
@@ -4372,54 +4372,54 @@ airyaiprime(x)
 
 "),
 
-(E"Statistics",E"Base",E"median",E"median(v)
+("Statistics","Base","median","median(v)
 
    Compute the median of a vector \"v\"
 
 "),
 
-(E"Statistics",E"Base",E"hist",E"hist(v[, n])
+("Statistics","Base","hist","hist(v[, n])
 
    Compute the histogram of \"v\", optionally using \"n\" bins
 
 "),
 
-(E"Statistics",E"Base",E"hist",E"hist(v, e)
+("Statistics","Base","hist","hist(v, e)
 
    Compute the histogram of \"v\" using a vector \"e\" as the edges
    for the bins
 
 "),
 
-(E"Statistics",E"Base",E"quantile",E"quantile(v, p)
+("Statistics","Base","quantile","quantile(v, p)
 
    Compute the quantiles of a vector \"v\" at a specified set of
    probability values \"p\".
 
 "),
 
-(E"Statistics",E"Base",E"quantile",E"quantile(v)
+("Statistics","Base","quantile","quantile(v)
 
    Compute the quantiles of a vector \"v\" at the probability values
    \"[.0, .2, .4, .6, .8, 1.0]\".
 
 "),
 
-(E"Statistics",E"Base",E"cov",E"cov(v)
+("Statistics","Base","cov","cov(v)
 
    Compute the Pearson covariance between two vectors \"v1\" and
    \"v2\".
 
 "),
 
-(E"Statistics",E"Base",E"cor",E"cor(v)
+("Statistics","Base","cor","cor(v)
 
    Compute the Pearson correlation between two vectors \"v1\" and
    \"v2\".
 
 "),
 
-(E"Signal Processing",E"Base",E"fft",E"fft(A[, dims])
+("Signal Processing","Base","fft","fft(A[, dims])
 
    Performs a multidimensional FFT of the array \"A\".  The optional
    \"dims\" argument specifies an iterable subset of dimensions (e.g.
@@ -4437,14 +4437,14 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"fft!",E"fft!(A[, dims])
+("Signal Processing","Base","fft!","fft!(A[, dims])
 
    Same as \"fft()\", but operates in-place on \"A\", which must be an
    array of complex floating-point numbers.
 
 "),
 
-(E"Signal Processing",E"",E"ifft(A [, dims]), bfft, bfft!",E"ifft(A [, dims]), bfft, bfft!
+("Signal Processing","","ifft(A [, dims]), bfft, bfft!","ifft(A [, dims]), bfft, bfft!
 
    Multidimensional inverse FFT.
 
@@ -4457,13 +4457,13 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"ifft!",E"ifft!(A[, dims])
+("Signal Processing","Base","ifft!","ifft!(A[, dims])
 
    Same as \"ifft()\", but operates in-place on \"A\".
 
 "),
 
-(E"Signal Processing",E"Base",E"bfft",E"bfft(A[, dims])
+("Signal Processing","Base","bfft","bfft(A[, dims])
 
    Similar to \"ifft()\", but computes an unnormalized inverse
    (backward) transform, which must be divided by the product of the
@@ -4474,13 +4474,13 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"bfft!",E"bfft!(A[, dims])
+("Signal Processing","Base","bfft!","bfft!(A[, dims])
 
    Same as \"bfft()\", but operates in-place on \"A\".
 
 "),
 
-(E"Signal Processing",E"",E"plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft",E"plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
+("Signal Processing","","plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft","plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
 
    Pre-plan an optimized FFT along given dimensions (\"dims\") of
    arrays matching the shape and type of \"A\".  (The first two
@@ -4505,25 +4505,25 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"plan_fft!",E"plan_fft!(A[, dims[, flags[, timelimit]]])
+("Signal Processing","Base","plan_fft!","plan_fft!(A[, dims[, flags[, timelimit]]])
 
    Same as \"plan_fft()\", but operates in-place on \"A\".
 
 "),
 
-(E"Signal Processing",E"Base",E"plan_ifft!",E"plan_ifft!(A[, dims[, flags[, timelimit]]])
+("Signal Processing","Base","plan_ifft!","plan_ifft!(A[, dims[, flags[, timelimit]]])
 
    Same as \"plan_ifft()\", but operates in-place on \"A\".
 
 "),
 
-(E"Signal Processing",E"Base",E"plan_bfft!",E"plan_bfft!(A[, dims[, flags[, timelimit]]])
+("Signal Processing","Base","plan_bfft!","plan_bfft!(A[, dims[, flags[, timelimit]]])
 
    Same as \"plan_bfft()\", but operates in-place on \"A\".
 
 "),
 
-(E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dims])
+("Signal Processing","Base","rfft","rfft(A[, dims])
 
    Multidimensional FFT of a real array A, exploiting the fact that
    the transform has conjugate symmetry in order to save roughly half
@@ -4539,7 +4539,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"irfft",E"irfft(A, d[, dims])
+("Signal Processing","Base","irfft","irfft(A, d[, dims])
 
    Inverse of \"rfft()\": for a complex array \"A\", gives the
    corresponding real array whose FFT yields \"A\" in the first half.
@@ -4554,7 +4554,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"brfft",E"brfft(A, d[, dims])
+("Signal Processing","Base","brfft","brfft(A, d[, dims])
 
    Similar to \"irfft()\" but computes an unnormalized inverse
    transform (similar to \"bfft()\"), which must be divided by the
@@ -4563,7 +4563,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"plan_rfft",E"plan_rfft(A[, dims[, flags[, timelimit]]])
+("Signal Processing","Base","plan_rfft","plan_rfft(A[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized real-input FFT, similar to \"plan_fft()\"
    except for \"rfft()\" instead of \"fft()\".  The first two
@@ -4572,7 +4572,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft",E"plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+("Signal Processing","","plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft","plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
 
    Pre-plan an optimized inverse real-input FFT, similar to
    \"plan_rfft()\" except for \"irfft()\" and \"brfft()\",
@@ -4581,7 +4581,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"dct",E"dct(A[, dims])
+("Signal Processing","Base","dct","dct(A[, dims])
 
    Performs a multidimensional type-II discrete cosine transform (DCT)
    of the array \"A\", using the unitary normalization of the DCT. The
@@ -4593,14 +4593,14 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"dct!",E"dct!(A[, dims])
+("Signal Processing","Base","dct!","dct!(A[, dims])
 
    Same as \"dct!()\", except that it operates in-place on \"A\",
    which must be an array of real or complex floating-point values.
 
 "),
 
-(E"Signal Processing",E"Base",E"idct",E"idct(A[, dims])
+("Signal Processing","Base","idct","idct(A[, dims])
 
    Computes the multidimensional inverse discrete cosine transform
    (DCT) of the array \"A\" (technically, a type-III DCT with the
@@ -4613,13 +4613,13 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"idct!",E"idct!(A[, dims])
+("Signal Processing","Base","idct!","idct!(A[, dims])
 
    Same as \"idct!()\", but operates in-place on \"A\".
 
 "),
 
-(E"Signal Processing",E"Base",E"plan_dct",E"plan_dct(A[, dims[, flags[, timelimit]]])
+("Signal Processing","Base","plan_dct","plan_dct(A[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized discrete cosine transform (DCT), similar to
    \"plan_fft()\" except producing a function that computes \"dct()\".
@@ -4627,13 +4627,13 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"plan_dct!",E"plan_dct!(A[, dims[, flags[, timelimit]]])
+("Signal Processing","Base","plan_dct!","plan_dct!(A[, dims[, flags[, timelimit]]])
 
    Same as \"plan_dct()\", but operates in-place on \"A\".
 
 "),
 
-(E"Signal Processing",E"Base",E"plan_idct",E"plan_idct(A[, dims[, flags[, timelimit]]])
+("Signal Processing","Base","plan_idct","plan_idct(A[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized inverse discrete cosine transform (DCT),
    similar to \"plan_fft()\" except producing a function that computes
@@ -4642,13 +4642,13 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"plan_idct!",E"plan_idct!(A[, dims[, flags[, timelimit]]])
+("Signal Processing","Base","plan_idct!","plan_idct!(A[, dims[, flags[, timelimit]]])
 
    Same as \"plan_idct()\", but operates in-place on \"A\".
 
 "),
 
-(E"Signal Processing",E"",E"FFTW.r2r(A, kind [, dims]), FFTW.r2r!",E"FFTW.r2r(A, kind [, dims]), FFTW.r2r!
+("Signal Processing","","FFTW.r2r(A, kind [, dims]), FFTW.r2r!","FFTW.r2r(A, kind [, dims]), FFTW.r2r!
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type \"kind\" of the array \"A\", as defined in the FFTW manual.
@@ -4678,7 +4678,7 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!",E"FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
+("Signal Processing","","FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!","FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
 
    Pre-plan an optimized r2r transform, similar to \"plan_fft()\"
    except that the transforms (and the first three arguments)
@@ -4686,58 +4686,58 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"Base",E"fftshift",E"fftshift(x)
+("Signal Processing","Base","fftshift","fftshift(x)
 
    Swap the first and second halves of each dimension of \"x\".
 
 "),
 
-(E"Signal Processing",E"Base",E"fftshift",E"fftshift(x, dim)
+("Signal Processing","Base","fftshift","fftshift(x, dim)
 
    Swap the first and second halves of the given dimension of array
    \"x\".
 
 "),
 
-(E"Signal Processing",E"Base",E"ifftshift",E"ifftshift(x[, dim])
+("Signal Processing","Base","ifftshift","ifftshift(x[, dim])
 
    Undoes the effect of \"fftshift\".
 
 "),
 
-(E"Signal Processing",E"Base",E"filt",E"filt(b, a, x)
+("Signal Processing","Base","filt","filt(b, a, x)
 
    Apply filter described by vectors \"a\" and \"b\" to vector \"x\".
 
 "),
 
-(E"Signal Processing",E"Base",E"deconv",E"deconv(b, a)
+("Signal Processing","Base","deconv","deconv(b, a)
 
    Construct vector \"c\" such that \"b = conv(a,c) + r\". Equivalent
    to polynomial division.
 
 "),
 
-(E"Signal Processing",E"Base",E"conv",E"conv(u, v)
+("Signal Processing","Base","conv","conv(u, v)
 
    Convolution of two vectors. Uses FFT algorithm.
 
 "),
 
-(E"Signal Processing",E"Base",E"xcorr",E"xcorr(u, v)
+("Signal Processing","Base","xcorr","xcorr(u, v)
 
    Compute the cross-correlation of two vectors.
 
 "),
 
-(E"Parallel Computing",E"Base",E"addprocs_local",E"addprocs_local(n)
+("Parallel Computing","Base","addprocs_local","addprocs_local(n)
 
    Add processes on the local machine. Can be used to take advantage
    of multiple cores.
 
 "),
 
-(E"Parallel Computing",E"Base",E"addprocs_ssh",E"addprocs_ssh({\"host1\", \"host2\", ...})
+("Parallel Computing","Base","addprocs_ssh","addprocs_ssh({\"host1\", \"host2\", ...})
 
    Add processes on remote machines via SSH. Requires julia to be
    installed in the same location on each node, or to be available via
@@ -4745,65 +4745,65 @@ airyaiprime(x)
 
 "),
 
-(E"Parallel Computing",E"Base",E"addprocs_sge",E"addprocs_sge(n)
+("Parallel Computing","Base","addprocs_sge","addprocs_sge(n)
 
    Add processes via the Sun/Oracle Grid Engine batch queue, using
    \"qsub\".
 
 "),
 
-(E"Parallel Computing",E"Base",E"nprocs",E"nprocs()
+("Parallel Computing","Base","nprocs","nprocs()
 
    Get the number of available processors.
 
 "),
 
-(E"Parallel Computing",E"Base",E"myid",E"myid()
+("Parallel Computing","Base","myid","myid()
 
    Get the id of the current processor.
 
 "),
 
-(E"Parallel Computing",E"Base",E"pmap",E"pmap(f, c)
+("Parallel Computing","Base","pmap","pmap(f, c)
 
    Transform collection \"c\" by applying \"f\" to each element in
    parallel.
 
 "),
 
-(E"Parallel Computing",E"Base",E"remote_call",E"remote_call(id, func, args...)
+("Parallel Computing","Base","remote_call","remote_call(id, func, args...)
 
    Call a function asynchronously on the given arguments on the
    specified processor. Returns a \"RemoteRef\".
 
 "),
 
-(E"Parallel Computing",E"Base",E"wait",E"wait(RemoteRef)
+("Parallel Computing","Base","wait","wait(RemoteRef)
 
    Wait for a value to become available for the specified remote
    reference.
 
 "),
 
-(E"Parallel Computing",E"Base",E"fetch",E"fetch(RemoteRef)
+("Parallel Computing","Base","fetch","fetch(RemoteRef)
 
    Wait for and get the value of a remote reference.
 
 "),
 
-(E"Parallel Computing",E"Base",E"remote_call_wait",E"remote_call_wait(id, func, args...)
+("Parallel Computing","Base","remote_call_wait","remote_call_wait(id, func, args...)
 
    Perform \"wait(remote_call(...))\" in one message.
 
 "),
 
-(E"Parallel Computing",E"Base",E"remote_call_fetch",E"remote_call_fetch(id, func, args...)
+("Parallel Computing","Base","remote_call_fetch","remote_call_fetch(id, func, args...)
 
    Perform \"fetch(remote_call(...))\" in one message.
 
 "),
 
-(E"Parallel Computing",E"Base",E"put",E"put(RemoteRef, value)
+("Parallel Computing","Base","put","put(RemoteRef, value)
 
    Store a value to a remote reference. Implements \"shared queue of
    length 1\" semantics: if a value is already present, blocks until
@@ -4811,26 +4811,26 @@ airyaiprime(x)
 
 "),
 
-(E"Parallel Computing",E"Base",E"take",E"take(RemoteRef)
+("Parallel Computing","Base","take","take(RemoteRef)
 
    Fetch the value of a remote reference, removing it so that the
    reference is empty again.
 
 "),
 
-(E"Parallel Computing",E"Base",E"RemoteRef",E"RemoteRef()
+("Parallel Computing","Base","RemoteRef","RemoteRef()
 
    Make an uninitialized remote reference on the local machine.
 
 "),
 
-(E"Parallel Computing",E"Base",E"RemoteRef",E"RemoteRef(n)
+("Parallel Computing","Base","RemoteRef","RemoteRef(n)
 
    Make an uninitialized remote reference on processor \"n\".
 
 "),
 
-(E"Distributed Arrays",E"Base",E"DArray",E"DArray(init, dims[, procs, dist])
+("Distributed Arrays","Base","DArray","DArray(init, dims[, procs, dist])
 
    Construct a distributed array. \"init\" is a function accepting a
    tuple of index ranges. This function should return a chunk of the
@@ -4842,66 +4842,66 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"Base",E"dzeros",E"dzeros(dims, ...)
+("Distributed Arrays","Base","dzeros","dzeros(dims, ...)
 
    Construct a distributed array of zeros. Trailing arguments are the
    same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"Base",E"dones",E"dones(dims, ...)
+("Distributed Arrays","Base","dones","dones(dims, ...)
 
    Construct a distributed array of ones. Trailing arguments are the
    same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"Base",E"dfill",E"dfill(x, dims, ...)
+("Distributed Arrays","Base","dfill","dfill(x, dims, ...)
 
    Construct a distributed array filled with value \"x\". Trailing
    arguments are the same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"Base",E"drand",E"drand(dims, ...)
+("Distributed Arrays","Base","drand","drand(dims, ...)
 
    Construct a distributed uniform random array. Trailing arguments
    are the same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"Base",E"drandn",E"drandn(dims, ...)
+("Distributed Arrays","Base","drandn","drandn(dims, ...)
 
    Construct a distributed normal random array. Trailing arguments are
    the same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"Base",E"distribute",E"distribute(a)
+("Distributed Arrays","Base","distribute","distribute(a)
 
    Convert a local array to distributed
 
 "),
 
-(E"Distributed Arrays",E"Base",E"localize",E"localize(d)
+("Distributed Arrays","Base","localize","localize(d)
 
    Get the local piece of a distributed array
 
 "),
 
-(E"Distributed Arrays",E"Base",E"myindexes",E"myindexes(d)
+("Distributed Arrays","Base","myindexes","myindexes(d)
 
    A tuple describing the indexes owned by the local processor
 
 "),
 
-(E"Distributed Arrays",E"Base",E"procs",E"procs(d)
+("Distributed Arrays","Base","procs","procs(d)
 
    Get the vector of processors storing pieces of \"d\"
 
 "),
 
-(E"System",E"Base",E"run",E"run(command)
+("System","Base","run","run(command)
 
    Run a command object, constructed with backticks. Throws an error
    if anything goes wrong, including the process exiting with a non-
@@ -4909,14 +4909,14 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"success",E"success(command)
+("System","Base","success","success(command)
 
    Run a command object, constructed with backticks, and tell whether
    it was successful (exited with a code of 0).
 
 "),
 
-(E"System",E"Base",E"readsfrom",E"readsfrom(command)
+("System","Base","readsfrom","readsfrom(command)
 
    Starts running a command asynchronously, and returns a tuple
    (stream,process). The first value is a stream reading from the
@@ -4924,7 +4924,7 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"writesto",E"writesto(command)
+("System","Base","writesto","writesto(command)
 
    Starts running a command asynchronously, and returns a tuple
    (stream,process). The first value is a stream writing to the
@@ -4932,7 +4932,7 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"readandwrite",E"readandwrite(command)
+("System","Base","readandwrite","readandwrite(command)
 
    Starts running a command asynchronously, and returns a tuple
    (stdout,stdin,process) of the output stream and input stream of the
@@ -4940,7 +4940,7 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"",E"> < >> .>",E"> < >> .>
+("System","","> < >> .>","> < >> .>
 
    \">\" \"<\" and \">>\" work exactly as in bash, and \".>\"
    redirects STDERR.
@@ -4949,40 +4949,40 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"gethostname",E"gethostname() -> String
+("System","Base","gethostname","gethostname() -> String
 
    Get the local machine's host name.
 
 "),
 
-(E"System",E"Base",E"getipaddr",E"getipaddr() -> String
+("System","Base","getipaddr","getipaddr() -> String
 
    Get the IP address of the local machine, as a string of the form
    \"x.x.x.x\".
 
 "),
 
-(E"System",E"Base",E"pwd",E"pwd() -> String
+("System","Base","pwd","pwd() -> String
 
    Get the current working directory.
 
 "),
 
-(E"System",E"Base",E"cd",E"cd(dir::String)
+("System","Base","cd","cd(dir::String)
 
    Set the current working directory. Returns the new current
    directory.
 
 "),
 
-(E"System",E"Base",E"cd",E"cd(f[, \"dir\"])
+("System","Base","cd","cd(f[, \"dir\"])
 
    Temporarily changes the current working directory (HOME if not
    specified) and applies function f before returning.
 
 "),
 
-(E"System",E"Base",E"mkdir",E"mkdir(path[, mode])
+("System","Base","mkdir","mkdir(path[, mode])
 
    Make a new directory with name \"path\" and permissions \"mode\".
    \"mode\" defaults to 0o777, modified by the current file creation
@@ -4990,66 +4990,66 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"Base",E"rmdir",E"rmdir(path)
+("System","Base","rmdir","rmdir(path)
 
    Remove the directory named \"path\".
 
 "),
 
-(E"System",E"Base",E"getpid",E"getpid() -> Int32
+("System","Base","getpid","getpid() -> Int32
 
    Get julia's process ID.
 
 "),
 
-(E"System",E"Base",E"time",E"time()
+("System","Base","time","time()
 
    Get the system time in seconds since the epoch, with fairly high
    (typically, microsecond) resolution.
 
 "),
 
-(E"System",E"Base",E"time_ns",E"time_ns()
+("System","Base","time_ns","time_ns()
 
    Get the time in nanoseconds. The time corresponding to 0 is
    undefined, and wraps every 5.8 years.
 
 "),
 
-(E"System",E"Base",E"tic",E"tic()
+("System","Base","tic","tic()
 
    Set a timer to be read by the next call to \"toc()\" or \"toq()\".
    The macro call \"@time expr\" can also be used to time evaluation.
 
 "),
 
-(E"System",E"Base",E"toc",E"toc()
+("System","Base","toc","toc()
 
    Print and return the time elapsed since the last \"tic()\".
 
 "),
 
-(E"System",E"Base",E"toq",E"toq()
+("System","Base","toq","toq()
 
    Return, but do not print, the time elapsed since the last
    \"tic()\".
 
 "),
 
-(E"System",E"Base",E"EnvHash",E"EnvHash() -> EnvHash
+("System","Base","EnvHash","EnvHash() -> EnvHash
 
    A singleton of this type provides a hash table interface to
    environment variables.
 
 "),
 
-(E"System",E"Base",E"ENV",E"ENV
+("System","Base","ENV","ENV
 
    Reference to the singleton \"EnvHash\".
 
 "),
 
-(E"C Interface",E"Base",E"ccall",E"ccall((symbol, library), RetType, (ArgType1, ...), ArgVar1, ...)
+("C Interface","Base","ccall","ccall((symbol, library), RetType, (ArgType1, ...), ArgVar1, ...)
 ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 
    Call function in C-exported shared library, specified by (function
@@ -5060,13 +5060,13 @@ ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 
 "),
 
-(E"C Interface",E"Base",E"cfunction",E"cfunction(fun::Function, RetType::Type, (ArgTypes...))
+("C Interface","Base","cfunction","cfunction(fun::Function, RetType::Type, (ArgTypes...))
 
    Generate C-callable function pointer from Julia function.
 
 "),
 
-(E"C Interface",E"Base",E"dlopen",E"dlopen(libfile::String[, flags::Integer])
+("C Interface","Base","dlopen","dlopen(libfile::String[, flags::Integer])
 
    Load a shared library, returning an opaque handle.
 
@@ -5084,86 +5084,86 @@ ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 
 "),
 
-(E"C Interface",E"Base",E"dlsym",E"dlsym(handle, sym)
+("C Interface","Base","dlsym","dlsym(handle, sym)
 
    Look up a symbol from a shared library handle, return callable
    function pointer on success.
 
 "),
 
-(E"C Interface",E"Base",E"dlsym_e",E"dlsym_e(handle, sym)
+("C Interface","Base","dlsym_e","dlsym_e(handle, sym)
 
    Look up a symbol from a shared library handle, silently return NULL
    pointer on lookup failure.
 
 "),
 
-(E"C Interface",E"Base",E"dlclose",E"dlclose(handle)
+("C Interface","Base","dlclose","dlclose(handle)
 
    Close shared library referenced by handle.
 
 "),
 
-(E"C Interface",E"Base",E"c_free",E"c_free(addr::Ptr)
+("C Interface","Base","c_free","c_free(addr::Ptr)
 
    Call free() from C standard library.
 
 "),
 
-(E"C Interface",E"Base",E"unsafe_ref",E"unsafe_ref(p::Ptr{T}, i::Integer)
+("C Interface","Base","unsafe_ref","unsafe_ref(p::Ptr{T}, i::Integer)
 
    Dereference the pointer \"p[i]\" or \"*p\", returning a copy of
    type T.
 
 "),
 
-(E"C Interface",E"Base",E"unsafe_assign",E"unsafe_assign(p::Ptr{T}, x, i::Integer)
+("C Interface","Base","unsafe_assign","unsafe_assign(p::Ptr{T}, x, i::Integer)
 
    Assign to the pointer \"p[i] = x\" or \"*p = x\", making a copy of
    object x into the memory at p.
 
 "),
 
-(E"Errors",E"Base",E"error",E"error(message::String)
+("Errors","Base","error","error(message::String)
 error(Exception)
 
    Raise an error with the given message
 
 "),
 
-(E"Errors",E"Base",E"throw",E"throw(e)
+("Errors","Base","throw","throw(e)
 
    Throw an object as an exception
 
 "),
 
-(E"Errors",E"Base",E"errno",E"errno()
+("Errors","Base","errno","errno()
 
    Get the value of the C library's \"errno\"
 
 "),
 
-(E"Errors",E"Base",E"strerror",E"strerror(n)
+("Errors","Base","strerror","strerror(n)
 
    Convert a system call error code to a descriptive string
 
 "),
 
-(E"Errors",E"Base",E"assert",E"assert(cond)
+("Errors","Base","assert","assert(cond)
 
    Raise an error if \"cond\" is false. Also available as the macro
    \"@assert expr\".
 
 "),
 
-(E"Tasks",E"Base",E"Task",E"Task(func)
+("Tasks","Base","Task","Task(func)
 
    Create a \"Task\" (i.e. thread, or coroutine) to execute the given
    function. The task exits when this function returns.
 
 "),
 
-(E"Tasks",E"Base",E"yieldto",E"yieldto(task, args...)
+("Tasks","Base","yieldto","yieldto(task, args...)
 
    Switch to the given task. The first time a task is switched to, the
    task's function is called with \"args\". On subsequent switches,
@@ -5171,67 +5171,67 @@ error(Exception)
 
 "),
 
-(E"Tasks",E"Base",E"current_task",E"current_task()
+("Tasks","Base","current_task","current_task()
 
    Get the currently running Task.
 
 "),
 
-(E"Tasks",E"Base",E"istaskdone",E"istaskdone(task)
+("Tasks","Base","istaskdone","istaskdone(task)
 
    Tell whether a task has exited.
 
 "),
 
-(E"Tasks",E"Base",E"consume",E"consume(task)
+("Tasks","Base","consume","consume(task)
 
    Receive the next value passed to \"produce\" by the specified task.
 
 "),
 
-(E"Tasks",E"Base",E"produce",E"produce(value)
+("Tasks","Base","produce","produce(value)
 
    Send the given value to the last \"consume\" call, switching to the
    consumer task.
 
 "),
 
-(E"Tasks",E"Base",E"make_scheduled",E"make_scheduled(task)
+("Tasks","Base","make_scheduled","make_scheduled(task)
 
    Register a task with the main event loop, so it will automatically
    run when possible.
 
 "),
 
-(E"Tasks",E"Base",E"yield",E"yield()
+("Tasks","Base","yield","yield()
 
    For scheduled tasks, switch back to the scheduler to allow another
    scheduled task to run.
 
 "),
 
-(E"Tasks",E"Base",E"tls",E"tls(symbol)
+("Tasks","Base","tls","tls(symbol)
 
    Look up the value of a symbol in the current task's task-local
    storage.
 
 "),
 
-(E"Tasks",E"Base",E"tls",E"tls(symbol, value)
+("Tasks","Base","tls","tls(symbol, value)
 
    Assign a value to a symbol in the current task's task-local
    storage.
 
 "),
 
-(E"BLAS",E"BLAS",E"copy!",E"copy!(n, X, incx, Y, incy)
+("BLAS","BLAS","copy!","copy!(n, X, incx, Y, incy)
 
    Copy \"n\" elements of array \"X\" with stride \"incx\" to array
    \"Y\" with stride \"incy\".  Returns \"Y\".
 
 "),
 
-(E"BLAS",E"BLAS",E"dot",E"dot(n, X, incx, Y, incy)
+("BLAS","BLAS","dot","dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of \"n\" elements of array
    \"X\" with stride \"incx\" and \"n\" elements of array \"Y\" with
@@ -5240,20 +5240,20 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"nrm2",E"nrm2(n, X, incx)
+("BLAS","BLAS","nrm2","nrm2(n, X, incx)
 
    2-norm of a vector consisting of \"n\" elements of array \"X\" with
    stride \"incx\".
 
 "),
 
-(E"BLAS",E"BLAS",E"axpy!",E"axpy!(n, a, X, incx, Y, incy)
+("BLAS","BLAS","axpy!","axpy!(n, a, X, incx, Y, incy)
 
    Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
 
 "),
 
-(E"BLAS",E"BLAS",E"syrk!",E"syrk!(uplo, trans, alpha, A, beta, C)
+("BLAS","BLAS","syrk!","syrk!(uplo, trans, alpha, A, beta, C)
 
    Rank-k update of the symmetric matrix \"C\" as \"alpha*A*A.' +
    beta*C\" or \"alpha*A.'*A + beta*C\" according to whether \"trans\"
@@ -5262,7 +5262,7 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"syrk",E"syrk(uplo, trans, alpha, A)
+("BLAS","BLAS","syrk","syrk(uplo, trans, alpha, A)
 
    Returns either the upper triangle or the lower triangle, according
    to \"uplo\" ('U' or 'L'), of \"alpha*A*A.'\" or \"alpha*A.'*A\",
@@ -5270,7 +5270,7 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"herk!",E"herk!(uplo, trans, alpha, A, beta, C)
+("BLAS","BLAS","herk!","herk!(uplo, trans, alpha, A, beta, C)
 
    Methods for complex arrays only.  Rank-k update of the Hermitian
    matrix \"C\" as \"alpha*A*A' + beta*C\" or \"alpha*A'*A + beta*C\"
@@ -5280,7 +5280,7 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"herk",E"herk(uplo, trans, alpha, A)
+("BLAS","BLAS","herk","herk(uplo, trans, alpha, A)
 
    Methods for complex arrays only.  Returns either the upper triangle
    or the lower triangle, according to \"uplo\" ('U' or 'L'), of
@@ -5289,7 +5289,7 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"gbmv!",E"gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+("BLAS","BLAS","gbmv!","gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Update vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'*x +
    beta*y\" according to \"trans\" ('N' or 'T').  The matrix \"A\" is
@@ -5299,7 +5299,7 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"gbmv",E"gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+("BLAS","BLAS","gbmv","gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Returns \"alpha*A*x\" or \"alpha*A'*x\" according to \"trans\" ('N'
    or 'T'). The matrix \"A\" is a general band matrix of dimension
@@ -5308,7 +5308,7 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"sbmv!",E"sbmv!(uplo, k, alpha, A, x, beta, y)
+("BLAS","BLAS","sbmv!","sbmv!(uplo, k, alpha, A, x, beta, y)
 
    Update vector \"y\" as \"alpha*A*x + beta*y\" where \"A\" is a a
    symmetric band matrix of order \"size(A,2)\" with \"k\" super-
@@ -5320,7 +5320,7 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"sbmv",E"sbmv(uplo, k, alpha, A, x)
+("BLAS","BLAS","sbmv","sbmv(uplo, k, alpha, A, x)
 
    Returns \"alpha*A*x\" where \"A\" is a symmetric band matrix of
    order \"size(A,2)\" with \"k\" super-diagonals stored in the
@@ -5328,7 +5328,7 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"gemm!",E"gemm!(tA, tB, alpha, A, B, beta, C)
+("BLAS","BLAS","gemm!","gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update \"C\" as \"alpha*A*B + beta*C\" or the other three variants
    according to \"tA\" (transpose \"A\") and \"tB\".  Returns the
@@ -5336,21 +5336,21 @@ error(Exception)
 
 "),
 
-(E"BLAS",E"BLAS",E"gemm",E"gemm(tA, tB, alpha, A, B)
+("BLAS","BLAS","gemm","gemm(tA, tB, alpha, A, B)
 
    Returns \"alpha*A*B\" or the other three variants according to
    \"tA\" (transpose \"A\") and \"tB\".
 
 "),
 
-(E"Constants",E"Base",E"OS_NAME",E"OS_NAME
+("Constants","Base","OS_NAME","OS_NAME
 
    A symbol representing the name of the operating system. Possible
    values are \":Linux\", \":Darwin\" (OS X), or \":Windows\".
 
 "),
 
-(E"cpp.jl",E"",E"@cpp",E"@cpp(ccall_expression)
+("cpp.jl","","@cpp","@cpp(ccall_expression)
 
    Suppose you have a C++ shared library, \"libdemo\", which contains
    a function \"timestwo\":
@@ -5394,56 +5394,56 @@ error(Exception)
 
 "),
 
-(E"GLPK",E"GLPK",E"set_prob_name",E"set_prob_name(glp_prob, name)
+("GLPK","GLPK","set_prob_name","set_prob_name(glp_prob, name)
 
    Assigns a name to the problem object (or deletes it if \"name\" is
    empty or \"nothing\").
 
 "),
 
-(E"GLPK",E"GLPK",E"set_obj_name",E"set_obj_name(glp_prob, name)
+("GLPK","GLPK","set_obj_name","set_obj_name(glp_prob, name)
 
    Assigns a name to the objective function (or deletes it if \"name\"
    is empty or \"nothing\").
 
 "),
 
-(E"GLPK",E"GLPK",E"set_obj_dir",E"set_obj_dir(glp_prob, dir)
+("GLPK","GLPK","set_obj_dir","set_obj_dir(glp_prob, dir)
 
    Sets the optimization direction, \"GLPK.MIN\" (minimization) or
    \"GLPK.MAX\" (maximization).
 
 "),
 
-(E"GLPK",E"GLPK",E"add_rows",E"add_rows(glp_prob, rows)
+("GLPK","GLPK","add_rows","add_rows(glp_prob, rows)
 
    Adds the given number of rows (constraints) to the problem object;
    returns the number of the first new row added.
 
 "),
 
-(E"GLPK",E"GLPK",E"add_cols",E"add_cols(glp_prob, cols)
+("GLPK","GLPK","add_cols","add_cols(glp_prob, cols)
 
    Adds the given number of columns (structural variables) to the
    problem object; returns the number of the first new column added.
 
 "),
 
-(E"GLPK",E"GLPK",E"set_row_name",E"set_row_name(glp_prob, row, name)
+("GLPK","GLPK","set_row_name","set_row_name(glp_prob, row, name)
 
    Assigns a name to the specified row (or deletes it if \"name\" is
    empty or \"nothing\").
 
 "),
 
-(E"GLPK",E"GLPK",E"set_col_name",E"set_col_name(glp_prob, col, name)
+("GLPK","GLPK","set_col_name","set_col_name(glp_prob, col, name)
 
    Assigns a name to the specified column (or deletes it if \"name\"
    is empty or \"nothing\").
 
 "),
 
-(E"GLPK",E"GLPK",E"set_row_bnds",E"set_row_bnds(glp_prob, row, bounds_type, lb, ub)
+("GLPK","GLPK","set_row_bnds","set_row_bnds(glp_prob, row, bounds_type, lb, ub)
 
    Sets the type and bounds on a row. \"type\" must be one of
    \"GLPK.FR\" (free), \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper
@@ -5453,7 +5453,7 @@ error(Exception)
 
 "),
 
-(E"GLPK",E"GLPK",E"set_col_bnds",E"set_col_bnds(glp_prob, col, bounds_type, lb, ub)
+("GLPK","GLPK","set_col_bnds","set_col_bnds(glp_prob, col, bounds_type, lb, ub)
 
    Sets the type and bounds on a column. \"type\" must be one of
    \"GLPK.FR\" (free), \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper
@@ -5463,14 +5463,14 @@ error(Exception)
 
 "),
 
-(E"GLPK",E"GLPK",E"set_obj_coef",E"set_obj_coef(glp_prob, col, coef)
+("GLPK","GLPK","set_obj_coef","set_obj_coef(glp_prob, col, coef)
 
    Sets the objective coefficient to a column (\"col\" can be 0 to
    indicate the constant term of the objective function).
 
 "),
 
-(E"GLPK",E"GLPK",E"set_mat_row",E"set_mat_row(glp_prob, row[, len], ind, val)
+("GLPK","GLPK","set_mat_row","set_mat_row(glp_prob, row[, len], ind, val)
 
    Sets (replaces) the content of a row. The content is specified in
    sparse format: \"ind\" is a vector of indices, \"val\" is the
@@ -5485,14 +5485,14 @@ error(Exception)
 
 "),
 
-(E"GLPK",E"GLPK",E"set_mat_col",E"set_mat_col(glp_prob, col[, len], ind, val)
+("GLPK","GLPK","set_mat_col","set_mat_col(glp_prob, col[, len], ind, val)
 
    Sets (replaces) the content of a column. Everything else is like
    \"set_mat_row\".
 
 "),
 
-(E"GLPK",E"GLPK",E"load_matrix",E"load_matrix(glp_prob[, numel], ia, ja, ar)
+("GLPK","GLPK","load_matrix","load_matrix(glp_prob[, numel], ia, ja, ar)
 load_matrix(glp_prob, A)
 
    Sets (replaces) the content matrix (i.e. sets all  rows/coluns at
@@ -5513,7 +5513,7 @@ load_matrix(glp_prob, A)
 
 "),
 
-(E"GLPK",E"GLPK",E"check_dup",E"check_dup(rows, cols[, numel], ia, ja)
+("GLPK","GLPK","check_dup","check_dup(rows, cols[, numel], ia, ja)
 
    Check for duplicates in the indices vectors \"ia\" and \"ja\".
    \"numel\" has the same meaning and (optional) use as in
@@ -5523,13 +5523,13 @@ load_matrix(glp_prob, A)
 
 "),
 
-(E"GLPK",E"GLPK",E"sort_matrix",E"sort_matrix(glp_prob)
+("GLPK","GLPK","sort_matrix","sort_matrix(glp_prob)
 
    Sorts the elements of the problem object's matrix.
 
 "),
 
-(E"GLPK",E"GLPK",E"del_rows",E"del_rows(glp_prob[, num_rows], rows_ids)
+("GLPK","GLPK","del_rows","del_rows(glp_prob[, num_rows], rows_ids)
 
    Deletes rows from the problem object. Rows are specified in the
    \"rows_ids\" vector. \"num_rows\" is the number of elements of
@@ -5540,13 +5540,13 @@ load_matrix(glp_prob, A)
 
 "),
 
-(E"GLPK",E"GLPK",E"del_cols",E"del_cols(glp_prob, cols_ids)
+("GLPK","GLPK","del_cols","del_cols(glp_prob, cols_ids)
 
    Deletes columns from the problem object. See \"del_rows\".
 
 "),
 
-(E"GLPK",E"GLPK",E"copy_prob",E"copy_prob(glp_prob_dest, glp_prob, copy_names)
+("GLPK","GLPK","copy_prob","copy_prob(glp_prob_dest, glp_prob, copy_names)
 
    Makes a copy of the problem object. The flag \"copy_names\"
    determines if names are copied, and must be either \"GLPK.ON\" or
@@ -5554,60 +5554,60 @@ load_matrix(glp_prob, A)
 
 "),
 
-(E"GLPK",E"GLPK",E"erase_prob",E"erase_prob(glp_prob)
+("GLPK","GLPK","erase_prob","erase_prob(glp_prob)
 
    Resets the problem object.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_prob_name",E"get_prob_name(glp_prob)
+("GLPK","GLPK","get_prob_name","get_prob_name(glp_prob)
 
    Returns the problem object's name. Unlike the C version, if the
    problem has no assigned name, returns an empty string.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_obj_name",E"get_obj_name(glp_prob)
+("GLPK","GLPK","get_obj_name","get_obj_name(glp_prob)
 
    Returns the objective function's name. Unlike the C version, if the
    objective has no assigned name, returns an empty string.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_obj_dir",E"get_obj_dir(glp_prob)
+("GLPK","GLPK","get_obj_dir","get_obj_dir(glp_prob)
 
    Returns the optimization direction, \"GLPK.MIN\" (minimization) or
    \"GLPK.MAX\" (maximization).
 
 "),
 
-(E"GLPK",E"GLPK",E"get_num_rows",E"get_num_rows(glp_prob)
+("GLPK","GLPK","get_num_rows","get_num_rows(glp_prob)
 
    Returns the current number of rows.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_num_cols",E"get_num_cols(glp_prob)
+("GLPK","GLPK","get_num_cols","get_num_cols(glp_prob)
 
    Returns the current number of columns.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_row_name",E"get_row_name(glp_prob, row)
+("GLPK","GLPK","get_row_name","get_row_name(glp_prob, row)
 
    Returns the name of the specified row. Unlike the C version, if the
    row has no assigned name, returns an empty string.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_col_name",E"get_col_name(glp_prob, col)
+("GLPK","GLPK","get_col_name","get_col_name(glp_prob, col)
 
    Returns the name of the specified column. Unlike the C version, if
    the column has no assigned name, returns an empty string.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_row_type",E"get_row_type(glp_prob, row)
+("GLPK","GLPK","get_row_type","get_row_type(glp_prob, row)
 
    Returns the type of the specified row: \"GLPK.FR\" (free),
    \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper bounded),
@@ -5615,21 +5615,21 @@ load_matrix(glp_prob, A)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_row_lb",E"get_row_lb(glp_prob, row)
+("GLPK","GLPK","get_row_lb","get_row_lb(glp_prob, row)
 
    Returns the lower bound of the specified row, \"-DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_row_ub",E"get_row_ub(glp_prob, row)
+("GLPK","GLPK","get_row_ub","get_row_ub(glp_prob, row)
 
    Returns the upper bound of the specified row, \"+DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_col_type",E"get_col_type(glp_prob, col)
+("GLPK","GLPK","get_col_type","get_col_type(glp_prob, col)
 
    Returns the type of the specified column: \"GLPK.FR\" (free),
    \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper bounded),
@@ -5637,34 +5637,34 @@ load_matrix(glp_prob, A)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_col_lb",E"get_col_lb(glp_prob, col)
+("GLPK","GLPK","get_col_lb","get_col_lb(glp_prob, col)
 
    Returns the lower bound of the specified column, \"-DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_col_ub",E"get_col_ub(glp_prob, col)
+("GLPK","GLPK","get_col_ub","get_col_ub(glp_prob, col)
 
    Returns the upper bound of the specified column, \"+DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_obj_coef",E"get_obj_coef(glp_prob, col)
+("GLPK","GLPK","get_obj_coef","get_obj_coef(glp_prob, col)
 
    Return the objective coefficient to a column (\"col\" can be 0 to
    indicate the constant term of the objective function).
 
 "),
 
-(E"GLPK",E"GLPK",E"get_num_nz",E"get_num_nz(glp_prob)
+("GLPK","GLPK","get_num_nz","get_num_nz(glp_prob)
 
    Return the number of non-zero elements in the constraint matrix.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_mat_row",E"get_mat_row(glp_prob, row, ind, val)
+("GLPK","GLPK","get_mat_row","get_mat_row(glp_prob, row, ind, val)
 get_mat_row(glp_prob, row)
 
    Returns the contents of a row. In the first form (original C API),
@@ -5679,65 +5679,65 @@ get_mat_row(glp_prob, row)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_mat_col",E"get_mat_col(glp_prob, col, ind, val)
+("GLPK","GLPK","get_mat_col","get_mat_col(glp_prob, col, ind, val)
 get_mat_col(glp_prob, col)
 
    Returns the contents of a column. See \"get_mat_row\".
 
 "),
 
-(E"GLPK",E"GLPK",E"create_index",E"create_index(glp_prob)
+("GLPK","GLPK","create_index","create_index(glp_prob)
 
    Creates the name index (used by \"find_row\", \"find_col\") for the
    problem object.
 
 "),
 
-(E"GLPK",E"GLPK",E"find_row",E"find_row(glp_prob, name)
+("GLPK","GLPK","find_row","find_row(glp_prob, name)
 
    Finds the numeric id of a row by name. Returns 0 if no row with the
    given name is found.
 
 "),
 
-(E"GLPK",E"GLPK",E"find_col",E"find_col(glp_prob, name)
+("GLPK","GLPK","find_col","find_col(glp_prob, name)
 
    Finds the numeric id of a column by name. Returns 0 if no column
    with the given name is found.
 
 "),
 
-(E"GLPK",E"GLPK",E"delete_index",E"delete_index(glp_prob)
+("GLPK","GLPK","delete_index","delete_index(glp_prob)
 
    Deletes the name index for the problem object.
 
 "),
 
-(E"GLPK",E"GLPK",E"set_rii",E"set_rii(glp_prob, row, rii)
+("GLPK","GLPK","set_rii","set_rii(glp_prob, row, rii)
 
    Sets the rii scale factor for the specified row.
 
 "),
 
-(E"GLPK",E"GLPK",E"set_sjj",E"set_sjj(glp_prob, col, sjj)
+("GLPK","GLPK","set_sjj","set_sjj(glp_prob, col, sjj)
 
    Sets the sjj scale factor for the specified column.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_rii",E"get_rii(glp_prob, row)
+("GLPK","GLPK","get_rii","get_rii(glp_prob, row)
 
    Returns the rii scale factor for the specified row.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_sjj",E"get_sjj(glp_prob, col)
+("GLPK","GLPK","get_sjj","get_sjj(glp_prob, col)
 
    Returns the sjj scale factor for the specified column.
 
 "),
 
-(E"GLPK",E"GLPK",E"scale_prob",E"scale_prob(glp_prob, flags)
+("GLPK","GLPK","scale_prob","scale_prob(glp_prob, flags)
 
    Performs automatic scaling of problem data for the problem object.
    The parameter \"flags\" can be \"GLPK.SF_AUTO\" (automatic) or a
@@ -5747,13 +5747,13 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"unscale_prob",E"unscale_prob(glp_prob)
+("GLPK","GLPK","unscale_prob","unscale_prob(glp_prob)
 
    Unscale the problem data (cancels the scaling effect).
 
 "),
 
-(E"GLPK",E"GLPK",E"set_row_stat",E"set_row_stat(glp_prob, row, stat)
+("GLPK","GLPK","set_row_stat","set_row_stat(glp_prob, row, stat)
 
    Sets the status of the specified row. \"stat\" must be one of:
    \"GLPK.BS\" (basic), \"GLPK.NL\" (non-basic lower bounded),
@@ -5762,7 +5762,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"set_col_stat",E"set_col_stat(glp_prob, col, stat)
+("GLPK","GLPK","set_col_stat","set_col_stat(glp_prob, col, stat)
 
    Sets the status of the specified column. \"stat\" must be one of:
    \"GLPK.BS\" (basic), \"GLPK.NL\" (non-basic lower bounded),
@@ -5771,28 +5771,28 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"std_basis",E"std_basis(glp_prob)
+("GLPK","GLPK","std_basis","std_basis(glp_prob)
 
    Constructs the standard (trivial) initial LP basis for the problem
    object.
 
 "),
 
-(E"GLPK",E"GLPK",E"adv_basis",E"adv_basis(glp_prob[, flags])
+("GLPK","GLPK","adv_basis","adv_basis(glp_prob[, flags])
 
    Constructs an advanced initial LP basis for the problem object. The
    flag \"flags\" is optional; it must be 0 if given.
 
 "),
 
-(E"GLPK",E"GLPK",E"cpx_basis",E"cpx_basis(glp_prob)
+("GLPK","GLPK","cpx_basis","cpx_basis(glp_prob)
 
    Constructs an initial LP basis for the problem object with the
    algorithm proposed by R. Bixby.
 
 "),
 
-(E"GLPK",E"GLPK",E"simplex",E"simplex(glp_prob[, glp_param])
+("GLPK","GLPK","simplex","simplex(glp_prob[, glp_param])
 
    The routine \"simplex\" is a driver to the LP solver based on the
    simplex method. This routine retrieves problem data from the
@@ -5815,7 +5815,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"exact",E"exact(glp_prob[, glp_param])
+("GLPK","GLPK","exact","exact(glp_prob[, glp_param])
 
    A tentative implementation of the primal two-phase simplex method
    based on exact (rational) arithmetic. Similar to \"simplex\". The
@@ -5827,7 +5827,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"init_smcp",E"init_smcp(glp_param)
+("GLPK","GLPK","init_smcp","init_smcp(glp_param)
 
    Initializes a \"GLPK.SimplexParam\" object with the default values.
    In Julia, this is done at object creation time; this function can
@@ -5835,7 +5835,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_status",E"get_status(glp_prob)
+("GLPK","GLPK","get_status","get_status(glp_prob)
 
    Returns the generic status of the current basic solution:
    \"GLPK.OPT\" (optimal), \"GLPK.FEAS\" (feasible), \"GLPK.INFEAS\"
@@ -5844,7 +5844,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_prim_stat",E"get_prim_stat(glp_prob)
+("GLPK","GLPK","get_prim_stat","get_prim_stat(glp_prob)
 
    Returns the status of the primal basic solution: \"GLPK.FEAS\",
    \"GLPK.INFEAS\", \"GLPK.NOFEAS\", \"GLPK.UNDEF\" (see
@@ -5852,7 +5852,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_dual_stat",E"get_dual_stat(glp_prob)
+("GLPK","GLPK","get_dual_stat","get_dual_stat(glp_prob)
 
    Returns the status of the dual basic solution: \"GLPK.FEAS\",
    \"GLPK.INFEAS\", \"GLPK.NOFEAS\", \"GLPK.UNDEF\" (see
@@ -5860,32 +5860,32 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_obj_val",E"get_obj_val(glp_prob)
+("GLPK","GLPK","get_obj_val","get_obj_val(glp_prob)
 
    Returns the current value of the objective function.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_row_stat",E"get_row_stat(glp_prob, row)
+("GLPK","GLPK","get_row_stat","get_row_stat(glp_prob, row)
 
    Returns the status of the specified row: \"GLPK.BS\", \"GLPK.NL\",
    \"GLPK.NU\", \"GLPK.NF\", \"GLPK.NS\" (see \"set_row_stat()\").
 
 "),
 
-(E"GLPK",E"GLPK",E"get_row_prim",E"get_row_prim(glp_prob, row)
+("GLPK","GLPK","get_row_prim","get_row_prim(glp_prob, row)
 
    Returns the primal value of the specified row.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_row_dual",E"get_row_dual(glp_prob, row)
+("GLPK","GLPK","get_row_dual","get_row_dual(glp_prob, row)
 
    Returns the dual value (reduced cost) of the specified row.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_col_stat",E"get_col_stat(glp_prob, col)
+("GLPK","GLPK","get_col_stat","get_col_stat(glp_prob, col)
 
    Returns the status of the specified column: \"GLPK.BS\",
    \"GLPK.NL\", \"GLPK.NU\", \"GLPK.NF\", \"GLPK.NS\" (see
@@ -5893,19 +5893,19 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_col_prim",E"get_col_prim(glp_prob, col)
+("GLPK","GLPK","get_col_prim","get_col_prim(glp_prob, col)
 
    Returns the primal value of the specified column.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_col_dual",E"get_col_dual(glp_prob, col)
+("GLPK","GLPK","get_col_dual","get_col_dual(glp_prob, col)
 
    Returns the dual value (reduced cost) of the specified column.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_unbnd_ray",E"get_unbnd_ray(glp_prob)
+("GLPK","GLPK","get_unbnd_ray","get_unbnd_ray(glp_prob)
 
    Returns the number k of a variable, which causes primal or dual
    unboundedness (if 1 <= k <= rows it's row k; if rows+1 <= k <=
@@ -5913,7 +5913,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"interior",E"interior(glp_prob[, glp_param])
+("GLPK","GLPK","interior","interior(glp_prob[, glp_param])
 
    The routine \"interior\" is a driver to the LP solver based on the
    primal-dual interior-point method. This routine retrieves problem
@@ -5933,7 +5933,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"init_iptcp",E"init_iptcp(glp_param)
+("GLPK","GLPK","init_iptcp","init_iptcp(glp_param)
 
    Initializes a \"GLPK.InteriorParam\" object with the default
    values. In Julia, this is done at object creation time; this
@@ -5941,7 +5941,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"ipt_status",E"ipt_status(glp_prob)
+("GLPK","GLPK","ipt_status","ipt_status(glp_prob)
 
    Returns the status of the interior-point solution: \"GLPK.OPT\"
    (optimal), \"GLPK.INFEAS\" (infeasible), \"GLPK.NOFEAS\" (no
@@ -5949,42 +5949,42 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"ipt_obj_val",E"ipt_obj_val(glp_prob)
+("GLPK","GLPK","ipt_obj_val","ipt_obj_val(glp_prob)
 
    Returns the current value of the objective function for the
    interior-point solution.
 
 "),
 
-(E"GLPK",E"GLPK",E"ipt_row_prim",E"ipt_row_prim(glp_prob, row)
+("GLPK","GLPK","ipt_row_prim","ipt_row_prim(glp_prob, row)
 
    Returns the primal value of the specified row for the interior-
    point solution.
 
 "),
 
-(E"GLPK",E"GLPK",E"ipt_row_dual",E"ipt_row_dual(glp_prob, row)
+("GLPK","GLPK","ipt_row_dual","ipt_row_dual(glp_prob, row)
 
    Returns the dual value (reduced cost) of the specified row for the
    interior-point solution.
 
 "),
 
-(E"GLPK",E"GLPK",E"ipt_col_prim",E"ipt_col_prim(glp_prob, col)
+("GLPK","GLPK","ipt_col_prim","ipt_col_prim(glp_prob, col)
 
    Returns the primal value of the specified column for the interior-
    point solution.
 
 "),
 
-(E"GLPK",E"GLPK",E"ipt_col_dual",E"ipt_col_dual(glp_prob, col)
+("GLPK","GLPK","ipt_col_dual","ipt_col_dual(glp_prob, col)
 
    Returns the dual value (reduced cost) of the specified column for
    the interior-point solution.
 
 "),
 
-(E"GLPK",E"GLPK",E"set_col_kind",E"set_col_kind(glp_prob, col, kind)
+("GLPK","GLPK","set_col_kind","set_col_kind(glp_prob, col, kind)
 
    Sets the kind for the specified column (for mixed-integer
    programming). \"kind\" must be one of: \"GLPK.CV\" (continuous),
@@ -5992,25 +5992,25 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_col_kind",E"get_col_kind(glp_prob, col)
+("GLPK","GLPK","get_col_kind","get_col_kind(glp_prob, col)
 
    Returns the kind for the specified column (see \"set_col_kind()\").
 
 "),
 
-(E"GLPK",E"GLPK",E"get_num_int",E"get_num_int(glp_prob)
+("GLPK","GLPK","get_num_int","get_num_int(glp_prob)
 
    Returns the number of columns marked as integer (including binary).
 
 "),
 
-(E"GLPK",E"GLPK",E"get_num_bin",E"get_num_bin(glp_prob)
+("GLPK","GLPK","get_num_bin","get_num_bin(glp_prob)
 
    Returns the number of columns marked binary.
 
 "),
 
-(E"GLPK",E"GLPK",E"intopt",E"intopt(glp_prob[, glp_param])
+("GLPK","GLPK","intopt","intopt(glp_prob[, glp_param])
 
    The routine \"intopt\" is a driver to the mixed-integer-programming
    (MIP) solver based on the branch- and-cut method, which is a hybrid
@@ -6030,7 +6030,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"init_iocp",E"init_iocp(glp_param)
+("GLPK","GLPK","init_iocp","init_iocp(glp_param)
 
    Initializes a \"GLPK.IntoptParam\" object with the default values.
    In Julia, this is done at object creation time; this function can
@@ -6038,7 +6038,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"mip_status",E"mip_status(glp_prob)
+("GLPK","GLPK","mip_status","mip_status(glp_prob)
 
    Returns the generic status of the MIP solution: \"GLPK.OPT\"
    (optimal), \"GLPK.FEAS\" (feasible), \"GLPK.NOFEAS\" (no feasible
@@ -6046,26 +6046,26 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"mip_obj_val",E"mip_obj_val(glp_prob)
+("GLPK","GLPK","mip_obj_val","mip_obj_val(glp_prob)
 
    Returns the current value of the objective function for the MIP
    solution.
 
 "),
 
-(E"GLPK",E"GLPK",E"mip_row_val",E"mip_row_val(glp_prob, row)
+("GLPK","GLPK","mip_row_val","mip_row_val(glp_prob, row)
 
    Returns the value of the specified row for the MIP solution.
 
 "),
 
-(E"GLPK",E"GLPK",E"mip_col_val",E"mip_col_val(glp_prob, col)
+("GLPK","GLPK","mip_col_val","mip_col_val(glp_prob, col)
 
    Returns the value of the specified column for the MIP solution.
 
 "),
 
-(E"GLPK",E"GLPK",E"read_mps",E"read_mps(glp_prob, format[, param], filename)
+("GLPK","GLPK","read_mps","read_mps(glp_prob, format[, param], filename)
 
    Reads problem data in MPS format from a text file. \"format\" must
    be one of \"GLPK.MPS_DECK\" (fixed, old) or \"GLPK.MPS_FILE\"
@@ -6076,7 +6076,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"write_mps",E"write_mps(glp_prob, format[, param], filename)
+("GLPK","GLPK","write_mps","write_mps(glp_prob, format[, param], filename)
 
    Writes problem data in MPS format from a text file. See
    \"read_mps\".
@@ -6085,7 +6085,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"read_lp",E"read_lp(glp_prob[, param], filename)
+("GLPK","GLPK","read_lp","read_lp(glp_prob[, param], filename)
 
    Reads problem data in CPLEX LP format from a text file. \"param\"
    is optional; if given it must be \"nothing\".
@@ -6094,7 +6094,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"write_lp",E"write_lp(glp_prob[, param], filename)
+("GLPK","GLPK","write_lp","write_lp(glp_prob[, param], filename)
 
    Writes problem data in CPLEX LP format from a text file. See
    \"read_lp\".
@@ -6103,7 +6103,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"read_prob",E"read_prob(glp_prob[, flags], filename)
+("GLPK","GLPK","read_prob","read_prob(glp_prob[, flags], filename)
 
    Reads problem data in GLPK LP/MIP format from a text file.
    \"flags\" is optional; if given it must be 0.
@@ -6112,7 +6112,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"write_prob",E"write_prob(glp_prob[, flags], filename)
+("GLPK","GLPK","write_prob","write_prob(glp_prob[, flags], filename)
 
    Writes problem data in GLPK LP/MIP format from a text file. See
    \"read_prob\".
@@ -6121,7 +6121,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"mpl_read_model",E"mpl_read_model(glp_tran, filename, skip)
+("GLPK","GLPK","mpl_read_model","mpl_read_model(glp_tran, filename, skip)
 
    Reads the model section and, optionally, the data section, from a
    text file in MathProg format, and stores it in \"glp_tran\", which
@@ -6132,7 +6132,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"mpl_read_data",E"mpl_read_data(glp_tran, filename)
+("GLPK","GLPK","mpl_read_data","mpl_read_data(glp_tran, filename)
 
    Reads data section from a text file in MathProg format and stores
    it in \"glp_tran\", which is a \"GLPK.MathProgWorkspace\" object.
@@ -6142,7 +6142,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"mpl_generate",E"mpl_generate(glp_tran[, filename])
+("GLPK","GLPK","mpl_generate","mpl_generate(glp_tran[, filename])
 
    Generates the model using its description stored in the
    \"GLPK.MathProgWorkspace\" translator workspace \"glp_tran\". The
@@ -6153,7 +6153,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"mpl_build_prob",E"mpl_build_prob(glp_tran, glp_prob)
+("GLPK","GLPK","mpl_build_prob","mpl_build_prob(glp_tran, glp_prob)
 
    Transfer information from the \"GLPK.MathProgWorkspace\" translator
    workspace \"glp_tran\" to the \"GLPK.Prob\" problem object
@@ -6161,7 +6161,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"mpl_postsolve",E"mpl_postsolve(glp_tran, glp_prob, sol)
+("GLPK","GLPK","mpl_postsolve","mpl_postsolve(glp_tran, glp_prob, sol)
 
    Copies the solution from the \"GLPK.Prob\" problem object
    \"glp_prob\" to the \"GLPK.MathProgWorkspace\" translator workspace
@@ -6176,7 +6176,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"print_sol",E"print_sol(glp_prob, filename)
+("GLPK","GLPK","print_sol","print_sol(glp_prob, filename)
 
    Writes the current basic solution to a text file, in printable
    format.
@@ -6185,7 +6185,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"read_sol",E"read_sol(glp_prob, filename)
+("GLPK","GLPK","read_sol","read_sol(glp_prob, filename)
 
    Reads the current basic solution from a text file, in the format
    used by \"write_sol\".
@@ -6194,7 +6194,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"write_sol",E"write_sol(glp_prob, filename)
+("GLPK","GLPK","write_sol","write_sol(glp_prob, filename)
 
    Writes the current basic solution from a text file, in a format
    which can be read by \"read_sol\".
@@ -6203,7 +6203,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"print_ipt",E"print_ipt(glp_prob, filename)
+("GLPK","GLPK","print_ipt","print_ipt(glp_prob, filename)
 
    Writes the current interior-point solution to a text file, in
    printable format.
@@ -6212,7 +6212,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"read_ipt",E"read_ipt(glp_prob, filename)
+("GLPK","GLPK","read_ipt","read_ipt(glp_prob, filename)
 
    Reads the current interior-point solution from a text file, in the
    format used by \"write_ipt\".
@@ -6221,7 +6221,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"write_ipt",E"write_ipt(glp_prob, filename)
+("GLPK","GLPK","write_ipt","write_ipt(glp_prob, filename)
 
    Writes the current interior-point solution from a text file, in a
    format which can be read by \"read_ipt\".
@@ -6230,7 +6230,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"print_mip",E"print_mip(glp_prob, filename)
+("GLPK","GLPK","print_mip","print_mip(glp_prob, filename)
 
    Writes the current MIP solution to a text file, in printable
    format.
@@ -6239,7 +6239,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"read_mip",E"read_mip(glp_prob, filename)
+("GLPK","GLPK","read_mip","read_mip(glp_prob, filename)
 
    Reads the current MIP solution from a text file, in the format used
    by \"write_mip\".
@@ -6248,7 +6248,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"write_mip",E"write_mip(glp_prob, filename)
+("GLPK","GLPK","write_mip","write_mip(glp_prob, filename)
 
    Writes the current MIP solution from a text file, in a format which
    can be read by \"read_mip\".
@@ -6257,7 +6257,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"print_ranges",E"print_ranges(glp_prob, [[len,] list,] [flags,] filename)
+("GLPK","GLPK","print_ranges","print_ranges(glp_prob, [[len,] list,] [flags,] filename)
 
    Performs sensitivity analysis of current optimal basic solution and
    writes the analysis report in human-readable format to a text file.
@@ -6277,14 +6277,14 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"bf_exists",E"bf_exists(glp_prob)
+("GLPK","GLPK","bf_exists","bf_exists(glp_prob)
 
    Returns non-zero if the basis fatorization for the current basis
    exists, 0 otherwise.
 
 "),
 
-(E"GLPK",E"GLPK",E"factorize",E"factorize(glp_prob)
+("GLPK","GLPK","factorize","factorize(glp_prob)
 
    Computes the basis factorization for the current basis.
 
@@ -6294,14 +6294,14 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"bf_updated",E"bf_updated(glp_prob)
+("GLPK","GLPK","bf_updated","bf_updated(glp_prob)
 
    Returns 0 if the basis factorization was computed from scratch,
    non-zero otherwise.
 
 "),
 
-(E"GLPK",E"GLPK",E"get_bfcp",E"get_bfcp(glp_prob, glp_param)
+("GLPK","GLPK","get_bfcp","get_bfcp(glp_prob, glp_param)
 
    Retrieves control parameters, which are used on computing and
    updating the basis factorization associated with the problem
@@ -6310,7 +6310,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"set_bfcp",E"set_bfcp(glp_prob[, glp_param])
+("GLPK","GLPK","set_bfcp","set_bfcp(glp_prob[, glp_param])
 
    Sets the control parameters stored in the \"GLPK.BasisFactParam\"
    object \"glp_param\" into the problem object. If \"glp_param\" is
@@ -6321,7 +6321,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_bhead",E"get_bhead(glp_prob, k)
+("GLPK","GLPK","get_bhead","get_bhead(glp_prob, k)
 
    Returns the basis header information for the current basis. \"k\"
    is a row index.
@@ -6332,7 +6332,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_row_bind",E"get_row_bind(glp_prob, row)
+("GLPK","GLPK","get_row_bind","get_row_bind(glp_prob, row)
 
    Returns the index of the basic variable \"k\" which is associated
    with the specified row, or \"0\" if the variable is non-basic. If
@@ -6341,7 +6341,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"get_col_bind",E"get_col_bind(glp_prob, col)
+("GLPK","GLPK","get_col_bind","get_col_bind(glp_prob, col)
 
    Returns the index of the basic variable \"k\" which is associated
    with the specified column, or \"0\" if the variable is non-basic.
@@ -6350,7 +6350,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"ftran",E"ftran(glp_prob, v)
+("GLPK","GLPK","ftran","ftran(glp_prob, v)
 
    Performs forward transformation (FTRAN), i.e. it solves the system
    Bx = b, where B is the basis matrix, x is the vector of unknowns to
@@ -6360,7 +6360,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"btran",E"btran(glp_prob, v)
+("GLPK","GLPK","btran","btran(glp_prob, v)
 
    Performs backward transformation (BTRAN), i.e. it solves the system
    \"B'x = b\", where \"B\" is the transposed of the basis matrix,
@@ -6371,7 +6371,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"warm_up",E"warm_up(glp_prob)
+("GLPK","GLPK","warm_up","warm_up(glp_prob)
 
    \"Warms up\" the LP basis using current statuses assigned to rows
    and columns, i.e. computes factorization of the basis matrix (if it
@@ -6384,7 +6384,7 @@ get_mat_col(glp_prob, col)
 
 "),
 
-(E"GLPK",E"GLPK",E"eval_tab_row",E"eval_tab_row(glp_prob, k, ind, val)
+("GLPK","GLPK","eval_tab_row","eval_tab_row(glp_prob, k, ind, val)
 eval_tab_row(glp_prob, k)
 
    Computes a row of the current simplex tableau which corresponds to
@@ -6404,7 +6404,7 @@ eval_tab_row(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"eval_tab_col",E"eval_tab_col(glp_prob, k, ind, val)
+("GLPK","GLPK","eval_tab_col","eval_tab_col(glp_prob, k, ind, val)
 eval_tab_col(glp_prob, k)
 
    Computes a column of the current simplex tableau which corresponds
@@ -6413,7 +6413,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"transform_row",E"transform_row(glp_prob[, len], ind, val)
+("GLPK","GLPK","transform_row","transform_row(glp_prob[, len], ind, val)
 
    Performs the same operation as \"eval_tab_row\" with the exception
    that the row to be transformed is specified explicitly as a sparse
@@ -6429,7 +6429,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"transform_col",E"transform_col(glp_prob[, len], ind, val)
+("GLPK","GLPK","transform_col","transform_col(glp_prob[, len], ind, val)
 
    Performs the same operation as \"eval_tab_col\" with the exception
    that the row to be transformed is specified explicitly as a sparse
@@ -6437,7 +6437,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"prim_rtest",E"prim_rtest(glp_prob[, len], ind, val, dir, eps)
+("GLPK","GLPK","prim_rtest","prim_rtest(glp_prob[, len], ind, val, dir, eps)
 
    Performs the primal ratio test using an explicitly specified column
    of the simplex table. The current basic solution must be primal
@@ -6458,7 +6458,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"dual_rtest",E"dual_rtest(glp_prob[, len], ind, val, dir, eps)
+("GLPK","GLPK","dual_rtest","dual_rtest(glp_prob[, len], ind, val, dir, eps)
 
    Performs the dual ratio test using an explicitly specified row of
    the simplex table. The current basic solution must be dual
@@ -6467,7 +6467,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"analyze_bound",E"analyze_bound(glp_prob, k)
+("GLPK","GLPK","analyze_bound","analyze_bound(glp_prob, k)
 
    Analyzes the effect of varying the active bound of specified non-
    basic variable. See the GLPK manual for a detailed explanation. In
@@ -6477,7 +6477,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"analyze_coef",E"analyze_coef(glp_prob, k)
+("GLPK","GLPK","analyze_coef","analyze_coef(glp_prob, k)
 
    Analyzes the effect of varying the objective coefficient at
    specified basic variable. See the GLPK manual for a detailed
@@ -6487,7 +6487,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"init_env",E"init_env()
+("GLPK","GLPK","init_env","init_env()
 
    Initializes the GLPK environment. Not normally needed.
 
@@ -6497,7 +6497,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"version",E"version()
+("GLPK","GLPK","version","version()
 
    Returns the GLPK version number. In Julia, instead of returning a
    string as in C, it returns a tuple of integer values, containing
@@ -6505,7 +6505,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"free_env",E"free_env()
+("GLPK","GLPK","free_env","free_env()
 
    Frees all resources used by GLPK routines (memory blocks, etc.)
    which are currently still in use. Not normally needed.
@@ -6514,7 +6514,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"term_out",E"term_out(flag)
+("GLPK","GLPK","term_out","term_out(flag)
 
    Enables/disables the terminal output of glpk routines. \"flag\" is
    either \"GLPK.ON\" (output enabled) or \"GLPK.OFF\" (output
@@ -6524,7 +6524,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"open_tee",E"open_tee(filename)
+("GLPK","GLPK","open_tee","open_tee(filename)
 
    Starts copying all the terminal output to an output text file.
 
@@ -6533,7 +6533,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"close_tee",E"close_tee()
+("GLPK","GLPK","close_tee","close_tee()
 
    Stops copying the terminal output to the output text file
    previously open by the \"open_tee\".
@@ -6543,7 +6543,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"malloc",E"malloc(size)
+("GLPK","GLPK","malloc","malloc(size)
 
    Replacement of standard C \"malloc\". Allocates uninitialized
    memeory which must freed with \"free\".
@@ -6552,7 +6552,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"calloc",E"calloc(n, size)
+("GLPK","GLPK","calloc","calloc(n, size)
 
    Replacement of standard C \"calloc\", but does not initialize the
    memeory. Allocates uninitialized memeory which must freed with
@@ -6562,14 +6562,14 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"free",E"free(ptr)
+("GLPK","GLPK","free","free(ptr)
 
    Deallocates a memory block previously allocated by \"malloc\" or
    \"calloc\".
 
 "),
 
-(E"GLPK",E"GLPK",E"mem_usage",E"mem_usage()
+("GLPK","GLPK","mem_usage","mem_usage()
 
    Reports some information about utilization of the memory by the
    routines \"malloc\", \"calloc\", and \"free\". In Julia, this
@@ -6579,27 +6579,27 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"mem_limit",E"mem_limit(limit)
+("GLPK","GLPK","mem_limit","mem_limit(limit)
 
    Limits the amount of memory avaliable for dynamic allocation to a
    value in megabyes given by the integer parameter \"limit\".
 
 "),
 
-(E"GLPK",E"GLPK",E"time",E"time()
+("GLPK","GLPK","time","time()
 
    Returns the current universal time (UTC), in milliseconds.
 
 "),
 
-(E"GLPK",E"GLPK",E"difftime",E"difftime(t1, t0)
+("GLPK","GLPK","difftime","difftime(t1, t0)
 
    Returns the difference between two time values \"t1\" and \"t0\",
    expressed in seconds.
 
 "),
 
-(E"GLPK",E"GLPK",E"sdf_open_file",E"sdf_open_file(filename)
+("GLPK","GLPK","sdf_open_file","sdf_open_file(filename)
 
    Opens a plain data file.
 
@@ -6608,14 +6608,14 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"sdf_read_int",E"sdf_read_int(glp_data)
+("GLPK","GLPK","sdf_read_int","sdf_read_int(glp_data)
 
    Reads an integer number from the plain data file specified by the
    \"GLPK.Data\" parameter \"glp_data\", skipping initial whitespace.
 
 "),
 
-(E"GLPK",E"GLPK",E"sdf_read_num",E"sdf_read_num(glp_data)
+("GLPK","GLPK","sdf_read_num","sdf_read_num(glp_data)
 
    Reads a floating point number from the plain data file specified by
    the \"GLPK.Data\" parameter \"glp_data\", skipping initial
@@ -6623,7 +6623,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"sdf_read_item",E"sdf_read_item(glp_data)
+("GLPK","GLPK","sdf_read_item","sdf_read_item(glp_data)
 
    Reads a data item (a String) from the plain data file specified by
    the \"GLPK.Data\" parameter \"glp_data\", skipping initial
@@ -6631,7 +6631,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"sdf_read_text",E"sdf_read_text(glp_data)
+("GLPK","GLPK","sdf_read_text","sdf_read_text(glp_data)
 
    Reads a line of text from the plain data file specified by the
    \"GLPK.Data\" parameter \"glp_data\", skipping initial and final
@@ -6639,19 +6639,19 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"sdf_line",E"sdf_line(glp_data)
+("GLPK","GLPK","sdf_line","sdf_line(glp_data)
 
    Returns the current line in the \"GLPK.Data\" object \"glp_data\"
 
 "),
 
-(E"GLPK",E"GLPK",E"sdf_close_file",E"sdf_close_file(glp_data)
+("GLPK","GLPK","sdf_close_file","sdf_close_file(glp_data)
 
    Closes the file associated to \"glp_data\" and frees the resources.
 
 "),
 
-(E"GLPK",E"GLPK",E"read_cnfsat",E"read_cnfsat(glp_prob, filename)
+("GLPK","GLPK","read_cnfsat","read_cnfsat(glp_prob, filename)
 
    Reads the CNF-SAT problem data in DIMACS format from a text file.
 
@@ -6659,14 +6659,14 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"check_cnfsat",E"check_cnfsat(glp_prob)
+("GLPK","GLPK","check_cnfsat","check_cnfsat(glp_prob)
 
    Checks if the problem object encodes a CNF-SAT problem instance, in
    which case it returns 0, otherwise returns non-zero.
 
 "),
 
-(E"GLPK",E"GLPK",E"write_cnfsat",E"write_cnfsat(glp_prob, filename)
+("GLPK","GLPK","write_cnfsat","write_cnfsat(glp_prob, filename)
 
    Writes the CNF-SAT problem data in DIMACS format into a text file.
 
@@ -6674,7 +6674,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"minisat1",E"minisat1(glp_prob)
+("GLPK","GLPK","minisat1","minisat1(glp_prob)
 
    The routine \"minisat1\" is a driver to MiniSat, a CNF-SAT solver
    developed by Niklas Eén and Niklas Sörensson, Chalmers University
@@ -6686,7 +6686,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GLPK",E"GLPK",E"intfeas1",E"intfeas1(glp_prob, use_bound, obj_bound)
+("GLPK","GLPK","intfeas1","intfeas1(glp_prob, use_bound, obj_bound)
 
    The routine \"glp_intfeas1\" is a tentative implementation of an
    integer feasibility solver based on a CNF-SAT solver (currently
@@ -6706,7 +6706,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GZip",E"GZip",E"gzopen",E"gzopen(fname[, gzmode[, buf_size]])
+("GZip","GZip","gzopen","gzopen(fname[, gzmode[, buf_size]])
 
    Opens a file with mode (default \"\"r\"\"), setting internal buffer
    size to buf_size (default \"Z_DEFAULT_BUFSIZE=8192\"), and returns
@@ -6748,27 +6748,27 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"GZip",E"GZip",E"gzdopen",E"gzdopen(fd[, gzmode[, buf_size]])
+("GZip","GZip","gzdopen","gzdopen(fd[, gzmode[, buf_size]])
 
    Create a \"GZipStream\" object from an integer file descriptor. See
    \"gzopen()\" for \"gzmode\" and \"buf_size\" descriptions.
 
 "),
 
-(E"GZip",E"GZip",E"gzdopen",E"gzdopen(s[, gzmode[, buf_size]])
+("GZip","GZip","gzdopen","gzdopen(s[, gzmode[, buf_size]])
 
    Create a \"GZipStream\" object from \"IOStream\" \"s\".
 
 "),
 
-(E"GZip",E"GZip",E"GZipStream",E"type GZipStream(name, gz_file[, buf_size[, fd[, s]]])
+("GZip","GZip","GZipStream","type GZipStream(name, gz_file[, buf_size[, fd[, s]]])
 
    Subtype of \"IO\" which wraps a gzip stream.  Returned by
    \"gzopen()\" and \"gzdopen()\".
 
 "),
 
-(E"GZip",E"GZip",E"GZError",E"type GZError(err, err_str)
+("GZip","GZip","GZError","type GZError(err, err_str)
 
    gzip error number and string.  Possible error values:
 
@@ -6791,7 +6791,7 @@ eval_tab_col(glp_prob, k)
 "),
 
 
-(E"OptionsMod",E"OptionsMod",E"@options",E"@options([check_flag], assignments...)
+("OptionsMod","OptionsMod","@options","@options([check_flag], assignments...)
 
    Use the \"@options\" macro to set the value of optional parameters
    for a function that has been written to use them (see
@@ -6827,7 +6827,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"OptionsMod",E"OptionsMod",E"@set_options",E"@set_options(opts, assigments...)
+("OptionsMod","OptionsMod","@set_options","@set_options(opts, assigments...)
 
    The \"@set_options\" macro lets you add new parameters to an
    existing options structure.  For example:
@@ -6839,7 +6839,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"OptionsMod",E"OptionsMod",E"@defaults",E"@defaults(opts, assignments...)
+("OptionsMod","OptionsMod","@defaults","@defaults(opts, assignments...)
 
    The \"@defaults\" macro is for writing functions that take optional
    parameters.  The typical syntax of such functions is:
@@ -6875,7 +6875,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"OptionsMod",E"OptionsMod",E"@check_used",E"@check_used(opts)
+("OptionsMod","OptionsMod","@check_used","@check_used(opts)
 
    The \"@check_used\" macro tests whether user-supplied parameters
    were ever accessed by the \"@defaults()\" macro. The test is
@@ -6909,7 +6909,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"OptionsMod",E"OptionsMod",E"Options",E"type Options(OptionsChecking, param1, val1, param2, val2, ...)
+("OptionsMod","OptionsMod","Options","type Options(OptionsChecking, param1, val1, param2, val2, ...)
 
    \"Options\" is the central type used for handling optional
    arguments. Its fields are briefly described below.
@@ -6944,7 +6944,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"profile.jl",E"",E"@profile",E"@profile()
+("profile.jl","","@profile","@profile()
 
    Profiling is controlled via the \"@profile\" macro. Your first step
    is to determine which code you want to profile and encapsulate it
@@ -6999,7 +6999,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sort",E"sort(v[, alg[, ord]])
+("Base.Sort","Base.Sort","sort","sort(v[, alg[, ord]])
 
    Sort a vector in ascending order.  Specify \"alg\" to choose a
    particular sorting algorithm (\"Sort.InsertionSort\",
@@ -7009,13 +7009,13 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sort!",E"sort!(...)
+("Base.Sort","Base.Sort","sort!","sort!(...)
 
    In-place sort.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortby",E"sortby(v, by[, alg])
+("Base.Sort","Base.Sort","sortby","sortby(v, by[, alg])
 
    Sort a vector according to \"by(v)\".  Specify \"alg\" to choose a
    particular sorting algorithm (\"Sort.InsertionSort\",
@@ -7023,13 +7023,13 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortby!",E"sortby!(...)
+("Base.Sort","Base.Sort","sortby!","sortby!(...)
 
    In-place \"sortby\".
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"sortperm",E"sortperm(v[, alg[, ord]])
+("Base.Sort","Base.Sort","sortperm","sortperm(v[, alg[, ord]])
 
    Return a permutation vector, which when applied to the input vector
    \"v\" will sort it.  Specify \"alg\" to choose a particular sorting
@@ -7039,14 +7039,14 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"issorted",E"issorted(v[, ord])
+("Base.Sort","Base.Sort","issorted","issorted(v[, ord])
 
    Test whether a vector is in ascending sorted order.  If specified,
    \"ord\" gives the ordering to test.
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"searchsorted",E"searchsorted(a, x[, ord])
+("Base.Sort","Base.Sort","searchsorted","searchsorted(a, x[, ord])
 
    Returns the index of the first value of \"a\" equal to or
    succeeding \"x\", according to ordering \"ord\" (default:
@@ -7056,7 +7056,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"searchsortedfirst",E"searchsortedfirst(a, x[, ord])
+("Base.Sort","Base.Sort","searchsortedfirst","searchsortedfirst(a, x[, ord])
 
    Returns the index of the first value of \"a\" equal to or
    succeeding \"x\", according to ordering \"ord\" (default:
@@ -7064,14 +7064,14 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"searchsortedlast",E"searchsortedlast(a, x[, ord])
+("Base.Sort","Base.Sort","searchsortedlast","searchsortedlast(a, x[, ord])
 
    Returns the index of the last value of \"a\" preceding or equal to
    \"x\", according to ordering \"ord\" (default: \"Sort.Forward\").
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"select",E"select(v, k[, ord])
+("Base.Sort","Base.Sort","select","select(v, k[, ord])
 
    Find the element in position \"k\" in the sorted vector \"v\"
    without sorting, according to ordering \"ord\" (default:
@@ -7079,13 +7079,13 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Base.Sort",E"Base.Sort",E"select!",E"select!(v, k[, ord])
+("Base.Sort","Base.Sort","select!","select!(v, k[, ord])
 
    Version of \"select\" which permutes the input vector in place.
 
 "),
 
-(E"Sound",E"Sound",E"wavread",E"wavread(io[, options])
+("Sound","Sound","wavread","wavread(io[, options])
 
    Reads and returns the samples from a RIFF/WAVE file. The samples
    are converted to floating point values in the range from -1.0 to
@@ -7132,7 +7132,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"Sound",E"Sound",E"wavwrite",E"wavwrite(samples, io[, options])
+("Sound","Sound","wavwrite","wavwrite(samples, io[, options])
 
       Writes samples to a RIFF/WAVE file io object. The \"io\"
       argument accepts either an \"IO\" object or a filename
@@ -7193,7 +7193,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"strpack.jl",E"",E"pack",E"pack(io, composite[, strategy])
+("strpack.jl","","pack","pack(io, composite[, strategy])
 
    Create a packed buffer representation of \"composite\" in stream
    \"io\", using data alignment coded by \"strategy\". This buffer is
@@ -7201,7 +7201,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"strpack.jl",E"",E"unpack",E"unpack(io, T[, strategy])
+("strpack.jl","","unpack","unpack(io, T[, strategy])
 
    Extract an instance of the Julia composite type \"T\" from the
    packed representation in the stream \"io\". \"io\" must be
@@ -7210,7 +7210,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"TextWrap",E"TextWrap",E"wrap",E"wrap(string[, options])
+("TextWrap","TextWrap","wrap","wrap(string[, options])
 
    Returns a string in which newlines are inserted as appropriate in
    order for each line to fit within a specified width.
@@ -7253,7 +7253,7 @@ eval_tab_col(glp_prob, k)
 
 "),
 
-(E"TextWrap",E"TextWrap",E"println_wrapped",E"print_wrapped(text...[, options])
+("TextWrap","TextWrap","println_wrapped","print_wrapped(text...[, options])
 print_wrapped(io, text...[, options])
 println_wrapped(text...[, options])
 println_wrapped(io, text...[, options])
@@ -7266,14 +7266,14 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"Zlib",E"Zlib",E"compress_bound",E"compress_bound(input_size)
+("Zlib","Zlib","compress_bound","compress_bound(input_size)
 
    Returns the maximum size of the compressed output buffer for a
    given uncompressed input size.
 
 "),
 
-(E"Zlib",E"Zlib",E"compress",E"compress(source[, level])
+("Zlib","Zlib","compress","compress(source[, level])
 
    Compresses source using the given compression level, and returns
    the compressed buffer (\"Array{Uint8,1}\").  \"level\" is an
@@ -7287,7 +7287,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"Zlib",E"Zlib",E"compress_to_buffer",E"compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
+("Zlib","Zlib","compress_to_buffer","compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
 
    Compresses the source buffer into the destination buffer, and
    returns the number of bytes written into dest.
@@ -7297,7 +7297,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"Zlib",E"Zlib",E"uncompress",E"uncompress(source[, uncompressed_size])
+("Zlib","Zlib","uncompress","uncompress(source[, uncompressed_size])
 
    Allocates a buffer of size \"uncompressed_size\", uncompresses
    source to this buffer using the given compression level, and
@@ -7312,7 +7312,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"Zlib",E"Zlib",E"uncompress_to_buffer",E"uncompress_to_buffer(source, dest)
+("Zlib","Zlib","uncompress_to_buffer","uncompress_to_buffer(source, dest)
 
    Uncompresses the source buffer into the destination buffer. Returns
    the number of bytes written into dest.  An error is thrown if the

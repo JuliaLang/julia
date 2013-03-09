@@ -42,8 +42,8 @@ abstract Ordering
 
 type Forward <: Ordering end
 type Reverse <: Ordering end
-type By <: Ordering by::Function end
-type Lt <: Ordering lt::Function end
+immutable By <: Ordering by::Function end
+immutable Lt <: Ordering lt::Function end
 
 lt(o::Forward, a, b) = isless(a,b)
 lt(o::Reverse, a, b) = isless(b,a)
@@ -252,7 +252,7 @@ include("timsort.jl")
 
 ## sortperm: the permutation to sort an array ##
 
-type Perm{O<:Ordering,V<:AbstractVector} <: Ordering
+immutable Perm{O<:Ordering,V<:AbstractVector} <: Ordering
     ord::O
     vec::V
 end

@@ -1,4 +1,4 @@
-type Stat
+immutable Stat
     device  :: Uint
     inode   :: Uint
     mode    :: Uint
@@ -21,11 +21,11 @@ Stat(buf::Vector{Uint8}) = Stat(
     uint(ccall(:jl_stat_uid,     Uint32,  (Ptr{Uint8},), buf)),
     uint(ccall(:jl_stat_gid,     Uint32,  (Ptr{Uint8},), buf)),
     uint(ccall(:jl_stat_rdev,    Uint32,  (Ptr{Uint8},), buf)),
-    ccall(:jl_stat_size,    Int,     (Ptr{Uint8},), buf),
+         ccall(:jl_stat_size,    Int,     (Ptr{Uint8},), buf),
      int(ccall(:jl_stat_blksize, Uint32,  (Ptr{Uint8},), buf)),
      int(ccall(:jl_stat_blocks,  Uint32,  (Ptr{Uint8},), buf)),
-    ccall(:jl_stat_mtime,   Float64, (Ptr{Uint8},), buf),
-    ccall(:jl_stat_ctime,   Float64, (Ptr{Uint8},), buf),
+         ccall(:jl_stat_mtime,   Float64, (Ptr{Uint8},), buf),
+         ccall(:jl_stat_ctime,   Float64, (Ptr{Uint8},), buf),
 )
 
 show(io::IO, st::Stat) = print("Stat(mode=$(oct(st.mode,6)), size=$(st.size))")

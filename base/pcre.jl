@@ -15,6 +15,7 @@ const COMPILE_MASK      =
       DOTALL            |
       EXTENDED          |
       FIRSTLINE         |
+      JAVASCRIPT_COMPAT |
       MULTILINE         |
       NEWLINE_ANY       |
       NEWLINE_ANYCRLF   |

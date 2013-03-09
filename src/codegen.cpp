@@ -946,14 +946,11 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
                 assert(jl_is_datatype(sty));
                 answer = ConstantInt::get(T_int1, 1);
                 for(unsigned i=0; i < jl_tuple_len(sty->names); i++) {
+                    jl_value_t *fldty = jl_tupleref(sty->types,i);
                     Value *subAns =
-                        emit_f_is(jl_tupleref(sty->types,i),
-                                  jl_tupleref(sty->types,i),
-                                  NULL, NULL,
-                                  builder.
-                                  CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
-                                  builder.
-                                  CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
+                        emit_f_is(fldty, fldty, NULL, NULL,
+                                  builder.CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
+                                  builder.CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
                                   ctx);
                     answer = builder.CreateAnd(answer, subAns);
                 }
@@ -1264,6 +1261,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
                     Value *idx = emit_array_nd_index(ary, nd, &args[2], nargs-1, ctx);
                     JL_GC_POP();
+                    if (jl_array_store_unboxed(ety) &&
+                        ((jl_datatype_t*)ety)->size == 0) {
+                        jl_new_struct_uninit((jl_datatype_t*)ety);
+                        return literal_pointer_val(((jl_datatype_t*)ety)->instance);
+                    }
                     return typed_load(emit_arrayptr(ary), idx, ety, ctx);
                 }
             }
@@ -1288,9 +1290,15 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     Value *ary = emit_expr(args[1], ctx);
                     size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
                     Value *idx = emit_array_nd_index(ary, nd, &args[3], nargs-2, ctx);
-                    typed_store(emit_arrayptr(ary), idx,
-                                ety==(jl_value_t*)jl_any_type ? emit_expr(args[2],ctx) : emit_unboxed(args[2],ctx),
-                                ety, ctx);
+                    if (jl_array_store_unboxed(ety) &&
+                        ((jl_datatype_t*)ety)->size == 0) {
+                        // no-op
+                    }
+                    else {
+                        typed_store(emit_arrayptr(ary), idx,
+                                    ety==(jl_value_t*)jl_any_type ? emit_expr(args[2],ctx) : emit_unboxed(args[2],ctx),
+                                    ety, ctx);
+                    }
                     JL_GC_POP();
                     return ary;
                 }
@@ -1909,6 +1917,7 @@ static bool store_unboxed_p(char *name, jl_codectx_t *ctx)
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
     return (ctx->linfo->inferred && jl_isbits(jt) &&
+            ((jl_datatype_t*)jt)->size > 0 &&
             // don't unbox intrinsics, since inference depends on their having
             // stable addresses for table lookup.
             jt != (jl_value_t*)jl_intrinsic_type && !(*ctx->isCaptured)[name]);
@@ -1960,7 +1969,8 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
                                           ConstantInt::get(T_size, i));
         Value *theArg = builder.CreateLoad(argPtr, false);
         jl_value_t *ty = jl_tupleref(lam->specTypes, i);
-        if (jl_is_leaf_type(ty) && jl_isbits(ty)) {
+        if (jl_is_leaf_type(ty) && jl_isbits(ty) &&
+            ((jl_datatype_t*)ty)->size > 0) {
             Type *lty = julia_type_to_llvm(ty);
             assert(lty != NULL);
             theArg = emit_unbox(lty, PointerType::get(lty,0), theArg);
