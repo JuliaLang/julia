@@ -321,6 +321,8 @@ end
 @test search(u8str, r"∄") == 0:-1
 @test search(u8str, r"∀") == 1:3
 @test search(u8str, r"∀", 4) == 0:-1
+@test search(u8str, r"∀") == search(u8str, r"\u2200")
+@test search(u8str, r"∀", 4) == search(u8str, r"\u2200", 4)
 @test search(u8str, r"∃") == 13:15
 @test search(u8str, r"∃", 16) == 0:-1
 @test search(u8str, r"x") == 26:26
