@@ -177,6 +177,10 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x)
                                               CreateBitCast(p, T_pint8), false),
                                    T_int1);
     }
+    if (to->isStructTy() && !to->isSized()) {
+        // empty struct - TODO - is this a good way to represent it?
+        return UndefValue::get(to);
+    }
     return builder.CreateLoad(builder.CreateBitCast(p, pto), false);
 }
 
