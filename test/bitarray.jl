@@ -555,8 +555,6 @@ m2 = 3
 @check_bit_operation sum Int (b1,)
 
 b0 = falses(0)
-@check_bit_operation max Bool (b0,)
-@check_bit_operation min Bool (b0,)
 @check_bit_operation any Bool (b0,)
 @check_bit_operation all Bool (b0,)
 @check_bit_operation sum Int (b0,)

@@ -731,12 +731,12 @@ end
 max{T}(A::SparseMatrixCSC{T}) =
     isempty(A) ? error("max: argument is empty") : reducedim(max,A,(1,2),typemin(T))
 max{T}(A::SparseMatrixCSC{T}, b::(), region) =
-    isempty(A) ? similar(A, reduced_dims(A,region)) : reducedim(max,A,region,typemin(T))
+    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
 
 min{T}(A::SparseMatrixCSC{T}) =
     isempty(A) ? error("min: argument is empty") : reducedim(min,A,(1,2),typemax(T))
 min{T}(A::SparseMatrixCSC{T}, b::(), region) =
-    isempty(A) ? similar(A, reduced_dims(A,region)) : reducedim(min,A,region,typemax(T))
+    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
 
 sum{T}(A::SparseMatrixCSC{T}) = reducedim(+,A,(1,2),zero(T))
 sum{T}(A::SparseMatrixCSC{T}, region)  = reducedim(+,A,region,zero(T))

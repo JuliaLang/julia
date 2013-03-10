@@ -62,7 +62,7 @@ function check_bounds(sz::Int, I::AbstractVector{Bool})
 end
 
 function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
-    if min(I) < 1 || max(I) > sz
+    if !isempty(I) && (min(I) < 1 || max(I) > sz)
         throw(BoundsError())
     end
 end
@@ -1220,17 +1220,22 @@ bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)
 
 # Basic AbstractArray functions
 
-reduced_dims(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
-                                               contains(region, i) ? 1 :
+# for reductions that expand 0 dims to 1
+reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 :
                                                size(A,i)))
+
+# keep 0 dims in place
+reduced_dims0(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
+                                                contains(region, i) ? 1 :
+                                                size(A,i)))
 
 reducedim(f::Function, A, region, v0) =
     reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
 
 max{T}(A::AbstractArray{T}, b::(), region) =
-    isempty(A) ? similar(A,reduced_dims(A,region)) : reducedim(max,A,region,typemin(T))
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
 min{T}(A::AbstractArray{T}, b::(), region) =
-    isempty(A) ? similar(A,reduced_dims(A,region)) : reducedim(min,A,region,typemax(T))
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
 sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
 prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
 
