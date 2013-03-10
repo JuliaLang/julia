@@ -145,3 +145,4 @@ end
 @deprecate  localize         localpart
 @deprecate  expr(hd, a...)   Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1}) Expr(hd, a...)
+@deprecate  logb    exponent
