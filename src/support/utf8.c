@@ -288,7 +288,6 @@ size_t u8_strwidth(const char *s)
             }
             ch -= offsetsFromUTF8[nb];
             w = wcwidth(ch);  // might return -1
-            w=0;
             if (w > 0) tot += w;
         }
     }
