@@ -1250,10 +1250,6 @@ Mathematical Functions
 
    Accurate natural logarithm of ``1+x``
 
-.. function:: exponent(x)
-
-   Return the exponent of x, represented as a floating-point number
-
 .. function:: ilogb(x) 
 
    Return the exponent of x, represented as a signed integer value
