@@ -168,25 +168,25 @@ function promote_shape(a::Dims, b::Dims)
     return a
 end
 
-# shape of array to create for ref() with indexes I
-function ref_shape(I...)
+# shape of array to create for getindex() with indexes I
+function index_shape(I...)
     n = length(I)
     while n > 0 && isa(I[n],Real); n-=1; end
     tuple([length(I[i]) for i=1:n]...)
 end
 
-ref_shape(i::Real) = ()
-ref_shape(i)       = (length(i),)
-ref_shape(i::Real,j::Real) = ()
-ref_shape(i      ,j::Real) = (length(i),)
-ref_shape(i      ,j)       = (length(i),length(j))
-ref_shape(i::Real,j::Real,k::Real) = ()
-ref_shape(i      ,j::Real,k::Real) = (length(i),)
-ref_shape(i      ,j      ,k::Real) = (length(i),length(j))
-ref_shape(i      ,j      ,k      ) = (length(i),length(j),length(k))
+index_shape(i::Real) = ()
+index_shape(i)       = (length(i),)
+index_shape(i::Real,j::Real) = ()
+index_shape(i      ,j::Real) = (length(i),)
+index_shape(i      ,j)       = (length(i),length(j))
+index_shape(i::Real,j::Real,k::Real) = ()
+index_shape(i      ,j::Real,k::Real) = (length(i),)
+index_shape(i      ,j      ,k::Real) = (length(i),length(j))
+index_shape(i      ,j      ,k      ) = (length(i),length(j),length(k))
 
 # check for valid sizes in A[I...] = X where X <: AbstractArray
-function assign_shape_check(X::AbstractArray, I...)
+function setindex_shape_check(X::AbstractArray, I...)
     nel = 1
     for idx in I
         nel *= length(idx)

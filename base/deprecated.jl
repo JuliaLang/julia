@@ -145,4 +145,14 @@ end
 @deprecate  localize         localpart
 @deprecate  expr(hd, a...)   Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1}) Expr(hd, a...)
-@deprecate  logb    exponent
+@deprecate  logb                exponent
+@deprecate  ref_shape           index_shape
+@deprecate  assign_shape_check  setindex_shape_check
+
+# note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
+
+# renamings
+const ref = getindex
+export ref
+const assign = setindex!
+export assign
