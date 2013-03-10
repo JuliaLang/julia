@@ -1287,9 +1287,12 @@ end
 nonzeros(x::Number) = x == 0 ? Array(typeof(x),0) : [x]
 
 function findmax(a)
-    m = typemin(eltype(a))
-    mi = 0
-    for i=1:length(a)
+    if isempty(a)
+        error("findmax: array is empty")
+    end
+    m = a[1]
+    mi = 1
+    for i=2:length(a)
         if a[i] > m
             m = a[i]
             mi = i
@@ -1299,9 +1302,12 @@ function findmax(a)
 end
 
 function findmin(a)
-    m = typemax(eltype(a))
-    mi = 0
-    for i=1:length(a)
+    if isempty(a)
+        error("findmin: array is empty")
+    end
+    m = a[1]
+    mi = 1
+    for i=2:length(a)
         if a[i] < m
             m = a[i]
             mi = i
