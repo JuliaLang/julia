@@ -677,7 +677,7 @@
 			      (list 'call op (parse-factor s)))
 		       num))
 		 (let ((next (peek-token s)))
-		   (cond ((or (closing-token? next) (newline? next))
+		   (cond ((or (closing-token? next) (newline? next)) ;; ?
 			  op)  ; return operator by itself, as in (+)
 			 ((eqv? next #\{)  ;; this case is +{T}(x::T) = ...
 			  (ts:put-back! s op)
