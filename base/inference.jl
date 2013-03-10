@@ -498,7 +498,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     if length(argtypes)>1 && isa(argtypes[1],Tuple) && argtypes[2]===Int
         # allow tuple indexing functions to take advantage of constant
         # index arguments.
-        if f === Main.Base.ref
+        if f === Main.Base.getindex
             e.head = :call1
             return tupleref_tfunc(fargs, argtypes[1], argtypes[2])
         elseif f === Main.Base.next
@@ -863,7 +863,7 @@ type StateUpdate
     state::VarTable
 end
 
-function ref(x::StateUpdate, s::Symbol)
+function getindex(x::StateUpdate, s::Symbol)
     if is(x.var,s)
         return x.vtype
     end

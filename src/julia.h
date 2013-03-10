@@ -852,7 +852,7 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy);
 void jl_start_parsing_file(const char *fname);
 void jl_stop_parsing();
 jl_value_t *jl_parse_next();
-DLLEXPORT void jl_load_file_string(const char *text);
+DLLEXPORT void jl_load_file_string(const char *text, char *filename);
 DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 

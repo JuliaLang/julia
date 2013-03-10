@@ -151,3 +151,15 @@ end
 @deprecate  lufact             lu
 @deprecate  qrfact             qr
 @deprecate  qrpfact            qrp
+
+@deprecate  logb                exponent
+@deprecate  ref_shape           index_shape
+@deprecate  assign_shape_check  setindex_shape_check
+
+# note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
+
+# renamings
+const ref = getindex
+export ref
+const assign = setindex!
+export assign

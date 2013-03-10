@@ -115,8 +115,8 @@ macro which(ex)
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
-            if isa(a11, TopNode) && a11.name == :assign
-                exret = Expr(:call, :which, eval(Expr(:toplevel, :assign)), map(esc, a1.args[2:end])...)
+            if isa(a11, TopNode) && a11.name == :setindex!
+                exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
             end
         end
     elseif ex.head == :thunk
@@ -543,7 +543,7 @@ function show(io::IO, cpu::Array{CPUinfo})
     end
     cpu_summary(io,cpu,first,length(cpu))
 end
-repl_show(io, cpu::Array{CPUinfo}) = show(io, cpu)
+repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
 function cpu_info()
     SC_CLK_TCK = ccall(:SC_CLK_TCK, Int, ())
     UVcpus = Array(Ptr{UV_cpu_info_t},1)
