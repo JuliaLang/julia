@@ -1360,11 +1360,6 @@ end
 
 ## Reductions ##
 
-reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 : size(A,i)))
-
-reducedim(f::Function, A, region, v0) =
-    reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
-
 # TODO:
 # - find out why inner loop with dimsA[i] instead of size(A,i) is way too slow
 

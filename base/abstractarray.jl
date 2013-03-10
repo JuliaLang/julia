@@ -1220,8 +1220,17 @@ bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)
 
 # Basic AbstractArray functions
 
-max{T}(A::AbstractArray{T}, b::(), region) = reducedim(max,A,region,typemin(T))
-min{T}(A::AbstractArray{T}, b::(), region) = reducedim(min,A,region,typemax(T))
+reduced_dims(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
+                                               contains(region, i) ? 1 :
+                                               size(A,i)))
+
+reducedim(f::Function, A, region, v0) =
+    reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
+
+max{T}(A::AbstractArray{T}, b::(), region) =
+    isempty(A) ? similar(A,reduced_dims(A,region)) : reducedim(max,A,region,typemin(T))
+min{T}(A::AbstractArray{T}, b::(), region) =
+    isempty(A) ? similar(A,reduced_dims(A,region)) : reducedim(min,A,region,typemax(T))
 sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
 prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
 
