@@ -49,6 +49,7 @@ import Base.nnz
 import Base.show
 import Base.size
 import Base.solve
+import Base.convert
 
 include("linalg/suitesparse_h.jl")
 
