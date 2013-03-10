@@ -115,8 +115,8 @@ macro which(ex)
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
-            if isa(a11, TopNode) && a11.name == :assign
-                exret = Expr(:call, :which, eval(Expr(:toplevel, :assign)), map(esc, a1.args[2:end])...)
+            if isa(a11, TopNode) && a11.name == :setindex!
+                exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
             end
         end
     elseif ex.head == :thunk
@@ -192,8 +192,25 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
-                             t.env)
+methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
+                        t.env)
+
+# locale
+
+let LOCALE = nothing
+    global locale
+    function locale()
+        if LOCALE === nothing
+            # XXX:TBD return default locale
+            return ""
+        end
+        LOCALE
+    end
+    function locale(s::ByteString)
+        LOCALE = s
+        # XXX:TBD call setlocale
+    end
+end
 
 # help
 
@@ -214,12 +231,24 @@ function decor_help_desc(func::String, mfunc::String, desc::String)
     return join(sd, '\n')
 end
 
+function helpdb_filename()
+    root = "$JULIA_HOME/../share/julia"
+    file = "helpdb.jl"
+    for loc in [locale()]
+        fn = joinpath(root, loc, file)
+        if isfile(fn)
+            return fn
+        end
+    end
+    joinpath(root, file)
+end
+
 function init_help()
     global help_category_list, help_category_dict,
            help_module_dict, help_function_dict
     if help_category_dict == nothing
         println("Loading help data...")
-        helpdb = evalfile("$JULIA_HOME/../share/julia/helpdb.jl")
+        helpdb = evalfile(helpdb_filename())
         help_category_list = {}
         help_category_dict = Dict()
         help_module_dict = Dict()
@@ -370,13 +399,13 @@ function help(f::Function)
     help_for(string(f), f)
 end
 
-help(t::CompositeKind) = help_for(string(t.name),t)
+help(t::DataType) = help_for(string(t.name),t)
 
 function help(x)
     show(x)
     t = typeof(x)
     println(" is of type $t")
-    if isa(t,CompositeKind)
+    if isa(t,DataType) && length(t.names)>0
         println("  which has fields $(t.names)")
     end
 end
@@ -514,7 +543,7 @@ function show(io::IO, cpu::Array{CPUinfo})
     end
     cpu_summary(io,cpu,first,length(cpu))
 end
-repl_show(io, cpu::Array{CPUinfo}) = show(io, cpu)
+repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
 function cpu_info()
     SC_CLK_TCK = ccall(:SC_CLK_TCK, Int, ())
     UVcpus = Array(Ptr{UV_cpu_info_t},1)
@@ -543,3 +572,37 @@ end
 free_memory() = ccall(:uv_get_free_memory, Uint64, ())
 total_memory() = ccall(:uv_get_total_memory, Uint64, ())
 
+
+# `methodswith` -- shows a list of methods using the type given
+
+function methodswith(io::IO, t::Type, m::Module)
+    for nm in names(m)
+        try
+           mt = eval(nm)
+           d = mt.env.defs
+           while !is(d,())
+               if any(map(x -> x == t, d.sig)) 
+                   print(io, nm)
+                   show(io, d)
+                   println(io)
+               end
+               d = d.next
+           end
+        end
+    end
+end
+
+methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m)
+methodswith(t::Type) = methodswith(OUTPUT_STREAM, t)
+function methodswith(io::IO, t::Type)
+    mainmod = ccall(:jl_get_current_module, Any, ())::Module
+    # find modules in Main
+    for nm in names(mainmod)
+        if isdefined(mainmod,nm)
+            mod = eval(mainmod, nm)
+            if isa(mod, Module)
+                methodswith(io, t, mod)
+            end
+        end
+    end
+end

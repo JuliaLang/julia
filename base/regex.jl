@@ -2,9 +2,9 @@
 
 include("pcre.jl")
 
-const DEFAULT_OPTS = PCRE.UTF8
+const DEFAULT_OPTS = PCRE.JAVASCRIPT_COMPAT | PCRE.UTF8
 
-type Regex
+immutable Regex
     pattern::ByteString
     options::Uint32
     regex::Array{Uint8}
@@ -58,7 +58,7 @@ end
 # TODO: map offsets into non-ByteStrings back to original indices.
 # or maybe it's better to just fail since that would be quite slow
 
-type RegexMatch
+immutable RegexMatch
     match::ByteString
     captures::Vector{Union(Nothing,ByteString)}
     offset::Int
@@ -92,7 +92,7 @@ function match(re::Regex, str::ByteString, idx::Integer)
     mat = str[m[1]+1:m[2]]
     cap = Union(Nothing,ByteString)[
             m[2i+1] < 0 ? nothing : str[m[2i+1]+1:m[2i+2]] for i=1:n ]
-    off = [ m[2i+1]::Int32+1 for i=1:n ]
+    off = Int[ m[2i+1]::Int32+1 for i=1:n ]
     RegexMatch(mat, cap, m[1]+1, off)
 end
 match(r::Regex, s::String) = match(r, s, start(s))
@@ -112,7 +112,7 @@ search(s::String, r::Regex, idx::Integer) =
     error("regex search is only available for bytestrings; use bytestring(s) to convert")
 search(s::String, r::Regex) = search(s,r,start(s))
 
-type RegexMatchIterator
+immutable RegexMatchIterator
     regex::Regex
     string::ByteString
     overlap::Bool

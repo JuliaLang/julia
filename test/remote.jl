@@ -1,7 +1,7 @@
 # Check that serializer hasn't gone out-of-frame
 @test Base.ser_tag[Symbol] == 2
-@test Base.ser_tag[()] == 49
-@test Base.ser_tag[false] == 125
+@test Base.ser_tag[()] == 47
+@test Base.ser_tag[false] == 123
 
 # issue #1770
 let

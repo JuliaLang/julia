@@ -1,6 +1,43 @@
-## generic complex number definitions ##
+immutable Complex{T<:Real} <: Number
+    re::T
+    im::T
+end
+Complex(x::Real, y::Real) = Complex(promote(x,y)...)
+Complex(x::Real) = Complex(x, zero(x))
 
-abstract Complex{T<:Real} <: Number
+typealias Complex128 Complex{Float64}
+typealias Complex64  Complex{Float32}
+typealias ComplexPair Complex
+
+real(z::Complex) = z.re
+imag(z::Complex) = z.im
+real(x::Real) = x
+imag(x::Real) = zero(x)
+
+convert{T<:Real}(::Type{Complex{T}}, x::Real) =
+    Complex{T}(convert(T,x), convert(T,0))
+convert{T<:Real}(::Type{Complex{T}}, z::Complex{T}) = z
+convert{T<:Real}(::Type{Complex{T}}, z::Complex) =
+    Complex{T}(convert(T,real(z)),convert(T,imag(z)))
+
+convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
+                                           throw(InexactError()))
+
+promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{T}) = Complex{T}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
+    Complex{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
+    Complex{promote_type(T,S)}
+
+complex(x, y) = Complex(x, y)
+complex(x) = Complex(x)
+
+complex128(r::Float64, i::Float64) = Complex{Float64}(r, i)
+complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
+complex128(z) = complex128(real(z), imag(z))
+complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
+complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
+complex64(z) = complex64(real(z), imag(z))
 
 iscomplex(x::Complex) = true
 iscomplex(x::Number) = false
@@ -8,13 +45,10 @@ iscomplex(x::Number) = false
 real_valued{T<:Real}(z::Complex{T}) = imag(z) == 0
 integer_valued(z::Complex) = real_valued(z) && integer_valued(real(z))
 
-real(x::Real) = x
-imag(x::Real) = zero(x)
-
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
 
-function complex_show(io, z::Complex, compact::Bool)
+function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
     if isnan(r) || isfinite(i)
         compact ? showcompact(io,r) : show(io,r)
@@ -37,147 +71,32 @@ end
 show(io::IO, z::Complex) = complex_show(io, z, false)
 showcompact(io::IO, z::Complex) = complex_show(io, z, true)
 
-convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
-                                           throw(InexactError()))
-
-## packed complex float types ##
-
-bitstype 128 Complex128 <: Complex{Float64}
-
-function complex128(r::Float64, i::Float64)
-    box(Complex128,
-        or_int(shl_int(zext_int(Complex128,unbox(Float64,i)), 64),
-               zext_int(Complex128,unbox(Float64,r))))
+function read{T<:Real}(s::IO, ::Type{Complex{T}})
+    r = read(s,T)
+    i = read(s,T)
+    Complex{T}(r,i)
 end
-
-complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
-complex128(z) = complex128(real(z), imag(z))
-
-real(c::Complex128) = box(Float64,trunc_int(Int64,c))
-imag(c::Complex128) = box(Float64,trunc_int(Int64,ashr_int(c, 64)))
-
-convert(::Type{Complex128}, x::Real) = complex128(x,0)
-convert(::Type{Complex128}, z::Complex128) = z
-convert(::Type{Complex128}, z::Complex) = complex128(real(z),imag(z))
-
-promote_rule(::Type{Complex128}, ::Type{Float64}) = Complex128
-promote_rule(::Type{Complex128}, ::Type{Float32}) = Complex128
-promote_rule{S<:Integer}(::Type{Complex128}, ::Type{S}) = Complex128
-promote_rule{S<:Real}(::Type{Complex128}, ::Type{S}) =
-    (P = promote_type(Float64,S);
-     is(P,Float64) ? Complex128 : ComplexPair{P})
-
-function read(s, ::Type{Complex128})
-    r = read(s,Float64)
-    i = read(s,Float64)
-    complex128(r,i)
-end
-function write(s::IO, z::Complex128)
+function write(s::IO, z::Complex)
     write(s,real(z))
     write(s,imag(z))
 end
-
-sizeof(::Type{Complex128}) = 16
-
-bitstype 64 Complex64 <: Complex{Float32}
-
-function complex64(r::Float32, i::Float32)
-    box(Complex64,
-        or_int(shl_int(zext_int(Complex64,unbox(Float32,i)), 32),
-               zext_int(Complex64,unbox(Float32,r))))
-end
-
-complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
-complex64(z) = complex64(real(z), imag(z))
-
-real(c::Complex64) = box(Float32,trunc_int(Int32,c))
-imag(c::Complex64) = box(Float32,trunc_int(Int32,ashr_int(c, 32)))
-
-convert(::Type{Complex64}, x::Real) = complex64(x,0)
-convert(::Type{Complex64}, z::Complex64) = z
-convert(::Type{Complex64}, z::Complex) = complex64(real(z),imag(z))
-
-promote_rule(::Type{Complex64}, ::Type{Float64}) = Complex128
-promote_rule(::Type{Complex64}, ::Type{Float32}) = Complex64
-promote_rule{S<:Integer}(::Type{Complex64}, ::Type{S}) = Complex64
-promote_rule{S<:Real}(::Type{Complex64}, ::Type{S}) =
-    (P = promote_type(Float32,S);
-     is(P,Float64) ? Complex128 :
-     is(P,Float32) ? Complex64  : ComplexPair{P})
-promote_rule(::Type{Complex128}, ::Type{Complex64}) = Complex128
-
-function read(s, ::Type{Complex64})
-    r = read(s,Float32)
-    i = read(s,Float32)
-    complex64(r,i)
-end
-function write(s, z::Complex64)
-    write(s,real(z))
-    write(s,imag(z))
-end
-
-sizeof(::Type{Complex64}) = 8
-
-complex(x::Float64, y::Float64) = complex128(x, y)
-complex(x::Float32, y::Float32) = complex64(x, y)
-complex(x::FloatingPoint, y::FloatingPoint) = complex(promote(x,y)...)
-complex(x::FloatingPoint, y::Real) = complex(promote(x,y)...)
-complex(x::Real, y::FloatingPoint) = complex(promote(x,y)...)
-complex(x::FloatingPoint) = complex(x, zero(x))
-
-
-## complex with arbitrary component type ##
-
-type ComplexPair{T<:Real} <: Complex{T}
-    re::T
-    im::T
-end
-ComplexPair(x::Real, y::Real) = ComplexPair(promote(x,y)...)
-ComplexPair(x::Real) = ComplexPair(x, zero(x))
-
-real(z::ComplexPair) = z.re
-imag(z::ComplexPair) = z.im
-
-convert{T<:Real}(::Type{ComplexPair{T}}, x::Real) =
-    ComplexPair(convert(T,x), convert(T,0))
-convert{T<:Real}(::Type{ComplexPair{T}}, z::ComplexPair{T}) = z
-convert{T<:Real}(::Type{ComplexPair{T}}, z::Complex) =
-    ComplexPair(convert(T,real(z)),convert(T,imag(z)))
-
-promote_rule{T<:Real}(::Type{ComplexPair{T}}, ::Type{T}) =
-    ComplexPair{T}
-promote_rule{T<:Real,S<:Real}(::Type{ComplexPair{T}}, ::Type{S}) =
-    ComplexPair{promote_type(T,S)}
-promote_rule{T<:Real,S<:Real}(::Type{ComplexPair{T}}, ::Type{ComplexPair{S}}) =
-    ComplexPair{promote_type(T,S)}
-promote_rule{T<:Real}(::Type{ComplexPair{T}}, ::Type{Complex128}) =
-    (P = promote_type(Float64,T);
-     is(P,Float64) ? Complex128 : ComplexPair{P})
-promote_rule{T<:Real}(::Type{ComplexPair{T}}, ::Type{Complex64}) =
-    (P = promote_type(Float32,T);
-     is(P,Float64) ? Complex128 : is(P,Float32) ? Complex64  : ComplexPair{P})
-
-complex(x, y) = ComplexPair(x, y)
-complex(x) = ComplexPair(x)
 
 
 ## singleton type for imaginary unit constant ##
 
-type ImaginaryUnit <: Complex{Int32}; end
+type ImaginaryUnit <: Number end
 const im = ImaginaryUnit()
 
-convert{T<:Real}(::Type{ComplexPair{T}}, ::ImaginaryUnit) =
-    ComplexPair(zero(T),one(T))
-convert(::Type{Complex128}, ::ImaginaryUnit) = complex128(0,1)
-convert(::Type{Complex64},  ::ImaginaryUnit) = complex64(0,1)
+iscomplex(::ImaginaryUnit) = true
+
+convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex{T}(zero(T),one(T))
+convert(::Type{Complex}, ::ImaginaryUnit) = Complex(real(im),imag(im))
 
 real(::ImaginaryUnit) = int32(0)
 imag(::ImaginaryUnit) = int32(1)
 
 promote_rule{T<:Complex}(::Type{ImaginaryUnit}, ::Type{T}) = T
-promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = ComplexPair{T}
-promote_rule(::Type{ImaginaryUnit}, ::Type{Float64}) = Complex128
-promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
+promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = Complex{T}
 
 
 ## generic functions of complex numbers ##

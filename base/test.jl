@@ -21,9 +21,10 @@ default_handler(r::Error)   = rethrow(r)
 
 import Base.error_show
 
-function error_show(io::IO, r::Error)
+error_show(io::IO, r::Error) = error_show(io, r, {})
+function error_show(io::IO, r::Error, bt)
     println(io, "test error during $(r.expr)")
-    error_show(io, r.err)
+    error_show(io, r.err, r.backtrace)
 end
 
 const handlers = [default_handler]

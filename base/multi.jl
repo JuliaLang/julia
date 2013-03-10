@@ -52,7 +52,7 @@
 # - timer events
 # - send pings at some interval to detect failed/hung machines
 # - integrate event loop with other kinds of i/o (non-messages)
-# ? method_missing for waiting (ref/assign/localdata seems to cover a lot)
+# ? method_missing for waiting (getindex/setindex!/localdata seems to cover a lot)
 # * serializing closures
 # * recover from i/o errors
 # * handle remote execution errors
@@ -399,7 +399,7 @@ function serialize(s, rr::RemoteRef)
 end
 
 function deserialize(s, t::Type{RemoteRef})
-    rr = invoke(deserialize, (Any, CompositeKind), s, t)
+    rr = invoke(deserialize, (Any, DataType), s, t)
     where = rr.where
     if where == myid()
         add_client(rr2id(rr), myid())
@@ -687,6 +687,10 @@ function perform_work(job::WorkItem)
                 push!(waiters, waitinfo)
             end
         end
+    elseif isa(result,WaitTask)
+        job.task.runnable = false
+        wt::WaitTask = result
+        wt.job = job
     elseif job.task.runnable
         # otherwise return to queue
         enq_work(job)

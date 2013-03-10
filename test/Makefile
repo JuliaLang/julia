@@ -1,14 +1,10 @@
 JULIAHOME = $(abspath ..)
 include ../Make.inc
 
-default all extra unicode gzip::
-
-TESTS = default all extra \
-core numbers strings unicode corelib hashing remote \
-arrayops blas linalg fft dct sparse bitarray suitesparse arpack \
-random math functional bigint bigfloat sorting \
-statistics poly file Rmath remote zlib image \
-iostring gzip integers spawn ccall parallel pkg
+TESTS = core numbers strings unicode corelib hashing remote iostring \
+arrayops linalg blas fft dct sparse bitarray random math functional bigint \
+sorting statistics spawn parallel suitesparse arpack bigfloat file zlib image \
+all pkg
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@

@@ -51,12 +51,12 @@ convert(::Type{ByteString}, s::String) = bytestring(s)
 start(s::String) = 1
 done(s::String,i) = (i > endof(s))
 isempty(s::String) = done(s,start(s))
-ref(s::String, i::Int) = next(s,i)[1]
-ref(s::String, i::Integer) = s[int(i)]
-ref(s::String, x::Real) = s[to_index(x)]
-ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
+getindex(s::String, i::Int) = next(s,i)[1]
+getindex(s::String, i::Integer) = s[int(i)]
+getindex(s::String, x::Real) = s[to_index(x)]
+getindex{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
-ref(s::String, v::AbstractVector) =
+getindex(s::String, v::AbstractVector) =
     sprint(length(v), io->(for i in v write(io,s[i]) end))
 
 symbol(s::String) = symbol(bytestring(s))
@@ -65,7 +65,7 @@ print(io::IO, s::String) = for c in s write(io, c) end
 write(io::IO, s::String) = print(io, s)
 show(io::IO, s::String) = print_quoted(io, s)
 
-(*)(s::Union(String,Char)...) = string(s...)
+(*)(s::String...) = string(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
 
 length(s::DirectIndexString) = endof(s)
@@ -286,7 +286,7 @@ isblank(c::Char) = c==' ' || c=='\t'
 
 ## generic string uses only endof and next ##
 
-type GenericString <: String
+immutable GenericString <: String
     string::String
 end
 
@@ -295,7 +295,7 @@ next(s::GenericString, i::Int) = next(s.string, i)
 
 ## plain old character arrays ##
 
-type CharString <: DirectIndexString
+immutable CharString <: DirectIndexString
     chars::Array{Char,1}
 
     CharString(a::Array{Char,1}) = new(a)
@@ -309,7 +309,7 @@ length(s::CharString) = length(s.chars)
 
 ## substrings reference original strings ##
 
-type SubString{T<:String} <: String
+immutable SubString{T<:String} <: String
     string::T
     offset::Int
     endof::Int
@@ -338,7 +338,7 @@ endof(s::SubString) = s.endof
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-function ref(s::String, r::Range1{Int})
+function getindex(s::String, r::Range1{Int})
     if first(r) < 1 || endof(s) < last(r)
         error(BoundsError)
     end
@@ -347,7 +347,7 @@ end
 
 ## efficient representation of repeated strings ##
 
-type RepString <: String
+immutable RepString <: String
     string::String
     repeat::Integer
 end
@@ -375,7 +375,7 @@ convert(::Type{RepString}, s::String) = RepString(s,1)
 
 ## reversed strings without data movement ##
 
-type RevString <: String
+immutable RevString <: String
     string::String
 end
 
@@ -392,7 +392,7 @@ reverse(s::RevString) = s.string
 
 ## ropes for efficient concatenation, etc. ##
 
-type RopeString <: String
+immutable RopeString <: String
     head::String
     tail::String
     depth::Int32
@@ -489,7 +489,7 @@ end
 ## string escaping & unescaping ##
 
 escape_nul(s::String, i::Int) =
-    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
+    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
 isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 need_full_hex(s::String, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
@@ -499,14 +499,14 @@ function print_escaped(io, s::String, esc::String)
     while !done(s,i)
         c, j = next(s,i)
         c == '\0'       ? print(io, escape_nul(s,j)) :
-        c == '\e'       ? print(io, L"\e") :
+        c == '\e'       ? print(io, "\\e") :
         c == '\\'       ? print(io, "\\\\") :
         contains(esc,c) ? print(io, '\\', c) :
         7 <= c <= 13    ? print(io, '\\', "abtnvfr"[int(c-6)]) :
         isprint(c)      ? print(io, c) :
-        c <= '\x7f'     ? print(io, L"\x", hex(c, 2)) :
-        c <= '\uffff'   ? print(io, L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
-                          print(io, L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
+        c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
+        c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
+                          print(io, "\\U", hex(c, need_full_hex(s,j) ? 8 : 4))
         i = j
     end
 end
@@ -659,7 +659,7 @@ function unindent(s::String, indent::Int)
     takebuf_string(buf)
 end
 
-function triplequoted(unescape::Function, args...)
+function triplequoted(args...)
     sx = { isa(arg,ByteString) ? arg : esc(arg) for arg in args }
 
     indent = 0
@@ -684,7 +684,7 @@ function triplequoted(unescape::Function, args...)
 
     for i in 1:length(sx)
         if isa(sx[i],ByteString)
-            sx[i] = unescape(unindent(sx[i], indent))
+            sx[i] = unindent(sx[i], indent)
         end
     end
 
@@ -700,29 +700,9 @@ end
 
 ## core string macros ##
 
-function singlequoted(unescape::Function, args...)
-    if length(args) == 1 return unescape(args[1]) end
-    sx = { isa(arg,ByteString) ? unescape(arg) : esc(arg) for arg in args }
-    Expr(:call, :string, sx...)
-end
+macro b_str(s); :($(unescape_string(s)).data); end
 
-macro   str(s...); singlequoted(unescape_string, s...); end
-macro I_str(s...); singlequoted(x->unescape_chars(x,"\""), s...); end
-macro E_str(s); check_utf8(unescape_string(s)); end
-
-function byteliteral(args...)
-    sx = { isa(arg,ByteString) ? unescape_string(arg) : esc(arg) for arg in args }
-    writer(io,x...) = for w=x; write(io,w); end
-    Expr(:call, :sprint, writer, sx...)
-end
-
-macro B_str(s...); byteliteral(s...); end
-macro b_str(s...); ex = byteliteral(s...); :(($ex).data); end
-
-macro   mstr(s...); triplequoted(unescape_string, s...); end
-macro L_mstr(s); s; end
-macro I_mstr(s...); triplequoted(x->unescape_chars(x,"\""), s...); end
-macro E_mstr(s); triplequoted(unescape_string, s); end
+macro mstr(s...); triplequoted(s...); end
 
 ## shell-like command parsing ##
 

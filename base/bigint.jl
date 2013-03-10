@@ -1,10 +1,12 @@
-type BigInt <: Integer
+BigInt_clear(mpz::Vector{Int32}) = ccall((:__gmpz_clear, :libgmp), Void, (Ptr{Void},), mpz)
+
+immutable BigInt <: Integer
     mpz::Vector{Int32}
     function BigInt() 
         z = Array(Int32, 4)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{Void},), z)
         b = new(z)
-        finalizer(b, BigInt_clear)
+        finalizer(b.mpz, BigInt_clear)
         return b
     end
 end
@@ -177,10 +179,6 @@ end
 
 function show(io::IO, x::BigInt)
     print(io, string(x))
-end
-
-function BigInt_clear(x::BigInt)
-    ccall((:__gmpz_clear, :libgmp), Void, (Ptr{Void},), x.mpz)
 end
 
 ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Uint, (Ptr{Void}, Int32), x.mpz, 10)

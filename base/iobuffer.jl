@@ -35,7 +35,7 @@ IOBuffer(maxsize::Int) = (x=IOBuffer(Array(Uint8,maxsize),true,true,maxsize); x.
 
 function read{T}(from::IOBuffer, a::Array{T})
     if !from.readable error("read failed") end
-    if isa(T, BitsKind)
+    if isbits(T)
         nb = length(a)*sizeof(T)
         if nb > nb_available(from)
             throw(EOFError())
@@ -164,7 +164,7 @@ function write_sub{T}(to::IOBuffer, a::Array{T}, offs, nel)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isa(T, BitsKind)
+    if isbits(T)
         nb = nel*sizeof(T)
         ensureroom(to, nb)
         ptr = (to.append ? to.size+1 : to.ptr)

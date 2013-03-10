@@ -1,6 +1,6 @@
 include("lru.jl")
 
-import Base.isequal, Base.length, Base.ref
+import Base.isequal, Base.length, Base.getindex
 
 bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
 
@@ -20,8 +20,8 @@ type Struct
     struct::Type
 end
 function Struct{T}(::Type{T}, endianness)
-    if !isa(T, CompositeKind)
-        error("Type $T is not a composite type.")
+    if !isstructtype(T)
+        error("Type $T is not a struct type.")
     end
     if !isbitsequivalent(T)
         error("Type $T is not bits-equivalent.")
@@ -62,9 +62,9 @@ read(s, ::Type{PadByte}) = read(s, Uint8)
 
 # TODO Handle strings and arrays
 function isbitsequivalent{T}(::Type{T})
-    if isa(T, BitsKind)
+    if isbits(T)
         return true
-    elseif !isa(T, CompositeKind)
+    elseif !isstructtype(T)
         return false
     end
     for S in T.types
@@ -88,9 +88,9 @@ function calcsize(types)
     size = 0
     for (elemtype, dims) in types
         typ = elemtype <: Array ? eltype(elemtype) : elemtype
-        size += if isa(typ, BitsKind)
+        size += if isbits(typ)
             prod(dims)*sizeof(typ)
-        elseif isa(typ, CompositeKind)
+        elseif isstructtype(typ)
             prod(dims)*sizeof(Struct(typ))
         else
             error("Improper type $typ in struct.")
@@ -233,7 +233,7 @@ function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Sy
         end)
         rvar = gensym()
         push!(rvars, rvar)
-        push!(xprs, if isa(typ, CompositeKind)
+        push!(xprs, if isstructtype(typ)
             :($rvar = unpack($stream, $typ))
         elseif dims == 1
             :($rvar = ($convert)(Base.read($stream, $typ)))
@@ -272,13 +272,13 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
             end
             $offset += sizeof($typ)*prod($dims)
         end)
-        push!(xprs, if isa(typ, CompositeKind)
+        push!(xprs, if isstructtype(typ)
             :(pack($stream, getfield($struct, ($fieldnames)[$elnum])))
         elseif dims == 1
             :(Base.write($stream, ($convert)(getfield($struct, ($fieldnames)[$elnum]))))
         else
             ranges = tuple([1:d for d in dims]...)
-            :(Base.write($stream, map($convert, ref(getfield($struct, ($fieldnames)[$elnum]), ($ranges)...))))
+            :(Base.write($stream, map($convert, getindex(getfield($struct, ($fieldnames)[$elnum]), ($ranges)...))))
         end)
     end
     xprs
@@ -302,8 +302,8 @@ endianness_converters(::LittleEndian) = htol, ltoh
 endianness_converters(::NativeEndian) = identity, identity
 
 function struct_utils(struct_type)
-    @eval ref(struct::($struct_type), i::Integer) = struct.(($struct_type).names[i])
-    @eval ref(struct::($struct_type), x) = [struct.(($struct_type).names[i]) for i in x]
+    @eval getindex(struct::($struct_type), i::Integer) = struct.(($struct_type).names[i])
+    @eval getindex(struct::($struct_type), x) = [struct.(($struct_type).names[i]) for i in x]
     @eval length(struct::($struct_type)) = length(($struct_type).names)
     # this could be better
     @eval isequal(a::($struct_type), b::($struct_type)) = isequal(a[1:end], b[1:end])
@@ -440,7 +440,7 @@ align_x86_pc_linux_gnu = align_table(align_default,
 function alignment_for(strategy::DataAlign, typ::Type)
     if has(strategy.ttable, typ)
         strategy.ttable[typ]
-    elseif isa(typ, CompositeKind)
+    elseif isstructtype(typ)
         strategy.aggregate(map(x->x[1], Struct(typ).types))
     else
         strategy.default(typ)

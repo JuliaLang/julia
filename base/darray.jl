@@ -56,9 +56,9 @@ function serialize{T,N,dd}(s, d::DArray{T,N,dd})
         emptylocl = Array(T, ntuple(length(sz), i->(i==d.distdim ? 0 : sz[i])))
         invoke(serialize, (Any, Any),
                s,
-               ccall(:jl_new_structt, Any, (Any, Any),
+               ccall(:jl_new_struct, Any, (Any, Any...),
                      DArray{T,N,dd},
-                     (sz, emptylocl, d.pmap, d.dist, d.distdim, 0, d.go)))
+                     sz, emptylocl, d.pmap, d.dist, d.distdim, 0, d.go))
     else
         serialize(s, d.go)
     end
@@ -362,7 +362,7 @@ function distribute_one(T, lsz, da, distdim, owner, orig_array)
     # indexes of original array I will take
     idxs = { 1:lsz[i] for i=1:length(da.dims) }
     idxs[distdim] = (i1:iend)
-    remote_call_fetch(owner, ref, orig_array, idxs...)
+    remote_call_fetch(owner, getindex, orig_array, idxs...)
 end
 
 convert{T,N}(::Type{Array}, d::DArray{T,N}) = convert(Array{T,N}, d)
@@ -415,47 +415,47 @@ ctranspose{T<:Real}(v::DArray{T,1}) = transpose(v)
 
 ## Indexing ##
 
-ref(r::RemoteRef) = invoke(ref, (RemoteRef, Any...), r)
-function ref(r::RemoteRef, args...)
+getindex(r::RemoteRef) = invoke(getindex, (RemoteRef, Any...), r)
+function getindex(r::RemoteRef, args...)
     if r.where==myid()
-        ref(fetch(r), args...)
+        getindex(fetch(r), args...)
     else
-        remote_call_fetch(r.where, ref, r, args...)
+        remote_call_fetch(r.where, getindex, r, args...)
     end
 end
 
-function assign(r::RemoteRef, args...)
+function setindex!(r::RemoteRef, args...)
     if r.where==myid()
-        assign(fetch(r), args...)
+        setindex!(fetch(r), args...)
     else
-        sync_add(remote_call(r.where, assign, r, args...))
+        sync_add(remote_call(r.where, setindex!, r, args...))
     end
 end
 
-# 1d scalar ref
-function ref{T}(d::DArray{T,1}, i::Int)
+# 1d scalar getindex
+function getindex{T}(d::DArray{T,1}, i::Int)
     p = locate(d, i)
     if p==d.localpiece
         offs = d.dist[p]-1
         return localize(d)[i-offs]
     end
-    return remote_call_fetch(d.pmap[p], ref, d, i)::T
+    return remote_call_fetch(d.pmap[p], getindex, d, i)::T
 end
 
-# 1d scalar assign
-function assign{T}(d::DArray{T,1}, v, i::Int)
+# 1d scalar setindex!
+function setindex!{T}(d::DArray{T,1}, v, i::Int)
     p = locate(d, i)
     if p==d.localpiece
         offs = d.dist[p]-1
         localize(d)[i-offs] = v
     else
-        sync_add(remote_call(d.pmap[p], assign, d, v, i))
+        sync_add(remote_call(d.pmap[p], setindex!, d, v, i))
     end
     d
 end
 
-# Nd scalar ref
-function ref_elt{T}(d::DArray{T}, sub::(Int...))
+# Nd scalar getindex
+function getindex_elt{T}(d::DArray{T}, sub::(Int...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -465,13 +465,13 @@ function ref_elt{T}(d::DArray{T}, sub::(Int...))
         end
         return localize(d)[sub...]::T
     end
-    return remote_call_fetch(d.pmap[p], ref_elt, d, sub)::T
+    return remote_call_fetch(d.pmap[p], getindex_elt, d, sub)::T
 end
 
-ref(d::DArray, i::Int)    = ref_elt(d, ind2sub(d.dims, i))
-ref(d::DArray, I::Int...) = ref_elt(d, I)
+getindex(d::DArray, i::Int)    = getindex_elt(d, ind2sub(d.dims, i))
+getindex(d::DArray, I::Int...) = getindex_elt(d, I)
 
-ref(d::DArray) = d
+getindex(d::DArray) = d
 
 function da_sub(d::DArray, I::Range1{Int}...)
     offs = d.dist[d.localpiece]-1
@@ -480,8 +480,8 @@ function da_sub(d::DArray, I::Range1{Int}...)
     return sub(localize(d), J)
 end
 
-# Nd ref with Range1 indexes
-function ref{T}(d::DArray{T}, I::Range1{Int}...)
+# Nd getindex with Range1 indexes
+function getindex{T}(d::DArray{T}, I::Range1{Int}...)
     (pmap, dist) = locate(d, I[d.distdim])
     np = length(pmap)
     if np == 1 && pmap[1] == d.localpiece
@@ -509,15 +509,15 @@ function ref{T}(d::DArray{T}, I::Range1{Int}...)
 end
 
 # combinations of Range1 and scalar indexes
-ref(d::DArray, I::Range1{Int}, j::Int) = d[I, j:j]
-ref(d::DArray, i::Int, J::Range1{Int}) = d[i:i, J]
+getindex(d::DArray, I::Range1{Int}, j::Int) = d[I, j:j]
+getindex(d::DArray, i::Int, J::Range1{Int}) = d[i:i, J]
 
-ref(d::DArray, I::Union(Int,Range1{Int})...) =
+getindex(d::DArray, I::Union(Int,Range1{Int})...) =
     d[[isa(i,Int) ? (i:i) : i for i in I ]...]
 
 
-# Nd ref with vector indexes
-function ref{T}(d::DArray{T}, I::AbstractVector{Int}...)
+# Nd getindex with vector indexes
+function getindex{T}(d::DArray{T}, I::AbstractVector{Int}...)
     (pmap, dist, perm) = locate(d,[I[d.distdim]])
     np = length(pmap)
     if np == 1 && pmap[1] == d.localpiece
@@ -538,9 +538,9 @@ function ref{T}(d::DArray{T}, I::AbstractVector{Int}...)
         end
         K = [ i==d.distdim ? II[lower:(j-1)] : I[i] for i=1:ndims(d) ]
         if np == 1
-            deps[p] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
+            deps[p] = remote_call_fetch(d.pmap[pmap[p]], getindex, d, K...)
         else
-            deps[p] = remote_call(d.pmap[pmap[p]], ref, d, K...)
+            deps[p] = remote_call(d.pmap[pmap[p]], getindex, d, K...)
         end
     end
     j = 1
@@ -557,14 +557,14 @@ function ref{T}(d::DArray{T}, I::AbstractVector{Int}...)
 end
 
 # combinations of vector and scalar indexes
-ref(d::DArray, I::AbstractVector{Int}, j::Int) = d[I, [j]]
-ref(d::DArray, i::Int, J::AbstractVector{Int}) = d[[i], J]
+getindex(d::DArray, I::AbstractVector{Int}, j::Int) = d[I, [j]]
+getindex(d::DArray, i::Int, J::AbstractVector{Int}) = d[[i], J]
 
-ref(d::DArray, I::Union(Int,AbstractVector{Int})...) =
+getindex(d::DArray, I::Union(Int,AbstractVector{Int})...) =
     d[[isa(i,Int) ? [i] : i for i in I]...]
 
-# Nd scalar assign
-function assign_elt(d::DArray, v, sub::(Int...))
+# Nd scalar setindex!
+function setindex!_elt(d::DArray, v, sub::(Int...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -574,19 +574,19 @@ function assign_elt(d::DArray, v, sub::(Int...))
         end
         localize(d)[sub...] = v
     else
-        sync_add(remote_call(d.pmap[p], assign_elt, d, v, sub))
+        sync_add(remote_call(d.pmap[p], setindex!_elt, d, v, sub))
     end
     d
 end
 
-assign(d::DArray, v, i::Int) = assign_elt(d, v, ind2sub(d.dims, i))
-assign(d::DArray, v, i0::Int, I::Int...) = assign_elt(d, v, tuple(i0,I...))
+setindex!(d::DArray, v, i::Int) = setindex!_elt(d, v, ind2sub(d.dims, i))
+setindex!(d::DArray, v, i0::Int, I::Int...) = setindex!_elt(d, v, tuple(i0,I...))
 
 #TODO: Fix this
-assign(d::DArray, v) = error("distributed arrays of dimension 0 not supported")
+setindex!(d::DArray, v) = error("distributed arrays of dimension 0 not supported")
 
-# Nd assign, scalar fill case, with Range1 indexes
-function assign(d::DArray, v, I::Range1{Int}...)
+# Nd setindex!, scalar fill case, with Range1 indexes
+function setindex!(d::DArray, v, I::Range1{Int}...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -596,14 +596,14 @@ function assign(d::DArray, v, I::Range1{Int}...)
     end
     for p = 1:length(pmap)
         K = [ i==d.distdim ? (dist[p]:(dist[p+1]-1)) : I[i] for i=1:ndims(d) ]
-        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v, K...))
+        sync_add(remote_call(d.pmap[pmap[p]], setindex!, d, v, K...))
     end
     return d
 end
 
-# Nd assign, array copy case, with Range1 indexes
-function assign(d::DArray, v::AbstractArray, I::Range1{Int}...)
-    assign_shape_check(v, I...)
+# Nd setindex!, array copy case, with Range1 indexes
+function setindex!(d::DArray, v::AbstractArray, I::Range1{Int}...)
+    setindex_shape_check(v, I...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -620,13 +620,13 @@ function assign(d::DArray, v::AbstractArray, I::Range1{Int}...)
                                                (1:length(I[i]))))
         K = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
                                                I[i]))
-        sync_add(remote_call(d.pmap[pmap[p]], assign, d, sub(v,J), K...))
+        sync_add(remote_call(d.pmap[pmap[p]], setindex!, d, sub(v,J), K...))
     end
     return d
 end
 
-# Nd assign, scalar fill case, vector indexes
-function assign(d::DArray, v, I::AbstractVector{Int}...)
+# Nd setindex!, scalar fill case, vector indexes
+function setindex!(d::DArray, v, I::AbstractVector{Int}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -644,14 +644,14 @@ function assign(d::DArray, v, I::AbstractVector{Int}...)
             j += 1
         end
         K = [ i==d.distdim ? II[lower:(j-1)] : I[i] for i=1:ndims(d) ]
-        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v, K...))
+        sync_add(remote_call(d.pmap[pmap[p]], setindex!, d, v, K...))
     end
     return d
 end
 
-# Nd assign, array copy case, vector indexes
-function assign(d::DArray, v::AbstractArray, I::AbstractVector{Int}...)
-    assign_shape_check(v, I...)
+# Nd setindex!, array copy case, vector indexes
+function setindex!(d::DArray, v::AbstractArray, I::AbstractVector{Int}...)
+    setindex_shape_check(v, I...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -675,18 +675,18 @@ function assign(d::DArray, v::AbstractArray, I::AbstractVector{Int}...)
                                                (1:length(I[i]))))
         K = ntuple(ndims(d),i->(i==d.distdim ? II[lower:(j-1)] :
                                                I[i]))
-        sync_add(remote_call(d.pmap[pmap[p]], assign, d, sub(v,J), K...))
+        sync_add(remote_call(d.pmap[pmap[p]], setindex!, d, sub(v,J), K...))
     end
     return d
 end
 
-# assign with combinations of Range1 and scalar indexes
-assign(d::DArray, v, I::Union(Int,Range1{Int})...) =
-    assign(d, v, [isa(i,Int) ? (i:i) : i for i in I]...)
+# setindex! with combinations of Range1 and scalar indexes
+setindex!(d::DArray, v, I::Union(Int,Range1{Int})...) =
+    setindex!(d, v, [isa(i,Int) ? (i:i) : i for i in I]...)
 
-# assign with combinations of vector and scalar indexes
-assign(d::DArray, v, I::Union(Int,AbstractVector{Int})...) =
-    assign(d, v, [isa(i,Int) ? [i] : i for i in I]...)
+# setindex! with combinations of vector and scalar indexes
+setindex!(d::DArray, v, I::Union(Int,AbstractVector{Int})...) =
+    setindex!(d, v, [isa(i,Int) ? [i] : i for i in I]...)
 
 ## matrix multiply ##
 

@@ -399,7 +399,7 @@ function generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{
     if mA == nA == nB == 2; return matmul2x2(C, tA, tB, A, B); end
     if mA == nA == nB == 3; return matmul3x3(C, tA, tB, A, B); end
 
-    if isa(R, BitsKind)
+    if isbits(R)
         tile_size = int(ifloor(sqrt(tilebufsize/sizeof(R))))
         sz = (tile_size, tile_size)
         Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
@@ -452,7 +452,7 @@ function generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{
             end
         end
     else
-        # Multiplication for non-BitsKind uses the naive algorithm
+        # Multiplication for non-plain-data uses the naive algorithm
         if tA == 'N'
             if tB == 'N'
                 for i = 1:mA

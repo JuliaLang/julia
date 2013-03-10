@@ -63,7 +63,7 @@ for (T, saupd, seupd, naupd, neupd) in
                end
                if info[1] != 0 error("error code $(info[1]) from ARPACK aupd") end
                if (ido[1] != -1 && ido[1] != 1) break end
-               workd[ipntr[2]+zernm1] = A*ref(workd, ipntr[1]+zernm1)
+               workd[ipntr[2]+zernm1] = A*getindex(workd, ipntr[1]+zernm1)
            end
 
            howmny = "A"
@@ -159,7 +159,7 @@ for (T, TR, naupd, neupd) in
                          iparam, ipntr, workd, workl, &lworkl, rwork, info)
                if info[1] != 0 error("error code $(info[1]) from ARPACK aupd") end
                if (ido[1] != -1 && ido[1] != 1) break end
-               workd[ipntr[2]+zernm1] = A*ref(workd, ipntr[1]+zernm1)
+               workd[ipntr[2]+zernm1] = A*getindex(workd, ipntr[1]+zernm1)
            end
 
            howmny = "A"
@@ -231,7 +231,7 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
                      iparam, ipntr, workd, workl, &lworkl, info)
                if (info[1] < 0) error("error code $(info[1]) from ARPACK saupd") end
                if (ido[1] != -1 && ido[1] != 1) break end
-               workd[ipntr[2]+zernm1] = sarupdate(A, At, ref(workd, ipntr[1]+zernm1))
+               workd[ipntr[2]+zernm1] = sarupdate(A, At, getindex(workd, ipntr[1]+zernm1))
            end
 
            d      = Array($T, nev)

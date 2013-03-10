@@ -94,7 +94,7 @@ ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
 ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
 
 function ident_cmp(A::Vector{Union(Int,ASCIIString)},
-                       B::Vector{Union(Int,ASCIIString)})
+                   B::Vector{Union(Int,ASCIIString)})
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)
@@ -140,9 +140,9 @@ hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
 if(isfile("$JULIA_HOME/../../VERSION"))
 const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
 elseif(isfile("$JULIA_HOME/../share/julia/VERSION"))
-	const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../share/julia/VERSION"))
+    const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../share/julia/VERSION"))
 else
-	const VERSION = convert(VersionNumber,"0.0.0")
+    const VERSION = convert(VersionNumber,"0.0.0")
 end
 if(isfile("$JULIA_HOME/../../COMMIT"))
     const VERSION_COMMIT = ""
@@ -219,16 +219,17 @@ end
 begin
 const version_string = "Version $VERSION"
 const banner_plain =
-I"               _
+"""
+               _
    _       _ _(_)_     |  A fresh approach to technical computing
   (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-   _ _   _| |_  __ _   |  Type \"help()\" to list help topics
+   _ _   _| |_  __ _   |  Type "help()" to list help topics
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  $version_string
- _/ |\__'_|_|_|\__'_|  |  $commit_string
+ _/ |\\__'_|_|_|\\__'_|  |  $commit_string
 |__/                   |
 
-"
+"""
 local tx = "\033[0m\033[1m" # text
 local jl = "\033[0m\033[1m" # julia
 local d1 = "\033[34m" # first dot

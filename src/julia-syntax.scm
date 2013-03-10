@@ -99,18 +99,71 @@
 		,(expand-update-operator- op nuref rhs)))
       (expand-update-operator- op lhs rhs)))
 
-; (a > b > c) => (call & (call > a b) (call > b c))
+(define (dotop? o) (eqv? (string.char (string o) 0) #\.))
+
+;; accumulate a series of comparisons, with the given "and" constructor,
+;; exit criteria, and "take" function that consumes part of a list,
+;; returning (expression . rest)
+(define (comp-accum e make-and done? take)
+  (let loop ((e e)
+	     (expr '()))
+    (if (done? e) (cons expr e)
+	(let ((ex_rest (take e)))
+	  (loop (cdr ex_rest)
+		(if (null? expr)
+		    (car ex_rest)
+		    (make-and expr (car ex_rest))))))))
+
+(define (add-init arg arg2 expr)
+  (if (eq? arg arg2) expr
+      `(block (= ,arg2 ,arg) ,expr)))
+
+;; generate a comparison from e.g. (a < b ...)
+;; returning (expr . rest)
+(define (compare-one e)
+  (let* ((arg   (caddr e))
+	 (arg2  (if (and (pair? arg)
+			 (pair? (cdddr e)))
+		    (gensy) arg)))
+    (if (and (not (dotop? (cadr e)))
+	     (length> e 5)
+	     (pair? (cadddr (cdr e)))
+	     (dotop? (cadddr (cddr e))))
+	;; look ahead: if the 2nd argument of the next comparison is also
+	;; an argument to an eager (dot) op, make sure we don't skip the
+	;; initialization of its variable by short-circuiting
+	(let ((s (gensy)))
+	  (cons `(block
+		  ,@(if (eq? arg arg2) '() `((= ,arg2 ,arg)))
+		  (= ,s ,(cadddr (cdr e)))
+		  (call ,(cadr e) ,(car e) ,arg2))
+		(list* arg2 (cadddr e) s (cddddr (cdr e)))))
+	(cons
+	 (add-init arg arg2
+		   `(call ,(cadr e) ,(car e) ,arg2))
+	 (cons arg2 (cdddr e))))))
+
+;; convert a series of scalar comparisons into && expressions
+(define (expand-scalar-compare e)
+  (comp-accum e
+	      (lambda (a b) `(&& ,a ,b))
+	      (lambda (x) (or (not (length> x 2)) (dotop? (cadr x))))
+	      compare-one))
+
+;; convert a series of scalar and vector comparisons into & calls,
+;; combining as many scalar comparisons as possible into short-circuit
+;; && sequences.
+(define (expand-vector-compare e)
+  (comp-accum e
+	      (lambda (a b) `(call & ,a ,b))
+	      (lambda (x) (not (length> x 2)))
+	      (lambda (e)
+		(if (dotop? (cadr e))
+		    (compare-one e)
+		    (expand-scalar-compare e)))))
+
 (define (expand-compare-chain e)
-  (if (length> e 3)
-      (let ((arg2 (caddr e)))
-	(if (pair? arg2)
-	    (let ((g (gensy)))
-	      `(block (= ,g ,arg2)
-		      (call & (call ,(cadr e) ,(car e) ,g)
-			    ,(expand-compare-chain (cons g (cdddr e))))))
-	    `(call & (call ,(cadr e) ,(car e) ,arg2)
-		   ,(expand-compare-chain (cddr e)))))
-      `(call ,(cadr e) ,(car e) ,(caddr e))))
+  (car (expand-vector-compare e)))
 
 ;; last = is this last index?
 (define (end-val a n tuples last)
@@ -261,10 +314,10 @@
 		  ,@(symbols->typevars names bounds #t)
 		  ,body))))))
 
-(define (struct-def-expr name params super fields)
+(define (struct-def-expr name params super fields mut)
   (receive
    (params bounds) (sparam-name-bounds params '() '())
-   (struct-def-expr- name params bounds super (flatten-blocks fields))))
+   (struct-def-expr- name params bounds super (flatten-blocks fields) mut)))
 
 (define (default-inner-ctor name field-names field-types)
   `(function (call ,name
@@ -280,19 +333,16 @@
 	     (block
 	      (call (curly ,name ,@params) ,@field-names))))
 
-(define (new-call Texpr args field-names)
-  (cond ((> (length args) (length field-names))
+(define (new-call Texpr args field-names field-types mutabl)
+  (cond ((length> args (length field-names))
 	 `(call (top error) "new: too many arguments"))
-	((null? args)
-	 `(new ,Texpr))
 	(else
-	 (let ((g (gensy)))
-	   `(block (= ,g (new ,Texpr))
-		   ,@(map (lambda (fld val) `(= (|.| ,g (quote ,fld)) ,val))
-			  (list-head field-names (length args)) args)
-		   ,g)))))
+	 `(new ,Texpr
+	       ,@(map (lambda (fty val)
+			`(call (top convert) ,fty ,val))
+		      (list-head field-types (length args)) args)))))
 
-(define (rewrite-ctor ctor Tname params field-names)
+(define (rewrite-ctor ctor Tname params field-names field-types mutabl)
   (define (ctor-body body)
     `(block ;; make type name global
 	    (global ,Tname)
@@ -303,7 +353,9 @@
 					      Tname
 					      `(curly ,Tname ,@params))
 					  args
-					  field-names)))
+					  field-names
+					  field-types
+					  mutabl)))
 			      body)))
   (let ((ctor2
 	 (pattern-replace
@@ -331,7 +383,7 @@
 			  (else (list x))))
 		  e))))
 
-(define (struct-def-expr- name params bounds super fields)
+(define (struct-def-expr- name params bounds super fields mut)
   (receive
    (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
 			   fields)
@@ -346,14 +398,15 @@
 	   (const ,name)
 	   (composite_type ,name (tuple ,@params)
 			   (tuple ,@(map (lambda (x) `',x) field-names))
-			   (null) ,super (tuple ,@field-types))
+			   (null) ,super (tuple ,@field-types)
+			   ,mut)
 	   (call
 	    (lambda ()
 	      (scope-block
 	       (block
 		(global ,name)
 		,@(map (lambda (c)
-			 (rewrite-ctor c name '() field-names))
+			 (rewrite-ctor c name '() field-names field-types mut))
 		       defs2)))))
 	   (null))
 	 ;; parametric case
@@ -374,10 +427,12 @@
 				 (global ,@params)
 				 ,@(map
 				    (lambda (c)
-				      (rewrite-ctor c name params field-names))
+				      (rewrite-ctor c name params field-names
+						    field-types mut))
 				    defs2)
 				 ,name)))
-			     ,super (tuple ,@field-types))))
+			     ,super (tuple ,@field-types)
+			     ,mut)))
 	   (scope-block
 	    (block
 	     (global ,@params)
@@ -570,9 +625,9 @@
 		      (-> (tuple ,@argl) ,body)))
 
    ;; type definition
-   (pattern-lambda (type sig (block . fields))
+   (pattern-lambda (type mut sig (block . fields))
 		   (receive (name params super) (analyze-type-sig sig)
-			    (struct-def-expr name params super fields)))
+			    (struct-def-expr name params super fields mut)))
 
    ;; try with finally
    (pattern-lambda (try tryb var catchb finalb)
@@ -861,7 +916,7 @@
 			  ,@stmts
 			  ,@stuff
 			  ,@rini
-			  (call (top assign) ,arr ,r ,@new-idxs)
+			  (call setindex! ,arr ,r ,@new-idxs)
 			  ,r)))))
 
    (pattern-lambda (ref a . idxs)
@@ -878,7 +933,7 @@
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
 			,@(append stmts stuff)
-			(call (top ref) ,arr ,@new-idxs)))))
+			(call getindex ,arr ,@new-idxs)))))
 
    (pattern-lambda (curly type . elts)
 		   `(call (top apply_type) ,type ,@elts))
@@ -1098,6 +1153,40 @@
 				,@(apply nconc rows)))
 		       `(call (top vcat) ,@a)))
 
+   (pattern-lambda (typed_hcat t . a)
+                   (let ((result (gensy))
+                         (ncols (length a)))
+                     `(block
+                       (if (call (top !) (call (top isa) ,t Type))
+                           (call error "invalid array index"))
+                       (= ,result (call (top Array) ,t 1 ,ncols))
+                       ,@(map (lambda (x i) `(call (top setindex!) ,result ,x ,i))
+                              a (cdr (iota (+ ncols 1))))
+                       ,result)))
+
+   (pattern-lambda (typed_vcat t . rows)
+     (if (any (lambda (x) (not (and (pair? x) (eq? 'row (car x))))) rows)
+         (error "invalid array literal")
+         (let ((result (gensy))
+               (nrows (length rows))
+               (ncols (length (cdar rows))))
+           (if (any (lambda (x) (not (= (length (cdr x)) ncols))) rows)
+               (error "invalid array literal")
+               `(block
+                 (if (call (top !) (call (top isa) ,t Type))
+                     (call error "invalid array index"))
+                 (= ,result (call (top Array) ,t ,nrows ,ncols))
+                 ,@(apply nconc
+                     (map
+                       (lambda (row i)
+                         (map
+                           (lambda (x j) `(call (top setindex!) ,result ,x ,i ,j))
+                           (cdr row)
+                           (cdr (iota (+ ncols 1)))))
+                       rows
+                       (cdr (iota (+ nrows 1)))))
+                 ,result)))))
+
    ;; transpose operator
    (pattern-lambda (|'| a) `(call ctranspose ,a))
    (pattern-lambda (|.'| a) `(call transpose ,a))
@@ -1153,7 +1242,7 @@
 	(if (null? ranges)
 	    `(block (= ,oneresult ,expr)
 		    (type_goto ,initlabl)
-		    (call (top assign) ,result ,oneresult ,ri)
+		    (call (top setindex!) ,result ,oneresult ,ri)
 		    (+= ,ri 1))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
@@ -1193,7 +1282,7 @@
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
 	(if (null? ranges)
-	    `(block (call (top assign) ,result ,expr ,ri)
+	    `(block (call (top setindex!) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
 		  ,(construct-loops (cdr ranges) (cdr rs)))))
@@ -1228,7 +1317,7 @@
 	    `(block (= ,onekey ,(cadr expr))
 		    (= ,oneval ,(caddr expr))
 		    (type_goto ,initlabl)
-		    (call (top assign) ,result ,oneval ,onekey))
+		    (call (top setindex!) ,result ,oneval ,onekey))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
 
@@ -1264,7 +1353,7 @@
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
 	(if (null? ranges)
-	    `(call (top assign) ,result ,(caddr expr) ,(cadr expr))
+	    `(call (top setindex!) ,result ,(caddr expr) ,(cadr expr))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
 		  ,(construct-loops (cdr ranges) (cdr rs)))))
 
@@ -1311,9 +1400,9 @@
     (define (construct-loops ranges iters oneresult-dim)
       (if (null? ranges)
 	  (if (null? iters)
-	      `(block (call (top assign) ,result ,expr ,ri)
+	      `(block (call (top setindex!) ,result ,expr ,ri)
 		      (+= ,ri 1))
-	      `(block (call (top assign) ,result (ref ,expr ,@(reverse iters)) ,ri)
+	      `(block (call (top setindex!) ,result (ref ,expr ,@(reverse iters)) ,ri)
 		      (+= ,ri 1)) )
 	  (if (eq? (car ranges) `:)
 	      (let ((i (gensy)))
@@ -2166,7 +2255,7 @@ So far only the second case can actually occur.
 				 (resolve-expansion-vars- x env m))
 			       (cdr e))))
 	   ((type)
-	    `(type ,(unescape (cadr e))
+	    `(type ,(cadr e) ,(unescape (caddr e))
 		   ;; type has special behavior: identifiers inside are
 		   ;; field names, not expressions.
 		   ,(map (lambda (x)
@@ -2176,7 +2265,7 @@ So far only the second case can actually occur.
 				    ,(resolve-expansion-vars- (caddr x) env m)))
 				 (else
 				  (resolve-expansion-vars- x env m))))
-			 (caddr e))))
+			 (cadddr e))))
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)

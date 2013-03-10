@@ -3,7 +3,7 @@
 show(x) = show(OUTPUT_STREAM::IO, x)
 
 print(io::IO, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
-show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io::IO, x)
+show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io, x)
 
 showcompact(io::IO, x) = show(io, x)
 showcompact(x) = showcompact(OUTPUT_STREAM::IO, x)
@@ -388,7 +388,7 @@ end
 function xdump(fn::Function, io::IO, x, n::Int, indent)
     T = typeof(x)
     print(io, T, " ")
-    if isa(T, CompositeKind)
+    if isa(T, DataType)
         println(io)
         if n > 0
             for field in T.names
@@ -427,14 +427,14 @@ xdump(fn::Function, io::IO, x::Function, n::Int, indent) = println(io, x)
 xdump(fn::Function, io::IO, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x)
 
 # Types
-xdump(fn::Function, io::IO, x::UnionKind, n::Int, indent) = println(io, x)
-function xdump(fn::Function, io::IO, x::CompositeKind, n::Int, indent)
+xdump(fn::Function, io::IO, x::UnionType, n::Int, indent) = println(io, x)
+function xdump(fn::Function, io::IO, x::DataType, n::Int, indent)
     println(io, x, "::", typeof(x), " ", " <: ", super(x))
     if n > 0
         for idx in 1:min(10,length(x.names))
             if x.names[idx] != symbol("")    # prevents segfault if symbol is blank
                 print(io, indent, "  ", x.names[idx], "::")
-                if isa(x.types[idx], CompositeKind) 
+                if isa(x.types[idx], DataType)
                     xdump(fn, io, x.types[idx], n - 1, string(indent, "  "))
                 else
                     println(x.types[idx])
@@ -471,7 +471,7 @@ function dumptype(io::IO, x, n::Int, indent)
                                 length(t.parameters) > 0 ? "{$targs}" : "",
                                 " = ", t)
                     end
-                elseif isa(t, UnionKind)
+                elseif isa(t, UnionType)
                     if any(map(tt -> string(x.name) == typargs(tt), t.types))
                         println(io, indent, "  ", s, " = ", t)
                     end
@@ -491,8 +491,8 @@ end
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-xdump(fn::Function, io::IO, x::AbstractKind) = dumptype(io, x, 5, "")
-xdump(fn::Function, io::IO, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
+xdump(fn::Function, io::IO, x::DataType) = dumptype(io, x, 5, "")
+xdump(fn::Function, io::IO, x::DataType, n::Int) = dumptype(io, x, n, "")
 
 # defaults:
 xdump(fn::Function, io::IO, x) = xdump(xdump, io, x, 5, "")  # default is 5 levels
@@ -526,10 +526,9 @@ function dump(io::IO, x::Dict, n::Int, indent)
 end
 
 # More generic representation for common types:
-dump(io::IO, x::AbstractKind, n::Int, indent) = println(io, x.name)
-dump(io::IO, x::AbstractKind) = dumptype(io, x, 5, "")
-dump(io::IO, x::AbstractKind, n::Int) = dumptype(io, x, n, "")
-dump(io::IO, x::BitsKind, n::Int, indent) = println(io, x.name)
+dump(io::IO, x::DataType, n::Int, indent) = println(io, x.name)
+dump(io::IO, x::DataType) = dumptype(io, x, 5, "")
+dump(io::IO, x::DataType, n::Int) = dumptype(io, x, n, "")
 dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
@@ -597,7 +596,7 @@ function alignment(
     return a
 end
 
-function print_matrix_row(io,
+function print_matrix_row(io::IO,
     X::AbstractMatrix, A::Vector,
     i::Integer, cols::AbstractVector, sep::String
 )
@@ -618,7 +617,7 @@ function print_matrix_row(io,
     end
 end
 
-function print_matrix_vdots(io,
+function print_matrix_vdots(io::IO,
     vdots::String, A::Vector, sep::String, M::Integer, m::Integer
 )
     for k = 1:length(A)
@@ -634,7 +633,7 @@ function print_matrix_vdots(io,
     end
 end
 
-function print_matrix(io,
+function print_matrix(io::IO,
     X::AbstractMatrix, rows::Integer, cols::Integer,
     pre::String, sep::String, post::String,
     hdots::String, vdots::String, ddots::String,
@@ -709,11 +708,11 @@ function print_matrix(io,
         end
     end
 end
-print_matrix(io, X::AbstractMatrix, rows::Integer, cols::Integer) =
+print_matrix(io::IO, X::AbstractMatrix, rows::Integer, cols::Integer) =
     print_matrix(io, X, rows, cols, " ", "  ", "",
                  "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 
-print_matrix(io, X::AbstractMatrix) = print_matrix(io, X, tty_rows()-4, tty_cols())
+print_matrix(io::IO, X::AbstractMatrix) = print_matrix(io, X, tty_rows()-4, tty_cols())
 
 summary(x) = string(typeof(x))
 
@@ -724,13 +723,13 @@ dims2string(d) = length(d) == 0 ? "0-dimensional" :
 summary{T}(a::AbstractArray{T}) =
     string(dims2string(size(a)), " ", T, " ", typeof(a).name)
 
-function show_nd(io, a::AbstractArray)
+function show_nd(io::IO, a::AbstractArray)
     if isempty(a)
         return
     end
     tail = size(a)[3:]
     nd = ndims(a)-2
-    function print_slice(io, idxs...)
+    function print_slice(io::IO, idxs...)
         for i = 1:nd
             ii = idxs[i]
             if size(a,i+2) > 10
@@ -818,7 +817,7 @@ function showall(io::IO, a::AbstractArray)
     cartesian_map(print_slice, tail)
 end
 
-function show_vector(io, v, opn, cls)
+function show_vector(io::IO, v, opn, cls)
     X = reshape(v,(1,length(v)))
     print_matrix(io, X, 1, tty_cols(), opn, ", ", cls, "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 end

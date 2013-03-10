@@ -108,7 +108,7 @@ end
 
 _tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 
-function ref(t::Associative, key)
+function getindex(t::Associative, key)
     v = get(t, key, secret_table_token)
     if is(v, secret_table_token)
         throw(KeyError(key))
@@ -125,7 +125,7 @@ end
 
 similar(d::ObjectIdDict) = ObjectIdDict()
 
-function assign(t::ObjectIdDict, v::ANY, k::ANY)
+function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
     t.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any), t.ht, k, v)
     return t
 end
@@ -352,7 +352,7 @@ function empty!{K,V}(h::Dict{K,V})
     return h
 end
 
-function assign{K,V}(h::Dict{K,V}, v, key)
+function setindex!{K,V}(h::Dict{K,V}, v, key)
     key = convert(K,key)
     v   = convert(V,  v)
 
@@ -410,7 +410,7 @@ function assign{K,V}(h::Dict{K,V}, v, key)
 
     rehash(h, h.count > 64000 ? sz*2 : sz*4)
 
-    assign(h, v, key)
+    setindex!(h, v, key)
 end
 
 # get the index where a key is stored, or -1 if not present
@@ -440,7 +440,7 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
     return -1
 end
 
-function ref{K,V}(h::Dict{K,V}, key)
+function getindex{K,V}(h::Dict{K,V}, key)
     index = ht_keyindex(h, key)
     return (index<0) ? throw(KeyError(key)) : h.vals[index]::V
 end
@@ -501,7 +501,7 @@ function add_weak_key(t::Dict, k, v)
     t[WeakRef(k)] = v
     # TODO: it might be better to avoid the finalizer, allow
     # wiped WeakRefs to remain in the table, and delete them as
-    # they are discovered by ref and assign.
+    # they are discovered by getindex and setindex!.
     finalizer(k, t.deleter)
     return t
 end
@@ -519,7 +519,7 @@ type WeakKeyDict{K,V} <: Associative{K,V}
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 
-assign{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
+setindex!{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
 
 function getkey{K}(wkh::WeakKeyDict{K}, kk, deflt)
     k = getkey(wkh.ht, kk, secret_table_token)
@@ -534,7 +534,7 @@ delete!{K}(wkh::WeakKeyDict{K}, key) = delete!(wkh.ht, key)
 delete!{K}(wkh::WeakKeyDict{K}, key, def) = delete!(wkh.ht, key, def)
 empty!(wkh::WeakKeyDict)  = (empty!(wkh.ht); wkh)
 has{K}(wkh::WeakKeyDict{K}, key) = has(wkh.ht, key)
-ref{K}(wkh::WeakKeyDict{K}, key) = ref(wkh.ht, key)
+getindex{K}(wkh::WeakKeyDict{K}, key) = getindex(wkh.ht, key)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 
 start(t::WeakKeyDict) = start(t.ht)

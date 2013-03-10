@@ -64,6 +64,16 @@ function ReqsStruct(reqs::Vector{VersionSet}, fixed::Dict)
     vers = versions(pkgs)
     deps = dependencies(union(pkgs,keys(fixed)))
 
+    filter!(reqs) do r
+        if has(fixed, r.package)
+            if !contains(r, Version(r.package,fixed[r.package]))
+                warn("$(r.package) is fixed at $(repr(fixed[r.package])) which doesn't satisfy $(r.versions).")
+            end
+            false
+        else
+            true
+        end
+    end
     filter!(pkgs) do p
         !has(fixed, p)
     end
@@ -87,6 +97,14 @@ function ReqsStruct(reqs::Vector{VersionSet}, fixed::Dict)
     end
     filter!(deps) do d
         !contains(unsatisfiable, d[1])
+    end
+    version_packages_set = Set{String}(String[v.package for v in vers]...)
+    filter!(pkgs) do p
+        contains(version_packages_set, p)
+    end
+    for r in reqs
+        contains(pkgs, r.package) && continue
+        error("$(r.package) has no versions compatible with your fixed requirements (e.g. julia version).")
     end
 
     ReqsStruct(reqs, pkgs, vers, deps)

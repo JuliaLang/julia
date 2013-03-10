@@ -6,7 +6,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cosd, cotd, cscd, secd, sind, tand,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
-       log, log2, log10, log1p, logb, exp, exp2, expm1, 
+       log, log2, log10, log1p, exponent, exp, exp2, expm1,
        cbrt, sqrt, square, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
        lgamma, hypot, gamma, lfact, max, min, ilogb, ldexp, frexp,
@@ -113,12 +113,12 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
-for f in (:logb, :expm1, :significand)
+for (f,jlname) in ((:logb,:exponent), (:expm1,:expm1), (:significand,:significand))
     @eval begin
-        ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        ($f)(x::Integer) = ($f)(float(x))
-        @vectorize_1arg Real $f
+        ($jlname)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
+        ($jlname)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
+        ($jlname)(x::Integer) = ($jlname)(float(x))
+        @vectorize_1arg Real $jlname
     end
 end
 

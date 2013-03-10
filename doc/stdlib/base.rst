@@ -56,6 +56,10 @@ Getting Around
 
    Show all methods of ``f`` with their argument types.
 
+.. function:: methodswith(t)
+
+   Show all methods with an argument of type ``typ``.
+
 All Objects
 -----------
 
@@ -219,7 +223,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
 .. function:: zip(iters...)
 
-   For a set of iterable objects, returns an iterable of tuples, where the ``i``th tuple contains the ``i``th component of each input iterable.
+   For a set of iterable objects, returns an iterable of tuples, where the ``i``\ th tuple contains the ``i``\ th component of each input iterable.
 
    Note that ``zip`` is it's own inverse: [zip(zip(a...)...)...] == [a...]
 
@@ -591,7 +595,7 @@ Strings
 
 .. function:: bytestring(::Ptr{Uint8})
 
-   Create a string from the address of a C (0-terminated) string.
+   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed.
 
 .. function:: bytestring(s)
 
@@ -993,7 +997,7 @@ Mathematical Functions
 
    The binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
-.. function:: .* ./ .\\ .^
+.. function:: .+ .- .* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
@@ -1246,7 +1250,7 @@ Mathematical Functions
 
    Accurate natural logarithm of ``1+x``
 
-.. function:: logb(x)
+.. function:: exponent(x)
 
    Return the exponent of x, represented as a floating-point number
 
@@ -1821,10 +1825,6 @@ Numbers
 
    Get the exponent of a floating-point number
 
-.. function:: mantissa(f)
-
-   Get the mantissa of a floating-point number
-
 .. function:: BigInt(x)
 
    Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``String``. 
@@ -2368,11 +2368,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qmulQR(QR, A)
    
-   Perform Q*A efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
+   Perform ``Q*A`` efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
 
 .. function:: qTmulQR(QR, A)
 
-   Perform Q'*A efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
+   Perform ``Q'*A`` efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
 
 .. function:: sqrtm(A)
 
@@ -2851,7 +2851,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
    ``kind`` specifies either a discrete cosine transform of various types
-   (``FFTW.REDFT00``, ``FFTW.REDFT01``,``FFTW.REDFT10``, or
+   (``FFTW.REDFT00``, ``FFTW.REDFT01``, ``FFTW.REDFT10``, or
    ``FFTW.REDFT11``), a discrete sine transform of various types 
    (``FFTW.RODFT00``, ``FFTW.RODFT01``, ``FFTW.RODFT10``, or
    ``FFTW.RODFT11``), a real-input DFT with halfcomplex-format output
@@ -2862,9 +2862,9 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    for any unspecified dimensions.  See the FFTW manual for precise
    definitions of these transform types, at `<http://www.fftw.org/doc>`.
 
-   The optional ``dims``argument specifies an iterable subset of
+   The optional ``dims`` argument specifies an iterable subset of
    dimensions (e.g. an integer, range, tuple, or array) to transform
-   along.  ``kind[i]`` is then the transform type for ``dims[i]``,
+   along. ``kind[i]`` is then the transform type for ``dims[i]``,
    with ``kind[end]`` being used for ``i > length(kind)``.
 
    See also :func:`FFTW.plan_r2r` to pre-plan optimized r2r transforms.
@@ -3146,6 +3146,15 @@ C Interface
 .. function:: c_free(addr::Ptr)
   
    Call free() from C standard library.
+
+.. function:: unsafe_ref(p::Ptr{T},i::Integer)
+
+   Dereference the pointer ``p[i]`` or ``*p``, returning a copy of type T.
+
+.. function:: unsafe_assign(p::Ptr{T},x,i::Integer)
+
+   Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
+
 
 Errors
 ------
