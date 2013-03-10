@@ -48,7 +48,7 @@ integer_valued(z::Complex) = real_valued(z) && integer_valued(real(z))
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
 
-function complex_show(io, z::Complex, compact::Bool)
+function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
     if isnan(r) || isfinite(i)
         compact ? showcompact(io,r) : show(io,r)

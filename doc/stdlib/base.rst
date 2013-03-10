@@ -243,7 +243,7 @@ General Collections
 
 .. function:: length(collection) -> Integer
 
-   For ordered, indexable collections, the maximum index ``i`` for which ``ref(collection, i)`` is valid. For unordered collections, the number of elements.
+   For ordered, indexable collections, the maximum index ``i`` for which ``getindex(collection, i)`` is valid. For unordered collections, the number of elements.
 
 .. function:: endof(collection) -> Integer
 
@@ -355,12 +355,12 @@ Iterable Collections
 Indexable Collections
 ---------------------
 
-.. function:: ref(collection, key...)
+.. function:: getindex(collection, key...)
               collection[key...]
 
    Retrieve the value(s) stored at the given key or index within a collection.
 
-.. function:: assign(collection, value, key...)
+.. function:: setindex!(collection, value, key...)
               collection[key...] = value
 
    Store the given value at the given key or index within a collection.
@@ -1250,7 +1250,7 @@ Mathematical Functions
 
    Accurate natural logarithm of ``1+x``
 
-.. function:: logb(x)
+.. function:: exponent(x)
 
    Return the exponent of x, represented as a floating-point number
 
@@ -1825,10 +1825,6 @@ Numbers
 
    Get the exponent of a floating-point number
 
-.. function:: mantissa(f)
-
-   Get the mantissa of a floating-point number
-
 .. function:: BigInt(x)
 
    Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``String``. 
@@ -1995,7 +1991,7 @@ Constructors
 
    Construct an uninitialized dense array. ``dims`` may be a tuple or a series of integer arguments.
 
-.. function:: ref(type)
+.. function:: getindex(type)
 
    Construct an empty 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
 
@@ -2082,19 +2078,19 @@ All mathematical operations and functions are supported for arrays
 Indexing, Assignment, and Concatenation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. function:: ref(A, ind)
+.. function:: getindex(A, ind)
 
    Returns a subset of ``A`` as specified by ``ind``, which may be an ``Int``, a ``Range``, or a ``Vector``.
 
 .. function:: sub(A, ind)
 
-   Returns a SubArray, which stores the input ``A`` and ``ind`` rather than computing the result immediately. Calling ``ref`` on a SubArray computes the indices on the fly.
+   Returns a SubArray, which stores the input ``A`` and ``ind`` rather than computing the result immediately. Calling ``getindex`` on a SubArray computes the indices on the fly.
 
 .. function:: slicedim(A, d, i)
 
    Return all the data of ``A`` where the index for dimension ``d`` equals ``i``. Equivalent to ``A[:,:,...,i,:,:,...]`` where ``i`` is in position ``d``.
 
-.. function:: assign(A, X, ind)
+.. function:: setindex!(A, X, ind)
 
    Store an input array ``X`` within some subset of ``A`` as specified by ``ind``.
 

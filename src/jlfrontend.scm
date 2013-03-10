@@ -149,8 +149,8 @@
 			       (loop (cons expr exprs))))))))))
 
 ;; parse file-in-a-string
-(define (jl-parse-string-stream str)
-  (jl-parser-set-stream "string" (open-input-string str)))
+(define (jl-parse-string-stream str filename)
+  (jl-parser-set-stream filename (open-input-string str)))
 
 (define (jl-parse-file s)
   (jl-parser-set-stream s (open-input-file s)))

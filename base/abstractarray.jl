@@ -457,9 +457,9 @@ end
 
 
 
-## Indexing: ref ##
+## Indexing: getindex ##
 
-ref(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
+getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
@@ -506,12 +506,12 @@ function circshift(a, shiftamts)
     a[I...]::typeof(a)
 end
 
-## Indexing: assign ##
+## Indexing: setindex! ##
 
 # 1-d indexing is assumed defined on subtypes
-assign(t::AbstractArray, x, i::Real) =
-    error("assign not defined for ",typeof(t))
-assign(t::AbstractArray, x) = throw(MethodError(assign, (t, x)))
+setindex!(t::AbstractArray, x, i::Real) =
+    error("setindex! not defined for ",typeof(t))
+setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
 
 ## Concatenation ##
 

@@ -19,7 +19,7 @@
 import Base.isempty, Base.length, Base.sizeof
 import Base.start, Base.next, Base.done
 import Base.has, Base.get
-import Base.assign, Base.ref, Base.delete!, Base.empty!
+import Base.setindex!, Base.getindex, Base.delete!, Base.empty!
 import Base.show
 
 abstract LRU{K,V} <: Associative{K,V}
@@ -85,7 +85,7 @@ function locate(q, x)
     error("Item not found.")
 end
 
-function ref(lru::LRU, key)
+function getindex(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
     delete!(lru.q, idx)
@@ -93,7 +93,7 @@ function ref(lru::LRU, key)
     item.v
 end
 
-function assign(lru::LRU, v, key)
+function setindex!(lru::LRU, v, key)
     if has(lru, key)
         item = lru.ht[key]
         idx = locate(lru.q, item)
@@ -107,8 +107,8 @@ function assign(lru::LRU, v, key)
 end
 
 # Eviction
-function assign{V,K}(lru::BoundedLRU, v::V, key::K)
-    invoke(assign, (LRU, V, K), lru, v, key)
+function setindex!{V,K}(lru::BoundedLRU, v::V, key::K)
+    invoke(setindex!, (LRU, V, K), lru, v, key)
     nrm = length(lru) - lru.maxsize
     for i in 1:nrm
         rm = pop!(lru.q)
