@@ -51,12 +51,12 @@ convert(::Type{ByteString}, s::String) = bytestring(s)
 start(s::String) = 1
 done(s::String,i) = (i > endof(s))
 isempty(s::String) = done(s,start(s))
-ref(s::String, i::Int) = next(s,i)[1]
-ref(s::String, i::Integer) = s[int(i)]
-ref(s::String, x::Real) = s[to_index(x)]
-ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
+getindex(s::String, i::Int) = next(s,i)[1]
+getindex(s::String, i::Integer) = s[int(i)]
+getindex(s::String, x::Real) = s[to_index(x)]
+getindex{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
-ref(s::String, v::AbstractVector) =
+getindex(s::String, v::AbstractVector) =
     sprint(length(v), io->(for i in v write(io,s[i]) end))
 
 symbol(s::String) = symbol(bytestring(s))
@@ -338,7 +338,7 @@ endof(s::SubString) = s.endof
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-function ref(s::String, r::Range1{Int})
+function getindex(s::String, r::Range1{Int})
     if first(r) < 1 || endof(s) < last(r)
         error(BoundsError)
     end

@@ -203,18 +203,18 @@ end
 
 ## indexing ##
 
-function ref(r::RemoteRef, args...)
+function getindex(r::RemoteRef, args...)
     if r.where==myid()
-        ref(fetch(r), args...)
+        getindex(fetch(r), args...)
     else
-        remote_call_fetch(r.where, ref, r, args...)
+        remote_call_fetch(r.where, getindex, r, args...)
     end
 end
 
-ref(d::DArray, i::Int) = ref(d, ind2sub(size(d), i))
-ref(d::DArray, i::Int...) = ref(d, sub2ind(size(d), i...))
+getindex(d::DArray, i::Int) = getindex(d, ind2sub(size(d), i))
+getindex(d::DArray, i::Int...) = getindex(d, sub2ind(size(d), i...))
 
-function ref{T}(d::DArray{T}, I::(Int...))
+function getindex{T}(d::DArray{T}, I::(Int...))
     chidx = locate(d, I...)
     chunk = d.chunks[chidx...]
     idxs = d.indexes[chidx...]
@@ -222,15 +222,15 @@ function ref{T}(d::DArray{T}, I::(Int...))
     chunk[localidx...]::T
 end
 
-ref(d::DArray) = d[1]
-ref(d::DArray, I::Union(Int,Range1{Int})...) = sub(d,I)
+getindex(d::DArray) = d[1]
+getindex(d::DArray, I::Union(Int,Range1{Int})...) = sub(d,I)
 
 copy(d::SubOrDArray) = d
 
 # local copies are obtained by convert(Array, ) or assigning from
 # a SubDArray to a local Array.
 
-function assign(a::Array, d::DArray, I::Range1{Int}...)
+function setindex!(a::Array, d::DArray, I::Range1{Int}...)
     n = length(I)
     @sync begin
         for i = 1:length(d.chunks)
@@ -241,7 +241,7 @@ function assign(a::Array, d::DArray, I::Range1{Int}...)
     a
 end
 
-function assign(a::Array, s::SubDArray, I::Range1{Int}...)
+function setindex!(a::Array, s::SubDArray, I::Range1{Int}...)
     n = length(I)
     d = s.parent
     J = s.indexes
@@ -271,7 +271,7 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
 end
 
 # to disambiguate
-assign(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
+setindex!(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
 
-assign(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
-    assign(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
+setindex!(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
+    setindex!(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)

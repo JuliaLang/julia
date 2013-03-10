@@ -29,10 +29,10 @@ function has(t::TreeNode, key)
     end
 end
 
-ref(t::EmptyTree, k) = throw(KeyError(k))
-ref(t::BTree, k) = t.root[k]
+getindex(t::EmptyTree, k) = throw(KeyError(k))
+getindex(t::BTree, k) = t.root[k]
 
-function ref(t::TreeNode, key)
+function getindex(t::TreeNode, key)
     if t.key == key
         t.data
     elseif key < t.key

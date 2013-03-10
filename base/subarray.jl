@@ -150,23 +150,23 @@ ndims{T,N}(s::SubArray{T,N}) = N
 copy(s::SubArray) = copy!(similar(s.parent, size(s)), s)
 similar(s::SubArray, T, dims::Dims) = similar(s.parent, T, dims)
 
-ref{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
-ref{T}(s::SubArray{T,0}) = s.parent[s.first_index]
+getindex{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
+getindex{T}(s::SubArray{T,0}) = s.parent[s.first_index]
 
-ref{T}(s::SubArray{T,1}, i::Integer) = s.parent[s.first_index + (i-1)*s.strides[1]]
-ref{T}(s::SubArray{T,2}, i::Integer, j::Integer) =
+getindex{T}(s::SubArray{T,1}, i::Integer) = s.parent[s.first_index + (i-1)*s.strides[1]]
+getindex{T}(s::SubArray{T,2}, i::Integer, j::Integer) =
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
 
-ref(s::SubArray, i::Integer) = s[ind2sub(size(s), i)...]
+getindex(s::SubArray, i::Integer) = s[ind2sub(size(s), i)...]
 
-function ref{T}(s::SubArray{T,2}, ind::Integer)
+function getindex{T}(s::SubArray{T,2}, ind::Integer)
     ld = size(s,1)
     i = rem(ind-1,ld)+1
     j = div(ind-1,ld)+1
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
 end
 
-function ref(s::SubArray, is::Integer...)
+function getindex(s::SubArray, is::Integer...)
     index = s.first_index
     for i = 1:length(is)
         index += (is[i]-1)*s.strides[i]
@@ -174,18 +174,18 @@ function ref(s::SubArray, is::Integer...)
     s.parent[index]
 end
 
-ref{T}(s::SubArray{T,1}, I::Range1{Int}) =
-    ref(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
+getindex{T}(s::SubArray{T,1}, I::Range1{Int}) =
+    getindex(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
-ref{T}(s::SubArray{T,1}, I::Range{Int}) =
-    ref(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
+getindex{T}(s::SubArray{T,1}, I::Range{Int}) =
+    getindex(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
 
-function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
+function getindex{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
     t = Array(Int, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
     end
-    ref(s.parent, t)
+    getindex(s.parent, t)
 end
 
 # translate a linear index vector I for dim n to a linear index vector for
@@ -201,7 +201,7 @@ function translate_linear_indexes(s, n, I)
     idx
 end
 
-function ref(s::SubArray, I::Union(Real,AbstractArray)...)
+function getindex(s::SubArray, I::Union(Real,AbstractArray)...)
     I = indices(I)
     ndp = ndims(s.parent)
     n = length(I)
@@ -216,8 +216,8 @@ function ref(s::SubArray, I::Union(Real,AbstractArray)...)
         end
     end
 
-    rs = ref_shape(I...)
-    result = ref(s.parent, newindexes...)
+    rs = index_shape(I...)
+    result = getindex(s.parent, newindexes...)
     if isequal(rs, size(result))
         return result
     else
@@ -225,9 +225,9 @@ function ref(s::SubArray, I::Union(Real,AbstractArray)...)
     end
 end
 
-assign(s::SubArray, v, i::Integer) = assign(s, v, ind2sub(size(s), i)...)
+setindex!(s::SubArray, v, i::Integer) = setindex!(s, v, ind2sub(size(s), i)...)
 
-function assign{T}(s::SubArray{T,2}, v, ind::Integer)
+function setindex!{T}(s::SubArray{T,2}, v, ind::Integer)
     ld = size(s,1)
     i = rem(ind-1,ld)+1
     j = div(ind-1,ld)+1
@@ -235,7 +235,7 @@ function assign{T}(s::SubArray{T,2}, v, ind::Integer)
     return s
 end
 
-function assign(s::SubArray, v, is::Integer...)
+function setindex!(s::SubArray, v, is::Integer...)
     index = s.first_index
     for i = 1:length(is)
         index += (is[i]-1)*s.strides[i]
@@ -244,32 +244,32 @@ function assign(s::SubArray, v, is::Integer...)
     return s
 end
 
-assign{T}(s::SubArray{T,0,AbstractArray{T,0}},v) = assign(s.parent, v)
+setindex!{T}(s::SubArray{T,0,AbstractArray{T,0}},v) = setindex!(s.parent, v)
 
-assign{T}(s::SubArray{T,0}, v) = assign(s.parent, v, s.first_index)
+setindex!{T}(s::SubArray{T,0}, v) = setindex!(s.parent, v, s.first_index)
 
 
-assign{T}(s::SubArray{T,1}, v, i::Integer) =
-    assign(s.parent, v, s.first_index + (i-1)*s.strides[1])
+setindex!{T}(s::SubArray{T,1}, v, i::Integer) =
+    setindex!(s.parent, v, s.first_index + (i-1)*s.strides[1])
 
-assign{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
-    assign(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2])
+setindex!{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
+    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2])
 
-assign{T}(s::SubArray{T,1}, v, I::Range1{Int}) =
-    assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
+setindex!{T}(s::SubArray{T,1}, v, I::Range1{Int}) =
+    setindex!(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
-assign{T}(s::SubArray{T,1}, v, I::Range{Int}) =
-    assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
+setindex!{T}(s::SubArray{T,1}, v, I::Range{Int}) =
+    setindex!(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
 
-function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
+function setindex!{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
     t = Array(Int, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
     end
-    assign(s.parent, v, t)
+    setindex!(s.parent, v, t)
 end
 
-function assign(s::SubArray, v, I::Union(Real,AbstractArray)...)
+function setindex!(s::SubArray, v, I::Union(Real,AbstractArray)...)
     I = indices(I)
     j = 1 #the jth dimension in subarray
     ndp = ndims(s.parent)
@@ -286,7 +286,7 @@ function assign(s::SubArray, v, I::Union(Real,AbstractArray)...)
         j += 1
     end
 
-    assign(s.parent, v, newindexes...)
+    setindex!(s.parent, v, newindexes...)
 end
 
 function stride(s::SubArray, i::Integer)

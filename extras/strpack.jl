@@ -1,6 +1,6 @@
 include("lru.jl")
 
-import Base.isequal, Base.length, Base.ref
+import Base.isequal, Base.length, Base.getindex
 
 bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
 
@@ -278,7 +278,7 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
             :(Base.write($stream, ($convert)(getfield($struct, ($fieldnames)[$elnum]))))
         else
             ranges = tuple([1:d for d in dims]...)
-            :(Base.write($stream, map($convert, ref(getfield($struct, ($fieldnames)[$elnum]), ($ranges)...))))
+            :(Base.write($stream, map($convert, getindex(getfield($struct, ($fieldnames)[$elnum]), ($ranges)...))))
         end)
     end
     xprs
@@ -302,8 +302,8 @@ endianness_converters(::LittleEndian) = htol, ltoh
 endianness_converters(::NativeEndian) = identity, identity
 
 function struct_utils(struct_type)
-    @eval ref(struct::($struct_type), i::Integer) = struct.(($struct_type).names[i])
-    @eval ref(struct::($struct_type), x) = [struct.(($struct_type).names[i]) for i in x]
+    @eval getindex(struct::($struct_type), i::Integer) = struct.(($struct_type).names[i])
+    @eval getindex(struct::($struct_type), x) = [struct.(($struct_type).names[i]) for i in x]
     @eval length(struct::($struct_type)) = length(($struct_type).names)
     # this could be better
     @eval isequal(a::($struct_type), b::($struct_type)) = isequal(a[1:end], b[1:end])
