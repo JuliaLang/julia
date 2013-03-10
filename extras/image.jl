@@ -1,4 +1,4 @@
-import Base.ref, Base.assign, Base.sub, Base.size, Base.copy
+import Base.getindex, Base.setindex!, Base.sub, Base.size, Base.copy
 
 ## Color spaces
 abstract ColorSpace
@@ -18,10 +18,10 @@ type CSNamed <: ColorSpace
     str::Vector{ASCIIString}
 end
 CSNamed(t...) = CSNamed([t...])  # allow tuple
-function ref(n::CSNamed,ind::Int)
+function getindex(n::CSNamed,ind::Int)
     return n.str[ind]
 end
-function assign(n::CSNamed,value,key)
+function setindex!(n::CSNamed,value,key)
     n.str[key] = value
 end
 
@@ -161,10 +161,10 @@ getminmax(::Type{Float32}) = [typemin(Float32),typemax(Float32)]
 getminmax(::Type{Float64}) = [typemin(Float64),typemax(Float64)]
 
 # An image type with all data held in memory
-type ImageArray{DataType<:Number} <: Image
-    data::Array{DataType}         # the raw data
+type ImageArray{DType<:Number} <: Image
+    data::Array{DType}         # the raw data
     arrayi_order::ASCIIString     # storage order of data array, e.g. "yxc"
-    minmax::Vector{DataType}      # min and max possible values
+    minmax::Vector{DType}      # min and max possible values
     size_ancestor::Vector{Int}    # size of the _original_ array (pre-snip)
     arrayi_range::Vector{Range1{Int}} # vector of ranges (snipping out blocks)
     arrayi2physc::Matrix{Float64} # transform matrix
@@ -177,10 +177,10 @@ type ImageArray{DataType<:Number} <: Image
     metadata       # arbitrary metadata, like acquisition date&time, etc.
 end
 # Empty constructor (doesn't seem to work now, for unknown reason)
-ImageArray{DataType<:Number}() =
-    ImageArray{DataType}(Array(DataType,0),
+ImageArray{DType<:Number}() =
+    ImageArray{DType}(Array(DType,0),
                          "",
-                         getminmax(DataType),
+                         getminmax(DType),
                          Array(Int,0),
                          Array(Range1,0),
                          zeros(0,0),
@@ -193,7 +193,7 @@ ImageArray{DataType<:Number}() =
                          "")
 # Construct from a data array, providing defaults for everything
 # except the storage order
-function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIString)
+function ImageArray{DType<:Number}(data::Array{DType},arrayi_order::ASCIIString)
     sz = size(data)
     szv = vcat(sz...)
     n_dims = length(sz)
@@ -231,10 +231,10 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
             color_space = CSCMYK
         end
     end
-    ImageArray{DataType}(data,arrayi_order,getminmax(DataType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
+    ImageArray{DType}(data,arrayi_order,getminmax(DType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
 end
 
-### Copy and ref functions ###
+### Copy and getindex functions ###
 # Deep copy---copies everything that is immutable
 function copy(img::ImageArray)
     ImageArray(copy(img.data),
@@ -270,12 +270,12 @@ function copy_pfields(img::ImageArray)
 end
 
 # Copy just the data
-function copy_data{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+function copy_data{DType}(image_out::ImageArray{DType},image_in::ImageArray{DType})
     image_out.data = image_in.data[image_out.arrayi_range...]
 end
 
 # Copy just the metadata
-function copy_metadata{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+function copy_metadata{DType}(image_out::ImageArray{DType},image_in::ImageArray{DType})
     image_out.metadata = copy(image_in.metadata)
 end
 
@@ -297,10 +297,10 @@ function _image_named_coords_sub(img::Image,ind...)
     return sniprange
 end
 
-# This supports two ref syntaxes
-function ref(img::ImageArray,ind...)
+# This supports two getindex syntaxes
+function getindex(img::ImageArray,ind...)
     if isa(ind[1],Char)
-        ## Named ref syntax: ref(img,'a',20:50,'b',40:200,...)
+        ## Named getindex syntax: getindex(img,'a',20:50,'b',40:200,...)
         imgret = copy_pfields(img)
         sniprange = _image_named_coords_sub(img,ind...)
         # Do the snip
@@ -308,9 +308,9 @@ function ref(img::ImageArray,ind...)
         imgret.arrayi_range = sniprange
         return imgret
     else
-        # Normal ref syntax: img[20:50,40:200,...]
+        # Normal getindex syntax: img[20:50,40:200,...]
         imgret = copy_pfields(img)
-        imgret.data = ref(img.data,ind...)
+        imgret.data = getindex(img.data,ind...)
         for i = 1:length(ind)
             imgret.arrayi_range[i] = ind[i]
         end
@@ -336,14 +336,14 @@ function sub(img::ImageArray,ind...)
         return imgret
     end
 end
-function assign(img::ImageArray,val,ind...)
+function setindex!(img::ImageArray,val,ind...)
     if isa(ind[1],Char)
-        ## Named assign syntax: assign(img,'a',20:50,'b',40:200,...)
+        ## Named setindex! syntax: setindex!(img,'a',20:50,'b',40:200,...)
         sniprange = _image_named_coords_sub(img,ind)
         # Do the snip
         img.data[sniprange...] = val
     else
-        # Normal assign syntax: img[20:50,40:200,...]
+        # Normal setindex! syntax: img[20:50,40:200,...]
         imgret = copy_pfields(img)
         img.data[ind...] = val
     end
@@ -376,7 +376,7 @@ end
 
 
 ### Manipulations
-function permutedims!{DataType}(img::ImageArray{DataType},perm)
+function permutedims!{DType}(img::ImageArray{DType},perm)
     img.data = permutedims(img.data,perm)
     img.size_ancestor = img.size_ancestor[perm]
     img.arrayi_range = img.arrayi_range[perm]

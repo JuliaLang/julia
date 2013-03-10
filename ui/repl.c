@@ -160,13 +160,13 @@ static int exec_program(void)
             }
             else {
                 while (1) {
-                    if (jl_typeof(e) == (jl_type_t*)jl_loaderror_type) {
+                    if (jl_typeof(e) == (jl_value_t*)jl_loaderror_type) {
                         e = jl_fieldref(e, 2);
                         // TODO: show file and line
                     }
                     else break;
                 }
-                if (jl_typeof(e) == (jl_type_t*)jl_errorexception_type) {
+                if (jl_typeof(e) == (jl_value_t*)jl_errorexception_type) {
                     jl_printf(JL_STDERR, "error during bootstrap: %s\n",
                                jl_string_data(jl_fieldref(e,0)));
                 }
@@ -277,7 +277,7 @@ int true_main(int argc, char *argv[])
             jl_printf(JL_STDERR, "\n\n");
             iserr = 0;
         }
-    uv_run(jl_global_event_loop());
+    uv_run(jl_global_event_loop(),UV_RUN_DEFAULT);
     }
     JL_CATCH {
         iserr = 1;

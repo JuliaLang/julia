@@ -2,7 +2,7 @@
 
 const (<:) = subtype
 
-super(T::Union(CompositeKind,BitsKind,AbstractKind)) = T.super
+super(T::DataType) = T.super
 
 ## comparison ##
 
@@ -123,24 +123,15 @@ zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
 
 sizeof(T::Type) = error(string("size of type ",T," unknown"))
-sizeof(T::BitsKind) = div(T.nbits,8)
-sizeof(T::CompositeKind) = if isleaftype(T) T.sizeof else error("type does not have a native sizeof") end
+sizeof(T::DataType) = if isleaftype(T) T.size else error("type does not have a native size") end
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
 copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
-              TopNode,QuoteNode,BitsKind,CompositeKind,AbstractKind,
-              UnionKind)) = x
+              TopNode,QuoteNode,DataType,UnionType)) = x
 
-# function composition & pipelining
-one(f::Function) = identity
-one(::Type{Function}) = identity
-*(f::Function, g::Function) = x->f(g(x))
+# function pipelining
 |(x, f::Function) = f(x)
-
-# currying of map, filter, etc.
-map(f::Function) = (x...)->map(f, x...)
-filter(f::Function) = (x...)->filter(f, x...)
 
 # array shape rules
 
@@ -177,25 +168,25 @@ function promote_shape(a::Dims, b::Dims)
     return a
 end
 
-# shape of array to create for ref() with indexes I
-function ref_shape(I...)
+# shape of array to create for getindex() with indexes I
+function index_shape(I...)
     n = length(I)
     while n > 0 && isa(I[n],Real); n-=1; end
     tuple([length(I[i]) for i=1:n]...)
 end
 
-ref_shape(i::Real) = ()
-ref_shape(i)       = (length(i),)
-ref_shape(i::Real,j::Real) = ()
-ref_shape(i      ,j::Real) = (length(i),)
-ref_shape(i      ,j)       = (length(i),length(j))
-ref_shape(i::Real,j::Real,k::Real) = ()
-ref_shape(i      ,j::Real,k::Real) = (length(i),)
-ref_shape(i      ,j      ,k::Real) = (length(i),length(j))
-ref_shape(i      ,j      ,k      ) = (length(i),length(j),length(k))
+index_shape(i::Real) = ()
+index_shape(i)       = (length(i),)
+index_shape(i::Real,j::Real) = ()
+index_shape(i      ,j::Real) = (length(i),)
+index_shape(i      ,j)       = (length(i),length(j))
+index_shape(i::Real,j::Real,k::Real) = ()
+index_shape(i      ,j::Real,k::Real) = (length(i),)
+index_shape(i      ,j      ,k::Real) = (length(i),length(j))
+index_shape(i      ,j      ,k      ) = (length(i),length(j),length(k))
 
 # check for valid sizes in A[I...] = X where X <: AbstractArray
-function assign_shape_check(X::AbstractArray, I...)
+function setindex_shape_check(X::AbstractArray, I...)
     nel = 1
     for idx in I
         nel *= length(idx)

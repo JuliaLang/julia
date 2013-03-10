@@ -1,6 +1,6 @@
 ## from base/boot.jl:
 #
-# type UTF8String <: String
+# immutable UTF8String <: String
 #     data::Array{Uint8,1}
 # end
 #
@@ -31,7 +31,7 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 endof(s::UTF8String) = thisind(s,length(s.data))
 length(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
 
-function ref(s::UTF8String, i::Int)
+function getindex(s::UTF8String, i::Int)
     d = s.data
     b = d[i]
     if !is_utf8_start(b)
@@ -74,7 +74,7 @@ end
 isvalid(s::UTF8String, i::Integer) =
     (1 <= i <= endof(s.data)) && is_utf8_start(s.data[i])
 
-function ref(s::UTF8String, r::Range1{Int})
+function getindex(s::UTF8String, r::Range1{Int})
     a, b = first(r), last(r)
     i = isvalid(s,a) ? a : nextind(s,a)
     j = b < endof(s) ? nextind(s,b)-1 : endof(s.data)

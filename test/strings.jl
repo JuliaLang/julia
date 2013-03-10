@@ -321,6 +321,8 @@ end
 @test search(u8str, r"∄") == 0:-1
 @test search(u8str, r"∀") == 1:3
 @test search(u8str, r"∀", 4) == 0:-1
+@test search(u8str, r"∀") == search(u8str, r"\u2200")
+@test search(u8str, r"∀", 4) == search(u8str, r"\u2200", 4)
 @test search(u8str, r"∃") == 13:15
 @test search(u8str, r"∃", 16) == 0:-1
 @test search(u8str, r"x") == 26:26
@@ -486,6 +488,11 @@ for i1 = 1:length(u8str2)
     end
 end
 
+# quotes + interpolation (issue #455)
+@test "$("string")" == "string"
+arr = ["a","b","c"]
+@test "[$(join(arr, " - "))]" == "[a - b - c]"
+
 # string iteration, and issue #1454
 str = "é"
 str_a = [str...]
@@ -503,9 +510,6 @@ str = "s\u2200"
 @test """abc\"""" == "abc\""
 n = 3
 @test """$n\n""" == "$n\n"
-@test L"""$n\n""" == L"$n\n"
-@test I"""$n\n""" == I"$n\n"
-@test E"""$n\n""" == E"$n\n"
 @test """$(n)""" == "3"
 @test """$(2n)""" == "6"
 @test """$(n+4)""" == "7"
@@ -514,8 +518,6 @@ a = [3,1,2]
 @test """$(a[2])""" == "1"
 @test """$(a[3]+7)""" == "9"
 @test """$(ifloor(4.5))""" == "4"
-@test L"""
-      """ == "\n      "
 @test """
      a
      b
@@ -530,9 +532,6 @@ a = [3,1,2]
 @test """
      $n
    """ == "  $n\n"
-@test E"""
-     $n
-   """ == E"  $n\n"
 @test """
       a
      b

@@ -56,9 +56,14 @@ JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release webrepl
-	@for subdir in "sbin" "bin" "etc" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" ; do \
+	@for subdir in "sbin" "bin" "etc" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
+ifeq ($(OS), Darwin)
+	$(MAKE) -C deps install-git
+	-cp -a $(BUILD)/libexec $(PREFIX)
+	-cp -a $(BUILD)/share $(PREFIX)
+endif
 	cp -a $(BUILD)/bin $(PREFIX)
 	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
@@ -83,7 +88,6 @@ dist:
 #	-$(MAKE) -C deps clean-openblas
 	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
 ifeq ($(OS), Darwin)
-	$(MAKE) -C deps install-git
 	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 ifeq ($(OS), WINNT)

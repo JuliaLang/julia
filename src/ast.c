@@ -93,6 +93,9 @@ static builtinspec_t julia_flisp_ast_ext[] = {
     { NULL, NULL }
 };
 
+static value_t true_sym;
+static value_t false_sym;
+
 DLLEXPORT void jl_init_frontend(void)
 {
     fl_init(2*512*1024);
@@ -111,6 +114,8 @@ DLLEXPORT void jl_init_frontend(void)
                                 NULL, NULL);
 
     assign_global_builtins(julia_flisp_ast_ext);
+    true_sym = symbol("true");
+    false_sym = symbol("false");
 }
 
 static jl_sym_t *scmsym_to_julia(value_t s)
@@ -222,13 +227,10 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
 #endif
     }
     if (issymbol(e)) {
-        if (!fl_isgensym(e)) {
-            char *sn = symbol_name(e);
-            if (!strcmp(sn, "true"))
-                return jl_true;
-            else if (!strcmp(sn, "false"))
-                return jl_false;
-        }
+        if (e == true_sym)
+            return jl_true;
+        else if (e == false_sym)
+            return jl_false;
         return (jl_value_t*)scmsym_to_julia(e);
     }
     if (fl_isstring(e)) {
@@ -466,11 +468,12 @@ jl_value_t *jl_parse_next()
     return scm_to_julia(c,0);
 }
 
-void jl_load_file_string(const char *text)
+void jl_load_file_string(const char *text, char *filename)
 {
-    fl_applyn(1, symbol_value(symbol("jl-parse-string-stream")),
-              cvalue_static_cstring(text));
-    jl_parse_eval_all("");
+    fl_applyn(2, symbol_value(symbol("jl-parse-string-stream")),
+              cvalue_static_cstring(text),
+              cvalue_static_cstring(filename));
+    jl_parse_eval_all(filename);
 }
 
 // returns either an expression or a thunk

@@ -4,7 +4,7 @@ typealias Dims (Int...)
 
 abstract Ranges{T} <: AbstractArray{T,1}
 
-type Range{T<:Real} <: Ranges{T}
+immutable Range{T<:Real} <: Ranges{T}
     start::T
     step::T
     len::Int
@@ -20,7 +20,7 @@ type Range{T<:Real} <: Ranges{T}
 end
 Range{T}(start::T, step, len::Integer) = Range{T}(start, step, len)
 
-type Range1{T<:Real} <: Ranges{T}
+immutable Range1{T<:Real} <: Ranges{T}
     start::T
     len::Int
 
@@ -32,7 +32,7 @@ type Range1{T<:Real} <: Ranges{T}
 end
 Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 
-type OrdinalRange{T} <: Ranges{T}
+immutable OrdinalRange{T} <: Ranges{T}
     start::T
     step::Int
     len::Int
@@ -123,18 +123,18 @@ max(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  l
 # Ranges are intended to be immutable
 copy(r::Ranges) = r
 
-function ref{T}(r::Ranges{T}, i::Integer)
+function getindex{T}(r::Ranges{T}, i::Integer)
     if !(1 <= i <= r.len); error(BoundsError); end
     oftype(T, r.start + (i-1)*step(r))
 end
 
-ref(r::Range, s::Range{Int}) =
+getindex(r::Range, s::Range{Int}) =
     r.len < last(s) ? error(BoundsError) : Range(r[s.start], r.step*s.step, s.len)
-ref(r::Range1, s::Range{Int}) =
+getindex(r::Range1, s::Range{Int}) =
     r.len < last(s) ? error(BoundsError) : Range(r[s.start], s.step, s.len)
-ref(r::Range, s::Range1{Int}) =
+getindex(r::Range, s::Range1{Int}) =
     r.len < last(s) ? error(BoundsError) : Range(r[s.start], r.step, s.len)
-ref(r::Range1, s::Range1{Int}) =
+getindex(r::Range1, s::Range1{Int}) =
     r.len < last(s) ? error(BoundsError) : Range1(r[s.start], s.len)
 
 show(io::IO, r::Range)  = print(io, r.start,':',step(r),':',last(r))

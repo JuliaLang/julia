@@ -15,7 +15,7 @@ function gen_listpkg()
 	Pkg.update()
 	io=open("packages/packagelist.rst","w+");
 	print(io, "********************\n Available Packages  \n********************\n\n")
-	cd(julia_pkgdir()) do 
+	cd(Pkg.dir()) do
 	for pkg in Pkg.Metadata.each_package()
 		print(" Processing $(pkg)\n")
 		url = (Pkg.Metadata.pkg_url(pkg))
@@ -54,7 +54,7 @@ function gen_listpkg()
 		print(io, "  Maintainer: `$(u[:fullname]) <$(u[:url])>`_\n\n") 
 		
 		if homepage != nothing && length(chomp(homepage)) > 0
-			print(io, "  More Info: `<$(homepage)>`_ \n\n")
+			print(io, "  Documentation: `<$(homepage)>`_ \n\n")
 		end
 		print(io, "  Dependencies::\n\n" )
 		ver_dir = "METADATA/$pkg/versions/$(maxv.version)/requires"

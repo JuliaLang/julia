@@ -14,27 +14,21 @@
 #    name::Symbol
 #end
 
-#type AbstractKind <: Type
-#    name::TypeName
-#    super::Type
-#    parameters::Tuple
-#end
-
-#type CompositeKind <: Type
+#type DataType <: Type
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
 #    names::Tuple
 #    types::Tuple
+#    ctor
+#    instance
+#    size::Int32
+#    abstract::Bool
+#    mutable::Bool
+#    pointerfree::Bool
 #end
 
-#type BitsKind <: Type
-#    name::TypeName
-#    super::Type
-#    parameters::Tuple
-#end
-
-#type UnionKind <: Type
+#type UnionType <: Type
 #    types::Tuple
 #end
 
@@ -120,8 +114,8 @@ import Intrinsics.ccall
 
 export
     # key types
-    AbstractKind, Any, BitsKind, CompositeKind, Vararg, ANY, NTuple, None, Top,
-    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionKind, Void,
+    Any, DataType, Vararg, ANY, NTuple, None, Top,
+    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionType, Void,
     AbstractArray,
     # special objects
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
@@ -232,11 +226,11 @@ type GetfieldNode
     typ
 end
 
-type ASCIIString <: DirectIndexString
+immutable ASCIIString <: DirectIndexString
     data::Array{Uint8,1}
 end
 
-type UTF8String <: String
+immutable UTF8String <: String
     data::Array{Uint8,1}
 end
 

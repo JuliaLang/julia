@@ -1,6 +1,6 @@
 # called to show a REPL result
 repl_show(v::ANY) = repl_show(OUTPUT_STREAM, v)
-function repl_show(io, v::ANY)
+function repl_show(io::IO, v::ANY)
     if !(isa(v,Function) && isgeneric(v))
         if isa(v,AbstractVector) && !isa(v,Ranges)
             print(io, summary(v))
@@ -12,7 +12,7 @@ function repl_show(io, v::ANY)
             show(io, v)
         end
     end
-    if isgeneric(v) && !isa(v,CompositeKind)
+    if isgeneric(v) && !isa(v,DataType)
         show(io, v.env)
     end
 end
@@ -26,8 +26,6 @@ function error_show(io::IO, e::TypeError)
     if e.expected === Bool
         print(io, "type: non-boolean ($(typeof(e.got))) ",
                   "used in boolean context")
-    elseif e.expected === Function && e.func === :apply && isa(e.got,AbstractKind)
-        print(io, "type: cannot instantiate abstract type $(e.got.name)")
     else
         if isa(e.got,Type)
             tstr = "Type{$(e.got)}"

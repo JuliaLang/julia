@@ -19,6 +19,7 @@ convert{T}(::Type{Ptr{T}}, a::Array) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
 convert(::Type{Ptr{Uint8}}, s::ByteString) = convert(Ptr{Uint8}, s.data)
 
 pointer{T}(::Type{T}, x::Uint) = convert(Ptr{T}, x)
+pointer{T}(::Type{T}, x::Ptr) = convert(Ptr{T}, x)
 # note: these definitions don't mean any AbstractArray is convertible to
 # pointer. they just map the array element type to the pointer type for
 # convenience in cases that work.
@@ -36,6 +37,10 @@ unsafe_ref(p::Ptr) = unsafe_ref(p, 1)
 unsafe_assign(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, int(i))
 unsafe_assign{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T, x), int(i))
 unsafe_assign{T}(p::Ptr{T}, x) = unsafe_assign(p, convert(T,x), 1)
+
+# convert a raw Ptr to an object reference, and vice-versa
+unsafe_pointer_to_objref(p::Ptr) = pointertoref(unbox(Ptr{Void},p))
+pointer_from_objref(x::Any) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)

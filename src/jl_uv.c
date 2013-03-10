@@ -66,7 +66,7 @@ int base_module_conflict = 0; //set to 1 if Base is getting redefined since it m
             /* jl_puts(#hook " original succeeded\n",jl_uv_stderr); */ \
         } \
         JL_CATCH { \
-            if (jl_typeof(jl_exception_in_transit) == (jl_type_t*)jl_methoderror_type) { \
+            if (jl_typeof(jl_exception_in_transit) == (jl_value_t*)jl_methoderror_type) { \
                 /* jl_puts("\n" #hook " being retried with new Base bindings --> ",jl_uv_stderr); */ \
                 jl_function_t *cb_func = JULIA_HOOK_((jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base")), hook); \
                 ret = jl_callback_call(cb_func,args); \
@@ -222,14 +222,12 @@ DLLEXPORT uv_tcp_t *jl_make_tcp(uv_loop_t* loop, jl_value_t *julia_struct)
 
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
-    restore_signals();
-    if (loop) uv_run(loop);
+    if (loop) uv_run(loop,UV_RUN_DEFAULT);
 }
 
 DLLEXPORT void jl_process_events(uv_loop_t *loop)
 {
-    restore_signals();
-    if (loop) uv_run_once(loop);
+    if (loop) uv_run(loop,UV_RUN_NOWAIT);
 }
 
 DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only, jl_value_t *julia_struct)
@@ -411,10 +409,12 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
     if (stream!=0) {
         if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
+            JL_SIGATOMIC_BEGIN();
             uv_write_t *uvw = malloc(sizeof(uv_write_t));
             uvw->data=0;
             uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
             int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
+            JL_SIGATOMIC_END();
             return err ? 0 : 1;
         }
         else {
@@ -431,12 +431,14 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
     if (stream == 0)
         return 0;
     if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
+        JL_SIGATOMIC_BEGIN();
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         char *data = malloc(n);
         memcpy(data,str,n);
         uv_buf_t buf[]  = {{.base = data,.len=n}};
         uvw->data = data;
         int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
+        JL_SIGATOMIC_END();
         return err ? 0 : n;
     }
     else {
