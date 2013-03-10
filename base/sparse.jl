@@ -136,6 +136,8 @@ copy(S::SparseMatrixCSC) =
 similar(S::SparseMatrixCSC, Tv::Type) = 
     SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), Array(Tv, length(S.rowval)))
 
+similar(S::SparseMatrixCSC, Tv::Type, d::(Int,Int)) = spzeros(Tv, d[1], d[2])
+
 function similar(A::SparseMatrixCSC, Tv::Type, Ti::Type)
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
 
@@ -726,11 +728,15 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
     end
 end
 
-max{T}(A::SparseMatrixCSC{T}) = reducedim(max,A,(1,2),typemin(T))
-max{T}(A::SparseMatrixCSC{T}, b::(), region) = reducedim(max,A,region,typemin(T))
+max{T}(A::SparseMatrixCSC{T}) =
+    isempty(A) ? error("max: argument is empty") : reducedim(max,A,(1,2),typemin(T))
+max{T}(A::SparseMatrixCSC{T}, b::(), region) =
+    isempty(A) ? similar(A, reduced_dims(A,region)) : reducedim(max,A,region,typemin(T))
 
-min{T}(A::SparseMatrixCSC{T}) = reducedim(min,A,(1,2),typemax(T))
-min{T}(A::SparseMatrixCSC{T}, b::(), region) = reducedim(min,A,region,typemax(T))
+min{T}(A::SparseMatrixCSC{T}) =
+    isempty(A) ? error("min: argument is empty") : reducedim(min,A,(1,2),typemax(T))
+min{T}(A::SparseMatrixCSC{T}, b::(), region) =
+    isempty(A) ? similar(A, reduced_dims(A,region)) : reducedim(min,A,region,typemax(T))
 
 sum{T}(A::SparseMatrixCSC{T}) = reducedim(+,A,(1,2),zero(T))
 sum{T}(A::SparseMatrixCSC{T}, region)  = reducedim(+,A,region,zero(T))
