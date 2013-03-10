@@ -84,10 +84,10 @@ but is more efficient.
 
 ::
 
-    julia> remote_call_fetch(2, ref, r, 1, 1)
+    julia> remote_call_fetch(2, getindex, r, 1, 1)
     0.10824216411304866
 
-Remember that ``ref(r,1,1)`` is :ref:`equivalent <man-array-indexing>` to
+Remember that ``getindex(r,1,1)`` is :ref:`equivalent <man-array-indexing>` to
 ``r[1,1]``, so this call fetches the first element of the remote
 reference ``r``.
 
