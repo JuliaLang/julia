@@ -258,8 +258,11 @@ ref(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, I::In
 
 # Fast copy using copy! for Range1
 function ref(A::Array, I::Range1{Int})
-    X = similar(A, length(I))
-    copy!(X, 1, A, first(I), length(I))
+    lI = length(I)
+    X = similar(A, lI)
+    if lI > 0
+        copy!(X, 1, A, first(I), lI)
+    end
     return X
 end
 

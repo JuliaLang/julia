@@ -1340,8 +1340,9 @@ function prod{T}(A::AbstractArray{T})
 end
 
 function min{T<:Integer}(A::AbstractArray{T})
-    v = typemax(T)
-    for i=1:length(A)
+    if isempty(A); error("min: argument is empty"); end
+    v = A[1]
+    for i=2:length(A)
         x = A[i]
         if x < v
             v = x
@@ -1351,8 +1352,9 @@ function min{T<:Integer}(A::AbstractArray{T})
 end
 
 function max{T<:Integer}(A::AbstractArray{T})
-    v = typemin(T)
-    for i=1:length(A)
+    if isempty(A); error("max: argument is empty"); end
+    v = A[1]
+    for i=2:length(A)
         x = A[i]
         if x > v
             v = x
