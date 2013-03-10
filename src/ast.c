@@ -468,11 +468,12 @@ jl_value_t *jl_parse_next()
     return scm_to_julia(c,0);
 }
 
-void jl_load_file_string(const char *text)
+void jl_load_file_string(const char *text, char *filename)
 {
-    fl_applyn(1, symbol_value(symbol("jl-parse-string-stream")),
-              cvalue_static_cstring(text));
-    jl_parse_eval_all("");
+    fl_applyn(2, symbol_value(symbol("jl-parse-string-stream")),
+              cvalue_static_cstring(text),
+              cvalue_static_cstring(filename));
+    jl_parse_eval_all(filename);
 }
 
 // returns either an expression or a thunk
