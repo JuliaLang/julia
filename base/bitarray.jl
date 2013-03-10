@@ -1625,8 +1625,8 @@ function any(B::BitArray)
     return false
 end
 
-min(B::BitArray) = all(B)
-max(B::BitArray) = any(B)
+min(B::BitArray) = isempty(B) ? error("min: argument is empty") : all(B)
+max(B::BitArray) = isempty(B) ? error("max: argument is empty") : any(B)
 
 ## map over bitarrays ##
 
