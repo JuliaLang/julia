@@ -1250,7 +1250,7 @@ Mathematical Functions
 
    Accurate natural logarithm of ``1+x``
 
-.. function:: logb(x)
+.. function:: exponent(x)
 
    Return the exponent of x, represented as a floating-point number
 
@@ -1824,10 +1824,6 @@ Numbers
 .. function:: exponent(f)
 
    Get the exponent of a floating-point number
-
-.. function:: mantissa(f)
-
-   Get the mantissa of a floating-point number
 
 .. function:: BigInt(x)
 
