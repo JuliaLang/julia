@@ -155,8 +155,8 @@ function readdlm(fname::String, dlm, eol::Char)
     return a
 end
 
-readcsv(io::IO)          = readdlm(io, ',')
-readcsv(io::IO, T::Type) = readdlm(io, ',', T)
+readcsv(io)          = readdlm(io, ',')
+readcsv(io, T::Type) = readdlm(io, ',', T)
 
 # todo: keyword argument for # of digits to print
 function writedlm(io::IO, a::Matrix, dlm::Char)
@@ -186,5 +186,5 @@ function writedlm(fname::String, a::Matrix, dlm::Char)
     end
 end
 
-writedlm(io::IO, a) = writedlm(io, a, '\t')
-writecsv(io::IO, a) = writedlm(io, a, ',')
+writedlm(io, a) = writedlm(io, a, '\t')
+writecsv(io, a) = writedlm(io, a, ',')
