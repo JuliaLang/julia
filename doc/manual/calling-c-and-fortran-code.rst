@@ -307,7 +307,7 @@ or type declaration.
 Given a ``Ptr{T}``, the contents of type ``T`` can generally be copied from
 the referenced memory into a Julia type using ``unsafe_ref(ptr, [index])``. The
 index argument is optional (default is 1), and performs 1-based indexing. This
-function is intentionally similar to the behavior of ``ref()`` and ``assign()``
+function is intentionally similar to the behavior of ``getindex()`` and ``setindex!()``
 (e.g. ``[]`` access syntax).
 
 If T is a bitstype, the return value will be that number.
