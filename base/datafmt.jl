@@ -91,7 +91,7 @@ function readdlm_auto(a, io, dlm, nr, nc, row, eol)
     a
 end
 
-countlines(io::IO) = countlines(io, '\n')
+countlines(nameorfile) = countlines(nameorfile, '\n')
 function countlines(filename::String, eol::Char)
     open(filename) do io
         countlines(io, eol)
