@@ -106,7 +106,7 @@ function init(meta::String)
             # initial content
             run(`touch REQUIRE`)
             run(`git add REQUIRE`)
-            run(`git submodule add $meta METADATA`)
+            run(`git submodule add -b devel $meta METADATA`)
             run(`git commit -m "Empty package repo"`)
             cd(Git.autoconfig_pushurl,"METADATA")
             Metadata.gen_hashes()
@@ -515,6 +515,9 @@ end
 
 update() = cd_pkgdir() do
     cd("METADATA") do
+        run(`git checkout -q HEAD^0`)
+        run(`git branch -q -f devel origin/devel`)
+        run(`git checkout -q devel`)
         run(`git pull`)
     end
     Metadata.gen_hashes()
