@@ -490,3 +490,8 @@ DLLEXPORT void jl_native_alignment(uint_t* int8align, uint_t* int16align, uint_t
     *float64align = LLVMPreferredAlignmentOfType(tgtdata, LLVMDoubleType());
     LLVMDisposeTargetData(tgtdata);
 }
+
+DLLEXPORT jl_value_t *jl_is_char_signed()
+{
+    return ((char)255) < 0 ? jl_true : jl_false;
+}
