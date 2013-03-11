@@ -155,8 +155,28 @@ function readdlm(fname::String, dlm, eol::Char)
     return a
 end
 
-readcsv(io)          = readdlm(io, ',')
-readcsv(io, T::Type) = readdlm(io, ',', T)
+function readdlm(io::Union(String, IO), dlm::Char, T::Type, eol::Char, dims::Dims)
+    return reshape(readdlm(io, dlm, T, eol), dims)
+end
+
+function readdlm(io::Union(String, IO), dlm::Char, eol::Char, dims::Dims)
+    return reshape(readdlm(io, dlm, eol), dims)
+end
+
+readdlm(io::Union(String, IO), dlm::Char, T::Type, dims::Dims) = readdlm(io, dlm, T, '\n', dims)
+readdlm(io::Union(String, IO), dlm::Char, dims::Dims) = readdlm(io, dlm, '\n', dims)
+
+readcsv(io)                          = readdlm(io, ',')
+readcsv(io, TorD::Union(Type, Dims)) = readdlm(io, ',', TorD)
+readcsv(io, T::Type, d::Dims)        = readdlm(io, ',', T, d)
+
+function writedlm(io::IO, a::Array, dlm::Char)
+    a_size = size(a)
+    y_dim = reduce(*, a_size[2:])
+
+    a_2d = reshape(a, (a_size[1], y_dim))
+    writedlm(io, a_2d, dlm)
+end
 
 # todo: keyword argument for # of digits to print
 function writedlm(io::IO, a::Matrix, dlm::Char)
@@ -180,7 +200,7 @@ end
 
 writedlm(io::IO, a::Vector, dlm::Char) = writedlm(io, reshape(a,length(a),1), dlm)
 
-function writedlm(fname::String, a::Matrix, dlm::Char)
+function writedlm(fname::String, a::Array, dlm::Char)
     open(fname, "w") do io
         writedlm(io, a, dlm)
     end
