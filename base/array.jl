@@ -264,8 +264,11 @@ getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, 
 
 # Fast copy using copy! for Range1
 function getindex(A::Array, I::Range1{Int})
-    X = similar(A, length(I))
-    copy!(X, 1, A, first(I), length(I))
+    lI = length(I)
+    X = similar(A, lI)
+    if lI > 0
+        copy!(X, 1, A, first(I), lI)
+    end
     return X
 end
 
@@ -1284,9 +1287,12 @@ end
 nonzeros(x::Number) = x == 0 ? Array(typeof(x),0) : [x]
 
 function findmax(a)
-    m = typemin(eltype(a))
-    mi = 0
-    for i=1:length(a)
+    if isempty(a)
+        error("findmax: array is empty")
+    end
+    m = a[1]
+    mi = 1
+    for i=2:length(a)
         if a[i] > m
             m = a[i]
             mi = i
@@ -1296,9 +1302,12 @@ function findmax(a)
 end
 
 function findmin(a)
-    m = typemax(eltype(a))
-    mi = 0
-    for i=1:length(a)
+    if isempty(a)
+        error("findmin: array is empty")
+    end
+    m = a[1]
+    mi = 1
+    for i=2:length(a)
         if a[i] < m
             m = a[i]
             mi = i
@@ -1356,11 +1365,6 @@ end
 
 
 ## Reductions ##
-
-reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 : size(A,i)))
-
-reducedim(f::Function, A, region, v0) =
-    reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
 
 # TODO:
 # - find out why inner loop with dimsA[i] instead of size(A,i) is way too slow

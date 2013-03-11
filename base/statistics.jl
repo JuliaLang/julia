@@ -75,7 +75,7 @@ std(v::Ranges) = std(v, true)
 
 function hist(v::AbstractVector, nbins::Integer)
     h = zeros(Int, nbins)
-    if nbins == 0
+    if nbins == 0 || isempty(v)
         return h
     end
     lo, hi = min(v), max(v)

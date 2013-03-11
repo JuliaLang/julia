@@ -544,7 +544,7 @@
 
 "),
 
-("Generic Functions","Base","|","|()
+("Generic Functions","Base","|","|(x, f)
 
    Applies a function to the preceding argument which allows for easy
    function chaining.
@@ -578,8 +578,8 @@
    the \"i\"th tuple contains the \"i\"th component of each input
    iterable.
 
-   Note that \"zip\" is it's own inverse: [zip(zip(a...)...)...] ==
-   [a...]
+   Note that \"zip\" is it's own inverse: \"[zip(zip(a...)...)...] ==
+   [a...]\".
 
 "),
 
@@ -598,8 +598,8 @@
 ("General Collections","Base","length","length(collection) -> Integer
 
    For ordered, indexable collections, the maximum index \"i\" for
-   which \"ref(collection, i)\" is valid. For unordered collections,
-   the number of elements.
+   which \"getindex(collection, i)\" is valid. For unordered
+   collections, the number of elements.
 
 "),
 
@@ -764,19 +764,19 @@
 
 "),
 
-("Indexable Collections","Base","collection[key...]","ref(collection, key...)
-collection[key...]()
+("Indexable Collections","Base","getindex","getindex(collection, key...)
 
    Retrieve the value(s) stored at the given key or index within a
-   collection.
+   collection. The syntax \"a[i,j,...]\" is converted by the compiler
+   to \"getindex(a, i, j, ...)\".
 
 "),
 
-("Indexable Collections","","collection[key...] = value","assign(collection, value, key...)
-collection[key...] = value
+("Indexable Collections","Base","setindex!","setindex!(collection, value, key...)
 
    Store the given value at the given key or index within a
-   collection.
+   collection. The syntax \"a[i,j,...] = x\" is converted by the
+   compiler to \"setindex!(a, x, i, j, ...)\".
 
 "),
 
@@ -1051,8 +1051,7 @@ collection[key...] = value
 
 "),
 
-("Strings","Base","string","*()
-string(strs...)
+("Strings","Base","*","*(s, t)
 
    Concatenate strings.
 
@@ -1060,9 +1059,9 @@ string(strs...)
 
 "),
 
-("Strings","Base","^","^()
+("Strings","Base","^","^(s, n)
 
-   Repeat a string.
+   Repeat string \"s\" \"n\" times.
 
    **Example**: \"\"Julia \"^3 == \"Julia Julia Julia \"\"
 
@@ -1740,23 +1739,81 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","-","-()
+("Mathematical Functions","Base","-","-(x)
 
-   Unary minus
-
-"),
-
-("Mathematical Functions","","+ - * / \\ ^","+ - * / \\ ^
-
-   The binary addition, subtraction, multiplication, left division,
-   right division, and exponentiation operators
+   Unary minus operator.
 
 "),
 
-("Mathematical Functions","",".+ .- .* ./ .\\ .^",".+ .- .* ./ .\\ .^
+("Mathematical Functions","Base","+","+(x, y)
 
-   The element-wise binary addition, subtraction, multiplication, left
-   division, right division, and exponentiation operators
+   Binary addition operator.
+
+"),
+
+("Mathematical Functions","Base","-","-(x, y)
+
+   Binary subtraction operator.
+
+"),
+
+("Mathematical Functions","Base","*","*(x, y)
+
+   Binary multiplication operator.
+
+"),
+
+("Mathematical Functions","Base","/","/(x, y)
+
+   Binary left-division operator.
+
+"),
+
+("Mathematical Functions","Base","\\","\\(x, y)
+
+   Binary right-division operator.
+
+"),
+
+("Mathematical Functions","Base","^","^(x, y)
+
+   Binary exponentiation operator.
+
+"),
+
+("Mathematical Functions","Base","+",".+(x, y)
+
+   Element-wise binary addition operator.
+
+"),
+
+("Mathematical Functions","Base","-",".-(x, y)
+
+   Element-wise binary subtraction operator.
+
+"),
+
+("Mathematical Functions","Base","*",".*(x, y)
+
+   Element-wise binary multiplication operator.
+
+"),
+
+("Mathematical Functions","Base","/","./(x, y)
+
+   Element-wise binary left division operator.
+
+"),
+
+("Mathematical Functions","Base","\\",".\\(x, y)
+
+   Element-wise binary right division operator.
+
+"),
+
+("Mathematical Functions","Base","^",".^(x, y)
+
+   Element-wise binary exponentiation operator.
 
 "),
 
@@ -1778,10 +1835,15 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","%","rem()
-%()
+("Mathematical Functions","Base","rem","rem(x, m)
 
    Remainder after division
+
+"),
+
+("Mathematical Functions","Base","%","%(x, m)
+
+   Remainder after division. The operator form of \"rem\".
 
 "),
 
@@ -1791,7 +1853,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","//","//()
+("Mathematical Functions","Base","//","//(num, den)
 
    Rational division
 
@@ -1809,16 +1871,51 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","","<< >>","<< >>
+("Mathematical Functions","Base","<<","<<(x, n)
 
-   Left and right shift operators
+   Left shift operator.
 
 "),
 
-("Mathematical Functions","","== != < <= > >=","== != < <= > >=
+("Mathematical Functions","Base",">>",">>(x, n)
 
-   Comparison operators to test equals, not equals, less than, less
-   than or equals, greater than, and greater than or equals
+   Right shift operator.
+
+"),
+
+("Mathematical Functions","Base","==","==(x, y)
+
+   Equality comparison operator.
+
+"),
+
+("Mathematical Functions","Base","!=","!=(x, y)
+
+   Not-equals comparison operator.
+
+"),
+
+("Mathematical Functions","Base","<","<(x, y)
+
+   Less-than comparison operator.
+
+"),
+
+("Mathematical Functions","Base","<=","<=(x, y)
+
+   Less-than-or-equals comparison operator.
+
+"),
+
+("Mathematical Functions","Base",">",">(x, y)
+
+   Greater-than comparison operator.
+
+"),
+
+("Mathematical Functions","Base",">=",">=(x, y)
+
+   Greater-than-or-equals comparison operator.
 
 "),
 
@@ -1829,31 +1926,31 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","!","!()
+("Mathematical Functions","Base","!","!(x)
 
    Boolean not
 
 "),
 
-("Mathematical Functions","Base","~","~()
+("Mathematical Functions","Base","~","~(x)
 
-   Boolean or bitwise not
+   Bitwise not
 
 "),
 
-("Mathematical Functions","Base","&","&()
+("Mathematical Functions","Base","&","&(x, y)
 
    Bitwise and
 
 "),
 
-("Mathematical Functions","Base","|","|()
+("Mathematical Functions","Base","|","|(x, y)
 
    Bitwise or
 
 "),
 
-("Mathematical Functions","Base","\$","\$()
+("Mathematical Functions","Base","\$","\$(x, y)
 
    Bitwise exclusive or
 
@@ -2090,13 +2187,13 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 ("Mathematical Functions","Base","sinc","sinc(x)
 
-   Compute sin(\\pi x) / x
+   Compute \\sin(\\pi x) / x
 
 "),
 
 ("Mathematical Functions","Base","cosc","cosc(x)
 
-   Compute cos(\\pi x) / x
+   Compute \\cos(\\pi x) / x
 
 "),
 
@@ -2114,7 +2211,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 ("Mathematical Functions","Base","hypot","hypot(x, y)
 
-   Compute the \\sqrt{(x^2+y^2)} without undue overflow or underflow
+   Compute the \\sqrt{x^2+y^2} without undue overflow or underflow
 
 "),
 
@@ -2142,7 +2239,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","logb","logb(x)
+("Mathematical Functions","Base","exponent","exponent(x)
 
    Return the exponent of x, represented as a floating-point number
 
@@ -3044,12 +3141,6 @@ airyaiprime(x)
 
 "),
 
-("Numbers","Base","mantissa","mantissa(f)
-
-   Get the mantissa of a floating-point number
-
-"),
-
 ("Numbers","Base","BigInt","BigInt(x)
 
    Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
@@ -3286,7 +3377,7 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","ref","ref(type)
+("Arrays","Base","getindex","getindex(type)
 
    Construct an empty 1-d array of the specified type. This is usually
    called with the syntax \"Type[]\". Element values can be specified
@@ -3419,7 +3510,7 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","ref","ref(A, ind)
+("Arrays","Base","getindex","getindex(A, ind)
 
    Returns a subset of \"A\" as specified by \"ind\", which may be an
    \"Int\", a \"Range\", or a \"Vector\".
@@ -3429,7 +3520,7 @@ airyaiprime(x)
 ("Arrays","Base","sub","sub(A, ind)
 
    Returns a SubArray, which stores the input \"A\" and \"ind\" rather
-   than computing the result immediately. Calling \"ref\" on a
+   than computing the result immediately. Calling \"getindex\" on a
    SubArray computes the indices on the fly.
 
 "),
@@ -3442,7 +3533,7 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","assign","assign(A, X, ind)
+("Arrays","Base","setindex!","setindex!(A, X, ind)
 
    Store an input array \"X\" within some subset of \"A\" as specified
    by \"ind\".
@@ -3744,13 +3835,13 @@ airyaiprime(x)
 
 "),
 
-("Linear Algebra","Base","*","*()
+("Linear Algebra","Base","*","*(A, B)
 
    Matrix multiplication
 
 "),
 
-("Linear Algebra","Base","\\","\\()
+("Linear Algebra","Base","\\","\\(A, B)
 
    Matrix division using a polyalgorithm. For input matrices \"A\" and
    \"B\", the result \"X\" is such that \"A*X == B\". For rectangular
@@ -3764,19 +3855,19 @@ airyaiprime(x)
 
 "),
 
-("Linear Algebra","Base","dot","dot()
+("Linear Algebra","Base","dot","dot(x, y)
 
    Compute the dot product
 
 "),
 
-("Linear Algebra","Base","cross","cross()
+("Linear Algebra","Base","cross","cross(x, y)
 
    Compute the cross product of two 3-vectors
 
 "),
 
-("Linear Algebra","Base","norm","norm()
+("Linear Algebra","Base","norm","norm(a)
 
    Compute the norm of a \"Vector\" or a \"Matrix\"
 

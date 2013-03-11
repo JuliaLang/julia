@@ -29,7 +29,7 @@ end
 function max(itr)
     s = start(itr)
     if done(itr, s)
-        return typemin(eltype(itr))
+        error("max: argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
@@ -42,7 +42,7 @@ end
 function min(itr)
     s = start(itr)
     if done(itr, s)
-        return typemax(eltype(itr))
+        error("min: argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
