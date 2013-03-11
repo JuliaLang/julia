@@ -115,10 +115,10 @@ step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 step(r::OrdinalRange) = r.step
 
-min(r::Range1) = r.start
-max(r::Range1) = last(r)
-min(r::Ranges) = step(r) > 0 ? r.start : last(r)
-max(r::Ranges) = step(r) > 0 ? last(r) : r.start
+min(r::Range1) = (isempty(r)&&error("min: range is empty")) || first(r)
+max(r::Range1) = (isempty(r)&&error("max: range is empty")) || last(r)
+min(r::Ranges) = (isempty(r)&&error("min: range is empty")) || (step(r) > 0 ? first(r) :  last(r))
+max(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  last(r) : first(r))
 
 # Ranges are intended to be immutable
 copy(r::Ranges) = r

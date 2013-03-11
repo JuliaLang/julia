@@ -30,7 +30,11 @@ dlclose(p::Ptr) = ccall(:uv_dlclose,Void,(Ptr{Void},),p)
 cfunction(f::Function, r, a) =
     ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
-typealias Cchar Int8
+if ccall(:jl_is_char_signed, Any, ())
+    typealias Cchar Int8
+else
+    typealias Cchar Uint8
+end
 typealias Cuchar Uint8
 typealias Cshort Int16
 typealias Cushort Uint16

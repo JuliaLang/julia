@@ -183,7 +183,7 @@ Generic Functions
 
    Invoke a method for the given generic function matching the specified types (as a tuple), on the specified arguments. The arguments must be compatible with the specified types. This allows invoking a method other than the most specific matching method, which is useful when the behavior of a more general definition is explicitly needed (often as part of the implementation of a more specific method of the same function).
 
-.. function:: |
+.. function:: |(x, f)
    
    Applies a function to the preceding argument which allows for easy function chaining.
 
@@ -225,7 +225,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    For a set of iterable objects, returns an iterable of tuples, where the ``i``\ th tuple contains the ``i``\ th component of each input iterable.
 
-   Note that ``zip`` is it's own inverse: [zip(zip(a...)...)...] == [a...]
+   Note that ``zip`` is it's own inverse: ``[zip(zip(a...)...)...] == [a...]``.
 
 
 Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
@@ -356,14 +356,16 @@ Indexable Collections
 ---------------------
 
 .. function:: getindex(collection, key...)
-              collection[key...]
 
    Retrieve the value(s) stored at the given key or index within a collection.
+   The syntax ``a[i,j,...]`` is converted by the compiler to
+   ``getindex(a, i, j, ...)``.
 
 .. function:: setindex!(collection, value, key...)
-              collection[key...] = value
 
    Store the given value at the given key or index within a collection.
+   The syntax ``a[i,j,...] = x`` is converted by the compiler to
+   ``setindex!(a, x, i, j, ...)``.
 
 Fully implemented by: ``Array``, ``DArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``String``.
 
@@ -568,16 +570,15 @@ Strings
 
    Return an array of the characters in ``string``.
 
-.. function:: *
-              string(strs...)
+.. function:: *(s, t)
 
    Concatenate strings.
 
    **Example**: ``"Hello " * "world" == "Hello world"``
 
-.. function:: ^
+.. function:: ^(s, n)
 
-   Repeat a string.
+   Repeat string ``s`` ``n`` times.
 
    **Example**: ``"Julia "^3 == "Julia Julia Julia "``
 
@@ -989,17 +990,57 @@ Standard Numeric Types
 Mathematical Functions
 ----------------------
 
-.. function:: -
+.. function:: -(x)
 
-   Unary minus
+   Unary minus operator.
 
-.. function:: + - * / \\ ^
+.. function:: +(x, y)
 
-   The binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
+   Binary addition operator.
 
-.. function:: .+ .- .* ./ .\\ .^
+.. function:: -(x, y)
 
-   The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
+   Binary subtraction operator.
+
+.. function:: *(x, y)
+
+   Binary multiplication operator.
+
+.. function:: /(x, y)
+
+   Binary left-division operator.
+
+.. function:: \\(x, y)
+
+   Binary right-division operator.
+
+.. function:: ^(x, y)
+
+   Binary exponentiation operator.
+
+.. function:: .+(x, y)
+
+   Element-wise binary addition operator.
+
+.. function:: .-(x, y)
+
+   Element-wise binary subtraction operator.
+
+.. function:: .*(x, y)
+
+   Element-wise binary multiplication operator.
+
+.. function:: ./(x, y)
+
+   Element-wise binary left division operator.
+
+.. function:: .\\(x, y)
+
+   Element-wise binary right division operator.
+
+.. function:: .^(x, y)
+
+   Element-wise binary exponentiation operator.
 
 .. function:: div(a,b)
 
@@ -1013,16 +1054,19 @@ Mathematical Functions
 
    Modulus after division, returning in the range [0,m)
 
-.. function:: rem
-              %
+.. function:: rem(x, m)
 
    Remainder after division
+
+.. function:: %(x, m)
+
+   Remainder after division. The operator form of ``rem``.
 
 .. function:: mod1(x,m)
 
    Modulus after division, returning in the range (0,m]
 
-.. function:: //
+.. function:: //(num, den)
 
    Rational division
 
@@ -1034,35 +1078,59 @@ Mathematical Functions
 
    Denominator of the rational representation of ``x``
 
-.. function:: << >>
+.. function:: <<(x, n)
 
-   Left and right shift operators
+   Left shift operator.
 
-.. function:: == != < <= > >=
+.. function:: >>(x, n)
 
-   Comparison operators to test equals, not equals, less than, less than or equals, greater than, and greater than or equals
+   Right shift operator.
+
+.. function:: ==(x, y)
+
+   Equality comparison operator.
+
+.. function:: !=(x, y)
+
+   Not-equals comparison operator.
+
+.. function:: <(x, y)
+
+   Less-than comparison operator.
+
+.. function:: <=(x, y)
+
+   Less-than-or-equals comparison operator.
+
+.. function:: >(x, y)
+
+   Greater-than comparison operator.
+
+.. function:: >=(x, y)
+
+   Greater-than-or-equals comparison operator.
 
 .. function:: cmp(x,y)
 
    Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively
 
-.. function:: !
+.. function:: !(x)
 
    Boolean not
 
-.. function:: ~
+.. function:: ~(x)
 
-   Boolean or bitwise not
+   Bitwise not
 
-.. function:: &
+.. function:: &(x, y)
 
    Bitwise and
 
-.. function:: |
+.. function:: |(x, y)
 
    Bitwise or
 
-.. function:: $
+.. function:: $(x, y)
 
    Bitwise exclusive or
 
@@ -1216,11 +1284,11 @@ Mathematical Functions
 
 .. function:: sinc(x)
 
-   Compute :math:`sin(\pi x) / x`
+   Compute :math:`\sin(\pi x) / x`
 
 .. function:: cosc(x)
 
-   Compute :math:`cos(\pi x) / x`
+   Compute :math:`\cos(\pi x) / x`
 
 .. function:: degrees2radians(x)
 
@@ -1232,7 +1300,7 @@ Mathematical Functions
 
 .. function:: hypot(x, y)
 
-   Compute the :math:`\sqrt{(x^2+y^2)}` without undue overflow or underflow
+   Compute the :math:`\sqrt{x^2+y^2}` without undue overflow or underflow
 
 .. function:: log(x)
    
@@ -1249,10 +1317,6 @@ Mathematical Functions
 .. function:: log1p(x)
 
    Accurate natural logarithm of ``1+x``
-
-.. function:: exponent(x)
-
-   Return the exponent of x, represented as a floating-point number
 
 .. function:: ilogb(x) 
 
@@ -2286,23 +2350,23 @@ Linear Algebra
 
 Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.
 
-.. function:: *
+.. function:: *(A, B)
 
    Matrix multiplication
 
-.. function:: \
+.. function:: \\(A, B)
 
    Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B``. For rectangular ``A``, QR factorization is used. For triangular ``A``, a triangular solve is performed. For square ``A``, Cholesky factorization is tried if the input is symmetric with a heavy diagonal. LU factorization is used in case Cholesky factorization fails or for general square inputs. If ``size(A,1) > size(A,2)``, the result is a least squares solution of ``A*X+eps=B`` using the singular value decomposition. ``A`` does not need to have full rank.
 
-.. function:: dot
+.. function:: dot(x, y)
 
    Compute the dot product
 
-.. function:: cross
+.. function:: cross(x, y)
 
    Compute the cross product of two 3-vectors
 
-.. function:: norm
+.. function:: norm(a)
 
    Compute the norm of a ``Vector`` or a ``Matrix``
 
