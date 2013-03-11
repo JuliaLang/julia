@@ -15,10 +15,12 @@ export ChmCommon,
        chm_fac_xtype!,
        chm_factorize,
        chm_factorize!,
+       chm_norm,
        chm_ones,
        chm_pack_fac!,
        chm_print,
        chm_scale!,
+       chm_sdmult,
        chm_solve,
        chm_sort,
        chm_speye,
@@ -166,7 +168,6 @@ for (f_sym_r, f_num_r, f_sym_c, f_num_c, itype) in
                            umf_ctrl, umf_info)
             if status != UMFPACK_OK; error("Error code $status from symbolic factorization"); end
             U.symbolic = tmp[1]
-#            finalizer(U.symbolic,umfpack_free_symbolic)
             U
         end
 
@@ -180,7 +181,6 @@ for (f_sym_r, f_num_r, f_sym_c, f_num_c, itype) in
                            umf_ctrl, umf_info)
             if status != UMFPACK_OK; error("Error code $status from symbolic factorization"); end
             U.symbolic = tmp[1]
-#            finalizer(U.symbolic,umfpack_free_symbolic)
             U
         end
 
@@ -196,7 +196,6 @@ for (f_sym_r, f_num_r, f_sym_c, f_num_c, itype) in
             if status > 0; throw(MatrixIllConditionedException); end
             if status != UMFPACK_OK; error("Error code $status from numeric factorization"); end
             U.numeric = tmp[1]
-#            finalizer(U.numeric,umfpack_free_numeric)
             U
         end
 
@@ -212,17 +211,17 @@ for (f_sym_r, f_num_r, f_sym_c, f_num_c, itype) in
             if status > 0; throw(MatrixIllConditionedException); end
             if status != UMFPACK_OK; error("Error code $status from numeric factorization"); end
             U.numeric = tmp[1]
-#            finalizer(U.numeric,umfpack_free_numeric)
             U
         end
     end
 end
 
-for (f_sol_r, f_sol_c, inttype) in
+for (f_sol_r, f_sol_c, itype) in
     (("umfpack_di_solve","umfpack_zi_solve",:Int32),
      ("umfpack_dl_solve","umfpack_zl_solve",:Int64))
     @eval begin
-        function umfpack_solve{Tv<:Float64,Ti<:$inttype}(lu::UmfpackLU{Tv,Ti}, b::Vector{Tv}, typ::Integer)
+        function umfpack_solve{Tv<:Float64,Ti<:$itype}(lu::UmfpackLU{Tv,Ti},
+                                                       b::Vector{Tv}, typ::Integer)
             umfpack_numeric!(lu)
             x = similar(b)
             status = ccall(($f_sol_r, :libumfpack), Ti,
@@ -233,16 +232,19 @@ for (f_sol_r, f_sol_c, inttype) in
             return x
         end
 
-        function umfpack_solve{Tv<:Complex128,Ti<:$inttype}(lu::UmfpackLU{Tv,Ti}, b::Vector{Tv}, typ::Integer)
+        function umfpack_solve{Tv<:Complex128,Ti<:$itype}(lu::UmfpackLU{Tv,Ti},
+                                                          b::Vector{Tv}, typ::Integer)
             umfpack_numeric!(lu)
             xr = similar(b, Float64)
             xi = similar(b, Float64)
             status = ccall(($f_sol_c, :libumfpack),
                            Ti,
-                           (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
-                            Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
+                           (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64},
+                            Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
+                            Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
                            typ, lu.colptr, lu.rowval, real(lu.nzval), imag(lu.nzval),
-                           xr, xi, real(b), imag(b), lu.num, umf_ctrl, umf_info)
+                           xr, xi, real(b), imag(b),
+                           lu.num, umf_ctrl, umf_info)
             if status != UMFPACK_OK; error("Error code $status from umfpack_solve"); end
             return complex(xr,xi)
         end
@@ -276,9 +278,9 @@ for (det_r,det_z,itype) in
     end
 end
 
-for (lunz,itype) in
-    (("umfpack_di_get_lunz", :Int32),    # no distinction between real and complex here
-     ("umfpack_dl_get_lunz", :Int64))
+for (lunz,get_numeric_r,get_numeric_z,itype) in
+    (("umfpack_di_get_lunz","umfpack_di_get_numeric","umfpack_zi_get_numeric",:Int32),
+     ("umfpack_dl_get_lunz","umfpack_dl_get_numeric","umfpack_zl_get_numeric",:Int64))
     @eval begin
         function umf_lunz{Tv<:UMFVTypes,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
             lnz = Array(Ti, 1)
@@ -292,13 +294,6 @@ for (lunz,itype) in
             if status != UMFPACK_OK error("Error code $status from umfpack_get_lunz") end
             (lnz[1], unz[1], n_row[1], n_col[1], nz_diag[1])
         end
-    end
-end
-
-for (get_numeric_r,get_numeric_z,itype) in
-    (("umfpack_di_get_numeric","umfpack_zi_get_numeric",:Int32),
-     ("umfpack_dl_get_numeric","umfpack_zl_get_numeric",:Int64))
-    @eval begin
         function umf_extract{Tv<:Float64,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz,unz,n_row,n_col,nz_diag) = umf_lunz(lu)
@@ -321,13 +316,13 @@ for (get_numeric_r,get_numeric_z,itype) in
                            P, Q, C_NULL,
                            &0, Rs, lu.numeric)
             if status != UMFPACK_OK error("Error code $status from numeric") end
-            (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment(Lj),Lx)),
-             SparseMatrixCSC(n_row,n_col,increment!(Up),increment(Ui),Ux),
+            (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment!(Lj),Lx)),
+             SparseMatrixCSC(n_row,n_col,increment!(Up),increment!(Ui),Ux),
              increment!(P), increment!(Q), Rs)
         end
     end
 end
-            
+
 ## The C functions called by these Julia functions do not depend on
 ## the numeric and index types, even though the umfpack names indicate
 ## they do.  The umfpack_free_* functions can be called on C_NULL without harm.
@@ -396,8 +391,7 @@ umfpack_report_numeric(lu::UmfpackLU) = umfpack_report_numeric(lu.symbolic,4.)
 ## CHOLMOD
 
 const chm_com_sz = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
-const chm_com    = Array(Uint8, chm_com_sz)
-ccall((:cholmod_start, :libcholmod), Int32, (Ptr{Uint8},), chm_com)
+const chm_com    = ones(Uint8, chm_com_sz)
 
 ### A way of examining some of the fields in chm_com
 ### Probably better to make this a Dict{ASCIIString,Tuple} and
@@ -455,7 +449,7 @@ end
 ## cholmod_dense pointers passed to or returned from C functions are of Julia type
 ## Ptr{c_CholmodDense}.  The CholmodDense type contains a c_CholmodDense object and other
 ## fields then ensure the memory pointed to is freed when it should be and not before.
-type c_CholmodDense{T<:CHMVTypes}
+immutable c_CholmodDense{T<:CHMVTypes}
     m::Int
     n::Int
     nzmax::Int
@@ -466,12 +460,12 @@ type c_CholmodDense{T<:CHMVTypes}
     dtype::Int32
 end
 
-type CholmodDense{T<:CHMVTypes}
+immutable CholmodDense{T<:CHMVTypes}
     c::c_CholmodDense
     mat::Matrix{T}
 end
 
-type c_CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
+immutable c_CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
     n::Int
     minor::Int
     Perm::Ptr{Ti}
@@ -502,7 +496,7 @@ type c_CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
     dtype::Int32
 end
 
-type CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
+immutable CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
     c::c_CholmodFactor{Tv,Ti}
     Perm::Vector{Ti}
     ColCount::Vector{Ti}
@@ -518,7 +512,7 @@ type CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
     s::Vector{Ti}
 end
 
-type c_CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
+immutable c_CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
     m::Int
     n::Int
     nzmax::Int
@@ -535,14 +529,14 @@ type c_CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
     packed::Int32
 end
 
-type CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
+immutable CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
     c::c_CholmodSparse{Tv,Ti}
     colptr0::Vector{Ti}
     rowval0::Vector{Ti}
     nzval::Vector{Tv}
 end
 
-type c_CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
+immutable c_CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
     m::Int
     n::Int
     nzmax::Int
@@ -557,7 +551,7 @@ type c_CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
     dtype::Int32
 end
 
-type CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
+immutable CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
     c::c_CholmodTriplet{Tv,Ti}
     i::Vector{Ti}
     j::Vector{Ti}
@@ -632,11 +626,10 @@ end
 chm_print(cd::CholmodDense, lev::Integer) = chm_print(cd, lev, "")
 chm_print(cd::CholmodDense) = chm_print(cd, int32(4), "")
 
-function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(A::SparseMatrixCSC{Tv,Ti})
-    stype = ishermitian(A) ? 1 : 0
-    aa = stype > 0 ? triu(A) : A
-    colptr0 = decrement(aa.colptr)
-    rowval0 = decrement(aa.rowval)
+function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(A::SparseMatrixCSC{Tv,Ti}, stype::Integer)
+    zerobased = A.colptr[1] == 0
+    colptr0 = zerobased ? copy(aa.colptr) : decrement(aa.colptr)
+    rowval0 = zerobased ? copy(aa.rowptr) : decrement(aa.rowval)
     nzval = copy(aa.nzval)
     CholmodSparse{Tv,Ti}(c_CholmodSparse{Tv,Ti}(size(A,1),size(A,2),
                                                 int(colptr0[end]),
@@ -649,10 +642,17 @@ function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(A::SparseMatrixCSC{Tv,Ti})
                                                 CHOLMOD_TRUE, CHOLMOD_TRUE),
                          colptr0, rowval0, nzval)
 end
+function CholmodSparse(A::SparseMatrixCSC)
+    stype = ishermitian(A) ? 1 : 0
+    CholmodSparse(stype > 0 ? triu(A) : A, stype)
+end
 
-function cmn{Ti<:CHMITypes}(i::Ti)
-    chm_com[chm_ityp_inds] =
-        reinterpret(Uint8, [Ti<:Int64 ? CHOLMOD_LONG : CHOLMOD_INT])
+function cmn{Ti<:CHMITypes}(i::Ti) # turns out this is as fast as checking for initialization
+    if Ti <: Int64
+        ccall((:cholmod_l_start, :libcholmod), Int32, (Ptr{Uint8},), chm_com)
+    else
+        ccall((:cholmod_start, :libcholmod), Int32, (Ptr{Uint8},), chm_com)
+    end
     chm_com
 end
 cmn{Tv,Ti<:CHMITypes}(A::CholmodSparse{Tv,Ti}) = cmn(one(Ti))
@@ -661,6 +661,14 @@ cmn{Tv,Ti<:CHMITypes}(ap::Ptr{c_CholmodSparse{Tv,Ti}}) = cmn(one(Ti))
 cmn{Tv,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti}) = cmn(one(Ti))
 cmn{Tv,Ti<:CHMITypes}(l::c_CholmodFactor{Tv,Ti}) = cmn(one(Ti))
 cmn{Tv,Ti<:CHMITypes}(lp::Ptr{c_CholmodFactor{Tv,Ti}}) = cmn(one(Ti))
+    
+function chm_rdsp(fnm::String)
+    fd = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}), fnm, "r")
+    res = ccall((:cholmod_read_sparse,:libcholmod), Ptr{c_CholmodSparse{Float64,Int32}},
+                (Ptr{Void},Ptr{Uint8}),fd,cmn(one(Int32)))
+    ccall(:fclose, Cint, (Ptr{Void},), fd)
+    CholmodSparse(res)
+end
 
 function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodSparse{Tv,Ti}})
     csp = unsafe_ref(cp)
@@ -674,26 +682,28 @@ function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodSparse{Tv,T
 end
 
 for (chk,prt,srt,itype) in
-    ((:cholmod_check_sparse,:cholmod_print_sparse,:cholmod_sort,:Int32),
-     (:cholmod_l_check_sparse,:cholmod_l_print_sparse,:cholmod_l_sort,:Int64))
+    (("cholmod_check_sparse","cholmod_print_sparse","cholmod_sort",:Int32),
+     ("cholmod_l_check_sparse","cholmod_l_print_sparse","cholmod_l_sort",:Int64))
     @eval begin
         function chm_check{Tv<:CHMVTypes}(cs::CholmodSparse{Tv,$itype})
-            status = ccall(($(string(chk)),:libcholmod), Int32,
+            cmn(cs)
+            status = ccall(($chk,:libcholmod), Int32,
                            (Ptr{c_CholmodSparse{Tv,$itype}}, Ptr{Uint8}),
-                           &cs.c, cmn(cs))
+                           &cs.c, chm_com)
             if status != CHOLMOD_TRUE throw(CholmodException) end
         end
         function chm_print{Tv<:CHMVTypes}(cs::CholmodSparse{Tv,$itype},lev,nm)
+            cmn(cs)                     # initialize if necessary
             orig = chm_com[chm_prt_inds]
             chm_com[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
-            status = ccall(($(string(prt)),:libcholmod), Int32,
+            status = ccall(($prt,:libcholmod), Int32,
                            (Ptr{c_CholmodSparse{Tv,$itype}}, Ptr{Uint8}, Ptr{Uint8}),
-                           &cs.c, nm, cmn(cs))
+                           &cs.c, nm, chm_com)
             chm_com[chm_prt_inds] = orig
             if status != CHOLMOD_TRUE throw(CholmodException) end
         end
         function chm_sort{Tv<:CHMVTypes}(cs::CholmodSparse{Tv,$itype})
-            status = ccall(($(string(srt)),:libcholmod), Int32,
+            status = ccall(($srt,:libcholmod), Int32,
                            (Ptr{c_CholmodSparse{Tv,$itype}}, Ptr{Uint8}),
                            &cs.c, cmn(cs))
             if status != CHOLMOD_TRUE throw(CholmodException) end
@@ -711,36 +721,59 @@ function size{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::CholmodSparse{Tv,Ti}, d::Integer)
     d == 1 ? cp.c.m : (d == 2 ? cp.c.n : 1)
 end
 
-for (speye,aat,cop,copsp,freesp,itype) in
-    ((:cholmod_speye,:cholmod_aat,:cholmod_copy,
-      :cholmod_copy_sparse,:cholmod_free_sparse,:Int32),
-     (:cholmod_l_speye,:cholmod_l_aat,:cholmod_l_copy,
-      :cholmod_l_copy_sparse,:cholmod_l_free_sparse,:Int64))
+for (aat,cop,copsp,freesp,normsp,sdmult,speye,itype) in
+    (("cholmod_aat","cholmod_copy","cholmod_copy_sparse","cholmod_free_sparse",
+      "cholmod_norm_sparse","cholmod_sdmult","cholmod_speye",:Int32),
+     ("cholmod_l_aat","cholmod_l_copy","cholmod_l_copy_sparse","cholmod_l_free_sparse",
+      "cholmod_norm_sparse","cholmod_l_sdmult","cholmod_l_speye",:Int64))
     @eval begin
-        function chm_speye{Tv<:Union(Float64,Complex128)}(m::Integer, n::Integer, t::Tv, i::$itype)
-            CholmodSparse(ccall(($(string(speye)), :libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
-                                (Int, Int, Int32, Ptr{Uint8}),
-                                m, n,
-                                Tv<:Complex ? CHOLMOD_COMPLEX : CHOLMOD_REAL,
-                                cmn(one($itype))))
-        end
         function chm_aat{Tv<:CHMVTypes}(a::c_CholmodSparse{Tv,$itype})
             cm = cmn(a)
             aa = Array(Ptr{c_CholmodSparse{Tv,$itype}}, 1)
-            aa[1] = ccall(($(string(aat)), :libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
+            aa[1] = ccall(($aat, :libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
                           (Ptr{c_CholmodSparse{Tv,$itype}}, Ptr{Void}, Int, Int32, Ptr{Uint8}),
                           &a, C_NULL, 0, 1, cm)
             res = CholmodSparse(ccall(($(string(cop)), :libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
                                       (Ptr{c_CholmodSparse{Tv,$itype}}, Int32, Int32, Ptr{Uint8}),
                                       aa[1], 1, 1, cm))
-            status = ccall(($(string(freesp)), :libcholmod), Int32,
+            status = ccall(($freesp, :libcholmod), Int32,
                            (Ptr{Ptr{c_CholmodSparse{Tv,$itype}}}, Ptr{Uint8}), aa, cm)
             if status != CHOLMOD_TRUE throw(CholmodException) end
             res
         end
         function chm_copy_sp{Tv<:CHMVTypes}(a::c_CholmodSparse{Tv,$itype})
-            ccall(($(string(copsp)),:libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
+            ccall(($copsp,:libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
                   (Ptr{c_CholmodSparse{Tv,$itype}},Ptr{Uint8}), &a, cmn(a))
+        end
+        function chm_norm{Tv<:CHMVTypes}(a::c_CholmodSparse{Tv,$itype}, norm::Integer)
+            ccall(($normsp, :libcholmod), Float64, 
+                  (Ptr{c_CholmodSparse{Tv,$itype}}, Int32, Ptr{Uint8}),
+                  &a,norm,cmn(a))
+        end
+        function chm_sdmult{Tv<:CHMVTypes}(a::c_CholmodSparse{Tv,$itype},
+                                           trans::Bool,
+                                           alpha::Tv,
+                                           beta::Tv,
+                                           x::c_CholmodDense{Tv})
+            nc = trans ? a.m : a.n
+            nr = trans ? a.n : a.m
+            if nc != x.m
+                error("Incompatible dimensions, $nc and $(x.m), in sdmult")
+            end
+            Y = CholmodDense(Array(Tv,nr,x.n))
+            status = ccall(($sdmult,:libcholmod), Int32,
+                           (Ptr{c_CholmodSparse{Tv,$itype}},Int32,Ptr{Tv},Ptr{Tv},
+                            Ptr{c_CholmodDense{Tv}}, Ptr{c_CholmodDense{Tv}}, Ptr{Uint8}),
+                           &a,trans,&alpha,&beta,&x,&Y.c,cmn(a))
+            if status != CHOLMOD_TRUE throw(CholmodException) end
+            Y
+        end
+        function chm_speye{Tv<:Union(Float64,Complex128)}(m::Integer, n::Integer, t::Tv, i::$itype)
+            CholmodSparse(ccall(($speye, :libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
+                                (Int, Int, Int32, Ptr{Uint8}),
+                                m, n,
+                                Tv<:Complex ? CHOLMOD_COMPLEX : CHOLMOD_REAL,
+                                cmn(one($itype))))
         end
     end
 end
@@ -748,16 +781,20 @@ chm_speye(m::Integer, n::Integer) = chm_speye(m, n, 1., 1)
 chm_speye(n::Integer) = chm_speye(n, n, 1., 1)
 chm_aat(A::CholmodSparse) = chm_aat(A.c)
 chm_aat(A::SparseMatrixCSC) = chm_aat(CholmodSparse(A).c)
+chm_norm(A::CholmodSparse,norm::Integer) = chm_norm(A.c,norm)
+chm_norm(A::SparseMatrixCSC,norm::Integer) = chm_norm(CholmodSparse(A).c,norm)
+chm_norm(A::CholmodSparse) = chm_norm(A.c,one(Int32))
+chm_norm(A::SparseMatrixCSC) = chm_norm(CholmodSparse(A).c,one(Int32))
 copy(A::CholmodSparse) = CholmodSparse(chm_copy_sp(A.c))
 
 for (scl,itype) in
-    ((:cholmod_scale,:Int32),
-     (:cholmod_l_scale,:Int64))
+    (("cholmod_scale",:Int32),
+     ("cholmod_l_scale",:Int64))
     @eval begin
         function chm_scale!{Tv<:CHMVTypes}(a::c_CholmodSparse{Tv,$itype},
                                            s::c_CholmodDense{Tv},
                                            typ::Integer)
-            status = ccall(($(string(scl)),:libcholmod), Int32,
+            status = ccall(($scl,:libcholmod), Int32,
                            (Ptr{c_CholmodDense{Tv}},Int32,Ptr{c_CholmodSparse{Tv,$itype}},
                             Ptr{Uint8}), &s, typ, &a, cmn(a))
             if status != CHOLMOD_TRUE throw(CholmodException) end
