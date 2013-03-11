@@ -21,7 +21,7 @@ chol(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not po
 size(C::CholeskyDense) = size(C.UL)
 size(C::CholeskyDense,d::Integer) = size(C.UL,d)
 
-function ref(C::CholeskyDense, d::Symbol)
+function getindex(C::CholeskyDense, d::Symbol)
     if d == :U || d == :L
         return symbol(C.uplo) == d ? C.UL : C.UL'
     elseif d == :UL
@@ -67,7 +67,7 @@ cholp{T<:Int}(A::Matrix{T}, args...) = cholp(float64(A), args...)
 size(C::CholeskyPivotedDense) = size(C.UL)
 size(C::CholeskyPivotedDense,d::Integer) = size(C.UL,d)
 
-ref(C::CholeskyPivotedDense) = C.UL, C.piv
+getindex(C::CholeskyPivotedDense) = C.UL, C.piv
 function ref{T<:BlasFloat}(C::CholeskyPivotedDense{T}, d::Symbol)
     if d == :U || d == :L
         return symbol(C.uplo) == d ? C.UL : C.UL'
@@ -188,7 +188,7 @@ qr(x::Number) = (one(x), x)
 
 size(A::QRDense, args::Integer...) = size(A.vs, args...)
 
-function ref(A::QRDense, d::Symbol)
+function getindex(A::QRDense, d::Symbol)
     if d == :R; return triu(A.vs[1:min(size(A)),:]); end;
     if d == :Q; return QRDenseQ(A); end
     error("No such property")
@@ -349,9 +349,9 @@ type HessenbergQ{T} <: AbstractMatrix{T}
 end
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.hh, A.tau)
 size(A::HessenbergQ, args...) = size(A.hh, args...)
-ref(A::HessenbergQ, args...) = ref(full(A), args...)
+getindex(A::HessenbergQ, args...) = getindex(full(A), args...)
 
-function ref(A::Hessenberg, d::Symbol)
+function getindex(A::Hessenberg, d::Symbol)
     if d == :Q; return HessenbergQ(A); end
     if d == :H; return triu(A.hh, -1); end
     error("No such property")
@@ -379,7 +379,7 @@ svd(A::StridedMatrix, args...) = SVDDense(copy(A), args...)
 svd(a::Vector, args...) = svd(reshape(a, length(a), 1), args...)
 svd(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
 
-function ref(F::SVDDense, d::Symbol)
+function getindex(F::SVDDense, d::Symbol)
     if d == :U return F.U end
     if d == :S return F.S end
     if d == :Vt return F.Vt end
