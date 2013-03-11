@@ -77,22 +77,36 @@
     <list name="types">
       <item> AbstractArray </item>
       <item> AbstractMatrix </item>
+      <item> AbstractSparseMatrix </item>
       <item> AbstractVector </item>
       <item> Any </item>
       <item> Array </item>
       <item> ASCIIString </item>
       <item> Associative </item>
+      <item> AsyncStream </item>
+      <item> BitArray </item>
+      <item> BigFloat </item>
+      <item> BigInt </item>
+      <item> BitMatrix </item>
+      <item> BitVector </item>
       <item> Bool </item>
       <item> ByteString </item>
       <item> Char </item>
+      <item> CharString </item>
+      <item> Colon </item>
       <item> Complex </item>
       <item> Complex64 </item>
       <item> Complex128 </item>
       <item> ComplexPair </item>
       <item> DArray </item>
       <item> Dict </item>
+      <item> Dims </item>
+      <item> EachLine </item>
+      <item> EnvHash </item>
       <item> Exception </item>
       <item> Expr </item>
+      <item> FileOffset </item>
+      <item> Filter </item>
       <item> Float </item>
       <item> Float32 </item>
       <item> Float64 </item>
@@ -106,32 +120,53 @@
       <item> Int128 </item>
       <item> Integer </item>
       <item> IntSet </item>
+      <item> ImaginaryUnit </item>
       <item> IO </item>
+      <item> IOBuffer </item>
       <item> IOStream </item>
+      <item> LocalProcess </item>
       <item> Matrix </item>
       <item> Nothing </item>
       <item> None </item>
       <item> NTuple </item>
       <item> Number </item>
+      <item> ObjectIdDict </item>
+      <item> OrdinalRange </item>
+      <item> PipeBuffer </item>
+      <item> ProcessGroup </item>
       <item> Ptr </item>
       <item> Range </item>
       <item> Range1 </item>
+      <item> RangeIndex </item>
       <item> Ranges </item>
       <item> Rational </item>
       <item> Real </item>
       <item> Regex </item>
       <item> RegexMatch </item>
+      <item> RegexMatchIterator </item>
+      <item> RemoteRef </item>
+      <item> RepString </item>
+      <item> RevString </item>
+      <item> Reverse </item>
+      <item> RopeString </item>
       <item> Set </item>
       <item> Signed </item>
+      <item> SparseMatrixCSC </item>
+      <item> SpawnNullStream </item>
       <item> StridedArray </item>
       <item> StridedMatrix </item>
       <item> StridedVecOrMat </item>
       <item> StridedVector </item>
       <item> String </item>
       <item> SubArray </item>
+      <item> SubDArray </item>
+      <item> SubOrDArray </item>
       <item> SubString </item>
       <item> Symbol </item>
+      <item> SymTridiagonal </item>
       <item> Task </item>
+      <item> TcpSocket </item>
+      <item> Tridiagonal </item>
       <item> Tuple </item>
       <item> Type </item>
       <item> Uint </item>
@@ -143,10 +178,58 @@
       <item> Union </item>
       <item> Unsigned </item>
       <item> UTF8String </item>
+      <item> UVError </item>
       <item> VecOrMat </item>
       <item> Vector </item>
+      <item> VersionNumber </item>
       <item> Void </item>
+      <item> WeakKeyDict </item>
       <item> WeakRef </item>
+      <item> Woodbury </item>
+      <item> Zip </item>
+
+      <item> Stat </item>
+      <item> Factorization </item>
+      <item> BunchKaufman </item>
+      <item> CholeskyDense </item>
+      <item> CholeskyPivotedDense </item>
+      <item> LUDense </item>
+      <item> LUTridiagonal </item>
+      <item> LDLTTridiagonal </item>
+      <item> QRDense </item>
+      <item> QRPivotedDense </item>
+      <item> SVDDense </item>
+      <item> GSVDDense </item>
+      <item> InsertionSort </item>
+      <item> QuickSort </item>
+      <item> MergeSort </item>
+      <item> TimSort </item>
+
+      <item> Cchar </item>
+      <item> Cuchar </item>
+      <item> Cshort </item>
+      <item> Cushort </item>
+      <item> Cint </item>
+      <item> Cuint </item>
+      <item> Clong </item>
+      <item> Culong </item>
+      <item> Cptrdiff_t </item>
+      <item> Csize_t </item>
+      <item> Clonglong </item>
+      <item> Culonglong </item>
+      <item> Cfloat </item>
+      <item> Cdouble </item>
+
+      <item> ArgumentError </item>
+      <item> DisconnectException </item>
+      <item> EOFError </item>
+      <item> ErrorException </item>
+      <item> KeyError </item>
+      <item> LoadError </item>
+      <item> MethodError </item>
+      <item> ParseError </item>
+      <item> SystemError </item>
+      <item> TypeError </item>
     </list>
     <contexts>
 
