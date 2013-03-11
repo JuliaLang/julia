@@ -68,7 +68,7 @@ size(C::CholeskyPivotedDense) = size(C.UL)
 size(C::CholeskyPivotedDense,d::Integer) = size(C.UL,d)
 
 getindex(C::CholeskyPivotedDense) = C.UL, C.piv
-function ref{T<:BlasFloat}(C::CholeskyPivotedDense{T}, d::Symbol)
+function getindex{T<:BlasFloat}(C::CholeskyPivotedDense{T}, d::Symbol)
     if d == :U || d == :L
         return symbol(C.uplo) == d ? C.UL : C.UL'
     end
@@ -134,7 +134,7 @@ lu(x::Number) = (one(x), x, [1])
 size(A::LUDense) = size(A.LU)
 size(A::LUDense,n) = size(A.LU,n)
 
-function ref{T}(A::LUDense{T}, d::Symbol)
+function getindex{T}(A::LUDense{T}, d::Symbol)
     if d == :L; return tril(A.LU, -1) + eye(T, size(A, 1)); end;
     if d == :U; return triu(A.LU); end;
     if d == :p
@@ -259,7 +259,7 @@ qrp(A::Matrix) = QRPivotedDense(copy(A))
 
 size(A::QRPivotedDense, args::Integer...) = size(A.hh, args...)
 
-function ref{T<:BlasFloat}(A::QRPivotedDense{T}, d::Symbol)
+function getindex{T<:BlasFloat}(A::QRPivotedDense{T}, d::Symbol)
     if d == :R; return triu(A.hh[1:min(size(A)),:]); end;
     if d == :Q; return QRDensePivotedQ(A); end
     if d == :p; return A.jpvt; end
@@ -422,7 +422,7 @@ end
 
 svd(A::StridedMatrix, B::StridedMatrix) = GSVDDense(copy(A), copy(B))
 
-function ref{T}(obj::GSVDDense{T}, d::Symbol)
+function getindex{T}(obj::GSVDDense{T}, d::Symbol)
     if d == :U return obj.U end
     if d == :V return obj.V end
     if d == :Q return obj.Q end
