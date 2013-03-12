@@ -907,6 +907,14 @@ Text I/O
 
    Print (using :func:`print`) ``x`` followed by a newline
 
+.. function:: @printf("%Fmt", args...)
+
+   Print arg(s) using C ``printf()`` style format specification string.
+
+.. function:: @sprintf(stream::IOStream, "%Fmt", args...)
+    
+   Write ``@printf`` formatted output arg(s) to stream.
+
 .. function:: showall(x)
 
    Show x, printing all elements of arrays
