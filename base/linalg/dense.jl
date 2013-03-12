@@ -199,15 +199,15 @@ kron(a::Number, b::Matrix) = a * b
 
 randsym(n) = symmetrize!(randn(n,n))
 
-^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : power_by_squaring(A,p)
+^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)
     if integer_valued(p)
         ip = integer(real(p))
         if ip < 0
-            return inv(power_by_squaring(A, -ip))
+            return inv(Base.power_by_squaring(A, -ip))
         else
-            return power_by_squaring(A, ip)
+            return Base.power_by_squaring(A, ip)
         end
     end
     if size(A,1) != size(A,2)

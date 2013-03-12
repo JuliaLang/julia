@@ -42,7 +42,7 @@ function triu(B::BitMatrix, k::Int)
     A = falses(m,n)
     for i = max(k+1,1):n
         j = clamp((i - 1) * m + 1, 1, i * m)
-        copy_chunks(A.chunks, j, B.chunks, j, min(i-k, m))
+        Base.copy_chunks(A.chunks, j, B.chunks, j, min(i-k, m))
     end
     return A
 end
@@ -53,7 +53,7 @@ function tril(B::BitMatrix, k::Int)
     A = falses(m, n)
     for i = 1:min(n, m+k)
         j = clamp((i - 1) * m + i - k, 1, i * m)
-        copy_chunks(A.chunks, j, B.chunks, j, max(m-i+k+1, 0))
+        Base.copy_chunks(A.chunks, j, B.chunks, j, max(m-i+k+1, 0))
     end
     return A
 end
@@ -117,7 +117,7 @@ function kron(a::BitVector, b::BitVector)
     zS = zero(S)
     for j = 1:n
         if b[j] != zS
-            copy_chunks(R.chunks, (j-1)*m+1, a.chunks, 1, m)
+            Base.copy_chunks(R.chunks, (j-1)*m+1, a.chunks, 1, m)
         end
     end
     return R
@@ -245,8 +245,8 @@ function findmin(a::BitArray)
             return (false, ti)
         end
     end
-    l = (@_mod64 (length(a)-1)) + 1
-    msk = @_mskr l
+    l = (Base.@_mod64 (length(a)-1)) + 1
+    msk = Base.@_mskr l
     k = trailing_ones(a.chunks[end] & msk)
     ti += k
     if k != l

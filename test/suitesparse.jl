@@ -2,7 +2,7 @@ se33 = speye(3)
 do33 = ones(3)
 @test isequal(se33 \ do33, do33)
 
-using Base.SuiteSparse
+using Base.LinAlg.SuiteSparse
 
 # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
@@ -99,7 +99,7 @@ rowval0 = int32([0,1,2,1,2,3,0,2,4,0,1,5,0,4,6,1,3,7,2,8,1,3,7,8,9,0,4,6,8,10,5,
                  31,35,37,14,15,32,34,38,14,15,33,37,38,39,16,32,34,36,38,40,12,17,31,35,36,
                  37,41,12,16,17,18,23,36,40,42,13,14,15,19,37,39,43,13,14,15,20,21,38,43,44,
                  13,14,15,20,21,37,39,43,44,45,12,16,17,22,36,40,42,46,12,16,17,18,23,41,42,46,47])
-A = CholmodSparse{Float64,Int32}(Base.SuiteSparse.c_CholmodSparse{Float64,Int32}(48,48,224,
+A = CholmodSparse{Float64,Int32}(Base.LinAlg.SuiteSparse.c_CholmodSparse{Float64,Int32}(48,48,224,
                                                                      convert(Ptr{Int32}, colptr0),
                                                                      convert(Ptr{Int32}, rowval0),
                                                                      C_NULL,
@@ -130,7 +130,7 @@ rowval0 = int32([2,3,6,7,8,9,12,13,16,17,18,19,20,21,22,23,24,25,26,0,1,2,23,0,3
                  6,24,4,5,7,24,4,5,8,24,4,5,9,24,6,20,7,20,8,20,9,20,3,4,4,22,5,26,10,11,12,21,
                  10,13,10,23,10,20,11,25,14,15,16,22,14,15,17,22,14,15,18,22,14,15,19,22,16,20,
                  17,20,18,20,19,20,13,15,15,24,14,26,15])
-afiro = CholmodSparse{Float64,Int32}(Base.SuiteSparse.c_CholmodSparse{Float64,Int32}(27,51,102,
+afiro = CholmodSparse{Float64,Int32}(Base.LinAlg.SuiteSparse.c_CholmodSparse{Float64,Int32}(27,51,102,
                                                                      convert(Ptr{Int32}, colptr0),
                                                                      convert(Ptr{Int32}, rowval0),
                                                                      C_NULL,
