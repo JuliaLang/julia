@@ -620,23 +620,15 @@ Strings
 
 .. function:: is_valid_ascii(s) -> Bool
 
-   Returns true if the string is valid ASCII, false otherwise.
+   Returns true if the string or byte vector is valid ASCII, false otherwise.
 
 .. function:: is_valid_utf8(s) -> Bool
 
-   Returns true if the string is valid UTF-8, false otherwise.
+   Returns true if the string or byte vector is valid UTF-8, false otherwise.
 
-.. function:: check_ascii(s)
+.. function:: is_valid_char(c) -> Bool
 
-   Calls :func:`is_valid_ascii` on string. Throws error if it is not valid.
-
-.. function:: check_utf8(s)
-
-   Calls :func:`is_valid_utf8` on string. Throws error if it is not valid.
-
-.. function:: byte_string_classify(s)
-
-   Returns 0 if the string is neither valid ASCII nor UTF-8, 1 if it is valid ASCII, and 2 if it is valid UTF-8.
+   Returns true if the given char or integer is a valid Unicode code point.
 
 .. function:: search(string, char, [i])
 
@@ -1809,10 +1801,6 @@ Data Formats
 .. function:: char(x)
 
    Convert a number or array to ``Char`` data type
-
-.. function:: safe_char(x)
-
-   Convert to ``Char``, checking for invalid code points
 
 .. function:: complex(r,i)
 
