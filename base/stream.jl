@@ -373,12 +373,12 @@ function read(this::AsyncStream,::Type{Uint8})
     read(buf,Uint8)
 end
 
-function readline(this::AsyncStream)
+function readln(this::AsyncStream)
     buf = this.buffer
     assert(buf.seekable == false)
     start_reading(this)
     wait_readline(this)
-    readline(buf)
+    readln(buf)
 end
 
 function finish_read(pipe::NamedPipe)

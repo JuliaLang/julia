@@ -927,7 +927,7 @@ Text I/O
 
    Read the entire contents of an I/O stream as a string.
 
-.. function:: readline(stream)
+.. function:: readln(stream)
 
    Read a single line of text, including a trailing newline character (if one is reached before the end of the input).
 
@@ -935,11 +935,11 @@ Text I/O
 
    Read a string, up to and including the given delimiter byte.
 
-.. function:: readlines(stream)
+.. function:: readlns(stream)
 
    Read all lines as an array.
 
-.. function:: each_line(stream)
+.. function:: eachln(stream)
 
    Create an iterable object that will yield each line from a stream.
 

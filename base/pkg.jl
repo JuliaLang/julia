@@ -188,7 +188,7 @@ rm(pkgs::Vector{String}) = cd_pkgdir() do
             end
             open("REQUIRE") do r
                 open("REQUIRE.new","w") do w
-                    for line in each_line(r)
+                    for line in eachln(r)
                         fields = split(line)
                         if isempty(fields) || fields[1]!=pkg
                             print(w,line)
@@ -406,7 +406,7 @@ end
 # set package remote in METADATA
 
 get_origin(pkg::String, remote::String) = cd_pkgdir() do
-    for line in each_line(`git --git-dir=$(joinpath(pkg,".git")) remote -v`)
+    for line in eachln(`git --git-dir=$(joinpath(pkg,".git")) remote -v`)
         m = match(r"^(\S*)\s*(\S*)\s*\(fetch\)", line)
         if m != nothing && m.captures[1] == remote
             return m.captures[2]
@@ -619,7 +619,7 @@ function promptuserinfo()
              Git would like to know your name to initialize your .julia directory.
              Enter it below:
              """)
-        name = chomp(readline(STDIN))
+        name = chomp(readln(STDIN))
         if(isempty(name))
             error("Could not read name")
         else
@@ -632,7 +632,7 @@ function promptuserinfo()
              Git would like to know your email to initialize your .julia directory.
              Enter it below:
              """)
-        email = chomp(readline(STDIN))
+        email = chomp(readln(STDIN))
         if(isempty(email))
             error("Could not read email")
         else

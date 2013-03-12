@@ -158,7 +158,7 @@ function readuntil{T}(s::IO, delim::T)
     out
 end
 
-readline(s::IO) = readuntil(s, '\n')
+readln(s::IO) = readuntil(s, '\n')
 
 function readall(s::IO)
     out = memio()
@@ -179,7 +179,7 @@ type EachLine
     EachLine(stream) = EachLine(stream, ()->nothing)
     EachLine(stream, ondone) = new(stream, ondone)
 end
-each_line(stream::IO) = EachLine(stream)
+eachln(stream::IO) = EachLine(stream)
 
 start(itr::EachLine) = nothing
 function done(itr::EachLine, nada)
@@ -190,11 +190,11 @@ function done(itr::EachLine, nada)
     itr.ondone()
     true
 end
-next(itr::EachLine, nada) = (readline(itr.stream), nothing)
+next(itr::EachLine, nada) = (readln(itr.stream), nothing)
 
-function readlines(s, fx::Function...)
+function readlns(s, fx::Function...)
     a = {}
-    for l = each_line(s)
+    for l = eachln(s)
         for f in fx
           l = f(l)
         end
@@ -438,7 +438,7 @@ function eatwspace_comment(s::IOStream, cmt::Char)
     ch = peekchar(s); status = int(ch)
     while status >= 0 && (isspace(ch) || ch == cmt)
         if ch == cmt
-            readline(s)
+            readln(s)
         else
             read(s, Char)  # advance one character
         end

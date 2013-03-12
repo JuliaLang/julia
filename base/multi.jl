@@ -905,7 +905,7 @@ function start_remote_workers(machines, cmds, tunnel)
         stream.line_buffered = true
         while true
             wait_readline(stream)
-            conninfo = readline(stream.buffer)
+            conninfo = readln(stream.buffer)
             hostname, port = parse_connection_info(conninfo)
             if hostname != ""
                 break
@@ -1010,7 +1010,7 @@ function start_sge_workers(n)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
     end
-    id = chomp(split(readline(out),'.')[1])
+    id = chomp(split(readln(out),'.')[1])
     println("job id is $id")
     print("waiting for job to start");
     workers = cell(n)
@@ -1024,7 +1024,7 @@ function start_sge_workers(n)
             try
                 fl = open(fname)
                 try
-                    conninfo = readline(fl)
+                    conninfo = readln(fl)
                     hostname, port = parse_connection_info(conninfo)
                 finally
                     close(fl)

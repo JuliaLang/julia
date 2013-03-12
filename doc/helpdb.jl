@@ -1641,7 +1641,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Text I/O","Base","readline","readline(stream)
+("Text I/O","Base","readln","readln(stream)
 
    Read a single line of text, including a trailing newline character
    (if one is reached before the end of the input).
@@ -1654,13 +1654,13 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Text I/O","Base","readlines","readlines(stream)
+("Text I/O","Base","readlns","readlns(stream)
 
    Read all lines as an array.
 
 "),
 
-("Text I/O","Base","each_line","each_line(stream)
+("Text I/O","Base","eachln","eachln(stream)
 
    Create an iterable object that will yield each line from a stream.
 

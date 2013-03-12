@@ -142,12 +142,15 @@ end
 
 # 0.2
 
-@deprecate  localize         localpart
-@deprecate  expr(hd, a...)   Expr(hd, a...)
+@deprecate  localize                  localpart
+@deprecate  expr(hd, a...)            Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1}) Expr(hd, a...)
-@deprecate  logb                exponent
-@deprecate  ref_shape           index_shape
-@deprecate  assign_shape_check  setindex_shape_check
+@deprecate  logb                      exponent
+@deprecate  ref_shape                 index_shape
+@deprecate  assign_shape_check        setindex_shape_check
+@deprecate  readline                  readln
+@deprecate  readlines                 readlns
+@deprecate  each_line                 eachln
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
