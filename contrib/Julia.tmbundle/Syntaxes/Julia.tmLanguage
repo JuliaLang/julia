@@ -15,7 +15,7 @@
 	<key>firstLineMatch</key>
 	<string>^#!/usr/bin/env\s+julia\s*$</string>
 	<key>foldingStartMarker</key>
-	<string>^\s*(?:if|while|for|begin|function|macro|module|baremodule|type|let)\b(?!.*\bend\b).*$</string>
+	<string>^\s*(?:if|while|for|begin|function|macro|module|baremodule|type|immutable|let)\b(?!.*\bend\b).*$</string>
 	<key>foldingStopMarker</key>
 	<string>^\s*(?:end)\b.*$</string>
 	<key>name</key>
@@ -164,7 +164,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(?:function|type|macro|quote|abstract|bitstype|Base|Main|Core|typealias|module|baremodule|new)\b</string>
+					<string>\b(?:function|type|immutable|macro|quote|abstract|bitstype|Base|Main|Core|typealias|module|baremodule|new)\b</string>
 					<key>name</key>
 					<string>keyword.other.julia</string>
 				</dict>
@@ -528,7 +528,7 @@
 						</dict>
 					</dict>
 					<key>match</key>
-					<string>(type)\s+([a-zA-Z0-9_]+)(\s*(&lt;:)\s*[.a-zA-Z0-9_:]+)?</string>
+					<string>(type|immutable)\s+([a-zA-Z0-9_]+)(\s*(&lt;:)\s*[.a-zA-Z0-9_:]+)?</string>
 					<key>name</key>
 					<string>meta.type.julia</string>
 				</dict>
