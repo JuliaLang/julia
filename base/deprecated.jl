@@ -148,6 +148,10 @@ end
 @deprecate  logb                exponent
 @deprecate  ref_shape           index_shape
 @deprecate  assign_shape_check  setindex_shape_check
+@deprecate  quote_string        repr
+@deprecate  safe_char(c)        (is_valid_char(char(c))||error())&&char(c)
+@deprecate  check_ascii(x)      (is_valid_ascii(x)?x:error())
+@deprecate  check_utf8(x)       (is_valid_utf8(x)?x:error())
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
