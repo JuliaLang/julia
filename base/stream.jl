@@ -113,7 +113,7 @@ end
 wait_connect_filter(w::AsyncStream, args...) = !w.open
 wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
 wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
-wait_readline_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
+wait_readln_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
 
 function wait(forwhat::Vector, notify_list_name, filter_fcn)
     args = ()
@@ -139,7 +139,7 @@ end
 
 wait_connected(x) = wait(x, :connectnotify, wait_connect_filter)
 wait_readable(x) = wait(x, :readnotify, wait_readable_filter)
-wait_readline(x) = wait(x, :readnotify, wait_readline_filter)
+wait_readln(x) = wait(x, :readnotify, wait_readln_filter)
 wait_readnb(x::(AsyncStream,Int)) = wait(x, :readnotify, wait_readnb_filter)
 wait_readnb(x::AsyncStream,b::Int) = wait_readnb((x,b))
 
@@ -373,12 +373,12 @@ function read(this::AsyncStream,::Type{Uint8})
     read(buf,Uint8)
 end
 
-function readline(this::AsyncStream)
+function readln(this::AsyncStream)
     buf = this.buffer
     assert(buf.seekable == false)
     start_reading(this)
-    wait_readline(this)
-    readline(buf)
+    wait_readln(this)
+    readln(buf)
 end
 
 function finish_read(pipe::NamedPipe)
