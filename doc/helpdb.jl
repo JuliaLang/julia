@@ -1609,6 +1609,19 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
+("Text I/O","Base","@printf","@printf(\"%Fmt\", args...)
+
+   Print arg(s) using C \"printf()\" style format specification
+   string.
+
+"),
+
+("Text I/O","Base","@sprintf","@sprintf(stream::IOStream, \"%Fmt\", args...)
+
+   Write \"@printf\" formatted output arg(s) to stream.
+
+"),
+
 ("Text I/O","Base","showall","showall(x)
 
    Show x, printing all elements of arrays
@@ -2236,12 +2249,6 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 ("Mathematical Functions","Base","log1p","log1p(x)
 
    Accurate natural logarithm of \"1+x\"
-
-"),
-
-("Mathematical Functions","Base","exponent","exponent(x)
-
-   Return the exponent of x, represented as a floating-point number
 
 "),
 
