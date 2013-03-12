@@ -515,8 +515,9 @@ end
 
 update() = cd_pkgdir() do
     cd("METADATA") do
+        run(`git fetch -q --all`)
         run(`git checkout -q HEAD^0`)
-        run(`git branch -q -f devel origin/devel`)
+        run(`git branch -f devel origin/devel`)
         run(`git checkout -q devel`)
         run(`git pull`)
     end
