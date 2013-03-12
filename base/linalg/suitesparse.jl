@@ -41,17 +41,19 @@ import Base.(\)
 import Base.Ac_ldiv_B
 import Base.At_ldiv_B
 import Base.SparseMatrixCSC
-import Base.chol
 import Base.copy
-import Base.det             
-import Base.diagmm
-import Base.findn_nzs
-import Base.lu
 import Base.nnz
+import Base.findn_nzs
 import Base.show
 import Base.size
-import Base.solve
 import Base.convert
+
+import LinAlg.Factorization
+import LinAlg.chol
+import LinAlg.det             
+import LinAlg.diagmm
+import LinAlg.lu
+import LinAlg.solve
 
 include("linalg/suitesparse_h.jl")
 

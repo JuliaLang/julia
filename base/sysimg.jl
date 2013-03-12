@@ -149,9 +149,10 @@ include("util.jl")
 include("test.jl")
 include("meta.jl")
 
-# linear algebra
+# sparse matrices and linear algebra
 include("sparse.jl")
 include("linalg/linalg.jl")
+importall LinAlg
 
 # signal processing
 include("fftw.jl")

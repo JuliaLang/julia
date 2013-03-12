@@ -1,15 +1,6 @@
-typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
-typealias BlasChar Char
-
-if USE_LIB64
-    typealias BlasInt Int64
-    blas_int(x) = int64(x)
-else
-    typealias BlasInt Int32
-    blas_int(x) = int32(x)
-end
-
 module BLAS
+
+import Base.copy!
 
 export copy!,
        scal!,
@@ -35,10 +26,10 @@ export copy!,
 
 const libblas = Base.libblas_name
 
-import Base.BlasFloat
-import Base.BlasChar
-import Base.BlasInt
-import Base.blas_int
+import LinAlg.BlasFloat
+import LinAlg.BlasChar
+import LinAlg.BlasInt
+import LinAlg.blas_int
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
