@@ -1,6 +1,3 @@
-import ARPACK.eigs
-import ARPACK.svds
-
 begin
 	local n,a,asym,d,v
 	n = 10
