@@ -211,6 +211,11 @@ d4[1001] = randstring(3)
 @test !isequal({1 => 2}, {"dog" => "bone"})
 @test isequal(Dict{Int, Int}(), Dict{String, String}())
 
+# issue #2540
+d = {x => 1
+    for x in ['a', 'b', 'c']}
+@test d == {'a'=>1, 'b'=>1, 'c'=> 1}
+
 # ############# end of dict tests #############
 
 # #################### set ####################
