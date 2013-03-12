@@ -1,6 +1,15 @@
 JULIAHOME = $(abspath .)
 include $(JULIAHOME)/Make.inc
 
+# TODO: Code bundled with Julia should be installed into a versioned directory,
+# PREFIX/share/julia/VERSDIR, so that in the future one can have multiple
+# major versions of Julia installed concurrently. Third-party code that
+# is not controlled by Pkg should be installed into
+# PREFIX/share/julia/site/VERSDIR (not PREFIX/share/julia/VERSDIR/site ...
+# so that PREFIX/share/julia/VERSDIR can be overwritten without touching
+# third-party code).
+VERSDIR = v`cut -d. -f1-2 < VERSION`
+
 all: default
 default: release
 
@@ -55,7 +64,7 @@ JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
-	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" ; do \
+	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" "share/julia/site/"$(VERSDIR) ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 ifeq ($(OS), Darwin)
