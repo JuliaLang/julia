@@ -42,6 +42,7 @@ import Base.Ac_ldiv_B
 import Base.At_ldiv_B
 import Base.SparseMatrixCSC
 import Base.copy
+
 import Base.nnz
 import Base.findn_nzs
 import Base.show
@@ -51,7 +52,9 @@ import Base.convert
 import LinAlg.Factorization
 import LinAlg.chol
 import LinAlg.det             
+import LinAlg.diag
 import LinAlg.diagmm
+import LinAlg.logdet
 import LinAlg.lu
 import LinAlg.solve
 
@@ -630,9 +633,9 @@ chm_print(cd::CholmodDense) = chm_print(cd, int32(4), "")
 
 function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(A::SparseMatrixCSC{Tv,Ti}, stype::Integer)
     zerobased = A.colptr[1] == 0
-    colptr0 = zerobased ? copy(aa.colptr) : decrement(aa.colptr)
-    rowval0 = zerobased ? copy(aa.rowptr) : decrement(aa.rowval)
-    nzval = copy(aa.nzval)
+    colptr0 = zerobased ? copy(A.colptr) : decrement(A.colptr)
+    rowval0 = zerobased ? copy(A.rowptr) : decrement(A.rowval)
+    nzval = copy(A.nzval)
     CholmodSparse{Tv,Ti}(c_CholmodSparse{Tv,Ti}(size(A,1),size(A,2),
                                                 int(colptr0[end]),
                                                 convert(Ptr{Ti}, colptr0),
@@ -723,25 +726,45 @@ function size{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::CholmodSparse{Tv,Ti}, d::Integer)
     d == 1 ? cp.c.m : (d == 2 ? cp.c.n : 1)
 end
 
-for (aat,cop,copsp,freesp,normsp,sdmult,speye,itype) in
-    (("cholmod_aat","cholmod_copy","cholmod_copy_sparse","cholmod_free_sparse",
-      "cholmod_norm_sparse","cholmod_sdmult","cholmod_speye",:Int32),
-     ("cholmod_l_aat","cholmod_l_copy","cholmod_l_copy_sparse","cholmod_l_free_sparse",
-      "cholmod_norm_sparse","cholmod_l_sdmult","cholmod_l_speye",:Int64))
+for (aat,allocsp,cop,copsp,freesp,normsp,sdmult,speye,transsym,itype) in
+    (("cholmod_aat","cholmod_allocate_sparse","cholmod_copy","cholmod_copy_sparse",
+      "cholmod_free_sparse","cholmod_norm_sparse","cholmod_sdmult","cholmod_speye",
+      "cholmod_transpose_sym",:Int32),
+     ("cholmod_l_aat","cholmod_l_allocate_sparse","cholmod_l_copy",
+      "cholmod_l_copy_sparse","cholmod_l_free_sparse","cholmod_norm_sparse",
+      "cholmod_l_sdmult","cholmod_l_speye","cholmod_l_transpose_sym",:Int64))
     @eval begin
         function chm_aat{Tv<:CHMVTypes}(a::c_CholmodSparse{Tv,$itype})
             cm = cmn(a)
-            aa = Array(Ptr{c_CholmodSparse{Tv,$itype}}, 1)
+            ## strangely the matrix returned by $aat is not marked as symmetric
+            ## all of the code past the call to $aat is to create the symmetric-storage
+            ## version of the result then transpose it to provide sorted columns
+            aa = Array(Ptr{c_CholmodSparse{Tv,$itype}}, 2)
             aa[1] = ccall(($aat, :libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
                           (Ptr{c_CholmodSparse{Tv,$itype}}, Ptr{Void}, Int, Int32, Ptr{Uint8}),
                           &a, C_NULL, 0, 1, cm)
-            res = CholmodSparse(ccall(($(string(cop)), :libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
-                                      (Ptr{c_CholmodSparse{Tv,$itype}}, Int32, Int32, Ptr{Uint8}),
-                                      aa[1], 1, 1, cm))
+            ## Create the lower triangle unsorted
+            aa[2] = ccall(($cop, :libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
+                          (Ptr{c_CholmodSparse{Tv,$itype}}, Int32, Int32, Ptr{Uint8}),
+                          aa[1], -1, 1, cm)
             status = ccall(($freesp, :libcholmod), Int32,
                            (Ptr{Ptr{c_CholmodSparse{Tv,$itype}}}, Ptr{Uint8}), aa, cm)
             if status != CHOLMOD_TRUE throw(CholmodException) end
-            res
+            aa[1] = aa[2]
+            r = unsafe_ref(aa[1])
+            ## Now transpose the lower triangle to the upper triangle to do the sorting
+            rpt = ccall(($allocsp,:libcholmod),Ptr{c_CholmodSparse{Tv,$itype}},
+                        (Csize_t,Csize_t,Csize_t,Cint,Cint,Cint,Cint,Ptr{Cuchar}),
+                        r.m,r.n,r.nzmax,r.sorted,r.packed,-r.stype,r.xtype,cm)
+            status = ccall(($transsym,:libcholmod),Int32,
+                           (Ptr{c_CholmodSparse{Tv,$itype}}, Int32, Ptr{$itype},
+                            Ptr{c_CholmodSparse{Tv,$itype}}, Ptr{Uint8}),
+                           aa[1],1,C_NULL,rpt,cm)
+            if status != CHOLMOD_TRUE throw(CholmodException) end
+            status = ccall(($freesp, :libcholmod), Int32,
+                           (Ptr{Ptr{c_CholmodSparse{Tv,$itype}}}, Ptr{Uint8}), aa, cm)
+            if status != CHOLMOD_TRUE throw(CholmodException) end
+            CholmodSparse(rpt)
         end
         function chm_copy_sp{Tv<:CHMVTypes}(a::c_CholmodSparse{Tv,$itype})
             ccall(($copsp,:libcholmod), Ptr{c_CholmodSparse{Tv,$itype}},
@@ -1015,5 +1038,47 @@ function findn_nzs{Tv,Ti}(A::CholmodSparse{Tv,Ti})
 end
 
 findn_nzs(L::CholmodFactor) = findn_nzs(chm_fac_to_sp(L))
- 
+
+function diag{Tv}(A::CholmodSparse{Tv})
+    minmn = min(size(A))
+    res = zeros(Tv,minmn)
+    cp0 = A.colptr0
+    rv0 = A.rowval0
+    anz = A.nzval
+    for j in 1:minmn, k in (cp0[j]+1):cp0[j+1]
+        if rv0[k] == j-1
+            res[j] += anz[k]
+        end
+    end
+    res
+end
+
+function diag{Tv}(L::CholmodFactor{Tv})
+    res = zeros(Tv,L.c.n)
+    if L.c.is_super != 0 error("Method for supernodal factors not yet written") end
+    c0 = L.p
+    r0 = L.i
+    xv = L.x
+    for j in 1:length(c0)-1
+        jj = c0[j]+1
+        assert(r0[jj] == j-1)
+        res[j] = xv[jj]
+    end
+    res
+end
+
+function logdet{Tv,Ti}(L::CholmodFactor{Tv,Ti})
+    if L.c.is_super != 0 error("Method for supernodal factors not yet written") end
+    c0 = L.p
+    r0 = L.i
+    xv = L.x
+    res = zero(Tv)
+    for j in 1:length(c0)-1
+        jj = c0[j]+1
+        assert(r0[jj] == j-1)
+        res += log(xv[jj])
+    end
+    L.c.is_ll != 0 ? 2res : res
+end
+
 end #module
