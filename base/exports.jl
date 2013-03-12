@@ -328,7 +328,6 @@ export
     hypot,
     iceil,
     ifloor,
-    ilogb,
     imag,
     inf,
     int,
