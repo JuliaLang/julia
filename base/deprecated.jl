@@ -146,6 +146,7 @@ end
 @deprecate  expr(hd, a...)   Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1}) Expr(hd, a...)
 @deprecate  logb                exponent
+@deprecate  ilogb               exponent
 @deprecate  ref_shape           index_shape
 @deprecate  assign_shape_check  setindex_shape_check
 @deprecate  quote_string        repr
