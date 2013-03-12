@@ -1326,10 +1326,6 @@ Mathematical Functions
 
    Accurate natural logarithm of ``1+x``
 
-.. function:: ilogb(x) 
-
-   Return the exponent of x, represented as a signed integer value
-
 .. function:: frexp(val, exp)
 
    Return a number ``x`` such that it has a magnitude in the interval ``[1/2, 1)`` or 0,
@@ -1794,6 +1790,10 @@ Data Formats
    
    For example, ``significand(15.2)/15.2 == 0.125``, and ``significand(15.2)*8 == 15.2``
 
+.. function:: exponent(x) -> Int
+
+   Get the exponent of a normalized floating-point number.
+
 .. function:: float64_valued(x::Rational)
 
    True if ``x`` can be losslessly represented as a ``Float64`` data type
@@ -1892,10 +1892,6 @@ Numbers
 .. function:: real_valued(x)
 
    Test whether ``x`` is numerically equal to some real number
-
-.. function:: exponent(f)
-
-   Get the exponent of a floating-point number
 
 .. function:: BigInt(x)
 

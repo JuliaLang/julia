@@ -1,3 +1,9 @@
+# frexp,ldexp,significand,exponent
+@test frexp(12.8) == (0.8,4)
+@test ldexp(0.8,4) == 12.8
+@test significand(12.8) == 1.6
+@test exponent(12.8) == 3
+
 # error functions
 @test_approx_eq erf(1) 0.84270079294971486934
 @test_approx_eq erfc(1) 0.15729920705028513066
