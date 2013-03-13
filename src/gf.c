@@ -492,8 +492,23 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         jl_value_t *decl_i = nth_slot_type(decl,i);
         if (jl_is_type_type(elt) && jl_is_tuple(jl_tparam0(elt)) &&
             !jl_is_type_type(decl_i)) {
-            elt = jl_full_type(jl_tparam0(elt));
-            jl_tupleset(type, i, elt);
+            jl_methlist_t *curr = mt->defs;
+            int ok=1;
+            while (curr != JL_NULL) {
+                jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                if (slottype && curr->func!=method) {
+                    if (jl_is_type_type(slottype) &&
+                        jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
+                        ok=0;
+                        break;
+                    }
+                }
+                curr = curr->next;
+            }
+            if (ok) {
+                elt = jl_full_type(jl_tparam0(elt));
+                jl_tupleset(type, i, elt);
+            }
         }
 
         int set_to_any = 0;
@@ -686,7 +701,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             while (curr != JL_NULL) {
                 jl_value_t *slottype = nth_slot_type(curr->sig, i);
                 if (slottype && curr->func!=method) {
-                    if (jl_subtype(slottype, decl_i, 0)) {
+                    if (jl_is_type_type(slottype) &&
+                        jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
                         ok=0;
                         break;
                     }

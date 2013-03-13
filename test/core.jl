@@ -94,6 +94,9 @@ end
 @test subtype(Type{TypeVar(:T,Tuple)},Union(Tuple,UnionType))
 @test !subtype(Type{TypeVar(:T,Tuple)},Union(DataType,UnionType))
 
+@test !is(None, typeintersect((DataType,DataType),Type{TypeVar(:T,(Number,Number))}))
+@test !is(None, typeintersect((DataType,UnionType),Type{(Number,None)}))
+
 # join
 @test typejoin(Int8,Int16) === Signed
 @test typejoin(Int,String) === Any

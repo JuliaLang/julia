@@ -157,9 +157,6 @@ end
 
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-#Array{N}(T, d::NTuple{N,Int}) =
-#    (AT = Array{T,N};
-#     ccall(:jl_new_array, Any, (Any,Any), AT, d)::AT)
 
 Array{T}(::Type{T}, m::Int) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
