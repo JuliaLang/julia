@@ -1049,6 +1049,23 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 return arg1;
             }
         }
+        if (jl_subtype(ty, (jl_value_t*)jl_type_type, 0)) {
+            std::vector<Type *> fargt(0);
+            fargt.push_back(jl_pvalue_llvmt);
+            fargt.push_back(jl_pvalue_llvmt);
+            FunctionType *ft = FunctionType::get(T_void, fargt, false);
+            Value *typeassert = jl_Module->getOrInsertFunction("jl_typeassert", ft);
+            Value *arg1 = emit_expr(args[1], ctx);
+            int ldepth = ctx->argDepth;
+            if (arg1->getType() != jl_pvalue_llvmt) {
+                arg1 = boxed(arg1);
+                make_gcroot(arg1, ctx);
+            }
+            builder.CreateCall2(typeassert, arg1, boxed(emit_expr(args[2], ctx)));
+            ctx->argDepth = ldepth;
+            JL_GC_POP();
+            return arg1;
+        }
     }
     else if (f->fptr == &jl_f_isa && nargs==2) {
         jl_value_t *arg = expr_type(args[1], ctx); rt1 = arg;
