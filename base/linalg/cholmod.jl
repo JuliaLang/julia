@@ -206,10 +206,10 @@ immutable CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
     x::Vector{Tv}
 end
 
-eltype{T<:CHMVTypes}(CholmodDense{T}) = T
-eltype{T<:CHMVTypes}(CholmodFactor{T}) = T
-eltype{T<:CHMVTypes}(CholmodSparse{T}) = T
-eltype{T<:CHMVTypes}(CholmodTriplet{T}) = T
+eltype{T<:CHMVTypes}(A::CholmodDense{T}) = T
+eltype{T<:CHMVTypes}(A::CholmodFactor{T}) = T
+eltype{T<:CHMVTypes}(A::CholmodSparse{T}) = T
+eltype{T<:CHMVTypes}(A::CholmodTriplet{T}) = T
 
 function CholmodDense{T<:CHMVTypes}(aa::VecOrMat{T})
     m = size(aa,1); n = size(aa,2)
