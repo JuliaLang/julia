@@ -69,9 +69,9 @@ function aupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
 
     bmat   = "I"
     lworkl = cmplx ? ncv * (3*ncv + 5) : ( lworkl = sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6) )
+    TR     = cmplx ? T.types[1] : T
 
     v      = Array(T, n, ncv)
-    TR = typeof(real(v[1]))
     workd  = Array(T, 3*n)
     workl  = Array(T, lworkl)
     rwork  = cmplx ? Array(TR, ncv) : Array(TR, 0)
