@@ -1248,6 +1248,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         tvarslen = 1;
     }
     else {
+        assert(jl_is_tuple(tvars));
         tvs = &jl_t0(tvars);
         tvarslen = jl_tuple_len(tvars);
     }

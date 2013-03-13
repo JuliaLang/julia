@@ -490,6 +490,12 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     for (i=0; i < jl_tuple_len(type); i++) {
         jl_value_t *elt = jl_tupleref(type,i);
         jl_value_t *decl_i = nth_slot_type(decl,i);
+        if (jl_is_type_type(elt) && jl_is_tuple(jl_tparam0(elt)) &&
+            !jl_is_type_type(decl_i)) {
+            elt = jl_full_type(jl_tparam0(elt));
+            jl_tupleset(type, i, elt);
+        }
+
         int set_to_any = 0;
         if (decl_i == jl_ANY_flag) {
             // don't specialize on slots marked ANY
@@ -634,7 +640,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             */
             int ok=1, kindslot=0;
             jl_methlist_t *curr = mt->defs;
-            jl_value_t *kind = (jl_value_t*)jl_typeof(jl_tparam0(elt));
+            jl_value_t *kind = (jl_value_t*)jl_full_type(jl_tparam0(elt));
             while (curr != JL_NULL) {
                 jl_value_t *slottype = nth_slot_type(curr->sig, i);
                 if (slottype && curr->func!=method) {
@@ -841,6 +847,7 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
     jl_value_t *ti = jl_type_intersection_matching(a, b, penv, tvars);
     if (ti == (jl_value_t*)jl_bottom_type)
         return ti;
+    assert(jl_is_tuple(*penv));
     jl_value_t **ee = alloca(sizeof(void*) * jl_tuple_len(*penv));
     int n=0;
     // only keep vars in tvars list
@@ -1559,6 +1566,7 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
         else {
             cenv = (jl_value_t*)jl_null;
         }
+        assert(jl_is_tuple(env));
         result = jl_tuple(4, ti, env, func->linfo, cenv);
     }
     JL_GC_POP();

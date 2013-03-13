@@ -86,6 +86,7 @@ end
 
 @test !isa(Type{(Int,Int)},Tuple)
 @test subtype(Type{(Int,Int)},Tuple)
+@test subtype(Type{(Int,)}, (DataType,))
 
 # this is fancy: know that any type T<:Number must be either a DataType or a UnionType
 @test subtype(Type{TypeVar(:T,Number)},Union(DataType,UnionType))
