@@ -1977,8 +1977,9 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
                                          jl_tupleref(ttb->parameters,1),
                                          0, morespecific, invariant);
                 }
-                if (ttb->name == jl_type_type->name && jl_is_typevar(jl_tparam0(b))) {
-                    return jl_subtype_le(a, jl_tparam0(b), 0, morespecific, 1);
+                if (super && ttb->name == jl_type_type->name && jl_is_typevar(jl_tparam0(b))) {
+                    if (jl_subtype_le(a, jl_tparam0(b), 0, morespecific, 1))
+                        return 1;
                 }
                 assert(jl_tuple_len(tta->parameters) == jl_tuple_len(ttb->parameters));
                 for(i=0; i < jl_tuple_len(tta->parameters); i++) {
