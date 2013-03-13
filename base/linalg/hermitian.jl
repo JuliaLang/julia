@@ -26,23 +26,24 @@ end
 
 inv(A::Hermitian) = inv(BunchKaufman(copy(A.S), A.uplo))
 
-eig(A::Hermitian) = LAPACK.syevr!('V', 'A', A.uplo, copy(A.S), 0.0, 0.0, 0, 0, -1.0)
+eigenfact!(A::Hermitian) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
+eigenfact(A::Hermitian) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, copy(A.S), 0.0, 0.0, 0, 0, -1.0)...)
 eigvals(A::Hermitian, il::Int, ih::Int) = LAPACK.syevr!('N', 'I', A.uplo, copy(A.S), 0.0, 0.0, il, ih, -1.0)[1]
 eigvals(A::Hermitian, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, copy(A.S), vl, vh, 0, 0, -1.0)[1]
 eigvals(A::Hermitian) = eigvals(A, 1, size(A, 1))
 eigmax(A::Hermitian) = eigvals(A, size(A, 1), size(A, 1))[1]
 
 function sqrtm(A::Hermitian, cond::Bool)
-    v, z = eig(A)
-    vsqrt = sqrt(complex(v))
+    F = eigenfact(A)
+    vsqrt = sqrt(complex(F[:values]))
     if all(imag(vsqrt) .== 0)
-        retmat = symmetrize!(diagmm(z, real(vsqrt)) * z')
+        retmat = symmetrize!(diagmm(F[:vectors], real(vsqrt)) * F[:vectors]')
     else
-        zc = complex(z)
+        zc = complex(F[:vectors])
         retmat = symmetrize!(diagmm(zc, vsqrt) * zc')
     end
     if cond
-        return retmat, norm(vsqrt, Inf)^2/norm(v, Inf)
+        return retmat, norm(vsqrt, Inf)^2/norm(F[:values], Inf)
     else
         return retmat
     end

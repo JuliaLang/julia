@@ -411,7 +411,7 @@ function det(A::Matrix)
     m, n = size(A)
     if m != n; throw(LAPACK.DimensionMismatch("det only defined for square matrices")); end
     if istriu(A) | istril(A); return det(Triangular(A, 'U', false)); end
-    return det(LUDense(copy(A)))
+    return det(lufact(A))
 end
 det(x::Number) = x
 
@@ -421,44 +421,8 @@ function inv(A::StridedMatrix)
     if istriu(A) return inv(Triangular(A, 'U')) end
     if istril(A) return inv(Triangular(A, 'L')) end
     if ishermitian(A) return inv(Hermitian(A)) end
-    return inv(LUDense(copy(A)))
+    return inv(lufact(A))
 end
-
-function eig{T<:BlasFloat}(A::StridedMatrix{T})
-    n = size(A, 2)
-    if n == 0; return (zeros(T, 0), zeros(T, 0, 0)) end
-    if ishermitian(A) return eig(Hermitian(A)) end
-    if iscomplex(A) return LAPACK.geev!('N', 'V', copy(A))[[1,3]] end
-
-    WR, WI, VL, VR = LAPACK.geev!('N', 'V', copy(A))
-    if all(WI .== 0.) return WR, VR end
-    evec = complex(zeros(T, n, n))
-    j = 1
-    while j <= n
-        if WI[j] == 0.0
-            evec[:,j] = VR[:,j]
-        else
-            evec[:,j]   = VR[:,j] + im*VR[:,j+1]
-            evec[:,j+1] = VR[:,j] - im*VR[:,j+1]
-            j += 1
-        end
-        j += 1
-    end
-    return complex(WR, WI), evec
-end
-
-eig{T<:Integer}(x::StridedMatrix{T}) = eig(float64(x))
-eig(x::Number) = (x, one(x))
-
-function eigvals(A::StridedMatrix)
-    if ishermitian(A) return eigvals(Hermitian(A)) end
-    if iscomplex(A) return LAPACK.geev!('N', 'N', copy(A))[1] end
-    valsre, valsim, _, _ = LAPACK.geev!('N', 'N', copy(A))
-    if all(valsim .== 0) return valsre end
-    return complex(valsre, valsim)
-end
-
-eigvals(x::Number) = 1.0
 
 schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 
@@ -483,7 +447,7 @@ end
 
 ## Moore-Penrose inverse
 function pinv{T<:BlasFloat}(A::StridedMatrix{T})
-    SVD         = SVDDense(copy(A), true)
+    SVD         = svdfact(A, true)
     Sinv        = zeros(T, length(SVD[:S]))
     index       = SVD[:S] .> eps(real(one(T)))*max(size(A))*max(SVD[:S])
     Sinv[index] = 1.0 ./ SVD[:S][index]
@@ -496,7 +460,7 @@ pinv(x::Number) = one(x)/x
 ## Basis for null space
 function null{T<:BlasFloat}(A::StridedMatrix{T})
     m,n = size(A)
-    SVD = SVDDense(copy(A))
+    SVD = svdfact(A)
     if m == 0; return eye(T, n); end
     indstart = sum(SVD[:S] .> max(m,n)*max(SVD[:S])*eps(eltype(SVD[:S]))) + 1
     SVD[:V][:,indstart:]
@@ -512,7 +476,7 @@ function cond(A::StridedMatrix, p)
     elseif p == 1 || p == Inf
         m, n = size(A)
         if m != n; error("Use 2-norm for non-square matrices"); end
-        cnd = 1 / LAPACK.gecon!(p == 1 ? '1' : 'I', LUDense(copy(A)).LU, norm(A, p))
+        cnd = 1 / LAPACK.gecon!(p == 1 ? '1' : 'I', lufact(A).LU, norm(A, p))
     else
         error("Norm type must be 1, 2 or Inf")
     end

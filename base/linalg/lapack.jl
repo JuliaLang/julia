@@ -37,7 +37,7 @@ end
 function chksquare(A::Matrix...)
     for a in A
         m, n = size(a)
-        if m != n error("LAPACK: Matrix must be square") end
+        if m != n throw(DimensionMismatch("Matrix must be square")) end
     end
 end
 
@@ -436,7 +436,7 @@ for (gels, gesv, getrs, getri, elty) in
         function getrs!(trans::BlasChar, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A, B)
             m, n    = size(A)
-            if m != n || size(B, 1) != m error("getrs!: dimension mismatch") end
+            if m != n || size(B, 1) != m throw(DimensionMismatch("Matrix must be square")) end
             nrhs    = size(B, 2)
             info    = Array(BlasInt, 1)
             ccall(($(string(getrs)),liblapack), Void,
@@ -455,7 +455,7 @@ for (gels, gesv, getrs, getri, elty) in
         function getri!(A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
             m, n    = size(A)
-            if m != n || n != length(ipiv) error("getri!: dimension mismatch") end
+            if m != n || n != length(ipiv) throw(DimensionMismatch("Matrix must be square")) end
             lda     = stride(A, 2)
             info    = Array(BlasInt, 1)
             lwork   = -1
@@ -465,7 +465,7 @@ for (gels, gesv, getrs, getri, elty) in
                       (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &n, A, &lda, ipiv, work, &lwork, info)
-                if info[1] != 0 error("getri!: error $(info[1])") end
+                if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work  = Array($elty, lwork)
@@ -1130,7 +1130,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkstride1(A, B)
             chksquare(A)
             n    =  size(A,2)
-            if size(B,1) != n error("potrs!: dimension mismatch") end
+            if size(B,1) != n throw(DimensionMismatch("Left and right hand side does not fit")) end
             info = Array(BlasInt, 1)
             ccall(($(string(potrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -1280,7 +1280,7 @@ for (trtri, trtrs, elty) in
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &uplo, &diag, &n, A, &lda, info)
-            if info[1] < 0 error("trtri!: error $(info[1])") end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             A, info[1]
         end
         #      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )

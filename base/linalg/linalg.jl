@@ -43,6 +43,8 @@ export
     diff,
     dot,
     eig,
+    eigenfact!,
+    eigenfact,
     eigs,
     eigvals,
     expm,
