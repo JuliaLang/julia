@@ -719,7 +719,7 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         error("wrong border treatment")
     end
     # check if separable
-    SVD = SVDDense(copy(filter))
+    SVD = svdfact(filter)
     U, S, Vt = SVD[:U], SVD[:S], SVD[:Vt]
     separable = true;
     for i = 2:length(S)

@@ -13,14 +13,15 @@ type CholeskyDense{T<:BlasFloat} <: Factorization{T}
 end
 CholeskyDense{T<:BlasFloat}(A::Matrix{T}, uplo::Char) = CholeskyDense{T}(A, uplo)
 
-cholfact!(A::Matrix, uplo::Symbol) = CholeskyDense(A, string(uplo)[1])
-cholfact(A::Matrix, uplo::Symbol) = cholfact!(copy(A), uplo)
-cholfact!(A::Matrix) = cholfact!(A, :U)
-cholfact(A::Matrix) = cholfact(A, :U)
-cholfact{T<:Integer}(A::Matrix{T}, args...) = cholfact(float(A), args...)
+cholfact!(A::StridedMatrix, uplo::Symbol) = CholeskyDense(A, string(uplo)[1])
+cholfact(A::StridedMatrix, uplo::Symbol) = cholfact!(copy(A), uplo)
+cholfact!(A::StridedMatrix) = cholfact!(A, :U)
+cholfact(A::StridedMatrix) = cholfact(A, :U)
+cholfact{T<:Integer}(A::StridedMatrix{T}, args...) = cholfact(float(A), args...)
 cholfact(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
 
-chol(A) = cholfact(A, :U)[:U]
+chol(A::Union(Number, StridedMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
+chol(A::Union(Number, StridedMatrix)) = cholfact(A, :U)[:U]
 
 size(C::CholeskyDense) = size(C.UL)
 size(C::CholeskyDense,d::Integer) = size(C.UL,d)
@@ -58,18 +59,18 @@ type CholeskyPivotedDense{T<:BlasFloat} <: Factorization{T}
     tol::Real
     info::BlasInt
 end
-function CholeskyPivotedDense{T<:BlasFloat}(A::Matrix{T}, uplo::Char, tol::Real)
+function CholeskyPivotedDense{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Char, tol::Real)
     A, piv, rank, info = LAPACK.pstrf!(uplo, A, tol)
     CholeskyPivotedDense{T}(uplo == 'U' ? triu!(A) : tril!(A), uplo, piv, rank, tol, info)
 end
 
-cholpfact!(A::Matrix, uplo::Symbol, tol::Real) = CholeskyPivotedDense(A, string(uplo)[1], tol)
-cholpfact(A::Matrix, uplo::Symbol, tol::Real) = cholpfact!(copy(A), uplo, tol)
-cholpfact!(A::Matrix, tol::Real) = cholpfact!(A, :U, tol)
-cholpfact(A::Matrix, tol::Real) = cholpfact(A, :U, tol)
-cholpfact!(A::Matrix) = cholpfact!(A, -1.)
-cholpfact(A::Matrix) = cholpfact(A, -1.)
-cholpfact{T<:Int}(A::Matrix{T}, args...) = cholpfact(float(A), args...)
+cholpfact!(A::StridedMatrix, uplo::Symbol, tol::Real) = CholeskyPivotedDense(A, string(uplo)[1], tol)
+cholpfact(A::StridedMatrix, uplo::Symbol, tol::Real) = cholpfact!(copy(A), uplo, tol)
+cholpfact!(A::StridedMatrix, tol::Real) = cholpfact!(A, :U, tol)
+cholpfact(A::StridedMatrix, tol::Real) = cholpfact(A, :U, tol)
+cholpfact!(A::StridedMatrix) = cholpfact!(A, -1.)
+cholpfact(A::StridedMatrix) = cholpfact(A, -1.)
+cholpfact{T<:Int}(A::StridedMatrix{T}, args...) = cholpfact(float(A), args...)
 
 size(C::CholeskyPivotedDense) = size(C.UL)
 size(C::CholeskyPivotedDense,d::Integer) = size(C.UL,d)
@@ -124,23 +125,19 @@ type LUDense{T} <: Factorization{T}
     LU::Matrix{T}
     ipiv::Vector{BlasInt}
     info::BlasInt
-    function LUDense(LU::Matrix{T}, ipiv::Vector{BlasInt}, info::BlasInt)
-        m, n = size(LU)
-        m == n ? new(LU, ipiv, info) : throw(LAPACK.DimensionMismatch("LUDense only defined for square matrices"))
-    end
 end
-function LUDense{T<:BlasFloat}(A::Matrix{T})
+function LUDense{T<:BlasFloat}(A::StridedMatrix{T})
     LU, ipiv, info = LAPACK.getrf!(A)
     LUDense{T}(LU, ipiv, info)
 end
 
-lufact!(A::Matrix) = LUDense(A)
-lufact(A::Matrix) = lufact!(copy(A))
-lufact!{T<:Integer}(A::Matrix{T}) = lufact!(float(A))
-lufact{T<:Integer}(A::Matrix{T}) = lufact(float(A))
+lufact!(A::StridedMatrix) = LUDense(A)
+lufact(A::StridedMatrix) = lufact!(copy(A))
+lufact!{T<:Integer}(A::StridedMatrix{T}) = lufact!(float(A))
+lufact{T<:Integer}(A::StridedMatrix{T}) = lufact(float(A))
 lufact(x::Number) = (one(x), x, [1])
 
-function lu(A::Matrix) 
+function lu(A::Union(Number, StridedMatrix))
     F = lufact(A)
     return (F[:L], F[:U], F[:P])
 end
@@ -194,17 +191,18 @@ type QRDense{S} <: Factorization{S}
     vs::Matrix{S}                     # the elements on and above the diagonal contain the N-by-N upper triangular matrix R; the elements below the diagonal are the columns of V
     T::Matrix{S}                      # upper triangular factor of the block reflector.
 end
-QRDense(A::Matrix) = QRDense(LAPACK.geqrt3!(A)...)
+QRDense(A::StridedMatrix) = QRDense(LAPACK.geqrt3!(A)...)
 
-qrfact!(A::Matrix) = QRDense(A)
-qrfact(A::Matrix) = qrfact!(copy(A))
-qrfact{T<:Integer}(A::Matrix{T}) = qrfact(float(A))
+qrfact!(A::StridedMatrix) = QRDense(A)
+qrfact(A::StridedMatrix) = qrfact!(copy(A))
+qrfact{T<:Integer}(A::StridedMatrix{T}) = qrfact(float(A))
 qrfact(x::Number) = (one(x), x)
 
-function qr(A::Matrix)
+function qr(A::Union(Number, StridedMatrix), thin::Bool)
     F = qrfact(A)
-    return (F[:Q], F[:R])
+    return (full(F[:Q], thin), F[:R])
 end
+qr(A::Union(Number, StridedMatrix)) = qr(A, false)
 
 size(A::QRDense, args::Integer...) = size(A.vs, args...)
 
@@ -273,11 +271,15 @@ type QRPivotedDense{T} <: Factorization{T}
         new(hh,tau,jpvt)
     end
 end
-QRPivotedDense{T<:BlasFloat}(A::Matrix{T}) = QRPivotedDense{T}(LAPACK.geqp3!(A)...)
+qrpfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPivotedDense{T}(LAPACK.geqp3!(A)...)
 
-qrpfact!(A::Matrix) = QRPivotedDense(A)
-qrpfact(A::Matrix) = qrpfact!(copy(A))
-# QRDenseQ(A::QRPivotedDense) = QRDenseQ(A.hh, A.tau)
+qrpfact(A::StridedMatrix) = qrpfact!(copy(A))
+
+function qrp(A::Union(Number, StridedMatrix), thin::Bool)
+    F = qrpfact(A)
+    return full(F[:Q], thin), F[:R], F[:P]
+end
+qrp(A::StridedMatrix) = qrp(A, false)
 
 size(A::QRPivotedDense, args::Integer...) = size(A.hh, args...)
 
@@ -318,6 +320,7 @@ function full{T<:BlasFloat}(A::QRDensePivotedQ{T}, thin::Bool)
     end
 end
 full(A::QRDensePivotedQ) = full(A, true)
+print_matrix(io::IO, A::QRDensePivotedQ) = print_matrix(io, full(A))
 
 ## Multiplication by Q from the Pivoted QR decomposition
 function *{T<:BlasFloat}(A::QRDensePivotedQ{T}, B::StridedVecOrMat{T})
@@ -363,7 +366,7 @@ end
 Hessenberg{T<:BlasFloat}(hh::Matrix{T}, tau::Vector{T}) = Hessenberg{T}(hh, tau)
 Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 
-hess(A::StridedMatrix) = Hessenberg(copy(A))
+hessfact(A::StridedMatrix) = Hessenberg(copy(A))
 
 type HessenbergQ{T} <: AbstractMatrix{T}
     hh::Matrix{T}
@@ -381,13 +384,70 @@ end
 
 full(A::HessenbergQ) = LAPACK.orghr!(1, size(A.hh, 1), copy(A.hh), A.tau)
 
+# Eigenvalues
+type Eigen{T} <: Factorization{T}
+    values::Vector
+    vectors::Matrix{T}
+end
+
+function getindex(A::Eigen, d::Symbol)
+    if d == :values return A.values end
+    if d == :vectors return A.vectors end
+    error("No such property")
+end
+
+function eigenfact!{T<:BlasFloat}(A::StridedMatrix{T})
+    n = size(A, 2)
+    if n == 0; return Eigen(zeros(T, 0), zeros(T, 0, 0)) end
+    if ishermitian(A) return eigenfact!(Hermitian(A)) end
+    if iscomplex(A) return Eigen(LAPACK.geev!('N', 'V', A)[[1,3]]...) end
+
+    WR, WI, VL, VR = LAPACK.geev!('N', 'V', A)
+    if all(WI .== 0.) return Eigen(WR, VR) end
+    evec = complex(zeros(T, n, n))
+    j = 1
+    while j <= n
+        if WI[j] == 0.0
+            evec[:,j] = VR[:,j]
+        else
+            evec[:,j]   = VR[:,j] + im*VR[:,j+1]
+            evec[:,j+1] = VR[:,j] - im*VR[:,j+1]
+            j += 1
+        end
+        j += 1
+    end
+    return Eigen(complex(WR, WI), evec)
+end
+
+eigenfact(A::StridedMatrix) = eigenfact!(copy(A))
+eigenfact{T<:Integer}(x::StridedMatrix{T}) = eigenfact(float64(x))
+eigenfact(x::Number) = (x, one(x))
+
+function eig(A::Union(Number, StridedMatrix))
+    F = eigenfact(A)
+    return F[:values], F[:vectors]
+end
+
+function eigvals(A::StridedMatrix)
+    if ishermitian(A) return eigvals(Hermitian(A)) end
+    if iscomplex(A) return LAPACK.geev!('N', 'N', copy(A))[1] end
+    valsre, valsim, _, _ = LAPACK.geev!('N', 'N', copy(A))
+    if all(valsim .== 0) return valsre end
+    return complex(valsre, valsim)
+end
+
+eigvals(x::Number) = 1.0
+
+inv(A::Eigen) = diagmm(A[:vectors], 1.0/A[:values])*A[:vectors]'
+det(A::Eigen) = prod(A[:values])
+
 # SVD
 type SVDDense{T,Tr} <: Factorization{T}
     U::Matrix{T}
     S::Vector{Tr}
     Vt::Matrix{T}
 end
-function SVDDense(A::StridedMatrix, thin::Bool)
+function svdfact!(A::StridedMatrix, thin::Bool)
     m,n = size(A)
     if m == 0 || n == 0
         u,s,vt = (eye(m, thin ? n : m), zeros(0), eye(n,n))
@@ -396,10 +456,15 @@ function SVDDense(A::StridedMatrix, thin::Bool)
     end
     return SVDDense(u,s,vt)
 end
-SVDDense(A::StridedMatrix) = SVDDense(A, false)
-svd(A::StridedMatrix, args...) = SVDDense(copy(A), args...)
-svd(a::Vector, args...) = svd(reshape(a, length(a), 1), args...)
-svd(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
+svdfact(A::StridedMatrix, thin::Bool) = svdfact!(copy(A), thin)
+svdfact(a::Vector, thin::Bool) = svdfact(reshape(a, length(a), 1), thin)
+svdfact(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
+svdfact(A::Union(Number, StridedVecOrMat)) = svdfact(A, false)
+
+function svd(A::Union(Number, StridedVecOrMat), args...)
+    F = svdfact(A, args...)
+    return F[:U], F[:S], F[:V]
+end
 
 function getindex(F::SVDDense, d::Symbol)
     if d == :U return F.U end
@@ -437,12 +502,17 @@ type GSVDDense{T} <: Factorization{T}
     R::Matrix{T}
 end
 
-function GSVDDense(A::StridedMatrix, B::StridedMatrix)
+function svdfact!(A::StridedMatrix, B::StridedMatrix)
     U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', A, B)
     return GSVDDense(U, V, Q, a, b, int(k), int(l), R)
 end
 
-svd(A::StridedMatrix, B::StridedMatrix) = GSVDDense(copy(A), copy(B))
+svdfact(A::StridedMatrix, B::StridedMatrix) = svdfact!(copy(A), copy(B))
+
+function svd(A::StridedMatrix, B::StridedMatrix)
+    F = svdfact(A, B)
+    return F[:U], F[:V], F[:Q]*F[:R0]', F[:D1], F[:D2]
+end
 
 function getindex{T}(obj::GSVDDense{T}, d::Symbol)
     if d == :U return obj.U end

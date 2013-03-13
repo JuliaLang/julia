@@ -67,10 +67,10 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq sort(imag(v)) sort(imag(d))
         @test istriu(u) || isreal(a)
 
-        usv = svd(a)                # singular value decomposition
+        usv = svdfact(a)                # singular value decomposition
         @test_approx_eq usv[:U]*diagmm(usv[:S],usv[:Vt]) a
     
-        gsvd = svd(a,a[1:5,:])         # Generalized svd
+        gsvd = svdfact(a,a[1:5,:])         # Generalized svd
         @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
         @test_approx_eq gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' a[1:5,:]
 
@@ -243,7 +243,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq expm(A3) eA3
 
                                         # Hessenberg
-        @test_approx_eq hess(A1)[:H] convert(Matrix{elty}, 
+        @test_approx_eq hessfact(A1)[:H] convert(Matrix{elty}, 
                         [4.000000000000000  -1.414213562373094  -1.414213562373095
                         -1.414213562373095   4.999999999999996  -0.000000000000000
                                          0  -0.000000000000002   3.000000000000000])
