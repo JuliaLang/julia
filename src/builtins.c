@@ -198,6 +198,12 @@ JL_CALLABLE(jl_f_isa)
     return (jl_subtype(args[0],args[1],1) ? jl_true : jl_false);
 }
 
+DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
+{
+    if (!jl_subtype(x,t,1))
+        jl_type_error("typeassert", t, x);
+}
+
 JL_CALLABLE(jl_f_typeassert)
 {
     JL_NARGS(typeassert, 2, 2);
