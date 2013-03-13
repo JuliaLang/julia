@@ -248,7 +248,8 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
                 //jl_module_import(to, from, b->name);
                 jl_sym_t *var = (jl_sym_t*)table[i-1];
                 jl_binding_t **tobp = (jl_binding_t**)ptrhash_bp(&to->bindings, var);
-                if (*tobp != HT_NOTFOUND && !eq_bindings(jl_get_binding(to,var), b)) {
+                if (*tobp != HT_NOTFOUND && (*tobp)->owner != NULL &&
+                    !eq_bindings(jl_get_binding(to,var), b)) {
                     jl_printf(JL_STDERR,
                               "Warning: using %s.%s in module %s conflicts with an existing identifier.\n",
                               from->name->name, var->name, to->name->name);
