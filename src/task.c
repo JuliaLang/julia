@@ -516,7 +516,7 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
     }
     FreeLibrary(kernel32);
 #else
-    return RtlCaptureStackBackTrace(0, maxsize, data, NULL);
+    return RtlCaptureStackBackTrace(0, maxsize, (void**)data, NULL);
 #endif
 }
 #else

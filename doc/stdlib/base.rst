@@ -620,23 +620,15 @@ Strings
 
 .. function:: is_valid_ascii(s) -> Bool
 
-   Returns true if the string is valid ASCII, false otherwise.
+   Returns true if the string or byte vector is valid ASCII, false otherwise.
 
 .. function:: is_valid_utf8(s) -> Bool
 
-   Returns true if the string is valid UTF-8, false otherwise.
+   Returns true if the string or byte vector is valid UTF-8, false otherwise.
 
-.. function:: check_ascii(s)
+.. function:: is_valid_char(c) -> Bool
 
-   Calls :func:`is_valid_ascii` on string. Throws error if it is not valid.
-
-.. function:: check_utf8(s)
-
-   Calls :func:`is_valid_utf8` on string. Throws error if it is not valid.
-
-.. function:: byte_string_classify(s)
-
-   Returns 0 if the string is neither valid ASCII nor UTF-8, 1 if it is valid ASCII, and 2 if it is valid UTF-8.
+   Returns true if the given char or integer is a valid Unicode code point.
 
 .. function:: search(string, char, [i])
 
@@ -1326,10 +1318,6 @@ Mathematical Functions
 
    Accurate natural logarithm of ``1+x``
 
-.. function:: ilogb(x) 
-
-   Return the exponent of x, represented as a signed integer value
-
 .. function:: frexp(val, exp)
 
    Return a number ``x`` such that it has a magnitude in the interval ``[1/2, 1)`` or 0,
@@ -1794,6 +1782,10 @@ Data Formats
    
    For example, ``significand(15.2)/15.2 == 0.125``, and ``significand(15.2)*8 == 15.2``
 
+.. function:: exponent(x) -> Int
+
+   Get the exponent of a normalized floating-point number.
+
 .. function:: float64_valued(x::Rational)
 
    True if ``x`` can be losslessly represented as a ``Float64`` data type
@@ -1809,10 +1801,6 @@ Data Formats
 .. function:: char(x)
 
    Convert a number or array to ``Char`` data type
-
-.. function:: safe_char(x)
-
-   Convert to ``Char``, checking for invalid code points
 
 .. function:: complex(r,i)
 
@@ -1892,10 +1880,6 @@ Numbers
 .. function:: real_valued(x)
 
    Test whether ``x`` is numerically equal to some real number
-
-.. function:: exponent(f)
-
-   Get the exponent of a floating-point number
 
 .. function:: BigInt(x)
 

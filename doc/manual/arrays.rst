@@ -268,8 +268,7 @@ one of the inputs is a scalar.
     ``sec``, ``csc``, ``cot``, ``asec``, ``acsc``, ``acot``, ``sech``,
     ``csch``, ``coth``, ``asech``, ``acsch``, ``acoth``, ``sinc``,
     ``cosc``, ``hypot``
-7.  Logarithmic functions — ``log``, ``log2``, ``log10``, ``log1p``,
-    ``logb``, ``ilogb``
+7.  Logarithmic functions — ``log``, ``log2``, ``log10``, ``log1p``
 8.  Exponential functions — ``exp``, ``expm1``, ``exp2``, ``ldexp``
 9.  Rounding functions — ``ceil``, ``floor``, ``trunc``, ``round``,
     ``ipart``, ``fpart``
