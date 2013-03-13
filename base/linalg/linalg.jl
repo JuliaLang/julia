@@ -154,7 +154,8 @@ include("linalg/rectfullpacked.jl")
 include("linalg/bitarray.jl")
 
 include("linalg/sparse.jl")
-include("linalg/suitesparse.jl")
+include("linalg/umfpack.jl")
+include("linalg/cholmod.jl")
 
 include("linalg/arpack.jl")
 include("linalg/arnoldi.jl")

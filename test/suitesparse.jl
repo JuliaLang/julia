@@ -2,15 +2,15 @@ se33 = speye(3)
 do33 = ones(3)
 @test isequal(se33 \ do33, do33)
 
-using Base.LinAlg.SuiteSparse
+using Base.LinAlg.UMFPACK
 
 # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
 A = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
            increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
            [2.,1.,3.,4.,-1.,-3.,3.,6.,2.,1.,4.,2.], 5, 5)
-lua = lu(A)
-umf_lunz(lua)
+lua = lufact(A)
+#umf_lunz(lua)
 @test_approx_eq det(lua) det(full(A))
 
 b = [8., 45., -3., 3., 19.]
@@ -19,7 +19,7 @@ x = lua\b
 
 @test norm(A*x-b,1) < eps(1e4)
 
-L,U,P,Q,Rs = umf_extract(lua)
+L,U,P,Q,Rs = lua[:(:)]
 @test_approx_eq diagmm(Rs,A)[P,Q] L*U
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
@@ -109,8 +109,8 @@ A = CholmodSparse{Float64,Int32}(Base.LinAlg.SuiteSparse.c_CholmodSparse{Float64
                                                                      one(Int32), zero(Int32),
                                                                      one(Int32), one(Int32)),
                                  colptr0, rowval0, nzval)
-@test_approx_eq chm_norm(A,0) 3.570948074697437e9
-@test_approx_eq chm_norm(A,1) 3.570948074697437e9
+@test_approx_eq norm(A,Inf) 3.570948074697437e9
+@test_approx_eq norm(A) 3.570948074697437e9
 chm_print(A,3)
 B = chm_sdmult(A.c, false, 1., 0., CholmodDense(ones(size(A,2))).c)
 chm_print(B,3)
