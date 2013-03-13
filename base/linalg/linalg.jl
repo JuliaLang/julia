@@ -26,7 +26,11 @@ export
 
 # Functions
     chol,
+    cholfact,
+    cholfact!,
     cholp,
+    cholpfact,
+    cholpfact!,
     cond,
     copy!,
     cross,

@@ -146,12 +146,6 @@ end
 @deprecate  expr(hd, a...)   Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1}) Expr(hd, a...)
 
-@deprecate  cholfact           chol
-@deprecate  cholpfact          cholp
-@deprecate  lufact             lu
-@deprecate  qrfact             qr
-@deprecate  qrpfact            qrp
-
 @deprecate  logb                exponent
 @deprecate  ref_shape           index_shape
 @deprecate  assign_shape_check  setindex_shape_check

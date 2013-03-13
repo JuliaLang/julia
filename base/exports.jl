@@ -550,7 +550,11 @@ export
 
 # linear algebra
     chol,
+    cholfact,
+    cholfact!,
     cholp,
+    cholpfact,
+    cholpfact!,
     cond,
     cross,
     ctranspose,
