@@ -1,13 +1,7 @@
 char(x) = convert(Char, x)
 char(x::FloatingPoint) = char(iround(x))
 
-function safe_char(x)
-    c = char(x)
-    if '\ud800' <= c <= '\udfff' || '\U10ffff' < c
-        error("invalid Unicode code point: U+", hex(c))
-    end
-    return c
-end
+is_valid_char(c) = !('\ud800' <= c <= '\udfff' || '\U10ffff' < c)
 
 integer(x::Char) = int(x)
 unsigned(x::Char) = uint(x)

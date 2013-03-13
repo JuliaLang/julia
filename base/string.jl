@@ -517,7 +517,6 @@ function print_quoted(io, s::String)
     print_escaped(io, s, "\"\$") #"# work around syntax highlighting problem
     print(io, '"')
 end
-quote_string(s::String) = sprint(endof(s)+2, io->print_quoted(io,s))
 
 # bare minimum unescaping function unescapes only given characters
 
@@ -604,11 +603,8 @@ byte_string_classify(s::ByteString) = byte_string_classify(s.data)
     # 1: valid ASCII
     # 2: valid UTF-8
 
-is_valid_ascii(s::ByteString) = byte_string_classify(s) == 1
-is_valid_utf8 (s::ByteString) = byte_string_classify(s) != 0
-
-check_ascii(s::ByteString) = is_valid_ascii(s) ? s : error("invalid ASCII sequence")
-check_utf8 (s::ByteString) = is_valid_utf8(s)  ? s : error("invalid UTF-8 sequence")
+is_valid_ascii(s::Union(Array{Uint8,1},ByteString)) = byte_string_classify(s) == 1
+is_valid_utf8 (s::Union(Array{Uint8,1},ByteString)) = byte_string_classify(s) != 0
 
 ## multiline strings ##
 

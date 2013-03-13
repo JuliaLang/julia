@@ -77,5 +77,5 @@ write(io::IO, s::ASCIIString) = write(io, s.data)
 ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
-convert(::Type{ASCIIString}, a::Array{Uint8,1}) = check_ascii(ASCIIString(a))
+convert(::Type{ASCIIString}, a::Array{Uint8,1}) = is_valid_ascii(a) ? ASCIIString(a) : error("invalid ASCII sequence")
 convert(::Type{ASCIIString}, s::String) = ascii(bytestring(s))
