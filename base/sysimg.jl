@@ -136,6 +136,9 @@ include("sort.jl")
 importall Sort
 include("combinatorics.jl")
 
+# Ordered Collections
+include("ordered_dict.jl")  # currently, must come after sort
+
 # distributed arrays and memory-mapped arrays
 #include("darray.jl")
 include("darray2.jl")
