@@ -756,8 +756,16 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
             }
         }
         if (jl_is_type_type(b) && jl_is_typevar(jl_tparam0(b))) {
-            if (jl_subtype(jl_tupletype_type, jl_tparam0(b), 0)) {
+            jl_tvar_t *btp0 = (jl_tvar_t*)jl_tparam0(b);
+            if (jl_subtype(jl_tupletype_type, (jl_value_t*)btp0, 0)) {
                 b = jl_tupletype_type;
+            }
+            else if (jl_subtype(btp0->ub, a, 1)) {
+                JL_GC_POP();
+                return b;
+            }
+            else if (jl_is_tuple(btp0->ub)) {
+                b = jl_full_type(btp0->ub);
             }
         }
         if (!jl_is_tuple(b)) {
@@ -1916,9 +1924,10 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
         if (jl_is_typevar(tp0a)) {
             jl_value_t *ub = ((jl_tvar_t*)tp0a)->ub;
             jl_value_t *lb = ((jl_tvar_t*)tp0a)->lb;
-            if (jl_subtype_le(lb, b, 1, 0, 0) && jl_subtype_le(ub, b, 1, 0, 0) &&
+            if (jl_subtype_le(ub, b, 1, 0, 0) &&
                 !jl_subtype_le((jl_value_t*)jl_any_type, ub, 0, 0, 0)) {
-                return 1;
+                if (morespecific || jl_subtype_le(lb, b, 1, 0, 0))
+                    return 1;
             }
         }
         else {
