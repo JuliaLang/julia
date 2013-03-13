@@ -8,7 +8,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         apd   = a'*a                    # symmetric positive-definite
         b     = convert(Vector{elty}, b)
         
-        capd  = chol(apd)              # upper Cholesky factor
+        capd  = cholfact(apd)              # upper Cholesky factor
         r     = capd[:U]
         @test_approx_eq r'*r apd
         @test_approx_eq b apd * (capd\b)
@@ -16,10 +16,10 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq a*(capd\(a'*b)) b # least squares soln for square a
         @test_approx_eq det(capd) det(apd)
 
-        l     = chol(apd, :L)[:L] # lower Cholesky factor
+        l     = cholfact(apd, :L)[:L] # lower Cholesky factor
         @test_approx_eq l*l' apd
 
-        cpapd = cholp(apd)                          # pivoted Choleksy decomposition
+        cpapd = cholpfact(apd)                          # pivoted Choleksy decomposition
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
         @test_approx_eq b apd * (cpapd\b)
@@ -32,21 +32,21 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq inv(bc2) * apd eye(elty, n)
         @test_approx_eq apd * (bc2\b) b
 
-        lua   = lu(a)                  # LU decomposition
+        lua   = lufact(a)                  # LU decomposition
         l,u,p = lua[:L], lua[:U], lua[:p]
         @test_approx_eq l*u a[p,:]
         @test_approx_eq l[invperm(p),:]*u a
         @test_approx_eq a * inv(lua) eye(elty, n)
         @test_approx_eq a*(lua\b) b
 
-        qra   = qr(a)                  # QR decomposition
+        qra   = qrfact(a)                  # QR decomposition
         q,r   = qra[:Q], qra[:R]
         @test_approx_eq q'*full(q, false) eye(elty, n)
         @test_approx_eq q*full(q, false)' eye(elty, n)
         @test_approx_eq q*r a
         @test_approx_eq a*(qra\b) b
 
-        qrpa  = qrp(a)                 # pivoted QR decomposition
+        qrpa  = qrpfact(a)                 # pivoted QR decomposition
         q,r,p = qrpa[:Q], qrpa[:R], qrpa[:p]
         @test_approx_eq q'*full(q, false) eye(elty, n)
         @test_approx_eq q*full(q, false)' eye(elty, n)

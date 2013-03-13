@@ -13,10 +13,14 @@ type CholeskyDense{T<:BlasFloat} <: Factorization{T}
 end
 CholeskyDense{T<:BlasFloat}(A::Matrix{T}, uplo::Char) = CholeskyDense{T}(A, uplo)
 
-chol(A::Matrix, uplo::Symbol) = CholeskyDense(copy(A), string(uplo)[1])
-chol(A::Matrix) = chol(A, :U)
-chol{T<:Integer}(A::Matrix{T}, args...) = chol(float64(A), args...)
-chol(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
+cholfact!(A::Matrix, uplo::Symbol) = CholeskyDense(A, string(uplo)[1])
+cholfact(A::Matrix, uplo::Symbol) = cholfact!(copy(A), uplo)
+cholfact!(A::Matrix) = cholfact!(A, :U)
+cholfact(A::Matrix) = cholfact(A, :U)
+cholfact{T<:Integer}(A::Matrix{T}, args...) = cholfact(float(A), args...)
+cholfact(x::Number) = imag(x) == 0 && real(x) > 0 ? sqrt(x) : error("Argument not positive-definite")
+
+chol(A) = cholfact(A, :U)[:U]
 
 size(C::CholeskyDense) = size(C.UL)
 size(C::CholeskyDense,d::Integer) = size(C.UL,d)
@@ -59,10 +63,13 @@ function CholeskyPivotedDense{T<:BlasFloat}(A::Matrix{T}, uplo::Char, tol::Real)
     CholeskyPivotedDense{T}(uplo == 'U' ? triu!(A) : tril!(A), uplo, piv, rank, tol, info)
 end
 
-cholp(A::Matrix, uplo::Symbol, tol::Real) = CholeskyPivotedDense(copy(A), string(uplo)[1], tol)
-cholp(A::Matrix, tol::Real) = cholp(A, :U, tol)
-cholp(A::Matrix) = cholp(A, -1.)
-cholp{T<:Int}(A::Matrix{T}, args...) = cholp(float64(A), args...)
+cholpfact!(A::Matrix, uplo::Symbol, tol::Real) = CholeskyPivotedDense(A, string(uplo)[1], tol)
+cholpfact(A::Matrix, uplo::Symbol, tol::Real) = cholpfact!(copy(A), uplo, tol)
+cholpfact!(A::Matrix, tol::Real) = cholpfact!(A, :U, tol)
+cholpfact(A::Matrix, tol::Real) = cholpfact(A, :U, tol)
+cholpfact!(A::Matrix) = cholpfact!(A, -1.)
+cholpfact(A::Matrix) = cholpfact(A, -1.)
+cholpfact{T<:Int}(A::Matrix{T}, args...) = cholpfact(float(A), args...)
 
 size(C::CholeskyPivotedDense) = size(C.UL)
 size(C::CholeskyPivotedDense,d::Integer) = size(C.UL,d)
@@ -127,9 +134,16 @@ function LUDense{T<:BlasFloat}(A::Matrix{T})
     LUDense{T}(LU, ipiv, info)
 end
 
-lu(A::Matrix) = LUDense(copy(A))
-lu{T<:Integer}(A::Matrix{T}) = lu(float(A))
-lu(x::Number) = (one(x), x, [1])
+lufact!(A::Matrix) = LUDense(A)
+lufact(A::Matrix) = lufact!(copy(A))
+lufact!{T<:Integer}(A::Matrix{T}) = lufact!(float(A))
+lufact{T<:Integer}(A::Matrix{T}) = lufact(float(A))
+lufact(x::Number) = (one(x), x, [1])
+
+function lu(A::Matrix) 
+    F = lufact(A)
+    return (F[:L], F[:U], F[:P])
+end
 
 size(A::LUDense) = size(A.LU)
 size(A::LUDense,n) = size(A.LU,n)
@@ -182,9 +196,15 @@ type QRDense{S} <: Factorization{S}
 end
 QRDense(A::Matrix) = QRDense(LAPACK.geqrt3!(A)...)
 
-qr(A::Matrix) = QRDense(copy(A))
-qr{T<:Integer}(A::Matrix{T}) = qr(float(A))
-qr(x::Number) = (one(x), x)
+qrfact!(A::Matrix) = QRDense(A)
+qrfact(A::Matrix) = qrfact!(copy(A))
+qrfact{T<:Integer}(A::Matrix{T}) = qrfact(float(A))
+qrfact(x::Number) = (one(x), x)
+
+function qr(A::Matrix)
+    F = qrfact(A)
+    return (F[:Q], F[:R])
+end
 
 size(A::QRDense, args::Integer...) = size(A.vs, args...)
 
@@ -254,7 +274,9 @@ type QRPivotedDense{T} <: Factorization{T}
     end
 end
 QRPivotedDense{T<:BlasFloat}(A::Matrix{T}) = QRPivotedDense{T}(LAPACK.geqp3!(A)...)
-qrp(A::Matrix) = QRPivotedDense(copy(A))
+
+qrpfact!(A::Matrix) = QRPivotedDense(A)
+qrpfact(A::Matrix) = qrpfact!(copy(A))
 # QRDenseQ(A::QRPivotedDense) = QRDenseQ(A.hh, A.tau)
 
 size(A::QRPivotedDense, args::Integer...) = size(A.hh, args...)
