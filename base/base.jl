@@ -4,6 +4,8 @@ using Core.Intrinsics
 
 import Core.Array  # to add methods
 
+const NonTupleType = Union(DataType,UnionType,TypeConstructor)
+
 convert(T, x)               = convert_default(T, x, convert)
 convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 
