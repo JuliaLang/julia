@@ -1,5 +1,5 @@
 # parameters limiting potentially-infinite types
-const MAX_TYPEUNION_LEN = 2
+const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 2
 const MAX_TUPLETYPE_LEN  = 8
 const MAX_TUPLE_DEPTH = 4
@@ -743,6 +743,9 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = typeintersect(t, Any)
+        if isa(t,UnionType)
+            t = typejoin(t.types...)
+        end
         if is(t,None)
         elseif isleaftype(t)
             t = Type{t}
@@ -1557,6 +1560,9 @@ function effect_free(e)
         return true
     end
     if isa(e,Expr)
+        if e.head === :static_typeof
+            return true
+        end
         ea = e.args
         if e.head === :call || e.head === :call1
             for a in ea
