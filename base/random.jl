@@ -108,7 +108,7 @@ rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 
 rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
 rand(dims::Dims) = rand!(Array(Float64, dims))
-rand(dims::Int...) = rand(dims)
+rand(dims::Int...) = rand!(Array(Float64, dims...))
 
 rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
 rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
@@ -191,6 +191,6 @@ randbool!(B::BitArray) = rand!(B)
 randn() = randmtzig_randn()
 randn!(A::Array{Float64}) = randmtzig_fill_randn!(A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
-randn(dims::Int...) = randn(dims)
+randn(dims::Int...) = randn!(Array(Float64, dims...))
 
 end # module
