@@ -40,7 +40,6 @@ Extras
    gzip
    profile
    sound
-   strpack
    textwrap
    zlib
 
