@@ -1702,7 +1702,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             }
             if (tn == jl_array_typename)
                 ndt->pointerfree = 0;
-            if (ftypes->length == 0)
+            if (jl_tuple_len(ftypes) == 0)
                 ndt->size = dt->size;
         }
         if (cacheable) cache_type_((jl_value_t*)ndt);
@@ -2312,6 +2312,9 @@ void jl_init_types(void)
 
     jl_tuple_type = jl_alloc_tuple(1);
     jl_tuple_type->type = (jl_value_t*)jl_tuple_type;
+#ifdef OVERLAP_TUPLE_LEN
+    jl_tuple_set_len_unsafe(jl_tuple_type, 1);
+#endif
 
     jl_null = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, 1);
     jl_tuple_set_len_unsafe(jl_null, 0);

@@ -137,7 +137,7 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
     if (dt->mutabl) return 0;
     size_t sz = dt->size;
     if (sz == 0) return 1;
-    size_t nf = dt->names->length;
+    size_t nf = jl_tuple_len(dt->names);
     if (nf == 0) {
         return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
     }
@@ -681,7 +681,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
             jl_show_tuple(str, dt->parameters, '{', '}', 0);
         }
         JL_PUTC('(', s);
-        if (dt->names->length>0 || dt->size==0) {
+        if (jl_tuple_len(dt->names)>0 || dt->size==0) {
             size_t i;
             size_t n = jl_tuple_len(dt->names);
             for(i=0; i < n; i++) {
@@ -894,7 +894,7 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
     size_t sz = jl_datatype_size(tv);
     uptrint_t h = inthash((uptrint_t)tv);
     if (sz == 0) return ~h;
-    size_t nf = dt->names->length;
+    size_t nf = jl_tuple_len(dt->names);
     if (nf == 0) {
         return bits_hash(jl_data_ptr(v), sz) ^ h;
     }

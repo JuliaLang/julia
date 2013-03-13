@@ -260,6 +260,13 @@ static Value *emit_typeof(Value *p)
         tt = builder.
             CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_size,0)),
                        false);
+#ifdef OVERLAP_TUPLE_LEN
+        tt = builder.
+            CreateIntToPtr(builder.
+                           CreateAnd(builder.CreatePtrToInt(tt, T_int64),
+                                     ConstantInt::get(T_int64,0x000fffffffffffff)),
+                           jl_pvalue_llvmt);
+#endif
         return tt;
     }
     return literal_pointer_val(julia_type_of(p));
@@ -534,11 +541,13 @@ type_of_constant:
 
 static Value *emit_tuplelen(Value *t)
 {
-    Value *lenbits = emit_nthptr(t, 1);
-#ifdef _P64
-    return builder.CreatePtrToInt(lenbits, T_int64);
+#ifdef OVERLAP_TUPLE_LEN
+    Value *lenbits = emit_nthptr(t, (size_t)0);
+    return builder.CreateLShr(builder.CreatePtrToInt(lenbits, T_int64),
+                              ConstantInt::get(T_int32, 52));
 #else
-    return builder.CreatePtrToInt(lenbits, T_int32);
+    Value *lenbits = emit_nthptr(t, 1);
+    return builder.CreatePtrToInt(lenbits, T_size);
 #endif
 }
 

@@ -1220,7 +1220,7 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     jl_tuple_t *tt = jl_alloc_tuple(nargs);
     JL_GC_PUSH(&tt);
     size_t i;
-    for(i=0; i < jl_tuple_len(tt); i++) {
+    for(i=0; i < nargs; i++) {
         jl_value_t *a;
         if (jl_is_nontuple_type(args[i])) {  //***
             a = (jl_value_t*)jl_wrap_Type(args[i]);
