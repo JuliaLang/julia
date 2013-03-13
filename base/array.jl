@@ -149,7 +149,7 @@ similar{T}(a::Array{T,2}, m::Int)     = Array(T, m)
 similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 
 # T[x...] constructs Array{T,1}
-function getindex{T}(::Type{T}, vals...)
+function getindex(T::Union(DataType,UnionType), vals...)
     a = Array(T,length(vals))
     for i = 1:length(vals)
         a[i] = vals[i]

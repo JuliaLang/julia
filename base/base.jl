@@ -116,7 +116,6 @@ const isimmutable = x->(isa(x,Tuple) || !typeof(x).mutable)
 isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
 isstructtype(x) = false
 isbits(t::DataType) = !t.mutable && t.pointerfree
-isbits(t::Tuple) = false
 isbits(t::Type) = false
 isbits(x) = isbits(typeof(x))
 
@@ -156,9 +155,9 @@ end
 
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-Array{N}(T, d::NTuple{N,Int}) =
-    (AT = Array{T,N};
-     ccall(:jl_new_array, Any, (Any,Any), AT, d)::AT)
+#Array{N}(T, d::NTuple{N,Int}) =
+#    (AT = Array{T,N};
+#     ccall(:jl_new_array, Any, (Any,Any), AT, d)::AT)
 
 Array{T}(::Type{T}, m::Int) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
@@ -167,8 +166,8 @@ Array{T}(::Type{T}, m::Int,n::Int) =
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m,n,o)
 
-Array(T, d::Int...) = Array(T, d)
-Array(T, d::Integer...) = Array(T, convert((Int...), d))
+Array(T::Type, d::Int...) = Array(T, d)
+Array(T::Type, d::Integer...) = Array(T, convert((Int...), d))
 
 Array{T}(::Type{T}, m::Integer) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)

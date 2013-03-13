@@ -119,8 +119,7 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
             if (!jl_is_tuple(a) || !jl_subtype(a, decl, 1))
                 return 0;
         }
-        else if (jl_is_type_type(decl) &&
-                 jl_is_nontuple_type(a)) {   //***
+        else if (jl_is_type_type(decl) && jl_is_type(a)) {
             jl_value_t *tp0 = jl_tparam0(decl);
             if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
@@ -1223,7 +1222,7 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     size_t i;
     for(i=0; i < nargs; i++) {
         jl_value_t *a;
-        if (jl_is_nontuple_type(args[i])) {  //***
+        if (jl_is_type(args[i])) {
             a = (jl_value_t*)jl_wrap_Type(args[i]);
         }
         else {
