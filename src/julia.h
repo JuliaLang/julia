@@ -28,8 +28,19 @@
 #define NORETURN
 #endif
 
+#ifdef _P64
+// a risky way to save 8 bytes per tuple
+//#define OVERLAP_TUPLE_LEN
+#endif
+
+#ifdef OVERLAP_TUPLE_LEN
+#define JL_DATA_TYPE    \
+    size_t type : 52;   \
+    size_t _resvd : 12;
+#else
 #define JL_DATA_TYPE \
     struct _jl_value_t *type;
+#endif
 
 typedef struct _jl_value_t {
     JL_DATA_TYPE
@@ -47,8 +58,13 @@ typedef struct _jl_sym_t {
 } jl_sym_t;
 
 typedef struct {
+#ifdef OVERLAP_TUPLE_LEN
+    size_t type : 52;
+    size_t length : 12;
+#else
     JL_DATA_TYPE
     size_t length;
+#endif
     jl_value_t *data[1];
 } jl_tuple_t;
 
@@ -447,8 +463,13 @@ void *allocobj(size_t sz);
 #define allocobj(nb)  malloc(nb)
 #endif
 
+#ifdef OVERLAP_TUPLE_LEN
+#define jl_tupleref(t,i) (((jl_value_t**)(t))[1+(i)])
+#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[1+(i)])=(jl_value_t*)(x))
+#else
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(jl_value_t*)(x))
+#endif
 #define jl_t0(t) jl_tupleref(t,0)
 #define jl_t1(t) jl_tupleref(t,1)
 
@@ -471,7 +492,11 @@ void *allocobj(size_t sz);
 #define jl_tparam0(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 0)
 #define jl_tparam1(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 1)
 
+#ifdef OVERLAP_TUPLE_LEN
+#define jl_typeof(v) ((jl_value_t*)(uptrint_t)((jl_value_t*)(v))->type)
+#else
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
+#endif
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
 #define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
@@ -623,7 +648,7 @@ int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 DLLEXPORT jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
-int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
+int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv);
 jl_value_t *jl_type_union(jl_tuple_t *types);
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars);

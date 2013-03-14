@@ -659,3 +659,12 @@ immutable Foo2517; end
 @test repr(Foo2517()) == "Foo2517()"
 @test repr(Array(Foo2517,1)) == "[Foo2517()]"
 @test Foo2517() === Foo2517()
+
+# issue #1474
+type X1474{a,b} end
+Y{A,B}(::Type{X1474{A,B}}) = 1
+Y{A}(::Type{X1474{A}}) = 2
+Y(::Type{X1474}) = 3
+@test Y(X1474) == 3
+@test Y(X1474{Int}) == 2
+@test Y(X1474{Int,String}) == 1

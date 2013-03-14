@@ -942,10 +942,10 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
 
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);
 
-static int sigs_eq(jl_value_t *a, jl_value_t *b)
+static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
 {
     if (jl_has_typevars(a) || jl_has_typevars(b)) {
-        return jl_types_equal_generic(a,b);
+        return jl_types_equal_generic(a,b,useenv);
     }
     return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
@@ -1025,7 +1025,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         JL_GC_PUSH(&isect);
         jl_methlist_t *l = ml;
         while (l != JL_NULL) {
-            if (sigs_eq(isect, (jl_value_t*)l->sig))
+            if (sigs_eq(isect, (jl_value_t*)l->sig, 0))
                 goto done_chk_amb;  // ok, intersection is covered
             l = l->next;
         }
@@ -1068,7 +1068,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     l = *pml;
     while (l != JL_NULL) {
         if (((l->tvars==jl_null) == (tvars==jl_null)) &&
-            sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig)) {
+            sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig, 1)) {
             // method overwritten
             if (check_amb && l->func->linfo && method->linfo &&
                 (l->func->linfo->module != method->linfo->module) &&
@@ -1220,7 +1220,7 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     jl_tuple_t *tt = jl_alloc_tuple(nargs);
     JL_GC_PUSH(&tt);
     size_t i;
-    for(i=0; i < jl_tuple_len(tt); i++) {
+    for(i=0; i < nargs; i++) {
         jl_value_t *a;
         if (jl_is_nontuple_type(args[i])) {  //***
             a = (jl_value_t*)jl_wrap_Type(args[i]);
