@@ -25,7 +25,6 @@ import LinAlg.solve
 include("linalg/suitesparse_h.jl")
 
 type MatrixIllConditionedException <: Exception end
-type CholmodException <: Exception end
 
 function decrement!{T<:Integer}(A::AbstractArray{T})
     for i in 1:length(A) A[i] -= one(T) end
