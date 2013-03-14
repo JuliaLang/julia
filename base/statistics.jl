@@ -19,57 +19,44 @@ function median!{T<:Real}(v::AbstractVector{T})
     isnan(v[end]) && error("median is undefined in presence of NaNs")
     isodd(length(v)) ? float(v[div(end+1,2)]) : (v[div(end,2)]+v[div(end,2)+1])/2
 end
-median{T<:Real}(v::AbstractArray{T}) = median!(copy(reshape(v, length(v))))
+median{T<:Real}(v::AbstractArray{T}) = median!(copy(vec(v)))
 
 ## variance with known mean
-function varm(v::AbstractVector, m::Number, corrected::Bool)
+function varm(v::AbstractVector, m::Number)
     n = length(v)
-    if n == 0 || (n == 1 && corrected)
+    if n == 0 || n == 1
         return NaN
     end
     x = v - m
-    return dot(x, x) / (n - (corrected ? 1 : 0))
+    return dot(x, x) / (n - 1)
 end
-varm(v::AbstractVector, m::Number) = varm(v, m, true)
-varm(v::AbstractArray, m::Number, corrected::Bool) = varm(reshape(v, length(v)), m, corrected)
-varm(v::AbstractArray, m::Number) = varm(v, m, true)
-function varm(v::Ranges, m::Number, corrected::Bool)
+varm(v::AbstractArray, m::Number) = varm(vec(v), m)
+function varm(v::Ranges, m::Number)
     f = first(v) - m
     s = step(v)
     l = length(v)
-    if l == 0 || (l == 1 && corrected)
+    if l == 0 || l == 1
         return NaN
     end
-    if corrected
-        return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
-    else
-        return f^2 + f * s * (l - 1) + s^2 * (l - 1) * (2 * l - 1) / 6
-    end
+    return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
 end
-varm(v::Ranges, m::Number) = varm(v, m, true)
 
 ## variance
-function var(v::Ranges, corrected::Bool)
+function var(v::Ranges)
     s = step(v)
     l = length(v)
-    if l == 0 || (l == 1 && corrected)
+    if l == 0 || l == 1
         return NaN
     end
-    return abs2(s) * (l + 1) * (corrected ? l : (l - 1)) / 12
+    return abs2(s) * (l + 1) * l / 12
 end
-var(v::AbstractVector, corrected::Bool) = varm(v, mean(v), corrected)
-var(v::AbstractArray, corrected::Bool) = var(reshape(v, length(v)), corrected)
-var(v::AbstractArray) = var(v, true)
+var(v::AbstractArray) = varm(v, mean(v))
 
 ## standard deviation with known mean
-stdm(v::AbstractArray, m::Number, corrected::Bool) = sqrt(varm(v, m, corrected))
-stdm(v::AbstractArray, m::Number) = stdm(v, m, true)
+stdm(v, m::Number) = sqrt(varm(v, m))
 
 ## standard deviation
-std(v::AbstractArray, corrected::Bool) = stdm(v, mean(v), corrected)
-std(v::AbstractArray) = std(v, true)
-std(v::Ranges, corrected::Bool) = sqrt(var(v, corrected))
-std(v::Ranges) = std(v, true)
+std(v) = sqrt(var(v))
 
 ## hist ##
 
@@ -155,35 +142,35 @@ function center(x::AbstractVector)
     res
 end
 
-function cov(x::AbstractVecOrMat, y::AbstractVecOrMat, corrected::Bool)
+function cov(x::AbstractVecOrMat, y::AbstractVecOrMat)
     if size(x, 1) != size(y, 1)
         error("incompatible matrices")
     end
     n = size(x, 1)
     xc = center(x)
     yc = center(y)
-    conj(xc' * yc / (n - (corrected ? 1 : 0)))
+    conj(xc' * yc / (n - 1))
 end
-cov(x::AbstractVector, y::AbstractVector, corrected::Bool) = cov(x'', y, corrected)[1]
+cov(x::AbstractVector, y::AbstractVector) = cov(x'', y)[1]
 
-function cov(x::AbstractVecOrMat, corrected::Bool)
+function cov(x::AbstractVecOrMat)
     n = size(x, 1)
     xc = center(x)
-    conj(xc' * xc / (n - (corrected ? 1 : 0)))
+    conj(xc' * xc / (n - 1))
 end
-cov(x::AbstractVector, corrected::Bool) = cov(x'', corrected)[1]
+cov(x::AbstractVector) = cov(x'')[1]
 
-function cor(x::AbstractVecOrMat, y::AbstractVecOrMat, corrected::Bool)
-    z = cov(x, y, corrected)
+function cor(x::AbstractVecOrMat, y::AbstractVecOrMat)
+    z = cov(x, y)
     scale = Base.amap(std, x, 2) * Base.amap(std, y, 2)'
     z ./ scale
 end
-cor(x::AbstractVector, y::AbstractVector, corrected::Bool) =
-    cov(x, y, corrected) / std(x) / std(y)
+cor(x::AbstractVector, y::AbstractVector) =
+    cov(x, y) / std(x) / std(y)
     
 
-function cor(x::AbstractVecOrMat, corrected::Bool)
-    res = cov(x, corrected)
+function cor(x::AbstractVecOrMat)
+    res = cov(x)
     n = size(res, 1)
     scale = 1 / sqrt(diag(res))
     for j in 1:n
@@ -195,13 +182,7 @@ function cor(x::AbstractVecOrMat, corrected::Bool)
     end
     res 
 end
-cor(x::AbstractVector, corrected::Bool) = cor(x'', corrected)[1]
-
-cov(x::AbstractVecOrMat) = cov(x, true)
-cov(x::AbstractVecOrMat, y::AbstractVecOrMat) = cov(x, y, true)
-cor(x::AbstractVecOrMat) = cor(x, true)
-cor(x::AbstractVecOrMat, y::AbstractVecOrMat) = cor(x, y, true)
-
+cor(x::AbstractVector) = cor(x'')[1]
 
 ## quantiles ##
 
