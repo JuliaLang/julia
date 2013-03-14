@@ -14,20 +14,6 @@ const CHOLMOD_D    = int32(6)          # solve Dx=b
 const CHOLMOD_P    = int32(7)          # permute x=Px 
 const CHOLMOD_Pt   = int32(8)          # permute x=P'x 
 
-# itype defines the types of integer used:
-const CHOLMOD_INT  = int32(0)  # all integer arrays are int 
-const CHOLMOD_LONG = int32(2)  # all integer arrays are UF_long 
-
-# dtype defines what the numerical type is (double or float):
-const CHOLMOD_DOUBLE = int32(0)        # all numerical values are double 
-const CHOLMOD_SINGLE = int32(1)        # all numerical values are float 
-
-# xtype defines the kind of numerical values used:
-const CHOLMOD_PATTERN = int32(0)       # pattern only, no numerical values 
-const CHOLMOD_REAL    = int32(1)       # a real matrix 
-const CHOLMOD_COMPLEX = int32(2)       # a complex matrix (ANSI C99 compatible) 
-const CHOLMOD_ZOMPLEX = int32(3)       # a complex matrix (MATLAB compatible) 
-
 # Definitions for cholmod_common: 
 const CHOLMOD_MAXMETHODS = int32(9)    # maximum number of different methods that 
                                     # cholmod_analyze can try. Must be >= 9. 
