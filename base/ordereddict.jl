@@ -29,6 +29,16 @@
 #   od = sort(d)         # d is a Dict; returns a sorted OrderedDict
 #   #sort!(d)            # error! Dicts can't be sorted in place!
 #
+# Additional AbstractArray-like features
+#
+#   indexof(od, key)     # returns the index of key according to the current order
+#   getitem(od, 2)       # returns the second (k,v) pair according to the current order
+#   od[2]                # same, but only works for OrderedDicts where the
+#                        # keys are not Numbers
+#   first(od) == od[1]   
+#   last(od) == od[end]
+#   reverse!(od)         # reverses od in-place
+#   reverse(od)          # creates a reversed copy of od
 
 ######################
 ## OrderedDict type ##
@@ -66,6 +76,9 @@ OrderedDict(ks, vs) = OrderedDict{Any,Any}(ks, vs)
 OrderedDict{K,V}(ks::(K...), vs::(V...)) = OrderedDict{K  ,V  }(ks, vs)
 OrderedDict{K  }(ks::(K...), vs::Tuple ) = OrderedDict{K  ,Any}(ks, vs)
 OrderedDict{V  }(ks::Tuple , vs::(V...)) = OrderedDict{Any,V  }(ks, vs)
+OrderedDict{K,V}(kvs::AbstractArray{(K,V)}) = OrderedDict{K,V}(zip(kvs...)...)
+#OrderedDict{K,V}(d::Associative{K,V}) = OrderedDict{K,V}(collect(d))  ## Why doesn't this work?
+OrderedDict{K,V}(d::Associative{K,V}) = OrderedDict(collect(d))
 
 ##########################
 ## Construction-related ##
@@ -307,8 +320,16 @@ function indexof{K,V}(h::OrderedDict{K,V}, key, deflt)
     return (index<0) ? deflt : (_compact(h); h.ord_idxs[index])
 end
 
+findfirst(h::OrderedDict, v) = indexof(h, v, 0)
+findnext(h::OrderedDict, v, start::Int) = (idx=indexof(h,v,0); idx >= start? idx : 0)
+ 
+first(h::OrderedDict) = getitem(h, 1)
+last(h::OrderedDict) = getitem(h, length(h))
+endof(h::OrderedDict) = length(h)
+
 first(h::OrderedDict) = getitem(h, 1)
 last(h::OrderedDict) = getitem(h, h.count)
+
 function reverse!(h::OrderedDict)
     _compact(h)
     reverse!(h.ord)
