@@ -1337,17 +1337,21 @@ int jl_types_equal(jl_value_t *a, jl_value_t *b)
     return type_eqv_(a, b);
 }
 
-static int type_le_generic(jl_value_t *a, jl_value_t *b)
+static int type_le_generic(jl_value_t *a, jl_value_t *b, int useenv)
 {
     jl_value_t *env = jl_type_match(a, b);
     if (env == jl_false) return 0;
+    size_t l = jl_tuple_len(env);
     // make sure all typevars correspond to other unique typevars
-    for(int i=0; i < jl_tuple_len(env); i+=2) {
-        if (!jl_is_typevar(jl_tupleref(env,i+1)))
+    for(size_t i=0; i < l; i+=2) {
+        jl_value_t *envi = jl_tupleref(env,i+1);
+        if (!jl_is_typevar(envi))
             return 0;
-        for(int j=0; j < jl_tuple_len(env); j+=2) {
+        if (useenv && ((jl_tvar_t*)envi)->bound!=((jl_tvar_t*)jl_tupleref(env,i))->bound)
+            return 0;
+        for(size_t j=0; j < l; j+=2) {
             if (i != j) {
-                if (jl_tupleref(env,i+1) == jl_tupleref(env,j+1))
+                if (envi == jl_tupleref(env,j+1))
                     return 0;
             }
         }
@@ -1355,9 +1359,9 @@ static int type_le_generic(jl_value_t *a, jl_value_t *b)
     return 1;
 }
 
-int jl_types_equal_generic(jl_value_t *a, jl_value_t *b)
+int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv)
 {
-    return type_le_generic(a, b) && type_le_generic(b, a);
+    return type_le_generic(a, b, useenv) && type_le_generic(b, a, useenv);
 }
 
 static int valid_type_param(jl_value_t *v)
