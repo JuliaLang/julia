@@ -798,7 +798,9 @@ export
     median,
     quantile,
     std,
+    stdm,
     var,
+    varm,
 
 # signal processing
     bfft,
