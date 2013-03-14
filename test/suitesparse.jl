@@ -3,6 +3,7 @@ do33 = ones(3)
 @test isequal(se33 \ do33, do33)
 
 using Base.LinAlg.UMFPACK
+import Base.(*)
 
 # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
@@ -26,7 +27,6 @@ using Base.LinAlg.CHOLMOD
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
 
-# use inline values instead of
 # chm_rdsp(joinpath(JULIA_HOME, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
 # because the file may not exist in binary distributions and when a system suitesparse library
 # is used
@@ -112,13 +112,13 @@ A = CholmodSparse!(int32([0,1,2,3,6,9,12,15,18,20,25,30,34,36,39,43,47,52,58,62,
 show(A)
 @test_approx_eq norm(A,Inf) 3.570948074697437e9
 @test_approx_eq norm(A) 3.570948074697437e9
-## the call to cholmod_sdmult is giving problems right now
-#B = A * CholmodDense(ones(size(A,2)))
-#Base.LinAlg.CHOLMOD.chm_print(B,3)
+
+B = A * ones(size(A,2))
 chma = cholfact(A)
 show(chma)
-#x = chma\B
-#@test_approx_eq x ones(size(A,2))'
+x = chma\B
+show(x)
+@test_approx_eq x.mat ones(size(x))
 
 #lp_afiro example
 afiro = CholmodSparse!(int32([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,23,25,27,29,33,37,
@@ -138,3 +138,5 @@ afiro = CholmodSparse!(int32([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,
 show(afiro)
 chmaf = cholfact(afiro)
 show(chmaf)
+sol = solve(chmaf,afiro * ones(size(afiro,2))) # least squares solution
+show(sol)
