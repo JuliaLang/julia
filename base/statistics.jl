@@ -12,6 +12,7 @@ function mean(iterable)
     end
     return total/count
 end
+mean(v::AbstractArray, region) = sum(v, region) / prod(size(v)[region])
 
 function median!{T<:Real}(v::AbstractVector{T})
     isempty(v) && error("median of an empty array is undefined")
@@ -31,15 +32,7 @@ function varm(v::AbstractVector, m::Number)
     return dot(x, x) / (n - 1)
 end
 varm(v::AbstractArray, m::Number) = varm(vec(v), m)
-function varm(v::Ranges, m::Number)
-    f = first(v) - m
-    s = step(v)
-    l = length(v)
-    if l == 0 || l == 1
-        return NaN
-    end
-    return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
-end
+varm(v::Ranges, m::Number) = var(v)
 
 ## variance
 function var(v::Ranges)
@@ -51,12 +44,17 @@ function var(v::Ranges)
     return abs2(s) * (l + 1) * l / 12
 end
 var(v::AbstractArray) = varm(v, mean(v))
+function var(v::AbstractArray, region)
+    x = bsxfun(-, v, mean(v, region))
+    return sum(x.^2, region) / (prod(size(v)[region]) - 1)
+end
 
 ## standard deviation with known mean
 stdm(v, m::Number) = sqrt(varm(v, m))
 
 ## standard deviation
 std(v) = sqrt(var(v))
+std(v, region) = sqrt(var(v, region))
 
 ## hist ##
 
