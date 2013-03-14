@@ -1,0 +1,29 @@
+<NotepadPlus>
+    <UserLang name="Julia" ext="jl">
+        <Settings>
+            <Global caseIgnored="no" allowFoldOfComments="yes" />
+            <Prefix Keywords1="no" Keywords2="no" />
+        </Settings>
+        <KeywordLists>
+            <Keywords name="Comments">00#</Keywords>
+            <Keywords name="Operators">&apos; - ! &quot; $ % &amp; * , . / : ; ? @ \ ^ ` | ~ + &lt; = &gt; &lt;: :: .+ .- .* ./ .\ .^ &amp;&amp; || // [ ] ( ) { }</Keywords>
+            <Keywords name="Folders in code1, open">begin do for function if immutable let quote try type while</Keywords>
+            <Keywords name="Folders in code1, middle">elseif else</Keywords>
+            <Keywords name="Folders in code1, close">end</Keywords>
+            <Keywords name="Delimiters">&quot;00&quot;00</Keywords>
+            <Keywords name="Keywords1">abstract bitstype break ccall const continue export global import importall in local macro module baremodule return typealias using</Keywords>
+            <Keywords name="Keywords2">AbstractArray AbstractMatrix AbstractSparseMatrix AbstractVector Any Array ASCIIString Associative AsyncStream BitArray BigFloat BigInt BitMatrix BitVector Bool ByteString Char CharString Colon Complex Complex64 Complex128 ComplexPair DArray Dict Dims EachLine EnvHash Exception Expr FileOffset Filter Float Float32 Float64 Function ObjectIdDict Int Int8 Int16 Int32 Int64 Int128 Integer IntSet ImaginaryUnit IO IOBuffer IOStream LocalProcess Matrix Nothing None NTuple Number ObjectIdDict OrdinalRange PipeBuffer ProcessGroup Ptr Range Range1 RangeIndex Ranges Rational Real Regex RegexMatch RegexMatchIterator RemoteRef RepString RevString Reverse RopeString Set Signed SparseMatrixCSC SpawnNullStream StridedArray StridedMatrix StridedVecOrMat StridedVector String SubArray SubDArray SubOrDArray SubString Symbol SymTridiagonal Task TcpSocket Tridiagonal Tuple Type Uint Uint8 Uint16 Uint32 Uint64 Uint128 Union Unsigned UTF8String UVError VecOrMat Vector VersionNumber Void WeakKeyDict WeakRef Woodbury Zip Stat Factorization BunchKaufman CholeskyDense CholeskyPivotedDense LUDense LUTridiagonal LDLTTridiagonal QRDense QRPivotedDense SVDDense GSVDDense InsertionSort QuickSort MergeSort TimSort Cchar Cuchar Cshort Cushort Cint Cuint Clong Culong Cptrdiff_t Csize_t Clonglong Culonglong Cfloat Cdouble ArgumentError DisconnectException EOFError ErrorException KeyError LoadError MethodError ParseError SystemError TypeError</Keywords>
+        </KeywordLists>
+        <Styles>
+            <WordsStyle name="DEFAULT" fgColor="000000" bgColor="FFFFFF" fontStyle="0" />
+            <WordsStyle name="COMMENTS" fgColor="808080" bgColor="FFFFFF" fontStyle="0" />
+            <WordsStyle name="LINE COMMENTS" fgColor="808080" bgColor="FFFFFF" fontStyle="0" />
+            <WordsStyle name="NUMBERS" fgColor="FF8000" bgColor="FFFFFF" fontStyle="0"  fontName="Lucida Console" />
+            <WordsStyle name="KEYWORDS1" fgColor="000080" bgColor="FFFFFF" fontStyle="1" fontName="Lucida Console" />
+            <WordsStyle name="KEYWORDS2" fgColor="FF00FF" bgColor="FFFFFF" fontStyle="0" />
+            <WordsStyle name="OPERATORS" fgColor="008000" bgColor="FFFFFF" fontStyle="1" />
+            <WordsStyle name="FOLDER IN CODE1" fgColor="800000" bgColor="FFFFFF" fontStyle="0" fontName="Lucida Console" />
+            <WordsStyle name="DELIMITERS1" fgColor="800080" bgColor="FFFFFF" fontStyle="0" fontName="Lucida Console" />
+        </Styles>
+    </UserLang>
+</NotepadPlus>
