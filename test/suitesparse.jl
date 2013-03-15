@@ -2,16 +2,17 @@ se33 = speye(3)
 do33 = ones(3)
 @test isequal(se33 \ do33, do33)
 
-using Base.LinAlg.UMFPACK
-import Base.(*)
-
 # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
+
+using Base.LinAlg.UMFPACK.increment!
 
 A = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
            increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
            [2.,1.,3.,4.,-1.,-3.,3.,6.,2.,1.,4.,2.], 5, 5)
 lua = lufact(A)
-#umf_lunz(lua)
+L,U,P,Q,Rs = lua[:(:)]
+@test_approx_eq diagmm(Rs,A)[P,Q] L*U
+
 @test_approx_eq det(lua) det(full(A))
 
 b = [8., 45., -3., 3., 19.]
@@ -19,9 +20,6 @@ x = lua\b
 @test_approx_eq x float([1:5])
 
 @test norm(A*x-b,1) < eps(1e4)
-
-L,U,P,Q,Rs = lua[:(:)]
-@test_approx_eq diagmm(Rs,A)[P,Q] L*U
 
 using Base.LinAlg.CHOLMOD
 
@@ -109,15 +107,15 @@ A = CholmodSparse!(int32([0,1,2,3,6,9,12,15,18,20,25,30,34,36,39,43,47,52,58,62,
                     2.29724661236e8,-5.57173510779e7,-833333.333333,-1.25e6,2.5e8,2.39928529451e6,
                     9.61679848804e8,275828.470683,-5.57173510779e7,1.09411960038e7,2.08333333333e6,
                     1.0e8,-2.5e6,140838.195984,-1.09779731332e8,5.31278103775e8], 48, 48, 1)
-show(A)
+#show(A)
 @test_approx_eq norm(A,Inf) 3.570948074697437e9
 @test_approx_eq norm(A) 3.570948074697437e9
 
 B = A * ones(size(A,2))
 chma = cholfact(A)
-show(chma)
+#show(chma)
 x = chma\B
-show(x)
+#show(x)
 @test_approx_eq x.mat ones(size(x))
 
 #lp_afiro example
@@ -135,8 +133,9 @@ afiro = CholmodSparse!(int32([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,
                         1.0,-1.0,1.0,-1.0,1.0,-1.0,1.0,1.0,-0.43,1.0,1.0,0.109,-0.43,1.0,1.0,0.108,
                         -0.39,1.0,1.0,0.108,-0.37,1.0,1.0,0.107,-1.0,2.191,-1.0,2.219,-1.0,2.249,
                         -1.0,2.279,1.4,-1.0,1.0,-1.0,1.0,1.0,1.0], 27, 51, 0)
-show(afiro)
+#show(afiro)
 chmaf = cholfact(afiro)
-show(chmaf)
-sol = solve(chmaf,afiro * ones(size(afiro,2))) # least squares solution
-show(sol)
+#show(chmaf)
+sol = solve(chmaf, afiro*ones(size(afiro,2))) # least squares solution
+# ToDo: check for the residual being orthogonal to the rows of afiro
+#show(sol)
