@@ -807,6 +807,10 @@ I/O
 
    Global variable referring to the standard input stream.
 
+.. data:: OUTPUT_STREAM
+
+   The default stream used for text output, e.g. in the ``print`` and ``show`` functions.
+
 .. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
@@ -1840,6 +1844,30 @@ Numbers
 .. data:: pi
 
    The constant pi
+
+.. data:: im
+
+   The imaginary unit
+
+.. data:: e
+
+   The constant e
+
+.. data:: Inf
+
+   Positive infinity of type Float64
+
+.. data:: Inf32
+
+   Positive infinity of type Float32
+
+.. data:: NaN
+
+   A not-a-number value of type Float64
+
+.. data:: NaN32
+
+   A not-a-number value of type Float32
 
 .. function:: isdenormal(f) -> Bool
 
@@ -3161,7 +3189,7 @@ System
 
 .. data:: ENV
 
-   Reference to the singleton ``EnvHash``.
+   Reference to the singleton ``EnvHash``, providing a dictionary interface to system environment variables.
 
 C Interface
 -----------
