@@ -207,7 +207,7 @@ let LOCALE = nothing
         LOCALE
     end
     function locale(s::ByteString)
-        global help_category_list, help_category_dict
+        global help_category_list, help_category_dict,
                help_module_dict, help_function_dict
         help_category_list = nothing
         help_category_dict = nothing

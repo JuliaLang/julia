@@ -194,7 +194,7 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 ## Directories
 
     base/          source code for Julia's standard library
-    contrib/       emacs, vim and textmate support for Julia
+    contrib/       emacs, vim, notepad++ and textmate support for Julia
     deps/          external dependencies
     examples/      example Julia programs
     extras/        useful optional libraries
