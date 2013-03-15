@@ -1443,6 +1443,13 @@
 
 "),
 
+("I/O","Base","OUTPUT_STREAM","OUTPUT_STREAM
+
+   The default stream used for text output, e.g. in the \"print\" and
+   \"show\" functions.
+
+"),
+
 ("I/O","Base","open","open(file_name[, read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The
@@ -1782,37 +1789,37 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","+",".+(x, y)
+("Mathematical Functions","Base",".+",".+(x, y)
 
    Element-wise binary addition operator.
 
 "),
 
-("Mathematical Functions","Base","-",".-(x, y)
+("Mathematical Functions","Base",".-",".-(x, y)
 
    Element-wise binary subtraction operator.
 
 "),
 
-("Mathematical Functions","Base","*",".*(x, y)
+("Mathematical Functions","Base",".*",".*(x, y)
 
    Element-wise binary multiplication operator.
 
 "),
 
-("Mathematical Functions","Base","/","./(x, y)
+("Mathematical Functions","Base","./","./(x, y)
 
    Element-wise binary left division operator.
 
 "),
 
-("Mathematical Functions","Base","\\",".\\(x, y)
+("Mathematical Functions","Base",".\\",".\\(x, y)
 
    Element-wise binary right division operator.
 
 "),
 
-("Mathematical Functions","Base","^",".^(x, y)
+("Mathematical Functions","Base",".^",".^(x, y)
 
    Element-wise binary exponentiation operator.
 
@@ -3059,6 +3066,42 @@ airyaiprime(x)
 ("Numbers","Base","pi","pi
 
    The constant pi
+
+"),
+
+("Numbers","Base","im","im
+
+   The imaginary unit
+
+"),
+
+("Numbers","Base","e","e
+
+   The constant e
+
+"),
+
+("Numbers","Base","Inf","Inf
+
+   Positive infinity of type Float64
+
+"),
+
+("Numbers","Base","Inf32","Inf32
+
+   Positive infinity of type Float32
+
+"),
+
+("Numbers","Base","NaN","NaN
+
+   A not-a-number value of type Float64
+
+"),
+
+("Numbers","Base","NaN32","NaN32
+
+   A not-a-number value of type Float32
 
 "),
 
@@ -5086,7 +5129,8 @@ airyaiprime(x)
 
 ("System","Base","ENV","ENV
 
-   Reference to the singleton \"EnvHash\".
+   Reference to the singleton \"EnvHash\", providing a dictionary
+   interface to system environment variables.
 
 "),
 
@@ -5391,47 +5435,41 @@ error(Exception)
 
 "),
 
-("cpp.jl","","@cpp","@cpp(ccall_expression)
+("Constants","Base","ARGS","ARGS
 
-   Suppose you have a C++ shared library, \"libdemo\", which contains
-   a function \"timestwo\":
+   An array of the command line arguments passed to Julia, as strings.
 
-      int timestwo(int x) {
-        return 2*x;
-      }
+"),
 
-      double timestwo(double x) {
-        return 2*x;
-      }
+("Constants","Base","C_NULL","C_NULL
 
-   You can use these functions by placing the \"@cpp\" macro prior to
-   a ccall, for example:
+   The C null pointer constant, sometimes used when calling external
+   code.
 
-      mylib = dlopen(\"libdemo\")
-      x = 3.5
-      x2 = @cpp ccall(dlsym(mylib, :timestwo), Float64, (Float64,), x)
-      y = 3
-      y2 = @cpp ccall(dlsym(mylib, :timestwo), Int, (Int,), y)
+"),
 
-   The macro performs C++ ABI name-mangling (using the types of the
-   parameters) to determine the correct library symbol.
+("Constants","Base","CPU_CORES","CPU_CORES
 
-   Like \"ccall\", this performs library calls without overhead.
-   However, currently it has a number of limitations:
+   The number of CPU cores in the system.
 
-   * It does not support pure-header libraries
+"),
 
-   * The restrictions of \"ccall\" apply here; for example, there is
-     no support for \"struct\". Consequently it is not possible to use
-     C++ objects.
+("Constants","Base","WORD_SIZE","WORD_SIZE
 
-   * Currently there is no C++ namespace support
+   Standard word size on the current machine, in bits.
 
-   * Currently there is no support for templated functions
+"),
 
-   * Currently only g++ is supported
+("Constants","Base","VERSION","VERSION
 
-   The latter three may not be difficult to fix.
+   An object describing which version of Julia is in use.
+
+"),
+
+("Constants","Base","LOAD_PATH","LOAD_PATH
+
+   An array of paths (as strings) where the \"require\" function looks
+   for code.
 
 "),
 
