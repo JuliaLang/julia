@@ -17,6 +17,6 @@ end
 
 require("testdefs.jl")
 
-reduce(propagate_errors, pmap(runtests, tests))
+reduce(propagate_errors, nothing, pmap(runtests, tests))
 
 println("    \033[32;1mSUCCESS\033[0m")
