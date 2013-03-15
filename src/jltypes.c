@@ -1364,17 +1364,21 @@ int jl_types_equal(jl_value_t *a, jl_value_t *b)
     return type_eqv_(a, b);
 }
 
-static int type_le_generic(jl_value_t *a, jl_value_t *b)
+static int type_le_generic(jl_value_t *a, jl_value_t *b, int useenv)
 {
     jl_value_t *env = jl_type_match(a, b);
     if (env == jl_false) return 0;
+    size_t l = jl_tuple_len(env);
     // make sure all typevars correspond to other unique typevars
-    for(int i=0; i < jl_tuple_len(env); i+=2) {
-        if (!jl_is_typevar(jl_tupleref(env,i+1)))
+    for(size_t i=0; i < l; i+=2) {
+        jl_value_t *envi = jl_tupleref(env,i+1);
+        if (!jl_is_typevar(envi))
             return 0;
-        for(int j=0; j < jl_tuple_len(env); j+=2) {
+        if (useenv && ((jl_tvar_t*)envi)->bound!=((jl_tvar_t*)jl_tupleref(env,i))->bound)
+            return 0;
+        for(size_t j=0; j < l; j+=2) {
             if (i != j) {
-                if (jl_tupleref(env,i+1) == jl_tupleref(env,j+1))
+                if (envi == jl_tupleref(env,j+1))
                     return 0;
             }
         }
@@ -1382,9 +1386,9 @@ static int type_le_generic(jl_value_t *a, jl_value_t *b)
     return 1;
 }
 
-int jl_types_equal_generic(jl_value_t *a, jl_value_t *b)
+int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv)
 {
-    return type_le_generic(a, b) && type_le_generic(b, a);
+    return type_le_generic(a, b, useenv) && type_le_generic(b, a, useenv);
 }
 
 static int valid_type_param(jl_value_t *v)
@@ -1729,7 +1733,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             }
             if (tn == jl_array_typename)
                 ndt->pointerfree = 0;
-            if (ftypes->length == 0)
+            if (jl_tuple_len(ftypes) == 0)
                 ndt->size = dt->size;
         }
         if (cacheable) cache_type_((jl_value_t*)ndt);
@@ -2370,6 +2374,9 @@ void jl_init_types(void)
 
     jl_tuple_type = jl_alloc_tuple(1);
     jl_tuple_type->type = (jl_value_t*)jl_tuple_type;
+#ifdef OVERLAP_TUPLE_LEN
+    jl_tuple_set_len_unsafe(jl_tuple_type, 1);
+#endif
 
     jl_null = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, 1);
     jl_tuple_set_len_unsafe(jl_null, 0);

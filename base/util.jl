@@ -293,15 +293,16 @@ end
 function help()
     init_help()
     print(
-" Welcome to Julia. The full manual is available at
+"""
+ Welcome to Julia. The full manual is available at
 
     http://docs.julialang.org
 
- To get help on a function, try help(function). To search all help text,
- try apropos(\"string\"). To see available functions, try help(category),
- for one of the following categories:
+ To get help, try help(function), help("@macro"), or help("variable").
+ To search all help text, try apropos("string"). To see available functions,
+ try help(category), for one of the following categories:
 
-")
+""")
     for cat = help_category_list
         if !isempty(help_category_dict[cat])
             print("  ")

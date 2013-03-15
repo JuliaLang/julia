@@ -3,8 +3,7 @@ module Resolve
 # Use max-sum algorithm to resolve packages dependencies
 #
 
-import Metadata.Version, Metadata.VersionSet,
-       Metadata.packages, Metadata.versions, Metadata.dependencies
+using Metadata
 
 import Base.<, Base.<=, Base.==, Base.-, Base.+,
        Base.zero, Base.isless, Base.abs, Base.typemin, Base.typemax,
@@ -59,55 +58,15 @@ type ReqsStruct
     end
 end
 
-function ReqsStruct(reqs::Vector{VersionSet}, fixed::Dict)
-    pkgs = packages()
-    vers = versions(pkgs)
-    deps = dependencies(union(pkgs,keys(fixed)))
-
-    filter!(reqs) do r
-        if has(fixed, r.package)
-            if !contains(r, Version(r.package,fixed[r.package]))
-                warn("$(r.package) is fixed at $(repr(fixed[r.package])) which doesn't satisfy $(r.versions).")
-            end
-            false
-        else
-            true
-        end
+function ReqsStruct(reqs::Vector{VersionSet}, vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
+    pkgs = Set{String}()
+    for r in reqs add!(pkgs, r.package) end
+    for v in vers add!(pkgs, v.package) end
+    for d in deps
+        add!(pkgs, d[1].package)
+        add!(pkgs, d[2].package)
     end
-    filter!(pkgs) do p
-        !has(fixed, p)
-    end
-    filter!(vers) do v
-        !has(fixed, v.package)
-    end
-    unsatisfiable = Set{Version}()
-    filter!(deps) do d
-        p = d[2].package
-        if has(fixed, p)
-            if !contains(d[2], Version(p, fixed[p]))
-                add!(unsatisfiable, d[1])
-            end
-            false # drop
-        else
-            true # keep
-        end
-    end
-    filter!(vers) do v
-        !contains(unsatisfiable, v)
-    end
-    filter!(deps) do d
-        !contains(unsatisfiable, d[1])
-    end
-    version_packages_set = Set{String}(String[v.package for v in vers]...)
-    filter!(pkgs) do p
-        contains(version_packages_set, p)
-    end
-    for r in reqs
-        contains(pkgs, r.package) && continue
-        error("$(r.package) has no versions compatible with your fixed requirements (e.g. julia version).")
-    end
-
-    ReqsStruct(reqs, pkgs, vers, deps)
+    ReqsStruct(reqs, sort!(collect(pkgs)), vers, deps)
 end
 
 # The numeric type used to determine how the different
@@ -1200,9 +1159,9 @@ function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::V
 end
 
 # The external-facing function
-function resolve(reqs, fixed)
+function resolve(reqs::Vector{VersionSet}, vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
     # fetch data
-    reqsstruct = ReqsStruct(reqs, fixed)
+    reqsstruct = ReqsStruct(reqs, vers, deps)
 
     # init structures
     pkgstruct = PkgStruct(reqsstruct)
