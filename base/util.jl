@@ -339,7 +339,7 @@ help_for(s::String) = help_for(s, 0)
 function help_for(fname::String, obj)
     init_help()
     found = false
-    if contains(fname, '.')
+    if !begins_with(fname,'.') && contains(fname, '.')
         if has(help_function_dict, fname)
             print_help_entries(help_function_dict[fname])
             found = true
