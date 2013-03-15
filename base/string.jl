@@ -51,12 +51,12 @@ convert(::Type{ByteString}, s::String) = bytestring(s)
 start(s::String) = 1
 done(s::String,i) = (i > endof(s))
 isempty(s::String) = done(s,start(s))
-ref(s::String, i::Int) = next(s,i)[1]
-ref(s::String, i::Integer) = s[int(i)]
-ref(s::String, x::Real) = s[to_index(x)]
-ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
+getindex(s::String, i::Int) = next(s,i)[1]
+getindex(s::String, i::Integer) = s[int(i)]
+getindex(s::String, x::Real) = s[to_index(x)]
+getindex{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
-ref(s::String, v::AbstractVector) =
+getindex(s::String, v::AbstractVector) =
     sprint(length(v), io->(for i in v write(io,s[i]) end))
 
 symbol(s::String) = symbol(bytestring(s))
@@ -262,8 +262,11 @@ ends_with(a::String, c::Char) = !isempty(a) && a[end] == c
 
 cmp(a::ByteString, b::ByteString)     = cmp(a.data, b.data)
 isequal(a::ByteString, b::ByteString) = endof(a)==endof(b) && cmp(a,b)==0
+begins_with(a::ByteString, b::ByteString) = begins_with(a.data, b.data)
 
-# TODO: fast begins_with and ends_with
+begins_with(a::Array{Uint8,1}, b::Array{Uint8,1}) = (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
+
+# TODO: fast ends_with
 
 ## character column width function ##
 
@@ -338,7 +341,7 @@ endof(s::SubString) = s.endof
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-function ref(s::String, r::Range1{Int})
+function getindex(s::String, r::Range1{Int})
     if first(r) < 1 || endof(s) < last(r)
         error(BoundsError)
     end
@@ -517,7 +520,6 @@ function print_quoted(io, s::String)
     print_escaped(io, s, "\"\$") #"# work around syntax highlighting problem
     print(io, '"')
 end
-quote_string(s::String) = sprint(endof(s)+2, io->print_quoted(io,s))
 
 # bare minimum unescaping function unescapes only given characters
 
@@ -604,11 +606,8 @@ byte_string_classify(s::ByteString) = byte_string_classify(s.data)
     # 1: valid ASCII
     # 2: valid UTF-8
 
-is_valid_ascii(s::ByteString) = byte_string_classify(s) == 1
-is_valid_utf8 (s::ByteString) = byte_string_classify(s) != 0
-
-check_ascii(s::ByteString) = is_valid_ascii(s) ? s : error("invalid ASCII sequence")
-check_utf8 (s::ByteString) = is_valid_utf8(s)  ? s : error("invalid UTF-8 sequence")
+is_valid_ascii(s::Union(Array{Uint8,1},ByteString)) = byte_string_classify(s) == 1
+is_valid_utf8 (s::Union(Array{Uint8,1},ByteString)) = byte_string_classify(s) != 0
 
 ## multiline strings ##
 

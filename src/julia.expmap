@@ -185,6 +185,7 @@
     jl_module_parent;
     jl_module_type;
     jl_native_alignment;
+    jl_is_char_signed;
     jl_nb_available;
     jl_new_array;
     jl_new_closure;
@@ -292,6 +293,7 @@
     jl_type_intersection;
     jl_type_match;
     jl_types_equal;
+    jl_typeassert;
     jl_uncompress_ast;
     jl_uv_*;
     jl_wrap_raw_dl_handle;
@@ -317,6 +319,7 @@
     u8_isvalid;
     u8_strlen;
     u8_strwidth;
+    wcwidth;
     uv_*;
     add_library_mapping;
 

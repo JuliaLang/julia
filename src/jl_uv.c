@@ -409,10 +409,10 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
     if (stream!=0) {
         if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
+            JL_SIGATOMIC_BEGIN();
             uv_write_t *uvw = malloc(sizeof(uv_write_t));
             uvw->data=0;
             uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
-            JL_SIGATOMIC_BEGIN();
             int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
             JL_SIGATOMIC_END();
             return err ? 0 : 1;
@@ -431,12 +431,12 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
     if (stream == 0)
         return 0;
     if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
+        JL_SIGATOMIC_BEGIN();
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         char *data = malloc(n);
         memcpy(data,str,n);
         uv_buf_t buf[]  = {{.base = data,.len=n}};
         uvw->data = data;
-        JL_SIGATOMIC_BEGIN();
         int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
         JL_SIGATOMIC_END();
         return err ? 0 : n;

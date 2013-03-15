@@ -62,7 +62,10 @@ end
 
 # remote/parallel load
 
-include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
+include_string(txt::ByteString, fname::ByteString) =
+    ccall(:jl_load_file_string, Void, (Ptr{Uint8},Ptr{Uint8}), txt, fname)
+
+include_string(txt::ByteString) = include_string(txt, "string")
 
 function source_path(default)
     t = current_task()
@@ -88,7 +91,7 @@ function include_from_node1(path)
         if myid()==1
             Core.include(path)
         else
-            include_string(remote_call_fetch(1, readall, path))
+            include_string(remote_call_fetch(1, readall, path), path)
         end
     finally
         if prev == nothing

@@ -62,7 +62,7 @@ function check_bounds(sz::Int, I::AbstractVector{Bool})
 end
 
 function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
-    if min(I) < 1 || max(I) > sz
+    if !isempty(I) && (min(I) < 1 || max(I) > sz)
         throw(BoundsError())
     end
 end
@@ -457,9 +457,9 @@ end
 
 
 
-## Indexing: ref ##
+## Indexing: getindex ##
 
-ref(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
+getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
@@ -506,12 +506,12 @@ function circshift(a, shiftamts)
     a[I...]::typeof(a)
 end
 
-## Indexing: assign ##
+## Indexing: setindex! ##
 
 # 1-d indexing is assumed defined on subtypes
-assign(t::AbstractArray, x, i::Real) =
-    error("assign not defined for ",typeof(t))
-assign(t::AbstractArray, x) = throw(MethodError(assign, (t, x)))
+setindex!(t::AbstractArray, x, i::Real) =
+    error("setindex! not defined for ",typeof(t))
+setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
 
 ## Concatenation ##
 
@@ -1220,8 +1220,22 @@ bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)
 
 # Basic AbstractArray functions
 
-max{T}(A::AbstractArray{T}, b::(), region) = reducedim(max,A,region,typemin(T))
-min{T}(A::AbstractArray{T}, b::(), region) = reducedim(min,A,region,typemax(T))
+# for reductions that expand 0 dims to 1
+reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 :
+                                               size(A,i)))
+
+# keep 0 dims in place
+reduced_dims0(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
+                                                contains(region, i) ? 1 :
+                                                size(A,i)))
+
+reducedim(f::Function, A, region, v0) =
+    reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
+
+max{T}(A::AbstractArray{T}, b::(), region) =
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
+min{T}(A::AbstractArray{T}, b::(), region) =
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
 sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
 prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
 
@@ -1336,8 +1350,9 @@ function prod{T}(A::AbstractArray{T})
 end
 
 function min{T<:Integer}(A::AbstractArray{T})
-    v = typemax(T)
-    for i=1:length(A)
+    if isempty(A); error("min: argument is empty"); end
+    v = A[1]
+    for i=2:length(A)
         x = A[i]
         if x < v
             v = x
@@ -1347,8 +1362,9 @@ function min{T<:Integer}(A::AbstractArray{T})
 end
 
 function max{T<:Integer}(A::AbstractArray{T})
-    v = typemin(T)
-    for i=1:length(A)
+    if isempty(A); error("max: argument is empty"); end
+    v = A[1]
+    for i=2:length(A)
         x = A[i]
         if x > v
             v = x

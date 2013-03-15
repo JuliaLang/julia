@@ -214,7 +214,7 @@ end
 
 function findmax(a::BitArray)
     if length(a) == 0
-        return (false, 0)
+        error("findmax: array is empty")
     end
     m = false
     mi = 1
@@ -233,7 +233,7 @@ end
 
 function findmin(a::BitArray)
     if length(a) == 0
-        return (true, 0)
+        error("findmin: array is empty")
     end
     m = true
     mi = 1

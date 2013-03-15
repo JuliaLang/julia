@@ -137,7 +137,7 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
     if (dt->mutabl) return 0;
     size_t sz = dt->size;
     if (sz == 0) return 1;
-    size_t nf = dt->names->length;
+    size_t nf = jl_tuple_len(dt->names);
     if (nf == 0) {
         return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
     }
@@ -196,6 +196,12 @@ JL_CALLABLE(jl_f_isa)
     JL_NARGS(isa, 2, 2);
     JL_TYPECHK(isa, type, args[1]);
     return (jl_subtype(args[0],args[1],1) ? jl_true : jl_false);
+}
+
+DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
+{
+    if (!jl_subtype(x,t,1))
+        jl_type_error("typeassert", t, x);
 }
 
 JL_CALLABLE(jl_f_typeassert)
@@ -681,7 +687,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
             jl_show_tuple(str, dt->parameters, '{', '}', 0);
         }
         JL_PUTC('(', s);
-        if (dt->names->length>0 || dt->size==0) {
+        if (jl_tuple_len(dt->names)>0 || dt->size==0) {
             size_t i;
             size_t n = jl_tuple_len(dt->names);
             for(i=0; i < n; i++) {
@@ -894,7 +900,7 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
     size_t sz = jl_datatype_size(tv);
     uptrint_t h = inthash((uptrint_t)tv);
     if (sz == 0) return ~h;
-    size_t nf = dt->names->length;
+    size_t nf = jl_tuple_len(dt->names);
     if (nf == 0) {
         return bits_hash(jl_data_ptr(v), sz) ^ h;
     }

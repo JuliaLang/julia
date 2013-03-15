@@ -221,7 +221,11 @@ jl_tuple_t *jl_tuple(size_t n, ...)
     va_list args;
     if (n == 0) return jl_null;
     va_start(args, n);
+#ifdef OVERLAP_TUPLE_LEN
+    jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, n);
+#else
     jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, n+1);
+#endif
     jl_tuple_set_len_unsafe(jv, n);
     for(size_t i=0; i < n; i++) {
         jl_tupleset(jv, i, va_arg(args, jl_value_t*));
@@ -232,7 +236,11 @@ jl_tuple_t *jl_tuple(size_t n, ...)
 
 jl_tuple_t *jl_tuple1(void *a)
 {
+#ifdef OVERLAP_TUPLE_LEN
+    jl_tuple_t *t = (jl_tuple_t*)alloc_2w();
+#else
     jl_tuple_t *t = (jl_tuple_t*)alloc_3w();
+#endif
     t->type = (jl_value_t*)jl_tuple_type;
     jl_tuple_set_len_unsafe(t, 1);
     jl_tupleset(t, 0, a);
@@ -241,7 +249,11 @@ jl_tuple_t *jl_tuple1(void *a)
 
 jl_tuple_t *jl_tuple2(void *a, void *b)
 {
+#ifdef OVERLAP_TUPLE_LEN
+    jl_tuple_t *t = (jl_tuple_t*)alloc_3w();
+#else
     jl_tuple_t *t = (jl_tuple_t*)alloc_4w();
+#endif
     t->type = (jl_value_t*)jl_tuple_type;
     jl_tuple_set_len_unsafe(t, 2);
     jl_tupleset(t, 0, a);
@@ -252,7 +264,11 @@ jl_tuple_t *jl_tuple2(void *a, void *b)
 jl_tuple_t *jl_alloc_tuple_uninit(size_t n)
 {
     if (n == 0) return jl_null;
+#ifdef OVERLAP_TUPLE_LEN
+    jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, n);
+#else
     jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, n+1);
+#endif
     jl_tuple_set_len_unsafe(jv, n);
     return jv;
 }
@@ -593,7 +609,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->instance = NULL;
     t->struct_decl = NULL;
     t->size = 0;
-    if (abstract || parameters->length > 0) {
+    if (abstract || jl_tuple_len(parameters) > 0) {
         t->uid = 0;
     }
     else {

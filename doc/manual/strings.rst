@@ -590,23 +590,6 @@ Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_. It's an
 excellent introduction to Unicode and UTF-8, and may help alleviate some
 confusion regarding the matter.
 
-In byte array literals, objects interpolate as their binary
-representation rather than as their string representation::
-
-    julia> msg = "Hello."
-    "Hello."
-
-    julia> len = uint16(length(msg))
-    6
-
-    julia> b"$len$msg"
-    [6,0,72,101,108,108,111,46]
-
-Here the first two bytes are the native (little-endian on x86) binary
-representation of the length of the string "Hello.", encoded as a
-unsigned 16-bit integer, while the following bytes are the ASCII bytes
-of the string "Hello." itself.
-
 Regular Expressions
 -------------------
 

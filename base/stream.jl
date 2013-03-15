@@ -126,6 +126,7 @@ end
 function wait(forwhat, notify_list_name, filter_fcn)
     args = ()
     while filter_fcn(forwhat)
+        assert(current_task() != Scheduler, "Cannot execute blocking function from Scheduler")
         thing = isa(forwhat,Tuple) ? forwhat[1] : forwhat
         wt = WaitTask(forwhat, filter_fcn)
         push!(thing.(notify_list_name), wt)

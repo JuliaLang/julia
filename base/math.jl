@@ -6,10 +6,10 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cosd, cotd, cscd, secd, sind, tand,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
-       log, log2, log10, log1p, logb, exp, exp2, expm1, 
+       log, log2, log10, log1p, exponent, exp, exp2, expm1,
        cbrt, sqrt, square, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
-       lgamma, hypot, gamma, lfact, max, min, ilogb, ldexp, frexp,
+       lgamma, hypot, gamma, lfact, max, min, ldexp, frexp,
        clamp, modf, ^, 
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
@@ -93,7 +93,7 @@ const libm = Base.libm_name
 const openlibm_extras = "libopenlibm-extras"
 
 # functions with no domain error
-for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2)
+for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -113,16 +113,7 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
-for f in (:logb, :expm1, :significand)
-    @eval begin
-        ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        ($f)(x::Integer) = ($f)(float(x))
-        @vectorize_1arg Real $f
-    end
-end
-
-for f in (:ceil, :trunc) # :rint, :nearbyint
+for f in (:ceil, :trunc, :significand) # :rint, :nearbyint
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -165,19 +156,19 @@ min(x::Float64, y::Float64) = ccall((:fmin,libm),  Float64, (Float64,Float64), x
 min(x::Float32, y::Float32) = ccall((:fminf,libm), Float32, (Float32,Float32), x, y)
 @vectorize_2arg Real min
 
-function ilogb(x::Float64)
+function exponent(x::Float64)
     if x==0 || !isfinite(x)
         throw(DomainError())
     end
     int(ccall((:ilogb,libm), Int32, (Float64,), x))
 end
-function ilogb(x::Float32)
+function exponent(x::Float32)
     if x==0 || !isfinite(x)
         throw(DomainError())
     end
     int(ccall((:ilogbf,libm), Int32, (Float32,), x))
 end
-@vectorize_1arg Real ilogb
+@vectorize_1arg Real exponent
 
 ldexp(x::Float64,e::Int) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, int32(e))
 ldexp(x::Float32,e::Int) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, int32(e))

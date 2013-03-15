@@ -3,7 +3,7 @@ module Metadata
 import Git
 import Base.isequal, Base.isless, Base.contains, Base.hash
 
-export parse_requires, Version, VersionSet
+export parse_requires, Version, VersionSet, packages, versions, dependencies
 
 function gen_versions(pkg::String)
     for (ver,sha1) in Git.each_tagged_version(pkg)

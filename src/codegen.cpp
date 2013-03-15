@@ -766,7 +766,11 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
         if (it != ctx->closureEnv->end()) {
             int idx = (*it).second;
+#ifdef OVERLAP_TUPLE_LEN
+            val = emit_nthptr((Value*)ctx->envArg, idx+1);
+#else
             val = emit_nthptr((Value*)ctx->envArg, idx+2);
+#endif
         }
         else {
             Value *l = (*ctx->vars)[s->name];
@@ -1026,7 +1030,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
             Value *arg1 = boxed(emit_expr(args[1], ctx));
             JL_GC_POP();
-            return emit_nthptr(arg1, (size_t)0);
+            return emit_typeof(arg1);
         }
     }
     else if (f->fptr == &jl_f_typeassert && nargs==2) {
@@ -1044,6 +1048,23 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 JL_GC_POP();
                 return arg1;
             }
+        }
+        if (jl_subtype(ty, (jl_value_t*)jl_type_type, 0)) {
+            std::vector<Type *> fargt(0);
+            fargt.push_back(jl_pvalue_llvmt);
+            fargt.push_back(jl_pvalue_llvmt);
+            FunctionType *ft = FunctionType::get(T_void, fargt, false);
+            Value *typeassert = jl_Module->getOrInsertFunction("jl_typeassert", ft);
+            Value *arg1 = emit_expr(args[1], ctx);
+            int ldepth = ctx->argDepth;
+            if (arg1->getType() != jl_pvalue_llvmt) {
+                arg1 = boxed(arg1);
+                make_gcroot(arg1, ctx);
+            }
+            builder.CreateCall2(typeassert, arg1, boxed(emit_expr(args[2], ctx)));
+            ctx->argDepth = ldepth;
+            JL_GC_POP();
+            return arg1;
         }
     }
     else if (f->fptr == &jl_f_isa && nargs==2) {
@@ -1106,7 +1127,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (idx > 0 && (idx < tlen || (idx == tlen && !isseqt))) {
                     // known to be in bounds
                     JL_GC_POP();
+#ifdef OVERLAP_TUPLE_LEN
+                    return emit_nthptr(arg1, idx);
+#else
                     return emit_nthptr(arg1, idx+1);
+#endif
                 }
                 if (idx==0 || (!isseqt && idx > tlen)) {
                     builder.CreateCall2(jlthrow_line_func,
@@ -1121,8 +1146,12 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                     emit_unboxed(args[2], ctx));
             emit_bounds_check(idx, tlen, ctx);
             JL_GC_POP();
+#ifdef OVERLAP_TUPLE_LEN
+            return emit_nthptr(arg1, idx);
+#else
             return emit_nthptr(arg1,
                                builder.CreateAdd(idx, ConstantInt::get(T_size,1)));
+#endif
         }
     }
     else if (f->fptr == &jl_f_tuple) {
@@ -1154,24 +1183,46 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         // first, then do hand-over-hand to track the tuple.
         Value *arg1 = boxed(emit_expr(args[1], ctx));
         make_gcroot(arg1, ctx);
+#ifdef OVERLAP_TUPLE_LEN
+        size_t nwords = nargs+1;
+#else
+        size_t nwords = nargs+2;
+#endif
         Value *tup = 
             builder.CreateCall(jlallocobj_func,
-                               ConstantInt::get(T_size,
-                                                sizeof(void*)*(nargs+2)));
+                               ConstantInt::get(T_size, sizeof(void*)*nwords));
+#ifdef OVERLAP_TUPLE_LEN
+        builder.CreateStore(arg1, emit_nthptr_addr(tup, 1));
+#else
         builder.CreateStore(arg1, emit_nthptr_addr(tup, 2));
+#endif
         ctx->argDepth--;
         make_gcroot(tup, ctx);
+#ifdef  OVERLAP_TUPLE_LEN
+        builder.
+            CreateStore(builder.
+                        CreateOr(builder.CreatePtrToInt(literal_pointer_val((jl_value_t*)jl_tuple_type), T_int64),
+                                 ConstantInt::get(T_int64, nargs<<52)),
+                        builder.CreateBitCast(emit_nthptr_addr(tup, (size_t)0),
+                                              T_pint64));
+#else
         builder.CreateStore(literal_pointer_val((jl_value_t*)jl_tuple_type),
                             emit_nthptr_addr(tup, (size_t)0));
         builder.CreateStore(literal_pointer_val((jl_value_t*)nargs),
                             emit_nthptr_addr(tup, (size_t)1));
+#endif
+#ifdef OVERLAP_TUPLE_LEN
+        size_t offs = 1;
+#else
+        size_t offs = 2;
+#endif
         for(i=1; i < nargs; i++) {
             builder.CreateStore(V_null,
-                                emit_nthptr_addr(tup, i+2));
+                                emit_nthptr_addr(tup, i+offs));
         }
         for(i=1; i < nargs; i++) {
             builder.CreateStore(boxed(emit_expr(args[i+1], ctx)),
-                                emit_nthptr_addr(tup, i+2));
+                                emit_nthptr_addr(tup, i+offs));
         }
         ctx->argDepth = last_depth;
         JL_GC_POP();
@@ -1505,9 +1556,17 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
     if (it != ctx->closureEnv->end()) {
         int idx = (*it).second;
         if (isBoxed(s->name, ctx)) {
+#ifdef OVERLAP_TUPLE_LEN
+            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+1), 1);
+#else
             return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+2), 1);
+#endif
         }
+#ifdef OVERLAP_TUPLE_LEN
+        return emit_nthptr_addr((Value*)ctx->envArg, idx+1);
+#else
         return emit_nthptr_addr((Value*)ctx->envArg, idx+2);
+#endif
     }
     Value *l = (*ctx->vars)[s->name];
     if (l != NULL) {
@@ -2609,7 +2668,11 @@ static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
 extern "C" jl_value_t *jl_new_box(jl_value_t *v)
 {
     jl_value_t *box = (jl_value_t*)alloc_2w();
+#ifdef OVERLAP_TUPLE_LEN
+    box->type = (size_t)jl_box_any_type;
+#else
     box->type = jl_box_any_type;
+#endif
     ((jl_value_t**)box)[1] = v;
     return box;
 }

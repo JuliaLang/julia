@@ -29,7 +29,7 @@ function splitdir(path::ByteString)
     a, b = splitdrive(path)
     m = match(path_dir_splitter,b)
     m == nothing && return (a,b)
-    a *= isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1]
+    a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
     a, m.captures[3]
 end
 splitdir(path::String) = splitdir(bytestring(path))
