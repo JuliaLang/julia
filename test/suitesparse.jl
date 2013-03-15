@@ -107,15 +107,14 @@ A = CholmodSparse!(int32([0,1,2,3,6,9,12,15,18,20,25,30,34,36,39,43,47,52,58,62,
                     2.29724661236e8,-5.57173510779e7,-833333.333333,-1.25e6,2.5e8,2.39928529451e6,
                     9.61679848804e8,275828.470683,-5.57173510779e7,1.09411960038e7,2.08333333333e6,
                     1.0e8,-2.5e6,140838.195984,-1.09779731332e8,5.31278103775e8], 48, 48, 1)
-#show(A)
 @test_approx_eq norm(A,Inf) 3.570948074697437e9
 @test_approx_eq norm(A) 3.570948074697437e9
+@test isvalid(A)
 
 B = A * ones(size(A,2))
 chma = cholfact(A)
-#show(chma)
+@test isvalid(chma)
 x = chma\B
-#show(x)
 @test_approx_eq x.mat ones(size(x))
 
 #lp_afiro example
@@ -133,9 +132,9 @@ afiro = CholmodSparse!(int32([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,
                         1.0,-1.0,1.0,-1.0,1.0,-1.0,1.0,1.0,-0.43,1.0,1.0,0.109,-0.43,1.0,1.0,0.108,
                         -0.39,1.0,1.0,0.108,-0.37,1.0,1.0,0.107,-1.0,2.191,-1.0,2.219,-1.0,2.249,
                         -1.0,2.279,1.4,-1.0,1.0,-1.0,1.0,1.0,1.0], 27, 51, 0)
-#show(afiro)
 chmaf = cholfact(afiro)
-#show(chmaf)
-sol = solve(chmaf, afiro*ones(size(afiro,2))) # least squares solution
-# ToDo: check for the residual being orthogonal to the rows of afiro
-#show(sol)
+y = afiro'*ones(size(afiro,1))
+sol = solve(chmaf, afiro*y) # least squares solution
+@test isvalid(sol)
+pred = afiro'*sol
+@test norm(afiro * (y.mat - pred.mat)) < 1e-8 
