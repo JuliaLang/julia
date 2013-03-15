@@ -149,6 +149,7 @@ function wait_accept(server::TcpSocket)
     end
     wt = WaitTask()
     while true
+        assert(current_task() != Scheduler, "Cannot execute blocking function from Scheduler")
         push!(server.connectnotify,wt)
         args = yield(wt)
         if isa(args,InterruptException)
