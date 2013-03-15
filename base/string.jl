@@ -209,6 +209,8 @@ function search(s::String, t::String, i::Integer)
 end
 search(s::String, t::String) = search(s,t,start(s))
 
+contains(s::String, t::String) = search(s,t,start(s)) == 0:-1 ? false : true
+
 function cmp(a::String, b::String)
     i = start(a)
     j = start(b)
