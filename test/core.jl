@@ -659,3 +659,25 @@ immutable Foo2517; end
 @test repr(Foo2517()) == "Foo2517()"
 @test repr(Array(Foo2517,1)) == "[Foo2517()]"
 @test Foo2517() === Foo2517()
+
+# issue #1474
+type X1474{a,b} end
+begin
+    local Y
+    Y{A,B}(::Type{X1474{A,B}}) = 1
+    Y{A}(::Type{X1474{A}}) = 2
+    Y(::Type{X1474}) = 3
+    @test Y(X1474) == 3
+    @test Y(X1474{Int}) == 2
+    @test Y(X1474{Int,String}) == 1
+end
+
+# issue #2562
+type Node2562{T}
+    value::T
+    Node2562(value::T) = new(value)
+end
+Node2562{T}(value::T, args...) = Node2562{T}(value, args...)
+makenode2562(value) = Node2562(value)
+@test isa(Node2562(0), Node2562)
+@test isa(makenode2562(0), Node2562)

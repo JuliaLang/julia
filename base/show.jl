@@ -596,7 +596,7 @@ function alignment(
     return a
 end
 
-function print_matrix_row(io,
+function print_matrix_row(io::IO,
     X::AbstractMatrix, A::Vector,
     i::Integer, cols::AbstractVector, sep::String
 )
@@ -617,7 +617,7 @@ function print_matrix_row(io,
     end
 end
 
-function print_matrix_vdots(io,
+function print_matrix_vdots(io::IO,
     vdots::String, A::Vector, sep::String, M::Integer, m::Integer
 )
     for k = 1:length(A)
@@ -633,7 +633,7 @@ function print_matrix_vdots(io,
     end
 end
 
-function print_matrix(io,
+function print_matrix(io::IO,
     X::AbstractMatrix, rows::Integer, cols::Integer,
     pre::String, sep::String, post::String,
     hdots::String, vdots::String, ddots::String,
@@ -708,11 +708,11 @@ function print_matrix(io,
         end
     end
 end
-print_matrix(io, X::AbstractMatrix, rows::Integer, cols::Integer) =
+print_matrix(io::IO, X::AbstractMatrix, rows::Integer, cols::Integer) =
     print_matrix(io, X, rows, cols, " ", "  ", "",
                  "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 
-print_matrix(io, X::AbstractMatrix) = print_matrix(io, X, tty_rows()-4, tty_cols())
+print_matrix(io::IO, X::AbstractMatrix) = print_matrix(io, X, tty_rows()-4, tty_cols())
 
 summary(x) = string(typeof(x))
 
@@ -723,13 +723,13 @@ dims2string(d) = length(d) == 0 ? "0-dimensional" :
 summary{T}(a::AbstractArray{T}) =
     string(dims2string(size(a)), " ", T, " ", typeof(a).name)
 
-function show_nd(io, a::AbstractArray)
+function show_nd(io::IO, a::AbstractArray)
     if isempty(a)
         return
     end
     tail = size(a)[3:]
     nd = ndims(a)-2
-    function print_slice(io, idxs...)
+    function print_slice(io::IO, idxs...)
         for i = 1:nd
             ii = idxs[i]
             if size(a,i+2) > 10
@@ -817,7 +817,7 @@ function showall(io::IO, a::AbstractArray)
     cartesian_map(print_slice, tail)
 end
 
-function show_vector(io, v, opn, cls)
+function show_vector(io::IO, v, opn, cls)
     X = reshape(v,(1,length(v)))
     print_matrix(io, X, 1, tty_cols(), opn, ", ", cls, "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 end

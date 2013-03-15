@@ -1004,7 +1004,7 @@
 			  ,@stmts
 			  ,@stuff
 			  ,@rini
-			  (call (top assign) ,arr ,r ,@new-idxs)
+			  (call setindex! ,arr ,r ,@new-idxs)
 			  ,r)))))
 
    (pattern-lambda (ref a . idxs)
@@ -1021,7 +1021,7 @@
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
 			,@(append stmts stuff)
-			(call (top ref) ,arr ,@new-idxs)))))
+			(call getindex ,arr ,@new-idxs)))))
 
    (pattern-lambda (curly type . elts)
 		   `(call (top apply_type) ,type ,@elts))
@@ -1263,7 +1263,7 @@
                        (if (call (top !) (call (top isa) ,t Type))
                            (call error "invalid array index"))
                        (= ,result (call (top Array) ,t 1 ,ncols))
-                       ,@(map (lambda (x i) `(call (top assign) ,result ,x ,i))
+                       ,@(map (lambda (x i) `(call (top setindex!) ,result ,x ,i))
                               a (cdr (iota (+ ncols 1))))
                        ,result)))
 
@@ -1283,7 +1283,7 @@
                      (map
                        (lambda (row i)
                          (map
-                           (lambda (x j) `(call (top assign) ,result ,x ,i ,j))
+                           (lambda (x j) `(call (top setindex!) ,result ,x ,i ,j))
                            (cdr row)
                            (cdr (iota (+ ncols 1)))))
                        rows
@@ -1345,7 +1345,7 @@
 	(if (null? ranges)
 	    `(block (= ,oneresult ,expr)
 		    (type_goto ,initlabl)
-		    (call (top assign) ,result ,oneresult ,ri)
+		    (call (top setindex!) ,result ,oneresult ,ri)
 		    (+= ,ri 1))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
@@ -1385,7 +1385,7 @@
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
 	(if (null? ranges)
-	    `(block (call (top assign) ,result ,expr ,ri)
+	    `(block (call (top setindex!) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
 		  ,(construct-loops (cdr ranges) (cdr rs)))))
@@ -1420,7 +1420,7 @@
 	    `(block (= ,onekey ,(cadr expr))
 		    (= ,oneval ,(caddr expr))
 		    (type_goto ,initlabl)
-		    (call (top assign) ,result ,oneval ,onekey))
+		    (call (top setindex!) ,result ,oneval ,onekey))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
 
@@ -1456,7 +1456,7 @@
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
 	(if (null? ranges)
-	    `(call (top assign) ,result ,(caddr expr) ,(cadr expr))
+	    `(call (top setindex!) ,result ,(caddr expr) ,(cadr expr))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
 		  ,(construct-loops (cdr ranges) (cdr rs)))))
 
@@ -1503,9 +1503,9 @@
     (define (construct-loops ranges iters oneresult-dim)
       (if (null? ranges)
 	  (if (null? iters)
-	      `(block (call (top assign) ,result ,expr ,ri)
+	      `(block (call (top setindex!) ,result ,expr ,ri)
 		      (+= ,ri 1))
-	      `(block (call (top assign) ,result (ref ,expr ,@(reverse iters)) ,ri)
+	      `(block (call (top setindex!) ,result (ref ,expr ,@(reverse iters)) ,ri)
 		      (+= ,ri 1)) )
 	  (if (eq? (car ranges) `:)
 	      (let ((i (gensy)))

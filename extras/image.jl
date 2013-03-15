@@ -1,4 +1,4 @@
-import Base.ref, Base.assign, Base.sub, Base.size, Base.copy
+import Base.getindex, Base.setindex!, Base.sub, Base.size, Base.copy
 
 ## Color spaces
 abstract ColorSpace
@@ -18,10 +18,10 @@ type CSNamed <: ColorSpace
     str::Vector{ASCIIString}
 end
 CSNamed(t...) = CSNamed([t...])  # allow tuple
-function ref(n::CSNamed,ind::Int)
+function getindex(n::CSNamed,ind::Int)
     return n.str[ind]
 end
-function assign(n::CSNamed,value,key)
+function setindex!(n::CSNamed,value,key)
     n.str[key] = value
 end
 
@@ -234,7 +234,7 @@ function ImageArray{DType<:Number}(data::Array{DType},arrayi_order::ASCIIString)
     ImageArray{DType}(data,arrayi_order,getminmax(DType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
 end
 
-### Copy and ref functions ###
+### Copy and getindex functions ###
 # Deep copy---copies everything that is immutable
 function copy(img::ImageArray)
     ImageArray(copy(img.data),
@@ -297,10 +297,10 @@ function _image_named_coords_sub(img::Image,ind...)
     return sniprange
 end
 
-# This supports two ref syntaxes
-function ref(img::ImageArray,ind...)
+# This supports two getindex syntaxes
+function getindex(img::ImageArray,ind...)
     if isa(ind[1],Char)
-        ## Named ref syntax: ref(img,'a',20:50,'b',40:200,...)
+        ## Named getindex syntax: getindex(img,'a',20:50,'b',40:200,...)
         imgret = copy_pfields(img)
         sniprange = _image_named_coords_sub(img,ind...)
         # Do the snip
@@ -308,9 +308,9 @@ function ref(img::ImageArray,ind...)
         imgret.arrayi_range = sniprange
         return imgret
     else
-        # Normal ref syntax: img[20:50,40:200,...]
+        # Normal getindex syntax: img[20:50,40:200,...]
         imgret = copy_pfields(img)
-        imgret.data = ref(img.data,ind...)
+        imgret.data = getindex(img.data,ind...)
         for i = 1:length(ind)
             imgret.arrayi_range[i] = ind[i]
         end
@@ -336,14 +336,14 @@ function sub(img::ImageArray,ind...)
         return imgret
     end
 end
-function assign(img::ImageArray,val,ind...)
+function setindex!(img::ImageArray,val,ind...)
     if isa(ind[1],Char)
-        ## Named assign syntax: assign(img,'a',20:50,'b',40:200,...)
+        ## Named setindex! syntax: setindex!(img,'a',20:50,'b',40:200,...)
         sniprange = _image_named_coords_sub(img,ind)
         # Do the snip
         img.data[sniprange...] = val
     else
-        # Normal assign syntax: img[20:50,40:200,...]
+        # Normal setindex! syntax: img[20:50,40:200,...]
         imgret = copy_pfields(img)
         img.data[ind...] = val
     end

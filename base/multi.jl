@@ -52,7 +52,7 @@
 # - timer events
 # - send pings at some interval to detect failed/hung machines
 # - integrate event loop with other kinds of i/o (non-messages)
-# ? method_missing for waiting (ref/assign/localdata seems to cover a lot)
+# ? method_missing for waiting (getindex/setindex!/localdata seems to cover a lot)
 # * serializing closures
 # * recover from i/o errors
 # * handle remote execution errors

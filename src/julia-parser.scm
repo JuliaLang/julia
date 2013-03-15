@@ -1263,20 +1263,28 @@
 	    (else
 	     (loop (cons (parse-eq* s) vec) outer)))))))
 
+(define (peek-non-newline-token s)
+  (let loop ((t (peek-token s)))
+    (if (newline? t)
+        (begin (take-token s)
+               (loop (peek-token s)))
+        t)))
+
 (define (parse-cat s closer)
   (with-normal-ops
    (with-inside-vec
     (if (eqv? (require-token s) closer)
 	(begin (take-token s)
                '())
-	(let* ((first (parse-eq* s))
-	       (next (peek-token s)))
+	(let ((first (parse-eq* s)))
           (if (dict-literal? first)
-              (if (eqv? next 'for)
-                  (begin (take-token s)
-                         (parse-dict-comprehension s first closer))
-                  (parse-dict s first closer))
-              (case next
+              (case (peek-non-newline-token s)
+                ((for)
+                 (take-token s)
+                 (parse-dict-comprehension s first closer))
+                (else
+                 (parse-dict s first closer)))
+              (case (peek-token s)
                 ((#\,)
                  (parse-vcat s first closer))
                 ((for)

@@ -42,5 +42,5 @@ type RefGroup
     RefGroup(P) = new([ RemoteRef(p) for p=P ])
 end
 
-ref(r::RefGroup, i) = fetch(r.refs[i])
-assign(r::RefGroup, v, i) = put(r.refs[i], v)
+getindex(r::RefGroup, i) = fetch(r.refs[i])
+setindex!(r::RefGroup, v, i) = put(r.refs[i], v)

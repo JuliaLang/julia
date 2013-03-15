@@ -1,5 +1,5 @@
 # parameters limiting potentially-infinite types
-const MAX_TYPEUNION_LEN = 2
+const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 2
 const MAX_TUPLETYPE_LEN  = 8
 const MAX_TUPLE_DEPTH = 4
@@ -498,7 +498,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     if length(argtypes)>1 && isa(argtypes[1],Tuple) && argtypes[2]===Int
         # allow tuple indexing functions to take advantage of constant
         # index arguments.
-        if f === Main.Base.ref
+        if f === Main.Base.getindex
             e.head = :call1
             return tupleref_tfunc(fargs, argtypes[1], argtypes[2])
         elseif f === Main.Base.next
@@ -593,7 +593,11 @@ end
 
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,apply) && length(fargs)>0
-        af = isconstantfunc(fargs[1], sv)
+        if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
+            af = argtypes[1].parameters[1]
+        else
+            af = isconstantfunc(fargs[1], sv)
+        end
         if !is(af,false)
             aargtypes = argtypes[2:]
             if all(x->isa(x,Tuple), aargtypes) &&
@@ -627,23 +631,6 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                     end
                 end
                 return Tuple
-            end
-        else
-            ft = abstract_eval(fargs[1], vtypes, sv)
-            if isType(ft)
-                # TODO: improve abstract_call_constructor
-                st = ft.parameters[1]
-                if isstructtype(st) && isleaftype(st)
-                    f = st
-                    _methods(f,(),0)
-                else
-                    if isa(st,TypeVar)
-                        st = st.ub
-                    end
-                    if isstructtype(st)
-                        return st
-                    end
-                end
             end
         end
     end
@@ -743,6 +730,9 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = typeintersect(t, Any)
+        if isa(t,UnionType)
+            t = typejoin(t.types...)
+        end
         if is(t,None)
         elseif isleaftype(t)
             t = Type{t}
@@ -863,7 +853,7 @@ type StateUpdate
     state::VarTable
 end
 
-function ref(x::StateUpdate, s::Symbol)
+function getindex(x::StateUpdate, s::Symbol)
     if is(x.var,s)
         return x.vtype
     end
@@ -1557,6 +1547,9 @@ function effect_free(e)
         return true
     end
     if isa(e,Expr)
+        if e.head === :static_typeof
+            return true
+        end
         ea = e.args
         if e.head === :call || e.head === :call1
             for a in ea

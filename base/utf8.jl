@@ -31,7 +31,7 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 endof(s::UTF8String) = thisind(s,length(s.data))
 length(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
 
-function ref(s::UTF8String, i::Int)
+function getindex(s::UTF8String, i::Int)
     d = s.data
     b = d[i]
     if !is_utf8_start(b)
@@ -74,7 +74,7 @@ end
 isvalid(s::UTF8String, i::Integer) =
     (1 <= i <= endof(s.data)) && is_utf8_start(s.data[i])
 
-function ref(s::UTF8String, r::Range1{Int})
+function getindex(s::UTF8String, r::Range1{Int})
     a, b = first(r), last(r)
     i = isvalid(s,a) ? a : nextind(s,a)
     j = b < endof(s) ? nextind(s,b)-1 : endof(s.data)
@@ -107,5 +107,5 @@ write(io::IO, s::UTF8String) = write(io, s.data)
 utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
-convert(::Type{UTF8String}, a::Array{Uint8,1}) = check_utf8(UTF8String(a))
+convert(::Type{UTF8String}, a::Array{Uint8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("invalid UTF-8 sequence")
 convert(::Type{UTF8String}, s::String) = utf8(bytestring(s))

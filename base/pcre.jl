@@ -72,7 +72,7 @@ function compile(pattern::String, options::Integer)
     if re_ptr == C_NULL
         error("compile: $(bytestring(errstr[1]))",
               " at position $(erroff[1]+1)",
-              " in $(quote_string(pattern))")
+              " in $(repr(pattern))")
     end
     size = info(re_ptr, C_NULL, INFO_SIZE, Int32)
     regex = Array(Uint8,size)

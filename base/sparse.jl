@@ -136,6 +136,8 @@ copy(S::SparseMatrixCSC) =
 similar(S::SparseMatrixCSC, Tv::Type) = 
     SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), Array(Tv, length(S.rowval)))
 
+similar(S::SparseMatrixCSC, Tv::Type, d::(Int,Int)) = spzeros(Tv, d[1], d[2])
+
 function similar(A::SparseMatrixCSC, Tv::Type, Ti::Type)
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
 
@@ -726,11 +728,15 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
     end
 end
 
-max{T}(A::SparseMatrixCSC{T}) = reducedim(max,A,(1,2),typemin(T))
-max{T}(A::SparseMatrixCSC{T}, b::(), region) = reducedim(max,A,region,typemin(T))
+max{T}(A::SparseMatrixCSC{T}) =
+    isempty(A) ? error("max: argument is empty") : reducedim(max,A,(1,2),typemin(T))
+max{T}(A::SparseMatrixCSC{T}, b::(), region) =
+    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
 
-min{T}(A::SparseMatrixCSC{T}) = reducedim(min,A,(1,2),typemax(T))
-min{T}(A::SparseMatrixCSC{T}, b::(), region) = reducedim(min,A,region,typemax(T))
+min{T}(A::SparseMatrixCSC{T}) =
+    isempty(A) ? error("min: argument is empty") : reducedim(min,A,(1,2),typemax(T))
+min{T}(A::SparseMatrixCSC{T}, b::(), region) =
+    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
 
 sum{T}(A::SparseMatrixCSC{T}) = reducedim(+,A,(1,2),zero(T))
 sum{T}(A::SparseMatrixCSC{T}, region)  = reducedim(+,A,region,zero(T))
@@ -743,11 +749,11 @@ prod{T}(A::SparseMatrixCSC{T}, region) = reducedim(*,A,region,one(T))
 #sum(A::SparseMatrixCSC{Bool}, region) = reducedim(+,A,region,0,Int)
 #sum(A::SparseMatrixCSC{Bool}) = nnz(A)
 
-## ref
-ref(A::SparseMatrixCSC, i::Integer) = ref(A, ind2sub(size(A),i))
-ref(A::SparseMatrixCSC, I::(Integer,Integer)) = ref(A, I[1], I[2])
+## getindex
+getindex(A::SparseMatrixCSC, i::Integer) = getindex(A, ind2sub(size(A),i))
+getindex(A::SparseMatrixCSC, I::(Integer,Integer)) = getindex(A, I[1], I[2])
 
-function ref{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
+function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error(BoundsError); end
     first = A.colptr[i1]
     last = A.colptr[i1+1]-1
@@ -765,10 +771,10 @@ function ref{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     return zero(T)
 end
 
-ref{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, j::Integer) = ref(A,I,[j])
-ref{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = ref(A,[i],J)
+getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, j::Integer) = getindex(A,I,[j])
+getindex{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = getindex(A,[i],J)
 
-function ref_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
+function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
 
     (m, n) = size(A)
     nJ = length(J)
@@ -806,7 +812,7 @@ end
 # TODO: See if growing arrays is faster than pre-computing structure
 # and then populating nonzeros
 # TODO: Use binary search in cases where nI >> nnz(A[:,j]) or nI << nnz(A[:,j])
-function ref_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
+function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
 
     (m, n) = size(A)
     nI = length(I)
@@ -872,8 +878,8 @@ function ref_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVe
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-# ref_I_sorted based on merging of sorted lists
-function ref_I_sorted_old{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
+# getindex_I_sorted based on merging of sorted lists
+function getindex_I_sorted_old{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
 
     (m, n) = size(A)
     nI = length(I)
@@ -947,7 +953,7 @@ function ref_I_sorted_old{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::Abstra
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-function ref_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
+function getindex_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
     (m, n) = size(A)
     nI = length(I)
     nJ = length(J)
@@ -1030,25 +1036,25 @@ function ref_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVec
 end
 
 # S = A[I, J]
-function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
     m = size(A, 1)
 
     if isa(I, Range) || isa(I, Range1); I = [I]; end
 
     if I == 1:m
-        return ref_cols(A, J)
+        return getindex_cols(A, J)
     elseif issorted(I)
-        return ref_I_sorted(A, I, J)
+        return getindex_I_sorted(A, I, J)
     else
-        return ref_general(A, I, J)
+        return getindex_general(A, I, J)
     end
 
 end
 
-## assign
-assign(A::SparseMatrixCSC, v, i::Integer) = assign(A, v, ind2sub(size(A),i)...)
+## setindex!
+setindex!(A::SparseMatrixCSC, v, i::Integer) = setindex!(A, v, ind2sub(size(A),i)...)
 
-function assign{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
+function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
     i0 = convert(Ti, i0)
     i1 = convert(Ti, i1)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error(BoundsError); end
@@ -1153,19 +1159,19 @@ function assign{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
     return A
 end
 
-assign(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector) = assign(A, v, [i], J)
-assign(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector, j::Integer) = assign(A, v, I, [j])
+setindex!(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector) = setindex!(A, v, [i], J)
+setindex!(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector, j::Integer) = setindex!(A, v, I, [j])
 
-assign{Tv}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector, J::AbstractVector) = 
-    assign(A, fill(x::Tv, (length(I), length(J))), I, J)
+setindex!{Tv}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector, J::AbstractVector) = 
+    setindex!(A, fill(x::Tv, (length(I), length(J))), I, J)
 
-assign{Tv}(A::SparseMatrixCSC{Tv}, S::Matrix{Tv}, I::AbstractVector, J::AbstractVector) = 
-      assign(A, sparse(S), I, J)
+setindex!{Tv}(A::SparseMatrixCSC{Tv}, S::Matrix{Tv}, I::AbstractVector, J::AbstractVector) = 
+      setindex!(A, sparse(S), I, J)
 
 # A[I,J] = B
-function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
     if size(B,1) != length(I) || size(B,2) != length(J)
-        return("error in assign: mismatched dimensions")
+        return("error in setindex!: mismatched dimensions")
     end
 
     issortedI = issorted(I)

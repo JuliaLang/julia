@@ -15,9 +15,17 @@ const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 
 # some utility functions
 
-@unix_only dir() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(ENV["HOME"],".julia")))
-@windows_only begin
-    dir() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(ENV["HOME"],"packages")))
+@unix_only const DIR_NAME = ".julia"
+@windows_only const DIR_NAME = "packages"
+
+function dir()
+    b = abspath(get(ENV,"JULIA_PKGDIR",joinpath(ENV["HOME"],DIR_NAME)))
+    x, y = VERSION.major, VERSION.minor
+    d = joinpath(b,"v$x.$y")
+    isdir(d) && return d
+    d = joinpath(b,"v$x")
+    isdir(d) && return d
+    return b
 end
 dir(pkg::String...) = joinpath(dir(),pkg...)
 
@@ -106,7 +114,7 @@ function init(meta::String)
             # initial content
             run(`touch REQUIRE`)
             run(`git add REQUIRE`)
-            run(`git submodule add $meta METADATA`)
+            run(`git submodule add -b devel $meta METADATA`)
             run(`git commit -m "Empty package repo"`)
             cd(Git.autoconfig_pushurl,"METADATA")
             Metadata.gen_hashes()
@@ -262,7 +270,46 @@ function _resolve()
         end
     end
     sort!(reqs)
-    want = Resolve.resolve(reqs,fixed)
+
+    pkgs = Metadata.packages()
+    vers = Metadata.versions(pkgs)
+    deps = Metadata.dependencies(union(pkgs,keys(fixed)))
+    filter!(reqs) do r
+        if has(fixed, r.package)
+            if !contains(r, Version(r.package,fixed[r.package]))
+                warn("$(r.package) is fixed at $(repr(fixed[r.package])) which doesn't satisfy $(r.versions).")
+            end
+            false
+        else
+            true
+        end
+    end
+    filter!(pkgs) do p
+        !has(fixed, p)
+    end
+    filter!(vers) do v
+        !has(fixed, v.package)
+    end
+    unsatisfiable = Set{Version}()
+    filter!(deps) do d
+        p = d[2].package
+        if has(fixed, p)
+            if !contains(d[2], Version(p, fixed[p]))
+                add!(unsatisfiable, d[1])
+            end
+            false # drop
+        else
+            true # keep
+        end
+    end
+    filter!(vers) do v
+        !contains(unsatisfiable, v)
+    end
+    filter!(deps) do d
+        !contains(unsatisfiable, d[1])
+    end
+    want = Resolve.resolve(reqs,vers,deps)
+
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
         if has(have,pkg)
@@ -515,6 +562,10 @@ end
 
 update() = cd_pkgdir() do
     cd("METADATA") do
+        run(`git fetch -q --all`)
+        run(`git checkout -q HEAD^0`)
+        run(`git branch -f devel origin/devel`)
+        run(`git checkout -q devel`)
         run(`git pull`)
     end
     Metadata.gen_hashes()

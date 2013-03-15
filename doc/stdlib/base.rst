@@ -183,7 +183,7 @@ Generic Functions
 
    Invoke a method for the given generic function matching the specified types (as a tuple), on the specified arguments. The arguments must be compatible with the specified types. This allows invoking a method other than the most specific matching method, which is useful when the behavior of a more general definition is explicitly needed (often as part of the implementation of a more specific method of the same function).
 
-.. function:: |
+.. function:: |(x, f)
    
    Applies a function to the preceding argument which allows for easy function chaining.
 
@@ -225,7 +225,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    For a set of iterable objects, returns an iterable of tuples, where the ``i``\ th tuple contains the ``i``\ th component of each input iterable.
 
-   Note that ``zip`` is it's own inverse: [zip(zip(a...)...)...] == [a...]
+   Note that ``zip`` is it's own inverse: ``[zip(zip(a...)...)...] == [a...]``.
 
 
 Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
@@ -243,7 +243,7 @@ General Collections
 
 .. function:: length(collection) -> Integer
 
-   For ordered, indexable collections, the maximum index ``i`` for which ``ref(collection, i)`` is valid. For unordered collections, the number of elements.
+   For ordered, indexable collections, the maximum index ``i`` for which ``getindex(collection, i)`` is valid. For unordered collections, the number of elements.
 
 .. function:: endof(collection) -> Integer
 
@@ -355,15 +355,17 @@ Iterable Collections
 Indexable Collections
 ---------------------
 
-.. function:: ref(collection, key...)
-              collection[key...]
+.. function:: getindex(collection, key...)
 
    Retrieve the value(s) stored at the given key or index within a collection.
+   The syntax ``a[i,j,...]`` is converted by the compiler to
+   ``getindex(a, i, j, ...)``.
 
-.. function:: assign(collection, value, key...)
-              collection[key...] = value
+.. function:: setindex!(collection, value, key...)
 
    Store the given value at the given key or index within a collection.
+   The syntax ``a[i,j,...] = x`` is converted by the compiler to
+   ``setindex!(a, x, i, j, ...)``.
 
 Fully implemented by: ``Array``, ``DArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``String``.
 
@@ -568,16 +570,15 @@ Strings
 
    Return an array of the characters in ``string``.
 
-.. function:: *
-              string(strs...)
+.. function:: *(s, t)
 
    Concatenate strings.
 
    **Example**: ``"Hello " * "world" == "Hello world"``
 
-.. function:: ^
+.. function:: ^(s, n)
 
-   Repeat a string.
+   Repeat string ``s`` ``n`` times.
 
    **Example**: ``"Julia "^3 == "Julia Julia Julia "``
 
@@ -619,23 +620,15 @@ Strings
 
 .. function:: is_valid_ascii(s) -> Bool
 
-   Returns true if the string is valid ASCII, false otherwise.
+   Returns true if the string or byte vector is valid ASCII, false otherwise.
 
 .. function:: is_valid_utf8(s) -> Bool
 
-   Returns true if the string is valid UTF-8, false otherwise.
+   Returns true if the string or byte vector is valid UTF-8, false otherwise.
 
-.. function:: check_ascii(s)
+.. function:: is_valid_char(c) -> Bool
 
-   Calls :func:`is_valid_ascii` on string. Throws error if it is not valid.
-
-.. function:: check_utf8(s)
-
-   Calls :func:`is_valid_utf8` on string. Throws error if it is not valid.
-
-.. function:: byte_string_classify(s)
-
-   Returns 0 if the string is neither valid ASCII nor UTF-8, 1 if it is valid ASCII, and 2 if it is valid UTF-8.
+   Returns true if the given char or integer is a valid Unicode code point.
 
 .. function:: search(string, char, [i])
 
@@ -814,6 +807,10 @@ I/O
 
    Global variable referring to the standard input stream.
 
+.. data:: OUTPUT_STREAM
+
+   The default stream used for text output, e.g. in the ``print`` and ``show`` functions.
+
 .. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
@@ -906,6 +903,14 @@ Text I/O
 
    Print (using :func:`print`) ``x`` followed by a newline
 
+.. function:: @printf("%Fmt", args...)
+
+   Print arg(s) using C ``printf()`` style format specification string.
+
+.. function:: @sprintf(stream::IOStream, "%Fmt", args...)
+    
+   Write ``@printf`` formatted output arg(s) to stream.
+
 .. function:: showall(x)
 
    Show x, printing all elements of arrays
@@ -989,17 +994,57 @@ Standard Numeric Types
 Mathematical Functions
 ----------------------
 
-.. function:: -
+.. function:: -(x)
 
-   Unary minus
+   Unary minus operator.
 
-.. function:: + - * / \\ ^
+.. function:: +(x, y)
 
-   The binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
+   Binary addition operator.
 
-.. function:: .+ .- .* ./ .\\ .^
+.. function:: -(x, y)
 
-   The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
+   Binary subtraction operator.
+
+.. function:: *(x, y)
+
+   Binary multiplication operator.
+
+.. function:: /(x, y)
+
+   Binary left-division operator.
+
+.. function:: \\(x, y)
+
+   Binary right-division operator.
+
+.. function:: ^(x, y)
+
+   Binary exponentiation operator.
+
+.. function:: .+(x, y)
+
+   Element-wise binary addition operator.
+
+.. function:: .-(x, y)
+
+   Element-wise binary subtraction operator.
+
+.. function:: .*(x, y)
+
+   Element-wise binary multiplication operator.
+
+.. function:: ./(x, y)
+
+   Element-wise binary left division operator.
+
+.. function:: .\\(x, y)
+
+   Element-wise binary right division operator.
+
+.. function:: .^(x, y)
+
+   Element-wise binary exponentiation operator.
 
 .. function:: div(a,b)
 
@@ -1013,16 +1058,19 @@ Mathematical Functions
 
    Modulus after division, returning in the range [0,m)
 
-.. function:: rem
-              %
+.. function:: rem(x, m)
 
    Remainder after division
+
+.. function:: %(x, m)
+
+   Remainder after division. The operator form of ``rem``.
 
 .. function:: mod1(x,m)
 
    Modulus after division, returning in the range (0,m]
 
-.. function:: //
+.. function:: //(num, den)
 
    Rational division
 
@@ -1034,35 +1082,59 @@ Mathematical Functions
 
    Denominator of the rational representation of ``x``
 
-.. function:: << >>
+.. function:: <<(x, n)
 
-   Left and right shift operators
+   Left shift operator.
 
-.. function:: == != < <= > >=
+.. function:: >>(x, n)
 
-   Comparison operators to test equals, not equals, less than, less than or equals, greater than, and greater than or equals
+   Right shift operator.
+
+.. function:: ==(x, y)
+
+   Equality comparison operator.
+
+.. function:: !=(x, y)
+
+   Not-equals comparison operator.
+
+.. function:: <(x, y)
+
+   Less-than comparison operator.
+
+.. function:: <=(x, y)
+
+   Less-than-or-equals comparison operator.
+
+.. function:: >(x, y)
+
+   Greater-than comparison operator.
+
+.. function:: >=(x, y)
+
+   Greater-than-or-equals comparison operator.
 
 .. function:: cmp(x,y)
 
    Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively
 
-.. function:: !
+.. function:: !(x)
 
    Boolean not
 
-.. function:: ~
+.. function:: ~(x)
 
-   Boolean or bitwise not
+   Bitwise not
 
-.. function:: &
+.. function:: &(x, y)
 
    Bitwise and
 
-.. function:: |
+.. function:: |(x, y)
 
    Bitwise or
 
-.. function:: $
+.. function:: $(x, y)
 
    Bitwise exclusive or
 
@@ -1216,11 +1288,11 @@ Mathematical Functions
 
 .. function:: sinc(x)
 
-   Compute :math:`sin(\pi x) / x`
+   Compute :math:`\sin(\pi x) / x`
 
 .. function:: cosc(x)
 
-   Compute :math:`cos(\pi x) / x`
+   Compute :math:`\cos(\pi x) / x`
 
 .. function:: degrees2radians(x)
 
@@ -1232,7 +1304,7 @@ Mathematical Functions
 
 .. function:: hypot(x, y)
 
-   Compute the :math:`\sqrt{(x^2+y^2)}` without undue overflow or underflow
+   Compute the :math:`\sqrt{x^2+y^2}` without undue overflow or underflow
 
 .. function:: log(x)
    
@@ -1249,14 +1321,6 @@ Mathematical Functions
 .. function:: log1p(x)
 
    Accurate natural logarithm of ``1+x``
-
-.. function:: logb(x)
-
-   Return the exponent of x, represented as a floating-point number
-
-.. function:: ilogb(x) 
-
-   Return the exponent of x, represented as a signed integer value
 
 .. function:: frexp(val, exp)
 
@@ -1722,6 +1786,10 @@ Data Formats
    
    For example, ``significand(15.2)/15.2 == 0.125``, and ``significand(15.2)*8 == 15.2``
 
+.. function:: exponent(x) -> Int
+
+   Get the exponent of a normalized floating-point number.
+
 .. function:: float64_valued(x::Rational)
 
    True if ``x`` can be losslessly represented as a ``Float64`` data type
@@ -1737,10 +1805,6 @@ Data Formats
 .. function:: char(x)
 
    Convert a number or array to ``Char`` data type
-
-.. function:: safe_char(x)
-
-   Convert to ``Char``, checking for invalid code points
 
 .. function:: complex(r,i)
 
@@ -1781,6 +1845,30 @@ Numbers
 
    The constant pi
 
+.. data:: im
+
+   The imaginary unit
+
+.. data:: e
+
+   The constant e
+
+.. data:: Inf
+
+   Positive infinity of type Float64
+
+.. data:: Inf32
+
+   Positive infinity of type Float32
+
+.. data:: NaN
+
+   A not-a-number value of type Float64
+
+.. data:: NaN32
+
+   A not-a-number value of type Float32
+
 .. function:: isdenormal(f) -> Bool
 
    Test whether a floating point number is denormal
@@ -1820,14 +1908,6 @@ Numbers
 .. function:: real_valued(x)
 
    Test whether ``x`` is numerically equal to some real number
-
-.. function:: exponent(f)
-
-   Get the exponent of a floating-point number
-
-.. function:: mantissa(f)
-
-   Get the mantissa of a floating-point number
 
 .. function:: BigInt(x)
 
@@ -1995,7 +2075,7 @@ Constructors
 
    Construct an uninitialized dense array. ``dims`` may be a tuple or a series of integer arguments.
 
-.. function:: ref(type)
+.. function:: getindex(type)
 
    Construct an empty 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
 
@@ -2082,19 +2162,19 @@ All mathematical operations and functions are supported for arrays
 Indexing, Assignment, and Concatenation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. function:: ref(A, ind)
+.. function:: getindex(A, ind)
 
    Returns a subset of ``A`` as specified by ``ind``, which may be an ``Int``, a ``Range``, or a ``Vector``.
 
 .. function:: sub(A, ind)
 
-   Returns a SubArray, which stores the input ``A`` and ``ind`` rather than computing the result immediately. Calling ``ref`` on a SubArray computes the indices on the fly.
+   Returns a SubArray, which stores the input ``A`` and ``ind`` rather than computing the result immediately. Calling ``getindex`` on a SubArray computes the indices on the fly.
 
 .. function:: slicedim(A, d, i)
 
    Return all the data of ``A`` where the index for dimension ``d`` equals ``i``. Equivalent to ``A[:,:,...,i,:,:,...]`` where ``i`` is in position ``d``.
 
-.. function:: assign(A, X, ind)
+.. function:: setindex!(A, X, ind)
 
    Store an input array ``X`` within some subset of ``A`` as specified by ``ind``.
 
@@ -2290,23 +2370,23 @@ Linear Algebra
 
 Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.
 
-.. function:: *
+.. function:: *(A, B)
 
    Matrix multiplication
 
-.. function:: \
+.. function:: \\(A, B)
 
    Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B``. For rectangular ``A``, QR factorization is used. For triangular ``A``, a triangular solve is performed. For square ``A``, Cholesky factorization is tried if the input is symmetric with a heavy diagonal. LU factorization is used in case Cholesky factorization fails or for general square inputs. If ``size(A,1) > size(A,2)``, the result is a least squares solution of ``A*X+eps=B`` using the singular value decomposition. ``A`` does not need to have full rank.
 
-.. function:: dot
+.. function:: dot(x, y)
 
    Compute the dot product
 
-.. function:: cross
+.. function:: cross(x, y)
 
    Compute the cross product of two 3-vectors
 
-.. function:: norm
+.. function:: norm(a)
 
    Compute the norm of a ``Vector`` or a ``Matrix``
 
@@ -2620,37 +2700,37 @@ Combinatorics
 Statistics
 ----------
 
-.. function:: mean(v, [dim])
+.. function:: mean(v[, region])
 
-   Compute the mean of whole array ``v``, or optionally along dimension ``dim``
+   Compute the mean of whole array ``v``, or optionally along the dimensions in ``region``.
 
-.. function:: std(v, [corrected])
+.. function:: std(v[, region])
 
-   Compute the sample standard deviation of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- mean(v)).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- mean(v)).^2) / length(v))``, which is the empirical standard deviation of the sample.
+   Compute the sample standard deviation of a vector or array``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
 
-.. function:: std(v, m, [corrected])
+.. function:: stdm(v, m)
 
-   Compute the sample standard deviation of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- m).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- m).^2) / length(v))``, which is the empirical standard deviation of the sample.
+   Compute the sample standard deviation of a vector ``v`` with known mean ``m``.
 
-.. function:: var(v, [corrected])
+.. function:: var(v[, region])
 
-   Compute the sample variance of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- mean(v)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- mean(v)).^2) / length(v)``, which is the empirical variance of the sample.
+   Compute the sample variance of a vector or array``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
 
-.. function:: var(v, m, [corrected])
+.. function:: varm(v, m)
 
-   Compute the sample variance of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- m)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- m)).^2) / length(v)``, which is the empirical variance of the sample.
+   Compute the sample variance of a vector ``v`` with known mean ``m``.
 
 .. function:: median(v)
 
-   Compute the median of a vector ``v``
+   Compute the median of a vector ``v``.
 
-.. function:: hist(v, [n])
+.. function:: hist(v[, n])
 
-   Compute the histogram of ``v``, optionally using ``n`` bins
+   Compute the histogram of ``v``, optionally using ``n`` bins.
 
 .. function:: hist(v, e)
 
-   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
+   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins.
 
 .. function:: quantile(v, p)
 
@@ -2660,13 +2740,17 @@ Statistics
 
    Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
 
-.. function:: cov(v)
+.. function:: cov(v1[, v2])
 
-   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
+   Compute the Pearson covariance between two vectors ``v1`` and ``v2``. If
+   called with a single element ``v``, then computes covariance of columns of
+   ``v``.
 
-.. function:: cor(v)
+.. function:: cor(v1[, v2])
 
-   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
+   Compute the Pearson correlation between two vectors ``v1`` and ``v2``. If
+   called with a single element ``v``, then computes correlation of columns of
+   ``v``.
 
 Signal Processing
 -----------------
@@ -3105,7 +3189,7 @@ System
 
 .. data:: ENV
 
-   Reference to the singleton ``EnvHash``.
+   Reference to the singleton ``EnvHash``, providing a dictionary interface to system environment variables.
 
 C Interface
 -----------

@@ -115,8 +115,8 @@ macro which(ex)
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
-            if isa(a11, TopNode) && a11.name == :assign
-                exret = Expr(:call, :which, eval(Expr(:toplevel, :assign)), map(esc, a1.args[2:end])...)
+            if isa(a11, TopNode) && a11.name == :setindex!
+                exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
             end
         end
     elseif ex.head == :thunk
@@ -207,6 +207,12 @@ let LOCALE = nothing
         LOCALE
     end
     function locale(s::ByteString)
+        global help_category_list, help_category_dict
+               help_module_dict, help_function_dict
+        help_category_list = nothing
+        help_category_dict = nothing
+        help_module_dict = nothing
+        help_function_dict = nothing
         LOCALE = s
         # XXX:TBD call setlocale
     end
@@ -287,15 +293,16 @@ end
 function help()
     init_help()
     print(
-" Welcome to Julia. The full manual is available at
+"""
+ Welcome to Julia. The full manual is available at
 
     http://docs.julialang.org
 
- To get help on a function, try help(function). To search all help text,
- try apropos(\"string\"). To see available functions, try help(category),
- for one of the following categories:
+ To get help, try help(function), help("@macro"), or help("variable").
+ To search all help text, try apropos("string"). To see available functions,
+ try help(category), for one of the following categories:
 
-")
+""")
     for cat = help_category_list
         if !isempty(help_category_dict[cat])
             print("  ")
@@ -543,7 +550,7 @@ function show(io::IO, cpu::Array{CPUinfo})
     end
     cpu_summary(io,cpu,first,length(cpu))
 end
-repl_show(io, cpu::Array{CPUinfo}) = show(io, cpu)
+repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
 function cpu_info()
     SC_CLK_TCK = ccall(:SC_CLK_TCK, Int, ())
     UVcpus = Array(Ptr{UV_cpu_info_t},1)

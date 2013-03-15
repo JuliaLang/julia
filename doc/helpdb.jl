@@ -544,7 +544,7 @@
 
 "),
 
-("Generic Functions","Base","|","|()
+("Generic Functions","Base","|","|(x, f)
 
    Applies a function to the preceding argument which allows for easy
    function chaining.
@@ -578,8 +578,8 @@
    the \"i\"th tuple contains the \"i\"th component of each input
    iterable.
 
-   Note that \"zip\" is it's own inverse: [zip(zip(a...)...)...] ==
-   [a...]
+   Note that \"zip\" is it's own inverse: \"[zip(zip(a...)...)...] ==
+   [a...]\".
 
 "),
 
@@ -598,8 +598,8 @@
 ("General Collections","Base","length","length(collection) -> Integer
 
    For ordered, indexable collections, the maximum index \"i\" for
-   which \"ref(collection, i)\" is valid. For unordered collections,
-   the number of elements.
+   which \"getindex(collection, i)\" is valid. For unordered
+   collections, the number of elements.
 
 "),
 
@@ -764,19 +764,19 @@
 
 "),
 
-("Indexable Collections","Base","collection[key...]","ref(collection, key...)
-collection[key...]()
+("Indexable Collections","Base","getindex","getindex(collection, key...)
 
    Retrieve the value(s) stored at the given key or index within a
-   collection.
+   collection. The syntax \"a[i,j,...]\" is converted by the compiler
+   to \"getindex(a, i, j, ...)\".
 
 "),
 
-("Indexable Collections","","collection[key...] = value","assign(collection, value, key...)
-collection[key...] = value
+("Indexable Collections","Base","setindex!","setindex!(collection, value, key...)
 
    Store the given value at the given key or index within a
-   collection.
+   collection. The syntax \"a[i,j,...] = x\" is converted by the
+   compiler to \"setindex!(a, x, i, j, ...)\".
 
 "),
 
@@ -1051,8 +1051,7 @@ collection[key...] = value
 
 "),
 
-("Strings","Base","string","*()
-string(strs...)
+("Strings","Base","*","*(s, t)
 
    Concatenate strings.
 
@@ -1060,9 +1059,9 @@ string(strs...)
 
 "),
 
-("Strings","Base","^","^()
+("Strings","Base","^","^(s, n)
 
-   Repeat a string.
+   Repeat string \"s\" \"n\" times.
 
    **Example**: \"\"Julia \"^3 == \"Julia Julia Julia \"\"
 
@@ -1128,34 +1127,22 @@ string(strs...)
 
 ("Strings","Base","is_valid_ascii","is_valid_ascii(s) -> Bool
 
-   Returns true if the string is valid ASCII, false otherwise.
+   Returns true if the string or byte vector is valid ASCII, false
+   otherwise.
 
 "),
 
 ("Strings","Base","is_valid_utf8","is_valid_utf8(s) -> Bool
 
-   Returns true if the string is valid UTF-8, false otherwise.
+   Returns true if the string or byte vector is valid UTF-8, false
+   otherwise.
 
 "),
 
-("Strings","Base","check_ascii","check_ascii(s)
+("Strings","Base","is_valid_char","is_valid_char(c) -> Bool
 
-   Calls \"is_valid_ascii()\" on string. Throws error if it is not
-   valid.
-
-"),
-
-("Strings","Base","check_utf8","check_utf8(s)
-
-   Calls \"is_valid_utf8()\" on string. Throws error if it is not
-   valid.
-
-"),
-
-("Strings","Base","byte_string_classify","byte_string_classify(s)
-
-   Returns 0 if the string is neither valid ASCII nor UTF-8, 1 if it
-   is valid ASCII, and 2 if it is valid UTF-8.
+   Returns true if the given char or integer is a valid Unicode code
+   point.
 
 "),
 
@@ -1610,6 +1597,19 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
+("Text I/O","Base","@printf","@printf(\"%Fmt\", args...)
+
+   Print arg(s) using C \"printf()\" style format specification
+   string.
+
+"),
+
+("Text I/O","Base","@sprintf","@sprintf(stream::IOStream, \"%Fmt\", args...)
+
+   Write \"@printf\" formatted output arg(s) to stream.
+
+"),
+
 ("Text I/O","Base","showall","showall(x)
 
    Show x, printing all elements of arrays
@@ -1740,23 +1740,81 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","-","-()
+("Mathematical Functions","Base","-","-(x)
 
-   Unary minus
-
-"),
-
-("Mathematical Functions","","+ - * / \\ ^","+ - * / \\ ^
-
-   The binary addition, subtraction, multiplication, left division,
-   right division, and exponentiation operators
+   Unary minus operator.
 
 "),
 
-("Mathematical Functions","",".+ .- .* ./ .\\ .^",".+ .- .* ./ .\\ .^
+("Mathematical Functions","Base","+","+(x, y)
 
-   The element-wise binary addition, subtraction, multiplication, left
-   division, right division, and exponentiation operators
+   Binary addition operator.
+
+"),
+
+("Mathematical Functions","Base","-","-(x, y)
+
+   Binary subtraction operator.
+
+"),
+
+("Mathematical Functions","Base","*","*(x, y)
+
+   Binary multiplication operator.
+
+"),
+
+("Mathematical Functions","Base","/","/(x, y)
+
+   Binary left-division operator.
+
+"),
+
+("Mathematical Functions","Base","\\","\\(x, y)
+
+   Binary right-division operator.
+
+"),
+
+("Mathematical Functions","Base","^","^(x, y)
+
+   Binary exponentiation operator.
+
+"),
+
+("Mathematical Functions","Base","+",".+(x, y)
+
+   Element-wise binary addition operator.
+
+"),
+
+("Mathematical Functions","Base","-",".-(x, y)
+
+   Element-wise binary subtraction operator.
+
+"),
+
+("Mathematical Functions","Base","*",".*(x, y)
+
+   Element-wise binary multiplication operator.
+
+"),
+
+("Mathematical Functions","Base","/","./(x, y)
+
+   Element-wise binary left division operator.
+
+"),
+
+("Mathematical Functions","Base","\\",".\\(x, y)
+
+   Element-wise binary right division operator.
+
+"),
+
+("Mathematical Functions","Base","^",".^(x, y)
+
+   Element-wise binary exponentiation operator.
 
 "),
 
@@ -1778,10 +1836,15 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","%","rem()
-%()
+("Mathematical Functions","Base","rem","rem(x, m)
 
    Remainder after division
+
+"),
+
+("Mathematical Functions","Base","%","%(x, m)
+
+   Remainder after division. The operator form of \"rem\".
 
 "),
 
@@ -1791,7 +1854,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","//","//()
+("Mathematical Functions","Base","//","//(num, den)
 
    Rational division
 
@@ -1809,16 +1872,51 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","","<< >>","<< >>
+("Mathematical Functions","Base","<<","<<(x, n)
 
-   Left and right shift operators
+   Left shift operator.
 
 "),
 
-("Mathematical Functions","","== != < <= > >=","== != < <= > >=
+("Mathematical Functions","Base",">>",">>(x, n)
 
-   Comparison operators to test equals, not equals, less than, less
-   than or equals, greater than, and greater than or equals
+   Right shift operator.
+
+"),
+
+("Mathematical Functions","Base","==","==(x, y)
+
+   Equality comparison operator.
+
+"),
+
+("Mathematical Functions","Base","!=","!=(x, y)
+
+   Not-equals comparison operator.
+
+"),
+
+("Mathematical Functions","Base","<","<(x, y)
+
+   Less-than comparison operator.
+
+"),
+
+("Mathematical Functions","Base","<=","<=(x, y)
+
+   Less-than-or-equals comparison operator.
+
+"),
+
+("Mathematical Functions","Base",">",">(x, y)
+
+   Greater-than comparison operator.
+
+"),
+
+("Mathematical Functions","Base",">=",">=(x, y)
+
+   Greater-than-or-equals comparison operator.
 
 "),
 
@@ -1829,31 +1927,31 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","!","!()
+("Mathematical Functions","Base","!","!(x)
 
    Boolean not
 
 "),
 
-("Mathematical Functions","Base","~","~()
+("Mathematical Functions","Base","~","~(x)
 
-   Boolean or bitwise not
+   Bitwise not
 
 "),
 
-("Mathematical Functions","Base","&","&()
+("Mathematical Functions","Base","&","&(x, y)
 
    Bitwise and
 
 "),
 
-("Mathematical Functions","Base","|","|()
+("Mathematical Functions","Base","|","|(x, y)
 
    Bitwise or
 
 "),
 
-("Mathematical Functions","Base","\$","\$()
+("Mathematical Functions","Base","\$","\$(x, y)
 
    Bitwise exclusive or
 
@@ -2090,13 +2188,13 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 ("Mathematical Functions","Base","sinc","sinc(x)
 
-   Compute sin(\\pi x) / x
+   Compute \\sin(\\pi x) / x
 
 "),
 
 ("Mathematical Functions","Base","cosc","cosc(x)
 
-   Compute cos(\\pi x) / x
+   Compute \\cos(\\pi x) / x
 
 "),
 
@@ -2114,7 +2212,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 ("Mathematical Functions","Base","hypot","hypot(x, y)
 
-   Compute the \\sqrt{(x^2+y^2)} without undue overflow or underflow
+   Compute the \\sqrt{x^2+y^2} without undue overflow or underflow
 
 "),
 
@@ -2139,18 +2237,6 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 ("Mathematical Functions","Base","log1p","log1p(x)
 
    Accurate natural logarithm of \"1+x\"
-
-"),
-
-("Mathematical Functions","Base","logb","logb(x)
-
-   Return the exponent of x, represented as a floating-point number
-
-"),
-
-("Mathematical Functions","Base","ilogb","ilogb(x)
-
-   Return the exponent of x, represented as a signed integer value
 
 "),
 
@@ -2886,6 +2972,12 @@ airyaiprime(x)
 
 "),
 
+("Data Formats","Base","exponent","exponent(x) -> Int
+
+   Get the exponent of a normalized floating-point number.
+
+"),
+
 ("Data Formats","Base","float64_valued","float64_valued(x::Rational)
 
    True if \"x\" can be losslessly represented as a \"Float64\" data
@@ -2908,12 +3000,6 @@ airyaiprime(x)
 ("Data Formats","Base","char","char(x)
 
    Convert a number or array to \"Char\" data type
-
-"),
-
-("Data Formats","Base","safe_char","safe_char(x)
-
-   Convert to \"Char\", checking for invalid code points
 
 "),
 
@@ -3035,18 +3121,6 @@ airyaiprime(x)
 ("Numbers","Base","real_valued","real_valued(x)
 
    Test whether \"x\" is numerically equal to some real number
-
-"),
-
-("Numbers","Base","exponent","exponent(f)
-
-   Get the exponent of a floating-point number
-
-"),
-
-("Numbers","Base","mantissa","mantissa(f)
-
-   Get the mantissa of a floating-point number
 
 "),
 
@@ -3286,7 +3360,7 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","ref","ref(type)
+("Arrays","Base","getindex","getindex(type)
 
    Construct an empty 1-d array of the specified type. This is usually
    called with the syntax \"Type[]\". Element values can be specified
@@ -3419,7 +3493,7 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","ref","ref(A, ind)
+("Arrays","Base","getindex","getindex(A, ind)
 
    Returns a subset of \"A\" as specified by \"ind\", which may be an
    \"Int\", a \"Range\", or a \"Vector\".
@@ -3429,7 +3503,7 @@ airyaiprime(x)
 ("Arrays","Base","sub","sub(A, ind)
 
    Returns a SubArray, which stores the input \"A\" and \"ind\" rather
-   than computing the result immediately. Calling \"ref\" on a
+   than computing the result immediately. Calling \"getindex\" on a
    SubArray computes the indices on the fly.
 
 "),
@@ -3442,7 +3516,7 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","assign","assign(A, X, ind)
+("Arrays","Base","setindex!","setindex!(A, X, ind)
 
    Store an input array \"X\" within some subset of \"A\" as specified
    by \"ind\".
@@ -3744,13 +3818,13 @@ airyaiprime(x)
 
 "),
 
-("Linear Algebra","Base","*","*()
+("Linear Algebra","Base","*","*(A, B)
 
    Matrix multiplication
 
 "),
 
-("Linear Algebra","Base","\\","\\()
+("Linear Algebra","Base","\\","\\(A, B)
 
    Matrix division using a polyalgorithm. For input matrices \"A\" and
    \"B\", the result \"X\" is such that \"A*X == B\". For rectangular
@@ -3764,19 +3838,19 @@ airyaiprime(x)
 
 "),
 
-("Linear Algebra","Base","dot","dot()
+("Linear Algebra","Base","dot","dot(x, y)
 
    Compute the dot product
 
 "),
 
-("Linear Algebra","Base","cross","cross()
+("Linear Algebra","Base","cross","cross(x, y)
 
    Compute the cross product of two 3-vectors
 
 "),
 
-("Linear Algebra","Base","norm","norm()
+("Linear Algebra","Base","norm","norm(a)
 
    Compute the norm of a \"Vector\" or a \"Matrix\"
 
@@ -4294,100 +4368,65 @@ airyaiprime(x)
 
 "),
 
-("Statistics","Base","mean","mean(v[, dim])
+("Statistics","Base","mean","mean(v[, region])
 
-   Compute the mean of whole array \"v\", or optionally along
-   dimension \"dim\"
-
-"),
-
-("Statistics","Base","std","std(v[, corrected])
-
-   Compute the sample standard deviation of a vector \"v\". If the
-   optional argument \"corrected\" is either left unspecified or is
-   explicitly set to the default value of \"true\", then the algorithm
-   will return an estimator of the generative distribution's standard
-   deviation under the assumption that each entry of \"v\" is an IID
-   draw from that generative distribution. This computation is
-   equivalent to calculating \"sqrt(sum((v .- mean(v)).^2) /
-   (length(v) - 1))\" and involves an implicit correction term
-   sometimes called the Bessel correction which insures that the
-   estimator of the variance is unbiased. If, instead, the optional
-   argument \"corrected\" is set to \"false\", then the algorithm will
-   produce the equivalent of \"sqrt(sum((v .- mean(v)).^2) /
-   length(v))\", which is the empirical standard deviation of the
-   sample.
+   Compute the mean of whole array \"v\", or optionally along the
+   dimensions in \"region\".
 
 "),
 
-("Statistics","Base","std","std(v, m[, corrected])
+("Statistics","Base","std","std(v[, region])
+
+   Compute the sample standard deviation of a vector or array``v``,
+   optionally along dimensions in \"region\". The algorithm returns an
+   estimator of the generative distribution's standard deviation under
+   the assumption that each entry of \"v\" is an IID draw from that
+   generative distribution. This computation is equivalent to
+   calculating \"sqrt(sum((v - mean(v)).^2) / (length(v) - 1))\".
+
+"),
+
+("Statistics","Base","stdm","stdm(v, m)
 
    Compute the sample standard deviation of a vector \"v\" with known
-   mean \"m\". If the optional argument \"corrected\" is either left
-   unspecified or is explicitly set to the default value of \"true\",
-   then the algorithm will return an estimator of the generative
-   distribution's standard deviation under the assumption that each
-   entry of \"v\" is an IID draw from that generative distribution.
-   This computation is equivalent to calculating \"sqrt(sum((v .-
-   m).^2) / (length(v) - 1))\" and involves an implicit correction
-   term sometimes called the Bessel correction which insures that the
-   estimator of the variance is unbiased. If, instead, the optional
-   argument \"corrected\" is set to \"false\", then the algorithm will
-   produce the equivalent of \"sqrt(sum((v .- m).^2) / length(v))\",
-   which is the empirical standard deviation of the sample.
+   mean \"m\".
 
 "),
 
-("Statistics","Base","var","var(v[, corrected])
+("Statistics","Base","var","var(v[, region])
 
-   Compute the sample variance of a vector \"v\". If the optional
-   argument \"corrected\" is either left unspecified or is explicitly
-   set to the default value of \"true\", then the algorithm will
-   return an unbiased estimator of the generative distribution's
-   variance under the assumption that each entry of \"v\" is an IID
-   draw from that generative distribution. This computation is
-   equivalent to calculating \"sum((v .- mean(v)).^2) / (length(v) -
-   1)\" and involves an implicit correction term sometimes called the
-   Bessel correction. If, instead, the optional argument \"corrected\"
-   is set to \"false\", then the algorithm will produce the equivalent
-   of \"sum((v .- mean(v)).^2) / length(v)\", which is the empirical
-   variance of the sample.
+   Compute the sample variance of a vector or array``v``, optionally
+   along dimensions in \"region\". The algorithm will return an
+   estimator of the generative distribution's variance under the
+   assumption that each entry of \"v\" is an IID draw from that
+   generative distribution. This computation is equivalent to
+   calculating \"sum((v - mean(v)).^2) / (length(v) - 1)\".
 
 "),
 
-("Statistics","Base","var","var(v, m[, corrected])
+("Statistics","Base","varm","varm(v, m)
 
    Compute the sample variance of a vector \"v\" with known mean
-   \"m\". If the optional argument \"corrected\" is either left
-   unspecified or is explicitly set to the default value of \"true\",
-   then the algorithm will return an unbiased estimator of the
-   generative distribution's variance under the assumption that each
-   entry of \"v\" is an IID draw from that generative distribution.
-   This computation is equivalent to calculating \"sum((v .- m)).^2) /
-   (length(v) - 1)\" and involves an implicit correction term
-   sometimes called the Bessel correction. If, instead, the optional
-   argument \"corrected\" is set to \"false\", then the algorithm will
-   produce the equivalent of \"sum((v .- m)).^2) / length(v)\", which
-   is the empirical variance of the sample.
+   \"m\".
 
 "),
 
 ("Statistics","Base","median","median(v)
 
-   Compute the median of a vector \"v\"
+   Compute the median of a vector \"v\".
 
 "),
 
 ("Statistics","Base","hist","hist(v[, n])
 
-   Compute the histogram of \"v\", optionally using \"n\" bins
+   Compute the histogram of \"v\", optionally using \"n\" bins.
 
 "),
 
 ("Statistics","Base","hist","hist(v, e)
 
    Compute the histogram of \"v\" using a vector \"e\" as the edges
-   for the bins
+   for the bins.
 
 "),
 
@@ -4405,17 +4444,19 @@ airyaiprime(x)
 
 "),
 
-("Statistics","Base","cov","cov(v)
+("Statistics","Base","cov","cov(v1[, v2])
 
    Compute the Pearson covariance between two vectors \"v1\" and
-   \"v2\".
+   \"v2\". If called with a single element \"v\", then computes
+   covariance of columns of \"v\".
 
 "),
 
-("Statistics","Base","cor","cor(v)
+("Statistics","Base","cor","cor(v1[, v2])
 
    Compute the Pearson correlation between two vectors \"v1\" and
-   \"v2\".
+   \"v2\". If called with a single element \"v\", then computes
+   correlation of columns of \"v\".
 
 "),
 
@@ -6999,6 +7040,76 @@ eval_tab_col(glp_prob, k)
 
 "),
 
+("Punctuation","","punctuation","punctuation
+
+   +-----------+---------------------------------------------------------------------------------------------+
+   | symbol    | meaning                                                                                     |
+   +===========+=============================================================================================+
+   | \\\"@m\\\"    | invoke macro m; followed by space-separated expressions                                     |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"!\\\"     | prefix \\\"not\\\" operator                                                                     |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"!\\\"     | at the end of a function name, indicates that a function modifies its argument(s)           |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"#\\\"     | begin single line comment                                                                   |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"\\\$\\\"    | xor operator, string and expression interpolation                                           |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"%\\\"     | remainder operator                                                                          |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"^\\\"     | exponent operator                                                                           |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"&\\\"     | bitwise and                                                                                 |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"*\\\"     | multiply, or matrix multiply                                                                |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"()\\\"    | the empty tuple                                                                             |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"~\\\"     | bitwise not operator                                                                        |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"\\\\\\\"    | backslash operator                                                                          |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"a[]\\\"   | array indexing                                                                              |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"[,]\\\"   | vertical concatenation                                                                      |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"[;]\\\"   | also vertical concatenation                                                                 |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"[  ]\\\"  | with space-separated expressions, horizontal concatenation                                  |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"T{ }\\\"  | parametric type instantiation                                                               |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"{  }\\\"  | construct a cell array                                                                      |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\";\\\"     | statement separator                                                                         |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\",\\\"     | separate function arguments or tuple components                                             |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"?\\\"     | 3-argument conditional operator                                                             |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"\\\"\\\"\\\"  | delimit string literals                                                                     |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"''\\\"    | delimit character literals                                                                  |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | >>``<<    | delimit external process (command) specifications                                           |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"...\\\"   | splice arguments into a function call, or declare a varargs function                        |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\".\\\"     | access named fields in objects or names inside modules, also prefixes elementwise operators |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"a:b\\\"   | range                                                                                       |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"a:s:b\\\" | range                                                                                       |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\":\\\"     | index an entire dimension                                                                   |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"::\\\"    | type annotation                                                                             |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\":( )\\\"  | quoted expression                                                                           |
+   +-----------+---------------------------------------------------------------------------------------------+
+
+"),
+
 ("Base.Sort","Base.Sort","sort","sort(v[, alg[, ord]])
 
    Sort a vector in ascending order.  Specify \"alg\" to choose a
@@ -7190,23 +7301,6 @@ eval_tab_col(glp_prob, k)
       wavwrite(y::Array) = wavwrite(y, @options)
       wavwrite(y::Array, Fs::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs)
       wavwrite(y::Array, Fs::Real, N::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs nbits=N)
-
-"),
-
-("strpack.jl","","pack","pack(io, composite[, strategy])
-
-   Create a packed buffer representation of \"composite\" in stream
-   \"io\", using data alignment coded by \"strategy\". This buffer is
-   suitable to pass as a \"struct\" argument in a \"ccall\".
-
-"),
-
-("strpack.jl","","unpack","unpack(io, T[, strategy])
-
-   Extract an instance of the Julia composite type \"T\" from the
-   packed representation in the stream \"io\". \"io\" must be
-   positioned at the beginning (using \"seek\"). This allows you to
-   read C \"struct\" outputs from \"ccall\".
 
 "),
 

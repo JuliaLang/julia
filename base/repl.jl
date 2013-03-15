@@ -1,6 +1,6 @@
 # called to show a REPL result
 repl_show(v::ANY) = repl_show(OUTPUT_STREAM, v)
-function repl_show(io, v::ANY)
+function repl_show(io::IO, v::ANY)
     if !(isa(v,Function) && isgeneric(v))
         if isa(v,AbstractVector) && !isa(v,Ranges)
             print(io, summary(v))

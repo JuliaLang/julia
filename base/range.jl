@@ -115,26 +115,26 @@ step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 step(r::OrdinalRange) = r.step
 
-min(r::Range1) = r.start
-max(r::Range1) = last(r)
-min(r::Ranges) = step(r) > 0 ? r.start : last(r)
-max(r::Ranges) = step(r) > 0 ? last(r) : r.start
+min(r::Range1) = (isempty(r)&&error("min: range is empty")) || first(r)
+max(r::Range1) = (isempty(r)&&error("max: range is empty")) || last(r)
+min(r::Ranges) = (isempty(r)&&error("min: range is empty")) || (step(r) > 0 ? first(r) :  last(r))
+max(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  last(r) : first(r))
 
 # Ranges are intended to be immutable
 copy(r::Ranges) = r
 
-function ref{T}(r::Ranges{T}, i::Integer)
+function getindex{T}(r::Ranges{T}, i::Integer)
     if !(1 <= i <= r.len); error(BoundsError); end
     oftype(T, r.start + (i-1)*step(r))
 end
 
-ref(r::Range, s::Range{Int}) =
+getindex(r::Range, s::Range{Int}) =
     r.len < last(s) ? error(BoundsError) : Range(r[s.start], r.step*s.step, s.len)
-ref(r::Range1, s::Range{Int}) =
+getindex(r::Range1, s::Range{Int}) =
     r.len < last(s) ? error(BoundsError) : Range(r[s.start], s.step, s.len)
-ref(r::Range, s::Range1{Int}) =
+getindex(r::Range, s::Range1{Int}) =
     r.len < last(s) ? error(BoundsError) : Range(r[s.start], r.step, s.len)
-ref(r::Range1, s::Range1{Int}) =
+getindex(r::Range1, s::Range1{Int}) =
     r.len < last(s) ? error(BoundsError) : Range1(r[s.start], s.len)
 
 show(io::IO, r::Range)  = print(io, r.start,':',step(r),':',last(r))

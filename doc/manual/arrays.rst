@@ -177,9 +177,9 @@ scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
 will be the number of true values in the vector (they behave as if they were
 transformed with ``find``).
 
-Indexing syntax is equivalent to a call to ``ref``::
+Indexing syntax is equivalent to a call to ``getindex``::
 
-    X = ref(A, I_1, I_2, ..., I_n)
+    X = getindex(A, I_1, I_2, ..., I_n)
 
 Example::
 
@@ -213,9 +213,9 @@ The size of X should be ``(length(I_1), length(I_2), ..., length(I_n))``, and
 the value in location ``(i_1, i_2, ..., i_n)`` of A is overwritten with
 the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
 
-Index assignment syntax is equivalent to a call to ``assign``::
+Index assignment syntax is equivalent to a call to ``setindex!``::
 
-      A = assign(A, X, I_1, I_2, ..., I_n)
+      A = setindex!(A, X, I_1, I_2, ..., I_n)
 
 Example::
 
@@ -268,8 +268,7 @@ one of the inputs is a scalar.
     ``sec``, ``csc``, ``cot``, ``asec``, ``acsc``, ``acot``, ``sech``,
     ``csch``, ``coth``, ``asech``, ``acsch``, ``acoth``, ``sinc``,
     ``cosc``, ``hypot``
-7.  Logarithmic functions — ``log``, ``log2``, ``log10``, ``log1p``,
-    ``logb``, ``ilogb``
+7.  Logarithmic functions — ``log``, ``log2``, ``log10``, ``log1p``
 8.  Exponential functions — ``exp``, ``expm1``, ``exp2``, ``ldexp``
 9.  Rounding functions — ``ceil``, ``floor``, ``trunc``, ``round``,
     ``ipart``, ``fpart``
@@ -334,9 +333,9 @@ generic manner for ``AbstractArray``.
 
 ``SubArray`` is a specialization of ``AbstractArray`` that performs
 indexing by reference rather than by copying. A ``SubArray`` is created
-with the ``sub`` function, which is called the same way as ``ref`` (with
+with the ``sub`` function, which is called the same way as ``getindex`` (with
 an array and a series of index arguments). The result of ``sub`` looks
-the same as the result of ``ref``, except the data is left in place.
+the same as the result of ``getindex``, except the data is left in place.
 ``sub`` stores the input index vectors in a ``SubArray`` object, which
 can later be used to index the original array indirectly.
 
