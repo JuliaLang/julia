@@ -17,6 +17,7 @@ Built-ins
 
    base
    constants
+   punctuation
 
 ****************
 Built-in Modules
@@ -40,7 +41,6 @@ Extras
    gzip
    profile
    sound
-   strpack
    textwrap
    zlib
 

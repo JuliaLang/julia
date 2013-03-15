@@ -807,6 +807,10 @@ I/O
 
    Global variable referring to the standard input stream.
 
+.. data:: OUTPUT_STREAM
+
+   The default stream used for text output, e.g. in the ``print`` and ``show`` functions.
+
 .. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
@@ -1841,6 +1845,30 @@ Numbers
 
    The constant pi
 
+.. data:: im
+
+   The imaginary unit
+
+.. data:: e
+
+   The constant e
+
+.. data:: Inf
+
+   Positive infinity of type Float64
+
+.. data:: Inf32
+
+   Positive infinity of type Float32
+
+.. data:: NaN
+
+   A not-a-number value of type Float64
+
+.. data:: NaN32
+
+   A not-a-number value of type Float32
+
 .. function:: isdenormal(f) -> Bool
 
    Test whether a floating point number is denormal
@@ -2672,37 +2700,37 @@ Combinatorics
 Statistics
 ----------
 
-.. function:: mean(v, [dim])
+.. function:: mean(v[, region])
 
-   Compute the mean of whole array ``v``, or optionally along dimension ``dim``
+   Compute the mean of whole array ``v``, or optionally along the dimensions in ``region``.
 
-.. function:: std(v, [corrected])
+.. function:: std(v[, region])
 
-   Compute the sample standard deviation of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- mean(v)).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- mean(v)).^2) / length(v))``, which is the empirical standard deviation of the sample.
+   Compute the sample standard deviation of a vector or array``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
 
-.. function:: std(v, m, [corrected])
+.. function:: stdm(v, m)
 
-   Compute the sample standard deviation of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- m).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- m).^2) / length(v))``, which is the empirical standard deviation of the sample.
+   Compute the sample standard deviation of a vector ``v`` with known mean ``m``.
 
-.. function:: var(v, [corrected])
+.. function:: var(v[, region])
 
-   Compute the sample variance of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- mean(v)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- mean(v)).^2) / length(v)``, which is the empirical variance of the sample.
+   Compute the sample variance of a vector or array``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
 
-.. function:: var(v, m, [corrected])
+.. function:: varm(v, m)
 
-   Compute the sample variance of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- m)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- m)).^2) / length(v)``, which is the empirical variance of the sample.
+   Compute the sample variance of a vector ``v`` with known mean ``m``.
 
 .. function:: median(v)
 
-   Compute the median of a vector ``v``
+   Compute the median of a vector ``v``.
 
-.. function:: hist(v, [n])
+.. function:: hist(v[, n])
 
-   Compute the histogram of ``v``, optionally using ``n`` bins
+   Compute the histogram of ``v``, optionally using ``n`` bins.
 
 .. function:: hist(v, e)
 
-   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
+   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins.
 
 .. function:: quantile(v, p)
 
@@ -2712,13 +2740,17 @@ Statistics
 
    Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
 
-.. function:: cov(v)
+.. function:: cov(v1[, v2])
 
-   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
+   Compute the Pearson covariance between two vectors ``v1`` and ``v2``. If
+   called with a single element ``v``, then computes covariance of columns of
+   ``v``.
 
-.. function:: cor(v)
+.. function:: cor(v1[, v2])
 
-   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
+   Compute the Pearson correlation between two vectors ``v1`` and ``v2``. If
+   called with a single element ``v``, then computes correlation of columns of
+   ``v``.
 
 Signal Processing
 -----------------
@@ -3157,7 +3189,7 @@ System
 
 .. data:: ENV
 
-   Reference to the singleton ``EnvHash``.
+   Reference to the singleton ``EnvHash``, providing a dictionary interface to system environment variables.
 
 C Interface
 -----------

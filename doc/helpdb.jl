@@ -1127,34 +1127,22 @@
 
 ("Strings","Base","is_valid_ascii","is_valid_ascii(s) -> Bool
 
-   Returns true if the string is valid ASCII, false otherwise.
+   Returns true if the string or byte vector is valid ASCII, false
+   otherwise.
 
 "),
 
 ("Strings","Base","is_valid_utf8","is_valid_utf8(s) -> Bool
 
-   Returns true if the string is valid UTF-8, false otherwise.
+   Returns true if the string or byte vector is valid UTF-8, false
+   otherwise.
 
 "),
 
-("Strings","Base","check_ascii","check_ascii(s)
+("Strings","Base","is_valid_char","is_valid_char(c) -> Bool
 
-   Calls \"is_valid_ascii()\" on string. Throws error if it is not
-   valid.
-
-"),
-
-("Strings","Base","check_utf8","check_utf8(s)
-
-   Calls \"is_valid_utf8()\" on string. Throws error if it is not
-   valid.
-
-"),
-
-("Strings","Base","byte_string_classify","byte_string_classify(s)
-
-   Returns 0 if the string is neither valid ASCII nor UTF-8, 1 if it
-   is valid ASCII, and 2 if it is valid UTF-8.
+   Returns true if the given char or integer is a valid Unicode code
+   point.
 
 "),
 
@@ -2252,12 +2240,6 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","ilogb","ilogb(x)
-
-   Return the exponent of x, represented as a signed integer value
-
-"),
-
 ("Mathematical Functions","Base","frexp","frexp(val, exp)
 
    Return a number \"x\" such that it has a magnitude in the interval
@@ -2990,6 +2972,12 @@ airyaiprime(x)
 
 "),
 
+("Data Formats","Base","exponent","exponent(x) -> Int
+
+   Get the exponent of a normalized floating-point number.
+
+"),
+
 ("Data Formats","Base","float64_valued","float64_valued(x::Rational)
 
    True if \"x\" can be losslessly represented as a \"Float64\" data
@@ -3012,12 +3000,6 @@ airyaiprime(x)
 ("Data Formats","Base","char","char(x)
 
    Convert a number or array to \"Char\" data type
-
-"),
-
-("Data Formats","Base","safe_char","safe_char(x)
-
-   Convert to \"Char\", checking for invalid code points
 
 "),
 
@@ -3139,12 +3121,6 @@ airyaiprime(x)
 ("Numbers","Base","real_valued","real_valued(x)
 
    Test whether \"x\" is numerically equal to some real number
-
-"),
-
-("Numbers","Base","exponent","exponent(f)
-
-   Get the exponent of a floating-point number
 
 "),
 
@@ -4392,100 +4368,65 @@ airyaiprime(x)
 
 "),
 
-("Statistics","Base","mean","mean(v[, dim])
+("Statistics","Base","mean","mean(v[, region])
 
-   Compute the mean of whole array \"v\", or optionally along
-   dimension \"dim\"
-
-"),
-
-("Statistics","Base","std","std(v[, corrected])
-
-   Compute the sample standard deviation of a vector \"v\". If the
-   optional argument \"corrected\" is either left unspecified or is
-   explicitly set to the default value of \"true\", then the algorithm
-   will return an estimator of the generative distribution's standard
-   deviation under the assumption that each entry of \"v\" is an IID
-   draw from that generative distribution. This computation is
-   equivalent to calculating \"sqrt(sum((v .- mean(v)).^2) /
-   (length(v) - 1))\" and involves an implicit correction term
-   sometimes called the Bessel correction which insures that the
-   estimator of the variance is unbiased. If, instead, the optional
-   argument \"corrected\" is set to \"false\", then the algorithm will
-   produce the equivalent of \"sqrt(sum((v .- mean(v)).^2) /
-   length(v))\", which is the empirical standard deviation of the
-   sample.
+   Compute the mean of whole array \"v\", or optionally along the
+   dimensions in \"region\".
 
 "),
 
-("Statistics","Base","std","std(v, m[, corrected])
+("Statistics","Base","std","std(v[, region])
+
+   Compute the sample standard deviation of a vector or array``v``,
+   optionally along dimensions in \"region\". The algorithm returns an
+   estimator of the generative distribution's standard deviation under
+   the assumption that each entry of \"v\" is an IID draw from that
+   generative distribution. This computation is equivalent to
+   calculating \"sqrt(sum((v - mean(v)).^2) / (length(v) - 1))\".
+
+"),
+
+("Statistics","Base","stdm","stdm(v, m)
 
    Compute the sample standard deviation of a vector \"v\" with known
-   mean \"m\". If the optional argument \"corrected\" is either left
-   unspecified or is explicitly set to the default value of \"true\",
-   then the algorithm will return an estimator of the generative
-   distribution's standard deviation under the assumption that each
-   entry of \"v\" is an IID draw from that generative distribution.
-   This computation is equivalent to calculating \"sqrt(sum((v .-
-   m).^2) / (length(v) - 1))\" and involves an implicit correction
-   term sometimes called the Bessel correction which insures that the
-   estimator of the variance is unbiased. If, instead, the optional
-   argument \"corrected\" is set to \"false\", then the algorithm will
-   produce the equivalent of \"sqrt(sum((v .- m).^2) / length(v))\",
-   which is the empirical standard deviation of the sample.
+   mean \"m\".
 
 "),
 
-("Statistics","Base","var","var(v[, corrected])
+("Statistics","Base","var","var(v[, region])
 
-   Compute the sample variance of a vector \"v\". If the optional
-   argument \"corrected\" is either left unspecified or is explicitly
-   set to the default value of \"true\", then the algorithm will
-   return an unbiased estimator of the generative distribution's
-   variance under the assumption that each entry of \"v\" is an IID
-   draw from that generative distribution. This computation is
-   equivalent to calculating \"sum((v .- mean(v)).^2) / (length(v) -
-   1)\" and involves an implicit correction term sometimes called the
-   Bessel correction. If, instead, the optional argument \"corrected\"
-   is set to \"false\", then the algorithm will produce the equivalent
-   of \"sum((v .- mean(v)).^2) / length(v)\", which is the empirical
-   variance of the sample.
+   Compute the sample variance of a vector or array``v``, optionally
+   along dimensions in \"region\". The algorithm will return an
+   estimator of the generative distribution's variance under the
+   assumption that each entry of \"v\" is an IID draw from that
+   generative distribution. This computation is equivalent to
+   calculating \"sum((v - mean(v)).^2) / (length(v) - 1)\".
 
 "),
 
-("Statistics","Base","var","var(v, m[, corrected])
+("Statistics","Base","varm","varm(v, m)
 
    Compute the sample variance of a vector \"v\" with known mean
-   \"m\". If the optional argument \"corrected\" is either left
-   unspecified or is explicitly set to the default value of \"true\",
-   then the algorithm will return an unbiased estimator of the
-   generative distribution's variance under the assumption that each
-   entry of \"v\" is an IID draw from that generative distribution.
-   This computation is equivalent to calculating \"sum((v .- m)).^2) /
-   (length(v) - 1)\" and involves an implicit correction term
-   sometimes called the Bessel correction. If, instead, the optional
-   argument \"corrected\" is set to \"false\", then the algorithm will
-   produce the equivalent of \"sum((v .- m)).^2) / length(v)\", which
-   is the empirical variance of the sample.
+   \"m\".
 
 "),
 
 ("Statistics","Base","median","median(v)
 
-   Compute the median of a vector \"v\"
+   Compute the median of a vector \"v\".
 
 "),
 
 ("Statistics","Base","hist","hist(v[, n])
 
-   Compute the histogram of \"v\", optionally using \"n\" bins
+   Compute the histogram of \"v\", optionally using \"n\" bins.
 
 "),
 
 ("Statistics","Base","hist","hist(v, e)
 
    Compute the histogram of \"v\" using a vector \"e\" as the edges
-   for the bins
+   for the bins.
 
 "),
 
@@ -4503,17 +4444,19 @@ airyaiprime(x)
 
 "),
 
-("Statistics","Base","cov","cov(v)
+("Statistics","Base","cov","cov(v1[, v2])
 
    Compute the Pearson covariance between two vectors \"v1\" and
-   \"v2\".
+   \"v2\". If called with a single element \"v\", then computes
+   covariance of columns of \"v\".
 
 "),
 
-("Statistics","Base","cor","cor(v)
+("Statistics","Base","cor","cor(v1[, v2])
 
    Compute the Pearson correlation between two vectors \"v1\" and
-   \"v2\".
+   \"v2\". If called with a single element \"v\", then computes
+   correlation of columns of \"v\".
 
 "),
 
@@ -7097,6 +7040,76 @@ eval_tab_col(glp_prob, k)
 
 "),
 
+("Punctuation","","punctuation","punctuation
+
+   +-----------+---------------------------------------------------------------------------------------------+
+   | symbol    | meaning                                                                                     |
+   +===========+=============================================================================================+
+   | \\\"@m\\\"    | invoke macro m; followed by space-separated expressions                                     |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"!\\\"     | prefix \\\"not\\\" operator                                                                     |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"!\\\"     | at the end of a function name, indicates that a function modifies its argument(s)           |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"#\\\"     | begin single line comment                                                                   |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"\\\$\\\"    | xor operator, string and expression interpolation                                           |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"%\\\"     | remainder operator                                                                          |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"^\\\"     | exponent operator                                                                           |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"&\\\"     | bitwise and                                                                                 |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"*\\\"     | multiply, or matrix multiply                                                                |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"()\\\"    | the empty tuple                                                                             |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"~\\\"     | bitwise not operator                                                                        |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"\\\\\\\"    | backslash operator                                                                          |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"a[]\\\"   | array indexing                                                                              |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"[,]\\\"   | vertical concatenation                                                                      |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"[;]\\\"   | also vertical concatenation                                                                 |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"[  ]\\\"  | with space-separated expressions, horizontal concatenation                                  |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"T{ }\\\"  | parametric type instantiation                                                               |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"{  }\\\"  | construct a cell array                                                                      |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\";\\\"     | statement separator                                                                         |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\",\\\"     | separate function arguments or tuple components                                             |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"?\\\"     | 3-argument conditional operator                                                             |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"\\\"\\\"\\\"  | delimit string literals                                                                     |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"''\\\"    | delimit character literals                                                                  |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | >>``<<    | delimit external process (command) specifications                                           |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"...\\\"   | splice arguments into a function call, or declare a varargs function                        |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\".\\\"     | access named fields in objects or names inside modules, also prefixes elementwise operators |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"a:b\\\"   | range                                                                                       |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"a:s:b\\\" | range                                                                                       |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\":\\\"     | index an entire dimension                                                                   |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\"::\\\"    | type annotation                                                                             |
+   +-----------+---------------------------------------------------------------------------------------------+
+   | \\\":( )\\\"  | quoted expression                                                                           |
+   +-----------+---------------------------------------------------------------------------------------------+
+
+"),
+
 ("Base.Sort","Base.Sort","sort","sort(v[, alg[, ord]])
 
    Sort a vector in ascending order.  Specify \"alg\" to choose a
@@ -7288,23 +7301,6 @@ eval_tab_col(glp_prob, k)
       wavwrite(y::Array) = wavwrite(y, @options)
       wavwrite(y::Array, Fs::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs)
       wavwrite(y::Array, Fs::Real, N::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs nbits=N)
-
-"),
-
-("strpack.jl","","pack","pack(io, composite[, strategy])
-
-   Create a packed buffer representation of \"composite\" in stream
-   \"io\", using data alignment coded by \"strategy\". This buffer is
-   suitable to pass as a \"struct\" argument in a \"ccall\".
-
-"),
-
-("strpack.jl","","unpack","unpack(io, T[, strategy])
-
-   Extract an instance of the Julia composite type \"T\" from the
-   packed representation in the stream \"io\". \"io\" must be
-   positioned at the beginning (using \"seek\"). This allows you to
-   read C \"struct\" outputs from \"ccall\".
 
 "),
 
