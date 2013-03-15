@@ -36,7 +36,6 @@ Extras
    :maxdepth: 1
 
    argparse
-   cpp
    options
    gzip
    profile
