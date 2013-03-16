@@ -234,7 +234,7 @@ function versioninfo(io::IO, verbose::Bool)
         end
         println(io, "  uname: ",readchomp(`uname -mprsv`))
         println(io, "Memory: $(total_memory()/2^30) GB ($(free_memory()/2^20) MB free)")
-        println(io, "Uptime: $(uptime()) sec")
+        try println(io, "Uptime: $(uptime()) sec") catch end
         print(io, "Load Avg: ")
         print_matrix(io,Base.loadavg()')
         println()
