@@ -1095,6 +1095,7 @@ get-unwind: libunwind-$(UNWIND_VER).tar.gz
 configure-unwind: libunwind-$(UNWIND_VER)/config.status
 compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 check-unwind: libunwind-$(UNWIND_VER)/checked
+install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 
 ## GMP ##
