@@ -227,6 +227,10 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    Note that ``zip`` is it's own inverse: ``[zip(zip(a...)...)...] == [a...]``.
 
+.. function:: enumerate(iter)
+
+   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1,
+   and ``x`` is the ``ith`` value from the given iterator.
 
 Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
 
@@ -2828,7 +2832,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
 .. function:: plan_ifft(A [, dims [, flags [, timelimit]]])
 
-   Same as :func:`plan_fft`, but produces a plan that performs an inverse transforms
+   Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
    :func:`ifft`.
 
 .. function:: plan_bfft(A [, dims [, flags [, timelimit]]])
@@ -3124,6 +3128,10 @@ System
 
    Run a command object, constructed with backticks. Throws an error if anything goes wrong, including the process exiting with a non-zero status.
 
+.. function:: spawn(command)
+
+   Run a command object asynchronously, returning the resulting ``Process`` object.
+
 .. function:: success(command)
 
    Run a command object, constructed with backticks, and tell whether it was successful (exited with a code of 0).
@@ -3271,6 +3279,21 @@ C Interface
 
    Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
 
+.. function:: pointer(a[, index])
+
+   Get the native address of an array element. Be careful to ensure that a julia
+   reference to ``a`` exists as long as this pointer will be used.
+
+.. function:: pointer(type, int)
+
+   Convert an integer to a pointer of the specified element type.
+
+.. function:: pointer_to_array(p, dims[, own])
+
+   Wrap a native pointer as a Julia Array object. The pointer element type determines
+   the array element type. ``own`` optionally specifies whether Julia should take
+   ownership of the memory, calling ``free`` on the pointer when the array is no
+   longer referenced.
 
 Errors
 ------
