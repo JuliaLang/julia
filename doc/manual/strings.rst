@@ -353,26 +353,19 @@ can interpolate any expression into a string using parentheses::
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
 
-The expression need not be contained in parentheses, however. For
-example, since a literal array expression is not complete until the
-opening ``[`` is closed by a matching ``]``, you can interpolate an
-array like this::
-
-    julia> x = 2; y = 3; z = 5;
-
-    julia> "x,y,z: $[x,y,z]."
-    "x,y,z: [2,3,5]."
-
 Both concatenation and string interpolation call the generic ``string``
 function to convert objects into ``String`` form. Most non-``String``
 objects are converted to strings as they are shown in interactive
 sessions::
 
     julia> v = [1,2,3]
-    [1,2,3]
+    3-element Int64 Array:
+     1
+     2
+     3
 
     julia> "v: $v"
-    "v: [1,2,3]"
+    "v: [1, 2, 3]"
 
 The ``string`` function is the identity for ``String`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
