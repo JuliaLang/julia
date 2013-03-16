@@ -151,7 +151,7 @@ include("meta.jl")
 
 # sparse matrices and linear algebra
 include("sparse.jl")
-include("linalg/linalg.jl")
+include("linalg.jl")
 importall LinAlg
 
 # signal processing
