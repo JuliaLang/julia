@@ -140,6 +140,13 @@ for (fun,typ) in {(:randexp,:Exponential), (:randg,:Gamma), (:randbeta,:Beta), (
 ")
 end
 
+const IOString = IOBuffer
+export IOString
+const PipeString = PipeBuffer
+export PipeString
+
+# @spawnlocal deprecated
+
 # 0.2
 
 @deprecate  localize         localpart

@@ -413,6 +413,39 @@ function readall(s::IOStream)
 end
 readall(filename::String) = open(readall, filename)
 
+# based on code by Glen Hertz
+function readuntil(s::IO, t::String)
+    l = length(t)
+    if l == 0
+        return ""
+    end
+    if l > 40
+        warn("readuntil(IO,String) will perform poorly with a long string")
+    end
+    out = IOBuffer()
+    m = Array(Char, l)  # last part of stream to match
+    t = collect(t)
+    i = 0
+    while !eof(s)
+        i += 1
+        c = read(s, Char)
+        write(out, c)
+        if i <= l
+            m[i] = c
+        else
+            # shift to last part of s
+            for j = 2:l
+                m[j-1] = m[j]
+            end
+            m[l] = c
+        end
+        if i >= l && m == t
+            break
+        end
+    end
+    return takebuf_string(out)
+end
+
 ## Character streams ##
 const _chtmp = Array(Char, 1)
 function peekchar(s::IOStream)

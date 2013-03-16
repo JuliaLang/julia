@@ -47,7 +47,6 @@ export
     Filter,
     IO,
     IOStream,
-    IOString,  # deprecated
     IOBuffer,
     ImaginaryUnit,
     IntSet,
@@ -58,7 +57,6 @@ export
     #PipeEnd,
     #PipeIn,
     #PipeOut,
-    PipeString,  # deprecated
     PipeBuffer,
     #Port,
     #Ports,
