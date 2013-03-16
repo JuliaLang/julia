@@ -130,7 +130,7 @@ Building Julia requires that the following software be installed:
 - **[gcc, g++][gcc]**           — compiling and linking C, C++
 - **[clang][clang]**            — clang is the default compiler on OS X (Need at least v3.1, Xcode 4.3.3 on OS X)
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
-- **[git]**                     — contributions and version control.
+- **[git]**                     — version control and package management.
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **fetch** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
@@ -194,7 +194,7 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 ## Directories
 
     base/          source code for Julia's standard library
-    contrib/       emacs, vim and textmate support for Julia
+    contrib/       editor support for Julia source, miscellaneous scripts
     deps/          external dependencies
     examples/      example Julia programs
     extras/        useful optional libraries
