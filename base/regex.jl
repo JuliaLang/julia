@@ -123,8 +123,8 @@ done(itr::RegexMatchIterator, m) = m == nothing
 next(itr::RegexMatchIterator, m) =
     (m, match(itr.regex, itr.string, m.offset + (itr.overlap ? 1 : length(m.match))))
 
-each_match(re::Regex, str::String, ovr::Bool) = RegexMatchIterator(re,str,ovr)
-each_match(re::Regex, str::String)            = RegexMatchIterator(re,str,false)
+eachmatch(re::Regex, str::String, ovr::Bool) = RegexMatchIterator(re,str,ovr)
+eachmatch(re::Regex, str::String)            = RegexMatchIterator(re,str,false)
 
 # miscellaneous methods that depend on Regex being defined
 
