@@ -86,7 +86,7 @@ end
 # get array of start indexes for dividing sz into nc chunks
 function defaultdist(sz::Int, nc::Int)
     if sz >= nc
-        linspace(1, sz+1, nc+1)
+        iround(linspace(1, sz+1, nc+1))
     else
         [[1:(sz+1)], zeros(Int, nc-sz)]
     end
