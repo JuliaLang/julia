@@ -275,6 +275,18 @@ function stop_timer(timer::TimeoutAsyncWork)
     ccall(:jl_timer_stop,Int32,(Ptr{Void},),timer.handle)
 end
 
+function sleep(sec::Real)
+    timer = TimeoutAsyncWork(status->tasknotify([wt], status))
+    wt = WaitTask(timer, false)
+    start_timer(timer, iround(sec*1000), 0)
+    args = yield(wt)
+    if isa(args,InterruptException)
+        stop_timer(timer)
+        error(args)
+    end
+    nothing
+end
+
 assignIdleAsyncWork(work::IdleAsyncWork,cb::Function) = ccall(:jl_idle_start,Ptr{Void},(Ptr{Void},),work.handle)
 
 function add_idle_cb(loop::Ptr{Void},cb::Function)
