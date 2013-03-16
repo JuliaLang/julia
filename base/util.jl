@@ -71,7 +71,7 @@ peakflops() = peakflops(2000)
 
 # source files, editing, function reflection
 
-function function_loc(f::Function, types)
+function functionloc(f::Function, types)
     for m = methods(f, types)
         if isa(m[3],LambdaStaticData)
             lsd = m[3]::LambdaStaticData
@@ -83,7 +83,7 @@ function function_loc(f::Function, types)
     end
     error("could not find function definition")
 end
-function_loc(f::Function) = function_loc(f, (Any...))
+functionloc(f::Function) = functionloc(f, (Any...))
 
 function whicht(f, types)
     for m = methods(f, types)
@@ -177,10 +177,10 @@ function less(file::String, line::Integer)
 end
 less(file::String) = less(file, 1)
 
-edit(f::Function)    = edit(function_loc(f)...)
-edit(f::Function, t) = edit(function_loc(f,t)...)
-less(f::Function)    = less(function_loc(f)...)
-less(f::Function, t) = less(function_loc(f,t)...)
+edit(f::Function)    = edit(functionloc(f)...)
+edit(f::Function, t) = edit(functionloc(f,t)...)
+less(f::Function)    = less(functionloc(f)...)
+less(f::Function, t) = less(functionloc(f,t)...)
 
 disassemble(f::Function, types::Tuple) =
     print(ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString)

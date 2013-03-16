@@ -935,7 +935,7 @@ Text I/O
 
    Read all lines as an array.
 
-.. function:: each_line(stream)
+.. function:: eachline(stream)
 
    Create an iterable object that will yield each line from a stream.
 

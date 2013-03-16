@@ -903,7 +903,7 @@ export
 # help and reflection
     ans,
     apropos,
-    function_loc,
+    functionloc,
     edit,
     methods,
     methodswith,
@@ -928,7 +928,7 @@ export
     require,
 
 # RTS internals
-    compile_hint, # TODO: rename to "precompile"?
+    precompile,
     finalizer,
     gc,
     gc_disable,
@@ -1011,7 +1011,6 @@ export
     fetch,
     isready,
     yield,
-    enq_work,
     myid,
     nprocs,
     pmap,
