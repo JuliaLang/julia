@@ -29,21 +29,6 @@ Built-in Modules
 
    sort
 
-******
-Extras
-******
-
-.. toctree::
-   :maxdepth: 1
-
-   argparse
-   options
-   gzip
-   profile
-   sound
-   textwrap
-   zlib
-
 ****************
 Math & Numerical
 ****************
@@ -52,5 +37,4 @@ Math & Numerical
    :maxdepth: 1
 
    blas
-   glpk
 
