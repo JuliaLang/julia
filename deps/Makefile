@@ -27,7 +27,8 @@ unexport CONFIG_SITE
 
 STAGE1_DEPS = uv openlibm-extras random Rmath double-conversion
 STAGE2_DEPS =
-STAGE3_DEPS = suitesparse-wrapper
+#STAGE3_DEPS = suitesparse-wrapper
+STAGE3_DEPS = 
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
