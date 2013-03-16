@@ -618,6 +618,13 @@ OPENBLAS_OBJ_TARGET = $(BUILD)/lib/libopenblas.$(SHLIB_EXT)
 OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH)
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
+ifneq ($(ARCH),x86_64)
+# assume we can't address much memory to spawn many threads
+OPENBLAS_BUILD_OPTS += NUM_THREADS=30
+else
+# assume we may want lots of threads on some future machine
+OPENBLAS_BUILD_OPTS += NUM_THREADS=512
+endif
 endif
 
 ifeq ($(USE_LIB64), 1)
