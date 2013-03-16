@@ -369,6 +369,14 @@
 
 "),
 
+("Iteration","Base","enumerate","enumerate(iter)
+
+   Return an iterator that yields \"(i, x)\" where \"i\" is an index
+   starting at 1, and \"x\" is the \"ith\" value from the given
+   iterator.
+
+"),
+
 ("General Collections","Base","isempty","isempty(collection) -> Bool
 
    Determine whether a collection is empty (has no elements).
@@ -4377,8 +4385,8 @@ airyaiprime(x)
 
 ("Signal Processing","Base","plan_ifft","plan_ifft(A[, dims[, flags[, timelimit]]])
 
-   Same as \"plan_fft()\", but produces a plan that performs an
-   inverse transforms \"ifft()\".
+   Same as \"plan_fft()\", but produces a plan that performs inverse
+   transforms \"ifft()\".
 
 "),
 
@@ -4803,6 +4811,13 @@ airyaiprime(x)
 
 "),
 
+("System","Base","spawn","spawn(command)
+
+   Run a command object asynchronously, returning the resulting
+   \"Process\" object.
+
+"),
+
 ("System","Base","success","success(command)
 
    Run a command object, constructed with backticks, and tell whether
@@ -5034,6 +5049,30 @@ ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 
    Assign to the pointer \"p[i] = x\" or \"*p = x\", making a copy of
    object x into the memory at p.
+
+"),
+
+("C Interface","Base","pointer","pointer(a[, index])
+
+   Get the native address of an array element. Be careful to ensure
+   that a julia reference to \"a\" exists as long as this pointer will
+   be used.
+
+"),
+
+("C Interface","Base","pointer","pointer(type, int)
+
+   Convert an integer to a pointer of the specified element type.
+
+"),
+
+("C Interface","Base","pointer_to_array","pointer_to_array(p, dims[, own])
+
+   Wrap a native pointer as a Julia Array object. The pointer element
+   type determines the array element type. \"own\" optionally
+   specifies whether Julia should take ownership of the memory,
+   calling \"free\" on the pointer when the array is no longer
+   referenced.
 
 "),
 
@@ -5301,29 +5340,98 @@ error(Exception)
 
 "),
 
-("Filesystem","Base","isdir","isdir(s) -> Bool
+("Filesystem","Base","isblockdev","isblockdev(path) -> Bool
 
-   Returns \"true\" if \"s\" is a directory path, \"false\" otherwise.
-
-"),
-
-("Filesystem","Base","isfifo","isfifo(s) -> Bool
-
-   Returns \"true\" if \"s\" is a FIFO path, \"false\" otherwise.
-
-"),
-
-("Filesystem","Base","isfile","isfile(s) -> Bool
-
-   Returns \"true\" if \"s\" is a regular file path, \"false\"
+   Returns \"true\" if \"path\" is a block device, \"false\"
    otherwise.
 
 "),
 
-("Filesystem","Base","islink","islink(s) -> Bool
+("Filesystem","Base","ischardev","ischardev(path) -> Bool
 
-   Returns \"true\" if \"s\" is a symbolic link path, \"false\"
+   Returns \"true\" if \"path\" is a character device, \"false\"
    otherwise.
+
+"),
+
+("Filesystem","Base","isdir","isdir(path) -> Bool
+
+   Returns \"true\" if \"path\" is a directory, \"false\" otherwise.
+
+"),
+
+("Filesystem","Base","isexecutable","isexecutable(path) -> Bool
+
+   Returns \"true\" if the current user has permission to execute
+   \"path\", \"false\" otherwise.
+
+"),
+
+("Filesystem","Base","isfifo","isfifo(path) -> Bool
+
+   Returns \"true\" if \"path\" is a FIFO, \"false\" otherwise.
+
+"),
+
+("Filesystem","Base","isfile","isfile(path) -> Bool
+
+   Returns \"true\" if \"path\" is a regular file, \"false\"
+   otherwise.
+
+"),
+
+("Filesystem","Base","islink","islink(path) -> Bool
+
+   Returns \"true\" if \"path\" is a symbolic link, \"false\"
+   otherwise.
+
+"),
+
+("Filesystem","Base","ispath","ispath(path) -> Bool
+
+   Returns \"true\" if \"path\" is a valid filesystem path, \"false\"
+   otherwise.
+
+"),
+
+("Filesystem","Base","isreadable","isreadable(path) -> Bool
+
+   Returns \"true\" if the current user has permission to read
+   \"path\", \"false\" otherwise.
+
+"),
+
+("Filesystem","Base","issetgid","issetgid(path) -> Bool
+
+   Returns \"true\" if \"path\" has the setgid flag set, \"false\"
+   otherwise.
+
+"),
+
+("Filesystem","Base","issetuid","issetuid(path) -> Bool
+
+   Returns \"true\" if \"path\" has the setuid flag set, \"false\"
+   otherwise.
+
+"),
+
+("Filesystem","Base","issocket","issocket(path) -> Bool
+
+   Returns \"true\" if \"path\" is a socket, \"false\" otherwise.
+
+"),
+
+("Filesystem","Base","issticky","issticky(path) -> Bool
+
+   Returns \"true\" if \"path\" has the sticky bit set, \"false\"
+   otherwise.
+
+"),
+
+("Filesystem","Base","iswriteable","iswriteable(path) -> Bool
+
+   Returns \"true\" if the current user has permission to write to
+   \"path\", \"false\" otherwise.
 
 "),
 
