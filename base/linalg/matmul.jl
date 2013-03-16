@@ -302,7 +302,7 @@ function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM
     if tM == 'N'
         copy!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
-        copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
+        Base.copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         if tM == 'C'
             conj!(B)
         end
@@ -311,7 +311,7 @@ end
 
 function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if tM == 'N'
-        copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
+        Base.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
         copy!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         if tM == 'C'
@@ -408,7 +408,7 @@ function generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{
         z = zero(R)
 
         if mA < tile_size && nA < tile_size && nB < tile_size
-            copy_transpose!(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
+            Base.copy_transpose!(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
             copy!(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
             for j = 1:nB
                 boff = (j-1)*tile_size
@@ -433,7 +433,7 @@ function generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{
                     for kb = 1:tile_size:nA
                         klim = min(kb+tile_size-1,mB)
                         klen = klim-kb+1
-                        copy_transpose!(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
+                        Base.copy_transpose!(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
                         copy!(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
                         for j=1:jlen
                             bcoff = (j-1)*tile_size

@@ -1,15 +1,6 @@
-typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
-typealias BlasChar Char
-
-if USE_LIB64
-    typealias BlasInt Int64
-    blas_int(x) = int64(x)
-else
-    typealias BlasInt Int32
-    blas_int(x) = int32(x)
-end
-
 module BLAS
+
+import Base.copy!
 
 export copy!,
        scal!,
@@ -35,10 +26,10 @@ export copy!,
 
 const libblas = Base.libblas_name
 
-import Base.BlasFloat
-import Base.BlasChar
-import Base.BlasInt
-import Base.blas_int
+import LinAlg.BlasFloat
+import LinAlg.BlasChar
+import LinAlg.BlasInt
+import LinAlg.blas_int
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
@@ -450,6 +441,75 @@ for (mfname, vfname, elty) in
            symv(uplo, one($elty), A, x)
        end
    end
+end
+
+# (TR) Triangular matrix multiplication
+# Vector
+for (fname, elty) in
+    ((:dtrmv_,:Float64),
+     (:strmv_,:Float32),
+     (:ztrmv_,:Complex128),
+     (:ctrmv_,:Complex64))
+  @eval begin
+#       SUBROUTINE DTRMV(UPLO,TRANS,DIAG,N,A,LDA,X,INCX)
+# *     .. Scalar Arguments ..
+#       INTEGER INCX,LDA,N
+#       CHARACTER DIAG,TRANS,UPLO
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION A(LDA,*),X(*)
+    function trmv!(uplo::Char, trans::Char, diag::Char, A::StridedMatrix{$elty}, x::StridedVector{$elty})
+      n, m = size(A)
+      if m != n throw(BlasDimMisMatch("Matrix must be square")) end
+      if n != length(x) throw(BlasDimMisMatch("Length of Vector must match matrix dimension")) end
+      lda = max(1,stride(A, 2))
+      ccall(($(string(fname)), libblas), Void,
+        (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
+         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+        &uplo, &trans, &diag, &n,
+        A, &lda, x, &1)
+      return x
+    end
+    trmv(uplo::Char, trans::Char, diag::Char, A::StridedMatrix{$elty}, x::StridedVector{$elty}) = trmv!(uplo, trans, diag, A, copy(x))
+
+  end
+end
+
+# Matrix
+for (fname, elty) in
+    ((:dtrmm_,:Float64),
+     (:strmm_,:Float32),
+     (:ztrmm_,:Complex128),
+     (:ctrmm_,:Complex64))
+  @eval begin
+#       SUBROUTINE DTRMM(SIDE,UPLO,TRANSA,DIAG,M,N,ALPHA,A,LDA,B,LDB)
+# *     .. Scalar Arguments ..
+#       DOUBLE PRECISION ALPHA
+#       INTEGER LDA,LDB,M,N
+#       CHARACTER DIAG,SIDE,TRANSA,UPLO
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION A(LDA,*),B(LDB,*)
+    function trmm!(side::Char, uplo::Char, transa::Char, diag::Char, alpha::Number, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+      m, n = size(B)
+      mA, nA = size(A)
+      if mA != nA throw(BlasDimMisMatch("Matrix must be square")) end
+      if side == 'L' && nA != m throw(BlasDimMisMatch("")) end
+      if side == 'R' && nA != n throw(BlasDimMisMatch("")) end
+      lda = max(1,stride(A, 2))
+      ldb = max(1,stride(B, 2))
+      ccall(($(string(fname)), libblas), Void,
+        (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
+         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
+         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+        &side, &uplo, &transa, &diag,
+        &m, &n, &alpha, A,
+        &lda, B, &ldb)
+      return B
+    end
+    trmm(side::Char, uplo::Char, transa::Char, diag::Char, alpha::$elty, A::StridedMatrix{$elty}, B::StridedMatrix{$elty}) = trmm!(side, uplo, transa, diag, alpha, A, copy(B))
+
+  end
 end
 
 end # module
