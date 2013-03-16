@@ -9,6 +9,7 @@ before_install:
     - sudo apt-get update -qq -y
     - sudo apt-get install zlib1g-dev gfortran libsuitesparse-dev libncurses5-dev libatlas3gf-base libblas-dev libarpack2-dev libfftw3-dev libgmp-dev libunwind7-dev libreadline-dev liblapack3gf liblapack-dev -y
     - sudo add-apt-repository ppa:staticfloat/julia-deps -y
+    - sudo apt-get update -qq -y
     - sudo apt-get install llvm-3.2-dev -y
 
 script:
