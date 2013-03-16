@@ -17,6 +17,7 @@ Built-ins
 
    base
    constants
+   file
    punctuation
 
 ****************
