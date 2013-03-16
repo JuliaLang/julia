@@ -14,6 +14,7 @@ before_install:
 script:
     - make $BUILDOPTS PREFIX=/tmp/julia install
     - cd .. && mv julia julia2
+    - export OPENBLAS_NUM_THREADS=1
     - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia runtests.jl all
     - cd - && mv julia2 julia
     - echo "Ready for packaging..."
