@@ -619,6 +619,16 @@ end
 
 @test typemax(Uint64) != 2.0^64
 
+@test typemax(Uint64) < float64(typemax(Uint64))
+@test typemax(Int64) < float64(typemax(Int64))
+@test typemax(Uint64) <= float64(typemax(Uint64))
+@test typemax(Int64) <= float64(typemax(Int64))
+
+@test float64(typemax(Uint64)) > typemax(Uint64)
+@test float64(typemax(Int64)) > typemax(Int64)
+@test float64(typemax(Uint64)) >= typemax(Uint64)
+@test float64(typemax(Int64)) >= typemax(Int64)
+
 @test float64(int128(0)) == 0.0
 @test float32(int128(0)) == 0.0f0
 @test float64(int128(-1)) == -1.0

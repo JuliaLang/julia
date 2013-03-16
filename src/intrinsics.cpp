@@ -618,47 +618,47 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(ltfsi64,2) {
         x = FP(x);
         fy = JL_INT(y);
+        Value *ffy = builder.CreateSIToFP(fy, T_float64);
+        Value *siffy = builder.CreateFPToSI(ffy, T_int64);
         return builder.CreateOr(
-            builder.CreateFCmpOLT(x, builder.CreateSIToFP(fy, T_float64)),
+            builder.CreateFCmpOLT(x, ffy),
             builder.CreateAnd(
-                builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
-                builder.CreateICmpSGT(
-                    fy, builder.CreateFPToSI(
-                        builder.CreateSIToFP(fy, T_float64),
-                        T_int64
-                    )
-                )
+                              // ensure x < 2.0^63
+                builder.CreateFCmpOLT(x, ConstantFP::get(T_float64,
+                                                         9.223372036854776e18)),
+                builder.CreateAnd(builder.CreateFCmpOEQ(x, ffy),
+                                  builder.CreateICmpSGT(fy, siffy))
             )
         );
     }
     HANDLE(ltfui64,2) {
         x = FP(x);
         fy = JL_INT(y);
+        Value *ffy = builder.CreateUIToFP(fy, T_float64);
+        Value *uiffy = builder.CreateFPToUI(ffy, T_int64);
         return builder.CreateOr(
-            builder.CreateFCmpOLT(x, builder.CreateUIToFP(fy, T_float64)),
+            builder.CreateFCmpOLT(x, ffy),
             builder.CreateAnd(
-                builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
-                builder.CreateICmpUGT(
-                    fy, builder.CreateFPToUI(
-                        builder.CreateUIToFP(fy, T_float64),
-                        T_int64
-                    )
-                )
+                              // ensure x < 2.0^64
+                builder.CreateFCmpOLT(x, ConstantFP::get(T_float64,
+                                                         1.8446744073709552e19)),
+                builder.CreateAnd(builder.CreateFCmpOEQ(x, ffy),
+                                  builder.CreateICmpUGT(fy, uiffy))
             )
         );
     }
     HANDLE(lefsi64,2) {
         x = FP(x);
         fy = JL_INT(y);
+        Value *ffy = builder.CreateSIToFP(fy, T_float64);
         return builder.CreateOr(
-            builder.CreateFCmpOLT(x, builder.CreateSIToFP(fy, T_float64)),
+            builder.CreateFCmpOLT(x, ffy),
             builder.CreateAnd(
-                builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
-                builder.CreateICmpSGE(
-                    fy, builder.CreateFPToSI(
-                        builder.CreateSIToFP(fy, T_float64),
-                        T_int64
-                    )
+                builder.CreateFCmpOLT(x, ConstantFP::get(T_float64,
+                                                         9.223372036854776e18)),
+                builder.CreateAnd(
+                    builder.CreateFCmpOEQ(x, ffy),
+                    builder.CreateICmpSGE(fy, builder.CreateFPToSI(ffy,T_int64))
                 )
             )
         );
@@ -666,15 +666,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(lefui64,2) {
         x = FP(x);
         fy = JL_INT(y);
+        Value *ffy = builder.CreateUIToFP(fy, T_float64);
         return builder.CreateOr(
-            builder.CreateFCmpOLT(x, builder.CreateUIToFP(fy, T_float64)),
+            builder.CreateFCmpOLT(x, ffy),
             builder.CreateAnd(
-                builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
-                builder.CreateICmpUGE(
-                    fy, builder.CreateFPToUI(
-                        builder.CreateUIToFP(fy, T_float64),
-                        T_int64
-                    )
+                builder.CreateFCmpOLT(x, ConstantFP::get(T_float64,
+                                                         1.8446744073709552e19)),
+                builder.CreateAnd(
+                    builder.CreateFCmpOEQ(x, ffy),
+                    builder.CreateICmpUGE(fy, builder.CreateFPToUI(ffy, T_int64))
                 )
             )
         );
@@ -682,66 +682,62 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(ltsif64,2) {
         x = JL_INT(x);
         fy = FP(y);
+        Value *fx = builder.CreateSIToFP(x, T_float64);
         return builder.CreateOr(
-            builder.CreateFCmpOLT(builder.CreateSIToFP(x, T_float64), fy),
-            builder.CreateAnd(
-                builder.CreateFCmpOEQ(builder.CreateSIToFP(x, T_float64), fy),
-                builder.CreateICmpSLT(
-                    x, builder.CreateFPToSI(
-                        builder.CreateSIToFP(x, T_float64),
-                        T_int64
-                    )
-                )
-            )
-        );
+                   builder.CreateOr(
+                       builder.CreateFCmpOGE(fy, ConstantFP::get(T_float64,
+                                                                 9.223372036854776e18)),
+                       builder.CreateFCmpOLT(fx, fy)),
+                   builder.CreateAnd(
+                       builder.CreateFCmpOEQ(fx, fy),
+                       builder.CreateICmpSLT(x, builder.CreateFPToSI(fx, T_int64))
+                   )
+               );
     }
     HANDLE(ltuif64,2) {
         x = JL_INT(x);
         fy = FP(y);
+        Value *fx = builder.CreateUIToFP(x, T_float64);
         return builder.CreateOr(
-            builder.CreateFCmpOLT(builder.CreateUIToFP(x, T_float64), fy),
-            builder.CreateAnd(
-                builder.CreateFCmpOEQ(builder.CreateUIToFP(x, T_float64), fy),
-                builder.CreateICmpULT(
-                    x, builder.CreateFPToUI(
-                        builder.CreateUIToFP(x, T_float64),
-                        T_int64
-                    )
-                )
-            )
-        );
+                   builder.CreateOr(
+                       builder.CreateFCmpOGE(fy, ConstantFP::get(T_float64,
+                                                                 1.8446744073709552e19)),
+                       builder.CreateFCmpOLT(fx, fy)),
+                   builder.CreateAnd(
+                       builder.CreateFCmpOEQ(fx, fy),
+                       builder.CreateICmpULT(x, builder.CreateFPToUI(fx, T_int64))
+                   )
+               );
     }
     HANDLE(lesif64,2) {
         x = JL_INT(x);
         fy = FP(y);
+        Value *fx = builder.CreateSIToFP(x, T_float64);
         return builder.CreateOr(
-            builder.CreateFCmpOLT(builder.CreateSIToFP(x, T_float64), fy),
-            builder.CreateAnd(
-                builder.CreateFCmpOEQ(builder.CreateSIToFP(x, T_float64), fy),
-                builder.CreateICmpSLE(
-                    x, builder.CreateFPToSI(
-                        builder.CreateSIToFP(x, T_float64),
-                        T_int64
-                    )
-                )
-            )
-        );
+                   builder.CreateOr(
+                       builder.CreateFCmpOGE(fy, ConstantFP::get(T_float64,
+                                                                 9.223372036854776e18)),
+                       builder.CreateFCmpOLT(fx, fy)),
+                   builder.CreateAnd(
+                       builder.CreateFCmpOEQ(fx, fy),
+                       builder.CreateICmpSLE(x, builder.CreateFPToSI(fx, T_int64))
+                   )
+               );
     }
     HANDLE(leuif64,2) {
         x = JL_INT(x);
         fy = FP(y);
+        Value *fx = builder.CreateUIToFP(x, T_float64);
         return builder.CreateOr(
-            builder.CreateFCmpOLT(builder.CreateUIToFP(x, T_float64), fy),
-            builder.CreateAnd(
-                builder.CreateFCmpOEQ(builder.CreateUIToFP(x, T_float64), fy),
-                builder.CreateICmpULE(
-                    x, builder.CreateFPToUI(
-                        builder.CreateUIToFP(x, T_float64),
-                        T_int64
-                    )
-                )
-            )
-        );
+                   builder.CreateOr(
+                       builder.CreateFCmpOGE(fy, ConstantFP::get(T_float64,
+                                                                 1.8446744073709552e19)),
+                       builder.CreateFCmpOLT(fx, fy)),
+                   builder.CreateAnd(
+                       builder.CreateFCmpOEQ(fx, fy),
+                       builder.CreateICmpULE(x, builder.CreateFPToUI(fx, T_int64))
+                   )
+               );
     }
 
     HANDLE(fpiseq32,2) {
