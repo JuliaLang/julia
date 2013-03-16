@@ -170,6 +170,7 @@
     jl_load_file_string;
     jl_loaderror_type;
     jl_load_file_string;
+    jl_locate_sysimg;
     jl_lstat;
     jl_macroexpand;
     jl_main_module;
