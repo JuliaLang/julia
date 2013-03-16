@@ -13,15 +13,12 @@ type IOBuffer <: IO
     IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) = 
         new(data,readable,writable,seekable,append,length(data),maxsize,1)
 end
-typealias IOString IOBuffer
-#typealias PipeBuffer IOBuffer
+
 # PipeBuffers behave like Unix Pipes. They are readable and writable, the act appendable, and not seekable.
 PipeBuffer(data::Vector{Uint8},maxsize::Int) = IOBuffer(data,true,true,false,true,maxsize)
 PipeBuffer(data::Vector{Uint8}) = PipeBuffer(data,typemax(Int))
 PipeBuffer() = PipeBuffer(Uint8[])
 PipeBuffer(maxsize::Int) = (x = PipeBuffer(Array(Uint8,maxsize),data,maxsize); x.size=0; x)
-
-const PipeString = PipeBuffer
 
 # IOBuffers behave like Files. They are readable and writable. They are seekable. (They can be appendable).
 IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,maxsize::Int) =
