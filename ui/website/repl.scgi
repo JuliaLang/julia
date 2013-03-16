@@ -1,1 +1,0 @@
-This file exists so Lighttpd doesn't return a 404 for this request.  A request to this resource is actually handled by the SCGI server.
