@@ -37,7 +37,7 @@ namespace JL_I {
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
-        checked_fptoui32, checked_fptosi32, checked_fptoui64, checked_fptosi64,
+        checked_fptoui, checked_fptosi,
         nan_dom_err,
         // c interface
         ccall, jl_alloca
@@ -330,45 +330,37 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     return allocate_box_dynamic(emit_expr(targ, ctx), (nb+7)/8, vx);
 }
 
-static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+static Type *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx_t *ctx)
 {
     jl_value_t *bt =
         jl_interpret_toplevel_expr_in(ctx->module, targ,
                                       &jl_tupleref(ctx->sp,0),
                                       jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bitstype(bt))
-        jl_error("trunc_int: expected bits type as first argument");
+        jl_errorf("%s: expected bits type as first argument", fname);
     Type *to = julia_type_to_llvm(bt);
     if (to == NULL) {
         unsigned int nb = jl_datatype_size(bt)*8;
         to = IntegerType::get(jl_LLVMContext, nb);
     }
+    return to;
+}
+
+static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+{
+    Type *to = staticeval_bitstype(targ, "trunc_int", ctx);
     return builder.CreateTrunc(JL_INT(auto_unbox(x,ctx)), to);
 }
 
 static Value *generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
-    jl_value_t *bt =
-        jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                      &jl_tupleref(ctx->sp,0),
-                                      jl_tuple_len(ctx->sp)/2);
-    if (!jl_is_bitstype(bt))
-        jl_error("sext_int: expected bits type as first argument");
-    unsigned int nb = jl_datatype_size(bt)*8;
-    Type *to = IntegerType::get(jl_LLVMContext, nb);
+    Type *to = staticeval_bitstype(targ, "sext_int", ctx);
     return builder.CreateSExt(JL_INT(auto_unbox(x,ctx)), to);
 }
 
 static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
-    jl_value_t *bt =
-        jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                      &jl_tupleref(ctx->sp,0),
-                                      jl_tuple_len(ctx->sp)/2);
-    if (!jl_is_bitstype(bt))
-        jl_error("zext_int: expected bits type as first argument");
-    unsigned int nb = jl_datatype_size(bt)*8;
-    Type *to = IntegerType::get(jl_LLVMContext, nb);
+    Type *to = staticeval_bitstype(targ, "zext_int", ctx);
     return builder.CreateZExt(JL_INT(auto_unbox(x,ctx)), to);
 }
 
@@ -392,6 +384,58 @@ static Value *emit_eqfui64(Value *x, Value *y)
          builder.CreateICmpEQ(fy, builder.CreateFPToUI
                               (builder.CreateUIToFP(fy, T_float64),
                                T_int64)));
+}
+
+static Value *emit_checked_fptosi(Type *to, Value *x, jl_codectx_t *ctx)
+{
+    x = FP(x);
+    Value *v = builder.CreateFPToSI(x, to);
+    if (x->getType() == T_float32 && to == T_int32) {
+        raise_exception_unless
+            (builder.CreateFCmpOEQ(builder.CreateFPExt(x, T_float64),
+                                   builder.CreateSIToFP(v, T_float64)),
+             jlinexacterr_var, ctx);
+    }
+    else {
+        Value *xx = x, *vv = v;
+        if (x->getType() == T_float32)
+            xx = builder.CreateFPExt(x, T_float64);
+        if (to->getPrimitiveSizeInBits() < 64)
+            vv = builder.CreateSExt(v, T_int64);
+        raise_exception_unless(emit_eqfsi64(xx, vv), jlinexacterr_var, ctx);
+    }
+    return v;
+}
+
+static Value *emit_checked_fptosi(jl_value_t *targ, Value *x, jl_codectx_t *ctx)
+{
+    return emit_checked_fptosi(staticeval_bitstype(targ, "checked_fptosi", ctx), x, ctx);
+}
+
+static Value *emit_checked_fptoui(Type *to, Value *x, jl_codectx_t *ctx)
+{
+    x = FP(x);
+    Value *v = builder.CreateFPToUI(x, to);
+    if (x->getType() == T_float32 && to == T_int32) {
+        raise_exception_unless
+            (builder.CreateFCmpOEQ(builder.CreateFPExt(x, T_float64),
+                                   builder.CreateUIToFP(v, T_float64)),
+             jlinexacterr_var, ctx);
+    }
+    else {
+        Value *xx = x, *vv = v;
+        if (x->getType() == T_float32)
+            xx = builder.CreateFPExt(x, T_float64);
+        if (to->getPrimitiveSizeInBits() < 64)
+            vv = builder.CreateZExt(v, T_int64);
+        raise_exception_unless(emit_eqfui64(xx, vv), jlinexacterr_var, ctx);
+    }
+    return v;
+}
+
+static Value *emit_checked_fptoui(jl_value_t *targ, Value *x, jl_codectx_t *ctx)
+{
+    return emit_checked_fptoui(staticeval_bitstype(targ, "checked_fptoui", ctx), x, ctx);
 }
 
 static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
@@ -461,51 +505,34 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
 static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                              jl_codectx_t *ctx)
 {
-    if (f == ccall) return emit_ccall(args, nargs, ctx);
-    if (f == box) {
-        if (nargs!=2)
-            jl_error("box: wrong number of arguments");
-        return generic_box(args[1], args[2], ctx);
-    }
-    if (f == unbox) {
-        if (nargs!=2)
-            jl_error("unbox: wrong number of arguments");
-        return generic_unbox(args[1], args[2], ctx);
-    }
-    if (f == trunc_int) {
-        if (nargs!=2)
-            jl_error("trunc_int: wrong number of arguments");
-        return generic_trunc(args[1], args[2], ctx);
-    }
-    if (f == sext_int) {
-        if (nargs!=2)
-            jl_error("sext_int: wrong number of arguments");
-        return generic_sext(args[1], args[2], ctx);
-    }
-    if (f == zext_int) {
-        if (nargs!=2)
-            jl_error("zext_int: wrong number of arguments");
-        return generic_zext(args[1], args[2], ctx);
-    }
-    if (f == pointerref) {
-        if (nargs!=2)
-            jl_error("pointerref: wrong number of arguments");
-        return emit_pointerref(args[1], args[2], ctx);
-    }
-    if (f == pointerset) {
-        if (nargs!=3)
-            jl_error("pointerset: wrong number of arguments");
-        return emit_pointerset(args[1], args[2], args[3], ctx);
-    }
-    if (f == pointertoref) {
-        if (nargs != 1)
-            jl_error("pointertoref: wrong number of arguments");
+    switch (f) {
+    case ccall: return emit_ccall(args, nargs, ctx);
+
+    HANDLE(box,2)         return generic_box(args[1], args[2], ctx);
+    HANDLE(unbox,2)       return generic_unbox(args[1], args[2], ctx);
+    HANDLE(trunc_int,2)   return generic_trunc(args[1], args[2], ctx);
+    HANDLE(sext_int,2)    return generic_sext(args[1], args[2], ctx);
+    HANDLE(zext_int,2)    return generic_zext(args[1], args[2], ctx);
+    HANDLE(pointerref,2)  return emit_pointerref(args[1], args[2], ctx);
+    HANDLE(pointerset,3)  return emit_pointerset(args[1], args[2], args[3], ctx);
+    HANDLE(pointertoref,1) {
         Value *p = auto_unbox(args[1], ctx);
         if (p->getType()->isIntegerTy()) {
             return builder.CreateIntToPtr(p, jl_pvalue_llvmt);
         }
         return builder.CreateBitCast(p, jl_pvalue_llvmt);
     }
+    HANDLE(checked_fptosi,2) {
+        Value *x = FP(auto_unbox(args[2], ctx));
+        return emit_checked_fptosi(args[1], x, ctx);
+    }
+    HANDLE(checked_fptoui,2) {
+        Value *x = FP(auto_unbox(args[2], ctx));
+        return emit_checked_fptoui(args[1], x, ctx);
+    }
+    default: ;
+    }
+
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = auto_unbox(args[1], ctx);
     Value *y = NULL;
@@ -925,40 +952,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFPExt(builder.CreateLoad(jlfloat32temp_var, true),
                                    T_float64);
 
-    HANDLE(checked_fptosi32,1) {
-        x = FP(x);
-        Value *v = builder.CreateFPToSI(x, T_int32);
-        raise_exception_unless
-            (builder.CreateFCmpOEQ(builder.CreateFPExt(x, T_float64),
-                                   builder.CreateSIToFP(v, T_float64)),
-             jlinexacterr_var, ctx);
-        return v;
-    }
-    HANDLE(checked_fptoui32,1) {
-        x = FP(x);
-        Value *v = builder.CreateFPToUI(x, T_int32);
-        raise_exception_unless
-            (builder.CreateFCmpOEQ(builder.CreateFPExt(x, T_float64),
-                                   builder.CreateUIToFP(v, T_float64)),
-             jlinexacterr_var, ctx);
-        return v;
-    }
-    HANDLE(checked_fptosi64,1) {
-        x = FP(x);
-        Value *v = builder.CreateFPToSI(x, T_int64);
-        if (x->getType() == T_float32)
-            x = builder.CreateFPExt(x, T_float64);
-        raise_exception_unless(emit_eqfsi64(x, v), jlinexacterr_var, ctx);
-        return v;
-    }
-    HANDLE(checked_fptoui64,1) {
-        x = FP(x);
-        Value *v = builder.CreateFPToUI(x, T_int64);
-        if (x->getType() == T_float32)
-            x = builder.CreateFPExt(x, T_float64);
-        raise_exception_unless(emit_eqfui64(x, v), jlinexacterr_var, ctx);
-        return v;
-    }
     HANDLE(nan_dom_err,2) {
         // nan_dom_err(f, x) throw DomainError if isnan(f)&&!isnan(x)
         Value *f = FP(x); x = FP(y);
@@ -1104,8 +1097,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);
-    ADD_I(checked_fptosi32); ADD_I(checked_fptoui32);
-    ADD_I(checked_fptosi64); ADD_I(checked_fptoui64);
+    ADD_I(checked_fptosi); ADD_I(checked_fptoui);
     ADD_I(nan_dom_err);
     ADD_I(ccall);
     ADD_I(jl_alloca);
