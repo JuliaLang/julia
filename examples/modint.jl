@@ -1,6 +1,6 @@
 importall Base
 
-type ModInt{n} <: Integer
+immutable ModInt{n} <: Integer
     k::Int
     ModInt(k) = new(mod(k,n))
 end

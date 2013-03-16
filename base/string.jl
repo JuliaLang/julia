@@ -262,8 +262,11 @@ ends_with(a::String, c::Char) = !isempty(a) && a[end] == c
 
 cmp(a::ByteString, b::ByteString)     = cmp(a.data, b.data)
 isequal(a::ByteString, b::ByteString) = endof(a)==endof(b) && cmp(a,b)==0
+begins_with(a::ByteString, b::ByteString) = begins_with(a.data, b.data)
 
-# TODO: fast begins_with and ends_with
+begins_with(a::Array{Uint8,1}, b::Array{Uint8,1}) = (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
+
+# TODO: fast ends_with
 
 ## character column width function ##
 

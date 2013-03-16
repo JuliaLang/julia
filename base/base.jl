@@ -146,7 +146,7 @@ end
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end
 
-function compile_hint(f, args::Tuple)
+function precompile(f, args::Tuple)
     if isgeneric(f)
         ccall(:jl_compile_hint, Void, (Any, Any), f, args)
     end

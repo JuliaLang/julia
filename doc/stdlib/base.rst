@@ -227,6 +227,10 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    Note that ``zip`` is it's own inverse: ``[zip(zip(a...)...)...] == [a...]``.
 
+.. function:: enumerate(iter)
+
+   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1,
+   and ``x`` is the ``ith`` value from the given iterator.
 
 Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
 
@@ -807,6 +811,10 @@ I/O
 
    Global variable referring to the standard input stream.
 
+.. data:: OUTPUT_STREAM
+
+   The default stream used for text output, e.g. in the ``print`` and ``show`` functions.
+
 .. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
@@ -931,7 +939,7 @@ Text I/O
 
    Read all lines as an array.
 
-.. function:: each_line(stream)
+.. function:: eachline(stream)
 
    Create an iterable object that will yield each line from a stream.
 
@@ -1841,6 +1849,30 @@ Numbers
 
    The constant pi
 
+.. data:: im
+
+   The imaginary unit
+
+.. data:: e
+
+   The constant e
+
+.. data:: Inf
+
+   Positive infinity of type Float64
+
+.. data:: Inf32
+
+   Positive infinity of type Float32
+
+.. data:: NaN
+
+   A not-a-number value of type Float64
+
+.. data:: NaN32
+
+   A not-a-number value of type Float32
+
 .. function:: isdenormal(f) -> Bool
 
    Test whether a floating point number is denormal
@@ -2672,37 +2704,37 @@ Combinatorics
 Statistics
 ----------
 
-.. function:: mean(v, [dim])
+.. function:: mean(v[, region])
 
-   Compute the mean of whole array ``v``, or optionally along dimension ``dim``
+   Compute the mean of whole array ``v``, or optionally along the dimensions in ``region``.
 
-.. function:: std(v, [corrected])
+.. function:: std(v[, region])
 
-   Compute the sample standard deviation of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- mean(v)).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- mean(v)).^2) / length(v))``, which is the empirical standard deviation of the sample.
+   Compute the sample standard deviation of a vector or array``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
 
-.. function:: std(v, m, [corrected])
+.. function:: stdm(v, m)
 
-   Compute the sample standard deviation of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v .- m).^2) / (length(v) - 1))`` and involves an implicit correction term sometimes called the Bessel correction which insures that the estimator of the variance is unbiased. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sqrt(sum((v .- m).^2) / length(v))``, which is the empirical standard deviation of the sample.
+   Compute the sample standard deviation of a vector ``v`` with known mean ``m``.
 
-.. function:: var(v, [corrected])
+.. function:: var(v[, region])
 
-   Compute the sample variance of a vector ``v``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- mean(v)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- mean(v)).^2) / length(v)``, which is the empirical variance of the sample.
+   Compute the sample variance of a vector or array``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
 
-.. function:: var(v, m, [corrected])
+.. function:: varm(v, m)
 
-   Compute the sample variance of a vector ``v`` with known mean ``m``. If the optional argument ``corrected`` is either left unspecified or is explicitly set to the default value of ``true``, then the algorithm will return an unbiased estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v .- m)).^2) / (length(v) - 1)`` and involves an implicit correction term sometimes called the Bessel correction. If, instead, the optional argument ``corrected`` is set to ``false``, then the algorithm will produce the equivalent of ``sum((v .- m)).^2) / length(v)``, which is the empirical variance of the sample.
+   Compute the sample variance of a vector ``v`` with known mean ``m``.
 
 .. function:: median(v)
 
-   Compute the median of a vector ``v``
+   Compute the median of a vector ``v``.
 
-.. function:: hist(v, [n])
+.. function:: hist(v[, n])
 
-   Compute the histogram of ``v``, optionally using ``n`` bins
+   Compute the histogram of ``v``, optionally using ``n`` bins.
 
 .. function:: hist(v, e)
 
-   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins
+   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins.
 
 .. function:: quantile(v, p)
 
@@ -2712,13 +2744,17 @@ Statistics
 
    Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
 
-.. function:: cov(v)
+.. function:: cov(v1[, v2])
 
-   Compute the Pearson covariance between two vectors ``v1`` and ``v2``.
+   Compute the Pearson covariance between two vectors ``v1`` and ``v2``. If
+   called with a single element ``v``, then computes covariance of columns of
+   ``v``.
 
-.. function:: cor(v)
+.. function:: cor(v1[, v2])
 
-   Compute the Pearson correlation between two vectors ``v1`` and ``v2``.
+   Compute the Pearson correlation between two vectors ``v1`` and ``v2``. If
+   called with a single element ``v``, then computes correlation of columns of
+   ``v``.
 
 Signal Processing
 -----------------
@@ -2743,7 +2779,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    Same as :func:`fft`, but operates in-place on ``A``,
    which must be an array of complex floating-point numbers.
 
-.. function:: ifft(A [, dims]), bfft, bfft!
+.. function:: ifft(A [, dims])
 
    Multidimensional inverse FFT.
 
@@ -2772,7 +2808,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Same as :func:`bfft`, but operates in-place on ``A``.
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
+.. function:: plan_fft(A [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
@@ -2793,6 +2829,16 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    complex floating-point numbers).  :func:`plan_ifft` and so on
    are similar but produce plans that perform the equivalent of
    the inverse transforms :func:`ifft` and so on.
+
+.. function:: plan_ifft(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
+   :func:`ifft`.
+
+.. function:: plan_bfft(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
+   backwards transform :func:`bfft`.
 
 .. function:: plan_fft!(A [, dims [, flags [, timelimit]]])
 
@@ -2845,7 +2891,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
-.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
@@ -2902,7 +2948,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Same as :func:`plan_idct`, but operates in-place on ``A``.
 
-.. function:: FFTW.r2r(A, kind [, dims]), FFTW.r2r!
+.. function:: FFTW.r2r(A, kind [, dims])
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
@@ -2925,15 +2971,21 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    See also :func:`FFTW.plan_r2r` to pre-plan optimized r2r transforms.
 
+.. function:: FFTW.r2r!
+
    :func:`FFTW.r2r!` is the same as :func:`FFTW.r2r`, but operates
    in-place on ``A``, which must be an array of real or complex 
    floating-point numbers.
 
-.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
+.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized r2r transform, similar to :func:`plan_fft`
    except that the transforms (and the first three arguments)
    correspond to :func:`FFTW.r2r` and :func:`FFTW.r2r!`, respectively.
+
+.. function:: FFTW.plan_r2r!
+
+   Similar to :func:`plan_fft`, but corresponds to :func:`FFTW.r2r!`.
 
 .. function:: fftshift(x)
 
@@ -3076,6 +3128,10 @@ System
 
    Run a command object, constructed with backticks. Throws an error if anything goes wrong, including the process exiting with a non-zero status.
 
+.. function:: spawn(command)
+
+   Run a command object asynchronously, returning the resulting ``Process`` object.
+
 .. function:: success(command)
 
    Run a command object, constructed with backticks, and tell whether it was successful (exited with a code of 0).
@@ -3092,11 +3148,23 @@ System
 
    Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the output stream and input stream of the process, and the process object itself.
 
-.. function:: > < >> .>
+.. function:: >
 
-   ``>`` ``<`` and ``>>`` work exactly as in bash, and ``.>`` redirects STDERR.
+   Redirect standard output of a process.
 
-   **Example**: ``run((`ls` > "out.log") .> "err.log")``
+   **Example**: ``run(`ls` > "out.log")``
+
+.. function:: <
+
+   Redirect standard input of a process.
+
+.. function:: >>
+
+   Redirect standard output of a process, appending to the destination file.
+
+.. function:: .>
+
+   Redirect the standard error stream of a process.
 
 .. function:: gethostname() -> String
 
@@ -3157,7 +3225,7 @@ System
 
 .. data:: ENV
 
-   Reference to the singleton ``EnvHash``.
+   Reference to the singleton ``EnvHash``, providing a dictionary interface to system environment variables.
 
 C Interface
 -----------
@@ -3211,6 +3279,21 @@ C Interface
 
    Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
 
+.. function:: pointer(a[, index])
+
+   Get the native address of an array element. Be careful to ensure that a julia
+   reference to ``a`` exists as long as this pointer will be used.
+
+.. function:: pointer(type, int)
+
+   Convert an integer to a pointer of the specified element type.
+
+.. function:: pointer_to_array(p, dims[, own])
+
+   Wrap a native pointer as a Julia Array object. The pointer element type determines
+   the array element type. ``own`` optionally specifies whether Julia should take
+   ownership of the memory, calling ``free`` on the pointer when the array is no
+   longer referenced.
 
 Errors
 ------

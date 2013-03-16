@@ -391,4 +391,4 @@ to non-constants, such as local variables or function arguments.
 C++
 ---
 
-Limited support for C++ is provided by the :mod:`Cpp` package.
+Limited support for C++ is provided by the `Cpp` package.

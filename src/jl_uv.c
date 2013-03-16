@@ -348,6 +348,11 @@ DLLEXPORT int jl_timer_start(uv_timer_t* timer, int64_t timeout, int64_t repeat)
     return uv_timer_start(timer,(uv_timer_cb)&jl_asynccb,timeout,repeat);
 }
 
+DLLEXPORT int jl_timer_stop(uv_timer_t* timer)
+{
+    return uv_timer_stop(timer);
+}
+
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 {
     return jl_write(stream,str,strlen(str));

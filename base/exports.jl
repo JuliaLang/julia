@@ -49,7 +49,6 @@ export
     Filter,
     IO,
     IOStream,
-    IOString,  # deprecated
     IOBuffer,
     ImaginaryUnit,
     IntSet,
@@ -60,7 +59,6 @@ export
     #PipeEnd,
     #PipeIn,
     #PipeOut,
-    PipeString,  # deprecated
     PipeBuffer,
     #Port,
     #Ports,
@@ -704,7 +702,7 @@ export
     chop,
     chr2ind,
     bytestring,
-    each_match,
+    eachmatch,
     ends_with,
     escape_string,
     first_utf8_byte,
@@ -809,7 +807,9 @@ export
     median,
     quantile,
     std,
+    stdm,
     var,
+    varm,
 
 # signal processing
     bfft,
@@ -912,7 +912,7 @@ export
 # help and reflection
     ans,
     apropos,
-    function_loc,
+    functionloc,
     edit,
     methods,
     methodswith,
@@ -937,7 +937,7 @@ export
     require,
 
 # RTS internals
-    compile_hint, # TODO: rename to "precompile"?
+    precompile,
     finalizer,
     gc,
     gc_disable,
@@ -966,7 +966,7 @@ export
     deserialize,
     readdlm,
     writedlm,
-    each_line,
+    eachline,
     eatwspace,
     eatwspace_comment,
     eof,
@@ -1020,7 +1020,6 @@ export
     fetch,
     isready,
     yield,
-    enq_work,
     myid,
     nprocs,
     pmap,

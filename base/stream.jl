@@ -126,6 +126,7 @@ end
 function wait(forwhat, notify_list_name, filter_fcn)
     args = ()
     while filter_fcn(forwhat)
+        assert(current_task() != Scheduler, "Cannot execute blocking function from Scheduler")
         thing = isa(forwhat,Tuple) ? forwhat[1] : forwhat
         wt = WaitTask(forwhat, filter_fcn)
         push!(thing.(notify_list_name), wt)
@@ -272,6 +273,18 @@ end
 
 function stop_timer(timer::TimeoutAsyncWork)
     ccall(:jl_timer_stop,Int32,(Ptr{Void},),timer.handle)
+end
+
+function sleep(sec::Real)
+    timer = TimeoutAsyncWork(status->tasknotify([wt], status))
+    wt = WaitTask(timer, false)
+    start_timer(timer, iround(sec*1000), 0)
+    args = yield(wt)
+    if isa(args,InterruptException)
+        stop_timer(timer)
+        error(args)
+    end
+    nothing
 end
 
 assignIdleAsyncWork(work::IdleAsyncWork,cb::Function) = ccall(:jl_idle_start,Ptr{Void},(Ptr{Void},),work.handle)
