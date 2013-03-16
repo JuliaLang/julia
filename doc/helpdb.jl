@@ -5473,6 +5473,32 @@ error(Exception)
 
 "),
 
+("Filesystem","Base","isdir","isdir(s) -> Bool
+
+   Returns \"true\" if \"s\" is a directory path, \"false\" otherwise.
+
+"),
+
+("Filesystem","Base","isfifo","isfifo(s) -> Bool
+
+   Returns \"true\" if \"s\" is a FIFO path, \"false\" otherwise.
+
+"),
+
+("Filesystem","Base","isfile","isfile(s) -> Bool
+
+   Returns \"true\" if \"s\" is a regular file path, \"false\"
+   otherwise.
+
+"),
+
+("Filesystem","Base","islink","islink(s) -> Bool
+
+   Returns \"true\" if \"s\" is a symbolic link path, \"false\"
+   otherwise.
+
+"),
+
 ("GLPK","GLPK","set_prob_name","set_prob_name(glp_prob, name)
 
    Assigns a name to the problem object (or deletes it if \"name\" is
