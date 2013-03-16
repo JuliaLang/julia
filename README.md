@@ -238,16 +238,6 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
     keysym Return = Return Linefeed
 
-<a name="Web-REPL">
-## Web REPL
-
-Julia has a web REPL with very preliminary graphics capabilities. The web REPL is currently a showcase to try out new ideas. The web REPL is social - multiple people signing in with a common session name can collaborate within a session.
-
-1. Do `make webrepl` to build the Julia webserver.
-2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
-3. Point your browser to `http://localhost:2000/`.
-4. Try `plot(cumsum(randn(1000)))` and other things.
-
 ### Try it Online
 
 [Forio.com](http://forio.com/) is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com).
