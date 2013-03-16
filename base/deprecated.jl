@@ -153,6 +153,8 @@ end
 @deprecate  safe_char(c)        (is_valid_char(char(c))||error())&&char(c)
 @deprecate  check_ascii(x)      (is_valid_ascii(x)?x:error())
 @deprecate  check_utf8(x)       (is_valid_utf8(x)?x:error())
+@deprecate  each_line           eachline
+@deprecate  each_match          eachmatch
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 

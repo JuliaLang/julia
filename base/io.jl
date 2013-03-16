@@ -179,7 +179,7 @@ type EachLine
     EachLine(stream) = EachLine(stream, ()->nothing)
     EachLine(stream, ondone) = new(stream, ondone)
 end
-each_line(stream::IO) = EachLine(stream)
+eachline(stream::IO) = EachLine(stream)
 
 start(itr::EachLine) = nothing
 function done(itr::EachLine, nada)
@@ -194,7 +194,7 @@ next(itr::EachLine, nada) = (readline(itr.stream), nothing)
 
 function readlines(s, fx::Function...)
     a = {}
-    for l = each_line(s)
+    for l in eachline(s)
         for f in fx
           l = f(l)
         end
