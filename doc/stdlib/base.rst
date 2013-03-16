@@ -2775,7 +2775,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    Same as :func:`fft`, but operates in-place on ``A``,
    which must be an array of complex floating-point numbers.
 
-.. function:: ifft(A [, dims]), bfft, bfft!
+.. function:: ifft(A [, dims])
 
    Multidimensional inverse FFT.
 
@@ -2804,7 +2804,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Same as :func:`bfft`, but operates in-place on ``A``.
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
+.. function:: plan_fft(A [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
@@ -2825,6 +2825,16 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    complex floating-point numbers).  :func:`plan_ifft` and so on
    are similar but produce plans that perform the equivalent of
    the inverse transforms :func:`ifft` and so on.
+
+.. function:: plan_ifft(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_fft`, but produces a plan that performs an inverse transforms
+   :func:`ifft`.
+
+.. function:: plan_bfft(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
+   backwards transform :func:`bfft`.
 
 .. function:: plan_fft!(A [, dims [, flags [, timelimit]]])
 
@@ -2877,7 +2887,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
-.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
@@ -2934,7 +2944,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Same as :func:`plan_idct`, but operates in-place on ``A``.
 
-.. function:: FFTW.r2r(A, kind [, dims]), FFTW.r2r!
+.. function:: FFTW.r2r(A, kind [, dims])
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
@@ -2957,15 +2967,21 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    See also :func:`FFTW.plan_r2r` to pre-plan optimized r2r transforms.
 
+.. function:: FFTW.r2r!
+
    :func:`FFTW.r2r!` is the same as :func:`FFTW.r2r`, but operates
    in-place on ``A``, which must be an array of real or complex 
    floating-point numbers.
 
-.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
+.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized r2r transform, similar to :func:`plan_fft`
    except that the transforms (and the first three arguments)
    correspond to :func:`FFTW.r2r` and :func:`FFTW.r2r!`, respectively.
+
+.. function:: FFTW.plan_r2r!
+
+   Similar to :func:`plan_fft`, but corresponds to :func:`FFTW.r2r!`.
 
 .. function:: fftshift(x)
 
@@ -3124,11 +3140,23 @@ System
 
    Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the output stream and input stream of the process, and the process object itself.
 
-.. function:: > < >> .>
+.. function:: >
 
-   ``>`` ``<`` and ``>>`` work exactly as in bash, and ``.>`` redirects STDERR.
+   Redirect standard output of a process.
 
-   **Example**: ``run((`ls` > "out.log") .> "err.log")``
+   **Example**: ``run(`ls` > "out.log")``
+
+.. function:: <
+
+   Redirect standard input of a process.
+
+.. function:: >>
+
+   Redirect standard output of a process, appending to the destination file.
+
+.. function:: .>
+
+   Redirect the standard error stream of a process.
 
 .. function:: gethostname() -> String
 

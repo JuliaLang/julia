@@ -1441,7 +1441,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Text I/O","Base","each_line","each_line(stream)
+("Text I/O","Base","eachline","eachline(stream)
 
    Create an iterable object that will yield each line from a stream.
 
@@ -4314,7 +4314,7 @@ airyaiprime(x)
 
 "),
 
-("Signal Processing","","ifft(A [, dims]), bfft, bfft!","ifft(A [, dims]), bfft, bfft!
+("Signal Processing","Base","ifft","ifft(A[, dims])
 
    Multidimensional inverse FFT.
 
@@ -4350,7 +4350,7 @@ airyaiprime(x)
 
 "),
 
-("Signal Processing","","plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft","plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
+("Signal Processing","Base","plan_fft","plan_fft(A[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized FFT along given dimensions (\"dims\") of
    arrays matching the shape and type of \"A\".  (The first two
@@ -4372,6 +4372,20 @@ airyaiprime(x)
    complex floating-point numbers).  \"plan_ifft()\" and so on are
    similar but produce plans that perform the equivalent of the
    inverse transforms \"ifft()\" and so on.
+
+"),
+
+("Signal Processing","Base","plan_ifft","plan_ifft(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_fft()\", but produces a plan that performs an
+   inverse transforms \"ifft()\".
+
+"),
+
+("Signal Processing","Base","plan_bfft","plan_bfft(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_fft()\", but produces a plan that performs an
+   unnormalized backwards transform \"bfft()\".
 
 "),
 
@@ -4442,7 +4456,7 @@ airyaiprime(x)
 
 "),
 
-("Signal Processing","","plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft","plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+("Signal Processing","Base","plan_irfft","plan_irfft(A, d[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized inverse real-input FFT, similar to
    \"plan_rfft()\" except for \"irfft()\" and \"brfft()\",
@@ -4518,7 +4532,7 @@ airyaiprime(x)
 
 "),
 
-("Signal Processing","","FFTW.r2r(A, kind [, dims]), FFTW.r2r!","FFTW.r2r(A, kind [, dims]), FFTW.r2r!
+("Signal Processing","Base","FFTW","FFTW.r2r(A, kind[, dims])
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type \"kind\" of the array \"A\", as defined in the FFTW manual.
@@ -4542,17 +4556,27 @@ airyaiprime(x)
 
    See also \"FFTW.plan_r2r()\" to pre-plan optimized r2r transforms.
 
+"),
+
+("Signal Processing","Base","FFTW","FFTW.r2r!()
+
    \"FFTW.r2r!()\" is the same as \"FFTW.r2r()\", but operates in-
    place on \"A\", which must be an array of real or complex floating-
    point numbers.
 
 "),
 
-("Signal Processing","","FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!","FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
+("Signal Processing","Base","FFTW","FFTW.plan_r2r(A, kind[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized r2r transform, similar to \"plan_fft()\"
    except that the transforms (and the first three arguments)
    correspond to \"FFTW.r2r()\" and \"FFTW.r2r!()\", respectively.
+
+"),
+
+("Signal Processing","Base","FFTW","FFTW.plan_r2r!()
+
+   Similar to \"plan_fft()\", but corresponds to \"FFTW.r2r!()\".
 
 "),
 
@@ -4810,12 +4834,30 @@ airyaiprime(x)
 
 "),
 
-("System","","> < >> .>","> < >> .>
+("System","Base",">",">()
 
-   \">\" \"<\" and \">>\" work exactly as in bash, and \".>\"
-   redirects STDERR.
+   Redirect standard output of a process.
 
-   **Example**: \"run((`ls` > \"out.log\") .> \"err.log\")\"
+   **Example**: \"run(`ls` > \"out.log\")\"
+
+"),
+
+("System","Base","<","<()
+
+   Redirect standard input of a process.
+
+"),
+
+("System","Base",">>",">>()
+
+   Redirect standard output of a process, appending to the destination
+   file.
+
+"),
+
+("System","Base",".>",".>()
+
+   Redirect the standard error stream of a process.
 
 "),
 
