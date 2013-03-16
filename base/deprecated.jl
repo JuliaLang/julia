@@ -155,6 +155,8 @@ end
 @deprecate  check_utf8(x)       (is_valid_utf8(x)?x:error())
 @deprecate  each_line           eachline
 @deprecate  each_match          eachmatch
+@deprecate  function_loc        functionloc
+@deprecate  compile_hint        precompile
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
