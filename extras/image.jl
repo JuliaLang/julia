@@ -719,7 +719,8 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         error("wrong border treatment")
     end
     # check if separable
-    U, S, V = svdt(filter)
+    SVD = svdfact(filter)
+    U, S, Vt = SVD[:U], SVD[:S], SVD[:Vt]
     separable = true;
     for i = 2:length(S)
         # assumption that <10^-7 \approx 0
@@ -729,7 +730,7 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         # conv2 isn't suitable for this (kernel center should be the actual center of the kernel)
         #C = conv2(U[:,1]*sqrt(S[1]), vec(V[1,:])*sqrt(S[1]), A)
         x = U[:,1]*sqrt(S[1])
-        y = vec(V[1,:])*sqrt(S[1])
+        y = vec(Vt[1,:])*sqrt(S[1])
         sa = size(A)
         m = length(y)+sa[1]
         n = length(x)+sa[2]
