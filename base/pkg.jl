@@ -188,7 +188,7 @@ rm(pkgs::Vector{String}) = cd_pkgdir() do
             end
             open("REQUIRE") do r
                 open("REQUIRE.new","w") do w
-                    for line in each_line(r)
+                    for line in eachline(r)
                         fields = split(line)
                         if isempty(fields) || fields[1]!=pkg
                             print(w,line)
@@ -270,7 +270,46 @@ function _resolve()
         end
     end
     sort!(reqs)
-    want = Resolve.resolve(reqs,fixed)
+
+    pkgs = Metadata.packages()
+    vers = Metadata.versions(pkgs)
+    deps = Metadata.dependencies(union(pkgs,keys(fixed)))
+    filter!(reqs) do r
+        if has(fixed, r.package)
+            if !contains(r, Version(r.package,fixed[r.package]))
+                warn("$(r.package) is fixed at $(repr(fixed[r.package])) which doesn't satisfy $(r.versions).")
+            end
+            false
+        else
+            true
+        end
+    end
+    filter!(pkgs) do p
+        !has(fixed, p)
+    end
+    filter!(vers) do v
+        !has(fixed, v.package)
+    end
+    unsatisfiable = Set{Version}()
+    filter!(deps) do d
+        p = d[2].package
+        if has(fixed, p)
+            if !contains(d[2], Version(p, fixed[p]))
+                add!(unsatisfiable, d[1])
+            end
+            false # drop
+        else
+            true # keep
+        end
+    end
+    filter!(vers) do v
+        !contains(unsatisfiable, v)
+    end
+    filter!(deps) do d
+        !contains(unsatisfiable, d[1])
+    end
+    want = Resolve.resolve(reqs,vers,deps)
+
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
         if has(have,pkg)
@@ -406,7 +445,7 @@ end
 # set package remote in METADATA
 
 get_origin(pkg::String, remote::String) = cd_pkgdir() do
-    for line in each_line(`git --git-dir=$(joinpath(pkg,".git")) remote -v`)
+    for line in eachline(`git --git-dir=$(joinpath(pkg,".git")) remote -v`)
         m = match(r"^(\S*)\s*(\S*)\s*\(fetch\)", line)
         if m != nothing && m.captures[1] == remote
             return m.captures[2]

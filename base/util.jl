@@ -71,7 +71,7 @@ peakflops() = peakflops(2000)
 
 # source files, editing, function reflection
 
-function function_loc(f::Function, types)
+function functionloc(f::Function, types)
     for m = methods(f, types)
         if isa(m[3],LambdaStaticData)
             lsd = m[3]::LambdaStaticData
@@ -83,7 +83,7 @@ function function_loc(f::Function, types)
     end
     error("could not find function definition")
 end
-function_loc(f::Function) = function_loc(f, (Any...))
+functionloc(f::Function) = functionloc(f, (Any...))
 
 function whicht(f, types)
     for m = methods(f, types)
@@ -177,10 +177,10 @@ function less(file::String, line::Integer)
 end
 less(file::String) = less(file, 1)
 
-edit(f::Function)    = edit(function_loc(f)...)
-edit(f::Function, t) = edit(function_loc(f,t)...)
-less(f::Function)    = less(function_loc(f)...)
-less(f::Function, t) = less(function_loc(f,t)...)
+edit(f::Function)    = edit(functionloc(f)...)
+edit(f::Function, t) = edit(functionloc(f,t)...)
+less(f::Function)    = less(functionloc(f)...)
+less(f::Function, t) = less(functionloc(f,t)...)
 
 disassemble(f::Function, types::Tuple) =
     print(ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString)
@@ -207,7 +207,7 @@ let LOCALE = nothing
         LOCALE
     end
     function locale(s::ByteString)
-        global help_category_list, help_category_dict
+        global help_category_list, help_category_dict,
                help_module_dict, help_function_dict
         help_category_list = nothing
         help_category_dict = nothing
@@ -293,15 +293,16 @@ end
 function help()
     init_help()
     print(
-" Welcome to Julia. The full manual is available at
+"""
+ Welcome to Julia. The full manual is available at
 
     http://docs.julialang.org
 
- To get help on a function, try help(function). To search all help text,
- try apropos(\"string\"). To see available functions, try help(category),
- for one of the following categories:
+ To get help, try help(function), help("@macro"), or help("variable").
+ To search all help text, try apropos("string"). To see available functions,
+ try help(category), for one of the following categories:
 
-")
+""")
     for cat = help_category_list
         if !isempty(help_category_dict[cat])
             print("  ")
@@ -338,7 +339,7 @@ help_for(s::String) = help_for(s, 0)
 function help_for(fname::String, obj)
     init_help()
     found = false
-    if contains(fname, '.')
+    if !begins_with(fname,'.') && contains(fname, '.')
         if has(help_function_dict, fname)
             print_help_entries(help_function_dict[fname])
             found = true

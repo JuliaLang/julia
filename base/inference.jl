@@ -593,7 +593,11 @@ end
 
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,apply) && length(fargs)>0
-        af = isconstantfunc(fargs[1], sv)
+        if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
+            af = argtypes[1].parameters[1]
+        else
+            af = isconstantfunc(fargs[1], sv)
+        end
         if !is(af,false)
             aargtypes = argtypes[2:]
             if all(x->isa(x,Tuple), aargtypes) &&
@@ -627,23 +631,6 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                     end
                 end
                 return Tuple
-            end
-        else
-            ft = abstract_eval(fargs[1], vtypes, sv)
-            if isType(ft)
-                # TODO: improve abstract_call_constructor
-                st = ft.parameters[1]
-                if isstructtype(st) && isleaftype(st)
-                    f = st
-                    _methods(f,(),0)
-                else
-                    if isa(st,TypeVar)
-                        st = st.ub
-                    end
-                    if isstructtype(st)
-                        return st
-                    end
-                end
             end
         end
     end

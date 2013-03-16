@@ -33,7 +33,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 The mailing list for developer discussion is
 <http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
 of messages is higher, and the discussions tend to be more esoteric. New
-developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the julia codebase.
+developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
 
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
@@ -59,11 +59,11 @@ If you are behind a firewall and you need to use the https protocol instead of t
 Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
-Building julia requires 1.5GiB of diskspace and approximately 700MiB of virtual memory.
+Building Julia requires 1.5GiB of diskspace and approximately 700MiB of virtual memory.
 
 **Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
-Once it is built, you can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere (in the current shell session):
+Once it is built, you can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
 
 In bash:
 
@@ -73,7 +73,7 @@ In csh / tcsh:
 
     set path= ( $path $cwd )
 
-Now you should be able to run julia like this:
+Now you should be able to run Julia like this:
 
     julia
 
@@ -85,7 +85,7 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 #### Linux
 
-GCC version 4.6 or later is recommended to build julia.
+GCC version 4.6 or later is recommended to build Julia.
 
 If the build fails trying to compile OpenBLAS, set OPENBLAS_TARGET_ARCH to BARCELONA on AMD, or NEHALEM on Intel CPUs in Make.inc and build again.
 
@@ -93,17 +93,19 @@ On some Linux distributions you may need to change how the readline library is l
 
 On Ubuntu systems, you may also need to install the package `libncurses5-dev`.
 
-On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build julia.
+On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build Julia.
 
 #### OS X
 
-It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 compilers in brew and macports work for building julia. If you do not use brew or macports, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires gcc to function properly. 
+It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 compilers in brew and macports work for building Julia. If you do not use brew or macports, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires gcc to function properly. 
 
-Clang is now used by default to build julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build julia. On older systems, the julia build will attempt to use gcc. The build also detects Snow Leopard and sets `USE_SYSTEM_LIBM=1`, `USE_SYSTEM_BLAS=1`, and `USE_SYSTEM_LAPACK=1`.
+Clang is now used by default to build Julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build Julia. On older systems, the Julia build will attempt to use gcc. The build also detects Snow Leopard and sets `USE_SYSTEM_LIBM=1`, `USE_SYSTEM_BLAS=1`, and `USE_SYSTEM_LAPACK=1`.
+
+If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your .bashrc or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
 
 #### FreeBSD
 
-*Release 9.0:* install the gcc46, git, and gmake packages/ports, and compile julia with the command:
+*Release 9.0:* install the gcc46, git, and gmake packages/ports, and compile Julia with the command:
 
     $ gmake FC=gfortran46
 
@@ -128,7 +130,7 @@ Building Julia requires that the following software be installed:
 - **[gcc, g++][gcc]**           — compiling and linking C, C++
 - **[clang][clang]**            — clang is the default compiler on OS X (Need at least v3.1, Xcode 4.3.3 on OS X)
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
-- **[git]**                     — contributions and version control.
+- **[git]**                     — version control and package management.
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **fetch** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
@@ -137,7 +139,7 @@ Building Julia requires that the following software be installed:
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
 - **[LLVM]**                — compiler infrastructure.
-- **[FemtoLisp]**           — packaged with julia source, and used to implement the compiler front-end.
+- **[FemtoLisp]**           — packaged with Julia source, and used to implement the compiler front-end.
 - **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 - **[libuv]**               — portable, high-performance event-based I/O library
 - **[OpenLibm]**            — a portable libm library containing elementary math functions.
@@ -192,7 +194,7 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 ## Directories
 
     base/          source code for Julia's standard library
-    contrib/       emacs, vim and textmate support for Julia
+    contrib/       editor support for Julia source, miscellaneous scripts
     deps/          external dependencies
     examples/      example Julia programs
     extras/        useful optional libraries
@@ -204,26 +206,26 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://code.google.com/p/julialang/downloads/list).
+Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://code.google.com/p/Julialang/downloads/list).
 
-You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere (in the current shell session):
+You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
 
     export PATH="$(pwd)/julia:$PATH"
 
-Now you should be able to run julia like this:
+Now you should be able to run Julia like this:
 
     julia
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
-An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available. Julia has also been added to [Debian](http://packages.debian.org/sid/julia). On OS X, julia is available through [homebrew](http://mxcl.github.com/homebrew/).
+An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available. Julia has also been added to [Debian](http://packages.debian.org/sid/julia). On OS X, Julia is available through [homebrew](http://mxcl.github.com/homebrew/).
 
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
 
-Currently, [julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, Textmate, Notepad++, and Kate.
+Currently, [Julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, Textmate, Notepad++, and Kate.
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.
@@ -241,7 +243,7 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
 Julia has a web REPL with very preliminary graphics capabilities. The web REPL is currently a showcase to try out new ideas. The web REPL is social - multiple people signing in with a common session name can collaborate within a session.
 
-1. Do `make webrepl` to build the julia webserver.
+1. Do `make webrepl` to build the Julia webserver.
 2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
 3. Point your browser to `http://localhost:2000/`.
 4. Try `plot(cumsum(randn(1000)))` and other things.
