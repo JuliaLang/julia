@@ -22,7 +22,7 @@ import LinAlg.lufact
 import LinAlg.lufact!
 import LinAlg.solve
 
-include("linalg/suitesparse_h.jl")
+include("linalg/umfpack_h.jl")
 
 type MatrixIllConditionedException <: Exception end
 

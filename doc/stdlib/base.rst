@@ -1118,6 +1118,30 @@ Mathematical Functions
 
    Greater-than-or-equals comparison operator.
 
+.. function:: .==(x, y)
+
+   Element-wise equality comparison operator.
+
+.. function:: .!=(x, y)
+
+   Element-wise not-equals comparison operator.
+
+.. function:: .<(x, y)
+
+   Element-wise less-than comparison operator.
+
+.. function:: .<=(x, y)
+
+   Element-wise less-than-or-equals comparison operator.
+
+.. function:: .>(x, y)
+
+   Element-wise greater-than comparison operator.
+
+.. function:: .>=(x, y)
+
+   Element-wise greater-than-or-equals comparison operator.
+
 .. function:: cmp(x,y)
 
    Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively

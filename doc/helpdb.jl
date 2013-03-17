@@ -1721,6 +1721,42 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
+("Mathematical Functions","Base",".==",".==(x, y)
+
+   Element-wise equality comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".!=",".!=(x, y)
+
+   Element-wise not-equals comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".<",".<(x, y)
+
+   Element-wise less-than comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".<=",".<=(x, y)
+
+   Element-wise less-than-or-equals comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".>",".>(x, y)
+
+   Element-wise greater-than comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".>=",".>=(x, y)
+
+   Element-wise greater-than-or-equals comparison operator.
+
+"),
+
 ("Mathematical Functions","Base","cmp","cmp(x, y)
 
    Return -1, 0, or 1 depending on whether \"x<y\", \"x==y\", or

@@ -74,7 +74,7 @@ typealias CHMVTypes Union(Complex64, Complex128, Float32, Float64)
 type CholmodException <: Exception end
 
 ## macro to generate the name of the C function according to the integer type
-macro chm_nm(nm,typ) string("cholmod_", eval(typ) == :Int64 ? "l_" : "", nm) end
+macro chm_nm(nm,typ) string("cholmod_", eval(typ) == Int64 ? "l_" : "", nm) end
              
 ### A way of examining some of the fields in chm_com
 ### Probably better to make this a Dict{ASCIIString,Tuple} and
@@ -101,8 +101,8 @@ type ChmCommon
     dtype::Int32
 end
 
-#include("linalg/suitesparse_h.jl")
-             
+include("linalg/cholmod_h.jl")
+
 ### These offsets should be reconfigured to be less error-prone in matches
 const chm_com_offsets = Array(Int, length(ChmCommon.types))
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
@@ -122,41 +122,6 @@ end
 function set_chm_prt_lev(cm::Array{Uint8}, lev::Integer) # can probably be removed
     cm[(1:4) + chm_com_offsets[13]] = reinterpret(Uint8, [int32(lev)])
 end
-
-## itype defines the types of integer used:
-const CHOLMOD_INT  = int32(0)  # all integer arrays are int 
-const CHOLMOD_LONG = int32(2)  # all integer arrays are UF_long 
-ityp(::Type{Int32}) = CHOLMOD_INT
-ityp(::Type{Int64}) = CHOLMOD_LONG
-
-## dtype defines what the numerical type is (double or float):
-const CHOLMOD_DOUBLE = int32(0)        # all numerical values are double 
-const CHOLMOD_SINGLE = int32(1)        # all numerical values are float 
-dtyp(::Type{Float32}) = CHOLMOD_SINGLE
-dtyp(::Type{Float64}) = CHOLMOD_DOUBLE
-dtyp(::Type{Complex64}) = CHOLMOD_SINGLE
-dtyp(::Type{Complex128}) = CHOLMOD_DOUBLE
-
-## xtype defines the kind of numerical values used:
-const CHOLMOD_PATTERN = int32(0)       # pattern only, no numerical values 
-const CHOLMOD_REAL    = int32(1)       # a real matrix 
-const CHOLMOD_COMPLEX = int32(2)       # a complex matrix (ANSI C99 compatible) 
-const CHOLMOD_ZOMPLEX = int32(3)       # a complex matrix (MATLAB compatible) 
-xtyp(::Type{Float32}) = CHOLMOD_REAL
-xtyp(::Type{Float64}) = CHOLMOD_REAL
-xtyp(::Type{Complex64}) = CHOLMOD_COMPLEX
-xtyp(::Type{Complex128}) = CHOLMOD_COMPLEX
-
-## Types of systems to solve
-const CHOLMOD_A    = int32(0)          # solve Ax=b 
-const CHOLMOD_LDLt = int32(1)          # solve LDL'x=b 
-const CHOLMOD_LD   = int32(2)          # solve LDx=b 
-const CHOLMOD_DLt  = int32(3)          # solve DL'x=b 
-const CHOLMOD_L    = int32(4)          # solve Lx=b 
-const CHOLMOD_Lt   = int32(5)          # solve L'x=b 
-const CHOLMOD_D    = int32(6)          # solve Dx=b 
-const CHOLMOD_P    = int32(7)          # permute x=Px 
-const CHOLMOD_Pt   = int32(8)          # permute x=P'x 
              
 ## cholmod_dense pointers passed to or returned from C functions are of Julia type
 ## Ptr{c_CholmodDense}.  The CholmodDense type contains a c_CholmodDense object and other
@@ -306,15 +271,13 @@ CholmodDense!{T<:CHMVTypes}(c::Ptr{c_CholmodDense{T}}) = CholmodDense(c) # no di
 
 function isvalid{T<:CHMVTypes}(cd::CholmodDense{T})
     bool(ccall((:cholmod_check_dense, :libcholmod), Cint,
-               (Ptr{c_CholmodDense{T}}, Ptr{Uint8}), &cd.c, chm_com))
+               (Ptr{c_CholmodDense{T}}, Ptr{Uint8}), &cd.c, cmn(Int32)))
 end
 
 function chm_eye{T<:Union(Float64,Complex128)}(m::Integer, n::Integer, t::T)
     CholmodDense(ccall((:cholmod_eye, :libcholmod), Ptr{c_CholmodDense{T}},
                        (Int, Int, Cint, Ptr{Uint8}),
-                       m, n,
-                       T<:Complex ? CHOLMOD_COMPLEX : CHOLMOD_REAL,
-                       chm_com))
+                       m, n,xtyp(T),cmn(Int32)))
 end
 chm_eye(m::Integer, n::Integer) = chm_eye(m, n, 1.)
 chm_eye(n::Integer) = chm_eye(n, n, 1.)
@@ -322,28 +285,25 @@ chm_eye(n::Integer) = chm_eye(n, n, 1.)
 function chm_ones{T<:Union(Float64,Complex128)}(m::Integer, n::Integer, t::T)
     CholmodDense(ccall((:cholmod_ones, :libcholmod), Ptr{c_CholmodDense{T}},
                        (Int, Int, Cint, Ptr{Uint8}),
-                       m, n,
-                       T<:Complex ? CHOLMOD_COMPLEX : CHOLMOD_REAL,
-                       chm_com))
+                       m, n, xtyp(T), cmn(Int32)))
 end
 chm_ones(m::Integer, n::Integer) = chm_ones(m, n, 1.)
 
 function chm_zeros{T<:Union(Float64,Complex128)}(m::Integer, n::Integer, t::T)
     CholmodDense(ccall((:cholmod_zeros, :libcholmod), Ptr{c_CholmodDense{T}},
                        (Int, Int, Cint, Ptr{Uint8}),
-                       m, n,
-                       T<:Complex ? CHOLMOD_COMPLEX : CHOLMOD_REAL,
-                       chm_com))
+                       m, n, xtyp(T), cmn(Int32)))
 end
 chm_zeros(m::Integer, n::Integer) = chm_zeros(m, n, 1.)
 
 function chm_print{T<:CHMVTypes}(cd::CholmodDense{T}, lev::Integer, nm::ASCIIString)
-    orig = chm_com[chm_prt_inds]
-    chm_com[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
+    cm = cmn(Int32)
+    orig = cm[chm_prt_inds]
+    cm[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
     status = ccall((:cholmod_print_dense, :libcholmod), Cint,
                    (Ptr{c_CholmodDense{T}}, Ptr{Uint8}, Ptr{Uint8}),
-                   &cd.c, nm, chm_com)
-    chm_com[chm_prt_inds] = orig
+                   &cd.c, nm, cm)
+    cm[chm_prt_inds] = orig
     if status != CHOLMOD_TRUE throw(CholmodException) end
 end
 chm_print(cd::CholmodDense, lev::Integer) = chm_print(cd, lev, "")
@@ -403,11 +363,14 @@ function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
     if any(rowval .< 0) || any(rowval .>= m)
         error("all elements of rowval must be in the range [0,$(m-1)]")
     end
+    it = ityp(Ti)
     sort!(CholmodSparse(c_CholmodSparse{Tv,Ti}(m,n,int(nz),convert(Ptr{Ti},colpt),
                                                convert(Ptr{Ti},rowval), C_NULL,
                                                convert(Ptr{Tv},nzval), C_NULL,
-                                               int32(stype), ityp(Ti), xtyp(Tv), dtyp(Tv),
-                                               CHOLMOD_FALSE,CHOLMOD_TRUE),colpt,rowval,nzval))
+                                               int32(stype), ityp(Ti),
+                                               xtyp(Tv),dtyp(Tv),
+                                               CHOLMOD_FALSE,CHOLMOD_TRUE),
+                        colpt,rowval,nzval))
 end
 function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
                                                     rowval::Vector{Ti},
@@ -601,12 +564,12 @@ for Ti in (:Int32,:Int64)
             if ll cm[chm_final_ll_inds] = reinterpret(Uint8, [one(Cint)]) end
             Lpt = ccall((@chm_nm "analyze" $Ti
                          ,:libcholmod), Ptr{c_CholmodFactor{Tv,$Ti}},
-                        (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}), &A.c, chm_com)
+                        (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}), &A.c, cm)
             status = ccall((@chm_nm "factorize" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}},
                             Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
-                           &A.c, Lpt, chm_com)
+                           &A.c, Lpt, cm)
             if status != CHOLMOD_TRUE throw(CholmodException) end
             CholmodFactor(Lpt)
         end
@@ -626,25 +589,25 @@ for Ti in (:Int32,:Int64)
             if status != CHOLMOD_TRUE throw(CholmodException) end
         end
         function chm_print{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti},lev,nm)
-            cmn($Ti)
-            orig = chm_com[chm_prt_inds]
-            chm_com[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
+            cm = cmn($Ti)
+            orig = cm[chm_prt_inds]
+            cm[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
             status = ccall((@chm_nm "print_factor" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}, Ptr{Uint8}),
-                           &L.c, nm, chm_com)
-            chm_com[chm_prt_inds] = orig
+                           &L.c, nm, cm)
+            cm[chm_prt_inds] = orig
             if status != CHOLMOD_TRUE throw(CholmodException) end
         end
         function chm_print{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},lev,nm)
-            cmn($Ti)
-            orig = chm_com[chm_prt_inds]
-            chm_com[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
+            cm = cmn($Ti)
+            orig = cm[chm_prt_inds]
+            cm[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
             status = ccall((@chm_nm "print_sparse" $Ti
                            ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}, Ptr{Uint8}),
-                           &A.c, nm, chm_com)
-            chm_com[chm_prt_inds] = orig
+                           &A.c, nm, cm)
+            cm[chm_prt_inds] = orig
             if status != CHOLMOD_TRUE throw(CholmodException) end
         end
         function chm_scale!{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},
