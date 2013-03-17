@@ -231,7 +231,8 @@
     jl_rethrow_other;
     jl_throw_with_superfluous_argument;
     jl_get_backtrace;
-    jl_parse_backtrace;
+    jl_backtrace_from_here;
+    jl_lookup_code_address;
     rec_backtrace;
     jl_reshape_array;
     jl_restore_system_image;

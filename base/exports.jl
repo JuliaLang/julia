@@ -888,6 +888,7 @@ export
     error,
     rethrow,
     backtrace,
+    catch_backtrace,
     system_error,
 
 # types
