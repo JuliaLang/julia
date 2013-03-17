@@ -962,16 +962,8 @@
    with \"r\". If \"n\" is provided, replace at most \"n\" occurances.
    As with search, the second argument may be a single character, a
    vector or a set of characters, a string, or a regular expression.
-
-"),
-
-("Strings","Base","replace","replace(string, pat, f[, n])
-
-   Search for the given pattern \"pat\", and replace each occurance
-   with \"f(pat)\". If \"n\" is provided, replace at most \"n\"
-   occurances.  As with search, the second argument may be a single
-   character, a vector or a set of characters, a string, or a regular
-   expression.
+   If \"r\" is a function, each occurrence is replaced with \"r(s)\"
+   where \"s\" is the matched substring.
 
 "),
 
@@ -3085,7 +3077,7 @@
 
 ("Random Numbers","Base","rand","rand()
 
-   Generate a \"Float64\" random number in (0,1)
+   Generate a \"Float64\" random number uniformly in [0,1)
 
 "),
 
@@ -3105,7 +3097,7 @@
 
 "),
 
-("Random Numbers","Base","rand","rand(dims...)
+("Random Numbers","Base","rand","rand(dims or [dims...])
 
    Generate a random \"Float64\" array of the size specified by dims
 
@@ -3140,7 +3132,7 @@
 
 "),
 
-("Random Numbers","Base","randn","randn([dims...])
+("Random Numbers","Base","randn","randn(dims or [dims...])
 
    Generate a normally-distributed random number with mean 0 and
    standard deviation 1. Optionally generate an array of normally-
@@ -3286,18 +3278,6 @@
 
 "),
 
-("Arrays","Base","rand","rand(dims)
-
-   Create a random array with Float64 random values in (0,1)
-
-"),
-
-("Arrays","Base","randf","randf(dims)
-
-   Create a random array with Float32 random values in (0,1)
-
-"),
-
 ("Arrays","Base","eye","eye(n)
 
    n-by-n identity matrix
@@ -3379,9 +3359,12 @@
 
 "),
 
-("Arrays","Base","hvcat","hvcat()
+("Arrays","Base","hvcat","hvcat(rows::(Int...), values...)
 
-   Horizontal and vertical concatenation in one call
+   Horizontal and vertical concatenation in one call. This function is
+   called for block matrix syntax. The first argument specifies the
+   number of arguments to concatenate in each block row. For example,
+   \"[a b;c d e]\" calls \"hvcat((2,3),a,b,c,d,e)\".
 
 "),
 
@@ -4561,7 +4544,7 @@
 
 "),
 
-("Signal Processing","Base","FFTW","FFTW.r2r!()
+("Signal Processing","Base","FFTW","FFTW.r2r!(A, kind[, dims])
 
    \"FFTW.r2r!()\" is the same as \"FFTW.r2r()\", but operates in-
    place on \"A\", which must be an array of real or complex floating-
@@ -4577,7 +4560,7 @@
 
 "),
 
-("Signal Processing","Base","FFTW","FFTW.plan_r2r!()
+("Signal Processing","Base","FFTW","FFTW.plan_r2r!(A, kind[, dims[, flags[, timelimit]]])
 
    Similar to \"plan_fft()\", but corresponds to \"FFTW.r2r!()\".
 

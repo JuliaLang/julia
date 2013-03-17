@@ -640,11 +640,7 @@ Strings
 
 .. function:: replace(string, pat, r[, n])
 
-   Search for the given pattern ``pat``, and replace each occurance with ``r``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
-
-.. function:: replace(string, pat, f[, n])
-
-   Search for the given pattern ``pat``, and replace each occurance with ``f(pat)``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
+   Search for the given pattern ``pat``, and replace each occurance with ``r``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring.
 
 .. function:: split(string, [chars, [limit,] [include_empty]])
 
@@ -2005,7 +2001,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
 .. function:: rand()
 
-   Generate a ``Float64`` random number in (0,1)
+   Generate a ``Float64`` random number uniformly in [0,1)
 
 .. function:: rand!([rng], A)
 
@@ -2015,7 +2011,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
    Generate a random ``Float64`` number or array of the size specified by dims, using the specified RNG object. Currently, ``MersenneTwister`` is the only available Random Number Generator (RNG), which may be seeded using srand.
 
-.. function:: rand(dims...)
+.. function:: rand(dims or [dims...])
 
    Generate a random ``Float64`` array of the size specified by dims
 
@@ -2035,7 +2031,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
    Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.   
 
-.. function:: randn([dims...])
+.. function:: randn(dims or [dims...])
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
 
@@ -2131,14 +2127,6 @@ Constructors
 
    Construct an array with the same binary data as the given array, but with the specified element type
 
-.. function:: rand(dims)
-
-   Create a random array with Float64 random values in (0,1)
-
-.. function:: randf(dims)
-
-   Create a random array with Float32 random values in (0,1)
-
 .. function:: eye(n)
 
    n-by-n identity matrix
@@ -2195,9 +2183,12 @@ Indexing, Assignment, and Concatenation
 
    Concatenate along dimension 2
 
-.. function:: hvcat
+.. function:: hvcat(rows::(Int...), values...)
 
-   Horizontal and vertical concatenation in one call
+   Horizontal and vertical concatenation in one call. This function is called for
+   block matrix syntax. The first argument specifies the number of arguments to
+   concatenate in each block row.
+   For example, ``[a b;c d e]`` calls ``hvcat((2,3),a,b,c,d,e)``.
 
 .. function:: flipdim(A, d)
 
@@ -2968,7 +2959,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    See also :func:`FFTW.plan_r2r` to pre-plan optimized r2r transforms.
 
-.. function:: FFTW.r2r!
+.. function:: FFTW.r2r!(A, kind [, dims])
 
    :func:`FFTW.r2r!` is the same as :func:`FFTW.r2r`, but operates
    in-place on ``A``, which must be an array of real or complex 
@@ -2980,7 +2971,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    except that the transforms (and the first three arguments)
    correspond to :func:`FFTW.r2r` and :func:`FFTW.r2r!`, respectively.
 
-.. function:: FFTW.plan_r2r!
+.. function:: FFTW.plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
 
    Similar to :func:`plan_fft`, but corresponds to :func:`FFTW.r2r!`.
 
