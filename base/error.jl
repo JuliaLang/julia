@@ -9,8 +9,8 @@ macro unexpected()
     :(error("unexpected branch reached"))
 end
 
-rethrow() = ccall(:jl_rethrow, Void, ())
-rethrow(e) = ccall(:jl_rethrow_other, Void, (Any,), e)
+rethrow() = ccall(:jl_rethrow, Void, ())::None
+rethrow(e) = ccall(:jl_rethrow_other, Void, (Any,), e)::None
 backtrace() = ccall(:jl_get_backtrace, Array{Any,1}, ())
 
 ## system error handling ##
