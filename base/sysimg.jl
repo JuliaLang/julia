@@ -148,11 +148,6 @@ include("deepcopy.jl")
 include("util.jl")
 include("test.jl")
 include("meta.jl")
-include("i18n.jl")
-include("help.jl")
-using I18n
-using Help
-push!(I18n.CALLBACKS, Help.clear_cache)
 
 # sparse matrices and linear algebra
 include("sparse.jl")

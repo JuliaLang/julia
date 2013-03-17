@@ -195,6 +195,228 @@ end
 methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
                         t.env)
 
+# locale
+
+let LOCALE = nothing
+    global locale
+    function locale()
+        if LOCALE === nothing
+            # XXX:TBD return default locale
+            return ""
+        end
+        LOCALE
+    end
+    function locale(s::ByteString)
+        global help_category_list, help_category_dict,
+               help_module_dict, help_function_dict
+        help_category_list = nothing
+        help_category_dict = nothing
+        help_module_dict = nothing
+        help_function_dict = nothing
+        LOCALE = s
+        # XXX:TBD call setlocale
+    end
+end
+
+# help
+
+help_category_list = nothing
+help_category_dict = nothing
+help_module_dict = nothing
+help_function_dict = nothing
+
+function decor_help_desc(func::String, mfunc::String, desc::String)
+    sd = split(desc, '\n')
+    for i = 1:length(sd)
+        if begins_with(sd[i], func)
+            sd[i] = mfunc * sd[i][length(func)+1:end]
+        else
+            break
+        end
+    end
+    return join(sd, '\n')
+end
+
+function helpdb_filename()
+    root = "$JULIA_HOME/../share/julia"
+    file = "helpdb.jl"
+    for loc in [locale()]
+        fn = joinpath(root, loc, file)
+        if isfile(fn)
+            return fn
+        end
+    end
+    joinpath(root, file)
+end
+
+function init_help()
+    global help_category_list, help_category_dict,
+           help_module_dict, help_function_dict
+    if help_category_dict == nothing
+        println("Loading help data...")
+        helpdb = evalfile(helpdb_filename())
+        help_category_list = {}
+        help_category_dict = Dict()
+        help_module_dict = Dict()
+        help_function_dict = Dict()
+        for (cat,mod,func,desc) in helpdb
+            if !has(help_category_dict, cat)
+                push!(help_category_list, cat)
+                help_category_dict[cat] = {}
+            end
+            if !isempty(mod)
+                if begins_with(func, '@')
+                    mfunc = "@" * mod * "." * func[2:]
+                else
+                    mfunc = mod * "." * func
+                end
+                desc = decor_help_desc(func, mfunc, desc)
+            else
+                mfunc = func
+            end
+            push!(help_category_dict[cat], mfunc)
+            if !has(help_function_dict, mfunc)
+                help_function_dict[mfunc] = {}
+            end
+            push!(help_function_dict[mfunc], desc)
+            if !has(help_module_dict, func)
+                help_module_dict[func] = {}
+            end
+            if !contains(help_module_dict[func], mod)
+                push!(help_module_dict[func], mod)
+            end
+        end
+    end
+end
+
+
+function help()
+    init_help()
+    print(
+"""
+ Welcome to Julia. The full manual is available at
+
+    http://docs.julialang.org
+
+ To get help, try help(function), help("@macro"), or help("variable").
+ To search all help text, try apropos("string"). To see available functions,
+ try help(category), for one of the following categories:
+
+""")
+    for cat = help_category_list
+        if !isempty(help_category_dict[cat])
+            print("  ")
+            show(cat); println()
+        end
+    end
+end
+
+function help(cat::String)
+    init_help()
+    if !has(help_category_dict, cat)
+        # if it's not a category, try another named thing
+        return help_for(cat)
+    end
+    println("Help is available for the following items:")
+    for func = help_category_dict[cat]
+        print(func, " ")
+    end
+    println()
+end
+
+function print_help_entries(entries)
+    first = true
+    for desc in entries
+        if !first
+            println()
+        end
+        println(strip(desc))
+        first = false
+    end
+end
+
+help_for(s::String) = help_for(s, 0)
+function help_for(fname::String, obj)
+    init_help()
+    found = false
+    if !begins_with(fname,'.') && contains(fname, '.')
+        if has(help_function_dict, fname)
+            print_help_entries(help_function_dict[fname])
+            found = true
+        end
+    else
+        macrocall = ""
+        if begins_with(fname, '@')
+            sfname = fname[2:]
+            macrocall = "@"
+        else
+            sfname = fname
+        end
+        if has(help_module_dict, fname)
+            allmods = help_module_dict[fname]
+            alldesc = {}
+            for mod in allmods
+                mod_prefix = isempty(mod) ? "" : mod * "."
+                append!(alldesc, help_function_dict[macrocall * mod_prefix * sfname])
+            end
+            print_help_entries(alldesc)
+            found = true
+        end
+    end
+    if !found
+        if isgeneric(obj)
+            repl_show(obj); println()
+        else
+            println("No help information found.")
+        end
+    end
+end
+
+function apropos(txt::String)
+    init_help()
+    n = 0
+    r = Regex("\\Q$txt", PCRE.CASELESS)
+    for (cat, _) in help_category_dict
+        if ismatch(r, cat)
+            println("Category: \"$cat\"")
+        end
+    end
+    for (func, entries) in help_function_dict
+        if ismatch(r, func) || any(e->ismatch(r,e), entries)
+            for desc in entries
+                nl = search(desc,'\n')
+                if nl != 0
+                    println(desc[1:(nl-1)])
+                else
+                    println(desc)
+                end
+            end
+            n+=1
+        end
+    end
+    if n == 0
+        println("No help information found.")
+    end
+end
+
+function help(f::Function)
+    if is(f,help)
+        return help()
+    end
+    help_for(string(f), f)
+end
+
+help(t::DataType) = help_for(string(t.name),t)
+
+function help(x)
+    show(x)
+    t = typeof(x)
+    println(" is of type $t")
+    if isa(t,DataType) && length(t.names)>0
+        println("  which has fields $(t.names)")
+    end
+end
+
 # print a warning only once
 
 const have_warned = (ByteString=>Bool)[]
@@ -204,6 +426,7 @@ function warn_once(msg::String...)
     have_warned[msg] = true
     warn(msg)
 end
+
 
 # system information
 
