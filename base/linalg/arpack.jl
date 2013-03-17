@@ -1,7 +1,5 @@
 module ARPACK 
 
-const libarpack = "libarpack"
-
 export naupd, neupd, saupd, seupd
 
 import LinAlg.BlasInt
@@ -15,7 +13,7 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
         function naupd(ido, bmat, n, evtype, nev, tol, resid, ncv, v, ldv,
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info)
             
-            ccall(($(string(naupd_name)), libarpack), Void,
+            ccall(($(string(naupd_name)), :libarpack), Void,
                   (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
                    Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -27,7 +25,7 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
                   workev, bmat, n, evtype, nev, tol, resid, ncv, v, ldv,
                   iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info)
 
-            ccall(($(string(neupd_name)), libarpack), Void,
+            ccall(($(string(neupd_name)), :libarpack), Void,
                   (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{$T},
                    Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{BlasInt},
                    Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T},
@@ -41,7 +39,7 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
         function saupd(ido, bmat, n, which, nev, tol, resid, ncv, v, ldv, 
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info)
             
-            ccall(($(string(saupd_name)), libarpack), Void,
+            ccall(($(string(saupd_name)), :libarpack), Void,
                   (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
                    Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -54,7 +52,7 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
                        bmat, n, evtype, nev, tol, resid, ncv, v, ldv,
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info) 
 
-            ccall(($(string(seupd_name)), libarpack), Void,
+            ccall(($(string(seupd_name)), :libarpack), Void,
                   (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T},
                    Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
                    Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -76,7 +74,7 @@ for (T, TR, naupd_name, neupd_name) in
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, 
                        rwork::Array{$TR}, info)
             
-            ccall(($(string(naupd_name)), libarpack), Void,
+            ccall(($(string(naupd_name)), :libarpack), Void,
                   (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
                    Ptr{$TR}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt},
@@ -91,7 +89,7 @@ for (T, TR, naupd_name, neupd_name) in
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, 
                        rwork::Array{$TR}, info) 
 
-            ccall(($(string(neupd_name)), libarpack), Void,
+            ccall(($(string(neupd_name)), :libarpack), Void,
                   (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
                    Ptr{$TR}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt},
