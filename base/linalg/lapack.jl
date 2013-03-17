@@ -1803,7 +1803,7 @@ for (gehrd, elty) in
      (:zgehrd_,:Complex128),
      (:cgehrd_,:Complex64))
     @eval begin
-        function gehrd!(ilo::BlasInt, ihi::BlasInt, A::StridedMatrix{$elty})
+        function gehrd!(ilo::Integer, ihi::Integer, A::StridedMatrix{$elty})
 #                 .. Scalar Arguments ..
 #       INTEGER            IHI, ILO, INFO, LDA, LWORK, N
 # *     ..
@@ -1843,7 +1843,7 @@ for (orghr, elty) in
      (:zunghr_,:Complex128),
      (:cunghr_,:Complex64))
     @eval begin
-        function orghr!(ilo::BlasInt, ihi::BlasInt, A::StridedMatrix{$elty}, tau::StridedVector{$elty})
+        function orghr!(ilo::Integer, ihi::Integer, A::StridedMatrix{$elty}, tau::StridedVector{$elty})
 # *     .. Scalar Arguments ..
 #       INTEGER            IHI, ILO, INFO, LDA, LWORK, N
 # *     ..
