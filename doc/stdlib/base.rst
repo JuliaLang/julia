@@ -407,10 +407,6 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Delete the mapping for the given key in a collection.
 
-.. function:: empty!(collection)
-
-   Delete all keys from a collection.
-
 .. function:: keys(collection)
 
    Return an array of all keys in a collection.
@@ -570,10 +566,6 @@ Strings
 
    The number of characters in string ``s``.
 
-.. function:: collect(string)
-
-   Return an array of the characters in ``string``.
-
 .. function:: *(s, t)
 
    Concatenate strings.
@@ -586,13 +578,9 @@ Strings
 
    **Example**: ``"Julia "^3 == "Julia Julia Julia "``
 
-.. function:: string(char...)
+.. function:: string(xs...)
 
-   Create a string with the given characters.
-
-.. function:: string(x)
-
-   Create a string from any value using the ``print`` function.
+   Create a string from any values using the ``print`` function.
 
 .. function:: repr(x)
 
@@ -634,10 +622,6 @@ Strings
 
    Returns true if the given char or integer is a valid Unicode code point.
 
-.. function:: search(string, char, [i])
-
-   Return the index of ``char`` in ``string``, giving 0 if not found. The second argument may also be a vector or a set of characters. The third argument optionally specifies a starting index.
-
 .. function:: ismatch(r::Regex, s::String)
 
    Test whether a string contains a match of the given regular expression.
@@ -652,7 +636,7 @@ Strings
 
 .. function:: search(string, chars, [start])
 
-   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
+   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
 
 .. function:: replace(string, pat, r[, n])
 
@@ -833,10 +817,6 @@ I/O
    ==== =================================
 
 
-.. function:: open(file_name) -> IOStream
-
-   Open a file in read mode.
-
 .. function:: open(f::function, args...)
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
@@ -847,8 +827,7 @@ I/O
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
-.. function:: fdio(fd::Integer, [own::Bool]) -> IOStream
-              fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
+.. function:: fdio([name::String, ]fd::Integer[, own::Bool]) -> IOStream
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected. ``name`` allows you to associate the descriptor with a named file.
 
@@ -1594,13 +1573,19 @@ Mathematical Functions
 
    Compute the digamma function of ``x`` (the logarithmic derivative of ``gamma(x)``)
 
-.. function:: airy(x)
-              airyai(x)
+.. function:: airy(k,x)
+
+   kth derivative of the Airy function :math:`\operatorname{Ai}(x)`.
+
+.. function:: airyai(x)
 
    Airy function :math:`\operatorname{Ai}(x)`.
 
 .. function:: airyprime(x)
-              airyaiprime(x)
+
+   Airy function derivative :math:`\operatorname{Ai}'(x)`.
+
+.. function:: airyaiprime(x)
 
    Airy function derivative :math:`\operatorname{Ai}'(x)`.
 
@@ -2040,7 +2025,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
 .. function:: rand(r, [dims...])
 
-   Generate a random integer from ``1``:``n`` inclusive. Optionally, generate a random integer array.
+   Generate a random integer from the inclusive interval specified by ``Range1 r`` (for example, ``1:n``). Optionally, generate a random integer array.
 
 .. function:: randbool([dims...])
 
@@ -2078,7 +2063,7 @@ Basic functions
 
 .. function:: nnz(A)
 
-   Counts the number of nonzero values in A
+   Counts the number of nonzero values in array A (dense or sparse)
 
 .. function:: scale!(A, k)
 
@@ -2103,9 +2088,9 @@ Constructors
 
    Construct an uninitialized dense array. ``dims`` may be a tuple or a series of integer arguments.
 
-.. function:: getindex(type)
+.. function:: getindex(type[, elements...])
 
-   Construct an empty 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
+   Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
 
 .. function:: cell(dims)
 
@@ -2138,10 +2123,6 @@ Constructors
 
    Create an array with the same data as the given array, but with different dimensions. An implementation for a particular type of array may choose whether the data is copied or shared.
 
-.. function:: copy(A)
-
-   Create a copy of ``A``
-
 .. function:: similar(array, element_type, dims)
 
    Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments.
@@ -2157,10 +2138,6 @@ Constructors
 .. function:: randf(dims)
 
    Create a random array with Float32 random values in (0,1)
-
-.. function:: randn(dims)
-
-   Create a random array with Float64 normally-distributed random values with a mean of 0 and standard deviation of 1
 
 .. function:: eye(n)
 
@@ -2192,7 +2169,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: getindex(A, ind)
 
-   Returns a subset of ``A`` as specified by ``ind``, which may be an ``Int``, a ``Range``, or a ``Vector``.
+   Returns a subset of array ``A`` as specified by ``ind``, which may be an ``Int``, a ``Range``, or a ``Vector``.
 
 .. function:: sub(A, ind)
 
@@ -2204,7 +2181,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: setindex!(A, X, ind)
 
-   Store an input array ``X`` within some subset of ``A`` as specified by ``ind``.
+   Store values from array ``X`` within some subset of ``A`` as specified by ``ind``.
 
 .. function:: cat(dim, A...)
 
@@ -2347,10 +2324,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: issparse(S)
 
    Returns ``true`` if ``S`` is sparse, and ``false`` otherwise.
-
-.. function:: nnz(S)
-
-   Return the number of nonzeros in ``S``.
 
 .. function:: sparse(A)
 
@@ -3254,8 +3227,7 @@ System
 C Interface
 -----------
 
-.. function:: ccall( (symbol, library), RetType, (ArgType1, ...), ArgVar1, ...)
-              ccall( fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
+.. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
    Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively, ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
 
@@ -3323,7 +3295,6 @@ Errors
 ------
 
 .. function:: error(message::String)
-              error(Exception)
 
    Raise an error with the given message
 
