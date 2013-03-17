@@ -532,7 +532,7 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
             return (jl_value_t*)jl_any_type;
     }
 type_of_constant:
-    if (jl_is_datatype(e))
+    if (jl_is_datatype(e) || jl_is_uniontype(e))
         return (jl_value_t*)jl_wrap_Type(e);
     return (jl_value_t*)jl_typeof(e);
 }

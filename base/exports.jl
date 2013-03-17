@@ -17,7 +17,7 @@ export
     Operators,
     Errno,
     Meta,
-    
+
 # Types
     AbstractMatrix,
     AbstractSparseMatrix,

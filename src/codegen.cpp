@@ -1045,7 +1045,17 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             jl_value_t *tp0 = jl_tparam0(ty);
             if (jl_subtype(arg, tp0, 0)) {
                 JL_GC_POP();
-                return emit_expr(args[1], ctx);
+                Value *v = emit_expr(args[1], ctx);
+                if (tp0 == jl_bottom_type) {
+                    return builder.CreateUnreachable();
+                }
+                return v;
+            }
+            if (tp0 == jl_bottom_type) {
+                emit_expr(args[1], ctx);
+                emit_error("reached code declared unreachable", ctx);
+                JL_GC_POP();
+                return builder.CreateUnreachable();
             }
             if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
                 Value *arg1 = emit_expr(args[1], ctx);
