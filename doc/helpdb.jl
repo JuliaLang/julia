@@ -606,12 +606,6 @@
 
 "),
 
-("Associative Collections","Base","empty!","empty!(collection)
-
-   Delete all keys from a collection.
-
-"),
-
 ("Associative Collections","Base","keys","keys(collection)
 
    Return an array of all keys in a collection.
@@ -839,12 +833,6 @@
 
 "),
 
-("Strings","Base","collect","collect(string)
-
-   Return an array of the characters in \"string\".
-
-"),
-
 ("Strings","Base","*","*(s, t)
 
    Concatenate strings.
@@ -861,15 +849,9 @@
 
 "),
 
-("Strings","Base","string","string(char...)
+("Strings","Base","string","string(xs...)
 
-   Create a string with the given characters.
-
-"),
-
-("Strings","Base","string","string(x)
-
-   Create a string from any value using the \"print\" function.
+   Create a string from any values using the \"print\" function.
 
 "),
 
@@ -940,14 +922,6 @@
 
 "),
 
-("Strings","Base","search","search(string, char[, i])
-
-   Return the index of \"char\" in \"string\", giving 0 if not found.
-   The second argument may also be a vector or a set of characters.
-   The third argument optionally specifies a starting index.
-
-"),
-
 ("Strings","Base","ismatch","ismatch(r::Regex, s::String)
 
    Test whether a string contains a match of the given regular
@@ -973,7 +947,7 @@
 
    Search for the given characters within the given string. The second
    argument may be a single character, a vector or a set of
-   characters, a string, or a regular expression (but regular
+   characters, a string, or a regular expression (though regular
    expressions are only allowed on contiguous strings, such as ASCII
    or UTF-8 strings). The third argument optionally specifies a
    starting index. The return value is a range of indexes where the
@@ -1275,12 +1249,6 @@
 
 "),
 
-("I/O","Base","open","open(file_name) -> IOStream
-
-   Open a file in read mode.
-
-"),
-
 ("I/O","Base","open","open(f::function, args...)
 
    Apply the function \"f\" to the result of \"open(args...)\" and
@@ -1297,8 +1265,7 @@
 
 "),
 
-("I/O","Base","fdio","fdio(fd::Integer[, own::Bool]) -> IOStream
-fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
+("I/O","Base","fdio","fdio([name::String], fd::Integer[, own::Bool]) -> IOStream
 
    Create an \"IOStream\" object from an integer file descriptor. If
    \"own\" is true, closing this object will close the underlying
@@ -2461,15 +2428,25 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","airyai","airy(x)
-airyai(x)
+("Mathematical Functions","Base","airy","airy(k, x)
+
+   kth derivative of the Airy function \\operatorname{Ai}(x).
+
+"),
+
+("Mathematical Functions","Base","airyai","airyai(x)
 
    Airy function \\operatorname{Ai}(x).
 
 "),
 
-("Mathematical Functions","Base","airyaiprime","airyprime(x)
-airyaiprime(x)
+("Mathematical Functions","Base","airyprime","airyprime(x)
+
+   Airy function derivative \\operatorname{Ai}'(x).
+
+"),
+
+("Mathematical Functions","Base","airyaiprime","airyaiprime(x)
 
    Airy function derivative \\operatorname{Ai}'(x).
 
@@ -3143,8 +3120,9 @@ airyaiprime(x)
 
 ("Random Numbers","Base","rand","rand(r[, dims...])
 
-   Generate a random integer from \"1\":\"n\" inclusive. Optionally,
-   generate a random integer array.
+   Generate a random integer from the inclusive interval specified by
+   \"Range1 r\" (for example, \"1:n\"). Optionally, generate a random
+   integer array.
 
 "),
 
@@ -3197,7 +3175,7 @@ airyaiprime(x)
 
 ("Arrays","Base","nnz","nnz(A)
 
-   Counts the number of nonzero values in A
+   Counts the number of nonzero values in array A (dense or sparse)
 
 "),
 
@@ -3233,11 +3211,11 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","getindex","getindex(type)
+("Arrays","Base","getindex","getindex(type[, elements...])
 
-   Construct an empty 1-d array of the specified type. This is usually
-   called with the syntax \"Type[]\". Element values can be specified
-   using \"Type[a,b,c,...]\".
+   Construct a 1-d array of the specified type. This is usually called
+   with the syntax \"Type[]\". Element values can be specified using
+   \"Type[a,b,c,...]\".
 
 "),
 
@@ -3292,12 +3270,6 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","copy","copy(A)
-
-   Create a copy of \"A\"
-
-"),
-
 ("Arrays","Base","similar","similar(array, element_type, dims)
 
    Create an uninitialized array of the same type as the given array,
@@ -3323,13 +3295,6 @@ airyaiprime(x)
 ("Arrays","Base","randf","randf(dims)
 
    Create a random array with Float32 random values in (0,1)
-
-"),
-
-("Arrays","Base","randn","randn(dims)
-
-   Create a random array with Float64 normally-distributed random
-   values with a mean of 0 and standard deviation of 1
 
 "),
 
@@ -3368,8 +3333,8 @@ airyaiprime(x)
 
 ("Arrays","Base","getindex","getindex(A, ind)
 
-   Returns a subset of \"A\" as specified by \"ind\", which may be an
-   \"Int\", a \"Range\", or a \"Vector\".
+   Returns a subset of array \"A\" as specified by \"ind\", which may
+   be an \"Int\", a \"Range\", or a \"Vector\".
 
 "),
 
@@ -3391,8 +3356,8 @@ airyaiprime(x)
 
 ("Arrays","Base","setindex!","setindex!(A, X, ind)
 
-   Store an input array \"X\" within some subset of \"A\" as specified
-   by \"ind\".
+   Store values from array \"X\" within some subset of \"A\" as
+   specified by \"ind\".
 
 "),
 
@@ -3614,12 +3579,6 @@ airyaiprime(x)
 ("Sparse Matrices","Base","issparse","issparse(S)
 
    Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
-
-"),
-
-("Sparse Matrices","Base","nnz","nnz(S)
-
-   Return the number of nonzeros in \"S\".
 
 "),
 
@@ -5013,8 +4972,7 @@ airyaiprime(x)
 
 "),
 
-("C Interface","Base","ccall","ccall((symbol, library), RetType, (ArgType1, ...), ArgVar1, ...)
-ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
+("C Interface","Base","ccall","ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
    Call function in C-exported shared library, specified by (function
    name, library) tuple (String or :Symbol). Alternatively, ccall may
@@ -5113,7 +5071,6 @@ ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 "),
 
 ("Errors","Base","error","error(message::String)
-error(Exception)
 
    Raise an error with the given message
 
