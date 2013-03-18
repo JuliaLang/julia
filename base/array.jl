@@ -1134,14 +1134,6 @@ end
 
 ## find ##
 
-function nnz(a)
-    n = 0
-    for i = 1:length(a)
-        n += bool(a[i]) ? 1 : 0
-    end
-    return n
-end
-
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(A, start::Integer)
     for i = start:length(A)
