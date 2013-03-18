@@ -882,13 +882,13 @@ Text I/O
 
    Print (using :func:`print`) ``x`` followed by a newline
 
-.. function:: @printf("%Fmt", args...)
+.. function:: @printf([io::IOStream], "%Fmt", args...)
 
-   Print arg(s) using C ``printf()`` style format specification string.
+   Print arg(s) using C ``printf()`` style format specification string. Optionally, an IOStream may be passed as the first argument to redirect output.
 
-.. function:: @sprintf(stream::IOStream, "%Fmt", args...)
+.. function:: @sprintf("%Fmt", args...)
     
-   Write ``@printf`` formatted output arg(s) to stream.
+   Return ``@printf`` formatted output as string.
 
 .. function:: showall(x)
 
