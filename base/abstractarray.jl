@@ -1220,6 +1220,14 @@ bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)
 
 # Basic AbstractArray functions
 
+function nnz{T}(a::AbstractArray{T})
+    n = 0
+    for i = 1:length(a)
+        n += a[i] != zero(T) ? 1 : 0 
+    end
+    return n
+end
+
 # for reductions that expand 0 dims to 1
 reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 :
                                                size(A,i)))
