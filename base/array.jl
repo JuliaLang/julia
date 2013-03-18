@@ -666,6 +666,16 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
     return a
 end
 
+function prepend!{T}(a::Array{T,1}, items::Array{T,1})
+    if is(T,None)
+        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+    end
+    n = length(items)
+    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
+    a[1:n] = items
+    return a
+end
+
 function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
