@@ -1357,16 +1357,17 @@
 
 "),
 
-("Text I/O","Base","@printf","@printf(\"%Fmt\", args...)
+("Text I/O","Base","@printf","@printf([io::IOStream], \"%Fmt\", args...)
 
    Print arg(s) using C \"printf()\" style format specification
-   string.
+   string. Optionally, an IOStream may be passed as the first argument
+   to redirect output.
 
 "),
 
-("Text I/O","Base","@sprintf","@sprintf(stream::IOStream, \"%Fmt\", args...)
+("Text I/O","Base","@sprintf","@sprintf(\"%Fmt\", args...)
 
-   Write \"@printf\" formatted output arg(s) to stream.
+   Return \"@printf\" formatted output as string.
 
 "),
 
