@@ -42,7 +42,7 @@ function version(pkg::String, sha1::String)
 end
 
 each_package() = @task begin
-    for line in each_line(`ls -1 METADATA`)
+    for line in eachline(`ls -1 METADATA`)
         line = chomp(line)
         # stat() chokes if we try to check if the subdirectory of a non-directory exists
         if isdir(joinpath("METADATA", line)) && isdir(joinpath("METADATA", line, "versions"))
@@ -52,7 +52,7 @@ each_package() = @task begin
 end
 
 each_tagged_version(pkg::String) = @task begin
-    for line in each_line(`ls -1 $(joinpath("METADATA", pkg, "versions"))`)
+    for line in eachline(`ls -1 $(joinpath("METADATA", pkg, "versions"))`)
         line = chomp(line)
         if isdir(joinpath("METADATA", pkg, "versions", line)) && ismatch(Base.VERSION_REGEX, line)
             ver = convert(VersionNumber,line)
@@ -127,7 +127,7 @@ hash(s::VersionSet) = hash([s.(n) for n in VersionSet.names])
 
 function parse_requires(readable)
     reqs = VersionSet[]
-    for line in each_line(readable)
+    for line in eachline(readable)
         if ismatch(r"^\s*(?:#|$)", line) continue end
         line = replace(line, r"#.*$", "")
         fields = split(line)

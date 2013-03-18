@@ -85,7 +85,7 @@ function eval_user_input(ast::ANY, show_value)
                 println("SYSTEM: show(lasterr) caused an error")
             end
             iserr, lasterr = true, err
-            bt = backtrace()
+            bt = catch_backtrace()
         end
     end
     println()
@@ -341,7 +341,7 @@ function _start()
             run_repl()
         end
     catch err
-        display_error(err,backtrace())
+        display_error(err,catch_backtrace())
         println()
         exit(1)
     end

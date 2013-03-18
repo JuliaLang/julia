@@ -846,10 +846,18 @@
   (with-normal-ops
   (without-whitespace-newline
   (case word
-    ((begin)  (begin0 (parse-block s)
-		      (expect-end s)))
-    ((quote)  (begin0 (list 'quote (parse-block s))
-		      (expect-end s)))
+    ((begin quote)
+     (let ((loc  (begin (skip-ws-and-comments (ts:port s))
+			(line-number-filename-node s)))
+	   (blk  (parse-block s)))
+       (expect-end s)
+       (let ((blk  (if (and (length> blk 1)
+			    (pair? (cadr blk)) (eq? (caadr blk) 'line))
+		       (list* 'block loc (cddr blk))
+		       blk)))
+	 (if (eq? word 'quote)
+	     (list 'quote blk)
+	     blk))))
     ((while)  (begin0 (list 'while (parse-cond s) (parse-block s))
 		      (expect-end s)))
     ((for)

@@ -645,7 +645,7 @@ function perform_work(job::WorkItem)
         end
     catch err
         print("exception on ", myid(), ": ")
-        display_error(err,backtrace())
+        display_error(err,catch_backtrace())
         println()
         result = err
     end
@@ -1386,7 +1386,7 @@ function event_loop(isclient)
                 run_event_loop()
             end
         catch err
-            bt = backtrace()
+            bt = catch_backtrace()
             if isa(err,DisconnectException)
                 # TODO: wake up tasks waiting for failed process
                 if !isclient

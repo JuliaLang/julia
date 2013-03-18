@@ -170,6 +170,7 @@
     jl_load_file_string;
     jl_loaderror_type;
     jl_load_file_string;
+    jl_locate_sysimg;
     jl_lstat;
     jl_macroexpand;
     jl_main_module;
@@ -230,7 +231,8 @@
     jl_rethrow_other;
     jl_throw_with_superfluous_argument;
     jl_get_backtrace;
-    jl_parse_backtrace;
+    jl_backtrace_from_here;
+    jl_lookup_code_address;
     rec_backtrace;
     jl_reshape_array;
     jl_restore_system_image;
@@ -289,6 +291,7 @@
     jl_tcp_init;
     jl_test;
     jl_timer_start;
+    jl_timer_stop;
     jl_toplevel_eval;
     jl_type_intersection;
     jl_type_match;
