@@ -188,7 +188,7 @@ rm(pkgs::Vector{String}) = cd_pkgdir() do
             end
             open("REQUIRE") do r
                 open("REQUIRE.new","w") do w
-                    for line in each_line(r)
+                    for line in eachline(r)
                         fields = split(line)
                         if isempty(fields) || fields[1]!=pkg
                             print(w,line)
@@ -445,7 +445,7 @@ end
 # set package remote in METADATA
 
 get_origin(pkg::String, remote::String) = cd_pkgdir() do
-    for line in each_line(`git --git-dir=$(joinpath(pkg,".git")) remote -v`)
+    for line in eachline(`git --git-dir=$(joinpath(pkg,".git")) remote -v`)
         m = match(r"^(\S*)\s*(\S*)\s*\(fetch\)", line)
         if m != nothing && m.captures[1] == remote
             return m.captures[2]

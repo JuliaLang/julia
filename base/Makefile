@@ -12,7 +12,7 @@ errno_h.jl:
 	$(QUIET_PERL) echo '#include "errno.h"' | $(CC) -E -dM - | perl -nle 'print "const $$1 = int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | sort > $@
 
 file_constants.jl: ../src/file_constants.h
-	$(QUIET_PERL) ${CC} -E -P -DJULIA ../src/file_constants.h | perl -nle 'print "$$1" if /^(\s*const\s+[A-z_]+\s+=\s+[0-9A-z_]+\s*)$$/' > $@
+	$(QUIET_PERL) ${CC} -E -P -DJULIA ../src/file_constants.h | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@
 
 uv_constants.jl: ../src/uv_constants.h
 	$(QUIET_PERL) ${CC} -E -P -I"../deps/libuv/include" -DJULIA ../src/uv_constants.h | tail -n 5 > $@

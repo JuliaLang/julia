@@ -4,7 +4,8 @@
  Getting Started  
 *****************
 
-Julia installation is straightforward, whether using precompiled binaries or compiling from source. Download and install Julia by following the instructions at [http://julialang.org/downloads/](http://julialang.org/downloads/).
+Julia installation is straightforward, whether using precompiled binaries or compiling from source. Download and install Julia by following the instructions at
+`http://julialang.org/downloads/ <http://julialang.org/downloads/>`_.
 
 The easiest way to learn and experiment with Julia is by starting an
 interactive session (also known as a read-eval-print loop or "repl")::
@@ -25,8 +26,6 @@ interactive session (also known as a read-eval-print loop or "repl")::
     julia> ans
     3
 
-    julia> require("file")
-
 To exit the interactive session, type ``^D`` — the control key
 together with the ``d`` key or type ``quit()``. When run in interactive
 mode, ``julia`` displays a banner and prompts the user for input. Once
@@ -35,8 +34,10 @@ hits enter, the interactive session evaluates the expression and shows
 its value. If an expression is entered into an interactive session
 with a trailing semicolon, its value is not shown. The variable
 ``ans`` is bound to the value of the last evaluated expression whether
-it is shown or not. The ``require`` function reads and evaluates the
-contents of the given file, ``file.jl`` in this case.
+it is shown or not.
+
+To evaluate expressions written in a source file ``file.jl``, write
+``include("file.jl")``.
 
 To run code in a file non-interactively, you can give it as the first
 argument to the julia command::
@@ -85,6 +86,13 @@ those available for the ``perl`` and ``ruby`` programs::
 
      -h --help                Print this message
 
+Tutorials
+---------
+
+A few walkthrough-style tutorials are available online:
+
+- `Forio Julia Tutorials <http://forio.com/julia/tutorials-list>`_
+- `Tutorial for Homer Reid's numerical analysis class <http://homerreid.ath.cx/teaching/18.330/JuliaProgramming.shtml#SimplePrograms>`_
 
 Noteworthy differences from MATLAB
 ----------------------------------

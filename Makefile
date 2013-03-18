@@ -25,7 +25,6 @@ julia-debug julia-release:
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
 	@$(MAKE) $(QUIET_MAKE) -C base
-	@$(MAKE) $(QUIET_MAKE) -C extras
 	@$(MAKE) $(QUIET_MAKE) -C ui $@
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
 
@@ -33,7 +32,7 @@ $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 	@cp $< $@
 
 # use sys.ji if it exists, otherwise run two stages
-$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl $(BUILD)/share/julia/helpdb.jl
+$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl $(BUILD)/share/julia/helpdb.jl
 	@#echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
 	$(QUIET_JULIA) cd base && \
 	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make clean'. If the error persists, 'make cleanall' may help."
@@ -55,8 +54,8 @@ JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
 		  umfpack z openblas
 
 PREFIX ?= julia-$(JULIA_COMMIT)
-install: release webrepl
-	@for subdir in "sbin" "bin" "etc" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" ; do \
+install: release
+	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 ifeq ($(OS), Darwin)
@@ -72,11 +71,12 @@ endif
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
 		cp -a $(BUILD)/lib/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
+	cp -a $(BUILD)/lib/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	cp -a src/julia.h $(BUILD)/include/uv* $(PREFIX)/include/julia
 	# Copy system image
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well
 	cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
-	-cp $(BUILD)/etc/nginx.conf $(PREFIX)/etc/
 ifeq ($(OS), WINNT)
 	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
 endif
@@ -91,7 +91,6 @@ ifeq ($(OS), Darwin)
 	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 ifeq ($(OS), WINNT)
-	cp -R $(BUILD)/sbin $(PREFIX)
 	-[ -e dist-extras/7za.exe ] && cp dist-extras/7za.exe $(PREFIX)/bin/7z.exe
 	-[ -e dist-extras/PortableGit-1.8.0-preview20121022.7z ] && \
 	  mkdir $(PREFIX)/Git && \
@@ -113,7 +112,6 @@ endif
 
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
-	@$(MAKE) -C extras clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
 	@for buildtype in "release" "debug" ; do \
@@ -131,7 +129,7 @@ cleanall: clean
 #	@$(MAKE) -C deps clean-uv
 
 .PHONY: default debug release julia-debug julia-release \
-	test testall test-* clean cleanall webrepl \
+	test testall test-* clean cleanall \
 	run-julia run-julia-debug run-julia-release
 
 test: release
@@ -142,12 +140,6 @@ testall: release
 
 test-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
-
-webrepl: all
-ifeq ($(USE_SYSTEM_NGINX), 0)
-	@$(MAKE) $(QUIET_MAKE) -C deps install-nginx
-endif
-	@$(MAKE) -C ui/webserver julia-release
 
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras

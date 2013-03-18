@@ -9,19 +9,19 @@ for elty in (Float32, Float64, Complex64, Complex128)
         b     = convert(Vector{elty}, b)
         
         capd  = cholfact(apd)              # upper Cholesky factor
-        r     = factors(capd)
+        r     = capd[:U]
         @test_approx_eq r'*r apd
         @test_approx_eq b apd * (capd\b)
         @test_approx_eq apd * inv(capd) eye(elty, n)
         @test_approx_eq a*(capd\(a'*b)) b # least squares soln for square a
         @test_approx_eq det(capd) det(apd)
 
-        l     = factors(cholfact(apd, 'L')) # lower Cholesky factor
+        l     = cholfact(apd, :L)[:L] # lower Cholesky factor
         @test_approx_eq l*l' apd
 
-        cpapd = cholpfact(apd)           # pivoted Choleksy decomposition
+        cpapd = cholpfact(apd)                          # pivoted Choleksy decomposition
         @test rank(cpapd) == n
-        @test all(diff(diag(real(cpapd.LR))).<=0.) # diagonal should be non-increasing
+        @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
         @test_approx_eq b apd * (cpapd\b)
         @test_approx_eq apd * inv(cpapd) eye(elty, n)
 
@@ -33,31 +33,23 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq apd * (bc2\b) b
 
         lua   = lufact(a)                  # LU decomposition
-        l,u,p = lu(a)
-        L,U,P = factors(lua)
-        @test l == L && u == U && p == P
+        l,u,p = lua[:L], lua[:U], lua[:p]
         @test_approx_eq l*u a[p,:]
         @test_approx_eq l[invperm(p),:]*u a
         @test_approx_eq a * inv(lua) eye(elty, n)
         @test_approx_eq a*(lua\b) b
 
         qra   = qrfact(a)                  # QR decomposition
-        q,r   = factors(qra)
-        @test_approx_eq q'*q eye(elty, n)
-        @test_approx_eq q*q' eye(elty, n)
-        Q,R   = qr(a)
-        @test q == Q && r == R
+        q,r   = qra[:Q], qra[:R]
+        @test_approx_eq q'*full(q, false) eye(elty, n)
+        @test_approx_eq q*full(q, false)' eye(elty, n)
         @test_approx_eq q*r a
-        @test_approx_eq qmulQR(qra,b) Q*b
-        @test_approx_eq qTmulQR(qra,b) Q'*b
         @test_approx_eq a*(qra\b) b
 
         qrpa  = qrpfact(a)                 # pivoted QR decomposition
-        q,r,p = factors(qrpa)
-        @test_approx_eq q'*q eye(elty, n)
-        @test_approx_eq q*q' eye(elty, n)
-        Q,R,P = qrp(a)
-        @test q == Q && r == R && p == P
+        q,r,p = qrpa[:Q], qrpa[:R], qrpa[:p]
+        @test_approx_eq q'*full(q, false) eye(elty, n)
+        @test_approx_eq q*full(q, false)' eye(elty, n)
         @test_approx_eq q*r a[:,p]
         @test_approx_eq q*r[:,invperm(p)] a
         @test_approx_eq a*(qrpa\b) b
@@ -68,19 +60,19 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
         d,v   = eig(a)                 # non-symmetric eigen decomposition
         for i in 1:size(a,2) @test_approx_eq a*v[:,i] d[i]*v[:,i] end
-    
+
         u, q, v = schur(a)             # Schur
         @test_approx_eq q*u*q' a
         @test_approx_eq sort(real(v)) sort(real(d))
         @test_approx_eq sort(imag(v)) sort(imag(d))
         @test istriu(u) || isreal(a)
 
-        u,s,vt = svdt(a)                # singular value decomposition
-        @test_approx_eq u*diagmm(s,vt) a
+        usv = svdfact(a)                # singular value decomposition
+        @test_approx_eq usv[:U]*diagmm(usv[:S],usv[:Vt]) a
     
-        gsvd = svd(a,a[1:5,:])         # Generalized svd
-        @test_approx_eq gsvd[1]*gsvd[4]*gsvd[6]*gsvd[3]' a
-        @test_approx_eq gsvd[2]*gsvd[5]*gsvd[6]*gsvd[3]' a[1:5,:]
+        gsvd = svdfact(a,a[1:5,:])         # Generalized svd
+        @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
+        @test_approx_eq gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' a[1:5,:]
 
         x = a \ b
         @test_approx_eq a*x b
@@ -251,7 +243,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq expm(A3) eA3
 
                                         # Hessenberg
-        @test_approx_eq hess(A1) convert(Matrix{elty}, 
+        @test_approx_eq hessfact(A1)[:H] convert(Matrix{elty}, 
                         [4.000000000000000  -1.414213562373094  -1.414213562373095
                         -1.414213562373095   4.999999999999996  -0.000000000000000
                                          0  -0.000000000000002   3.000000000000000])
@@ -296,7 +288,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq solve(T,v) invFv
         B = convert(Matrix{elty}, B)
         @test_approx_eq solve(T, B) F\B
-        Tlu = lufact(T)
+        Tlu = LUTridiagonal(copy(T))
         x = Tlu\v
         @test_approx_eq x invFv
         @test_approx_eq det(T) det(F)
@@ -329,27 +321,27 @@ for elty in (Float32, Float64, Complex64, Complex128)
         #  axiomatic definition of determinants.
         # If all axioms are satisfied and all the composition rules work,
         #  all determinants will be correct except for floating point errors.
-        
+     
         # The determinant of the identity matrix should always be 1.
         for i = 1:10
             A = eye(elty, i)
             @test_approx_eq det(A) one(elty)
         end
-        
+
         # The determinant of a Householder reflection matrix should always be -1.
         for i = 1:10
             A = eye(elty, 10)
             A[i, i] = -one(elty)
             @test_approx_eq det(A) -one(elty)
         end
-        
+
         # The determinant of a rotation matrix should always be 1.
         for theta = convert(Vector{elty}, pi ./ [1:4])
             R = [cos(theta) -sin(theta);
                  sin(theta) cos(theta)]
             @test_approx_eq convert(elty, det(R)) one(elty)
         end
-        
+
         # issue 1490
         @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(one(elty))
 end
@@ -360,13 +352,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                         # syevr!
         A = convert(Array{elty, 2}, Ainit)
         Asym = A'A
-        Z = Array(elty, 5, 5)
-        vals = LAPACK.syevr!(copy(Asym), Z)
+        vals, Z = LinAlg.LAPACK.syevr!('V', copy(Asym))
         @test_approx_eq Z*diagmm(vals, Z') Asym
         @test all(vals .> 0.0)
-        @test_approx_eq LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,zeros(elty,0,0),-1.0) vals[vals .< 1.0]
-        @test_approx_eq LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,zeros(elty,0,0),-1.0) vals[4:5]
-        @test_approx_eq vals LAPACK.syev!('N','U',copy(Asym))
+        @test_approx_eq LinAlg.LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
+        @test_approx_eq LinAlg.LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
+        @test_approx_eq vals LinAlg.LAPACK.syev!('N','U',copy(Asym))
 end
 
 ## Issue related tests

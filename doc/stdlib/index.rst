@@ -17,6 +17,7 @@ Built-ins
 
    base
    constants
+   file
    punctuation
 
 ****************
@@ -28,22 +29,6 @@ Built-in Modules
 
    sort
 
-******
-Extras
-******
-
-.. toctree::
-   :maxdepth: 1
-
-   argparse
-   cpp
-   options
-   gzip
-   profile
-   sound
-   textwrap
-   zlib
-
 ****************
 Math & Numerical
 ****************
@@ -52,5 +37,4 @@ Math & Numerical
    :maxdepth: 1
 
    blas
-   glpk
 

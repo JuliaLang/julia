@@ -1,13 +1,8 @@
-require("arpack")
-
-using ARPACK
-
-# arpack
 begin
 	local n,a,asym,d,v
 	n = 10
 	a = rand(n,n)
-	asym = a+a'+n*eye(n)
+	asym = a' * a
 
 	(d,v) = eigs(asym, 3)
 	@test sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8

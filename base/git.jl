@@ -21,7 +21,7 @@ head() = readchomp(`git rev-parse HEAD`)
 
 function each_tagged_version()
     git_dir = abspath(dir())
-    @task for line in each_line(`git --git-dir=$git_dir show-ref --tags`)
+    @task for line in eachline(`git --git-dir=$git_dir show-ref --tags`)
         m = match(r"^([0-9a-f]{40}) refs/tags/(v\S+)$", line)
         if m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2])
             produce((convert(VersionNumber,m.captures[2]),m.captures[1]))
@@ -32,7 +32,7 @@ each_tagged_version(dir::String) = cd(each_tagged_version,dir)
 
 function each_submodule(f::Function, recursive::Bool, dir::ByteString)
     cmd = `git submodule foreach --quiet 'echo "$name $path $sha1"'`
-    for line in each_line(cmd)
+    for line in eachline(cmd)
         name, path, sha1 = match(r"^(.*) (.*) ([0-9a-f]{40})$", line).captures
         cd(dir) do
             f(name, path, sha1)
@@ -53,7 +53,7 @@ each_submodule(f::Function, r::Bool) = each_submodule(f, r, pwd())
 function read_config(file::String)
     cfg = Dict()
     # TODO: use --null option for better handling of weird values.
-    for line in each_line(`git config -f $file --get-regexp '.*'`)
+    for line in eachline(`git config -f $file --get-regexp '.*'`)
         key, val = match(r"^(\S+)\s+(.*)$", line).captures
         cfg[key] = has(cfg,key) ? [cfg[key],val] : val
     end

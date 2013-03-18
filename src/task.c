@@ -453,42 +453,6 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
     return fromC;
 }
 
-static void push_frame_info_from_ip(jl_array_t *a, size_t ip, int doCframes)
-{
-    const char *func_name;
-    int line_num;
-    const char *file_name;
-    int fromC;
-    int i = jl_array_len(a);
-    fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip, doCframes);
-    if (func_name != NULL) {
-        jl_array_grow_end(a, 3);
-        //ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
-        jl_arrayset(a, (jl_value_t*)jl_symbol(func_name), i); i++;
-        jl_arrayset(a, (jl_value_t*)jl_symbol(file_name), i); i++;
-        if (fromC)
-            jl_arrayset(a, jl_box_ulong(line_num), i); // while offset, not line #
-        else
-            jl_arrayset(a, jl_box_long(line_num), i);
-    }
-}
-
-DLLEXPORT jl_value_t *jl_parse_backtrace(ptrint_t *data, size_t n, int doCframes)
-{
-    jl_array_t *a = jl_alloc_cell_1d(0);
-    JL_GC_PUSH(&a);
-    for(size_t i=0; i < n; i++) {
-        push_frame_info_from_ip(a, (size_t)data[i], doCframes);
-    }
-    JL_GC_POP();
-    return (jl_value_t*)a;
-}
-
-DLLEXPORT jl_value_t *jl_get_backtrace()
-{
-    return jl_parse_backtrace(bt_data, bt_size, 0);
-}
-
 #if defined(__WIN32__)
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 {
@@ -548,6 +512,49 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 static void record_backtrace(void)
 {
     bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
+}
+
+static jl_value_t *array_ptr_void_type = NULL;
+DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
+{
+    if (array_ptr_void_type == NULL)
+        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type,
+                                            jl_tuple2(jl_voidpointer_type,
+                                                      jl_box_long(1)));
+    jl_array_t *bt = jl_alloc_array_1d(array_ptr_void_type, MAX_BT_SIZE);
+    size_t n = rec_backtrace(jl_array_data(bt), MAX_BT_SIZE);
+    if (n < MAX_BT_SIZE)
+        jl_array_del_end(bt, MAX_BT_SIZE-n);
+    return (jl_value_t*)bt;
+}
+
+DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip)
+{
+    const char *func_name;
+    int line_num;
+    const char *file_name;
+    (void)frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, 0);
+    if (func_name != NULL) {
+        jl_value_t *r = (jl_value_t*)jl_alloc_tuple(3);
+        JL_GC_PUSH(&r);
+        jl_tupleset(r, 0, jl_symbol(func_name));
+        jl_tupleset(r, 1, jl_symbol(file_name));
+        jl_tupleset(r, 2, jl_box_long(line_num));
+        JL_GC_POP();
+        return r;
+    }
+    return (jl_value_t*)jl_null;
+}
+
+DLLEXPORT jl_value_t *jl_get_backtrace(void)
+{
+    if (array_ptr_void_type == NULL)
+        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type,
+                                            jl_tuple2(jl_voidpointer_type,
+                                                      jl_box_long(1)));
+    jl_array_t *bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
+    memcpy(bt->data, bt_data, bt_size*sizeof(void*));
+    return (jl_value_t*)bt;
 }
 
 //for looking up functions from gdb:

@@ -5,7 +5,7 @@ import re
 import sphinx.domains.python
 
 sphinx.domains.python.py_sig_re = re.compile(
-    r'''^ ([\w.]*\.)?            # class name(s)
+    r'''^ ([\w.]+\.)?            # class name(s)
           ([^\s(]+)  \s*         # thing name
           (?: \((.*)\)           # optional: arguments
            (?:\s* -> \s* (.*))?  #           return annotation

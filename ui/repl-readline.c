@@ -424,13 +424,30 @@ static int common_prefix(const char *s1, const char *s2)
     return i;
 }
 
+static char *lang_keywords[] =
+    { "if", "else", "elseif", "while", "for", "begin", "end", "quote",
+      "try", "catch", "return", "local", "abstract", "function", "macro", "ccall",
+      "finally", "typealias", "break", "continue", "type", "global",
+      "module", "using", "import", "export", "const", "let", "bitstype", "do",
+      "baremodule", "importall", "immutable", NULL };
+
+static int is_keyword(char *s)
+{
+    for(size_t i=0; lang_keywords[i]; i++) {
+        if (!strcmp(lang_keywords[i],s))
+            return 1;
+    }
+    return 0;
+}
+
 static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
                           jl_module_t *module, const char *str,
                           const char *prefix, int plen)
 {
     do {
         if (common_prefix(prefix, tree->name) == plen &&
-            (module ? jl_defines_or_exports_p(module, tree) : jl_boundp(jl_current_module, tree))) {
+            ((module ? jl_defines_or_exports_p(module, tree) : jl_boundp(jl_current_module, tree)) ||
+             is_keyword(tree->name))) {
             ios_puts(str, result);
             ios_puts(tree->name + plen, result);
             ios_putc('\n', result);
@@ -638,6 +655,10 @@ static void init_rl(void)
 {
     rl_readline_name = "julia";
     rl_attempted_completion_function = julia_completion;
+    for(size_t i=0; lang_keywords[i]; i++) {
+        // make sure keywords are in symbol table
+        (void)jl_symbol(lang_keywords[i]);
+    }
     rl_completer_word_break_characters = " \t\n\"\\'`@$><=;|&{}()[],+-*/?%^~!";
     Keymap keymaps[] = {emacs_standard_keymap, vi_insertion_keymap};
     int i;
