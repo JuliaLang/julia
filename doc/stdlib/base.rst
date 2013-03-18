@@ -2382,17 +2382,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the norm of a ``Vector`` or a ``Matrix``
 
-.. function:: factors(F)
-
-   Return the factors of a factorization ``F``. For example, in the case of an LU decomposition, factors(LU) -> L, U, P
-
 .. function:: lu(A) -> L, U, P
 
    Compute the LU factorization of ``A``, such that ``A[P,:] = L*U``.
 
 .. function:: lufact(A) -> LUDense
 
-   Compute the LU factorization of ``A`` and return a ``LUDense`` object. ``factors(lufact(A))`` returns the triangular matrices containing the factorization. The following functions are available for ``LUDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``.
+   Compute the LU factorization of ``A`` and return a ``LUDense`` object. The individual components of the factorization ``F`` can be accesed by indexing: ``F[:L]``, ``F[:U]``, and ``F[:P]`` (permutation matrix) or ``F[:p]`` (permutation vector). The following functions are available for ``LUDense`` objects: ``size``, ``\``, ``inv``, ``det``.
 
 .. function:: lufact!(A) -> LUDense
 
@@ -2404,7 +2400,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholfact(A, [LU]) -> CholeskyDense
 
-   Compute the Cholesky factorization of a symmetric positive-definite matrix ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholfact(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDense`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
+   Compute the Cholesky factorization of a symmetric positive-definite matrix ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The triangular matrix can be obtained from the forization ``F`` with: ``F[:L]`` and ``F[:U]``. The following functions are available for ``CholeskyDense`` objects: ``size``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
 
 .. function: cholfact!(A, [LU]) -> CholeskyDense
 
@@ -2412,7 +2408,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 ..  function:: cholpfact(A, [LU]) -> CholeskyPivotedDense
 
-   Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. ``factors(cholpfact(A))`` returns the triangular matrix containing the factorization. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``factors``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
+   Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyDensePivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The triangular factors containted in the factorization ``F`` can be obtained with ``F[:L]`` and ``F[:U]``, whereas the permutation can be obtained with ``F[:P]`` or ``F[:p]``. The following functions are available for ``CholeskyDensePivoted`` objects: ``size``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
 
 .. function:: cholpfact!(A, [LU]) -> CholeskyPivotedDense
 
@@ -2424,7 +2420,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qrfact(A)
 
-   Compute the QR factorization of ``A`` and return a ``QRDense`` object. ``factors(qrfact(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDense`` objects: ``size``, ``factors``, ``qmulQR``, ``qTmulQR``, ``\``. 
+   Compute the QR factorization of ``A`` and return a ``QRDense`` object. The coomponents of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]`` and the triangular matrix ``R`` with ``F[:R]``. The following functions are available for ``QRDense`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRDenseQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``.
 
 .. function:: qrfact!(A)
 
@@ -2436,19 +2432,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qrpfact(A) -> QRPivotedDense
 
-   Compute the QR factorization of ``A`` with pivoting and return a ``QRDensePivoted`` object. ``factors(qrpfact(A))`` returns ``Q`` and ``R``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``factors``, ``qmulQR``, ``qTmulQR``, ``\``. 
+   Compute the QR factorization of ``A`` with pivoting and return a ``QRDensePivoted`` object. The coomponents of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]``, the triangular matrix ``R`` with ``F[:R]``, and the permutation with ``F[:P]`` or ``F[:p]``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRDenseQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``.
 
 .. function:: qrpfact!(A) -> QRPivotedDense
 
    ``qrpfact!`` is the same as ``qrpfact`` but saves space by overwriting the input A, instead of creating a copy.
-
-.. function:: qmulQR(QR, A)
-   
-   Perform ``Q*A`` efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
-
-.. function:: qTmulQR(QR, A)
-
-   Perform ``Q'*A`` efficiently, where Q is a an orthogonal matrix defined as the product of k elementary reflectors from the QR decomposition.
 
 .. function:: sqrtm(A)
 
@@ -2464,7 +2452,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svdfact(A, [thin]) -> SVDDense
 
-   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVDDense`` object. ``factors(svdfact(A))`` returns ``U``, ``S``, and ``Vt``, such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
+   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVDDense`` object. ``U``, ``S``, and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``, ``F[:S]``, and ``F[:V]``, such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
 .. function:: svdfact!(A, [thin]) -> SVDDense
 
@@ -2488,7 +2476,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svdfact(A, B) -> GSVDDense
 
-   Compute the generalized SVD of ``A`` and ``B``, returning a ``GSVDDense`` Factorization object. ``factors(svdfact(A,b))`` returns ``U``, ``V``, ``Q``, ``D1``, ``D2``, and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
+   Compute the generalized SVD of ``A`` and ``B``, returning a ``GSVDDense`` Factorization object, such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
    
 .. function:: svd(A, B) -> U, V, Q, D1, D2, R0
 
