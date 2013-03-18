@@ -644,6 +644,7 @@ export
 
 # dequeues
     append!,
+    prepend!,
     resize!,
     insert!,
     shift!,
