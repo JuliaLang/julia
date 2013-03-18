@@ -33,7 +33,7 @@ function do_test(thk, qex)
     handlers[end](try
         thk() ? Success(qex) : Failure(qex)
     catch err
-        Error(qex,err,backtrace())
+        Error(qex,err,catch_backtrace())
     end)
 end
 

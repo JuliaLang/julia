@@ -209,7 +209,8 @@ function one{T}(x::AbstractMatrix{T})
     eye(T, m)
 end
 
-
+linspace(start::Integer, stop::Integer, n::Integer) =
+    linspace(float(start), float(stop), n)
 function linspace(start::Real, stop::Real, n::Integer)
     (start, stop) = promote(start, stop)
     T = typeof(start)
@@ -218,15 +219,9 @@ function linspace(start::Real, stop::Real, n::Integer)
         a[1] = start
         return a
     end
-    step = (stop-start)/(n-1)
-    if isa(start,Integer)
-        for i=1:n
-            a[i] = iround(T,start+(i-1)*step)
-        end
-    else
-        for i=1:n
-            a[i] = start+(i-1)*step
-        end
+    n -= 1
+    for i=0:n
+        a[i+1] = start*((n-i)/n) + stop*(i/n)
     end
     a
 end

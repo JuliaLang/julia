@@ -846,7 +846,9 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                                                        sty->fields[idx].offset + sizeof(void*)));
                 JL_GC_POP();
                 if (sty->fields[idx].isptr) {
-                    return builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt));
+                    Value *fldv = builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt));
+                    null_pointer_check(fldv, ctx);
+                    return fldv;
                 }
                 else {
                     return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx);
@@ -857,6 +859,9 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                     CreateExtractValue(strct, ArrayRef<unsigned>(&idx,1));
                 if (jfty == (jl_value_t*)jl_bool_type) {
                     fldv = builder.CreateTrunc(fldv, T_int1);
+                }
+                else if (sty->fields[idx].isptr) {
+                    null_pointer_check(fldv, ctx);
                 }
                 JL_GC_POP();
                 return mark_julia_type(fldv, jfty);
@@ -1040,7 +1045,17 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             jl_value_t *tp0 = jl_tparam0(ty);
             if (jl_subtype(arg, tp0, 0)) {
                 JL_GC_POP();
-                return emit_expr(args[1], ctx);
+                Value *v = emit_expr(args[1], ctx);
+                if (tp0 == jl_bottom_type) {
+                    return builder.CreateUnreachable();
+                }
+                return v;
+            }
+            if (tp0 == jl_bottom_type) {
+                emit_expr(args[1], ctx);
+                emit_error("reached code declared unreachable", ctx);
+                JL_GC_POP();
+                return builder.CreateUnreachable();
             }
             if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
                 Value *arg1 = emit_expr(args[1], ctx);

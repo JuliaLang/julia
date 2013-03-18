@@ -140,11 +140,19 @@ for (fun,typ) in {(:randexp,:Exponential), (:randg,:Gamma), (:randbeta,:Beta), (
 ")
 end
 
+const IOString = IOBuffer
+export IOString
+const PipeString = PipeBuffer
+export PipeString
+
+# @spawnlocal deprecated
+
 # 0.2
 
 @deprecate  localize         localpart
 @deprecate  expr(hd, a...)   Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1}) Expr(hd, a...)
+
 @deprecate  logb                exponent
 @deprecate  ilogb               exponent
 @deprecate  ref_shape           index_shape
@@ -153,6 +161,10 @@ end
 @deprecate  safe_char(c)        (is_valid_char(char(c))||error())&&char(c)
 @deprecate  check_ascii(x)      (is_valid_ascii(x)?x:error())
 @deprecate  check_utf8(x)       (is_valid_utf8(x)?x:error())
+@deprecate  each_line           eachline
+@deprecate  each_match          eachmatch
+@deprecate  function_loc        functionloc
+@deprecate  compile_hint        precompile
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
