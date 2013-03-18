@@ -1,7 +1,7 @@
 Linear Algebra
 --------------
 
-Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.
+Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http:://www.suitesparse.com/>`_.
 
 .. function:: *(A, B)
 
@@ -9,7 +9,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: \\(A, B)
 
-   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B``. For rectangular ``A``, QR factorization is used. For triangular ``A``, a triangular solve is performed. For square ``A``, Cholesky factorization is tried if the input is symmetric with a heavy diagonal. LU factorization is used in case Cholesky factorization fails or for general square inputs. If ``size(A,1) > size(A,2)``, the result is a least squares solution of ``A*X+eps=B`` using the singular value decomposition. ``A`` does not need to have full rank.
+   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the BunchKaufman factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by reducing ``A`` to bidiagonal form and solving the bidiagonal least squares problem.  For sparse, square ``A`` the LU factorization (from UMFPACK) is used.
 
 .. function:: dot(x, y)
 
@@ -29,11 +29,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: lufact(A) -> LUDense
 
-   Compute the LU factorization of ``A`` and return a ``LUDense`` object. The individual components of the factorization ``F`` can be accesed by indexing: ``F[:L]``, ``F[:U]``, and ``F[:P]`` (permutation matrix) or ``F[:p]`` (permutation vector). The following functions are available for ``LUDense`` objects: ``size``, ``\``, ``inv``, ``det``.
+   Compute the LU factorization of ``A``, returning an ``LUDense`` object for dense ``A`` or an ``UmfpackLU`` object for sparse ``A``. The individual components of the factorization ``F`` can be accesed by indexing: ``F[:L]``, ``F[:U]``, and ``F[:P]`` (permutation matrix) or ``F[:p]`` (permutation vector). An ``UmfpackLU`` object has additional components ``F[:q]`` (the left permutation vector) and ``Rs`` the vector of scaling factors. The following functions are available for both ``LUDense`` and ``UmfpackLU`` objects: ``size``, ``\`` and ``det``.  For ``LUDense`` there is also an ``inv`` method.  The sparse LU factorization is such that ``L*U`` is equal to``diagmm(Rs,A)[p,q]``.
 
 .. function:: lufact!(A) -> LUDense
 
-   ``lufact!`` is the same as ``lufact`` but saves space by overwriting the input A, instead of creating a copy.
+   ``lufact!`` is the same as ``lufact`` but saves space by overwriting the input A, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
 
 .. function:: chol(A, [LU]) -> F
 
@@ -41,7 +41,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholfact(A, [LU]) -> CholeskyDense
 
-   Compute the Cholesky factorization of a symmetric positive-definite matrix ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The triangular matrix can be obtained from the forization ``F`` with: ``F[:L]`` and ``F[:U]``. The following functions are available for ``CholeskyDense`` objects: ``size``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
+   Compute the Cholesky factorization of a dense symmetric positive-definite matrix ``A`` and return a ``CholeskyDense`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The triangular matrix can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``. The following functions are available for ``CholeskyDense`` objects: ``size``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
+
+.. function:: cholfact(A, [ll]) -> CholmodFactor
+
+   Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet``.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = diagmm(L,D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL.
 
 .. function: cholfact!(A, [LU]) -> CholeskyDense
 
