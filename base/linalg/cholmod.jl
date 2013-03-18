@@ -15,12 +15,6 @@ export                                  # types
 using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
  
 import Base.(*)
-import Base.(\)
-import Base.A_mul_Bc
-import Base.A_mul_Bt
-import Base.Ac_ldiv_B
-import Base.At_ldiv_B
-import Base.Ac_mul_B
 import Base.convert
 import Base.copy
 import Base.ctranspose
@@ -36,10 +30,18 @@ import Base.sort!
 import Base.transpose
 import Base.vcat
 
+import LinAlg.(\)
+import LinAlg.A_mul_Bc
+import LinAlg.A_mul_Bt
+import LinAlg.Ac_ldiv_B
+import LinAlg.At_ldiv_B
+import LinAlg.Ac_mul_B
 import LinAlg.Factorization
 import LinAlg.cholfact
 import LinAlg.cholfact!
 import LinAlg.copy
+import LinAlg.det
+import LinAlg.diag
 import LinAlg.diagmm
 import LinAlg.diagmm!
 import LinAlg.logdet
