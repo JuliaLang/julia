@@ -1,10 +1,3 @@
-:mod:`LinAlg` --- Linear Algebra functions
-==========================================
-
-.. module:: Linear Algebra
-   :synopsis: Linear Algebra functions in Base
-
-
 Linear Algebra
 --------------
 
@@ -249,11 +242,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The conjugate transpose operator (').
 
 
-:mod:`BLAS` --- Basic Linear Algebra Subroutines
-===================================================
-
-.. module:: BLAS
-   :synopsis: Wrapper functions for the Basic Linear Algebra Subroutines
+BLAS Functions
+--------------
 
 This module provides wrappers for some of the BLAS functions for
 linear algebra.  Those BLAS functions that overwrite one of the input
@@ -261,9 +251,6 @@ arrays have names ending in ``'!'``.
 
 Usually a function has 4 methods defined, one each for ``Float64``,
 ``Float32``, ``Complex128`` and ``Complex64`` arrays.
-
-BLAS Functions
---------------
 
 .. function:: copy!(n, X, incx, Y, incy)
 
