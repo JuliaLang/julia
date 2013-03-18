@@ -290,24 +290,19 @@ for to in _inttypes, from in _inttypes
     end
 end
 
-for to in (Int8, Uint8, Int16, Uint16)
+for to in (Int8, Int16, Int32, Int64)
     @eval begin
-        convert(::Type{$to}, x::Float32) = box($to,trunc_int($to,checked_fptosi32(unbox(Float32,x))))
-        convert(::Type{$to}, x::Float64) = box($to,trunc_int($to,checked_fptosi64(unbox(Float64,x))))
+        convert(::Type{$to}, x::Float32) = box($to,checked_fptosi($to,unbox(Float32,x)))
+        convert(::Type{$to}, x::Float64) = box($to,checked_fptosi($to,unbox(Float64,x)))
     end
 end
 
-convert(::Type{Int32}, x::Float32) = box(Int32,checked_fptosi32(unbox(Float32,x)))
-convert(::Type{Int32}, x::Float64) = box(Int32,trunc_int(Int32,checked_fptosi64(unbox(Float64,x))))
-
-convert(::Type{Uint32}, x::Float32) = box(Uint32,checked_fptoui32(unbox(Float32,x)))
-convert(::Type{Uint32}, x::Float64) = box(Uint32,trunc_int(Uint32,checked_fptoui64(unbox(Float64,x))))
-
-convert(::Type{Int64}, x::Float32) = box(Int64,checked_fptosi64(fpext64(unbox(Float32,x))))
-convert(::Type{Int64}, x::Float64) = box(Int64,checked_fptosi64(unbox(Float64,x)))
-
-convert(::Type{Uint64}, x::Float32) = box(Uint64,checked_fptoui64(fpext64(unbox(Float32,x))))
-convert(::Type{Uint64}, x::Float64) = box(Uint64,checked_fptoui64(unbox(Float64,x)))
+for to in (Uint8, Uint16, Uint32, Uint64)
+    @eval begin
+        convert(::Type{$to}, x::Float32) = box($to,checked_fptoui($to,unbox(Float32,x)))
+        convert(::Type{$to}, x::Float64) = box($to,checked_fptoui($to,unbox(Float64,x)))
+    end
+end
 
 function convert(::Type{Int128}, x::Float64)
     ax = abs(x)

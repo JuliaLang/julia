@@ -130,7 +130,7 @@ Building Julia requires that the following software be installed:
 - **[gcc, g++][gcc]**           — compiling and linking C, C++
 - **[clang][clang]**            — clang is the default compiler on OS X (Need at least v3.1, Xcode 4.3.3 on OS X)
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
-- **[git]**                     — contributions and version control.
+- **[git]**                     — version control and package management.
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **fetch** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
@@ -194,7 +194,7 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 ## Directories
 
     base/          source code for Julia's standard library
-    contrib/       emacs, vim and textmate support for Julia
+    contrib/       editor support for Julia source, miscellaneous scripts
     deps/          external dependencies
     examples/      example Julia programs
     extras/        useful optional libraries
@@ -237,16 +237,6 @@ The second binding allows `Shift-Enter` to insert a newline without evaluating t
 On Linux systems, the `Shift-Enter` binding can be set by placing the following line in the file `.xmodmaprc` in your home directory:
 
     keysym Return = Return Linefeed
-
-<a name="Web-REPL">
-## Web REPL
-
-Julia has a web REPL with very preliminary graphics capabilities. The web REPL is currently a showcase to try out new ideas. The web REPL is social - multiple people signing in with a common session name can collaborate within a session.
-
-1. Do `make webrepl` to build the Julia webserver.
-2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
-3. Point your browser to `http://localhost:2000/`.
-4. Try `plot(cumsum(randn(1000)))` and other things.
 
 ### Try it Online
 

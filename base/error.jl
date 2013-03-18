@@ -1,3 +1,19 @@
+# pseudo-definitions to show how everything behaves
+#
+# throw(label, val) = # throw a value to a dynamically enclosing block
+#
+# function rethrow(val)
+#     global current_exception = val
+#     throw(current_handler(), current_exception)
+# end
+#
+# rethrow() = rethrow(current_exception)
+#
+# function throw(val)
+#     global catch_backtrace = backtrace()
+#     rethrow(val)
+# end
+
 ## native julia error handling ##
 
 error(e::Exception) = throw(e)
@@ -9,9 +25,10 @@ macro unexpected()
     :(error("unexpected branch reached"))
 end
 
-rethrow() = ccall(:jl_rethrow, Void, ())
-rethrow(e) = ccall(:jl_rethrow_other, Void, (Any,), e)
-backtrace() = ccall(:jl_get_backtrace, Array{Any,1}, ())
+rethrow() = ccall(:jl_rethrow, Void, ())::None
+rethrow(e) = ccall(:jl_rethrow_other, Void, (Any,), e)::None
+backtrace() = ccall(:jl_backtrace_from_here, Array{Ptr{Void},1}, ())
+catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())
 
 ## system error handling ##
 

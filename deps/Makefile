@@ -385,7 +385,7 @@ $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	cp -r libuv/include/* $(BUILD)/include
 
 clean-uv:
-	-$(MAKE) -C libuv clean uname_S=$(uname_S)
+	-$(MAKE) clean $(LIBUV_MAKE_FLAGS)
 	-rm -rf $(BUILD)/lib/libuv.a $(BUILD)/include/uv.h $(BUILD)/include/uv-private
 distclean-uv: clean-uv
 
@@ -618,6 +618,13 @@ OPENBLAS_OBJ_TARGET = $(BUILD)/lib/libopenblas.$(SHLIB_EXT)
 OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH)
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
+ifneq ($(ARCH),x86_64)
+# assume we can't address much memory to spawn many threads
+OPENBLAS_BUILD_OPTS += NUM_THREADS=30
+else
+# assume we may want lots of threads on some future machine
+OPENBLAS_BUILD_OPTS += NUM_THREADS=512
+endif
 endif
 
 ifeq ($(USE_LIB64), 1)
@@ -1096,61 +1103,6 @@ configure-unwind: libunwind-$(UNWIND_VER)/config.status
 compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 check-unwind: libunwind-$(UNWIND_VER)/checked
 install-unwind: $(LIBUNWIND_TARGET_OBJ)
-
-
-## NGINX ##
-
-ifneq ($(OS), WINNT)
-NGINX_OBJ_TARGET = $(BUILD)/sbin/nginx
-NGINX_SRC_TARGET = nginx/objs/nginx
-NGINX_FLAGS = --with-ld-opt="-L'$(BUILD)/lib' -lpcre -Wl,-rpath,'$(BUILD)/lib' $(RPATH)"
-
-nginx/.gitignore:
-	rm -f $@
-	for x in .gitignore Makefile config.status objs; do echo /$$x >> $@; done
-nginx/auto/configure: | compile-pcre
-	(cd .. && git submodule update --init)
-	touch -c $@
-nginx/config.status: nginx/auto/configure nginx/.gitignore
-	cd nginx && \
-	./auto/configure --without-http_gzip_module --without-http_rewrite_module $(NGINX_FLAGS) --with-debug --prefix=".."
-	echo 1 > $@
-$(NGINX_SRC_TARGET): nginx/config.status nginx/.gitignore
-	$(MAKE) -C nginx
-	touch -c $@
-$(NGINX_OBJ_TARGET): $(NGINX_SRC_TARGET) nginx/.gitignore
-	$(MAKE) -C nginx install DESTDIR="$(abspath $(BUILD)/bin)/"
-	touch -c $@
-
-clean-nginx:
-	-$(MAKE) -C nginx clean
-distclean-nginx:
-	-rm -rf nginx
-
-get-nginx: nginx/auto/configure
-configure-nginx: nginx/config.status
-compile-nginx: $(NGINX_SRC_TARGET)
-check-nginx: $(NGINX_SRC_TARGET)
-install-nginx: $(NGINX_OBJ_TARGET)
-else
-NGINX_VER=1.2.6
-NGINX_SRC_TARGET = nginx-$(NGINX_VER).zip
-NGINX_OBJ_TARGET = nginx-$(NGINX_VER)/nginx.exe
-$(NGINX_SRC_TARGET):
-	$(WGET) http://nginx.org/download/$@
-$(NGINX_OBJ_TARGET): $(NGINX_SRC_TARGET)
-	unzip $<
-	touch -c $@
-$(BUILD)/sbin/nginx.exe: $(NGINX_OBJ_TARGET)
-	mkdir -p $(BUILD)/sbin
-	cp -a nginx-$(NGINX_VER)/* $(BUILD)/sbin
-	touch -c $@
-get-nginx: $(NGINX_SRC_TARGET)
-configure-nginx: get-nginx
-compile-nginx: $(NGINX_OBJ_TARGET)
-check-nginx: compile-nginx
-install-nginx: $(BUILD)/sbin/nginx.exe
-endif
 
 
 ## GMP ##

@@ -353,26 +353,19 @@ can interpolate any expression into a string using parentheses::
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
 
-The expression need not be contained in parentheses, however. For
-example, since a literal array expression is not complete until the
-opening ``[`` is closed by a matching ``]``, you can interpolate an
-array like this::
-
-    julia> x = 2; y = 3; z = 5;
-
-    julia> "x,y,z: $[x,y,z]."
-    "x,y,z: [2,3,5]."
-
 Both concatenation and string interpolation call the generic ``string``
 function to convert objects into ``String`` form. Most non-``String``
 objects are converted to strings as they are shown in interactive
 sessions::
 
     julia> v = [1,2,3]
-    [1,2,3]
+    3-element Int64 Array:
+     1
+     2
+     3
 
     julia> "v: $v"
-    "v: [1,2,3]"
+    "v: [1, 2, 3]"
 
 The ``string`` function is the identity for ``String`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
@@ -464,131 +457,6 @@ quite what is needed. For these kinds of situations, Julia provides
 *non-standard string literals*. A non-standard string literal looks like
 a regular double-quoted string literal, but is immediately prefixed by
 an identifier, and doesn't behave quite like a normal string literal.
-
-Two types of interpretation are performed on normal Julia string
-literals: interpolation and unescaping (escaping is the act of
-expressing a non-standard character with a sequence like ``\n``, whereas
-unescaping is the process of interpreting such escape sequences as
-actual characters). There are cases where its convenient to disable
-either or both of these behaviors. For such situations, Julia provides
-three types of non-standard string literals:
-
--  ``E"..."`` interpret escape sequences but do not interpolate, thereby
-   rendering ``$`` a harmless, normal character.
--  ``I"..."`` perform interpolation but do not interpret escape
-   sequences specially.
--  ``L"..."`` perform neither unescaping nor interpolation.
-
-Suppose, for example, you would like to write strings that will contain
-many ``$`` characters without interpolation. You can, as described
-above, escape the ``$`` characters with a preceding backslash. This can
-become tedious, however. Non-standard string literals prefixed with
-``E`` do not perform string interpolation::
-
-    julia> E"I have $100 in my account.\n"
-    "I have \$100 in my account.\n"
-
-This allows you to have ``$`` characters inside of string literals
-without triggering interpolation and without needing to escape those
-``$``\ s by preceding them with a ``\``. Escape sequences, such as the
-``\n`` above, still behave as usual, so '' becomes a newline character.
-
-On the other hand, ``I"..."`` string literals perform interpolation but
-no unescaping::
-
-    julia> I"I have $100 in my account.\n"
-    "I have 100 in my account.\\n"
-
-The value of the expression ``100`` is interpolated into the string,
-yielding the decimal string representation of the value 100 — namely
-``"100"`` (sorry, that might be a bit confusing). The trailing ``\n``
-sequence is taken as literal backslash and ``n`` characters, rather than
-being interpreted as a single newline character.
-
-The third non-standard string form interprets all the characters between
-the opening and closing quotes literally: the ``L"..."`` form. Here is
-an example usage::
-
-    julia> L"I have $100 in my account.\n"
-    "I have \$100 in my account.\\n"
-
-Neither the ``$`` nor the ``\n`` sequence are specially interpreted.
-
-Byte Array Literals
-~~~~~~~~~~~~~~~~~~~
-
-Some string literal forms don't create strings at all. In the `next
-section <#regular-expressions>`_, we will see that regular expressions
-are written as non-standard string literals. Another useful non-standard
-string literal, however, is the byte-array string literal: ``b"..."``.
-This form lets you use string notation to express literal byte arrays —
-i.e. arrays of ``Uint8`` values. The convention is that non-standard
-literals with uppercase prefixes produce actual string objects, while
-those with lowercase prefixes produce non-string objects like byte
-arrays or compiled regular expressions. The rules for byte array
-literals are the following:
-
--  ASCII characters and ASCII escapes produce a single byte.
--  ``\x`` and octal escape sequences produce the *byte* corresponding to
-   the escape value.
--  Unicode escape sequences produce a sequence of bytes encoding that
-   code point in UTF-8.
-
-There is some overlap between these rules since the behavior of ``\x``
-and octal escapes less than 0x80 (128) are covered by both of the first
-two rules, but here these rules agree. Together, these rules allow one
-to easily use ASCII characters, arbitrary byte values, and UTF-8
-sequences to produce arrays of bytes. Here is an example using all
-three::
-
-    julia> b"DATA\xff\u2200"
-    [68,65,84,65,255,226,136,128]
-
-The ASCII string "DATA" corresponds to the bytes 68, 65, 84, 65.
-``\xff`` produces the single byte 255. The Unicode escape ``\u2200`` is
-encoded in UTF-8 as the three bytes 226, 136, 128. Note that the
-resulting byte array does not correspond to a valid UTF-8 string — if
-you try to use this as a regular string literal, you will get a syntax
-error::
-
-    julia> "DATA\xff\u2200"
-    syntax error: invalid UTF-8 sequence
-
-Also observe the significant distinction between ``\xff`` and ``\uff``:
-the former escape sequence encodes the *byte 255*, whereas the latter
-escape sequence represents the *code point 255*, which is encoded as two
-bytes in UTF-8::
-
-    julia> b"\xff"
-    1-element Uint8 Array:
-     0xff
-
-    julia> b"\uff"
-    2-element Uint8 Array:
-     0xc3
-     0xbf
-
-In character literals, this distinction is glossed over and ``\xff`` is
-allowed to represent the code point 255, because characters *always*
-represent code points. In strings, however, ``\x`` escapes always
-represent bytes, not code points, whereas ``\u`` and ``\U`` escapes
-always represent code points, which are encoded in one or more bytes.
-For code points less than ``\u80``, it happens that the the UTF-8
-encoding of each code point is just the single byte produced by the
-corresponding ``\x`` escape, so the distinction can safely be ignored.
-For the escapes ``\x80`` through ``\xff`` as compared to ``\u80``
-through ``\uff``, however, there is a major difference: the former
-escapes all encode single bytes, which — unless followed by very
-specific continuation bytes — do not form valid UTF-8 data, whereas the
-latter escapes all represent Unicode code points with two-byte
-encodings.
-
-If this is all extremely confusing, try reading `"The Absolute Minimum
-Every Software Developer Absolutely, Positively Must Know About Unicode
-and Character
-Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_. It's an
-excellent introduction to Unicode and UTF-8, and may help alleviate some
-confusion regarding the matter.
 
 Regular Expressions
 -------------------
@@ -752,3 +620,76 @@ For example, the following regex has all three flags turned on::
 
     julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
     RegexMatch("angry,\nBad world")
+
+Byte Array Literals
+~~~~~~~~~~~~~~~~~~~
+
+Another useful non-standard string literal is the byte-array string literal:
+``b"..."``. This form lets you use string notation to express literal byte
+arrays — i.e. arrays of ``Uint8`` values. The convention is that non-standard
+literals with uppercase prefixes produce actual string objects, while
+those with lowercase prefixes produce non-string objects like byte
+arrays or compiled regular expressions. The rules for byte array
+literals are the following:
+
+-  ASCII characters and ASCII escapes produce a single byte.
+-  ``\x`` and octal escape sequences produce the *byte* corresponding to
+   the escape value.
+-  Unicode escape sequences produce a sequence of bytes encoding that
+   code point in UTF-8.
+
+There is some overlap between these rules since the behavior of ``\x``
+and octal escapes less than 0x80 (128) are covered by both of the first
+two rules, but here these rules agree. Together, these rules allow one
+to easily use ASCII characters, arbitrary byte values, and UTF-8
+sequences to produce arrays of bytes. Here is an example using all
+three::
+
+    julia> b"DATA\xff\u2200"
+    [68,65,84,65,255,226,136,128]
+
+The ASCII string "DATA" corresponds to the bytes 68, 65, 84, 65.
+``\xff`` produces the single byte 255. The Unicode escape ``\u2200`` is
+encoded in UTF-8 as the three bytes 226, 136, 128. Note that the
+resulting byte array does not correspond to a valid UTF-8 string — if
+you try to use this as a regular string literal, you will get a syntax
+error::
+
+    julia> "DATA\xff\u2200"
+    syntax error: invalid UTF-8 sequence
+
+Also observe the significant distinction between ``\xff`` and ``\uff``:
+the former escape sequence encodes the *byte 255*, whereas the latter
+escape sequence represents the *code point 255*, which is encoded as two
+bytes in UTF-8::
+
+    julia> b"\xff"
+    1-element Uint8 Array:
+     0xff
+
+    julia> b"\uff"
+    2-element Uint8 Array:
+     0xc3
+     0xbf
+
+In character literals, this distinction is glossed over and ``\xff`` is
+allowed to represent the code point 255, because characters *always*
+represent code points. In strings, however, ``\x`` escapes always
+represent bytes, not code points, whereas ``\u`` and ``\U`` escapes
+always represent code points, which are encoded in one or more bytes.
+For code points less than ``\u80``, it happens that the the UTF-8
+encoding of each code point is just the single byte produced by the
+corresponding ``\x`` escape, so the distinction can safely be ignored.
+For the escapes ``\x80`` through ``\xff`` as compared to ``\u80``
+through ``\uff``, however, there is a major difference: the former
+escapes all encode single bytes, which — unless followed by very
+specific continuation bytes — do not form valid UTF-8 data, whereas the
+latter escapes all represent Unicode code points with two-byte
+encodings.
+
+If this is all extremely confusing, try reading `"The Absolute Minimum
+Every Software Developer Absolutely, Positively Must Know About Unicode
+and Character
+Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_. It's an
+excellent introduction to Unicode and UTF-8, and may help alleviate some
+confusion regarding the matter.

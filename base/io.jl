@@ -179,7 +179,7 @@ type EachLine
     EachLine(stream) = EachLine(stream, ()->nothing)
     EachLine(stream, ondone) = new(stream, ondone)
 end
-each_line(stream::IO) = EachLine(stream)
+eachline(stream::IO) = EachLine(stream)
 
 start(itr::EachLine) = nothing
 function done(itr::EachLine, nada)
@@ -194,7 +194,7 @@ next(itr::EachLine, nada) = (readline(itr.stream), nothing)
 
 function readlines(s, fx::Function...)
     a = {}
-    for l = each_line(s)
+    for l in eachline(s)
         for f in fx
           l = f(l)
         end
@@ -412,6 +412,39 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 readall(filename::String) = open(readall, filename)
+
+# based on code by Glen Hertz
+function readuntil(s::IO, t::String)
+    l = length(t)
+    if l == 0
+        return ""
+    end
+    if l > 40
+        warn("readuntil(IO,String) will perform poorly with a long string")
+    end
+    out = IOBuffer()
+    m = Array(Char, l)  # last part of stream to match
+    t = collect(t)
+    i = 0
+    while !eof(s)
+        i += 1
+        c = read(s, Char)
+        write(out, c)
+        if i <= l
+            m[i] = c
+        else
+            # shift to last part of s
+            for j = 2:l
+                m[j-1] = m[j]
+            end
+            m[l] = c
+        end
+        if i >= l && m == t
+            break
+        end
+    end
+    return takebuf_string(out)
+end
 
 ## Character streams ##
 const _chtmp = Array(Char, 1)

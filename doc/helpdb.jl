@@ -2,220 +2,6 @@
 
 {
 
-("ArgParse","ArgParse","parse_args","parse_args([args], settings)
-
-   This is the central function of the \"ArgParse\" module. It takes a
-   \"Vector\" of arguments and an \"ArgParseSettings\" objects (see
-   *this section*), and returns a \"Dict{String,Any}\". If \"args\" is
-   not provided, the global variable \"ARGS\" will be used.
-
-   The returned \"Dict\" keys are defined (possibly implicitly) in
-   \"settings\", and their associated values are parsed from \"args\".
-   Special keys are used for more advanced purposes; at the moment,
-   one such key exists: \"%COMMAND%\" (see *this section*).
-
-   Arguments are parsed in sequence and matched against the argument
-   table in \"settings\" to determine whether they are long options,
-   short options, option arguments or positional arguments:
-
-   * long options begin with a doule dash \"\"--\"\"; if a \"'='\"
-     character is found, the remainder is the option argument;
-     therefore, \"[\"--opt=arg\"]\" and \"[\"--opt\", \"arg\"]\" are
-     equivalent if \"--opt\" takes at least one argument. Long options
-     can be abbreviated (e.g. \"--opt\" instead of \"--option\") as
-     long as there is no ambiguity.
-
-   * short options begin with a single dash \"\"-\"\" and their name
-     consists of a single character; they can be grouped togheter
-     (e.g. \"[\"-x\", \"-y\"]\" can become \"[\"-xy\"]\"), but in that
-     case only the last option in the group can take an argument
-     (which can also be grouped, e.g. \"[\"-a\", \"-f\",
-     \"file.txt\"]\" can be passed as \"[\"-affile.txt\"]\" if \"-a\"
-     does not take an argument and \"-f\" does). The \"'='\" character
-     can be used to separate option names from option arguments as
-     well (e.g. \"-af=file.txt\").
-
-   * positional arguments are anything else; they can appear anywhere.
-
-   The special string \"\"--\"\" can be used to signal the end of all
-   options; after that, everything is considered as a positional
-   argument (e.g. if \"args = [\"--opt1\", \"--\", \"--opt2\"]\", the
-   parser will recognize \"--opt1\" as a long option without argument,
-   and \"--opt2\" as a positional argument).
-
-   The special string \"\"-\"\" is always parsed as a positional
-   argument.
-
-   The parsing can stop early if a \":show_help\" or \":show_version\"
-   action is triggered, or if a parsing error is found.
-
-   Some ambiguities can arise in parsing, see *this section* for a
-   detailed description of how they're solved.
-
-"),
-
-("ArgParse","ArgParse","@add_arg_table","@add_arg_table(settings, table...)
-
-   This macro adds a table of arguments and options to the given
-   \"settings\". It can be invoked multiple times. The arguments
-   groups are determined automatically, or the current default group
-   is used if specified (see *this section* for more details).
-
-   The \"table\" is a list in which each element can be either
-   \"String\", or a tuple or a vector of \"String\", or an assigmment
-   expression, or a block:
-
-   * a \"String\", a tuple or a vector introduces a new positional
-     argument or option. Tuples and vectors are only allowed for
-     options and provide alternative names (e.g. \"[\"--opt\",
-     \"-o\"]\")
-
-   * assignment expressions (i.e. expressions using \"=\", \":=\" or
-     \"=>\") describe the previous argument behavior (e.g. \"help =
-     \"an option\"\" or \"required => false\").  See *this section*
-     for a complete description
-
-   * blocks (\"begin...end\" or lists of expressions in parentheses
-     separated by semicolons) are useful to group entries and span
-     multiple lines.
-
-   These rules allow for a variety usage styles, which are discussed
-   in *this section*. In the rest of this document, we will mostly use
-   this style:
-
-      @add_arg_table settings begin
-          \"--opt1\", \"-o\"
-              help = \"an option with an argument\"
-          \"--opt2\"
-          \"arg1\"
-              help = \"a positional argument\"
-              required = true
-      end
-
-   In the above example, the \"table\" is put in a single
-   \"begin...end\" block and the line \"\"-opt1\", \"-o\"\" is parsed
-   as a tuple; indentation is used to help readability.
-
-"),
-
-("ArgParse","ArgParse","add_arg_table","add_arg_table(settings, [arg_name [,arg_options]]...)
-
-   This function is almost equivalent to the macro version. Its syntax
-   is stricter (tuples and blocks are not allowed and argument options
-   are explicitly specified as \"Options\" objects) but the
-   \"arg_name\" entries need not be explicit, they can be anything
-   which evaluates to a \"String\" or a \"Vector{String}\".
-
-   Example:
-
-      add_arg_table(settings,
-          [\"--opt1\", \"-o\"],
-          @options begin
-              help = \"an option with an argument\"
-          end,
-          \"--opt2\",
-          \"arg1\",
-          @options begin
-              help = \"a positional argument\"
-              required = true
-          end)
-
-   Note that the \"OptionsMod\" module must be imported in order to
-   use this function.
-
-"),
-
-("ArgParse","ArgParse","add_arg_group","add_arg_group(settings, description[, name[, set_as_default]])
-
-   This function adds an argument group to the argument table in
-   \"settings\". The \"description\" is a \"String\" used in the help
-   screen as a title for that group. The \"name\" is a unique name
-   which can be provided to refer to that group at a later time.
-
-   After invoking this function, all subsequent invocations of the
-   \"@add_arg_table\" macro and \"add_arg_table\" function will use
-   the new group as the default, unless \"set_as_default\" is set to
-   \"false\" (the default is \"true\", and the option can only be set
-   if providing a \"name\"). Therefore, the most obvious usage pattern
-   is: for each group, add it and populate the argument table of that
-   group. Example:
-
-      julia> settings = ArgParseSettings();
-
-      julia> add_arg_group(settings, \"custom group\");
-
-      julia> @add_arg_table settings begin
-                \"--opt\"
-                \"arg\"
-             end;
-
-      julia> parse_args([\"--help\"], settings)
-      usage: <command> [--opt OPT] [-h] [arg]
-
-      optional arguments:
-        -h, --help  show this help message and exit
-
-      custom group:
-        --opt OPT
-        arg
-
-   As seen from the example, new groups are always added at the end of
-   existing ones.
-
-   The \"name\" can also be passed as a \"Symbol\". Forbidden names
-   are the standard groups names (\"\"command\"\", \"\"positional\"\"
-   and \"\"optional\"\") and those beginning with a hash character
-   \"'#'\".
-
-"),
-
-("ArgParse","ArgParse","set_default_arg_group","set_default_arg_group(settings[, name])
-
-   Set the default group for subsequent invocations of the
-   \"@add_arg_table\" macro and \"add_arg_table\" function. \"name\"
-   is a \"String\", and must be one of the standard group names
-   (\"\"command\"\", \"\"positional\"\" or \"\"optional\"\") or one of
-   the user-defined names given in \"add_arg_group\" (groups with no
-   assigned name cannot be used with this function).
-
-   If \"name\" is not provided or is the empty string \"\"\"\", then
-   the default behavior is reset (i.e. arguments will be automatically
-   assigned to the standard groups). The \"name\" can also be passed
-   as a \"Symbol\".
-
-"),
-
-("ArgParse","ArgParse","import_settings","import_settings(settings, other_settings[, args_only])
-
-   Imports \"other_settings\" into \"settings\", where both are
-   \"ArgParseSettings\" objects. If \"args_only\" is \"true\" (this is
-   the default), only the argument table will be imported; otherwise,
-   the default argument group will also be imported, and all general
-   settings except \"prog\", \"description\", \"epilog\" and
-   \"usage\".
-
-   Sub-settings associated with commands will also be imported
-   recursively; the \"args_only\" setting applies to those as well. If
-   there are common commands, their sub-settings will be merged.
-
-   While importing, conflicts may arise: if
-   \"settings.error_on_conflict\" is \"true\", this will result in an
-   error, otherwise conflicts will be resolved in favor of
-   \"other_settings\" (see *this section* for a detailed discussion of
-   how conflicts are handled).
-
-   Argument groups will also be imported; if two groups in
-   \"settings\" and \"other_settings\" match, they are merged (groups
-   match either by name, or, if unnamed, by their description).
-
-   Note that the import will have effect immediately: any subsequent
-   modification of \"other_settings\" will not have any effect on
-   \"settings\".
-
-   This function can be used at any time.
-
-"),
-
 ("Getting Around","Base","exit","exit([code])
 
    Quit (or control-D at the prompt). The default exit code is zero,
@@ -583,6 +369,14 @@
 
 "),
 
+("Iteration","Base","enumerate","enumerate(iter)
+
+   Return an iterator that yields \"(i, x)\" where \"i\" is an index
+   starting at 1, and \"x\" is the \"ith\" value from the given
+   iterator.
+
+"),
+
 ("General Collections","Base","isempty","isempty(collection) -> Bool
 
    Determine whether a collection is empty (has no elements).
@@ -809,12 +603,6 @@
 ("Associative Collections","Base","delete!","delete!(collection, key)
 
    Delete the mapping for the given key in a collection.
-
-"),
-
-("Associative Collections","Base","empty!","empty!(collection)
-
-   Delete all keys from a collection.
 
 "),
 
@@ -1045,12 +833,6 @@
 
 "),
 
-("Strings","Base","collect","collect(string)
-
-   Return an array of the characters in \"string\".
-
-"),
-
 ("Strings","Base","*","*(s, t)
 
    Concatenate strings.
@@ -1067,15 +849,9 @@
 
 "),
 
-("Strings","Base","string","string(char...)
+("Strings","Base","string","string(xs...)
 
-   Create a string with the given characters.
-
-"),
-
-("Strings","Base","string","string(x)
-
-   Create a string from any value using the \"print\" function.
+   Create a string from any values using the \"print\" function.
 
 "),
 
@@ -1146,14 +922,6 @@
 
 "),
 
-("Strings","Base","search","search(string, char[, i])
-
-   Return the index of \"char\" in \"string\", giving 0 if not found.
-   The second argument may also be a vector or a set of characters.
-   The third argument optionally specifies a starting index.
-
-"),
-
 ("Strings","Base","ismatch","ismatch(r::Regex, s::String)
 
    Test whether a string contains a match of the given regular
@@ -1179,7 +947,7 @@
 
    Search for the given characters within the given string. The second
    argument may be a single character, a vector or a set of
-   characters, a string, or a regular expression (but regular
+   characters, a string, or a regular expression (though regular
    expressions are only allowed on contiguous strings, such as ASCII
    or UTF-8 strings). The third argument optionally specifies a
    starting index. The return value is a range of indexes where the
@@ -1194,16 +962,8 @@
    with \"r\". If \"n\" is provided, replace at most \"n\" occurances.
    As with search, the second argument may be a single character, a
    vector or a set of characters, a string, or a regular expression.
-
-"),
-
-("Strings","Base","replace","replace(string, pat, f[, n])
-
-   Search for the given pattern \"pat\", and replace each occurance
-   with \"f(pat)\". If \"n\" is provided, replace at most \"n\"
-   occurances.  As with search, the second argument may be a single
-   character, a vector or a set of characters, a string, or a regular
-   expression.
+   If \"r\" is a function, each occurrence is replaced with \"r(s)\"
+   where \"s\" is the matched substring.
 
 "),
 
@@ -1443,6 +1203,13 @@
 
 "),
 
+("I/O","Base","OUTPUT_STREAM","OUTPUT_STREAM
+
+   The default stream used for text output, e.g. in the \"print\" and
+   \"show\" functions.
+
+"),
+
 ("I/O","Base","open","open(file_name[, read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The
@@ -1474,12 +1241,6 @@
 
 "),
 
-("I/O","Base","open","open(file_name) -> IOStream
-
-   Open a file in read mode.
-
-"),
-
 ("I/O","Base","open","open(f::function, args...)
 
    Apply the function \"f\" to the result of \"open(args...)\" and
@@ -1496,8 +1257,7 @@
 
 "),
 
-("I/O","Base","fdio","fdio(fd::Integer[, own::Bool]) -> IOStream
-fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
+("I/O","Base","fdio","fdio([name::String], fd::Integer[, own::Bool]) -> IOStream
 
    Create an \"IOStream\" object from an integer file descriptor. If
    \"own\" is true, closing this object will close the underlying
@@ -1648,7 +1408,7 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Text I/O","Base","each_line","each_line(stream)
+("Text I/O","Base","eachline","eachline(stream)
 
    Create an iterable object that will yield each line from a stream.
 
@@ -1782,37 +1542,37 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","+",".+(x, y)
+("Mathematical Functions","Base",".+",".+(x, y)
 
    Element-wise binary addition operator.
 
 "),
 
-("Mathematical Functions","Base","-",".-(x, y)
+("Mathematical Functions","Base",".-",".-(x, y)
 
    Element-wise binary subtraction operator.
 
 "),
 
-("Mathematical Functions","Base","*",".*(x, y)
+("Mathematical Functions","Base",".*",".*(x, y)
 
    Element-wise binary multiplication operator.
 
 "),
 
-("Mathematical Functions","Base","/","./(x, y)
+("Mathematical Functions","Base","./","./(x, y)
 
    Element-wise binary left division operator.
 
 "),
 
-("Mathematical Functions","Base","\\",".\\(x, y)
+("Mathematical Functions","Base",".\\",".\\(x, y)
 
    Element-wise binary right division operator.
 
 "),
 
-("Mathematical Functions","Base","^",".^(x, y)
+("Mathematical Functions","Base",".^",".^(x, y)
 
    Element-wise binary exponentiation operator.
 
@@ -1917,6 +1677,42 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 ("Mathematical Functions","Base",">=",">=(x, y)
 
    Greater-than-or-equals comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".==",".==(x, y)
+
+   Element-wise equality comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".!=",".!=(x, y)
+
+   Element-wise not-equals comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".<",".<(x, y)
+
+   Element-wise less-than comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".<=",".<=(x, y)
+
+   Element-wise less-than-or-equals comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".>",".>(x, y)
+
+   Element-wise greater-than comparison operator.
+
+"),
+
+("Mathematical Functions","Base",".>=",".>=(x, y)
+
+   Element-wise greater-than-or-equals comparison operator.
 
 "),
 
@@ -2624,15 +2420,25 @@ fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
 
 "),
 
-("Mathematical Functions","Base","airyai","airy(x)
-airyai(x)
+("Mathematical Functions","Base","airy","airy(k, x)
+
+   kth derivative of the Airy function \\operatorname{Ai}(x).
+
+"),
+
+("Mathematical Functions","Base","airyai","airyai(x)
 
    Airy function \\operatorname{Ai}(x).
 
 "),
 
-("Mathematical Functions","Base","airyaiprime","airyprime(x)
-airyaiprime(x)
+("Mathematical Functions","Base","airyprime","airyprime(x)
+
+   Airy function derivative \\operatorname{Ai}'(x).
+
+"),
+
+("Mathematical Functions","Base","airyaiprime","airyaiprime(x)
 
    Airy function derivative \\operatorname{Ai}'(x).
 
@@ -3062,6 +2868,42 @@ airyaiprime(x)
 
 "),
 
+("Numbers","Base","im","im
+
+   The imaginary unit
+
+"),
+
+("Numbers","Base","e","e
+
+   The constant e
+
+"),
+
+("Numbers","Base","Inf","Inf
+
+   Positive infinity of type Float64
+
+"),
+
+("Numbers","Base","Inf32","Inf32
+
+   Positive infinity of type Float32
+
+"),
+
+("Numbers","Base","NaN","NaN
+
+   A not-a-number value of type Float64
+
+"),
+
+("Numbers","Base","NaN32","NaN32
+
+   A not-a-number value of type Float32
+
+"),
+
 ("Numbers","Base","isdenormal","isdenormal(f) -> Bool
 
    Test whether a floating point number is denormal
@@ -3235,7 +3077,7 @@ airyaiprime(x)
 
 ("Random Numbers","Base","rand","rand()
 
-   Generate a \"Float64\" random number in (0,1)
+   Generate a \"Float64\" random number uniformly in [0,1)
 
 "),
 
@@ -3255,7 +3097,7 @@ airyaiprime(x)
 
 "),
 
-("Random Numbers","Base","rand","rand(dims...)
+("Random Numbers","Base","rand","rand(dims or [dims...])
 
    Generate a random \"Float64\" array of the size specified by dims
 
@@ -3270,8 +3112,9 @@ airyaiprime(x)
 
 ("Random Numbers","Base","rand","rand(r[, dims...])
 
-   Generate a random integer from \"1\":\"n\" inclusive. Optionally,
-   generate a random integer array.
+   Generate a random integer from the inclusive interval specified by
+   \"Range1 r\" (for example, \"1:n\"). Optionally, generate a random
+   integer array.
 
 "),
 
@@ -3289,7 +3132,7 @@ airyaiprime(x)
 
 "),
 
-("Random Numbers","Base","randn","randn([dims...])
+("Random Numbers","Base","randn","randn(dims or [dims...])
 
    Generate a normally-distributed random number with mean 0 and
    standard deviation 1. Optionally generate an array of normally-
@@ -3324,7 +3167,7 @@ airyaiprime(x)
 
 ("Arrays","Base","nnz","nnz(A)
 
-   Counts the number of nonzero values in A
+   Counts the number of nonzero values in array A (dense or sparse)
 
 "),
 
@@ -3360,11 +3203,11 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","getindex","getindex(type)
+("Arrays","Base","getindex","getindex(type[, elements...])
 
-   Construct an empty 1-d array of the specified type. This is usually
-   called with the syntax \"Type[]\". Element values can be specified
-   using \"Type[a,b,c,...]\".
+   Construct a 1-d array of the specified type. This is usually called
+   with the syntax \"Type[]\". Element values can be specified using
+   \"Type[a,b,c,...]\".
 
 "),
 
@@ -3419,12 +3262,6 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","copy","copy(A)
-
-   Create a copy of \"A\"
-
-"),
-
 ("Arrays","Base","similar","similar(array, element_type, dims)
 
    Create an uninitialized array of the same type as the given array,
@@ -3438,25 +3275,6 @@ airyaiprime(x)
 
    Construct an array with the same binary data as the given array,
    but with the specified element type
-
-"),
-
-("Arrays","Base","rand","rand(dims)
-
-   Create a random array with Float64 random values in (0,1)
-
-"),
-
-("Arrays","Base","randf","randf(dims)
-
-   Create a random array with Float32 random values in (0,1)
-
-"),
-
-("Arrays","Base","randn","randn(dims)
-
-   Create a random array with Float64 normally-distributed random
-   values with a mean of 0 and standard deviation of 1
 
 "),
 
@@ -3495,8 +3313,8 @@ airyaiprime(x)
 
 ("Arrays","Base","getindex","getindex(A, ind)
 
-   Returns a subset of \"A\" as specified by \"ind\", which may be an
-   \"Int\", a \"Range\", or a \"Vector\".
+   Returns a subset of array \"A\" as specified by \"ind\", which may
+   be an \"Int\", a \"Range\", or a \"Vector\".
 
 "),
 
@@ -3518,8 +3336,8 @@ airyaiprime(x)
 
 ("Arrays","Base","setindex!","setindex!(A, X, ind)
 
-   Store an input array \"X\" within some subset of \"A\" as specified
-   by \"ind\".
+   Store values from array \"X\" within some subset of \"A\" as
+   specified by \"ind\".
 
 "),
 
@@ -3541,9 +3359,12 @@ airyaiprime(x)
 
 "),
 
-("Arrays","Base","hvcat","hvcat()
+("Arrays","Base","hvcat","hvcat(rows::(Int...), values...)
 
-   Horizontal and vertical concatenation in one call
+   Horizontal and vertical concatenation in one call. This function is
+   called for block matrix syntax. The first argument specifies the
+   number of arguments to concatenate in each block row. For example,
+   \"[a b;c d e]\" calls \"hvcat((2,3),a,b,c,d,e)\".
 
 "),
 
@@ -3741,12 +3562,6 @@ airyaiprime(x)
 ("Sparse Matrices","Base","issparse","issparse(S)
 
    Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
-
-"),
-
-("Sparse Matrices","Base","nnz","nnz(S)
-
-   Return the number of nonzeros in \"S\".
 
 "),
 
@@ -4485,7 +4300,7 @@ airyaiprime(x)
 
 "),
 
-("Signal Processing","","ifft(A [, dims]), bfft, bfft!","ifft(A [, dims]), bfft, bfft!
+("Signal Processing","Base","ifft","ifft(A[, dims])
 
    Multidimensional inverse FFT.
 
@@ -4521,7 +4336,7 @@ airyaiprime(x)
 
 "),
 
-("Signal Processing","","plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft","plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
+("Signal Processing","Base","plan_fft","plan_fft(A[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized FFT along given dimensions (\"dims\") of
    arrays matching the shape and type of \"A\".  (The first two
@@ -4543,6 +4358,20 @@ airyaiprime(x)
    complex floating-point numbers).  \"plan_ifft()\" and so on are
    similar but produce plans that perform the equivalent of the
    inverse transforms \"ifft()\" and so on.
+
+"),
+
+("Signal Processing","Base","plan_ifft","plan_ifft(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_fft()\", but produces a plan that performs inverse
+   transforms \"ifft()\".
+
+"),
+
+("Signal Processing","Base","plan_bfft","plan_bfft(A[, dims[, flags[, timelimit]]])
+
+   Same as \"plan_fft()\", but produces a plan that performs an
+   unnormalized backwards transform \"bfft()\".
 
 "),
 
@@ -4613,7 +4442,7 @@ airyaiprime(x)
 
 "),
 
-("Signal Processing","","plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft","plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+("Signal Processing","Base","plan_irfft","plan_irfft(A, d[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized inverse real-input FFT, similar to
    \"plan_rfft()\" except for \"irfft()\" and \"brfft()\",
@@ -4689,7 +4518,7 @@ airyaiprime(x)
 
 "),
 
-("Signal Processing","","FFTW.r2r(A, kind [, dims]), FFTW.r2r!","FFTW.r2r(A, kind [, dims]), FFTW.r2r!
+("Signal Processing","Base","FFTW","FFTW.r2r(A, kind[, dims])
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type \"kind\" of the array \"A\", as defined in the FFTW manual.
@@ -4713,17 +4542,27 @@ airyaiprime(x)
 
    See also \"FFTW.plan_r2r()\" to pre-plan optimized r2r transforms.
 
+"),
+
+("Signal Processing","Base","FFTW","FFTW.r2r!(A, kind[, dims])
+
    \"FFTW.r2r!()\" is the same as \"FFTW.r2r()\", but operates in-
    place on \"A\", which must be an array of real or complex floating-
    point numbers.
 
 "),
 
-("Signal Processing","","FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!","FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
+("Signal Processing","Base","FFTW","FFTW.plan_r2r(A, kind[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized r2r transform, similar to \"plan_fft()\"
    except that the transforms (and the first three arguments)
    correspond to \"FFTW.r2r()\" and \"FFTW.r2r!()\", respectively.
+
+"),
+
+("Signal Processing","Base","FFTW","FFTW.plan_r2r!(A, kind[, dims[, flags[, timelimit]]])
+
+   Similar to \"plan_fft()\", but corresponds to \"FFTW.r2r!()\".
 
 "),
 
@@ -4950,6 +4789,13 @@ airyaiprime(x)
 
 "),
 
+("System","Base","spawn","spawn(command)
+
+   Run a command object asynchronously, returning the resulting
+   \"Process\" object.
+
+"),
+
 ("System","Base","success","success(command)
 
    Run a command object, constructed with backticks, and tell whether
@@ -4981,12 +4827,30 @@ airyaiprime(x)
 
 "),
 
-("System","","> < >> .>","> < >> .>
+("System","Base",">",">()
 
-   \">\" \"<\" and \">>\" work exactly as in bash, and \".>\"
-   redirects STDERR.
+   Redirect standard output of a process.
 
-   **Example**: \"run((`ls` > \"out.log\") .> \"err.log\")\"
+   **Example**: \"run(`ls` > \"out.log\")\"
+
+"),
+
+("System","Base","<","<()
+
+   Redirect standard input of a process.
+
+"),
+
+("System","Base",">>",">>()
+
+   Redirect standard output of a process, appending to the destination
+   file.
+
+"),
+
+("System","Base",".>",".>()
+
+   Redirect the standard error stream of a process.
 
 "),
 
@@ -5086,12 +4950,12 @@ airyaiprime(x)
 
 ("System","Base","ENV","ENV
 
-   Reference to the singleton \"EnvHash\".
+   Reference to the singleton \"EnvHash\", providing a dictionary
+   interface to system environment variables.
 
 "),
 
-("C Interface","Base","ccall","ccall((symbol, library), RetType, (ArgType1, ...), ArgVar1, ...)
-ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
+("C Interface","Base","ccall","ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
    Call function in C-exported shared library, specified by (function
    name, library) tuple (String or :Symbol). Alternatively, ccall may
@@ -5165,8 +5029,31 @@ ccall(fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
 
 "),
 
+("C Interface","Base","pointer","pointer(a[, index])
+
+   Get the native address of an array element. Be careful to ensure
+   that a julia reference to \"a\" exists as long as this pointer will
+   be used.
+
+"),
+
+("C Interface","Base","pointer","pointer(type, int)
+
+   Convert an integer to a pointer of the specified element type.
+
+"),
+
+("C Interface","Base","pointer_to_array","pointer_to_array(p, dims[, own])
+
+   Wrap a native pointer as a Julia Array object. The pointer element
+   type determines the array element type. \"own\" optionally
+   specifies whether Julia should take ownership of the memory,
+   calling \"free\" on the pointer when the array is no longer
+   referenced.
+
+"),
+
 ("Errors","Base","error","error(message::String)
-error(Exception)
 
    Raise an error with the given message
 
@@ -5391,1654 +5278,139 @@ error(Exception)
 
 "),
 
-("cpp.jl","","@cpp","@cpp(ccall_expression)
+("Constants","Base","ARGS","ARGS
 
-   Suppose you have a C++ shared library, \"libdemo\", which contains
-   a function \"timestwo\":
+   An array of the command line arguments passed to Julia, as strings.
 
-      int timestwo(int x) {
-        return 2*x;
-      }
-
-      double timestwo(double x) {
-        return 2*x;
-      }
-
-   You can use these functions by placing the \"@cpp\" macro prior to
-   a ccall, for example:
-
-      mylib = dlopen(\"libdemo\")
-      x = 3.5
-      x2 = @cpp ccall(dlsym(mylib, :timestwo), Float64, (Float64,), x)
-      y = 3
-      y2 = @cpp ccall(dlsym(mylib, :timestwo), Int, (Int,), y)
-
-   The macro performs C++ ABI name-mangling (using the types of the
-   parameters) to determine the correct library symbol.
-
-   Like \"ccall\", this performs library calls without overhead.
-   However, currently it has a number of limitations:
-
-   * It does not support pure-header libraries
-
-   * The restrictions of \"ccall\" apply here; for example, there is
-     no support for \"struct\". Consequently it is not possible to use
-     C++ objects.
-
-   * Currently there is no C++ namespace support
-
-   * Currently there is no support for templated functions
-
-   * Currently only g++ is supported
-
-   The latter three may not be difficult to fix.
-
-"),
-
-("GLPK","GLPK","set_prob_name","set_prob_name(glp_prob, name)
-
-   Assigns a name to the problem object (or deletes it if \"name\" is
-   empty or \"nothing\").
-
-"),
-
-("GLPK","GLPK","set_obj_name","set_obj_name(glp_prob, name)
-
-   Assigns a name to the objective function (or deletes it if \"name\"
-   is empty or \"nothing\").
-
-"),
-
-("GLPK","GLPK","set_obj_dir","set_obj_dir(glp_prob, dir)
-
-   Sets the optimization direction, \"GLPK.MIN\" (minimization) or
-   \"GLPK.MAX\" (maximization).
-
-"),
-
-("GLPK","GLPK","add_rows","add_rows(glp_prob, rows)
-
-   Adds the given number of rows (constraints) to the problem object;
-   returns the number of the first new row added.
-
-"),
-
-("GLPK","GLPK","add_cols","add_cols(glp_prob, cols)
-
-   Adds the given number of columns (structural variables) to the
-   problem object; returns the number of the first new column added.
-
-"),
-
-("GLPK","GLPK","set_row_name","set_row_name(glp_prob, row, name)
-
-   Assigns a name to the specified row (or deletes it if \"name\" is
-   empty or \"nothing\").
-
-"),
-
-("GLPK","GLPK","set_col_name","set_col_name(glp_prob, col, name)
-
-   Assigns a name to the specified column (or deletes it if \"name\"
-   is empty or \"nothing\").
-
-"),
-
-("GLPK","GLPK","set_row_bnds","set_row_bnds(glp_prob, row, bounds_type, lb, ub)
-
-   Sets the type and bounds on a row. \"type\" must be one of
-   \"GLPK.FR\" (free), \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper
-   bounded), \"GLPK.DB\" (double bounded), \"GLPK.FX\" (fixed).
-
-   At initialization, each row is free.
-
-"),
-
-("GLPK","GLPK","set_col_bnds","set_col_bnds(glp_prob, col, bounds_type, lb, ub)
-
-   Sets the type and bounds on a column. \"type\" must be one of
-   \"GLPK.FR\" (free), \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper
-   bounded), \"GLPK.DB\" (double bounded), \"GLPK.FX\" (fixed).
-
-   At initialization, each column is fixed at 0.
-
-"),
-
-("GLPK","GLPK","set_obj_coef","set_obj_coef(glp_prob, col, coef)
-
-   Sets the objective coefficient to a column (\"col\" can be 0 to
-   indicate the constant term of the objective function).
-
-"),
-
-("GLPK","GLPK","set_mat_row","set_mat_row(glp_prob, row[, len], ind, val)
-
-   Sets (replaces) the content of a row. The content is specified in
-   sparse format: \"ind\" is a vector of indices, \"val\" is the
-   vector of corresponding values. \"len\" is the number of vector
-   elements which will be considered, and must be less or equal to the
-   length of both \"ind\" and \"val\".  If \"len\" is 0, \"ind\"
-   and/or \"val\" can be \"nothing\".
-
-   In Julia, \"len\" can be omitted, and then it is inferred from
-   \"ind\" and \"val\" (which need to have the same length in such
-   case).
-
-"),
-
-("GLPK","GLPK","set_mat_col","set_mat_col(glp_prob, col[, len], ind, val)
-
-   Sets (replaces) the content of a column. Everything else is like
-   \"set_mat_row\".
-
-"),
-
-("GLPK","GLPK","load_matrix","load_matrix(glp_prob[, numel], ia, ja, ar)
-load_matrix(glp_prob, A)
-
-   Sets (replaces) the content matrix (i.e. sets all  rows/coluns at
-   once). The matrix is passed in sparse format.
-
-   In the first form (original C API), it's passed via 3 vectors:
-   \"ia\" and \"ja\" are for rows/columns indices, \"ar\" is for
-   values. \"numel\" is the number of elements which will be read and
-   must be less or equal to the length of any of the 3 vectors. If
-   \"numel\" is 0, any of the vectors can be passed as \"nothing\".
-
-   In Julia, \"numel\" can be omitted, and then it is inferred from
-   \"ia\", \"ja\" and \"ar\" (which need to have the same length in
-   such case).
-
-   Also, in Julia there's a second, simpler calling form, in which the
-   matrix is passed as a \"SparseMatrixCSC\" object.
-
-"),
-
-("GLPK","GLPK","check_dup","check_dup(rows, cols[, numel], ia, ja)
-
-   Check for duplicates in the indices vectors \"ia\" and \"ja\".
-   \"numel\" has the same meaning and (optional) use as in
-   \"load_matrix\". Returns 0 if no duplicates/out-of-range indices
-   are found, or a positive number indicating where a duplicate
-   occurs, or a negative number indicating an out-of-bounds index.
-
-"),
-
-("GLPK","GLPK","sort_matrix","sort_matrix(glp_prob)
-
-   Sorts the elements of the problem object's matrix.
-
-"),
-
-("GLPK","GLPK","del_rows","del_rows(glp_prob[, num_rows], rows_ids)
-
-   Deletes rows from the problem object. Rows are specified in the
-   \"rows_ids\" vector. \"num_rows\" is the number of elements of
-   \"rows_ids\" which will be considered, and must be less or equal to
-   the length id \"rows_ids\". If \"num_rows\" is 0, \"rows_ids\" can
-   be \"nothing\". In Julia, \"num_rows\" is optional (it's inferred
-   from \"rows_ids\" if not given).
-
-"),
-
-("GLPK","GLPK","del_cols","del_cols(glp_prob, cols_ids)
-
-   Deletes columns from the problem object. See \"del_rows\".
-
-"),
-
-("GLPK","GLPK","copy_prob","copy_prob(glp_prob_dest, glp_prob, copy_names)
-
-   Makes a copy of the problem object. The flag \"copy_names\"
-   determines if names are copied, and must be either \"GLPK.ON\" or
-   \"GLPK.OFF\".
-
-"),
-
-("GLPK","GLPK","erase_prob","erase_prob(glp_prob)
-
-   Resets the problem object.
-
-"),
-
-("GLPK","GLPK","get_prob_name","get_prob_name(glp_prob)
-
-   Returns the problem object's name. Unlike the C version, if the
-   problem has no assigned name, returns an empty string.
-
-"),
-
-("GLPK","GLPK","get_obj_name","get_obj_name(glp_prob)
-
-   Returns the objective function's name. Unlike the C version, if the
-   objective has no assigned name, returns an empty string.
-
-"),
-
-("GLPK","GLPK","get_obj_dir","get_obj_dir(glp_prob)
-
-   Returns the optimization direction, \"GLPK.MIN\" (minimization) or
-   \"GLPK.MAX\" (maximization).
-
-"),
-
-("GLPK","GLPK","get_num_rows","get_num_rows(glp_prob)
-
-   Returns the current number of rows.
-
-"),
-
-("GLPK","GLPK","get_num_cols","get_num_cols(glp_prob)
-
-   Returns the current number of columns.
-
-"),
-
-("GLPK","GLPK","get_row_name","get_row_name(glp_prob, row)
-
-   Returns the name of the specified row. Unlike the C version, if the
-   row has no assigned name, returns an empty string.
-
-"),
-
-("GLPK","GLPK","get_col_name","get_col_name(glp_prob, col)
-
-   Returns the name of the specified column. Unlike the C version, if
-   the column has no assigned name, returns an empty string.
-
-"),
-
-("GLPK","GLPK","get_row_type","get_row_type(glp_prob, row)
-
-   Returns the type of the specified row: \"GLPK.FR\" (free),
-   \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper bounded),
-   \"GLPK.DB\" (double bounded), \"GLPK.FX\" (fixed).
-
-"),
-
-("GLPK","GLPK","get_row_lb","get_row_lb(glp_prob, row)
-
-   Returns the lower bound of the specified row, \"-DBL_MAX\" if
-   unbounded.
-
-"),
-
-("GLPK","GLPK","get_row_ub","get_row_ub(glp_prob, row)
-
-   Returns the upper bound of the specified row, \"+DBL_MAX\" if
-   unbounded.
-
-"),
-
-("GLPK","GLPK","get_col_type","get_col_type(glp_prob, col)
-
-   Returns the type of the specified column: \"GLPK.FR\" (free),
-   \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper bounded),
-   \"GLPK.DB\" (double bounded), \"GLPK.FX\" (fixed).
-
-"),
-
-("GLPK","GLPK","get_col_lb","get_col_lb(glp_prob, col)
-
-   Returns the lower bound of the specified column, \"-DBL_MAX\" if
-   unbounded.
-
-"),
-
-("GLPK","GLPK","get_col_ub","get_col_ub(glp_prob, col)
-
-   Returns the upper bound of the specified column, \"+DBL_MAX\" if
-   unbounded.
-
-"),
-
-("GLPK","GLPK","get_obj_coef","get_obj_coef(glp_prob, col)
-
-   Return the objective coefficient to a column (\"col\" can be 0 to
-   indicate the constant term of the objective function).
-
-"),
-
-("GLPK","GLPK","get_num_nz","get_num_nz(glp_prob)
-
-   Return the number of non-zero elements in the constraint matrix.
-
-"),
-
-("GLPK","GLPK","get_mat_row","get_mat_row(glp_prob, row, ind, val)
-get_mat_row(glp_prob, row)
-
-   Returns the contents of a row. In the first form (original C API),
-   it fills the \"ind\" and \"val\" vectors provided, which must be of
-   type \"Vector{Int32}\" and \"Vector{Float64}\" respectively, and
-   have a sufficient length to hold the result (or they can be empty
-   or \"nothing\", and then they're not filled). It returns the length
-   of the result.
-
-   In Julia, there's a second, simpler calling form which allocates
-   and returns the two vectors as \"(ind, val)\".
-
-"),
-
-("GLPK","GLPK","get_mat_col","get_mat_col(glp_prob, col, ind, val)
-get_mat_col(glp_prob, col)
-
-   Returns the contents of a column. See \"get_mat_row\".
-
-"),
-
-("GLPK","GLPK","create_index","create_index(glp_prob)
-
-   Creates the name index (used by \"find_row\", \"find_col\") for the
-   problem object.
-
-"),
-
-("GLPK","GLPK","find_row","find_row(glp_prob, name)
-
-   Finds the numeric id of a row by name. Returns 0 if no row with the
-   given name is found.
-
-"),
-
-("GLPK","GLPK","find_col","find_col(glp_prob, name)
-
-   Finds the numeric id of a column by name. Returns 0 if no column
-   with the given name is found.
-
-"),
-
-("GLPK","GLPK","delete_index","delete_index(glp_prob)
-
-   Deletes the name index for the problem object.
-
-"),
-
-("GLPK","GLPK","set_rii","set_rii(glp_prob, row, rii)
-
-   Sets the rii scale factor for the specified row.
-
-"),
-
-("GLPK","GLPK","set_sjj","set_sjj(glp_prob, col, sjj)
-
-   Sets the sjj scale factor for the specified column.
-
-"),
-
-("GLPK","GLPK","get_rii","get_rii(glp_prob, row)
-
-   Returns the rii scale factor for the specified row.
-
-"),
-
-("GLPK","GLPK","get_sjj","get_sjj(glp_prob, col)
-
-   Returns the sjj scale factor for the specified column.
-
-"),
-
-("GLPK","GLPK","scale_prob","scale_prob(glp_prob, flags)
-
-   Performs automatic scaling of problem data for the problem object.
-   The parameter \"flags\" can be \"GLPK.SF_AUTO\" (automatic) or a
-   bitwise OR of the forllowing: \"GLPK.SF_GM\" (geometric mean),
-   \"GLPK.SF_EQ\" (equilibration), \"GLPK.SF_2N\" (nearest power of
-   2), \"GLPK.SF_SKIP\" (skip if well scaled).
-
-"),
-
-("GLPK","GLPK","unscale_prob","unscale_prob(glp_prob)
-
-   Unscale the problem data (cancels the scaling effect).
-
-"),
-
-("GLPK","GLPK","set_row_stat","set_row_stat(glp_prob, row, stat)
-
-   Sets the status of the specified row. \"stat\" must be one of:
-   \"GLPK.BS\" (basic), \"GLPK.NL\" (non-basic lower bounded),
-   \"GLPK.NU\" (non-basic upper-bounded), \"GLPK.NF\" (non-basic
-   free), \"GLPK.NS\" (non-basic fixed).
-
-"),
-
-("GLPK","GLPK","set_col_stat","set_col_stat(glp_prob, col, stat)
-
-   Sets the status of the specified column. \"stat\" must be one of:
-   \"GLPK.BS\" (basic), \"GLPK.NL\" (non-basic lower bounded),
-   \"GLPK.NU\" (non-basic upper-bounded), \"GLPK.NF\" (non-basic
-   free), \"GLPK.NS\" (non-basic fixed).
-
-"),
-
-("GLPK","GLPK","std_basis","std_basis(glp_prob)
-
-   Constructs the standard (trivial) initial LP basis for the problem
-   object.
-
-"),
-
-("GLPK","GLPK","adv_basis","adv_basis(glp_prob[, flags])
-
-   Constructs an advanced initial LP basis for the problem object. The
-   flag \"flags\" is optional; it must be 0 if given.
-
-"),
-
-("GLPK","GLPK","cpx_basis","cpx_basis(glp_prob)
-
-   Constructs an initial LP basis for the problem object with the
-   algorithm proposed by R. Bixby.
-
-"),
-
-("GLPK","GLPK","simplex","simplex(glp_prob[, glp_param])
-
-   The routine \"simplex\" is a driver to the LP solver based on the
-   simplex method. This routine retrieves problem data from the
-   specified problem object, calls the solver to solve the problem
-   instance, and stores results of computations back into the problem
-   object.
-
-   The parameters are specified via the optional \"glp_param\"
-   argument, which is of type \"GLPK.SimplexParam\" (or \"nothing\" to
-   use the default settings).
-
-   Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLPK.EBADB\" (invalid base), \"GLPK.ESING\"
-   (singular matrix), \"GLPK.ECOND\" (ill-conditioned matrix),
-   \"GLPK.EBOUND\" (incorrect bounds), \"GLPK.EFAIL\" (solver
-   failure), \"GLPK.EOBJLL\" (lower limit reached), \"GLPK.EOBJUL\"
-   (upper limit reached), \"GLPK.ITLIM\" (iterations limit exceeded),
-   \"GLPK.ETLIM\" (time limit exceeded), \"GLPK.ENOPFS\" (no primal
-   feasible solution), \"GLPK.ENODFS\" (no dual feasible solution).
-
-"),
-
-("GLPK","GLPK","exact","exact(glp_prob[, glp_param])
-
-   A tentative implementation of the primal two-phase simplex method
-   based on exact (rational) arithmetic. Similar to \"simplex\". The
-   optional \"glp_param\" is of type \"GLPK.SimplexParam\".
-
-   The possible return values are \"0\" (success) or \"GLPK.EBADB\",
-   \"GLPK.ESING\", \"GLPK.EBOUND\", \"GLPK.EFAIL\", \"GLPK.ITLIM\",
-   \"GLPK.ETLIM\" (see \"simplex()\").
-
-"),
-
-("GLPK","GLPK","init_smcp","init_smcp(glp_param)
-
-   Initializes a \"GLPK.SimplexParam\" object with the default values.
-   In Julia, this is done at object creation time; this function can
-   be used to reset the object.
-
-"),
-
-("GLPK","GLPK","get_status","get_status(glp_prob)
-
-   Returns the generic status of the current basic solution:
-   \"GLPK.OPT\" (optimal), \"GLPK.FEAS\" (feasible), \"GLPK.INFEAS\"
-   (infeasible), \"GLPK.NOFEAS\" (no feasible solution),
-   \"GLPK.UNBND\" (unbounded solution), \"GLPK.UNDEF\" (undefined).
-
-"),
-
-("GLPK","GLPK","get_prim_stat","get_prim_stat(glp_prob)
-
-   Returns the status of the primal basic solution: \"GLPK.FEAS\",
-   \"GLPK.INFEAS\", \"GLPK.NOFEAS\", \"GLPK.UNDEF\" (see
-   \"get_status()\").
-
-"),
-
-("GLPK","GLPK","get_dual_stat","get_dual_stat(glp_prob)
-
-   Returns the status of the dual basic solution: \"GLPK.FEAS\",
-   \"GLPK.INFEAS\", \"GLPK.NOFEAS\", \"GLPK.UNDEF\" (see
-   \"get_status()\").
-
-"),
-
-("GLPK","GLPK","get_obj_val","get_obj_val(glp_prob)
-
-   Returns the current value of the objective function.
-
-"),
-
-("GLPK","GLPK","get_row_stat","get_row_stat(glp_prob, row)
-
-   Returns the status of the specified row: \"GLPK.BS\", \"GLPK.NL\",
-   \"GLPK.NU\", \"GLPK.NF\", \"GLPK.NS\" (see \"set_row_stat()\").
-
-"),
-
-("GLPK","GLPK","get_row_prim","get_row_prim(glp_prob, row)
-
-   Returns the primal value of the specified row.
-
-"),
-
-("GLPK","GLPK","get_row_dual","get_row_dual(glp_prob, row)
-
-   Returns the dual value (reduced cost) of the specified row.
-
-"),
-
-("GLPK","GLPK","get_col_stat","get_col_stat(glp_prob, col)
-
-   Returns the status of the specified column: \"GLPK.BS\",
-   \"GLPK.NL\", \"GLPK.NU\", \"GLPK.NF\", \"GLPK.NS\" (see
-   \"set_row_stat()\").
-
-"),
-
-("GLPK","GLPK","get_col_prim","get_col_prim(glp_prob, col)
-
-   Returns the primal value of the specified column.
-
-"),
-
-("GLPK","GLPK","get_col_dual","get_col_dual(glp_prob, col)
-
-   Returns the dual value (reduced cost) of the specified column.
-
-"),
-
-("GLPK","GLPK","get_unbnd_ray","get_unbnd_ray(glp_prob)
-
-   Returns the number k of a variable, which causes primal or dual
-   unboundedness (if 1 <= k <= rows it's row k; if rows+1 <= k <=
-   rows+cols it's column k-rows, if k=0 such variable is not defined).
-
-"),
-
-("GLPK","GLPK","interior","interior(glp_prob[, glp_param])
-
-   The routine \"interior\" is a driver to the LP solver based on the
-   primal-dual interior-point method. This routine retrieves problem
-   data from the specified problem object, calls the solver to solve
-   the problem instance, and stores results of computations back into
-   the problem object.
-
-   The parameters are specified via the optional \"glp_param\"
-   argument, which is of type \"GLPK.InteriorParam\" (or \"nothing\"
-   to use the default settings).
-
-   Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLPK.EFAIL\" (solver failure),
-   \"GLPK.ENOCVG\" (very slow convergence, or divergence),
-   \"GLPK.ITLIM\" (iterations limit exceeded), \"GLPK.EINSTAB\"
-   (numerical instability).
-
-"),
-
-("GLPK","GLPK","init_iptcp","init_iptcp(glp_param)
-
-   Initializes a \"GLPK.InteriorParam\" object with the default
-   values. In Julia, this is done at object creation time; this
-   function can be used to reset the object.
-
-"),
-
-("GLPK","GLPK","ipt_status","ipt_status(glp_prob)
-
-   Returns the status of the interior-point solution: \"GLPK.OPT\"
-   (optimal), \"GLPK.INFEAS\" (infeasible), \"GLPK.NOFEAS\" (no
-   feasible solution), \"GLPK.UNDEF\" (undefined).
-
-"),
-
-("GLPK","GLPK","ipt_obj_val","ipt_obj_val(glp_prob)
-
-   Returns the current value of the objective function for the
-   interior-point solution.
-
-"),
-
-("GLPK","GLPK","ipt_row_prim","ipt_row_prim(glp_prob, row)
-
-   Returns the primal value of the specified row for the interior-
-   point solution.
-
-"),
-
-("GLPK","GLPK","ipt_row_dual","ipt_row_dual(glp_prob, row)
-
-   Returns the dual value (reduced cost) of the specified row for the
-   interior-point solution.
-
-"),
-
-("GLPK","GLPK","ipt_col_prim","ipt_col_prim(glp_prob, col)
-
-   Returns the primal value of the specified column for the interior-
-   point solution.
-
-"),
-
-("GLPK","GLPK","ipt_col_dual","ipt_col_dual(glp_prob, col)
-
-   Returns the dual value (reduced cost) of the specified column for
-   the interior-point solution.
-
-"),
-
-("GLPK","GLPK","set_col_kind","set_col_kind(glp_prob, col, kind)
-
-   Sets the kind for the specified column (for mixed-integer
-   programming). \"kind\" must be one of: \"GLPK.CV\" (continuous),
-   \"GLPK.IV\" (integer), \"GLPK.BV\" (binary, 0/1).
-
-"),
-
-("GLPK","GLPK","get_col_kind","get_col_kind(glp_prob, col)
-
-   Returns the kind for the specified column (see \"set_col_kind()\").
-
-"),
-
-("GLPK","GLPK","get_num_int","get_num_int(glp_prob)
-
-   Returns the number of columns marked as integer (including binary).
-
-"),
-
-("GLPK","GLPK","get_num_bin","get_num_bin(glp_prob)
-
-   Returns the number of columns marked binary.
-
-"),
-
-("GLPK","GLPK","intopt","intopt(glp_prob[, glp_param])
-
-   The routine \"intopt\" is a driver to the mixed-integer-programming
-   (MIP) solver based on the branch- and-cut method, which is a hybrid
-   of branch-and-bound and cutting plane methods.
-
-   The parameters are specified via the optional \"glp_param\"
-   argument, which is of type \"GLPK.IntoptParam\" (or \"nothing\" to
-   use the default settings).
-
-   Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLPK.EBOUND\" (incorrect bounds),
-   \"GLPK.EROOT\" (no optimal LP basis given), \"GLPK.ENOPFS\" (no
-   primal feasible LP solution), \"GLPK.ENODFS\" (no dual feasible LP
-   solution), \"GLPK.EFAIL\" (solver failure), \"GLPK.EMIPGAP\" (mip
-   gap tolearance reached), \"GLPK.ETLIM\" (time limit exceeded),
-   \"GLPK.ESTOP\" (terminated by application).
-
-"),
-
-("GLPK","GLPK","init_iocp","init_iocp(glp_param)
-
-   Initializes a \"GLPK.IntoptParam\" object with the default values.
-   In Julia, this is done at object creation time; this function can
-   be used to reset the object.
-
-"),
-
-("GLPK","GLPK","mip_status","mip_status(glp_prob)
-
-   Returns the generic status of the MIP solution: \"GLPK.OPT\"
-   (optimal), \"GLPK.FEAS\" (feasible), \"GLPK.NOFEAS\" (no feasible
-   solution), \"GLPK.UNDEF\" (undefined).
-
-"),
-
-("GLPK","GLPK","mip_obj_val","mip_obj_val(glp_prob)
-
-   Returns the current value of the objective function for the MIP
-   solution.
-
-"),
-
-("GLPK","GLPK","mip_row_val","mip_row_val(glp_prob, row)
-
-   Returns the value of the specified row for the MIP solution.
-
-"),
-
-("GLPK","GLPK","mip_col_val","mip_col_val(glp_prob, col)
-
-   Returns the value of the specified column for the MIP solution.
-
-"),
-
-("GLPK","GLPK","read_mps","read_mps(glp_prob, format[, param], filename)
-
-   Reads problem data in MPS format from a text file. \"format\" must
-   be one of \"GLPK.MPS_DECK\" (fixed, old) or \"GLPK.MPS_FILE\"
-   (free, modern). \"param\" is optional; if given it must be
-   \"nothing\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","write_mps","write_mps(glp_prob, format[, param], filename)
-
-   Writes problem data in MPS format from a text file. See
-   \"read_mps\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","read_lp","read_lp(glp_prob[, param], filename)
-
-   Reads problem data in CPLEX LP format from a text file. \"param\"
-   is optional; if given it must be \"nothing\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","write_lp","write_lp(glp_prob[, param], filename)
-
-   Writes problem data in CPLEX LP format from a text file. See
-   \"read_lp\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","read_prob","read_prob(glp_prob[, flags], filename)
-
-   Reads problem data in GLPK LP/MIP format from a text file.
-   \"flags\" is optional; if given it must be 0.
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","write_prob","write_prob(glp_prob[, flags], filename)
-
-   Writes problem data in GLPK LP/MIP format from a text file. See
-   \"read_prob\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","mpl_read_model","mpl_read_model(glp_tran, filename, skip)
-
-   Reads the model section and, optionally, the data section, from a
-   text file in MathProg format, and stores it in \"glp_tran\", which
-   is a \"GLPK.MathProgWorkspace\" object. If \"skip\" is nonzero, the
-   data section is skipped if present.
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","mpl_read_data","mpl_read_data(glp_tran, filename)
-
-   Reads data section from a text file in MathProg format and stores
-   it in \"glp_tran\", which is a \"GLPK.MathProgWorkspace\" object.
-   May be called more than once.
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","mpl_generate","mpl_generate(glp_tran[, filename])
-
-   Generates the model using its description stored in the
-   \"GLPK.MathProgWorkspace\" translator workspace \"glp_tran\". The
-   optional \"filename\" specifies an output file; if not given or
-   \"nothing\", the terminal is used.
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","mpl_build_prob","mpl_build_prob(glp_tran, glp_prob)
-
-   Transfer information from the \"GLPK.MathProgWorkspace\" translator
-   workspace \"glp_tran\" to the \"GLPK.Prob\" problem object
-   \"glp_prob\".
-
-"),
-
-("GLPK","GLPK","mpl_postsolve","mpl_postsolve(glp_tran, glp_prob, sol)
-
-   Copies the solution from the \"GLPK.Prob\" problem object
-   \"glp_prob\" to the \"GLPK.MathProgWorkspace\" translator workspace
-   \"glp_tran\" and then executes all the remaining model statements,
-   which follow the solve statement.
-
-   The parameter \"sol\" specifies which solution should be copied
-   from the problem object to the workspace: \"GLPK.SOL\" (basic),
-   \"GLPK.IPT\" (interior-point), \"GLPK.MIP\" (MIP).
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","print_sol","print_sol(glp_prob, filename)
-
-   Writes the current basic solution to a text file, in printable
-   format.
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","read_sol","read_sol(glp_prob, filename)
-
-   Reads the current basic solution from a text file, in the format
-   used by \"write_sol\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","write_sol","write_sol(glp_prob, filename)
-
-   Writes the current basic solution from a text file, in a format
-   which can be read by \"read_sol\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","print_ipt","print_ipt(glp_prob, filename)
-
-   Writes the current interior-point solution to a text file, in
-   printable format.
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","read_ipt","read_ipt(glp_prob, filename)
-
-   Reads the current interior-point solution from a text file, in the
-   format used by \"write_ipt\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","write_ipt","write_ipt(glp_prob, filename)
-
-   Writes the current interior-point solution from a text file, in a
-   format which can be read by \"read_ipt\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","print_mip","print_mip(glp_prob, filename)
-
-   Writes the current MIP solution to a text file, in printable
-   format.
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","read_mip","read_mip(glp_prob, filename)
-
-   Reads the current MIP solution from a text file, in the format used
-   by \"write_mip\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","write_mip","write_mip(glp_prob, filename)
-
-   Writes the current MIP solution from a text file, in a format which
-   can be read by \"read_mip\".
-
-   Returns 0 upon success; throws an error in case of failure.
-
-"),
-
-("GLPK","GLPK","print_ranges","print_ranges(glp_prob, [[len,] list,] [flags,] filename)
-
-   Performs sensitivity analysis of current optimal basic solution and
-   writes the analysis report in human-readable format to a text file.
-   \"list\" is a vector specifying the rows/columns to analyze (if 1
-   <= list[i] <= rows, analyzes row list[i]; if rows+1 <= list[i] <=
-   rows+cols, analyzes column list[i]-rows). \"len\" is the number of
-   elements of \"list\" which will be consideres, and must be smaller
-   or equal to the length of the list. In Julia, \"len\" is optional
-   (it's inferred from \"len\" if not given). \"list\" can be empty of
-   \"nothing\" or not given at all, implying all indices will be
-   analyzed. \"flags\" is optional, and must be 0 if given.
-
-   To call this function, the current basic solution must be optimal,
-   and the basis factorization must exist.
-
-   Returns 0 upon success, non-zero otherwise.
-
-"),
-
-("GLPK","GLPK","bf_exists","bf_exists(glp_prob)
-
-   Returns non-zero if the basis fatorization for the current basis
-   exists, 0 otherwise.
-
-"),
-
-("GLPK","GLPK","factorize","factorize(glp_prob)
-
-   Computes the basis factorization for the current basis.
-
-   Returns 0 if successful, otherwise: \"GLPK.EBADB\" (invalid
-   matrix), \"GLPK.ESING\" (singluar matrix), \"GLPK.ECOND\" (ill-
-   conditioned matrix).
-
-"),
-
-("GLPK","GLPK","bf_updated","bf_updated(glp_prob)
-
-   Returns 0 if the basis factorization was computed from scratch,
-   non-zero otherwise.
-
-"),
-
-("GLPK","GLPK","get_bfcp","get_bfcp(glp_prob, glp_param)
-
-   Retrieves control parameters, which are used on computing and
-   updating the basis factorization associated with the problem
-   object, and stores them in the \"GLPK.BasisFactParam\" object
-   \"glp_param\".
-
-"),
-
-("GLPK","GLPK","set_bfcp","set_bfcp(glp_prob[, glp_param])
-
-   Sets the control parameters stored in the \"GLPK.BasisFactParam\"
-   object \"glp_param\" into the problem object. If \"glp_param\" is
-   \"nothing\" or is omitted, resets the parameters to their defaults.
-
-   The \"glp_param\" should always be retreived via \"get_bfcp\"
-   before changing its values and calling this function.
-
-"),
-
-("GLPK","GLPK","get_bhead","get_bhead(glp_prob, k)
-
-   Returns the basis header information for the current basis. \"k\"
-   is a row index.
-
-   Returns either i such that 1 <= i <= rows, if \"k\" corresponds to
-   i-th auxiliary variable, or rows+j such that 1 <= j <= columns, if
-   \"k\" corresponds to the j-th structural variable.
-
-"),
-
-("GLPK","GLPK","get_row_bind","get_row_bind(glp_prob, row)
-
-   Returns the index of the basic variable \"k\" which is associated
-   with the specified row, or \"0\" if the variable is non-basic. If
-   \"GLPK.get_bhead(glp_prob, k) == row\", then
-   \"GLPK.get_bind(glp_prob, row) = k\".
-
-"),
-
-("GLPK","GLPK","get_col_bind","get_col_bind(glp_prob, col)
-
-   Returns the index of the basic variable \"k\" which is associated
-   with the specified column, or \"0\" if the variable is non-basic.
-   If \"GLPK.get_bhead(glp_prob, k) == rows+col\", then
-   \"GLPK.get_bind(glp_prob, col) = k\".
-
-"),
-
-("GLPK","GLPK","ftran","ftran(glp_prob, v)
-
-   Performs forward transformation (FTRAN), i.e. it solves the system
-   Bx = b, where B is the basis matrix, x is the vector of unknowns to
-   be computed, b is the vector of right-hand sides. At input, \"v\"
-   represents the vector b; at output, it contains the vector x. \"v\"
-   must be a \"Vector{Float64}\" whose length is the number of rows.
-
-"),
-
-("GLPK","GLPK","btran","btran(glp_prob, v)
-
-   Performs backward transformation (BTRAN), i.e. it solves the system
-   \"B'x = b\", where \"B\" is the transposed of the basis matrix,
-   \"x\" is the vector of unknowns to be computed, \"b\" is the vector
-   of right-hand sides. At input, \"v\" represents the vector \"b\";
-   at output, it contains the vector \"x\". \"v\" must be a
-   \"Vector{Float64}\" whose length is the number of rows.
-
-"),
-
-("GLPK","GLPK","warm_up","warm_up(glp_prob)
-
-   \"Warms up\" the LP basis using current statuses assigned to rows
-   and columns, i.e. computes factorization of the basis matrix (if it
-   does not exist), computes primal and dual components of basic
-   solution, and determines the solution status.
-
-   Returns 0 if successful, otherwise: \"GLPK.EBADB\" (invalid
-   matrix), \"GLPK.ESING\" (singluar matrix), \"GLPK.ECOND\" (ill-
-   conditioned matrix).
-
-"),
-
-("GLPK","GLPK","eval_tab_row","eval_tab_row(glp_prob, k, ind, val)
-eval_tab_row(glp_prob, k)
-
-   Computes a row of the current simplex tableau which corresponds to
-   some basic variable specified by the parameter \"k\". If 1 <= \"k\"
-   <= rows, uses \"k\"-th auxiliary variable; if rows+1 <= \"k\" <=
-   rows+cols, uses (\"k\"-rows)-th structural variable. The basis
-   factorization must exist.
-
-   In the first form, stores the result in the provided vectors
-   \"ind\" and \"val\", which must be of type \"Vector{Int32}\" and
-   \"Vector{Float64}\", respectively, and returns the length of the
-   outcome; in Julia, the vectors will be resized as needed to hold
-   the result.
-
-   In the second, simpler form, \"ind\" and \"val\" are returned in a
-   tuple as the output of the function.
-
-"),
-
-("GLPK","GLPK","eval_tab_col","eval_tab_col(glp_prob, k, ind, val)
-eval_tab_col(glp_prob, k)
-
-   Computes a column of the current simplex tableau which corresponds
-   to some non-basic variable specified by the parameter \"k\". See
-   \"eval_tab_row\".
-
-"),
-
-("GLPK","GLPK","transform_row","transform_row(glp_prob[, len], ind, val)
-
-   Performs the same operation as \"eval_tab_row\" with the exception
-   that the row to be transformed is specified explicitly as a sparse
-   vector. The parameter \"len\" is the number of elements of \"ind\"
-   and \"val\" which will be used, and must be smaller or equal to the
-   length of both vectors; in Julia it is optional (and the \"ind\"
-   and \"val\" must have the same length). The vectors \"int\" and
-   \"val\" must be of type \"Vector{Int32}\" and \"Vector{Float64}\",
-   respectively, since they will also hold the result; in Julia, they
-   will be resized to the resulting required length.
-
-   Returns the length if the resulting vectors \"ind\" and \"val\".
-
-"),
-
-("GLPK","GLPK","transform_col","transform_col(glp_prob[, len], ind, val)
-
-   Performs the same operation as \"eval_tab_col\" with the exception
-   that the row to be transformed is specified explicitly as a sparse
-   vector. See \"transform_row\".
-
-"),
-
-("GLPK","GLPK","prim_rtest","prim_rtest(glp_prob[, len], ind, val, dir, eps)
-
-   Performs the primal ratio test using an explicitly specified column
-   of the simplex table. The current basic solution must be primal
-   feasible. The column is specified in sparse format by \"len\"
-   (length of the vector), \"ind\" and \"val\" (indices and values of
-   the vector). \"len\" is the number of elements which will be
-   considered and must be smaller or equal to the length of both
-   \"ind\" and \"val\"; in Julia, it can be omitted (and then \"ind\"
-   and \"val\" must have the same length). The indices in \"ind\" must
-   be between 1 and rows+cols; they must correspond to basic
-   variables. \"dir\" is a direction parameter which must be either +1
-   (increasing) or -1 (decreasing). \"eps\" is a tolerance parameter
-   and must be positive. See the GLPK manual for a detailed
-   explanation.
-
-   Returns the position in \"ind\" and \"val\" which corresponds to
-   the pivot element, or 0 if the choice cannot be made.
-
-"),
-
-("GLPK","GLPK","dual_rtest","dual_rtest(glp_prob[, len], ind, val, dir, eps)
-
-   Performs the dual ratio test using an explicitly specified row of
-   the simplex table. The current basic solution must be dual
-   feasible. The indices in \"ind\" must correspond to non-basic
-   variables. Everything else is like in \"prim_rtest\".
-
-"),
-
-("GLPK","GLPK","analyze_bound","analyze_bound(glp_prob, k)
-
-   Analyzes the effect of varying the active bound of specified non-
-   basic variable. See the GLPK manual for a detailed explanation. In
-   Julia, this function has a different API then C. It returns
-   \"(limit1, var1, limit2, var2)\" rather then taking them as
-   pointers in the argument list.
-
-"),
-
-("GLPK","GLPK","analyze_coef","analyze_coef(glp_prob, k)
-
-   Analyzes the effect of varying the objective coefficient at
-   specified basic variable. See the GLPK manual for a detailed
-   explanation. In Julia, this function has a different API then C. It
-   returns \"(coef1, var1, value1, coef2, var2, value2)\" rather then
-   taking them as pointers in the argument list.
-
-"),
-
-("GLPK","GLPK","init_env","init_env()
-
-   Initializes the GLPK environment. Not normally needed.
-
-   Returns 0 (initilization successful), 1 (environment already
-   initialized), 2 (failed, insufficient memory) or 3 (failed,
-   unsupported programming model).
-
-"),
-
-("GLPK","GLPK","version","version()
-
-   Returns the GLPK version number. In Julia, instead of returning a
-   string as in C, it returns a tuple of integer values, containing
-   the major and the minor number.
-
-"),
-
-("GLPK","GLPK","free_env","free_env()
-
-   Frees all resources used by GLPK routines (memory blocks, etc.)
-   which are currently still in use. Not normally needed.
-
-   Returns 0 if successful, 1 if envirnoment is inactive.
-
-"),
-
-("GLPK","GLPK","term_out","term_out(flag)
-
-   Enables/disables the terminal output of glpk routines. \"flag\" is
-   either \"GLPK.ON\" (output enabled) or \"GLPK.OFF\" (output
-   disabled).
-
-   Returns the previous status of the terminal output.
-
-"),
-
-("GLPK","GLPK","open_tee","open_tee(filename)
-
-   Starts copying all the terminal output to an output text file.
-
-   Returns 0 if successful, 1 if already active, 2 if it fails
-   creating the output file.
-
-"),
-
-("GLPK","GLPK","close_tee","close_tee()
-
-   Stops copying the terminal output to the output text file
-   previously open by the \"open_tee\".
-
-   Return 0 if successful, 1 if copying terminal output was not
-   started.
-
-"),
-
-("GLPK","GLPK","malloc","malloc(size)
-
-   Replacement of standard C \"malloc\". Allocates uninitialized
-   memeory which must freed with \"free\".
-
-   Returns a pointer to the allocated memory.
-
-"),
-
-("GLPK","GLPK","calloc","calloc(n, size)
-
-   Replacement of standard C \"calloc\", but does not initialize the
-   memeory. Allocates uninitialized memeory which must freed with
-   \"free\".
-
-   Returns a pointer to the allocated memory.
-
-"),
-
-("GLPK","GLPK","free","free(ptr)
-
-   Deallocates a memory block previously allocated by \"malloc\" or
-   \"calloc\".
-
-"),
-
-("GLPK","GLPK","mem_usage","mem_usage()
-
-   Reports some information about utilization of the memory by the
-   routines \"malloc\", \"calloc\", and \"free\". In Julia, this
-   function has a different API then C. It returns \"(count, cpeak,
-   total, tpeak)\" rather then taking them as pointers in the argument
-   list.
-
-"),
-
-("GLPK","GLPK","mem_limit","mem_limit(limit)
-
-   Limits the amount of memory avaliable for dynamic allocation to a
-   value in megabyes given by the integer parameter \"limit\".
-
 "),
 
-("GLPK","GLPK","time","time()
+("Constants","Base","C_NULL","C_NULL
 
-   Returns the current universal time (UTC), in milliseconds.
+   The C null pointer constant, sometimes used when calling external
+   code.
 
 "),
 
-("GLPK","GLPK","difftime","difftime(t1, t0)
+("Constants","Base","CPU_CORES","CPU_CORES
 
-   Returns the difference between two time values \"t1\" and \"t0\",
-   expressed in seconds.
+   The number of CPU cores in the system.
 
 "),
 
-("GLPK","GLPK","sdf_open_file","sdf_open_file(filename)
+("Constants","Base","WORD_SIZE","WORD_SIZE
 
-   Opens a plain data file.
+   Standard word size on the current machine, in bits.
 
-   If successful, returns a \"GLPK.Data\" object, otherwise throws an
-   error.
-
-"),
-
-("GLPK","GLPK","sdf_read_int","sdf_read_int(glp_data)
-
-   Reads an integer number from the plain data file specified by the
-   \"GLPK.Data\" parameter \"glp_data\", skipping initial whitespace.
-
-"),
-
-("GLPK","GLPK","sdf_read_num","sdf_read_num(glp_data)
-
-   Reads a floating point number from the plain data file specified by
-   the \"GLPK.Data\" parameter \"glp_data\", skipping initial
-   whitespace.
-
-"),
-
-("GLPK","GLPK","sdf_read_item","sdf_read_item(glp_data)
-
-   Reads a data item (a String) from the plain data file specified by
-   the \"GLPK.Data\" parameter \"glp_data\", skipping initial
-   whitespace.
-
 "),
 
-("GLPK","GLPK","sdf_read_text","sdf_read_text(glp_data)
+("Constants","Base","VERSION","VERSION
 
-   Reads a line of text from the plain data file specified by the
-   \"GLPK.Data\" parameter \"glp_data\", skipping initial and final
-   whitespace.
+   An object describing which version of Julia is in use.
 
 "),
 
-("GLPK","GLPK","sdf_line","sdf_line(glp_data)
+("Constants","Base","LOAD_PATH","LOAD_PATH
 
-   Returns the current line in the \"GLPK.Data\" object \"glp_data\"
+   An array of paths (as strings) where the \"require\" function looks
+   for code.
 
 "),
 
-("GLPK","GLPK","sdf_close_file","sdf_close_file(glp_data)
+("Filesystem","Base","isblockdev","isblockdev(path) -> Bool
 
-   Closes the file associated to \"glp_data\" and frees the resources.
+   Returns \"true\" if \"path\" is a block device, \"false\"
+   otherwise.
 
 "),
-
-("GLPK","GLPK","read_cnfsat","read_cnfsat(glp_prob, filename)
 
-   Reads the CNF-SAT problem data in DIMACS format from a text file.
+("Filesystem","Base","ischardev","ischardev(path) -> Bool
 
-   Returns 0 upon success; throws an error in case of failure.
+   Returns \"true\" if \"path\" is a character device, \"false\"
+   otherwise.
 
 "),
 
-("GLPK","GLPK","check_cnfsat","check_cnfsat(glp_prob)
+("Filesystem","Base","isdir","isdir(path) -> Bool
 
-   Checks if the problem object encodes a CNF-SAT problem instance, in
-   which case it returns 0, otherwise returns non-zero.
+   Returns \"true\" if \"path\" is a directory, \"false\" otherwise.
 
 "),
 
-("GLPK","GLPK","write_cnfsat","write_cnfsat(glp_prob, filename)
+("Filesystem","Base","isexecutable","isexecutable(path) -> Bool
 
-   Writes the CNF-SAT problem data in DIMACS format into a text file.
+   Returns \"true\" if the current user has permission to execute
+   \"path\", \"false\" otherwise.
 
-   Returns 0 upon success; throws an error in case of failure.
-
 "),
-
-("GLPK","GLPK","minisat1","minisat1(glp_prob)
 
-   The routine \"minisat1\" is a driver to MiniSat, a CNF-SAT solver
-   developed by Niklas Eén and Niklas Sörensson, Chalmers University
-   of Technology, Sweden.
+("Filesystem","Base","isfifo","isfifo(path) -> Bool
 
-   Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLPK.EDATA\" (problem is not CNF-SAT),
-   \"GLPK.EFAIL\" (solver failure).
+   Returns \"true\" if \"path\" is a FIFO, \"false\" otherwise.
 
 "),
 
-("GLPK","GLPK","intfeas1","intfeas1(glp_prob, use_bound, obj_bound)
+("Filesystem","Base","isfile","isfile(path) -> Bool
 
-   The routine \"glp_intfeas1\" is a tentative implementation of an
-   integer feasibility solver based on a CNF-SAT solver (currently
-   MiniSat). \"use_bound\" is a flag: if zero, any feasible solution
-   is seeked, otherwise seraches for an integer feasible solution.
-   \"obj_bound\" is used only if \"use_bound\" is non-zero, and
-   specifies an upper/lower bound (for maximization/minimazion
-   respectively) to the objective function.
+   Returns \"true\" if \"path\" is a regular file, \"false\"
+   otherwise.
 
-   All variables (columns) must either be binary or fixed. All
-   constraint and objective coeffient must be integer.
-
-   Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLPK.EDATA\" (problem data is not valid),
-   \"GLPK.ERANGE\" (integer overflow occurred), \"GLPK.EFAIL\" (solver
-   failure).
-
 "),
-
-("GZip","GZip","gzopen","gzopen(fname[, gzmode[, buf_size]])
-
-   Opens a file with mode (default \"\"r\"\"), setting internal buffer
-   size to buf_size (default \"Z_DEFAULT_BUFSIZE=8192\"), and returns
-   a the file as a \"GZipStream\".
-
-   \"gzmode\" must contain one of
-
-   +------+-----------------------------------+
-   | r    | read                              |
-   +------+-----------------------------------+
-   | w    | write, create, truncate           |
-   +------+-----------------------------------+
-   | a    | write, create, append             |
-   +------+-----------------------------------+
-
-   In addition, gzmode may also contain
-
-   +-------+-----------------------------------+
-   | x     | create the file exclusively       |
-   +-------+-----------------------------------+
-   | 0-9   | compression level                 |
-   +-------+-----------------------------------+
 
-   and/or a compression strategy:
+("Filesystem","Base","islink","islink(path) -> Bool
 
-   +------+-----------------------------------+
-   | f    | filtered data                     |
-   +------+-----------------------------------+
-   | h    | Huffman-only compression          |
-   +------+-----------------------------------+
-   | R    | run-length encoding               |
-   +------+-----------------------------------+
-   | F    | fixed code compression            |
-   +------+-----------------------------------+
+   Returns \"true\" if \"path\" is a symbolic link, \"false\"
+   otherwise.
 
-   Note that \"+\" is not allowed in gzmode.
-
-   If an error occurs, \"gzopen\" throws a \"GZError\"
-
 "),
 
-("GZip","GZip","gzdopen","gzdopen(fd[, gzmode[, buf_size]])
+("Filesystem","Base","ispath","ispath(path) -> Bool
 
-   Create a \"GZipStream\" object from an integer file descriptor. See
-   \"gzopen()\" for \"gzmode\" and \"buf_size\" descriptions.
+   Returns \"true\" if \"path\" is a valid filesystem path, \"false\"
+   otherwise.
 
 "),
 
-("GZip","GZip","gzdopen","gzdopen(s[, gzmode[, buf_size]])
+("Filesystem","Base","isreadable","isreadable(path) -> Bool
 
-   Create a \"GZipStream\" object from \"IOStream\" \"s\".
+   Returns \"true\" if the current user has permission to read
+   \"path\", \"false\" otherwise.
 
 "),
-
-("GZip","GZip","GZipStream","type GZipStream(name, gz_file[, buf_size[, fd[, s]]])
-
-   Subtype of \"IO\" which wraps a gzip stream.  Returned by
-   \"gzopen()\" and \"gzdopen()\".
 
-"),
+("Filesystem","Base","issetgid","issetgid(path) -> Bool
 
-("GZip","GZip","GZError","type GZError(err, err_str)
-
-   gzip error number and string.  Possible error values:
-
-   +-----------------------+------------------------------------------+
-   | \\\"Z_OK\\\"              | No error                                 |
-   +-----------------------+------------------------------------------+
-   | \\\"Z_ERRNO\\\"           | Filesystem error (consult \\\"errno()\\\")   |
-   +-----------------------+------------------------------------------+
-   | \\\"Z_STREAM_ERROR\\\"    | Inconsistent stream state                |
-   +-----------------------+------------------------------------------+
-   | \\\"Z_DATA_ERROR\\\"      | Compressed data error                    |
-   +-----------------------+------------------------------------------+
-   | \\\"Z_MEM_ERROR\\\"       | Out of memory                            |
-   +-----------------------+------------------------------------------+
-   | \\\"Z_BUF_ERROR\\\"       | Input buffer full/output buffer empty    |
-   +-----------------------+------------------------------------------+
-   | \\\"Z_VERSION_ERROR\\\"   | zlib library version is incompatible     |
-   +-----------------------+------------------------------------------+
+   Returns \"true\" if \"path\" has the setgid flag set, \"false\"
+   otherwise.
 
 "),
-
-
-("OptionsMod","OptionsMod","@options","@options([check_flag], assignments...)
-
-   Use the \"@options\" macro to set the value of optional parameters
-   for a function that has been written to use them (see
-   \"defaults()\" to learn how to write such functions).  The syntax
-   is:
 
-      opts = @options a=5 b=7
+("Filesystem","Base","issetuid","issetuid(path) -> Bool
 
-   For a function that uses optional parameters \"a\" and \"b\", this
-   will override the default settings for these parameters. You would
-   likely call that function in the following way:
+   Returns \"true\" if \"path\" has the setuid flag set, \"false\"
+   otherwise.
 
-      myfunc(requiredarg1, requiredarg2, ..., opts)
-
-   Most functions written to use optional arguments will probably
-   check to make sure that you are not supplying parameters that are
-   never used by the function or its sub-functions. Typically,
-   supplying unused parameters will result in an error. You can
-   control the behavior this way:
-
-      # throw an error if a or b is not used (the default)
-      opts = @options CheckError a=5 b=2
-      # issue a warning if a or b is not used
-      opts = @options CheckWarn a=5 b=2
-      # don't check whether a and b are used
-      opts = @options CheckNone a=5 b=2
-
-   As an alternative to the macro syntax, you can also say:
-
-      opts = Options(CheckWarn, :a, 5, :b, 2)
-
-   The check flag is optional.
-
 "),
-
-("OptionsMod","OptionsMod","@set_options","@set_options(opts, assigments...)
-
-   The \"@set_options\" macro lets you add new parameters to an
-   existing options structure.  For example:
 
-      @set_options opts d=99
+("Filesystem","Base","issocket","issocket(path) -> Bool
 
-   would add \"d\" to the set of parameters in \"opts\", or re-set its
-   value if it was already supplied.
+   Returns \"true\" if \"path\" is a socket, \"false\" otherwise.
 
 "),
 
-("OptionsMod","OptionsMod","@defaults","@defaults(opts, assignments...)
-
-   The \"@defaults\" macro is for writing functions that take optional
-   parameters.  The typical syntax of such functions is:
-
-      function myfunc(requiredarg1, requiredarg2, ..., opts::Options)
-          @defaults opts a=11 b=2a+1 c=a*b d=100
-          # The function body. Use a, b, c, and d just as you would
-          # any other variable. For example,
-          k = a + b
-          # You can pass opts down to subfunctions, which might supply
-          # additional defaults for other variables aa, bb, etc.
-          y = subfun(k, opts)
-          # Terminate your function with check_used, then return values
-          @check_used opts
-          return y
-      end
-
-   Note the function calls \"@check_used()\" at the end.
-
-   It is possible to have more than one Options parameter to a
-   function, for example:
-
-      function twinopts(x, plotopts::Options, calcopts::Options)
-          @defaults plotopts linewidth=1
-          @defaults calcopts n_iter=100
-          # Do stuff
-          @check_used plotopts
-          @check_used calcopts
-      end
-
-   Within a given scope, you should only have one call to
-   \"@defaults\" per options variable.
+("Filesystem","Base","issticky","issticky(path) -> Bool
 
-"),
-
-("OptionsMod","OptionsMod","@check_used","@check_used(opts)
-
-   The \"@check_used\" macro tests whether user-supplied parameters
-   were ever accessed by the \"@defaults()\" macro. The test is
-   performed at the end of the function body, so that subfunction
-   handling parameters not used by the parent function may be
-   \"credited\" for their usage. Each sub-function should also call
-   \"@check_used\", for example:
-
-      function complexfun(x, opts::Options)
-          @defaults opts parent=3 both=7
-          println(parent)
-          println(both)
-          subfun1(x, opts)
-          subfun2(x, opts)
-          @check_used opts
-      end
-
-      function subfun1(x, opts::Options)
-          @defaults opts sub1=\"sub1 default\" both=0
-          println(sub1)
-          println(both)
-          @check_used opts
-      end
-
-      function subfun2(x, opts::Options)
-          @defaults opts sub2=\"sub2 default\" both=22
-          println(sub2)
-          println(both)
-          @check_used opts
-      end
+   Returns \"true\" if \"path\" has the sticky bit set, \"false\"
+   otherwise.
 
 "),
-
-("OptionsMod","OptionsMod","Options","type Options(OptionsChecking, param1, val1, param2, val2, ...)
-
-   \"Options\" is the central type used for handling optional
-   arguments. Its fields are briefly described below.
-
-   key2index
-
-      A \"Dict\" that looks up an integer index, given the symbol for
-      a variable (e.g., \"key2index[:a]\" for the variable \"a\")
-
-   vals
-
-      \"vals[key2index[:a]]\" is the value to be assigned to the
-      variable \"a\"
 
-   used
+("Filesystem","Base","iswriteable","iswriteable(path) -> Bool
 
-      A vector of booleans, one per variable, with
-      \"used[key2index[:a]]\" representing the value for variable
-      \"a\". These all start as \"false\", but access by a
-      \"@defaults\" command sets the corresponding value to \"true\".
-      This marks the variable as having been used in the function.
+   Returns \"true\" if the current user has permission to write to
+   \"path\", \"false\" otherwise.
 
-   check_lock
-
-      A vector of booleans, one per variable. This is a \"lock\" that
-      prevents sub-functions from complaining that they did not access
-      variables that were intended for the parent function.
-      \"@defaults()\" sets the lock to true for any options variables
-      that have already been defined; new variables added through
-      \"@set_options()\" will start with their \"check_lock\" set to
-      \"false\", to be handled by a subfunction.
-
 "),
-
-("profile.jl","","@profile","@profile()
-
-   Profiling is controlled via the \"@profile\" macro. Your first step
-   is to determine which code you want to profile and encapsulate it
-   inside a \"@profile begin ... end\" block, like this:
-
-      @profile begin
-      function f1(x::Int)
-        z = 0
-        for j = 1:x
-          z += j^2
-        end
-        return z
-      end
-
-      function f1(x::Float64)
-        return x+2
-      end
-
-      function f1{T}(x::T)
-        return x+5
-      end
-
-      f2(x) = 2*x
-      end     # @profile begin
 
-   Now load the file and execute the code you want to profile, e.g.:
-
-      f1(215)
-      for i = 1:100
-        f1(3.5)
-      end
-      for i = 1:150
-        f1(uint8(7))
-      end
-      for i = 1:125
-        f2(11)
-      end
-
-   To view the execution times, type \"@profile report\".
-
-   Here are the various options you have for controlling profiling:
-
-   * \"@profile report\": display cumulative profiling results
-
-   * \"@profile clear\": clear all timings accumulated thus far (start
-     from zero)
-
-   * \"@profile off\": turn profiling off (there is no need to remove
-     \"@profile begin ... end\" blocks)
-
-   * \"@profile on\": turn profiling back on
-
-"),
 
 ("Punctuation","","punctuation","punctuation
 
@@ -7193,227 +5565,6 @@ eval_tab_col(glp_prob, k)
 ("Base.Sort","Base.Sort","select!","select!(v, k[, ord])
 
    Version of \"select\" which permutes the input vector in place.
-
-"),
-
-("Sound","Sound","wavread","wavread(io[, options])
-
-   Reads and returns the samples from a RIFF/WAVE file. The samples
-   are converted to floating point values in the range from -1.0 to
-   1.0 by default. The \"io\" argument accepts either an \"IO\" object
-   or a filename (\"String\"). The options are passed via an
-   \"Options\" object (see the \"OptionsMod\" module).
-
-   The available options, and the default values, are:
-
-   * \"format\" (default = \"double\"): changes the format of the
-     returned samples. The string \"double\" returns double precision
-     floating point values in the range -1.0 to 1.0. The string
-     \"native\" returns the values as encoded in the file. The string
-     \"size\" returns the number of samples in the file, rather than
-     the actual samples.
-
-   * \"subrange\" (default = \"Any\"): controls which samples are
-     returned. The default, \"Any\" returns all of the samples.
-     Passing a number (\"Real\"), \"N\", will return the first \"N\"
-     samples of each channel. Passing a range (\"Range1{Real}\"),
-     \"R\", will return the samples in that range of each channel.
-
-   The returned values are:
-
-   * \"y\": The acoustic samples; A matrix is returned for files that
-     contain multiple channels.
-
-   * \"Fs\": The sampling frequency
-
-   * \"nbits\": The number of bits used to encode each sample
-
-   * \"extra\": Any additional bytes used to encode the samples (is
-     always \"None\")
-
-   The following functions are also defined to make this function
-   compatible with MATLAB:
-
-      wavread(filename::String) = wavread(filename, @options)
-      wavread(filename::String, fmt::String) = wavread(filename, @options format=fmt)
-      wavread(filename::String, N::Int) = wavread(filename, @options subrange=N)
-      wavread(filename::String, N::Range1{Int}) = wavread(filename, @options subrange=N)
-      wavread(filename::String, N::Int, fmt::String) = wavread(filename, @options subrange=N format=fmt)
-      wavread(filename::String, N::Range1{Int}, fmt::String) = wavread(filename, @options subrange=N format=fmt)
-
-"),
-
-("Sound","Sound","wavwrite","wavwrite(samples, io[, options])
-
-      Writes samples to a RIFF/WAVE file io object. The \"io\"
-      argument accepts either an \"IO\" object or a filename
-      (\"String\"). The function assumes that the sample rate is 8 kHz
-      and uses 16 bits to encode each sample. Both of these values can
-      be changed with the options parameter. Each column of the data
-      represents a different channel. Stereo files should contain two
-      columns. The options are passed via an \"Options\" object (see
-      the \"OptionsMod\" module).
-
-      The available options, and the default values, are:
-
-   * \"sample_rate\" (default = \"8000\"): sampling frequency
-
-   * \"nbits\" (default = \"16\"): number of bits used to encode each
-     sample
-
-   * \"compression\" (default = \"WAVE_FORMAT_PCM\"): The desired
-     compression technique; accepted values are: WAVE_FORMAT_PCM,
-     WAVE_FORMAT_IEEE_FLOAT
-
-   The type of the input array, samples, also affects the generated
-   file. \"Native\" WAVE files are written when integers are passed
-   into wavwrite. This means that the literal values are written into
-   the file. The input ranges are as follows for integer samples.
-
-   +--------+-------------+------------------------+---------------+
-   | N Bits | y Data Type | y Data Range           | Output Format |
-   +========+=============+========================+===============+
-   | 8      | uint8       | 0 <= y <= 255          | uint8         |
-   +--------+-------------+------------------------+---------------+
-   | 16     | int16       | –32768 <= y <= +32767  | int16         |
-   +--------+-------------+------------------------+---------------+
-   | 24     | int32       | –2^23 <= y <= 2^23 – 1 | int32         |
-   +--------+-------------+------------------------+---------------+
-
-   If samples contains floating point values, the input data ranges
-   are the following.
-
-   +--------+------------------+-------------------+---------------+
-   | N Bits | y Data Type      | y Data Range      | Output Format |
-   +========+==================+===================+===============+
-   | 8      | single or double | –1.0 <= y < +1.0  | uint8         |
-   +--------+------------------+-------------------+---------------+
-   | 16     | single or double | –1.0 <= y < +1.0  | int16         |
-   +--------+------------------+-------------------+---------------+
-   | 24     | single or double | –1.0 <= y < +1.0  | int32         |
-   +--------+------------------+-------------------+---------------+
-   | 32     | single or double | –1.0 <= y <= +1.0 | single        |
-   +--------+------------------+-------------------+---------------+
-
-   The following functions are also defined to make this function
-   compatible with MATLAB:
-
-      wavwrite(y::Array) = wavwrite(y, @options)
-      wavwrite(y::Array, Fs::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs)
-      wavwrite(y::Array, Fs::Real, N::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs nbits=N)
-
-"),
-
-("TextWrap","TextWrap","wrap","wrap(string[, options])
-
-   Returns a string in which newlines are inserted as appropriate in
-   order for each line to fit within a specified width.
-
-   The options are passed via an \"Options\" object (provided by the
-   \"OptionsMod\" module). The available options, and their default
-   values, are:
-
-   * \"width\" (default = \"70\"): the maximum width of the wrapped
-     text, including indentation.
-
-   * \"initial_indent\" (default = \"\"\"\"): indentation of the first
-     line. This can be any string (shorter than \"width\"), or it can
-     be an integer number (lower than \"width\").
-
-   * \"subsequent_indent\" (default = \"\"\"\"): indentation of all
-     lines except the first. Works the same as \"initial_indent\".
-
-   * \"break_on_hyphens\" (default = \"true\"): this flag determines
-     whether words can be broken on hyphens, e.g. whether \"high-
-     precision\" can be split into \"high-\" and \"precision\".
-
-   * \"break_long_words\" (default = \"true\"): this flag determines
-     what to do when a word is too long to fit in any line. If
-     \"true\", the word will be broken, otherwise it will go beyond
-     the desired text width.
-
-   * \"replace_whitespace\" (default = \"true\"): if this flag is
-     true, all whitespace characters in the original text (including
-     newlines) will be replaced by spaces.
-
-   * \"expand_tabs\" (default = \"true\"): if this flag is true, tabs
-     will be expanded in-place into spaces. The expansion happens
-     before whitespace replacement.
-
-   * \"fix_sentence_endings\" (default = \"false\"): if this flag is
-     true, the wrapper will try to recognize sentence endings in the
-     middle of a paragraph and put two spaces before the next sentence
-     in case only one is present.
-
-"),
-
-("TextWrap","TextWrap","println_wrapped","print_wrapped(text...[, options])
-print_wrapped(io, text...[, options])
-println_wrapped(text...[, options])
-println_wrapped(io, text...[, options])
-
-   These are just like the standard \"print()\" and \"println()\"
-   functions (they print multiple arguments and accept an optional
-   \"IO\" first argument), except that they wrap the result, and
-   accept an optional last argument with the options to pass to
-   \"wrap()\".
-
-"),
-
-("Zlib","Zlib","compress_bound","compress_bound(input_size)
-
-   Returns the maximum size of the compressed output buffer for a
-   given uncompressed input size.
-
-"),
-
-("Zlib","Zlib","compress","compress(source[, level])
-
-   Compresses source using the given compression level, and returns
-   the compressed buffer (\"Array{Uint8,1}\").  \"level\" is an
-   integer between 0 and 9, or one of \"Z_NO_COMPRESSION\",
-   \"Z_BEST_SPEED\", \"Z_BEST_COMPRESSION\", or
-   \"Z_DEFAULT_COMPRESSION\".  It defaults to
-   \"Z_DEFAULT_COMPRESSION\".
-
-   If an error occurs, \"compress\" throws a \"ZError\" with more
-   information about the error.
-
-"),
-
-("Zlib","Zlib","compress_to_buffer","compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
-
-   Compresses the source buffer into the destination buffer, and
-   returns the number of bytes written into dest.
-
-   If an error occurs, \"uncompress\" throws a \"ZError\" with more
-   information about the error.
-
-"),
-
-("Zlib","Zlib","uncompress","uncompress(source[, uncompressed_size])
-
-   Allocates a buffer of size \"uncompressed_size\", uncompresses
-   source to this buffer using the given compression level, and
-   returns the compressed buffer.  If \"uncompressed_size\" is not
-   given, the size of the output buffer is estimated as
-   \"2*length(source)\".  If the uncompressed_size is larger than
-   uncompressed_size, the allocated buffer is grown and the
-   uncompression is retried.
-
-   If an error occurs, \"uncompress\" throws a \"ZError\" with more
-   information about the error.
-
-"),
-
-("Zlib","Zlib","uncompress_to_buffer","uncompress_to_buffer(source, dest)
-
-   Uncompresses the source buffer into the destination buffer. Returns
-   the number of bytes written into dest.  An error is thrown if the
-   destination buffer does not have enough space.
-
-   If an error occurs, \"uncompress_to_buffer\" throws a \"ZError\"
-   with more information about the error.
 
 "),
 

@@ -65,13 +65,13 @@ isblockdev(mode::Unsigned) = mode & 0xf000 == 0x6000
 
 # mode permission predicates
 
-issetuid(mode::Unsigned) = (mode & 0x800) > 0
-issetgid(mode::Unsigned) = (mode & 0x400) > 0
-issticky(mode::Unsigned) = (mode & 0x200) > 0
+issetuid(mode::Unsigned) = (mode & 0o4000) > 0
+issetgid(mode::Unsigned) = (mode & 0o2000) > 0
+issticky(mode::Unsigned) = (mode & 0o1000) > 0
 
-  isreadable(mode::Unsigned) = (mode & 0x124) > 0
- iswriteable(mode::Unsigned) = (mode & 0x092) > 0
-isexecutable(mode::Unsigned) = (mode & 0x049) > 0
+  isreadable(mode::Unsigned) = (mode & 0o444) > 0
+ iswriteable(mode::Unsigned) = (mode & 0o222) > 0
+isexecutable(mode::Unsigned) = (mode & 0o111) > 0
 
 uperm(mode::Unsigned) = uint8(mode >> 6) & 0x7
 gperm(mode::Unsigned) = uint8(mode >> 3) & 0x7

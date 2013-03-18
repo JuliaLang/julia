@@ -227,6 +227,10 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    Note that ``zip`` is it's own inverse: ``[zip(zip(a...)...)...] == [a...]``.
 
+.. function:: enumerate(iter)
+
+   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1,
+   and ``x`` is the ``ith`` value from the given iterator.
 
 Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
 
@@ -403,10 +407,6 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Delete the mapping for the given key in a collection.
 
-.. function:: empty!(collection)
-
-   Delete all keys from a collection.
-
 .. function:: keys(collection)
 
    Return an array of all keys in a collection.
@@ -566,10 +566,6 @@ Strings
 
    The number of characters in string ``s``.
 
-.. function:: collect(string)
-
-   Return an array of the characters in ``string``.
-
 .. function:: *(s, t)
 
    Concatenate strings.
@@ -582,13 +578,9 @@ Strings
 
    **Example**: ``"Julia "^3 == "Julia Julia Julia "``
 
-.. function:: string(char...)
+.. function:: string(xs...)
 
-   Create a string with the given characters.
-
-.. function:: string(x)
-
-   Create a string from any value using the ``print`` function.
+   Create a string from any values using the ``print`` function.
 
 .. function:: repr(x)
 
@@ -630,10 +622,6 @@ Strings
 
    Returns true if the given char or integer is a valid Unicode code point.
 
-.. function:: search(string, char, [i])
-
-   Return the index of ``char`` in ``string``, giving 0 if not found. The second argument may also be a vector or a set of characters. The third argument optionally specifies a starting index.
-
 .. function:: ismatch(r::Regex, s::String)
 
    Test whether a string contains a match of the given regular expression.
@@ -648,15 +636,11 @@ Strings
 
 .. function:: search(string, chars, [start])
 
-   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
+   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
 
 .. function:: replace(string, pat, r[, n])
 
-   Search for the given pattern ``pat``, and replace each occurance with ``r``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
-
-.. function:: replace(string, pat, f[, n])
-
-   Search for the given pattern ``pat``, and replace each occurance with ``f(pat)``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression.
+   Search for the given pattern ``pat``, and replace each occurance with ``r``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring.
 
 .. function:: split(string, [chars, [limit,] [include_empty]])
 
@@ -829,10 +813,6 @@ I/O
    ==== =================================
 
 
-.. function:: open(file_name) -> IOStream
-
-   Open a file in read mode.
-
 .. function:: open(f::function, args...)
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
@@ -843,8 +823,7 @@ I/O
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
-.. function:: fdio(fd::Integer, [own::Bool]) -> IOStream
-              fdio(name::String, fd::Integer, [own::Bool]]) -> IOStream
+.. function:: fdio([name::String, ]fd::Integer[, own::Bool]) -> IOStream
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected. ``name`` allows you to associate the descriptor with a named file.
 
@@ -935,7 +914,7 @@ Text I/O
 
    Read all lines as an array.
 
-.. function:: each_line(stream)
+.. function:: eachline(stream)
 
    Create an iterable object that will yield each line from a stream.
 
@@ -1113,6 +1092,30 @@ Mathematical Functions
 .. function:: >=(x, y)
 
    Greater-than-or-equals comparison operator.
+
+.. function:: .==(x, y)
+
+   Element-wise equality comparison operator.
+
+.. function:: .!=(x, y)
+
+   Element-wise not-equals comparison operator.
+
+.. function:: .<(x, y)
+
+   Element-wise less-than comparison operator.
+
+.. function:: .<=(x, y)
+
+   Element-wise less-than-or-equals comparison operator.
+
+.. function:: .>(x, y)
+
+   Element-wise greater-than comparison operator.
+
+.. function:: .>=(x, y)
+
+   Element-wise greater-than-or-equals comparison operator.
 
 .. function:: cmp(x,y)
 
@@ -1566,13 +1569,19 @@ Mathematical Functions
 
    Compute the digamma function of ``x`` (the logarithmic derivative of ``gamma(x)``)
 
-.. function:: airy(x)
-              airyai(x)
+.. function:: airy(k,x)
+
+   kth derivative of the Airy function :math:`\operatorname{Ai}(x)`.
+
+.. function:: airyai(x)
 
    Airy function :math:`\operatorname{Ai}(x)`.
 
 .. function:: airyprime(x)
-              airyaiprime(x)
+
+   Airy function derivative :math:`\operatorname{Ai}'(x)`.
+
+.. function:: airyaiprime(x)
 
    Airy function derivative :math:`\operatorname{Ai}'(x)`.
 
@@ -1992,7 +2001,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
 .. function:: rand()
 
-   Generate a ``Float64`` random number in (0,1)
+   Generate a ``Float64`` random number uniformly in [0,1)
 
 .. function:: rand!([rng], A)
 
@@ -2002,7 +2011,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
    Generate a random ``Float64`` number or array of the size specified by dims, using the specified RNG object. Currently, ``MersenneTwister`` is the only available Random Number Generator (RNG), which may be seeded using srand.
 
-.. function:: rand(dims...)
+.. function:: rand(dims or [dims...])
 
    Generate a random ``Float64`` array of the size specified by dims
 
@@ -2012,7 +2021,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
 .. function:: rand(r, [dims...])
 
-   Generate a random integer from ``1``:``n`` inclusive. Optionally, generate a random integer array.
+   Generate a random integer from the inclusive interval specified by ``Range1 r`` (for example, ``1:n``). Optionally, generate a random integer array.
 
 .. function:: randbool([dims...])
 
@@ -2022,7 +2031,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
    Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.   
 
-.. function:: randn([dims...])
+.. function:: randn(dims or [dims...])
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
 
@@ -2050,7 +2059,7 @@ Basic functions
 
 .. function:: nnz(A)
 
-   Counts the number of nonzero values in A
+   Counts the number of nonzero values in array A (dense or sparse)
 
 .. function:: scale!(A, k)
 
@@ -2075,9 +2084,9 @@ Constructors
 
    Construct an uninitialized dense array. ``dims`` may be a tuple or a series of integer arguments.
 
-.. function:: getindex(type)
+.. function:: getindex(type[, elements...])
 
-   Construct an empty 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
+   Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
 
 .. function:: cell(dims)
 
@@ -2110,10 +2119,6 @@ Constructors
 
    Create an array with the same data as the given array, but with different dimensions. An implementation for a particular type of array may choose whether the data is copied or shared.
 
-.. function:: copy(A)
-
-   Create a copy of ``A``
-
 .. function:: similar(array, element_type, dims)
 
    Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments.
@@ -2121,18 +2126,6 @@ Constructors
 .. function:: reinterpret(type, A)
 
    Construct an array with the same binary data as the given array, but with the specified element type
-
-.. function:: rand(dims)
-
-   Create a random array with Float64 random values in (0,1)
-
-.. function:: randf(dims)
-
-   Create a random array with Float32 random values in (0,1)
-
-.. function:: randn(dims)
-
-   Create a random array with Float64 normally-distributed random values with a mean of 0 and standard deviation of 1
 
 .. function:: eye(n)
 
@@ -2164,7 +2157,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: getindex(A, ind)
 
-   Returns a subset of ``A`` as specified by ``ind``, which may be an ``Int``, a ``Range``, or a ``Vector``.
+   Returns a subset of array ``A`` as specified by ``ind``, which may be an ``Int``, a ``Range``, or a ``Vector``.
 
 .. function:: sub(A, ind)
 
@@ -2176,7 +2169,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: setindex!(A, X, ind)
 
-   Store an input array ``X`` within some subset of ``A`` as specified by ``ind``.
+   Store values from array ``X`` within some subset of ``A`` as specified by ``ind``.
 
 .. function:: cat(dim, A...)
 
@@ -2190,9 +2183,12 @@ Indexing, Assignment, and Concatenation
 
    Concatenate along dimension 2
 
-.. function:: hvcat
+.. function:: hvcat(rows::(Int...), values...)
 
-   Horizontal and vertical concatenation in one call
+   Horizontal and vertical concatenation in one call. This function is called for
+   block matrix syntax. The first argument specifies the number of arguments to
+   concatenate in each block row.
+   For example, ``[a b;c d e]`` calls ``hvcat((2,3),a,b,c,d,e)``.
 
 .. function:: flipdim(A, d)
 
@@ -2319,10 +2315,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: issparse(S)
 
    Returns ``true`` if ``S`` is sparse, and ``false`` otherwise.
-
-.. function:: nnz(S)
-
-   Return the number of nonzeros in ``S``.
 
 .. function:: sparse(A)
 
@@ -2775,7 +2767,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    Same as :func:`fft`, but operates in-place on ``A``,
    which must be an array of complex floating-point numbers.
 
-.. function:: ifft(A [, dims]), bfft, bfft!
+.. function:: ifft(A [, dims])
 
    Multidimensional inverse FFT.
 
@@ -2804,7 +2796,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Same as :func:`bfft`, but operates in-place on ``A``.
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]]),  plan_ifft, plan_bfft
+.. function:: plan_fft(A [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
@@ -2825,6 +2817,16 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    complex floating-point numbers).  :func:`plan_ifft` and so on
    are similar but produce plans that perform the equivalent of
    the inverse transforms :func:`ifft` and so on.
+
+.. function:: plan_ifft(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
+   :func:`ifft`.
+
+.. function:: plan_bfft(A [, dims [, flags [, timelimit]]])
+
+   Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
+   backwards transform :func:`bfft`.
 
 .. function:: plan_fft!(A [, dims [, flags [, timelimit]]])
 
@@ -2877,7 +2879,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
-.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]]), plan_bfft
+.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
@@ -2934,7 +2936,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Same as :func:`plan_idct`, but operates in-place on ``A``.
 
-.. function:: FFTW.r2r(A, kind [, dims]), FFTW.r2r!
+.. function:: FFTW.r2r(A, kind [, dims])
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
@@ -2957,15 +2959,21 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    See also :func:`FFTW.plan_r2r` to pre-plan optimized r2r transforms.
 
+.. function:: FFTW.r2r!(A, kind [, dims])
+
    :func:`FFTW.r2r!` is the same as :func:`FFTW.r2r`, but operates
    in-place on ``A``, which must be an array of real or complex 
    floating-point numbers.
 
-.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]]), FFTW.plan_r2r!
+.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized r2r transform, similar to :func:`plan_fft`
    except that the transforms (and the first three arguments)
    correspond to :func:`FFTW.r2r` and :func:`FFTW.r2r!`, respectively.
+
+.. function:: FFTW.plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+
+   Similar to :func:`plan_fft`, but corresponds to :func:`FFTW.r2r!`.
 
 .. function:: fftshift(x)
 
@@ -3108,6 +3116,10 @@ System
 
    Run a command object, constructed with backticks. Throws an error if anything goes wrong, including the process exiting with a non-zero status.
 
+.. function:: spawn(command)
+
+   Run a command object asynchronously, returning the resulting ``Process`` object.
+
 .. function:: success(command)
 
    Run a command object, constructed with backticks, and tell whether it was successful (exited with a code of 0).
@@ -3124,11 +3136,23 @@ System
 
    Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the output stream and input stream of the process, and the process object itself.
 
-.. function:: > < >> .>
+.. function:: >
 
-   ``>`` ``<`` and ``>>`` work exactly as in bash, and ``.>`` redirects STDERR.
+   Redirect standard output of a process.
 
-   **Example**: ``run((`ls` > "out.log") .> "err.log")``
+   **Example**: ``run(`ls` > "out.log")``
+
+.. function:: <
+
+   Redirect standard input of a process.
+
+.. function:: >>
+
+   Redirect standard output of a process, appending to the destination file.
+
+.. function:: .>
+
+   Redirect the standard error stream of a process.
 
 .. function:: gethostname() -> String
 
@@ -3194,8 +3218,7 @@ System
 C Interface
 -----------
 
-.. function:: ccall( (symbol, library), RetType, (ArgType1, ...), ArgVar1, ...)
-              ccall( fptr::Ptr{Void}, RetType, (ArgType1, ...), ArgVar1, ...)
+.. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
    Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively, ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
 
@@ -3243,12 +3266,26 @@ C Interface
 
    Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
 
+.. function:: pointer(a[, index])
+
+   Get the native address of an array element. Be careful to ensure that a julia
+   reference to ``a`` exists as long as this pointer will be used.
+
+.. function:: pointer(type, int)
+
+   Convert an integer to a pointer of the specified element type.
+
+.. function:: pointer_to_array(p, dims[, own])
+
+   Wrap a native pointer as a Julia Array object. The pointer element type determines
+   the array element type. ``own`` optionally specifies whether Julia should take
+   ownership of the memory, calling ``free`` on the pointer when the array is no
+   longer referenced.
 
 Errors
 ------
 
 .. function:: error(message::String)
-              error(Exception)
 
    Raise an error with the given message
 
