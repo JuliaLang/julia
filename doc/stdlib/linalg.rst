@@ -73,7 +73,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qrpfact(A) -> QRPivotedDense
 
-   Compute the QR factorization of ``A`` with pivoting and return a ``QRDensePivoted`` object. The coomponents of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]``, the triangular matrix ``R`` with ``F[:R]``, and the permutation with ``F[:P]`` or ``F[:p]``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRDenseQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``.
+   Compute the QR factorization of ``A`` with pivoting and return a ``QRDensePivoted`` object. The components of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]``, the triangular matrix ``R`` with ``F[:R]``, and the permutation with ``F[:P]`` or ``F[:p]``. The following functions are available for ``QRDensePivoted`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRDenseQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. A ``QRDenseQ`` matrix can be converted into a regular matrix with ``full``.
 
 .. function:: qrpfact!(A) -> QRPivotedDense
 
@@ -90,6 +90,22 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigvals(A)
 
    Returns the eigenvalues of ``A``.
+
+.. function:: eigfact(A)
+
+   Compute the eigenvalue decomposition of ``A`` and return an ``EigenDense`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``EigenDense`` objects: ``chol``, ``det``.
+
+.. function:: eigfact!(A)
+
+   ``eigfact!`` is the same as ``eigfact`` but saves space by overwriting the input A, instead of creating a copy.
+
+.. function:: hessfact(A)
+
+   Compute the Hessenberg decomposition of ``A`` and return a ``HessenbergDense`` object. If ``F`` is the factorization object, the unitary matrix can be accessed with ``F[:Q]`` and the Hessenberg matrix with ``F[:H]``. When ``Q`` is extracted, the resulting type is the ``HessenbergDenseQ`` object, and may be converted to a regular matrix with ``full``.
+
+.. function:: hessfact!(A)
+
+   ``hessfact!`` is the same as ``hessfact`` but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: svdfact(A, [thin]) -> SVDDense
 
