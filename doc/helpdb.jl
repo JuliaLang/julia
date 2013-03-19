@@ -2587,12 +2587,12 @@
 
 "),
 
-("Data Formats","Base","base","base(b, n[, pad])
+("Data Formats","Base","base","base(base, n[, pad])
 
    Convert an integer to a string in the given base, optionally
-   specifying a number of digits to pad to. The base \"b\" can be
-   specified as either an integer, or as a \"Uint8\" array of
-   character values to use as digit symbols.
+   specifying a number of digits to pad to. The base can be specified
+   as either an integer, or as a \"Uint8\" array of character values
+   to use as digit symbols.
 
 "),
 

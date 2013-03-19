@@ -287,9 +287,9 @@ function _base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
     ASCIIString(a)
 end
 
-base(b::Integer     , x::Integer, pad::Integer) = _base(dig_syms,int(b),unsigned(abs(x)),pad,x<0)
-base(s::Array{Uint8}, x::Integer, pad::Integer) = _base(s,length(s),unsigned(abs(x)),pad,x<0)
-base(b::Union(Integer,Array{Uint8}), x::Integer) = base(b, x, 1)
+base(base::Integer, n::Integer, pad::Integer) = _base(dig_syms,int(base),unsigned(abs(n)),pad,n<0)
+base(symbols::Array{Uint8}, n::Integer, p::Integer) = _base(symbols,length(symbols),unsigned(abs(n)),p,n<0)
+base(base_or_symbols::Union(Integer,Array{Uint8}), n::Integer) = base(base_or_symbols, n, 1)
 
 
 for sym in (:bin, :oct, :dec, :hex)
