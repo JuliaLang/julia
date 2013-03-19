@@ -117,6 +117,9 @@ copy(M::Tridiagonal) = Tridiagonal(M.dl, M.d, M.du)
 round(M::Tridiagonal) = Tridiagonal(round(M.dl), round(M.d), round(M.du))
 iround(M::Tridiagonal) = Tridiagonal(iround(M.dl), iround(M.d), iround(M.du))
 
+import Base.ctranspose
+ctranspose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
+
 ## Solvers
 
 #### Tridiagonal matrix routines ####
