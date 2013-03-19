@@ -472,7 +472,7 @@ function dumptype(io::IO, x, n::Int, indent)
                                 " = ", t)
                     end
                 elseif isa(t, UnionType)
-                    if any(map(tt -> string(x.name) == typargs(tt), t.types))
+                    if any(tt -> string(x.name) == typargs(tt), t.types)
                         println(io, indent, "  ", s, " = ", t)
                     end
                 elseif isa(t, Type) && super(t).name == x.name
@@ -491,8 +491,8 @@ end
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-xdump(fn::Function, io::IO, x::DataType) = dumptype(io, x, 5, "")
-xdump(fn::Function, io::IO, x::DataType, n::Int) = dumptype(io, x, n, "")
+xdump(fn::Function, io::IO, x::DataType) = x.abstract ? dumptype(io, x, 5, "") : xdump(fn, io, x, 5, "")
+xdump(fn::Function, io::IO, x::DataType, n::Int) = x.abstract ? dumptype(io, x, n, "") : xdump(fn, io, x, n, "")
 
 # defaults:
 xdump(fn::Function, io::IO, x) = xdump(xdump, io, x, 5, "")  # default is 5 levels
@@ -526,9 +526,9 @@ function dump(io::IO, x::Dict, n::Int, indent)
 end
 
 # More generic representation for common types:
-dump(io::IO, x::DataType, n::Int, indent) = println(io, x.name)
-dump(io::IO, x::DataType) = dumptype(io, x, 5, "")
-dump(io::IO, x::DataType, n::Int) = dumptype(io, x, n, "")
+dump(io::IO, x::DataType, n::Int, indent) = x.abstract ? dumptype(io,x,n,indent) : println(io, x.name)
+dump(io::IO, x::DataType, n::Int) = dump(io, x, n, "")
+dump(io::IO, x::DataType) = dump(io, x, 5, "")
 dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
