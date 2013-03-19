@@ -25,7 +25,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: lu(A) -> L, U, P
 
-   Compute the LU factorization of ``A``, such that ``A[P,:] = L*U``.
+   Compute the LU factorization of ``A``, such that ``P*A = L*U``.
 
 .. function:: lufact(A) -> LUDense
 
@@ -73,7 +73,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qrp(A) -> Q, R, P
 
-   Compute the QR factorization of ``A`` with pivoting, such that ``A*I[:,P] = Q*R``, where ``I`` is the identity matrix. Also see ``qrpfact``.
+   Compute the QR factorization of ``A`` with pivoting, such that ``A*P = Q*R``, Also see ``qrpfact``.
 
 .. function:: qrpfact(A) -> QRPivotedDense
 
@@ -97,7 +97,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eigfact(A)
 
-   Compute the eigenvalue decomposition of ``A`` and return an ``EigenDense`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``EigenDense`` objects: ``chol``, ``det``.
+   Compute the eigenvalue decomposition of ``A`` and return an ``EigenDense`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``EigenDense`` objects: ``inv``, ``det``.
 
 .. function:: eigfact!(A)
 
@@ -113,7 +113,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svdfact(A, [thin]) -> SVDDense
 
-   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVDDense`` object. ``U``, ``S``, and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``, ``F[:S]``, and ``F[:V]``, such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
+   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVDDense`` object. ``U``, ``S``, ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``, ``F[:S]``, ``F[:V]`` and ``F[:Vt]``, such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned. The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``.
 
 .. function:: svdfact!(A, [thin]) -> SVDDense
 
@@ -122,10 +122,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svd(A, [thin]) -> U, S, V
 
    Compute the SVD of A, returning ``U``, vector ``S``, and ``V`` such that ``A == U*diagm(S)*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned.
-
-.. function:: svdt(A, [thin]) -> U, S, Vt
-
-   Compute the SVD of A, returning ``U``, vector ``S``, and ``Vt`` such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned.
 
 .. function:: svdvals(A)
 
