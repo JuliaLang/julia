@@ -46,9 +46,11 @@ size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
 size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<2 ? length(m.dv) : 1)
 
 eig(m::SymTridiagonal) = LAPACK.stegr!('V', copy(m.dv), copy(m.ev))
-eigvals(m::SymTridiagonal, il::Int, ih::Int) = LAPACK.stebz!('I', 'E', 0.0, 0.0, il, iu, -1.0, copy(m.dv), copy(m.ev))[1]
-eigvals(m::SymTridiagonal, vl::Int, iv::Int) = LAPACK.stebz!('V', 'E', vl, vh, 0, 0, -1.0, copy(m.dv), copy(m.ev))[1]
-eigvals(m::SymTridiagonal) = eigvals(m, 1, size(m, 1))
+
+#Wrap LAPACK DSTEBZ to compute eigenvalues
+eigvals(m::SymTridiagonal, il::Int, iu::Int) = LAPACK.stebz!('I', 'E', 0.0, 0.0, il, iu, -1.0, copy(m.dv), copy(m.ev))[1]
+eigvals(m::SymTridiagonal, vl::Float64, vu::Float64) = LAPACK.stebz!('V', 'E', vl, vu, 0, 0, -1.0, copy(m.dv), copy(m.ev))[1]
+eigvals(m::SymTridiagonal) = LAPACK.stebz!('A', 'E', 0.0, 0.0, 0, 0, -1.0, copy(m.dv), copy(m.ev))[1]
 
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
