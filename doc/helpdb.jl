@@ -2590,7 +2590,9 @@
 ("Data Formats","Base","base","base(b, n[, pad])
 
    Convert an integer to a string in the given base, optionally
-   specifying a number of digits to pad to.
+   specifying a number of digits to pad to. The base \"b\" can be
+   specified as either an integer, or as a \"Uint8\" array of
+   character values to use as digit symbols.
 
 "),
 
@@ -3527,555 +3529,6 @@
 
    Returns the sum of all array elements, using the Kahan-Babuska-
    Neumaier compensated summation algorithm for additional accuracy.
-
-"),
-
-("Sparse Matrices","Base","sparse","sparse(I, J, V[, m, n, combine])
-
-   Create a sparse matrix \"S\" of dimensions \"m x n\" such that
-   \"S[I[k], J[k]] = V[k]\". The \"combine\" function is used to
-   combine duplicates. If \"m\" and \"n\" are not specified, they are
-   set to \"max(I)\" and \"max(J)\" respectively. If the \"combine\"
-   function is not supplied, duplicates are added by default.
-
-"),
-
-("Sparse Matrices","Base","sparsevec","sparsevec(I, V[, m, combine])
-
-   Create a sparse matrix \"S\" of size \"m x 1\" such that \"S[I[k]]
-   = V[k]\". Duplicates are combined using the \"combine\" function,
-   which defaults to *+* if it is not provided. In julia, sparse
-   vectors are really just sparse matrices with one column. Given
-   Julia's Compressed Sparse Columns (CSC) storage format, a sparse
-   column matrix with one column is sparse, whereas a sparse row
-   matrix with one row ends up being dense.
-
-"),
-
-("Sparse Matrices","Base","sparsevec","sparsevec(D::Dict[, m])
-
-   Create a sparse matrix of size \"m x 1\" where the row values are
-   keys from the dictionary, and the nonzero values are the values
-   from the dictionary.
-
-"),
-
-("Sparse Matrices","Base","issparse","issparse(S)
-
-   Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
-
-"),
-
-("Sparse Matrices","Base","sparse","sparse(A)
-
-   Convert a dense matrix \"A\" into a sparse matrix.
-
-"),
-
-("Sparse Matrices","Base","sparsevec","sparsevec(A)
-
-   Convert a dense vector \"A\" into a sparse matrix of size \"m x
-   1\". In julia, sparse vectors are really just sparse matrices with
-   one column.
-
-"),
-
-("Sparse Matrices","Base","dense","dense(S)
-
-   Convert a sparse matrix \"S\" into a dense matrix.
-
-"),
-
-("Sparse Matrices","Base","full","full(S)
-
-   Convert a sparse matrix \"S\" into a dense matrix.
-
-"),
-
-("Sparse Matrices","Base","spzeros","spzeros(m, n)
-
-   Create an empty sparse matrix of size \"m x n\".
-
-"),
-
-("Sparse Matrices","Base","speye","speye(type, m[, n])
-
-   Create a sparse identity matrix of specified type of size \"m x
-   m\". In case \"n\" is supplied, create a sparse identity matrix of
-   size \"m x n\".
-
-"),
-
-("Sparse Matrices","Base","spones","spones(S)
-
-   Create a sparse matrix with the same structure as that of \"S\",
-   but with every nonzero element having the value \"1.0\".
-
-"),
-
-("Sparse Matrices","Base","sprand","sprand(m, n, density[, rng])
-
-   Create a random sparse matrix with the specified density. Nonzeros
-   are sampled from the distribution specified by \"rng\". The uniform
-   distribution is used in case \"rng\" is not specified.
-
-"),
-
-("Sparse Matrices","Base","sprandn","sprandn(m, n, density)
-
-   Create a random sparse matrix of specified density with nonzeros
-   sampled from the normal distribution.
-
-"),
-
-("Sparse Matrices","Base","sprandbool","sprandbool(m, n, density)
-
-   Create a random sparse boolean matrix with the specified density.
-
-"),
-
-("Linear Algebra","Base","*","*(A, B)
-
-   Matrix multiplication
-
-"),
-
-("Linear Algebra","Base","\\","\\(A, B)
-
-   Matrix division using a polyalgorithm. For input matrices \"A\" and
-   \"B\", the result \"X\" is such that \"A*X == B\". For rectangular
-   \"A\", QR factorization is used. For triangular \"A\", a triangular
-   solve is performed. For square \"A\", Cholesky factorization is
-   tried if the input is symmetric with a heavy diagonal. LU
-   factorization is used in case Cholesky factorization fails or for
-   general square inputs. If \"size(A,1) > size(A,2)\", the result is
-   a least squares solution of \"A*X+eps=B\" using the singular value
-   decomposition. \"A\" does not need to have full rank.
-
-"),
-
-("Linear Algebra","Base","dot","dot(x, y)
-
-   Compute the dot product
-
-"),
-
-("Linear Algebra","Base","cross","cross(x, y)
-
-   Compute the cross product of two 3-vectors
-
-"),
-
-("Linear Algebra","Base","norm","norm(a)
-
-   Compute the norm of a \"Vector\" or a \"Matrix\"
-
-"),
-
-("Linear Algebra","Base","factors","factors(F)
-
-   Return the factors of a factorization \"F\". For example, in the
-   case of an LU decomposition, factors(LU) -> L, U, P
-
-"),
-
-("Linear Algebra","Base","lu","lu(A) -> L, U, P
-
-   Compute the LU factorization of \"A\", such that \"A[P,:] = L*U\".
-
-"),
-
-("Linear Algebra","Base","lufact","lufact(A) -> LUDense
-
-   Compute the LU factorization of \"A\" and return a \"LUDense\"
-   object. \"factors(lufact(A))\" returns the triangular matrices
-   containing the factorization. The following functions are available
-   for \"LUDense\" objects: \"size\", \"factors\", \"\\\", \"inv\",
-   \"det\".
-
-"),
-
-("Linear Algebra","Base","lufact!","lufact!(A) -> LUDense
-
-   \"lufact!\" is the same as \"lufact\" but saves space by
-   overwriting the input A, instead of creating a copy.
-
-"),
-
-("Linear Algebra","Base","chol","chol(A[, LU]) -> F
-
-   Compute Cholesky factorization of a symmetric positive-definite
-   matrix \"A\" and return the matrix \"F\". If \"LU\" is \"L\"
-   (Lower), \"A = L*L'\". If \"LU\" is \"U\" (Upper), \"A = R'*R\".
-
-"),
-
-("Linear Algebra","Base","cholfact","cholfact(A[, LU]) -> CholeskyDense
-
-   Compute the Cholesky factorization of a symmetric positive-definite
-   matrix \"A\" and return a \"CholeskyDense\" object. \"LU\" may be
-   'L' for using the lower part or 'U' for the upper part. The default
-   is to use 'U'. \"factors(cholfact(A))\" returns the triangular
-   matrix containing the factorization. The following functions are
-   available for \"CholeskyDense\" objects: \"size\", \"factors\",
-   \"\\\", \"inv\", \"det\". A \"LAPACK.PosDefException\" error is
-   thrown in case the matrix is not positive definite.
-
-"),
-
-("Linear Algebra","Base","cholpfact","cholpfact(A[, LU]) -> CholeskyPivotedDense
-
-   Compute the pivoted Cholesky factorization of a symmetric positive
-   semi-definite matrix \"A\" and return a \"CholeskyDensePivoted\"
-   object. \"LU\" may be 'L' for using the lower part or 'U' for the
-   upper part. The default is to use 'U'. \"factors(cholpfact(A))\"
-   returns the triangular matrix containing the factorization. The
-   following functions are available for \"CholeskyDensePivoted\"
-   objects: \"size\", \"factors\", \"\\\", \"inv\", \"det\". A
-   \"LAPACK.RankDeficientException\" error is thrown in case the
-   matrix is rank deficient.
-
-"),
-
-("Linear Algebra","Base","cholpfact!","cholpfact!(A[, LU]) -> CholeskyPivotedDense
-
-   \"cholpfact!\" is the same as \"cholpfact\" but saves space by
-   overwriting the input A, instead of creating a copy.
-
-"),
-
-("Linear Algebra","Base","qr","qr(A) -> Q, R
-
-   Compute the QR factorization of \"A\" such that \"A = Q*R\". Also
-   see \"qrd\".
-
-"),
-
-("Linear Algebra","Base","qrfact","qrfact(A)
-
-   Compute the QR factorization of \"A\" and return a \"QRDense\"
-   object. \"factors(qrfact(A))\" returns \"Q\" and \"R\". The
-   following functions are available for \"QRDense\" objects:
-   \"size\", \"factors\", \"qmulQR\", \"qTmulQR\", \"\\\".
-
-"),
-
-("Linear Algebra","Base","qrfact!","qrfact!(A)
-
-   \"qrfact!\" is the same as \"qrfact\" but saves space by
-   overwriting the input A, instead of creating a copy.
-
-"),
-
-("Linear Algebra","Base","qrp","qrp(A) -> Q, R, P
-
-   Compute the QR factorization of \"A\" with pivoting, such that
-   \"A*I[:,P] = Q*R\", where \"I\" is the identity matrix. Also see
-   \"qrpfact\".
-
-"),
-
-("Linear Algebra","Base","qrpfact","qrpfact(A) -> QRPivotedDense
-
-   Compute the QR factorization of \"A\" with pivoting and return a
-   \"QRDensePivoted\" object. \"factors(qrpfact(A))\" returns \"Q\"
-   and \"R\". The following functions are available for
-   \"QRDensePivoted\" objects: \"size\", \"factors\", \"qmulQR\",
-   \"qTmulQR\", \"\\\".
-
-"),
-
-("Linear Algebra","Base","qrpfact!","qrpfact!(A) -> QRPivotedDense
-
-   \"qrpfact!\" is the same as \"qrpfact\" but saves space by
-   overwriting the input A, instead of creating a copy.
-
-"),
-
-("Linear Algebra","Base","qmulQR","qmulQR(QR, A)
-
-   Perform \"Q*A\" efficiently, where Q is a an orthogonal matrix
-   defined as the product of k elementary reflectors from the QR
-   decomposition.
-
-"),
-
-("Linear Algebra","Base","qTmulQR","qTmulQR(QR, A)
-
-   Perform \"Q'*A\" efficiently, where Q is a an orthogonal matrix
-   defined as the product of k elementary reflectors from the QR
-   decomposition.
-
-"),
-
-("Linear Algebra","Base","sqrtm","sqrtm(A)
-
-   Compute the matrix square root of \"A\". If \"B = sqrtm(A)\", then
-   \"B*B == A\" within roundoff error.
-
-"),
-
-("Linear Algebra","Base","eig","eig(A) -> D, V
-
-   Compute eigenvalues and eigenvectors of A
-
-"),
-
-("Linear Algebra","Base","eigvals","eigvals(A)
-
-   Returns the eigenvalues of \"A\".
-
-"),
-
-("Linear Algebra","Base","svdfact","svdfact(A[, thin]) -> SVDDense
-
-   Compute the Singular Value Decomposition (SVD) of \"A\" and return
-   an \"SVDDense\" object. \"factors(svdfact(A))\" returns \"U\",
-   \"S\", and \"Vt\", such that \"A = U*diagm(S)*Vt\". If \"thin\" is
-   \"true\", an economy mode decomposition is returned.
-
-"),
-
-("Linear Algebra","Base","svdfact!","svdfact!(A[, thin]) -> SVDDense
-
-   \"svdfact!\" is the same as \"svdfact\" but saves space by
-   overwriting the input A, instead of creating a copy. If \"thin\" is
-   \"true\", an economy mode decomposition is returned.
-
-"),
-
-("Linear Algebra","Base","svd","svd(A[, thin]) -> U, S, V
-
-   Compute the SVD of A, returning \"U\", vector \"S\", and \"V\" such
-   that \"A == U*diagm(S)*V'\". If \"thin\" is \"true\", an economy
-   mode decomposition is returned.
-
-"),
-
-("Linear Algebra","Base","svdt","svdt(A[, thin]) -> U, S, Vt
-
-   Compute the SVD of A, returning \"U\", vector \"S\", and \"Vt\"
-   such that \"A = U*diagm(S)*Vt\". If \"thin\" is \"true\", an
-   economy mode decomposition is returned.
-
-"),
-
-("Linear Algebra","Base","svdvals","svdvals(A)
-
-   Returns the singular values of \"A\".
-
-"),
-
-("Linear Algebra","Base","svdvals!","svdvals!(A)
-
-   Returns the singular values of \"A\", while saving space by
-   overwriting the input.
-
-"),
-
-("Linear Algebra","Base","svdfact","svdfact(A, B) -> GSVDDense
-
-   Compute the generalized SVD of \"A\" and \"B\", returning a
-   \"GSVDDense\" Factorization object. \"factors(svdfact(A,b))\"
-   returns \"U\", \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that
-   \"A = U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
-
-"),
-
-("Linear Algebra","Base","svd","svd(A, B) -> U, V, Q, D1, D2, R0
-
-   Compute the generalized SVD of \"A\" and \"B\", returning \"U\",
-   \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that \"A =
-   U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
-
-"),
-
-("Linear Algebra","Base","svdvals","svdvals(A, B)
-
-   Return only the singular values from the generalized singular value
-   decomposition of \"A\" and \"B\".
-
-"),
-
-("Linear Algebra","Base","triu","triu(M)
-
-   Upper triangle of a matrix
-
-"),
-
-("Linear Algebra","Base","tril","tril(M)
-
-   Lower triangle of a matrix
-
-"),
-
-("Linear Algebra","Base","diag","diag(M[, k])
-
-   The \"k\"-th diagonal of a matrix, as a vector
-
-"),
-
-("Linear Algebra","Base","diagm","diagm(v[, k])
-
-   Construct a diagonal matrix and place \"v\" on the \"k\"-th
-   diagonal
-
-"),
-
-("Linear Algebra","Base","diagmm","diagmm(matrix, vector)
-
-   Multiply matrices, interpreting the vector argument as a diagonal
-   matrix. The arguments may occur in the other order to multiply with
-   the diagonal matrix on the left.
-
-"),
-
-("Linear Algebra","Base","Tridiagonal","Tridiagonal(dl, d, du)
-
-   Construct a tridiagonal matrix from the lower diagonal, diagonal,
-   and upper diagonal
-
-"),
-
-("Linear Algebra","Base","Woodbury","Woodbury(A, U, C, V)
-
-   Construct a matrix in a form suitable for applying the Woodbury
-   matrix identity
-
-"),
-
-("Linear Algebra","Base","rank","rank(M)
-
-   Compute the rank of a matrix
-
-"),
-
-("Linear Algebra","Base","norm","norm(A[, p])
-
-   Compute the \"p\"-norm of a vector or a matrix. \"p\" is \"2\" by
-   default, if not provided. If \"A\" is a vector, \"norm(A, p)\"
-   computes the \"p\"-norm. \"norm(A, Inf)\" returns the largest value
-   in \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest. If
-   \"A\" is a matrix, valid values for \"p\" are \"1\", \"2\", or
-   \"Inf\". In order to compute the Frobenius norm, use \"normfro\".
-
-"),
-
-("Linear Algebra","Base","normfro","normfro(A)
-
-   Compute the Frobenius norm of a matrix \"A\".
-
-"),
-
-("Linear Algebra","Base","cond","cond(M[, p])
-
-   Matrix condition number, computed using the p-norm. \"p\" is 2 by
-   default, if not provided. Valid values for \"p\" are \"1\", \"2\",
-   or \"Inf\".
-
-"),
-
-("Linear Algebra","Base","trace","trace(M)
-
-   Matrix trace
-
-"),
-
-("Linear Algebra","Base","det","det(M)
-
-   Matrix determinant
-
-"),
-
-("Linear Algebra","Base","inv","inv(M)
-
-   Matrix inverse
-
-"),
-
-("Linear Algebra","Base","pinv","pinv(M)
-
-   Moore-Penrose inverse
-
-"),
-
-("Linear Algebra","Base","null","null(M)
-
-   Basis for null space of M.
-
-"),
-
-("Linear Algebra","Base","repmat","repmat(A, n, m)
-
-   Construct a matrix by repeating the given matrix \"n\" times in
-   dimension 1 and \"m\" times in dimension 2.
-
-"),
-
-("Linear Algebra","Base","kron","kron(A, B)
-
-   Kronecker tensor product of two vectors or two matrices.
-
-"),
-
-("Linear Algebra","Base","linreg","linreg(x, y)
-
-   Determine parameters \"[a, b]\" that minimize the squared error
-   between \"y\" and \"a+b*x\".
-
-"),
-
-("Linear Algebra","Base","linreg","linreg(x, y, w)
-
-   Weighted least-squares linear regression.
-
-"),
-
-("Linear Algebra","Base","expm","expm(A)
-
-   Matrix exponential.
-
-"),
-
-("Linear Algebra","Base","issym","issym(A)
-
-   Test whether a matrix is symmetric.
-
-"),
-
-("Linear Algebra","Base","isposdef","isposdef(A)
-
-   Test whether a matrix is positive-definite.
-
-"),
-
-("Linear Algebra","Base","istril","istril(A)
-
-   Test whether a matrix is lower-triangular.
-
-"),
-
-("Linear Algebra","Base","istriu","istriu(A)
-
-   Test whether a matrix is upper-triangular.
-
-"),
-
-("Linear Algebra","Base","ishermitian","ishermitian(A)
-
-   Test whether a matrix is hermitian.
-
-"),
-
-("Linear Algebra","Base","transpose","transpose(A)
-
-   The transpose operator (.').
-
-"),
-
-("Linear Algebra","Base","ctranspose","ctranspose(A)
-
-   The conjugate transpose operator (').
 
 "),
 
@@ -5153,125 +4606,6 @@
 
 "),
 
-("BLAS","BLAS","copy!","copy!(n, X, incx, Y, incy)
-
-   Copy \"n\" elements of array \"X\" with stride \"incx\" to array
-   \"Y\" with stride \"incy\".  Returns \"Y\".
-
-"),
-
-("BLAS","BLAS","dot","dot(n, X, incx, Y, incy)
-
-   Dot product of two vectors consisting of \"n\" elements of array
-   \"X\" with stride \"incx\" and \"n\" elements of array \"Y\" with
-   stride \"incy\".  There are no \"dot\" methods for \"Complex\"
-   arrays.
-
-"),
-
-("BLAS","BLAS","nrm2","nrm2(n, X, incx)
-
-   2-norm of a vector consisting of \"n\" elements of array \"X\" with
-   stride \"incx\".
-
-"),
-
-("BLAS","BLAS","axpy!","axpy!(n, a, X, incx, Y, incy)
-
-   Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
-
-"),
-
-("BLAS","BLAS","syrk!","syrk!(uplo, trans, alpha, A, beta, C)
-
-   Rank-k update of the symmetric matrix \"C\" as \"alpha*A*A.' +
-   beta*C\" or \"alpha*A.'*A + beta*C\" according to whether \"trans\"
-   is 'N' or 'T'.  When \"uplo\" is 'U' the upper triangle of \"C\" is
-   updated ('L' for lower triangle).  Returns \"C\".
-
-"),
-
-("BLAS","BLAS","syrk","syrk(uplo, trans, alpha, A)
-
-   Returns either the upper triangle or the lower triangle, according
-   to \"uplo\" ('U' or 'L'), of \"alpha*A*A.'\" or \"alpha*A.'*A\",
-   according to \"trans\" ('N' or 'T').
-
-"),
-
-("BLAS","BLAS","herk!","herk!(uplo, trans, alpha, A, beta, C)
-
-   Methods for complex arrays only.  Rank-k update of the Hermitian
-   matrix \"C\" as \"alpha*A*A' + beta*C\" or \"alpha*A'*A + beta*C\"
-   according to whether \"trans\" is 'N' or 'T'.  When \"uplo\" is 'U'
-   the upper triangle of \"C\" is updated ('L' for lower triangle).
-   Returns \"C\".
-
-"),
-
-("BLAS","BLAS","herk","herk(uplo, trans, alpha, A)
-
-   Methods for complex arrays only.  Returns either the upper triangle
-   or the lower triangle, according to \"uplo\" ('U' or 'L'), of
-   \"alpha*A*A'\" or \"alpha*A'*A\", according to \"trans\" ('N' or
-   'T').
-
-"),
-
-("BLAS","BLAS","gbmv!","gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
-
-   Update vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'*x +
-   beta*y\" according to \"trans\" ('N' or 'T').  The matrix \"A\" is
-   a general band matrix of dimension \"m\" by \"size(A,2)\" with
-   \"kl\" sub-diagonals and \"ku\" super-diagonals. Returns the
-   updated \"y\".
-
-"),
-
-("BLAS","BLAS","gbmv","gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
-
-   Returns \"alpha*A*x\" or \"alpha*A'*x\" according to \"trans\" ('N'
-   or 'T'). The matrix \"A\" is a general band matrix of dimension
-   \"m\" by \"size(A,2)\" with \"kl\" sub-diagonals and \"ku\" super-
-   diagonals.
-
-"),
-
-("BLAS","BLAS","sbmv!","sbmv!(uplo, k, alpha, A, x, beta, y)
-
-   Update vector \"y\" as \"alpha*A*x + beta*y\" where \"A\" is a a
-   symmetric band matrix of order \"size(A,2)\" with \"k\" super-
-   diagonals stored in the argument \"A\".  The storage layout for
-   \"A\" is described the reference BLAS module, level-2 BLAS at
-   *<http://www.netlib.org/lapack/explore-html/>*.
-
-   Returns the updated \"y\".
-
-"),
-
-("BLAS","BLAS","sbmv","sbmv(uplo, k, alpha, A, x)
-
-   Returns \"alpha*A*x\" where \"A\" is a symmetric band matrix of
-   order \"size(A,2)\" with \"k\" super-diagonals stored in the
-   argument \"A\".
-
-"),
-
-("BLAS","BLAS","gemm!","gemm!(tA, tB, alpha, A, B, beta, C)
-
-   Update \"C\" as \"alpha*A*B + beta*C\" or the other three variants
-   according to \"tA\" (transpose \"A\") and \"tB\".  Returns the
-   updated \"C\".
-
-"),
-
-("BLAS","BLAS","gemm","gemm(tA, tB, alpha, A, B)
-
-   Returns \"alpha*A*B\" or the other three variants according to
-   \"tA\" (transpose \"A\") and \"tB\".
-
-"),
-
 ("Constants","Base","OS_NAME","OS_NAME
 
    A symbol representing the name of the operating system. Possible
@@ -5412,6 +4746,614 @@
 
 "),
 
+
+("Linear Algebra","","*","*(A, B)
+
+   Matrix multiplication
+
+"),
+
+("Linear Algebra","","\\","\\(A, B)
+
+   Matrix division using a polyalgorithm. For input matrices \"A\" and
+   \"B\", the result \"X\" is such that \"A*X == B\" when \"A\" is
+   square.  The solver that is used depends upon the structure of
+   \"A\".  A direct solver is used for upper- or lower triangular
+   \"A\".  For Hermitian \"A\" (equivalent to symmetric \"A\" for non-
+   complex \"A\") the BunchKaufman factorization is used.  Otherwise
+   an LU factorization is used. For rectangular \"A\" the result is
+   the minimum-norm least squares solution computed by reducing \"A\"
+   to bidiagonal form and solving the bidiagonal least squares
+   problem.  For sparse, square \"A\" the LU factorization (from
+   UMFPACK) is used.
+
+"),
+
+("Linear Algebra","","dot","dot(x, y)
+
+   Compute the dot product
+
+"),
+
+("Linear Algebra","","cross","cross(x, y)
+
+   Compute the cross product of two 3-vectors
+
+"),
+
+("Linear Algebra","","norm","norm(a)
+
+   Compute the norm of a \"Vector\" or a \"Matrix\"
+
+"),
+
+("Linear Algebra","","lu","lu(A) -> L, U, P
+
+   Compute the LU factorization of \"A\", such that \"P*A = L*U\".
+
+"),
+
+("Linear Algebra","","lufact","lufact(A) -> LUDense
+
+   Compute the LU factorization of \"A\", returning an \"LUDense\"
+   object for dense \"A\" or an \"UmfpackLU\" object for sparse \"A\".
+   The individual components of the factorization \"F\" can be accesed
+   by indexing: \"F[:L]\", \"F[:U]\", and \"F[:P]\" (permutation
+   matrix) or \"F[:p]\" (permutation vector). An \"UmfpackLU\" object
+   has additional components \"F[:q]\" (the left permutation vector)
+   and \"Rs\" the vector of scaling factors. The following functions
+   are available for both \"LUDense\" and \"UmfpackLU\" objects:
+   \"size\", \"\\\" and \"det\".  For \"LUDense\" there is also an
+   \"inv\" method.  The sparse LU factorization is such that \"L*U\"
+   is equal to``diagmm(Rs,A)[p,q]``.
+
+"),
+
+("Linear Algebra","","lufact!","lufact!(A) -> LUDense
+
+   \"lufact!\" is the same as \"lufact\" but saves space by
+   overwriting the input A, instead of creating a copy.  For sparse
+   \"A\" the \"nzval\" field is not overwritten but the index fields,
+   \"colptr\" and \"rowval\" are decremented in place, converting from
+   1-based indices to 0-based indices.
+
+"),
+
+("Linear Algebra","","chol","chol(A[, LU]) -> F
+
+   Compute Cholesky factorization of a symmetric positive-definite
+   matrix \"A\" and return the matrix \"F\". If \"LU\" is \"L\"
+   (Lower), \"A = L*L'\". If \"LU\" is \"U\" (Upper), \"A = R'*R\".
+
+"),
+
+("Linear Algebra","","cholfact","cholfact(A[, LU]) -> CholeskyDense
+
+   Compute the Cholesky factorization of a dense symmetric positive-
+   definite matrix \"A\" and return a \"CholeskyDense\" object. \"LU\"
+   may be 'L' for using the lower part or 'U' for the upper part. The
+   default is to use 'U'. The triangular matrix can be obtained from
+   the factorization \"F\" with: \"F[:L]\" and \"F[:U]\". The
+   following functions are available for \"CholeskyDense\" objects:
+   \"size\", \"\\\", \"inv\", \"det\". A \"LAPACK.PosDefException\"
+   error is thrown in case the matrix is not positive definite.
+
+"),
+
+("Linear Algebra","","cholfact","cholfact(A[, ll]) -> CholmodFactor
+
+   Compute the sparse Cholesky factorization of a sparse matrix \"A\".
+   If \"A\" is Hermitian its Cholesky factor is determined.  If \"A\"
+   is not Hermitian the Cholesky factor of \"A*A'\" is determined. A
+   fill-reducing permutation is used.  Methods for \"size\",
+   \"solve\", \"\\\", \"findn_nzs\", \"diag\", \"det\" and \"logdet\".
+   One of the solve methods includes an integer argument that can be
+   used to solve systems involving parts of the factorization only.
+   The optional boolean argument, \"ll\" determines whether the
+   factorization returned is of the \"A[p,p] = L*L'\" form, where
+   \"L\" is lower triangular or \"A[p,p] = diagmm(L,D)*L'\" form where
+   \"L\" is unit lower triangular and \"D\" is a non-negative vector.
+   The default is LDL.
+
+"),
+
+("Linear Algebra","","cholpfact","cholpfact(A[, LU]) -> CholeskyPivotedDense
+
+   Compute the pivoted Cholesky factorization of a symmetric positive
+   semi-definite matrix \"A\" and return a \"CholeskyDensePivoted\"
+   object. \"LU\" may be 'L' for using the lower part or 'U' for the
+   upper part. The default is to use 'U'. The triangular factors
+   containted in the factorization \"F\" can be obtained with
+   \"F[:L]\" and \"F[:U]\", whereas the permutation can be obtained
+   with \"F[:P]\" or \"F[:p]\". The following functions are available
+   for \"CholeskyDensePivoted\" objects: \"size\", \"\\\", \"inv\",
+   \"det\". A \"LAPACK.RankDeficientException\" error is thrown in
+   case the matrix is rank deficient.
+
+"),
+
+("Linear Algebra","","cholpfact!","cholpfact!(A[, LU]) -> CholeskyPivotedDense
+
+   \"cholpfact!\" is the same as \"cholpfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+("Linear Algebra","","qr","qr(A) -> Q, R
+
+   Compute the QR factorization of \"A\" such that \"A = Q*R\". Also
+   see \"qrfact\".
+
+"),
+
+("Linear Algebra","","qrfact","qrfact(A)
+
+   Compute the QR factorization of \"A\" and return a \"QRDense\"
+   object. The coomponents of the factorization \"F\" can be accessed
+   as follows: the orthogonal matrix \"Q\" can be extracted with
+   \"F[:Q]\" and the triangular matrix \"R\" with \"F[:R]\". The
+   following functions are available for \"QRDense\" objects:
+   \"size\", \"\\\". When \"Q\" is extracted, the resulting type is
+   the \"QRDenseQ\" object, and has the \"*\" operator overloaded to
+   support efficient multiplication by \"Q\" and \"Q'\".
+
+"),
+
+("Linear Algebra","","qrfact!","qrfact!(A)
+
+   \"qrfact!\" is the same as \"qrfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+("Linear Algebra","","qrp","qrp(A) -> Q, R, P
+
+   Compute the QR factorization of \"A\" with pivoting, such that
+   \"A*P = Q*R\", Also see \"qrpfact\".
+
+"),
+
+("Linear Algebra","","qrpfact","qrpfact(A) -> QRPivotedDense
+
+   Compute the QR factorization of \"A\" with pivoting and return a
+   \"QRDensePivoted\" object. The components of the factorization
+   \"F\" can be accessed as follows: the orthogonal matrix \"Q\" can
+   be extracted with \"F[:Q]\", the triangular matrix \"R\" with
+   \"F[:R]\", and the permutation with \"F[:P]\" or \"F[:p]\". The
+   following functions are available for \"QRDensePivoted\" objects:
+   \"size\", \"\\\". When \"Q\" is extracted, the resulting type is
+   the \"QRDenseQ\" object, and has the \"*\" operator overloaded to
+   support efficient multiplication by \"Q\" and \"Q'\". A
+   \"QRDenseQ\" matrix can be converted into a regular matrix with
+   \"full\".
+
+"),
+
+("Linear Algebra","","qrpfact!","qrpfact!(A) -> QRPivotedDense
+
+   \"qrpfact!\" is the same as \"qrpfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+("Linear Algebra","","sqrtm","sqrtm(A)
+
+   Compute the matrix square root of \"A\". If \"B = sqrtm(A)\", then
+   \"B*B == A\" within roundoff error.
+
+"),
+
+("Linear Algebra","","eig","eig(A) -> D, V
+
+   Compute eigenvalues and eigenvectors of A
+
+"),
+
+("Linear Algebra","","eigvals","eigvals(A)
+
+   Returns the eigenvalues of \"A\".
+
+"),
+
+("Linear Algebra","","eigfact","eigfact(A)
+
+   Compute the eigenvalue decomposition of \"A\" and return an
+   \"EigenDense\" object. If \"F\" is the factorization object, the
+   eigenvalues can be accessed with \"F[:values]\" and the
+   eigenvectors with \"F[:vectors]\". The following functions are
+   available for \"EigenDense\" objects: \"inv\", \"det\".
+
+"),
+
+("Linear Algebra","","eigfact!","eigfact!(A)
+
+   \"eigfact!\" is the same as \"eigfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+("Linear Algebra","","hessfact","hessfact(A)
+
+   Compute the Hessenberg decomposition of \"A\" and return a
+   \"HessenbergDense\" object. If \"F\" is the factorization object,
+   the unitary matrix can be accessed with \"F[:Q]\" and the
+   Hessenberg matrix with \"F[:H]\". When \"Q\" is extracted, the
+   resulting type is the \"HessenbergDenseQ\" object, and may be
+   converted to a regular matrix with \"full\".
+
+"),
+
+("Linear Algebra","","hessfact!","hessfact!(A)
+
+   \"hessfact!\" is the same as \"hessfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+("Linear Algebra","","svdfact","svdfact(A[, thin]) -> SVDDense
+
+   Compute the Singular Value Decomposition (SVD) of \"A\" and return
+   an \"SVDDense\" object. \"U\", \"S\", \"V\" and \"Vt\" can be
+   obtained from the factorization \"F\" with \"F[:U]\", \"F[:S]\",
+   \"F[:V]\" and \"F[:Vt]\", such that \"A = U*diagm(S)*Vt\". If
+   \"thin\" is \"true\", an economy mode decomposition is returned.
+   The algorithm produces \"Vt\" and hence \"Vt\" is more efficient to
+   extract than \"V\".
+
+"),
+
+("Linear Algebra","","svdfact!","svdfact!(A[, thin]) -> SVDDense
+
+   \"svdfact!\" is the same as \"svdfact\" but saves space by
+   overwriting the input A, instead of creating a copy. If \"thin\" is
+   \"true\", an economy mode decomposition is returned.
+
+"),
+
+("Linear Algebra","","svd","svd(A[, thin]) -> U, S, V
+
+   Compute the SVD of A, returning \"U\", vector \"S\", and \"V\" such
+   that \"A == U*diagm(S)*V'\". If \"thin\" is \"true\", an economy
+   mode decomposition is returned.
+
+"),
+
+("Linear Algebra","","svdvals","svdvals(A)
+
+   Returns the singular values of \"A\".
+
+"),
+
+("Linear Algebra","","svdvals!","svdvals!(A)
+
+   Returns the singular values of \"A\", while saving space by
+   overwriting the input.
+
+"),
+
+("Linear Algebra","","svdfact","svdfact(A, B) -> GSVDDense
+
+   Compute the generalized SVD of \"A\" and \"B\", returning a
+   \"GSVDDense\" Factorization object, such that \"A = U*D1*R0*Q'\"
+   and \"B = V*D2*R0*Q'\".
+
+"),
+
+("Linear Algebra","","svd","svd(A, B) -> U, V, Q, D1, D2, R0
+
+   Compute the generalized SVD of \"A\" and \"B\", returning \"U\",
+   \"V\", \"Q\", \"D1\", \"D2\", and \"R0\" such that \"A =
+   U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
+
+"),
+
+("Linear Algebra","","svdvals","svdvals(A, B)
+
+   Return only the singular values from the generalized singular value
+   decomposition of \"A\" and \"B\".
+
+"),
+
+("Linear Algebra","","triu","triu(M)
+
+   Upper triangle of a matrix
+
+"),
+
+("Linear Algebra","","tril","tril(M)
+
+   Lower triangle of a matrix
+
+"),
+
+("Linear Algebra","","diag","diag(M[, k])
+
+   The \"k\"-th diagonal of a matrix, as a vector
+
+"),
+
+("Linear Algebra","","diagm","diagm(v[, k])
+
+   Construct a diagonal matrix and place \"v\" on the \"k\"-th
+   diagonal
+
+"),
+
+("Linear Algebra","","diagmm","diagmm(matrix, vector)
+
+   Multiply matrices, interpreting the vector argument as a diagonal
+   matrix. The arguments may occur in the other order to multiply with
+   the diagonal matrix on the left.
+
+"),
+
+("Linear Algebra","","Tridiagonal","Tridiagonal(dl, d, du)
+
+   Construct a tridiagonal matrix from the lower diagonal, diagonal,
+   and upper diagonal
+
+"),
+
+("Linear Algebra","","Woodbury","Woodbury(A, U, C, V)
+
+   Construct a matrix in a form suitable for applying the Woodbury
+   matrix identity
+
+"),
+
+("Linear Algebra","","rank","rank(M)
+
+   Compute the rank of a matrix
+
+"),
+
+("Linear Algebra","","norm","norm(A[, p])
+
+   Compute the \"p\"-norm of a vector or a matrix. \"p\" is \"2\" by
+   default, if not provided. If \"A\" is a vector, \"norm(A, p)\"
+   computes the \"p\"-norm. \"norm(A, Inf)\" returns the largest value
+   in \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest. If
+   \"A\" is a matrix, valid values for \"p\" are \"1\", \"2\", or
+   \"Inf\". In order to compute the Frobenius norm, use \"normfro\".
+
+"),
+
+("Linear Algebra","","normfro","normfro(A)
+
+   Compute the Frobenius norm of a matrix \"A\".
+
+"),
+
+("Linear Algebra","","cond","cond(M[, p])
+
+   Matrix condition number, computed using the p-norm. \"p\" is 2 by
+   default, if not provided. Valid values for \"p\" are \"1\", \"2\",
+   or \"Inf\".
+
+"),
+
+("Linear Algebra","","trace","trace(M)
+
+   Matrix trace
+
+"),
+
+("Linear Algebra","","det","det(M)
+
+   Matrix determinant
+
+"),
+
+("Linear Algebra","","inv","inv(M)
+
+   Matrix inverse
+
+"),
+
+("Linear Algebra","","pinv","pinv(M)
+
+   Moore-Penrose inverse
+
+"),
+
+("Linear Algebra","","null","null(M)
+
+   Basis for null space of M.
+
+"),
+
+("Linear Algebra","","repmat","repmat(A, n, m)
+
+   Construct a matrix by repeating the given matrix \"n\" times in
+   dimension 1 and \"m\" times in dimension 2.
+
+"),
+
+("Linear Algebra","","kron","kron(A, B)
+
+   Kronecker tensor product of two vectors or two matrices.
+
+"),
+
+("Linear Algebra","","linreg","linreg(x, y)
+
+   Determine parameters \"[a, b]\" that minimize the squared error
+   between \"y\" and \"a+b*x\".
+
+"),
+
+("Linear Algebra","","linreg","linreg(x, y, w)
+
+   Weighted least-squares linear regression.
+
+"),
+
+("Linear Algebra","","expm","expm(A)
+
+   Matrix exponential.
+
+"),
+
+("Linear Algebra","","issym","issym(A)
+
+   Test whether a matrix is symmetric.
+
+"),
+
+("Linear Algebra","","isposdef","isposdef(A)
+
+   Test whether a matrix is positive-definite.
+
+"),
+
+("Linear Algebra","","istril","istril(A)
+
+   Test whether a matrix is lower-triangular.
+
+"),
+
+("Linear Algebra","","istriu","istriu(A)
+
+   Test whether a matrix is upper-triangular.
+
+"),
+
+("Linear Algebra","","ishermitian","ishermitian(A)
+
+   Test whether a matrix is hermitian.
+
+"),
+
+("Linear Algebra","","transpose","transpose(A)
+
+   The transpose operator (.').
+
+"),
+
+("Linear Algebra","","ctranspose","ctranspose(A)
+
+   The conjugate transpose operator (').
+
+"),
+
+("BLAS Functions","","copy!","copy!(n, X, incx, Y, incy)
+
+   Copy \"n\" elements of array \"X\" with stride \"incx\" to array
+   \"Y\" with stride \"incy\".  Returns \"Y\".
+
+"),
+
+("BLAS Functions","","dot","dot(n, X, incx, Y, incy)
+
+   Dot product of two vectors consisting of \"n\" elements of array
+   \"X\" with stride \"incx\" and \"n\" elements of array \"Y\" with
+   stride \"incy\".  There are no \"dot\" methods for \"Complex\"
+   arrays.
+
+"),
+
+("BLAS Functions","","nrm2","nrm2(n, X, incx)
+
+   2-norm of a vector consisting of \"n\" elements of array \"X\" with
+   stride \"incx\".
+
+"),
+
+("BLAS Functions","","axpy!","axpy!(n, a, X, incx, Y, incy)
+
+   Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
+
+"),
+
+("BLAS Functions","","syrk!","syrk!(uplo, trans, alpha, A, beta, C)
+
+   Rank-k update of the symmetric matrix \"C\" as \"alpha*A*A.' +
+   beta*C\" or \"alpha*A.'*A + beta*C\" according to whether \"trans\"
+   is 'N' or 'T'.  When \"uplo\" is 'U' the upper triangle of \"C\" is
+   updated ('L' for lower triangle).  Returns \"C\".
+
+"),
+
+("BLAS Functions","","syrk","syrk(uplo, trans, alpha, A)
+
+   Returns either the upper triangle or the lower triangle, according
+   to \"uplo\" ('U' or 'L'), of \"alpha*A*A.'\" or \"alpha*A.'*A\",
+   according to \"trans\" ('N' or 'T').
+
+"),
+
+("BLAS Functions","","herk!","herk!(uplo, trans, alpha, A, beta, C)
+
+   Methods for complex arrays only.  Rank-k update of the Hermitian
+   matrix \"C\" as \"alpha*A*A' + beta*C\" or \"alpha*A'*A + beta*C\"
+   according to whether \"trans\" is 'N' or 'T'.  When \"uplo\" is 'U'
+   the upper triangle of \"C\" is updated ('L' for lower triangle).
+   Returns \"C\".
+
+"),
+
+("BLAS Functions","","herk","herk(uplo, trans, alpha, A)
+
+   Methods for complex arrays only.  Returns either the upper triangle
+   or the lower triangle, according to \"uplo\" ('U' or 'L'), of
+   \"alpha*A*A'\" or \"alpha*A'*A\", according to \"trans\" ('N' or
+   'T').
+
+"),
+
+("BLAS Functions","","gbmv!","gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+
+   Update vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'*x +
+   beta*y\" according to \"trans\" ('N' or 'T').  The matrix \"A\" is
+   a general band matrix of dimension \"m\" by \"size(A,2)\" with
+   \"kl\" sub-diagonals and \"ku\" super-diagonals. Returns the
+   updated \"y\".
+
+"),
+
+("BLAS Functions","","gbmv","gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+
+   Returns \"alpha*A*x\" or \"alpha*A'*x\" according to \"trans\" ('N'
+   or 'T'). The matrix \"A\" is a general band matrix of dimension
+   \"m\" by \"size(A,2)\" with \"kl\" sub-diagonals and \"ku\" super-
+   diagonals.
+
+"),
+
+("BLAS Functions","","sbmv!","sbmv!(uplo, k, alpha, A, x, beta, y)
+
+   Update vector \"y\" as \"alpha*A*x + beta*y\" where \"A\" is a a
+   symmetric band matrix of order \"size(A,2)\" with \"k\" super-
+   diagonals stored in the argument \"A\".  The storage layout for
+   \"A\" is described the reference BLAS module, level-2 BLAS at
+   *<http://www.netlib.org/lapack/explore-html/>*.
+
+   Returns the updated \"y\".
+
+"),
+
+("BLAS Functions","","sbmv","sbmv(uplo, k, alpha, A, x)
+
+   Returns \"alpha*A*x\" where \"A\" is a symmetric band matrix of
+   order \"size(A,2)\" with \"k\" super-diagonals stored in the
+   argument \"A\".
+
+"),
+
+("BLAS Functions","","gemm!","gemm!(tA, tB, alpha, A, B, beta, C)
+
+   Update \"C\" as \"alpha*A*B + beta*C\" or the other three variants
+   according to \"tA\" (transpose \"A\") and \"tB\".  Returns the
+   updated \"C\".
+
+"),
+
+("BLAS Functions","","gemm","gemm(tA, tB, alpha, A, B)
+
+   Returns \"alpha*A*B\" or the other three variants according to
+   \"tA\" (transpose \"A\") and \"tB\".
+
+"),
 
 ("Punctuation","","punctuation","punctuation
 
@@ -5566,6 +5508,110 @@
 ("Base.Sort","Base.Sort","select!","select!(v, k[, ord])
 
    Version of \"select\" which permutes the input vector in place.
+
+"),
+
+("Sparse Matrices","","sparse","sparse(I, J, V[, m, n, combine])
+
+   Create a sparse matrix \"S\" of dimensions \"m x n\" such that
+   \"S[I[k], J[k]] = V[k]\". The \"combine\" function is used to
+   combine duplicates. If \"m\" and \"n\" are not specified, they are
+   set to \"max(I)\" and \"max(J)\" respectively. If the \"combine\"
+   function is not supplied, duplicates are added by default.
+
+"),
+
+("Sparse Matrices","","sparsevec","sparsevec(I, V[, m, combine])
+
+   Create a sparse matrix \"S\" of size \"m x 1\" such that \"S[I[k]]
+   = V[k]\". Duplicates are combined using the \"combine\" function,
+   which defaults to *+* if it is not provided. In julia, sparse
+   vectors are really just sparse matrices with one column. Given
+   Julia's Compressed Sparse Columns (CSC) storage format, a sparse
+   column matrix with one column is sparse, whereas a sparse row
+   matrix with one row ends up being dense.
+
+"),
+
+("Sparse Matrices","","sparsevec","sparsevec(D::Dict[, m])
+
+   Create a sparse matrix of size \"m x 1\" where the row values are
+   keys from the dictionary, and the nonzero values are the values
+   from the dictionary.
+
+"),
+
+("Sparse Matrices","","issparse","issparse(S)
+
+   Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
+
+"),
+
+("Sparse Matrices","","sparse","sparse(A)
+
+   Convert a dense matrix \"A\" into a sparse matrix.
+
+"),
+
+("Sparse Matrices","","sparsevec","sparsevec(A)
+
+   Convert a dense vector \"A\" into a sparse matrix of size \"m x
+   1\". In julia, sparse vectors are really just sparse matrices with
+   one column.
+
+"),
+
+("Sparse Matrices","","dense","dense(S)
+
+   Convert a sparse matrix \"S\" into a dense matrix.
+
+"),
+
+("Sparse Matrices","","full","full(S)
+
+   Convert a sparse matrix \"S\" into a dense matrix.
+
+"),
+
+("Sparse Matrices","","spzeros","spzeros(m, n)
+
+   Create an empty sparse matrix of size \"m x n\".
+
+"),
+
+("Sparse Matrices","","speye","speye(type, m[, n])
+
+   Create a sparse identity matrix of specified type of size \"m x
+   m\". In case \"n\" is supplied, create a sparse identity matrix of
+   size \"m x n\".
+
+"),
+
+("Sparse Matrices","","spones","spones(S)
+
+   Create a sparse matrix with the same structure as that of \"S\",
+   but with every nonzero element having the value \"1.0\".
+
+"),
+
+("Sparse Matrices","","sprand","sprand(m, n, density[, rng])
+
+   Create a random sparse matrix with the specified density. Nonzeros
+   are sampled from the distribution specified by \"rng\". The uniform
+   distribution is used in case \"rng\" is not specified.
+
+"),
+
+("Sparse Matrices","","sprandn","sprandn(m, n, density)
+
+   Create a random sparse matrix of specified density with nonzeros
+   sampled from the normal distribution.
+
+"),
+
+("Sparse Matrices","","sprandbool","sprandbool(m, n, density)
+
+   Create a random sparse boolean matrix with the specified density.
 
 "),
 
