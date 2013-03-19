@@ -61,7 +61,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qr(A) -> Q, R
 
-   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrd``.
+   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrfact``.
 
 .. function:: qrfact(A)
 
