@@ -1622,6 +1622,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         return NF
     end
     sp = meth[2]::Tuple
+    sp = tuple(sp..., meth[3].sparams...)
     spvals = { sp[i] for i in 2:2:length(sp) }
     for i=1:length(spvals)
         if isa(spvals[i],TypeVar)
