@@ -280,8 +280,8 @@ function sleep(sec::Real)
     wt = WaitTask(timer, false)
     start_timer(timer, iround(sec*1000), 0)
     args = yield(wt)
+    stop_timer(timer)
     if isa(args,InterruptException)
-        stop_timer(timer)
         error(args)
     end
     nothing
