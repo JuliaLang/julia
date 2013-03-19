@@ -232,42 +232,18 @@ else
 end
 
 
-# dict
+# hash dict
 
-type Dict{K,V} <: Associative{K,V}
-    slots::Array{Uint8,1}
-    keys::Array{K,1}
-    vals::Array{V,1}
-    ndel::Int
-    count::Int
-    deleter::Function
+abstract AbstractHashDict{K,V} <: Associative{K,V}
+    # # subclasses must contain
+    # slots::Array{Uint8,1}
+    # keys::Array{K,1}
+    # vals::Array{V,1}
+    # ndel::Int
+    # count::Int
+#end
 
-    function Dict()
-        n = 16
-        new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
-    end
-    function Dict(ks, vs)
-        n = length(ks)
-        h = Dict{K,V}()
-        for i=1:n
-            h[ks[i]] = vs[i]
-        end
-        return h
-    end
-end
-Dict() = Dict{Any,Any}()
-
-Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
-Dict(ks, vs) = Dict{Any,Any}(ks, vs)
-
-# syntax entry points
-Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
-Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
-Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
-
-similar{K,V}(d::Dict{K,V}) = (K=>V)[]
-
-function serialize(s, t::Dict)
+function serialize(s, t::AbstractHashDict)
     serialize_type(s, typeof(t))
     write(s, int32(length(t)))
     for (k,v) in t
@@ -276,7 +252,7 @@ function serialize(s, t::Dict)
     end
 end
 
-function deserialize{K,V}(s, T::Type{Dict{K,V}})
+function deserialize{K,V}(s, T::Type{AbstractHashDict{K,V}})
     n = read(s, Int32)
     t = T(); sizehint(t, n)
     for i = 1:n
@@ -289,11 +265,11 @@ end
 
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
-isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
-isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
-isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
+isslotempty(h::AbstractHashDict, i::Int) = h.slots[i] == 0x0
+isslotfilled(h::AbstractHashDict, i::Int) = h.slots[i] == 0x1
+isslotmissing(h::AbstractHashDict, i::Int) = h.slots[i] == 0x2
 
-function rehash{K,V}(h::Dict{K,V}, newsz)
+function rehash{K,V}(h::AbstractHashDict{K,V}, newsz)
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
@@ -329,7 +305,7 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     return h
 end
 
-function sizehint(d::Dict, newsz)
+function sizehint(d::AbstractHashDict, newsz)
     oldsz = length(d.slots)
     if newsz <= oldsz
         # todo: shrink
@@ -342,7 +318,7 @@ function sizehint(d::Dict, newsz)
     rehash(d, newsz)
 end
 
-function empty!{K,V}(h::Dict{K,V})
+function empty!{K,V}(h::AbstractHashDict{K,V})
     fill!(h.slots, 0x0)
     sz = length(h.slots)
     h.keys = Array(K, sz)
@@ -352,7 +328,7 @@ function empty!{K,V}(h::Dict{K,V})
     return h
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v, key)
+function setindex!{K,V}(h::AbstractHashDict{K,V}, v, key)
     key = convert(K,key)
     v   = convert(V,  v)
 
@@ -414,7 +390,7 @@ function setindex!{K,V}(h::Dict{K,V}, v, key)
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex{K,V}(h::Dict{K,V}, key)
+function ht_keyindex{K,V}(h::AbstractHashDict{K,V}, key)
     sz = length(h.keys)
     iter = 0
     maxprobe = max(16, sz>>6)
@@ -440,24 +416,24 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
     return -1
 end
 
-function getindex{K,V}(h::Dict{K,V}, key)
+function getindex{K,V}(h::AbstractHashDict{K,V}, key)
     index = ht_keyindex(h, key)
     return (index<0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
-function get{K,V}(h::Dict{K,V}, key, deflt)
+function get{K,V}(h::AbstractHashDict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
     return (index<0) ? deflt : h.vals[index]::V
 end
 
-has(h::Dict, key) = (ht_keyindex(h, key) >= 0)
+has(h::AbstractHashDict, key) = (ht_keyindex(h, key) >= 0)
 
-function getkey{K,V}(h::Dict{K,V}, key, deflt)
+function getkey{K,V}(h::AbstractHashDict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
     return (index<0) ? deflt : h.keys[index]::K
 end
 
-function _delete!(h::Dict, index)
+function _delete!(h::AbstractHashDict, index)
     val = h.vals[index]
     h.slots[index] = 0x2
     ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
@@ -467,17 +443,17 @@ function _delete!(h::Dict, index)
     return val
 end
 
-function delete!(h::Dict, key)
+function delete!(h::AbstractHashDict, key)
     index = ht_keyindex(h, key)
     index > 0 ? _delete!(h, index) : throw(KeyError(key))
 end
 
-function delete!(h::Dict, key, default)
+function delete!(h::AbstractHashDict, key, default)
     index = ht_keyindex(h, key)
     index > 0 ? _delete!(h, index) : default
 end
 
-function skip_deleted(h::Dict, i)
+function skip_deleted(h::AbstractHashDict, i)
     L = length(h.slots)
     while i<=L && !isslotfilled(h,i)
         i += 1
@@ -485,12 +461,48 @@ function skip_deleted(h::Dict, i)
     return i
 end
 
-start(t::Dict) = skip_deleted(t, 1)
-done(t::Dict, i) = done(t.vals, i)
-next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
+start(t::AbstractHashDict) = skip_deleted(t, 1)
+done(t::AbstractHashDict, i) = done(t.vals, i)
+next(t::AbstractHashDict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
-isempty(t::Dict) = (t.count == 0)
-length(t::Dict) = t.count
+isempty(t::AbstractHashDict) = (t.count == 0)
+length(t::AbstractHashDict) = t.count
+
+# dict
+
+type Dict{K,V} <: AbstractHashDict{K,V}
+    slots::Array{Uint8,1}
+    keys::Array{K,1}
+    vals::Array{V,1}
+    ndel::Int
+    count::Int
+    deleter::Function
+
+    function Dict()
+        n = 16
+        new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
+    end
+    function Dict(ks, vs)
+        n = length(ks)
+        h = Dict{K,V}()
+        for i=1:n
+            h[ks[i]] = vs[i]
+        end
+        return h
+    end
+end
+Dict() = Dict{Any,Any}()
+
+Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
+Dict(ks, vs) = Dict{Any,Any}(ks, vs)
+
+# syntax entry points
+Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
+Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
+Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
+
+similar{K,V}(d::Dict{K,V}) = (K=>V)[]
+
 
 # weak key dictionaries
 

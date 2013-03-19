@@ -3,7 +3,7 @@ testnames = ["core", "numbers", "strings", "unicode", "corelib", "hashing",
              "dct", "sparse", "bitarray", "random", "math", "functional",
              "bigint", "sorting", "statistics", "spawn", "parallel",
              "suitesparse", "arpack", "bigfloat", "file", "zlib", "image",
-             "perf"]
+             "perf", "ordereddict"]
 
 if ARGS == ["all"]
     tests = testnames
