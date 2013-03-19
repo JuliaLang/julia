@@ -1692,16 +1692,20 @@
 
 	  (else
 	   (if (and dest (not tail) (eq? (car e) 'method))
-	       (error (string "misplaced method definition for " (cadr e))))
-	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
-			 (cdr e))))
-	     (cond ((symbol? dest)
-		    (cons `(= ,dest ,(cons (car e) (map car r)))
-			  (apply append (map cdr r))))
-		   (else
-		    (let ((ex (cons (car e) (map car r))))
-		      (cons (if tail `(return ,ex) ex)
-			    (apply append (map cdr r)))))))))))
+	       (let ((ex (to-lff (cadr e) dest tail))
+		     (fu (to-lff e #f #f)))
+		 (cons (car ex)
+		       (append fu (cdr ex))))
+	       ;(error (string "misplaced method definition for " (cadr e))))
+	       (let ((r (map (lambda (arg) (to-lff arg #t #f))
+			     (cdr e))))
+		 (cond ((symbol? dest)
+			(cons `(= ,dest ,(cons (car e) (map car r)))
+			      (apply append (map cdr r))))
+		       (else
+			(let ((ex (cons (car e) (map car r))))
+			  (cons (if tail `(return ,ex) ex)
+				(apply append (map cdr r))))))))))))
   (to-blk (to-lff e #t #t)))
 #|
 future issue:
