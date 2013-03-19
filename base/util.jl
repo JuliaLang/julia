@@ -77,7 +77,7 @@ function functionloc(f::Function, types)
             lsd = m[3]::LambdaStaticData
             ln = lsd.line
             if ln > 0
-                return (find_in_path(string(lsd.file)), ln)
+                return (find_source_file(string(lsd.file)), ln)
             end
         end
     end
@@ -126,17 +126,27 @@ macro which(ex)
     exret
 end
 
+function find_source_file(file)
+    if file[1]!='/' && !is_file_readable(file)
+        file2 = find_in_path(file)
+        if is_file_readable(file2)
+            return file2
+        else
+            file2 = "$JULIA_HOME/../share/julia/base/$file"
+            if is_file_readable(file2)
+                return file2
+            end
+        end
+    end
+    return file
+end
+
 edit(file::String) = edit(file, 1)
 function edit(file::String, line::Integer)
     editor = get(ENV, "JULIA_EDITOR", "emacs")
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
-        if file[1]!='/' && !is_file_readable(file)
-            file2 = "$JULIA_HOME/../lib/julia/base/$file"
-            if is_file_readable(file2)
-                file = file2
-            end
-        end
+        file = find_source_file(file)
     end
     if editor == "emacs"
         if issrc
