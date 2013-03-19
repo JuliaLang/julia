@@ -368,7 +368,7 @@ function readall(cmd::AbstractCmd,stdin::AsyncStream)
     return takebuf_string(out.buffer)
 end
 
-writeall(cmd::AbstractCmd, stdout::String) = writeall(cmd, stdout, null_handle)
+writeall(cmd::AbstractCmd, stdin::String) = writeall(cmd, stdin, null_handle)
 function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream)
     (in,pc) = writesto(cmd, stdout)
     write(in, stdin)

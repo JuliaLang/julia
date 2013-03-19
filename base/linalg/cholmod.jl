@@ -15,12 +15,6 @@ export                                  # types
 using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
  
 import Base.(*)
-import Base.(\)
-import Base.A_mul_Bc
-import Base.A_mul_Bt
-import Base.Ac_ldiv_B
-import Base.At_ldiv_B
-import Base.Ac_mul_B
 import Base.convert
 import Base.copy
 import Base.ctranspose
@@ -36,10 +30,18 @@ import Base.sort!
 import Base.transpose
 import Base.vcat
 
+import LinAlg.(\)
+import LinAlg.A_mul_Bc
+import LinAlg.A_mul_Bt
+import LinAlg.Ac_ldiv_B
+import LinAlg.At_ldiv_B
+import LinAlg.Ac_mul_B
 import LinAlg.Factorization
 import LinAlg.cholfact
 import LinAlg.cholfact!
 import LinAlg.copy
+import LinAlg.det
+import LinAlg.diag
 import LinAlg.diagmm
 import LinAlg.diagmm!
 import LinAlg.logdet
@@ -787,6 +789,10 @@ chm_analyze(A::SparseMatrixCSC) = chm_analyze(CholmodSparse(A))
 chm_print(A::CholmodSparse, lev::Integer) = chm_print(A, lev, "")
 chm_print(A::CholmodFactor, lev::Integer) = chm_print(L, lev, "")
 
+function chm_scale!{T<:CHMVTypes}(A::CholmodSparse{T},S::CholmodDense{T},typ::Integer)
+    chm_scale!(A.c,S.c,typ)
+end
+
 chm_speye(m::Integer, n::Integer) = chm_speye(m, n, 1., 1) # default element type is Float32
 chm_speye(n::Integer) = chm_speye(n, n, 1.)             # default shape is square
 
@@ -824,9 +830,6 @@ function size(A::CholmodSparse, d::Integer)
 end
 size(L::CholmodFactor) = (n = int(L.c.n); (n,n))
 size(L::CholmodFactor,d::Integer) = d < 1 ? error("dimension out of range") : (d <= 2 ? int(L.c.n) : 1)
-function chm_scale!{T<:CHMVTypes}(A::CholmodSparse{T},S::CholmodDense{T},typ::Integer)
-    chm_scale!(A.c,S.c,typ)
-end
 
 function solve{Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},
                                             B::SparseMatrixCSC{Tv,Ti},typ::Integer)
@@ -866,7 +869,7 @@ function findn_nzs{Tv,Ti}(A::CholmodSparse{Tv,Ti})
     (increment!(A.rowval0[ind]), jj[ind], A.nzval[ind])
 end
 
-findn_nzs(L::CholmodFactor) = findn_nzs(chm_fac_to_sp(L))
+findn_nzs(L::CholmodFactor) = findn_nzs(CholmodSparse(L))
 
 function diag{Tv}(A::CholmodSparse{Tv})
     minmn = min(size(A))
@@ -909,5 +912,7 @@ function logdet{Tv,Ti}(L::CholmodFactor{Tv,Ti})
     end
     L.c.is_ll != 0 ? 2res : res
 end
+
+det(L::CholmodFactor) = exp(logdet(L))
 
 end #module
