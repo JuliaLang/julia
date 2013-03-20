@@ -135,7 +135,7 @@ clean: | $(CLEAN_TARGETS)
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
 	@rm -fr $(BUILD)/$(JL_LIBDIR)
-#	@$(MAKE) -C deps clean-uv
+	@$(MAKE) -C deps clean-uv
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* clean cleanall \
