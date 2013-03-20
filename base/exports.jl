@@ -1124,6 +1124,7 @@ export
 # C interface
     c_free,
     dlopen,
+    dlopen_e,
     dlclose,
     dlsym,
     dlsym_e,
