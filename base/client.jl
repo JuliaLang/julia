@@ -264,10 +264,13 @@ is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
 function init_load_path()
+    vers="v$(VERSION.major).$(VERSION.minor)"
     global const LOAD_PATH = ByteString[
         ".", # TODO: should we really look here?
         abspath(Pkg.dir()),
         abspath(JULIA_HOME,"..","share","julia","extras"),
+        abspath(JULIA_HOME,"..","local","share","julia","site",vers),
+        abspath(JULIA_HOME,"..","share","julia","site",vers)
     ]
 end
 
