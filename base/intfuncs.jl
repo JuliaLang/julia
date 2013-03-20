@@ -274,7 +274,7 @@ end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
 
-function base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
+function _base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
     if !(2 <= b <= length(symbols)) error("invalid base: $b") end
     i = neg + max(pad,ndigits0z(x,b))
     a = Array(Uint8,i)
@@ -286,12 +286,11 @@ function base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-base(b::Int, x::Unsigned, p::Int, n::Bool)            = base(dig_syms, b, x, p, n)
-base(s::Array{Uint8}, x::Unsigned, p::Int, n::Bool)   = base(s, length(s), x, p, n)
-base(b::Union(Int,Array{Uint8}), x::Unsigned, p::Int) = base(b,x,p,false)
-base(b::Union(Int,Array{Uint8}), x::Unsigned)         = base(b,x,1,false)
-base(b::Union(Int,Array{Uint8}), x::Integer, p::Int)  = base(b,unsigned(abs(x)),p,x<0)
-base(b::Union(Int,Array{Uint8}), x::Integer)          = base(b,unsigned(abs(x)),1,x<0)
+
+base(base::Integer, n::Integer, pad::Integer) = _base(dig_syms,int(base),unsigned(abs(n)),pad,n<0)
+base(symbols::Array{Uint8}, n::Integer, p::Integer) = _base(symbols,length(symbols),unsigned(abs(n)),p,n<0)
+base(base_or_symbols::Union(Integer,Array{Uint8}), n::Integer) = base(base_or_symbols, n, 1)
+
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
