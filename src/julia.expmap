@@ -238,6 +238,7 @@
     jl_reshape_array;
     jl_restore_system_image;
     jl_run_event_loop;
+    jl_run_once;
     jl_save_system_image;
     jl_set_const;
     jl_set_current_module;

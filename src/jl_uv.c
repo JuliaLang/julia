@@ -220,14 +220,19 @@ DLLEXPORT uv_tcp_t *jl_make_tcp(uv_loop_t* loop, jl_value_t *julia_struct)
 
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 
+DLLEXPORT int jl_run_once(uv_loop_t *loop)
+{
+    if (loop) return uv_run(loop,UV_RUN_ONCE);
+}
+
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
     if (loop) uv_run(loop,UV_RUN_DEFAULT);
 }
 
-DLLEXPORT void jl_process_events(uv_loop_t *loop)
+DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
-    if (loop) uv_run(loop,UV_RUN_NOWAIT);
+    if (loop) return uv_run(loop,UV_RUN_NOWAIT);
 }
 
 DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only, jl_value_t *julia_struct)
