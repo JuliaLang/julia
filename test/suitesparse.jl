@@ -112,7 +112,12 @@ A = CholmodSparse!(int32([0,1,2,3,6,9,12,15,18,20,25,30,34,36,39,43,47,52,58,62,
 @test isvalid(A)
 
 B = A * ones(size(A,2))
-chma = cholfact(A)
+chma = cholfact(A)                      # LDL' form
+@test isvalid(chma)
+x = chma\B
+@test_approx_eq x.mat ones(size(x))
+
+chma = cholfact(A,true)                 # LL' form
 @test isvalid(chma)
 x = chma\B
 @test_approx_eq x.mat ones(size(x))
