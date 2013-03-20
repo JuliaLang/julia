@@ -1032,14 +1032,15 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         char *n = fname->name;
         jl_value_t *errstream = jl_stderr_obj();
         JL_STREAM *s = JL_STDERR;
-        JL_PRINTF(s, "Warning: New definition %s", n);
+        JL_PRINTF(s, "Warning: New definition \n    %s", n);
         jl_show(errstream, (jl_value_t*)type);
-        JL_PRINTF(s, " is ambiguous with %s", n);
+        print_func_loc(s, linfo);
+        JL_PRINTF(s, "\nis ambiguous with \n    %s", n);
         jl_show(errstream, (jl_value_t*)sig);
         print_func_loc(s, oldmeth->func->linfo);
-        JL_PRINTF(s, ".\n         Make sure %s", n);
+        JL_PRINTF(s, ".\nMake sure \n    %s", n);
         jl_show(errstream, isect);
-        JL_PRINTF(s, " is defined first.\n");
+        JL_PRINTF(s, "\nis defined first.\n");
     done_chk_amb:
         JL_GC_POP();
     }

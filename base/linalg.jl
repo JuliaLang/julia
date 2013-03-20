@@ -13,8 +13,9 @@ export
     BunchKaufman,
     CholeskyDense,
     CholeskyPivotedDense,
+    EigenDense,
     GSVDDense,
-    Hessenberg,
+    HessenbergDense,
     LUDense,
     LUTridiagonal,
     LDLTTridiagonal,
@@ -43,8 +44,8 @@ export
     diff,
     dot,
     eig,
-    eigenfact!,
-    eigenfact,
+    eigfact,
+    eigfact!,
     eigs,
     eigvals,
     expm,
@@ -53,6 +54,7 @@ export
     factors,
     hess,
     hessfact,
+    hessfact!,
     ishermitian,
     isposdef,
     isposdef!,
@@ -146,6 +148,7 @@ include("linalg/dense.jl")
 include("linalg/factorization.jl")
 
 include("linalg/bunchkaufman.jl")
+include("linalg/triangular.jl")
 include("linalg/hermitian.jl")
 include("linalg/woodbury.jl")
 include("linalg/tridiag.jl")

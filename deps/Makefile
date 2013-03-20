@@ -158,7 +158,8 @@ LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
 endif
 
-LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-static --enable-targets=host --disable-bindings --disable-docs
+LLVM_TARGET_FLAGS= --enable-targets=host
+LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions --enable-optimized

@@ -123,7 +123,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     
         x = a[:,1:2]\b                  # Matrix rhs
         @test_approx_eq det((a[:,1:2]*x-b)'*(a[:,1:2]*x-b)) convert(elty, 4.437969924812031)
-    
+
         x = a\b                         # Rank deficient
         @test_approx_eq det((a*x-b)'*(a*x-b)) convert(elty, 4.437969924812031)
 
@@ -280,6 +280,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
             F[i+1,i] = dl[i]
         end
         @test full(T) == F
+                                        # elementary operations on tridiagonals
+# Disable these tests until fixed.
+#        @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
+#        @test transpose(T) == Tridiagonal(du, d, du)
+#        @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+
                                         # tridiagonal linear algebra
         v = convert(Vector{elty}, v)
         @test_approx_eq T*v F*v

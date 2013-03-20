@@ -317,15 +317,21 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
             if (ff->linfo->cFunctionObject != NULL) {
                 jl_lambda_info_t *li = ff->linfo;
                 jl_value_t *astrt = jl_ast_rettype(li, li->ast);
-                if (jl_types_equal((jl_value_t*)li->specTypes, argt) &&
-                    (jl_types_equal(astrt, rt) ||
-                     (astrt==(jl_value_t*)jl_nothing->type && rt==(jl_value_t*)jl_bottom_type))) {
-                    return jl_ExecutionEngine->getPointerToFunction((Function*)ff->linfo->cFunctionObject);
-                }
-                else {
-                    jl_errorf("function_ptr: type signature of %s does not match",
+                if (!jl_types_equal((jl_value_t*)li->specTypes, argt)) {
+                    jl_errorf("cfunction: type signature of %s does not match",
                               li->name->name);
                 }
+                if (!jl_types_equal(astrt, rt) &&
+                    !(astrt==(jl_value_t*)jl_nothing->type && rt==(jl_value_t*)jl_bottom_type)) {
+                    if (astrt == (jl_value_t*)jl_bottom_type) {
+                        jl_errorf("cfunction: %s does not return", li->name->name);
+                    }
+                    else {
+                        jl_errorf("cfunction: return type of %s does not match",
+                                  li->name->name);
+                    }
+                }
+                return jl_ExecutionEngine->getPointerToFunction((Function*)ff->linfo->cFunctionObject);
             }
         }
     }
