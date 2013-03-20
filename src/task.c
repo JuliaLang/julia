@@ -528,12 +528,12 @@ DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
     return (jl_value_t*)bt;
 }
 
-DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip)
+DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int doCframes)
 {
     const char *func_name;
     int line_num;
     const char *file_name;
-    (void)frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, 0);
+    (void)frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
     if (func_name != NULL) {
         jl_value_t *r = (jl_value_t*)jl_alloc_tuple(3);
         JL_GC_PUSH(&r);
