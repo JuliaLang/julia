@@ -784,7 +784,7 @@
                                 (loop (list* 'ref ex (cdr al)))))
                            ((comprehension)
                             (loop (list* 'typed_comprehension ex (cdr al))))
-                           ((dict-comprehension)
+                           ((dict_comprehension)
                             (loop (list* 'typed_dict_comprehension ex (cdr al))))
                            (else (error "unknown parse-cat result (internal error)"))))))
 		  ((|.|)
