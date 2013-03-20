@@ -7,13 +7,10 @@
 <dict>
 	<key>fileTypes</key>
 	<array>
-		<string>j</string>
 		<string>jl</string>
-		<string>jul</string>
-		<string>julia</string>
 	</array>
 	<key>firstLineMatch</key>
-	<string>^#!/usr/bin/env\s+julia\s*$</string>
+	<string>^#!.*\bjulia\s*$</string>
 	<key>foldingStartMarker</key>
 	<string>^\s*(?:if|while|for|begin|function|macro|module|baremodule|type|immutable|let)\b(?!.*\bend\b).*$</string>
 	<key>foldingStopMarker</key>
@@ -164,7 +161,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(?:function|type|immutable|macro|quote|abstract|bitstype|Base|Main|Core|typealias|module|baremodule|new)\b</string>
+					<string>\b(?:function|type|immutable|macro|quote|abstract|bitstype|typealias|module|baremodule|new)\b</string>
 					<key>name</key>
 					<string>keyword.other.julia</string>
 				</dict>
@@ -186,12 +183,6 @@
 					<key>name</key>
 					<string>variable.macro.julia</string>
 				</dict>
-				<dict>
-					<key>match</key>
-					<string>\b(true|false|nothing|NA)\b</string>
-					<key>name</key>
-					<string>constant.language.julia</string>
-				</dict>
 			</array>
 		</dict>
 		<key>number</key>
@@ -200,7 +191,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>((\b0(x|X)[0-9a-fA-F]*)|((\b[0-9]+\.?[0-9]*)|(\.[0-9]+))((e|E)(\+|-)?[0-9]*)?(im)?|\bInf(32)?\b|\bNaN(32)?\b|\be\b|\bpi\b)</string>
+					<string>((\b0(x|X)[0-9a-fA-F]*)|((\b[0-9]+\.?[0-9]*)|(\.[0-9]+))((e|E)(\+|-)?[0-9]*)?(im)?|\bInf(32)?\b|\bNaN(32)?\b|\btrue\b|\bfalse\b)</string>
 					<key>name</key>
 					<string>constant.numeric.julia</string>
 				</dict>
@@ -531,12 +522,6 @@
 					<string>(type|immutable)\s+([a-zA-Z0-9_]+)(\s*(&lt;:)\s*[.a-zA-Z0-9_:]+)?</string>
 					<key>name</key>
 					<string>meta.type.julia</string>
-				</dict>
-				<dict>
-					<key>match</key>
-					<string>\b(Int8|Int16|Int32|Int64|Int128|Uint8|Uint16|Uint32|Uint64|Uint128|Float32|Float64|Bool|Char|Int|Uint|Void|Any)\b</string>
-					<key>name</key>
-					<string>support.other.bit-types.julia</string>
 				</dict>
 				<dict>
 					<key>captures</key>

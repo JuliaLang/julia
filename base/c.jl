@@ -20,11 +20,12 @@ const RTLD_NOLOAD    = 0x00000010
 const RTLD_DEEPBIND  = 0x00000020
 const RTLD_FIRST     = 0x00000040
 
-dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
-dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
+dlsym(hnd, s::Union(Symbol,String)) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym_e(hnd, s::Union(Symbol,String)) = ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlopen(s::String, flags::Integer) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
+dlopen_e(s::String, flags::Integer) = ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
 dlopen(s::String) = dlopen(s, RTLD_LAZY | RTLD_DEEPBIND)
+dlopen_e(s::String) = dlopen_e(s, RTLD_LAZY | RTLD_DEEPBIND)
 dlclose(p::Ptr) = ccall(:uv_dlclose,Void,(Ptr{Void},),p)
 
 cfunction(f::Function, r, a) =

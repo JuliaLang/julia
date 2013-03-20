@@ -68,7 +68,7 @@ int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
 #endif
 }
 
-uv_lib_t *jl_load_dynamic_library(char *modname, unsigned flags)
+uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
 {
     int error;
     char *ext;
@@ -112,13 +112,25 @@ uv_lib_t *jl_load_dynamic_library(char *modname, unsigned flags)
     if (!error) goto done;
 #endif
 
-    //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
-    jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
+    if (throw_err) {
+        //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
+        jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
+    }
     uv_dlclose(handle);
     free(handle);
     return NULL;
 done:
     return handle;
+}
+
+uv_lib_t *jl_load_dynamic_library_e(char *modname, unsigned flags)
+{
+    return jl_load_dynamic_library_(modname, flags, 0);
+}
+
+uv_lib_t *jl_load_dynamic_library(char *modname, unsigned flags)
+{
+    return jl_load_dynamic_library_(modname, flags, 1);
 }
 
 void *jl_dlsym_e(uv_lib_t *handle, char *symbol)

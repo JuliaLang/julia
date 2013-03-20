@@ -17,7 +17,8 @@ next(t::Tuple, i::Int) = (t[i], i+1)
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
 indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
-indexed_next(I, i, state) = next(I, state)
+indexed_next(a::Array, i::Int, state) = (a[i], i+1)
+indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
 
 ## mapping ##
 
