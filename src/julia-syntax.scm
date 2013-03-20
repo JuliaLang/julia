@@ -99,7 +99,7 @@
 		,(expand-update-operator- op nuref rhs)))
       (expand-update-operator- op lhs rhs)))
 
-(define (dotop? o) (eqv? (string.char (string o) 0) #\.))
+(define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)))
 
 ;; accumulate a series of comparisons, with the given "and" constructor,
 ;; exit criteria, and "take" function that consumes part of a list,
