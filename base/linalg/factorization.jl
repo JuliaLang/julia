@@ -355,55 +355,56 @@ end
 ## Lower priority: Add LQ, QL and RQ factorizations
 
 # FIXME! Should add balancing option through xgebal
-type Hessenberg{T} <: Factorization{T}
+type HessenbergDense{T} <: Factorization{T}
     hh::Matrix{T}
     tau::Vector{T}
-    function Hessenberg(hh::Matrix{T}, tau::Vector{T})
+    function HessenbergDense(hh::Matrix{T}, tau::Vector{T})
         if size(hh, 1) != size(hh, 2) throw(LAPACK.DimensionMismatch("")) end
         return new(hh, tau)
     end
 end
-Hessenberg{T<:BlasFloat}(hh::Matrix{T}, tau::Vector{T}) = Hessenberg{T}(hh, tau)
-Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
+HessenbergDense{T<:BlasFloat}(hh::Matrix{T}, tau::Vector{T}) = HessenbergDense{T}(hh, tau)
+HessenbergDense(A::StridedMatrix) = HessenbergDense(LAPACK.gehrd!(A)...)
 
-hessfact(A::StridedMatrix) = Hessenberg(copy(A))
+hessfact!(A::StridedMatrix) = HessenbergDense(A)
+hessfact(A::StridedMatrix)  = hessfact!(copy(A))
 
-type HessenbergQ{T} <: AbstractMatrix{T}
+type HessenbergDenseQ{T} <: AbstractMatrix{T}
     hh::Matrix{T}
     tau::Vector{T}
 end
-HessenbergQ(A::Hessenberg) = HessenbergQ(A.hh, A.tau)
-size(A::HessenbergQ, args...) = size(A.hh, args...)
-getindex(A::HessenbergQ, args...) = getindex(full(A), args...)
+HessenbergDenseQ(A::HessenbergDense) = HessenbergDenseQ(A.hh, A.tau)
+size(A::HessenbergDenseQ, args...) = size(A.hh, args...)
+getindex(A::HessenbergDenseQ, args...) = getindex(full(A), args...)
 
-function getindex(A::Hessenberg, d::Symbol)
-    if d == :Q; return HessenbergQ(A); end
+function getindex(A::HessenbergDense, d::Symbol)
+    if d == :Q; return HessenbergDenseQ(A); end
     if d == :H; return triu(A.hh, -1); end
     error("No such property")
 end
 
-full(A::HessenbergQ) = LAPACK.orghr!(1, size(A.hh, 1), copy(A.hh), A.tau)
+full(A::HessenbergDenseQ) = LAPACK.orghr!(1, size(A.hh, 1), copy(A.hh), A.tau)
 
-# Eigenvalues
-type Eigen{T} <: Factorization{T}
+# EigenDensevalues
+type EigenDense{T} <: Factorization{T}
     values::Vector
     vectors::Matrix{T}
 end
 
-function getindex(A::Eigen, d::Symbol)
+function getindex(A::EigenDense, d::Symbol)
     if d == :values return A.values end
     if d == :vectors return A.vectors end
     error("No such property")
 end
 
-function eigenfact!{T<:BlasFloat}(A::StridedMatrix{T})
+function eigfact!{T<:BlasFloat}(A::StridedMatrix{T})
     n = size(A, 2)
-    if n == 0; return Eigen(zeros(T, 0), zeros(T, 0, 0)) end
-    if ishermitian(A) return eigenfact!(Hermitian(A)) end
-    if iscomplex(A) return Eigen(LAPACK.geev!('N', 'V', A)[[1,3]]...) end
+    if n == 0; return EigenDense(zeros(T, 0), zeros(T, 0, 0)) end
+    if ishermitian(A) return eigfact!(Hermitian(A)) end
+    if iscomplex(A) return EigenDense(LAPACK.geev!('N', 'V', A)[[1,3]]...) end
 
     WR, WI, VL, VR = LAPACK.geev!('N', 'V', A)
-    if all(WI .== 0.) return Eigen(WR, VR) end
+    if all(WI .== 0.) return EigenDense(WR, VR) end
     evec = complex(zeros(T, n, n))
     j = 1
     while j <= n
@@ -416,15 +417,15 @@ function eigenfact!{T<:BlasFloat}(A::StridedMatrix{T})
         end
         j += 1
     end
-    return Eigen(complex(WR, WI), evec)
+    return EigenDense(complex(WR, WI), evec)
 end
 
-eigenfact(A::StridedMatrix) = eigenfact!(copy(A))
-eigenfact{T<:Integer}(x::StridedMatrix{T}) = eigenfact(float64(x))
-eigenfact(x::Number) = (x, one(x))
+eigfact(A::StridedMatrix) = eigfact!(copy(A))
+eigfact{T<:Integer}(x::StridedMatrix{T}) = eigfact(float64(x))
+eigfact(x::Number) = (x, one(x))
 
 function eig(A::Union(Number, StridedMatrix))
-    F = eigenfact(A)
+    F = eigfact(A)
     return F[:values], F[:vectors]
 end
 
@@ -438,8 +439,8 @@ end
 
 eigvals(x::Number) = 1.0
 
-inv(A::Eigen) = diagmm(A[:vectors], 1.0/A[:values])*A[:vectors]'
-det(A::Eigen) = prod(A[:values])
+inv(A::EigenDense) = diagmm(A[:vectors], 1.0/A[:values])*A[:vectors]'
+det(A::EigenDense) = prod(A[:values])
 
 # SVD
 type SVDDense{T,Tr} <: Factorization{T}

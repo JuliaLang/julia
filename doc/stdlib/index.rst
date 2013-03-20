@@ -16,6 +16,8 @@ Built-ins
    :maxdepth: 1
 
    base
+   sparse
+   linalg
    constants
    file
    punctuation
@@ -29,12 +31,4 @@ Built-in Modules
 
    sort
 
-****************
-Math & Numerical
-****************
-
-.. toctree::
-   :maxdepth: 1
-
-   blas
 

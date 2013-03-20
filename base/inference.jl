@@ -1,6 +1,6 @@
 # parameters limiting potentially-infinite types
 const MAX_TYPEUNION_LEN = 3
-const MAX_TYPE_DEPTH = 2
+const MAX_TYPE_DEPTH = 4
 const MAX_TUPLETYPE_LEN  = 8
 const MAX_TUPLE_DEPTH = 4
 
@@ -362,6 +362,9 @@ const apply_type_tfunc = function (A, args...)
         # doesn't match, which could happen if a type estimate is too coarse
         appl = args[1]
         uncertain = true
+    end
+    if type_too_complex(appl,0)
+        return args[1]
     end
     uncertain ? Type{TypeVar(:_,appl)} : Type{appl}
 end
@@ -904,7 +907,7 @@ function type_too_complex(t::ANY, d)
     if isa(t,UnionType)
         p = t.types
     elseif isa(t,DataType)
-        return false
+        p = t.parameters
     elseif isa(t,Tuple)
         p = t
     elseif isa(t,TypeVar)
@@ -1037,7 +1040,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #if dbg
     #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
     #end
-    #print("typeinf ", linfo.name, " ", atypes, "\n")
+    #print("typeinf ", linfo.name, " ", atypes, " ", linfo.file,":",linfo.line,"\n")
     # if isdefined(:STDOUT)
     #     write(STDOUT, "typeinf ")
     #     write(STDOUT, string(linfo.name))
@@ -1622,6 +1625,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         return NF
     end
     sp = meth[2]::Tuple
+    sp = tuple(sp..., meth[3].sparams...)
     spvals = { sp[i] for i in 2:2:length(sp) }
     for i=1:length(spvals)
         if isa(spvals[i],TypeVar)

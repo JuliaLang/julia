@@ -666,6 +666,16 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
     return a
 end
 
+function prepend!{T}(a::Array{T,1}, items::Array{T,1})
+    if is(T,None)
+        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+    end
+    n = length(items)
+    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
+    a[1:n] = items
+    return a
+end
+
 function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
@@ -1123,14 +1133,6 @@ function vcat{T}(arrays::Array{T,1}...)
 end
 
 ## find ##
-
-function nnz(a)
-    n = 0
-    for i = 1:length(a)
-        n += bool(a[i]) ? 1 : 0
-    end
-    return n
-end
 
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(A, start::Integer)
