@@ -545,12 +545,12 @@ function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
 
-## Unary arithmetic operators
+## Unary arithmetic and boolean operators
 
 for op in (:-, )
     @eval begin
 
-        function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
+        function ($op)(A::SparseMatrixCSC)
             B = copy(A)
             nzvalB = B.nzval
             for i=1:length(nzvalB)
@@ -562,9 +562,10 @@ for op in (:-, )
     end
 end
 
-## Binary arithmetic operators
+## Binary arithmetic and boolean operators
 
-for op in (:+, :-, :.*, :.^)
+for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing), (:.^, Nothing), 
+                       (:(.<), Bool) )
     @eval begin
 
         function ($op){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
@@ -586,7 +587,11 @@ for op in (:+, :-, :.*, :.^)
             nnzS = nnz(A) + nnz(B)
             colptrS = Array(Ti, A.n+1)
             rowvalS = Array(Ti, nnzS)
-            nzvalS = Array(Tv, nnzS)
+            if $restype == Nothing
+                nzvalS = Array(Tv, nnzS)
+            else
+                nzvalS = Array($restype, nnzS)
+            end
 
             z = zero(Tv)
 
@@ -693,6 +698,9 @@ end # macro
 (.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, dense(B))
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(dense(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, dense(B))
+
+(.<)(A::SparseMatrixCSC, B::Number) = (.<)(dense(A), B)
+(.<)(A::Number, B::SparseMatrixCSC) = (.<)(A, dense(B))
 
 # Reductions
 
