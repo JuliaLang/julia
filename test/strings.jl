@@ -133,17 +133,17 @@ end
 @test "\x0F" == unescape_string("\\x0F")
 
 # integer parsing
-@test parse_int(Int32,"0",36) == 0
-@test parse_int(Int32,"1",36) == 1
-@test parse_int(Int32,"9",36) == 9
-@test parse_int(Int32,"A",36) == 10
-@test parse_int(Int32,"a",36) == 10
-@test parse_int(Int32,"B",36) == 11
-@test parse_int(Int32,"b",36) == 11
-@test parse_int(Int32,"F",36) == 15
-@test parse_int(Int32,"f",36) == 15
-@test parse_int(Int32,"Z",36) == 35
-@test parse_int(Int32,"z",36) == 35
+@test is(parse_int(Int32,"0",36),int32(0))
+@test is(parse_int(Int32,"1",36),int32(1))
+@test is(parse_int(Int32,"9",36),int32(9))
+@test is(parse_int(Int32,"A",36),int32(10))
+@test is(parse_int(Int32,"a",36),int32(10))
+@test is(parse_int(Int32,"B",36),int32(11))
+@test is(parse_int(Int32,"b",36),int32(11))
+@test is(parse_int(Int32,"F",36),int32(15))
+@test is(parse_int(Int32,"f",36),int32(15))
+@test is(parse_int(Int32,"Z",36),int32(35))
+@test is(parse_int(Int32,"z",36),int32(35))
 
 @test parse_int("0") == 0
 @test parse_int("-0") == 0
