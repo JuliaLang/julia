@@ -1152,6 +1152,12 @@
        args
        `((keywords ,@kws) ,@args))))
 
+(define (has-keywords? lst)
+  (and (pair? lst) (pair? (car lst)) (eq? (caar lst) 'keywords)))
+
+(define (has-parameters? lst)
+  (and (pair? lst) (pair? (car lst)) (eq? (caar lst) 'parameters)))
+
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
 ; . expressions after a ; are enclosed in (parameters ...)
@@ -1175,8 +1181,15 @@
 			 ;; allow f(a, b; )
 			 (begin (take-token s)
 				(reverse lst))
-			 (reverse (cons (cons 'parameters (loop '()))
-					lst))))
+			 (let ((params (loop '()))
+			       (lst    (separate-keywords (reverse lst))))
+			   (let ((params (cons 'parameters
+					       (if (has-keywords? params)
+						   (append (cdar params) (cdr params))
+						   params))))
+			     (if (has-keywords? lst)
+				 (list* (car lst) params (cdr lst))
+				 (list* params lst))))))
 	      (let* ((nxt (parse-eq* s))
 		     (c (require-token s)))
 		(cond ((eqv? c #\,)
