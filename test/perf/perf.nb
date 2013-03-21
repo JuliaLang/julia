@@ -1,0 +1,10 @@
+(* fibonacci *)
+fib = Compile[{{n, _Integer}}, If[n < 3, 1, fib[n - 1] + fib[n - 2]]];
+
+(* mandelbrot *)
+mandel = Compile[{{a, _Real, 1}}, 
+   Module[{z = 0 I, i = 0}, 
+    While[i++ < 79 && Abs[z] <= 2, z = z^2 + a[[1]] + a[[2]]*I]; i], 
+   RuntimeAttributes -> {Listable}, CompilationTarget -> "C",  RuntimeOptions -> "Speed"];
+
+Flatten@mandel@Table[{y, x}, {x, -1, 1, .01}, {y, -2, 0.5, .01}]
