@@ -171,7 +171,7 @@ function trace{T}(A::Matrix{T})
     return t
 end
 
-kron(a::Vector, b::Vector) = [ a[i]*b[j] for i=1:length(a), j=1:length(b) ]
+kron(a::Vector, b::Vector) = vec([ a[i]*b[j] for j=1:length(b), i=1:length(a) ])
 
 function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
