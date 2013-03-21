@@ -12,6 +12,7 @@ copyfiles:
 	cp -a ~/.julia/Tk/deps/usr/* ./julia/
 	rm -f julia/lib/*.{a,la}
 	chmod a+w julia/lib/*.dylib
+	mkdir julia.dmgCreator_build
 
 rewritepaths:
 	(for lib in julia/lib/*.dylib; do ./run-install-name-tool-change.sh $$lib $$HOME/.julia/Cairo/deps/usr/lib/ lib/ change; done)
@@ -20,4 +21,3 @@ rewritepaths:
 
 clean:
 	rm -fr julia *.app julia.dmgCreator_build *.dmg
-	mkdir julia.dmgCreator_build
