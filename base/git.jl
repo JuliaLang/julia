@@ -19,6 +19,25 @@ attached() = success(`git symbolic-ref -q HEAD` > SpawnNullStream())
 branch() = readchomp(`git rev-parse --symbolic-full-name --abbrev-ref HEAD`)
 head() = readchomp(`git rev-parse HEAD`)
 
+function transact(f::Function)
+    head = readchomp(`git rev-parse HEAD`)
+    index = readchomp(`git write-tree`)
+    worktree = try
+        run(`git add --all`)
+        run(`git add .`)
+        readchomp(`git write-tree`)
+    finally
+        run(`git read-tree $index`)              # restore index
+    end
+    try f() catch
+        run(`git checkout -q -f $worktree -- .`) # retore work tree
+        run(`git clean -df`)                     # remove everything else
+        run(`git read-tree $index`)              # restore index
+        run(`git reset -q --soft $head`)         # restore head
+        rethrow()
+    end
+end
+
 function each_tagged_version()
     git_dir = abspath(dir())
     @task for line in eachline(`git --git-dir=$git_dir show-ref --tags`)
