@@ -156,8 +156,16 @@ function similar(A::SparseMatrixCSC, Tv::Type, Ti::Type)
     SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), Array(Tv, length(S.rowval)))
 end
 
-convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC) =
-    SparseMatrixCSC(S.m, S.n, convert(Vector{Ti},S.colptr), convert(Vector{Ti},S.rowval), convert(Vector{Tv},S.nzval))
+function convert{Tv,Ti,TvS,TiS}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC{TvS,TiS})
+    if Tv == TvS && Ti == TiS
+        return S
+    else
+        return SparseMatrixCSC(S.m, S.n, 
+                               convert(Vector{Ti},S.colptr), 
+                               convert(Vector{Ti},S.rowval), 
+                               convert(Vector{Tv},S.nzval))
+    end
+end
 
 convert(::Type{SparseMatrixCSC}, M::Matrix) = sparse(M)
 
@@ -537,12 +545,12 @@ function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
 
-## Unary arithmetic operators
+## Unary arithmetic and boolean operators
 
 for op in (:-, )
     @eval begin
 
-        function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
+        function ($op)(A::SparseMatrixCSC)
             B = copy(A)
             nzvalB = B.nzval
             for i=1:length(nzvalB)
@@ -554,10 +562,19 @@ for op in (:-, )
     end
 end
 
-## Binary arithmetic operators
+## Binary arithmetic and boolean operators
 
-for op in (:+, :-, :.*, :.^)
+for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing), (:.^, Nothing), 
+                       (:(.<), Bool) )
     @eval begin
+
+        function ($op){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
+            Tv = promote_type(TvA, TvB)
+            Ti = promote_type(TiA, TiB)
+            A  = convert(SparseMatrixCSC{Tv,Ti}, A)
+            B  = convert(SparseMatrixCSC{Tv,Ti}, B)
+            return ($op)(A, B)
+        end
 
         function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
             if size(A,1) != size(B,1) || size(A,2) != size(B,2)
@@ -570,7 +587,11 @@ for op in (:+, :-, :.*, :.^)
             nnzS = nnz(A) + nnz(B)
             colptrS = Array(Ti, A.n+1)
             rowvalS = Array(Ti, nnzS)
-            nzvalS = Array(Tv, nnzS)
+            if $restype == Nothing
+                nzvalS = Array(Tv, nnzS)
+            else
+                nzvalS = Array($restype, nnzS)
+            end
 
             z = zero(Tv)
 
@@ -677,6 +698,9 @@ end # macro
 (.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, dense(B))
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(dense(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, dense(B))
+
+(.<)(A::SparseMatrixCSC, B::Number) = (.<)(dense(A), B)
+(.<)(A::Number, B::SparseMatrixCSC) = (.<)(A, dense(B))
 
 # Reductions
 
