@@ -77,7 +77,7 @@ function show_backtrace(io::IO, t)
             :(:) #for when client.jl is not yet defined
         end
     for i = 1:length(t)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), t[i])
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Bool), t[i], false)
         if lkup === ()
             continue
         end

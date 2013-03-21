@@ -6,6 +6,10 @@ se33 = speye(3)
 do33 = ones(3)
 @test isequal(se33 * se33, se33)
 
+# check sparse binary op
+@test all(full(se33 + convert(SparseMatrixCSC{Float32,Int32}, se33)) == 2*eye(3))
+@test all(full(se33 * convert(SparseMatrixCSC{Float32,Int32}, se33)) == eye(3))
+
 # check horiz concatenation
 @test all([se33 se33] == sparse([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 5, 6], ones(6)))
 

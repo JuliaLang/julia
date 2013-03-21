@@ -1066,9 +1066,9 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
             break
         end
     end
-    sgn = one(T)
+    sgn = 1
     if T <: Signed && c == '-'
-        sgn = -sgn
+        sgn = -1
         if done(s,i)
             throw(ArgumentError(string(
                 "premature end of integer (in ", repr(s), ")"
@@ -1113,10 +1113,9 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
         c,i = next(s,i)
     end
     if T <: Signed
-        return flipsign(n,sgn)
-    else
-        return n
+        n = flipsign(n,sgn)
     end
+    return n
 end
 
 parse_int(s::String, base::Integer) = parse_int(Int,s,base)

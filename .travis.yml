@@ -5,7 +5,7 @@ compiler:
 notifications:
     email: false
 before_install:
-    - BUILDOPTS="LLVM_CONFIG=llvm-config-3.2 USE_QUIET=0 USE_LIB64=0"; for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP LIBUNWIND READLINE GLPK NGINX; do export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1"; done
+    - BUILDOPTS="LLVM_CONFIG=llvm-config-3.2 USE_QUIET=0 USE_LIB64=0"; for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP LIBUNWIND READLINE; do export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1"; done
     - sudo apt-get update -qq -y
     - sudo apt-get install zlib1g-dev
     - sudo add-apt-repository ppa:staticfloat/julia-deps -y

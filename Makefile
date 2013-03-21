@@ -1,6 +1,15 @@
 JULIAHOME = $(abspath .)
 include $(JULIAHOME)/Make.inc
 
+# TODO: Code bundled with Julia should be installed into a versioned directory,
+# PREFIX/share/julia/VERSDIR, so that in the future one can have multiple
+# major versions of Julia installed concurrently. Third-party code that
+# is not controlled by Pkg should be installed into
+# PREFIX/share/julia/site/VERSDIR (not PREFIX/share/julia/VERSDIR/site ...
+# so that PREFIX/share/julia/VERSDIR can be overwritten without touching
+# third-party code).
+VERSDIR = v`cut -d. -f1-2 < VERSION`
+
 all: default
 default: release
 
@@ -35,7 +44,7 @@ $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl $(BUILD)/share/julia/helpdb.jl
 	@#echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
 	$(QUIET_JULIA) cd base && \
-	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make clean'. If the error persists, 'make cleanall' may help."
+	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'."
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
@@ -55,7 +64,7 @@ JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
-	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" ; do \
+	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" "share/julia/site/"$(VERSDIR) ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 ifeq ($(OS), Darwin)
@@ -88,7 +97,7 @@ dist:
 #	-$(MAKE) -C deps clean-openblas
 	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
 ifeq ($(OS), Darwin)
-	-./contrib/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	-./contrib/mac/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 ifeq ($(OS), WINNT)
 	-[ -e dist-extras/7za.exe ] && cp dist-extras/7za.exe $(PREFIX)/bin/7z.exe
@@ -126,7 +135,7 @@ clean: | $(CLEAN_TARGETS)
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
 	@rm -fr $(BUILD)/$(JL_LIBDIR)
-#	@$(MAKE) -C deps clean-uv
+	@$(MAKE) -C deps clean-uv
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* clean cleanall \
