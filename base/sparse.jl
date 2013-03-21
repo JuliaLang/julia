@@ -156,8 +156,16 @@ function similar(A::SparseMatrixCSC, Tv::Type, Ti::Type)
     SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), Array(Tv, length(S.rowval)))
 end
 
-convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC) =
-    SparseMatrixCSC(S.m, S.n, convert(Vector{Ti},S.colptr), convert(Vector{Ti},S.rowval), convert(Vector{Tv},S.nzval))
+function convert{Tv,Ti,TvS,TiS}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC{TvS,TiS})
+    if Tv == TvS && Ti == TiS
+        return S
+    else
+        return SparseMatrixCSC(S.m, S.n, 
+                               convert(Vector{Ti},S.colptr), 
+                               convert(Vector{Ti},S.rowval), 
+                               convert(Vector{Tv},S.nzval))
+    end
+end
 
 convert(::Type{SparseMatrixCSC}, M::Matrix) = sparse(M)
 
@@ -558,6 +566,14 @@ end
 
 for op in (:+, :-, :.*, :.^)
     @eval begin
+
+        function ($op){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
+            Tv = promote_type(TvA, TvB)
+            Ti = promote_type(TiA, TiB)
+            A  = convert(SparseMatrixCSC{Tv,Ti}, A)
+            B  = convert(SparseMatrixCSC{Tv,Ti}, B)
+            return ($op)(A, B)
+        end
 
         function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
             if size(A,1) != size(B,1) || size(A,2) != size(B,2)
