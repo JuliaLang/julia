@@ -283,6 +283,15 @@
 	(map (lambda (x)    `(call (top TypeVar) ',x ,@bnd)) sl)
 	(map (lambda (x ub) `(call (top TypeVar) ',x ,ub ,@bnd)) sl upperbounds))))
 
+(define (sparam-name sp)
+  (cond ((symbol? sp)
+	 sp)
+	((and (length= sp 3)
+	      (eq? (car sp) '|<:|)
+	      (symbol? (cadr sp)))
+	 (cadr sp))
+	(else (error "malformed type parameter list"))))
+
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
 	 (values (reverse names) (reverse bounds)))
@@ -378,12 +387,54 @@
 			  ,@(if (null? vararg) '()
 				(list `(... ,(arg-name (car vararg)))))))))))))
 
+(define (optional-positional-defs name sparams req opt dfl body)
+  `(block
+    ,@(map (lambda (n)
+	     (let* ((passed (append req (list-head opt n)))
+		    ;; only keep static parameters used by these arguments
+		    (sp     (filter (lambda (sp)
+				      (contains (lambda (e) (eq? e (sparam-name sp)))
+						passed))
+				    sparams))
+		    (vals   (list-tail dfl n))
+		    (absent (list-tail opt n)) ;; absent arguments
+		    (body
+		     (if (any (lambda (defaultv)
+				;; does any default val expression...
+				(contains (lambda (e)
+					    ;; contain "e" such that...
+					    (any (lambda (a)
+						   ;; "e" is in an absent arg
+						   (contains (lambda (u)
+							       (eq? u e))
+							     a))
+						 absent))
+					  defaultv))
+			      vals)
+			 ;; then add only one next argument
+			 `(call ,name ,@(map arg-name passed) ,(car vals))
+			 ;; otherwise add all
+			 `(call ,name ,@(map arg-name passed) ,@vals))))
+	       (method-def-expr- name sp passed body)))
+	   (iota (length opt)))
+    ,(method-def-expr- name sparams (append req opt) body)))
+
 (define (method-def-expr name sparams argl body)
-  (if (and (pair? argl)
-           (pair? (car argl))
-           (eqv? (caar argl) 'keywords))
-      (keywords-method-def-expr name sparams argl body)
-      (method-def-expr- name sparams argl body)))
+  (if (has-keywords? argl)
+      ;; here (keywords ...) is optional positional args
+      (if (has-parameters? (cdr argl))
+	  ();; both!
+	  ;; optional positional only
+	  (let ((req (filter (lambda (x) (not (and (pair? x) (eq? (car x) '...))))
+			     (cdr argl)))
+		(opt (map cadr (cdar argl)))
+		(dfl (map caddr (cdar argl))))
+	    (optional-positional-defs name sparams req opt dfl body)))
+      (if (has-parameters? argl)
+	  ;; keywords only
+	  (keywords-method-def-expr name sparams argl body)
+	  ;; neither
+	  (method-def-expr- name sparams argl body))))
 
 (define (method-def-expr- name sparams argl body)
   (if (has-dups (llist-vars argl))
@@ -921,6 +972,23 @@
 			  (+ i 1)))))
       ,t)))
 
+(define (lower-kw-call f kw pa)
+  (let ((invalid (filter (lambda (x)
+			   (not (or (assignment? x)
+				    (and (pair? x) (eq? (car x) '...)))))
+			 kw)))
+    (if (pair? invalid)
+	(error (string "invalid keyword argument " (car invalid))))
+    `(call (top kwcall) ,f
+	   (call (top tuple)
+		 ,@(apply append
+			  (map (lambda (a)
+				 (if (assignment? a)
+				     `((quote ,(cadr a)) ,(caddr a))
+				     `(,a)))
+			       kw)))
+	   ,@pa)))
+
 (define patterns
   (pattern-set
    (pattern-lambda (block)
@@ -1026,6 +1094,19 @@
    (pattern-lambda (curly type . elts)
 		   `(call (top apply_type) ,type ,@elts))
 
+   ;; call with keywords
+   (pattern-lambda (call f (keywords . kwargs) ...)
+		   (let ((kw (if (and (length> __ 3)
+				      (pair? (cadddr __))
+				      (eq? (car (cadddr __)) 'parameters))
+				 (append kwargs (cdr (cadddr __)))
+				 kwargs)))
+		     (lower-kw-call f kw (if (eq? kw kwargs)
+					     (cdddr __)
+					     (cddddr __)))))
+   (pattern-lambda (call f (parameters . kwargs) ...)
+		   (lower-kw-call f kwargs (cdddr __)))
+
    ;; call with splat
    (pattern-lambda (call f ... (... _) ...)
 		   (let ((argl (cddr __)))
@@ -1046,15 +1127,6 @@
 				 (tuple-wrap (cdr a) (cons x run))))))
 		     `(call (top apply) ,f ,@(tuple-wrap argl '()))))
 
-   ;; call with keywords
-   (pattern-lambda (call f (keywords . args) ...)
-		   `(call ,f (call (top NKeywords) ,(length args))
-			  ,@(cdddr __)
-			  ,@(apply append
-				   (map (lambda (kw)
-					  `((quote ,(cadr kw)) ,(caddr kw)))
-					args))))
-
    ; tuple syntax (a, b...)
    ; note, directly inside tuple ... means Vararg type
    (pattern-lambda (tuple . args)
@@ -1065,12 +1137,6 @@
 				       `(curly Vararg ,(cadr x))
 				       x))
 				 args)))
-
-   ;; keywords syntax
-   #;(pattern-lambda (keywords . args)
-                   `(call (top Keywords)
-                          (tuple ,@(map (lambda (x) `(quote ,(cadr x))) args))
-                          (tuple ,@(map caddr args))))
 
    ;; dict syntax
    (pattern-lambda (dict . args)
