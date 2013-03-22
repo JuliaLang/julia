@@ -30,8 +30,9 @@ function transact(f::Function)
         run(`git read-tree $index`)              # restore index
     end
     try f() catch
+        run(`git reset -q --`)                   # unstage everything
         run(`git checkout -q -f $worktree -- .`) # retore work tree
-        run(`git clean -df`)                     # remove everything else
+        run(`git clean -qdf`)                    # remove everything else
         run(`git read-tree $index`)              # restore index
         run(`git reset -q --soft $head`)         # restore head
         rethrow()
