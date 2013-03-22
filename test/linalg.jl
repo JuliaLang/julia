@@ -395,14 +395,15 @@ end
 let
   a = [1, 2, 3]
   b = [4, 5, 6]
-  @test kron(a,b) == [4,5,6,8,10,12,12,15,18] 
-  @test kron(a',b') == [4 5 6 8 10 12 12 15 18]
-  @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]
-  @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]
-  @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]
-  @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3]
-  @test kron(eye(2),2) == 2*eye(2)
-  @test kron(3,eye(3)) == 3*eye(3)
-  @test kron(a,2) == [2, 4, 6]
-  @test kron(b',2) == [8 10 12]
+  @test kron(eye(2),eye(2)) == eye(4)
+  @test kron(a,b) == [4,5,6,8,10,12,12,15,18]             
+  @test kron(a',b') == [4 5 6 8 10 12 12 15 18]           
+  @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]         
+  @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]         
+  @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]  
+  @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3] 
+  @test kron(eye(2),2) == 2*eye(2)                        
+  @test kron(3,eye(3)) == 3*eye(3)                        
+  @test kron(a,2) == [2, 4, 6]                            
+  @test kron(b',2) == [8 10 12]                              
 end
