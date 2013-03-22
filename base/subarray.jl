@@ -75,7 +75,8 @@ function sub(A::SubArray, i::RangeIndex...)
             j += 1
         end
     end
-    sub(A.parent, tuple(newindexes...))
+    ni = tuple(newindexes...)
+    SubArray{eltype(A),L,typeof(A.parent),typeof(ni)}(A.parent, ni)
 end
 
 function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
@@ -188,33 +189,63 @@ function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
     ref(s.parent, t)
 end
 
+function translate_indexes(s::SubArray, I::Union(Real,AbstractArray)...)
+    I = indices(I)
+    nds = ndims(s)
+    n = length(I)
+    if n > nds
+        throw(BoundsError())
+    end
+    ndp = ndims(s.parent) - (nds-n)
+    newindexes = Array(Any, ndp)
+    sp = strides(s.parent)
+    j = 1
+    for i = 1:ndp
+        t = s.indexes[i]
+        if s.strides[j] == sp[i]
+            #TODO: don't generate the dense vector indexes if they can be ranges
+            if j==n && n < nds
+                newindexes[i] = translate_linear_indexes(s, j, I[j])
+            else
+                newindexes[i] = isa(t, Int) ? t : t[I[j]]
+            end
+            j += 1
+        else
+            newindexes[i] = t
+        end
+    end
+    newindexes
+end
+
 # translate a linear index vector I for dim n to a linear index vector for
 # the parent array
 function translate_linear_indexes(s, n, I)
     idx = Array(Int, length(I))
     ssztail = size(s)[n:]
-    psztail = size(s.parent)[n:]
+    pdims = parentdims(s)
+    psztail = size(s.parent)[pdims[n:]]
     for j=1:length(I)
         su = ind2sub(ssztail,I[j])
-        idx[j] = sub2ind(psztail, [ s.indexes[n+k-1][su[k]] for k=1:length(su) ]...)
+        idx[j] = sub2ind(psztail, [ s.indexes[pdims[n+k-1]][su[k]] for k=1:length(su) ]...)
     end
     idx
 end
 
-function ref(s::SubArray, I::Union(Real,AbstractArray)...)
-    I = indices(I)
-    ndp = ndims(s.parent)
-    n = length(I)
-    newindexes = Array(Any, n)
-    for i = 1:n
-        t = s.indexes[i]
-        #TODO: don't generate the dense vector indexes if they can be ranges
-        if i==n && n < ndp
-            newindexes[i] = translate_linear_indexes(s, i, I[i])
-        else
-            newindexes[i] = isa(t, Int) ? t : t[I[i]]
+function parentdims(s::SubArray)
+    dimindex = Array(Int, ndims(s))
+    sp = strides(s.parent)
+    j = 1
+    for i = 1:ndims(s.parent)
+        if sp[i] == s.strides[j]
+            dimindex[j] = i
+            j += 1
         end
     end
+    dimindex
+end
+
+function ref(s::SubArray, I::Union(Real,AbstractArray)...)
+    newindexes = translate_indexes(s, I...)
 
     rs = ref_shape(I...)
     result = ref(s.parent, newindexes...)
@@ -270,22 +301,7 @@ function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
 end
 
 function assign(s::SubArray, v, I::Union(Real,AbstractArray)...)
-    I = indices(I)
-    j = 1 #the jth dimension in subarray
-    ndp = ndims(s.parent)
-    n = length(I)
-    newindexes = cell(n)
-    for i = 1:n
-        t = s.indexes[i]
-        #TODO: don't generate the dense vector indexes if they can be ranges
-        if i==n && n < ndp
-            newindexes[i] = translate_linear_indexes(s, i, I[i])
-        else
-            newindexes[i] = isa(t, Int) ? t : t[I[j]]
-        end
-        j += 1
-    end
-
+    newindexes = translate_indexes(s, I...)
     assign(s.parent, v, newindexes...)
 end
 
