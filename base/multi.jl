@@ -615,8 +615,6 @@ type WaitFor
     rr
 end
 
-global work_cb, fgcm_cb
-
 function enq_work(wi::WorkItem)
     unshift!(Workqueue, wi)
 end
@@ -1359,23 +1357,21 @@ function yield(args...)
 end
 
 function event_loop(isclient)
-    global fgcm_cb = SingleAsyncWork(eventloop(), (args...)->flush_gc_msgs());
     iserr, lasterr, bt = false, nothing, {}
     while true
         try
-            if !isempty(Workqueue)
-                perform_work()
-            else
-                queueAsync(fgcm_cb::SingleAsyncWork)
-            end
             if iserr
                 display_error(lasterr, bt)
                 iserr, lasterr, bt = false, nothing, {}
             else
-                if(isempty(Workqueue))
-                    run_event_loop_once()
-                else
-                    process_events()
+                while true
+                    if(isempty(Workqueue))
+                        flush_gc_msgs()
+                        process_events(true)
+                    else
+                        perform_work()
+                        process_events(false)
+                    end
                 end
             end
         catch err
