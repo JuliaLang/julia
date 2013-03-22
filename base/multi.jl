@@ -355,6 +355,8 @@ function del_clients(pairs::(Any,Any)...)
     end
 end
 
+any_gc_flag = false
+
 function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
@@ -362,6 +364,7 @@ function send_del_client(rr::RemoteRef)
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (rr2id(rr), myid()))
         w.gcflag = true
+        global any_gc_flag = true
     end
 end
 
@@ -387,6 +390,7 @@ function send_add_client(rr::RemoteRef, i)
         w = worker_from_id(rr.where)
         push!(w.add_msgs, (rr2id(rr), i))
         w.gcflag = true
+        global any_gc_flag = true
     end
 end
 
@@ -1366,8 +1370,10 @@ function event_loop(isclient)
                 iserr, lasterr, bt = false, nothing, {}
             else
                 while true
-                    if(isempty(Workqueue))
-                        flush_gc_msgs()
+                    if isempty(Workqueue)
+                        if any_gc_flag
+                            flush_gc_msgs()
+                        end
                         process_events(true)
                     else
                         perform_work()
