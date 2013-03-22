@@ -615,11 +615,8 @@ type WaitFor
     rr
 end
 
-global work_cb, fgcm_cb
-
 function enq_work(wi::WorkItem)
     unshift!(Workqueue, wi)
-    queueAsync(work_cb::SingleAsyncWork)
 end
 
 enq_work(f::Function) = enq_work(WorkItem(f))
@@ -1148,7 +1145,6 @@ function spawnlocal(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
     add!(wi.clientset, rid[1])
     push!(Workqueue, wi)   # add to the *front* of the queue, work first
-    queueAsync(work_cb::SingleAsyncWork)
     yield()
     rr
 end
@@ -1360,22 +1356,7 @@ function yield(args...)
     return v
 end
 
-function _jl_work_cb(args...)
-    if !isempty(Workqueue)
-        perform_work()
-    else
-        queueAsync(fgcm_cb::SingleAsyncWork)
-    end
-    if !isempty(Workqueue)
-        # really this should just make process_event be non-blocking
-        queueAsync(work_cb::SingleAsyncWork)
-    end
-end
-
 function event_loop(isclient)
-    global work_cb = SingleAsyncWork(eventloop(), _jl_work_cb)
-    global fgcm_cb = SingleAsyncWork(eventloop(), (args...)->flush_gc_msgs());
-    queueAsync(work_cb::SingleAsyncWork)
     iserr, lasterr, bt = false, nothing, {}
     while true
         try
@@ -1383,7 +1364,15 @@ function event_loop(isclient)
                 display_error(lasterr, bt)
                 iserr, lasterr, bt = false, nothing, {}
             else
-                run_event_loop()
+                while true
+                    if(isempty(Workqueue))
+                        flush_gc_msgs()
+                        process_events(true)
+                    else
+                        perform_work()
+                        process_events(false)
+                    end
+                end
             end
         catch err
             bt = catch_backtrace()
