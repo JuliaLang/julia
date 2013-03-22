@@ -181,7 +181,7 @@ function kron(a::Matrix, b::Vector)
   res
 end
 
-function kron(a::Matrix, b::Matrix)
+function kron(a::Vector, b::Matrix)
   res = kron(a,b[:,1])
   for i=2:size(b,2)
     res = hcat(res, kron(a,b[:,i]))
@@ -189,8 +189,12 @@ function kron(a::Matrix, b::Matrix)
   res
 end
 
-function kron(a::Vector, b::Matrix)
-  kron(a',b')'
+function kron(a::Matrix, b::Matrix)
+  res = kron(a[:,1],b)
+  for i=2:size(a,2)
+    res = hcat(res, kron(a[:,i],b))
+  end
+  res
 end
 
 kron(a::Number, b::Number) = a * b 
