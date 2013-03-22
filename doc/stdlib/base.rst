@@ -56,7 +56,7 @@ Getting Around
 
    Show all methods of ``f`` with their argument types.
 
-.. function:: methodswith(t)
+.. function:: methodswith(typ)
 
    Show all methods with an argument of type ``typ``.
 
