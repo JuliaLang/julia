@@ -783,6 +783,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             # joining existing process group
             PGRP.np = length(PGRP.locs)
             PGRP.workers = w = cell(PGRP.np)
+            fill!(w, nothing)
             w[1] = Worker("", 0, sock, 1)
             for i = 2:(PGRP.myid-1)
                 w[i] = Worker(locs[i][1], locs[i][2])
