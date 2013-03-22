@@ -429,6 +429,9 @@ function eig(A::Union(Number, StridedMatrix))
     return F[:values], F[:vectors]
 end
 
+#Calculates eigenvectors
+eigvecs(A::Union(Number, StridedMatrix)) = eigfact(A)[:vectors]
+
 function eigvals(A::StridedMatrix)
     if ishermitian(A) return eigvals(Hermitian(A)) end
     if iscomplex(A) return LAPACK.geev!('N', 'N', copy(A))[1] end

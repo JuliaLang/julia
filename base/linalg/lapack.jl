@@ -1308,13 +1308,15 @@ for (trtri, trtrs, elty) in
 end
 
 ## (ST) Symmetric tridiagonal - eigendecomposition
-for (stev, stebz, stegr, elty) in
-    ((:dstev_,:dstebz_,:dstegr_,:Float64),
-     (:sstev_,:sstebz_,:sstegr_,:Float32)
+for (stev, stebz, stegr, stein, elty) in
+    ((:dstev_,:dstebz_,:dstegr_,:dstein_,:Float64),
+     (:sstev_,:sstebz_,:sstegr_,:sstein_,:Float32)
 #     , (:zstev_,:Complex128)  Need to rewrite for ZHEEV, rwork, etc.
 #     , (:cstev_,:Complex64)
      )
     @eval begin
+        #*  DSTEV computes all eigenvalues and, optionally, eigenvectors of a
+        #*  real symmetric tridiagonal matrix A.
         function stev!(job::BlasChar, dv::Vector{$elty}, ev::Vector{$elty})
             n    = length(dv)
             if length(ev) != (n-1) throw(DimensionMismatch("stev!")) end
@@ -1328,6 +1330,10 @@ for (stev, stebz, stegr, elty) in
             if info[1] != 0 throw(LAPACKException(info[1])) end
             dv, Zmat
         end
+        #*  DSTEBZ computes the eigenvalues of a symmetric tridiagonal
+        #*  matrix T.  The user may ask for all eigenvalues, all eigenvalues
+        #*  in the half-open interval (VL, VU], or the IL-th through IU-th
+        #*  eigenvalues.
         function stebz!(range::Char, order::Char, vl::$elty, vu::$elty, il::Integer, iu::Integer, abstol::Real, dv::Vector{$elty}, ev::Vector{$elty})
             n = length(dv)
             if length(ev) != (n-1) throw(LapackDimMisMatch("stebz!")) end
@@ -1354,6 +1360,14 @@ for (stev, stebz, stegr, elty) in
                 if info[1] != 0 throw(LapackException(info[1])) end
             w[1:m[1]], isplit[1:m[1]], isplit[1:nsplit[1]], info[1]
         end
+        #*  DSTEGR computes selected eigenvalues and, optionally, eigenvectors
+        #*  of a real symmetric tridiagonal matrix T. Any such unreduced matrix has
+        #*  a well defined set of pairwise different real eigenvalues, the corresponding
+        #*  real eigenvectors are pairwise orthogonal.
+        #*
+        #*  The spectrum may be computed either completely or partially by specifying
+        #*  either an interval (VL,VU] or a range of indices IL:IU for the desired
+        #*  eigenvalues.
         function stegr!(jobz::BlasChar, range::BlasChar, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer, abstol::Real)
             n = length(dv)
             if length(ev) != (n-1) throw(LapackDimMisMatch("stebz!")) end
@@ -1390,10 +1404,48 @@ for (stev, stebz, stegr, elty) in
             if info[1] != 0 throw(LapackException(info[1])) end
             return w[1:m[1]], Z[:,1:m[1]]
         end
+        #*  DSTEIN computes the eigenvectors of a real symmetric tridiagonal
+        #*  matrix T corresponding to specified eigenvalues, using inverse
+        #*  iteration.
+        #      SUBROUTINE DSTEIN( N, D, E, M, W, IBLOCK, ISPLIT, Z, LDZ, WORK,
+        #     $                   IWORK, IFAIL, INFO )
+        # We allow the user to specify exactly which eigenvextors to get via evalidx
+        function stein!(dv::Vector{$elty}, ev::Vector{$elty},evalidx::Vector{BlasInt})
+            n = length(dv)
+            if length(ev) != (n-1) throw(LapackDimMisMatch("stein!")) end
+            ldz = n #Leading dimension
+            m = 1 #Number of eigenvalues to find
+            z = Array($elty,(n,m))
+            w = Array($elty, n)
+            length(evalidx)>n ? throw(LapackDimMisMatch("stein!")) : (nw=length(evalidx))
+            w = [evalidx; zeros(BlasInt,n-nw)]
+            #XXX  ( The output array IBLOCK from DSTEBZ is expected here. )
+            iblock = Array(BlasInt,n)
+            iblock[1] = 1
+            #XXX  ( The output array ISPLIT from DSTEBZ is expected here. )
+            isplit = Array(BlasInt,n)
+            isplit[1] = n
+            work = Array($elty, 5*n)
+            iwork = Array(BlasInt,n)
+            ifail = Array(BlasInt,m)
+            info = Array(BlasInt,1)
+
+            ccall(($(string(stein)),liblapack), Void,
+                (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                Ptr{BlasInt}),
+                &n, dv, ev, &m, w, iblock, isplit, z, &ldz, work, iwork, ifail, info)
+            
+            (info[1]!= 0) ? throw(LapackException(info[1])) : z
+        end
     end
 end
 stegr!(jobz::BlasChar, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
 stegr!(dv::Vector, ev::Vector) = stegr!('N', 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
+        
+# Allow user to specify just one eigenvextor to get in stein!
+stein!(dv::Vector, ev::Vector, evalidx::Integer)=stein!(dv, ev, [evalidx])
 
 ## (SY) symmetric matrices - eigendecomposition, Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
