@@ -383,6 +383,47 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq vals LinAlg.LAPACK.syev!('N','U',copy(Asym))
 end
 
+#LAPACK tests for symmetric tridiagonal matrices
+n=5
+Ainit = randn(n)
+Binit = randn(n-1)
+for elty in (Float32, Float64)
+    A = convert(Array{elty, 1}, Ainit)
+    B = convert(Array{elty, 1}, Binit)
+    zero, infinity = convert(elty, 0), convert(elty, Inf)
+    #This tests eigenvalue and eigenvector computations using stebz! and stein!
+    (w, iblock, isplit, info) = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
+
+    (evecs, ifail, info)=LinAlg.LAPACK.stein!(A,B,w)
+    @test info==0
+    @test all(ifail .== 0)
+    
+    (e, v)=eig(SymTridiagonal(A,B))
+    @test_approx_eq e w
+    #Take into account possible phase (sign) difference in eigenvectors
+    for i=1:n
+        ev1 = v[:,i]
+        ev2 = evecs[:,i]
+        deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
+        @test_approx_eq_eps deviation 0.0 n*eps(abs(convert(elty, 1.0)))
+    end
+
+    #Test stein! call using iblock and isplit
+    (w, iblock, isplit, info) = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
+    @test info==0
+    (evecs, ifail, info)=LinAlg.LAPACK.stein!(A, B, w, iblock, isplit)
+    @test info==0
+    @test all(ifail .== 0)
+    for i=1:n
+        ev1 = v[:,i]
+        ev2 = evecs[:,i]
+        deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
+        @test_approx_eq_eps deviation 0.0 n*eps(abs(convert(elty, 1.0)))
+    end
+
+end
+
+
 ## Issue related tests
 # issue 1447
 let
