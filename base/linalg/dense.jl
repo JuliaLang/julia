@@ -431,6 +431,9 @@ function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         if istriu(A) return Triangular(A, 'U')\B end
         if istril(A) return Triangular(A, 'L')\B end
         if ishermitian(A) return Hermitian(A)\B end
+        ans, _, _, info = LAPACK.gesv!(copy(A), copy(B))
+        if info > 0; throw(LinAlg.LAPACK.SingularException(info)); end
+        return ans
     end
     LAPACK.gelsd!(copy(A), copy(B))[1]
 end

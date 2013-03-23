@@ -214,6 +214,10 @@ d = {x => 1
     for x in ['a', 'b', 'c']}
 @test d == {'a'=>1, 'b'=>1, 'c'=> 1}
 
+# issue #2629
+d = (String => String)[ a => "foo" for a in ["a","b","c"]]
+@test d == ["a"=>"foo","b"=>"foo","c"=>"foo"]
+
 # ############# end of dict tests #############
 
 # #################### set ####################

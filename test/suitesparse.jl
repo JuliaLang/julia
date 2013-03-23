@@ -10,8 +10,8 @@ A = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
            increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
            [2.,1.,3.,4.,-1.,-3.,3.,6.,2.,1.,4.,2.], 5, 5)
 lua = lufact(A)
-L,U,P,Q,Rs = lua[:(:)]
-@test_approx_eq diagmm(Rs,A)[P,Q] L*U
+L,U,p,q,Rs = lua[:(:)]
+@test_approx_eq diagmm(Rs,A)[p,q] L*U
 
 @test_approx_eq det(lua) det(full(A))
 
@@ -112,7 +112,12 @@ A = CholmodSparse!(int32([0,1,2,3,6,9,12,15,18,20,25,30,34,36,39,43,47,52,58,62,
 @test isvalid(A)
 
 B = A * ones(size(A,2))
-chma = cholfact(A)
+chma = cholfact(A)                      # LDL' form
+@test isvalid(chma)
+x = chma\B
+@test_approx_eq x.mat ones(size(x))
+
+chma = cholfact(A,true)                 # LL' form
 @test isvalid(chma)
 x = chma\B
 @test_approx_eq x.mat ones(size(x))
