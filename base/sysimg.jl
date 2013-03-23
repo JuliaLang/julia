@@ -78,6 +78,9 @@ include("set.jl")
 import Core.Undef  # used internally by compiler
 include("inference.jl")
 
+# For OS sprcific stuff in I/O
+include("osutils.jl")
+
 # I/O, strings & printing
 include("io.jl")
 include("iobuffer.jl")
@@ -105,7 +108,6 @@ include("serialize.jl")
 include("multi.jl")
 
 # system & environment
-include("osutils.jl")
 include("libc.jl")
 include("env.jl")
 include("errno.jl")

@@ -25,8 +25,15 @@
 extern "C" {
 #endif
 
-
 /** libuv callbacks */
+
+/*
+ * Notes for adding new callbacks
+ * - Make sure to type annotate the callback, so we'll get the one in the new
+ *   Base module rather than the old one.
+ *
+ */
+
 //These callbacks are implemented in stream.jl
 #define JL_CB_TYPES(XX) \
 	XX(close) \
@@ -36,7 +43,8 @@ extern "C" {
 	XX(connectcb) \
 	XX(connectioncb) \
 	XX(asynccb) \
-    XX(getaddrinfo)
+    XX(getaddrinfo) \
+    XX(pollcb)
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
@@ -112,8 +120,9 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 
 void closeHandle(uv_handle_t* handle)
 {
-    JULIA_CB(close,handle->data,0); (void)ret;
-    //TODO: maybe notify Julia handle to close itself
+    if(handle->data) {
+        JULIA_CB(close,handle->data,0); (void)ret;
+    }
     free(handle);
 }
 
@@ -162,6 +171,12 @@ void jl_getaddrinfocb(uv_getaddrinfo_t *req,int status, struct addrinfo *addr)
 void jl_asynccb(uv_handle_t *handle, int status)
 {
     JULIA_CB(asynccb,handle->data,1,CB_INT32,status);
+    (void)ret;
+}
+
+void jl_pollcb(uv_poll_t *handle, int status, int events)
+{
+    JULIA_CB(pollcb,handle->data,1,CB_INT32,status,CB_INT32,events)
     (void)ret;
 }
 
@@ -262,6 +277,11 @@ DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *dat
     handle->data = data;
 }
 
+DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
+{
+    handle->data = NULL;
+}
+
 DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle)
 {
     if (!handle)
@@ -312,7 +332,6 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
     opts.exit_cb = &jl_return_spawn;
     error = uv_spawn(loop,proc,opts);
-    proc->data = julia_struct;
     return error;
 }
 
@@ -347,6 +366,11 @@ DLLEXPORT int jl_idle_start(uv_idle_t *idle)
     if (!idle||(idle)->data)
         jl_error("jl_idle_start: Invalid handle");
     return uv_idle_start(idle,(uv_idle_cb)&jl_asynccb);
+}
+
+DLLEXPORT int jl_poll_start(uv_poll_t* handle, int32_t events)
+{
+    return uv_poll_start(handle, events, &jl_pollcb);
 }
 
 //units are in ms
@@ -497,6 +521,11 @@ char *jl_bufptr(ios_t *s)
 DLLEXPORT size_t jl_sizeof_uv_stream_t()
 {
     return sizeof(uv_stream_t);
+}
+
+DLLEXPORT size_t jl_sizeof_uv_poll_t()
+{
+    return sizeof(uv_poll_t);
 }
 
 DLLEXPORT size_t jl_sizeof_uv_pipe_t()

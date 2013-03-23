@@ -161,6 +161,7 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
         c_free(proc)
         throw(UVError("spawn"))
     end
+    associate_julia_struct(proc,pp)
     return proc
 end
 
