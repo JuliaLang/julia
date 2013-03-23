@@ -355,6 +355,8 @@ function del_clients(pairs::(Any,Any)...)
     end
 end
 
+any_gc_flag = false
+
 function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
@@ -362,6 +364,7 @@ function send_del_client(rr::RemoteRef)
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (rr2id(rr), myid()))
         w.gcflag = true
+        global any_gc_flag = true
     end
 end
 
@@ -387,6 +390,7 @@ function send_add_client(rr::RemoteRef, i)
         w = worker_from_id(rr.where)
         push!(w.add_msgs, (rr2id(rr), i))
         w.gcflag = true
+        global any_gc_flag = true
     end
 end
 
@@ -615,11 +619,8 @@ type WaitFor
     rr
 end
 
-global work_cb, fgcm_cb
-
 function enq_work(wi::WorkItem)
     unshift!(Workqueue, wi)
-    queueAsync(work_cb::SingleAsyncWork)
 end
 
 enq_work(f::Function) = enq_work(WorkItem(f))
@@ -786,6 +787,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             # joining existing process group
             PGRP.np = length(PGRP.locs)
             PGRP.workers = w = cell(PGRP.np)
+            fill!(w, nothing)
             w[1] = Worker("", 0, sock, 1)
             for i = 2:(PGRP.myid-1)
                 w[i] = Worker(locs[i][1], locs[i][2])
@@ -1148,7 +1150,6 @@ function spawnlocal(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
     add!(wi.clientset, rid[1])
     push!(Workqueue, wi)   # add to the *front* of the queue, work first
-    queueAsync(work_cb::SingleAsyncWork)
     yield()
     rr
 end
@@ -1360,22 +1361,7 @@ function yield(args...)
     return v
 end
 
-function _jl_work_cb(args...)
-    if !isempty(Workqueue)
-        perform_work()
-    else
-        queueAsync(fgcm_cb::SingleAsyncWork)
-    end
-    if !isempty(Workqueue)
-        # really this should just make process_event be non-blocking
-        queueAsync(work_cb::SingleAsyncWork)
-    end
-end
-
 function event_loop(isclient)
-    global work_cb = SingleAsyncWork(eventloop(), _jl_work_cb)
-    global fgcm_cb = SingleAsyncWork(eventloop(), (args...)->flush_gc_msgs());
-    queueAsync(work_cb::SingleAsyncWork)
     iserr, lasterr, bt = false, nothing, {}
     while true
         try
@@ -1383,7 +1369,17 @@ function event_loop(isclient)
                 display_error(lasterr, bt)
                 iserr, lasterr, bt = false, nothing, {}
             else
-                run_event_loop()
+                while true
+                    if isempty(Workqueue)
+                        if any_gc_flag
+                            flush_gc_msgs()
+                        end
+                        process_events(true)
+                    else
+                        perform_work()
+                        process_events(false)
+                    end
+                end
             end
         catch err
             bt = catch_backtrace()
