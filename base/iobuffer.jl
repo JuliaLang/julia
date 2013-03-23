@@ -46,7 +46,7 @@ function read{T}(from::IOBuffer, a::Array{T})
 end
 
 function read(from::IOBuffer, ::Type{Uint8})
-    if !from.readable error("read failed") end
+    if !from.readable error("read failed: write-only buffer") end
     if from.ptr > from.size
         throw(EOFError())
     end
@@ -56,6 +56,40 @@ function read(from::IOBuffer, ::Type{Uint8})
 end
 
 read{T}(from::IOBuffer, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
+
+function peek(from::IOBuffer)
+    if !from.readable error("peek failed: write-only buffer") end
+    if from.ptr > from.size
+        int32(-1)
+    end
+    int32(from.data[from.ptr])
+end
+
+function peekchar(from::IOBuffer)
+    if !from.readable error("peek failed: write-only buffer") end
+    if from.ptr > from.size
+        return char(-1)
+    end
+    ch = from.data[from.ptr]
+    if ch < 0x80
+        return char(ch)
+    end
+
+    # mimic utf8.next function
+    trailing = utf8_trailing[ch+1]
+    if from.ptr+trailing > from.size
+        return char(-1)
+    end
+    c::Uint32 = 0
+    for j = 1:trailing
+        c += ch
+        c <<= 6
+        ch = from.data[from.ptr+i]
+    end
+    c += ch
+    c -= utf8_offset[trailing+1]
+    char(c)
+end
 
 # TODO: IOBuffer is not iterable, so doesn't really have a length.
 # This should maybe be sizeof() instead.
