@@ -52,7 +52,6 @@ export
     IOBuffer,
     ImaginaryUnit,
     IntSet,
-    Keywords,
     LocalProcess,
     Matrix,
     ObjectIdDict,
@@ -695,9 +694,6 @@ export
     values,
     filter,
     filter!,
-
-# keywords
-    keywords,
 
 # strings and text output
     ascii,

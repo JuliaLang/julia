@@ -306,15 +306,42 @@
 	(else
 	 (error "malformed type parameter list"))))
 
+(define (method-def-expr- name sparams argl body)
+  (if (has-dups (llist-vars argl))
+      (error "function argument names not unique"))
+  (if (not (symbol? name))
+      (error (string "invalid method name " name)))
+  (let* ((types (llist-types argl))
+	 (body  (method-lambda-expr argl body)))
+    (if (null? sparams)
+	`(method ,name (tuple ,@types) ,body (tuple))
+	(receive
+	 (names bounds) (sparam-name-bounds sparams '() '())
+	 (let ((f (gensy)))
+	   `(call (lambda (,@names ,f)
+		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
+		  ,@(symbols->typevars names bounds #t)
+		  ,body))))))
+
+(define (vararg? x) (and (pair? x) (eq? (car x) '...)))
+
+(define (const-default? x)
+  (or (number? x) (string? x) (char? x) (and (pair? x) (eq? (car x) 'quote))))
+
 (define (keywords-method-def-expr name sparams argl body)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (pargl (cdr argl))   ;; positional args
 	 ;; 1-element list of vararg argument, or empty if none
 	 (vararg (let ((l (last pargl)))
-		   (if (and (pair? l) (eq? (car l) '...))
+		   (if (vararg? l)
 		       (list l) '())))
 	 ;; positional args without vararg
 	 (pargl (if (null? vararg) pargl (butlast pargl)))
+	 ;; keywords glob
+	 (varkw (let ((l (last kargl)))
+		  (if (vararg? l)
+		      (list (cadr l)) '())))
+	 (kargl (if (null? varkw) kargl (butlast kargl)))
 	 ;; the keyword::Type expressions
          (vars     (map cadr kargl))
 	 ;; keyword default values
@@ -327,63 +354,87 @@
 		   '()))
 	 ;; body statements, minus line number node
 	 (stmts (if (null? lno) (cdr body) (cddr body))))
-    (let ((rest (gensy)) (nkw (gensy)) (i (gensy)) (o (gensy)) (ii (gensy))
-	  (elt  (gensy)))
+    (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (vkw (gensy))
+	  (mangled (symbol (string name (gensy))))
+	  (flags (map (lambda (x) (gensy)) vals)))
       `(block
 	;; call with no keyword args
 	,(method-def-expr-
 	  name sparams (append pargl vararg)
 	  `(block
-	    ;; call name(SortedKeywords(), pargs..., vals..., [vararg]...)
-	    (return (call ,name (call (top SortedKeywords))
-			  ,@(map arg-name pargl)
+	    ;; call mangled(vals..., [var_kw ,]pargs..., [vararg]...)
+	    (return (call ,mangled
 			  ,@vals
+			  ,@(if (null? varkw) '() '((call (top tuple))))
+			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
 				(list `(... ,(arg-name (car vararg)))))))))
 	;; call with keyword args pre-sorted - original method code goes here
 	,(method-def-expr-
-	  name sparams
-	  `((:: ,nkw (top SortedKeywords)) ,@pargl ,@vars ,@vararg)
+	  mangled sparams
+	  `(,@vars ,@varkw ,@pargl ,@vararg)
 	  `(block
 	    ,@lno
 	    ,@stmts))
 	;; call with unsorted keyword args. this just sorts and re-dispatches.
 	,(method-def-expr-
 	  name sparams
-	  `((:: ,nkw (top NKeywords)) ,@pargl (... ,rest))
+	  `((:: ,kw (top Tuple)) ,@pargl ,@vararg)
 	  `(block
 	    ,@lno
-	    ;; initialize keyword args to their defaults
-	    ,@(map make-assignment keynames vals)
-	    ;; o = length(rest) - 2*int(nkw) + 1
-	    (= ,o (call (top +) 1
-			(call (top -)
-			      (call (top length) ,rest)
-			      (call (top *) 2 (|.| ,nkw 'n)))))
-	    ;; set user's vararg to rest[1:(o-1)]
-	    ,(if (null? vararg) 'nothing
-		 `(= ,(arg-name (car vararg))
-		     (call (top ref) ,rest (: 1 (call (top -) ,o 1)))))
-	    (for (= ,i (: 0 (call (top -) (|.| ,nkw 'n) 1)))
+	    ;; initialize keyword args to their defaults, or set a flag telling
+	    ;; whether this keyword needs to be set.
+	    ,@(map (lambda (name dflt flag)
+		     (if (const-default? dflt)
+			 `(= ,name ,dflt)
+			 `(= ,flag true)))
+		   keynames vals flags)
+	    (local ,i)
+	    (local ,ii)
+	    ;; for i = 1:(length(kw)>>1)
+	    (for (= ,i (: 1 (call (top >>) (call (top length) kw) 1)))
 		 (block
-		  (= ,ii (call (top +) ,o (call (top *) ,i 2)))
-		  (= ,elt (call (top ref) ,rest ,ii))
-		  ,(foldl (lambda (k else)
-			    (let ((rval `(call (top ref) ,rest
-					       (call (top +) ,ii 1))))
-			      ;; if rest[ii] == 'k; k = rest[ii+1]::Type; end
+		  ;; ii = i*2 - 1
+		  (= ,ii (call (top -) (call (top *) ,i 2) 1))
+		  (= ,elt (call (top tupleref) ,kw ,ii))
+		  ,(foldl (lambda (kvf else)
+			    (let* ((k    (car kvf))
+				   (rval `(call (top tupleref) ,kw
+						(call (top +) ,ii 1)))
+				   (rval (if (decl? k)
+					     `(call (top typeassert)
+						    ,rval
+						    ,(caddr k))
+					     rval)))
+			      ;; if kw[ii] == 'k; k = kw[ii+1]::Type; end
 			      `(if (comparison ,elt === (quote ,(decl-var k)))
-				   (= ,(decl-var k)
-				      ,(if (decl? k)
-					   `(call (top typeassert)
-						  ,rval
-						  ,(caddr k))
-					   rval))
+				   (block
+				    (= ,(decl-var k) ,rval)
+				    ,@(if (not (const-default? (cadr kvf)))
+					  `((= ,(caddr kvf) false))
+					  '()))
 				   ,else)))
-			  `(call (top error) "unrecognized keyword " ,elt)
-			  vars)))
-	    (return (call ,name (call (top SortedKeywords))
-			  ,@(map arg-name pargl) ,@keynames
+			  (if (null? varkw)
+			      ;; if no varkw, give error for unrecognized
+			      `(call (top error) "unrecognized keyword " ,elt)
+			      ;; otherwise break as soon as we hit an unknown KW
+			      '(break))
+			  (map list vars vals flags))))
+	    ,@(if (null? varkw) '()
+		  ;; vkw = kw[ii:length(kw)]
+		  '((= ,vkw (call (top getindex) ,kw (: ,ii (call (top length) ,kw))))))
+	    ;; set keywords that weren't present to their default values
+	    ,@(apply append
+		     (map (lambda (name dflt flag)
+			    (if (const-default? dflt)
+				'()
+				`((if ,flag (= ,name ,dflt)))))
+			  keynames vals flags))
+	    ;; finally, call the core function
+	    (return (call ,mangled
+			  ,@keynames
+			  ,@(if (null? varkw) '() (list vkw))
+			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
 				(list `(... ,(arg-name (car vararg)))))))))))))
 
@@ -424,6 +475,9 @@
       ;; here (keywords ...) is optional positional args
       (if (has-parameters? (cdr argl))
 	  ();; both!
+	  ;; separate into keyword version with all positional args,
+	  ;; and a series of optional-positional-defs that delegate keywords
+
 	  ;; optional positional only
 	  (let ((req (filter (lambda (x) (not (and (pair? x) (eq? (car x) '...))))
 			     (cdr argl)))
@@ -435,23 +489,6 @@
 	  (keywords-method-def-expr name sparams argl body)
 	  ;; neither
 	  (method-def-expr- name sparams argl body))))
-
-(define (method-def-expr- name sparams argl body)
-  (if (has-dups (llist-vars argl))
-      (error "function argument names not unique"))
-  (if (not (symbol? name))
-      (error (string "invalid method name " name)))
-  (let* ((types (llist-types argl))
-	 (body  (method-lambda-expr argl body)))
-    (if (null? sparams)
-	`(method ,name (tuple ,@types) ,body (tuple))
-	(receive
-	 (names bounds) (sparam-name-bounds sparams '() '())
-	 (let ((f (gensy)))
-	   `(call (lambda (,@names ,f)
-		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
-		  ,@(symbols->typevars names bounds #t)
-		  ,body))))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
