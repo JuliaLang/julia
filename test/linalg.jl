@@ -249,6 +249,11 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                          0  -0.000000000000002   3.000000000000000])
 end
 
+# Hermitian matrix exponential
+A1 = randn(4,4) + im*randn(4,4)
+A2 = A1 + A1'
+@test_approx_eq expm(A2) expm(Hermitian(A2))
+
                                         # matmul for types w/o sizeof (issue #1282)
 A = Array(ComplexPair{Int},10,10)
 A[:] = complex(1,1)
