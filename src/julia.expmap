@@ -167,6 +167,7 @@
     jl_load_;
     jl_load;
     jl_load_dynamic_library;
+    jl_load_dynamic_library_e;
     jl_load_file_string;
     jl_loaderror_type;
     jl_load_file_string;
@@ -237,6 +238,7 @@
     jl_reshape_array;
     jl_restore_system_image;
     jl_run_event_loop;
+    jl_run_once;
     jl_save_system_image;
     jl_set_const;
     jl_set_current_module;

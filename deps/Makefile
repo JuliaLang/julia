@@ -19,7 +19,7 @@ CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
 endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp patchelf
-#custom configure-driven script: zlib nginx
+#custom configure-driven script: zlib
 #custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv
 
 # prevent installing libs into usr/lib64 on opensuse
@@ -114,7 +114,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-clp get-unwind get-nginx get-gmp get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-unwind get-gmp get-zlib get-patchelf
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -158,7 +158,8 @@ LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
 endif
 
-LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-static --enable-targets=host --disable-bindings --disable-docs
+LLVM_TARGET_FLAGS= --enable-targets=host
+LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions --enable-optimized

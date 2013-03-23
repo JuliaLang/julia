@@ -6,6 +6,7 @@ typealias AbstractMatrix{T} AbstractArray{T,2}
 ## Basic functions ##
 
 size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
+eltype(x) = Any
 eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
 eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
@@ -1219,6 +1220,14 @@ bsxfun(f, a, b::AbstractArray) = f(a, b)
 bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)
 
 # Basic AbstractArray functions
+
+function nnz{T}(a::AbstractArray{T})
+    n = 0
+    for i = 1:length(a)
+        n += a[i] != zero(T) ? 1 : 0 
+    end
+    return n
+end
 
 # for reductions that expand 0 dims to 1
 reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 :

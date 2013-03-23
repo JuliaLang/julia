@@ -1,4 +1,6 @@
 ## CHOLMOD
+const CHOLMOD_TRUE  = int32(1)
+const CHOLMOD_FALSE = int32(0)
 
 ## itype defines the types of integer used:
 const CHOLMOD_INT  = int32(0)  # all integer arrays are int 

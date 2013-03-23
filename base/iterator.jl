@@ -78,6 +78,17 @@ end
 
 done(f::Filter, s) = done(f.itr,s)
 
+# Rest -- iterate starting at the given state
+immutable Rest{I,S}
+    itr::I
+    st::S
+end
+rest(itr,state) = Rest(itr,state)
+
+start(i::Rest) = i.st
+next(i::Rest, st) = next(i.itr, st)
+done(i::Rest, st) = done(i.itr, st)
+
 # reverse
 
 type Reverse

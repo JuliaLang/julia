@@ -1,5 +1,13 @@
 ## sparse matrix multiplication
 
+function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
+    Tv = promote_type(TvA, TvB)
+    Ti = promote_type(TiA, TiB)
+    A  = convert(SparseMatrixCSC{Tv,Ti}, A)
+    B  = convert(SparseMatrixCSC{Tv,Ti}, B)
+    return A * B
+end
+
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
     if A.n != length(X); error("mismatched dimensions"); end

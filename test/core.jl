@@ -703,3 +703,21 @@ Node2562{T}(value::T, args...) = Node2562{T}(value, args...)
 makenode2562(value) = Node2562(value)
 @test isa(Node2562(0), Node2562)
 @test isa(makenode2562(0), Node2562)
+
+# issue #2619
+type I2619{T}
+    v::T
+    I2619(v) = new(convert(T,v))
+end
+bad2619 = false
+function i2619()
+    global e2619 = try
+        I2619{Float64}(0.0f)
+        global bad2619 = true
+    catch _e
+        _e
+    end
+end
+i2619()
+@test !bad2619
+@test isa(e2619,ErrorException) && e2619.msg == "in i2619: f not defined"

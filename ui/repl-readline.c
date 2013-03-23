@@ -446,8 +446,8 @@ static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
 {
     do {
         if (common_prefix(prefix, tree->name) == plen &&
-            ((module ? jl_defines_or_exports_p(module, tree) : jl_boundp(jl_current_module, tree)) ||
-             is_keyword(tree->name))) {
+            (module ? jl_defines_or_exports_p(module, tree) : (jl_boundp(jl_current_module, tree) ||
+                                                               is_keyword(tree->name)))) {
             ios_puts(str, result);
             ios_puts(tree->name + plen, result);
             ios_putc('\n', result);

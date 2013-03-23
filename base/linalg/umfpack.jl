@@ -272,13 +272,13 @@ end
 solve(lu::UmfpackLU, b::Vector) = solve(lu, b, UMFPACK_A)
 
 function getindex(lu::UmfpackLU, d::Symbol)
-    L,U,P,Q,Rs = umf_extract(lu)
+    L,U,p,q,Rs = umf_extract(lu)
     d == :L ? L :
     (d == :U ? U :
-     (d == :P ? P :
-      (d == :Q ? Q :
+     (d == :p ? p :
+      (d == :q ? q :
        (d == :Rs ? Rs :
-        (d == :(:) ? (L,U,P,Q,Rs) :
+        (d == :(:) ? (L,U,p,q,Rs) :
          error("No component for symbol $d"))))))
 end
  

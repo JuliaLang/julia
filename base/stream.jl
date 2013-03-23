@@ -2,7 +2,6 @@
 include("uv_constants.jl")
 
 ## types ##
-
 typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
 type WaitTask 
@@ -113,6 +112,7 @@ end
 wait_connect_filter(w::AsyncStream, args...) = !w.open
 wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
 wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
+wait_readbyte_filter(w::(AsyncStream,Uint8), args...) = w[1].open && (search(w[1].buffer,w[2]) <= 0)
 wait_readline_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
 
 function wait(forwhat::Vector, notify_list_name, filter_fcn)
@@ -143,6 +143,7 @@ wait_readable(x) = wait(x, :readnotify, wait_readable_filter)
 wait_readline(x) = wait(x, :readnotify, wait_readline_filter)
 wait_readnb(x::(AsyncStream,Int)) = wait(x, :readnotify, wait_readnb_filter)
 wait_readnb(x::AsyncStream,b::Int) = wait_readnb((x,b))
+wait_readbyte(x::AsyncStream,c::Uint8) = wait((x,c), :readnotify, wait_readbyte_filter)
 
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
@@ -280,8 +281,8 @@ function sleep(sec::Real)
     wt = WaitTask(timer, false)
     start_timer(timer, iround(sec*1000), 0)
     args = yield(wt)
+    stop_timer(timer)
     if isa(args,InterruptException)
-        stop_timer(timer)
         error(args)
     end
     nothing
@@ -306,6 +307,14 @@ eventloop() = ccall(:jl_global_event_loop,Ptr{Void},())
 function run_event_loop(loop::Ptr{Void})
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),loop)
 end
+function process_events(block::Bool,loop::Ptr{Void})
+    if(block)
+        ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
+    else
+        ccall(:jl_process_events,Int32,(Ptr{Void},),loop)        
+    end
+end
+process_events(block::Bool) = process_events(block,eventloop())
 run_event_loop() = run_event_loop(eventloop())
 
 ##pipe functions
@@ -382,6 +391,7 @@ end
 function read(this::AsyncStream,::Type{Uint8})
     buf = this.buffer
     assert(buf.seekable == false)
+    start_reading(this)
     wait_readnb(this,1)
     read(buf,Uint8)
 end
@@ -392,6 +402,14 @@ function readline(this::AsyncStream)
     start_reading(this)
     wait_readline(this)
     readline(buf)
+end
+
+function readuntil(this::AsyncStream,c::Uint8)
+    buf = this.buffer
+    assert(buf.seekable == false)
+    start_reading(this)
+    wait_readbyte(this,c)
+    readuntil(buf,c)
 end
 
 function finish_read(pipe::NamedPipe)
