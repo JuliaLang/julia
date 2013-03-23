@@ -173,6 +173,10 @@ end
 
 kron(a::Vector, b::Vector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1)))
 
+kron(a::Matrix, b::Vector)=kron(a,reshape(b,length(b),1))
+
+kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
+
 function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
 
