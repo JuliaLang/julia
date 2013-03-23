@@ -19,6 +19,7 @@ typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
 
 const _sizeof_uv_pipe = ccall(:jl_sizeof_uv_pipe_t,Int32,())
+const _sizeof_uv_poll = ccall(:jl_sizeof_uv_poll_t,Int32,())
 
 function eof(s::AsyncStream)
     start_reading(s)
@@ -55,6 +56,62 @@ end
 
 show(io::IO,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
 
+
+const UV_READABLE = 1
+const UV_WRITEABLE = 2
+
+#Wrapper for an OS file descriptor (on both Unix and Windows)
+immutable OS_FD
+    fd::Int32
+end
+
+#Wrapper for an OS file descriptor (on both Unix and Windows)
+@windows_only immutable OS_SOCKET
+    handle::Uint32
+end
+
+#
+# The only reason this is not immutable is that we want to reset the handle to 0 to 
+# prevent use-after-free. These things should always die together however, so we should
+# be able to make it immutable eventually.
+#
+
+type FDWatcher
+    handle::Ptr{Void}
+    cb::Callback
+    function FDWatcher(fd::OS_FD)
+        handle = c_malloc(_sizeof_uv_poll)
+        ccall(:uv_poll_init,Int32,(Ptr{Void},Ptr{Void},Int32),eventloop(),handle,fd)
+        this = new(handle,false)
+        associate_julia_struct(handle,this)
+        this
+    end
+    @windows_only function FDWatcher(fd::OS_SOCKET)
+        handle = c_malloc(_sizeof_uv_poll)
+        ccall(:uv_poll_init_socket,Int32,(Ptr{Void},Ptr{Void},Uint32),eventloop(),handle,fd)
+        this = new(handle,false)
+        associate_julia_struct(handle,this)
+        this
+    end
+end
+
+function start_watching(f::Function, t::FDWatcher, events)
+    t.cb = f
+    associate_julia_struct(handle,this)
+    ccall(:jl_poll_start,Int32,(Ptr{Void},Int32),t.handle,events)
+end
+function stop_watching(t::FDWatcher)
+    disassociate_julia_struct(t.handle)
+    ccall(:uv_poll_stop,Int32,(Ptr{Void},),t.handle)
+end
+
+function _uv_hook_pollcb(t::FDWatcher,status::Int32,events::Int32)
+    if(isa(t.cb,Function))
+        t.cb(status, events)
+    end
+end
+_uv_hook_close(uv::FDWatcher) = (uv.handle = 0; nothing)
+
 uvtype(::AsyncStream) = UV_STREAM
 uvhandle(stream::AsyncStream) = stream.handle
 
@@ -66,10 +123,15 @@ handle(s::Ptr{Void}) = s
 
 make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 
+associate_julia_struct(handle::Ptr{Void},jlobj::ANY) = 
+    ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),handle,jlobj)
+disassociate_julia_struct(handle::Ptr{Void}) = 
+    ccall(:jl_uv_disassociate_julia_struct,Void,(Ptr{Void},),handle)
+
 function _uv_tty2tty(handle::Ptr{Void})
     tty = TTY(handle,true)
     tty.line_buffered = false
-    ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),handle,tty)
+    associate_julia_struct(handle,tty)
     tty
 end
 
@@ -252,10 +314,13 @@ type TimeoutAsyncWork <: AsyncWork
     function TimeoutAsyncWork(loop::Ptr{Void},cb::Function)
         this=new(cb)
         this.handle=ccall(:jl_make_timer,Ptr{Void},(Ptr{Void},Any),loop,this)
+        finalizer(this,close)
         this
     end
 end
 TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
+
+close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 function _uv_hook_close(uv::AsyncStream)
     uv.handle = 0
@@ -268,11 +333,14 @@ _uv_hook_close(uv::AsyncWork) = (uv.handle = 0; nothing)
 # This serves as a common callback for all async classes
 _uv_hook_asynccb(async::AsyncWork, status::Int32) = async.cb(status)
 
+
 function start_timer(timer::TimeoutAsyncWork,timeout::Int64,repeat::Int64)
+    associate_julia_struct(timer.handle,timer)
     ccall(:jl_timer_start,Int32,(Ptr{Void},Int64,Int64),timer.handle,timeout,repeat)
 end
 
 function stop_timer(timer::TimeoutAsyncWork)
+    disassociate_julia_struct(timer.handle)
     ccall(:jl_timer_stop,Int32,(Ptr{Void},),timer.handle)
 end
 
