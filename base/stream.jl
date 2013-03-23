@@ -307,15 +307,15 @@ eventloop() = ccall(:jl_global_event_loop,Ptr{Void},())
 function run_event_loop(loop::Ptr{Void})
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),loop)
 end
-function process_events(loop::Ptr{Void})
-    ccall(:jl_process_events,Int32,(Ptr{Void},),loop)
+function process_events(block::Bool,loop::Ptr{Void})
+    if(block)
+        ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
+    else
+        ccall(:jl_process_events,Int32,(Ptr{Void},),loop)        
+    end
 end
-function run_event_loop_once(loop::Ptr{Void})
-    ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
-end
-process_events() = process_events(eventloop())
+process_events(block::Bool) = process_events(block,eventloop())
 run_event_loop() = run_event_loop(eventloop())
-run_event_loop_once() = run_event_loop_once(eventloop())
 
 ##pipe functions
 malloc_pipe() = c_malloc(_sizeof_uv_pipe)
