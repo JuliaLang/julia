@@ -249,6 +249,11 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                          0  -0.000000000000002   3.000000000000000])
 end
 
+# Hermitian matrix exponential
+A1 = randn(4,4) + im*randn(4,4)
+A2 = A1 + A1'
+@test_approx_eq expm(A2) expm(Hermitian(A2))
+
                                         # matmul for types w/o sizeof (issue #1282)
 A = Array(ComplexPair{Int},10,10)
 A[:] = complex(1,1)
@@ -281,10 +286,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
         end
         @test full(T) == F
                                         # elementary operations on tridiagonals
-# Disable these tests until fixed.
-#        @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
-#        @test transpose(T) == Tridiagonal(du, d, du)
-#        @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+        @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
+        @test transpose(T) == Tridiagonal(du, d, dl)
+        @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+                                        # test interconversion of Tridiagonal and SymTridiagonal
+        @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
+        @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
+        @test SymTridiagonal(d, dl) + Tridiagonal(du, d, du) == SymTridiagonal(2d, dl+du)
 
                                         # tridiagonal linear algebra
         v = convert(Vector{elty}, v)
