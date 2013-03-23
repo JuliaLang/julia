@@ -1352,7 +1352,7 @@ for (stev, stebz, stegr, elty) in
                 w, iblock, isplit, work, 
                 iwork, info)
                 if info[1] != 0 throw(LapackException(info[1])) end
-            w[1:m[1]], isplit[1:m[1]], isplit[1:nsplit[1]], info[1]
+            w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]], info[1]
         end
         function stegr!(jobz::BlasChar, range::BlasChar, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer, abstol::Real)
             n = length(dv)
