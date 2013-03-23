@@ -330,6 +330,15 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq W\v F\v
         @test_approx_eq det(W) det(F)
 
+        # Diagonal
+        D = Diagonal(d)
+        DM = diagm(d)
+        @test_approx_eq D*v DM*v
+        @test_approx_eq D*U DM*U
+        @test_approx_eq D\v DM\v
+        @test_approx_eq D\U DM\U
+        @test_approx_eq det(D) det(DM)   
+
         # Test det(A::Matrix)
         # In the long run, these tests should step through Strang's
         #  axiomatic definition of determinants.
