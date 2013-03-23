@@ -44,7 +44,7 @@ function show(io::IO, S::SymTridiagonal)
 end
 
 size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
-size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<2 ? length(m.dv) : 1)
+size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(m.dv) : 1)
 
 #Elementary operations
 copy(S::SymTridiagonal) = SymTridiagonal(copy(S.dv), copy(S.ev))
@@ -108,6 +108,8 @@ function Tridiagonal{Tl<:Number, Td<:Number, Tu<:Number}(dl::Vector{Tl}, d::Vect
 end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
+size(M::Tridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(M.d) : 1)
+
 function show(io::IO, M::Tridiagonal)
     println(io, summary(M), ":")
     print(io, " sub: ")
