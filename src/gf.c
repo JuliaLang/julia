@@ -95,14 +95,15 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
                               int va)
 {
     // NOTE: This function is a huge performance hot spot!!
-    if (jl_tuple_len(sig) > n) {
-        if (n != jl_tuple_len(sig)-1)
+    size_t lensig = jl_tuple_len(sig);
+    if (lensig > n) {
+        if (n != lensig-1)
             return 0;
     }
     size_t i;
     for(i=0; i < n; i++) {
         jl_value_t *decl = jl_tupleref(sig, i);
-        if (i == jl_tuple_len(sig)-1) {
+        if (i == lensig-1) {
             if (va) {
                 jl_value_t *t = jl_tparam0(decl);
                 for(; i < n; i++) {
@@ -116,10 +117,15 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
         if (jl_is_tuple(decl)) {
             // tuples don't have to match exactly, to avoid caching
             // signatures for tuples of every length
-            if (!jl_is_tuple(a) || !jl_subtype(a, decl, 1))
+            if (!jl_is_tuple(a) || //!jl_subtype(a, decl, 1))
+                !jl_tuple_subtype(((jl_tuple_t*)a)->data, jl_tuple_len(a),
+                                  ((jl_tuple_t*)decl)->data, jl_tuple_len(decl),
+                                  1, 0))
                 return 0;
         }
-        else if (jl_is_type_type(decl) && jl_is_type(a)) {
+        else if (jl_is_type_type(decl) &&
+                 (jl_is_nontuple_type(a) ||
+                  (jl_is_tuple(a)&&jl_is_type(a)))) {
             jl_value_t *tp0 = jl_tparam0(decl);
             if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
