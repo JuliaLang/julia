@@ -92,16 +92,10 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
 }
 
 static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
-                              int va)
+                              int va, size_t lensig)
 {
     // NOTE: This function is a huge performance hot spot!!
-    size_t lensig = jl_tuple_len(sig);
-    if (lensig > n) {
-        if (n != lensig-1)
-            return 0;
-    }
-    size_t i;
-    for(i=0; i < n; i++) {
+    for(size_t i=0; i < n; i++) {
         jl_value_t *decl = jl_tupleref(sig, i);
         if (i == lensig-1) {
             if (va) {
@@ -114,7 +108,15 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
             }
         }
         jl_value_t *a = args[i];
-        if (jl_is_tuple(decl)) {
+        if (decl == (jl_value_t*)jl_any_type) {
+        }
+        else if ((jl_value_t*)jl_typeof(a) == decl) {
+            /*
+              we know there are only concrete types here, and types are
+              hash-consed, so pointer comparison should work.
+            */
+        }
+        else if (jl_is_tuple(decl)) {
             // tuples don't have to match exactly, to avoid caching
             // signatures for tuples of every length
             if (!jl_is_tuple(a) || //!jl_subtype(a, decl, 1))
@@ -137,15 +139,8 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
                     return 0;
             }
         }
-        else if (decl == (jl_value_t*)jl_any_type) {
-        }
         else {
-            /*
-              we know there are only concrete types here, and types are
-              hash-consed, so pointer comparison should work.
-            */
-            if ((jl_value_t*)jl_typeof(a) != decl)
-                return 0;
+            return 0;
         }
     }
     return 1;
@@ -154,15 +149,13 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
 static inline
 jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
 {
-    uptrint_t uid;
-    if (jl_is_datatype(ty) && (uid = ((jl_datatype_t*)ty)->uid)) {
-        jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->nrows-1));
-        if (ml && ml!=JL_NULL) {
-            jl_value_t *t = jl_tupleref(ml->sig, 0);
-            if (tparam) t = jl_tparam0(t);
-            if (t == ty)
-                return ml;
-        }
+    uptrint_t uid = ((jl_datatype_t*)ty)->uid;
+    jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->nrows-1));
+    if (ml && ml!=JL_NULL) {
+        jl_value_t *t = jl_tupleref(ml->sig, 0);
+        if (tparam) t = jl_tparam0(t);
+        if (t == ty)
+            return ml;
     }
     return JL_NULL;
 }
@@ -222,13 +215,13 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
         jl_value_t *ty = jl_t0(types);
         if (jl_is_type_type(ty)) {
             jl_value_t *a0 = jl_tparam0(ty);
-            if (mt->cache_targ != JL_NULL) {
+            if (mt->cache_targ != JL_NULL && jl_is_datatype(a0)) {
                 ml = mtcache_hash_lookup(mt->cache_targ, a0, 1);
                 if (ml!=JL_NULL)
                     goto mt_assoc_bt_lkup;
             }
         }
-        if (mt->cache_arg1 != JL_NULL) {
+        if (mt->cache_arg1 != JL_NULL && jl_is_datatype(ty)) {
             ml = mtcache_hash_lookup(mt->cache_arg1, ty, 0);
         }
     }
@@ -253,14 +246,12 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
     if (n > 0) {
         jl_value_t *a0 = args[0];
         jl_value_t *ty = (jl_value_t*)jl_typeof(a0);
-        if (ty == (jl_value_t*)jl_datatype_type) {
-            if (mt->cache_targ != JL_NULL) {
-                ml = mtcache_hash_lookup(mt->cache_targ, a0, 1);
-                if (ml != JL_NULL)
-                    goto mt_assoc_lkup;
-            }
+        if (mt->cache_targ != JL_NULL && ty == (jl_value_t*)jl_datatype_type) {
+            ml = mtcache_hash_lookup(mt->cache_targ, a0, 1);
+            if (ml != JL_NULL)
+                goto mt_assoc_lkup;
         }
-        if (mt->cache_arg1 != JL_NULL) {
+        if (mt->cache_arg1 != JL_NULL && jl_is_datatype(ty)) {
             ml = mtcache_hash_lookup(mt->cache_arg1, ty, 0);
             if (ml != JL_NULL) {
                 if (ml->next==JL_NULL && n==1 && jl_tuple_len(ml->sig)==1)
@@ -284,8 +275,10 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
         ml = mt->cache;
  mt_assoc_lkup:
     while (ml != JL_NULL) {
-        if (jl_tuple_len(ml->sig) == n || ml->va) {
-            if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va)) {
+        size_t lensig = jl_tuple_len(ml->sig);
+        if ((lensig == n || ml->va) &&
+            !(lensig > n && n != lensig-1)) {
+            if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va, lensig)) {
                 return ml->func;
             }
         }
