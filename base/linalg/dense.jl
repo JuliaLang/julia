@@ -171,30 +171,24 @@ function trace{T}(A::Matrix{T})
     return t
 end
 
-kron(a::Vector, b::Vector) = vec([ a[i]*b[j] for j=1:length(b), i=1:length(a) ])
+kron(a::Vector, b::Vector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1)))
 
-function kron(a::Matrix, b::Vector)
-  res = kron(a[:,1],b)
-  for i=2:size(a,2)
-    res = hcat(res, kron(a[:,i],b))
-  end
-  res
-end
+function kron{T,S}(a::Matrix{T}, b::Matrix{S})
+    R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
 
-function kron(a::Vector, b::Matrix)
-  res = kron(a,b[:,1])
-  for i=2:size(b,2)
-    res = hcat(res, kron(a,b[:,i]))
-  end
-  res
-end
-
-function kron(a::Matrix, b::Matrix)
-  res = kron(a[:,1],b)
-  for i=2:size(a,2)
-    res = hcat(res, kron(a[:,i],b))
-  end
-  res
+    m = 1
+    for j = 1:size(a,2)
+        for l = 1:size(b,2)
+            for i = 1:size(a,1)
+                aij = a[i,j]
+                for k = 1:size(b,1)
+                    R[m] = aij*b[k,l]
+                    m += 1
+                end
+            end
+        end
+    end
+    R
 end
 
 kron(a::Number, b::Number) = a * b 
