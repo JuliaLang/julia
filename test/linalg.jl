@@ -281,10 +281,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
         end
         @test full(T) == F
                                         # elementary operations on tridiagonals
-# Disable these tests until fixed.
-#        @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
-#        @test transpose(T) == Tridiagonal(du, d, du)
-#        @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+        @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
+        @test transpose(T) == Tridiagonal(du, d, dl)
+        @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+                                        # test interconversion of Tridiagonal and SymTridiagonal
+        @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
+        @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
+        @test SymTridiagonal(d, dl) + Tridiagonal(du, d, du) == SymTridiagonal(2d, dl+du)
 
                                         # tridiagonal linear algebra
         v = convert(Vector{elty}, v)
