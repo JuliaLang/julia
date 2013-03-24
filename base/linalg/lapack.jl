@@ -1411,9 +1411,10 @@ for (stev, stebz, stegr, stein, elty) in
         #     $                   IWORK, IFAIL, INFO )
         # We allow the user to specify exactly which eigenvectors to get by
         # specifying the eigenvalues (which may be approximate) via w_in
-        function stein!(dv::Vector{$elty}, ev::Vector{$elty}, w_in::Vector{$elty}, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
+        function stein!(dv::Vector{$elty}, ev_in::Vector{$elty}, w_in::Vector{$elty}, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
             n = length(dv)
-            if length(ev) != (n-1) throw(DimensionMismatch("stein!")) end
+            if length(ev_in) != (n-1) throw(DimensionMismatch("stein!")) end
+            ev = [ev_in; zeros(BlasInt,1)]
             ldz = n #Leading dimension
             #Number of eigenvalues to find
             1<=length(w_in)<=n ? (m=length(w_in)) : throw(DimensionMismatch("stein!"))
