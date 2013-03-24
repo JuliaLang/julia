@@ -690,6 +690,11 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
     return lib;
 }
 
+DLLEXPORT void jl_uv_loop_stop(uv_loop_t *loop)
+{
+    loop->stop_flag = 1;
+}
+
 DLLEXPORT long SC_CLK_TCK() {
 #ifndef __WIN32__
     return sysconf(_SC_CLK_TCK);
