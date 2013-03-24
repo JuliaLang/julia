@@ -1414,7 +1414,7 @@ for (stev, stebz, stegr, stein, elty) in
         function stein!(dv::Vector{$elty}, ev_in::Vector{$elty}, w_in::Vector{$elty}, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
             n = length(dv)
             if length(ev_in) != (n-1) throw(DimensionMismatch("stein!")) end
-            ev = [ev_in; zeros(BlasInt,1)]
+            ev = [ev_in; zeros($elty,1)]
             ldz = n #Leading dimension
             #Number of eigenvalues to find
             1<=length(w_in)<=n ? (m=length(w_in)) : throw(DimensionMismatch("stein!"))
@@ -1422,10 +1422,10 @@ for (stev, stebz, stegr, stein, elty) in
             # i.e. set the block scheme to be the entire matrix
             if length(iblock_in) < m #Not enough block specifications
                 iblock = [[1 for i=1:m]; Array(BlasInt,n-m)]
-                w = [sort(w_in); zeros(BlasInt,n-m)]
+                w = [sort(w_in); zeros($elty,n-m)]
             else
                 iblock = [iblock_in; Array(BlasInt,n-length(iblock_in))]
-                w = [w_in; zeros(BlasInt,n-m)] #Assume user has sorted the eigenvalues properly
+                w = [w_in; zeros($elty,n-m)] #Assume user has sorted the eigenvalues properly
             end
             if length(isplit_in) < 1 #Not enough block specifications
                 isplit = [n; Array(BlasInt,n-1)]
