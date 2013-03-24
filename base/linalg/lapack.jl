@@ -291,7 +291,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &m, &n, A, &lda,
                 T, &n, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, T
         end
         ## Several variants of geqrf! could be defined.
@@ -490,7 +490,7 @@ for (gelsd, elty) in ((:dgelsd_, :Float64),
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
             LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B, 1) != m; throw(LAPACK.DimensionMismatch("gelsd!")); end
+            if size(B, 1) != m; throw(DimensionMismatch("gelsd!")); end
             if size(B, 1) < n
                 newB = Array($elty, n, size(B, 2))
                 newB[1:size(B, 1), :] = B
@@ -539,7 +539,7 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
             LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B,1) != m; throw(LAPACK.DimensionMismatch("gelsd!")); end
+            if size(B,1) != m; throw(DimensionMismatch("gelsd!")); end
             if size(B, 1) < n
                 newB = Array($elty, n, size(B, 2))
                 newB[1:size(B, 1), :] = B
@@ -1050,7 +1050,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                 &k, &k, V, &ldv,
                 T, &k, C, &ldc,
                 work, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return C
         end
     end
@@ -1336,7 +1336,7 @@ for (stev, stebz, stegr, stein, elty) in
         #*  eigenvalues.
         function stebz!(range::Char, order::Char, vl::$elty, vu::$elty, il::Integer, iu::Integer, abstol::Real, dv::Vector{$elty}, ev::Vector{$elty})
             n = length(dv)
-            if length(ev) != (n-1) throw(LapackDimMisMatch("stebz!")) end
+            if length(ev) != (n-1) throw(DimensionMismatch("stebz!")) end
             m = Array(BlasInt,1)
             nsplit = Array(BlasInt,1)
             w = Array($elty, n)
@@ -1357,8 +1357,8 @@ for (stev, stebz, stegr, stein, elty) in
                 dv, ev, m, nsplit,
                 w, iblock, isplit, work, 
                 iwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
-            w[1:m[1]], isplit[1:m[1]], isplit[1:nsplit[1]], info[1]
+                if info[1] != 0 throw(LAPACKException(info[1])) end
+            w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]], info[1]
         end
         #*  DSTEGR computes selected eigenvalues and, optionally, eigenvectors
         #*  of a real symmetric tridiagonal matrix T. Any such unreduced matrix has
@@ -1370,7 +1370,7 @@ for (stev, stebz, stegr, stein, elty) in
         #*  eigenvalues.
         function stegr!(jobz::BlasChar, range::BlasChar, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer, abstol::Real)
             n = length(dv)
-            if length(ev) != (n-1) throw(LapackDimMisMatch("stebz!")) end
+            if length(ev) != (n-1) throw(DimensionMismatch("stebz!")) end
             eev = [ev, zero($elty)]
             m = Array(BlasInt, 1)
             w = Array($elty, n)
@@ -1401,7 +1401,7 @@ for (stev, stebz, stegr, stein, elty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             return w[1:m[1]], Z[:,1:m[1]]
         end
         #*  DSTEIN computes the eigenvectors of a real symmetric tridiagonal
@@ -1409,21 +1409,30 @@ for (stev, stebz, stegr, stein, elty) in
         #*  iteration.
         #      SUBROUTINE DSTEIN( N, D, E, M, W, IBLOCK, ISPLIT, Z, LDZ, WORK,
         #     $                   IWORK, IFAIL, INFO )
-        # We allow the user to specify exactly which eigenvextors to get via evalidx
-        function stein!(dv::Vector{$elty}, ev::Vector{$elty},evalidx::Vector{BlasInt})
+        # We allow the user to specify exactly which eigenvectors to get by
+        # specifying the eigenvalues (which may be approximate) via w_in
+        function stein!(dv::Vector{$elty}, ev::Vector{$elty}, w_in::Vector{$elty}, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
             n = length(dv)
-            if length(ev) != (n-1) throw(LapackDimMisMatch("stein!")) end
+            if length(ev) != (n-1) throw(DimensionMismatch("stein!")) end
             ldz = n #Leading dimension
             #Number of eigenvalues to find
-            1<=length(evalidx)<=n ? (m=length(evalidx)) : throw(LapackDimMisMatch("stein!"))
-            evecs = Array($elty,(n,m))
-            w = [evalidx; zeros(BlasInt,n-m)]
-            #XXX  ( The output array IBLOCK from DSTEBZ is expected here. )
-            iblock = Array(BlasInt,n)
-            iblock[1] = 1
-            #XXX  ( The output array ISPLIT from DSTEBZ is expected here. )
-            isplit = Array(BlasInt,n)
-            isplit[1] = n
+            1<=length(w_in)<=n ? (m=length(w_in)) : throw(DimensionMismatch("stein!"))
+            #If iblock and isplit are invalid input, assume worst-case block paritioning,
+            # i.e. set the block scheme to be the entire matrix
+            if length(iblock_in) < m #Not enough block specifications
+                iblock = [[1 for i=1:m]; Array(BlasInt,n-m)]
+                w = [sort(w_in); zeros(BlasInt,n-m)]
+            else
+                iblock = [iblock_in; Array(BlasInt,n-length(iblock_in))]
+                w = [w_in; zeros(BlasInt,n-m)] #Assume user has sorted the eigenvalues properly
+            end
+            if length(isplit_in) < 1 #Not enough block specifications
+                isplit = [n; Array(BlasInt,n-1)]
+            else
+                isplit = [isplit_in; Array(BlasInt,n-length(isplit_in))]
+            end
+
+            z = Array($elty,(n,m))
             work = Array($elty, 5*n)
             iwork = Array(BlasInt,n)
             ifail = Array(BlasInt,m)
@@ -1434,17 +1443,20 @@ for (stev, stebz, stegr, stein, elty) in
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                 Ptr{BlasInt}),
-                &n, dv, ev, &m, w, iblock, isplit, evecs, &ldz, work, iwork, ifail, info)
+                &n, dv, ev, &m, w, iblock, isplit, z, &ldz, work, iwork, ifail, info)
             
-            (info[1]!= 0) ? throw(LapackException(info[1])) : evecs
+            if (info[1] < 0) throw(LAPACKException(info[1])) end
+            (z, ifail, info[1])
         end
     end
 end
 stegr!(jobz::BlasChar, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
 stegr!(dv::Vector, ev::Vector) = stegr!('N', 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
         
-# Allow user to specify just one eigenvextor to get in stein!
-stein!(dv::Vector, ev::Vector, evalidx::Integer)=stein!(dv, ev, [evalidx])
+# Allow user to skip specification of iblock and isplit
+stein!(dv::Vector, ev::Vector, w_in::Vector)=stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
+# Allow user to specify just one eigenvector to get in stein!
+stein!(dv::Vector, ev::Vector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
 
 ## (SY) symmetric matrices - eigendecomposition, Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
@@ -2035,7 +2047,7 @@ for (fn, elty, relty) in ((:dsfrk_, :Float64, :Float64),
             elseif trans == 'T'
                 k, n = size(A)
             else
-                throw(LapackException(0))
+                throw(LAPACKException(0))
             end
             lda = max(1, stride(A, 2))
             ccall(($(string(fn)), liblapack), Void,
@@ -2064,7 +2076,7 @@ for (fn, elty) in ((:dpftrf_, :Float64),
                  Ptr{BlasInt}),
                 &transr, &uplo, &n, A,
                 info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, info[1]
         end
     end
@@ -2084,7 +2096,7 @@ for (fn, elty) in ((:dpftri_, :Float64),
                  Ptr{BlasInt}),
                 &transr, &uplo, &n, A, 
                 info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, info[1]
         end
     end
@@ -2107,7 +2119,7 @@ for (fn, elty) in ((:dpftrs_, :Float64),
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &transr, &uplo, &n, &nhrs,
                 A, B, &ldb, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return B
         end
     end
@@ -2149,7 +2161,7 @@ for (fn, elty) in ((:dtftri_, :Float64),
                  Ptr{$elty}, Ptr{BlasInt}),
                 &transr, &uplo, &diag, &n, 
                 A, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, info[1]
         end
     end
@@ -2170,7 +2182,7 @@ for (fn, elty) in ((:dtfttr_, :Float64),
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &transr, &uplo, &n, Arf,
                 A, &n, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, info[1]
         end
     end
@@ -2192,7 +2204,7 @@ for (fn, elty) in ((:dtrttf_, :Float64),
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                 &transr, &uplo, &n, A,
                 &lda, Arf, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return Arf, info[1]
         end
     end
