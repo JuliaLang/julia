@@ -21,6 +21,12 @@ x = lua\b
 
 @test norm(A*x-b,1) < eps(1e4)
 
+b = [8., 20., 13., 6., 17.]
+x = lua'\b
+@test_approx_eq x float([1:5])
+
+@test norm(A'*x-b,1) < eps(1e4)
+
 using Base.LinAlg.CHOLMOD
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
