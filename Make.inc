@@ -185,7 +185,7 @@ LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG=llvm-config
+LLVM_CONFIG ?= llvm-config
 else
 LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
 endif
