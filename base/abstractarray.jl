@@ -1400,29 +1400,37 @@ function mapslices(f::Function, A::AbstractArray, dims)
 
     idx = cell(ndimsA)
     fill!(idx, 1)
-    Acolons = [ 1:size(A,d) for d in dims ]
+    for d in dims
+        idx[d] = 1:size(A,d)
+    end
     Asliceshape = tuple(dimsA[dims]...)
     itershape   = tuple(dimsA[otherdims]...)
-    idx[dims] = Acolons
 
     r1 = f(reshape(A[idx...], Asliceshape))
 
     # determine result size and allocate
     Rsize = copy(dimsA)
     # TODO: maybe support removing dimensions
-    Rsize[dims] = [size(r1)...]
+    Rsize[[dims...]] = [size(r1)...]
     R = similar(r1, tuple(Rsize...))
 
     ridx = cell(ndims(R))
     fill!(ridx, 1)
-    Rcolons = [ 1:size(R,d) for d in dims ]
-    ridx[dims] = Rcolons
+    for d in dims
+        ridx[d] = 1:size(R,d)
+    end
 
+    first = true
     cartesian_map(itershape) do idxs...
         ia = [idxs...]
         idx[otherdims] = ia
         ridx[otherdims] = ia
-        R[ridx...] = f(reshape(A[idx...], Asliceshape))
+        if first
+            R[ridx...] = r1
+            first = false
+        else
+            R[ridx...] = f(reshape(A[idx...], Asliceshape))
+        end
     end
 
     return R
