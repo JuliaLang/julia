@@ -1383,7 +1383,8 @@ end
 ## transform any set of dimensions
 ## dims specifies which dimensions will be transformed. for example
 ## dims==1:2 will call f on all slices A[:,:,...]
-function mapslices(f::Function, A::AbstractArray, dims)
+mapslices(f::Function, A::AbstractArray, dims) = mapslices(f, A, [dims...])
+function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     if isempty(dims)
         return A
     end
@@ -1400,10 +1401,11 @@ function mapslices(f::Function, A::AbstractArray, dims)
 
     idx = cell(ndimsA)
     fill!(idx, 1)
-    Acolons = [ 1:size(A,d) for d in dims ]
     Asliceshape = tuple(dimsA[dims]...)
     itershape   = tuple(dimsA[otherdims]...)
-    idx[dims] = Acolons
+    for d in dims
+        idx[d] = 1:size(A,d)
+    end
 
     r1 = f(reshape(A[idx...], Asliceshape))
 
@@ -1415,14 +1417,22 @@ function mapslices(f::Function, A::AbstractArray, dims)
 
     ridx = cell(ndims(R))
     fill!(ridx, 1)
-    Rcolons = [ 1:size(R,d) for d in dims ]
-    ridx[dims] = Rcolons
+    for d in dims
+        ridx[d] = 1:size(R,d)
+    end
 
+    R[ridx...] = r1
+
+    first = true
     cartesian_map(itershape) do idxs...
-        ia = [idxs...]
-        idx[otherdims] = ia
-        ridx[otherdims] = ia
-        R[ridx...] = f(reshape(A[idx...], Asliceshape))
+        if first
+            first = false
+        else
+            ia = [idxs...]
+            idx[otherdims] = ia
+            ridx[otherdims] = ia
+            R[ridx...] = f(reshape(A[idx...], Asliceshape))
+        end
     end
 
     return R
