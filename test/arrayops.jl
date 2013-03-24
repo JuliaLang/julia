@@ -376,8 +376,8 @@ end
 begin
     local a,h,i
     a = rand(5,5)
-    h = mapslices(hist, a, [1])
-    H = mapslices(hist, a, [2])
+    h = mapslices(hist, a, 1)
+    H = mapslices(hist, a, 2)
     s = mapslices(sort, a, [1])
     S = mapslices(sort, a, [2])
     for i = 1:5
