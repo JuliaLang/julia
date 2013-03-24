@@ -448,6 +448,7 @@ export
     zeta,
 
 # arrays
+    mapslices,
     reducedim,
     bsxfun,
     cartesian_map,
