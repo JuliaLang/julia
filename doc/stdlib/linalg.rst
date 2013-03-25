@@ -95,6 +95,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the eigenvalues of ``A``.
 
+.. function:: eigvecs(A, [eigvals])
+
+   Returns the eigenvectors of ``A``.
+
+   If the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors. (Currently this optional syntax only works for SymTridiagonal matrices.)
+
 .. function:: eigfact(A)
 
    Compute the eigenvalue decomposition of ``A`` and return an ``EigenDense`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``EigenDense`` objects: ``inv``, ``det``.

@@ -49,6 +49,7 @@ export
     eigfact!,
     eigs,
     eigvals,
+    eigvecs,
     expm,
     sqrtm,
     eye,
