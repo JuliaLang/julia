@@ -540,9 +540,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     for(size_t i=0; i < jl_tuple_len(st->types); i++) {
         jl_value_t *ty = jl_tupleref(st->types, i);
         size_t fsz, al;
-        if (jl_is_bitstype(ty)) {
+        if (jl_isbits(ty) && (al=((jl_datatype_t*)ty)->alignment)!=0) {
             fsz = jl_datatype_size(ty);
-            al = fsz;   // alignment == size for bits types
             st->fields[i].isptr = 0;
         }
         else {
@@ -609,6 +608,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->instance = NULL;
     t->struct_decl = NULL;
     t->size = 0;
+    t->alignment = 0;
     if (abstract || jl_tuple_len(parameters) > 0) {
         t->uid = 0;
     }
@@ -627,6 +627,7 @@ jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
     jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, super, parameters,
                                         jl_null, jl_null, 0, 0);
     bt->size = nbits/8;
+    bt->alignment = bt->size;
     bt->pointerfree = 1;
     return bt;
 }
