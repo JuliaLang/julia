@@ -29,14 +29,12 @@ isposdef(D::Diagonal) = all(D.diag .> 0)
 
 *(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 *(D::Diagonal, V::Vector) = D.diag .* V
-*(V::Vector,D::Diagonal) = V .* D.diag
 *(A::Matrix, D::Diagonal) = diagmm(A,D.diag)
 *(D::Diagonal, A::Matrix) = diagmm(D.diag,A)
 
 \(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag )
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
 \(D::Diagonal, V::Vector) = V ./ D.diag
-/(V::Vector, D::Diagonal) = V ./ D.diag
 function \(D::Diagonal, A::Matrix)
     m, n = size(A)
     if m != length(D.diag)
