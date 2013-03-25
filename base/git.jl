@@ -22,19 +22,20 @@ head() = readchomp(`git rev-parse HEAD`)
 function transact(f::Function)
     head = readchomp(`git rev-parse HEAD`)
     index = readchomp(`git write-tree`)
-    worktree = try
+    work = try
         run(`git add --all`)
         run(`git add .`)
         readchomp(`git write-tree`)
     finally
-        run(`git read-tree $index`)              # restore index
+        run(`git read-tree $index`)      # restore index
     end
     try f() catch
-        run(`git reset -q --`)                   # unstage everything
-        run(`git checkout -q -f $worktree -- .`) # retore work tree
-        run(`git clean -qdf`)                    # remove everything else
-        run(`git read-tree $index`)              # restore index
-        run(`git reset -q --soft $head`)         # restore head
+        run(`git reset -q --`)           # unstage everything
+        run(`git read-tree $work`)       # move work tree to index
+        run(`git checkout-index -fa`)    # check the index out to work
+        run(`git clean -qdf`)            # remove everything else
+        run(`git read-tree $index`)      # restore index
+        run(`git reset -q --soft $head`) # restore head
         rethrow()
     end
 end
