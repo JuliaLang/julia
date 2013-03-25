@@ -273,8 +273,9 @@ syntax::
 Note the distinguishing ``@`` before the macro name and the lack of
 commas between the argument expressions in the first form, and the
 lack of whitespace after ``@name`` in the second form. The two styles
-should not be mixed. For example, the following syntax invokes the
-macro with one argument, which is the tuple ``(expr1, expr2, ...)``::
+should not be mixed. For example, the following syntax is different
+from the examples above; it passes the tuple ``(expr1, expr2, ...)`` as
+one argument to the macro::
 
     @name (expr1, expr2, ...)
 
@@ -302,9 +303,7 @@ This macro can be used like this::
     Assertion failed: 1==0
 
 Macro calls are expanded so that the above calls are precisely
-equivalent to writing
-
-::
+equivalent to writing::
 
     1==1.0 ? nothing : error("Assertion failed: ", "1==1.0")
     1==0 ? nothing : error("Assertion failed: ", "1==0")
@@ -319,6 +318,11 @@ expression is false, an error is raised indicating the asserted
 expression that was false. Notice that it would not be possible to write
 this as a function, since only the *value* of the condition and not the
 expression that computed it would be available.
+
+The ``@assert`` example also shows how macros can include a ``quote``
+block, which allows for convenient manipulation of expressions inside
+the macro body.
+
 
 Hygiene
 ~~~~~~~
