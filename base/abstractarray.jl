@@ -205,11 +205,13 @@ for (f,t) in ((:char,   Char),
               (:int16,  Int16),
               (:int32,  Int32),
               (:int64,  Int64),
+              (:int128, Int128),
               (:uint,   Uint),
               (:uint8,  Uint8),
               (:uint16, Uint16),
               (:uint32, Uint32),
-              (:uint64, Uint64))
+              (:uint64, Uint64),
+              (:uint128,Uint128))
     @eval ($f)(x::AbstractArray{$t}) = x
     @eval ($f)(x::AbstractArray) = iround_to(similar(x,$t), x)
 end
