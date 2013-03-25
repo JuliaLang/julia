@@ -90,6 +90,28 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
+# sub
+A = reshape(1:120, 3, 5, 8)
+sA = sub(A, 2, 1:5, 1:8)
+@test size(sA) == (1, 5, 8)
+@test_fails sA[2, 1:8]
+@test sA[1, 2, 1:8][:] == 5:15:120
+sA[2:5:end] = -1
+@test all(sA[2:5:end] .== -1)
+@test all(A[5:15:120] .== -1)
+
+# slice
+A = reshape(1:120, 3, 5, 8)
+sA = slice(A, 2, 1:5, 1:8)
+@test size(sA) == (5, 8)
+@test sA[2, 1:8][:] == 5:15:120
+@test sA[:,1] == 2:3:14
+@test sA[2:5:end] == 5:15:120
+sA[2:5:end] = -1
+@test all(sA[2:5:end] .== -1)
+@test all(A[5:15:120] .== -1)
+
+
 # get
 let
     A = reshape(1:24, 3, 8)
@@ -350,3 +372,18 @@ end
 @test isequal(symdiff(Int64[], [1,2,3]), [1,2,3])
 @test isequal(symdiff(Int64[]), Int64[])
 
+# mapslices
+begin
+    local a,h,i
+    a = rand(5,5)
+    h = mapslices(hist, a, 1)
+    H = mapslices(hist, a, 2)
+    s = mapslices(sort, a, [1])
+    S = mapslices(sort, a, [2])
+    for i = 1:5
+        @test h[:,i] == hist(a[:,i])
+        @test vec(H[i,:]) == hist(vec(a[i,:]))
+        @test s[:,i] == sort(a[:,i])
+        @test vec(S[i,:]) == sort(vec(a[i,:]))
+    end
+end

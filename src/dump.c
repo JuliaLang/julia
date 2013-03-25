@@ -435,7 +435,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
         dt->types = (jl_tuple_t*)jl_deserialize_value(s);
     }
     else {
-        dt->alignment = 0;
+        dt->alignment = dt->size;
         dt->names = dt->types = jl_null;
     }
     uint8_t flags = read_uint8(s);

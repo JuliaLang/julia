@@ -664,6 +664,7 @@ static void gc_mark(void)
     gc_push_root(jl_unprotect_stack_func);
     gc_push_root(jl_bottom_func);
     gc_push_root(jl_typetype_type);
+    gc_push_root(jl_tupletype_type);
 
     // constants
     gc_push_root(jl_null);

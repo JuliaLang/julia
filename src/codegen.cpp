@@ -339,6 +339,12 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
     return NULL;
 }
 
+typedef struct {
+    Value *dataptr;
+    Value *len;
+    Value *nr;
+} jl_arrayvar_t;
+
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
 typedef struct {
@@ -350,6 +356,7 @@ typedef struct {
     std::map<std::string, bool> *isAssigned;
     std::map<std::string, bool> *isCaptured;
     std::map<std::string, bool> *escapes;
+    std::map<std::string, jl_arrayvar_t> *arrayvars;
     std::set<jl_sym_t*> *volatilevars;
     std::map<std::string, jl_value_t*> *declTypes;
     std::map<int, BasicBlock*> *labels;
@@ -1262,7 +1269,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             // todo: also allow e.g. Union of several array types
             Value *arg1 = emit_expr(args[1], ctx);
             JL_GC_POP();
-            return emit_arraylen(arg1);
+            return emit_arraylen(arg1, args[1], ctx);
         }
     }
     else if (f->fptr == &jl_f_arraysize && nargs==2) {
@@ -1277,7 +1284,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     uint32_t idx = (uint32_t)jl_unbox_long(args[2]);
                     if (idx > 0 && idx <= ndims) {
                         JL_GC_POP();
-                        return emit_arraysize(ary, idx);
+                        return emit_arraysize(ary, args[1], idx, ctx);
                     }
                     else if (idx > ndims) {
                         JL_GC_POP();
@@ -1331,14 +1338,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (jl_is_long(ndp) || nargs==2) {
                     Value *ary = emit_expr(args[1], ctx);
                     size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
-                    Value *idx = emit_array_nd_index(ary, nd, &args[2], nargs-1, ctx);
+                    Value *idx = emit_array_nd_index(ary, args[1], nd, &args[2], nargs-1, ctx);
                     JL_GC_POP();
                     if (jl_array_store_unboxed(ety) &&
                         ((jl_datatype_t*)ety)->size == 0) {
                         jl_new_struct_uninit((jl_datatype_t*)ety);
                         return literal_pointer_val(((jl_datatype_t*)ety)->instance);
                     }
-                    return typed_load(emit_arrayptr(ary), idx, ety, ctx);
+                    return typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx);
                 }
             }
         }
@@ -1361,13 +1368,13 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (jl_is_long(ndp) || nargs==3) {
                     Value *ary = emit_expr(args[1], ctx);
                     size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
-                    Value *idx = emit_array_nd_index(ary, nd, &args[3], nargs-2, ctx);
+                    Value *idx = emit_array_nd_index(ary, args[1], nd, &args[3], nargs-2, ctx);
                     if (jl_array_store_unboxed(ety) &&
                         ((jl_datatype_t*)ety)->size == 0) {
                         // no-op
                     }
                     else {
-                        typed_store(emit_arrayptr(ary), idx,
+                        typed_store(emit_arrayptr(ary,args[1],ctx), idx,
                                     ety==(jl_value_t*)jl_any_type ? emit_expr(args[2],ctx) : emit_unboxed(args[2],ctx),
                                     ety, ctx);
                     }
@@ -1678,20 +1685,35 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         assert(false);
     jl_binding_t *bnd=NULL;
     Value *bp = var_binding_pointer(s, &bnd, true, ctx);
+    Value *rval;
     if (bnd) {
+        rval = boxed(emit_expr(r, ctx, true));
         builder.CreateCall2(jlcheckassign_func,
                             literal_pointer_val((void*)bnd),
-                            boxed(emit_expr(r, ctx, true)));
+                            rval);
     }
     else {
         bool vol = ctx->volatilevars->find(s) != ctx->volatilevars->end();
         Type *vt = bp->getType();
-        if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
-            builder.CreateStore(emit_unbox(vt->getContainedType(0), vt,
-                                           emit_unboxed(r, ctx)),
-                                bp, vol);
-        else
-            builder.CreateStore(boxed(emit_expr(r, ctx, true)), bp, vol);
+        jl_value_t *rt = expr_type(r,ctx);
+        if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == jl_bottom_type) {
+            // sometimes x = y::None occurs
+            if (builder.GetInsertBlock()->getTerminator() != NULL)
+                return;
+        }
+        if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt) {
+            rval = emit_unbox(vt->getContainedType(0), vt, emit_unboxed(r, ctx));
+        }
+        else {
+            rval = boxed(emit_expr(r, ctx, true));
+        }
+        if (builder.GetInsertBlock()->getTerminator() == NULL) {
+            builder.CreateStore(rval, bp, vol);
+            jl_arrayvar_t *av = arrayvar_for(l, ctx);
+            if (av!=NULL) {
+                assign_arrayvar(*av, rval);
+            }
+        }
     }
 }
 
@@ -2018,6 +2040,23 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
     return lv;
 }
 
+static void maybe_alloc_arrayvar(char *name, jl_codectx_t *ctx)
+{
+    jl_value_t *jt = (*ctx->declTypes)[name];
+    if (jl_is_array_type(jt) && jl_is_leaf_type(jt) &&
+        jl_unbox_long(jl_tparam1(jt)) != 1) {
+        // TODO: this optimization does not yet work with 1-d arrays, since the
+        // length and data pointer can change at any time via push!
+        // we could make it work by reloading the metadata when the array is
+        // passed to an external function (ideally only impure functions)
+        jl_arrayvar_t av;
+        av.dataptr = builder.CreateAlloca(T_pint8);
+        av.len = builder.CreateAlloca(T_size);
+        av.nr = builder.CreateAlloca(T_size);
+        (*ctx->arrayvars)[name] = av;
+    }
+}
+
 // --- generate function bodies ---
 
 extern char *jl_stack_lo;
@@ -2088,6 +2127,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     std::map<std::string, bool> isAssigned;
     std::map<std::string, bool> isCaptured;
     std::map<std::string, bool> escapes;
+    std::map<std::string, jl_arrayvar_t> arrayvars;
     std::set<jl_sym_t*> volvars;
     std::map<std::string, jl_value_t*> declTypes;
     std::map<int, BasicBlock*> labels;
@@ -2100,6 +2140,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     ctx.isAssigned = &isAssigned;
     ctx.isCaptured = &isCaptured;
     ctx.escapes = &escapes;
+    ctx.arrayvars = &arrayvars;
     ctx.volatilevars = &volvars;
     ctx.declTypes = &declTypes;
     ctx.labels = &labels;
@@ -2296,6 +2337,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         else if (isAssigned[argname] || (va && i==largslen-1)) {
             n_roots++;
         }
+        maybe_alloc_arrayvar(argname, &ctx);
     }
     for(i=0; i < lvarslen; i++) {
         char *varname = ((jl_sym_t*)jl_cellref(lvars,i))->name;
@@ -2305,6 +2347,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         else {
             n_roots++;
         }
+        maybe_alloc_arrayvar(varname, &ctx);
     }
 
     // fetch env out of function object if we need it
@@ -2454,22 +2497,19 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             argPtr = builder.CreateGEP(argArray, ConstantInt::get(T_size, i));
         }
 
+        Value *theArg;
+        if (specsig)
+            theArg = argPtr;
+        else
+            theArg = builder.CreateLoad(argPtr, false);
         Value *lv = localVars[argname];
         if (lv == NULL) {
             // if this argument hasn't been given space yet, we've decided
             // to leave it in the input argument array.
-            if (specsig)
-                passedArgumentMap[argname] = argPtr;
-            else
-                passedArgumentMap[argname] = builder.CreateLoad(argPtr, false);
+            passedArgumentMap[argname] = theArg;
             //argumentMap[argname] = argPtr;
         }
         else {
-            Value *theArg;
-            if (specsig)
-                theArg = argPtr;
-            else
-                theArg = builder.CreateLoad(argPtr, false);
             // keep track of original (boxed) value to avoid re-boxing
             passedArgumentMap[argname] = theArg;
             if (isBoxed(argname, &ctx)) {
@@ -2486,6 +2526,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                                                lv->getType(),
                                                theArg),
                                     lv);
+        }
+        // get arrayvar data if applicable
+        if (arrayvars.find(argname) != arrayvars.end()) {
+            jl_arrayvar_t av = arrayvars[argname];
+            assign_arrayvar(av, theArg);
         }
     }
 

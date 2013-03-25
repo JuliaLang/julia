@@ -577,9 +577,18 @@ static Value *emit_arraysize(Value *t, Value *dim)
     return builder.CreatePtrToInt(dbits, T_size);
 }
 
-static Value *emit_arraysize(Value *t, int dim)
+static jl_arrayvar_t *arrayvar_for(jl_value_t *ex, jl_codectx_t *ctx)
 {
-    return emit_arraysize(t, ConstantInt::get(T_int32, dim));
+    if (ex == NULL) return NULL;
+    char *aname=NULL;
+    if (jl_is_symbol(ex))
+        aname = ((jl_sym_t*)ex)->name;
+    else if (jl_is_symbolnode(ex))
+        aname = jl_symbolnode_sym(ex)->name;
+    if (aname && ctx->arrayvars->find(aname) != ctx->arrayvars->end()) {
+        return &(*ctx->arrayvars)[aname];
+    }
+    return NULL;
 }
 
 static Value *emit_arraylen(Value *t)
@@ -588,9 +597,48 @@ static Value *emit_arraylen(Value *t)
     return builder.CreatePtrToInt(lenbits, T_size);
 }
 
+static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
+{
+    jl_arrayvar_t *av = arrayvar_for(ex, ctx);
+    if (av!=NULL)
+        return builder.CreateLoad(av->len);
+    return emit_arraylen(t);
+}
+
 static Value *emit_arrayptr(Value *t)
 {
     return emit_nthptr(t, 1);
+}
+
+static Value *emit_arrayptr(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
+{
+    jl_arrayvar_t *av = arrayvar_for(ex, ctx);
+    if (av!=NULL)
+        return builder.CreateLoad(av->dataptr);
+    return emit_arrayptr(t);
+}
+
+static Value *emit_arraysize(Value *t, int dim)
+{
+    return emit_arraysize(t, ConstantInt::get(T_int32, dim));
+}
+
+static Value *emit_arraysize(Value *t, jl_value_t *ex, int dim, jl_codectx_t *ctx)
+{
+    if (dim == 1) {
+        jl_arrayvar_t *av = arrayvar_for(ex, ctx);
+        if (av!=NULL)
+            return builder.CreateLoad(av->nr);
+    }
+    return emit_arraysize(t, dim);
+}
+
+static void assign_arrayvar(jl_arrayvar_t &av, Value *ar)
+{
+    builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),T_pint8),
+                        av.dataptr);
+    builder.CreateStore(emit_arraylen(ar), av.len);
+    builder.CreateStore(emit_arraysize(ar,1), av.nr);
 }
 
 static Value *data_pointer(Value *x)
@@ -599,7 +647,7 @@ static Value *data_pointer(Value *x)
                              ConstantInt::get(T_size, 1));
 }
 
-static Value *emit_array_nd_index(Value *a, size_t nd, jl_value_t **args,
+static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_t **args,
                                   size_t nidxs, jl_codectx_t *ctx)
 {
     Value *i = ConstantInt::get(T_size, 0);
@@ -614,7 +662,7 @@ static Value *emit_array_nd_index(Value *a, size_t nd, jl_value_t **args,
         i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
         if (k < nidxs-1) {
             Value *d =
-                k >= nd ? ConstantInt::get(T_size, 1) : emit_arraysize(a, k+1);
+                k >= nd ? ConstantInt::get(T_size, 1) : emit_arraysize(a, ex, k+1, ctx);
 #if CHECK_BOUNDS==1
             BasicBlock *okBB = BasicBlock::Create(getGlobalContext(), "ib");
             // if !(i < d) goto error
@@ -626,7 +674,7 @@ static Value *emit_array_nd_index(Value *a, size_t nd, jl_value_t **args,
         }
     }
 #if CHECK_BOUNDS==1
-    Value *alen = emit_arraylen(a);
+    Value *alen = emit_arraylen(a, ex, ctx);
     // if !(i < alen) goto error
     builder.CreateCondBr(builder.CreateICmpULT(i, alen), endBB, failBB);
 

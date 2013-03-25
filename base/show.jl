@@ -475,13 +475,13 @@ function dumptype(io::IO, x, n::Int, indent)
                     if any(tt -> string(x.name) == typargs(tt), t.types)
                         println(io, indent, "  ", s, " = ", t)
                     end
-                elseif isa(t, Type) && super(t).name == x.name
+                elseif isa(t, DataType) && super(t).name == x.name
                     # type aliases
                     if string(s) != string(t.name)
                         println(io, indent, "  ", s, " = ", t.name)
                     elseif t != Any 
                         print(io, indent, "  ")
-                        dumptype(io, t, n - 1, string(indent, "  "))
+                        dump(io, t, n - 1, string(indent, "  "))
                     end
                 end
             end
@@ -526,7 +526,7 @@ function dump(io::IO, x::Dict, n::Int, indent)
 end
 
 # More generic representation for common types:
-dump(io::IO, x::DataType, n::Int, indent) = x.abstract ? dumptype(io,x,n,indent) : println(io, x.name)
+dump(io::IO, x::DataType, n::Int, indent) = println(io, x.name)
 dump(io::IO, x::DataType, n::Int) = dump(io, x, n, "")
 dump(io::IO, x::DataType) = dump(io, x, 5, "")
 dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)

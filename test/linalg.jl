@@ -249,6 +249,11 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                          0  -0.000000000000002   3.000000000000000])
 end
 
+# Hermitian matrix exponential
+A1 = randn(4,4) + im*randn(4,4)
+A2 = A1 + A1'
+@test_approx_eq expm(A2) expm(Hermitian(A2))
+
                                         # matmul for types w/o sizeof (issue #1282)
 A = Array(ComplexPair{Int},10,10)
 A[:] = complex(1,1)
@@ -281,10 +286,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
         end
         @test full(T) == F
                                         # elementary operations on tridiagonals
-# Disable these tests until fixed.
-#        @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
-#        @test transpose(T) == Tridiagonal(du, d, du)
-#        @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+        @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
+        @test transpose(T) == Tridiagonal(du, d, dl)
+        @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+                                        # test interconversion of Tridiagonal and SymTridiagonal
+        @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
+        @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
+        @test SymTridiagonal(d, dl) + Tridiagonal(du, d, du) == SymTridiagonal(2d, dl+du)
 
                                         # tridiagonal linear algebra
         v = convert(Vector{elty}, v)
@@ -321,6 +329,15 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq W*v F*v
         @test_approx_eq W\v F\v
         @test_approx_eq det(W) det(F)
+
+        # Diagonal
+        D = Diagonal(d)
+        DM = diagm(d)
+        @test_approx_eq D*v DM*v
+        @test_approx_eq D*U DM*U
+        @test_approx_eq D\v DM\v
+        @test_approx_eq D\U DM\U
+        @test_approx_eq det(D) det(DM)   
 
         # Test det(A::Matrix)
         # In the long run, these tests should step through Strang's
@@ -389,4 +406,21 @@ end
 let
     N = 3
     @test_approx_eq log(det(eye(N))) logdet(eye(N))
+end
+
+# issue 2637
+let
+  a = [1, 2, 3]
+  b = [4, 5, 6]
+  @test kron(eye(2),eye(2)) == eye(4)
+  @test kron(a,b) == [4,5,6,8,10,12,12,15,18]             
+  @test kron(a',b') == [4 5 6 8 10 12 12 15 18]           
+  @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]         
+  @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]         
+  @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]  
+  @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3] 
+  @test kron(eye(2),2) == 2*eye(2)                        
+  @test kron(3,eye(3)) == 3*eye(3)                        
+  @test kron(a,2) == [2, 4, 6]                            
+  @test kron(b',2) == [8 10 12]                              
 end
