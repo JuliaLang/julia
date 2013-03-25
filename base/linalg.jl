@@ -24,6 +24,7 @@ export
     SVDDense,
     Hermitian,
     Triangular,
+    Diagonal,
 
 # Functions
     chol,
@@ -152,6 +153,7 @@ include("linalg/triangular.jl")
 include("linalg/hermitian.jl")
 include("linalg/woodbury.jl")
 include("linalg/tridiag.jl")
+include("linalg/diagonal.jl")
 include("linalg/rectfullpacked.jl")
 
 include("linalg/bitarray.jl")

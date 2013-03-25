@@ -33,6 +33,11 @@ eigvals(A::Hermitian, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, copy
 eigvals(A::Hermitian) = eigvals(A, 1, size(A, 1))
 eigmax(A::Hermitian) = eigvals(A, size(A, 1), size(A, 1))[1]
 
+function expm(A::Hermitian)
+    F = eigfact(A)
+    diagmm(F[:vectors], exp(F[:values])) * F[:vectors]'
+end
+
 function sqrtm(A::Hermitian, cond::Bool)
     F = eigfact(A)
     vsqrt = sqrt(complex(F[:values]))

@@ -4,9 +4,6 @@ export
     FFTW,
     DSP,
     LinAlg,
-    BLAS,
-    LAPACK,
-    ARPACK,
     LibRandom,
     Random,
     Math,
@@ -121,6 +118,7 @@ export
     SVDDense,
     Hermitian,
     Triangular,
+    Diagonal,
     InsertionSort,
     QuickSort,
     MergeSort,
@@ -451,6 +449,7 @@ export
     zeta,
 
 # arrays
+    mapslices,
     reducedim,
     bsxfun,
     cartesian_map,
