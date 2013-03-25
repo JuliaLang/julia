@@ -1,6 +1,6 @@
 module Test
 
-export @test, @test_fails, @test_approx_eq, @test_approx_eq_eps
+export @test, @test_fails, @test_approx_eq, @test_approx_eq_eps, @register_handler
 
 abstract Result
 type Success <: Result
@@ -44,6 +44,10 @@ function do_test_fails(thk, qex)
     catch err
         Success(qex)
     end)
+end
+
+macro register_handler(handler)
+    :(handlers[end] = $(esc(handler)))
 end
 
 macro test(ex)
