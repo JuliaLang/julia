@@ -171,7 +171,11 @@ function trace{T}(A::Matrix{T})
     return t
 end
 
-kron(a::Vector, b::Vector) = [ a[i]*b[j] for i=1:length(a), j=1:length(b) ]
+kron(a::Vector, b::Vector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1)))
+
+kron(a::Matrix, b::Vector)=kron(a,reshape(b,length(b),1))
+
+kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
 
 function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
@@ -191,11 +195,11 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R
 end
 
-kron(a::Number, b::Number) = a * b
-kron(a::Vector, b::Number) = a * b
-kron(a::Number, b::Vector) = a * b
-kron(a::Matrix, b::Number) = a * b
-kron(a::Number, b::Matrix) = a * b
+kron(a::Number, b::Number) = a * b 
+kron(a::Vector, b::Number) = a * b 
+kron(a::Number, b::Vector) = a * b 
+kron(a::Matrix, b::Number) = a * b 
+kron(a::Number, b::Matrix) = a * b 
 
 randsym(n) = symmetrize!(randn(n,n))
 
