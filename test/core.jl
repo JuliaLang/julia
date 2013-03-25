@@ -75,6 +75,28 @@ end
 @test !is(None, typeintersect(DataType, Type{TypeVar(:T,Int)}))
 @test !is(None, typeintersect(DataType, Type{TypeVar(:T,Integer)}))
 
+@test isa(Int,Type{TypeVar(:T,Number)})
+@test !isa(DataType,Type{TypeVar(:T,Number)})
+@test subtype(DataType,Type{TypeVar(:T,Type)})
+
+@test isa((),Type{()})
+@test subtype((DataType,),Type{TypeVar(:T,Tuple)})
+@test !subtype((Int,),Type{TypeVar(:T,Tuple)})
+@test isa((Int,),Type{TypeVar(:T,Tuple)})
+
+@test !isa(Type{(Int,Int)},Tuple)
+@test subtype(Type{(Int,Int)},Tuple)
+@test subtype(Type{(Int,)}, (DataType,))
+
+# this is fancy: know that any type T<:Number must be either a DataType or a UnionType
+@test subtype(Type{TypeVar(:T,Number)},Union(DataType,UnionType))
+@test !subtype(Type{TypeVar(:T,Number)},DataType)
+@test subtype(Type{TypeVar(:T,Tuple)},Union(Tuple,UnionType))
+@test !subtype(Type{TypeVar(:T,Tuple)},Union(DataType,UnionType))
+
+@test !is(None, typeintersect((DataType,DataType),Type{TypeVar(:T,(Number,Number))}))
+@test !is(None, typeintersect((DataType,UnionType),Type{(Number,None)}))
+
 # join
 @test typejoin(Int8,Int16) === Signed
 @test typejoin(Int,String) === Any

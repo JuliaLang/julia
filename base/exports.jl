@@ -4,9 +4,6 @@ export
     FFTW,
     DSP,
     LinAlg,
-    BLAS,
-    LAPACK,
-    ARPACK,
     LibRandom,
     Random,
     Math,
@@ -451,6 +448,7 @@ export
     zeta,
 
 # arrays
+    mapslices,
     reducedim,
     bsxfun,
     cartesian_map,

@@ -333,6 +333,7 @@ extern jl_datatype_t *jl_typector_type;
 extern jl_datatype_t *jl_sym_type;
 extern jl_datatype_t *jl_symbol_type;
 extern jl_tuple_t *jl_tuple_type;
+extern jl_value_t *jl_tupletype_type;
 extern jl_datatype_t *jl_ntuple_type;
 extern jl_typename_t *jl_ntuple_typename;
 extern jl_datatype_t *jl_tvar_type;
