@@ -268,12 +268,19 @@ in the final syntax tree. Macros are invoked with the following general
 syntax::
 
     @name expr1 expr2 ...
+    @name(expr1, expr2, ...)
 
 Note the distinguishing ``@`` before the macro name and the lack of
-commas between the argument expressions. Before the program runs, this
-statement will be replaced with the result of calling an expander
-function for ``name`` on the expression arguments. Expanders are defined
-with the ``macro`` keyword::
+commas between the argument expressions in the first form, and the
+lack of whitespace after ``@name`` in the second form. The two styles
+should not be mixed. For example, the following syntax invokes the
+macro with one argument, which is the tuple ``(expr1, expr2, ...)``::
+
+    @name (expr1, expr2, ...)
+
+Before the program runs, this statement will be replaced with the
+result of calling an expander function for ``name`` on the expression
+arguments. Expanders are defined with the ``macro`` keyword::
 
     macro name(expr1, expr2, ...)
         ...
