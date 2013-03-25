@@ -218,6 +218,26 @@ DLLEXPORT uv_tcp_t *jl_make_tcp(uv_loop_t* loop, jl_value_t *julia_struct)
     return tcp;
 }
 
+
+DLLEXPORT uv_poll_t *jl_poll_init_socket(uv_loop_t* loop, jl_value_t *julia_struct, uv_os_sock_t s)
+{
+    if (!loop)
+        return 0;
+    
+    uv_poll_t * h = malloc(sizeof(uv_poll_t));
+    
+    if (uv_poll_init_socket(loop, h, s)) {
+        free(h);
+        return 0;
+    }
+    
+    h->data = julia_struct;
+    return h;
+}
+
+
+
+
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 
 DLLEXPORT int jl_run_once(uv_loop_t *loop)
