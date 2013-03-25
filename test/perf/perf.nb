@@ -29,10 +29,6 @@ timeit[ex_, name_String] := Module[
 	];
 ];
 
-(*
-	TODO Impliment "test" function for now just aliasing Assert
-*)
-
 ClearAll[test];
 SetAttributes[test, HoldFirst];
 test[ex_] := Assert[ex];
@@ -43,7 +39,8 @@ On[Assert];
 
 ClearAll[fib];
 fib = Compile[{{n, _Integer}}, 
-	If[n < 2, n, fib[n - 1] + fib[n - 2]]
+	If[n < 2, n, fib[n - 1] + fib[n - 2]],
+	CompilationTarget -> "WVM"
 ];
 
 test[fib[20] == 6765];
@@ -121,7 +118,7 @@ timeit[mandelperf[], "mandel"];
 (* numeric vector sort *)
 
 ClearAll[qsort];
-qsort[ain_, loin_, hiin_] := Module[
+(* qsort[ain_, loin_, hiin_] := Module[
 	{a = ain, i = loin, j = hiin, lo = loin, hi = hiin, pivot},
 	While[ i < hi,
 		pivot = a[[BitShiftRight[lo + hi] ]];
@@ -137,6 +134,26 @@ qsort[ain_, loin_, hiin_] := Module[
 		{lo, j} = {i, hi};
 	];
 	a
+]; *)
+qsort = Compile[
+	{{ain, _Real, 1}, {loin, _Integer}, {hiin, _Integer}},
+	Module[
+		{a = ain, i = loin, j = hiin, lo = loin, hi = hiin, pivot},
+		While[ i < hi,
+			pivot = a[[ Floor[(lo + hi)/2] ]];
+			While[ i <= j,
+				While[a[[i]] < pivot, i++];
+				While[a[[j]] > pivot, j--];
+				If[ i <= j,
+					a[[{i,j}]] = a[[{j, i}]];
+					i++; j--;
+				];
+			];
+			If[ lo < j, a[[lo;;j]] = qsort[ a[[lo;;j]], 1, j - lo + 1] ];
+			{lo, j} = {i, hi};
+		];
+		a
+	]
 ];
 
 
@@ -240,7 +257,7 @@ timeit[RandomReal[1, {1000, 1000}].RandomReal[1, {1000, 1000}], "rand_mat_mul"];
 (* printfd *)
 
 (* only on unix systems *)
-If[ FileExistsQ["/dev/null"],
+If[ $OperatingSystem == "Linux"||$OperatingSystem == "MacOSX",
 	
 	ClearAll[printfd];
 	printfd[n_] := Module[
