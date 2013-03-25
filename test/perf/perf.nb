@@ -1,10 +1,13 @@
 (* Benchmark script *)
 
+(* Set up output stream *)
+SetOptions[$Output, FormatType -> OutputForm];
+
 (* Test if system has a C compiler and if so set target to "C"*)
-(* Needs["CCompilerDriver`"];
+Needs["CCompilerDriver`"];
 If[ Length[CCompilers[]] > 0,
 	$CompilationTarget = "C"
-];*)
+];
 
 
 ClearAll[$printOutput];
@@ -21,7 +24,8 @@ timeit[ex_, name_String] := Module[
 		{i, 1, 5}
 	];
 	If[$printOutput,
-		Print[OutputForm["Mathematica," <> name <> ","], t*1000];
+		(*Print[OutputForm["mathematica," <> name <> ","], t*1000];*)
+		Print["mathematica,", name, ",", t*1000];
 	];
 ];
 
@@ -148,7 +152,7 @@ ClearAll[pisum];
 pisum = Compile[ {},
 	Module[
 		{sum = 0.`},
-		Do[sum = Sum[1.`/(k*k), {k, 1, 10000}],
+		Do[sum = Sum[1/(k*k), {k, 1, 10000}],
 			{500}];
 		sum
 	]
@@ -160,25 +164,24 @@ timeit[pisum[], "pi_sum"];
 
 (* slow pi series, vectorized *)
 
-pisumvec[] := Module[
-	{s, a},
-	s = 0.0;
-	a = Range[1, 10000];
-	Do[
-		s = Total[1.0/a^2];
-		,
-		{500}
-	];
-	s
+pisumvec = Compile[{},
+	Module[
+		{sum = 0.},
+		Do[
+			sum = Total[1/Range[1, 10000]^2];,
+			{500}
+		];
+		sum
+	]
 ];
 
-(*test[Abs[pisumvec[] - 1.644834071848065`] < 1.`*^-12 ];*)
-(*timeit[pisumvec[], "pi_sum_vec"];*)
+(* test[Abs[pisumvec[] - 1.644834071848065`] < 1.`*^-12 ];*)
+(* timeit[pisumvec[], "pi_sum_vec"];*)
 
 (* random matrix statistics *)
 
 ClearAll[randmatstat];
-randmatstat[t_] := Module[
+(*randmatstat[t_] := Module[
 	{n, v, w, a, b, c, d, P, Q},
 	n = 5;
 	v = w = ConstantArray[0., {t}];
@@ -195,7 +198,34 @@ randmatstat[t_] := Module[
 		{i, 1, t}
 	];
 	{StandardDeviation[v]/Mean[v], StandardDeviation[w]/Mean[w]}
+];*)
+randmatstat = Compile[{{t, _Integer}},
+	Module[
+		{
+			n = 5, 
+			v = ConstantArray[0., t], 
+			w = ConstantArray[0., t], 
+			a = {{0.}}, b = {{0.}}, 
+			c = {{0.}}, d = {{0.}}, 
+			P = {{0.}}, Q = {{0.}}
+		},
+		Do[
+			a = RandomReal[NormalDistribution[], {n, n}];
+			b = RandomReal[NormalDistribution[], {n, n}];
+			c = RandomReal[NormalDistribution[], {n, n}];
+			d = RandomReal[NormalDistribution[], {n, n}];
+			P = Join[a, b, c, d, 2];
+			Q = ArrayFlatten[{{a, b}, {c, d}}];
+			v[[i]] = Tr[MatrixPower[Transpose[P].P, 4]];
+			w[[i]] = Tr[MatrixPower[Transpose[Q].Q, 4]];
+			,
+			{i, 1, t}
+		];
+		{StandardDeviation[v]/Mean[v], StandardDeviation[w]/Mean[w]}
+	],
+	{{_ArrayFlatten, _Real, 2}}
 ];
+
 
 ClearAll[s1,s2];
 {s1, s2} = randmatstat[1000];
@@ -209,4 +239,21 @@ timeit[RandomReal[1, {1000, 1000}].RandomReal[1, {1000, 1000}], "rand_mat_mul"];
 
 (* printfd *)
 
-
+(* only on unix systems *)
+If[ FileExistsQ["/dev/null"],
+	
+	ClearAll[printfd];
+	printfd[n_] := Module[
+		{stream},
+		stream = OpenWrite["/dev/null"];
+		Do[
+			WriteString[stream, i, " ", i+1, "\n" ];
+			,
+			{i, 1, n}
+		];
+		Close[stream];
+	];
+	
+	timeit[printfd[100000], "printfd"];
+	
+];
