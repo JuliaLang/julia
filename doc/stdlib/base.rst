@@ -56,9 +56,11 @@ Getting Around
 
    Show all methods of ``f`` with their argument types.
 
-.. function:: methodswith(typ)
+.. function:: methodswith(typ[, showparents])
 
-   Show all methods with an argument of type ``typ``.
+   Show all methods with an argument of type ``typ``. If optional
+   ``showparents`` is ``true``, also show arguments with a parent type
+   of ``typ``, excluding type ``Any``.  
 
 All Objects
 -----------
