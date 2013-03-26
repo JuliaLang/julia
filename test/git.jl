@@ -9,8 +9,7 @@ try cd(dir) do
 
     run(`git init -q`)
     run(`git commit -q --allow-empty -m "initial empty commit"`)
-    verify_tree(Dict(), "HEAD")
-    verify_work(Dict())
+    git_verify(Dict(), Dict(), Dict())
 
     # each path can have one of these content in each of head, index, work
     # for a total of length(contents)^3 = 4^3 = 64 combinations.
@@ -20,8 +19,7 @@ try cd(dir) do
 
     contents = [nothing, "foo", "bar", {"baz"=>"qux"}]
     b = length(contents)
-    files = 0:(b^3)^2-1
-    states = [ [ base(b,k,6) => contents[rem(div(k,b^p),b)+1] for k in files ] for p=0:5 ]
+    states = [ [ base(b,k,6) => contents[rem(div(k,b^p),b)+1] for k=0:(b^3)^2-1 ] for p=0:5 ]
 
     git_setup(states[1:3]...)
     try Git.transact() do
