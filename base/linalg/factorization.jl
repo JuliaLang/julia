@@ -202,7 +202,7 @@ function qr(A::Union(Number, StridedMatrix), thin::Bool)
     F = qrfact(A)
     return (full(F[:Q], thin), F[:R])
 end
-qr(A::Union(Number, StridedMatrix)) = qr(A, false)
+qr(A::Union(Number, StridedMatrix)) = qr(A, true)
 
 size(A::QRDense, args::Integer...) = size(A.vs, args...)
 
@@ -462,10 +462,11 @@ svdfact(a::Vector, thin::Bool) = svdfact(reshape(a, length(a), 1), thin)
 svdfact(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
 svdfact(A::Union(Number, StridedVecOrMat)) = svdfact(A, false)
 
-function svd(A::Union(Number, StridedVecOrMat), args...)
-    F = svdfact(A, args...)
+function svd(A::Union(Number, StridedVecOrMat), thin::Bool)
+    F = svdfact(A, thin)
     return F[:U], F[:S], F[:V]
 end
+svd(A::Union(Number, StridedVecOrMat)) = svd(A, true)
 
 function getindex(F::SVDDense, d::Symbol)
     if d == :U return F.U end
