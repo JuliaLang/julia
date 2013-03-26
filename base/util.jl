@@ -369,13 +369,13 @@ total_memory() = ccall(:uv_get_total_memory, Uint64, ())
 
 # `methodswith` -- shows a list of methods using the type given
 
-function methodswith(io::IO, t::Type, m::Module)
+function methodswith(io::IO, t::Type, m::Module, showparents::Bool)
     for nm in names(m)
         try
            mt = eval(nm)
            d = mt.env.defs
            while !is(d,())
-               if any(map(x -> x == t, d.sig)) 
+               if any(map(x -> x == t || (showparents && t <: x && x != Any && x != ANY && !isa(x, TypeVar)), d.sig))
                    print(io, nm)
                    show(io, d)
                    println(io)
@@ -386,16 +386,18 @@ function methodswith(io::IO, t::Type, m::Module)
     end
 end
 
-methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m)
-methodswith(t::Type) = methodswith(OUTPUT_STREAM, t)
-function methodswith(io::IO, t::Type)
+methodswith(t::Type, m::Module, showparents::Bool) = methodswith(OUTPUT_STREAM, t, m, showparents)
+methodswith(t::Type, showparents::Bool) = methodswith(OUTPUT_STREAM, t, showparents)
+methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m, false)
+methodswith(t::Type) = methodswith(OUTPUT_STREAM, t, false)
+function methodswith(io::IO, t::Type, showparents::Bool)
     mainmod = ccall(:jl_get_current_module, Any, ())::Module
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)
             mod = eval(mainmod, nm)
             if isa(mod, Module)
-                methodswith(io, t, mod)
+                methodswith(io, t, mod, showparents)
             end
         end
     end
