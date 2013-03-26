@@ -134,6 +134,18 @@ typealias BlasChar Char
 if USE_LIB64
     typealias BlasInt Int64
     blas_int(x) = int64(x)
+
+    print("Autodetecting BLAS interface....");
+    # Try and autodetect BLAS library interface bitwidth
+    try
+        configstr = bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () ))
+
+        # Check to see if we have an INTERFACE64=1 anywhere in the config string
+        if !ismatch(r".*INTERFACE64\s*=\s*1", configstr)
+            warn( "OpenBLAS configured as 32-bit interface, yet Julia configured for 64-bit BLAS interface!" );
+        end
+    catch
+    end 
 else
     typealias BlasInt Int32
     blas_int(x) = int32(x)
