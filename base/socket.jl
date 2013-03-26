@@ -197,7 +197,7 @@ callback_dict = ObjectIdDict()
 
 function _uv_hook_getaddrinfo(cb::Function,addrinfo::Ptr{Void}, status::Int32)
     delete!(callback_dict,cb)
-    if(status==-1)
+    if(status!=0)
         throw(UVError("getaddrinfo callback"))
     end
     sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
