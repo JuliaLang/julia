@@ -57,7 +57,10 @@ std(v) = sqrt(var(v))
 std(v, region) = sqrt(var(v, region))
 
 ## nice-valued ranges for histograms
-function nicerange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
+function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
+    if length(v) == 0
+        return Range(0.0,1.0,1)
+    end
     lo, hi = min(v), max(v)
     if hi == lo
         step = 1.0
@@ -77,7 +80,10 @@ function nicerange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     Range(start,step,1+iceil((hi - start)/step))
 end
 
-function nicerange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
+function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
+    if length(v) == 0
+        return Range(0,1,1)
+    end
     lo, hi = min(v), max(v)
     if hi == lo
         step = 1
@@ -124,7 +130,7 @@ function hist(v::AbstractVector, r::Ranges)
     end
     h
 end
-hist(v::AbstractVector, n::Integer) = hist(v,nicerange(v,n))
+hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
 hist(v::AbstractVector) = hist(v,iceil(log2(length(v)))+1) # Sturges' formula 
 
 function hist(v::AbstractVector, edg::AbstractVector)
@@ -147,7 +153,7 @@ function hist(A::AbstractMatrix, edg::AbstractVector)
     end
     H
 end
-hist(A::AbstractMatrix, n::Integer) = hist(A,nicerange(A,n))
+hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,iceil(log2(size(A,1)))+1) # Sturges' formula 
 
 ## pearson covariance functions ##
