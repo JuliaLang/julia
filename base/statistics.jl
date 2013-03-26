@@ -56,50 +56,83 @@ stdm(v, m::Number) = sqrt(varm(v, m))
 std(v) = sqrt(var(v))
 std(v, region) = sqrt(var(v, region))
 
-## hist ##
-
-function hist(v::AbstractVector, nbins::Integer)
-    h = zeros(Int, nbins)
-    if nbins == 0 || isempty(v)
-        return h
-    end
+## nice-valued ranges for histograms
+function nicerange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     lo, hi = min(v), max(v)
-    if lo == hi
-        lo -= div(nbins,2)
-        hi += div(nbins,2) + int(isodd(nbins))
+    if hi == lo
+        step = 1.0
+    else
+        bw = (hi - lo) / n
+        e = 10.0^floor(log10(bw))
+        r = bw / e
+        if r <= 2
+            step = 2*e
+        elseif r <= 5
+            step = 5*e
+        else
+            step = 10*e
+        end
     end
-    binsz = (hi - lo) / nbins
+    start = step*(ceil(lo/step)-1)
+    Range(start,step,1+iceil((hi - start)/step))
+end
+
+function nicerange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
+    lo, hi = min(v), max(v)
+    if hi == lo
+        step = 1
+    else
+        bw = (hi - lo) / n
+        e = 10^max(0,ifloor(log10(bw)))
+        r = bw / e
+        if r <= 1
+            step = e
+        elseif r <= 2
+            step = 2*e
+        elseif r <= 5
+            step = 5*e
+        else
+            step = 10*e
+        end
+    end
+    start = step*(iceil(lo/step)-1)
+    Range(start,step,1+iceil((hi - start)/step))
+end
+
+## midpoints of intervals
+midpoints(r::Range) = Range(r.start + 0.5*r.step,r.step,r.len-1)
+midpoints(r::Range1) = Range1(r.start + 0.5,r.len-1)
+function midpoints(v::Vector)
+    n = length(v) - 1
+    mid = Array(Float64,n)
+    for i = 1:n
+        mid[i] = 0.5*(v[i] + v[i+1])
+    end
+    mid
+end
+
+
+## hist ##
+function hist(v::AbstractVector, r::Ranges)
+    n = length(r)-1
+    h = zeros(Int, n)
     for x in v
-        if isfinite(x)
-            i = iround((x - lo) / binsz + 0.5)
-            h[i > nbins ? nbins : i] += 1
+        i = iceil((x-first(r))/step(r))
+        if 1 <= i <= n
+            h[i] += 1
         end
     end
     h
 end
-
-hist(x) = hist(x, 10)
-
-function hist(A::AbstractMatrix, nbins::Integer)
-    m, n = size(A)
-    h = Array(Int, nbins, n)
-    for j=1:n
-        h[:,j] = hist(sub(A, 1:m, j), nbins)
-    end
-    h
-end
+hist(v::AbstractVector, n::Integer) = hist(v,nicerange(v,n))
+hist(v::AbstractVector) = hist(v,iceil(log2(length(v)))+1) # Sturges' formula 
 
 function hist(v::AbstractVector, edg::AbstractVector)
-    n = length(edg)
+    n = length(edg)-1
     h = zeros(Int, n)
-    if n == 0
-        return h
-    end
-    first = edg[1]
-    last = edg[n]
     for x in v
-        if !isless(last, x) && !isless(x, first)
-            i = searchsortedlast(edg, x)
+        i = searchsortedfirst(edg, x)-1
+        if 1 <= i <= n
             h[i] += 1
         end
     end
@@ -108,12 +141,14 @@ end
 
 function hist(A::AbstractMatrix, edg::AbstractVector)
     m, n = size(A)
-    h = Array(Int, length(edg), n)
-    for j=1:n
-        h[:,j] = hist(sub(A, 1:m, j), edg)
+    H = Array(Int, length(edg)-1, n)
+    for j = 1:n
+        H[:,j] = hist(sub(A, 1:m, j), edg)
     end
-    h
+    H
 end
+hist(A::AbstractMatrix, n::Integer) = hist(A,nicerange(A,n))
+hist(A::AbstractMatrix) = hist(A,iceil(log2(size(A,1)))+1) # Sturges' formula 
 
 ## pearson covariance functions ##
 
