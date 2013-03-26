@@ -19,7 +19,13 @@ attached() = success(`git symbolic-ref -q HEAD` > SpawnNullStream())
 branch() = readchomp(`git rev-parse --symbolic-full-name --abbrev-ref HEAD`)
 head() = readchomp(`git rev-parse HEAD`)
 
-function transact(f::Function)
+immutable State
+    head::ASCIIString
+    index::ASCIIString
+    work::ASCIIString
+end
+
+function snapshot()
     head = readchomp(`git rev-parse HEAD`)
     index = readchomp(`git write-tree`)
     work = try
@@ -27,15 +33,24 @@ function transact(f::Function)
         run(`git add .`)
         readchomp(`git write-tree`)
     finally
-        run(`git read-tree $index`)      # restore index
+        run(`git read-tree $index`) # restore index
     end
+    State(head, index, work)
+end
+
+function restore(s::State)
+    run(`git reset -q --`)               # unstage everything
+    run(`git read-tree $(s.work)`)       # move work tree to index
+    run(`git checkout-index -fa`)        # check the index out to work
+    run(`git clean -qdf`)                # remove everything else
+    run(`git read-tree $(s.index)`)      # restore index
+    run(`git reset -q --soft $(s.head)`) # restore head
+end
+
+function transact(f::Function)
+    state = snapshot()
     try f() catch
-        run(`git reset -q --`)           # unstage everything
-        run(`git read-tree $work`)       # move work tree to index
-        run(`git checkout-index -fa`)    # check the index out to work
-        run(`git clean -qdf`)            # remove everything else
-        run(`git read-tree $index`)      # restore index
-        run(`git reset -q --soft $head`) # restore head
+        restore(state)
         rethrow()
     end
 end
