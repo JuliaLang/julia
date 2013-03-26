@@ -379,6 +379,7 @@ function read{T}(this::AsyncStream, a::Array{T})
         buf = this.buffer
         assert(buf.seekable == false)
         assert(buf.maxsize >= nb)
+        start_reading(this)
         wait_readnb(this,nb)
         read(this.buffer, a)
         return a
