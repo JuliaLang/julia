@@ -1,46 +1,35 @@
 import Base.Git
+include("gitutils.jl")
 
 dir = string("tmp.",randstring())
 @test !ispath(dir)
 mkdir(dir)
 @test isdir(dir)
-try # ensure directory removal
-cd(dir) do
+try cd(dir) do
 
-run(`git init -q`)
-run(`git commit -q --allow-empty -m "initial empty commit"`)
+    run(`git init -q`)
+    run(`git commit -q --allow-empty -m "initial empty commit"`)
+    verify_tree(Dict(), "HEAD")
+    verify_work(Dict())
 
-for a=["unchanged","changed","removed"], b=["tracked","untracked"]
-	run(`echo -n before` > "$a.$b")
-	b == "tracked" && run(`git add $a.$b`)
-end
+    # each path can have one of these content in each of head, index, work
+    # for a total of length(contents)^3 = 4^3 = 64 combinations.
+    # each path can be in any of these 64 "superpositions" before & after
+    # for a total of 64^2 = 4096 files needed to test all transitions
+    # between before and after superpositions of git repo states.
 
-try Git.transact() do
-	for a=["added","changed"], b=["tracked","untracked"]
-		run(`rm -f $a.$b`) # FIXME: delete this pending #2640
-		run(`echo -n after` > "$a.$b")
-		@test isfile("$a.$b")
-		@test readall("$a.$b") == "after"
-	end
-	for b=["tracked","untracked"]
-		run(`rm removed.$b`)
-		@test !ispath("removed.$b")
-	end
-	run(`git add added.tracked`)
-	throw(nothing)
-end catch x
-	is(x,nothing) || rethrow()
-end
+    contents = [nothing, "foo", "bar", {"baz"=>"qux"}]
+    b = length(contents)
+    files = 0:(b^3)^2-1
+    states = [ [ base(b,k,6) => contents[rem(div(k,b^p),b)+1] for k in files ] for p=0:5 ]
 
-for a=["unchanged","changed","removed"], b=["tracked","untracked"]
-	@test isfile("$a.$b")
-	@test readall("$a.$b") == "before"
-end
-for b=["tracked","untracked"]
-	@test !ispath("added.$b")
-end
+    git_setup(states[1:3]...)
+    try Git.transact() do
+        git_setup(states[4:6]...)
+        throw(nothing)
+    end catch x
+        is(x,nothing) || rethrow()
+    end
+    git_verify(states[1:3]...)
 
-end # cd
-finally
-run(`rm -rf $dir`)
-end
+end finally run(`rm -rf $dir`) end
