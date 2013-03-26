@@ -1420,17 +1420,20 @@ for (stev, stebz, stegr, stein, elty) in
             1<=length(w_in)<=n ? (m=length(w_in)) : throw(DimensionMismatch("stein!"))
             #If iblock and isplit are invalid input, assume worst-case block paritioning,
             # i.e. set the block scheme to be the entire matrix
+            iblock = Array(BlasInt,n)
+            isplit = Array(BlasInt,n)
+            w = Array($elty,n)
             if length(iblock_in) < m #Not enough block specifications
-                iblock = [[1 for i=1:m]; Array(BlasInt,n-m)]
-                w = [sort(w_in); zeros($elty,n-m)]
+                iblock[1:m] = ones(BlasInt, m)
+                w[1:m] = sort(w_in)
             else
-                iblock = [iblock_in; Array(BlasInt,n-length(iblock_in))]
-                w = [w_in; zeros($elty,n-m)] #Assume user has sorted the eigenvalues properly
+                iblock[1:m] = iblock_in
+                w[1:m] = w_in #Assume user has sorted the eigenvalues properly
             end
             if length(isplit_in) < 1 #Not enough block specifications
-                isplit = [n; Array(BlasInt,n-1)]
+                isplit[1] = n
             else
-                isplit = [isplit_in; Array(BlasInt,n-length(isplit_in))]
+                isplit[1:length(isplit_in)] = isplit_in
             end
 
             z = Array($elty,(n,m))
