@@ -806,6 +806,8 @@ export
     hist,
     mean,
     median,
+    midpoints,
+    nicerange,
     quantile,
     std,
     stdm,
