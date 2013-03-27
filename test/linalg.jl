@@ -85,8 +85,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
                                         # Test null
         a15null = null(a[:,1:5]')
-        @test_approx_eq_eps norm(a[:,1:5]'a15null) zero(elty) n*eps(one(elty))
-        @test_approx_eq_eps norm(a15null'a[:,1:5]) zero(elty) n*eps(one(elty))
+        @test_approx_eq_eps norm(a[:,1:5]'a15null) zero(elty) n*eps(real(one(elty)))
+        @test_approx_eq_eps norm(a15null'a[:,1:5]) zero(elty) n*eps(real(one(elty)))
         @test size(null(b), 2) == 0
 
                                         # Test pinv
@@ -366,7 +366,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         end
 
         # issue 1490
-        @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(one(elty))
+        @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
 end
 
                                         # LAPACK tests
