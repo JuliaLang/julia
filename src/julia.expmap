@@ -293,8 +293,6 @@
     jl_tcp_init;
     jl_test;
     jl_poll_start;
-    jl_poll_stop;
-    jl_poll_init_socket;
     jl_timer_start;
     jl_timer_stop;
     jl_toplevel_eval;

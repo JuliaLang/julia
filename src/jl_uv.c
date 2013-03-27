@@ -25,8 +25,15 @@
 extern "C" {
 #endif
 
-
 /** libuv callbacks */
+
+/*
+ * Notes for adding new callbacks
+ * - Make sure to type annotate the callback, so we'll get the one in the new
+ *   Base module rather than the old one.
+ *
+ */
+
 //These callbacks are implemented in stream.jl
 #define JL_CB_TYPES(XX) \
 	XX(close) \
@@ -113,8 +120,9 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 
 void closeHandle(uv_handle_t* handle)
 {
-    JULIA_CB(close,handle->data,0); (void)ret;
-    //TODO: maybe notify Julia handle to close itself
+    if(handle->data) {
+        JULIA_CB(close,handle->data,0); (void)ret;
+    }
     free(handle);
 }
 
@@ -166,6 +174,11 @@ void jl_asynccb(uv_handle_t *handle, int status)
     (void)ret;
 }
 
+void jl_pollcb(uv_poll_t *handle, int status, int events)
+{
+    JULIA_CB(pollcb,handle->data,2,CB_INT32,status,CB_INT32,events)
+    (void)ret;
+}
 
 /** libuv constructors */
 DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_value_t *julia_struct)
@@ -220,40 +233,6 @@ DLLEXPORT uv_tcp_t *jl_make_tcp(uv_loop_t* loop, jl_value_t *julia_struct)
     return tcp;
 }
 
-void jl_pollcb(uv_poll_t *h, int status, int events)
-{
-    JULIA_CB(pollcb,h->data,2,CB_INT32,status,CB_INT32,events);
-    (void)ret;
-}
-
-DLLEXPORT int jl_poll_start(uv_poll_t* h, int events)
-{
-    return uv_poll_start(h, events, (uv_poll_cb)&jl_pollcb);
-}
-
-DLLEXPORT int jl_poll_stop(uv_poll_t* h)
-{
-    return uv_poll_stop(h);
-}
-
-DLLEXPORT uv_poll_t *jl_poll_init_socket(uv_loop_t* loop, jl_value_t *julia_struct, uv_os_sock_t s)
-{
-    if (!loop)
-        return 0;
-    
-    uv_poll_t * h = malloc(sizeof(uv_poll_t));
-    
-    if (uv_poll_init_socket(loop, h, s)) {
-        free(h);
-        return 0;
-    }
-    
-    h->data = julia_struct;
-    return h;
-}
-
-
-
 
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 
@@ -300,6 +279,11 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data)
 {
     handle->data = data;
+}
+
+DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
+{
+    handle->data = NULL;
 }
 
 DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle)
@@ -352,7 +336,6 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
     opts.exit_cb = &jl_return_spawn;
     error = uv_spawn(loop,proc,opts);
-    proc->data = julia_struct;
     return error;
 }
 
@@ -387,6 +370,11 @@ DLLEXPORT int jl_idle_start(uv_idle_t *idle)
     if (!idle||(idle)->data)
         jl_error("jl_idle_start: Invalid handle");
     return uv_idle_start(idle,(uv_idle_cb)&jl_asynccb);
+}
+
+DLLEXPORT int jl_poll_start(uv_poll_t* handle, int32_t events)
+{
+    return uv_poll_start(handle, events, &jl_pollcb);
 }
 
 //units are in ms
@@ -537,6 +525,11 @@ char *jl_bufptr(ios_t *s)
 DLLEXPORT size_t jl_sizeof_uv_stream_t()
 {
     return sizeof(uv_stream_t);
+}
+
+DLLEXPORT size_t jl_sizeof_uv_poll_t()
+{
+    return sizeof(uv_poll_t);
 }
 
 DLLEXPORT size_t jl_sizeof_uv_pipe_t()
