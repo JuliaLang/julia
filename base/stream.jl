@@ -328,7 +328,7 @@ TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 
 close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
-function poll_fd(s::OS_FD, events::Int32, timeout_ms::Int32)
+function poll_fd(s, events::Int32, timeout_ms::Int32)
     timeout_at = (time() * 1000) + timeout_ms
     wt = WaitTask()
 
@@ -337,19 +337,10 @@ function poll_fd(s::OS_FD, events::Int32, timeout_ms::Int32)
     
     if (timeout_ms > 0)
         timer = TimeoutAsyncWork(status -> tasknotify([wt], :timeout, status))
-        start_timer(timer, int64(iround(timeout_ms/1000)), int64(timeout_ms % 1000))
+        start_timer(timer, int64(timeout_ms), int64(0))
     end
 
-    args = ()
-    while (args == ())
-        args = yield(wt)
-        if (length(args) >= 2)
-            if (args[1] != :poll) && ((timeout_at - (time() * 1000)) > 0)
-#                println("Ignoring premature timeout...")
-                args = ()
-            end
-        end
-    end
+    args = yield(wt)
 
     if (timeout_ms > 0) stop_timer(timer) end
 
