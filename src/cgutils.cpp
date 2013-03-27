@@ -566,10 +566,18 @@ static Value *emit_n_varargs(jl_codectx_t *ctx)
 
 static Value *emit_arraysize(Value *t, Value *dim)
 {
+#ifdef STORE_ARRAY_LEN
 #ifdef _P64
     int o = 3;
 #else
     int o = 4;
+#endif
+#else
+#ifdef _P64
+    int o = 2;
+#else
+    int o = 3;
+#endif
 #endif
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
@@ -591,10 +599,35 @@ static jl_arrayvar_t *arrayvar_for(jl_value_t *ex, jl_codectx_t *ctx)
     return NULL;
 }
 
-static Value *emit_arraylen(Value *t)
+static Value *emit_arraysize(Value *t, int dim)
 {
+    return emit_arraysize(t, ConstantInt::get(T_int32, dim));
+}
+
+static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
+{
+#ifdef STORE_ARRAY_LEN
+    (void)ty;
     Value *lenbits = emit_nthptr(t, 2);
     return builder.CreatePtrToInt(lenbits, T_size);
+#else
+    jl_value_t *p1 = jl_tparam1(ty);
+    if (jl_is_long(p1)) {
+        size_t nd = jl_unbox_long(p1);
+        Value *l = ConstantInt::get(T_size, 1);
+        for(size_t i=0; i < nd; i++) {
+            l = builder.CreateMul(l, emit_arraysize(t, (int)(i+1)));
+        }
+        return l;
+    }
+    else {
+        std::vector<Type *> fargt(0);
+        fargt.push_back(jl_pvalue_llvmt);
+        FunctionType *ft = FunctionType::get(T_size, fargt, false);
+        Value *alen = jl_Module->getOrInsertFunction("jl_array_len_", ft);
+        return builder.CreateCall(alen, t);
+    }
+#endif
 }
 
 static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
@@ -602,7 +635,7 @@ static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
     jl_arrayvar_t *av = arrayvar_for(ex, ctx);
     if (av!=NULL)
         return builder.CreateLoad(av->len);
-    return emit_arraylen(t);
+    return emit_arraylen_prim(t, expr_type(ex,ctx));
 }
 
 static Value *emit_arrayptr(Value *t)
@@ -616,11 +649,6 @@ static Value *emit_arrayptr(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
     if (av!=NULL)
         return builder.CreateLoad(av->dataptr);
     return emit_arrayptr(t);
-}
-
-static Value *emit_arraysize(Value *t, int dim)
-{
-    return emit_arraysize(t, ConstantInt::get(T_int32, dim));
 }
 
 static Value *emit_arraysize(Value *t, jl_value_t *ex, int dim, jl_codectx_t *ctx)
@@ -637,7 +665,7 @@ static void assign_arrayvar(jl_arrayvar_t &av, Value *ar)
 {
     builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),T_pint8),
                         av.dataptr);
-    builder.CreateStore(emit_arraylen(ar), av.len);
+    builder.CreateStore(emit_arraylen_prim(ar, av.ty), av.len);
     builder.CreateStore(emit_arraysize(ar,1), av.nr);
 }
 

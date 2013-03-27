@@ -343,6 +343,7 @@ typedef struct {
     Value *dataptr;
     Value *len;
     Value *nr;
+    jl_value_t *ty;
 } jl_arrayvar_t;
 
 // information about the context of a piece of code: its enclosing
@@ -2053,6 +2054,7 @@ static void maybe_alloc_arrayvar(char *name, jl_codectx_t *ctx)
         av.dataptr = builder.CreateAlloca(T_pint8);
         av.len = builder.CreateAlloca(T_size);
         av.nr = builder.CreateAlloca(T_size);
+        av.ty = jt;
         (*ctx->arrayvars)[name] = av;
     }
 }

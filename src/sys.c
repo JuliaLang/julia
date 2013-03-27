@@ -284,7 +284,9 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
             a = jl_takebuf_array(&dest);
         }
         else {
+#ifdef STORE_ARRAY_LEN
             a->length = n;
+#endif
             a->nrows = n;
             ((char*)a->data)[n] = '\0';
         }
