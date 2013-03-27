@@ -367,8 +367,11 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
 static char *type_summary(jl_value_t *t)
 {
     if (jl_is_tuple(t)) return "Tuple";
+    if (jl_is_uniontype(t)) return "UnionType";
     if (jl_is_datatype(t))
         return ((jl_datatype_t*)t)->name->name->name;
+    if (jl_is_typevar(t))
+        return ((jl_tvar_t*)t)->name->name;
     JL_PRINTF(JL_STDERR, "unexpected argument type: ");
     jl_show(jl_stderr_obj(), t);
     JL_PRINTF(JL_STDERR, "\n");
@@ -384,13 +387,29 @@ static void print_sig(jl_tuple_t *type)
     for(i=0; i < jl_tuple_len(type); i++) {
         if (i > 0) JL_PRINTF(JL_STDERR, ", ");
         jl_value_t *v = jl_tupleref(type,i);
+        if (jl_is_typector(v))
+            v = ((jl_typector_t*)v)->body;
         if (jl_is_tuple(v)) {
             JL_PUTC('(', JL_STDERR);
             print_sig((jl_tuple_t*)v);
             JL_PUTC(')', JL_STDERR);
         }
+        else if (jl_is_symbol(v)) {
+            JL_PRINTF(JL_STDERR, "%s", ((jl_sym_t*)v)->name);
+        }
+        else if (jl_is_long(v)) {
+            JL_PRINTF(JL_STDERR, "%lld", jl_unbox_long(v));
+        }
         else {
             JL_PRINTF(JL_STDERR, "%s", type_summary(v));
+            if (jl_is_datatype(v)) {
+                jl_datatype_t *dt = (jl_datatype_t*)v;
+                if (dt->parameters->length > 0) {
+                    JL_PUTC('{', JL_STDERR);
+                    print_sig(dt->parameters);
+                    JL_PUTC('}', JL_STDERR);
+                }
+            }
         }
     }
 }
