@@ -220,44 +220,42 @@ end
 versioninfo() = versioninfo(false)
 versioninfo(verbose::Bool) = versioninfo(OUTPUT_STREAM, verbose)
 function versioninfo(io::IO, verbose::Bool)
-    # note identation is intentionally incorrect,
-    # so that the printed information always lines up
-    println(io, "Julia $version_string")
-    println(io, commit_string)
-    println(io, "Platform Info:")
-    println(io, "  OS_NAME: ", OS_NAME)
-    println(io, "  WORD_SIZE: ", WORD_SIZE)
+    println(io,             "Julia $version_string")
+    println(io,             commit_string)
+    println(io,             "Platform Info:")
+    println(io,             "  OS_NAME: ", OS_NAME)
+    println(io,             "  WORD_SIZE: ", WORD_SIZE)
     if verbose
         lsb = readchomp(ignorestatus(`lsb_release -ds`) .> SpawnNullStream())
         if lsb != ""
-            println(io, "           ",lsb)
+            println(io,     "           ", lsb)
         end
-        println(io, "  uname: ",readchomp(`uname -mprsv`))
-        println(io, "Memory: $(total_memory()/2^30) GB ($(free_memory()/2^20) MB free)")
-        try println(io, "Uptime: $(uptime()) sec") catch end
-        print(io, "Load Avg: ")
-        print_matrix(io,Base.loadavg()')
-        println()
-        println(io, cpu_info())
+        println(io,         "  uname: ",readchomp(`uname -mprsv`))
+        println(io,         "Memory: $(total_memory()/2^30) GB ($(free_memory()/2^20) MB free)")
+        try println(io,     "Uptime: $(uptime()) sec") catch end
+        print(io,           "Load Avg: ")
+        print_matrix(io,    Base.loadavg()')
+        println(io          )
+        println(io,         cpu_info())
     end
     if Base.libblas_name == "libopenblas"
         openblas_config = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
-        println(io, "  BLAS: ",libblas_name, " (", openblas_config, ")")
+        println(io,         "  BLAS: ",libblas_name, " (", openblas_config, ")")
     else
-        println(io, "  BLAS: ",libblas_name)
+        println(io,         "  BLAS: ",libblas_name)
     end
-    println(io, "  LAPACK: ",liblapack_name)
-    println(io, "  LIBM: ",libm_name)
+    println(io,             "  LAPACK: ",liblapack_name)
+    println(io,             "  LIBM: ",libm_name)
     if verbose
-        println(io, "Environment:")
+        println(io,         "Environment:")
         for (k,v) in ENV
             if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME",k), nothing)
                 println(io, "  $(k) = $(v)")
             end
         end
-        println(io)
-        println(io, "Packages Installed:")
-        Pkg.status(io)
+        println(io          )
+        println(io,         "Packages Installed:")
+        Pkg.status(io       )
     end
 end
 
