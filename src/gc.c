@@ -727,7 +727,7 @@ static void print_obj_profile(void)
             jl_value_t *typ = (jl_value_t*)obj_counts.table[i];
             jl_printf(JL_STDERR, "%d ", obj_counts.table[i+1]-1);
             if (jl_is_datatype(typ)) {
-                jl_printf(JL_STDERR, "%s ", jl_typename_str((jl_value_t*)obj_counts.table[i]));
+                jl_printf(JL_STDERR, "%s ", jl_typename_str(typ));
             } else {
                 jl_printf(JL_STDERR, "<Unknown Type> ");
             }
