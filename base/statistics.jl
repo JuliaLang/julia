@@ -108,14 +108,7 @@ end
 ## midpoints of intervals
 midpoints(r::Range) = Range(r.start + 0.5*r.step,r.step,r.len-1)
 midpoints(r::Range1) = Range1(r.start + 0.5,r.len-1)
-function midpoints(v::Vector)
-    n = length(v) - 1
-    mid = Array(Float64,n)
-    for i = 1:n
-        mid[i] = 0.5*(v[i] + v[i+1])
-    end
-    mid
-end
+midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 
 ## hist ##
