@@ -386,8 +386,8 @@ end
 full(A::HessenbergDenseQ) = LAPACK.orghr!(1, size(A.hh, 1), copy(A.hh), A.tau)
 
 # EigenDensevalues
-type EigenDense{T} <: Factorization{T}
-    values::Vector
+type EigenDense{T,V} <: Factorization{T}
+    values::Vector{V}
     vectors::Matrix{T}
 end
 
@@ -423,14 +423,15 @@ end
 eigfact(A::StridedMatrix) = eigfact!(copy(A))
 eigfact{T<:Integer}(x::StridedMatrix{T}) = eigfact(float64(x))
 eigfact(x::Number) = (x, one(x))
+eig(x::Number) = eigfact(x)
 
-function eig(A::Union(Number, StridedMatrix))
+function eig(A::StridedMatrix)
     F = eigfact(A)
-    return F[:values], F[:vectors]
+    return F.values, F.vectors
 end
 
 #Calculates eigenvectors
-eigvecs(A::Union(Number, StridedMatrix)) = eigfact(A)[:vectors]
+eigvecs(A::Union(Number, StridedMatrix)) = eigfact(A).vectors
 
 function eigvals(A::StridedMatrix)
     if ishermitian(A) return eigvals(Hermitian(A)) end
@@ -440,10 +441,10 @@ function eigvals(A::StridedMatrix)
     return complex(valsre, valsim)
 end
 
-eigvals(x::Number) = 1.0
+eigvals(x::Number) = [one(x)]
 
-inv(A::EigenDense) = diagmm(A[:vectors], 1.0/A[:values])*A[:vectors]'
-det(A::EigenDense) = prod(A[:values])
+inv(A::EigenDense) = diagmm(A.vectors, 1.0/A.values)*A.vectors'
+det(A::EigenDense) = prod(A.values)
 
 # SVD
 type SVDDense{T,Tr} <: Factorization{T}
@@ -464,10 +465,11 @@ svdfact(A::StridedMatrix, thin::Bool) = svdfact!(copy(A), thin)
 svdfact(a::Vector, thin::Bool) = svdfact(reshape(a, length(a), 1), thin)
 svdfact(x::Number, thin::Bool) = (x==0?one(x):x/abs(x),abs(x),one(x))
 svdfact(A::Union(Number, StridedVecOrMat)) = svdfact(A, false)
+svd(A::Number, thin::Bool) = svdfact(A, thin)
 
-function svd(A::Union(Number, StridedVecOrMat), thin::Bool)
+function svd(A::StridedVecOrMat, thin::Bool)
     F = svdfact(A, thin)
-    return F[:U], F[:S], F[:V]
+    return F.U, F.S, F.Vt'
 end
 svd(A::Union(Number, StridedVecOrMat)) = svd(A, true)
 
@@ -486,13 +488,14 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T})
 end
 
 svdvals(A) = svdvals!(copy(A))
+svdvals(A::Number) = [A]
 
 # SVD least squares
 function \{T<:BlasFloat}(A::SVDDense{T}, B::StridedVecOrMat{T})
-    n = length(A[:S])
+    n = length(A.S)
     Sinv = zeros(T, n)
-    Sinv[A[:S] .> sqrt(eps())] = 1.0 ./ A[:S]
-    return diagmm(A[:V], Sinv) * A[:U][:,1:n]'B
+    Sinv[A.S .> sqrt(eps())] = 1.0 ./ A.S
+    return diagmm(A.Vt', Sinv) * A.U[:,1:n]'B
 end
 
 # Generalized svd
