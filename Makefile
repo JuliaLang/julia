@@ -67,11 +67,11 @@ install: release
 	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" "share/julia/site/"$(VERSDIR) ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
-ifeq ($(OS), Darwin)
-	$(MAKE) -C deps install-git
-	-cp -a $(BUILD)/libexec $(PREFIX)
-	-cp -a $(BUILD)/share $(PREFIX)
-endif
+#ifeq ($(OS), Darwin)
+#	$(MAKE) -C deps install-git
+#	-cp -a $(BUILD)/libexec $(PREFIX)
+#	-cp -a $(BUILD)/share $(PREFIX)
+#endif
 	cp -a $(BUILD)/bin $(PREFIX)
 	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
