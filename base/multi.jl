@@ -620,6 +620,7 @@ type WaitFor
 end
 
 function enq_work(wi::WorkItem)
+    ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
     unshift!(Workqueue, wi)
 end
 

@@ -222,17 +222,20 @@ DLLEXPORT uv_tcp_t *jl_make_tcp(uv_loop_t* loop, jl_value_t *julia_struct)
 
 DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
+    loop->stop_flag = 0;
     if (loop) return uv_run(loop,UV_RUN_ONCE);
     else return 0;
 }
 
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
+    loop->stop_flag = 0;
     if (loop) uv_run(loop,UV_RUN_DEFAULT);
 }
 
 DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
+    loop->stop_flag = 0;
     if (loop) return uv_run(loop,UV_RUN_NOWAIT);
     else return 0;
 }

@@ -279,7 +279,7 @@ end
 function sleep(sec::Real)
     timer = TimeoutAsyncWork(status->tasknotify([wt], status))
     wt = WaitTask(timer, false)
-    start_timer(timer, iround(sec*1000), 0)
+    start_timer(timer, int64(iround(sec*1000)), int64(0))
     args = yield(wt)
     stop_timer(timer)
     if isa(args,InterruptException)
@@ -379,6 +379,7 @@ function read{T}(this::AsyncStream, a::Array{T})
         buf = this.buffer
         assert(buf.seekable == false)
         assert(buf.maxsize >= nb)
+        start_reading(this)
         wait_readnb(this,nb)
         read(this.buffer, a)
         return a

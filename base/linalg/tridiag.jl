@@ -44,7 +44,7 @@ function show(io::IO, S::SymTridiagonal)
 end
 
 size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
-size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<2 ? length(m.dv) : 1)
+size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(m.dv) : 1)
 
 #Elementary operations
 copy(S::SymTridiagonal) = SymTridiagonal(copy(S.dv), copy(S.ev))
@@ -75,6 +75,9 @@ eig(m::SymTridiagonal) = LAPACK.stegr!('V', copy(m.dv), copy(m.ev))
 eigvals(m::SymTridiagonal, il::Int, iu::Int) = LAPACK.stebz!('I', 'E', 0.0, 0.0, il, iu, -1.0, copy(m.dv), copy(m.ev))[1]
 eigvals(m::SymTridiagonal, vl::Float64, vu::Float64) = LAPACK.stebz!('V', 'E', vl, vu, 0, 0, -1.0, copy(m.dv), copy(m.ev))[1]
 eigvals(m::SymTridiagonal) = LAPACK.stebz!('A', 'E', 0.0, 0.0, 0, 0, -1.0, copy(m.dv), copy(m.ev))[1]
+#Compute selected eigenvectors only corresponding to particular eigenvalues
+eigvecs(m::SymTridiagonal) = eig(m)[2]
+eigvecs{Eigenvalue<:Real}(m::SymTridiagonal, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(m.dv, m.ev, eigvals)
 
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
@@ -108,6 +111,8 @@ function Tridiagonal{Tl<:Number, Td<:Number, Tu<:Number}(dl::Vector{Tl}, d::Vect
 end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
+size(M::Tridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(M.d) : 1)
+
 function show(io::IO, M::Tridiagonal)
     println(io, summary(M), ":")
     print(io, " sub: ")

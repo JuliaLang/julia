@@ -23,9 +23,7 @@ function factorial{T<:Integer}(n::T, k::T)
 end
 
 function binomial{T<:Integer}(n::T, k::T)
-    if k < 0
-        return zero(T)
-    end
+    k < 0 && return zero(T)
     sgn = one(T)
     if n < 0
         n = -n + k -1
@@ -33,15 +31,9 @@ function binomial{T<:Integer}(n::T, k::T)
             sgn = -sgn
         end
     end
-    if k > n # TODO: is this definitely right?
-        return zero(T)
-    end
-    if k == 0 || k == n
-        return sgn
-    end
-    if k == 1
-        return sgn*n
-    end
+    k > n && return zero(T)
+    (k == 0 || k == n) && return sgn
+    k == 1 && return sgn*n
     if k > (n>>1)
         k = (n - k)
     end
@@ -49,11 +41,11 @@ function binomial{T<:Integer}(n::T, k::T)
     nn += 1.0
     rr = 2.0
     while rr <= k
-        x *= (nn/rr)
+        x *= nn/rr
         rr += 1
         nn += 1
     end
-    return sgn*iround(T,x)
+    sgn*iround(T,x)
 end
 
 pascal(n) = [binomial(i+j-2,i-1) for i=1:n,j=1:n]
@@ -91,8 +83,8 @@ function randcycle(n::Integer)
 end
 
 function nthperm!(a::AbstractVector, k::Integer)
+    k -= 1 # make k 1-indexed
     n = length(a)
-    k -= 1   # make k 1-indexed
     f = factorial(oftype(k, n-1))
     for i=1:n-1
         j = div(k, f) + 1

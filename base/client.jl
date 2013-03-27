@@ -296,7 +296,10 @@ end
 function _start()
     # set up standard streams
     reinit_stdio()
+    # Initialize RNG
     librandom_init()
+    # Check that OpenBLAS is correctly built
+    check_openblas()
 
     # set default local address
     global bind_addr = getipaddr()
