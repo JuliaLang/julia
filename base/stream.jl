@@ -93,6 +93,7 @@ end
 flush(::TTY) = nothing
 
 function tasknotify(waittasks::Vector{WaitTask}, args...)
+#    println("@ tasknotify(waittasks::Vector{WaitTask}, args" * string(waittasks) * ", " * string(args))
     newwts = WaitTask[]
     ct = current_task()
     for wt in waittasks
@@ -294,17 +295,46 @@ end
 # TODO : Handle timeout_ms below
 # poll_socket needs to wait both on uv_poll* and a TimeoutAsyncWork for timeout_ms
 # It needs to exit on whichever event occurs earlier and cancel the other one
+# function poll_socket(s::PollSocket, events::Int32, timeout_ms::Int32)
+#     p_h = PollAsyncWork((status, events) -> tasknotify([wt], status, events), s)
+#     wt = WaitTask(p_h, false)
+#     poll_start(p_h, events)
+#     args = yield(wt)
+#     poll_stop(p_h)
+#     if isa(args,InterruptException)
+#         error(args)
+#     end
+#     args
+# end
+
+
+
+
 function poll_socket(s::PollSocket, events::Int32, timeout_ms::Int32)
-    p_h = PollAsyncWork((status, events) -> tasknotify([wt], status, events), s)
-    wt = WaitTask(p_h, false)
+    wt = WaitTask()
+
+    p_h = PollAsyncWork((status, events) -> tasknotify([wt], :poll, status, events), s)
     poll_start(p_h, events)
-    args = yield(wt)
+
+    if (timeout_ms > 0)
+        timer = TimeoutAsyncWork(status -> tasknotify([wt], :timeout, status))
+        start_timer(timer, int64(iround(timeout_ms/1000)), int64(timeout_ms % 1000))
+    end
+    
+    args = ()
+    while (args == ())
+        args = yield(wt)
+    end
+    
+    if (timeout_ms > 0) stop_timer(timer) end
+    
     poll_stop(p_h)
     if isa(args,InterruptException)
         error(args)
     end
     args
 end
+
 
 
 
