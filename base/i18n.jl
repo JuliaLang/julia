@@ -2,20 +2,14 @@ module I18n
 
 export locale
 
-LOCALE = nothing
 CALLBACKS = Function[]
 
 function locale()
-    if LOCALE === nothing
-        # XXX:TBD return default locale
-        return ""
-    end
-    LOCALE
+    get(ENV, "JULIA_LOCALE", "")
 end
 
 function locale(s::ByteString)
-    global LOCALE = s
-    # XXX:TBD call setlocale
+    ENV["JULIA_LOCALE"] = s
     for cb in CALLBACKS
         cb()
     end

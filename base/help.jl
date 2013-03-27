@@ -27,15 +27,14 @@ function decor_help_desc(func::String, mfunc::String, desc::String)
 end
 
 function helpdb_filename()
-    root = "$JULIA_HOME/../share/julia"
-    file = "helpdb.jl"
-    for loc in [Base.locale()]
-        fn = joinpath(root, loc, file)
-        if isfile(fn)
-            return fn
-        end
+    loc = (Base.locale() == "") ? "" : "_$(Base.locale())"
+    file = "$JULIA_HOME/../share/julia/helpdb"
+    ext = ".jl"
+    fn = "$(file)$(loc)$(ext)"
+    if isfile(fn)
+        return fn
     end
-    joinpath(root, file)
+    joinpath(file, ext)
 end
 
 function init_help()
