@@ -319,7 +319,10 @@ OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.e
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
 LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
-JLDFLAGS = -Wl,--stack,8388608 -Wl,--large-address-aware
+JLDFLAGS = -Wl,--stack,8388608
+ifeq ($(ARCH),i686)
+JLDFLAGS += -Wl,--large-address-aware
+endif
 endif
 
 # MKL
