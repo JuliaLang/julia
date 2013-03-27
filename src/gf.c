@@ -404,7 +404,7 @@ static void print_sig(jl_tuple_t *type)
             JL_PRINTF(JL_STDERR, "%s", type_summary(v));
             if (jl_is_datatype(v)) {
                 jl_datatype_t *dt = (jl_datatype_t*)v;
-                if (dt->parameters->length > 0) {
+                if (jl_tuple_len(dt->parameters) > 0) {
                     JL_PUTC('{', JL_STDERR);
                     print_sig(dt->parameters);
                     JL_PUTC('}', JL_STDERR);
