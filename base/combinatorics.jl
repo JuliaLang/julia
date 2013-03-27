@@ -410,3 +410,16 @@ function prevprod(a::Vector{Int}, x)
     best = x >= p > best ? p : best
     return int(best)
 end
+
+#Computes the nth Catalan number
+#TODO Implement the faster O(n^2) algorithm of http://www.jstor.org/stable/2689673
+function catalan(n::Integer)
+    n<0 ? error("n must be positive") : nothing
+    c = n>33 ? BigInt(1) : int64(1) #Gracefully transitions to BigInt
+    for k=2:n
+        c *= 2*(2k-1)
+        c = div(c, k+1)
+    end
+    c
+end
+
