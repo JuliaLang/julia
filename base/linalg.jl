@@ -133,7 +133,8 @@ typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
 typealias BlasChar Char
 
 function check_openblas()
-    if Base.libblas_name == "libopenblas"
+    libblas = dlopen( Base.libblas_name )
+    if dlsym_e( libblas, :openblas_get_config ) != 0
         openblas_config = bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () ))
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
         if Base.USE_LIB64 != openblas64
