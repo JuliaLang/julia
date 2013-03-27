@@ -85,8 +85,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
                                         # Test null
         a15null = null(a[:,1:5]')
-        @test_approx_eq_eps norm(a[:,1:5]'a15null) zero(elty) n*eps(one(elty))
-        @test_approx_eq_eps norm(a15null'a[:,1:5]) zero(elty) n*eps(one(elty))
+        @test_approx_eq_eps norm(a[:,1:5]'a15null) zero(elty) n*eps(real(one(elty)))
+        @test_approx_eq_eps norm(a15null'a[:,1:5]) zero(elty) n*eps(real(one(elty)))
         @test size(null(b), 2) == 0
 
                                         # Test pinv
@@ -330,6 +330,15 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq W\v F\v
         @test_approx_eq det(W) det(F)
 
+        # Diagonal
+        D = Diagonal(d)
+        DM = diagm(d)
+        @test_approx_eq D*v DM*v
+        @test_approx_eq D*U DM*U
+        @test_approx_eq D\v DM\v
+        @test_approx_eq D\U DM\U
+        @test_approx_eq det(D) det(DM)   
+
         # Test det(A::Matrix)
         # In the long run, these tests should step through Strang's
         #  axiomatic definition of determinants.
@@ -357,7 +366,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         end
 
         # issue 1490
-        @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(one(elty))
+        @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
 end
 
                                         # LAPACK tests
@@ -373,6 +382,47 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq LinAlg.LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
         @test_approx_eq vals LinAlg.LAPACK.syev!('N','U',copy(Asym))
 end
+
+#LAPACK tests for symmetric tridiagonal matrices
+n=5
+Ainit = randn(n)
+Binit = randn(n-1)
+for elty in (Float32, Float64)
+    A = convert(Array{elty, 1}, Ainit)
+    B = convert(Array{elty, 1}, Binit)
+    zero, infinity = convert(elty, 0), convert(elty, Inf)
+    #This tests eigenvalue and eigenvector computations using stebz! and stein!
+    (w, iblock, isplit, info) = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
+
+    (evecs, ifail, info)=LinAlg.LAPACK.stein!(A,B,w)
+    @test info==0
+    @test all(ifail .== 0)
+    
+    (e, v)=eig(SymTridiagonal(A,B))
+    @test_approx_eq e w
+    #Take into account possible phase (sign) difference in eigenvectors
+    for i=1:n
+        ev1 = v[:,i]
+        ev2 = evecs[:,i]
+        deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
+        @test_approx_eq_eps deviation 0.0 n*eps(abs(convert(elty, 1.0)))
+    end
+
+    #Test stein! call using iblock and isplit
+    (w, iblock, isplit, info) = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
+    @test info==0
+    (evecs, ifail, info)=LinAlg.LAPACK.stein!(A, B, w, iblock, isplit)
+    @test info==0
+    @test all(ifail .== 0)
+    for i=1:n
+        ev1 = v[:,i]
+        ev2 = evecs[:,i]
+        deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
+        @test_approx_eq_eps deviation 0.0 n*eps(abs(convert(elty, 1.0)))
+    end
+
+end
+
 
 ## Issue related tests
 # issue 1447
@@ -397,4 +447,21 @@ end
 let
     N = 3
     @test_approx_eq log(det(eye(N))) logdet(eye(N))
+end
+
+# issue 2637
+let
+  a = [1, 2, 3]
+  b = [4, 5, 6]
+  @test kron(eye(2),eye(2)) == eye(4)
+  @test kron(a,b) == [4,5,6,8,10,12,12,15,18]             
+  @test kron(a',b') == [4 5 6 8 10 12 12 15 18]           
+  @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]         
+  @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]         
+  @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]  
+  @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3] 
+  @test kron(eye(2),2) == 2*eye(2)                        
+  @test kron(3,eye(3)) == 3*eye(3)                        
+  @test kron(a,2) == [2, 4, 6]                            
+  @test kron(b',2) == [8 10 12]                              
 end

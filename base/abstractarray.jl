@@ -205,10 +205,13 @@ for (f,t) in ((:char,   Char),
               (:int16,  Int16),
               (:int32,  Int32),
               (:int64,  Int64),
+              (:int128, Int128),
+              (:uint,   Uint),
               (:uint8,  Uint8),
               (:uint16, Uint16),
               (:uint32, Uint32),
-              (:uint64, Uint64))
+              (:uint64, Uint64),
+              (:uint128,Uint128))
     @eval ($f)(x::AbstractArray{$t}) = x
     @eval ($f)(x::AbstractArray) = iround_to(similar(x,$t), x)
 end
@@ -1070,34 +1073,6 @@ indices(I::Tuple) = map(indices, I)
 
 ## iteration utilities ##
 
-# TODO: something sensible should happen when each_col et. al. are used with a
-# pure function argument
-function each_col!(f::Function, a::AbstractMatrix)
-    m = size(a,1)
-    for i = 1:m:length(a)
-        f(sub(a, i:(i+m-1)))
-    end
-    return a
-end
-
-function each_row!(f::Function, a::AbstractMatrix)
-    m = size(a,1)
-    for i = 1:m
-        f(sub(a, i:m:length(a)))
-    end
-    return a
-end
-
-function each_vec!(f::Function, a::AbstractMatrix, dim::Integer)
-    if dim == 1; return each_col!(f,a); end
-    if dim == 2; return each_row!(f,a); end
-    error("invalid matrix dimensions: ", dim)
-end
-
-each_col(f::Function, a::AbstractMatrix) = each_col!(f,copy(a))
-each_row(f::Function, a::AbstractMatrix) = each_row!(f,copy(a))
-each_vec(f::Function, a::AbstractMatrix, d::Integer) = each_vec!(f,copy(a),d)
-
 # slow, but useful
 function cartesian_map(body, t::(Int...), it...)
     idx = length(t)-length(it)
@@ -1386,6 +1361,7 @@ end
 
 ## along an axis
 function amap(f::Function, A::AbstractArray, axis::Integer)
+    warn_once("amap is deprecated, use mapslices(f, A, dims) instead")
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
@@ -1402,6 +1378,67 @@ function amap(f::Function, A::AbstractArray, axis::Integer)
     for i = 2:axis_size
         idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
         R[i] = f(sub(A, idx))
+    end
+
+    return R
+end
+
+## transform any set of dimensions
+## dims specifies which dimensions will be transformed. for example
+## dims==1:2 will call f on all slices A[:,:,...]
+mapslices(f::Function, A::AbstractArray, dims) = mapslices(f, A, [dims...])
+function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
+    if isempty(dims)
+        return A
+    end
+
+    dimsA = [size(A)...]
+    ndimsA = ndims(A)
+    alldims = [1:ndimsA]
+
+    if dims == alldims
+        return f(A)
+    end
+
+    otherdims = setdiff(alldims, dims)
+
+    idx = cell(ndimsA)
+    fill!(idx, 1)
+    Asliceshape = tuple(dimsA[dims]...)
+    itershape   = tuple(dimsA[otherdims]...)
+    for d in dims
+        idx[d] = 1:size(A,d)
+    end
+
+    r1 = f(reshape(A[idx...], Asliceshape))
+
+    # determine result size and allocate
+    Rsize = copy(dimsA)
+    # TODO: maybe support removing dimensions
+    if isempty(size(r1))
+        r1 = [r1]
+    end
+    Rsize[dims] = [size(r1)...]
+    R = similar(r1, tuple(Rsize...))
+
+    ridx = cell(ndims(R))
+    fill!(ridx, 1)
+    for d in dims
+        ridx[d] = 1:size(R,d)
+    end
+
+    R[ridx...] = r1
+
+    first = true
+    cartesian_map(itershape) do idxs...
+        if first
+            first = false
+        else
+            ia = [idxs...]
+            idx[otherdims] = ia
+            ridx[otherdims] = ia
+            R[ridx...] = f(reshape(A[idx...], Asliceshape))
+        end
     end
 
     return R

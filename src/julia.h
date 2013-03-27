@@ -33,6 +33,10 @@
 //#define OVERLAP_TUPLE_LEN
 #endif
 
+// if this is not defined, only individual dimension sizes are
+// stored and not total length, to save space.
+#define STORE_ARRAY_LEN
+
 #ifdef OVERLAP_TUPLE_LEN
 #define JL_DATA_TYPE    \
     size_t type : 52;   \
@@ -89,11 +93,14 @@ typedef struct _jl_mallocptr_t {
 typedef struct {
     JL_DATA_TYPE
     void *data;
+#ifdef STORE_ARRAY_LEN
     size_t length;
+#endif
 
-    unsigned short ndims:14;
+    unsigned short ndims:13;
     unsigned short ptrarray:1;  // representation is pointer array
     unsigned short ismalloc:1;  // data owner is a jl_mallocptr_t
+    unsigned short isinline:1;  // data stored inline
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
 
@@ -106,35 +113,30 @@ typedef struct {
     };
     // other dim sizes go here for ndims > 2
 
+    // followed by alignment padding and inline data, or an owner pointer
     union {
         char _space[1];
         void *_pad;
     };
 } jl_array_t;
 
+#ifdef STORE_ARRAY_LEN
 #define jl_array_len(a)   (((jl_array_t*)(a))->length)
+#else
+DLLEXPORT size_t jl_array_len_(jl_array_t *a);
+#define jl_array_len(a)   jl_array_len_((jl_array_t*)(a))
+#endif
 #define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
 #define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
 #define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
 #define jl_array_nrows(a) (((jl_array_t*)(a))->nrows)
 #define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
-#define jl_array_data_owner(a) (*((jl_value_t**)jl_array_inline_data_area(a)))
+#define jl_array_data_owner(a) (*((jl_value_t**)(&a->_pad+jl_array_ndimwords(jl_array_ndims(a)))))
 
 // compute # of extra words needed to store dimensions
 static inline int jl_array_ndimwords(uint32_t ndims)
 {
-#ifdef _P64
-    // on 64-bit, ndimwords must be even to give 16-byte alignment
-    return (ndims == 0 ? 0 : ((ndims-1) & -2));
-#else
-    // on 32-bit, ndimwords must = 4k+1 to give 16-byte alignment
-    return (ndims & -4) + 1;
-#endif
-}
-
-static inline void *jl_array_inline_data_area(jl_array_t *a)
-{
-    return &a->_space[0] + jl_array_ndimwords(jl_array_ndims(a))*sizeof(size_t);
+    return (ndims < 3 ? 0 : ndims-2);
 }
 
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
@@ -333,6 +335,7 @@ extern jl_datatype_t *jl_typector_type;
 extern jl_datatype_t *jl_sym_type;
 extern jl_datatype_t *jl_symbol_type;
 extern jl_tuple_t *jl_tuple_type;
+extern jl_value_t *jl_tupletype_type;
 extern jl_datatype_t *jl_ntuple_type;
 extern jl_typename_t *jl_ntuple_typename;
 extern jl_datatype_t *jl_tvar_type;

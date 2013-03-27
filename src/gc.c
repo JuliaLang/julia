@@ -555,11 +555,10 @@ static void gc_mark_all()
         char *data = a->data;
         if (data == NULL) continue;
         int ndims = jl_array_ndims(a);
-        void *data_area = jl_array_inline_data_area(a);
         char *data0 = data;
         if (ndims == 1) data0 -= a->offset*a->elsize;
-        if (data0 != data_area) {
-            jl_value_t *owner = *(jl_value_t**)data_area;
+        if (!a->isinline) {
+            jl_value_t *owner = jl_array_data_owner(a);
             if (a->ismalloc) {
                 // jl_mallocptr_t
                 if (gc_marked(owner))
@@ -664,6 +663,7 @@ static void gc_mark(void)
     gc_push_root(jl_unprotect_stack_func);
     gc_push_root(jl_bottom_func);
     gc_push_root(jl_typetype_type);
+    gc_push_root(jl_tupletype_type);
 
     // constants
     gc_push_root(jl_null);

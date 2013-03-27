@@ -220,44 +220,43 @@ end
 versioninfo() = versioninfo(false)
 versioninfo(verbose::Bool) = versioninfo(OUTPUT_STREAM, verbose)
 function versioninfo(io::IO, verbose::Bool)
-  # note identation is intentionally incorrect,
-  # so that the printed information always lines up
-    println(io, "Julia $version_string")
-    println(io, commit_string)
-    println(io, "Platform Info:")
-    println(io, "  OS_NAME: ",OS_NAME)
-  if verbose
-   lsb = readchomp(ignorestatus(`lsb_release -ds`) .> SpawnNullStream())
-   if lsb != ""
-    println(io, "           ",lsb)
-   end
-    println(io, "  uname: ",readchomp(`uname -mprsv`))
-    println(io, "Memory: $(total_memory()/2^30) GB ($(free_memory()/2^20) MB free)")
-    println(io, "Uptime: $(uptime()) sec")
-    print(io, "Load Avg: ")
-        print_matrix(io,Base.loadavg()')
-        println()
-    println(io, cpu_info())
-  end
-  if USE_LIB64
-    println(io, "Using: (64-bit interface)")
-  else
-    println(io, "Using:")
-  end
-    println(io, "  Blas: ",libblas_name)
-    println(io, "  Lapack: ",liblapack_name)
-    println(io, "  Libm: ",libm_name)
-  if verbose
-    println(io, "Environment:")
-   for (k,v) in ENV
-       if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME",k), nothing)
-           println(io, "  $(k) = $(v)")
-       end
-   end
-    println(io)
-    println(io, "Packages Installed:")
-    Pkg.status(io)
-  end
+    println(io,             "Julia $version_string")
+    println(io,             commit_string)
+    println(io,             "Platform Info:")
+    println(io,             "  OS_NAME: ", OS_NAME)
+    println(io,             "  WORD_SIZE: ", WORD_SIZE)
+    if verbose
+        lsb = readchomp(ignorestatus(`lsb_release -ds`) .> SpawnNullStream())
+        if lsb != ""
+            println(io,     "           ", lsb)
+        end
+        println(io,         "  uname: ",readchomp(`uname -mprsv`))
+        println(io,         "Memory: $(total_memory()/2^30) GB ($(free_memory()/2^20) MB free)")
+        try println(io,     "Uptime: $(uptime()) sec") catch end
+        print(io,           "Load Avg: ")
+        print_matrix(io,    Base.loadavg()')
+        println(io          )
+        println(io,         cpu_info())
+    end
+    if Base.libblas_name == "libopenblas"
+        openblas_config = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+        println(io,         "  BLAS: ",libblas_name, " (", openblas_config, ")")
+    else
+        println(io,         "  BLAS: ",libblas_name)
+    end
+    println(io,             "  LAPACK: ",liblapack_name)
+    println(io,             "  LIBM: ",libm_name)
+    if verbose
+        println(io,         "Environment:")
+        for (k,v) in ENV
+            if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME",k), nothing)
+                println(io, "  $(k) = $(v)")
+            end
+        end
+        println(io          )
+        println(io,         "Packages Installed:")
+        Pkg.status(io       )
+    end
 end
 
 type UV_cpu_info_t
@@ -369,13 +368,13 @@ total_memory() = ccall(:uv_get_total_memory, Uint64, ())
 
 # `methodswith` -- shows a list of methods using the type given
 
-function methodswith(io::IO, t::Type, m::Module)
+function methodswith(io::IO, t::Type, m::Module, showparents::Bool)
     for nm in names(m)
         try
            mt = eval(nm)
            d = mt.env.defs
            while !is(d,())
-               if any(map(x -> x == t, d.sig)) 
+               if any(map(x -> x == t || (showparents && t <: x && x != Any && x != ANY && !isa(x, TypeVar)), d.sig))
                    print(io, nm)
                    show(io, d)
                    println(io)
@@ -386,16 +385,18 @@ function methodswith(io::IO, t::Type, m::Module)
     end
 end
 
-methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m)
-methodswith(t::Type) = methodswith(OUTPUT_STREAM, t)
-function methodswith(io::IO, t::Type)
+methodswith(t::Type, m::Module, showparents::Bool) = methodswith(OUTPUT_STREAM, t, m, showparents)
+methodswith(t::Type, showparents::Bool) = methodswith(OUTPUT_STREAM, t, showparents)
+methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m, false)
+methodswith(t::Type) = methodswith(OUTPUT_STREAM, t, false)
+function methodswith(io::IO, t::Type, showparents::Bool)
     mainmod = ccall(:jl_get_current_module, Any, ())::Module
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)
             mod = eval(mainmod, nm)
             if isa(mod, Module)
-                methodswith(io, t, mod)
+                methodswith(io, t, mod, showparents)
             end
         end
     end

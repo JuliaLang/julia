@@ -56,9 +56,11 @@ Getting Around
 
    Show all methods of ``f`` with their argument types.
 
-.. function:: methodswith(typ)
+.. function:: methodswith(typ[, showparents])
 
-   Show all methods with an argument of type ``typ``.
+   Show all methods with an argument of type ``typ``. If optional
+   ``showparents`` is ``true``, also show arguments with a parent type
+   of ``typ``, excluding type ``Any``.  
 
 All Objects
 -----------
@@ -2290,6 +2292,15 @@ Array functions
    Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
    vector specifying the dimensions to reduce, and ``initial`` is the initial
    value to use in the reductions.
+
+.. function:: mapslices(f, A, dims)
+
+   Transform the given dimensions of array ``A`` using function ``f``. ``f``
+   is called on each slice of ``A`` of the form ``A[...,:,...,:,...]``.
+   ``dims`` is an integer vector specifying where the colons go in this
+   expression. The results are concatenated along the remaining dimensions.
+   For example, if ``dims`` is ``[1,2]`` and A is 4-dimensional, ``f`` is
+   called on ``A[:,:,i,j]`` for all ``i`` and ``j``.
 
 .. function:: sum_kbn(A)
 

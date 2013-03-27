@@ -58,13 +58,13 @@ is_global(sv::StaticVarInfo, s::Symbol) =
 
 typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 
-methods(f::Union(Function,DataType),t::Tuple) = _methods(f,t,-1)::Array{Any,1}
-_methods(f::Union(Function,DataType),t::Tuple,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
+methods(f::ANY,t::ANY) = _methods(f,t,-1)::Array{Any,1}
+_methods(f::ANY,t::ANY,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
 typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
 
-isgeneric(f) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
-isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
+isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
+isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 
 isconst(s::Symbol) =
     ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
@@ -77,13 +77,13 @@ function _iisconst(s::Symbol)
     isdefined(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
 end
 
-_ieval(x) = eval((inference_stack::CallStack).mod, x)
-_iisdefined(x) = isdefined((inference_stack::CallStack).mod, x)
+_ieval(x::ANY) = eval((inference_stack::CallStack).mod, x)
+_iisdefined(x::ANY) = isdefined((inference_stack::CallStack).mod, x)
 
 _iisconst(s::SymbolNode) = _iisconst(s.name)
 _iisconst(s::TopNode) = isconst(_basemod(), s.name)
 _iisconst(x::Expr) = false
-_iisconst(x) = true
+_iisconst(x::ANY) = true
 
 function _basemod()
     m = (inference_stack::CallStack).mod
@@ -427,7 +427,7 @@ function a2t(a::AbstractVector)
     return tuple(a...)
 end
 
-function isconstantfunc(f, sv::StaticVarInfo)
+function isconstantfunc(f::ANY, sv::StaticVarInfo)
     if isa(f,TopNode)
         m = _basemod()
         return isconst(m, f.name) && isdefined(m, f.name) && f
@@ -2002,7 +2002,7 @@ function replace_tupleref(e, tupname, vals, sv, i0)
     end
 end
 
-function finfer(f, types)
+function finfer(f::Union(Function,DataType), types)
     x = methods(f,types)[1]
     (tree, ty) = typeinf(x[3], x[1], x[2])
     if !isa(tree,Expr)

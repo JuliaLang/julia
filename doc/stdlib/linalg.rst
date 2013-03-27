@@ -59,9 +59,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``cholpfact!`` is the same as ``cholpfact`` but saves space by overwriting the input A, instead of creating a copy.
 
-.. function:: qr(A) -> Q, R
+.. function:: qr(A, [thin]) -> Q, R
 
-   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrfact``.
+   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrfact``. The default is to compute a thin factorization.
 
 .. function:: qrfact(A)
 
@@ -71,9 +71,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``qrfact!`` is the same as ``qrfact`` but saves space by overwriting the input A, instead of creating a copy.
 
-.. function:: qrp(A) -> Q, R, P
+.. function:: qrp(A, [thin]) -> Q, R, P
 
-   Compute the QR factorization of ``A`` with pivoting, such that ``A*P = Q*R``, Also see ``qrpfact``.
+   Compute the QR factorization of ``A`` with pivoting, such that ``A*P = Q*R``, Also see ``qrpfact``. The default is to compute a thin factorization.
 
 .. function:: qrpfact(A) -> QRPivotedDense
 
@@ -95,6 +95,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the eigenvalues of ``A``.
 
+.. function:: eigvecs(A, [eigvals])
+
+   Returns the eigenvectors of ``A``.
+
+   If the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors. (Currently this optional syntax only works for SymTridiagonal matrices.)
+
 .. function:: eigfact(A)
 
    Compute the eigenvalue decomposition of ``A`` and return an ``EigenDense`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``EigenDense`` objects: ``inv``, ``det``.
@@ -113,11 +119,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svdfact(A, [thin]) -> SVDDense
 
-   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVDDense`` object. ``U``, ``S``, ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``, ``F[:S]``, ``F[:V]`` and ``F[:Vt]``, such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned. The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``.
+   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVDDense`` object. ``U``, ``S``, ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``, ``F[:S]``, ``F[:V]`` and ``F[:Vt]``, such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned. The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``. The default is to produce a thin decomposition.
 
 .. function:: svdfact!(A, [thin]) -> SVDDense
 
-   ``svdfact!`` is the same as ``svdfact`` but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned.
+   ``svdfact!`` is the same as ``svdfact`` but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
 .. function:: svd(A, [thin]) -> U, S, V
 
