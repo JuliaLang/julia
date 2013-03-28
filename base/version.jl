@@ -7,7 +7,7 @@ type VersionNumber
     prerelease::Vector{Union(Int,ASCIIString)}
     build::Vector{Union(Int,ASCIIString)}
 
-    function VersionNumber(major::Int, minor::Int, patch::Int, pre::Vector, bld::Vector)
+    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::Vector, bld::Vector)
         if major < 0 error("invalid major version: $major") end
         if minor < 0 error("invalid minor version: $minor") end
         if patch < 0 error("invalid patch version: $patch") end
