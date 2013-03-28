@@ -688,7 +688,7 @@ static void gc_mark(void)
     }
 
     gc_mark_all();
-    
+
     // find unmarked objects that need to be finalized.
     // this must happen last.
     for(i=0; i < finalizer_table.size; i+=2) {
@@ -719,14 +719,50 @@ static void big_obj_stats(void);
 #endif
 
 #ifdef OBJPROFILE
+extern char *jl_typename_str(jl_value_t *v);
+
+#define print_type(v) jl_print_type(v, 1)
+static void jl_print_type(jl_value_t *v, int8_t surround)
+{
+    if(jl_is_tuple(v)){
+        if (surround) {
+            JL_PUTC('(', JL_STDERR);
+        }
+        for(size_t i=0; i < jl_tuple_len((jl_tuple_t*)v); i++) {
+            if (i > 0) JL_PRINTF(JL_STDERR, ", ");
+            jl_value_t *subv = jl_tupleref((jl_tuple_t*)v,i);
+            if (jl_is_typector(subv)) {
+                subv = ((jl_typector_t*)subv)->body;
+            }
+            jl_print_type((jl_value_t*)subv, 1);
+        }
+        if (surround) {
+            JL_PUTC(')', JL_STDERR);
+        }
+    } else if (jl_is_symbol(v)) {
+        JL_PRINTF(JL_STDERR, "%s", ((jl_sym_t*)v)->name);
+    } else if (jl_is_long(v)) {
+        JL_PRINTF(JL_STDERR, "%lld", jl_unbox_long(v));
+    } else if ((jl_is_datatype(v))) {
+        JL_PRINTF(JL_STDERR, "%s", jl_typename_str(v));
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        if (jl_tuple_len(dt->parameters) > 0) {
+            JL_PUTC('{', JL_STDERR);
+            jl_print_type((jl_value_t*)dt->parameters, 0);
+            JL_PUTC('}', JL_STDERR);
+        }
+    } else {
+        JL_PRINTF(JL_STDERR, "<Unknown Type>");
+    }
+}
+
 static void print_obj_profile(void)
 {
-    jl_value_t *errstream = jl_stderr_obj();
     for(int i=0; i < obj_counts.size; i+=2) {
         if (obj_counts.table[i+1] != HT_NOTFOUND) {
-            jl_printf(jl_stderr, "%d ", obj_counts.table[i+1]-1);
-            jl_show(errstream, obj_counts.table[i]);
-            jl_printf(jl_stderr, "\n");
+            jl_printf(JL_STDERR, "%d ", obj_counts.table[i+1]-1);
+            print_type((jl_value_t*)obj_counts.table[i]);
+            jl_printf(JL_STDERR, "\n");
         }
     }
 }
@@ -869,7 +905,7 @@ void jl_gc_init(void)
 
                          288, 320, 352, 384, 416, 448, 480, 512,
 
-                         640, 768, 896, 1024, 
+                         640, 768, 896, 1024,
 
                          1536, 2048 };
     int i;
