@@ -338,10 +338,10 @@
 	 ;; positional args without vararg
 	 (pargl (if (null? vararg) pargl (butlast pargl)))
 	 ;; keywords glob
-	 (varkw (let ((l (last kargl)))
-		  (if (vararg? l)
-		      (list (cadr l)) '())))
-	 (kargl (if (null? varkw) kargl (butlast kargl)))
+	 (restkw (let ((l (last kargl)))
+		   (if (vararg? l)
+		       (list (cadr l)) '())))
+	 (kargl (if (null? restkw) kargl (butlast kargl)))
 	 ;; the keyword::Type expressions
          (vars     (map cadr kargl))
 	 ;; keyword default values
@@ -354,7 +354,7 @@
 		   '()))
 	 ;; body statements, minus line number node
 	 (stmts (if (null? lno) (cdr body) (cddr body))))
-    (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (vkw (gensy))
+    (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
 	  (mangled (symbol (string name (gensy))))
 	  (flags (map (lambda (x) (gensy)) vals)))
       `(block
@@ -362,17 +362,17 @@
 	,(method-def-expr-
 	  name sparams (append pargl vararg)
 	  `(block
-	    ;; call mangled(vals..., [var_kw ,]pargs..., [vararg]...)
+	    ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
 	    (return (call ,mangled
 			  ,@vals
-			  ,@(if (null? varkw) '() '((call (top tuple))))
+			  ,@(if (null? restkw) '() '((call (top tuple))))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
 				(list `(... ,(arg-name (car vararg)))))))))
 	;; call with keyword args pre-sorted - original method code goes here
 	,(method-def-expr-
 	  mangled sparams
-	  `(,@vars ,@varkw ,@pargl ,@vararg)
+	  `(,@vars ,@restkw ,@pargl ,@vararg)
 	  `(block
 	    ,@lno
 	    ,@stmts))
@@ -389,6 +389,7 @@
 			 `(= ,name ,dflt)
 			 `(= ,flag true)))
 		   keynames vals flags)
+	    (= ,rkw (cell1d))
 	    (local ,i)
 	    (local ,ii)
 	    ;; for i = 1:(length(kw)>>1)
@@ -399,13 +400,13 @@
 		  (= ,elt (call (top tupleref) ,kw ,ii))
 		  ,(foldl (lambda (kvf else)
 			    (let* ((k    (car kvf))
-				   (rval `(call (top tupleref) ,kw
-						(call (top +) ,ii 1)))
+				   (rval0 `(call (top tupleref) ,kw
+						 (call (top +) ,ii 1)))
 				   (rval (if (decl? k)
 					     `(call (top typeassert)
-						    ,rval
+						    ,rval0
 						    ,(caddr k))
-					     rval)))
+					     rval0)))
 			      ;; if kw[ii] == 'k; k = kw[ii+1]::Type; end
 			      `(if (comparison ,elt === (quote ,(decl-var k)))
 				   (block
@@ -414,15 +415,16 @@
 					  `((= ,(caddr kvf) false))
 					  '()))
 				   ,else)))
-			  (if (null? varkw)
-			      ;; if no varkw, give error for unrecognized
+			  (if (null? restkw)
+			      ;; if no rest kw, give error for unrecognized
 			      `(call (top error) "unrecognized keyword " ,elt)
-			      ;; otherwise break as soon as we hit an unknown KW
-			      '(break))
+			      ;; otherwise add to rest keywords
+			      '(block
+				(ccall 'jl_cell_1d_push Void (tuple Any Any)
+				       ,rkw ,elt)
+				(ccall 'jl_cell_1d_push Void (tuple Any Any)
+				       ,rkw ,rval0)))
 			  (map list vars vals flags))))
-	    ,@(if (null? varkw) '()
-		  ;; vkw = kw[ii:length(kw)]
-		  '((= ,vkw (call (top getindex) ,kw (: ,ii (call (top length) ,kw))))))
 	    ;; set keywords that weren't present to their default values
 	    ,@(apply append
 		     (map (lambda (name dflt flag)
@@ -433,7 +435,7 @@
 	    ;; finally, call the core function
 	    (return (call ,mangled
 			  ,@keynames
-			  ,@(if (null? varkw) '() (list vkw))
+			  ,@(if (null? restkw) '() (list rkw))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
 				(list `(... ,(arg-name (car vararg)))))))))))))
