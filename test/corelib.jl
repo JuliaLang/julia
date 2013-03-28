@@ -419,3 +419,7 @@ end
 # Ensure denormal flags functions don't segfault
 @test any(ccall("jl_zero_denormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
 @test any(ccall("jl_zero_denormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
+
+# VersionNumber
+@test VersionNumber(2,3,1) == VersionNumber(int8(2),uint32(3),int32(1)) == v"2.3.1"
+@test v"2.3.0" < v"2.3.1" < v"2.4.8" < v"3.7.2"
