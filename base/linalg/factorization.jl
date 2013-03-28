@@ -47,7 +47,7 @@ end
 function inv(C::CholeskyDense)
     Ci, info = LAPACK.potri!(C.uplo, copy(C.UL))
     if info != 0; throw(LAPACK.SingularException(info)); end 
-    symmetrize!(Ci, C.uplo)
+    symmetrize_conj!(Ci, C.uplo)
 end
 
 ## Pivoted Cholesky

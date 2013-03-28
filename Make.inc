@@ -16,7 +16,7 @@ BUILD = $(JULIAHOME)/usr
 JL_PRIVATE_LIBDIR = lib/julia
 JL_LIBDIR = lib
 
-# If we're on debian, default to arch-dependent library dirs
+# This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH = $(shell gcc -print-multiarch)
 JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
