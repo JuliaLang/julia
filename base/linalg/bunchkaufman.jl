@@ -19,7 +19,7 @@ size(B::BunchKaufman) = size(B.LD)
 size(B::BunchKaufman,d::Integer) = size(B.LD,d)
 
 function inv(B::BunchKaufman)
-    symmetrize!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo)
+    symmetrize_conj!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo)
 end
 
 \{T<:BlasFloat}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) =
