@@ -26,6 +26,12 @@ xtyp(::Type{Float64}) = CHOLMOD_REAL
 xtyp(::Type{Complex64}) = CHOLMOD_COMPLEX
 xtyp(::Type{Complex128}) = CHOLMOD_COMPLEX
 
+## Scaling modes, selected by the scale input parameter:
+const CHOLMOD_SCALAR = int32(0)        # A = s*A
+const CHOLMOD_ROW    = int32(1)        # A = diag(s)*A
+const CHOLMOD_COL    = int32(2)        # A = A*diag(s)
+const CHOLMOD_SYM    = int32(3)        # A = diag(s)*A*diag(s)
+
 ## Types of systems to solve
 const CHOLMOD_A    = int32(0)          # solve Ax=b 
 const CHOLMOD_LDLt = int32(1)          # solve LDL'x=b 

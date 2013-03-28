@@ -825,33 +825,27 @@ chm_analyze(A::SparseMatrixCSC) = chm_analyze(CholmodSparse(A))
 chm_print(A::CholmodSparse, lev::Integer) = chm_print(A, lev, "")
 chm_print(A::CholmodFactor, lev::Integer) = chm_print(L, lev, "")
 
-function chm_scale!{T<:CHMVTypes}(A::CholmodSparse{T},S::CholmodDense{T},typ::Integer)
-    chm_scale!(A.c,S.c,typ)
+function chm_scale!{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T},typ::Integer)
+    chm_scale!(A,CholmodDense(b),typ)
+    A
 end
+chm_scale{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T},typ::Integer) = chm_scale!(copy(A),b,typ)
 
 chm_speye(m::Integer, n::Integer) = chm_speye(m, n, 1., 1) # default element type is Float32
 chm_speye(n::Integer) = chm_speye(n, n, 1.)             # default shape is square
 
 chm_spzeros(m::Integer,n::Integer,nzmax::Integer) = chm_spzeros(m,n,nzmax,1.)
 
-function diagmm{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T})
-    Acp = copy(A)
-    chm_scale!(Acp,CholmodDense(b),CHOLMOD_ROW)
-    Acp
-end
 function diagmm!{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T})
     chm_scale!(A,CholmodDense(b),CHOLMOD_ROW)
     A
 end
-function diagmm{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T})
-    Acp = copy(A)
-    chm_scale!(Acp,CholmodDense(b),CHOLMOD_COL)
-    Acp
-end
+diagmm{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T}) = diagmm!(b,copy(A))
 function diagmm!{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T})
     chm_scale!(A,CholmodDense(b),CHOLMOD_COL)
     A
 end
+diagmm{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T}) = diagmm!(copy(A), b)
 
 norm(A::CholmodSparse) = norm(A,1)
                           
