@@ -722,7 +722,8 @@ static void big_obj_stats(void);
 extern char *jl_typename_str(jl_value_t *v);
 
 #define print_type(v) jl_print_type(v, 1)
-static void jl_print_type(jl_value_t *v, int8_t surround){
+static void jl_print_type(jl_value_t *v, int8_t surround)
+{
     if(jl_is_tuple(v)){
         if (surround) {
             JL_PUTC('(', JL_STDERR);
