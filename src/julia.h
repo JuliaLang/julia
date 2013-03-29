@@ -173,6 +173,7 @@ typedef struct _jl_lambda_info_t {
     jl_sym_t *file;
     int32_t line;
     int8_t inferred;
+    struct _jl_function_t *kwsorter;  // keyword argument sorter function
 
     // hidden fields:
     // flag telling if inference is running on this function
@@ -716,6 +717,7 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f,
                           jl_tuple_t *tvars);
+void jl_set_keyword_sorter(jl_function_t *f, jl_function_t *sorter);
 jl_value_t *jl_box_bool(int8_t x);
 jl_value_t *jl_box_int8(int32_t x);
 jl_value_t *jl_box_uint8(uint32_t x);

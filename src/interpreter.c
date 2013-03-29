@@ -184,6 +184,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         tvars = eval(args[3], locals, nl);
         jl_method_def(fname, bp, b, (jl_tuple_t*)atypes,
                       (jl_function_t*)meth, (jl_tuple_t*)tvars);
+        if (nargs > 4) {
+            jl_set_keyword_sorter((jl_function_t*)meth,
+                                  (jl_function_t*)eval(args[4], locals, nl));
+        }
         JL_GC_POP();
         return *bp;
     }
