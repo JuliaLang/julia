@@ -142,7 +142,7 @@ static void __fastcall win_raise_exception(void* excpt)
     jl_throw(excpt);
 }
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
-{   
+{
     int sig;
     //windows signals use different numbers from unix
     switch(wsig) {
@@ -267,12 +267,14 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
 }
 DLLEXPORT void uv_atexit_hook()
 {
+    JL_PRINT_GC_STATS;
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {
             jl_apply((jl_function_t*)f, NULL, 0);
         }
     }
+
     uv_loop_t* loop = jl_global_event_loop();
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);

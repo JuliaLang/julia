@@ -844,17 +844,17 @@ void *alloc_4w(void)
 #ifdef GC_FINAL_STATS
 static double process_t0;
 #include <malloc.h>
-void print_gc_stats(void)
+void jl_print_gc_stats(JL_STREAM *s)
 {
     malloc_stats();
     double ptime = clock_now()-process_t0;
-    jl_printf(JL_STDERR, "exec time\t%.5f sec\n", ptime);
-    jl_printf(JL_STDOUT, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
+    jl_printf(s, "exec time\t%.5f sec\n", ptime);
+    jl_printf(s, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
                (total_gc_time/ptime)*100);
     struct mallinfo mi = mallinfo();
-    jl_printf(JL_STDOUT, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
-    jl_printf(JL_STDOUT, "total freed\t%llu b\n", total_freed_bytes);
-    jl_printf(JL_STDOUT, "free rate\t%.1f MB/sec\n",
+    jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
+    jl_printf(s, "total freed\t%llu b\n", total_freed_bytes);
+    jl_printf(s, "free rate\t%.1f MB/sec\n",
                (total_freed_bytes/total_gc_time)/1024/1024);
 }
 #endif
@@ -892,7 +892,6 @@ void jl_gc_init(void)
 #endif
 #ifdef GC_FINAL_STATS
     process_t0 = clock_now();
-    atexit(print_gc_stats);
 #endif
 }
 
