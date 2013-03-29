@@ -1,14 +1,15 @@
 General Information for Windows
 ===============================
 
-Please see the README at https://github.com/JuliaLang/julia/README.md for more complete information about Julia. This is intended to only include information specific to using Julia on Windows.
+Please see the README at https://github.com/JuliaLang/julia/blob/master/README.md for more complete information about Julia. This is intended to only include information specific to using Julia on Windows.
 
 Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and Windows 8). Both the 32-bit and 64-bit versions are supported. The 32-bit i686 binary will run on either 32-bit and 64-bit operating systems. The 64-bit x86_64 binary will only run on 64-bit Windows.
 
-Downloading additional, internal libraries (Tk, Cairo, etc) is not necessary do not need to be downloaded directly. Julia's package manager will acquire them as needed.
+Downloading additional libraries (Tk, Cairo, etc) is not necessary. Julia's package manager will acquire them as needed.
 
 Julia requires that the lib and lib/julia directories be part of your `%PATH%` variable to startup. The `julia.bat` script will attempt to do this for you and is the recommended way of running julia on your system. The julia.bat file can be given arguments (e.g. `julia.bat -p 2 script.jl` for running script.jl on two processors) which will be passed directly to julia.exe.
 
+___________________________________________________
 Binary Downloads
 ================
 
@@ -27,7 +28,7 @@ Optional external libraries
 
  - MinGW/MSYS (as described below)
 
-
+___________________________________________________
 Source Compiling
 ================
 
@@ -98,9 +99,9 @@ If you are building for 64-bit windows. The steps are pretty much the same. Just
 Important Build Errata
 ----------------------
 
-Arpack 3.1.2 has an error in the tar file (a symlink from ./depcomp to a nonexistant file) that prevents it from being extracted on windows (cross-build is fine). To resolve this, we need a tar file that doesn't contain this symlink file. I found the easiest way to solve this was to run `make -C deps get-arpack` and then edit the arpack-*.tar.gz in 7zip to delete the depcomp symlink file before running the primary make target.
+- Arpack 3.1.2 has an error in the tar file (a symlink from ./depcomp to a nonexistant file) that prevents it from being extracted on windows (cross-build is fine). To resolve this, we need a tar file that doesn't contain this symlink file. I found the easiest way to solve this was to run `make -C deps get-arpack` and then edit the arpack-*.tar.gz in 7zip to delete the depcomp symlink file before running the primary make target.
 
-LLVM 3.x has an error on when compiling for 64-bit Windows that causes the build to fail when building the shared library file. Therefore, before building, you will need to change `--enable-shared` to `--disable-shared` in the `LLVM_FLAGS` variable in `deps/Makefile`.
+- LLVM 3.x has an error on when compiling for 64-bit Windows that causes the build to fail when building the shared library file. Therefore, before building, you will need to change `--enable-shared` to `--disable-shared` in the `LLVM_FLAGS` variable in `deps/Makefile`.
 
-The cross-build does not have access to git. If you want your sysimg to contain version information from the commit, remove the `#` from the line in Makefile that begins with @#echo `git rev-parse --short HEAD ...` and ends with `... > COMMIT`
+- The cross-build does not have access to git. If you want your sysimg to contain version information from the commit, remove the `#` from the line in Makefile that begins with @#echo `git rev-parse --short HEAD ...` and ends with `... > COMMIT`
 
