@@ -332,7 +332,7 @@
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (pargl (cdr argl))   ;; positional args
 	 ;; 1-element list of vararg argument, or empty if none
-	 (vararg (let ((l (last pargl)))
+	 (vararg (let ((l (if (null? pargl) '() (last pargl))))
 		   (if (vararg? l)
 		       (list l) '())))
 	 ;; positional args without vararg
@@ -392,6 +392,7 @@
 			 `(= ,name ,dflt)
 			 `(= ,flag true)))
 		   keynames vals flags)
+	    ;; TODO: use exact known size instead of pushing
 	    (= ,rkw (cell1d))
 	    ;; for i = 1:(length(kw)>>1)
 	    (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
@@ -443,7 +444,7 @@
 				(list `(... ,(arg-name (car vararg)))))))))
 	,sortername))))))
 
-(define (optional-positional-defs name sparams req opt dfl body)
+(define (optional-positional-defs name sparams req vararg opt dfl body)
   `(block
     ,@(map (lambda (n)
 	     (let* ((passed (append req (list-head opt n)))
@@ -473,7 +474,7 @@
 			 `(call ,name ,@(map arg-name passed) ,@vals))))
 	       (method-def-expr- name sp passed body)))
 	   (iota (length opt)))
-    ,(method-def-expr- name sparams (append req opt) body)))
+    ,(method-def-expr- name sparams (append req opt vararg) body)))
 
 (define (method-def-expr name sparams argl body)
   (if (has-keywords? argl)
@@ -484,11 +485,11 @@
 	  ;; and a series of optional-positional-defs that delegate keywords
 
 	  ;; optional positional only
-	  (let ((req (filter (lambda (x) (not (and (pair? x) (eq? (car x) '...))))
-			     (cdr argl)))
-		(opt (map cadr (cdar argl)))
+	  (let ((opt (map cadr (cdar argl)))
 		(dfl (map caddr (cdar argl))))
-	    (optional-positional-defs name sparams req opt dfl body)))
+	    (receive
+	     (vararg req) (separate vararg? (cdr argl))
+	     (optional-positional-defs name sparams req vararg opt dfl body))))
       (if (has-parameters? argl)
 	  ;; keywords only
 	  (keywords-method-def-expr name sparams argl body)
