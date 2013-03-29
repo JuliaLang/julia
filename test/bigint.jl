@@ -118,3 +118,12 @@ function bigfib(n)
    end
 end
 @test length(string(bigfib(1000000))) == 208988
+
+#Test Catalan numbers
+@test catalan( 0) == 1
+@test catalan( 1) == 1
+@test catalan(16) == 35357670
+@test catalan(24) == 1289904147324
+@test catalan(61) == BigInt("6182127958584855650487080847216336")
+
+

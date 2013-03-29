@@ -277,6 +277,7 @@ export
     bool,
     binomial,
     bswap,
+    catalan,
     cbrt,
     ceil,
     cis,

@@ -1501,6 +1501,10 @@ Mathematical Functions
 
    Compute ``factorial(n)/factorial(k)``
 
+.. function:: catalan(n)
+
+   Computes the nth Catalan number.
+
 .. function:: factor(n)
 
    Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
