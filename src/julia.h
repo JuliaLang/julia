@@ -21,6 +21,14 @@
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
 #endif
+#define JL_STREAM uv_stream_t
+#define JL_STDOUT jl_uv_stdout
+#define JL_STDERR jl_uv_stderr
+#define JL_STDIN  jl_uv_stdin
+#define JL_PRINTF jl_printf
+#define JL_PUTC	  jl_putc
+#define JL_PUTS	  jl_puts
+#define JL_WRITE  jl_write
 
 #if __GNUC__
 #define NORETURN __attribute__ ((noreturn))
@@ -892,6 +900,7 @@ DLLEXPORT jl_value_t *jl_stdout_obj();
 DLLEXPORT jl_value_t *jl_stderr_obj();
 DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
+void jl_debug_print_type(JL_STREAM *s, jl_value_t *v);
 
 // modules
 extern DLLEXPORT jl_module_t *jl_main_module;
@@ -1169,15 +1178,6 @@ DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
-
-#define JL_STREAM uv_stream_t
-#define JL_STDOUT jl_uv_stdout
-#define JL_STDERR jl_uv_stderr
-#define JL_STDIN  jl_uv_stdin
-#define JL_PRINTF jl_printf
-#define JL_PUTC	  jl_putc
-#define JL_PUTS	  jl_puts
-#define JL_WRITE  jl_write
 
 //IO objects
 extern DLLEXPORT uv_stream_t *jl_uv_stdin; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams

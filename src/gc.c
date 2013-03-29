@@ -688,7 +688,7 @@ static void gc_mark(void)
     }
 
     gc_mark_all();
-    
+
     // find unmarked objects that need to be finalized.
     // this must happen last.
     for(i=0; i < finalizer_table.size; i+=2) {
@@ -721,12 +721,11 @@ static void big_obj_stats(void);
 #ifdef OBJPROFILE
 static void print_obj_profile(void)
 {
-    jl_value_t *errstream = jl_stderr_obj();
     for(int i=0; i < obj_counts.size; i+=2) {
         if (obj_counts.table[i+1] != HT_NOTFOUND) {
-            jl_printf(jl_stderr, "%d ", obj_counts.table[i+1]-1);
-            jl_show(errstream, obj_counts.table[i]);
-            jl_printf(jl_stderr, "\n");
+            jl_printf(JL_STDERR, "%d ", obj_counts.table[i+1]-1);
+            jl_debug_print_type(JL_STDERR, (jl_value_t*)obj_counts.table[i]);
+            jl_printf(JL_STDERR, "\n");
         }
     }
 }
@@ -869,7 +868,7 @@ void jl_gc_init(void)
 
                          288, 320, 352, 384, 416, 448, 480, 512,
 
-                         640, 768, 896, 1024, 
+                         640, 768, 896, 1024,
 
                          1536, 2048 };
     int i;

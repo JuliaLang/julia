@@ -363,57 +363,50 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
     return jl_method_list_insert(pml, type, method, jl_null, 0)->func;
 }
 
-#if defined(JL_TRACE) || defined(TRACE_INFERENCE)
-static char *type_summary(jl_value_t *t)
+static void print_tuple_elts(JL_STREAM *s, jl_tuple_t *v)
 {
-    if (jl_is_tuple(t)) return "Tuple";
-    if (jl_is_uniontype(t)) return "UnionType";
-    if (jl_is_datatype(t))
-        return ((jl_datatype_t*)t)->name->name->name;
-    if (jl_is_typevar(t))
-        return ((jl_tvar_t*)t)->name->name;
-    JL_PRINTF(JL_STDERR, "unexpected argument type: ");
-    jl_show(jl_stderr_obj(), t);
-    JL_PRINTF(JL_STDERR, "\n");
-    assert(0);
-    return NULL;
-}
-#endif
-
-#ifdef TRACE_INFERENCE
-static void print_sig(jl_tuple_t *type)
-{
-    size_t i;
-    for(i=0; i < jl_tuple_len(type); i++) {
-        if (i > 0) JL_PRINTF(JL_STDERR, ", ");
-        jl_value_t *v = jl_tupleref(type,i);
-        if (jl_is_typector(v))
-            v = ((jl_typector_t*)v)->body;
-        if (jl_is_tuple(v)) {
-            JL_PUTC('(', JL_STDERR);
-            print_sig((jl_tuple_t*)v);
-            JL_PUTC(')', JL_STDERR);
-        }
-        else if (jl_is_symbol(v)) {
-            JL_PRINTF(JL_STDERR, "%s", ((jl_sym_t*)v)->name);
-        }
-        else if (jl_is_long(v)) {
-            JL_PRINTF(JL_STDERR, "%lld", jl_unbox_long(v));
-        }
-        else {
-            JL_PRINTF(JL_STDERR, "%s", type_summary(v));
-            if (jl_is_datatype(v)) {
-                jl_datatype_t *dt = (jl_datatype_t*)v;
-                if (jl_tuple_len(dt->parameters) > 0) {
-                    JL_PUTC('{', JL_STDERR);
-                    print_sig(dt->parameters);
-                    JL_PUTC('}', JL_STDERR);
-                }
-            }
-        }
+    for(size_t i=0; i < jl_tuple_len(v); i++) {
+        if (i > 0) JL_PRINTF(s, ", ");
+        jl_debug_print_type(s, jl_tupleref(v,i));
     }
 }
-#endif
+
+void jl_debug_print_type(JL_STREAM *s, jl_value_t *v)
+{
+    if (jl_is_tuple(v)) {
+        JL_PUTC('(', s);
+        print_tuple_elts(s, (jl_tuple_t*)v);
+        JL_PUTC(')', s);
+    }
+    else if (jl_is_symbol(v)) {
+        JL_PRINTF(s, "%s", ((jl_sym_t*)v)->name);
+    }
+    else if (jl_is_long(v)) {
+        JL_PRINTF(s, "%lld", jl_unbox_long(v));
+    }
+    else if (jl_is_datatype(v)) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        JL_PRINTF(s, "%s", dt->name->name->name);
+        if (jl_tuple_len(dt->parameters) > 0) {
+            JL_PUTC('{', s);
+            print_tuple_elts(s, dt->parameters);
+            JL_PUTC('}', s);
+        }
+    }
+    else if (jl_is_typector(v)) {
+        jl_debug_print_type(s, ((jl_typector_t*)v)->body);
+    }
+    else if (jl_is_uniontype(v)) {
+        JL_PRINTF(s, "Union");
+        jl_debug_print_type(s, (jl_value_t*)((jl_uniontype_t*)v)->types);
+    }
+    else if (jl_is_typevar(v)) {
+        JL_PRINTF(s, ((jl_tvar_t*)v)->name->name);
+    }
+    else {
+        JL_PRINTF(s, "<Unknown Type>");
+    }
+}
 
 extern jl_function_t *jl_typeinf_func;
 
@@ -440,9 +433,9 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
         fargs[2] = (jl_value_t*)jl_null;
         fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
-        JL_PRINTF(JL_STDERR,"inference on %s(", li->name->name);
-        print_sig(argtypes);
-        JL_PRINTF(JL_STDERR, ")\n");
+        JL_PRINTF(JL_STDERR,"inference on %s", li->name->name);
+        jl_debug_print_type(JL_STDERR, (jl_value_t*)argtypes);
+        JL_PRINTF(JL_STDERR, "\n");
 #endif
 #ifdef ENABLE_INFERENCE
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
@@ -1334,7 +1327,7 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
     JL_PRINTF(JL_STDOUT, "%s(",  jl_gf_name(F)->name);
     for(size_t i=0; i < nargs; i++) {
         if (i > 0) JL_PRINTF(JL_STDOUT, ", ");
-        JL_PRINTF(JL_STDOUT, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
+        jl_debug_print_type(JL_STDOUT, jl_typeof(args[i]));
     }
     JL_PRINTF(JL_STDOUT, ")\n");
 }
