@@ -933,7 +933,7 @@ enum JL_RTLD_CONSTANT {
      JL_RTLD_LOCAL=0U, JL_RTLD_GLOBAL=1U, /* LOCAL=0 since it is the default */
      JL_RTLD_LAZY=2U, JL_RTLD_NOW=4U,
      /* Linux/glibc and MacOS X: */
-     JL_RTLD_NODELETE=8U, JL_RTLD_NOLOAD=16U, 
+     JL_RTLD_NODELETE=8U, JL_RTLD_NOLOAD=16U,
      /* Linux/glibc: */ JL_RTLD_DEEPBIND=32U,
      /* MacOS X 10.5+: */ JL_RTLD_FIRST=64U
 };
@@ -1058,6 +1058,13 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
 
+#ifdef GC_FINAL_STATS
+void jl_print_gc_stats(JL_STREAM *s);
+#define JL_PRINT_GC_STATS jl_print_gc_stats(JL_STDERR)
+#else
+#define JL_PRINT_GC_STATS
+#endif
+
 void jl_gc_init(void);
 void jl_gc_setmark(jl_value_t *v);
 DLLEXPORT void jl_gc_enable(void);
@@ -1086,6 +1093,7 @@ void *alloc_4w(void);
 #define jl_gc_preserve(v) ((void)(v))
 #define jl_gc_unpreserve()
 #define jl_gc_n_preserved_values() (0)
+#define JL_PRINT_GC_STATS
 
 static inline void *alloc_2w() { return allocobj(2*sizeof(void*)); }
 static inline void *alloc_3w() { return allocobj(3*sizeof(void*)); }
