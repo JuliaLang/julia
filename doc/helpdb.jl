@@ -105,9 +105,11 @@
 
 "),
 
-("Getting Around","Base","methodswith","methodswith(t)
+("Getting Around","Base","methodswith","methodswith(typ[, showparents])
 
-   Show all methods with an argument of type \"typ\".
+   Show all methods with an argument of type \"typ\". If optional
+   \"showparents\" is \"true\", also show arguments with a parent type
+   of \"typ\", excluding type \"Any\".
 
 "),
 
@@ -3525,6 +3527,18 @@
 
 "),
 
+("Arrays","Base","mapslices","mapslices(f, A, dims)
+
+   Transform the given dimensions of array \"A\" using function \"f\".
+   \"f\" is called on each slice of \"A\" of the form
+   \"A[...,:,...,:,...]\". \"dims\" is an integer vector specifying
+   where the colons go in this expression. The results are
+   concatenated along the remaining dimensions. For example, if
+   \"dims\" is \"[1,2]\" and A is 4-dimensional, \"f\" is called on
+   \"A[:,:,i,j]\" for all \"i\" and \"j\".
+
+"),
+
 ("Arrays","Base","sum_kbn","sum_kbn(A)
 
    Returns the sum of all array elements, using the Kahan-Babuska-
@@ -3688,14 +3702,32 @@
 
 ("Statistics","Base","hist","hist(v[, n])
 
-   Compute the histogram of \"v\", optionally using \"n\" bins.
+   Compute the histogram of \"v\", optionally using appoximately \"n\"
+   bins.
 
 "),
 
 ("Statistics","Base","hist","hist(v, e)
 
-   Compute the histogram of \"v\" using a vector \"e\" as the edges
-   for the bins.
+   Compute the histogram of \"v\" using a vector/range \"e\" as the
+   edges for the bins. The result will be a vector of length
+   \"length(e) - 1\", with the \"i``th element being ``sum(e[i] .< v
+   .<= e[i+1])\".
+
+"),
+
+("Statistics","Base","histrange","histrange(v, n)
+
+   Compute *nice* bin ranges for the edges of a histogram of \"v\",
+   using approximately \"n\" bins. The resulting step sizes will be 1,
+   2 or 5 multiplied by a power of 10.
+
+"),
+
+("Statistics","Base","midpoints","midpoints(e)
+
+   Compute the midpoints of the bins with edges \"e\". The result is a
+   vector/range of length \"length(e) - 1\".
 
 "),
 
