@@ -306,7 +306,7 @@
 	(else
 	 (error "malformed type parameter list"))))
 
-(define (method-def-expr- name sparams argl body)
+(define (method-def-expr- name sparams argl body . kwsorter)
   (if (has-dups (llist-vars argl))
       (error "function argument names not unique"))
   (if (not (symbol? name))
@@ -314,12 +314,12 @@
   (let* ((types (llist-types argl))
 	 (body  (method-lambda-expr argl body)))
     (if (null? sparams)
-	`(method ,name (tuple ,@types) ,body (tuple))
+	`(method ,name (tuple ,@types) ,body (tuple) ,@kwsorter)
 	(receive
 	 (names bounds) (sparam-name-bounds sparams '() '())
 	 (let ((f (gensy)))
 	   `(call (lambda (,@names ,f)
-		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
+		    (method ,name (tuple ,@types) ,f (tuple ,@names) ,@kwsorter))
 		  ,@(symbols->typevars names bounds #t)
 		  ,body))))))
 
@@ -355,9 +355,18 @@
 	 ;; body statements, minus line number node
 	 (stmts (if (null? lno) (cdr body) (cddr body))))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
-	  (mangled (symbol (string name (gensy))))
+	  (sortername (gensy))
+	  (mangled (symbol (string name "#" (gensym))))
 	  (flags (map (lambda (x) (gensy)) vals)))
       `(block
+	;; call with keyword args pre-sorted - original method code goes here
+	,(method-def-expr-
+	  mangled sparams
+	  `(,@vars ,@restkw ,@pargl ,@vararg)
+	  `(block
+	    ,@lno
+	    ,@stmts))
+
 	;; call with no keyword args
 	,(method-def-expr-
 	  name sparams (append pargl vararg)
@@ -368,17 +377,11 @@
 			  ,@(if (null? restkw) '() '((call (top tuple))))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg)))))))))
-	;; call with keyword args pre-sorted - original method code goes here
+				(list `(... ,(arg-name (car vararg))))))))
+	  `(let
+	;; call with unsorted keyword args. this sorts and re-dispatches.
 	,(method-def-expr-
-	  mangled sparams
-	  `(,@vars ,@restkw ,@pargl ,@vararg)
-	  `(block
-	    ,@lno
-	    ,@stmts))
-	;; call with unsorted keyword args. this just sorts and re-dispatches.
-	,(method-def-expr-
-	  name sparams
+	  sortername sparams
 	  `((:: ,kw (top Tuple)) ,@pargl ,@vararg)
 	  `(block
 	    ,@lno
@@ -390,10 +393,8 @@
 			 `(= ,flag true)))
 		   keynames vals flags)
 	    (= ,rkw (cell1d))
-	    (local ,i)
-	    (local ,ii)
 	    ;; for i = 1:(length(kw)>>1)
-	    (for (= ,i (: 1 (call (top >>) (call (top length) kw) 1)))
+	    (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
 		 (block
 		  ;; ii = i*2 - 1
 		  (= ,ii (call (top -) (call (top *) ,i 2) 1))
@@ -438,7 +439,8 @@
 			  ,@(if (null? restkw) '() (list rkw))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg)))))))))))))
+				(list `(... ,(arg-name (car vararg)))))))))
+	,sortername))))))
 
 (define (optional-positional-defs name sparams req opt dfl body)
   `(block
@@ -476,7 +478,7 @@
   (if (has-keywords? argl)
       ;; here (keywords ...) is optional positional args
       (if (has-parameters? (cdr argl))
-	  ();; both!
+	  (error "not yet supported");; both!
 	  ;; separate into keyword version with all positional args,
 	  ;; and a series of optional-positional-defs that delegate keywords
 
@@ -2258,7 +2260,10 @@ So far only the second case can actually occur.
 	 `(method ,(cadr e)
 		  ,(analyze-vars (caddr  e) env captvars)
 		  ,(analyze-vars (cadddr e) env captvars)
-		  ,(cadddr (cdr e))))
+		  ,(cadddr (cdr e))
+		  ,@(if (length> e 5)
+			`(,(analyze-vars (cadddr (cddr e)) env captvars))
+			'())))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env captvars))
 			 (cdr e))))))

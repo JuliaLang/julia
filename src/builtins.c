@@ -286,6 +286,43 @@ JL_CALLABLE(jl_f_apply)
     return result;
 }
 
+JL_CALLABLE(jl_f_kwcall)
+{
+    if (nargs < 2)
+        jl_error("internal error: malformed keyword argument call");
+    JL_TYPECHK(apply, function, args[0]);
+    jl_function_t *f = (jl_function_t*)args[0];
+    if (!jl_is_gf(f))
+        jl_error("function does not accept keyword arguments");
+    jl_function_t *lkup = jl_method_lookup(jl_gf_mtable(f),
+                                           &args[2], nargs-2, 1);
+    if (lkup == jl_bottom_func) {
+        return jl_apply(f, &args[2], nargs-2);
+    }
+    jl_lambda_info_t *li = lkup->linfo;
+    jl_function_t *sorter = NULL;
+    if (li != NULL) {
+        li = li->def;
+        sorter = li->kwsorter;
+    }
+    if (sorter == NULL)
+        jl_errorf("function %s does not accept keyword arguments",
+                  jl_gf_name(f)->name);
+    return jl_apply(sorter, &args[1], nargs-1);
+}
+
+void jl_set_keyword_sorter(jl_function_t *f, jl_function_t *sorter)
+{
+    f->linfo->kwsorter = sorter;
+    jl_sym_t *name = f->linfo->name;
+    if (jl_is_gf(sorter)) {
+        // set up metadata to give sorter same name as the real function
+        jl_methtable_t *mt = jl_gf_mtable(sorter);
+        mt->name = name;
+        mt->defs->func->linfo->name = name;
+    }
+}
+
 // eval -----------------------------------------------------------------------
 
 extern int jl_lineno;
@@ -941,6 +978,7 @@ void jl_init_primitives(void)
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("apply", jl_f_apply);
+    add_builtin_func("kwcall", jl_f_kwcall);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("Union", jl_f_union);
