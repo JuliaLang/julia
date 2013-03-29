@@ -374,7 +374,7 @@
 	    ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
 	    (return (call ,mangled
 			  ,@vals
-			  ,@(if (null? restkw) '() '((call (top tuple))))
+			  ,@(if (null? restkw) '() '((cell1d)))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
 				(list `(... ,(arg-name (car vararg))))))))
@@ -420,11 +420,12 @@
 			      ;; if no rest kw, give error for unrecognized
 			      `(call (top error) "unrecognized keyword " ,elt)
 			      ;; otherwise add to rest keywords
-			      '(block
+			      `(block
 				(ccall 'jl_cell_1d_push Void (tuple Any Any)
 				       ,rkw ,elt)
 				(ccall 'jl_cell_1d_push Void (tuple Any Any)
-				       ,rkw ,rval0)))
+				       ,rkw (call (top tupleref) ,kw
+						  (call (top +) ,ii 1)))))
 			  (map list vars vals flags))))
 	    ;; set keywords that weren't present to their default values
 	    ,@(apply append
