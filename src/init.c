@@ -274,7 +274,6 @@ DLLEXPORT void uv_atexit_hook()
             jl_apply((jl_function_t*)f, NULL, 0);
         }
     }
-
     uv_loop_t* loop = jl_global_event_loop();
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
