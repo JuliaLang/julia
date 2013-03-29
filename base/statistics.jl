@@ -106,8 +106,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
 end
 
 ## midpoints of intervals
-midpoints(r::Range) = Range(r.start + 0.5*r.step,r.step,r.len-1)
-midpoints(r::Range1) = Range1(r.start + 0.5,r.len-1)
+midpoints(r::Ranges) = r[2:] - 0.5*step(r)
 midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 
