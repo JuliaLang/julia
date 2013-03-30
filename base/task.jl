@@ -27,6 +27,7 @@ function produce(v)
     ct.parent = ct.last  # always exit to last consumer
     nothing
 end
+produce(v...) = produce(v)
 
 function consume(P::Task)
     while !(P.runnable || P.done)
