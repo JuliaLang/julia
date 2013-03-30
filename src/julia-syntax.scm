@@ -306,20 +306,26 @@
 	(else
 	 (error "malformed type parameter list"))))
 
-(define (method-def-expr- name sparams argl body . kwsorter)
+(define (method-expr-name m)
+  (if (symbol? (cadr m)) (cadr m)
+      (cadr (cadr m))))
+
+(define (method-def-expr- name sparams argl body)
   (if (has-dups (llist-vars argl))
       (error "function argument names not unique"))
-  (if (not (symbol? name))
+  (if (not (or (symbol? name)
+	       (and (pair? name) (eq? (car name) 'kw)
+		    (symbol? (cadr name)))))
       (error (string "invalid method name " name)))
   (let* ((types (llist-types argl))
 	 (body  (method-lambda-expr argl body)))
     (if (null? sparams)
-	`(method ,name (tuple ,@types) ,body (tuple) ,@kwsorter)
+	`(method ,name (tuple ,@types) ,body (tuple))
 	(receive
 	 (names bounds) (sparam-name-bounds sparams '() '())
 	 (let ((f (gensy)))
 	   `(call (lambda (,@names ,f)
-		    (method ,name (tuple ,@types) ,f (tuple ,@names) ,@kwsorter))
+		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
 		  ,@(symbols->typevars names bounds #t)
 		  ,body))))))
 
@@ -355,7 +361,6 @@
 	 ;; body statements, minus line number node
 	 (stmts (if (null? lno) (cdr body) (cddr body))))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
-	  (sortername (gensy))
 	  (mangled (symbol (string name "#" (gensym))))
 	  (flags (map (lambda (x) (gensy)) vals)))
       `(block
@@ -377,11 +382,11 @@
 			  ,@(if (null? restkw) '() '((cell1d)))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg))))))))
-	  `(let
+				(list `(... ,(arg-name (car vararg)))))))))
+
 	;; call with unsorted keyword args. this sorts and re-dispatches.
 	,(method-def-expr-
-	  sortername sparams
+	  (list 'kw name) sparams
 	  `((:: ,kw (top Tuple)) ,@pargl ,@vararg)
 	  `(block
 	    ,@lno
@@ -392,8 +397,8 @@
 			 `(= ,name ,dflt)
 			 `(= ,flag true)))
 		   keynames vals flags)
-	    ;; TODO: use exact known size instead of pushing
-	    (= ,rkw (cell1d))
+	    ,@(if (null? restkw) '()
+		  `((= ,rkw (cell1d))))
 	    ;; for i = 1:(length(kw)>>1)
 	    (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
 		 (block
@@ -421,12 +426,10 @@
 			      ;; if no rest kw, give error for unrecognized
 			      `(call (top error) "unrecognized keyword " ,elt)
 			      ;; otherwise add to rest keywords
-			      `(block
-				(ccall 'jl_cell_1d_push Void (tuple Any Any)
-				       ,rkw ,elt)
-				(ccall 'jl_cell_1d_push Void (tuple Any Any)
-				       ,rkw (call (top tupleref) ,kw
-						  (call (top +) ,ii 1)))))
+			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
+				      ,rkw (tuple ,elt
+						  (call (top tupleref) ,kw
+							(call (top +) ,ii 1)))))
 			  (map list vars vals flags))))
 	    ;; set keywords that weren't present to their default values
 	    ,@(apply append
@@ -441,8 +444,7 @@
 			  ,@(if (null? restkw) '() (list rkw))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg)))))))))
-	,sortername))))))
+				(list `(... ,(arg-name (car vararg)))))))))))))
 
 (define (optional-positional-defs name sparams req vararg opt dfl body)
   `(block
@@ -1018,19 +1020,21 @@
 (define (lower-kw-call f kw pa)
   (let ((invalid (filter (lambda (x)
 			   (not (or (assignment? x)
-				    (and (pair? x) (eq? (car x) '...)))))
+				    (vararg? x))))
 			 kw)))
     (if (pair? invalid)
 	(error (string "invalid keyword argument " (car invalid))))
-    `(call (top kwcall) ,f
-	   (call (top tuple)
-		 ,@(apply append
-			  (map (lambda (a)
-				 (if (assignment? a)
-				     `((quote ,(cadr a)) ,(caddr a))
-				     `(,a)))
-			       kw)))
-	   ,@pa)))
+    (receive
+     (keys restkeys) (separate assignment? kw)
+     `(call (top kwcall) ,f ,(length keys)
+	    ,@(apply append
+		     (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
+			  keys))
+	    ,(if (null? restkeys)
+		 '(tuple)
+		 `(call (top append_any)
+			,@(map cadr restkeys)))
+	    ,@pa))))
 
 (define patterns
   (pattern-set
@@ -1904,7 +1908,7 @@
 
 	  (else
 	   (if (and dest (not tail) (eq? (car e) 'method))
-	       (let ((ex (to-lff (cadr e) dest tail))
+	       (let ((ex (to-lff (method-expr-name e) dest tail))
 		     (fu (to-lff e #f #f)))
 		 (cons (car ex)
 		       (append fu (cdr ex))))
@@ -1958,7 +1962,12 @@ So far only the second case can actually occur.
       '()
       (case (car e)
 	((lambda scope-block)  '())
-	((= method)
+	((method)
+	 (let ((v (decl-var (method-expr-name e))))
+	   (if (memq v env)
+	       '()
+	       (list v))))
+	((=)
 	 (let ((v (decl-var (cadr e))))
 	   (if (memq v env)
 	       '()
@@ -2253,7 +2262,7 @@ So far only the second case can actually occur.
 		     ,@vs)
 	      env captvars))))
 	((eq? (car e) 'method)
-	 (let ((vi (var-info-for (cadr e) env)))
+	 (let ((vi (var-info-for (method-expr-name e) env)))
 	   (if vi
 	       (begin
 		 (vinfo:set-asgn! vi #t)
@@ -2262,10 +2271,7 @@ So far only the second case can actually occur.
 	 `(method ,(cadr e)
 		  ,(analyze-vars (caddr  e) env captvars)
 		  ,(analyze-vars (cadddr e) env captvars)
-		  ,(cadddr (cdr e))
-		  ,@(if (length> e 5)
-			`(,(analyze-vars (cadddr (cddr e)) env captvars))
-			'())))
+		  ,(cadddr (cdr e))))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env captvars))
 			 (cdr e))))))

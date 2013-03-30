@@ -288,39 +288,35 @@ JL_CALLABLE(jl_f_apply)
 
 JL_CALLABLE(jl_f_kwcall)
 {
-    if (nargs < 2)
+    if (nargs < 3)
         jl_error("internal error: malformed keyword argument call");
     JL_TYPECHK(apply, function, args[0]);
     jl_function_t *f = (jl_function_t*)args[0];
     if (!jl_is_gf(f))
         jl_error("function does not accept keyword arguments");
-    jl_function_t *lkup = jl_method_lookup(jl_gf_mtable(f),
-                                           &args[2], nargs-2, 1);
-    if (lkup == jl_bottom_func) {
-        return jl_apply(f, &args[2], nargs-2);
-    }
-    jl_lambda_info_t *li = lkup->linfo;
-    jl_function_t *sorter = NULL;
-    if (li != NULL) {
-        li = li->def;
-        sorter = li->kwsorter;
-    }
+    jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
     if (sorter == NULL)
         jl_errorf("function %s does not accept keyword arguments",
                   jl_gf_name(f)->name);
-    return jl_apply(sorter, &args[1], nargs-1);
-}
 
-void jl_set_keyword_sorter(jl_function_t *f, jl_function_t *sorter)
-{
-    f->linfo->kwsorter = sorter;
-    jl_sym_t *name = f->linfo->name;
-    if (jl_is_gf(sorter)) {
-        // set up metadata to give sorter same name as the real function
-        jl_methtable_t *mt = jl_gf_mtable(sorter);
-        mt->name = name;
-        mt->defs->func->linfo->name = name;
+    size_t nkeys = jl_unbox_long(args[1]);
+    size_t nrest=0;
+    size_t pa = 3 + 2*nkeys;
+    jl_array_t *rkw = (jl_array_t*)args[2 + 2*nkeys];
+    if (jl_is_array(rkw)) {
+        nrest = jl_array_len(rkw);
     }
+
+    jl_tuple_t *kwtuple = jl_alloc_tuple_uninit((nkeys+nrest)*2);
+    if (nkeys > 0)
+        memcpy(&kwtuple->data[0], &args[2], nkeys*2*sizeof(void*));
+    for(size_t i=0; i < nrest; i++) {
+        jl_value_t *ri = jl_cellref(rkw, i);
+        jl_tupleset(kwtuple, (nkeys+i)*2  , jl_tupleref(ri,0));
+        jl_tupleset(kwtuple, (nkeys+i)*2+1, jl_tupleref(ri,1));
+    }
+    args[pa-1] = (jl_value_t*)kwtuple;
+    return jl_apply(sorter, &args[pa-1], nargs-(pa-1));
 }
 
 // eval -----------------------------------------------------------------------

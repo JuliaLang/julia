@@ -2539,12 +2539,13 @@ void jl_init_types(void)
 
     jl_methtable_type =
         jl_new_datatype(jl_symbol("MethodTable"), jl_any_type, jl_null,
-                        jl_tuple(6, jl_symbol("name"), jl_symbol("defs"),
+                        jl_tuple(7, jl_symbol("name"), jl_symbol("defs"),
                                  jl_symbol("cache"), jl_symbol("cache_arg1"),
                                  jl_symbol("cache_targ"),
-                                 jl_symbol("max_args")),
-                        jl_tuple(6, jl_sym_type, jl_any_type, jl_any_type,
-                                 jl_any_type, jl_any_type, jl_long_type),
+                                 jl_symbol("max_args"), jl_symbol("kwsorter")),
+                        jl_tuple(7, jl_sym_type, jl_any_type, jl_any_type,
+                                 jl_any_type, jl_any_type, jl_long_type,
+                                 jl_any_type),
                         0, 1);
     jl_methtable_type->fptr = jl_f_no_function;
 
@@ -2620,7 +2621,7 @@ void jl_init_types(void)
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaStaticData"),
                         jl_any_type, jl_null,
-                        jl_tuple(15, jl_symbol("ast"), jl_symbol("sparams"),
+                        jl_tuple(14, jl_symbol("ast"), jl_symbol("sparams"),
                                  jl_symbol("tfunc"), jl_symbol("name"),
                                  jl_symbol("roots"),
                                  /* jl_symbol("specTypes"),
@@ -2630,15 +2631,15 @@ void jl_init_types(void)
                                  jl_symbol("module"), jl_symbol("def"),
                                  jl_symbol("capt"),
                                  jl_symbol("file"), jl_symbol("line"),
-                                 jl_symbol("inferred"), jl_symbol("kwsorter")),
-                        jl_tuple(15, jl_any_type, jl_tuple_type,
+                                 jl_symbol("inferred")),
+                        jl_tuple(14, jl_any_type, jl_tuple_type,
                                  jl_any_type, jl_sym_type,
                                  jl_any_type, jl_tuple_type,
                                  jl_any_type, jl_array_any_type,
                                  jl_module_type, jl_any_type,
                                  jl_any_type,
                                  jl_sym_type, jl_int32_type,
-                                 jl_bool_type, jl_any_type),
+                                 jl_bool_type),
                         0, 1);
     jl_lambda_info_type->fptr = jl_f_no_function;
 

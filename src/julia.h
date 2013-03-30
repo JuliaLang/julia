@@ -173,7 +173,6 @@ typedef struct _jl_lambda_info_t {
     jl_sym_t *file;
     int32_t line;
     int8_t inferred;
-    struct _jl_function_t *kwsorter;  // keyword argument sorter function
 
     // hidden fields:
     // flag telling if inference is running on this function
@@ -314,6 +313,7 @@ typedef struct _jl_methtable_t {
     jl_array_t *cache_arg1;
     jl_array_t *cache_targ;
     ptrint_t max_args;  // max # of non-vararg arguments in a signature
+    jl_function_t *kwsorter;  // keyword argument sorter function
 #ifdef JL_GF_PROFILE
     int ncalls;
 #endif
@@ -505,7 +505,7 @@ void *allocobj(size_t sz);
 #define jl_tparam1(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 1)
 
 #ifdef OVERLAP_TUPLE_LEN
-#define jl_typeof(v) ((jl_value_t*)(uptrint_t)((jl_value_t*)(v))->type)
+#define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & 0x000ffffffffffffeULL))
 #else
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
 #endif
@@ -717,7 +717,6 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f,
                           jl_tuple_t *tvars);
-void jl_set_keyword_sorter(jl_function_t *f, jl_function_t *sorter);
 jl_value_t *jl_box_bool(int8_t x);
 jl_value_t *jl_box_int8(int32_t x);
 jl_value_t *jl_box_uint8(uint32_t x);
