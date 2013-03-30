@@ -1,3 +1,5 @@
+.. _available-packages:
+
 ********************
  Available Packages  
 ********************
