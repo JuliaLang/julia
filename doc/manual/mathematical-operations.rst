@@ -200,7 +200,7 @@ Note the evaluation behavior of chained comparisons::
 
     v(x) = (println(x); x)
 
-    julia> v(1) > v(2) <= v(3)
+    julia> v(1) < v(2) <= v(3)
     2
     1
     3
