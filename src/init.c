@@ -267,7 +267,7 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
 }
 DLLEXPORT void uv_atexit_hook()
 {
-#if defined(JL_GC_MARKSWEEP) || defined(GC_FINAL_STATS)
+#if defined(JL_GC_MARKSWEEP) && defined(GC_FINAL_STATS)
     jl_print_gc_stats(JL_STDERR);
 #endif
     if (jl_base_module) {
