@@ -1060,9 +1060,6 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
 #ifdef GC_FINAL_STATS
 void jl_print_gc_stats(JL_STREAM *s);
-#define JL_PRINT_GC_STATS jl_print_gc_stats(JL_STDERR)
-#else
-#define JL_PRINT_GC_STATS
 #endif
 
 void jl_gc_init(void);
@@ -1093,7 +1090,6 @@ void *alloc_4w(void);
 #define jl_gc_preserve(v) ((void)(v))
 #define jl_gc_unpreserve()
 #define jl_gc_n_preserved_values() (0)
-#define JL_PRINT_GC_STATS
 
 static inline void *alloc_2w() { return allocobj(2*sizeof(void*)); }
 static inline void *alloc_3w() { return allocobj(3*sizeof(void*)); }
