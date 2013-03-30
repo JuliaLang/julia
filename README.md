@@ -111,6 +111,10 @@ If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your .bashrc or equi
 
 You must use the gmake command on FreeBSD instead of make.
 
+#### Windows
+
+In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
+
 #### MKL
 
 To use the Intel [MKL] BLAS & LAPACK libraries, edit the following settings in `Make.inc`:
