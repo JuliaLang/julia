@@ -1522,6 +1522,41 @@ ______________________________________________
 
 ----
 
+`GSL <https://github.com/jiahao/GSL.jl>`_
+_________________________________________
+  .. image:: https://lh6.googleusercontent.com/-26SOOMMjonU/UONyzuToGtI/AAAAAAAABM4/kKjAZBVss_Q/s497/530448_10102150055573210_534780055_n.jpeg
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jiahao Chen
+     :target: https://github.com/jiahao
+
+  Current Version: ``0.0.0``
+
+  Julia interface to the `GNU Scientific Library <http://www.gnu.org/software/gsl>`_.
+
+  Maintainer: `Jiahao Chen <https://github.com/jiahao>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://lh6.googleusercontent.com/-26SOOMMjonU/UONyzuToGtI/AAAAAAAABM4/kKjAZBVss_Q/s497/530448_10102150055573210_534780055_n.jpeg
+        :height: 40px
+        :width: 40px
+        :alt: Jiahao Chen
+        :target: https://github.com/jiahao
+
+    .. image:: https://secure.gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Steven G. Johnson
+        :target: https://github.com/stevengj
+
+----
+
 `GZip <https://github.com/kmsquire/GZip.jl>`_
 _____________________________________________
 
@@ -3473,6 +3508,45 @@ ____________________________________________________
         :width: 40px
         :alt: Patrick O'Leary
         :target: https://github.com/pao
+
+----
+
+`RandomMatrices <https://github.com/jiahao/RandomMatrices.jl>`_
+_______________________________________________________________
+
+  .. image:: https://lh6.googleusercontent.com/-26SOOMMjonU/UONyzuToGtI/AAAAAAAABM4/kKjAZBVss_Q/s497/530448_10102150055573210_534780055_n.jpeg
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jiahao Chen
+     :target: https://github.com/jiahao
+
+  Current Version: ``0.0.0``
+
+  Statistical methods from random matrix theory
+
+  Maintainer: `Jiahao Chen <https://github.com/jiahao`_
+
+  Dependencies::
+
+      Catalan     Any Version
+      Distributions     Any Version
+      GSL     Any Version
+      ODE     Any Version
+
+  Contributors:
+
+    .. image:: https://lh6.googleusercontent.com/-26SOOMMjonU/UONyzuToGtI/AAAAAAAABM4/kKjAZBVss_Q/s497/530448_10102150055573210_534780055_n.jpeg
+        :height: 40px
+        :width: 40px
+        :alt: Jiahao Chen
+        :target: https://github.com/jiahao
+
+    .. image:: http://www-math.mit.edu/~edelman/Edelman/ae4.jpg
+        :height: 40px
+        :width: 40px
+        :alt: Alan Edelman
+        :target: https://github.com/alanedelman
 
 ----
 
