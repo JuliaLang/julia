@@ -264,7 +264,7 @@ static Value *emit_typeof(Value *p)
         tt = builder.
             CreateIntToPtr(builder.
                            CreateAnd(builder.CreatePtrToInt(tt, T_int64),
-                                     ConstantInt::get(T_int64,0x000fffffffffffff)),
+                                     ConstantInt::get(T_int64,0x000ffffffffffffe)),
                            jl_pvalue_llvmt);
 #endif
         return tt;

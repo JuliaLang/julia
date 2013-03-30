@@ -167,15 +167,25 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_sym_t *fname = (jl_sym_t*)args[0];
         jl_value_t **bp=NULL;
         jl_binding_t *b=NULL;
-        for (size_t i=0; i < nl; i++) {
-            if (locals[i*2] == (jl_value_t*)fname) {
-                bp = &locals[i*2+1];
-                break;
-            }
+        if (jl_is_expr(fname) && ((jl_expr_t*)fname)->head == jl_symbol("kw")) {
+            fname = (jl_sym_t*)jl_exprarg(fname, 0);
+            assert(jl_is_symbol(fname));
+            jl_function_t *gf = (jl_function_t*)eval((jl_value_t*)fname, locals, nl);
+            assert(jl_is_function(gf));
+            assert(jl_is_gf(gf));
+            bp = (jl_value_t**)&((jl_methtable_t*)gf->env)->kwsorter;
         }
-        if (bp == NULL) {
-            b = jl_get_binding_for_method_def(jl_current_module, fname);
-            bp = &b->value;
+        else {
+            for (size_t i=0; i < nl; i++) {
+                if (locals[i*2] == (jl_value_t*)fname) {
+                    bp = &locals[i*2+1];
+                    break;
+                }
+            }
+            if (bp == NULL) {
+                b = jl_get_binding_for_method_def(jl_current_module, fname);
+                bp = &b->value;
+            }
         }
         jl_value_t *atypes=NULL, *meth=NULL, *tvars=NULL;
         JL_GC_PUSH(&atypes, &meth, &tvars);
@@ -184,10 +194,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         tvars = eval(args[3], locals, nl);
         jl_method_def(fname, bp, b, (jl_tuple_t*)atypes,
                       (jl_function_t*)meth, (jl_tuple_t*)tvars);
-        if (nargs > 4) {
-            jl_set_keyword_sorter((jl_function_t*)meth,
-                                  (jl_function_t*)eval(args[4], locals, nl));
-        }
         JL_GC_POP();
         return *bp;
     }

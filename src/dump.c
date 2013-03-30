@@ -328,7 +328,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->name);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
-        jl_serialize_value(s, (jl_value_t*)li->kwsorter);
         write_int8(s, li->inferred);
         jl_serialize_value(s, (jl_value_t*)li->file);
         write_int32(s, li->line);
@@ -597,7 +596,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->name = (jl_sym_t*)jl_deserialize_value(s);
         li->specTypes = (jl_tuple_t*)jl_deserialize_value(s);
         li->specializations = (jl_array_t*)jl_deserialize_value(s);
-        li->kwsorter = (jl_function_t*)jl_deserialize_value(s);
         li->inferred = read_int8(s);
         li->file = (jl_sym_t*)jl_deserialize_value(s);
         li->line = read_int32(s);
