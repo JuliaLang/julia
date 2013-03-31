@@ -1659,6 +1659,115 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
     end
 end
 
+
+
+#Find the leading dimension
+ld = x->max(1,stride(x,2))
+function validate(uplo)
+    if !(uplo=='U' || uplo=='L')
+        error(string("Invalid UPLO: must be 'U' or 'L' but you said", uplo))
+    end
+end
+## (BD) Bidiagonal matrices - singular value decomposition
+for (bdsqr, relty, elty) in
+    ((:dbdsqr_,:Float64,:Float64),
+     (:sbdsqr_,:Float32,:Float32),
+     (:zbdsqr_,:Float64,:Complex128),
+     (:cbdsqr_,:Float32,:Complex64))
+    @eval begin
+        #*> DBDSQR computes the singular values and, optionally, the right and/or
+        #*> left singular vectors from the singular value decomposition (SVD) of
+        #*> a real N-by-N (upper or lower) bidiagonal matrix B using the implicit
+        #*> zero-shift QR algorithm.
+        function bdsqr!(uplo::BlasChar, d::Vector{$relty}, e_::Vector{$relty},
+            vt::StridedMatrix{$elty}, u::StridedMatrix{$elty}, c::StridedMatrix{$elty})
+            
+            validate(uplo)
+            n = length(d)
+            if length(e_) != n-1 throw(DimensionMismatch("bdsqr!")) end
+            ncvt, nru, ncc = size(vt)[2], size(u)[1], size(c)[2]
+            ldvt, ldu, ldc = ld(vt), ld(u), ld(c)
+            work=Array($elty, 4n)
+            info=Array(BlasInt,1)
+
+            ccall(($(string(bdsqr)),liblapack), Void,
+                (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}), 
+                &uplo, &n, ncvt, &nru, &ncc,
+                d, e_, vt, &ldvt, u,
+                &ldu, c, &ldc, work, info)
+
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            d, vt, u, c #singular values in descending order, P**T * VT, U * Q, Q**T * C
+        end
+   end
+end
+
+#Defined only for real types
+for (bdsdc, elty) in
+    ((:dbdsdc_,:Float64),
+     (:sbdsdc_,:Float32))
+    @eval begin
+        #*  DBDSDC computes the singular value decomposition (SVD) of a real
+        #*  N-by-N (upper or lower) bidiagonal matrix B:  B = U * S * VT,
+        #*  using a divide and conquer method
+        #*     .. Scalar Arguments ..
+        #      CHARACTER          COMPQ, UPLO
+        #      INTEGER            INFO, LDU, LDVT, N
+        #*     ..
+        #*     .. Array Arguments ..
+        #      INTEGER            IQ( * ), IWORK( * )
+        #      DOUBLE PRECISION   D( * ), E( * ), Q( * ), U( LDU, * ),
+        #     $                   VT( LDVT, * ), WORK( * )
+        function bdsdc!(uplo::BlasChar, compq::BlasChar, d::Vector{$elty}, e_::Vector{$elty})
+            validate(uplo)
+            n, ldiq, ldq, ldu, ldvt = length(d), 1, 1, 1, 1
+            if compq == 'N'
+                lwork = 4n
+            elseif compq == 'P'
+                warn("COMPQ='P' is not tested")
+                #TODO turn this into an actual LAPACK call
+                #smlsiz=ilaenv(9, $elty==:Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
+                smlsiz=100 #For now, completely overkill
+                ldq = n*(11+2*smlsiz+8*int(log((n/(smlsiz+1)))/log(2)))
+                ldiq = n*(3+3*int(log(n/(smlsiz+1))/log(2)))
+                lwork = 6n
+            elseif compq == 'I'
+                ldvt=ldu=max(1, n)
+                lwork=3*n^2 + 4n
+            else
+                error(string("Invalid COMPQ. Valid choices are 'N', 'P' or 'I' but you said '",compq,"'"))
+            end
+            u = Array($elty, (ldu,  n))
+            vt= Array($elty, (ldvt, n))
+            q = Array($elty, ldq)
+            iq= Array(BlasInt, ldiq)
+            work =Array($elty, lwork)
+            iwork=Array(BlasInt, 7n)
+            info =Array(BlasInt, 1)
+            ccall(($(string(bdsdc)),liblapack), Void,
+           (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+            &uplo, &compq, &n, d, e_,
+            u, &ldu, vt, &ldvt,
+            q, iq, work, iwork, info)
+
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            if compq == 'N'
+                d
+            elseif compq == 'P'
+                d, q, iq
+            else #compq == 'I'
+                u, d, vt'
+            end
+        end
+    end
+end
+
+
+
 # New symmetric eigen solver
 for (syevr, elty) in
     ((:dsyevr_,:Float64),

@@ -8,6 +8,7 @@ export
     BunchKaufman,
     SymTridiagonal,
     Tridiagonal,
+    Bidiagonal,
     Woodbury,
     Factorization,
     BunchKaufman,
@@ -166,6 +167,7 @@ include("linalg/triangular.jl")
 include("linalg/hermitian.jl")
 include("linalg/woodbury.jl")
 include("linalg/tridiag.jl")
+include("linalg/bidiag.jl")
 include("linalg/diagonal.jl")
 include("linalg/rectfullpacked.jl")
 
