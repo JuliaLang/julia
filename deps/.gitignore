@@ -10,6 +10,7 @@
 /git-*
 /gmp-*
 /grisu-*
+/libgrisu.so
 /lapack-*
 /libunwind-*
 /lighttpd-*
