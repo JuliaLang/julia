@@ -23,17 +23,9 @@ function SymTridiagonal{Td<:Number,Te<:Number}(dv::Vector{Td}, ev::Vector{Te})
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end
 
-SymTridiagonal(A::AbstractMatrix) = SymTridiagonal(diag(A), diag(A,1))
-
+SymTridiagonal(M::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A), diag(A,1)):error("Matrix is not symmetric, cannot convert to SymTridiagonal")
 full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
-function convert{T}(::Type{Matrix{T}}, S::SymTridiagonal{T})
-    M = diagm(S.dv)
-    for i in 1:length(S.ev)
-        j = i + 1
-        M[i,j] = M[j,i] = S.ev[i]
-    end
-    M
-end
+convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+diagm(M.ev,1)
 
 function show(io::IO, S::SymTridiagonal)
     println(io, summary(S), ":")
@@ -96,8 +88,8 @@ end
 
 function Tridiagonal{T<:Number}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
     N = length(d)
-    if length(dl) != N-1 || length(du) != N-1
-        error("The sub- and super-diagonals must have length N-1")
+    if (length(dl) != N-1 || length(du) != N-1)
+        error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
     end
     M = Tridiagonal{T}(N)
     M.dl = copy(dl)
@@ -160,7 +152,7 @@ ctranspose(M::Tridiagonal) = conj(transpose(M))
 ==(A::SymTridiagonal, B::SymTridiagonal) = B==A
 
 # Elementary operations that mix Tridiagonal and SymTridiagonal matrices
-Tridiagonal(A::SymTridiagonal) = Tridiagonal(A.dv, A.ev, A.dv)
+convert(::Type{Tridiagonal}, A::SymTridiagonal) = Tridiagonal(A.ev, A.dv, A.ev)
 +(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl+B.ev, A.d+B.dv, A.du+B.ev)
 +(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev+B.dl, A.dv+B.d, A.ev+B.du)
 -(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-B.ev, A.d-B.dv, A.du-B.ev)

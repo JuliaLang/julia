@@ -22,6 +22,7 @@ export
     Array,
     Associative,
     AsyncStream,
+    Bidiagonal,
     BitArray,
     BigFloat,
     BigInt,
