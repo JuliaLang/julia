@@ -627,11 +627,17 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
     else if (issymbol(type)) {
         // handle other integer prims. we know it's smaller than uint64
         // at this point, so int64 is big enough to capture everything.
-        int64_t i64 = conv_to_int64(data, sym_to_numtype(type));
-        if (weak || print_princ)
-            HPOS += ios_printf(f, "%lld", i64);
-        else
-            HPOS += ios_printf(f, "#%s(%lld)", symbol_name(type), i64);
+        numerictype_t nt = sym_to_numtype(type);
+        if (nt == N_NUMTYPES) {
+            HPOS += ios_printf(f, "#<%s>", symbol_name(type));
+        }
+        else {
+            int64_t i64 = conv_to_int64(data, nt);
+            if (weak || print_princ)
+                HPOS += ios_printf(f, "%lld", i64);
+            else
+                HPOS += ios_printf(f, "#%s(%lld)", symbol_name(type), i64);
+        }
     }
     else if (iscons(type)) {
         if (car_(type) == arraysym) {
