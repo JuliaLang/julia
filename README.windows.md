@@ -44,7 +44,7 @@ On Windows, you can get the mingw/msys environment from http://www.mingw.org/wik
 3. Set path by choosing ControlPanel > System and Security > System > Advanced System Settings > (Advanced) Environment Variables > Path and add to the end of line: C:\MinGW\bin;C:\MinGW\msys\1.0\bin;
 4. At command prompt, type - "mingw-get install wget" - to install wget
 5. Install 7-zip (http://www.7-zip.org/download.html), if you don't have it already
-5. Download Python-2.6.7_msys.7z from here and extract files (using 7-Zip) to respective locations in C:\MinGw\msys\1.0 path, i.e., bin, lib, libs, to get Python 2.6.7
+5. Download Python-2.6.7_msys.7z from [here](https://osspack32.googlecode.com/files/python-2.6.7_msys.7z) and extract files (using 7-Zip) to respective locations in C:\MinGw\msys\1.0 path, i.e., bin, lib, libs, to get Python 2.6.7
 6. Add the following line -  _CRTIMP int __cdecl _resetstkoflw (void); - to C:\MinGW\include\malloc.h at Line 76. This helped in tackling _resetstkoflw errors being showed in compiling codegen.cpp
 
 The recommended way to setup your environment follows:
