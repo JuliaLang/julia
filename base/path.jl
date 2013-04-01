@@ -57,8 +57,8 @@ joinpath(a::String, b::String, c::String...) = joinpath(joinpath(a,b), c...)
 
 function joinpath(a::String, b::String)
     isabspath(b) && return b
-    A,a = splitdrive(a)
-    B,b = splitdrive(b)
+    A, a = splitdrive(a)
+    B, b = splitdrive(b)
     !isempty(B) && A != B && error("drive mismatch: $A$a $B$b")
     C = isempty(B) ? A : B
     isempty(a)                             ? string(C,b) :
@@ -71,7 +71,7 @@ function normpath(path::String)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
     parts = split(path, path_separator_re)
-    parts = filter(x->!isempty(x) && x!=".", parts)
+    filter!(x->!isempty(x) && x!=".", parts)
     while true
         clean = true
         for j = 1:length(parts)-1
@@ -84,7 +84,7 @@ function normpath(path::String)
         clean && break
     end
     if isabs
-        while isabs && !isempty(parts) && parts[1] == ".."
+        while !isempty(parts) && parts[1] == ".."
             shift!(parts)
         end
     elseif isempty(parts)

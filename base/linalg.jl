@@ -24,8 +24,10 @@ export
     SVDDense,
     Hermitian,
     Triangular,
+    Diagonal,
 
 # Functions
+    check_openblas,
     chol,
     cholfact,
     cholfact!,
@@ -48,6 +50,7 @@ export
     eigfact!,
     eigs,
     eigvals,
+    eigvecs,
     expm,
     sqrtm,
     eye,
@@ -126,9 +129,19 @@ export
     At_rdiv_Bt
 
 
-
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
 typealias BlasChar Char
+
+function check_openblas()
+    if Base.libblas_name == "libopenblas"
+        openblas_config = bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () ))
+        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
+        if Base.USE_LIB64 != openblas64
+            println("OpenBLAS is incorrectly configured. Quitting.")
+            quit()
+        end
+    end
+end
 
 if USE_LIB64
     typealias BlasInt Int64
@@ -152,6 +165,7 @@ include("linalg/triangular.jl")
 include("linalg/hermitian.jl")
 include("linalg/woodbury.jl")
 include("linalg/tridiag.jl")
+include("linalg/diagonal.jl")
 include("linalg/rectfullpacked.jl")
 
 include("linalg/bitarray.jl")

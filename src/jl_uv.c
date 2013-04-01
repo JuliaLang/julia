@@ -43,7 +43,7 @@ extern "C" {
 	XX(connectcb) \
 	XX(connectioncb) \
 	XX(asynccb) \
-    XX(getaddrinfo) \
+    XX(getaddrinfo)\
     XX(pollcb)
 //TODO add UDP and other missing callbacks
 
@@ -176,7 +176,7 @@ void jl_asynccb(uv_handle_t *handle, int status)
 
 void jl_pollcb(uv_poll_t *handle, int status, int events)
 {
-    JULIA_CB(pollcb,handle->data,1,CB_INT32,status,CB_INT32,events)
+    JULIA_CB(pollcb,handle->data,2,CB_INT32,status,CB_INT32,events)
     (void)ret;
 }
 
@@ -233,21 +233,25 @@ DLLEXPORT uv_tcp_t *jl_make_tcp(uv_loop_t* loop, jl_value_t *julia_struct)
     return tcp;
 }
 
+
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 
 DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
+    loop->stop_flag = 0;
     if (loop) return uv_run(loop,UV_RUN_ONCE);
     else return 0;
 }
 
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
+    loop->stop_flag = 0;
     if (loop) uv_run(loop,UV_RUN_DEFAULT);
 }
 
 DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
+    loop->stop_flag = 0;
     if (loop) return uv_run(loop,UV_RUN_NOWAIT);
     else return 0;
 }
