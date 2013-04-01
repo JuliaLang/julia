@@ -73,6 +73,8 @@ export
     lu,
     lufact,
     lufact!,
+    maxeig,
+    mineig,
     norm,
     normfro,
     null,

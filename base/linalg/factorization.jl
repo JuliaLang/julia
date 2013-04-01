@@ -443,6 +443,16 @@ end
 
 eigvals(x::Number) = [one(x)]
 
+#Computes maximum and minimum eigenvalue
+function maxeig(A::Union(Number, StridedMatrix))
+    v = eigvals(A)
+    iscomplex(v) ? error("Complex eigenvalues cannot be ordered") : max(v)
+end
+function mineig(A::Union(Number, StridedMatrix))
+    v = eigvals(A)
+    iscomplex(v) ? error("Complex eigenvalues cannot be ordered") : min(v)
+end
+
 inv(A::EigenDense) = diagmm(A.vectors, 1.0/A.values)*A.vectors'
 det(A::EigenDense) = prod(A.values)
 
