@@ -383,6 +383,19 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq vals LinAlg.LAPACK.syev!('N','U',copy(Asym))
 end
 
+#Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
+function test_approx_eq_vecs(a, b)
+    n = size(a)[1]
+    @test n==size(b)[1]
+    elty = typeof(a[1])
+    @assert elty==typeof(b[1])
+    for i=1:n
+        ev1, ev2 = a[:,i], b[:,i]
+        deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
+        @test_approx_eq_eps deviation 0.0 n^2*eps(abs(convert(elty, 1.0)))
+    end
+end
+
 #LAPACK tests for symmetric tridiagonal matrices
 n=5
 Ainit = randn(n)
@@ -414,14 +427,45 @@ for elty in (Float32, Float64)
     (evecs, ifail, info)=LinAlg.LAPACK.stein!(A, B, w, iblock, isplit)
     @test info==0
     @test all(ifail .== 0)
-    for i=1:n
-        ev1 = v[:,i]
-        ev2 = evecs[:,i]
-        deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
-        @test_approx_eq_eps deviation 0.0 n*eps(abs(convert(elty, 1.0)))
-    end
-
+    test_approx_eq_vecs(v, evecs)
 end
+
+
+#Test bidiagonal matrices and their SVDs
+dv = randn(n)
+ev = randn(n-1)
+for elty in (Float32, Float64, Complex64, Complex128)
+    if (elty == Complex64)
+        dv += im*randn(n)
+        ev += im*randn(n-1)
+    end
+    for isupper in (true, false) #Test upper and lower bidiagonal matrices
+        T = Bidiagonal{elty}(dv, ev, isupper)
+        
+        @test size(T, 1) == n
+        @test size(T) == (n, n)
+        @test full(T) == diagm(dv) + diagm(ev, isupper?1:-1)
+        @test Bidiagonal(full(T), isupper) == T
+        z = zeros(elty, n)
+                                        # idempotent tests
+        @test conj(conj(T)) == T
+        @test transpose(transpose(T)) == T
+        @test ctranspose(ctranspose(T)) == T
+
+        if (elty <: Real)
+            #XXX If I run either of these tests separately, by themselves, things are OK.
+            # Enabling BOTH tests results in segfault.
+            # Where is the memory corruption???
+            #@test_approx_eq svdvals(full(T)) svdvals(T)
+            u1, d1, v1 = svd(full(T))
+            u2, d2, v2 = svd(T)
+            @test_approx_eq d1 d2
+            test_approx_eq_vecs(u1, u2)
+            test_approx_eq_vecs(v1, v2)
+        end
+    end
+end
+
 
 
 ## Issue related tests
