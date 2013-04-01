@@ -98,9 +98,9 @@ function At_mul_B{T<:BlasFloat}(A::StridedMatrix{T},
     end
 end
 
-At_mul_B{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'T', 'N', A, B)
+At_mul_B{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'T', 'N', A, B)
 At_mul_B{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul('T', 'N', A, B)
-At_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'T', 'N', A, B)
+At_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedVecOrMat{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'T', 'N', A, B)
 
 function A_mul_Bt{T<:BlasFloat}(A::StridedMatrix{T},
                                  B::StridedMatrix{T})
@@ -111,9 +111,9 @@ function A_mul_Bt{T<:BlasFloat}(A::StridedMatrix{T},
     end
 end
 
-A_mul_Bt{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'N', 'T', A, B)
+A_mul_Bt{T<:BlasFloat}(C::StridedVecOrMat{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'N', 'T', A, B)
 A_mul_Bt{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul('N', 'T', A, B)
-A_mul_Bt{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'N', 'T', A, B)
+A_mul_Bt{T,S,R}(C::StridedVecOrMat{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'N', 'T', A, B)
 
 At_mul_Bt{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper('T', 'T', A, B)
 At_mul_Bt{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'T', 'T', A, B)
@@ -266,7 +266,7 @@ function herk_wrapper{T<:BlasFloat}(tA, A::StridedMatrix{T})
 end
 
 function gemm_wrapper{T<:BlasFloat}(tA, tB,
-                             A::StridedMatrix{T},
+                             A::StridedVecOrMat{T},
                              B::StridedMatrix{T})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
@@ -274,8 +274,8 @@ function gemm_wrapper{T<:BlasFloat}(tA, tB,
     gemm_wrapper(C, tA, tB, A, B)
 end
 
-function gemm_wrapper{T<:BlasFloat}(C::StridedMatrix{T}, tA, tB,
-                             A::StridedMatrix{T},
+function gemm_wrapper{T<:BlasFloat}(C::StridedVecOrMat{T}, tA, tB,
+                             A::StridedVecOrMat{T},
                              B::StridedMatrix{T})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
@@ -376,9 +376,9 @@ end
 
 # NOTE: the generic version is also called as fallback for strides != 1 cases
 #       in libalg_blas.jl
-(*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul('N', 'N', A, B)
+(*){T,S}(A::StridedVecOrMat{T}, B::StridedMatrix{S}) = generic_matmatmul('N', 'N', A, B)
 
-function generic_matmatmul{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+function generic_matmatmul{T,S}(tA, tB, A::StridedVecOrMat{T}, B::StridedMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     C = Array(promote_type(T,S), mA, nB)
@@ -390,7 +390,7 @@ const Abuf = Array(Uint8, tilebufsize)
 const Bbuf = Array(Uint8, tilebufsize)
 const Cbuf = Array(Uint8, tilebufsize)
 
-function generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+function generic_matmatmul{T,S,R}(C::StridedVecOrMat{R}, tA, tB, A::StridedVecOrMat{T}, B::StridedMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if nA != mB; error("*: argument shapes do not match"); end

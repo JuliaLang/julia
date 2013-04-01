@@ -1579,13 +1579,14 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
                       (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
-                if info[1] != 0 throw(LAPACKException(info[1])) end
+                if info[1] < 0 throw(LAPACKException(info[1])) end
+                if info[1] > 0 throw(SingularException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            A, ipiv
+            A, ipiv, info
         end
         #       SUBROUTINE DSYTRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..

@@ -38,8 +38,8 @@ macro stat_call(sym,arg)
         fill!(stat_buf,0)
         r = ccall($(Expr(:quote,sym)), Int32, (Ptr{Uint8},Ptr{Uint8}), $arg, stat_buf)
         uv_errno = _uv_lasterror(eventloop())
-        ENOENT = 34
-        system_error(:stat, r!=0 && uv_errno!=ENOENT)
+        ENOENT, ENOTDIR = 34, 27
+        system_error(:stat, r!=0 && uv_errno!=ENOENT && uv_errno!=ENOTDIR)
         st = Stat(stat_buf)
         if ispath(st) != (r==0)
             error("WTF: stat returned zero type for a valid path!?")
@@ -48,9 +48,12 @@ macro stat_call(sym,arg)
     end
 end
 
-stat(path::String)  = @stat_call jl_stat  path
 stat(fd::Integer)   = @stat_call jl_fstat fd
+stat(path::String)  = @stat_call jl_stat  path
 lstat(path::String) = @stat_call jl_lstat path
+
+stat(path...) = stat(joinpath(path...))
+lstat(path...) = lstat(joinpath(path...))
 
 # mode type predicates
 
@@ -98,18 +101,18 @@ for f in {
     :gperm
     :operm
 }
-    @eval ($f)(st::Stat)     = ($f)(st.mode)
-    @eval ($f)(path::String) = ($f)(stat(path))
+    @eval ($f)(st::Stat) = ($f)(st.mode)
+    @eval ($f)(path...)  = ($f)(stat(path...))
 end
 
-islink(path::String) = islink(lstat(path))
+islink(path...) = islink(lstat(path...))
 
 # some convenience functions
 
-filemode(path::String) = stat(path).mode
-filesize(path::String) = stat(path).size
-   mtime(path::String) = stat(path).mtime
-   ctime(path::String) = stat(path).ctime
+filemode(path...) = stat(path...).mode
+filesize(path...) = stat(path...).size
+   mtime(path...) = stat(path...).mtime
+   ctime(path...) = stat(path...).ctime
 
 samefile(a::Stat, b::Stat) = a.device==b.device && a.inode==b.inode
 samefile(a::String, b::String) = samefile(stat(a),stat(b))
