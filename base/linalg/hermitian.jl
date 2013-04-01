@@ -14,9 +14,14 @@ Hermitian(A::StridedMatrix) = Hermitian(A, 'U')
 
 size(A::Hermitian, args...) = size(A.S, args...)
 print_matrix(io::IO, A::Hermitian) = print_matrix(io, full(A))
-full(A::Hermitian) = symmetrize!(copy(A.S), A.uplo)
+full(A::Hermitian) = A.S
 ishermitian(A::Hermitian) = true
 issym{T<:Union(Float64, Float32)}(A::Hermitian{T}) = true
+ctranspose(A::Hermitian) = A
+
+*(A::Hermitian, B::Hermitian) = *(full(A), full(B))
+*(A::Hermitian, B::StridedMatrix) = *(full(A), B)
+*(A::StridedMatrix, B::Hermitian) = *(A, full(B))
 
 function \(A::Hermitian, B::StridedVecOrMat)
     r, _, _, info = LAPACK.sysv!(A.uplo, copy(A.S), copy(B))

@@ -512,6 +512,41 @@ for (fname, elty) in
   end
 end
 
+# (TR) Triangular solve matrix
+# Vector
+
+# Matrix
+for (fname, elty) in
+    ((:dtrsm_,:Float64),
+     (:strsm_,:Float32),
+     (:ztrsm_,:Complex128),
+     (:ctrsm_,:Complex64))
+  @eval begin
+#       SUBROUTINE DTRSM(SIDE,UPLO,TRANSA,DIAG,M,N,ALPHA,A,LDA,B,LDB)
+# *     .. Scalar Arguments ..
+#       DOUBLE PRECISION ALPHA
+#       INTEGER LDA,LDB,M,N
+#       CHARACTER DIAG,SIDE,TRANSA,UPLO
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION A(LDA,*),B(LDB,*)
+    function trsm!(side::Char, uplo::Char, transa::Char, diag::Char, alpha::$elty, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+      m, n = size(B)
+      if size(A, 1) != size(A, 2) throw(DimensionMismatch("Matrix must square")) end
+      # if (side == 'L' && size(A, 1) != m) || (side == 'R' && side(A, 1) != n) throw(DimensionMismatch("Left and right hand side does not fit")) end
+      ccall(($(string(fname)), libblas), Void,
+        (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
+          Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+          Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+        &side, &uplo, &transa, &diag,
+        &m, &n, &alpha, A,
+        &max(1, stride(A, 2)), B, &max(1,stride(B, 2)))
+      return B
+    end
+  end
+end
+
+
 end # module
 
 # Use BLAS copy for small arrays where it is faster than memcpy, and for strided copying

@@ -450,8 +450,6 @@ end
 (\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(complex128(A), complex128(B))
 (\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
 
-(/)(A::StridedVecOrMat, B::StridedVecOrMat) = (B' \ A')'
-
 ## Moore-Penrose inverse
 function pinv{T<:BlasFloat}(A::StridedMatrix{T})
     SVD         = svdfact(A, true)
