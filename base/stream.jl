@@ -329,7 +329,7 @@ TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 function poll_fd(s, events::Int32, timeout_ms::Int32)
-    timeout_at = (time() * 1000) + timeout_ms
+    timeout_at = int64((time() * 1000)) + timeout_ms
     wt = WaitTask()
 
     fdw = FDWatcher(s)
@@ -340,7 +340,22 @@ function poll_fd(s, events::Int32, timeout_ms::Int32)
         start_timer(timer, int64(timeout_ms), int64(0))
     end
 
-    args = yield(wt)
+    cont = 1
+    local args
+    while(cont == 1)
+        args = yield(wt)
+        cont = 0
+        
+        now = int64(time() * 1000)
+#        println((timeout_at - now))
+        if ((args == (:timeout, 0)) && (timeout_at > now))
+            println("poll_fd : premature timeout...adding timer again...")
+            stop_timer(timer)
+            start_timer(timer, int64(timeout_at - now), int64(0))
+            
+            cont = 1
+        end
+    end
 
     if (timeout_ms > 0) stop_timer(timer) end
 
