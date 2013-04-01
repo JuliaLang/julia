@@ -175,6 +175,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal
 
+.. function:: Bidiagonal(dv, ev, isupper)
+
+   Constructs an upper (isupper=true) or lower (isupper=false) bidiagonal matrix
+   using the given diagonal (dv) and off-diagonal (ev) vectors
+
 .. function:: Woodbury(A, U, C, V)
 
    Construct a matrix in a form suitable for applying the Woodbury matrix identity

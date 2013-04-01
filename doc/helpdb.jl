@@ -5094,6 +5094,13 @@
 
 "),
 
+("Linear Algebra","","Bidiagonal","Bidiagonal(dv, ev, isupper)
+
+   Construct an upper (isupper=true) or lower (isupper=false) bidiagonal matrix
+   from the given diagonal (dv) and off-diagonal (ev) vectors.
+
+"),
+
 ("Linear Algebra","","Woodbury","Woodbury(A, U, C, V)
 
    Construct a matrix in a form suitable for applying the Woodbury
