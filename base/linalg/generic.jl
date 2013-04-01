@@ -100,6 +100,11 @@ inv(a::AbstractMatrix) = a \ one(a)
 inv(a::AbstractVector) = inv(reshape(a, length(a), 1))
 
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
+(/)(A::AbstractVector, B::AbstractVector) = (B' \ A')'
+(/)(A::AbstractVector, B::AbstractMatrix) = (B' \ A')'
+(/)(A::AbstractMatrix, B::AbstractVector) = (B' \ A')'
+(/)(A::AbstractMatrix, B::AbstractMatrix) = (B' \ A')'
+
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
