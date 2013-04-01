@@ -21,6 +21,14 @@
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
 #endif
+#define JL_STREAM uv_stream_t
+#define JL_STDOUT jl_uv_stdout
+#define JL_STDERR jl_uv_stderr
+#define JL_STDIN  jl_uv_stdin
+#define JL_PRINTF jl_printf
+#define JL_PUTC	  jl_putc
+#define JL_PUTS	  jl_puts
+#define JL_WRITE  jl_write
 
 #if __GNUC__
 #define NORETURN __attribute__ ((noreturn))
@@ -892,6 +900,7 @@ DLLEXPORT jl_value_t *jl_stdout_obj();
 DLLEXPORT jl_value_t *jl_stderr_obj();
 DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
+void jl_debug_print_type(JL_STREAM *s, jl_value_t *v);
 
 // modules
 extern DLLEXPORT jl_module_t *jl_main_module;
@@ -924,7 +933,7 @@ enum JL_RTLD_CONSTANT {
      JL_RTLD_LOCAL=0U, JL_RTLD_GLOBAL=1U, /* LOCAL=0 since it is the default */
      JL_RTLD_LAZY=2U, JL_RTLD_NOW=4U,
      /* Linux/glibc and MacOS X: */
-     JL_RTLD_NODELETE=8U, JL_RTLD_NOLOAD=16U, 
+     JL_RTLD_NODELETE=8U, JL_RTLD_NOLOAD=16U,
      /* Linux/glibc: */ JL_RTLD_DEEPBIND=32U,
      /* MacOS X 10.5+: */ JL_RTLD_FIRST=64U
 };
@@ -1049,6 +1058,10 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
 
+#ifdef GC_FINAL_STATS
+void jl_print_gc_stats(JL_STREAM *s);
+#endif
+
 void jl_gc_init(void);
 void jl_gc_setmark(jl_value_t *v);
 DLLEXPORT void jl_gc_enable(void);
@@ -1169,15 +1182,6 @@ DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
-
-#define JL_STREAM uv_stream_t
-#define JL_STDOUT jl_uv_stdout
-#define JL_STDERR jl_uv_stderr
-#define JL_STDIN  jl_uv_stdin
-#define JL_PRINTF jl_printf
-#define JL_PUTC	  jl_putc
-#define JL_PUTS	  jl_puts
-#define JL_WRITE  jl_write
 
 //IO objects
 extern DLLEXPORT uv_stream_t *jl_uv_stdin; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
