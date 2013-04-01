@@ -452,7 +452,9 @@ double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	mkdir -p double-conversion-$(GRISU_VER) && \
 	tar -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
 	touch -c $@
-double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
+
+ifeq ($(USE_SYSTEM_GRISU), 0)
+libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
 	cd double-conversion-$(GRISU_VER) && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
@@ -463,16 +465,21 @@ double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GR
 	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
-	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
-$(BUILD)/lib/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o ../libgrisu.$(SHLIB_EXT)
+else
+libgrisu.$(SHLIB_EXT):
+	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o libgrisu.$(SHLIB_EXT) -ldouble-conversion
+endif
+
+$(BUILD)/lib/libgrisu.$(SHLIB_EXT): libgrisu.$(SHLIB_EXT)
 	cp -f $< $@
-	$(INSTALL_NAME_CMD)libgrisu.dylib $@
+	$(INSTALL_NAME_CMD)libdouble-conversion.dylib $@
 
 clean-double-conversion:
 	-rm -f double-conversion-$(GRISU_VER)/src/*.o
-	-rm -f double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+	-rm -f libgrisu.$(SHLIB_EXT)
 distclean-double-conversion:
-	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
+	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) libgrisu.${SHLIB_EXT}
 
 get-double-conversion: double-conversion-$(GRISU_VER).tar.gz
 configure-double-conversion: get-double-conversion
