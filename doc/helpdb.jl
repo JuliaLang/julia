@@ -2994,8 +2994,9 @@ airyaiprime(x)
 
 (E"Random Numbers",E"Base",E"rand",E"rand(r[, dims...])
 
-   Generate a random integer from \"1\":\"n\" inclusive. Optionally,
-   generate a random integer array.
+   Generate a random integer from the inclusive interval specified by
+   \"Range1 r\" (for example, \"1:n\"). Optionally, generate a random
+   integer array.
 
 "),
 
