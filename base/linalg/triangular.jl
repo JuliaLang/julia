@@ -36,12 +36,12 @@ Ac_mul_B{T<:Union(Complex128, Complex64)}(A::Triangular{T}, b::Vector{T}) = BLAS
 At_mul_B{T<:Union(Float64, Float32)}(A::Triangular{T}, b::Vector{T}) = BLAS.trmv(A.uplo, 'T', A.unitdiag, A.UL, b)
 
 # Matrix multiplication
-*(A::Triangular, B::StridedMatrix) = BLAS.trmm('L', A.uplo, 'N', A.unitdiag, 1.0, A.UL, B)
-*(A::StridedMatrix, B::Triangular) = BLAS.trmm('R', B.uplo, 'N', B.unitdiag, 1.0, A, B.UL)
-Ac_mul_B{T<:Union(Complex128, Complex64)}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'C', A.unitdiag, 1.0, A.UL, B)
-Ac_mul_B{T<:Union(Float64, Float32)}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'T', A.unitdiag, 1.0, A.UL, B)
-A_mul_Bc{T<:Union(Complex128, Complex64)}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'C', B.unitdiag, 1.0, A, B.UL)
-A_mul_Bc{T<:Union(Float64, Float32)}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'T', B.unitdiag, 1.0, A, B.UL)
+*{T<:BlasFloat}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'N', A.unitdiag, one(T), A.UL, B)
+*{T<:BlasFloat}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'N', B.unitdiag, one(T), A, B.UL)
+Ac_mul_B{T<:Union(Complex128, Complex64)}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'C', A.unitdiag, one(T), A.UL, B)
+Ac_mul_B{T<:Union(Float64, Float32)}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'T', A.unitdiag, one(T), A.UL, B)
+A_mul_Bc{T<:Union(Complex128, Complex64)}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'C', B.unitdiag, one(T), B.UL, A)
+A_mul_Bc{T<:Union(Float64, Float32)}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'T', B.unitdiag, one(T), B.UL, A)
 
 function \(A::Triangular, B::StridedVecOrMat)
     r, info = LAPACK.trtrs!(A.uplo, 'N', A.unitdiag, A.UL, copy(B))
@@ -58,6 +58,9 @@ function Ac_ldiv_B{T<:Union(Complex128, Complex64)}(A::Triangular{T}, B::Strided
     if info > 0 throw(LAPACK.SingularException(info)) end
     return r
 end
+/{T<:BlasFloat}(A::StridedVecOrMat{T}, B::Triangular{T}) = BLAS.trsm!('R', B.uplo, 'N', B.unitdiag, one(T), B.UL, copy(A))
+A_rdiv_Bc{T<:Union(Float64, Float32)}(A::StridedVecOrMat{T}, B::Triangular{T}) = BLAS.trsm!('R', B.uplo, 'T', B.unitdiag, one(T), B.UL, copy(A))
+A_rdiv_Bc{T<:Union(Complex128, Complex64)}(A::StridedVecOrMat{T}, B::Triangular{T}) = BLAS.trsm!('R', B.uplo, 'C', B.unitdiag, one(T), B.UL, copy(A))
 
 det(A::Triangular) = prod(diag(A.UL))
 
