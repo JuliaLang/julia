@@ -16,7 +16,7 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 ### Contributing a Julia package
 
-Julia has a [package manager](https://github.com/JuliaLang/METADATA.jl). Most developers writing Julia libraries are encouraged to provide them as a Julia package.
+Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://docs.julialang.org/en/latest/packages/packagelist/) across many domains are already available for julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating julia packages](http://docs.julialang.org/en/latest/manual/packages/).
 
 ### Contributing to core functionality or base libraries
 
