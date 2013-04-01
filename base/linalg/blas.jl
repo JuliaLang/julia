@@ -318,9 +318,9 @@ for (gemm, gemv, elty) in
        # *     .. Array Arguments ..
        #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
        function gemm!(transA::BlasChar, transB::BlasChar,
-                      alpha::($elty), A::StridedMatrix{$elty},
+                      alpha::($elty), A::StridedVecOrMat{$elty},
                       B::StridedMatrix{$elty},
-                      beta::($elty), C::StridedMatrix{$elty})
+                      beta::($elty), C::StridedVecOrMat{$elty})
 #           if any([stride(A,1), stride(B,1), stride(C,1)] .!= 1)
 #               error("gemm!: BLAS module requires contiguous matrix columns")
 #           end  # should this be checked on every call?
