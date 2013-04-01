@@ -99,7 +99,15 @@ end
 -(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev)
 #XXX Returns dense matrix but really should be banded
 *(A::Bidiagonal, B::Bidiagonal) = full(A)*full(B)
+*(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.isupper)
+*(B::Number, A::Bidiagonal) = A*B
+/(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
+
+*(A::SymTridiagonal, B::Bidiagonal) = full(A)*full(B)
+*(A::Bidiagonal, B::SymTridiagonal) = full(A)*full(B)
+*(A::Tridiagonal, B::Bidiagonal) = full(A)*full(B)
+*(A::Bidiagonal, B::Tridiagonal) = full(A)*full(B)
 
 # solver uses tridiagonal gtsv! 
 function \{T<:BlasFloat}(M::Bidiagonal{T}, rhs::StridedVecOrMat{T})
