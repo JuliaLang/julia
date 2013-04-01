@@ -200,7 +200,7 @@ Note the evaluation behavior of chained comparisons::
 
     v(x) = (println(x); x)
 
-    julia> v(1) > v(2) <= v(3)
+    julia> v(1) < v(2) <= v(3)
     2
     1
     3
@@ -255,7 +255,6 @@ such definitions make sense.
 -  ``cbrt(x)`` — the cube root of ``x``.
 -  ``hypot(x,y)`` — accurate ``sqrt(x^2 + y^2)`` for all values of ``x``
    and ``y``.
--  ``pow(x,y)`` — ``x`` raised to the exponent ``y``.
 -  ``exp(x)`` — the natural exponential function at ``x``.
 -  ``expm1(x)`` — accurate ``exp(x)-1`` for ``x`` near zero.
 -  ``ldexp(x,n)`` — ``x*2^n`` computed efficiently for integer values of
@@ -295,19 +294,14 @@ coordinates. In order to compute trigonometric functions with degrees
 instead of radians, suffix the function with ``d``. For example, ``sind(x)``
 computes the sine of ``x`` where ``x`` is specified in degrees.
 
-For notational convenience, there are equivalent operator forms for the
-``rem`` and ``pow`` functions:
+For notational convenience, the ``rem`` functions has an operator form:
 
 -  ``x % y`` is equivalent to ``rem(x,y)``.
--  ``x ^ y`` is equivalent to ``pow(x,y)``.
 
-In the former case, the spelled-out ``rem`` operator is the "canonical"
-form, and the ``%`` operator form is retained for compatibility with
-other systems, whereas in the latter case, the ``^`` operator form is
-canonical and the spelled-out ``pow`` form is retained for
-compatibility. Like arithmetic and bitwise operators, ``%`` and ``^``
-also have updating forms. As with other operators, ``x %= y`` means
-``x = x % y`` and ``x ^= y`` means ``x = x^y``::
+The spelled-out ``rem`` operator is the "canonical" form, while the ``%`` operator
+form is retained for compatibility with other systems. Like arithmetic and bitwise
+operators, ``%`` and ``^`` also have updating forms. As with other updating forms,
+``x %= y`` means ``x = x % y`` and ``x ^= y`` means ``x = x^y``::
 
     julia> x = 2; x ^= 5; x
     32
