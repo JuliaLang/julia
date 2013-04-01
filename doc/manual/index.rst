@@ -29,6 +29,7 @@
    arrays
    parallel-computing
    running-external-programs
+   packages
    calling-c-and-fortran-code
    performance-tips
 
