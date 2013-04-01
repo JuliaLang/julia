@@ -14,10 +14,6 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 ## Submitting your contributions
 
-### Contributing a Julia package
-
-Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://docs.julialang.org/en/latest/packages/packagelist/) across many domains are already available for julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating julia packages](http://docs.julialang.org/en/latest/manual/packages/).
-
 ### Contributing to core functionality or base libraries
 
 The Julia team uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests.
@@ -27,6 +23,12 @@ You can make pull requests for incomplete features to get code review. The conve
 Before submitting, make sure that all tests pass by running `make testall`. Add your own tests for the new functionality in `test/`. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git). Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a `Good to merge` message.
 
 *By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
+
+### Contributing a Julia package
+
+Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://docs.julialang.org/en/latest/packages/packagelist/) across many domains are already available for julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating julia packages](http://docs.julialang.org/en/latest/manual/packages/). 
+
+For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
 ## Getting help
 
@@ -41,11 +43,10 @@ While getting familiar with Julia, remember to check out [the docs](http://docs.
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
   - **Documentation:** <http://julialang.org/manual/>
+
 * Design of Julia
   - [Julia: A Fast Dynamic Language for Technical Computing](http://julialang.org/images/julia-dynamic-2012-tr.pdf)
-* Working with Types
-  - [Some Type Patterns](https://github.com/JuliaLang/julia/wiki/Code-Patterns)
-  - [The Type Hierarchy](https://github.com/JuliaLang/julia/wiki/Types-Hierarchy)
+
 * Using GitHub
   - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)
   - [Using Julia on GitHub (notes for video)](https://gist.github.com/2712118#file_Julia_git_pull_request.md)
