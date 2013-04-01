@@ -12,12 +12,19 @@ Where to find Julia packages
 Installing a new Julia package
 ------------------------------
 
-Installing a new package is easy. Simply type the following into Julia,
-changing ``MY_PACKAGE_NAME`` to the actual package name.::
+The `Pkg` module in julia provides tools for installing and managing third party packages. It also manages the dependencies, while installing packages. Get the updated list of packages with::
+
+    Pkg.update()
+
+In order to install a package, use ``Pkg.add()``, where ``MY_PACKAGE_NAME`` is replaced with the actual package name::
 
    Pkg.add("MY_PACKAGE_NAME")
 
-This installs the package to ``$HOME/.julia/MY_PACKAGE_NAME`` .
+This installs the package to ``$HOME/.julia/MY_PACKAGE_NAME`` . In order to remove a package, do::
+
+   Pkg.rm("MY_PACKAGE_NAME")
+
+Internally, every Julia package is a ``git`` repository, and Julia uses ``git`` for its package management.
 
 Contributing a new Julia package
 --------------------------------
