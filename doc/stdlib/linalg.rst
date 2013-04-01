@@ -95,11 +95,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the eigenvalues of ``A``.
 
+.. function:: maxeig(A)
+
+   Returns the largest eigenvalue of ``A``.
+
+.. function:: minvals(A)
+
+   Returns the smallest eigenvalue of ``A``.
+
 .. function:: eigvecs(A, [eigvals])
 
    Returns the eigenvectors of ``A``.
 
-   If the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors. (Currently this optional syntax only works for SymTridiagonal matrices.)
+   For SymTridiagonal matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
 
 .. function:: eigfact(A)
 
