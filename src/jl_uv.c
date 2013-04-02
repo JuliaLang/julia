@@ -36,7 +36,8 @@ extern "C" {
 	XX(connectcb) \
 	XX(connectioncb) \
 	XX(asynccb) \
-    XX(getaddrinfo)
+    XX(getaddrinfo)\
+    XX(pollcb)
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
@@ -165,6 +166,7 @@ void jl_asynccb(uv_handle_t *handle, int status)
     (void)ret;
 }
 
+
 /** libuv constructors */
 DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_value_t *julia_struct)
 {
@@ -217,6 +219,41 @@ DLLEXPORT uv_tcp_t *jl_make_tcp(uv_loop_t* loop, jl_value_t *julia_struct)
     tcp->data=julia_struct;
     return tcp;
 }
+
+void jl_pollcb(uv_poll_t *h, int status, int events)
+{
+    JULIA_CB(pollcb,h->data,2,CB_INT32,status,CB_INT32,events);
+    (void)ret;
+}
+
+DLLEXPORT int jl_poll_start(uv_poll_t* h, int events)
+{
+    return uv_poll_start(h, events, (uv_poll_cb)&jl_pollcb);
+}
+
+DLLEXPORT int jl_poll_stop(uv_poll_t* h)
+{
+    return uv_poll_stop(h);
+}
+
+DLLEXPORT uv_poll_t *jl_poll_init_socket(uv_loop_t* loop, jl_value_t *julia_struct, uv_os_sock_t s)
+{
+    if (!loop)
+        return 0;
+    
+    uv_poll_t * h = malloc(sizeof(uv_poll_t));
+    
+    if (uv_poll_init_socket(loop, h, s)) {
+        free(h);
+        return 0;
+    }
+    
+    h->data = julia_struct;
+    return h;
+}
+
+
+
 
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 

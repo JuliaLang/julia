@@ -93,6 +93,7 @@ end
 flush(::TTY) = nothing
 
 function tasknotify(waittasks::Vector{WaitTask}, args...)
+#    println("@ tasknotify(waittasks::Vector{WaitTask}, args" * string(waittasks) * ", " * string(args))
     newwts = WaitTask[]
     ct = current_task()
     for wt in waittasks
@@ -256,6 +257,86 @@ type TimeoutAsyncWork <: AsyncWork
     end
 end
 TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
+
+
+# TODO: The build was hanging with the typealiases below...
+# On Windows a socket is a handle, and thus can be 64 bits long on 64-bit windows.
+#@unix_only typealias PollSocket Int32
+#@windows_only typealias PollSocket Ptr{Void}
+
+typealias PollSocket Int32
+
+type PollAsyncWork <: AsyncWork
+    cb::Function
+    handle::Ptr{Void}
+    function PollAsyncWork(loop::Ptr{Void},cb::Function,s::PollSocket)
+        this=new(cb)
+        this.handle=ccall(:jl_poll_init_socket,Ptr{Void},(Ptr{Void},Any,PollSocket),loop,this,s)
+        this
+    end
+end
+PollAsyncWork(cb::Function, s::Int32) = PollAsyncWork(eventloop(),cb,s)
+
+
+function poll_start(h_poll::PollAsyncWork,events::Int32)
+    ccall(:jl_poll_start,Int32,(Ptr{Void},Int32),h_poll.handle,events)
+end
+
+function poll_stop(h_poll::PollAsyncWork)
+    ccall(:jl_poll_stop,Int32,(Ptr{Void},),h_poll.handle)
+end
+
+function _uv_hook_pollcb(p_h::PollAsyncWork, status::Int32, events::Int32)
+    if isa(p_h.cb, Function)
+        p_h.cb(status, events)
+    end
+end
+
+# TODO : Handle timeout_ms below
+# poll_socket needs to wait both on uv_poll* and a TimeoutAsyncWork for timeout_ms
+# It needs to exit on whichever event occurs earlier and cancel the other one
+# function poll_socket(s::PollSocket, events::Int32, timeout_ms::Int32)
+#     p_h = PollAsyncWork((status, events) -> tasknotify([wt], status, events), s)
+#     wt = WaitTask(p_h, false)
+#     poll_start(p_h, events)
+#     args = yield(wt)
+#     poll_stop(p_h)
+#     if isa(args,InterruptException)
+#         error(args)
+#     end
+#     args
+# end
+
+
+
+
+function poll_socket(s::PollSocket, events::Int32, timeout_ms::Int32)
+    wt = WaitTask()
+
+    p_h = PollAsyncWork((status, events) -> tasknotify([wt], :poll, status, events), s)
+    poll_start(p_h, events)
+
+    if (timeout_ms > 0)
+        timer = TimeoutAsyncWork(status -> tasknotify([wt], :timeout, status))
+        start_timer(timer, int64(iround(timeout_ms/1000)), int64(timeout_ms % 1000))
+    end
+    
+    args = ()
+    while (args == ())
+        args = yield(wt)
+    end
+    
+    if (timeout_ms > 0) stop_timer(timer) end
+    
+    poll_stop(p_h)
+    if isa(args,InterruptException)
+        error(args)
+    end
+    args
+end
+
+
+
 
 function _uv_hook_close(uv::AsyncStream)
     uv.handle = 0
