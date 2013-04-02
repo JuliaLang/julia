@@ -475,6 +475,8 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-listen(sock::AsyncStream,backlog::Integer) = (err = ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog); err != -1 ? (sock.open = true): false)
-listen(sock::AsyncStream) = listen(sock,4)
-#listen(path::String)
+function listen(sock::AsyncStream, backlog::Integer)
+    err = ccall(:jl_listen, Int32, (Ptr{Void}, Int32), sock.handle, backlog)
+    err != -1 ? (sock.open = true): false
+end
+listen(sock::AsyncStream) = listen(sock, 511) # same default as node.js

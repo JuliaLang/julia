@@ -566,6 +566,8 @@ export
     eig,
     eigfact,
     eigfact!,
+    eigmax,
+    eigmin,
     eigs,
     eigvals,
     eigvecs,

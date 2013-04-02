@@ -37,6 +37,7 @@ eigvals(A::Hermitian, il::Int, ih::Int) = LAPACK.syevr!('N', 'I', A.uplo, copy(A
 eigvals(A::Hermitian, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, copy(A.S), vl, vh, 0, 0, -1.0)[1]
 eigvals(A::Hermitian) = eigvals(A, 1, size(A, 1))
 eigmax(A::Hermitian) = eigvals(A, size(A, 1), size(A, 1))[1]
+eigmin(A::Hermitian) = eigvals(A, 1, 1)[1]
 
 function expm(A::Hermitian)
     F = eigfact(A)
