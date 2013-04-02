@@ -46,6 +46,7 @@ end
         system_error(:setenv, ret == 0)
     end
 end
+    ENV
 end
 
 _setenv(var::String, val::String) = _setenv(var, val, true)
@@ -135,3 +136,220 @@ end
 
 tty_cols() = parse_int(Int32, get(ENV,"COLUMNS","80"), 10)
 tty_rows() = parse_int(Int32, get(ENV,"LINES","25"), 10)
+
+type ConfigHashItem
+    value::Any
+    hasvalue::Bool
+    default::Any
+    hasdefault::Bool
+    getter::Callback # (key,value) -> value
+    setter::Callback # (key,value,hadvalue,newvalue)
+    delete::Callback # (key,value)
+    ConfigHashItem(v::ANY, hasvalue::Bool, def::ANY, hasdefault::Bool,
+            getter::Callback, setter::Callback,
+            delete::Callback) =
+        new(v,hasvalue,def,hasdefault,getter,setter,delete)
+    ConfigHashItem(v::ANY) = new(v,true,nothing,false,false,false,false)
+end
+setindex!(chi::ConfigHashItem, v::ANY, k::String) =
+    setindex!(chi, v, k, :value)
+function setindex!(chi::ConfigHashItem, v::ANY, k::String, what::Symbol)
+    value = v
+    if isa(chi.setter, Function) && !(what == :default && chi.hasvalue)
+        if chi.hasvalue
+            value = chi.value
+            hasvalue = true
+        elseif chi.hasdefault
+            value = chi.default
+            hasvalue = true
+        else
+            value = nothing
+            hasvalue = false
+        end
+        chi.setter(k, value, hasvalue, v)
+    end
+    if what == :default
+        chi.default = v
+        chi.hasdefault = true
+    else
+        chi.value = v
+        chi.hasvalue = true
+    end
+    chi
+end
+delete!(chi::ConfigHashItem, k::String) = 
+    delete!(chi, k, :value)
+function delete!(chi::ConfigHashItem, k::String, what::Symbol)
+    if what == :default
+        if !chi.hasdefault
+            error("Key $k doesn't have a default")
+        end
+    elseif !chi.hasvalue
+        error("Key $k doesn't have a value")
+    end
+    v = getindex(chi, k)
+    if isa(chi.delete, Function)
+        if what == :default
+            if !chi.hasvalue
+                chi.delete(k, chi.default)
+            end
+        else
+            chi.delete(k, chi.value)
+        end
+    end
+    if what == :default
+        chi.hasdefault = false
+    else
+        chi.hasvalue = false
+        if isa(chi.setter, Function) && chi.hasdefault
+            chi.setter(k, chi.value, true, chi.default)
+        end
+    end
+    return v
+end
+function getindex(chi::ConfigHashItem, k::String)
+    if chi.hasvalue
+        value = chi.value
+    elseif chi.hasdefault
+        value = chi.default
+    else
+        error("Key $k doesn't have a value")
+    end
+    if isa(chi.getter, Function)
+        return chi.getter(k, value)
+    end
+    return value
+end
+
+type ConfigHash <: Associative{String,Any}
+    dict::Associative{String,ConfigHashItem}
+    ConfigHash() = new(Dict{String,ConfigHashItem}())
+end
+const CONFIG = ConfigHash()
+
+function getindex(ch::ConfigHash, k::String)
+    return ch.dict[k][k]
+end
+function get(ch::ConfigHash, k::String, def)
+    item = get(ch.dict, k, nothing)
+    if isa(item,ConfigHashItem)
+        return item[k]
+    end
+    return def
+end
+function has(ch::ConfigHash, k::String)
+    item = get(ch.dict, k, nothing)
+    if isa(item,ConfigHashItem)
+        if item.hasvalue || item.hasdefault
+            return true
+        end
+        return false
+    end
+    return false
+end
+function delete!(ch::ConfigHash, k::String)
+    item = ch.dict[k]
+    delete!(item, k)
+end
+function delete!(ch::ConfigHash, k::String, what::Symbol...)
+    # example usage:
+    # delete!(CONFIG, "hamster", :value, :entry)
+    item = ch.dict[k]
+    ret = nothing
+    for x in what
+        if x == :value || x == :default
+            ret = delete!(item, k, x)
+        elseif x == :getter
+            item.getter = false
+        elseif x == :setter
+            item.setter = false
+        elseif x == :delete
+            item.delete = false
+        elseif x == :entry
+            delete!(ch.dict, k)
+        else
+            error("Invalid attribute type $x for ConfigHash")
+        end
+    end
+    return ret
+end
+delete!(ch::ConfigHash, k::String, def) = has(ch.dict,k) ? delete!(ch,k) : def
+function setindex!(ch::ConfigHash, v, k::String)
+    item = get(ch.dict, k, nothing)
+    if isa(item,ConfigHashItem)
+        item[k] = v
+    else
+        ch.dict[k] = ConfigHashItem(v)
+    end
+    return ch
+end
+function setindex!(ch::ConfigHash, values, k::String, what::Symbol...)
+    # example usage:
+    # CONFIG["hamster",:default,:getter,:setter] = ("pet", getter_f, setter_f)
+    if !isa(values,Tuple)
+        values = (values,)
+    end
+    v::Tuple = values
+    if length(v) != length(what)
+        error("Mismatch in assignment to ConfigHash")
+    end
+    itm = get(ch.dict, k, nothing)
+    if !isa(itm,ConfigHashItem)
+        itm = ConfigHashItem(nothing)
+        itm.hasvalue = false
+        ch.dict[k] = itm
+    end
+    item::ConfigHashItem = itm
+    for i = 1:length(v)
+        x = what[i]
+        value = v[i]
+        if x == :value || x == :default
+            item[k, x] = value
+        elseif x == :getter
+            item.getter = value
+        elseif x == :setter
+            item.setter = value
+            if item.hasvalue
+                item.setter(k, nothing, false, item.value)
+            elseif item.hasdefault
+                item.setter(k, nothing, false, item.default)
+            end
+        elseif x == :delete
+            item.delete = value
+        else
+            error("Invalid attribute type $x for ConfigHash")
+        end
+    end
+    return ch
+end
+#start(ch::ConfigHash) = start(ch.dict)
+#done(ch::ConfigHash, i) = done(ch.dict, i)
+#function next(ch::ConfigHash, i)
+#    ((k,item),i) = next(ch.dict, i)
+#    if isa(item.getter, Function)
+#        return (item.getter(k, item.value), i)
+#    end
+#    return (item.value, i)
+#end
+#length(ch::ConfigHash) = length(ch.dict)
+function show(io::IO, ch::ConfigHash)
+    println("Julia Configuration:")
+    ks = sort!(keys(ch.dict))
+    for k in ks
+        item = getindex(ch.dict, k)
+        if item.hasvalue || item.hasdefault
+            v = getindex(item, k)
+            print(io, "$k = ")
+            show(io, v)
+            println(io)
+        else
+            println(io, "$k = <no value>")
+        end
+    end
+end
+
+CONFIG["OUTPUT_STREAM", :default, :setter] =
+    (STDOUT,
+    (key,value,hadvalue,newvalue::IO) -> global OUTPUT_STREAM = newvalue)
+CONFIG["gfx/backend", :default] = "gtk"
+

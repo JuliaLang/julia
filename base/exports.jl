@@ -158,6 +158,7 @@ export
 # Global constants and variables
     ARGS,
     C_NULL,
+    CONFIG,
     CPU_CORES,
     OS_NAME,
     ENDIAN_BOM,

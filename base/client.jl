@@ -21,15 +21,14 @@ have_color = false
 @windows_only default_color_input = text_colors[:normal]
 color_normal = text_colors[:normal]
 
-function answer_color()
-    c = symbol(get(ENV, "JULIA_ANSWER_COLOR", ""))
-    return get(text_colors, c, default_color_answer)
-end
-
-function input_color()
-    c = symbol(get(ENV, "JULIA_INPUT_COLOR", ""))
-    return get(text_colors, c, default_color_input)
-end
+CONFIG["answer_color", :default, :getter] =
+    (default_color_answer,
+    (key,value)->get(text_colors,symbol(get(ENV, "JULIA_ANSWER_COLOR", value)),value))
+CONFIG["input_color", :default, :getter] =
+    (default_color_input,
+    (key,value)->get(text_colors,symbol(get(ENV, "JULIA_INPUT_COLOR", value)),value))
+answer_color() = CONFIG["answer_color"]
+input_color() = CONFIG["input_color"]
 
 banner() = print(have_color ? banner_color : banner_plain)
 
