@@ -132,13 +132,14 @@ defined for complex numbers::
     julia> sinh(1 + 2im)
     -0.48905625904129374 + 1.4031192506220407im
 
-Note that mathematical functions always return real values when applied
+Note that mathematical functions typically return real values when applied
 to real numbers and complex values when applied to complex numbers.
-Thus, ``sqrt``, for example, behaves differently when applied to ``-1``
+For example, ``sqrt``, for example, behaves differently when applied to ``-1``
 versus ``-1 + 0im`` even though ``-1 == -1 + 0im``::
 
     julia> sqrt(-1)
-    NaN
+    ERROR: DomainError()
+     in sqrt at math.jl:111
 
     julia> sqrt(-1 + 0im)
     0.0 + 1.0im
