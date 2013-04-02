@@ -106,7 +106,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
 end
 
 ## midpoints of intervals
-midpoints(r::Ranges) = r[2:] - 0.5*step(r)
+midpoints(r::Ranges) = r[1:length(r)-1] + 0.5*step(r)
 midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 
@@ -120,7 +120,7 @@ function hist(v::AbstractVector, r::Ranges)
             h[i] += 1
         end
     end
-    h
+    r,h
 end
 hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
 hist(v::AbstractVector) = hist(v,iceil(log2(length(v)))+1) # Sturges' formula 
@@ -134,16 +134,16 @@ function hist(v::AbstractVector, edg::AbstractVector)
             h[i] += 1
         end
     end
-    h
+    edg,h
 end
 
 function hist(A::AbstractMatrix, edg::AbstractVector)
     m, n = size(A)
     H = Array(Int, length(edg)-1, n)
     for j = 1:n
-        H[:,j] = hist(sub(A, 1:m, j), edg)
+        _,H[:,j] = hist(sub(A, 1:m, j), edg)
     end
-    H
+    edg,H
 end
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,iceil(log2(size(A,1)))+1) # Sturges' formula 
