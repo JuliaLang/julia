@@ -69,8 +69,8 @@ eigvals(m::SymTridiagonal, vl::Float64, vu::Float64) = LAPACK.stebz!('V', 'E', v
 eigvals(m::SymTridiagonal) = LAPACK.stebz!('A', 'E', 0.0, 0.0, 0, 0, -1.0, copy(m.dv), copy(m.ev))[1]
 
 #Computes largest and smallest eigenvalue
-maxeig(m::SymTridiagonal) = eigvals(m, size(m)[1], size(m)[1])[1]
-mineig(m::SymTridiagonal) = eigvals(m, 1, 1)[1]
+eigmax(m::SymTridiagonal) = eigvals(m, size(m, 1), size(m, 1))[1]
+eigmin(m::SymTridiagonal) = eigvals(m, 1, 1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
 eigvecs(m::SymTridiagonal) = eig(m)[2]

@@ -95,11 +95,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the eigenvalues of ``A``.
 
-.. function:: maxeig(A)
+.. function:: eigmax(A)
 
    Returns the largest eigenvalue of ``A``.
 
-.. function:: minvals(A)
+.. function:: eigmin(A)
 
    Returns the smallest eigenvalue of ``A``.
 

@@ -444,11 +444,11 @@ end
 eigvals(x::Number) = [one(x)]
 
 #Computes maximum and minimum eigenvalue
-function maxeig(A::Union(Number, StridedMatrix))
+function eigmax(A::Union(Number, StridedMatrix))
     v = eigvals(A)
     iscomplex(v) ? error("Complex eigenvalues cannot be ordered") : max(v)
 end
-function mineig(A::Union(Number, StridedMatrix))
+function eigmin(A::Union(Number, StridedMatrix))
     v = eigvals(A)
     iscomplex(v) ? error("Complex eigenvalues cannot be ordered") : min(v)
 end
