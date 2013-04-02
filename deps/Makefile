@@ -781,9 +781,9 @@ endif
 
 ARPACK_OBJ_TARGET = $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ifeq ($(OS),WINNT)
-ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
+ARPACK_OBJ_SOURCE = arpack-ng-$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 else
-ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/.libs/libarpack.$(SHLIB_EXT)
+ARPACK_OBJ_SOURCE = arpack-ng-$(ARPACK_VER)/.libs/libarpack.$(SHLIB_EXT)
 endif
 ARPACK_ARGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
