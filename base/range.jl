@@ -107,9 +107,9 @@ length(r::Ranges) = r.len
 size(r::Ranges) = (r.len,)
 isempty(r::Ranges) = r.len==0
 first(r::Ranges) = r.start
-last{T}(r::Range{T}) = r.start + oftype(T,r.len-1)*step(r)
-last{T}(r::Range1{T}) = r.start + oftype(T,r.len-1)
-last{T}(r::OrdinalRange{T}) = r.start + (r.len-1)*r.step
+last{T}(r::Range1{T})       = oftype(T, r.start + r.len-1)
+last{T}(r::Range{T})        = oftype(T, r.start + (r.len-1)*r.step)
+last{T}(r::OrdinalRange{T}) = oftype(T, r.start + (r.len-1)*r.step)
 
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
