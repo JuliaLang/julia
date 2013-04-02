@@ -678,6 +678,8 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                 (*sp)++;
                 if (*sp > *max) *max = *sp;
             }
+            if (e->head == new_sym && *max < 1)
+                *max = 1;
             (*sp) = lastsp;
         }
         else if (e->head == method_sym) {
