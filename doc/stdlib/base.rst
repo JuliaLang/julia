@@ -2413,7 +2413,7 @@ Statistics
 
 .. function:: hist(v[, n])
 
-   Compute the histogram of ``v``, optionally using appoximately ``n`` bins.
+   Compute the histogram of ``v``, optionally using approximately ``n`` bins.
 
 .. function:: hist(v, e)
 
