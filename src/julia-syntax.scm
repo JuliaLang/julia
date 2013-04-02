@@ -369,7 +369,8 @@
 	  mangled sparams
 	  `(,@vars ,@restkw ,@pargl ,@vararg)
 	  `(block
-	    ,@lno
+	    ,@(if (null? lno) '()
+		  (list (append (car lno) (list name))))
 	    ,@stmts))
 
 	;; call with no keyword args
