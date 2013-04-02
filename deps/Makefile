@@ -788,46 +788,46 @@ endif
 ARPACK_ARGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
 
-arpack-ng_$(ARPACK_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng_$(ARPACK_VER).tar.gz
+arpack-ng-$(ARPACK_VER).tar.gz:
+	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng-$(ARPACK_VER).tar.gz
 	touch -c $@
-arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
+arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $< 
 	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
-arpack-ng_$(ARPACK_VER)/config.status: $(OPENBLAS_OBJ_TARGET)
+arpack-ng-$(ARPACK_VER)/config.status: $(OPENBLAS_OBJ_TARGET)
 endif
-arpack-ng_$(ARPACK_VER)/config.status: arpack-ng_$(ARPACK_VER)/configure
+arpack-ng-$(ARPACK_VER)/config.status: arpack-ng-$(ARPACK_VER)/configure
 ifeq ($(OS),WINNT)
-	cd arpack-ng_$(ARPACK_VER) && \
+	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f
 	echo 1 > $@
 else
-	cd arpack-ng_$(ARPACK_VER) && \
+	cd arpack-ng-$(ARPACK_VER) && \
 	./configure $(CONFIGURE_COMMON) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
 endif
 	touch -c $@
-$(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/config.status
+$(ARPACK_OBJ_SOURCE): arpack-ng-$(ARPACK_VER)/config.status
 ifeq ($(OS),WINNT)
-	cd arpack-ng_$(ARPACK_VER) && \
+	cd arpack-ng-$(ARPACK_VER) && \
 	$(FC) -shared $(ARPACK_OPTS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT)
 else
-	cd arpack-ng_$(ARPACK_VER) && \
+	cd arpack-ng-$(ARPACK_VER) && \
 	$(MAKE) $(ARPACK_ARGS)
 endif
 	touch -c $@
-arpack-ng_$(ARPACK_VER)/checked: $(ARPACK_OBJ_SOURCE)
+arpack-ng-$(ARPACK_VER)/checked: $(ARPACK_OBJ_SOURCE)
 ifneq ($(OS),WINNT)
-	cd arpack-ng_$(ARPACK_VER) && \
+	cd arpack-ng-$(ARPACK_VER) && \
 	$(MAKE) check $(ARPACK_ARGS)
 endif
 	echo 1 > $@
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) arpack-ng_$(ARPACK_VER)/checked | $(BUILD)/lib
+$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) arpack-ng-$(ARPACK_VER)/checked | $(BUILD)/lib
 ifeq ($(OS),WINNT)
-	cd arpack-ng_$(ARPACK_VER) && \
+	cd arpack-ng-$(ARPACK_VER) && \
 	cp libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 else
-	cd arpack-ng_$(ARPACK_VER) && \
+	cd arpack-ng-$(ARPACK_VER) && \
 	$(MAKE) install $(ARPACK_ARGS)
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ifeq ($(OS), Linux)
@@ -839,15 +839,15 @@ endif
 	touch -c $@
 
 clean-arpack:
-	-$(MAKE) -C arpack-ng_$(ARPACK_VER) clean
+	-$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
 	-rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	-rm -rf arpack-ng_$(ARPACK_VER).tar.gz arpack-ng_$(ARPACK_VER)
+	-rm -rf arpack-ng-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
 
-get-arpack: arpack-ng_$(ARPACK_VER).tar.gz
-configure-arpack: arpack-ng_$(ARPACK_VER)/config.status
+get-arpack: arpack-ng-$(ARPACK_VER).tar.gz
+configure-arpack: arpack-ng-$(ARPACK_VER)/config.status
 compile-arpack: $(ARPACK_OBJ_SOURCE)
-check-arpack: arpack-ng_$(ARPACK_VER)/checked
+check-arpack: arpack-ng-$(ARPACK_VER)/checked
 install-arpack: $(ARPACK_OBJ_TARGET)
 
 
