@@ -2268,6 +2268,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     // step 5. set up debug info context and create first basic block
     jl_value_t *stmt = jl_cellref(stmts,0);
     std::string filename = "no file";
+    char *dbgFuncName = lam->name->name;
     int lno = -1;
     // look for initial (line num filename) node
     if (jl_is_linenode(stmt)) {
@@ -2278,6 +2279,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
             assert(jl_is_symbol(jl_exprarg(stmt, 1)));
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
+            if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 2) {
+                dbgFuncName = ((jl_sym_t*)jl_exprarg(stmt, 2))->name;
+            }
         }
     }
     ctx.lineno = lno;
@@ -2288,8 +2292,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     DIFile fil = dbuilder->createFile(filename, ".");
     DISubprogram SP =
         dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
-                                 lam->name->name,
-                                 lam->name->name,
+                                 dbgFuncName, dbgFuncName,
                                  fil,
                                  0,
                                  dbuilder->createSubroutineType(fil,EltTypeArray),
