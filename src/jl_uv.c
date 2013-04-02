@@ -176,7 +176,7 @@ void jl_asynccb(uv_handle_t *handle, int status)
 
 void jl_pollcb(uv_poll_t *handle, int status, int events)
 {
-    JULIA_CB(pollcb,handle->data,1,CB_INT32,status,CB_INT32,events)
+    JULIA_CB(pollcb,handle->data,2,CB_INT32,status,CB_INT32,events)
     (void)ret;
 }
 
