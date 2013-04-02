@@ -65,9 +65,9 @@ immutable OS_FD
     fd::Int32
 end
 
-#Wrapper for an OS file descriptor (on both Unix and Windows)
+#Wrapper for an OS file descriptor (for Windows)
 @windows_only immutable OS_SOCKET
-    handle::Uint32
+    handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows...
 end
 
 #
@@ -81,25 +81,30 @@ type FDWatcher
     cb::Callback
     function FDWatcher(fd::OS_FD)
         handle = c_malloc(_sizeof_uv_poll)
-        ccall(:uv_poll_init,Int32,(Ptr{Void},Ptr{Void},Int32),eventloop(),handle,fd)
+        ccall(:uv_poll_init,Int32,(Ptr{Void},Ptr{Void},Int32),eventloop(),handle,fd.fd)
         this = new(handle,false)
         associate_julia_struct(handle,this)
+        finalizer(this,close)
         this
     end
     @windows_only function FDWatcher(fd::OS_SOCKET)
         handle = c_malloc(_sizeof_uv_poll)
-        ccall(:uv_poll_init_socket,Int32,(Ptr{Void},Ptr{Void},Uint32),eventloop(),handle,fd)
+        ccall(:uv_poll_init_socket,Int32,(Ptr{Void},Ptr{Void},Ptr{Void}),eventloop(),handle,fd.handle)
         this = new(handle,false)
         associate_julia_struct(handle,this)
+        finalizer(this,close)
         this
     end
 end
 
+close(t::FDWatcher) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
+
 function start_watching(f::Function, t::FDWatcher, events)
     t.cb = f
-    associate_julia_struct(handle,this)
+    associate_julia_struct(t.handle, t)
     ccall(:jl_poll_start,Int32,(Ptr{Void},Int32),t.handle,events)
 end
+
 function stop_watching(t::FDWatcher)
     disassociate_julia_struct(t.handle)
     ccall(:uv_poll_stop,Int32,(Ptr{Void},),t.handle)
@@ -321,6 +326,45 @@ end
 TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 
 close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
+
+function poll_fd(s, events::Int32, timeout_ms::Int32)
+    timeout_at = int64((time() * 1000)) + timeout_ms
+    wt = WaitTask()
+
+    fdw = FDWatcher(s)
+    start_watching((status, events) -> tasknotify([wt], :poll, status, events), fdw, events)
+    
+    if (timeout_ms > 0)
+        timer = TimeoutAsyncWork(status -> tasknotify([wt], :timeout, status))
+        start_timer(timer, int64(timeout_ms), int64(0))
+    end
+
+    cont = 1
+    local args
+    while(cont == 1)
+        args = yield(wt)
+        cont = 0
+        
+        now = int64(time() * 1000)
+#        println((timeout_at - now))
+        if ((args == (:timeout, 0)) && (timeout_at > now))
+            println("poll_fd : premature timeout...adding timer again...")
+            stop_timer(timer)
+            start_timer(timer, int64(timeout_at - now), int64(0))
+            
+            cont = 1
+        end
+    end
+
+    if (timeout_ms > 0) stop_timer(timer) end
+
+    stop_watching(fdw)
+    if isa(args,InterruptException)
+        error(args)
+    end
+    args
+end
+
 
 function _uv_hook_close(uv::AsyncStream)
     uv.handle = 0
