@@ -167,7 +167,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_sym_t *fname = (jl_sym_t*)args[0];
         jl_value_t **bp=NULL;
         jl_binding_t *b=NULL;
-        if (jl_is_expr(fname) && ((jl_expr_t*)fname)->head == jl_symbol("kw")) {
+        if (jl_is_expr(fname) && ((jl_expr_t*)fname)->head == kw_sym) {
             fname = (jl_sym_t*)jl_exprarg(fname, 0);
             assert(jl_is_symbol(fname));
             jl_function_t *gf = (jl_function_t*)eval((jl_value_t*)fname, locals, nl);

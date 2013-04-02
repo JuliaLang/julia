@@ -496,8 +496,7 @@
 	      (receive
 	       (vararg req) (separate vararg? argl)
 	       (optional-positional-defs name sparams req opt dfl body
-					 (cons kw
-					       (append req opt vararg))
+					 (cons kw (append req opt vararg))
 					 `(parameters (... ,(gensy))))))
 	    ;; optional positional only
 	    (receive

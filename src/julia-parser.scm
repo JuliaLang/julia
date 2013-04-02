@@ -74,7 +74,7 @@
 (define (assignment? e)
   (and (pair? e) (eq? (car e) '=)))
 
-(define (assertion? e)
+(define (typedecl? e)
   (and (length= e 3) (eq? (car e) |::|) (symbol? (cadr e))))
 
 (define unary-ops '(+ - ! ~ |<:| |>:|))
@@ -1146,7 +1146,7 @@
    (kws args) (separate (lambda (x)
 			  (and (assignment? x)
 			       (or (symbol? (cadr x))
-                                   (assertion? (cadr x)))))
+                                   (typedecl? (cadr x)))))
 			argl)
    (if (null? kws)
        args
