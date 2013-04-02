@@ -444,9 +444,11 @@
 			  ,@(if (null? restkw) '() (list rkw))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg)))))))))))))
+				(list `(... ,(arg-name (car vararg)))))))))
+	;; return primary function
+	,name))))
 
-(define (optional-positional-defs name sparams req vararg opt dfl body)
+(define (optional-positional-defs name sparams req opt dfl body overall-argl . kw)
   `(block
     ,@(map (lambda (n)
 	     (let* ((passed (append req (list-head opt n)))
@@ -471,27 +473,36 @@
 					  defaultv))
 			      vals)
 			 ;; then add only one next argument
-			 `(call ,name ,@(map arg-name passed) ,(car vals))
+			 `(block (call ,name ,@kw ,@(map arg-name passed) ,(car vals)))
 			 ;; otherwise add all
-			 `(call ,name ,@(map arg-name passed) ,@vals))))
-	       (method-def-expr- name sp passed body)))
+			 `(block (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
+	       (method-def-expr name sp (append kw passed) body)))
 	   (iota (length opt)))
-    ,(method-def-expr- name sparams (append req opt vararg) body)))
+    ,(method-def-expr name sparams overall-argl body)))
 
 (define (method-def-expr name sparams argl body)
   (if (has-keywords? argl)
       ;; here (keywords ...) is optional positional args
-      (if (has-parameters? (cdr argl))
-	  (error "not yet supported");; both!
-	  ;; separate into keyword version with all positional args,
-	  ;; and a series of optional-positional-defs that delegate keywords
-
-	  ;; optional positional only
-	  (let ((opt (map cadr (cdar argl)))
-		(dfl (map caddr (cdar argl))))
+      (let ((opt  (map cadr  (cdar argl)))
+	    (dfl  (map caddr (cdar argl)))
+	    (argl (cdr argl)))
+	(if (has-parameters? argl)
+	    ;; both!
+	    ;; separate into keyword version with all positional args,
+	    ;; and a series of optional-positional-defs that delegate keywords
+	    (let ((kw   (car argl))
+		  (argl (cdr argl)))
+	      (receive
+	       (vararg req) (separate vararg? argl)
+	       (optional-positional-defs name sparams req opt dfl body
+					 (cons kw
+					       (append req opt vararg))
+					 `(parameters (... ,(gensy))))))
+	    ;; optional positional only
 	    (receive
-	     (vararg req) (separate vararg? (cdr argl))
-	     (optional-positional-defs name sparams req vararg opt dfl body))))
+	     (vararg req) (separate vararg? argl)
+	     (optional-positional-defs name sparams req opt dfl body
+				       (append req opt vararg)))))
       (if (has-parameters? argl)
 	  ;; keywords only
 	  (keywords-method-def-expr name sparams argl body)

@@ -48,3 +48,16 @@ opaf2(a=1,rest...) = (a,rest)
 @test isequal(opaf2(), (1,()))
 @test isequal(opaf2(2), (2,()))
 @test isequal(opaf2(2,3), (2,(3,)))
+
+# optional positional plus keyword args
+opkwf1(a=0,b=1;k=2) = (a,b,k)
+@test isequal(opkwf1(), (0,1,2))
+@test isequal(opkwf1(10), (10,1,2))
+@test isequal(opkwf1(10,20), (10,20,2))
+@test_fails opkwf1(10,20,30)
+@test isequal(opkwf1(10,20,k=8), (10,20,8))
+@test isequal(opkwf1(11;k=8),    (11, 1,8))
+@test isequal(opkwf1(k=8),       ( 0, 1,8))
+
+# dictionaries as keywords
+@test kwf1(4; {:hundreds=>9, :tens=>5}...) == 954

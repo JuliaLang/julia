@@ -286,6 +286,8 @@ JL_CALLABLE(jl_f_apply)
     return result;
 }
 
+#include "newobj_internal.h"
+
 JL_CALLABLE(jl_f_kwcall)
 {
     if (nargs < 3)
@@ -302,14 +304,23 @@ JL_CALLABLE(jl_f_kwcall)
     size_t nkeys = jl_unbox_long(args[1]);
     size_t nrest=0;
     size_t pa = 3 + 2*nkeys;
-    jl_array_t *rkw = (jl_array_t*)args[2 + 2*nkeys];
-    if (jl_is_array(rkw)) {
+    jl_value_t *rkw = args[2 + 2*nkeys];
+    if (rkw != (jl_value_t*)jl_null) {
         nrest = jl_array_len(rkw);
     }
 
-    jl_tuple_t *kwtuple = jl_alloc_tuple_uninit((nkeys+nrest)*2);
-    if (nkeys > 0)
-        memcpy(&kwtuple->data[0], &args[2], nkeys*2*sizeof(void*));
+    size_t kwlen = (nkeys+nrest)*2;
+#ifdef OVERLAP_TUPLE_LEN
+    jl_tuple_t *kwtuple = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, kwlen);
+#else
+    jl_tuple_t *kwtuple = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, kwlen+1);
+#endif
+    jl_tuple_set_len_unsafe(kwtuple, kwlen);
+
+    for(size_t i=0; i < nkeys*2; i+=2) {
+        jl_tupleset(kwtuple, i  , args[2+i]);
+        jl_tupleset(kwtuple, i+1, args[2+i+1]);
+    }
     for(size_t i=0; i < nrest; i++) {
         jl_value_t *ri = jl_cellref(rkw, i);
         jl_tupleset(kwtuple, (nkeys+i)*2  , jl_tupleref(ri,0));
