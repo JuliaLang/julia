@@ -893,7 +893,9 @@ function abstract_interpret(e::Expr, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:gotoifnot)
         abstract_eval(e.args[1], vtypes, sv)
     elseif is(e.head,:method)
-        return StateUpdate(e.args[1], Function, vtypes)
+        fname = e.args[1]
+        if isa(fname,Expr); fname = fname.args[1]; end
+        return StateUpdate(fname, Function, vtypes)
     end
     return vtypes
 end

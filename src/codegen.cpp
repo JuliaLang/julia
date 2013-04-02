@@ -1854,24 +1854,35 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
     }
     else if (head == method_sym) {
-        jl_value_t *mn;
-        if (jl_is_symbolnode(args[0])) {
-            mn = (jl_value_t*)jl_symbolnode_sym(args[0]);
+        jl_value_t *mn = args[0];
+        bool iskw = false;
+        if (jl_is_expr(mn) && ((jl_expr_t*)mn)->head == kw_sym) {
+            iskw = true;
+            mn = jl_exprarg(mn,0);
         }
-        else {
-            mn = args[0];
+        if (jl_is_symbolnode(mn)) {
+            mn = (jl_value_t*)jl_symbolnode_sym(mn);
         }
         assert(jl_is_symbol(mn));
         int last_depth = ctx->argDepth;
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
         Value *bp;
-        if (is_global((jl_sym_t*)mn, ctx)) {
-            bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
-            bp = literal_pointer_val(&bnd->value, jl_ppvalue_llvmt);
+        if (iskw) {
+            Value *theF = emit_expr(mn, ctx);
+            // fenv = theF->env
+            Value *fenv = emit_nthptr(theF, 2);
+            // bp = &((jl_methtable_t*)fenv)->kwsorter
+            bp = emit_nthptr_addr(fenv, 7);
         }
         else {
-            bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
+            if (is_global((jl_sym_t*)mn, ctx)) {
+                bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
+                bp = literal_pointer_val(&bnd->value, jl_ppvalue_llvmt);
+            }
+            else {
+                bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
+            }
         }
         Value *a1 = emit_expr(args[1], ctx);
         make_gcroot(boxed(a1), ctx);

@@ -61,3 +61,23 @@ opkwf1(a=0,b=1;k=2) = (a,b,k)
 
 # dictionaries as keywords
 @test kwf1(4; {:hundreds=>9, :tens=>5}...) == 954
+
+# with inner function
+let
+    function kwf_maker()
+        f(;k=0) = 2k+1
+    end
+    kwf5 = kwf_maker()
+    @test kwf5() == 1
+    @test kwf5(k=2) == 5
+    @test_fails kwf5(1)
+end
+
+# with every feature!
+extravagant_args(x,y=0,rest...;color="blue",kw...) =
+    (x,y,rest,color,kwf1(6;tens=8,kw...))
+
+@test isequal(extravagant_args(1), (1,0,(),"blue",86))
+@test isequal(extravagant_args(1;hundreds=7), (1,0,(),"blue",786))
+@test isequal(extravagant_args(1,2,3;{:color=>"red", :hundreds=>3}...),
+              (1,2,(3,),"red",386))
