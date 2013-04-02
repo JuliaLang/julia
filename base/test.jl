@@ -1,6 +1,7 @@
 module Test
 
-export @test, @test_fails, @test_approx_eq, @test_approx_eq_eps, register_handler
+export @test, @test_fails, @test_approx_eq, @test_approx_eq_eps, 
+       register_handler, with_handler
 
 abstract Result
 type Success <: Result
@@ -48,6 +49,13 @@ end
 
 function register_handler(handler)
     handlers[end] = handler
+end
+
+function with_handler(f::Function, handler)
+    handler, handlers[end] = handlers[end], handler
+    ret = f()
+    handler, handlers[end] = handlers[end], handler
+    return ret
 end
 
 macro test(ex)
