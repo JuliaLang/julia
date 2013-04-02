@@ -185,14 +185,14 @@ endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
-	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
+	$(WGET_DASH_O) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 $(LLVM_COMPILER_RT_TAR):
-	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
+	$(WGET_DASH_O) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
 $(LLVM_TAR):
-	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
+	$(WGET_DASH_O) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 
 ifeq ($(BUILD_LLDB),1)
 llvm-$(LLVM_VER)/tools/lldb:
@@ -300,11 +300,11 @@ READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
 READLINE_OPTS = --enable-shared --enable-static --with-curses
 READLINE_CFLAGS = 
 readline-$(READLINE_VER).tar.gz:
-	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
-	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
-	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-003
-	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-004
-	$(WGET) http://ftp.gnu.org/gnu/readline/$@
+	$(WGET_DASH_O) readline62-001 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
+	$(WGET_DASH_O) readline62-002 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
+	$(WGET_DASH_O) readline62-003 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-003
+	$(WGET_DASH_O) readline62-004 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-004
+	$(WGET_DASH_O) $@ http://ftp.gnu.org/gnu/readline/$@
 	touch -c $@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
@@ -446,13 +446,15 @@ install-pcre: $(PCRE_OBJ_TARGET)
 GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
 
 double-conversion-$(GRISU_VER).tar.gz:
-	$(WGET) http://double-conversion.googlecode.com/files/double-conversion-$(GRISU_VER).tar.gz
+	$(WGET_DASH_O) $@ http://double-conversion.googlecode.com/files/$@
 	touch -c $@
 double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	mkdir -p double-conversion-$(GRISU_VER) && \
 	tar -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
 	touch -c $@
-double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
+
+ifeq ($(USE_SYSTEM_GRISU), 0)
+libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
 	cd double-conversion-$(GRISU_VER) && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
@@ -463,16 +465,21 @@ double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GR
 	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
-	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
-$(BUILD)/lib/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o ../libgrisu.$(SHLIB_EXT)
+else
+libgrisu.$(SHLIB_EXT):
+	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o libgrisu.$(SHLIB_EXT) -ldouble-conversion
+endif
+
+$(BUILD)/lib/libgrisu.$(SHLIB_EXT): libgrisu.$(SHLIB_EXT)
 	cp -f $< $@
-	$(INSTALL_NAME_CMD)libgrisu.dylib $@
+	$(INSTALL_NAME_CMD)libdouble-conversion.dylib $@
 
 clean-double-conversion:
 	-rm -f double-conversion-$(GRISU_VER)/src/*.o
-	-rm -f double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+	-rm -f libgrisu.$(SHLIB_EXT)
 distclean-double-conversion:
-	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
+	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) libgrisu.${SHLIB_EXT}
 
 get-double-conversion: double-conversion-$(GRISU_VER).tar.gz
 configure-double-conversion: get-double-conversion
@@ -732,7 +739,7 @@ LAPACK_OBJ_SOURCE =
 endif
 
 lapack-$(LAPACK_VER).tgz:
-	$(WGET) http://www.netlib.org/lapack/$@
+	$(WGET_DASH_O) $@ http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
 	touch -c $@
@@ -864,7 +871,7 @@ ifeq ($(OS),WINNT)
 endif
 
 fftw-$(FFTW_VER).tar.gz:
-	$(WGET) http://www.fftw.org/$@
+	$(WGET_DASH_O) $@ http://www.fftw.org/$@
 
 fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-single && \
@@ -992,7 +999,7 @@ SUITE_SPARSE_LIB += -Wl,-rpath,'$(BUILD)/lib'
 endif
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
-	$(WGET) http://www.cise.ufl.edu/research/sparse/SuiteSparse/SuiteSparse-$(SUITESPARSE_VER).tar.gz
+	$(WGET_DASH_O) $@ http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
@@ -1069,7 +1076,7 @@ LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
 
 libunwind-$(UNWIND_VER).tar.gz:
-	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
+	$(WGET_DASH_O) $@ http://savannah.spinellicreations.com/libunwind/$@
 libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
 	touch -c $@
@@ -1112,7 +1119,7 @@ GMP_SRC_TARGET = gmp-$(GMP_VER)/.libs/libgmp.$(SHLIB_EXT)
 GMP_OBJ_TARGET = $(BUILD)/lib/libgmp.$(SHLIB_EXT)
 
 gmp-$(GMP_VER).tar.bz2:
-	$(WGET) ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
+	$(WGET_DASH_O) $@ ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	tar jxf $<
 	touch -c $@
@@ -1160,7 +1167,7 @@ ZLIB_CONFIGFLAGS += CC="$(CC)"
 endif
 
 zlib-$(ZLIB_VER).tar.gz:
-	$(WGET) http://zlib.net/$@
+	$(WGET_DASH_O) $@ http://zlib.net/$@
 zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
 	tar zxf $<
 	touch -c $@
@@ -1212,7 +1219,7 @@ compile-patchelf: install-patchelf
 install-patchelf: $(PATCHELF_TARGET)
 
 patchelf-$(PATCHELF_VER).tar.bz2:
-	$(WGET) http://hydra.nixos.org/build/1524660/download/2/$@
+	$(WGET_DASH_O) $@ http://hydra.nixos.org/build/1524660/download/2/$@
 patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.bz2
 	tar jxf $<
 	touch -c $@
@@ -1251,7 +1258,7 @@ GIT_SOURCE = git-$(GIT_VER)/src/git
 GIT_TARGET = $(BUILD)/git
 
 git-$(GIT_VER).tar.gz:
-	$(WGET) http://git-core.googlecode.com/files/$@
+	$(WGET_DASH_O) $@ http://git-core.googlecode.com/files/$@
 git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
 	tar zxf $<
 	touch -c $@

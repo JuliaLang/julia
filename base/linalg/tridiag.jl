@@ -1,6 +1,6 @@
 #### Specialized matrix types ####
 
-import Base.conj, Base.transpose, Base.ctranspose
+import Base.conj, Base.transpose, Base.ctranspose, Base.convert
 
 ## Hermitian tridiagonal matrices
 type SymTridiagonal{T<:BlasFloat} <: AbstractMatrix{T}
@@ -23,16 +23,9 @@ function SymTridiagonal{Td<:Number,Te<:Number}(dv::Vector{Td}, ev::Vector{Te})
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end
 
-SymTridiagonal(A::AbstractMatrix) = SymTridiagonal(diag(A), diag(A,1))
-
-function full(S::SymTridiagonal)
-    M = diagm(S.dv)
-    for i in 1:length(S.ev)
-        j = i + 1
-        M[i,j] = M[j,i] = S.ev[i]
-    end
-    M
-end
+SymTridiagonal(M::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A), diag(A,1)):error("Matrix is not symmetric, cannot convert to SymTridiagonal")
+full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
+convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+diagm(M.ev,1)
 
 function show(io::IO, S::SymTridiagonal)
     println(io, summary(S), ":")
@@ -43,7 +36,7 @@ function show(io::IO, S::SymTridiagonal)
 end
 
 size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
-size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<2 ? length(m.dv) : 1)
+size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(m.dv) : 1)
 
 #Elementary operations
 copy(S::SymTridiagonal) = SymTridiagonal(copy(S.dv), copy(S.ev))
@@ -56,8 +49,11 @@ ctranspose(M::SymTridiagonal) = conj(M)
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, A.ev+B.ev)
 -(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv-B.dv, A.ev-B.ev)
-#XXX Returns dense matrix but really should be banded
 *(A::SymTridiagonal, B::SymTridiagonal) = full(A)*full(B)
+*(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
+*(B::Number, A::SymTridiagonal) = A*B
+/(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
+==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
 ## Solver
 function \{T<:BlasFloat}(M::SymTridiagonal{T}, rhs::StridedVecOrMat{T})
@@ -72,6 +68,9 @@ eig(m::SymTridiagonal) = LAPACK.stegr!('V', copy(m.dv), copy(m.ev))
 eigvals(m::SymTridiagonal, il::Int, iu::Int) = LAPACK.stebz!('I', 'E', 0.0, 0.0, il, iu, -1.0, copy(m.dv), copy(m.ev))[1]
 eigvals(m::SymTridiagonal, vl::Float64, vu::Float64) = LAPACK.stebz!('V', 'E', vl, vu, 0, 0, -1.0, copy(m.dv), copy(m.ev))[1]
 eigvals(m::SymTridiagonal) = LAPACK.stebz!('A', 'E', 0.0, 0.0, 0, 0, -1.0, copy(m.dv), copy(m.ev))[1]
+#Compute selected eigenvectors only corresponding to particular eigenvalues
+eigvecs(m::SymTridiagonal) = eig(m)[2]
+eigvecs{Eigenvalue<:Real}(m::SymTridiagonal, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(m.dv, m.ev, eigvals)
 
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
@@ -90,8 +89,8 @@ end
 
 function Tridiagonal{T<:Number}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
     N = length(d)
-    if length(dl) != N-1 || length(du) != N-1
-        error("The sub- and super-diagonals must have length N-1")
+    if (length(dl) != N-1 || length(du) != N-1)
+        error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
     end
     M = Tridiagonal{T}(N)
     M.dl = copy(dl)
@@ -105,6 +104,8 @@ function Tridiagonal{Tl<:Number, Td<:Number, Tu<:Number}(dl::Vector{Tl}, d::Vect
 end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
+size(M::Tridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(M.d) : 1)
+
 function show(io::IO, M::Tridiagonal)
     println(io, summary(M), ":")
     print(io, " sub: ")
@@ -138,24 +139,34 @@ copy(A::Tridiagonal) = Tridiagonal(copy(A.dl), copy(A.d), copy(A.du))
 round(M::Tridiagonal) = Tridiagonal(round(M.dl), round(M.d), round(M.du))
 iround(M::Tridiagonal) = Tridiagonal(iround(M.dl), iround(M.d), iround(M.du))
 
-conj(M::Tridiagonal) = Tridiagonal(conj(M.du), conj(M.d), conj(M.dl))
+conj(M::Tridiagonal) = Tridiagonal(conj(M.dl), conj(M.d), conj(M.du))
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 ctranspose(M::Tridiagonal) = conj(transpose(M))
 
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du+B.du)
-#XXX Returns dense matrix but really should be banded
 *(A::Tridiagonal, B::Tridiagonal) = full(A)*full(B)
+*(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
+*(B::Number, A::SymTridiagonal) = A*B
+/(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
+
+==(A::Tridiagonal, B::Tridiagonal) = (A.dl==B.dl) && (A.d==B.d) && (A.du==B.du)
+==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)
+==(A::SymTridiagonal, B::SymTridiagonal) = B==A
 
 # Elementary operations that mix Tridiagonal and SymTridiagonal matrices
-Tridiagonal(A::SymTridiagonal) = Tridiagonal(A.dv, A.ev, A.dv)
-+(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl+B.dv, A.d+B.ev, A.du+B.dv)
-+(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.dv+B.dl, A.ev+B.d, A.dv+B.du)
--(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-B.dv, A.d-B.ev, A.du-B.dv)
--(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.dv-B.dl, A.ev-B.d, A.dv-B.du)
+convert(::Type{Tridiagonal}, A::SymTridiagonal) = Tridiagonal(A.ev, A.dv, A.ev)
++(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl+B.ev, A.d+B.dv, A.du+B.ev)
++(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev+B.dl, A.dv+B.d, A.ev+B.du)
+-(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-B.ev, A.d-B.dv, A.du-B.ev)
+-(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev-B.dl, A.dv-B.d, A.ev-B.du)
 #XXX Returns dense matrix but really should be banded
 *(A::SymTridiagonal, B::Tridiagonal) = full(A)*full(B)
 *(A::Tridiagonal, B::SymTridiagonal) = full(A)*full(B)
+
+convert{T}(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) = Tridiagonal(M)
+convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal) = M.dl==M.du ? (SymTridiagonal(M.dl, M.d)) :
+    error("Tridiagonal is not symmetric, cannot convert to SymTridiagonal")
 
 ## Solvers
 

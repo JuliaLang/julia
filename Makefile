@@ -67,11 +67,11 @@ install: release
 	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" "share/julia/site/"$(VERSDIR) ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
-ifeq ($(OS), Darwin)
-	$(MAKE) -C deps install-git
-	-cp -a $(BUILD)/libexec $(PREFIX)
-	-cp -a $(BUILD)/share $(PREFIX)
-endif
+#ifeq ($(OS), Darwin)
+#	$(MAKE) -C deps install-git
+#	-cp -a $(BUILD)/libexec $(PREFIX)
+#	-cp -a $(BUILD)/share $(PREFIX)
+#endif
 	cp -a $(BUILD)/bin $(PREFIX)
 	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
@@ -101,15 +101,15 @@ ifeq ($(OS), Darwin)
 endif
 ifeq ($(OS), WINNT)
 	-[ -e dist-extras/7za.exe ] && cp dist-extras/7za.exe $(PREFIX)/bin/7z.exe
-	-[ -e dist-extras/PortableGit-1.8.0-preview20121022.7z ] && \
+	-[ -e dist-extras/PortableGit-1.8.1.2-preview20130201.7z ] && \
 	  mkdir $(PREFIX)/Git && \
-	  7z x dist-extras/PortableGit-1.8.0-preview20121022.7z -o"$(PREFIX)/Git"
+	  7z x dist-extras/PortableGit-1.8.1.2-preview20130201.7z -o"$(PREFIX)/Git"
 ifeq ($(shell uname),MINGW32_NT-6.1)
 	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
 		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
 	done
 else
-	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_sjlj-1" "libstdc++-6" ; do \
+	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_sjlj-1" "libstdc++-6" "libssp-0" ; do \
 		cp /usr/lib/gcc/i686-w64-mingw32/4.6/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
 	done
 endif
@@ -154,6 +154,6 @@ test-%: release
 .PHONY: win-extras
 win-extras:
 	cd dist-extras && \
-	wget http://downloads.sourceforge.net/sevenzip/7za920.zip && \
-	wget https://msysgit.googlecode.com/files/PortableGit-1.8.0-preview20121022.7z
+	wget -O 7za920.zip http://downloads.sourceforge.net/sevenzip/7za920.zip && \
+	wget -O PortableGit-1.8.1.2-preview20130201.7z https://msysgit.googlecode.com/files/PortableGit-1.8.1.2-preview20130201.7z
 

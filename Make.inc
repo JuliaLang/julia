@@ -16,7 +16,7 @@ BUILD = $(JULIAHOME)/usr
 JL_PRIVATE_LIBDIR = lib/julia
 JL_LIBDIR = lib
 
-# If we're on debian, default to arch-dependent library dirs
+# This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH = $(shell gcc -print-multiarch)
 JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
@@ -162,6 +162,7 @@ USE_SYSTEM_GMP=0
 USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_ZLIB=0
+USE_SYSTEM_GRISU=0
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -185,7 +186,7 @@ LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG=llvm-config
+LLVM_CONFIG ?= llvm-config
 else
 LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
 endif
@@ -319,7 +320,10 @@ OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.e
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
 LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
-JLDFLAGS = -Wl,--stack,8388608 -Wl,--large-address-aware
+JLDFLAGS = -Wl,--stack,8388608
+ifeq ($(ARCH),i686)
+JLDFLAGS += -Wl,--large-address-aware
+endif
 endif
 
 # MKL

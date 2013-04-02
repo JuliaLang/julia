@@ -555,11 +555,10 @@ static void gc_mark_all()
         char *data = a->data;
         if (data == NULL) continue;
         int ndims = jl_array_ndims(a);
-        void *data_area = jl_array_inline_data_area(a);
         char *data0 = data;
         if (ndims == 1) data0 -= a->offset*a->elsize;
-        if (data0 != data_area) {
-            jl_value_t *owner = *(jl_value_t**)data_area;
+        if (!a->isinline) {
+            jl_value_t *owner = jl_array_data_owner(a);
             if (a->ismalloc) {
                 // jl_mallocptr_t
                 if (gc_marked(owner))
@@ -664,6 +663,7 @@ static void gc_mark(void)
     gc_push_root(jl_unprotect_stack_func);
     gc_push_root(jl_bottom_func);
     gc_push_root(jl_typetype_type);
+    gc_push_root(jl_tupletype_type);
 
     // constants
     gc_push_root(jl_null);
@@ -688,7 +688,7 @@ static void gc_mark(void)
     }
 
     gc_mark_all();
-    
+
     // find unmarked objects that need to be finalized.
     // this must happen last.
     for(i=0; i < finalizer_table.size; i+=2) {
@@ -721,12 +721,11 @@ static void big_obj_stats(void);
 #ifdef OBJPROFILE
 static void print_obj_profile(void)
 {
-    jl_value_t *errstream = jl_stderr_obj();
     for(int i=0; i < obj_counts.size; i+=2) {
         if (obj_counts.table[i+1] != HT_NOTFOUND) {
-            jl_printf(jl_stderr, "%d ", obj_counts.table[i+1]-1);
-            jl_show(errstream, obj_counts.table[i]);
-            jl_printf(jl_stderr, "\n");
+            jl_printf(JL_STDERR, "%d ", obj_counts.table[i+1]-1);
+            jl_debug_print_type(JL_STDERR, (jl_value_t*)obj_counts.table[i]);
+            jl_printf(JL_STDERR, "\n");
         }
     }
 }
@@ -845,17 +844,17 @@ void *alloc_4w(void)
 #ifdef GC_FINAL_STATS
 static double process_t0;
 #include <malloc.h>
-void print_gc_stats(void)
+void jl_print_gc_stats(JL_STREAM *s)
 {
     malloc_stats();
     double ptime = clock_now()-process_t0;
-    jl_printf(JL_STDERR, "exec time\t%.5f sec\n", ptime);
-    jl_printf(JL_STDOUT, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
+    jl_printf(s, "exec time\t%.5f sec\n", ptime);
+    jl_printf(s, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
                (total_gc_time/ptime)*100);
     struct mallinfo mi = mallinfo();
-    jl_printf(JL_STDOUT, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
-    jl_printf(JL_STDOUT, "total freed\t%llu b\n", total_freed_bytes);
-    jl_printf(JL_STDOUT, "free rate\t%.1f MB/sec\n",
+    jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
+    jl_printf(s, "total freed\t%llu b\n", total_freed_bytes);
+    jl_printf(s, "free rate\t%.1f MB/sec\n",
                (total_freed_bytes/total_gc_time)/1024/1024);
 }
 #endif
@@ -869,7 +868,7 @@ void jl_gc_init(void)
 
                          288, 320, 352, 384, 416, 448, 480, 512,
 
-                         640, 768, 896, 1024, 
+                         640, 768, 896, 1024,
 
                          1536, 2048 };
     int i;
@@ -893,7 +892,6 @@ void jl_gc_init(void)
 #endif
 #ifdef GC_FINAL_STATS
     process_t0 = clock_now();
-    atexit(print_gc_stats);
 #endif
 }
 

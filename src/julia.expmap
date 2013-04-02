@@ -299,6 +299,7 @@
     jl_type_match;
     jl_types_equal;
     jl_typeassert;
+    jl_array_len_;
     jl_uncompress_ast;
     jl_uv_*;
     jl_wrap_raw_dl_handle;

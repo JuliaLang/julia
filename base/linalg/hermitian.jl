@@ -14,9 +14,14 @@ Hermitian(A::StridedMatrix) = Hermitian(A, 'U')
 
 size(A::Hermitian, args...) = size(A.S, args...)
 print_matrix(io::IO, A::Hermitian) = print_matrix(io, full(A))
-full(A::Hermitian) = symmetrize!(copy(A.S), A.uplo)
+full(A::Hermitian) = A.S
 ishermitian(A::Hermitian) = true
 issym{T<:Union(Float64, Float32)}(A::Hermitian{T}) = true
+ctranspose(A::Hermitian) = A
+
+*(A::Hermitian, B::Hermitian) = *(full(A), full(B))
+*(A::Hermitian, B::StridedMatrix) = *(full(A), B)
+*(A::StridedMatrix, B::Hermitian) = *(A, full(B))
 
 function \(A::Hermitian, B::StridedVecOrMat)
     r, _, _, info = LAPACK.sysv!(A.uplo, copy(A.S), copy(B))
@@ -32,6 +37,11 @@ eigvals(A::Hermitian, il::Int, ih::Int) = LAPACK.syevr!('N', 'I', A.uplo, copy(A
 eigvals(A::Hermitian, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, copy(A.S), vl, vh, 0, 0, -1.0)[1]
 eigvals(A::Hermitian) = eigvals(A, 1, size(A, 1))
 eigmax(A::Hermitian) = eigvals(A, size(A, 1), size(A, 1))[1]
+
+function expm(A::Hermitian)
+    F = eigfact(A)
+    diagmm(F[:vectors], exp(F[:values])) * F[:vectors]'
+end
 
 function sqrtm(A::Hermitian, cond::Bool)
     F = eigfact(A)

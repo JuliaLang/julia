@@ -347,7 +347,7 @@ end
 function sleep(sec::Real)
     timer = TimeoutAsyncWork(status->tasknotify([wt], status))
     wt = WaitTask(timer, false)
-    start_timer(timer, iround(sec*1000), 0)
+    start_timer(timer, int64(iround(sec*1000)), int64(0))
     args = yield(wt)
     stop_timer(timer)
     if isa(args,InterruptException)
@@ -447,6 +447,7 @@ function read{T}(this::AsyncStream, a::Array{T})
         buf = this.buffer
         assert(buf.seekable == false)
         assert(buf.maxsize >= nb)
+        start_reading(this)
         wait_readnb(this,nb)
         read(this.buffer, a)
         return a
@@ -542,6 +543,8 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-listen(sock::AsyncStream,backlog::Integer) = (err = ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog); err != -1 ? (sock.open = true): false)
-listen(sock::AsyncStream) = listen(sock,4)
-#listen(path::String)
+function listen(sock::AsyncStream, backlog::Integer)
+    err = ccall(:jl_listen, Int32, (Ptr{Void}, Int32), sock.handle, backlog)
+    err != -1 ? (sock.open = true): false
+end
+listen(sock::AsyncStream) = listen(sock, 511) # same default as node.js

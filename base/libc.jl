@@ -35,8 +35,12 @@ getpid() = ccall(:jl_getpid, Int32, ())
 ## network functions ##
 
 function gethostname()
-    hn = Array(Uint8, 128)
-    ccall(:gethostname, Int32, (Ptr{Uint8}, Uint), hn, length(hn))
+    hn = Array(Uint8, 256)
+    @unix_only err=ccall(:gethostname, Int32, (Ptr{Uint8}, Uint), hn, length(hn))
+    @windows_only err=ccall(:gethostname, stdcall, Int32, (Ptr{Uint8}, Uint32), hn, length(hn))
+    if err != 0
+        error("gethostname")
+    end
     bytestring(convert(Ptr{Uint8},hn))
 end
 

@@ -4,9 +4,6 @@ export
     FFTW,
     DSP,
     LinAlg,
-    BLAS,
-    LAPACK,
-    ARPACK,
     LibRandom,
     Random,
     Math,
@@ -25,6 +22,7 @@ export
     Array,
     Associative,
     AsyncStream,
+    Bidiagonal,
     BitArray,
     BigFloat,
     BigInt,
@@ -121,6 +119,7 @@ export
     SVDDense,
     Hermitian,
     Triangular,
+    Diagonal,
     InsertionSort,
     QuickSort,
     MergeSort,
@@ -451,6 +450,7 @@ export
     zeta,
 
 # arrays
+    mapslices,
     reducedim,
     bsxfun,
     cartesian_map,
@@ -568,6 +568,7 @@ export
     eigfact!,
     eigs,
     eigvals,
+    eigvecs,
     expm,
     sqrtm,
     eye,
@@ -959,6 +960,7 @@ export
 
 # I/O and events
     accept,
+    wait_accept,
     listen,
     bind,
     connect,

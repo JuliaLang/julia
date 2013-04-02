@@ -291,7 +291,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &m, &n, A, &lda,
                 T, &n, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, T
         end
         ## Several variants of geqrf! could be defined.
@@ -490,7 +490,7 @@ for (gelsd, elty) in ((:dgelsd_, :Float64),
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
             LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B, 1) != m; throw(LAPACK.DimensionMismatch("gelsd!")); end
+            if size(B, 1) != m; throw(DimensionMismatch("gelsd!")); end
             if size(B, 1) < n
                 newB = Array($elty, n, size(B, 2))
                 newB[1:size(B, 1), :] = B
@@ -539,7 +539,7 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
             LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B,1) != m; throw(LAPACK.DimensionMismatch("gelsd!")); end
+            if size(B,1) != m; throw(DimensionMismatch("gelsd!")); end
             if size(B, 1) < n
                 newB = Array($elty, n, size(B, 2))
                 newB[1:size(B, 1), :] = B
@@ -1050,7 +1050,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                 &k, &k, V, &ldv,
                 T, &k, C, &ldc,
                 work, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return C
         end
     end
@@ -1308,13 +1308,15 @@ for (trtri, trtrs, elty) in
 end
 
 ## (ST) Symmetric tridiagonal - eigendecomposition
-for (stev, stebz, stegr, elty) in
-    ((:dstev_,:dstebz_,:dstegr_,:Float64),
-     (:sstev_,:sstebz_,:sstegr_,:Float32)
+for (stev, stebz, stegr, stein, elty) in
+    ((:dstev_,:dstebz_,:dstegr_,:dstein_,:Float64),
+     (:sstev_,:sstebz_,:sstegr_,:sstein_,:Float32)
 #     , (:zstev_,:Complex128)  Need to rewrite for ZHEEV, rwork, etc.
 #     , (:cstev_,:Complex64)
      )
     @eval begin
+        #*  DSTEV computes all eigenvalues and, optionally, eigenvectors of a
+        #*  real symmetric tridiagonal matrix A.
         function stev!(job::BlasChar, dv::Vector{$elty}, ev::Vector{$elty})
             n    = length(dv)
             if length(ev) != (n-1) throw(DimensionMismatch("stev!")) end
@@ -1328,9 +1330,13 @@ for (stev, stebz, stegr, elty) in
             if info[1] != 0 throw(LAPACKException(info[1])) end
             dv, Zmat
         end
+        #*  DSTEBZ computes the eigenvalues of a symmetric tridiagonal
+        #*  matrix T.  The user may ask for all eigenvalues, all eigenvalues
+        #*  in the half-open interval (VL, VU], or the IL-th through IU-th
+        #*  eigenvalues.
         function stebz!(range::Char, order::Char, vl::$elty, vu::$elty, il::Integer, iu::Integer, abstol::Real, dv::Vector{$elty}, ev::Vector{$elty})
             n = length(dv)
-            if length(ev) != (n-1) throw(LapackDimMisMatch("stebz!")) end
+            if length(ev) != (n-1) throw(DimensionMismatch("stebz!")) end
             m = Array(BlasInt,1)
             nsplit = Array(BlasInt,1)
             w = Array($elty, n)
@@ -1351,12 +1357,20 @@ for (stev, stebz, stegr, elty) in
                 dv, ev, m, nsplit,
                 w, iblock, isplit, work, 
                 iwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
-            w[1:m[1]], isplit[1:m[1]], isplit[1:nsplit[1]], info[1]
+                if info[1] != 0 throw(LAPACKException(info[1])) end
+            w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]], info[1]
         end
+        #*  DSTEGR computes selected eigenvalues and, optionally, eigenvectors
+        #*  of a real symmetric tridiagonal matrix T. Any such unreduced matrix has
+        #*  a well defined set of pairwise different real eigenvalues, the corresponding
+        #*  real eigenvectors are pairwise orthogonal.
+        #*
+        #*  The spectrum may be computed either completely or partially by specifying
+        #*  either an interval (VL,VU] or a range of indices IL:IU for the desired
+        #*  eigenvalues.
         function stegr!(jobz::BlasChar, range::BlasChar, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer, abstol::Real)
             n = length(dv)
-            if length(ev) != (n-1) throw(LapackDimMisMatch("stebz!")) end
+            if length(ev) != (n-1) throw(DimensionMismatch("stebz!")) end
             eev = [ev, zero($elty)]
             m = Array(BlasInt, 1)
             w = Array($elty, n)
@@ -1387,13 +1401,66 @@ for (stev, stebz, stegr, elty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            if info[1] != 0 throw(LapackException(info[1])) end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
             return w[1:m[1]], Z[:,1:m[1]]
+        end
+        #*  DSTEIN computes the eigenvectors of a real symmetric tridiagonal
+        #*  matrix T corresponding to specified eigenvalues, using inverse
+        #*  iteration.
+        #      SUBROUTINE DSTEIN( N, D, E, M, W, IBLOCK, ISPLIT, Z, LDZ, WORK,
+        #     $                   IWORK, IFAIL, INFO )
+        # We allow the user to specify exactly which eigenvectors to get by
+        # specifying the eigenvalues (which may be approximate) via w_in
+        function stein!(dv::Vector{$elty}, ev_in::Vector{$elty}, w_in::Vector{$elty}, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
+            n = length(dv)
+            if length(ev_in) != (n-1) throw(DimensionMismatch("stein!")) end
+            ev = [ev_in; zeros($elty,1)]
+            ldz = n #Leading dimension
+            #Number of eigenvalues to find
+            1<=length(w_in)<=n ? (m=length(w_in)) : throw(DimensionMismatch("stein!"))
+            #If iblock and isplit are invalid input, assume worst-case block paritioning,
+            # i.e. set the block scheme to be the entire matrix
+            iblock = Array(BlasInt,n)
+            isplit = Array(BlasInt,n)
+            w = Array($elty,n)
+            if length(iblock_in) < m #Not enough block specifications
+                iblock[1:m] = ones(BlasInt, m)
+                w[1:m] = sort(w_in)
+            else
+                iblock[1:m] = iblock_in
+                w[1:m] = w_in #Assume user has sorted the eigenvalues properly
+            end
+            if length(isplit_in) < 1 #Not enough block specifications
+                isplit[1] = n
+            else
+                isplit[1:length(isplit_in)] = isplit_in
+            end
+
+            z = Array($elty,(n,m))
+            work = Array($elty, 5*n)
+            iwork = Array(BlasInt,n)
+            ifail = Array(BlasInt,m)
+            info = Array(BlasInt,1)
+
+            ccall(($(string(stein)),liblapack), Void,
+                (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                Ptr{BlasInt}),
+                &n, dv, ev, &m, w, iblock, isplit, z, &ldz, work, iwork, ifail, info)
+            
+            if (info[1] < 0) throw(LAPACKException(info[1])) end
+            (z, ifail, info[1])
         end
     end
 end
 stegr!(jobz::BlasChar, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
 stegr!(dv::Vector, ev::Vector) = stegr!('N', 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
+        
+# Allow user to skip specification of iblock and isplit
+stein!(dv::Vector, ev::Vector, w_in::Vector)=stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
+# Allow user to specify just one eigenvector to get in stein!
+stein!(dv::Vector, ev::Vector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
 
 ## (SY) symmetric matrices - eigendecomposition, Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
@@ -1512,13 +1579,14 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
                       (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
-                if info[1] != 0 throw(LAPACKException(info[1])) end
+                if info[1] < 0 throw(LAPACKException(info[1])) end
+                if info[1] > 0 throw(SingularException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            A, ipiv
+            A, ipiv, info
         end
         #       SUBROUTINE DSYTRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
@@ -1591,6 +1659,115 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
         end
     end
 end
+
+
+
+#Find the leading dimension
+ld = x->max(1,stride(x,2))
+function validate(uplo)
+    if !(uplo=='U' || uplo=='L')
+        error(string("Invalid UPLO: must be 'U' or 'L' but you said", uplo))
+    end
+end
+## (BD) Bidiagonal matrices - singular value decomposition
+for (bdsqr, relty, elty) in
+    ((:dbdsqr_,:Float64,:Float64),
+     (:sbdsqr_,:Float32,:Float32),
+     (:zbdsqr_,:Float64,:Complex128),
+     (:cbdsqr_,:Float32,:Complex64))
+    @eval begin
+        #*> DBDSQR computes the singular values and, optionally, the right and/or
+        #*> left singular vectors from the singular value decomposition (SVD) of
+        #*> a real N-by-N (upper or lower) bidiagonal matrix B using the implicit
+        #*> zero-shift QR algorithm.
+        function bdsqr!(uplo::BlasChar, d::Vector{$relty}, e_::Vector{$relty},
+            vt::StridedMatrix{$elty}, u::StridedMatrix{$elty}, c::StridedMatrix{$elty})
+            
+            validate(uplo)
+            n = length(d)
+            if length(e_) != n-1 throw(DimensionMismatch("bdsqr!")) end
+            ncvt, nru, ncc = size(vt)[2], size(u)[1], size(c)[2]
+            ldvt, ldu, ldc = ld(vt), ld(u), ld(c)
+            work=Array($elty, 4n)
+            info=Array(BlasInt,1)
+
+            ccall(($(string(bdsqr)),liblapack), Void,
+                (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}), 
+                &uplo, &n, ncvt, &nru, &ncc,
+                d, e_, vt, &ldvt, u,
+                &ldu, c, &ldc, work, info)
+
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            d, vt, u, c #singular values in descending order, P**T * VT, U * Q, Q**T * C
+        end
+   end
+end
+
+#Defined only for real types
+for (bdsdc, elty) in
+    ((:dbdsdc_,:Float64),
+     (:sbdsdc_,:Float32))
+    @eval begin
+        #*  DBDSDC computes the singular value decomposition (SVD) of a real
+        #*  N-by-N (upper or lower) bidiagonal matrix B:  B = U * S * VT,
+        #*  using a divide and conquer method
+        #*     .. Scalar Arguments ..
+        #      CHARACTER          COMPQ, UPLO
+        #      INTEGER            INFO, LDU, LDVT, N
+        #*     ..
+        #*     .. Array Arguments ..
+        #      INTEGER            IQ( * ), IWORK( * )
+        #      DOUBLE PRECISION   D( * ), E( * ), Q( * ), U( LDU, * ),
+        #     $                   VT( LDVT, * ), WORK( * )
+        function bdsdc!(uplo::BlasChar, compq::BlasChar, d::Vector{$elty}, e_::Vector{$elty})
+            validate(uplo)
+            n, ldiq, ldq, ldu, ldvt = length(d), 1, 1, 1, 1
+            if compq == 'N'
+                lwork = 4n
+            elseif compq == 'P'
+                warn("COMPQ='P' is not tested")
+                #TODO turn this into an actual LAPACK call
+                #smlsiz=ilaenv(9, $elty==:Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
+                smlsiz=100 #For now, completely overkill
+                ldq = n*(11+2*smlsiz+8*int(log((n/(smlsiz+1)))/log(2)))
+                ldiq = n*(3+3*int(log(n/(smlsiz+1))/log(2)))
+                lwork = 6n
+            elseif compq == 'I'
+                ldvt=ldu=max(1, n)
+                lwork=3*n^2 + 4n
+            else
+                error(string("Invalid COMPQ. Valid choices are 'N', 'P' or 'I' but you said '",compq,"'"))
+            end
+            u = Array($elty, (ldu,  n))
+            vt= Array($elty, (ldvt, n))
+            q = Array($elty, ldq)
+            iq= Array(BlasInt, ldiq)
+            work =Array($elty, lwork)
+            iwork=Array(BlasInt, 7n)
+            info =Array(BlasInt, 1)
+            ccall(($(string(bdsdc)),liblapack), Void,
+           (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+            &uplo, &compq, &n, d, e_,
+            u, &ldu, vt, &ldvt,
+            q, iq, work, iwork, info)
+
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            if compq == 'N'
+                d
+            elseif compq == 'P'
+                d, q, iq
+            else #compq == 'I'
+                u, d, vt'
+            end
+        end
+    end
+end
+
+
 
 # New symmetric eigen solver
 for (syevr, elty) in
@@ -1984,7 +2161,7 @@ for (fn, elty, relty) in ((:dsfrk_, :Float64, :Float64),
             elseif trans == 'T'
                 k, n = size(A)
             else
-                throw(LapackException(0))
+                throw(LAPACKException(0))
             end
             lda = max(1, stride(A, 2))
             ccall(($(string(fn)), liblapack), Void,
@@ -2013,7 +2190,7 @@ for (fn, elty) in ((:dpftrf_, :Float64),
                  Ptr{BlasInt}),
                 &transr, &uplo, &n, A,
                 info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, info[1]
         end
     end
@@ -2033,7 +2210,7 @@ for (fn, elty) in ((:dpftri_, :Float64),
                  Ptr{BlasInt}),
                 &transr, &uplo, &n, A, 
                 info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, info[1]
         end
     end
@@ -2056,7 +2233,7 @@ for (fn, elty) in ((:dpftrs_, :Float64),
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &transr, &uplo, &n, &nhrs,
                 A, B, &ldb, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return B
         end
     end
@@ -2098,7 +2275,7 @@ for (fn, elty) in ((:dtftri_, :Float64),
                  Ptr{$elty}, Ptr{BlasInt}),
                 &transr, &uplo, &diag, &n, 
                 A, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, info[1]
         end
     end
@@ -2119,7 +2296,7 @@ for (fn, elty) in ((:dtfttr_, :Float64),
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &transr, &uplo, &n, Arf,
                 A, &n, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return A, info[1]
         end
     end
@@ -2141,7 +2318,7 @@ for (fn, elty) in ((:dtrttf_, :Float64),
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                 &transr, &uplo, &n, A,
                 &lda, Arf, info)
-            if info[1] < 0 throw(LapackException(info[1])) end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
             return Arf, info[1]
         end
     end
