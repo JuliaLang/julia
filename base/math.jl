@@ -33,7 +33,11 @@ clamp{T<:Real}(x::AbstractArray{T}, lo::Real, hi::Real) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
 sinc(x::Number) = x==0 ? one(x)  : (pix=pi*x; oftype(x,sin(pix)/pix))
+sinc(x::Integer) = x==0 ? one(x) : zero(x)
+@vectorize_1arg Number sinc
 cosc(x::Number) = x==0 ? zero(x) : (pix=pi*x; oftype(x,cos(pix)/x-sin(pix)/(pix*x)))
+cosc(x::Integer) = x==0 ? zero(x) : (pix=pi*x; oftype(float(x),cos(pix)/x-sin(pix)/(pix*x)))
+@vectorize_1arg Number cosc
 
 radians2degrees(z::Real) = oftype(z, (180/pi) * z)
 degrees2radians(z::Real) = oftype(z, (pi/180) * z)
