@@ -1,6 +1,6 @@
-testnames = ["core", "numbers", "strings", "unicode", "corelib", "hashing",
-             "remote", "iostring", "arrayops", "linalg", "blas", "fft",
-             "dct", "sparse", "bitarray", "random", "math", "functional",
+testnames = ["core", "keywordargs", "numbers", "strings", "unicode", "corelib",
+             "hashing", "remote", "iostring", "arrayops", "linalg", "blas",
+             "fft", "dct", "sparse", "bitarray", "random", "math", "functional",
              "bigint", "sorting", "statistics", "spawn", "parallel",
              "suitesparse", "arpack", "bigfloat", "file", "zlib", "image",
              "perf"]

@@ -283,6 +283,15 @@
 	(map (lambda (x)    `(call (top TypeVar) ',x ,@bnd)) sl)
 	(map (lambda (x ub) `(call (top TypeVar) ',x ,ub ,@bnd)) sl upperbounds))))
 
+(define (sparam-name sp)
+  (cond ((symbol? sp)
+	 sp)
+	((and (length= sp 3)
+	      (eq? (car sp) '|<:|)
+	      (symbol? (cadr sp)))
+	 (cadr sp))
+	(else (error "malformed type parameter list"))))
+
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
 	 (values (reverse names) (reverse bounds)))
@@ -297,10 +306,16 @@
 	(else
 	 (error "malformed type parameter list"))))
 
-(define (method-def-expr name sparams argl body)
+(define (method-expr-name m)
+  (if (symbol? (cadr m)) (cadr m)
+      (cadr (cadr m))))
+
+(define (method-def-expr- name sparams argl body)
   (if (has-dups (llist-vars argl))
       (error "function argument names not unique"))
-  (if (not (symbol? name))
+  (if (not (or (symbol? name)
+	       (and (pair? name) (eq? (car name) 'kw)
+		    (symbol? (cadr name)))))
       (error (string "invalid method name " name)))
   (let* ((types (llist-types argl))
 	 (body  (method-lambda-expr argl body)))
@@ -313,6 +328,186 @@
 		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
 		  ,@(symbols->typevars names bounds #t)
 		  ,body))))))
+
+(define (vararg? x) (and (pair? x) (eq? (car x) '...)))
+
+(define (const-default? x)
+  (or (number? x) (string? x) (char? x) (and (pair? x) (eq? (car x) 'quote))))
+
+(define (keywords-method-def-expr name sparams argl body)
+  (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
+         (pargl (cdr argl))   ;; positional args
+	 ;; 1-element list of vararg argument, or empty if none
+	 (vararg (let ((l (if (null? pargl) '() (last pargl))))
+		   (if (vararg? l)
+		       (list l) '())))
+	 ;; positional args without vararg
+	 (pargl (if (null? vararg) pargl (butlast pargl)))
+	 ;; keywords glob
+	 (restkw (let ((l (last kargl)))
+		   (if (vararg? l)
+		       (list (cadr l)) '())))
+	 (kargl (if (null? restkw) kargl (butlast kargl)))
+	 ;; the keyword::Type expressions
+         (vars     (map cadr kargl))
+	 ;; keyword default values
+         (vals     (map caddr kargl))
+	 ;; just the keyword names
+	 (keynames (map decl-var vars))
+	 ;; 1-element list of function's line number node, or empty if none
+	 (lno  (if (and (pair? (cadr body)) (eq? (caadr body) 'line))
+		   (list (cadr body))
+		   '()))
+	 ;; body statements, minus line number node
+	 (stmts (if (null? lno) (cdr body) (cddr body))))
+    (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
+	  (mangled (symbol (string name "#" (gensym))))
+	  (flags (map (lambda (x) (gensy)) vals)))
+      `(block
+	;; call with keyword args pre-sorted - original method code goes here
+	,(method-def-expr-
+	  mangled sparams
+	  `(,@vars ,@restkw ,@pargl ,@vararg)
+	  `(block
+	    ,@(if (null? lno) '()
+		  (list (append (car lno) (list name))))
+	    ,@stmts))
+
+	;; call with no keyword args
+	,(method-def-expr-
+	  name sparams (append pargl vararg)
+	  `(block
+	    ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
+	    (return (call ,mangled
+			  ,@vals
+			  ,@(if (null? restkw) '() '((cell1d)))
+			  ,@(map arg-name pargl)
+			  ,@(if (null? vararg) '()
+				(list `(... ,(arg-name (car vararg)))))))))
+
+	;; call with unsorted keyword args. this sorts and re-dispatches.
+	,(method-def-expr-
+	  (list 'kw name) sparams
+	  `((:: ,kw (top Tuple)) ,@pargl ,@vararg)
+	  `(block
+	    ,@lno
+	    ;; initialize keyword args to their defaults, or set a flag telling
+	    ;; whether this keyword needs to be set.
+	    ,@(map (lambda (name dflt flag)
+		     (if (const-default? dflt)
+			 `(= ,name ,dflt)
+			 `(= ,flag true)))
+		   keynames vals flags)
+	    ,@(if (null? restkw) '()
+		  `((= ,rkw (cell1d))))
+	    ;; for i = 1:(length(kw)>>1)
+	    (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
+		 (block
+		  ;; ii = i*2 - 1
+		  (= ,ii (call (top -) (call (top *) ,i 2) 1))
+		  (= ,elt (call (top tupleref) ,kw ,ii))
+		  ,(foldl (lambda (kvf else)
+			    (let* ((k    (car kvf))
+				   (rval0 `(call (top tupleref) ,kw
+						 (call (top +) ,ii 1)))
+				   (rval (if (decl? k)
+					     `(call (top typeassert)
+						    ,rval0
+						    ,(caddr k))
+					     rval0)))
+			      ;; if kw[ii] == 'k; k = kw[ii+1]::Type; end
+			      `(if (comparison ,elt === (quote ,(decl-var k)))
+				   (block
+				    (= ,(decl-var k) ,rval)
+				    ,@(if (not (const-default? (cadr kvf)))
+					  `((= ,(caddr kvf) false))
+					  '()))
+				   ,else)))
+			  (if (null? restkw)
+			      ;; if no rest kw, give error for unrecognized
+			      `(call (top error) "unrecognized keyword " ,elt)
+			      ;; otherwise add to rest keywords
+			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
+				      ,rkw (tuple ,elt
+						  (call (top tupleref) ,kw
+							(call (top +) ,ii 1)))))
+			  (map list vars vals flags))))
+	    ;; set keywords that weren't present to their default values
+	    ,@(apply append
+		     (map (lambda (name dflt flag)
+			    (if (const-default? dflt)
+				'()
+				`((if ,flag (= ,name ,dflt)))))
+			  keynames vals flags))
+	    ;; finally, call the core function
+	    (return (call ,mangled
+			  ,@keynames
+			  ,@(if (null? restkw) '() (list rkw))
+			  ,@(map arg-name pargl)
+			  ,@(if (null? vararg) '()
+				(list `(... ,(arg-name (car vararg)))))))))
+	;; return primary function
+	,name))))
+
+(define (optional-positional-defs name sparams req opt dfl body overall-argl . kw)
+  `(block
+    ,@(map (lambda (n)
+	     (let* ((passed (append req (list-head opt n)))
+		    ;; only keep static parameters used by these arguments
+		    (sp     (filter (lambda (sp)
+				      (contains (lambda (e) (eq? e (sparam-name sp)))
+						passed))
+				    sparams))
+		    (vals   (list-tail dfl n))
+		    (absent (list-tail opt n)) ;; absent arguments
+		    (body
+		     (if (any (lambda (defaultv)
+				;; does any default val expression...
+				(contains (lambda (e)
+					    ;; contain "e" such that...
+					    (any (lambda (a)
+						   ;; "e" is in an absent arg
+						   (contains (lambda (u)
+							       (eq? u e))
+							     a))
+						 absent))
+					  defaultv))
+			      vals)
+			 ;; then add only one next argument
+			 `(block (call ,name ,@kw ,@(map arg-name passed) ,(car vals)))
+			 ;; otherwise add all
+			 `(block (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
+	       (method-def-expr name sp (append kw passed) body)))
+	   (iota (length opt)))
+    ,(method-def-expr name sparams overall-argl body)))
+
+(define (method-def-expr name sparams argl body)
+  (if (has-keywords? argl)
+      ;; here (keywords ...) is optional positional args
+      (let ((opt  (map cadr  (cdar argl)))
+	    (dfl  (map caddr (cdar argl)))
+	    (argl (cdr argl)))
+	(if (has-parameters? argl)
+	    ;; both!
+	    ;; separate into keyword version with all positional args,
+	    ;; and a series of optional-positional-defs that delegate keywords
+	    (let ((kw   (car argl))
+		  (argl (cdr argl)))
+	      (receive
+	       (vararg req) (separate vararg? argl)
+	       (optional-positional-defs name sparams req opt dfl body
+					 (cons kw (append req opt vararg))
+					 `(parameters (... ,(gensy))))))
+	    ;; optional positional only
+	    (receive
+	     (vararg req) (separate vararg? argl)
+	     (optional-positional-defs name sparams req opt dfl body
+				       (append req opt vararg)))))
+      (if (has-parameters? argl)
+	  ;; keywords only
+	  (keywords-method-def-expr name sparams argl body)
+	  ;; neither
+	  (method-def-expr- name sparams argl body))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -833,6 +1028,26 @@
 			  (+ i 1)))))
       ,t)))
 
+(define (lower-kw-call f kw pa)
+  (let ((invalid (filter (lambda (x)
+			   (not (or (assignment? x)
+				    (vararg? x))))
+			 kw)))
+    (if (pair? invalid)
+	(error (string "invalid keyword argument " (car invalid))))
+    (receive
+     (keys restkeys) (separate assignment? kw)
+     `(call (top kwcall) ,f ,(length keys)
+	    ,@(apply append
+		     (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
+			  keys))
+	    ,(if (null? restkeys)
+		 '(tuple)
+		 (if (length= restkeys 1)
+		     (cadr (car restkeys))
+		     `(call (top append_any) ,@(map cadr restkeys))))
+	    ,@pa))))
+
 (define patterns
   (pattern-set
    (pattern-lambda (block)
@@ -937,6 +1152,19 @@
 
    (pattern-lambda (curly type . elts)
 		   `(call (top apply_type) ,type ,@elts))
+
+   ;; call with keywords
+   (pattern-lambda (call f (keywords . kwargs) ...)
+		   (let ((kw (if (and (length> __ 3)
+				      (pair? (cadddr __))
+				      (eq? (car (cadddr __)) 'parameters))
+				 (append kwargs (cdr (cadddr __)))
+				 kwargs)))
+		     (lower-kw-call f kw (if (eq? kw kwargs)
+					     (cdddr __)
+					     (cddddr __)))))
+   (pattern-lambda (call f (parameters . kwargs) ...)
+		   (lower-kw-call f kwargs (cdddr __)))
 
    ;; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -1692,7 +1920,7 @@
 
 	  (else
 	   (if (and dest (not tail) (eq? (car e) 'method))
-	       (let ((ex (to-lff (cadr e) dest tail))
+	       (let ((ex (to-lff (method-expr-name e) dest tail))
 		     (fu (to-lff e #f #f)))
 		 (cons (car ex)
 		       (append fu (cdr ex))))
@@ -1746,7 +1974,12 @@ So far only the second case can actually occur.
       '()
       (case (car e)
 	((lambda scope-block)  '())
-	((= method)
+	((method)
+	 (let ((v (decl-var (method-expr-name e))))
+	   (if (memq v env)
+	       '()
+	       (list v))))
+	((=)
 	 (let ((v (decl-var (cadr e))))
 	   (if (memq v env)
 	       '()
@@ -2041,7 +2274,7 @@ So far only the second case can actually occur.
 		     ,@vs)
 	      env captvars))))
 	((eq? (car e) 'method)
-	 (let ((vi (var-info-for (cadr e) env)))
+	 (let ((vi (var-info-for (method-expr-name e) env)))
 	   (if vi
 	       (begin
 		 (vinfo:set-asgn! vi #t)
