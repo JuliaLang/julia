@@ -306,6 +306,15 @@ JL_CALLABLE(jl_f_kwcall)
     size_t pa = 3 + 2*nkeys;
     jl_value_t *rkw = args[2 + 2*nkeys];
     if (rkw != (jl_value_t*)jl_null) {
+        if (!jl_is_array(rkw)) {
+            if (jl_append_any_func == NULL) {
+                jl_append_any_func =
+                    (jl_function_t*)jl_get_global(jl_base_module,
+                                                  jl_symbol("append_any"));
+            }
+            rkw = jl_apply(jl_append_any_func, &rkw, 1);
+            args[2 + 2*nkeys] = rkw;  // gc root
+        }
         nrest = jl_array_len(rkw);
     }
 
