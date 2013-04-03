@@ -1987,13 +1987,14 @@
 
 ("Mathematical Functions","Base","sinc","sinc(x)
 
-   Compute \\sin(\\pi x) / x
+   Compute \\sin(\\pi x) / (\\pi x) if x \\neq 0, and 1 if x = 0.
 
 "),
 
 ("Mathematical Functions","Base","cosc","cosc(x)
 
-   Compute \\cos(\\pi x) / x
+   Compute \\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2) if x \\neq
+   0, and 0 if x = 0. This is the derivative of \"sinc(x)\".
 
 "),
 
@@ -4913,10 +4914,10 @@
 
 "),
 
-("Linear Algebra","","qr","qr(A) -> Q, R
+("Linear Algebra","","qr","qr(A[, thin]) -> Q, R
 
    Compute the QR factorization of \"A\" such that \"A = Q*R\". Also
-   see \"qrfact\".
+   see \"qrfact\". The default is to compute a thin factorization.
 
 "),
 
@@ -4940,10 +4941,11 @@
 
 "),
 
-("Linear Algebra","","qrp","qrp(A) -> Q, R, P
+("Linear Algebra","","qrp","qrp(A[, thin]) -> Q, R, P
 
    Compute the QR factorization of \"A\" with pivoting, such that
-   \"A*P = Q*R\", Also see \"qrpfact\".
+   \"A*P = Q*R\", Also see \"qrpfact\". The default is to compute a
+   thin factorization.
 
 "),
 
@@ -4986,6 +4988,28 @@
 ("Linear Algebra","","eigvals","eigvals(A)
 
    Returns the eigenvalues of \"A\".
+
+"),
+
+("Linear Algebra","","eigmax","eigmax(A)
+
+   Returns the largest eigenvalue of \"A\".
+
+"),
+
+("Linear Algebra","","eigmin","eigmin(A)
+
+   Returns the smallest eigenvalue of \"A\".
+
+"),
+
+("Linear Algebra","","eigvecs","eigvecs(A[, eigvals])
+
+   Returns the eigenvectors of \"A\".
+
+   For SymTridiagonal matrices, if the optional vector of eigenvalues
+   \"eigvals\" is specified, returns the specific corresponding
+   eigenvectors.
 
 "),
 
@@ -5032,7 +5056,7 @@
    \"F[:V]\" and \"F[:Vt]\", such that \"A = U*diagm(S)*Vt\". If
    \"thin\" is \"true\", an economy mode decomposition is returned.
    The algorithm produces \"Vt\" and hence \"Vt\" is more efficient to
-   extract than \"V\".
+   extract than \"V\". The default is to produce a thin decomposition.
 
 "),
 
@@ -5040,7 +5064,8 @@
 
    \"svdfact!\" is the same as \"svdfact\" but saves space by
    overwriting the input A, instead of creating a copy. If \"thin\" is
-   \"true\", an economy mode decomposition is returned.
+   \"true\", an economy mode decomposition is returned. The default is
+   to produce a thin decomposition.
 
 "),
 
@@ -5130,8 +5155,9 @@
 
 ("Linear Algebra","","Bidiagonal","Bidiagonal(dv, ev, isupper)
 
-   Construct an upper (isupper=true) or lower (isupper=false) bidiagonal matrix
-   from the given diagonal (dv) and off-diagonal (ev) vectors.
+   Constructs an upper (isupper=true) or lower (isupper=false)
+   bidiagonal matrix using the given diagonal (dv) and off-diagonal
+   (ev) vectors
 
 "),
 
