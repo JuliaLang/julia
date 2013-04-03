@@ -768,7 +768,7 @@ function accept_handler(server::TcpSocket, status::Int32)
     if(status == -1)
         error("An error occured during the creation of the server")
     end
-    client =  accept(server)
+    client = accept_nonblock(server)
     create_message_handler_loop(client)
 end
 
