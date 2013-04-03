@@ -172,6 +172,7 @@ export PipeString
 @deprecate  parse_oct(s)        parseint(s,8)
 @deprecate  parse_hex(T,s)      parseint(T,s,16)
 @deprecate  parse_hex(s)        parseint(s,16)
+@deprecate  wait_accept         accept
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)
