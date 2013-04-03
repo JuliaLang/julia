@@ -44,6 +44,7 @@ VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, [], [
 VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, [], [])
 
 function print(io::IO, v::VersionNumber)
+    v == typemax(VersionNumber) && return print(io, "∞")
     print(io, v.major)
     print(io, '.')
     print(io, v.minor)

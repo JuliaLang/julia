@@ -1,66 +1,44 @@
 # module Pkg2
-import Base: Git, isequal, isless, hash, intersect, contains
+import Base: Git, isequal, isless, hash, isempty, contains
 
 ### VersionSet ###
 
-abstract VersionInterval
-immutable NoVersions <: VersionInterval end
-immutable AllVersions <: VersionInterval end
-immutable VersionsGreater <: VersionInterval
-    lo::VersionNumber
-end
-immutable VersionsBetween <: VersionInterval
-    lo::VersionNumber
-    hi::VersionNumber
+immutable VersionInterval
+    lower::VersionNumber
+    upper::VersionNumber
 end
 
-interval(lo::VersionNumber) = VersionsGreater(lo)
-interval(lo::VersionNumber, hi::VersionNumber) = lo < hi ? VersionsBetween(lo, hi) : NoVersions()
-
-intersect(x::NoVersions,      y::VersionInterval) = x
-intersect(x::AllVersions,     y::VersionInterval) = y
-intersect(x::VersionInterval, y::VersionInterval) = intersect(y,x)
-intersect(x::VersionsGreater, y::VersionsGreater) = interval(max(x.lo,y.lo))
-intersect(x::VersionsGreater, y::VersionsBetween) = interval(max(x.lo,y.lo),y.hi)
-intersect(x::VersionsBetween, y::VersionsBetween) = interval(max(x.lo,y.lo),min(x.hi,y.hi))
-
-contains(i::NoVersions, v::VersionNumber) = false
-contains(i::AllVersions, v::VersionNumber) = true
-contains(i::VersionsGreater, v::VersionNumber) = i.lo <= v
-contains(i::VersionsBetween, v::VersionNumber) = i.lo <= v < i.hi
-
-immutable VersionSet
-    package::ByteString
-    versions::Vector{VersionNumber}
-    function VersionSet(pkg::ByteString, vers::Vector{VersionNumber})
-        if !issorted(vers)
-            error("version numbers must be sorted")
-        end
-        new(pkg, vers)
-    end
-end
-VersionSet(pkg::ByteString) = VersionSet(pkg, VersionNumber[])
-
-isequal(a::VersionSet, b::VersionSet) =
-    a.package == b.package && a.versions == b.versions
-isless(a::VersionSet, b::VersionSet) = a.package < b.package
-hash(s::VersionSet) = hash([s.(n) for n in VersionSet.names])
+isempty(i::VersionInterval) = i.upper <= i.lower
+contains(i::VersionInterval, v::VersionNumber) = a.lower <= v < a.upper
+intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
+intersect(A::Vector{VersionInterval}, B::Vector{VersionInterval}) =
+    sortby!(filter!(i->!isempty(i), vec([ intersect(a,b) for a in A, b in B ])), i->i.lower)
 
 function parse_requires(readable)
-    reqs = VersionSet[]
+    reqs = Dict{ByteString,Vector{VersionInterval}}()
     for line in eachline(readable)
-        if ismatch(r"^\s*(?:#|$)", line) continue end
-        line = replace(line, r"#.*$", "")
-        fields = split(line)
+        ismatch(r"^\s*(?:#|$)", line) && continue
+        fields = split(replace(line, r"#.*$", ""))
         pkg = shift!(fields)
+        if !all(x->ismatch(Base.VERSION_REGEX,x), fields)
+            error("invalid requires entry for $pkg: $fields")
+        end
         vers = [ convert(VersionNumber,x) for x in fields ]
         if !issorted(vers)
             error("invalid requires entry for $pkg: $vers")
         end
-        # TODO: merge version sets instead of appending?
-        push!(reqs,VersionSet(pkg,vers))
+        ivals = VersionInterval[]
+        if isempty(vers)
+            push!(ivals, VersionInterval(typemin(VersionNumber),typemax(VersionNumber)))
+        else
+            isodd(length(vers)) && push!(vers, typemax(VersionNumber))
+            while !isempty(vers)
+                push!(ivals, VersionInterval(shift!(vers), shift!(vers)))
+            end
+        end
+        reqs[pkg] = has(reqs,pkg) ? intersect(reqs[pkg], ivals) : ivals
     end
-    sort!(reqs)
+    return reqs
 end
 parse_requires(file::String) = open(parse_requires,file)
 
