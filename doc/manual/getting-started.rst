@@ -175,5 +175,4 @@ One of Julia's goals is to provide an effective language for data analysis and s
 - In R, performance requires vectorization. In Julia, almost the opposite is true: the best performing code is often achieved by using devectorized loops.
 - Unlike R, there is no delayed evaluation in Julia. For most users, this means that there are very few unquoted expressions or column names.
 - Julia does not ``NULL`` type.
-- Julia currently has no keyword arguments, but it is a planned feature.
 - There is no equivalent of R's ``assign`` or ``get`` in Julia.
