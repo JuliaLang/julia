@@ -1293,11 +1293,12 @@ Mathematical Functions
 
 .. function:: sinc(x)
 
-   Compute :math:`\sin(\pi x) / x`
+   Compute :math:`\sin(\pi x) / (\pi x)` if :math:`x \neq 0`, and :math:`1` if :math:`x = 0`.
 
 .. function:: cosc(x)
 
-   Compute :math:`\cos(\pi x) / x`
+   Compute :math:`\cos(\pi x) / x - \sin(\pi x) / (\pi x^2)` if :math:`x \neq 0`, and :math:`0`
+   if :math:`x = 0`. This is the derivative of ``sinc(x)``.
 
 .. function:: degrees2radians(x)
 

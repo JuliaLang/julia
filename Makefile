@@ -137,8 +137,13 @@ cleanall: clean
 	@rm -fr $(BUILD)/$(JL_LIBDIR)
 	@$(MAKE) -C deps clean-uv
 
+distclean: cleanall
+	@$(MAKE) -C deps distclean
+	@$(MAKE) -C doc distclean
+	rm -fr usr
+
 .PHONY: default debug release julia-debug julia-release \
-	test testall test-* clean cleanall \
+	test testall test-* clean distclean cleanall \
 	run-julia run-julia-debug run-julia-release
 
 test: release
