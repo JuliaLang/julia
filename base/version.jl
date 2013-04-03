@@ -1,50 +1,42 @@
 ## semantic version numbers (http://semver.org)
 
-type VersionNumber
+immutable VersionNumber
     major::Int
     minor::Int
     patch::Int
-    prerelease::Vector{Union(Int,ASCIIString)}
-    build::Vector{Union(Int,ASCIIString)}
+    prerelease::(Union(Int,ASCIIString)...)
+    build::(Union(Int,ASCIIString)...)
 
-    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::Vector, bld::Vector)
+    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::(Union(Int,ASCIIString)...), bld::(Union(Int,ASCIIString)...))
         if major < 0 error("invalid major version: $major") end
         if minor < 0 error("invalid minor version: $minor") end
         if patch < 0 error("invalid patch version: $patch") end
-        prerelease = Array(Union(Int,ASCIIString),length(pre))
-        for i in 1:length(pre)
-            ident = ascii(string(pre[i]))
-            if isempty(ident) && !(length(pre)==1 && isempty(bld))
-                error("invalid pre-release identifier: empty string")
+        for ident in pre
+            if isa(ident,Int)
+                ident >= 0 || error("invalid negative pre-release identifier: $ident")
+            else
+                if !ismatch(r"^[0-9a-z-]*$"i, ident)
+                    error("invalid pre-release identifier: $ident")
+                end
+                if isempty(ident) && !(length(pre)==1 && isempty(bld))
+                    error("invalid pre-release identifier: empty string")
+                end
             end
-            if !ismatch(r"^[0-9a-z-]*$"i, ident)
-                error("invalid pre-release identifier: $ident")
-            end
-            if ismatch(r"^\d+$", ident)
-                ident = parse_int(ident)
-            end
-            prerelease[i] = ident
         end
-        build = Array(Union(Int,ASCIIString),length(bld))
-        for i in 1:length(bld)
-            ident = ascii(string(bld[i]))
-            if isempty(ident) && length(bld)!=1
-                error("invalid pre-release identifier: empty string")
-            end
+        for ident in bld
             if !ismatch(r"^[0-9a-z-]*$"i, ident)
                 error("invalid build identifier: $ident")
             end
-            if ismatch(r"^\d+$", ident)
-                ident = parse_int(ident)
+            if isempty(ident) && length(bld)!=1
+                error("invalid pre-release identifier: empty string")
             end
-            build[i] = ident
         end
-        new(major, minor, patch, prerelease, build)
+        new(major, minor, patch, pre, bld)
     end
 end
-VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, [], [])
-VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, [], [])
-VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, [], [])
+VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, (), ())
+VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, (), ())
+VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, (), ())
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -79,6 +71,14 @@ const VERSION_REGEX = r"^
     ))
 $"ix
 
+function split_idents(s::String)
+    idents = split(s, '.')
+    ntuple(length(idents)) do i
+        ident = idents[i]
+        ismatch(r"^\d+$", ident) ? parse_int(ident) : ident
+    end
+end
+
 function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)
     if m == nothing error("invalid version string: $v") end
@@ -86,23 +86,23 @@ function convert(::Type{VersionNumber}, v::String)
     major = int(major)
     minor = minor != nothing ? int(minor) : 0
     patch = patch != nothing ? int(patch) : 0
-    prerl = prerl != nothing ? split(prerl,'.') : minus == "-" ? [""] : []
-    build = build != nothing ? split(build,'.') : plus  == "+" ? [""] : []
+    prerl = prerl != nothing ? split_idents(prerl) : minus == "-" ? ("",) : ()
+    build = build != nothing ? split_idents(build) : plus  == "+" ? ("",) : ()
     VersionNumber(major, minor, patch, prerl, build)
 end
 
 macro v_str(v); convert(VersionNumber, v); end
 
 typemin(::Type{VersionNumber}) = v"0-"
-typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),[],[""])
+typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))
 
 ident_cmp(a::Int, b::Int) = cmp(a,b)
 ident_cmp(a::Int, b::ASCIIString) = isempty(b) ? +1 : -1
 ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
 ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
 
-function ident_cmp(A::Vector{Union(Int,ASCIIString)},
-                   B::Vector{Union(Int,ASCIIString)})
+function ident_cmp(A::(Union(Int,ASCIIString)...),
+                   B::(Union(Int,ASCIIString)...))
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)
@@ -199,9 +199,17 @@ let
 
             if commits_after_tag > 0
                 field = tag < VERSION ? VERSION.prerelease : VERSION.build
-                push!(field, commits_after_tag)
-                push!(field, "r$(commit[1:4])")
-                if dirty push!(field, "dirty") end
+                field = tuple(field..., commits_after_tag, "r$(commit[1:8])")
+                if dirty
+                    field = tuple(field..., "dirty")
+                end
+                tag = VersionNumber(
+                    tag.major,
+                    tag.minor,
+                    tag.patch,
+                    tag < VERSION ? field : tag.prerelease,
+                    tag < VERSION ? tag.build : field,
+                )
             end
 
             isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
