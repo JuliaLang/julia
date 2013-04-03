@@ -118,7 +118,7 @@ srand(0xdeadbeef)
 for n in [0:10, 100, 1000]
     r = 1:10
     v = rand(1:10,n)
-    h = hist(v,length(r))
+    h = hist(v,r)
 
     for ord in [Sort.Forward, Sort.Reverse]
         # insersion sort as a reference
@@ -126,7 +126,7 @@ for n in [0:10, 100, 1000]
         @test isperm(pi)
         s = v[pi]
         @test issorted(s, ord)
-        @test hist(s) == h
+        @test hist(s,r) == h
         @test all([ issorted(pi[s.==i]) for i in r ])
         si = copy(v)
         permute!(si, pi)
