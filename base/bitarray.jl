@@ -372,7 +372,7 @@ end
 
 let getindex_cache = nothing
     global getindex
-    function getindex(B::BitArray, I::Union(Real,AbstractArray)...)
+    function getindex(B::BitArray, I::Union(Real,AbstractVector)...)
         I = indices(I)
         X = BitArray(index_shape(I...))
         Xc = X.chunks

@@ -244,7 +244,7 @@ function parentdims(s::SubArray)
     dimindex
 end
 
-function getindex(s::SubArray, I::Union(Real,AbstractArray)...)
+function getindex(s::SubArray, I::Union(Real,AbstractVector)...)
     newindexes = translate_indexes(s, I...)
 
     rs = index_shape(I...)
