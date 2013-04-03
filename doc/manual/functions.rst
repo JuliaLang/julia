@@ -356,11 +356,11 @@ Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore
 might not need to be passed explicitly in every call. For example, the
-library function ``parse_int(num,base)`` interprets a string as a number
+library function ``parseint(num,base)`` interprets a string as a number
 in some base. The ``base`` argument defaults to ``10``. This behavior can be
 expressed concisely as::
 
-    function parse_int(num, base=10)
+    function parseint(num, base=10)
         ###
     end
 
@@ -368,13 +368,13 @@ With this definition, the function can be called with either one or two
 arguments, and ``10`` is automatically passed when a second argument is not
 specified::
 
-    julia> parse_int("12",10)
+    julia> parseint("12",10)
     12
 
-    julia> parse_int("12",3)
+    julia> parseint("12",3)
     5
 
-    julia> parse_int("12")
+    julia> parseint("12")
     12
 
 Optional arguments are actually just a convenient syntax for writing

@@ -67,7 +67,6 @@ export
     #ProcessSignaled,
     #ProcessStatus,
     #ProcessStopped,
-    OrdinalRange,
     Range,
     Range1,
     RangeIndex,
@@ -700,7 +699,7 @@ export
 
 # strings and text output
     ascii,
-    begins_with,
+    beginswith,
     char,
     charwidth,
     chomp,
@@ -708,7 +707,7 @@ export
     chr2ind,
     bytestring,
     eachmatch,
-    ends_with,
+    endswith,
     escape_string,
     first_utf8_byte,
     ind2chr,
@@ -763,11 +762,8 @@ export
     ndigits,
     ndigits0z,
     oct,
-    parse_bin,
-    parse_float,
-    parse_hex,
-    parse_int,
-    parse_oct,
+    parsefloat,
+    parseint,
     print,
     print_escaped,
     print_joined,
@@ -964,7 +960,6 @@ export
 
 # I/O and events
     accept,
-    wait_accept,
     listen,
     bind,
     connect,

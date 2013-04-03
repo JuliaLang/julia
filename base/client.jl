@@ -225,7 +225,7 @@ function process_options(args::Array{Any,1})
             # load juliarc now before processing any more options
             try_include(string(ENV["HOME"],"/.juliarc.jl"))
             startup = false
-        elseif begins_with(args[i], "--color")
+        elseif beginswith(args[i], "--color")
             if args[i] == "--color"
                 color_set = true
                 global have_color = true
@@ -332,7 +332,7 @@ function _start()
             startup && try_include(joinpath(ENV["HOME"],".juliarc.jl"))
 
             if !color_set
-                @unix_only global have_color = (begins_with(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
+                @unix_only global have_color = (beginswith(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
                 @windows_only global have_color = true
             end
 

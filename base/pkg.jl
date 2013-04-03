@@ -512,7 +512,7 @@ pull() = cd_pkgdir() do
         end
         # remove submodules that were deleted
         for section in deleted
-            if !begins_with(section,"submodule.") continue end
+            if !beginswith(section,"submodule.") continue end
             path = get(Lc,"$section.path",nothing)
             if path == nothing continue end
             run(`git rm -qrf --cached --ignore-unmatch -- $path`)

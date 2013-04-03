@@ -465,6 +465,15 @@ end
 
 getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
 
+# linear indexing with a single multi-dimensional index
+function getindex(A::AbstractArray, I::AbstractArray)
+    x = similar(A, size(I))
+    for i=1:length(I)
+        x[i] = A[I[i]]
+    end
+    return x
+end
+
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
 slicedim(A::AbstractArray, d::Integer, i) =

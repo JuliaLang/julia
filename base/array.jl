@@ -327,7 +327,7 @@ end
 # Multidimensional indexing
 let getindex_cache = nothing
 global getindex
-function getindex(A::Array, I::Union(Real,AbstractArray)...)
+function getindex(A::Array, I::Union(Real,AbstractVector)...)
     check_bounds(A, I...)
     I = indices(I)
     X = similar(A, index_shape(I...))

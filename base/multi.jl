@@ -768,7 +768,7 @@ function accept_handler(server::TcpSocket, status::Int32)
     if(status == -1)
         error("An error occured during the creation of the server")
     end
-    client =  accept(server)
+    client = accept_nonblock(server)
     create_message_handler_loop(client)
 end
 
@@ -947,7 +947,7 @@ end
 function parse_connection_info(str)
     m = match(r"^julia_worker:(\d+)#(.*)", str)
     if m != nothing
-        (m.captures[2], parse_int(Int16, m.captures[1]))
+        (m.captures[2], parseint(Int16, m.captures[1]))
     else
         ("", int16(-1))
     end

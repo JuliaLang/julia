@@ -168,6 +168,21 @@ Types
 
    Determine a type big enough to hold values of each argument type without loss, whenever possible. In some cases, where no type exists which to which both types can be promoted losslessly, some loss is tolerated; for example, ``promote_type(Int64,Float64)`` returns ``Float64`` even though strictly, not all ``Int64`` values can be represented exactly as ``Float64`` values.
 
+.. function:: getfield(value, name::Symbol)
+
+   Extract a named field from a value of composite type. The syntax ``a.b`` calls
+   ``getfield(a, :b)``, and the syntax ``a.(b)`` calls ``getfield(a, b)``.
+
+.. function:: setfield(value, name::Symbol, x)
+
+   Assign ``x`` to a named field in ``value`` of composite type.
+   The syntax ``a.b = c`` calls ``setfield(a, :b, c)``, and the syntax ``a.(b) = c``
+   calls ``setfield(a, b, c)``.
+
+.. function:: fieldtype(value, name::Symbol)
+
+   Determine the declared type of a named field in a value of composite type.
+
 Generic Functions
 -----------------
 
@@ -660,11 +675,11 @@ Strings
 
    Return ``string`` with any trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
-.. function:: begins_with(string, prefix)
+.. function:: beginswith(string, prefix)
 
    Returns ``true`` if ``string`` starts with ``prefix``.
 
-.. function:: ends_with(string, suffix)
+.. function:: endswith(string, suffix)
 
    Returns ``true`` if ``string`` ends with ``suffix``.
 
@@ -1688,23 +1703,11 @@ Data Formats
 
    A string giving the literal bit representation of a number.
 
-.. function:: parse_int(type, str, [base])
+.. function:: parseint([type], str, [base])
 
-   Parse a string as an integer in the given base (default 10), yielding a number of the specified type.
+   Parse a string as an integer in the given base (default 10), yielding a number of the specified type (default ``Int``).
 
-.. function:: parse_bin(type, str)
-
-   Parse a string as an integer in base 2, yielding a number of the specified type.
-
-.. function:: parse_oct(type, str)
-
-   Parse a string as an integer in base 8, yielding a number of the specified type.
-
-.. function:: parse_hex(type, str)
-
-   Parse a string as an integer in base 16, yielding a number of the specified type.
-
-.. function:: parse_float(type, str)
+.. function:: parsefloat([type], str)
 
    Parse a string as a decimal floating point number, yielding a number of the specified type.
 

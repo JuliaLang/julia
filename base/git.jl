@@ -147,8 +147,8 @@ function merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     # expunge removed submodules from left and right sides
     deleted = Set{ByteString}()
     for section in Bs - Ls & Rs
-        filter!((k,v)->!begins_with(k,"$section."),Lc)
-        filter!((k,v)->!begins_with(k,"$section."),Rc)
+        filter!((k,v)->!beginswith(k,"$section."),Lc)
+        filter!((k,v)->!beginswith(k,"$section."),Rc)
         add!(deleted, section)
     end
     # merge the remaining config key-value pairs
