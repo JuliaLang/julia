@@ -754,7 +754,7 @@ end
 
 _is_str_expr(ex) =
     isa(ex,Expr) && ex.head==:macrocall && isa(ex.args[1],Symbol) &&
-    (ex.args[1] == :str || ends_with(string(ex.args[1]),"_str"))
+    (ex.args[1] == :str || endswith(string(ex.args[1]),"_str"))
 
 macro printf(args...)
     if length(args) == 0

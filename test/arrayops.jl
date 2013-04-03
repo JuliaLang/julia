@@ -387,3 +387,14 @@ begin
         @test vec(S[i,:]) == sort(vec(a[i,:]))
     end
 end
+
+# single multidimensional index
+let
+    a = rand(6,6)
+    I = [1 4 5; 4 2 6; 5 6 3]
+    a2 = a[I]
+    @test size(a2) == size(I)
+    for i = 1:length(a2)
+        @test a2[i] == a[I[i]]
+    end
+end
