@@ -1043,8 +1043,9 @@
 			  keys))
 	    ,(if (null? restkeys)
 		 '(tuple)
-		 `(call (top append_any)
-			,@(map cadr restkeys)))
+		 (if (length= restkeys 1)
+		     (cadr (car restkeys))
+		     `(call (top append_any) ,@(map cadr restkeys))))
 	    ,@pa))))
 
 (define patterns
