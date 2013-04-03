@@ -67,7 +67,6 @@ export
     #ProcessSignaled,
     #ProcessStatus,
     #ProcessStopped,
-    OrdinalRange,
     Range,
     Range1,
     RangeIndex,
