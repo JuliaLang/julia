@@ -304,6 +304,29 @@
 
 "),
 
+("Types","Base","getfield","getfield(value, name::Symbol)
+
+   Extract a named field from a value of composite type. The syntax
+   \"a.b\" calls \"getfield(a, :b)\", and the syntax \"a.(b)\" calls
+   \"getfield(a, b)\".
+
+"),
+
+("Types","Base","setfield","setfield(value, name::Symbol, x)
+
+   Assign \"x\" to a named field in \"value\" of composite type. The
+   syntax \"a.b = c\" calls \"setfield(a, :b, c)\", and the syntax
+   \"a.(b) = c\" calls \"setfield(a, b, c)\".
+
+"),
+
+("Types","Base","fieldtype","fieldtype(value, name::Symbol)
+
+   Determine the declared type of a named field in a value of
+   composite type.
+
+"),
+
 ("Generic Functions","Base","method_exists","method_exists(f, tuple) -> Bool
 
    Determine whether the given generic function has a method matching
