@@ -36,7 +36,7 @@ sinc(x::Number) = x==0 ? one(x)  : (pix=pi*x; oftype(x,sin(pix)/pix))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
 @vectorize_1arg Number sinc
 cosc(x::Number) = x==0 ? zero(x) : (pix=pi*x; oftype(x,cos(pix)/x-sin(pix)/(pix*x)))
-cosc(x::Integer) = x==0 ? zero(x) : (pix=pi*x; oftype(float(x),cos(pix)/x-sin(pix)/(pix*x)))
+cosc(x::Integer) = x==0 ? zero(float(x)) : (pix=pi*x; oftype(float(x),cos(pix)/x-sin(pix)/(pix*x)))
 @vectorize_1arg Number cosc
 
 radians2degrees(z::Real) = oftype(z, (180/pi) * z)
