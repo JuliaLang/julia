@@ -286,6 +286,59 @@ JL_CALLABLE(jl_f_apply)
     return result;
 }
 
+#include "newobj_internal.h"
+
+JL_CALLABLE(jl_f_kwcall)
+{
+    if (nargs < 3)
+        jl_error("internal error: malformed keyword argument call");
+    JL_TYPECHK(apply, function, args[0]);
+    jl_function_t *f = (jl_function_t*)args[0];
+    if (!jl_is_gf(f))
+        jl_error("function does not accept keyword arguments");
+    jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
+    if (sorter == NULL)
+        jl_errorf("function %s does not accept keyword arguments",
+                  jl_gf_name(f)->name);
+
+    size_t nkeys = jl_unbox_long(args[1]);
+    size_t nrest=0;
+    size_t pa = 3 + 2*nkeys;
+    jl_value_t *rkw = args[2 + 2*nkeys];
+    if (rkw != (jl_value_t*)jl_null) {
+        if (!jl_is_array(rkw)) {
+            if (jl_append_any_func == NULL) {
+                jl_append_any_func =
+                    (jl_function_t*)jl_get_global(jl_base_module,
+                                                  jl_symbol("append_any"));
+            }
+            rkw = jl_apply(jl_append_any_func, &rkw, 1);
+            args[2 + 2*nkeys] = rkw;  // gc root
+        }
+        nrest = jl_array_len(rkw);
+    }
+
+    size_t kwlen = (nkeys+nrest)*2;
+#ifdef OVERLAP_TUPLE_LEN
+    jl_tuple_t *kwtuple = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, kwlen);
+#else
+    jl_tuple_t *kwtuple = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, kwlen+1);
+#endif
+    jl_tuple_set_len_unsafe(kwtuple, kwlen);
+
+    for(size_t i=0; i < nkeys*2; i+=2) {
+        jl_tupleset(kwtuple, i  , args[2+i]);
+        jl_tupleset(kwtuple, i+1, args[2+i+1]);
+    }
+    for(size_t i=0; i < nrest; i++) {
+        jl_value_t *ri = jl_cellref(rkw, i);
+        jl_tupleset(kwtuple, (nkeys+i)*2  , jl_tupleref(ri,0));
+        jl_tupleset(kwtuple, (nkeys+i)*2+1, jl_tupleref(ri,1));
+    }
+    args[pa-1] = (jl_value_t*)kwtuple;
+    return jl_apply(sorter, &args[pa-1], nargs-(pa-1));
+}
+
 // eval -----------------------------------------------------------------------
 
 extern int jl_lineno;
@@ -941,6 +994,7 @@ void jl_init_primitives(void)
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("apply", jl_f_apply);
+    add_builtin_func("kwcall", jl_f_kwcall);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("Union", jl_f_union);

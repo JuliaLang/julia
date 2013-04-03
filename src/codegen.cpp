@@ -1854,24 +1854,35 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
     }
     else if (head == method_sym) {
-        jl_value_t *mn;
-        if (jl_is_symbolnode(args[0])) {
-            mn = (jl_value_t*)jl_symbolnode_sym(args[0]);
+        jl_value_t *mn = args[0];
+        bool iskw = false;
+        if (jl_is_expr(mn) && ((jl_expr_t*)mn)->head == kw_sym) {
+            iskw = true;
+            mn = jl_exprarg(mn,0);
         }
-        else {
-            mn = args[0];
+        if (jl_is_symbolnode(mn)) {
+            mn = (jl_value_t*)jl_symbolnode_sym(mn);
         }
         assert(jl_is_symbol(mn));
         int last_depth = ctx->argDepth;
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
         Value *bp;
-        if (is_global((jl_sym_t*)mn, ctx)) {
-            bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
-            bp = literal_pointer_val(&bnd->value, jl_ppvalue_llvmt);
+        if (iskw) {
+            Value *theF = emit_expr(mn, ctx);
+            // fenv = theF->env
+            Value *fenv = emit_nthptr(theF, 2);
+            // bp = &((jl_methtable_t*)fenv)->kwsorter
+            bp = emit_nthptr_addr(fenv, 7);
         }
         else {
-            bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
+            if (is_global((jl_sym_t*)mn, ctx)) {
+                bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
+                bp = literal_pointer_val(&bnd->value, jl_ppvalue_llvmt);
+            }
+            else {
+                bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
+            }
         }
         Value *a1 = emit_expr(args[1], ctx);
         make_gcroot(boxed(a1), ctx);
@@ -2268,6 +2279,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     // step 5. set up debug info context and create first basic block
     jl_value_t *stmt = jl_cellref(stmts,0);
     std::string filename = "no file";
+    char *dbgFuncName = lam->name->name;
     int lno = -1;
     // look for initial (line num filename) node
     if (jl_is_linenode(stmt)) {
@@ -2278,6 +2290,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
             assert(jl_is_symbol(jl_exprarg(stmt, 1)));
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
+            if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 2) {
+                dbgFuncName = ((jl_sym_t*)jl_exprarg(stmt, 2))->name;
+            }
         }
     }
     ctx.lineno = lno;
@@ -2288,8 +2303,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     DIFile fil = dbuilder->createFile(filename, ".");
     DISubprogram SP =
         dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
-                                 lam->name->name,
-                                 lam->name->name,
+                                 dbgFuncName, dbgFuncName,
                                  fil,
                                  0,
                                  dbuilder->createSubroutineType(fil,EltTypeArray),

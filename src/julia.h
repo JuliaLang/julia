@@ -313,6 +313,7 @@ typedef struct _jl_methtable_t {
     jl_array_t *cache_arg1;
     jl_array_t *cache_targ;
     ptrint_t max_args;  // max # of non-vararg arguments in a signature
+    jl_function_t *kwsorter;  // keyword argument sorter function
 #ifdef JL_GF_PROFILE
     int ncalls;
 #endif
@@ -452,7 +453,7 @@ extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
 extern jl_sym_t *macro_sym;   extern jl_sym_t *method_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
-extern jl_sym_t *static_typeof_sym;
+extern jl_sym_t *static_typeof_sym; extern jl_sym_t *kw_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
@@ -504,7 +505,7 @@ void *allocobj(size_t sz);
 #define jl_tparam1(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 1)
 
 #ifdef OVERLAP_TUPLE_LEN
-#define jl_typeof(v) ((jl_value_t*)(uptrint_t)((jl_value_t*)(v))->type)
+#define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & 0x000ffffffffffffeULL))
 #else
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
 #endif

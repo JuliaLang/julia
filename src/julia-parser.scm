@@ -74,6 +74,9 @@
 (define (assignment? e)
   (and (pair? e) (eq? (car e) '=)))
 
+(define (typedecl? e)
+  (and (length= e 3) (eq? (car e) |::|) (symbol? (cadr e))))
+
 (define unary-ops '(+ - ! ~ |<:| |>:|))
 
 ; operators that are both unary and binary
@@ -1141,11 +1144,19 @@
 (define (separate-keywords argl)
   (receive
    (kws args) (separate (lambda (x)
-			  (and (pair? x) (eq? (car x) '=)))
+			  (and (assignment? x)
+			       (or (symbol? (cadr x))
+                                   (typedecl? (cadr x)))))
 			argl)
    (if (null? kws)
        args
-       `(,@args (keywords ,@kws)))))
+       `((keywords ,@kws) ,@args))))
+
+(define (has-keywords? lst)
+  (and (pair? lst) (pair? (car lst)) (eq? (caar lst) 'keywords)))
+
+(define (has-parameters? lst)
+  (and (pair? lst) (pair? (car lst)) (eq? (caar lst) 'parameters)))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
@@ -1170,8 +1181,15 @@
 			 ;; allow f(a, b; )
 			 (begin (take-token s)
 				(reverse lst))
-			 (reverse (cons (cons 'parameters (loop '()))
-					lst))))
+			 (let ((params (loop '()))
+			       (lst    (separate-keywords (reverse lst))))
+			   (let ((params (cons 'parameters
+					       (if (has-keywords? params)
+						   (append (cdar params) (cdr params))
+						   params))))
+			     (if (has-keywords? lst)
+				 (list* (car lst) params (cdr lst))
+				 (list* params lst))))))
 	      (let* ((nxt (parse-eq* s))
 		     (c (require-token s)))
 		(cond ((eqv? c #\,)

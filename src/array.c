@@ -655,7 +655,7 @@ void jl_array_del_beg(jl_array_t *a, size_t dec)
     a->offset = newoffs;
 }
 
-void jl_cell_1d_push(jl_array_t *a, jl_value_t *item)
+DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item)
 {
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 1);

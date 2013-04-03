@@ -375,22 +375,19 @@ t_func[apply_type] = (1, Inf, apply_type_tfunc)
 function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     if is(f,tuple)
         return limit_tuple_depth(argtypes)
-    end
-    if is(f,arrayset)
+    elseif is(f,arrayset)
         if length(argtypes) < 3
             return None
         end
         return argtypes[1]
-    end
-    if is(f,arrayref)
+    elseif is(f,arrayref)
         if length(argtypes) < 2
             return None
         end
         a = argtypes[1]
         return (isa(a,DataType) && subtype(a,Array) ?
                 a.parameters[1] : Any)
-    end
-    if is(f,Expr)
+    elseif is(f,Expr)
         if length(argtypes) < 1
             return None
         end
@@ -659,6 +656,22 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             return abstract_eval_constant(_ieval(val))
         end
     end
+    if is(f,kwcall)
+        if length(argtypes) < 3
+            return None
+        end
+        ff = isconstantfunc(fargs[1], sv)
+        if !(ff===false)
+            ff = _ieval(ff)
+            if isgeneric(ff) && isdefined(ff.env,:kwsorter)
+                # use the fact that kwcall(...) calls ff.env.kwsorter
+                kwcount = fargs[2]
+                posargt = argtypes[(4+2*kwcount):end]
+                return abstract_call_gf(ff.env.kwsorter, (), tuple(Tuple, posargt...), e)
+            end
+        end
+        return Any
+    end
     rt = builtin_tfunction(f, fargs, argtypes)
     #print("=> ", rt, "\n")
     return rt
@@ -880,7 +893,9 @@ function abstract_interpret(e::Expr, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:gotoifnot)
         abstract_eval(e.args[1], vtypes, sv)
     elseif is(e.head,:method)
-        return StateUpdate(e.args[1], Function, vtypes)
+        fname = e.args[1]
+        if isa(fname,Expr); fname = fname.args[1]; end
+        return StateUpdate(fname, Function, vtypes)
     end
     return vtypes
 end
