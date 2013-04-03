@@ -136,8 +136,8 @@ _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) =
 
 ## WAITING ##
 
-function accept(server::TcpSocket)
-    client = TcpSocket()
+accept(server::TcpSocket) = accept(server, TcpSocket())
+function accept(server::TcpSocket, client::TcpSocket)
     err = accept_nonblock(server,client)
     if err == 0
         return client
