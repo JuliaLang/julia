@@ -960,7 +960,6 @@ export
 
 # I/O and events
     accept,
-    wait_accept,
     listen,
     bind,
     connect,

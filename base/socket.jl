@@ -136,9 +136,9 @@ _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) =
 
 ## WAITING ##
 
-function wait_accept(server::TcpSocket)
+function accept(server::TcpSocket)
     client = TcpSocket()
-    err = accept(server,client)
+    err = accept_nonblock(server,client)
     if err == 0
         return client
     else
@@ -159,7 +159,7 @@ function wait_accept(server::TcpSocket)
         if status == -1
             error("listen: ", _uv_lasterror(), "\n")
         end
-        err = accept(server,client)
+        err = accept_nonblock(server,client)
         if err == 0
             return client
         else
@@ -301,14 +301,14 @@ listen(cb::Callback,sock::Socket) = (sock.ccb=cb;listen(sock))
 
 _jl_tcp_accept(server::Ptr{Void},client::Ptr{Void}) =
     ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
-function accept(server::TcpSocket,client::TcpSocket)
+function accept_nonblock(server::TcpSocket,client::TcpSocket)
     err = _jl_tcp_accept(server.handle,client.handle)
     if err == 0
         client.open = true
     end
     err
 end
-function accept(server::TcpSocket)
+function accept_nonblock(server::TcpSocket)
     client = TcpSocket()
     uv_error("accept",_jl_tcp_accept(server.handle,client.handle) == -1)
     client.open = true
