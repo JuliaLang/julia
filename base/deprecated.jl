@@ -162,6 +162,16 @@ export PipeString
 @deprecate  each_match          eachmatch
 @deprecate  function_loc        functionloc
 @deprecate  compile_hint        precompile
+@deprecate  begins_with         beginswith
+@deprecate  ends_with           endswidth
+@deprecate  parse_float         parsefloat
+@deprecate  parse_int           parseint
+@deprecate  parse_bin(T,s)      parseint(T,s,2)
+@deprecate  parse_bin(s)        parseint(s,2)
+@deprecate  parse_oct(T,s)      parseint(T,s,8)
+@deprecate  parse_oct(s)        parseint(s,8)
+@deprecate  parse_hex(T,s)      parseint(T,s,16)
+@deprecate  parse_hex(s)        parseint(s,16)
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)

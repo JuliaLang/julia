@@ -17,7 +17,7 @@ end
 function decor_help_desc(func::String, mfunc::String, desc::String)
     sd = split(desc, '\n')
     for i = 1:length(sd)
-        if begins_with(sd[i], func)
+        if beginswith(sd[i], func)
             sd[i] = mfunc * sd[i][length(func)+1:end]
         else
             break
@@ -54,7 +54,7 @@ function init_help()
                 CATEGORY_DICT[cat] = {}
             end
             if !isempty(mod)
-                if begins_with(func, '@')
+                if beginswith(func, '@')
                     mfunc = "@" * mod * "." * func[2:]
                 else
                     mfunc = mod * "." * func
@@ -133,7 +133,7 @@ function help_for(fname::String, obj)
         found = true
     else
         macrocall = ""
-        if begins_with(fname, '@')
+        if beginswith(fname, '@')
             sfname = fname[2:]
             macrocall = "@"
         else
