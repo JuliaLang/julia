@@ -17,7 +17,7 @@ type VersionNumber
             if isempty(ident) && !(length(pre)==1 && isempty(bld))
                 error("invalid pre-release identifier: empty string")
             end
-            if !ismatch(r"^(?:[0-9a-z-]*)?$"i, ident)
+            if !ismatch(r"^[0-9a-z-]*$"i, ident)
                 error("invalid pre-release identifier: $ident")
             end
             if ismatch(r"^\d+$", ident)
@@ -28,7 +28,10 @@ type VersionNumber
         build = Array(Union(Int,ASCIIString),length(bld))
         for i in 1:length(bld)
             ident = ascii(string(bld[i]))
-            if !ismatch(r"^(?:[0-9a-z-]+)?$"i, ident)
+            if isempty(ident) && length(bld)!=1
+                error("invalid pre-release identifier: empty string")
+            end
+            if !ismatch(r"^[0-9a-z-]*$"i, ident)
                 error("invalid build identifier: $ident")
             end
             if ismatch(r"^\d+$", ident)
@@ -69,21 +72,22 @@ const VERSION_REGEX = r"^
     (\d+)                                   # major         (required)
     (?:\.(\d+))?                            # minor         (optional)
     (?:\.(\d+))?                            # patch         (optional)
-    (?:([\-\+])|
+    (?:(-)|
     (?:-((?:[0-9a-z-]+\.)*[0-9a-z-]+))?     # pre-release   (optional)
+    (?:(\+)|
     (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
-    )
+    ))
 $"ix
 
 function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)
     if m == nothing error("invalid version string: $v") end
-    major, minor, patch, sign, prerl, build = m.captures
+    major, minor, patch, minus, prerl, plus, build = m.captures
     major = int(major)
     minor = minor != nothing ? int(minor) : 0
     patch = patch != nothing ? int(patch) : 0
-    prerl = prerl != nothing ? split(prerl,'.') : sign == "-" ? [""] : []
-    build = build != nothing ? split(build,'.') : sign == "+" ? [""] : []
+    prerl = prerl != nothing ? split(prerl,'.') : minus == "-" ? [""] : []
+    build = build != nothing ? split(build,'.') : plus  == "+" ? [""] : []
     VersionNumber(major, minor, patch, prerl, build)
 end
 
