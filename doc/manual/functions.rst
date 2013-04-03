@@ -407,7 +407,7 @@ signature::
         ###
     end
 
-Extra keyword arguments can be collected using ``...``, as in varargs
+Extra named arguments can be collected using ``...``, as in varargs
 functions::
 
     function f(x; args...)
@@ -415,7 +415,7 @@ functions::
     end
 
 Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
-where each ``key`` is a symbol. Such collections can be passed as keyword
+where each ``key`` is a symbol. Such collections can be passed as named
 arguments using a semicolon in a call, ``f(x; k...)``. Dictionaries
 can be used for this purpose.
 
