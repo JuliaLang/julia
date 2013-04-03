@@ -376,13 +376,13 @@ end
 begin
     local a,h,i
     a = rand(5,5)
-    h = mapslices(hist, a, 1)
-    H = mapslices(hist, a, 2)
+    h = mapslices(v -> hist(v,0:0.1:1)[2], a, 1)
+    H = mapslices(v -> hist(v,0:0.1:1)[2], a, 2)
     s = mapslices(sort, a, [1])
     S = mapslices(sort, a, [2])
     for i = 1:5
-        @test h[:,i] == hist(a[:,i])
-        @test vec(H[i,:]) == hist(vec(a[i,:]))
+        @test h[:,i] == hist(a[:,i],0:0.1:1)[2]
+        @test vec(H[i,:]) == hist(vec(a[i,:]),0:0.1:1)[2]
         @test s[:,i] == sort(a[:,i])
         @test vec(S[i,:]) == sort(vec(a[i,:]))
     end
