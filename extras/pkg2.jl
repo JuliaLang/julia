@@ -42,7 +42,7 @@ function parse_requires(readable)
     end
     return reqs
 end
-parse_requires(file::String) = open(parse_requires,file)
+parse_requires(file::String) = isfile(file) ? open(parse_requires,file) : Requires()
 
 function merge!(A::Requires, B::Requires)
     for (pkg, ivals) in B
@@ -51,13 +51,10 @@ function merge!(A::Requires, B::Requires)
     return A
 end
 
-each_installed() = @task begin
-    for line in eachline(`ls`)
-        name = chomp(line)
-        name == "METADATA" && continue
-        name == "REQUIRE" && continue
-        isfile(name, "src", "$name.jl") && produce(name)
-    end
+immutable Installed
+    name::ByteString
+    fixed::Bool
+    reqs::Requires
 end
 
 function isfixed(pkg::String)
@@ -73,14 +70,35 @@ function isfixed(pkg::String)
     end
 end
 
-function requirements()
-    reqs = parse_requires("REQUIRE")
-    for pkg in each_installed()
-        isfixed(pkg) || continue
-        isfile(pkg, "REQUIRE") || continue
-        merge!(reqs, parse_requires(joinpath(pkg, "REQUIRE")))
+function installed()
+    pkgs = Installed[]
+    for line in eachline(`ls -1`)
+        pkg = chomp(line)
+        pkg == "METADATA" && continue
+        pkg == "REQUIRE" && continue
+        isfile(pkg, "src", "$pkg.jl") || continue
+        reqs = parse_requires(joinpath(pkg, "REQUIRE"))
+        push!(pkgs, Installed(pkg, isfixed(pkg), reqs))
     end
-    return reqs
+    return pkgs
+end
+
+function available()
+    pkgs = Dict{ByteString,Dict{VersionNumber,Requires}}()
+    for line in eachline(`ls -1 METADATA`)
+        pkg = chomp(line)
+        isfile("METADATA", pkg, "url") || continue
+        versions = joinpath("METADATA", pkg, "versions")
+        isdir(versions) || continue
+        for line in eachline(`ls -1 $versions`)
+            ver = chomp(line)
+            ismatch(Base.VERSION_REGEX, ver) || continue
+            isfile(versions, ver, "sha1") || continue
+            if !has(pkgs,pkg) pkgs[pkg] = Dict{VersionNumber,Requires}() end
+            pkgs[pkg][convert(VersionNumber,ver)] = parse_requires(joinpath(versions, ver, "requires"))
+        end
+    end
+    return pkgs
 end
 
 # end # module
