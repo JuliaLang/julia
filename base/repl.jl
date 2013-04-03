@@ -67,6 +67,21 @@ function error_show(io::IO, e::MethodError)
     end
 end
 
+function show_trace_entry(io, fname, file, line, n)
+    print(io, "\n")
+    print(io, " in ", fname, " at ", file)
+    if line >= 1
+        try
+            print(io, ":", line)
+        catch
+            print(io, '?') #for when dec is not yet defined
+        end
+    end
+    if n > 1
+        print(io, " (repeats ", n, " times)")
+    end
+end
+
 function show_backtrace(io::IO, t)
     # we may not declare :eval_user_input
     # directly so that we get a compile error
@@ -76,6 +91,9 @@ function show_backtrace(io::IO, t)
         catch
             :(:) #for when client.jl is not yet defined
         end
+    n = 1
+    lastfile = ""; lastline = -11; lastname = symbol("#")
+    local fname, file, line
     for i = 1:length(t)
         lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Bool), t[i], false)
         if lkup === ()
@@ -84,14 +102,17 @@ function show_backtrace(io::IO, t)
         fname, file, line = lkup
         if i == 1 && fname == :error; continue; end
         if fname == eval_function; break; end
-        print(io, "\n")
-        print(io, " in ", fname, " at ", file)
-        if line >= 1
-            try
-                print(io, ":", line)
-            catch
-                print(io, '?') #for when dec is not yet defined
+        if file != lastfile || line != lastline || fname != lastname
+            if lastline != -11
+                show_trace_entry(io, lastname, lastfile, lastline, n)
             end
+            n = 1
+            lastfile = file; lastline = line; lastname = fname
+        else
+            n += 1
         end
+    end
+    if n > 1 || lastline != -11
+        show_trace_entry(io, lastname, lastfile, lastline, n)
     end
 end
