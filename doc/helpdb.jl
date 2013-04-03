@@ -1007,13 +1007,13 @@
 
 "),
 
-("Strings","Base","begins_with","begins_with(string, prefix)
+("Strings","Base","beginswith","beginswith(string, prefix)
 
    Returns \"true\" if \"string\" starts with \"prefix\".
 
 "),
 
-("Strings","Base","ends_with","ends_with(string, suffix)
+("Strings","Base","endswith","endswith(string, suffix)
 
    Returns \"true\" if \"string\" ends with \"suffix\".
 
@@ -2605,35 +2605,14 @@
 
 "),
 
-("Data Formats","Base","parse_int","parse_int(type, str[, base])
+("Data Formats","Base","parseint","parseint([type], str[, base])
 
    Parse a string as an integer in the given base (default 10),
-   yielding a number of the specified type.
+   yielding a number of the specified type (default \"Int\").
 
 "),
 
-("Data Formats","Base","parse_bin","parse_bin(type, str)
-
-   Parse a string as an integer in base 2, yielding a number of the
-   specified type.
-
-"),
-
-("Data Formats","Base","parse_oct","parse_oct(type, str)
-
-   Parse a string as an integer in base 8, yielding a number of the
-   specified type.
-
-"),
-
-("Data Formats","Base","parse_hex","parse_hex(type, str)
-
-   Parse a string as an integer in base 16, yielding a number of the
-   specified type.
-
-"),
-
-("Data Formats","Base","parse_float","parse_float(type, str)
+("Data Formats","Base","parsefloat","parsefloat([type], str)
 
    Parse a string as a decimal floating point number, yielding a
    number of the specified type.

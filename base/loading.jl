@@ -9,7 +9,7 @@ function find_in_path(name::String)
     name[1] == '/' && return abspath(name)
     isfile(name) && return abspath(name)
     base = name
-    if ends_with(name,".jl")
+    if endswith(name,".jl")
         base = match(r"^(.*)\.jl$",name).captures[1]
     else
         name = string(base,".jl")

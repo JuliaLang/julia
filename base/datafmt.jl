@@ -12,7 +12,7 @@ function dlm_readrow(io::IO, dlm, eol::Char)
     else
         row = split(row_string, dlm, true)
     end
-    if ends_with(row[end], eol)
+    if endswith(row[end], eol)
         row[end] = chop(row[end])
     end
     row

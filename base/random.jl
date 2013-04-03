@@ -55,7 +55,7 @@ function librandom_init()
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try
-            seed = bitmix(seed, parse_int(Uint64, readall(`ifconfig`|`sha1sum`)[1:40], 16))
+            seed = bitmix(seed, parseint(Uint64, readall(`ifconfig`|`sha1sum`)[1:40], 16))
         catch
             # ignore
         end

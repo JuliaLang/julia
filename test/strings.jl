@@ -133,86 +133,90 @@ end
 @test "\x0F" == unescape_string("\\x0F")
 
 # integer parsing
-@test is(parse_int(Int32,"0",36),int32(0))
-@test is(parse_int(Int32,"1",36),int32(1))
-@test is(parse_int(Int32,"9",36),int32(9))
-@test is(parse_int(Int32,"A",36),int32(10))
-@test is(parse_int(Int32,"a",36),int32(10))
-@test is(parse_int(Int32,"B",36),int32(11))
-@test is(parse_int(Int32,"b",36),int32(11))
-@test is(parse_int(Int32,"F",36),int32(15))
-@test is(parse_int(Int32,"f",36),int32(15))
-@test is(parse_int(Int32,"Z",36),int32(35))
-@test is(parse_int(Int32,"z",36),int32(35))
+@test is(parseint(Int32,"0",36),int32(0))
+@test is(parseint(Int32,"1",36),int32(1))
+@test is(parseint(Int32,"9",36),int32(9))
+@test is(parseint(Int32,"A",36),int32(10))
+@test is(parseint(Int32,"a",36),int32(10))
+@test is(parseint(Int32,"B",36),int32(11))
+@test is(parseint(Int32,"b",36),int32(11))
+@test is(parseint(Int32,"F",36),int32(15))
+@test is(parseint(Int32,"f",36),int32(15))
+@test is(parseint(Int32,"Z",36),int32(35))
+@test is(parseint(Int32,"z",36),int32(35))
 
-@test parse_int("0") == 0
-@test parse_int("-0") == 0
-@test parse_int("1") == 1
-@test parse_int("-1") == -1
-@test parse_int("9") == 9
-@test parse_int("-9") == -9
-@test parse_int("10") == 10
-@test parse_int("-10") == -10
-@test parse_int(Int64,"3830974272") == 3830974272
-@test parse_int(Int64,"-3830974272") == -3830974272
+@test parseint("0") == 0
+@test parseint("-0") == 0
+@test parseint("1") == 1
+@test parseint("-1") == -1
+@test parseint("9") == 9
+@test parseint("-9") == -9
+@test parseint("10") == 10
+@test parseint("-10") == -10
+@test parseint(Int64,"3830974272") == 3830974272
+@test parseint(Int64,"-3830974272") == -3830974272
 
-@test parse_bin("0") == 0
-@test parse_bin("-0") == 0
-@test parse_bin("1") == 1
-@test parse_bin("-1") == -1
-@test parse_bin("10") == 2
-@test parse_bin("-10") == -2
-@test parse_bin("11") == 3
-@test parse_bin("-11") == -3
-@test parse_bin("1111000011110000111100001111") == 252645135
-@test parse_bin("-1111000011110000111100001111") == -252645135
+parsebin(s) = parseint(s,2)
+parseoct(s) = parseint(s,8)
+parsehex(s) = parseint(s,16)
 
-@test parse_oct("0") == 0
-@test parse_oct("-0") == 0
-@test parse_oct("1") == 1
-@test parse_oct("-1") == -1
-@test parse_oct("7") == 7
-@test parse_oct("-7") == -7
-@test parse_oct("10") == 8
-@test parse_oct("-10") == -8
-@test parse_oct("11") == 9
-@test parse_oct("-11") == -9
-@test parse_oct("72") == 58
-@test parse_oct("-72") == -58
-@test parse_oct("3172207320") == 434704080
-@test parse_oct("-3172207320") == -434704080
+@test parsebin("0") == 0
+@test parsebin("-0") == 0
+@test parsebin("1") == 1
+@test parsebin("-1") == -1
+@test parsebin("10") == 2
+@test parsebin("-10") == -2
+@test parsebin("11") == 3
+@test parsebin("-11") == -3
+@test parsebin("1111000011110000111100001111") == 252645135
+@test parsebin("-1111000011110000111100001111") == -252645135
 
-@test parse_hex("0") == 0
-@test parse_hex("-0") == 0
-@test parse_hex("1") == 1
-@test parse_hex("-1") == -1
-@test parse_hex("9") == 9
-@test parse_hex("-9") == -9
-@test parse_hex("a") == 10
-@test parse_hex("-a") == -10
-@test parse_hex("f") == 15
-@test parse_hex("-f") == -15
-@test parse_hex("10") == 16
-@test parse_hex("-10") == -16
-@test parse_hex("0BADF00D") == 195948557
-@test parse_hex("-0BADF00D") == -195948557
-@test parse_int(Int64,"BADCAB1E",16) == 3135023902
-@test parse_int(Int64,"-BADCAB1E",16) == -3135023902
-@test parse_int(Int64,"CafeBabe",16) == 3405691582
-@test parse_int(Int64,"-CafeBabe",16) == -3405691582
-@test parse_int(Int64,"DeadBeef",16) == 3735928559
-@test parse_int(Int64,"-DeadBeef",16) == -3735928559
+@test parseoct("0") == 0
+@test parseoct("-0") == 0
+@test parseoct("1") == 1
+@test parseoct("-1") == -1
+@test parseoct("7") == 7
+@test parseoct("-7") == -7
+@test parseoct("10") == 8
+@test parseoct("-10") == -8
+@test parseoct("11") == 9
+@test parseoct("-11") == -9
+@test parseoct("72") == 58
+@test parseoct("-72") == -58
+@test parseoct("3172207320") == 434704080
+@test parseoct("-3172207320") == -434704080
 
-@test parse_int("2\n") == 2
-@test parse_int("   2 \n ") == 2
-@test parse_int(" 2 ") == 2
-@test parse_int("2 ") == 2
-@test parse_int(" 2") == 2
-@test parse_int("+2\n") == 2
-@test parse_int("-2") == -2
-@test_fails parse_int("   2 \n 0")
-@test_fails parse_int("2x")
-@test_fails parse_int("-")
+@test parsehex("0") == 0
+@test parsehex("-0") == 0
+@test parsehex("1") == 1
+@test parsehex("-1") == -1
+@test parsehex("9") == 9
+@test parsehex("-9") == -9
+@test parsehex("a") == 10
+@test parsehex("-a") == -10
+@test parsehex("f") == 15
+@test parsehex("-f") == -15
+@test parsehex("10") == 16
+@test parsehex("-10") == -16
+@test parsehex("0BADF00D") == 195948557
+@test parsehex("-0BADF00D") == -195948557
+@test parseint(Int64,"BADCAB1E",16) == 3135023902
+@test parseint(Int64,"-BADCAB1E",16) == -3135023902
+@test parseint(Int64,"CafeBabe",16) == 3405691582
+@test parseint(Int64,"-CafeBabe",16) == -3405691582
+@test parseint(Int64,"DeadBeef",16) == 3735928559
+@test parseint(Int64,"-DeadBeef",16) == -3735928559
+
+@test parseint("2\n") == 2
+@test parseint("   2 \n ") == 2
+@test parseint(" 2 ") == 2
+@test parseint("2 ") == 2
+@test parseint(" 2") == 2
+@test parseint("+2\n") == 2
+@test parseint("-2") == -2
+@test_fails parseint("   2 \n 0")
+@test_fails parseint("2x")
+@test_fails parseint("-")
 
 # string manipulation
 @test strip("\t  hi   \n") == "hi"
@@ -454,17 +458,17 @@ end
 @test replace("abcd", r"b?c?", "^") == "^a^d^"
 @test replace("abcd", r"[bc]?", "^") == "^a^^d^"
 
-# {begins,ends}_with
-@test begins_with("abcd", 'a')
-@test begins_with("abcd", "a")
-@test begins_with("abcd", "ab")
-@test !begins_with("ab", "abcd")
-@test !begins_with("abcd", "bc")
-@test ends_with("abcd", 'd')
-@test ends_with("abcd", "d")
-@test ends_with("abcd", "cd")
-@test !ends_with("abcd", "dc")
-@test !ends_with("cd", "abcd")
+# {begins,ends}with
+@test beginswith("abcd", 'a')
+@test beginswith("abcd", "a")
+@test beginswith("abcd", "ab")
+@test !beginswith("ab", "abcd")
+@test !beginswith("abcd", "bc")
+@test endswith("abcd", 'd')
+@test endswith("abcd", "d")
+@test endswith("abcd", "cd")
+@test !endswith("abcd", "dc")
+@test !endswith("cd", "abcd")
 
 # RepStrings and SubStrings
 u8str2 = u8str^2
