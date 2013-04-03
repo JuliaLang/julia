@@ -2411,13 +2411,29 @@ Statistics
 
    Compute the median of a vector ``v``.
 
-.. function:: hist(v[, n])
+.. function:: hist(v[, n]) -> e, counts
 
-   Compute the histogram of ``v``, optionally using ``n`` bins.
+   Compute the histogram of ``v``, optionally using approximately ``n``
+   bins. The return values are a range ``e``, which correspond to the
+   edges of the bins, and ``counts`` containing the number of elements of
+   ``v`` in each bin.
 
-.. function:: hist(v, e)
+.. function:: hist(v, e) -> e, counts
 
-   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins.
+   Compute the histogram of ``v`` using a vector/range ``e`` as the edges for
+   the bins. The result will be a vector of length ``length(e) - 1``, with the
+   ``i``th element being ``sum(e[i] .< v .<= e[i+1])``.
+
+.. function:: histrange(v, n)
+
+   Compute `nice` bin ranges for the edges of a histogram of ``v``, using
+   approximately ``n`` bins. The resulting step sizes will be 1, 2 or 5
+   multiplied by a power of 10.
+
+.. function:: midpoints(e)
+
+   Compute the midpoints of the bins with edges ``e``. The result is a
+   vector/range of length ``length(e) - 1``. 
 
 .. function:: quantile(v, p)
 
