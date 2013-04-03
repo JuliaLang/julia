@@ -68,7 +68,7 @@ const VERSION_REGEX = r"^
     (\d+)                                   # major         (required)
     (?:\.(\d+))?                            # minor         (optional)
     (?:\.(\d+))?                            # patch         (optional)
-    (?:(-)|
+    (?:([\-\+])|
     (?:-((?:[0-9a-z-]+\.)*[0-9a-z-]+))?     # pre-release   (optional)
     (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
     )
@@ -77,16 +77,19 @@ $"ix
 function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)
     if m == nothing error("invalid version string: $v") end
-    major, minor, patch, minus, prerl, build = m.captures
+    major, minor, patch, sign, prerl, build = m.captures
     major = int(major)
     minor = minor != nothing ? int(minor) : 0
     patch = patch != nothing ? int(patch) : 0
-    prerl = prerl != nothing ? split(prerl,'.') : minus != nothing ? [""] : []
-    build = build != nothing ? split(build,'.') : []
+    prerl = prerl != nothing ? split(prerl,'.') : sign == "-" ? [""] : []
+    build = build != nothing ? split(build,'.') : sign == "+" ? [""] : []
     VersionNumber(major, minor, patch, prerl, build)
 end
 
 macro v_str(v); convert(VersionNumber, v); end
+
+typemin(::Type{VersionNumber}) = v"0-"
+typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),[],[""])
 
 ident_cmp(a::Int, b::Int) = cmp(a,b)
 ident_cmp(a::Int, b::ASCIIString) = isempty(b) ? +1 : -1
@@ -116,6 +119,8 @@ function isequal(a::VersionNumber, b::VersionNumber)
     return true
 end
 
+issupbuild(v::VersionNumber) = length(v.build)==1 && isempty(v.build[1])
+
 function isless(a::VersionNumber, b::VersionNumber)
     (a.major < b.major) && return true
     (a.major > b.major) && return false
@@ -128,6 +133,8 @@ function isless(a::VersionNumber, b::VersionNumber)
     c = ident_cmp(a.prerelease,b.prerelease)
     (c < 0) && return true
     (c > 0) && return false
+    (!issupbuild(a) && issupbuild(b)) && return true
+    (issupbuild(a) && !issupbuild(b)) && return false
     c = ident_cmp(a.build,b.build)
     (c < 0) && return true
     return false
