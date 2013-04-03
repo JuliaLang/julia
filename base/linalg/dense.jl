@@ -382,12 +382,12 @@ function sqrtm(A::StridedMatrix, cond::Bool)
     if ishermitian(A) 
         return sqrtm(Hermitian(A), cond)
     else
-        T,Q,_ = schur(complex(A))
-        R = zeros(eltype(T), n, n)
+        SchurF = schurfact!(iscomplex(A) ? copy(A) : complex(A))
+        R = zeros(eltype(SchurF[:T]), n, n)
         for j = 1:n
-            R[j,j] = sqrt(T[j,j])
+            R[j,j] = sqrt(SchurF[:T][j,j])
             for i = j - 1:-1:1
-                r = T[i,j]
+                r = SchurF[:T][i,j]
                 for k = i + 1:j - 1
                     r -= R[i,k]*R[k,j]
                 end
@@ -397,9 +397,9 @@ function sqrtm(A::StridedMatrix, cond::Bool)
             end
         end
     end
-    retmat = Q*R*Q'
+    retmat = SchurF[:vectors]*R*SchurF[:vectors]'
     if cond
-        alpha = norm(R)^2/norm(T)
+        alpha = norm(R)^2/norm(SchurF[:T])
         return (all(imag(retmat) .== 0) ? real(retmat) : retmat), alpha
     else
         return (all(imag(retmat) .== 0) ? real(retmat) : retmat)
@@ -427,8 +427,6 @@ function inv(A::StridedMatrix)
     if ishermitian(A) return inv(Hermitian(A)) end
     return inv(lufact(A))
 end
-
-schur{T<:BlasFloat}(A::StridedMatrix{T}) = LAPACK.gees!('V', copy(A))
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     if size(A, 1) == size(A, 2) # Square
@@ -477,14 +475,12 @@ function cond(A::StridedMatrix, p)
     if p == 2
         v = svdvals(A)
         maxv = max(v)
-        cnd = maxv == 0.0 ? Inf : maxv / min(v)
+        return maxv == 0.0 ? Inf : maxv / min(v)
     elseif p == 1 || p == Inf
         m, n = size(A)
         if m != n; error("Use 2-norm for non-square matrices"); end
-        cnd = 1 / LAPACK.gecon!(p == 1 ? '1' : 'I', lufact(A).LU, norm(A, p))
-    else
-        error("Norm type must be 1, 2 or Inf")
+        return cond(lufact(A), p)
     end
-    return cnd
+    error("Norm type must be 1, 2 or Inf")
 end
 cond(A::StridedMatrix) = cond(A, 2)
