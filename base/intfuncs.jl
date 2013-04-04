@@ -291,7 +291,6 @@ base(base::Integer, n::Integer, pad::Integer) = _base(dig_syms,int(base),unsigne
 base(symbols::Array{Uint8}, n::Integer, p::Integer) = _base(symbols,length(symbols),unsigned(abs(n)),p,n<0)
 base(base_or_symbols::Union(Integer,Array{Uint8}), n::Integer) = base(base_or_symbols, n, 1)
 
-
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
         ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
@@ -306,6 +305,18 @@ bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x),16)
 bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x),32)
 bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x),64)
 bits(x::Union(Int128,Uint128))            = bin(reinterpret(Uint128,x),128)
+
+function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
+    2 <= base || error("invalid base: $base")
+    i = max(pad,ndigits0z(n,base))
+    a = zeros(T,i)
+    while i > 0
+        a[i] = rem(n,base)
+        n = div(n,base)
+        i -= 1
+    end
+    return a
+end
 
 const PRIMES = [
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
