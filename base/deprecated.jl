@@ -163,7 +163,7 @@ export PipeString
 @deprecate  function_loc        functionloc
 @deprecate  compile_hint        precompile
 @deprecate  begins_with         beginswith
-@deprecate  ends_with           endswidth
+@deprecate  ends_with           endswith
 @deprecate  parse_float         parsefloat
 @deprecate  parse_int           parseint
 @deprecate  parse_bin(T,s)      parseint(T,s,2)
