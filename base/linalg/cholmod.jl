@@ -18,7 +18,7 @@ import Base.convert
 import Base.copy
 import Base.ctranspose
 import Base.eltype
-import Base.findn_nzs
+import Base.findnz
 import Base.getindex             
 import Base.hcat
 import Base.isvalid
@@ -877,7 +877,7 @@ end
 solve{T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T},typ::Integer)=solve(L,CholmodDense(B),typ)
 solve{T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
 
-function findn_nzs{Tv,Ti}(A::CholmodSparse{Tv,Ti})
+function findnz{Tv,Ti}(A::CholmodSparse{Tv,Ti})
     jj = similar(A.rowval0)             # expand A.colptr0 to a vector of indices
     for j in 1:A.c.n, k in (A.colptr0[j]+1):A.colptr0[j+1]
         jj[k] = j
@@ -899,7 +899,7 @@ function findn_nzs{Tv,Ti}(A::CholmodSparse{Tv,Ti})
     (increment!(A.rowval0[ind]), jj[ind], A.nzval[ind])
 end
 
-findn_nzs(L::CholmodFactor) = findn_nzs(CholmodSparse(L))
+findnz(L::CholmodFactor) = findnz(CholmodSparse(L))
 
 function diag{Tv}(A::CholmodSparse{Tv})
     minmn = min(size(A))

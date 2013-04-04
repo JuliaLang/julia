@@ -471,7 +471,7 @@ export
     findmax,
     findmin,
     findn,
-    findn_nzs,
+    findnz,
     findfirst,
     findnext,
     first,
