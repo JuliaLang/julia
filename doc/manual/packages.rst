@@ -88,8 +88,8 @@ repository URL should look like `https://github.com/MY_GITHUB_USER/METADATA.jl`.
 
 2. Update the local METADATA with the URL of your forked repository.::
 
-    cd $HOME/.julia/METADATA git remote add github
-    https://github.com/MY_GITHUB_USER/METADATA.jl
+    cd $HOME/.julia/METADATA
+    git remote add github https://github.com/MY_GITHUB_USER/METADATA.jl
 
 Distributing a new package or new version of an existing package
 ----------------------------------------------------------------
