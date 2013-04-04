@@ -246,7 +246,7 @@ function runbuildscript(pkg)
         cd(path) do
             if isfile("build.jl")
                 info("Running build script for package $pkg")
-                include("build.jl")
+                evalfile("build.jl")
             end
         end
     end

@@ -523,7 +523,8 @@ static void gc_mark_module(jl_module_t *m)
             gc_setmark_buf(b);
             if (b->value != NULL)
                 gc_push_root(b->value);
-            gc_push_root(b->type);
+            if (b->type != (jl_value_t*)jl_any_type)
+                gc_push_root(b->type);
         }
     }
 }

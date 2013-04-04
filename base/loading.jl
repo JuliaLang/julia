@@ -125,11 +125,12 @@ end
 
 function evalfile(path::String)
     s = readall(path)
-    v = nothing
+    m = Module(:__anon__)
+    body = Expr(:toplevel)
     i = 1
     while !done(s,i)
         ex, i = parse(s,i)
-        v = eval(ex)
+        push!(body.args, ex)
     end
-    return v
+    return eval(m, body)
 end
