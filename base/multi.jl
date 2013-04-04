@@ -103,7 +103,7 @@ Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
     Worker(host, port, connect(host,uint16(port)))
-Worker(host::String, port::Integer, tunneluser::String) = 
+Worker(host::String, port::Integer, tunnel_user::String) =
     Worker(host, port, connect("localhost",
            ssh_tunnel(tunnel_user, host, uint16(port))))
 
