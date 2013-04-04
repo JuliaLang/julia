@@ -56,3 +56,15 @@ typealias Cfloat Float32
 typealias Cdouble Float64
 #typealias Ccomplex_float Complex64
 #typealias Ccomplex_double Complex128
+
+# deferring (or un-deferring) ctrl-c handler for external C code that
+# is not interrupt safe (see also issue #2622).  The sigatomic_begin/end
+# functions should always be called in matched pairs, ideally via:
+#            disable_sigint() do .. end
+# reennable_sigint is provided so that immediate ctrl-c handling is
+# re-enabled within a sigatomic region, e.g. inside a Julia callback function
+# within a long-running C routine.
+sigatomic_begin() = ccall(:jl_sigatomic_begin, Void, ())
+sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
+disable_sigint(f::Function) = try sigatomic_begin(); f(); finally sigatomic_end(); end
+reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin(); end
