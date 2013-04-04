@@ -761,6 +761,7 @@ export
     xdump,
     ndigits,
     ndigits0z,
+    digits,
     oct,
     parsefloat,
     parseint,
