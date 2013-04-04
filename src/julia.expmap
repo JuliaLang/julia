@@ -120,6 +120,8 @@
     jl_get_field;
     jl_call1;
     jl_call2;
+    jl_sigatomic_begin;
+    jl_sigatomic_end;
     jl_init;
     jl_ascii_string_type;
     jl_utf8_string_type;
