@@ -167,13 +167,24 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_sym_t *fname = (jl_sym_t*)args[0];
         jl_value_t **bp=NULL;
         jl_binding_t *b=NULL;
-        if (jl_is_expr(fname) && ((jl_expr_t*)fname)->head == kw_sym) {
-            fname = (jl_sym_t*)jl_exprarg(fname, 0);
-            assert(jl_is_symbol(fname));
-            jl_function_t *gf = (jl_function_t*)eval((jl_value_t*)fname, locals, nl);
+        jl_value_t *gf=NULL;
+        int kw=0;
+        if (jl_is_expr(fname)) {
+            if (((jl_expr_t*)fname)->head == kw_sym) {
+                kw = 1;
+                fname = (jl_sym_t*)jl_exprarg(fname, 0);
+            }
+            gf = eval((jl_value_t*)fname, locals, nl);
             assert(jl_is_function(gf));
             assert(jl_is_gf(gf));
-            bp = (jl_value_t**)&((jl_methtable_t*)gf->env)->kwsorter;
+            if (!kw) {
+                fname = (jl_sym_t*)jl_fieldref(jl_exprarg(fname, 2), 0);
+                bp = &gf;
+            }
+            else {
+                bp = (jl_value_t**)&((jl_methtable_t*)((jl_function_t*)gf)->env)->kwsorter;
+            }
+            assert(jl_is_symbol(fname));
         }
         else {
             for (size_t i=0; i < nl; i++) {
