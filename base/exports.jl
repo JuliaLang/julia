@@ -1139,6 +1139,8 @@ export
     unsafe_assign,
     unsafe_pointer_to_objref,
     pointer_from_objref,
+    disable_sigint,
+    reenable_sigint,
 
 # Macros
     @b_str,

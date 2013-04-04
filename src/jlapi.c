@@ -166,3 +166,15 @@ DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld)
     }
     return v;
 }
+
+DLLEXPORT void jl_sigatomic_begin(void)
+{
+    JL_SIGATOMIC_BEGIN();
+}
+
+DLLEXPORT void jl_sigatomic_end(void)
+{
+    if (jl_defer_signal == 0)
+        jl_error("sigatomic_end called in non-sigatomic region");
+    JL_SIGATOMIC_END();
+}
