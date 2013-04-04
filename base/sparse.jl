@@ -212,7 +212,7 @@ sparse(a::Vector) = sparsevec(a)
 
 function sparse(A::Matrix)
     m, n = size(A)
-    (I, J, V) = findn_nzs(A)
+    (I, J, V) = findnz(A)
     return sparse_IJ_sorted!(I,J,V,m,n)
 end
 
@@ -410,7 +410,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J)
 end
 
-function findn_nzs{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     numnz = nnz(S)
     I = Array(Ti, numnz)
     J = Array(Ti, numnz)

@@ -1583,7 +1583,7 @@ function findn(B::BitArray)
 end
 end
 
-function findn_nzs(B::BitMatrix)
+function findnz(B::BitMatrix)
     I, J = findn(B)
     return (I, J, trues(length(I)))
 end

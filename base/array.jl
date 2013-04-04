@@ -1245,7 +1245,7 @@ function findn{T}(A::AbstractArray{T})
 end
 end
 
-function findn_nzs{T}(A::AbstractMatrix{T})
+function findnz{T}(A::AbstractMatrix{T})
     nnzA = nnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)

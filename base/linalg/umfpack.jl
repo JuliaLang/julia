@@ -10,7 +10,7 @@ export UmfpackLU,
 import Base.(\)
 import Base.Ac_ldiv_B
 import Base.At_ldiv_B
-import Base.findn_nzs
+import Base.findnz
 import Base.getindex             
 import Base.nnz
 import Base.show
