@@ -384,7 +384,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
                         bool valuepos=true);
 static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
-static void make_gcroot(Value *v, jl_codectx_t *ctx);
+static Value *make_gcroot(Value *v, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
 static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx);
@@ -683,6 +683,9 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
             (*sp) = lastsp;
         }
         else if (e->head == method_sym) {
+            int lastsp = *sp;
+            if (jl_is_expr(jl_exprarg(e,0)))
+                (*sp)++;
             max_arg_depth(jl_exprarg(e,1), max, sp, esc, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
@@ -692,7 +695,7 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
             max_arg_depth(jl_exprarg(e,3), max, sp, esc, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
-            (*sp)-=2;
+            (*sp) = lastsp;
         }
         else {
             size_t elen = jl_array_dim0(e->args);
@@ -719,7 +722,7 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
     }
 }
 
-static void make_gcroot(Value *v, jl_codectx_t *ctx)
+static Value *make_gcroot(Value *v, jl_codectx_t *ctx)
 {
     Value *froot = builder.CreateGEP(ctx->argTemp,
                                      ConstantInt::get(T_size,
@@ -729,6 +732,7 @@ static void make_gcroot(Value *v, jl_codectx_t *ctx)
     ctx->argDepth++;
     if (ctx->argDepth > ctx->maxDepth)
         ctx->maxDepth = ctx->argDepth;
+    return froot;
 }
 
 // --- lambda ---
@@ -1856,9 +1860,16 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     else if (head == method_sym) {
         jl_value_t *mn = args[0];
         bool iskw = false;
-        if (jl_is_expr(mn) && ((jl_expr_t*)mn)->head == kw_sym) {
-            iskw = true;
-            mn = jl_exprarg(mn,0);
+        Value *theF = NULL;
+        if (jl_is_expr(mn)) {
+            if (((jl_expr_t*)mn)->head == kw_sym) {
+                iskw = true;
+                mn = jl_exprarg(mn,0);
+            }
+            theF = emit_expr(mn, ctx);
+            if (!iskw) {
+                mn = jl_fieldref(jl_exprarg(mn, 2), 0);
+            }
         }
         if (jl_is_symbolnode(mn)) {
             mn = (jl_value_t*)jl_symbolnode_sym(mn);
@@ -1869,11 +1880,13 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_binding_t *bnd = NULL;
         Value *bp;
         if (iskw) {
-            Value *theF = emit_expr(mn, ctx);
             // fenv = theF->env
             Value *fenv = emit_nthptr(theF, 2);
             // bp = &((jl_methtable_t*)fenv)->kwsorter
             bp = emit_nthptr_addr(fenv, 7);
+        }
+        else if (theF != NULL) {
+            bp = make_gcroot(theF, ctx);
         }
         else {
             if (is_global((jl_sym_t*)mn, ctx)) {

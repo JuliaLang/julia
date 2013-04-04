@@ -515,7 +515,9 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_lambda_info_t *li = f->linfo;
             jl_errorf("invalid type for argument %s in method definition for %s at %s:%d",
-                      ((jl_sym_t*)jl_arrayref(jl_lam_args((jl_expr_t*)li->ast),i))->name,
+                      jl_is_expr(li->ast) ?
+                      ((jl_sym_t*)jl_arrayref(jl_lam_args((jl_expr_t*)li->ast),i))->name :
+                      "?",
                       name->name, li->file->name, li->line);
         }
     }
