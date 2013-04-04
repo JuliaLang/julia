@@ -132,6 +132,10 @@ Types
 
    True if and only if all values of ``type1`` are also of ``type2``. Can also be written using the ``<:`` infix operator as ``type1 <: type2``.
 
+.. function:: <:(T1, T2)
+
+   Subtype operator, equivalent to ``subtype(T1,T2)``.
+
 .. function:: typemin(type)
 
    The lowest value representable by the given (real) numeric type.
@@ -1085,6 +1089,21 @@ Mathematical Functions
 .. function:: >>(x, n)
 
    Right shift operator.
+
+.. function:: >>>(x, n)
+
+   Unsigned right shift operator.
+
+.. function:: :(start, [step], stop)
+
+   Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1,
+   and ``a:s:b`` is similar but uses a step size of ``s``. These syntaxes call the
+   function ``colon``.
+   The colon is also used in indexing to select whole dimensions.
+
+.. function:: colon(start, [step], stop)
+
+   Called by ``:`` syntax for constructing ranges.
 
 .. function:: ==(x, y)
 
@@ -2892,6 +2911,11 @@ System
 .. function:: mkdir(path, [mode])
 
    Make a new directory with name ``path`` and permissions ``mode``.
+   ``mode`` defaults to 0o777, modified by the current file creation mask.
+
+.. function:: mkpath(path, [mode])
+
+   Create all directories in the given ``path``, with permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
 
 .. function:: rmdir(path)

@@ -237,6 +237,12 @@
 
 "),
 
+("Types","Base","<:","<:(T1, T2)
+
+   Subtype operator, equivalent to \"subtype(T1,T2)\".
+
+"),
+
 ("Types","Base","typemin","typemin(type)
 
    The lowest value representable by the given (real) numeric type.
@@ -1667,6 +1673,27 @@
 ("Mathematical Functions","Base",">>",">>(x, n)
 
    Right shift operator.
+
+"),
+
+("Mathematical Functions","Base",">>>",">>>(x, n)
+
+   Unsigned right shift operator.
+
+"),
+
+("Mathematical Functions","Base",":",":(start[, step], stop)
+
+   Range operator. \"a:b\" constructs a range from \"a\" to \"b\" with
+   a step size of 1, and \"a:s:b\" is similar but uses a step size of
+   \"s\". These syntaxes call the function \"colon\". The colon is
+   also used in indexing to select whole dimensions.
+
+"),
+
+("Mathematical Functions","Base","colon","colon(start[, step], stop)
+
+   Called by \":\" syntax for constructing ranges.
 
 "),
 
@@ -4386,6 +4413,14 @@
 
 "),
 
+("System","Base","mkpath","mkpath(path[, mode])
+
+   Create all directories in the given \"path\", with permissions
+   \"mode\". \"mode\" defaults to 0o777, modified by the current file
+   creation mask.
+
+"),
+
 ("System","Base","rmdir","rmdir(path)
 
    Remove the directory named \"path\".
@@ -4780,6 +4815,64 @@
 
    Returns \"true\" if the current user has permission to write to
    \"path\", \"false\" otherwise.
+
+"),
+
+("Filesystem","Base","dirname","dirname(path::String) -> String
+
+   Get the directory part of a path.
+
+"),
+
+("Filesystem","Base","basename","basename(path::String) -> String
+
+   Get the file name part of a path.
+
+"),
+
+("Filesystem","Base","isabspath","isabspath(path::String) -> Bool
+
+   Determines whether a path is absolute (begins at the root
+   directory).
+
+"),
+
+("Filesystem","Base","joinpath","joinpath(parts...) -> String
+
+   Join path components into a full path. If some argument is an
+   absolute path, then prior components are dropped.
+
+"),
+
+("Filesystem","Base","abspath","abspath(path::String) -> String
+
+   Convert a path to an absolute path by adding the current directory
+   if necessary.
+
+"),
+
+("Filesystem","Base","tempname","tempname()
+
+   Generate a unique temporary filename.
+
+"),
+
+("Filesystem","Base","tempdir","tempdir()
+
+   Obtain the path of a temporary directory.
+
+"),
+
+("Filesystem","Base","mktemp","mktemp()
+
+   Returns \"(path, io)\", where \"path\" is the path of a new
+   temporary file and \"io\" is an open file object for this path.
+
+"),
+
+("Filesystem","Base","mktempdir","mktempdir()
+
+   Create a temporary directory and return its path.
 
 "),
 
