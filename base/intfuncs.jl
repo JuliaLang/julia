@@ -296,12 +296,11 @@ bits(x::Union(Int128,Uint128))            = bin(reinterpret(Uint128,x),128)
 
 function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
     2 <= base || error("invalid base: $base")
-    i = max(pad,ndigits0z(n,base))
-    a = zeros(T,i)
-    while i > 0
+    m = max(pad,ndigits0z(n,base))
+    a = zeros(T,m)
+    for i = 1:m
         a[i] = rem(n,base)
         n = div(n,base)
-        i -= 1
     end
     return a
 end
