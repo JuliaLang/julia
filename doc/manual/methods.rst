@@ -411,7 +411,7 @@ this definition::
 
     f(a=1,b=2) = a+2b
 
-translates to the following three methods:
+translates to the following three methods::
 
     f(a,b) = a+2b
     f(a) = f(a,2)
