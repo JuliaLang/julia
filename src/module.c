@@ -25,6 +25,15 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     return m;
 }
 
+JL_CALLABLE(jl_f_new_module)
+{
+    JL_NARGS(Module, 1, 1);
+    JL_TYPECHK(Module, symbol, args[0]);
+    jl_module_t *m = jl_new_module((jl_sym_t*)args[0]);
+    m->parent = jl_main_module;
+    return (jl_value_t*)m;
+}
+
 static jl_binding_t *new_binding(jl_sym_t *name)
 {
     jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));

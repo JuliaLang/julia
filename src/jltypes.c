@@ -2615,6 +2615,7 @@ void jl_init_types(void)
         jl_new_datatype(jl_symbol("Module"), jl_any_type, jl_null,
                         jl_tuple(2, jl_symbol("name"), jl_symbol("parent")),
                         jl_tuple(2, jl_sym_type, jl_any_type), 0, 1);
+    jl_module_type->fptr = jl_f_new_module;
 
     jl_tupleset(jl_typename_type->types, 1, jl_module_type);
 
