@@ -48,31 +48,20 @@ end
 
 cd(f::Function) = cd(f, ENV["HOME"])
 
-function mkdir(path::String, mode::Unsigned)
+function mkdir(path::String, mode::Unsigned=0o777)
     @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
     @windows_only ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), bytestring(path))
     system_error(:mkdir, ret != 0)
 end
-mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o", mode, "?")
-mkdir(path::String) = mkdir(path, 0o777)
 
-function mkpath(path::String, mode)
-    dparts = splitdrive(path)
-    isabs = isabspath(path)
-    path = dparts[1]
-    if isabs
-        @windows_only path *= "\\"
-        @unix_only path = "/"
-    end
-    parts = split(dparts[2],Base.path_separator_re,false)
-    for x in parts
-        path = joinpath(path,x)
-	if !isdir(path)
-	    mkdir(path,mode)
-	end
-    end
+function mkpath(path::String, mode::Unsigned=0o777)
+    (path=="" || path=="/" || isdir(path)) && return
+    mkpath(dirname(path), mode)
+    mkdir(path)
 end
-mkpath(path::String) = mkpath(path,0o777)
+
+mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o$mode?")
+mkdir(path::String, mode::Signed) = error("mkpath: mode must be an unsigned integer -- perhaps 0o$mode?")
 
 function rmdir(path::String)
     @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
