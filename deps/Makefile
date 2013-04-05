@@ -25,7 +25,7 @@ endif
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm-extras random Rmath double-conversion
+STAGE1_DEPS = uv random Rmath double-conversion
 STAGE2_DEPS =
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -51,8 +51,12 @@ WGET_DASH_O = $(WGET)
 
 ## USE_SYSTEM_LIBS options
 
+ifeq ($(USE_SYSTEM_OPENLIBM), 0)
+# No matter if we are using a system-libm or not, if we don't have a system-openlibm, we need the extras
+STAGE1_DEPS += openlibm-extras
 ifeq ($(USE_SYSTEM_LIBM), 0)
 STAGE1_DEPS += openlibm
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
