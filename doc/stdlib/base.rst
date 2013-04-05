@@ -892,18 +892,22 @@ I/O
    seeing ``eof`` return ``false``.
 
 .. function:: ntoh(x)
+
    Converts the endianness of a value from Network byte order (big-endian) to
    that used by the Host.
 
 .. function:: hton(x)
+
    Converts the endianness of a value from that used by the Host to Network
    byte order (big-endian).
 
 .. function:: ltoh(x)
+
    Converts the endianness of a value from Little-endian to that used by the
    Host.
 
 .. function:: htol(x)
+
    Converts the endianness of a value from that used by the Host to
    Little-endian.
 

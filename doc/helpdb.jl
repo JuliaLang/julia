@@ -1366,27 +1366,31 @@
 
 "),
 
-("I/O","","that used by the Host.","ntoh(x)
-Converts the endianness of a value from Network byte order (big-endian) to
-that used by the Host.
+("I/O","Base","ntoh","ntoh(x)
+
+   Converts the endianness of a value from Network byte order (big-
+   endian) to that used by the Host.
 
 "),
 
-("I/O","","byte order (big-endian).","hton(x)
-Converts the endianness of a value from that used by the Host to Network
-byte order (big-endian).
+("I/O","Base","hton","hton(x)
+
+   Converts the endianness of a value from that used by the Host to
+   Network byte order (big-endian).
 
 "),
 
-("I/O","Base","Host.","ltoh(x)
-Converts the endianness of a value from Little-endian to that used by the
-Host.()
+("I/O","Base","ltoh","ltoh(x)
+
+   Converts the endianness of a value from Little-endian to that used
+   by the Host.
 
 "),
 
-("I/O","Base","Little-endian.","htol(x)
-Converts the endianness of a value from that used by the Host to
-Little-endian.()
+("I/O","Base","htol","htol(x)
+
+   Converts the endianness of a value from that used by the Host to
+   Little-endian.
 
 "),
 
