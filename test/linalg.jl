@@ -61,11 +61,17 @@ for elty in (Float32, Float64, Complex64, Complex128)
         d,v   = eig(a)                 # non-symmetric eigen decomposition
         for i in 1:size(a,2) @test_approx_eq a*v[:,i] d[i]*v[:,i] end
 
-        u, q, v = schur(a)             # Schur
-        @test_approx_eq q*u*q' a
-        @test_approx_eq sort(real(v)) sort(real(d))
-        @test_approx_eq sort(imag(v)) sort(imag(d))
-        @test istriu(u) || isreal(a)
+        f = schurfact(a)             # Schur
+        @test_approx_eq f[:vectors]*f[:Schur]*f[:vectors]' a
+        @test_approx_eq sort(real(f[:values])) sort(real(d))
+        @test_approx_eq sort(imag(f[:values])) sort(imag(d))
+        @test istriu(f[:Schur]) || isreal(a)
+
+        f = schurfact(a[1:5,1:5], a[6:10,6:10]) # Generalized Schur
+        @test_approx_eq f[:Q]*f[:S]*f[:Z]' a[1:5,1:5]
+        @test_approx_eq f[:Q]*f[:T]*f[:Z]' a[6:10,6:10]
+        @test istriu(f[:S]) || isreal(a)
+        @test istriu(f[:T]) || isreal(a)
 
         usv = svdfact(a)                # singular value decomposition
         @test_approx_eq usv[:U]*diagmm(usv[:S],usv[:Vt]) a
