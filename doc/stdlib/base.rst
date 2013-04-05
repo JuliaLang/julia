@@ -886,7 +886,26 @@ I/O
 
 .. function:: eof(stream)
 
-   Tests whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this function will block to wait for more data if necessary, and then return ``false``. Therefore it is always safe to read one byte after seeing ``eof`` return ``false``.
+   Tests whether an I/O stream is at end-of-file. If the stream is not yet
+   exhausted, this function will block to wait for more data if necessary, and
+   then return ``false``. Therefore it is always safe to read one byte after
+   seeing ``eof`` return ``false``.
+
+.. function:: ntoh(x)
+   Converts the endianness of a value from Network byte order (big-endian) to
+   that used by the Host.
+
+.. function:: hton(x)
+   Converts the endianness of a value from that used by the Host to Network
+   byte order (big-endian).
+
+.. function:: ltoh(x)
+   Converts the endianness of a value from Little-endian to that used by the
+   Host.
+
+.. function:: htol(x)
+   Converts the endianness of a value from that used by the Host to
+   Little-endian.
 
 Text I/O
 --------
