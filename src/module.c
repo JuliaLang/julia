@@ -38,6 +38,7 @@ JL_CALLABLE(jl_f_new_module)
     }
     jl_module_t *m = jl_new_module(name);
     m->parent = jl_main_module;
+    jl_add_standard_imports(m);
     return (jl_value_t*)m;
 }
 
