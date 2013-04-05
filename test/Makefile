@@ -3,7 +3,7 @@ include ../Make.inc
 
 TESTS = core keywordargs numbers strings unicode corelib hashing remote iostring \
 arrayops linalg blas fft dct sparse bitarray random math functional bigint \
-sorting statistics spawn parallel suitesparse arpack bigfloat file zlib image \
+sorting statistics spawn parallel suitesparse arpack bigfloat file zlib \
 all git pkg pkg2
 
 $(TESTS) ::
