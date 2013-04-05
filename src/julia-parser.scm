@@ -1082,8 +1082,13 @@
 	     rest)
 	(cons first rest))))
 
+(define (parse-import-atom s)
+  (if (eq? (peek-token s) '|.|)
+      '|.|
+      (parse-atom s)))
+
 (define (parse-import s word)
-  (let ((ns (macrocall-to-atsym (parse-atom s))))
+  (let ((ns (macrocall-to-atsym (parse-import-atom s))))
     (let loop ((path (list ns)))
       (if (not (symbol? (car path)))
 	  (error (string "invalid " word " statement: expected identifier")))

@@ -110,7 +110,7 @@
 # end
 
 import Main
-import Intrinsics.ccall
+import Core.Intrinsics.ccall
 
 export
     # key types

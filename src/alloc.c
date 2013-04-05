@@ -84,6 +84,7 @@ jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
 jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
 jl_sym_t *global_sym; jl_sym_t *tuple_sym;
+jl_sym_t *dot_sym;
 
 typedef struct {
     int64_t a;

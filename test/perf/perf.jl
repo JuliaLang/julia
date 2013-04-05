@@ -1,4 +1,4 @@
-using Test
+using Base.Test
 
 print_output = isempty(ARGS) || contains(ARGS, "perf/perf.jl") || contains(ARGS, "perf")
 
