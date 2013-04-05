@@ -2764,4 +2764,5 @@ void jl_init_types(void)
     toplevel_sym = jl_symbol("toplevel");
     tuple_sym = jl_symbol("tuple");
     kw_sym = jl_symbol("kw");
+    dot_sym = jl_symbol(".");
 }

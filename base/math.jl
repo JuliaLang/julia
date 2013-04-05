@@ -21,7 +21,7 @@ import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
        Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.max, Base.min,
        Base.ceil, Base.floor, Base.trunc, Base.round, Base.^
 
-import Intrinsics.nan_dom_err
+import Core.Intrinsics.nan_dom_err
 
 # non-type specific math functions
 

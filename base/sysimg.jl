@@ -84,7 +84,7 @@ include("iobuffer.jl")
 include("stream.jl")
 include("socket.jl")
 include("fs.jl")
-importall FS
+importall .FS
 include("process.jl")
 ccall(:jl_get_uv_hooks, Void, ())
 include("char.jl")
@@ -94,9 +94,9 @@ include("string.jl")
 include("regex.jl")
 include("show.jl")
 include("grisu.jl")
-import Grisu.print_shortest
+import .Grisu.print_shortest
 include("printf.jl")
-importall Printf
+importall .Printf
 
 # concurrency and parallelism
 include("iterator.jl")
@@ -109,7 +109,7 @@ include("osutils.jl")
 include("libc.jl")
 include("env.jl")
 include("errno.jl")
-using Errno
+using .Errno
 include("file.jl")
 include("path.jl")
 include("stat.jl")
@@ -123,17 +123,17 @@ include("loading.jl")
 include("intfuncs.jl")
 include("floatfuncs.jl")
 include("math.jl")
-importall Math
+importall .Math
 
 # random number generation and statistics
 include("statistics.jl")
 include("librandom.jl")
 include("random.jl")
-importall Random
+importall .Random
 
 # Combinatorics
 include("sort.jl")
-importall Sort
+importall .Sort
 include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
@@ -150,23 +150,23 @@ include("test.jl")
 include("meta.jl")
 include("i18n.jl")
 include("help.jl")
-using I18n
-using Help
+using .I18n
+using .Help
 push!(I18n.CALLBACKS, Help.clear_cache)
 
 # sparse matrices and linear algebra
 include("sparse.jl")
 include("linalg.jl")
-importall LinAlg
+importall .LinAlg
 
 # signal processing
 include("fftw.jl")
 include("dsp.jl")
-importall DSP
+importall .DSP
 
 # BigInts and BigFloats
 include("gmp.jl")
-importall GMP
+importall .GMP
 
 # deprecated functions
 include("deprecated.jl")
