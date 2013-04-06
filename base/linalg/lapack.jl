@@ -2048,10 +2048,10 @@ for (orghr, elty) in
         end
     end
 end
-# Schur form
-for (gees, elty) in
-    ((:dgees_,:Float64),
-     (:sgees_,:Float32))
+# Schur forms
+for (gees, gges, elty) in
+    ((:dgees_,:dgges_,:Float64),
+     (:sgees_,:sgges_,:Float32))
     @eval begin
         function gees!(jobvs::BlasChar, A::StridedMatrix{$elty})
 #     .. Scalar Arguments ..
@@ -2064,7 +2064,6 @@ for (gees, elty) in
 #    $                   WR( * )
             chkstride1(A)
             chksquare(A)
-            sort = 'N'
             n = size(A, 1)
             sdim = Array(BlasInt, 1)
             wr = Array($elty, n)
@@ -2080,7 +2079,7 @@ for (gees, elty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{Void}, Ptr{BlasInt}),
-                    &jobvs, &sort, [], &n, 
+                    &jobvs, &'N', [], &n, 
                         A, &max(1, n), sdim, wr,
                         wi, vs, &ldvs, work, 
                         &lwork, [], info)
@@ -2096,11 +2095,57 @@ for (gees, elty) in
                 return A, vs, complex(wr, wi)
             end
         end
+        function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBVSL, JOBVSR, SORT
+#       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
+# *     ..
+# *     .. Array Arguments ..
+#       LOGICAL            BWORK( * )
+#       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
+#      $                   B( LDB, * ), BETA( * ), VSL( LDVSL, * ),
+#      $                   VSR( LDVSR, * ), WORK( * )
+            n = size(A, 1)
+            if size(A, 2) != n || size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("Matrices are not of same size")) end
+            sdim = blas_int(0)
+            alphar = Array($elty, n)
+            alphai = Array($elty, n)
+            beta = Array($elty, n)
+            ldvsl = jobvsl == 'V' ? n : 1
+            vsl = Array($elty, ldvsl, n)
+            ldvsr = jobvsr == 'V' ? n : 1
+            vsr = Array($elty, ldvsr, n)
+            work = Array($elty, 1)
+            lwork = blas_int(-1)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(gges)), liblapack), Void,
+                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Void},
+                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{Void},
+                        Ptr{BlasInt}),
+                    &jobvsl, &jobvsr, &'N', [], 
+                    &n, A, &max(1,n), B, 
+                    &max(1,n), &sdim, alphar, alphai, 
+                    beta, vsl, &ldvsl, vsr, 
+                    &ldvsr, work, &lwork, [], 
+                    info)
+                if i == 1
+                    lwork = blas_int(work[1])
+                    work = Array($elty, lwork)
+                end
+            end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            return A, B, complex(alphar, alphai), beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
+        end
     end
 end
-for (gees, elty, relty) in
-    ((:zgees_,:Complex128,:Float64),
-     (:cgees_,:Complex64,:Float32))
+for (gees, gges, elty, relty) in
+    ((:zgees_,:zgges_,:Complex128,:Float64),
+     (:cgees_,:cgges_,:Complex64,:Float32))
     @eval begin
         function gees!(jobvs::BlasChar, A::StridedMatrix{$elty})
 # *     .. Scalar Arguments ..
@@ -2115,7 +2160,7 @@ for (gees, elty, relty) in
             chksquare(A)
             sort = 'N'
             n = size(A, 1)
-            sdim = Array(BlasInt, 1)
+            sdim = blas_int(0)
             w = Array($elty, n)
             ldvs = jobvs == 'V' ? n : 1
             vs = Array($elty, ldvs, n)
@@ -2130,7 +2175,7 @@ for (gees, elty, relty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                         Ptr{$relty}, Ptr{Void}, Ptr{BlasInt}),
                     &jobvs, &sort, [], &n, 
-                        A, &max(1, n), sdim, w,
+                        A, &max(1, n), &sdim, w,
                         vs, &ldvs, work, &lwork, 
                         rwork, [], info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -2140,6 +2185,53 @@ for (gees, elty, relty) in
                 end
             end
             return A, vs, w
+        end
+        function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBVSL, JOBVSR, SORT
+#       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
+# *     ..
+# *     .. Array Arguments ..
+#       LOGICAL            BWORK( * )
+#       DOUBLE PRECISION   RWORK( * )
+#       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
+#      $                   BETA( * ), VSL( LDVSL, * ), VSR( LDVSR, * ),
+#      $                   WORK( * )
+            n = size(A, 1)
+            if size(A, 2) != n || size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("Matrices are not of same size")) end
+            sdim = blas_int(0)
+            alpha = Array($elty, n)
+            beta = Array($elty, n)
+            ldvsl = jobvsl == 'V' ? n : 1
+            vsl = Array($elty, ldvsl, n)
+            ldvsr = jobvsr == 'V' ? n : 1
+            vsr = Array($elty, ldvsr, n)
+            work = Array($elty, 1)
+            lwork = blas_int(-1)
+            rwork = Array($relty, 8n)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(gges)), liblapack), Void,
+                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Void},
+                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{Void},
+                        Ptr{BlasInt}),
+                    &jobvsl, &jobvsr, &'N', [], 
+                    &n, A, &max(1,n), B, 
+                    &max(1,n), &sdim, alpha, beta, 
+                    vsl, &ldvsl, vsr, &ldvsr, 
+                    work, &lwork, rwork, [], 
+                    info)
+                if i == 1
+                        lwork = blas_int(work[1])
+                        work = Array($elty, lwork)
+                end
+            end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            return A, B, alpha, beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
         end
     end
 end

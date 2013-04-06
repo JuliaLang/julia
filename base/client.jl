@@ -182,24 +182,23 @@ function process_options(args::Array{Any,1})
         elseif args[i]=="--bind-to"
             i += 1
             bind_addr = args[i]
-        elseif args[i]=="-e"
-            # TODO: support long options
+        elseif args[i]=="-e" || args[i]=="--eval"
             repl = false
             i+=1
             ARGS = args[i+1:end]
             eval(Main,parse_input_line(args[i]))
             break
-        elseif args[i]=="-E"
+        elseif args[i]=="-E" || args[i]=="--print"
             repl = false
             i+=1
             ARGS = args[i+1:end]
             show(eval(Main,parse_input_line(args[i])))
             println()
             break
-        elseif args[i]=="-P"
+        elseif args[i]=="-P" || args[i]=="--post-boot"
             i+=1
             eval(Main,parse_input_line(args[i]))
-        elseif args[i]=="-L"
+        elseif args[i]=="-L" || args[i]=="--load"
             i+=1
             require(args[i])
         elseif args[i]=="-p"
