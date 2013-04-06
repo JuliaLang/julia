@@ -1,8 +1,8 @@
 type Set{T}
-    hash::Dict{T,Bool}
+    dict::Dict{T,Nothing}
 
-    Set() = new((T=>Bool)[])
-    Set(x...) = add_each!(new(Dict{T,Bool}()), x)
+    Set() = new(Dict{T,Nothing}())
+    Set(x...) = add_each!(new(Dict{T,Nothing}()), x)
 end
 Set() = Set{Any}()
 Set(x...) = Set{Any}(x...)
@@ -10,21 +10,17 @@ Set{T}(x::T...) = Set{T}(x...)
 
 show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,'(',')'))
 
-isempty(s::Set) = isempty(s.hash)
-length(s::Set)  = length(s.hash)
+isempty(s::Set) = isempty(s.dict)
+length(s::Set)  = length(s.dict)
 eltype{T}(s::Set{T}) = T
 
-has(s::Set, x) = has(s.hash, x)
+has(s::Set, x) = has(s.dict, x)
 contains(s::Set, x) = has(s, x)
 
-add!(s::Set, x) = (s.hash[x] = true; s)
-delete!(s::Set, x) = (delete!(s.hash, x); x)
-function delete!(s::Set, x, deflt)
-    if delete!(s.hash, x, false)
-        return x
-    end
-    return deflt
-end
+add!(s::Set, x) = (s.dict[x] = nothing; s)
+delete!(s::Set, x) = (delete!(s.dict, x); x)
+# TODO: this method doesn't make much sense for sets:
+delete!(s::Set, x, deflt) = has(s.dict, x) ? delete!(s.dict, x) : deflt
 
 add_each!(s::Set, xs) = (for x=xs; add!(s,x); end; s)
 del_each!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
@@ -32,15 +28,15 @@ del_each!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 similar{T}(s::Set{T}) = Set{T}()
 copy(s::Set) = add_each!(similar(s), s)
 
-empty!{T}(s::Set{T}) = (empty!(s.hash); s)
+empty!{T}(s::Set{T}) = (empty!(s.dict); s)
 
-start(s::Set)       = start(s.hash)
-done(s::Set, state) = done(s.hash, state)
+start(s::Set)       = start(s.dict)
+done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.hash.keys[i], skip_deleted(s.hash,i+1))
+next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
 
 # TODO: simplify me?
-pop!(s::Set) = (val = s.hash.keys[start(s.hash)]; delete!(s.hash, val); val)
+pop!(s::Set) = (val = s.dict.keys[start(s.dict)]; delete!(s.dict, val); val)
 
 union() = Set()
 union(s::Set) = copy(s)
