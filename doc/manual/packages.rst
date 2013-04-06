@@ -70,9 +70,12 @@ already have one. For example, create a new repository called
 6. Add at least one git commit and push it to the remote repository::
 
     # Do some stuff
-    git add #new files
+    git add -A . #for all changes, or give an explicit file list to avoid checking in binaries and temporary 
     git commit
-    git push remote github
+    git push -u github master
+
+7. If the previous commands are new to you, this is probably a good time to
+go read an explanation of how git works.
 
 Distributing a Julia package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
