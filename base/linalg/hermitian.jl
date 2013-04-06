@@ -31,8 +31,8 @@ end
 
 inv(A::Hermitian) = inv(BunchKaufman(copy(A.S), A.uplo))
 
-eigfact!(A::Hermitian) = EigenDense(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
-eigfact(A::Hermitian) = EigenDense(LAPACK.syevr!('V', 'A', A.uplo, copy(A.S), 0.0, 0.0, 0, 0, -1.0)...)
+eigfact!(A::Hermitian) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
+eigfact(A::Hermitian) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, copy(A.S), 0.0, 0.0, 0, 0, -1.0)...)
 eigvals(A::Hermitian, il::Int, ih::Int) = LAPACK.syevr!('N', 'I', A.uplo, copy(A.S), 0.0, 0.0, il, ih, -1.0)[1]
 eigvals(A::Hermitian, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, copy(A.S), vl, vh, 0, 0, -1.0)[1]
 eigvals(A::Hermitian) = eigvals(A, 1, size(A, 1))

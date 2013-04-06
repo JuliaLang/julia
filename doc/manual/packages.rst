@@ -45,7 +45,7 @@ This will initialize a skeleton for a new package in ``$HOME/.julia/MY_PACKAGE_N
    This will overwrite any existing files and git repository in ``$HOME/.julia/MY_PACKAGE_NAME``.
 
 2. If you have already created a repository for your package, overwrite the
-skeleton by copying or symlinking over it. For example: ::
+skeleton by copying or symlinking over it. For example,::
 
     rm -r $HOME/.julia/MY_PACKAGE_NAME
     ln -s /path/to/existing/repo/MY_PACKAGE_NAME $HOME/.julia/MY_PACKAGE_NAME
@@ -55,9 +55,7 @@ package per line.
 
 4. Populate the package by filling out ``README.md`` and ``LICENSE.md``, source
 code in ``src/``, and tests in ``test/``. Ensure that each test file contains these
-lines near the beginning:
-
-.. code:: julia
+lines near the beginning::
 
     using Test
     using MY_PACKAGE_NAME
@@ -69,9 +67,7 @@ already have one. For example, create a new repository called
     cd $HOME/.julia/MY_PACKAGE_NAME
     git remote add github https://github.com/MY_GITHUB_USER/MY_PACKAGE_NAME.jl
  
-6. Add at least one git commit and push it to the remote repository.
-
-.. code:: bash
+6. Add at least one git commit and push it to the remote repository::
 
     # Do some stuff
     git add #new files
@@ -94,13 +90,23 @@ repository URL should look like `https://github.com/MY_GITHUB_USER/METADATA.jl`.
 Distributing a new package or new version of an existing package
 ----------------------------------------------------------------
 
+0. Ensure that both your forked METADATA.jl on Github and your local METADATA
+   repository are current. The latter should be checked out to the `devel`
+   branch.::
+
+    cd $HOME/.julia/METADATA
+    git fetch --all
+    git checkout devel
+    git rebase origin/devel
+    git push github devel
+
 1. Populate the local METADATA by running in Julia: ::
 
     Pkg.pkg_origin("MY_PACKAGE_NAME")
     Pkg.patch("MY_PACKAGE_NAME")
 
 2. Update the local METADATA with the URL of your forked repository and
-create a new branch with your package in it. ::
+create a new branch with your package in it.::
 
     cd $HOME/.julia/METADATA
     git branch MY_PACKAGE_NAME
