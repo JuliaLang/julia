@@ -16,9 +16,9 @@ using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
 import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
              isvalid, nnz, show, size, sort!, transpose, vcat
 
-import .LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                Factorization, cholfact, cholfact!, copy, dense, det, diag, diagmm,
-                diagmm!, full, logdet, norm, solve, sparse
+import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
+                 Factorization, cholfact, cholfact!, copy, dense, det, diag, diagmm,
+                 diagmm!, full, logdet, norm, solve, sparse
 
 include("linalg/cholmod_h.jl")
 

@@ -2,7 +2,7 @@ module ARPACK
 
 export naupd, neupd, saupd, seupd
 
-import .LinAlg: BlasInt, blas_int
+import ..LinAlg: BlasInt, blas_int
 
 for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
     ((:Float64, :dsaupd_, :dseupd_, :dnaupd_, :dneupd_),

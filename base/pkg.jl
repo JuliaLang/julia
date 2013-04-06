@@ -9,7 +9,7 @@ include("pkg/resolve.jl")
 using .Metadata
 using .Resolve
 
-import .Git
+import ..Git
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 

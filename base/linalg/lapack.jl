@@ -3,7 +3,7 @@ module LAPACK
 
 const liblapack = Base.liblapack_name
 
-import .LinAlg: BlasFloat, BlasChar, BlasInt, blas_int
+import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int
 
 type LAPACKException <: Exception
     info::BlasInt

@@ -26,7 +26,7 @@ export copy!,
 
 const libblas = Base.libblas_name
 
-import .LinAlg: BlasFloat, BlasChar, BlasInt, blas_int
+import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),

@@ -205,18 +205,24 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
     // following parent links. then evaluate the rest of the path from there.
     // in A.B, look for A in Main first.
     jl_sym_t *var = (jl_sym_t*)jl_cellref(args,0);
-    size_t i;
+    size_t i=1;
     assert(jl_is_symbol(var));
     jl_module_t *m;
-    if (var == dot_sym) {
-        m = jl_current_module;
-        var = (jl_sym_t*)jl_cellref(args,1);
-        i = 2;
+
+    if (var != dot_sym) {
+        m = jl_main_module;
     }
     else {
-        m = jl_main_module;
-        i = 1;
+        m = jl_current_module;
+        while (1) {
+            var = (jl_sym_t*)jl_cellref(args,i);
+            i++;
+            if (var != dot_sym)
+                break;
+            m = m->parent;
+        }
     }
+
     while (1) {
         if (jl_binding_resolved_p(m, var)) {
             jl_binding_t *mb = jl_get_binding(m, var);
@@ -238,9 +244,8 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
                     return eval_import_path_(args, 1);
                 }
             }
-            jl_errorf("in module path: %s not defined", var->name);
         }
-        m = m->parent;
+        jl_errorf("in module path: %s not defined", var->name);
     }
 
     for(; i < jl_array_len(args)-1; i++) {
