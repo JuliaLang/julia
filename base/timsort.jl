@@ -6,9 +6,9 @@
 # Original author: @kmsquire
 
 module _TimSort
-using .Sort
+using ..Sort
 
-import .Sort.sort!
+import ..Sort.sort!
 
 typealias Run Range1{Int}
 

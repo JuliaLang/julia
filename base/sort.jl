@@ -309,9 +309,9 @@ end
 ## fast clever sorting for floats ##
 
 module Float
-using .Sort
+using ..Sort
 
-import .Sort.sort!, .Sort.Perm, .Sort.lt, .Sort.Reverse
+import ..Sort.sort!, ..Sort.Perm, ..Sort.lt, ..Sort.Reverse
 import Core.Intrinsics.slt_int, Core.Intrinsics.unbox
 
 typealias Floats Union(Float32,Float64)

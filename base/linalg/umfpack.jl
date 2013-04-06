@@ -9,7 +9,7 @@ export UmfpackLU,
 
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, nnz, show, size
 
-import .LinAlg: Factorization, det, lufact, lufact!, solve
+import ..LinAlg: Factorization, det, lufact, lufact!, solve
 
 include("linalg/umfpack_h.jl")
 
