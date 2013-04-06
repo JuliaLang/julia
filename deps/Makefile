@@ -25,7 +25,7 @@ endif
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm-extras random Rmath double-conversion
+STAGE1_DEPS = uv random Rmath double-conversion
 STAGE2_DEPS =
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -38,7 +38,12 @@ endif
 endif
 
 ifeq ($(OS), Linux)
+ifneq ($(shell patchelf --version), patchelf 0.6)
 STAGE1_DEPS += patchelf
+PATCHELF=$(BUILD)/bin/patchelf
+else
+PATCHELF=patchelf
+endif
 endif
 
 WGET = $(abspath .)/jldownload
@@ -46,8 +51,12 @@ WGET_DASH_O = $(WGET)
 
 ## USE_SYSTEM_LIBS options
 
+ifeq ($(USE_SYSTEM_OPENLIBM), 0)
+# No matter if we are using a system-libm or not, if we don't have a system-openlibm, we need the extras
+STAGE1_DEPS += openlibm-extras
 ifeq ($(USE_SYSTEM_LIBM), 0)
 STAGE1_DEPS += openlibm
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -321,7 +330,7 @@ ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libhistory.dylib $(BUILD)/lib/libhistory.dylib
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libhistory.so* $(BUILD)/lib/libreadline.so* ; do \
-		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		$(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -832,7 +841,7 @@ else
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libarpack.so* ; do \
-		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 endif
@@ -906,7 +915,7 @@ else ifeq ($(OS),WINNT)
 	mv $(BUILD)/bin/libfftw3f-3.dll $(BUILD)/lib/libfftw3f.dll
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libfftw3f_threads.so* ; do \
-		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -944,7 +953,7 @@ else ifeq ($(OS),WINNT)
 	mv $(BUILD)/bin/libfftw3-3.dll $(BUILD)/lib/libfftw3.dll
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libfftw3_threads.so* ; do \
-		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
