@@ -1089,7 +1089,7 @@ LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
 
 libunwind-$(UNWIND_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://savannah.spinellicreations.com/libunwind/$@
+	$(WGET_DASH_O) $@ http://download.savannah.gnu.org/releases/libunwind/$@ 
 libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
 	touch -c $@
