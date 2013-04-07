@@ -154,9 +154,8 @@ example computes a dot product using a BLAS function.
     end
 
 The meaning of prefix ``&`` is not quite the same as in C. In
-particular, any changes to the referenced variables may not be visible
-in Julia (the goal is to make any changes visible in the spirit of C, but
-this is not currently implemented for immutable types). However, it will
+particular, any changes to the referenced variables will not be visible
+in Julia. However, it will
 never cause any harm for called functions to attempt such modifications
 (that is, writing through the passed pointers). Since this ``&`` is not
 a real address operator, it may be used with any syntax, such as
@@ -305,27 +304,26 @@ to terminate abruptly or corrupt arbitrary process memory due to a bad pointer
 or type declaration.
 
 Given a ``Ptr{T}``, the contents of type ``T`` can generally be copied from
-the referenced memory into a Julia type using ``unsafe_ref(ptr, [index])``. The
+the referenced memory into a Julia object using ``unsafe_ref(ptr, [index])``. The
 index argument is optional (default is 1), and performs 1-based indexing. This
 function is intentionally similar to the behavior of ``getindex()`` and ``setindex!()``
 (e.g. ``[]`` access syntax).
 
-If T is a bitstype, the return value will be that number.
-
-If T is a type or immutable, the return value will be a new object initialized
+The return value will be a new object initialized
 to contain a copy of the contents of the referenced memory. The referenced
 memory can safely be freed or released.
 
-If T is Any, then the referenced memory is assumed to contain some
-``jl_value_t*`` and is not copied. You must be careful in this case to ensure
+If ``T`` is ``Any``, then the memory is assumed to contain a reference to
+a Julia object (a ``jl_value_t*``), the result will be a reference to this object,
+and the object will not be copied. You must be careful in this case to ensure
 that the object was always visible to the garbage collector (pointers do not
-count, but the new object does) to ensure the memory is not prematurely freed.
+count, but the new reference does) to ensure the memory is not prematurely freed.
 Note that if the object was not originally allocated by Julia, the new object
 will never be finalized by Julia's garbage collector.  If the ``Ptr`` itself
 is actually a ``jl_value_t*``, it can be converted back to a Julia object
-reference by ``unsafe_pointer_to_objref(ptr)``.  [Julia values ``v``
-can be converted to ``jl_value_t*`` pointers (``Ptr{Void}``) by calling
-``pointer_from_objref(v)``.]
+reference by ``unsafe_pointer_to_objref(ptr)``.  (Julia values ``v``
+can be converted to ``jl_value_t*`` pointers, as ``Ptr{Void}``, by calling
+``pointer_from_objref(v)``.)
 
 The reverse operation (writing data to a Ptr{T}), can be performed using
 ``unsafe_assign(ptr, value, [index])``.  Currently, this is only supported
@@ -334,7 +332,7 @@ for bitstypes or other pointer-free (``isbits``) immutable types.
 Any operation that throws an error is probably currently unimplemented
 and should be posted as a bug so that it can be resolved.
 
-If the pointer of interest is an array of bits (bitstype or immutable), the
+If the pointer of interest is a plan-data array (bitstype or immutable), the
 function ``pointer_to_array(ptr,dims,[own])`` may be more more useful. The final
 parameter should be true if Julia should "take ownership" of the underlying
 buffer and call ``free(ptr)`` when the returned ``Array`` object is finalized.
@@ -343,7 +341,7 @@ buffer remains in existence until all access is complete.
 
 
 Garbage Collection Safety
---------------------------------
+-------------------------
 When passing data to a ccall, it is best to avoid using the ``pointer()``
 function. Instead define a convert method and pass the variables directly to
 the ccall. ccall automatically arranges that all of its arguments will be

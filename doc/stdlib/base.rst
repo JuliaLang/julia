@@ -377,6 +377,10 @@ Iterable Collections
 
    Get the last element of an ordered collection.
 
+.. function:: collect(collection)
+
+   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
+
 Indexable Collections
 ---------------------
 
@@ -435,10 +439,6 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 .. function:: values(collection)
 
    Return an array of all values in a collection.
-
-.. function:: collect(collection)
-
-   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
 
 .. function:: merge(collection, others...)
 
