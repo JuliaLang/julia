@@ -25,9 +25,13 @@ endif
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv random Rmath double-conversion
+STAGE1_DEPS = uv random double-conversion
 STAGE2_DEPS =
 STAGE3_DEPS = suitesparse-wrapper
+
+ifeq ($(USE_SYSTEM_RMATH), 0)
+STAGE1_DEPS += Rmath
+endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
