@@ -137,7 +137,6 @@ importall Sort
 include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
-#include("darray.jl")
 include("darray2.jl")
 include("mmap.jl")
 
