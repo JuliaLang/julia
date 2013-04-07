@@ -174,6 +174,7 @@ export PipeString
 @deprecate  parse_hex(s)        parseint(s,16)
 @deprecate  wait_accept         accept
 @deprecate  findn_nzs           findnz
+@deprecate  DivideByZeroError   DivideError
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)

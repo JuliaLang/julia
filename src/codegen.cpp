@@ -2838,8 +2838,8 @@ static void init_julia_llvm_env(Module *m)
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null);
     jlexc_var = global_to_llvm("jl_exception_in_transit",
                                (void*)&jl_exception_in_transit);
-    jldiverr_var = global_to_llvm("jl_divbyzero_exception",
-                                  (void*)&jl_divbyzero_exception);
+    jldiverr_var = global_to_llvm("jl_diverror_exception",
+                                  (void*)&jl_diverror_exception);
     jlundeferr_var = global_to_llvm("jl_undefref_exception",
                                     (void*)&jl_undefref_exception);
     jldomerr_var = global_to_llvm("jl_domain_exception",
