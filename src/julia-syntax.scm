@@ -729,13 +729,19 @@
 	  (loop (if isseq F (cdr F)) (cdr A) stmts
 		(list* rt (ccall-conversion ty ca) C))))))
 
+(define (block-returns? e)
+  (if (assignment? e)
+      (block-returns? (caddr e))
+      (and (pair? e) (eq? (car e) 'block)
+	   (any return? (cdr e)))))
+
 (define (replace-return e bb ret retval)
   (cond ((or (atom? e) (quoted? e)) e)
 	((or (eq? (car e) 'lambda)
 	     (eq? (car e) 'function)
 	     (eq? (car e) '->)) e)
 	((eq? (car e) 'return)
-	 `(block (= ,ret true)
+	 `(block ,@(if ret `((= ,ret true)) '())
 		 (= ,retval ,(cadr e))
 		 (break ,bb)))
 	(else (map (lambda (x) (replace-return x bb ret retval)) e))))
@@ -835,8 +841,14 @@
 
    ;; try with finally
    (pattern-lambda (try tryb var catchb finalb)
+		   (let ((hasret (or (contains return? tryb)
+				     (contains return? catchb))))
 		   (let ((err (gensy))
-			 (ret (gensy))
+			 (ret (and hasret
+				   (or (not (block-returns? tryb))
+				       (and catchb
+					    (not (block-returns? catchb))))
+				   (gensy)))
 			 (retval (gensy))
 			 (bb  (gensy))
 			 (val (gensy)))
@@ -845,19 +857,24 @@
 		       `(scope-block
 			 (block
 			  (local ,retval)
+			  (local ,val)
 			  (= ,err false)
-			  (= ,ret false)
+			  ,@(if ret `((= ,ret false)) '())
 			  (break-block
 			   ,bb
-			   (= ,val (try ,(if catchb
-					     `(try ,tryb ,var ,catchb)
-					     tryb)
-					#f
-					(= ,err true))))
+			   (try (= ,val
+				   ,(if catchb
+					`(try ,tryb ,var ,catchb)
+					tryb))
+				#f
+				(= ,err true)))
 			  ,finalb
 			  (if ,err (ccall 'jl_rethrow Void (tuple)))
-			  (if ,ret (return ,retval))
-			  ,val)))))
+			  ,(if hasret
+			       (if ret
+				   `(if ,ret (return ,retval) ,val)
+				   `(return ,retval))
+			       val)))))))
 
    ;; try - catch
    (pattern-lambda (try tryb var catchb)
@@ -980,6 +997,7 @@
 
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
+(define (return? e) (and (pair? e) (eq? (car e) 'return)))
 
 (define (const-check-symbol s)
   (if (not (symbol? s))
