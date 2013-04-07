@@ -191,8 +191,9 @@ comparisons can be arbitrarily chained::
     true
 
 Chaining comparisons is often quite convenient in numerical code.
-Chained numeric comparisons use the ``&`` operator, which allows them to
-work on arrays. For example, ``0 < A < 1`` gives a boolean array whose
+Chained comparisons use the ``&&`` operator for scalar comparisons,
+and the ``&`` operator for elementwise comparisons, which allows them to
+work on arrays. For example, ``0 .< A .< 1`` gives a boolean array whose
 entries are true where the corresponding elements of ``A`` are between 0
 and 1.
 
@@ -208,7 +209,7 @@ Note the evaluation behavior of chained comparisons::
 
 The middle expression is only evaluated once, rather than twice as it
 would be if the expression were written as
-``v(1) > v(2) & v(2) <= v(3)``. However, the order of evaluations in a
+``v(1) > v(2) && v(2) <= v(3)``. However, the order of evaluations in a
 chained comparison is undefined. It is strongly recommended not to use
 expressions with side effects (such as printing) in chained comparisons.
 If side effects are required, the short-circuit ``&&`` operator should
