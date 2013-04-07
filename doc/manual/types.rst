@@ -304,7 +304,9 @@ are called records, structures ("structs" in C), or objects in various
 languages. A composite type is a collection of named fields, an instance
 of which can be treated as a single value. In many languages, composite
 types are the only kind of user-definable type, and they are by far the
-most commonly used user-defined type in Julia as well. In mainstream
+most commonly used user-defined type in Julia as well.
+
+In mainstream
 object oriented languages, such as C++, Java, Python and Ruby, composite
 types also have named functions associated with them, and the
 combination is called an "object". In purer object-oriented languages,
@@ -312,15 +314,15 @@ such as Python and Ruby, all values are objects whether they are
 composites or not. In less pure object oriented languages, including C++
 and Java, some values, such as integers and floating-point values, are
 not objects, while instances of user-defined composite types are true
-objects with associated methods. In Julia, all values are objects, as in
-Python and Ruby, but functions are not bundled with the objects they
+objects with associated methods. In Julia, all values are objects,
+but functions are not bundled with the objects they
 operate on. This is necessary since Julia chooses which method of a
 function to use by multiple dispatch, meaning that the types of *all* of
 a function's arguments are considered when selecting a method, rather
 than just the first one (see :ref:`man-methods` for more
 information on methods and dispatch). Thus, it would be inappropriate
 for functions to "belong" to only their first argument. Organizing
-methods by association with function objects rather than simply having
+methods into function objects rather than having
 named bags of methods "inside" each object ends up being a highly
 beneficial aspect of the language design.
 
@@ -393,6 +395,42 @@ created, but that discussion depends on both `Parametric
 Types <#man-parametric-types>`_ and on :ref:`man-methods`, and is
 sufficiently important to be addressed in its own section:
 :ref:`man-constructors`.
+
+Immutable Composite Types
+-------------------------
+
+It is also possible to define *immutable* composite types by using
+the keyword ``immutable`` instead of ``type``:
+
+    immutable Complex
+      real::Float64
+      imag::Float64
+    end
+
+Such types behave just like other composite types, except that instances
+of them cannot be modified. Immutable types have several advantages:
+
+- They are more efficient in some cases. Types like the ``Complex``
+  example above can be packed efficiently into arrays, and in some
+  cases the compiler is able to avoid allocating immutable objects
+  entirely.
+- It is not possible to violate the invariants provided by the
+  type's constructors.
+- Code using immutable objects can be easier to reason about.
+
+An immutable object might contain mutable objects, such as arrays, as
+fields. Those contained objects will remain mutable; only the fields of the
+immutable object itself cannot be changed to point to different objects.
+
+A useful way to think about immutable composites is that each instance is
+associated with specific field values --- the field values alone tell
+you everything about the object. In contrast, a mutable object is like a
+little container that might contain different values over time, and so is
+not identified with specific field values. In deciding whether to make a
+type immutable, ask whether two instances with the same field values
+would be considered identical, or if they might need to change independently
+over time. If they would be considered identical, the type should probably
+be immutable.
 
 Type Unions
 -----------
