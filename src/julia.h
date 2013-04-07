@@ -371,7 +371,7 @@ extern jl_datatype_t *jl_typeerror_type;
 extern jl_datatype_t *jl_methoderror_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_memory_exception;
-extern jl_value_t *jl_divbyzero_exception;
+extern jl_value_t *jl_diverror_exception;
 extern jl_value_t *jl_domain_exception;
 extern jl_value_t *jl_overflow_exception;
 extern jl_value_t *jl_inexact_exception;
