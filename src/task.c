@@ -599,7 +599,7 @@ static void NORETURN throw_internal(jl_value_t *e)
             exit(1);
         }
         jl_task_t *cont = jl_current_task->on_exit;
-        while (cont->done)
+        while (cont->done || cont->eh == NULL)
             cont = cont->on_exit;
         // for now, exit the task
         finish_task(jl_current_task, e);
