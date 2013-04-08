@@ -1625,7 +1625,10 @@
              (if (triplequote-string-literal? ps)
                  `(macrocall @mstr ,@(cdr ps))
                  (if (interpolate-string-literal? ps)
-                     `(call (top string) ,@(cdr ps))
+                     `(string ,@(filter (lambda (s)
+					  (not (and (string? s)
+						    (= (length s) 0))))
+					(cdr ps)))
 		     (cadr ps)))))
 
 	  ;; macro call
