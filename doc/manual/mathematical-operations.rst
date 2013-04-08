@@ -205,11 +205,16 @@ Note the evaluation behavior of chained comparisons::
     2
     1
     3
+    true
+
+    julia> v(1) > v(2) <= v(3)
+    2
+    1
     false
 
 The middle expression is only evaluated once, rather than twice as it
 would be if the expression were written as
-``v(1) > v(2) && v(2) <= v(3)``. However, the order of evaluations in a
+``v(1) < v(2) && v(2) <= v(3)``. However, the order of evaluations in a
 chained comparison is undefined. It is strongly recommended not to use
 expressions with side effects (such as printing) in chained comparisons.
 If side effects are required, the short-circuit ``&&`` operator should
