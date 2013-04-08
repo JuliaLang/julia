@@ -129,7 +129,14 @@ function evalfile(path::String)
     body = Expr(:toplevel)
     i = 1
     while !done(s,i)
-        ex, i = parse(s,i)
+        ex, i = parse(s,i,true,false)
+        if isa(ex,Expr) && ex.head === :error
+            if ex.args[1] == "end of input"
+                break
+            else
+                throw(ParseError(ex.args[1]))
+            end
+        end
         push!(body.args, ex)
     end
     return eval(m, body)
