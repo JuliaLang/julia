@@ -1269,6 +1269,9 @@
 					args)
 				 ,name))))
 
+   ;; string interpolations
+   (pattern-lambda (string . exprs) `(call (top string) ,@exprs))
+
    ;; expand anything but "local x" with one symbol
    ;; local x,y,z => local x;local y;local z
    (pattern-lambda (local (-s)) __)
