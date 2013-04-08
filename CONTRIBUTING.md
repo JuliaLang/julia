@@ -10,6 +10,9 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 * Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep your repository up-to-date and rebase your work in progress frequently.
 
+* Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project.
+  Try a tutorial such as the one [provided by GitHub](http://try.github.io/levels/1/challenges/1).
+
 * Relax and have fun.
 
 ## Submitting your contributions
