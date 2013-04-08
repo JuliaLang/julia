@@ -2125,6 +2125,16 @@ Basic functions
 
    Returns a tuple of the memory strides in each dimension
 
+.. function:: ind2sub(dims, index) -> subscripts
+
+   Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
+
+   **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
+
+.. function:: sub2ind(dims, i, j, k...) -> index
+
+   The inverse of ``ind2sub``, returns the linear index corresponding to the provided subscripts
+
 Constructors
 ~~~~~~~~~~~~
 
