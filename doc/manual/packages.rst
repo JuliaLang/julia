@@ -131,42 +131,43 @@ The forked repository URL should look like `https://github.com/MY_GITHUB_USER/ME
     git remote add github https://github.com/MY_GITHUB_USER/METADATA.jl
 
 3. If you have started development based off of the ``master`` branch, you will
-need to migrate the changes to the ``devel`` branch.::
+need to migrate the changes to the ``devel`` branch. Try this instead of Step 1
+of the next section.::
 
     cd $HOME/.julia/METADATA
     git stash                          #Save any local changes
     git branch -m old-master           #Move local master branch 
     git reset --hard origin/master     #Get a fresh copy of the master branch
-    git rebase --onto devel old-master #Migrate commits from old local master to devel
     git checkout devel                 #Change to devel branch
+    git rebase origin/devel            #Updates local devel
+    git checkout -b MY_PACKAGE_NAME    #Start a new branch to work on
+    git rebase --onto MY_PACKAGE_NAME old-master #Migrate commits from old local master
     git stash pop                      #Apply any local changes
 
 Distributing a new package or new version of an existing package
 ----------------------------------------------------------------
 
 1. Ensure that both your forked METADATA.jl on Github and your local METADATA
-   repository are current. The latter should be checked out to the `devel`
-   branch.::
+   repository are current. If you haven't done so already, create a new branch
+   with your latest updates.::
 
     cd $HOME/.julia/METADATA
-    git fetch --all         #Get the latest updates but don't apply them yet
-    git stash               #Save any local changes
-    git checkout devel      #Change to devel branch
-    git rebase origin/devel #Updates local working repo
-    git stash pop           #Apply any local changes
-    git push github devel   #Update remote forked repo
+    git stash                          #Save any local changes
+    git fetch --all                 #Get the latest updates but don't apply them yet
+    git checkout devel              #Change to devel branch
+    git rebase origin/devel         #Updates local working repo
+    git push github devel           #Update remote forked repo
+    git checkout -b MY_PACKAGE_NAME #Put all existing and new development in its own branch
+    git stash pop                      #Apply any local changes
 
 2. Populate the local METADATA by running in Julia: ::
 
     Pkg.pkg_origin("MY_PACKAGE_NAME")
     Pkg.patch("MY_PACKAGE_NAME")
 
-3. Update the local METADATA with the URL of your forked repository and
-create a new branch with your package in it.::
+3. Update the local METADATA.::
 
     cd $HOME/.julia/METADATA
-    git branch MY_PACKAGE_NAME
-    git checkout MY_PACKAGE_NAME
     git add MY_PACKAGE_NAME #Ensure that only the latest hash is committed
     git commit
 
