@@ -10,6 +10,9 @@
    stdlib/index
    packages/packagelist
 
+Index and search
+================
+
 * :ref:`genindex`
 * :ref:`search`
 
