@@ -138,9 +138,7 @@ of the next section.::
     git stash                          #Save any local changes
     git branch -m old-master           #Move local master branch 
     git reset --hard origin/master     #Get a fresh copy of the master branch
-    git checkout devel                 #Change to devel branch
-    git rebase origin/devel            #Updates local devel
-    git checkout -b MY_PACKAGE_NAME    #Start a new branch to work on
+    git checkout -b MY_PACKAGE_NAME devel #Start a new branch to work on from devel
     git rebase --onto MY_PACKAGE_NAME old-master #Migrate commits from old local master
     git stash pop                      #Apply any local changes
 
@@ -157,7 +155,7 @@ Distributing a new package or new version of an existing package
     git checkout devel              #Change to devel branch
     git rebase origin/devel         #Updates local working repo
     git push github devel           #Update remote forked repo
-    git checkout -b MY_PACKAGE_NAME #Put all existing and new development in its own branch
+    git checkout -b MY_PACKAGE_NAME devel #Put all existing and new development in its own branch
     git stash pop                      #Apply any local changes
 
 2. Populate the local METADATA by running in Julia: ::
