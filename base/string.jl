@@ -850,7 +850,7 @@ shell_escape(cmd::String, args::String...) =
 
 ## interface to parser ##
 
-function parse(str::String, pos::Int, greedy::Bool, err::Bool)
+function parse(str::String, pos::Int, greedy::Bool=true, err::Bool=true)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8}, Int32, Int32),
@@ -867,8 +867,6 @@ function parse(str::String, pos::Int, greedy::Bool, err::Bool)
     end
     ex, pos+1 # C is zero-based, Julia is 1-based
 end
-parse(str::String, pos::Int, greedy::Bool) = parse(str, pos, greedy, true)
-parse(str::String, pos::Int) = parse(str, pos, true)
 
 function parse(str::String)
     ex, pos = parse(str, start(str))
