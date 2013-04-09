@@ -671,7 +671,7 @@ openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
-	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || echo "*** Use 'make OPENBLAS_NUM_THREADS=1 if OpenBLAS had trouble linking libpthread.so. Use 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there are errors in building SandyBridge support. Both these options can also be used simultaneously. ***"
+	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || echo "*** Use 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so. Use 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***"
 	touch -c $@
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(BUILD)/lib
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(BUILD)/lib
