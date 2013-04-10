@@ -376,6 +376,15 @@ end
 
 convert(::Type{RepString}, s::String) = RepString(s,1)
 
+function repeat(s::ByteString, r::Integer)
+    d = s.data; n = length(d)
+    out = Array(Uint8, n*r)
+    for i=1:r
+        copy!(out, 1+(i-1)*n, d, 1, n)
+    end
+    convert(typeof(s), out)
+end
+
 ## reversed strings without data movement ##
 
 immutable RevString <: String
