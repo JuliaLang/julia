@@ -180,7 +180,7 @@ end
 
 writedlm(io::IO, a::Vector, dlm::Char) = writedlm(io, reshape(a,length(a),1), dlm)
 
-function writedlm(fname::String, a::Matrix, dlm::Char)
+function writedlm(fname::String, a::Union(Vector,Matrix), dlm::Char)
     open(fname, "w") do io
         writedlm(io, a, dlm)
     end
