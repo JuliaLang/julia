@@ -9,6 +9,8 @@ export
     LibRandom,
     Random,
     Math,
+    MPC,
+    MPFR,
     GMP,
     Sort,
     Test,
@@ -56,6 +58,8 @@ export
     IntSet,
     LocalProcess,
     Matrix,
+    MPCComplex,
+    MPFRFloat,
     ObjectIdDict,
     #Pipe,
     #PipeEnd,
@@ -819,6 +823,17 @@ export
     randn!,
     randn,
     srand,
+
+# precision
+    exp10,
+    prec,
+    prec2,
+    get_precision,
+    get_complex_precision,
+    set_precision,
+    set_complex_precision,
+    with_precision,
+    with_complex_precision,
 
 # statistics
     cor,

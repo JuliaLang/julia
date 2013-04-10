@@ -173,6 +173,12 @@ importall .DSP
 include("gmp.jl")
 importall .GMP
 
+# MPFR and MPC
+include("mpfr.jl")
+importall .MPFR
+include("mpc.jl")
+importall .MPC
+
 # deprecated functions
 include("deprecated.jl")
 
