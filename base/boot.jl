@@ -127,7 +127,7 @@ export
     # string types
     Char, ASCIIString, ByteString, DirectIndexString, String, UTF8String,
     # errors
-    BoundsError, DivideByZeroError, DomainError, Exception,
+    BoundsError, DivideError, DomainError, Exception,
     InexactError, InterruptException, MemoryError, OverflowError,
     StackOverflowError, UndefRefError,
     # AST representation
@@ -198,7 +198,7 @@ end
 abstract Exception
 
 type BoundsError        <: Exception end
-type DivideByZeroError  <: Exception end
+type DivideError        <: Exception end
 type DomainError        <: Exception end
 type OverflowError      <: Exception end
 type InexactError       <: Exception end

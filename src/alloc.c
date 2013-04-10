@@ -53,7 +53,7 @@ jl_datatype_t *jl_pointer_type;
 jl_datatype_t *jl_voidpointer_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
-jl_value_t *jl_divbyzero_exception;
+jl_value_t *jl_diverror_exception;
 jl_value_t *jl_domain_exception;
 jl_value_t *jl_overflow_exception;
 jl_value_t *jl_inexact_exception;

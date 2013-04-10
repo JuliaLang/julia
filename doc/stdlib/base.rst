@@ -377,6 +377,10 @@ Iterable Collections
 
    Get the last element of an ordered collection.
 
+.. function:: collect(collection)
+
+   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
+
 Indexable Collections
 ---------------------
 
@@ -435,10 +439,6 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 .. function:: values(collection)
 
    Return an array of all values in a collection.
-
-.. function:: collect(collection)
-
-   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
 
 .. function:: merge(collection, others...)
 
@@ -2124,6 +2124,16 @@ Basic functions
 .. function:: strides(A)
 
    Returns a tuple of the memory strides in each dimension
+
+.. function:: ind2sub(dims, index) -> subscripts
+
+   Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
+
+   **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
+
+.. function:: sub2ind(dims, i, j, k...) -> index
+
+   The inverse of ``ind2sub``, returns the linear index corresponding to the provided subscripts
 
 Constructors
 ~~~~~~~~~~~~

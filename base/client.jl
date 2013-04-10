@@ -53,16 +53,16 @@ function display_error(er, bt)
 end
 
 function eval_user_input(ast::ANY, show_value)
-    iserr, lasterr, bt = false, (), nothing
+    errcount, lasterr, bt = 0, (), nothing
     while true
         try
             if have_color
                 print(color_normal)
             end
-            if iserr
+            if errcount > 0
                 display_error(lasterr,bt)
                 println()
-                iserr, lasterr = false, ()
+                errcount, lasterr = 0, ()
             else
                 ast = expand(ast)
                 value = eval(Main,ast)
@@ -81,10 +81,14 @@ function eval_user_input(ast::ANY, show_value)
             end
             break
         catch err
-            if iserr
+            if errcount > 0
                 println("SYSTEM: show(lasterr) caused an error")
             end
-            iserr, lasterr = true, err
+            errcount, lasterr = errcount+1, err
+            if errcount > 2
+                println("WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
+                break
+            end
             bt = catch_backtrace()
         end
     end
