@@ -143,7 +143,7 @@ that the result is of type ``Float64`` by writing::
 
     Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
-Using curly brackets instead of square brackets is a shortand notation for an
+Using curly brackets instead of square brackets is a shorthand notation for an
 array of type ``Any``::
 
     julia> { i/2 for i = 1:3 }
@@ -385,6 +385,128 @@ stride parameters.
      -1.175  -0.786311
       0.0    -0.414549
 
+***********************
+ Matrix factorizations
+***********************
+
+`Matrix factorizations (a.k.a. matrix decompositions) <http://en.wikipedia.org/wiki/Matrix_decomposition>`_
+compute the factorization of a matrix into a product of matrices, and
+are one of the central concepts in linear algebra.
+
+The following table summarizes the types of matrix factorizations that have been
+implemented in Julia. Details of their associated methods can be found
+in the :ref:`stdlib-linalg` section of the standard library documentation.
+
+=================== ===========
+``Cholesky``        `Cholesky factorization <http://en.wikipedia.org/wiki/Cholesky_decomposition>`_
+``CholeskyPivoted`` `Pivoted <http://en.wikipedia.org/wiki/Pivot_element>`_ Cholesky factorization
+``LU``              `LU factorization <http://en.wikipedia.org/wiki/LU_decomposition>`_
+``QRPivoted``       Pivoted `QR factorization <http://en.wikipedia.org/wiki/QR_decomposition>`_
+``Hessenberg``      `Hessenberg decomposition <http://mathworld.wolfram.com/HessenbergDecomposition.html>`_
+``Eigen``           `Spectral decomposition <http://en.wikipedia.org/wiki/Eigendecomposition_(matrix)>`_
+``SVD``             `Singular value decomposition <http://en.wikipedia.org/wiki/Singular_value_decomposition>`_
+``GeneralizedSVD``  `Generalized SVD <http://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version>`_
+=================== ===========
+
+******************
+ Special matrices 
+******************
+
+`Matrices with special symmetries and structures <http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274>`_
+arise often in linear algebra and are frequently associated with
+various matrix factorizations.
+Julia features a rich collection of special matrix types, which allow for fast
+computation with specialized routines that are specially developed for
+particular matrix types.
+
+The following tables summarize the types of special matrices that have been
+implemented in Julia, as well as whether hooks to various optimized methods
+for them in LAPACK are available.
+
++--------------------+-----------------------------------------------------------------------------------+
+| ``Hermitian``      | `Hermitian matrix <http://en.wikipedia.org/wiki/Hermitian_matrix>`_               |
++--------------------+-----------------------------------------------------------------------------------+
+| ``Triangular``     | Upper/lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_ |
++--------------------+-----------------------------------------------------------------------------------+
+| ``Tridiagonal``    | `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_           | 
++--------------------+-----------------------------------------------------------------------------------+
+| ``SymTridiagonal`` | Symmetric tridiagonal matrix                                                      |
++--------------------+-----------------------------------------------------------------------------------+
+| ``Bidiagonal``     | Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_ | 
++--------------------+-----------------------------------------------------------------------------------+
+| ``Diagonal``       | `Diagonal matrix <http://en.wikipedia.org/wiki/Diagonal_matrix>`_                 |
++--------------------+-----------------------------------------------------------------------------------+
+
+
+Elementary operations
+---------------------
+
++--------------------+-------+-------+-------+-------+---------------------+
+| Matrix type        | ``+`` | ``-`` | ``*`` | ``\`` | Other functions with|
+|                    |       |       |       |       | optimized methods   |
++--------------------+-------+-------+-------+-------+---------------------+
+| ``Hermitian``      |       |       |       |   XY  | ``inv``,            |
+|                    |       |       |       |       | ``sqrtm``, ``expm`` |
++--------------------+-------+-------+-------+-------+---------------------+
+| ``Triangular``     |       |       |  XY   |   XY  | ``inv``, ``det``    |
++--------------------+-------+-------+-------+-------+---------------------+
+| ``SymTridiagonal`` |   X   |   X   |  XZ   |   XY  | ``eigmax/min``      |
++--------------------+-------+-------+-------+-------+---------------------+
+| ``Tridiagonal``    |   X   |   X   |  XZ   |   XY  |                     |
++--------------------+-------+-------+-------+-------+---------------------+
+| ``Bidiagonal``     |   X   |   X   |  XZ   |   XY  |                     |
++--------------------+-------+-------+-------+-------+---------------------+
+| ``Diagonal``       |   X   |   X   |  XY   |   XY  | ``inv``, ``det``,   |
+|                    |       |       |       |       | ``logdet``, ``/``   |
++--------------------+-------+-------+-------+-------+---------------------+
+
+Legend:
+
++---+---------------------------------------------------------------+
+| X | An optimized method for matrix-matrix operations is available |
++---+---------------------------------------------------------------+
+| Y | An optimized method for matrix-vector operations is available |
++---+---------------------------------------------------------------+
+| Z | An optimized method for matrix-scalar operations is available |
++---+---------------------------------------------------------------+
+
+Matrix factorizations
+---------------------
+
++--------------------+-------------------------------------+-----------------------------+
+| Matrix type        | Eigensystems                        | Singular values and vectors |
+|                    +---------+-------------+-------------+---------+-------------------+
+|                    | ``eig`` | ``eigvals`` | ``eigvecs`` | ``svd`` | ``svdvals``       |
++--------------------+---------+-------------+-------------+---------+-------------------+
+| ``Hermitian``      |         |     ABC     |             |         |                   |
+|                    |         |             |             |         |                   |
++--------------------+---------+-------------+-------------+---------+-------------------+
+| ``Triangular``     |         |             |             |         |                   |
++--------------------+---------+-------------+-------------+---------+-------------------+
+| ``SymTridiagonal`` |    A    |     ABC     |     AD      |         |                   |
++--------------------+---------+-------------+-------------+---------+-------------------+
+| ``Tridiagonal``    |         |             |             |         |                   |
++--------------------+---------+-------------+-------------+---------+-------------------+
+| ``Bidiagonal``     |         |             |             |    A    |         A         |
++--------------------+---------+-------------+-------------+---------+-------------------+
+| ``Diagonal``       |         |      A      |             |         |                   |
+|                    |         |             |             |         |                   |
++--------------------+---------+-------------+-------------+---------+-------------------+
+
+Legend:
+
++---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+| A | An optimized method to find all the characteristic values and/or vectors is available                                             | e.g. ``eigvals(M)``    |
++---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+| B | An optimized method to find the ``il``:sup:`th` through the ``ih``:sup:`th` characteristic values are available                   | ``eigvals(M, il, ih)`` |
++---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+| C | An optimized method to find the characteristic values in the interval [``vl``, ``vh``] is available                               | ``eigvals(M, vl, vh)`` |
++---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+| D | An optimized method to find the characteristic vectors corresponding to the characteristic values ``x=[x1, x2,...]`` is available | ``eigvecs(M, x)``      |
++---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+
+
+
 ******************
  Sparse Matrices
 ******************
@@ -399,13 +521,12 @@ compared to performing the same operations on a dense matrix.
 Compressed Sparse Column (CSC) Storage
 --------------------------------------
 
-In julia, sparse matrices are stored in the `Compressed Sparse Column
+In Julia, sparse matrices are stored in the `Compressed Sparse Column
 (CSC) format
-<http://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29>`_. Julia
-sparse matrices have the type ``SparseMatrixCSC{Tv,Ti}``, where ``Tv``
+<http://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29>`_.
+Julia sparse matrices have the type ``SparseMatrixCSC{Tv,Ti}``, where ``Tv``
 is the type of the nonzero values, and ``Ti`` is the integer type for
-storing column pointers and row indices. 
-::
+storing column pointers and row indices.::
 
     type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
         m::Int                  # Number of rows
@@ -502,6 +623,57 @@ matrices. Indexing of, assignment into, and concatenation of sparse
 matrices work in the same way as dense matrices. Indexing operations,
 especially assignment, are expensive, when carried out one element at
 a time. In many cases it may be better to convert the sparse matrix
-into ``(I,J,V)`` format using ``find_nzs``, manipulate the nonzeros or
+into ``(I,J,V)`` format using ``find_nzs``, manipulate the non-zeroes or
 the structure in the dense vectors ``(I,J,V)``, and then reconstruct
 the sparse matrix.
+
+Correspondence of dense and sparse methods
+------------------------------------------
+The following table gives a correspondence between built-in methods on sparse
+matrices and their corresponding methods on dense matrix types. In general,
+methods that generate sparse matrices differ from their dense counterparts in
+that the resulting matrix follows the same sparsity pattern as a given sparse
+matrix ``S``, or that the resulting sparse matrix has density ``d``, i.e. each
+matrix element has a probability ``d`` of being non-zero.
+
+Details can be found in the :ref:`stdlib-sparse` section of the standard library
+reference.
+
++-----------------------+-------------------+----------------------------------------+
+| Sparse                | Dense             | Description                            |
++-----------------------+-------------------+----------------------------------------+
+| ``spzeros(m,n)``      | ``zeros(m,n)``    | Creates a *m*-by-*n* matrix of zeros.  |
+|                       |                   | (``spzeros(m,n)`` is empty.)           |
++-----------------------+-------------------+----------------------------------------+
+| ``spones(S)``         | ``ones(m,n)``     | Creates a matrix filled with ones.     |
+|                       |                   | Unlike the dense version, ``spones``   |
+|                       |                   | has the same sparsity pattern as *S*.  |
++-----------------------+-------------------+----------------------------------------+
+| ``speye(n)``          | ``eye(n)``        | Creates a *n*-by-*n* identity matrix.  |
++-----------------------+-------------------+----------------------------------------+
+| ``dense(S)``          | ``sparse(A)``     | Interconverts between dense            |
+| ``full(S)``           |                   | and sparse formats.                    |
++-----------------------+-------------------+----------------------------------------+
+| ``sprand(m,n,d)``     | ``rand(m,n)``     | Creates a *n*-by-*n* random matrix (of |
+|                       |                   | density *d*) with iid non-zero elements|
+|                       |                   | distributed uniformly on the           |
+|                       |                   | interval [0, 1].                       |
++-----------------------+-------------------+----------------------------------------+
+| ``sprandn(m,n,d)``    | ``randn(m,n)``    | Creates a *n*-by-*n* random matrix (of |
+|                       |                   | density *d*) with iid non-zero elements|
+|                       |                   | distributed according to the standard  |
+|                       |                   | normal (Gaussian) distribution.        |
++-----------------------+-------------------+----------------------------------------+
+| ``sprandn(m,n,d,X)``  | ``randn(m,n,X)``  | Creates a *n*-by-*n* random matrix (of |
+|                       |                   | density *d*) with iid non-zero elements|
+|                       |                   | distributed according to the *X*       |
+|                       |                   | distribution. (Requires the            |
+|                       |                   | ``Distributions`` package.)            |
++-----------------------+-------------------+----------------------------------------+
+| ``sprandbool(m,n,d)`` | ``randbool(m,n)`` | Creates a *n*-by-*n* random matrix (of |
+|                       |                   | density *d*) with non-zero ``Bool``    |
+|                       |                   | elements with probability *d* (*d* =0.5|
+|                       |                   | for ``randbool``.)                     |
++-----------------------+-------------------+----------------------------------------+
+
+
