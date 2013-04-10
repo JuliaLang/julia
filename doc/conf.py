@@ -146,7 +146,7 @@ html_sidebars = {
 #html_additional_pages = {}
 
 # If false, no module index is generated.
-#html_domain_indices = True
+html_domain_indices = False
 
 # If false, no index is generated.
 #html_use_index = True
@@ -198,7 +198,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'JuliaLanguage.tex', u'Julia Language Documentation',
+  ('latex', 'JuliaLanguage.tex', u'Julia Language Documentation',
    AUTHORS, 'manual'),
 ]
 
@@ -220,7 +220,7 @@ latex_documents = [
 #latex_appendices = []
 
 # If false, no module index is generated.
-#latex_domain_indices = True
+latex_domain_indices = False
 
 
 # -- Options for manual page output --------------------------------------------
