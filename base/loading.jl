@@ -28,6 +28,8 @@ find_in_node1_path(name) = myid()==1 ?
 
 # Store list of files and their load time
 package_list = (ByteString=>Float64)[]
+# to synchronize multiple tasks trying to require something
+package_locks = (ByteString=>Any)[]
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
@@ -38,7 +40,11 @@ function require(name::ByteString)
         end
     end
     path = find_in_node1_path(name)
-    has(package_list,path) || reload_path(path)
+    if has(package_list,path)
+        wait(package_locks[path])
+    else
+        reload_path(path)
+    end
 end
 
 function reload(name::String)
@@ -95,6 +101,9 @@ end
 
 function reload_path(path)
     had = has(package_list, path)
+    if !had
+        package_locks[path] = RemoteRef()
+    end
     package_list[path] = time()
     tls = task_local_storage()
     prev = delete!(tls, :SOURCE_PATH, nothing)
@@ -108,6 +117,7 @@ function reload_path(path)
             tls[:SOURCE_PATH] = prev
         end
     end
+    put(package_locks[path],nothing)
     nothing
 end
 
