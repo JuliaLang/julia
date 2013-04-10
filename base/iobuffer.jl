@@ -67,9 +67,9 @@ function seek(io::IOBuffer, n::Integer)
     io.ptr = min(n+1, io.size+1)
     return true
 end
-function seek_end(io::IOBuffer)
+function seekend(io::IOBuffer)
     io.ptr = io.size+1
-    return true 
+    return true
 end
 position(io::IOBuffer) = io.ptr-1
 function truncate(io::IOBuffer, n::Integer)
