@@ -72,22 +72,6 @@ int(x::Int) = x
 uint(x) = convert(Uint, x)
 uint(x::Uint) = x
 
-# reflection
-
-names(m::Module, all::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32), m, all)
-names(m::Module) = names(m,false)
-module_name(m::Module) = ccall(:jl_module_name, Any, (Any,), m)::Symbol
-module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
-names(t::DataType) = t.names
-function names(v)
-    t = typeof(v)
-    if isa(t,DataType)
-        return names(t)
-    else
-        error("cannot call names() on a non-composite type")
-    end
-end
-
 # index colon
 type Colon
 end
@@ -110,16 +94,6 @@ gc_enable() = ccall(:jl_gc_enable, Void, ())
 gc_disable() = ccall(:jl_gc_disable, Void, ())
 
 bytestring(str::ByteString) = str
-
-# return an integer such that object_id(x)==object_id(y) if is(x,y)
-object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
-
-const isimmutable = x->(isa(x,Tuple) || !typeof(x).mutable)
-isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
-isstructtype(x) = false
-isbits(t::DataType) = !t.mutable && t.pointerfree
-isbits(t::Type) = false
-isbits(x) = isbits(typeof(x))
 
 identity(x) = x
 

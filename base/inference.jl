@@ -56,22 +56,6 @@ is_closed(sv::StaticVarInfo, s::Symbol) = has(sv.cenv, s)
 is_global(sv::StaticVarInfo, s::Symbol) =
     !is_local(sv,s) && !is_closed(sv,s) && !is_static_parameter(sv,s)
 
-typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
-
-methods(f::ANY,t::ANY) = _methods(f,t,-1)::Array{Any,1}
-_methods(f::ANY,t::ANY,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
-
-typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
-
-isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
-isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
-
-isconst(s::Symbol) =
-    ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
-
-isconst(m::Module, s::Symbol) =
-    ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
-
 function _iisconst(s::Symbol)
     m = (inference_stack::CallStack).mod
     isdefined(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)

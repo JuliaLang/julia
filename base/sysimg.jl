@@ -42,6 +42,7 @@ end
 ## Load essential files and libraries
 
 include("base.jl")
+include("reflection.jl")
 include("build_h.jl")
 include("c.jl")
 
