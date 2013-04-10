@@ -21,7 +21,7 @@ ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
 endif
 
-#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf
+#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr mpc patchelf
 #custom configure-driven script: zlib
 #custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv
 
@@ -106,6 +106,10 @@ ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE1_DEPS += mpfr
 endif
 
+ifeq ($(USE_SYSTEM_MPC), 0)
+STAGE1_DEPS += mpc
+endif
+
 ifeq ($(USE_SYSTEM_ARPACK), 0)
 STAGE2_DEPS += arpack
 endif
@@ -138,7 +142,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-unwind get-gmp get-mpfr get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-unwind get-gmp get-mpfr get-mpc get-zlib get-patchelf
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -1223,6 +1227,44 @@ configure-mpfr: mpfr-$(MPFR_VER)/config.status
 compile-mpfr: $(MPFR_SRC_TARGET)
 check-mpfr: mpfr-$(MPFR_VER)/checked
 install-mpfr: $(MPFR_OBJ_TARGET)
+
+## MPC ##
+
+MPC_SRC_TARGET = mpc-$(MPC_VER)/.libs/libmpc.$(SHLIB_EXT)
+MPC_OBJ_TARGET = $(BUILD)/lib/libmpc.$(SHLIB_EXT)
+
+mpc-$(MPC_VER).tar.gz:
+	$(WGET_DASH_O) $@ http://www.multiprecision.org/mpc/download/$@
+mpc-$(MPC_VER)/configure: mpc-$(MPC_VER).tar.gz
+	tar zxf $<
+	touch -c $@
+mpc-$(MPC_VER)/config.status: mpc-$(MPC_VER)/configure
+	cd mpc-$(MPC_VER) && \
+	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
+	touch -c $@
+$(MPC_SRC_TARGET): mpc-$(MPC_VER)/config.status
+	$(MAKE) -C mpc-$(MPC_VER) $(LIBTOOL_CCLD)
+mpc-$(MPC_VER)/checked: $(MPC_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
+	$(MAKE) -C mpc-$(MPC_VER) $(LIBTOOL_CCLD) check
+endif
+	echo 1 > $@
+$(MPC_OBJ_TARGET): $(MPC_SRC_TARGET) mpc-$(MPC_VER)/checked
+	$(MAKE) -C mpc-$(MPC_VER) $(LIBTOOL_CCLD) install
+	$(INSTALL_NAME_CMD)libmpc.dylib $@
+	touch -c $@
+
+clean-mpc:
+	-$(MAKE) -C mpc-$(MPC_VER) clean
+	-rm -f $(MPC_OBJ_TARGET)
+distclean-mpc:
+	-rm -rf mpc-$(MPC_VER).tar.gz mpc-$(MPC_VER)
+
+get-mpc: mpc-$(MPC_VER).tar.gz
+configure-mpc: mpc-$(MPC_VER)/config.status
+compile-mpc: $(MPC_SRC_TARGET)
+check-mpc: mpc-$(MPC_VER)/checked
+install-mpc: $(MPC_OBJ_TARGET)
 
 ## ZLIB ##
 
