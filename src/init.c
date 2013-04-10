@@ -87,7 +87,7 @@ void fpe_handler(int arg)
         break;
     case _FPE_ZERODIVIDE:
 #endif
-        jl_throw(jl_divbyzero_exception);
+        jl_throw(jl_diverror_exception);
 #ifdef __WIN32__
         break;
     }
@@ -639,8 +639,8 @@ void jl_get_builtin_hooks(void)
 
     jl_stackovf_exception =
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
-    jl_divbyzero_exception =
-        jl_apply((jl_function_t*)core("DivideByZeroError"), NULL, 0);
+    jl_diverror_exception =
+        jl_apply((jl_function_t*)core("DivideError"), NULL, 0);
     jl_domain_exception =
         jl_apply((jl_function_t*)core("DomainError"), NULL, 0);
     jl_overflow_exception =

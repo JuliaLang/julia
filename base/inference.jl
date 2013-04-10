@@ -660,6 +660,9 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         if length(argtypes) < 3
             return None
         end
+        if length(fargs) < 2
+            return Any
+        end
         ff = isconstantfunc(fargs[1], sv)
         if !(ff===false)
             ff = _ieval(ff)

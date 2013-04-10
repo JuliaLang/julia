@@ -164,6 +164,7 @@ USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_ZLIB=0
 USE_SYSTEM_GRISU=0
+USE_SYSTEM_RMATH=0
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user

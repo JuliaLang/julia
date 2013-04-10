@@ -50,7 +50,7 @@ function error_show(io::IO, e::LoadError, bt)
 end
 
 error_show(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
-error_show(io::IO, ::DivideByZeroError) = print(io, "integer divide by zero")
+error_show(io::IO, ::DivideError) = print(io, "integer division error")
 error_show(io::IO, ::StackOverflowError) = print(io, "stack overflow")
 error_show(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
 error_show(io::IO, ::EOFError) = print(io, "read: end of file")

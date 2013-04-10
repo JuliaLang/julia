@@ -126,8 +126,7 @@ Now ``OrderedPair`` objects can only be constructed such that
      in OrderedPair at none:5
 
 You can still reach in and directly change the field values to violate
-this invariant (support for immutable composites is planned but not yet
-implemented), but messing around with an object's internals uninvited is
+this invariant, but messing around with an object's internals uninvited is
 considered poor form. You (or someone else) can also provide additional
 outer constructor methods at any later point, but once a type is
 declared, there is no way to add more inner constructor methods. Since
@@ -135,8 +134,12 @@ outer constructor methods can only create objects by calling other
 constructor methods, ultimately, some inner constructor must be called
 to create an object. This guarantees that all objects of the declared
 type must come into existence by a call to one of the inner constructor
-methods provided with the type, thereby giving some degree of real
-enforcement of a type's invariants, at least for object creation.
+methods provided with the type, thereby giving some degree of
+enforcement of a type's invariants.
+
+Of course, if the type is declared as ``immutable``, then its
+constructor-provided invariants are fully enforced. This is an important
+consideration when deciding whether a type should be immutable.
 
 If any inner constructor method is defined, no default constructor
 method is provided: it is presumed that you have supplied yourself with

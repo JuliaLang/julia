@@ -10,14 +10,14 @@
    stdlib/index
    packages/packagelist
 
-Translations
-============
-
-* `The Julia Manual (Chinese) <http://julia_zh_cn.readthedocs.org/en/latest/manual>`_
-
-Indices and tables
-==================
+Index and search
+================
 
 * :ref:`genindex`
 * :ref:`search`
 
+Translations
+============
+
+* `简体中文 <http://julia_zh_cn.readthedocs.org/en/latest/>`_
+* `Português brasileiro <https://julia_pt-br.readthedocs.org/en/latest/>`_

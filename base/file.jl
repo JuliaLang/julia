@@ -17,8 +17,7 @@ cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
 
-@unix_only begin
-function cd(f::Function, dir::String)
+@unix_only function cd(f::Function, dir::String)
     fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
     system_error(:open, fd == -1)
     try
@@ -29,21 +28,15 @@ function cd(f::Function, dir::String)
         system_error(:close, ccall(:close,Int32,(Int32,),fd) != 0)
     end
 end
-end
 
-@windows_only begin
-function cd(f::Function, dir::String)
+@windows_only function cd(f::Function, dir::String)
     old = pwd()
     try
         cd(dir)
-        retval = f()
+        f()
+   finally
         cd(old)
-        retval
-    catch err
-        cd(old)
-        rethrow(err)
     end
-end
 end
 
 cd(f::Function) = cd(f, ENV["HOME"])
@@ -55,8 +48,9 @@ function mkdir(path::String, mode::Unsigned=0o777)
 end
 
 function mkpath(path::String, mode::Unsigned=0o777)
-    (path=="" || path=="/" || isdir(path)) && return
-    mkpath(dirname(path), mode)
+    dir = dirname(path)
+    (path == dir || isdir(path)) && return
+    mkpath(dir, mode)
     mkdir(path)
 end
 
