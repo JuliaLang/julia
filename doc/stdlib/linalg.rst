@@ -1,3 +1,5 @@
+.. _stdlib-linalg:
+
 Linear Algebra
 --------------
 
