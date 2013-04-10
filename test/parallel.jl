@@ -1,5 +1,5 @@
 if nprocs() < 2
-    addprocs_local(1)
+    addprocs(1)
 end
 
 id_me = myid()

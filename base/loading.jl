@@ -24,7 +24,7 @@ function find_in_path(name::String)
 end
 
 find_in_node1_path(name) = myid()==1 ?
-    find_in_path(name) : remote_call_fetch(1, find_in_path, name)
+    find_in_path(name) : remotecall_fetch(1, find_in_path, name)
 
 # Store list of files and their load time
 package_list = (ByteString=>Float64)[]
@@ -87,7 +87,7 @@ function include_from_node1(path)
         if myid()==1
             Core.include(path)
         else
-            include_string(remote_call_fetch(1, readall, path), path)
+            include_string(remotecall_fetch(1, readall, path), path)
         end
     finally
         if prev == nothing

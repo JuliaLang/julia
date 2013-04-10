@@ -1022,10 +1022,8 @@ export
     write,
 
 # multiprocessing
-    addprocs_local,
+    addprocs,
     addprocs_sge,
-    addprocs_ssh,
-    addprocs_ssh_tunnel,
     fetch,
     isready,
     yield,
@@ -1033,10 +1031,9 @@ export
     nprocs,
     pmap,
     put,
-    remote_call,
-    remote_call_fetch,
-    remote_call_wait,
-    remote_do,
+    remotecall,
+    remotecall_fetch,
+    remotecall_wait,
     take,
     wait,
 

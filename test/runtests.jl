@@ -14,7 +14,7 @@ end
 ENV["OPENBLAS_NUM_THREADS"] = 1
 
 if CPU_CORES > 1 && length(tests)>2
-    addprocs_local(2)
+    addprocs(2)
 end
 
 require("testdefs.jl")

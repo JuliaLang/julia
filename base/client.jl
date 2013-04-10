@@ -212,11 +212,11 @@ function process_options(args::Array{Any,1})
             else
                 np = int(args[i])
             end
-            addprocs_local(np-1)
+            addprocs(np-1)
         elseif args[i]=="--machinefile"
             i+=1
             machines = split(readall(args[i]), '\n', false)
-            addprocs_ssh(machines)
+            addprocs(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
             exit(0)
