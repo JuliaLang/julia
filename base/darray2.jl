@@ -32,10 +32,10 @@ function DArray(init, dims, procs, dist)
     idxs, cuts = chunk_idxs([dims...], dist)
     chunks = Array(RemoteRef, dist...)
     for i = 1:np
-        chunks[i] = remote_call(procs[i], init, idxs[i])
+        chunks[i] = remotecall(procs[i], init, idxs[i])
     end
     p = max(1, localpartindex(procs))
-    A = remote_call_fetch(procs[p], r->typeof(fetch(r)), chunks[p])
+    A = remotecall_fetch(procs[p], r->typeof(fetch(r)), chunks[p])
     DArray{eltype(A),length(dims),A}(dims, chunks, procs, idxs, cuts)
 end
 
@@ -145,7 +145,7 @@ function distribute(a::Array)
     rr = RemoteRef()
     put(rr, a)
     DArray(size(a)) do I
-        remote_call_fetch(owner, ()->fetch(rr)[I...])
+        remotecall_fetch(owner, ()->fetch(rr)[I...])
     end
 end
 
@@ -207,7 +207,7 @@ function getindex(r::RemoteRef, args...)
     if r.where==myid()
         getindex(fetch(r), args...)
     else
-        remote_call_fetch(r.where, getindex, r, args...)
+        remotecall_fetch(r.where, getindex, r, args...)
     end
 end
 
@@ -262,7 +262,7 @@ function setindex!(a::Array, s::SubDArray, I::Range1{Int}...)
                 else
                     # partial chunk
                     ch = d.chunks[i]
-                    @async a[idxs...] = remote_call_fetch(ch.where, ()->sub(fetch(ch), [K[j]-first(K_c[j])+1 for j=1:n]...))
+                    @async a[idxs...] = remotecall_fetch(ch.where, ()->sub(fetch(ch), [K[j]-first(K_c[j])+1 for j=1:n]...))
                 end
             end
         end

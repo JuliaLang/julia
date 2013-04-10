@@ -1,11 +1,11 @@
 ## multi.jl - multiprocessing
 ##
 ## julia starts with one process, and processors can be added using:
-##   addprocs_local(n)                     using exec
-##   addprocs_ssh({"host1","host2",...})   using remote execution
-##   addprocs_sge(n)                       using Sun Grid Engine batch queue
+##   addprocs(n)                         using exec
+##   addprocs({"host1","host2",...})     using remote execution
+##   addprocs_sge(n)                     using Sun Grid Engine batch queue
 ##
-## remote_call(w, func, args...) -
+## remotecall(w, func, args...) -
 ##     tell a worker to call a function on the given arguments.
 ##     returns a RemoteRef to the result.
 ##
@@ -15,7 +15,7 @@
 ##
 ## fetch(rr) - wait for and get the value of a RemoteRef
 ##
-## remote_call_fetch(w, func, args...) - faster fetch(remote_call(...))
+## remotecall_fetch(w, func, args...) - faster fetch(remotecall(...))
 ##
 ## pmap(func, lst) -
 ##     call a function on each element of lst (some 1-d thing), in
@@ -335,7 +335,7 @@ function isready(rr::RemoteRef)
     if rr.where == myid()
         lookup_ref(rid).done
     else
-        remote_call_fetch(rr.where, id->lookup_ref(id).done, rid)
+        remotecall_fetch(rr.where, id->lookup_ref(id).done, rid)
     end
 end
 
@@ -437,7 +437,7 @@ end
 
 # make a thunk to call f on args in a way that simulates what would happen if
 # the function were sent elsewhere
-function local_remote_call_thunk(f, args)
+function local_remotecall_thunk(f, args)
     if isempty(args)
         return f
     end
@@ -458,31 +458,31 @@ function local_remote_call_thunk(f, args)
     # f(map(localize_ref,args)...)
 end
 
-function remote_call(w::LocalProcess, f, args...)
+function remotecall(w::LocalProcess, f, args...)
     rr = RemoteRef(w)
-    schedule_call(rr2id(rr), local_remote_call_thunk(f,args))
+    schedule_call(rr2id(rr), local_remotecall_thunk(f,args))
     rr
 end
 
-function remote_call(w::Worker, f, args...)
+function remotecall(w::Worker, f, args...)
     rr = RemoteRef(w)
     #println("$(myid()) asking for $rr")
     send_msg(w, :call, rr2id(rr), f, args)
     rr
 end
 
-remote_call(id::Integer, f, args...) = remote_call(worker_from_id(id), f, args...)
+remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
 
-# faster version of fetch(remote_call(...))
-function remote_call_fetch(w::LocalProcess, f, args...)
+# faster version of fetch(remotecall(...))
+function remotecall_fetch(w::LocalProcess, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
-    wi = schedule_call(oid, local_remote_call_thunk(f,args))
+    wi = schedule_call(oid, local_remotecall_thunk(f,args))
     wi.notify = ((), :call_fetch, oid, wi.notify)
     yield(WaitFor(:call_fetch, rr))
 end
 
-function remote_call_fetch(w::Worker, f, args...)
+function remotecall_fetch(w::Worker, f, args...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
     rr = WeakRemoteRef(w)
@@ -491,27 +491,27 @@ function remote_call_fetch(w::Worker, f, args...)
     yield(WaitFor(:call_fetch, rr))
 end
 
-remote_call_fetch(id::Integer, f, args...) =
-    remote_call_fetch(worker_from_id(id), f, args...)
+remotecall_fetch(id::Integer, f, args...) =
+    remotecall_fetch(worker_from_id(id), f, args...)
 
-# faster version of wait(remote_call(...))
-remote_call_wait(w::LocalProcess, f, args...) = wait(remote_call(w,f,args...))
+# faster version of wait(remotecall(...))
+remotecall_wait(w::LocalProcess, f, args...) = wait(remotecall(w,f,args...))
 
-function remote_call_wait(w::Worker, f, args...)
+function remotecall_wait(w::Worker, f, args...)
     rr = RemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_wait, oid, f, args)
     yield(WaitFor(:wait, rr))
 end
 
-remote_call_wait(id::Integer, f, args...) =
-    remote_call_wait(worker_from_id(id), f, args...)
+remotecall_wait(id::Integer, f, args...) =
+    remotecall_wait(worker_from_id(id), f, args...)
 
 function remote_do(w::LocalProcess, f, args...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
-    enq_work(WorkItem(local_remote_call_thunk(f, args)))
+    enq_work(WorkItem(local_remotecall_thunk(f, args)))
     nothing
 end
 
@@ -566,7 +566,7 @@ function put(rr::RemoteRef, val::ANY)
     if rr.where == myid()
         put_ref(rid, val)
     else
-        remote_call_fetch(rr.where, put_ref, rid, val)
+        remotecall_fetch(rr.where, put_ref, rid, val)
     end
     val
 end
@@ -587,7 +587,7 @@ function take(rr::RemoteRef)
     if rr.where == myid()
         take_ref(rid)
     else
-        remote_call_fetch(rr.where, take_ref, rid)
+        remotecall_fetch(rr.where, take_ref, rid)
     end
 end
 
@@ -893,8 +893,7 @@ function start_worker(out::IO)
     exit(0)
 end
 
-start_remote_workers(m, c) = start_remote_workers(m, c, false)
-function start_remote_workers(machines, cmds, tunnel)
+function start_remote_workers(machines, cmds, tunnel=false)
     n = length(cmds)
     outs = cell(n)
     w = cell(n)
@@ -975,15 +974,13 @@ end
 #    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
 #end
 
-function addprocs_ssh(machines)
-    add_workers(PGRP, start_remote_workers(machines, map(worker_ssh_cmd, machines)))
-end
-
-# start processes via SSH, then connect to them through an SSH tunnel.
+# start and connect to processes via SSH.
+# optionally through an SSH tunnel.
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
-function addprocs_ssh_tunnel(machines)
-    add_workers(PGRP, start_remote_workers(machines, map(worker_ssh_cmd, machines), true))
+function addprocs(machines::AbstractVector; tunnel=false)
+    add_workers(PGRP, start_remote_workers(machines,
+                                           map(worker_ssh_cmd, machines), tunnel))
 end
 
 #function addprocs_ssh(machines, keys)
@@ -999,7 +996,7 @@ end
 
 worker_local_cmd() = `$JULIA_HOME/julia-release-basic --bind-to $bind_addr --worker`
 
-addprocs_local(np::Integer) =
+addprocs(np::Integer) =
     add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
                                            { worker_local_cmd() for i=1:np }))
 
@@ -1080,7 +1077,7 @@ function sync_add(r)
     r
 end
 
-spawnat(p, thunk) = sync_add(remote_call(p, thunk))
+spawnat(p, thunk) = sync_add(remotecall(p, thunk))
 
 let lastp = 1
     global chooseproc
@@ -1172,7 +1169,7 @@ end
 
 function at_each(f, args...)
     for i=1:nprocs()
-        sync_add(remote_call(i, f, args...))
+        sync_add(remotecall(i, f, args...))
     end
 end
 
@@ -1187,7 +1184,7 @@ end
 function pmap_static(f, lsts...)
     np = nprocs()
     n = length(lsts[1])
-    { remote_call((i-1)%np+1, f, map(L->L[i], lsts)...) for i = 1:n }
+    { remotecall((i-1)%np+1, f, map(L->L[i], lsts)...) for i = 1:n }
 end
 
 pmap(f) = f()
@@ -1215,8 +1212,8 @@ function pmap(f, lsts...)
                         if idx > n
                             break
                         end
-                        results[idx] = remote_call_fetch(p, f,
-                                                         map(L->L[idx], lsts)...)
+                        results[idx] = remotecall_fetch(p, f,
+                                                        map(L->L[idx], lsts)...)
                     end
                 end
             end
