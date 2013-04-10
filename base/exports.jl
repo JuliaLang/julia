@@ -455,7 +455,7 @@ export
     mapslices,
     reducedim,
     bsxfun,
-    cartesian_map,
+    cartesianmap,
     cat,
     cell,
     circshift,
@@ -482,7 +482,6 @@ export
     fliplr,
     flipud,
     full,
-    gen_cartesian_map,
     gradient,
     hcat,
     hvcat,
@@ -546,7 +545,7 @@ export
     zeros,
     index_shape,
     setindex_shape_check,
-    check_bounds,
+    checkbounds,
 
 # linear algebra
     chol,
@@ -898,7 +897,7 @@ export
     rethrow,
     backtrace,
     catch_backtrace,
-    system_error,
+    systemerror,
 
 # types
     convert,
@@ -938,6 +937,8 @@ export
     isinteractive,
     disassemble,
     finfer,
+    isconst,
+    isgeneric,
 
 # loading source files
     evalfile,
@@ -952,8 +953,6 @@ export
     gc,
     gc_disable,
     gc_enable,
-    isconst,
-    isgeneric,
 
 # misc
     exit,
@@ -1009,7 +1008,7 @@ export
     readlines,
     readuntil,
     seek,
-    seek_end,
+    seekend,
     serialize,
     skip,
     start_reading,

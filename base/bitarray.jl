@@ -292,7 +292,7 @@ let getindex_cache = nothing
         if ndims(B) < 1 + length(I)
             error("wrong number of dimensions in getindex")
         end
-        check_bounds(B, I0, I...)
+        checkbounds(B, I0, I...)
         X = BitArray(index_shape(I0, I...))
         nI = 1 + length(I)
 

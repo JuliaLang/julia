@@ -4,14 +4,14 @@ function pwd()
     b = Array(Uint8,1024)
     @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
     @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
-    system_error(:getcwd, p == C_NULL)
+    systemerror(:getcwd, p == C_NULL)
     bytestring(p)
 end
 
 
 function cd(dir::String) 
-    @windows_only system_error(:_chdir, ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
-    @unix_only system_error(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+    @windows_only systemerror(:_chdir, ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
+    @unix_only systemerror(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
 end
 cd() = cd(ENV["HOME"])
 
@@ -19,13 +19,13 @@ cd() = cd(ENV["HOME"])
 
 @unix_only function cd(f::Function, dir::String)
     fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
-    system_error(:open, fd == -1)
+    systemerror(:open, fd == -1)
     try
         cd(dir)
         f()
     finally
-        system_error(:fchdir, ccall(:fchdir,Int32,(Int32,),fd) != 0)
-        system_error(:close, ccall(:close,Int32,(Int32,),fd) != 0)
+        systemerror(:fchdir, ccall(:fchdir,Int32,(Int32,),fd) != 0)
+        systemerror(:close, ccall(:close,Int32,(Int32,),fd) != 0)
     end
 end
 
@@ -44,7 +44,7 @@ cd(f::Function) = cd(f, ENV["HOME"])
 function mkdir(path::String, mode::Unsigned=0o777)
     @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
     @windows_only ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), bytestring(path))
-    system_error(:mkdir, ret != 0)
+    systemerror(:mkdir, ret != 0)
 end
 
 function mkpath(path::String, mode::Unsigned=0o777)
@@ -60,7 +60,7 @@ mkdir(path::String, mode::Signed) = error("mkpath: mode must be an unsigned inte
 function rmdir(path::String)
     @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
     @windows_only ret = ccall(:_rmdir, Int32, (Ptr{Uint8},), bytestring(path))
-    system_error(:rmdir, ret != 0)
+    systemerror(:rmdir, ret != 0)
 end
 
 # The following use Unix command line facilites
@@ -137,7 +137,7 @@ end
         if ret == 0
             return filename
         end
-        system_error(:mktempdir, errno()!=EEXIST)
+        systemerror(:mktempdir, errno()!=EEXIST)
         seed += 1
     end
 end

@@ -248,9 +248,9 @@ seek(s::IOStream, n::Integer) =
     (ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
      error("seek failed"))
 
-seek_end(s::IOStream) =
+seekend(s::IOStream) =
     (ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios)==0 ||
-     error("seek_end failed"))
+     error("seekend failed"))
 
 skip(s::IOStream, delta::Integer) =
     (ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)==0 ||
@@ -339,8 +339,8 @@ function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
     if N<=1
         return write(s, pointer(a, 1), colsz)
     else
-        cartesian_map((idxs...)->write(s, pointer(a, idxs), colsz),
-                      tuple(1, size(a)[2:]...))
+        cartesianmap((idxs...)->write(s, pointer(a, idxs), colsz),
+                     tuple(1, size(a)[2:]...))
         return colsz*trailingsize(a,2)
     end
 end

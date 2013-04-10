@@ -175,6 +175,10 @@ export PipeString
 @deprecate  wait_accept         accept
 @deprecate  findn_nzs           findnz
 @deprecate  DivideByZeroError   DivideError
+@deprecate  cartesian_map       cartesianmap
+@deprecate  check_bounds        checkbounds
+@deprecate  system_error        systemerror
+@deprecate  seek_end            seekend
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)

@@ -60,8 +60,8 @@ function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A:
     if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
         error("copy!: size mismatch")
     end
-    check_bounds(B, ir_dest, jr_dest)
-    check_bounds(A, ir_src, jr_src)
+    checkbounds(B, ir_dest, jr_dest)
+    checkbounds(A, ir_src, jr_src)
     jdest = first(jr_dest)
     Askip = size(A, 1)
     Bskip = size(B, 1)
@@ -87,8 +87,8 @@ function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range
     if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
         error("copy_transpose!: size mismatch")
     end
-    check_bounds(B, ir_dest, jr_dest)
-    check_bounds(A, ir_src, jr_src)
+    checkbounds(B, ir_dest, jr_dest)
+    checkbounds(A, ir_src, jr_src)
     idest = first(ir_dest)
     Askip = size(A, 1)
     for jsrc in jr_src
@@ -275,13 +275,13 @@ end
 # 2d indexing
 function getindex(A::Array, I::Range1{Int}, j::Real)
     j = to_index(j)
-    check_bounds(A, I, j)
+    checkbounds(A, I, j)
     X = similar(A,length(I))
     copy_unsafe!(X, 1, A, (j-1)*size(A,1) + first(I), length(I))
     return X
 end
 function getindex(A::Array, I::Range1{Int}, J::Range1{Int})
-    check_bounds(A, I, J)
+    checkbounds(A, I, J)
     X = similar(A, index_shape(I, J))
     if length(I) == size(A,1)
         copy_unsafe!(X, 1, A, (first(J)-1)*size(A,1) + 1, size(A,1)*length(J))
@@ -295,7 +295,7 @@ function getindex(A::Array, I::Range1{Int}, J::Range1{Int})
     return X
 end
 function getindex(A::Array, I::Range1{Int}, J::AbstractVector{Int})
-    check_bounds(A, I, J)
+    checkbounds(A, I, J)
     X = similar(A, index_shape(I, J))
     storeoffset = 1
     for j = J
@@ -311,7 +311,7 @@ getindex{T<:Real}(A::Array, I::Real, J::AbstractVector{T}) = [ A[i,j] for i=I,j=
 # This next is a 2d specialization of the algorithm used for general
 # multidimensional indexing
 function getindex{T<:Real}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
-    check_bounds(A, I, J)
+    checkbounds(A, I, J)
     I = indices(I); J = indices(J)
     X = similar(A, index_shape(I, J))
     storeind = 1
@@ -328,7 +328,7 @@ end
 let getindex_cache = nothing
 global getindex
 function getindex(A::Array, I::Union(Real,AbstractVector)...)
-    check_bounds(A, I...)
+    checkbounds(A, I...)
     I = indices(I)
     X = similar(A, index_shape(I...))
 
@@ -347,7 +347,7 @@ end
 # logical indexing
 
 function getindex_bool_1d(A::Array, I::AbstractArray{Bool})
-    check_bounds(A, I)
+    checkbounds(A, I)
     n = sum(I)
     out = similar(A, n)
     c = 1
@@ -417,7 +417,7 @@ end
 
 function setindex!{T<:Real}(A::Array, x, i::Real, J::AbstractVector{T})
     i = to_index(i)
-    check_bounds(A, i, J)
+    checkbounds(A, i, J)
     m = size(A, 1)
     if !isa(x,AbstractArray)
         for j in J
@@ -437,7 +437,7 @@ end
 
 function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, j::Real)
     j = to_index(j)
-    check_bounds(A, I, j)
+    checkbounds(A, I, j)
     m = size(A, 1)
     offset = (j-1)*m
 
@@ -459,14 +459,14 @@ end
 
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, j::Real)
     j = to_index(j)
-    check_bounds(A, I, j)
+    checkbounds(A, I, j)
     if length(X) != length(I); error("argument dimensions must match"); end
     copy_unsafe!(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
     return A
 end
 
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::Range1{Int})
-    check_bounds(A, I, J)
+    checkbounds(A, I, J)
     nel = length(I)*length(J)
     if length(X) != nel ||
         (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
@@ -485,7 +485,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::Range1{Int})
 end
 
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::AbstractVector{Int})
-    check_bounds(A, I, J)
+    checkbounds(A, I, J)
     nel = length(I)*length(J)
     if length(X) != nel ||
         (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
@@ -500,7 +500,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::AbstractVecto
 end
 
 function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector{T})
-    check_bounds(A, I, J)
+    checkbounds(A, I, J)
     m = size(A, 1)
     if !isa(x,AbstractArray)
         for j in J
@@ -531,7 +531,7 @@ end
 let assign_cache = nothing, assign_scalar_cache = nothing
 global setindex!
 function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
-    check_bounds(A, I...)
+    checkbounds(A, I...)
     I = indices(I)
     if !isa(x,AbstractArray)
         if is(assign_scalar_cache,nothing)
@@ -580,7 +580,7 @@ end
 # logical indexing
 
 function assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
-    check_bounds(A, I)
+    checkbounds(A, I)
     for i = 1:length(I)
         if I[i]
             A[i] = x
@@ -590,7 +590,7 @@ function assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
 end
 
 function assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
-    check_bounds(A, I)
+    checkbounds(A, I)
     c = 1
     for i = 1:length(I)
         if I[i]
