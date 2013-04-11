@@ -62,8 +62,8 @@ to the standard ``show`` function, so we had to write ``import Base.show``.
 Modules and files
 -----------------
 
-Files and file names are unrelated to modules; modules are associated only with
-module expressions.
+Files and file names are mostly unrelated to modules; modules are associated
+only with module expressions.
 One can have multiple files per module, and multiple modules per file::
 
     module Foo
@@ -123,6 +123,40 @@ keyword ``baremodule`` instead. In terms of ``baremodule``, a standard
     eval(m,x) = Core.eval(m, x)
     ...
     end
+
+
+Relative and Absolute Module Paths
+----------------------------------
+
+Given the statement ``using Foo``, the system looks for ``Foo``
+within ``Main``. If the module does not exist, the system
+attempts to ``require("Foo")``, which typically results in loading
+code from an installed package.
+
+However, some modules contain submodules, which means you sometimes
+need to access a module that is not directly available in ``Main``.
+There are two ways to do this. The first is to use an absolute path,
+for example ``using Base.Sort``. The second is to use a relative path,
+which makes it easier to import submodules of the current module or
+any of its enclosing modules::
+
+    module Parent
+
+    module Utils
+    ...
+    end
+
+    using .Utils
+
+    ...
+    end
+
+Here module ``Parent`` contains a submodule ``Utils``, and code in
+``Parent`` wants the contents of ``Utils`` to be visible. This is
+done by starting the ``using`` path with a period. Adding more leading
+periods moves up additional levels in the module hierarchy. For example
+``using ..Utils`` would look for ``Utils`` in ``Parent``'s enclosing
+module rather than in ``Parent`` itself.
 
 
 Miscellaneous details
