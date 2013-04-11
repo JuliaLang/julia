@@ -1300,8 +1300,14 @@
 
    ;; constant definition
    (pattern-lambda (const (= lhs rhs))
-		   `(block (const ,(const-check-symbol (decl-var lhs)))
-			   (= ,lhs ,rhs)))
+		   (let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+				   (cdr lhs)
+				   (list lhs))))
+		     `(block
+		       ,@(map (lambda (v)
+				`(const ,(const-check-symbol (decl-var v))))
+			      vars)
+		       (= ,lhs ,rhs))))
    (pattern-lambda (const (global . binds))
 		   (qualified-const-expr binds __))
    (pattern-lambda (const (local . binds))
