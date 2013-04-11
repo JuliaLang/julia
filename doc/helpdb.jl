@@ -105,9 +105,11 @@
 
 "),
 
-("Getting Around","Base","methodswith","methodswith(t)
+("Getting Around","Base","methodswith","methodswith(typ[, showparents])
 
-   Show all methods with an argument of type \"typ\".
+   Show all methods with an argument of type \"typ\". If optional
+   \"showparents\" is \"true\", also show arguments with a parent type
+   of \"typ\", excluding type \"Any\".
 
 "),
 
@@ -235,6 +237,12 @@
 
 "),
 
+("Types","Base","<:","<:(T1, T2)
+
+   Subtype operator, equivalent to \"subtype(T1,T2)\".
+
+"),
+
 ("Types","Base","typemin","typemin(type)
 
    The lowest value representable by the given (real) numeric type.
@@ -299,6 +307,29 @@
    loss is tolerated; for example, \"promote_type(Int64,Float64)\"
    returns \"Float64\" even though strictly, not all \"Int64\" values
    can be represented exactly as \"Float64\" values.
+
+"),
+
+("Types","Base","getfield","getfield(value, name::Symbol)
+
+   Extract a named field from a value of composite type. The syntax
+   \"a.b\" calls \"getfield(a, :b)\", and the syntax \"a.(b)\" calls
+   \"getfield(a, b)\".
+
+"),
+
+("Types","Base","setfield","setfield(value, name::Symbol, x)
+
+   Assign \"x\" to a named field in \"value\" of composite type. The
+   syntax \"a.b = c\" calls \"setfield(a, :b, c)\", and the syntax
+   \"a.(b) = c\" calls \"setfield(a, b, c)\".
+
+"),
+
+("Types","Base","fieldtype","fieldtype(value, name::Symbol)
+
+   Determine the declared type of a named field in a value of
+   composite type.
 
 "),
 
@@ -1005,13 +1036,13 @@
 
 "),
 
-("Strings","Base","begins_with","begins_with(string, prefix)
+("Strings","Base","beginswith","beginswith(string, prefix)
 
    Returns \"true\" if \"string\" starts with \"prefix\".
 
 "),
 
-("Strings","Base","ends_with","ends_with(string, suffix)
+("Strings","Base","endswith","endswith(string, suffix)
 
    Returns \"true\" if \"string\" ends with \"suffix\".
 
@@ -1335,6 +1366,34 @@
 
 "),
 
+("I/O","Base","ntoh","ntoh(x)
+
+   Converts the endianness of a value from Network byte order (big-
+   endian) to that used by the Host.
+
+"),
+
+("I/O","Base","hton","hton(x)
+
+   Converts the endianness of a value from that used by the Host to
+   Network byte order (big-endian).
+
+"),
+
+("I/O","Base","ltoh","ltoh(x)
+
+   Converts the endianness of a value from Little-endian to that used
+   by the Host.
+
+"),
+
+("I/O","Base","htol","htol(x)
+
+   Converts the endianness of a value from that used by the Host to
+   Little-endian.
+
+"),
+
 ("Text I/O","Base","show","show(x)
 
    Write an informative text representation of a value to the current
@@ -1642,6 +1701,27 @@
 ("Mathematical Functions","Base",">>",">>(x, n)
 
    Right shift operator.
+
+"),
+
+("Mathematical Functions","Base",">>>",">>>(x, n)
+
+   Unsigned right shift operator.
+
+"),
+
+("Mathematical Functions","Base",":",":(start[, step], stop)
+
+   Range operator. \"a:b\" constructs a range from \"a\" to \"b\" with
+   a step size of 1, and \"a:s:b\" is similar but uses a step size of
+   \"s\". These syntaxes call the function \"colon\". The colon is
+   also used in indexing to select whole dimensions.
+
+"),
+
+("Mathematical Functions","Base","colon","colon(start[, step], stop)
+
+   Called by \":\" syntax for constructing ranges.
 
 "),
 
@@ -1985,13 +2065,14 @@
 
 ("Mathematical Functions","Base","sinc","sinc(x)
 
-   Compute \\sin(\\pi x) / x
+   Compute \\sin(\\pi x) / (\\pi x) if x \\neq 0, and 1 if x = 0.
 
 "),
 
 ("Mathematical Functions","Base","cosc","cosc(x)
 
-   Compute \\cos(\\pi x) / x
+   Compute \\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2) if x \\neq
+   0, and 0 if x = 0. This is the derivative of \"sinc(x)\".
 
 "),
 
@@ -2602,35 +2683,14 @@
 
 "),
 
-("Data Formats","Base","parse_int","parse_int(type, str[, base])
+("Data Formats","Base","parseint","parseint([type], str[, base])
 
    Parse a string as an integer in the given base (default 10),
-   yielding a number of the specified type.
+   yielding a number of the specified type (default \"Int\").
 
 "),
 
-("Data Formats","Base","parse_bin","parse_bin(type, str)
-
-   Parse a string as an integer in base 2, yielding a number of the
-   specified type.
-
-"),
-
-("Data Formats","Base","parse_oct","parse_oct(type, str)
-
-   Parse a string as an integer in base 8, yielding a number of the
-   specified type.
-
-"),
-
-("Data Formats","Base","parse_hex","parse_hex(type, str)
-
-   Parse a string as an integer in base 16, yielding a number of the
-   specified type.
-
-"),
-
-("Data Formats","Base","parse_float","parse_float(type, str)
+("Data Formats","Base","parsefloat","parsefloat([type], str)
 
    Parse a string as a decimal floating point number, yielding a
    number of the specified type.
@@ -3525,6 +3585,18 @@
 
 "),
 
+("Arrays","Base","mapslices","mapslices(f, A, dims)
+
+   Transform the given dimensions of array \"A\" using function \"f\".
+   \"f\" is called on each slice of \"A\" of the form
+   \"A[...,:,...,:,...]\". \"dims\" is an integer vector specifying
+   where the colons go in this expression. The results are
+   concatenated along the remaining dimensions. For example, if
+   \"dims\" is \"[1,2]\" and A is 4-dimensional, \"f\" is called on
+   \"A[:,:,i,j]\" for all \"i\" and \"j\".
+
+"),
+
 ("Arrays","Base","sum_kbn","sum_kbn(A)
 
    Returns the sum of all array elements, using the Kahan-Babuska-
@@ -3686,16 +3758,36 @@
 
 "),
 
-("Statistics","Base","hist","hist(v[, n])
+("Statistics","Base","hist","hist(v[, n]) -> e, counts
 
-   Compute the histogram of \"v\", optionally using \"n\" bins.
+   Compute the histogram of \"v\", optionally using approximately
+   \"n\" bins. The return values are a range \"e\", which correspond
+   to the edges of the bins, and \"counts\" containing the number of
+   elements of \"v\" in each bin.
 
 "),
 
-("Statistics","Base","hist","hist(v, e)
+("Statistics","Base","hist","hist(v, e) -> e, counts
 
-   Compute the histogram of \"v\" using a vector \"e\" as the edges
-   for the bins.
+   Compute the histogram of \"v\" using a vector/range \"e\" as the
+   edges for the bins. The result will be a vector of length
+   \"length(e) - 1\", with the \"i``th element being ``sum(e[i] .< v
+   .<= e[i+1])\".
+
+"),
+
+("Statistics","Base","histrange","histrange(v, n)
+
+   Compute *nice* bin ranges for the edges of a histogram of \"v\",
+   using approximately \"n\" bins. The resulting step sizes will be 1,
+   2 or 5 multiplied by a power of 10.
+
+"),
+
+("Statistics","Base","midpoints","midpoints(e)
+
+   Compute the midpoints of the bins with edges \"e\". The result is a
+   vector/range of length \"length(e) - 1\".
 
 "),
 
@@ -4349,6 +4441,14 @@
 
 "),
 
+("System","Base","mkpath","mkpath(path[, mode])
+
+   Create all directories in the given \"path\", with permissions
+   \"mode\". \"mode\" defaults to 0o777, modified by the current file
+   creation mask.
+
+"),
+
 ("System","Base","rmdir","rmdir(path)
 
    Remove the directory named \"path\".
@@ -4746,6 +4846,64 @@
 
 "),
 
+("Filesystem","Base","dirname","dirname(path::String) -> String
+
+   Get the directory part of a path.
+
+"),
+
+("Filesystem","Base","basename","basename(path::String) -> String
+
+   Get the file name part of a path.
+
+"),
+
+("Filesystem","Base","isabspath","isabspath(path::String) -> Bool
+
+   Determines whether a path is absolute (begins at the root
+   directory).
+
+"),
+
+("Filesystem","Base","joinpath","joinpath(parts...) -> String
+
+   Join path components into a full path. If some argument is an
+   absolute path, then prior components are dropped.
+
+"),
+
+("Filesystem","Base","abspath","abspath(path::String) -> String
+
+   Convert a path to an absolute path by adding the current directory
+   if necessary.
+
+"),
+
+("Filesystem","Base","tempname","tempname()
+
+   Generate a unique temporary filename.
+
+"),
+
+("Filesystem","Base","tempdir","tempdir()
+
+   Obtain the path of a temporary directory.
+
+"),
+
+("Filesystem","Base","mktemp","mktemp()
+
+   Returns \"(path, io)\", where \"path\" is the path of a new
+   temporary file and \"io\" is an open file object for this path.
+
+"),
+
+("Filesystem","Base","mktempdir","mktempdir()
+
+   Create a temporary directory and return its path.
+
+"),
+
 
 ("Linear Algebra","","*","*(A, B)
 
@@ -4793,23 +4951,23 @@
 
 "),
 
-("Linear Algebra","","lufact","lufact(A) -> LUDense
+("Linear Algebra","","lufact","lufact(A) -> LU
 
-   Compute the LU factorization of \"A\", returning an \"LUDense\"
-   object for dense \"A\" or an \"UmfpackLU\" object for sparse \"A\".
-   The individual components of the factorization \"F\" can be accesed
-   by indexing: \"F[:L]\", \"F[:U]\", and \"F[:P]\" (permutation
-   matrix) or \"F[:p]\" (permutation vector). An \"UmfpackLU\" object
-   has additional components \"F[:q]\" (the left permutation vector)
-   and \"Rs\" the vector of scaling factors. The following functions
-   are available for both \"LUDense\" and \"UmfpackLU\" objects:
-   \"size\", \"\\\" and \"det\".  For \"LUDense\" there is also an
-   \"inv\" method.  The sparse LU factorization is such that \"L*U\"
-   is equal to``diagmm(Rs,A)[p,q]``.
+   Compute the LU factorization of \"A\", returning an \"LU\" object
+   for dense \"A\" or an \"UmfpackLU\" object for sparse \"A\". The
+   individual components of the factorization \"F\" can be accesed by
+   indexing: \"F[:L]\", \"F[:U]\", and \"F[:P]\" (permutation matrix)
+   or \"F[:p]\" (permutation vector). An \"UmfpackLU\" object has
+   additional components \"F[:q]\" (the left permutation vector) and
+   \"Rs\" the vector of scaling factors. The following functions are
+   available for both \"LU\" and \"UmfpackLU\" objects: \"size\",
+   \"\\\" and \"det\".  For \"LU\" there is also an \"inv\" method.
+   The sparse LU factorization is such that \"L*U\" is equal
+   to``diagmm(Rs,A)[p,q]``.
 
 "),
 
-("Linear Algebra","","lufact!","lufact!(A) -> LUDense
+("Linear Algebra","","lufact!","lufact!(A) -> LU
 
    \"lufact!\" is the same as \"lufact\" but saves space by
    overwriting the input A, instead of creating a copy.  For sparse
@@ -4827,14 +4985,14 @@
 
 "),
 
-("Linear Algebra","","cholfact","cholfact(A[, LU]) -> CholeskyDense
+("Linear Algebra","","cholfact","cholfact(A[, LU]) -> Cholesky
 
    Compute the Cholesky factorization of a dense symmetric positive-
-   definite matrix \"A\" and return a \"CholeskyDense\" object. \"LU\"
-   may be 'L' for using the lower part or 'U' for the upper part. The
+   definite matrix \"A\" and return a \"Cholesky\" object. \"LU\" may
+   be 'L' for using the lower part or 'U' for the upper part. The
    default is to use 'U'. The triangular matrix can be obtained from
    the factorization \"F\" with: \"F[:L]\" and \"F[:U]\". The
-   following functions are available for \"CholeskyDense\" objects:
+   following functions are available for \"Cholesky\" objects:
    \"size\", \"\\\", \"inv\", \"det\". A \"LAPACK.PosDefException\"
    error is thrown in case the matrix is not positive definite.
 
@@ -4857,44 +5015,51 @@
 
 "),
 
-("Linear Algebra","","cholpfact","cholpfact(A[, LU]) -> CholeskyPivotedDense
+("Linear Algebra","","cholfact!","cholfact!(A[, LU]) -> Cholesky
 
-   Compute the pivoted Cholesky factorization of a symmetric positive
-   semi-definite matrix \"A\" and return a \"CholeskyDensePivoted\"
-   object. \"LU\" may be 'L' for using the lower part or 'U' for the
-   upper part. The default is to use 'U'. The triangular factors
-   containted in the factorization \"F\" can be obtained with
-   \"F[:L]\" and \"F[:U]\", whereas the permutation can be obtained
-   with \"F[:P]\" or \"F[:p]\". The following functions are available
-   for \"CholeskyDensePivoted\" objects: \"size\", \"\\\", \"inv\",
-   \"det\". A \"LAPACK.RankDeficientException\" error is thrown in
-   case the matrix is rank deficient.
+   \"cholfact!\" is the same as \"cholfact\" but saves space by
+   overwriting the input A, instead of creating a copy.
 
 "),
 
-("Linear Algebra","","cholpfact!","cholpfact!(A[, LU]) -> CholeskyPivotedDense
+("Linear Algebra","","cholpfact","cholpfact(A[, LU]) -> CholeskyPivoted
+
+   Compute the pivoted Cholesky factorization of a symmetric positive
+   semi-definite matrix \"A\" and return a \"CholeskyPivoted\" object.
+   \"LU\" may be 'L' for using the lower part or 'U' for the upper
+   part. The default is to use 'U'. The triangular factors containted
+   in the factorization \"F\" can be obtained with \"F[:L]\" and
+   \"F[:U]\", whereas the permutation can be obtained with \"F[:P]\"
+   or \"F[:p]\". The following functions are available for
+   \"CholeskyPivoted\" objects: \"size\", \"\\\", \"inv\", \"det\". A
+   \"LAPACK.RankDeficientException\" error is thrown in case the
+   matrix is rank deficient.
+
+"),
+
+("Linear Algebra","","cholpfact!","cholpfact!(A[, LU]) -> CholeskyPivoted
 
    \"cholpfact!\" is the same as \"cholpfact\" but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
 
-("Linear Algebra","","qr","qr(A) -> Q, R
+("Linear Algebra","","qr","qr(A[, thin]) -> Q, R
 
    Compute the QR factorization of \"A\" such that \"A = Q*R\". Also
-   see \"qrfact\".
+   see \"qrfact\". The default is to compute a thin factorization.
 
 "),
 
 ("Linear Algebra","","qrfact","qrfact(A)
 
-   Compute the QR factorization of \"A\" and return a \"QRDense\"
-   object. The coomponents of the factorization \"F\" can be accessed
-   as follows: the orthogonal matrix \"Q\" can be extracted with
+   Compute the QR factorization of \"A\" and return a \"QR\" object.
+   The coomponents of the factorization \"F\" can be accessed as
+   follows: the orthogonal matrix \"Q\" can be extracted with
    \"F[:Q]\" and the triangular matrix \"R\" with \"F[:R]\". The
-   following functions are available for \"QRDense\" objects:
-   \"size\", \"\\\". When \"Q\" is extracted, the resulting type is
-   the \"QRDenseQ\" object, and has the \"*\" operator overloaded to
+   following functions are available for \"QR\" objects: \"size\",
+   \"\\\". When \"Q\" is extracted, the resulting type is the
+   \"QRPackedQ\" object, and has the \"*\" operator overloaded to
    support efficient multiplication by \"Q\" and \"Q'\".
 
 "),
@@ -4906,30 +5071,31 @@
 
 "),
 
-("Linear Algebra","","qrp","qrp(A) -> Q, R, P
+("Linear Algebra","","qrp","qrp(A[, thin]) -> Q, R, P
 
    Compute the QR factorization of \"A\" with pivoting, such that
-   \"A*P = Q*R\", Also see \"qrpfact\".
+   \"A*P = Q*R\", Also see \"qrpfact\". The default is to compute a
+   thin factorization.
 
 "),
 
-("Linear Algebra","","qrpfact","qrpfact(A) -> QRPivotedDense
+("Linear Algebra","","qrpfact","qrpfact(A) -> QRPivoted
 
    Compute the QR factorization of \"A\" with pivoting and return a
-   \"QRDensePivoted\" object. The components of the factorization
-   \"F\" can be accessed as follows: the orthogonal matrix \"Q\" can
-   be extracted with \"F[:Q]\", the triangular matrix \"R\" with
+   \"QRPivoted\" object. The components of the factorization \"F\" can
+   be accessed as follows: the orthogonal matrix \"Q\" can be
+   extracted with \"F[:Q]\", the triangular matrix \"R\" with
    \"F[:R]\", and the permutation with \"F[:P]\" or \"F[:p]\". The
-   following functions are available for \"QRDensePivoted\" objects:
+   following functions are available for \"QRPivoted\" objects:
    \"size\", \"\\\". When \"Q\" is extracted, the resulting type is
-   the \"QRDenseQ\" object, and has the \"*\" operator overloaded to
+   the \"QRPivotedQ\" object, and has the \"*\" operator overloaded to
    support efficient multiplication by \"Q\" and \"Q'\". A
-   \"QRDenseQ\" matrix can be converted into a regular matrix with
+   \"QRPivotedQ\" matrix can be converted into a regular matrix with
    \"full\".
 
 "),
 
-("Linear Algebra","","qrpfact!","qrpfact!(A) -> QRPivotedDense
+("Linear Algebra","","qrpfact!","qrpfact!(A) -> QRPivoted
 
    \"qrpfact!\" is the same as \"qrpfact\" but saves space by
    overwriting the input A, instead of creating a copy.
@@ -4955,13 +5121,35 @@
 
 "),
 
+("Linear Algebra","","eigmax","eigmax(A)
+
+   Returns the largest eigenvalue of \"A\".
+
+"),
+
+("Linear Algebra","","eigmin","eigmin(A)
+
+   Returns the smallest eigenvalue of \"A\".
+
+"),
+
+("Linear Algebra","","eigvecs","eigvecs(A[, eigvals])
+
+   Returns the eigenvectors of \"A\".
+
+   For SymTridiagonal matrices, if the optional vector of eigenvalues
+   \"eigvals\" is specified, returns the specific corresponding
+   eigenvectors.
+
+"),
+
 ("Linear Algebra","","eigfact","eigfact(A)
 
    Compute the eigenvalue decomposition of \"A\" and return an
-   \"EigenDense\" object. If \"F\" is the factorization object, the
+   \"Eigen\" object. If \"F\" is the factorization object, the
    eigenvalues can be accessed with \"F[:values]\" and the
    eigenvectors with \"F[:vectors]\". The following functions are
-   available for \"EigenDense\" objects: \"inv\", \"det\".
+   available for \"Eigen\" objects: \"inv\", \"det\".
 
 "),
 
@@ -4975,11 +5163,11 @@
 ("Linear Algebra","","hessfact","hessfact(A)
 
    Compute the Hessenberg decomposition of \"A\" and return a
-   \"HessenbergDense\" object. If \"F\" is the factorization object,
-   the unitary matrix can be accessed with \"F[:Q]\" and the
-   Hessenberg matrix with \"F[:H]\". When \"Q\" is extracted, the
-   resulting type is the \"HessenbergDenseQ\" object, and may be
-   converted to a regular matrix with \"full\".
+   \"Hessenberg\" object. If \"F\" is the factorization object, the
+   unitary matrix can be accessed with \"F[:Q]\" and the Hessenberg
+   matrix with \"F[:H]\". When \"Q\" is extracted, the resulting type
+   is the \"HessenbergQ\" object, and may be converted to a regular
+   matrix with \"full\".
 
 "),
 
@@ -4990,23 +5178,62 @@
 
 "),
 
-("Linear Algebra","","svdfact","svdfact(A[, thin]) -> SVDDense
+("Linear Algebra","","schurfact","schurfact(A) -> Schur
 
-   Compute the Singular Value Decomposition (SVD) of \"A\" and return
-   an \"SVDDense\" object. \"U\", \"S\", \"V\" and \"Vt\" can be
-   obtained from the factorization \"F\" with \"F[:U]\", \"F[:S]\",
-   \"F[:V]\" and \"F[:Vt]\", such that \"A = U*diagm(S)*Vt\". If
-   \"thin\" is \"true\", an economy mode decomposition is returned.
-   The algorithm produces \"Vt\" and hence \"Vt\" is more efficient to
-   extract than \"V\".
+   Computes the Schur factorization of the matrix \"A\". The (quasi)
+   triangular Schur factor can be obtained from the \"Schur\" object
+   \"F\" with either \"F[:Schur]\" or \"F[:T]\" and the
+   unitary/orthogonal Schur vectors can be obtained with
+   \"F[:vectors]\" or \"F[:Z]\" such that
+   \"A=F[:vectors]*F[:Schur]*F[:vectors]'\". The eigenvalues of \"A\"
+   can be obtained with \"F[:values]\".
 
 "),
 
-("Linear Algebra","","svdfact!","svdfact!(A[, thin]) -> SVDDense
+("Linear Algebra","","schur","schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
+
+   See schurfact
+
+"),
+
+("Linear Algebra","","schurfact","schurfact(A, B) -> GeneralizedSchur
+
+   Computes the Generalized Schur (or QZ) factorization of the
+   matrices \"A\" and \"B\". The (quasi) triangular Schur factors can
+   be obtained from the \"Schur\" object \"F\" with \"F[:S]\" and
+   \"F[:T]\", the left unitary/orthogonal Schur vectors can be
+   obtained with \"F[:left]\" or \"F[:Q]\" and the right
+   unitary/orthogonal Schur vectors can be obtained with \"F[:right]\"
+   or \"F[:Z]\" such that \"A=F[:left]*F[:S]*F[:right]'\" and
+   \"B=F[:left]*F[:T]*F[:right]'\". The generalized eigenvalues of
+   \"A\" and \"B\" can be obtained with \"F[:alpha]./F[:beta]\".
+
+"),
+
+("Linear Algebra","","schur","schur(A, B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
+
+   See schurfact
+
+"),
+
+("Linear Algebra","","svdfact","svdfact(A[, thin]) -> SVD
+
+   Compute the Singular Value Decomposition (SVD) of \"A\" and return
+   an \"SVD\" object. \"U\", \"S\", \"V\" and \"Vt\" can be obtained
+   from the factorization \"F\" with \"F[:U]\", \"F[:S]\", \"F[:V]\"
+   and \"F[:Vt]\", such that \"A = U*diagm(S)*Vt\". If \"thin\" is
+   \"true\", an economy mode decomposition is returned. The algorithm
+   produces \"Vt\" and hence \"Vt\" is more efficient to extract than
+   \"V\". The default is to produce a thin decomposition.
+
+"),
+
+("Linear Algebra","","svdfact!","svdfact!(A[, thin]) -> SVD
 
    \"svdfact!\" is the same as \"svdfact\" but saves space by
    overwriting the input A, instead of creating a copy. If \"thin\" is
-   \"true\", an economy mode decomposition is returned.
+   \"true\", an economy mode decomposition is returned. The default is
+   to produce a thin decomposition.
 
 "),
 
@@ -5031,11 +5258,11 @@
 
 "),
 
-("Linear Algebra","","svdfact","svdfact(A, B) -> GSVDDense
+("Linear Algebra","","svdfact","svdfact(A, B) -> GeneralizedSVD
 
    Compute the generalized SVD of \"A\" and \"B\", returning a
-   \"GSVDDense\" Factorization object, such that \"A = U*D1*R0*Q'\"
-   and \"B = V*D2*R0*Q'\".
+   \"GeneralizedSVD\" Factorization object, such that \"A =
+   U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
 
 "),
 
@@ -5096,8 +5323,9 @@
 
 ("Linear Algebra","","Bidiagonal","Bidiagonal(dv, ev, isupper)
 
-   Construct an upper (isupper=true) or lower (isupper=false) bidiagonal matrix
-   from the given diagonal (dv) and off-diagonal (ev) vectors.
+   Constructs an upper (isupper=true) or lower (isupper=false)
+   bidiagonal matrix using the given diagonal (dv) and off-diagonal
+   (ev) vectors
 
 "),
 

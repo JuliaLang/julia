@@ -49,26 +49,26 @@ function trailingsize(A, n)
 end
 
 ## Bounds checking ##
-function check_bounds(sz::Int, I::Real)
+function checkbounds(sz::Int, I::Real)
     I = to_index(I)
     if I < 1 || I > sz
         throw(BoundsError())
     end
 end
 
-function check_bounds(sz::Int, I::AbstractVector{Bool})
+function checkbounds(sz::Int, I::AbstractVector{Bool})
     if length(I) > sz
         throw(BoundsError())
     end
 end
 
-function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
+function checkbounds{T<:Integer}(sz::Int, I::Ranges{T})
     if !isempty(I) && (min(I) < 1 || max(I) > sz)
         throw(BoundsError())
     end
 end
 
-function check_bounds{T <: Real}(sz::Int, I::AbstractVector{T})
+function checkbounds{T <: Real}(sz::Int, I::AbstractVector{T})
     for i in I
         i = to_index(i)
         if i < 1 || i > sz
@@ -77,37 +77,37 @@ function check_bounds{T <: Real}(sz::Int, I::AbstractVector{T})
     end
 end
 
-function check_bounds(A::AbstractArray, I::AbstractArray{Bool})
+function checkbounds(A::AbstractArray, I::AbstractArray{Bool})
     if !isequal(size(A), size(I)) throw(BoundsError()) end
 end
 
-check_bounds(A::AbstractArray, I) = check_bounds(length(A), I)
+checkbounds(A::AbstractArray, I) = checkbounds(length(A), I)
 
-function check_bounds(A::AbstractMatrix, I, J)
-    check_bounds(size(A,1), I)
-    check_bounds(size(A,2), J)
+function checkbounds(A::AbstractMatrix, I, J)
+    checkbounds(size(A,1), I)
+    checkbounds(size(A,2), J)
 end
 
-function check_bounds(A::AbstractArray, I, J)
-    check_bounds(size(A,1), I)
+function checkbounds(A::AbstractArray, I, J)
+    checkbounds(size(A,1), I)
     sz = size(A,2)
     for i = 3:ndims(A)
         sz *= size(A, i) # TODO: sync. with decision on issue #1030
     end
-    check_bounds(sz, J)
+    checkbounds(sz, J)
 end
 
-function check_bounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
+function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
     n = length(I)
     if n > 0
         for dim = 1:(n-1)
-            check_bounds(size(A,dim), I[dim])
+            checkbounds(size(A,dim), I[dim])
         end
         sz = size(A,n)
         for i = n+1:ndims(A)
             sz *= size(A,i)     # TODO: sync. with decision on issue #1030
         end
-        check_bounds(sz, I[n])
+        checkbounds(sz, I[n])
     end
 end
 
@@ -464,6 +464,15 @@ end
 ## Indexing: getindex ##
 
 getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
+
+# linear indexing with a single multi-dimensional index
+function getindex(A::AbstractArray, I::AbstractArray)
+    x = similar(A, size(I))
+    for i=1:length(I)
+        x[i] = A[I[i]]
+    end
+    return x
+end
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
@@ -1074,7 +1083,7 @@ indices(I::Tuple) = map(indices, I)
 ## iteration utilities ##
 
 # slow, but useful
-function cartesian_map(body, t::(Int...), it...)
+function cartesianmap(body, t::(Int...), it...)
     idx = length(t)-length(it)
     if idx == 1
         for i = 1:t[1]
@@ -1089,23 +1098,23 @@ function cartesian_map(body, t::(Int...), it...)
     elseif idx > 1
         for j = 1:t[idx]
             for i = 1:t[idx-1]
-                cartesian_map(body, t, i, j, it...)
+                cartesianmap(body, t, i, j, it...)
             end
         end
     else
-        throw(ArgumentError("cartesian_map"))
+        throw(ArgumentError("cartesianmap"))
     end
 end
 
-cartesian_map(body, t::()) = (body(); nothing)
+cartesianmap(body, t::()) = (body(); nothing)
 
-function cartesian_map(body, t::(Int,))
+function cartesianmap(body, t::(Int,))
     for i = 1:t[1]
         body(i)
     end
 end
 
-function cartesian_map(body, t::(Int,Int))
+function cartesianmap(body, t::(Int,Int))
     for j = 1:t[2]
         for i = 1:t[1]
             body(i,j)
@@ -1113,7 +1122,7 @@ function cartesian_map(body, t::(Int,Int))
     end
 end
 
-function cartesian_map(body, t::(Int,Int,Int))
+function cartesianmap(body, t::(Int,Int,Int))
     for k = 1:t[3]
         for j = 1:t[2]
             for i = 1:t[1]
@@ -1185,7 +1194,7 @@ function bsxfun(f, a::AbstractArray, b::AbstractArray)
         end
         c[cidxs...] = f(aa, bb)
     end
-    cartesian_map(sliceop, range)
+    cartesianmap(sliceop, range)
     c
 end
 
@@ -1430,7 +1439,7 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     R[ridx...] = r1
 
     first = true
-    cartesian_map(itershape) do idxs...
+    cartesianmap(itershape) do idxs...
         if first
             first = false
         else

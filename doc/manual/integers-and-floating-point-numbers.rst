@@ -194,11 +194,22 @@ Literal floating-point numbers are represented in the standard formats::
     julia> 2.5e-4
     0.00025
 
-The above results are all ``Float64`` values. There is no literal format
-for ``Float32``, but you can convert values to ``Float32`` easily::
+The above results are all ``Float64`` values. Literal ``Float32`` values can
+be entered by writing an ``f`` in place of ``e``::
+
+    julia> 0.5f0
+    0.5f0
+
+    julia> typeof(ans)
+    Float32
+
+    julia> 2.5f-4
+    0.00025f0
+
+Values can be converted to ``Float32`` easily::
 
     julia> float32(-1.5)
-    -1.5
+    -1.5f0
 
     julia> typeof(ans)
     Float32

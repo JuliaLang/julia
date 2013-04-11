@@ -25,9 +25,13 @@ endif
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm-extras random Rmath double-conversion
+STAGE1_DEPS = uv random double-conversion
 STAGE2_DEPS =
 STAGE3_DEPS = suitesparse-wrapper
+
+ifeq ($(USE_SYSTEM_RMATH), 0)
+STAGE1_DEPS += Rmath
+endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
@@ -38,7 +42,12 @@ endif
 endif
 
 ifeq ($(OS), Linux)
+ifneq ($(shell patchelf --version 2>/dev/null), patchelf 0.6)
 STAGE1_DEPS += patchelf
+PATCHELF=$(BUILD)/bin/patchelf
+else
+PATCHELF=patchelf
+endif
 endif
 
 WGET = $(abspath .)/jldownload
@@ -46,8 +55,12 @@ WGET_DASH_O = $(WGET)
 
 ## USE_SYSTEM_LIBS options
 
+ifeq ($(USE_SYSTEM_OPENLIBM), 0)
+# No matter if we are using a system-libm or not, if we don't have a system-openlibm, we need the extras
+STAGE1_DEPS += openlibm-extras
 ifeq ($(USE_SYSTEM_LIBM), 0)
 STAGE1_DEPS += openlibm
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -321,7 +334,7 @@ ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libhistory.dylib $(BUILD)/lib/libhistory.dylib
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libhistory.so* $(BUILD)/lib/libreadline.so* ; do \
-		$(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		$(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -658,7 +671,7 @@ openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
-	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***"
 	touch -c $@
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(BUILD)/lib
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(BUILD)/lib
@@ -832,7 +845,7 @@ else
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libarpack.so* ; do \
-		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 endif
@@ -906,7 +919,7 @@ else ifeq ($(OS),WINNT)
 	mv $(BUILD)/bin/libfftw3f-3.dll $(BUILD)/lib/libfftw3f.dll
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libfftw3f_threads.so* ; do \
-		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -944,7 +957,7 @@ else ifeq ($(OS),WINNT)
 	mv $(BUILD)/bin/libfftw3-3.dll $(BUILD)/lib/libfftw3.dll
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libfftw3_threads.so* ; do \
-		[ -L $$filename ] || $(BUILD)/bin/patchelf --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -1076,7 +1089,7 @@ LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
 
 libunwind-$(UNWIND_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://savannah.spinellicreations.com/libunwind/$@
+	$(WGET_DASH_O) $@ http://download.savannah.gnu.org/releases/libunwind/$@ 
 libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
 	touch -c $@

@@ -17,7 +17,7 @@ a = Array(Uint8, 2)
 @assert truncate(io, 2)
 @assert position(io) == 1
 @assert !eof(io)
-@assert seek_end(io)
+@assert seekend(io)
 @assert position(io) == 2
 @assert truncate(io, 0)
 @assert position(io) == 0
@@ -81,7 +81,7 @@ io.maxsize = 75
 Base.ensureroom(io,100)
 @assert ioslength(io) == 0
 @assert length(io.data) == 75
-@assert seek_end(io)
+@assert seekend(io)
 @assert ioslength(io) == 0
 @assert position(io) == 0
 write(io,zeros(Uint8,200))

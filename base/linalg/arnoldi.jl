@@ -1,4 +1,4 @@
-using ARPACK
+using .ARPACK
 
 ## eigs
 

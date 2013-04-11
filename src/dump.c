@@ -1025,7 +1025,7 @@ void jl_init_serializer(void)
                       jl_f_set_field, jl_f_field_type, 
                       jl_f_arraylen, jl_f_arrayref, 
                       jl_f_arrayset, jl_f_arraysize, 
-                      jl_f_instantiate_type,
+                      jl_f_instantiate_type, jl_f_kwcall,
                       jl_f_convert_default, jl_f_convert_tuple,
                       jl_trampoline, jl_f_new_type_constructor, 
                       jl_f_typevar, jl_f_union, 
@@ -1033,6 +1033,7 @@ void jl_init_serializer(void)
                       jl_f_invoke, jl_apply_generic, 
                       jl_unprotect_stack, jl_f_task, 
                       jl_f_yieldto, jl_f_ctor_trampoline,
+                      jl_f_new_module,
                       NULL };
     i=2;
     while (fptrs[i-2] != NULL) {

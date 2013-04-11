@@ -38,12 +38,12 @@ end
 function _setenv(var::String, val::String, overwrite::Bool)
 @unix_only begin
     ret = ccall(:setenv, Int32, (Ptr{Uint8},Ptr{Uint8},Int32), var, val, overwrite)
-    system_error(:setenv, ret != 0)
+    systemerror(:setenv, ret != 0)
 end
 @windows_only begin
     if(overwrite||!_hasenv(var))
         ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,val)
-        system_error(:setenv, ret == 0)
+        systemerror(:setenv, ret == 0)
     end
 end
 end
@@ -53,11 +53,11 @@ _setenv(var::String, val::String) = _setenv(var, val, true)
 function _unsetenv(var::String)
 @unix_only begin
     ret = ccall(:unsetenv, Int32, (Ptr{Uint8},), var)
-    system_error(:unsetenv, ret != 0)
+    systemerror(:unsetenv, ret != 0)
 end
 @windows_only begin
     ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,C_NULL)
-    system_error(:setenv, ret == 0)
+    systemerror(:setenv, ret == 0)
 end
 end
 
@@ -133,5 +133,5 @@ end
 
 ## misc environment-related functionality ##
 
-tty_cols() = parse_int(Int32, get(ENV,"COLUMNS","80"), 10)
-tty_rows() = parse_int(Int32, get(ENV,"LINES","25"), 10)
+tty_cols() = parseint(Int32, get(ENV,"COLUMNS","80"), 10)
+tty_rows() = parseint(Int32, get(ENV,"LINES","25"), 10)

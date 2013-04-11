@@ -56,22 +56,6 @@ is_closed(sv::StaticVarInfo, s::Symbol) = has(sv.cenv, s)
 is_global(sv::StaticVarInfo, s::Symbol) =
     !is_local(sv,s) && !is_closed(sv,s) && !is_static_parameter(sv,s)
 
-typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
-
-methods(f::ANY,t::ANY) = _methods(f,t,-1)::Array{Any,1}
-_methods(f::ANY,t::ANY,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
-
-typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
-
-isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
-isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
-
-isconst(s::Symbol) =
-    ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
-
-isconst(m::Module, s::Symbol) =
-    ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
-
 function _iisconst(s::Symbol)
     m = (inference_stack::CallStack).mod
     isdefined(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
@@ -375,22 +359,19 @@ t_func[apply_type] = (1, Inf, apply_type_tfunc)
 function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     if is(f,tuple)
         return limit_tuple_depth(argtypes)
-    end
-    if is(f,arrayset)
+    elseif is(f,arrayset)
         if length(argtypes) < 3
             return None
         end
         return argtypes[1]
-    end
-    if is(f,arrayref)
+    elseif is(f,arrayref)
         if length(argtypes) < 2
             return None
         end
         a = argtypes[1]
         return (isa(a,DataType) && subtype(a,Array) ?
                 a.parameters[1] : Any)
-    end
-    if is(f,Expr)
+    elseif is(f,Expr)
         if length(argtypes) < 1
             return None
         end
@@ -659,6 +640,25 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             return abstract_eval_constant(_ieval(val))
         end
     end
+    if is(f,kwcall)
+        if length(argtypes) < 3
+            return None
+        end
+        if length(fargs) < 2
+            return Any
+        end
+        ff = isconstantfunc(fargs[1], sv)
+        if !(ff===false)
+            ff = _ieval(ff)
+            if isgeneric(ff) && isdefined(ff.env,:kwsorter)
+                # use the fact that kwcall(...) calls ff.env.kwsorter
+                kwcount = fargs[2]
+                posargt = argtypes[(4+2*kwcount):end]
+                return abstract_call_gf(ff.env.kwsorter, (), tuple(Tuple, posargt...), e)
+            end
+        end
+        return Any
+    end
     rt = builtin_tfunction(f, fargs, argtypes)
     #print("=> ", rt, "\n")
     return rt
@@ -880,7 +880,9 @@ function abstract_interpret(e::Expr, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:gotoifnot)
         abstract_eval(e.args[1], vtypes, sv)
     elseif is(e.head,:method)
-        return StateUpdate(e.args[1], Function, vtypes)
+        fname = e.args[1]
+        if isa(fname,Expr); fname = fname.args[1]; end
+        return StateUpdate(fname, Function, vtypes)
     end
     return vtypes
 end

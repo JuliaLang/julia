@@ -756,7 +756,7 @@ function show_nd(io::IO, a::AbstractArray)
         print_matrix(io, slice)
         print(io, idxs == tail ? "" : "\n\n")
     end
-    cartesian_map((idxs...)->print_slice(io,idxs...), tail)
+    cartesianmap((idxs...)->print_slice(io,idxs...), tail)
 end
 
 function whos(m::Module, pattern::Regex)
@@ -814,7 +814,7 @@ function showall(io::IO, a::AbstractArray)
                      typemax(Int64), typemax(Int64))
         print(io, idxs == tail ? "" : "\n\n")
     end
-    cartesian_map(print_slice, tail)
+    cartesianmap(print_slice, tail)
 end
 
 function show_vector(io::IO, v, opn, cls)

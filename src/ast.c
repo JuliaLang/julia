@@ -396,9 +396,6 @@ static value_t julia_to_scm(jl_value_t *v)
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v))) {
         return fixnum(jl_unbox_long(v));
     }
-    if (jl_typeis(v,jl_array_any_type)) {
-        return array_to_list((jl_array_t*)v);
-    }
     value_t opaque = cvalue(jvtype, sizeof(void*));
     *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
     return opaque;

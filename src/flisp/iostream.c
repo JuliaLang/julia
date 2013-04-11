@@ -109,7 +109,7 @@ value_t fl_buffer(value_t *args, u_int32_t nargs)
 
 value_t fl_read(value_t *args, u_int32_t nargs)
 {
-    value_t arg;
+    value_t arg = 0;
     if (nargs > 1) {
         argcount("read", nargs, 1);
     }

@@ -71,13 +71,24 @@ DLLEXPORT void *jl_eval_string(char *str)
     }
     JL_CATCH {
         //jl_show(jl_stderr_obj(), jl_exception_in_transit);
-        r = jl_exception_in_transit;
+        r = NULL;
     }
     return r;
 }
 
+DLLEXPORT jl_value_t *jl_exception_occurred(void)
+{
+    return jl_is_null(jl_exception_in_transit) ? NULL : 
+        jl_exception_in_transit;
+}
+
+DLLEXPORT void jl_exception_clear(void)
+{
+    jl_exception_in_transit = (jl_value_t*)jl_null;
+}
+
 // get the name of a type as a string
-DLLEXPORT char *jl_typename_str(jl_value_t *v)
+DLLEXPORT const char *jl_typename_str(jl_value_t *v)
 {
     if (jl_is_tuple(v))
         return "Tuple";
@@ -85,7 +96,7 @@ DLLEXPORT char *jl_typename_str(jl_value_t *v)
 }
 
 // get the name of typeof(v) as a string
-DLLEXPORT char *jl_typeof_str(jl_value_t *v)
+DLLEXPORT const char *jl_typeof_str(jl_value_t *v)
 {
     return jl_typename_str((jl_value_t*)jl_typeof(v));
 }
@@ -100,39 +111,70 @@ DLLEXPORT int jl_array_rank(jl_value_t *a)
     return jl_array_ndims(a);
 }
 
-DLLEXPORT long jl_array_size(jl_value_t *a, int d)
+DLLEXPORT size_t jl_array_size(jl_value_t *a, int d)
 {
     return jl_array_dim(a, d);
 }
 
 DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 
-DLLEXPORT char *jl_bytestring_ptr(jl_value_t *s)
+DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s)
 {
     return jl_string_data(s);
 }
 
 DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
 {
-    JL_GC_PUSH(&f,&a);
-    jl_value_t *v = jl_apply(f, &a, 1);
-    JL_GC_POP();
+    jl_value_t *v;
+    JL_TRY {
+        JL_GC_PUSH(&f,&a);
+        v = jl_apply(f, &a, 1);
+        JL_GC_POP();
+    }
+    JL_CATCH {
+        v = NULL;
+    }
     return v;
 }
 
 DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b)
 {
-    JL_GC_PUSH(&f,&a,&b);
-    jl_value_t *args[2] = {a,b};
-    jl_value_t *v = jl_apply(f, args, 2);
-    JL_GC_POP();
+    jl_value_t *v;
+    JL_TRY {
+        JL_GC_PUSH(&f,&a,&b);
+        jl_value_t *args[2] = {a,b};
+        v = jl_apply(f, args, 2);
+        JL_GC_POP();
+    }
+    JL_CATCH {
+        v = NULL;
+    }
     return v;
 }
 
 JL_CALLABLE(jl_f_get_field);
 DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld)
 {
-    jl_value_t *s = (jl_value_t*)jl_symbol(fld);
-    jl_value_t *args[2] = {o, s};
-    return jl_f_get_field(NULL, args, 2);
+    jl_value_t *v;
+    JL_TRY {
+        jl_value_t *s = (jl_value_t*)jl_symbol(fld);
+        jl_value_t *args[2] = {o, s};
+        v = jl_f_get_field(NULL, args, 2);
+    }
+    JL_CATCH {
+        v = NULL;
+    }
+    return v;
+}
+
+DLLEXPORT void jl_sigatomic_begin(void)
+{
+    JL_SIGATOMIC_BEGIN();
+}
+
+DLLEXPORT void jl_sigatomic_end(void)
+{
+    if (jl_defer_signal == 0)
+        jl_error("sigatomic_end called in non-sigatomic region");
+    JL_SIGATOMIC_END();
 }

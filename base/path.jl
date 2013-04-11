@@ -106,7 +106,7 @@ abspath(a::String, b::String...) = abspath(joinpath(a,b...))
 
 function realpath(path::String)
     p = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), path, C_NULL)
-    system_error(:realpath, p == C_NULL)
+    systemerror(:realpath, p == C_NULL)
     s = bytestring(p)
     c_free(p)
     return s

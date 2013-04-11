@@ -201,14 +201,32 @@ static jl_value_t *require_func=NULL;
 
 static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
 {
-    // in A.B.C, first find a binding for A in the chain of module scopes
+    // in .A.B.C, first find a binding for A in the chain of module scopes
     // following parent links. then evaluate the rest of the path from there.
+    // in A.B, look for A in Main first.
     jl_sym_t *var = (jl_sym_t*)jl_cellref(args,0);
+    size_t i=1;
     assert(jl_is_symbol(var));
-    jl_module_t *m = jl_current_module;
+    jl_module_t *m;
+
+    if (var != dot_sym) {
+        m = jl_main_module;
+    }
+    else {
+        m = jl_current_module;
+        while (1) {
+            var = (jl_sym_t*)jl_cellref(args,i);
+            i++;
+            if (var != dot_sym)
+                break;
+            m = m->parent;
+        }
+    }
+
     while (1) {
-        jl_binding_t *mb = jl_get_binding(m, var);
-        if (mb != NULL) {
+        if (jl_binding_resolved_p(m, var)) {
+            jl_binding_t *mb = jl_get_binding(m, var);
+            assert(mb != NULL);
             if (mb->value == NULL || !jl_is_module(mb->value))
                 jl_errorf("invalid module path");
             m = (jl_module_t*)mb->value;
@@ -226,12 +244,11 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
                     return eval_import_path_(args, 1);
                 }
             }
-            jl_errorf("in module path: %s not defined", var->name);
         }
-        m = m->parent;
+        jl_errorf("in module path: %s not defined", var->name);
     }
 
-    for(size_t i=1; i < jl_array_len(args)-1; i++) {
+    for(; i < jl_array_len(args)-1; i++) {
         jl_value_t *s = jl_cellref(args,i);
         assert(jl_is_symbol(s));
         m = (jl_module_t*)jl_eval_global_var(m, (jl_sym_t*)s);
@@ -515,7 +532,9 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_lambda_info_t *li = f->linfo;
             jl_errorf("invalid type for argument %s in method definition for %s at %s:%d",
-                      ((jl_sym_t*)jl_arrayref(jl_lam_args((jl_expr_t*)li->ast),i))->name,
+                      jl_is_expr(li->ast) ?
+                      ((jl_sym_t*)jl_arrayref(jl_lam_args((jl_expr_t*)li->ast),i))->name :
+                      "?",
                       name->name, li->file->name, li->line);
         }
     }

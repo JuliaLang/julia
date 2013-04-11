@@ -149,10 +149,7 @@ export PipeString
 
 # 0.2
 
-@deprecate  localize         localpart
-@deprecate  expr(hd, a...)   Expr(hd, a...)
-@deprecate  expr(hd, a::Array{Any,1}) Expr(hd, a...)
-
+@deprecate  localize            localpart
 @deprecate  logb                exponent
 @deprecate  ilogb               exponent
 @deprecate  ref_shape           index_shape
@@ -165,6 +162,32 @@ export PipeString
 @deprecate  each_match          eachmatch
 @deprecate  function_loc        functionloc
 @deprecate  compile_hint        precompile
+@deprecate  begins_with         beginswith
+@deprecate  ends_with           endswith
+@deprecate  parse_float         parsefloat
+@deprecate  parse_int           parseint
+@deprecate  parse_bin(T,s)      parseint(T,s,2)
+@deprecate  parse_bin(s)        parseint(s,2)
+@deprecate  parse_oct(T,s)      parseint(T,s,8)
+@deprecate  parse_oct(s)        parseint(s,8)
+@deprecate  parse_hex(T,s)      parseint(T,s,16)
+@deprecate  parse_hex(s)        parseint(s,16)
+@deprecate  wait_accept         accept
+@deprecate  findn_nzs           findnz
+@deprecate  DivideByZeroError   DivideError
+@deprecate  cartesian_map       cartesianmap
+@deprecate  check_bounds        checkbounds
+@deprecate  system_error        systemerror
+@deprecate  seek_end            seekend
+@deprecate  addprocs_ssh_tunnel(m) addprocs(m, tunnel=true)
+@deprecate  addprocs_ssh        addprocs
+@deprecate  addprocs_local      addprocs
+@deprecate  remote_call         remotecall
+@deprecate  remote_call_fetch   remotecall_fetch
+@deprecate  remote_call_wait    remotecall_wait
+
+@deprecate  expr(hd, a...)              Expr(hd, a...)
+@deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 

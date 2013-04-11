@@ -3,7 +3,7 @@ module Resolve
 # Use max-sum algorithm to resolve packages dependencies
 #
 
-using Metadata
+using ..Metadata
 
 import Base.<, Base.<=, Base.==, Base.-, Base.+,
        Base.zero, Base.isless, Base.abs, Base.typemin, Base.typemax,

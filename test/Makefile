@@ -1,10 +1,10 @@
 JULIAHOME = $(abspath ..)
 include ../Make.inc
 
-TESTS = core numbers strings unicode corelib hashing remote iostring \
+TESTS = core keywordargs numbers strings unicode corelib hashing remote iostring \
 arrayops linalg blas fft dct sparse bitarray random math functional bigint \
-sorting statistics spawn parallel suitesparse arpack bigfloat file zlib image \
-all git pkg
+sorting statistics spawn parallel suitesparse arpack bigfloat file zlib \
+all git pkg pkg2
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@

@@ -53,16 +53,16 @@ function display_error(er, bt)
 end
 
 function eval_user_input(ast::ANY, show_value)
-    iserr, lasterr, bt = false, (), nothing
+    errcount, lasterr, bt = 0, (), nothing
     while true
         try
             if have_color
                 print(color_normal)
             end
-            if iserr
+            if errcount > 0
                 display_error(lasterr,bt)
                 println()
-                iserr, lasterr = false, ()
+                errcount, lasterr = 0, ()
             else
                 ast = expand(ast)
                 value = eval(Main,ast)
@@ -81,10 +81,14 @@ function eval_user_input(ast::ANY, show_value)
             end
             break
         catch err
-            if iserr
+            if errcount > 0
                 println("SYSTEM: show(lasterr) caused an error")
             end
-            iserr, lasterr = true, err
+            errcount, lasterr = errcount+1, err
+            if errcount > 2
+                println("WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
+                break
+            end
             bt = catch_backtrace()
         end
     end
@@ -182,24 +186,23 @@ function process_options(args::Array{Any,1})
         elseif args[i]=="--bind-to"
             i += 1
             bind_addr = args[i]
-        elseif args[i]=="-e"
-            # TODO: support long options
+        elseif args[i]=="-e" || args[i]=="--eval"
             repl = false
             i+=1
             ARGS = args[i+1:end]
             eval(Main,parse_input_line(args[i]))
             break
-        elseif args[i]=="-E"
+        elseif args[i]=="-E" || args[i]=="--print"
             repl = false
             i+=1
             ARGS = args[i+1:end]
             show(eval(Main,parse_input_line(args[i])))
             println()
             break
-        elseif args[i]=="-P"
+        elseif args[i]=="-P" || args[i]=="--post-boot"
             i+=1
             eval(Main,parse_input_line(args[i]))
-        elseif args[i]=="-L"
+        elseif args[i]=="-L" || args[i]=="--load"
             i+=1
             require(args[i])
         elseif args[i]=="-p"
@@ -209,11 +212,11 @@ function process_options(args::Array{Any,1})
             else
                 np = int(args[i])
             end
-            addprocs_local(np-1)
+            addprocs(np-1)
         elseif args[i]=="--machinefile"
             i+=1
             machines = split(readall(args[i]), '\n', false)
-            addprocs_ssh(machines)
+            addprocs(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
             exit(0)
@@ -225,7 +228,7 @@ function process_options(args::Array{Any,1})
             # load juliarc now before processing any more options
             try_include(string(ENV["HOME"],"/.juliarc.jl"))
             startup = false
-        elseif begins_with(args[i], "--color")
+        elseif beginswith(args[i], "--color")
             if args[i] == "--color"
                 color_set = true
                 global have_color = true
@@ -332,7 +335,7 @@ function _start()
             startup && try_include(joinpath(ENV["HOME"],".juliarc.jl"))
 
             if !color_set
-                @unix_only global have_color = (begins_with(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
+                @unix_only global have_color = (beginswith(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
                 @windows_only global have_color = true
             end
 

@@ -6,10 +6,10 @@ module Pkg
 include("pkg/metadata.jl")
 include("pkg/resolve.jl")
 
-using Metadata
-using Resolve
+using .Metadata
+using .Resolve
 
-import Git
+import ..Git
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl.git"
 
@@ -246,7 +246,7 @@ function runbuildscript(pkg)
         cd(path) do
             if isfile("build.jl")
                 info("Running build script for package $pkg")
-                include("build.jl")
+                evalfile("build.jl")
             end
         end
     end
@@ -512,7 +512,7 @@ pull() = cd_pkgdir() do
         end
         # remove submodules that were deleted
         for section in deleted
-            if !begins_with(section,"submodule.") continue end
+            if !beginswith(section,"submodule.") continue end
             path = get(Lc,"$section.path",nothing)
             if path == nothing continue end
             run(`git rm -qrf --cached --ignore-unmatch -- $path`)

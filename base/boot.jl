@@ -110,7 +110,7 @@
 # end
 
 import Main
-import Intrinsics.ccall
+import Core.Intrinsics.ccall
 
 export
     # key types
@@ -127,7 +127,7 @@ export
     # string types
     Char, ASCIIString, ByteString, DirectIndexString, String, UTF8String,
     # errors
-    BoundsError, DivideByZeroError, DomainError, Exception,
+    BoundsError, DivideError, DomainError, Exception,
     InexactError, InterruptException, MemoryError, OverflowError,
     StackOverflowError, UndefRefError,
     # AST representation
@@ -136,7 +136,7 @@ export
     # object model functions
     apply, arraylen, arrayref, arrayset, arraysize, fieldtype, getfield,
     setfield, yieldto, throw, tuple, tuplelen, tupleref, is, ===, isdefined,
-    convert_default, convert_tuple,
+    convert_default, convert_tuple, kwcall,
     # type reflection
     subtype, typeassert, typeof, apply_type, isa,
     # method reflection
@@ -198,7 +198,7 @@ end
 abstract Exception
 
 type BoundsError        <: Exception end
-type DivideByZeroError  <: Exception end
+type DivideError        <: Exception end
 type DomainError        <: Exception end
 type OverflowError      <: Exception end
 type InexactError       <: Exception end

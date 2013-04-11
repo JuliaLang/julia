@@ -351,6 +351,75 @@ As you can see, if the wrong number of elements are in the spliced
 container, then the function call will fail, just as it would if too
 many arguments were given explicitly.
 
+Optional Arguments
+------------------
+
+In many cases, function arguments have sensible default values and therefore
+might not need to be passed explicitly in every call. For example, the
+library function ``parseint(num,base)`` interprets a string as a number
+in some base. The ``base`` argument defaults to ``10``. This behavior can be
+expressed concisely as::
+
+    function parseint(num, base=10)
+        ###
+    end
+
+With this definition, the function can be called with either one or two
+arguments, and ``10`` is automatically passed when a second argument is not
+specified::
+
+    julia> parseint("12",10)
+    12
+
+    julia> parseint("12",3)
+    5
+
+    julia> parseint("12")
+    12
+
+Optional arguments are actually just a convenient syntax for writing
+multiple method definitions with different numbers of arguments
+(see :ref:`man-methods`).
+
+
+Named Arguments
+---------------
+
+Some functions need a large number of arguments, or have a large number of
+behaviors. Remembering how to call such functions can be difficult. Named
+arguments, also called keyword arguments, can make these complex interfaces
+easier to use and extend by allowing arguments to be identified by name
+instead of only by position.
+
+For example, consider a function ``plot`` that
+plots a line. This function might have many options, for controlling line
+style, width, color, and so on. If it accepts named arguments, a possible
+call might look like ``plot(x, y, width=2)``, where we have chosen to
+specify only line width. Notice that this serves two purposes. The call is
+easier to read, since we can label an argument with its meaning. It also
+becomes possible to pass any subset of a large number of arguments, in
+any order.
+
+Functions with named arguments are defined using a semicolon in the
+signature::
+
+    function plot(x, y; style="solid", width=1, color="black")
+        ###
+    end
+
+Extra named arguments can be collected using ``...``, as in varargs
+functions::
+
+    function f(x; args...)
+        ###
+    end
+
+Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
+where each ``key`` is a symbol. Such collections can be passed as named
+arguments using a semicolon in a call, ``f(x; k...)``. Dictionaries
+can be used for this purpose.
+
+
 Block Syntax for Function Arguments
 -----------------------------------
 
@@ -402,12 +471,6 @@ in a certain directory::
 The function argument to ``cd`` takes no arguments; it is just a block of
 code. The function argument to ``open`` receives a handle to the opened
 file.
-
-
-Named function arguments (optional parameters)
-----------------------------------------------
-
-Some complex functions may depend on a large number of parameters. In such cases, it can be inconvenient to have to supply a long argument list in specified order. Such cases can be handled via the :mod:`options.jl` module.
 
 
 Further Reading

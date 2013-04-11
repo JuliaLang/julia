@@ -384,7 +384,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
                         bool valuepos=true);
 static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
-static void make_gcroot(Value *v, jl_codectx_t *ctx);
+static Value *make_gcroot(Value *v, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
 static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx);
@@ -678,9 +678,14 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                 (*sp)++;
                 if (*sp > *max) *max = *sp;
             }
+            if (e->head == new_sym && *max < 1)
+                *max = 1;
             (*sp) = lastsp;
         }
         else if (e->head == method_sym) {
+            int lastsp = *sp;
+            if (jl_is_expr(jl_exprarg(e,0)))
+                (*sp)++;
             max_arg_depth(jl_exprarg(e,1), max, sp, esc, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
@@ -690,7 +695,7 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
             max_arg_depth(jl_exprarg(e,3), max, sp, esc, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
-            (*sp)-=2;
+            (*sp) = lastsp;
         }
         else {
             size_t elen = jl_array_dim0(e->args);
@@ -717,7 +722,7 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
     }
 }
 
-static void make_gcroot(Value *v, jl_codectx_t *ctx)
+static Value *make_gcroot(Value *v, jl_codectx_t *ctx)
 {
     Value *froot = builder.CreateGEP(ctx->argTemp,
                                      ConstantInt::get(T_size,
@@ -727,6 +732,7 @@ static void make_gcroot(Value *v, jl_codectx_t *ctx)
     ctx->argDepth++;
     if (ctx->argDepth > ctx->maxDepth)
         ctx->maxDepth = ctx->argDepth;
+    return froot;
 }
 
 // --- lambda ---
@@ -1852,24 +1858,44 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
     }
     else if (head == method_sym) {
-        jl_value_t *mn;
-        if (jl_is_symbolnode(args[0])) {
-            mn = (jl_value_t*)jl_symbolnode_sym(args[0]);
+        jl_value_t *mn = args[0];
+        bool iskw = false;
+        Value *theF = NULL;
+        if (jl_is_expr(mn)) {
+            if (((jl_expr_t*)mn)->head == kw_sym) {
+                iskw = true;
+                mn = jl_exprarg(mn,0);
+            }
+            theF = emit_expr(mn, ctx);
+            if (!iskw) {
+                mn = jl_fieldref(jl_exprarg(mn, 2), 0);
+            }
         }
-        else {
-            mn = args[0];
+        if (jl_is_symbolnode(mn)) {
+            mn = (jl_value_t*)jl_symbolnode_sym(mn);
         }
         assert(jl_is_symbol(mn));
         int last_depth = ctx->argDepth;
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
         Value *bp;
-        if (is_global((jl_sym_t*)mn, ctx)) {
-            bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
-            bp = literal_pointer_val(&bnd->value, jl_ppvalue_llvmt);
+        if (iskw) {
+            // fenv = theF->env
+            Value *fenv = emit_nthptr(theF, 2);
+            // bp = &((jl_methtable_t*)fenv)->kwsorter
+            bp = emit_nthptr_addr(fenv, 7);
+        }
+        else if (theF != NULL) {
+            bp = make_gcroot(theF, ctx);
         }
         else {
-            bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
+            if (is_global((jl_sym_t*)mn, ctx)) {
+                bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
+                bp = literal_pointer_val(&bnd->value, jl_ppvalue_llvmt);
+            }
+            else {
+                bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
+            }
         }
         Value *a1 = emit_expr(args[1], ctx);
         make_gcroot(boxed(a1), ctx);
@@ -2266,6 +2292,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     // step 5. set up debug info context and create first basic block
     jl_value_t *stmt = jl_cellref(stmts,0);
     std::string filename = "no file";
+    char *dbgFuncName = lam->name->name;
     int lno = -1;
     // look for initial (line num filename) node
     if (jl_is_linenode(stmt)) {
@@ -2276,6 +2303,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
             assert(jl_is_symbol(jl_exprarg(stmt, 1)));
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
+            if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 2) {
+                dbgFuncName = ((jl_sym_t*)jl_exprarg(stmt, 2))->name;
+            }
         }
     }
     ctx.lineno = lno;
@@ -2286,8 +2316,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     DIFile fil = dbuilder->createFile(filename, ".");
     DISubprogram SP =
         dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
-                                 lam->name->name,
-                                 lam->name->name,
+                                 dbgFuncName, dbgFuncName,
                                  fil,
                                  0,
                                  dbuilder->createSubroutineType(fil,EltTypeArray),
@@ -2809,8 +2838,8 @@ static void init_julia_llvm_env(Module *m)
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null);
     jlexc_var = global_to_llvm("jl_exception_in_transit",
                                (void*)&jl_exception_in_transit);
-    jldiverr_var = global_to_llvm("jl_divbyzero_exception",
-                                  (void*)&jl_divbyzero_exception);
+    jldiverr_var = global_to_llvm("jl_diverror_exception",
+                                  (void*)&jl_diverror_exception);
     jlundeferr_var = global_to_llvm("jl_undefref_exception",
                                     (void*)&jl_undefref_exception);
     jldomerr_var = global_to_llvm("jl_domain_exception",

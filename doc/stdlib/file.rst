@@ -63,3 +63,41 @@ Filesystem
    Returns ``true`` if the current user has permission to write to ``path``,
    ``false`` otherwise.
 
+.. function:: dirname(path::String) -> String
+
+   Get the directory part of a path.
+
+.. function:: basename(path::String) -> String
+
+   Get the file name part of a path.
+
+.. function:: isabspath(path::String) -> Bool
+
+   Determines whether a path is absolute (begins at the root directory).
+
+.. function:: joinpath(parts...) -> String
+
+   Join path components into a full path. If some argument is an absolute
+   path, then prior components are dropped.
+
+.. function:: abspath(path::String) -> String
+
+   Convert a path to an absolute path by adding the current directory if
+   necessary.
+
+.. function:: tempname()
+
+   Generate a unique temporary filename.
+
+.. function:: tempdir()
+
+   Obtain the path of a temporary directory.
+
+.. function:: mktemp()
+
+   Returns ``(path, io)``, where ``path`` is the path of a new temporary file
+   and ``io`` is an open file object for this path.
+
+.. function:: mktempdir()
+
+   Create a temporary directory and return its path.
