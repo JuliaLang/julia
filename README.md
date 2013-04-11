@@ -83,7 +83,7 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 <a name="Uninstalling-Julia"/>
 ## Uninstalling Julia
 
-Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting the directory.
+Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting this directory.
 
 <a name="Platform-Specific-Notes"/>
 ## Platform-Specific Notes
@@ -92,11 +92,11 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 
 GCC version 4.6 or later is recommended to build Julia.
 
-If the build fails trying to compile OpenBLAS, set OPENBLAS_TARGET_ARCH to BARCELONA on AMD, or NEHALEM on Intel CPUs in Make.inc and build again.
+If the build fails trying to compile OpenBLAS, set one of the following build options in `Make.user` and build again. Use `OPENBLAS_TARGET_ARCH=BARCELONA` on AMD CPUs, and `OPENBLAS_TARGET_ARCH=NEHALEM` on Intel CPUs.
 
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, set `USE_SYSTEM_READLINE=1` in `Make.user`.
 
-On Ubuntu systems, you may also need to install the package `libncurses5-dev`.
+On Ubuntu or Debian systems, if you get any errors related to `ncurses`, you need to `apt-get install libncurses5-dev`.
 
 On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build Julia.
 
@@ -110,11 +110,11 @@ If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your .bashrc or equi
 
 ### FreeBSD
 
-*Release 9.0:* install the gcc46, git, and gmake packages/ports, and compile Julia with the command:
+On *FreeBSD Release 9.0*, install the gcc46, git, and gmake packages/ports, and compile Julia with the command:
 
     $ gmake FC=gfortran46
 
-You must use the gmake command on FreeBSD instead of make.
+You must use the `gmake` command on FreeBSD instead of `make`.
 
 ### Windows
 
@@ -201,8 +201,10 @@ To use the Intel [MKL] BLAS & LAPACK libraries, edit the following settings in `
 `MKLLIB` points to the directory containing `libmkl_rt.so`. MKL version 10.3 or greater is required.
 To rebuild a pre-built Julia source install with MKL support, delete the OpenBLAS, ARPACK, and SuiteSparse dependencies from `deps`, and run `make cleanall testall`.
 
-<a name="Directories"/>
-## Directories
+<a name="Source-Code-Organization"/>
+## Source Code Organization
+
+The Julia source code is organized as follows:
 
     base/          source code for Julia's standard library
     contrib/       editor support for Julia source, miscellaneous scripts
@@ -217,7 +219,7 @@ To rebuild a pre-built Julia source install with MKL support, delete the OpenBLA
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://code.google.com/p/Julialang/downloads/list).
+Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
 
@@ -226,6 +228,8 @@ You can either run the `julia` executable using its full path in the directory c
 Now you should be able to run Julia like this:
 
     julia
+
+On Windows, double-click `julia.bat`.
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
