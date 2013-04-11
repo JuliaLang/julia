@@ -69,21 +69,7 @@ end
 
 peakflops() = peakflops(2000)
 
-# source files, editing, function reflection
-
-function functionloc(f::Function, types)
-    for m = methods(f, types)
-        if isa(m[3],LambdaStaticData)
-            lsd = m[3]::LambdaStaticData
-            ln = lsd.line
-            if ln > 0
-                return (find_source_file(string(lsd.file)), ln)
-            end
-        end
-    end
-    error("could not find function definition")
-end
-functionloc(f::Function) = functionloc(f, (Any...))
+# searching definitions
 
 function whicht(f, types)
     for m = methods(f, types)
@@ -125,6 +111,8 @@ macro which(ex)
     end
     exret
 end
+
+# source files, editing
 
 function find_source_file(file)
     if file[1]!='/' && !is_file_readable(file)
@@ -191,19 +179,6 @@ edit(f::Function)    = edit(functionloc(f)...)
 edit(f::Function, t) = edit(functionloc(f,t)...)
 less(f::Function)    = less(functionloc(f)...)
 less(f::Function, t) = less(functionloc(f,t)...)
-
-disassemble(f::Function, types::Tuple) =
-    print(ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString)
-
-function methods(f::Function)
-    if !isgeneric(f)
-        error("methods: not a generic function")
-    end
-    f.env
-end
-
-methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
-                        t.env)
 
 # print a warning only once
 

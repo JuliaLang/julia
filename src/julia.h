@@ -313,6 +313,7 @@ typedef struct _jl_methtable_t {
     jl_array_t *cache_arg1;
     jl_array_t *cache_targ;
     ptrint_t max_args;  // max # of non-vararg arguments in a signature
+    jl_function_t *kwsorter;  // keyword argument sorter function
 #ifdef JL_GF_PROFILE
     int ncalls;
 #endif
@@ -370,7 +371,7 @@ extern jl_datatype_t *jl_typeerror_type;
 extern jl_datatype_t *jl_methoderror_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_memory_exception;
-extern jl_value_t *jl_divbyzero_exception;
+extern jl_value_t *jl_diverror_exception;
 extern jl_value_t *jl_domain_exception;
 extern jl_value_t *jl_overflow_exception;
 extern jl_value_t *jl_inexact_exception;
@@ -438,7 +439,7 @@ extern jl_sym_t *call_sym;
 extern jl_sym_t *call1_sym;
 extern jl_sym_t *dots_sym;
 extern jl_sym_t *quote_sym;
-extern jl_sym_t *top_sym;
+extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
 extern jl_sym_t *line_sym;    extern jl_sym_t *toplevel_sym;
 extern DLLEXPORT jl_sym_t *jl_continue_sym;
 extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
@@ -452,7 +453,7 @@ extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
 extern jl_sym_t *macro_sym;   extern jl_sym_t *method_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
-extern jl_sym_t *static_typeof_sym;
+extern jl_sym_t *static_typeof_sym; extern jl_sym_t *kw_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
@@ -504,7 +505,7 @@ void *allocobj(size_t sz);
 #define jl_tparam1(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 1)
 
 #ifdef OVERLAP_TUPLE_LEN
-#define jl_typeof(v) ((jl_value_t*)(uptrint_t)((jl_value_t*)(v))->type)
+#define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & 0x000ffffffffffffeULL))
 #else
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
 #endif
@@ -915,6 +916,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var);
 jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
+DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);

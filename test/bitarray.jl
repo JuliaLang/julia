@@ -535,7 +535,7 @@ for i = 3:v1-1
 end
 
 b1 = randbool(n1, n2)
-@check_bit_operation findn_nzs (Vector{Int}, Vector{Int}, BitArray) (b1,)
+@check_bit_operation findnz (Vector{Int}, Vector{Int}, BitArray) (b1,)
 
 timesofar("nnz&find")
 

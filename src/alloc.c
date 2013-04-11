@@ -53,7 +53,7 @@ jl_datatype_t *jl_pointer_type;
 jl_datatype_t *jl_voidpointer_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
-jl_value_t *jl_divbyzero_exception;
+jl_value_t *jl_diverror_exception;
 jl_value_t *jl_domain_exception;
 jl_value_t *jl_overflow_exception;
 jl_value_t *jl_inexact_exception;
@@ -77,13 +77,14 @@ jl_sym_t *null_sym;    jl_sym_t *body_sym;
 jl_sym_t *macro_sym;   jl_sym_t *method_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
-jl_sym_t *static_typeof_sym;
+jl_sym_t *static_typeof_sym; jl_sym_t *kw_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
 jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
 jl_sym_t *global_sym; jl_sym_t *tuple_sym;
+jl_sym_t *dot_sym;
 
 typedef struct {
     int64_t a;

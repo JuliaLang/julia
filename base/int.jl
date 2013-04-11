@@ -371,11 +371,6 @@ itrunc(x::Integer) = x
 ifloor(x::Integer) = x
  iceil(x::Integer) = x
 
-## reinterpret as unsigned integers ##
-
-reinterpret(::Type{Uint32}, x::Float32) = box(Uint32,unbox(Float32,x))
-reinterpret(::Type{Uint64}, x::Float64) = box(Uint64,unbox(Float64,x))
-
 ## system word size ##
 
 const WORD_SIZE = int(Int.size)*8

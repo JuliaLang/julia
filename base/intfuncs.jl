@@ -158,7 +158,6 @@ function prevpow(a, x)
     return n + int(a.^(n+1) .<= x)
 end
 
-
 # decimal digits in an unsigned integer
 const powers_of_ten = [
     0x0000000000000001, 0x000000000000000a, 0x0000000000000064, 0x00000000000003e8,
@@ -182,35 +181,24 @@ function ndigits0z(x::Uint128)
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
-if WORD_SIZE == 32
-const ndigits_max_mul = 69000000
-else
-const ndigits_max_mul = 290000000000000000
-end
+const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
 
-function ndigits0z(n::Unsigned, b::Integer)
-    if b == 2  return (sizeof(n)<<3-leading_zeros(n)); end
-    if b == 8  return div((sizeof(n)<<3)-leading_zeros(n)+2,3); end
-    if b == 16 return (sizeof(n)<<1)-(leading_zeros(n)>>2); end
-    if b == 10 return ndigits0z(n); end
-    nd = 1
-    if n <= ndigits_max_mul
-        # multiplication method is faster, but doesn't work for extreme values
-        d = b
-        while n >= d
-            nd += 1
-            d *= b
-        end
-    else
-        while true
-            n = div(n, b)
-            if n == 0
-                break
-            end
-            nd += 1
-        end
+function ndigits0z(n::Unsigned, b::Int)
+    b == 2  && return (sizeof(n)<<3-leading_zeros(n))
+    b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
+    b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
+    b == 10 && return ndigits0z(n)
+    d = 0
+    while ndigits_max_mul < n
+        n = div(n,b)
+        d += 1
     end
-    return nd
+    m = 1
+    while m <= n
+        m *= b
+        d += 1
+    end
+    return d
 end
 ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),b)
 
@@ -291,7 +279,6 @@ base(base::Integer, n::Integer, pad::Integer) = _base(dig_syms,int(base),unsigne
 base(symbols::Array{Uint8}, n::Integer, p::Integer) = _base(symbols,length(symbols),unsigned(abs(n)),p,n<0)
 base(base_or_symbols::Union(Integer,Array{Uint8}), n::Integer) = base(base_or_symbols, n, 1)
 
-
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
         ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
@@ -306,6 +293,17 @@ bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x),16)
 bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x),32)
 bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x),64)
 bits(x::Union(Int128,Uint128))            = bin(reinterpret(Uint128,x),128)
+
+function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
+    2 <= base || error("invalid base: $base")
+    m = max(pad,ndigits0z(n,base))
+    a = zeros(T,m)
+    for i = 1:m
+        a[i] = rem(n,base)
+        n = div(n,base)
+    end
+    return a
+end
 
 const PRIMES = [
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,

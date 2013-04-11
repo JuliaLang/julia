@@ -230,7 +230,7 @@ hash(s::String) = hash(bytestring(s))
 
 # begins with and ends with predicates
 
-function begins_with(a::String, b::String)
+function beginswith(a::String, b::String)
     i = start(a)
     j = start(b)
     while !done(a,i) && !done(b,i)
@@ -240,9 +240,9 @@ function begins_with(a::String, b::String)
     end
     done(b,i)
 end
-begins_with(a::String, c::Char) = !isempty(a) && a[start(a)] == c
+beginswith(a::String, c::Char) = !isempty(a) && a[start(a)] == c
 
-function ends_with(a::String, b::String)
+function endswith(a::String, b::String)
     i = endof(a)
     j = endof(b)
     a1 = start(a)
@@ -256,17 +256,17 @@ function ends_with(a::String, b::String)
     end
     j < b1
 end
-ends_with(a::String, c::Char) = !isempty(a) && a[end] == c
+endswith(a::String, c::Char) = !isempty(a) && a[end] == c
 
 # faster comparisons for byte strings
 
 cmp(a::ByteString, b::ByteString)     = cmp(a.data, b.data)
 isequal(a::ByteString, b::ByteString) = endof(a)==endof(b) && cmp(a,b)==0
-begins_with(a::ByteString, b::ByteString) = begins_with(a.data, b.data)
+beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
 
-begins_with(a::Array{Uint8,1}, b::Array{Uint8,1}) = (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
+beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) = (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
 
-# TODO: fast ends_with
+# TODO: fast endswith
 
 ## character column width function ##
 
@@ -375,6 +375,15 @@ function repeat(s::String, r::Integer)
 end
 
 convert(::Type{RepString}, s::String) = RepString(s,1)
+
+function repeat(s::ByteString, r::Integer)
+    d = s.data; n = length(d)
+    out = Array(Uint8, n*r)
+    for i=1:r
+        copy!(out, 1+(i-1)*n, d, 1, n)
+    end
+    convert(typeof(s), out)
+end
 
 ## reversed strings without data movement ##
 
@@ -850,7 +859,7 @@ shell_escape(cmd::String, args::String...) =
 
 ## interface to parser ##
 
-function parse(str::String, pos::Int, greedy::Bool, err::Bool)
+function parse(str::String, pos::Int, greedy::Bool=true, err::Bool=true)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8}, Int32, Int32),
@@ -867,8 +876,6 @@ function parse(str::String, pos::Int, greedy::Bool, err::Bool)
     end
     ex, pos+1 # C is zero-based, Julia is 1-based
 end
-parse(str::String, pos::Int, greedy::Bool) = parse(str, pos, greedy, true)
-parse(str::String, pos::Int) = parse(str, pos, true)
 
 function parse(str::String)
     ex, pos = parse(str, start(str))
@@ -1052,7 +1059,7 @@ strip(s::String, chars::String) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
-function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
+function parseint{T<:Integer}(::Type{T}, s::String, base::Integer)
     if !(2 <= base <= 36); error("invalid base: ",base); end
     i = start(s)
     while true
@@ -1118,32 +1125,24 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     return n
 end
 
-parse_int(s::String, base::Integer) = parse_int(Int,s,base)
-parse_int(T::Type, s::String)       = parse_int(T,s,10)
-parse_int(s::String)                = parse_int(Int,s,10)
-
-parse_bin(T::Type, s::String) = parse_int(T,s,2)
-parse_oct(T::Type, s::String) = parse_int(T,s,8)
-parse_hex(T::Type, s::String) = parse_int(T,s,16)
-
-parse_bin(s::String) = parse_int(Int,s,2)
-parse_oct(s::String) = parse_int(Int,s,8)
-parse_hex(s::String) = parse_int(Int,s,16)
+parseint(s::String, base::Integer) = parseint(Int,s,base)
+parseint(T::Type, s::String)       = parseint(T,s,10)
+parseint(s::String)                = parseint(Int,s,10)
 
 integer (s::String) = int(s)
 unsigned(s::String) = uint(s)
-int     (s::String) = parse_int(Int,s)
-uint    (s::String) = parse_int(Uint,s)
-int8    (s::String) = parse_int(Int8,s)
-uint8   (s::String) = parse_int(Uint8,s)
-int16   (s::String) = parse_int(Int16,s)
-uint16  (s::String) = parse_int(Uint16,s)
-int32   (s::String) = parse_int(Int32,s)
-uint32  (s::String) = parse_int(Uint32,s)
-int64   (s::String) = parse_int(Int64,s)
-uint64  (s::String) = parse_int(Uint64,s)
-int128  (s::String) = parse_int(Int128,s)
-uint128 (s::String) = parse_int(Uint128,s)
+int     (s::String) = parseint(Int,s)
+uint    (s::String) = parseint(Uint,s)
+int8    (s::String) = parseint(Int8,s)
+uint8   (s::String) = parseint(Uint8,s)
+int16   (s::String) = parseint(Int16,s)
+uint16  (s::String) = parseint(Uint16,s)
+int32   (s::String) = parseint(Int32,s)
+uint32  (s::String) = parseint(Uint32,s)
+int64   (s::String) = parseint(Int64,s)
+uint64  (s::String) = parseint(Uint64,s)
+int128  (s::String) = parseint(Int128,s)
+uint128 (s::String) = parseint(Uint128,s)
 
 ## stringifying integers more efficiently ##
 
@@ -1176,9 +1175,9 @@ begin
 end
 
 float(x::String) = float64(x)
-parse_float(x::String) = float64(x)
-parse_float(::Type{Float64}, x::String) = float64(x)
-parse_float(::Type{Float32}, x::String) = float32(x)
+parsefloat(x::String) = float64(x)
+parsefloat(::Type{Float64}, x::String) = float64(x)
+parsefloat(::Type{Float32}, x::String) = float32(x)
 
 for conv in (:float, :float32, :float64,
              :int, :int8, :int16, :int32, :int64,

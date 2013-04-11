@@ -1,6 +1,6 @@
 module Metadata
 
-import Git
+import ...Git
 import Base.isequal, Base.isless, Base.contains, Base.hash
 
 export parse_requires, Version, VersionSet, packages, versions, dependencies

@@ -74,6 +74,9 @@
 (define (assignment? e)
   (and (pair? e) (eq? (car e) '=)))
 
+(define (typedecl? e)
+  (and (length= e 3) (eq? (car e) |::|) (symbol? (cadr e))))
+
 (define unary-ops '(+ - ! ~ |<:| |>:|))
 
 ; operators that are both unary and binary
@@ -146,8 +149,9 @@
       (let loop ((str (string c))
 		 (c   (peek-char port)))
 	(if (and (not (eof-object? c)) (opchar? c))
-	    (let ((newop (string str c)))
-	      (if (operator? (string->symbol newop))
+	    (let* ((newop (string str c))
+		   (opsym (string->symbol newop)))
+	      (if (operator? opsym)
 		  (begin (read-char port)
 			 (loop newop (peek-char port)))
 		  (string->symbol str)))
@@ -1076,27 +1080,44 @@
 	     rest)
 	(cons first rest))))
 
+(define (parse-import-dots s)
+  (let loop ((l '())
+	     (t (peek-token s)))
+    (cond ((eq? t '|.|)
+	   (begin (take-token s)
+		  (loop (list* '|.| l) (peek-token s))))
+	  ((eq? t '..)
+	   (begin (take-token s)
+		  (loop (list* '|.| '|.| l) (peek-token s))))
+	  ((eq? t '...)
+	   (begin (take-token s)
+		  (loop (list* '|.| '|.| '|.| l) (peek-token s))))
+	  ((eq? t '....)
+	   (begin (take-token s)
+		  (loop (list* '|.| '|.| '|.| '|.| l) (peek-token s))))
+	  (else
+	   (cons (macrocall-to-atsym (parse-atom s)) l)))))
+
 (define (parse-import s word)
-  (let ((ns (macrocall-to-atsym (parse-atom s))))
-    (let loop ((path (list ns)))
-      (if (not (symbol? (car path)))
-	  (error (string "invalid " word " statement: expected identifier")))
-      (let ((nxt (peek-token s)))
-	(cond #;((eq? nxt '|.*|)
-	       (take-token s)
-	       `(importall ,@(reverse path)))
-	      ((eq? nxt '|.|)
-	       (take-token s)
-	       (loop (cons (macrocall-to-atsym (parse-atom s)) path)))
-	      ((or (memv nxt '(#\newline #\; #\, :))
-		   (eof-object? nxt))
-	       `(,word ,@(reverse path)))
-	      ((eqv? (string.sub (string nxt) 0 1) ".")
-	       (take-token s)
-	       (loop (cons (symbol (string.sub (string nxt) 1))
-			   path)))
-	      (else
-	       (error (string "invalid " word " statement"))))))))
+  (let loop ((path (parse-import-dots s)))
+    (if (not (symbol? (car path)))
+	(error (string "invalid " word " statement: expected identifier")))
+    (let ((nxt (peek-token s)))
+      (cond #;((eq? nxt '|.*|)
+       (take-token s)
+       `(importall ,@(reverse path)))
+       ((eq? nxt '|.|)
+	(take-token s)
+	(loop (cons (macrocall-to-atsym (parse-atom s)) path)))
+       ((or (memv nxt '(#\newline #\; #\, :))
+	    (eof-object? nxt))
+	`(,word ,@(reverse path)))
+       ((eqv? (string.sub (string nxt) 0 1) ".")
+	(take-token s)
+	(loop (cons (symbol (string.sub (string nxt) 1))
+		    path)))
+       (else
+	(error (string "invalid " word " statement")))))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated s what)
@@ -1141,11 +1162,19 @@
 (define (separate-keywords argl)
   (receive
    (kws args) (separate (lambda (x)
-			  (and (pair? x) (eq? (car x) '=)))
+			  (and (assignment? x)
+			       (or (symbol? (cadr x))
+                                   (typedecl? (cadr x)))))
 			argl)
    (if (null? kws)
        args
-       `(,@args (keywords ,@kws)))))
+       `((keywords ,@kws) ,@args))))
+
+(define (has-keywords? lst)
+  (and (pair? lst) (pair? (car lst)) (eq? (caar lst) 'keywords)))
+
+(define (has-parameters? lst)
+  (and (pair? lst) (pair? (car lst)) (eq? (caar lst) 'parameters)))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
@@ -1170,8 +1199,15 @@
 			 ;; allow f(a, b; )
 			 (begin (take-token s)
 				(reverse lst))
-			 (reverse (cons (cons 'parameters (loop '()))
-					lst))))
+			 (let ((params (loop '()))
+			       (lst    (separate-keywords (reverse lst))))
+			   (let ((params (cons 'parameters
+					       (if (has-keywords? params)
+						   (append (cdar params) (cdr params))
+						   params))))
+			     (if (has-keywords? lst)
+				 (list* (car lst) params (cdr lst))
+				 (list* params lst))))))
 	      (let* ((nxt (parse-eq* s))
 		     (c (require-token s)))
 		(cond ((eqv? c #\,)
@@ -1451,7 +1487,8 @@
 (define (parse-atom s)
   (let ((ex (parse-atom- s)))
     (if (and (symbol? ex)
-	     (memq ex syntactic-operators))
+	     (or (memq ex syntactic-operators)
+		 (eq? ex '....)))
 	(error (string "invalid identifier name " ex)))
     ex))
 
@@ -1604,7 +1641,10 @@
              (if (triplequote-string-literal? ps)
                  `(macrocall @mstr ,@(cdr ps))
                  (if (interpolate-string-literal? ps)
-                     `(call (top string) ,@(cdr ps))
+                     `(string ,@(filter (lambda (s)
+					  (not (and (string? s)
+						    (= (length s) 0))))
+					(cdr ps)))
 		     (cadr ps)))))
 
 	  ;; macro call

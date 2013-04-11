@@ -48,6 +48,7 @@
     jl_alloc_array_2d;
     jl_alloc_array_3d;
     jl_alloc_cell_1d;
+    jl_cell_1d_push;
     jl_apply_generic;
     jl_array_del_beg;
     jl_array_del_end;
@@ -109,6 +110,8 @@
     jl_expand;
     jl_expr_type;
     jl_eval_string;
+    jl_exception_occurred;
+    jl_exception_clear;
     jl_typeof_str;
     jl_typename_str;
     jl_array_eltype;
@@ -117,6 +120,8 @@
     jl_get_field;
     jl_call1;
     jl_call2;
+    jl_sigatomic_begin;
+    jl_sigatomic_end;
     jl_init;
     jl_ascii_string_type;
     jl_utf8_string_type;

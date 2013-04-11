@@ -571,6 +571,33 @@ the ability to unwind the stack and pass a value to a higher level is
 desirable. These are the circumstances in which ``throw`` should be used
 rather than ``error``.
 
+finally Clauses
+~~~~~~~~~~~~~~~
+
+In code that performs state changes or uses resources like files, there
+is typically clean-up work (such as closing files) that needs to be done
+when the code is finished. Exceptions potentially complicate this task,
+since they can cause a block of code to exit before reaching its
+normal end. The ``finally`` keyword solves this problem, by providing
+a way to run some code when a given block of code exits, regardless of
+how it exits.
+
+For example, here is how we can guarantee that an opened file is closed:
+
+    f = open("file")
+    try
+        # operate on file f
+    finally
+        close(f)
+    end
+
+When control leaves the ``try`` block (for example due to a ``return``, or
+just finishing normally), ``close(f)`` will be executed. If
+the ``try`` block exits due to an exception, the exception will continue
+propagating. A ``catch`` block may be combined with ``try`` and ``finally``
+as well. In this case the ``finally`` block will run after ``catch`` has
+handled the error.
+
 .. _man-tasks:
 
 Tasks (aka Coroutines)

@@ -84,9 +84,9 @@ const STDERR_NO = 2
 typealias Redirectable Union(UVStream,FS.File)
 
 type CmdRedirect <: AbstractCmd
-        cmd::AbstractCmd
-        handle::Redirectable
-        stream_no::Int
+    cmd::AbstractCmd
+    handle::Redirectable
+    stream_no::Int
 end
 
 ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)

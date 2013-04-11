@@ -44,7 +44,7 @@ $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl $(BUILD)/share/julia/helpdb.jl
 	@#echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
 	$(QUIET_JULIA) cd base && \
-	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'."
+	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***"
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
@@ -137,8 +137,13 @@ cleanall: clean
 	@rm -fr $(BUILD)/$(JL_LIBDIR)
 	@$(MAKE) -C deps clean-uv
 
+distclean: cleanall
+	@$(MAKE) -C deps distclean
+	@$(MAKE) -C doc distclean
+	rm -fr usr
+
 .PHONY: default debug release julia-debug julia-release \
-	test testall test-* clean cleanall \
+	test testall test-* clean distclean cleanall \
 	run-julia run-julia-debug run-julia-release
 
 test: release

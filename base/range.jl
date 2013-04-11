@@ -32,34 +32,10 @@ immutable Range1{T<:Real} <: Ranges{T}
 end
 Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 
-immutable OrdinalRange{T} <: Ranges{T}
-    start::T
-    step::Int
-    len::Int
-
-    function OrdinalRange(start::T, step::Int, len::Int)
-        if step == 0;    error("Range: step cannot be zero"); end
-        if !(len >= 0);  error("Range: length must be non-negative"); end
-        new(start, step, len)
-    end
-    OrdinalRange(start::T, step::Integer, len::Integer) = OrdinalRange(start, int(step), int(len))
-end
-OrdinalRange{T}(start::T, step::Integer, len::Integer) = OrdinalRange{T}(start, step, len)
-
 colon{T<:Integer}(start::T, step::T, stop::T) =
     Range(start, step, max(0, div(stop-start+step, step)))
 colon{T<:Integer}(start::T, stop::T) =
     Range1(start, max(0, stop-start+1))
-
-colon{T}(start::T, step, stop::T) =
-    OrdinalRange(start, step, max(0, div(stop-start+step, step)))
-colon{T}(start::T, stop::T) =
-    OrdinalRange(start, 1, max(0, stop-start+1))
-
-colon(start::Char, step::Int, stop::Char) =
-    OrdinalRange(start, step, max(0, div(stop-start+step, step)))
-colon(start::Char, stop::Char) =
-    OrdinalRange(start, 1, max(0, stop-start+1))
 
 function colon{T<:Real}(start::T, step::T, stop::T)
     if (step<0) != (stop<start)
@@ -107,13 +83,11 @@ length(r::Ranges) = r.len
 size(r::Ranges) = (r.len,)
 isempty(r::Ranges) = r.len==0
 first(r::Ranges) = r.start
-last{T}(r::Range{T}) = r.start + oftype(T,r.len-1)*step(r)
-last{T}(r::Range1{T}) = r.start + oftype(T,r.len-1)
-last{T}(r::OrdinalRange{T}) = r.start + (r.len-1)*r.step
+last{T}(r::Range1{T}) = oftype(T, r.start + r.len-1)
+last{T}(r::Range{T})  = oftype(T, r.start + (r.len-1)*r.step)
 
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
-step(r::OrdinalRange) = r.step
 
 min(r::Range1) = (isempty(r)&&error("min: range is empty")) || first(r)
 max(r::Range1) = (isempty(r)&&error("max: range is empty")) || last(r)
@@ -137,21 +111,12 @@ getindex(r::Range, s::Range1{Int}) =
 getindex(r::Range1, s::Range1{Int}) =
     r.len < last(s) ? error(BoundsError) : Range1(r[s.start], s.len)
 
-show(io::IO, r::Range)  = print(io, r.start,':',step(r),':',last(r))
-show(io::IO, r::Range1) = print(io, r.start,':',last(r))
-function show(io::IO, r::OrdinalRange)
-    show(io, r.start)
-    print(io, ':')
-    if step(r) != 1
-        print(io, step(r),':')
-    end
-    show(io, last(r))
-end
+show(io::IO, r::Range)  = print(io, repr(r.start),':',repr(step(r)),':',repr(last(r)))
+show(io::IO, r::Range1) = print(io, repr(r.start),':',repr(last(r)))
 
 start(r::Ranges) = 0
-next(r::Range,  i) = (r.start + oftype(r.start,i)*step(r), i+1)
-next(r::Range1, i) = (r.start + oftype(r.start,i), i+1)
-next(r::OrdinalRange, i) = (r.start + i*step(r), i+1)
+next{T}(r::Range{T},  i) = (oftype(T, r.start + i*step(r)), i+1)
+next{T}(r::Range1{T}, i) = (oftype(T, r.start + i), i+1)
 done(r::Ranges, i) = (length(r) <= i)
 
 isequal(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)

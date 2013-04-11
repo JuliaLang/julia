@@ -132,6 +132,10 @@ Types
 
    True if and only if all values of ``type1`` are also of ``type2``. Can also be written using the ``<:`` infix operator as ``type1 <: type2``.
 
+.. function:: <:(T1, T2)
+
+   Subtype operator, equivalent to ``subtype(T1,T2)``.
+
 .. function:: typemin(type)
 
    The lowest value representable by the given (real) numeric type.
@@ -167,6 +171,21 @@ Types
 .. function:: promote_type(type1, type2)
 
    Determine a type big enough to hold values of each argument type without loss, whenever possible. In some cases, where no type exists which to which both types can be promoted losslessly, some loss is tolerated; for example, ``promote_type(Int64,Float64)`` returns ``Float64`` even though strictly, not all ``Int64`` values can be represented exactly as ``Float64`` values.
+
+.. function:: getfield(value, name::Symbol)
+
+   Extract a named field from a value of composite type. The syntax ``a.b`` calls
+   ``getfield(a, :b)``, and the syntax ``a.(b)`` calls ``getfield(a, b)``.
+
+.. function:: setfield(value, name::Symbol, x)
+
+   Assign ``x`` to a named field in ``value`` of composite type.
+   The syntax ``a.b = c`` calls ``setfield(a, :b, c)``, and the syntax ``a.(b) = c``
+   calls ``setfield(a, b, c)``.
+
+.. function:: fieldtype(value, name::Symbol)
+
+   Determine the declared type of a named field in a value of composite type.
 
 Generic Functions
 -----------------
@@ -358,6 +377,10 @@ Iterable Collections
 
    Get the last element of an ordered collection.
 
+.. function:: collect(collection)
+
+   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
+
 Indexable Collections
 ---------------------
 
@@ -416,10 +439,6 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 .. function:: values(collection)
 
    Return an array of all values in a collection.
-
-.. function:: collect(collection)
-
-   Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
 
 .. function:: merge(collection, others...)
 
@@ -660,11 +679,11 @@ Strings
 
    Return ``string`` with any trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
 
-.. function:: begins_with(string, prefix)
+.. function:: beginswith(string, prefix)
 
    Returns ``true`` if ``string`` starts with ``prefix``.
 
-.. function:: ends_with(string, suffix)
+.. function:: endswith(string, suffix)
 
    Returns ``true`` if ``string`` ends with ``suffix``.
 
@@ -867,7 +886,30 @@ I/O
 
 .. function:: eof(stream)
 
-   Tests whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this function will block to wait for more data if necessary, and then return ``false``. Therefore it is always safe to read one byte after seeing ``eof`` return ``false``.
+   Tests whether an I/O stream is at end-of-file. If the stream is not yet
+   exhausted, this function will block to wait for more data if necessary, and
+   then return ``false``. Therefore it is always safe to read one byte after
+   seeing ``eof`` return ``false``.
+
+.. function:: ntoh(x)
+
+   Converts the endianness of a value from Network byte order (big-endian) to
+   that used by the Host.
+
+.. function:: hton(x)
+
+   Converts the endianness of a value from that used by the Host to Network
+   byte order (big-endian).
+
+.. function:: ltoh(x)
+
+   Converts the endianness of a value from Little-endian to that used by the
+   Host.
+
+.. function:: htol(x)
+
+   Converts the endianness of a value from that used by the Host to
+   Little-endian.
 
 Text I/O
 --------
@@ -1070,6 +1112,21 @@ Mathematical Functions
 .. function:: >>(x, n)
 
    Right shift operator.
+
+.. function:: >>>(x, n)
+
+   Unsigned right shift operator.
+
+.. function:: :(start, [step], stop)
+
+   Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1,
+   and ``a:s:b`` is similar but uses a step size of ``s``. These syntaxes call the
+   function ``colon``.
+   The colon is also used in indexing to select whole dimensions.
+
+.. function:: colon(start, [step], stop)
+
+   Called by ``:`` syntax for constructing ranges.
 
 .. function:: ==(x, y)
 
@@ -1293,11 +1350,12 @@ Mathematical Functions
 
 .. function:: sinc(x)
 
-   Compute :math:`\sin(\pi x) / x`
+   Compute :math:`\sin(\pi x) / (\pi x)` if :math:`x \neq 0`, and :math:`1` if :math:`x = 0`.
 
 .. function:: cosc(x)
 
-   Compute :math:`\cos(\pi x) / x`
+   Compute :math:`\cos(\pi x) / x - \sin(\pi x) / (\pi x^2)` if :math:`x \neq 0`, and :math:`0`
+   if :math:`x = 0`. This is the derivative of ``sinc(x)``.
 
 .. function:: degrees2radians(x)
 
@@ -1687,23 +1745,11 @@ Data Formats
 
    A string giving the literal bit representation of a number.
 
-.. function:: parse_int(type, str, [base])
+.. function:: parseint([type], str, [base])
 
-   Parse a string as an integer in the given base (default 10), yielding a number of the specified type.
+   Parse a string as an integer in the given base (default 10), yielding a number of the specified type (default ``Int``).
 
-.. function:: parse_bin(type, str)
-
-   Parse a string as an integer in base 2, yielding a number of the specified type.
-
-.. function:: parse_oct(type, str)
-
-   Parse a string as an integer in base 8, yielding a number of the specified type.
-
-.. function:: parse_hex(type, str)
-
-   Parse a string as an integer in base 16, yielding a number of the specified type.
-
-.. function:: parse_float(type, str)
+.. function:: parsefloat([type], str)
 
    Parse a string as a decimal floating point number, yielding a number of the specified type.
 
@@ -2079,6 +2125,16 @@ Basic functions
 
    Returns a tuple of the memory strides in each dimension
 
+.. function:: ind2sub(dims, index) -> subscripts
+
+   Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
+
+   **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
+
+.. function:: sub2ind(dims, i, j, k...) -> index
+
+   The inverse of ``ind2sub``, returns the linear index corresponding to the provided subscripts
+
 Constructors
 ~~~~~~~~~~~~
 
@@ -2411,13 +2467,29 @@ Statistics
 
    Compute the median of a vector ``v``.
 
-.. function:: hist(v[, n])
+.. function:: hist(v[, n]) -> e, counts
 
-   Compute the histogram of ``v``, optionally using ``n`` bins.
+   Compute the histogram of ``v``, optionally using approximately ``n``
+   bins. The return values are a range ``e``, which correspond to the
+   edges of the bins, and ``counts`` containing the number of elements of
+   ``v`` in each bin.
 
-.. function:: hist(v, e)
+.. function:: hist(v, e) -> e, counts
 
-   Compute the histogram of ``v`` using a vector ``e`` as the edges for the bins.
+   Compute the histogram of ``v`` using a vector/range ``e`` as the edges for
+   the bins. The result will be a vector of length ``length(e) - 1``, with the
+   ``i``th element being ``sum(e[i] .< v .<= e[i+1])``.
+
+.. function:: histrange(v, n)
+
+   Compute `nice` bin ranges for the edges of a histogram of ``v``, using
+   approximately ``n`` bins. The resulting step sizes will be 1, 2 or 5
+   multiplied by a power of 10.
+
+.. function:: midpoints(e)
+
+   Compute the midpoints of the bins with edges ``e``. The result is a
+   vector/range of length ``length(e) - 1``. 
 
 .. function:: quantile(v, p)
 
@@ -2872,6 +2944,11 @@ System
 .. function:: mkdir(path, [mode])
 
    Make a new directory with name ``path`` and permissions ``mode``.
+   ``mode`` defaults to 0o777, modified by the current file creation mask.
+
+.. function:: mkpath(path, [mode])
+
+   Create all directories in the given ``path``, with permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
 
 .. function:: rmdir(path)

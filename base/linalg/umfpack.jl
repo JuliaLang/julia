@@ -7,20 +7,9 @@ export UmfpackLU,
        increment,
        increment!
 
-import Base.(\)
-import Base.Ac_ldiv_B
-import Base.At_ldiv_B
-import Base.findn_nzs
-import Base.getindex             
-import Base.nnz
-import Base.show
-import Base.size
+import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, nnz, show, size
 
-import LinAlg.Factorization
-import LinAlg.det             
-import LinAlg.lufact
-import LinAlg.lufact!
-import LinAlg.solve
+import ..LinAlg: Factorization, det, lufact, lufact!, solve
 
 include("linalg/umfpack_h.jl")
 

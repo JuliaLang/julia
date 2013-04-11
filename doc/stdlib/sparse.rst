@@ -1,3 +1,4 @@
+.. _stdlib-sparse:
 
 Sparse Matrices
 ---------------

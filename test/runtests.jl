@@ -1,8 +1,8 @@
-testnames = ["core", "numbers", "strings", "unicode", "corelib", "hashing",
-             "remote", "iostring", "arrayops", "linalg", "blas", "fft",
-             "dct", "sparse", "bitarray", "random", "math", "functional",
+testnames = ["core", "keywordargs", "numbers", "strings", "unicode", "corelib",
+             "hashing", "remote", "iostring", "arrayops", "linalg", "blas",
+             "fft", "dct", "sparse", "bitarray", "random", "math", "functional",
              "bigint", "sorting", "statistics", "spawn", "parallel",
-             "suitesparse", "arpack", "bigfloat", "file", "zlib", "image",
+             "suitesparse", "arpack", "bigfloat", "file", "zlib",
              "perf"]
 
 if ARGS == ["all"]
@@ -14,7 +14,7 @@ end
 ENV["OPENBLAS_NUM_THREADS"] = 1
 
 if CPU_CORES > 1 && length(tests)>2
-    addprocs_local(2)
+    addprocs(2)
 end
 
 require("testdefs.jl")

@@ -21,7 +21,7 @@ import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
        Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.max, Base.min,
        Base.ceil, Base.floor, Base.trunc, Base.round, Base.^
 
-import Intrinsics.nan_dom_err
+import Core.Intrinsics.nan_dom_err
 
 # non-type specific math functions
 
@@ -33,7 +33,13 @@ clamp{T<:Real}(x::AbstractArray{T}, lo::Real, hi::Real) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
 sinc(x::Number) = x==0 ? one(x)  : (pix=pi*x; oftype(x,sin(pix)/pix))
+sinc(x::Integer) = x==0 ? one(x) : zero(x)
+sinc{T<:Integer}(x::Complex{T}) = sinc(complex(float(real(x)),float(imag(x))))
+@vectorize_1arg Number sinc
 cosc(x::Number) = x==0 ? zero(x) : (pix=pi*x; oftype(x,cos(pix)/x-sin(pix)/(pix*x)))
+cosc(x::Integer) = cosc(float(x))
+cosc{T<:Integer}(x::Complex{T}) = cosc(complex(float(real(x)),float(imag(x))))
+@vectorize_1arg Number cosc
 
 radians2degrees(z::Real) = oftype(z, (180/pi) * z)
 degrees2radians(z::Real) = oftype(z, (pi/180) * z)
@@ -64,7 +70,7 @@ end
 for (fd, f) in ((:asind, :asin), (:acosd, :acos), (:atand, :atan),
                 (:asecd, :asec), (:acscd, :acsc), (:acotd, :acot))
     @eval begin
-        ($fd)(y) = degrees2radians(($f)(y))
+        ($fd)(y) = radians2degrees(($f)(y))
     end
 end
 

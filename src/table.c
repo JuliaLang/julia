@@ -1,7 +1,7 @@
 #define hash_size(h) (jl_array_len(h)/2)
 
 // compute empirical max-probe for a given size
-#define max_probe(size) ((size)<=(HT_N_INLINE*2) ? (HT_N_INLINE/2) : (size)>>3)
+#define max_probe(size) ((size)<=1024 ? 16 : (size)>>6)
 
 #define keyhash(k)     jl_object_id(k)
 #define h2index(hv,sz) (index_t)(((hv) & ((sz)-1))*2)

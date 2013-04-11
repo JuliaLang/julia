@@ -12,7 +12,7 @@ function dlm_readrow(io::IO, dlm, eol::Char)
     else
         row = split(row_string, dlm, true)
     end
-    if ends_with(row[end], eol)
+    if endswith(row[end], eol)
         row[end] = chop(row[end])
     end
     row
@@ -180,7 +180,7 @@ end
 
 writedlm(io::IO, a::Vector, dlm::Char) = writedlm(io, reshape(a,length(a),1), dlm)
 
-function writedlm(fname::String, a::Matrix, dlm::Char)
+function writedlm(fname::String, a::Union(Vector,Matrix), dlm::Char)
     open(fname, "w") do io
         writedlm(io, a, dlm)
     end

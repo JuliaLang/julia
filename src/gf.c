@@ -32,6 +32,7 @@ static jl_methtable_t *new_method_table(jl_sym_t *name)
     mt->cache_arg1 = JL_NULL;
     mt->cache_targ = JL_NULL;
     mt->max_args = 0;
+    mt->kwsorter = NULL;
 #ifdef JL_GF_PROFILE
     mt->ncalls = 0;
 #endif

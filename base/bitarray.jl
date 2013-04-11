@@ -292,7 +292,7 @@ let getindex_cache = nothing
         if ndims(B) < 1 + length(I)
             error("wrong number of dimensions in getindex")
         end
-        check_bounds(B, I0, I...)
+        checkbounds(B, I0, I...)
         X = BitArray(index_shape(I0, I...))
         nI = 1 + length(I)
 
@@ -372,7 +372,7 @@ end
 
 let getindex_cache = nothing
     global getindex
-    function getindex(B::BitArray, I::Union(Real,AbstractArray)...)
+    function getindex(B::BitArray, I::Union(Real,AbstractVector)...)
         I = indices(I)
         X = BitArray(index_shape(I...))
         Xc = X.chunks
@@ -991,20 +991,20 @@ end
 
 function div(A::BitArray, B::BitArray)
     shp = promote_shape(size(A), size(B))
-    all(B) || throw(DivideByZeroError())
+    all(B) || throw(DivideError())
     return reshape(copy(A), shp)
 end
 div(A::BitArray, B::Array{Bool}) = div(A, bitpack(B))
 div(A::Array{Bool}, B::BitArray) = div(bitpack(A), B)
 function div(B::BitArray, x::Bool)
-    return x ? copy(B) : throw(DivideByZeroError())
+    return x ? copy(B) : throw(DivideError())
 end
 function div(x::Bool, B::BitArray)
-    all(B) || throw(DivideByZeroError())
+    all(B) || throw(DivideError())
     return x ? trues(size(B)) : falses(size(B))
 end
 function div(x::Number, B::BitArray)
-    all(B) || throw(DivideByZeroError)
+    all(B) || throw(DivideError())
     pt = promote_array_type(typeof(x), Bool)
     y = div(x, true)
     reshape(pt[ y for i = 1:length(B) ], size(B))
@@ -1012,20 +1012,20 @@ end
 
 function mod(A::BitArray, B::BitArray)
     shp = promote_shape(size(A), size(B))
-    all(B) || throw(DivideByZeroError())
+    all(B) || throw(DivideError())
     return falses(shp)
 end
 mod(A::BitArray, B::Array{Bool}) = mod(A, bitpack(B))
 mod(A::Array{Bool}, B::BitArray) = mod(bitpack(A), B)
 function mod(B::BitArray, x::Bool)
-    return x ? falses(size(B)) : throw(DivideByZeroError())
+    return x ? falses(size(B)) : throw(DivideError())
 end
 function mod(x::Bool, B::BitArray)
-    all(B) || throw(DivideByZeroError())
+    all(B) || throw(DivideError())
     return falses(size(B))
 end
 function mod(x::Number, B::BitArray)
-    all(B) || throw(DivideByZeroError)
+    all(B) || throw(DivideError())
     pt = promote_array_type(typeof(x), Bool)
     y = mod(x, true)
     reshape(pt[ y for i = 1:length(B) ], size(B))
@@ -1583,7 +1583,7 @@ function findn(B::BitArray)
 end
 end
 
-function findn_nzs(B::BitMatrix)
+function findnz(B::BitMatrix)
     I, J = findn(B)
     return (I, J, trues(length(I)))
 end

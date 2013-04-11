@@ -1,4 +1,4 @@
-using Test
+using Base.Test
 
 print_output = isempty(ARGS) || contains(ARGS, "perf/perf.jl") || contains(ARGS, "perf")
 
@@ -29,7 +29,7 @@ function parseintperf(t)
     for i=1:t
         n = rand(Uint32)
         s = hex(n)
-        m = uint32(parse_hex(s))
+        m = uint32(parseint(s,16))
     end
     @test m == n
     return n

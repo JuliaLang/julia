@@ -13,43 +13,12 @@ export                                  # types
 
 using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
  
-import Base.(*)
-import Base.convert
-import Base.copy
-import Base.ctranspose
-import Base.eltype
-import Base.findn_nzs
-import Base.getindex             
-import Base.hcat
-import Base.isvalid
-import Base.nnz
-import Base.show
-import Base.size
-import Base.sort!
-import Base.transpose
-import Base.vcat
+import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
+             isvalid, nnz, show, size, sort!, transpose, vcat
 
-import LinAlg.(\)
-import LinAlg.A_mul_Bc
-import LinAlg.A_mul_Bt
-import LinAlg.Ac_ldiv_B
-import LinAlg.Ac_mul_B
-import LinAlg.At_ldiv_B
-import LinAlg.At_mul_B
-import LinAlg.Factorization
-import LinAlg.cholfact
-import LinAlg.cholfact!
-import LinAlg.copy
-import LinAlg.dense
-import LinAlg.det
-import LinAlg.diag
-import LinAlg.diagmm
-import LinAlg.diagmm!
-import LinAlg.full
-import LinAlg.logdet
-import LinAlg.norm
-import LinAlg.solve
-import LinAlg.sparse
+import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
+                 Factorization, cholfact, cholfact!, copy, dense, det, diag, diagmm,
+                 diagmm!, full, logdet, norm, solve, sparse
 
 include("linalg/cholmod_h.jl")
 
@@ -877,7 +846,7 @@ end
 solve{T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T},typ::Integer)=solve(L,CholmodDense(B),typ)
 solve{T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
 
-function findn_nzs{Tv,Ti}(A::CholmodSparse{Tv,Ti})
+function findnz{Tv,Ti}(A::CholmodSparse{Tv,Ti})
     jj = similar(A.rowval0)             # expand A.colptr0 to a vector of indices
     for j in 1:A.c.n, k in (A.colptr0[j]+1):A.colptr0[j+1]
         jj[k] = j
@@ -899,7 +868,7 @@ function findn_nzs{Tv,Ti}(A::CholmodSparse{Tv,Ti})
     (increment!(A.rowval0[ind]), jj[ind], A.nzval[ind])
 end
 
-findn_nzs(L::CholmodFactor) = findn_nzs(CholmodSparse(L))
+findnz(L::CholmodFactor) = findnz(CholmodSparse(L))
 
 function diag{Tv}(A::CholmodSparse{Tv})
     minmn = min(size(A))

@@ -2539,12 +2539,13 @@ void jl_init_types(void)
 
     jl_methtable_type =
         jl_new_datatype(jl_symbol("MethodTable"), jl_any_type, jl_null,
-                        jl_tuple(6, jl_symbol("name"), jl_symbol("defs"),
+                        jl_tuple(7, jl_symbol("name"), jl_symbol("defs"),
                                  jl_symbol("cache"), jl_symbol("cache_arg1"),
                                  jl_symbol("cache_targ"),
-                                 jl_symbol("max_args")),
-                        jl_tuple(6, jl_sym_type, jl_any_type, jl_any_type,
-                                 jl_any_type, jl_any_type, jl_long_type),
+                                 jl_symbol("max_args"), jl_symbol("kwsorter")),
+                        jl_tuple(7, jl_sym_type, jl_any_type, jl_any_type,
+                                 jl_any_type, jl_any_type, jl_long_type,
+                                 jl_any_type),
                         0, 1);
     jl_methtable_type->fptr = jl_f_no_function;
 
@@ -2614,6 +2615,7 @@ void jl_init_types(void)
         jl_new_datatype(jl_symbol("Module"), jl_any_type, jl_null,
                         jl_tuple(2, jl_symbol("name"), jl_symbol("parent")),
                         jl_tuple(2, jl_sym_type, jl_any_type), 0, 1);
+    jl_module_type->fptr = jl_f_new_module;
 
     jl_tupleset(jl_typename_type->types, 1, jl_module_type);
 
@@ -2761,4 +2763,6 @@ void jl_init_types(void)
     type_goto_sym = jl_symbol("type_goto");
     toplevel_sym = jl_symbol("toplevel");
     tuple_sym = jl_symbol("tuple");
+    kw_sym = jl_symbol("kw");
+    dot_sym = jl_symbol(".");
 }
