@@ -1007,6 +1007,7 @@ export
     readline,
     readlines,
     readuntil,
+    readavailable,
     seek,
     seekend,
     serialize,
