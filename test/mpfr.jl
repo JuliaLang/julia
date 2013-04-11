@@ -2,21 +2,21 @@
 x = MPFRFloat{53}()
 x = MPFRFloat(12)
 y = MPFRFloat(x)
-@test x == y
+@test_approx_eq x y
 y = MPFRFloat(0xc)
-@test x == y
+@test_approx_eq x y
 y = MPFRFloat(12.)
-@test x == y
+@test_approx_eq x y
 y = MPFRFloat(BigInt(12))
-@test x == y
+@test_approx_eq x y
 y = MPFRFloat(BigFloat(12))
-@test x == y
+@test_approx_eq x y
 y = MPFRFloat("12")
-@test x == y
+@test_approx_eq x y
 y = MPFRFloat(float32(12.))
-@test x == y
+@test_approx_eq x y
 y = MPFRFloat(12//1)
-@test x == y
+@test_approx_eq x y
 
 # +
 x = MPFRFloat(12)
@@ -215,22 +215,26 @@ end
 @test [x,y] == [MPFRFloat(12), MPFRFloat(42)]
 
 # log / log2 / log10
+with_precision(53) do
 x = MPFRFloat(42)
-@test log(x) == log(42)
-@test isinf(log(MPFRFloat(0)))
-@test_fails log(MPFRFloat(-1))
-@test log2(x) == log2(42)
-@test isinf(log2(MPFRFloat(0)))
-@test_fails log2(MPFRFloat(-1))
-@test log10(x) == log10(42)
-@test isinf(log10(MPFRFloat(0)))
-@test_fails log10(MPFRFloat(-1))
+    @test log(x) == log(42)
+    @test isinf(log(MPFRFloat(0)))
+    @test_fails log(MPFRFloat(-1))
+    @test log2(x) == log2(42)
+    @test isinf(log2(MPFRFloat(0)))
+    @test_fails log2(MPFRFloat(-1))
+    @test log10(x) == log10(42)
+    @test isinf(log10(MPFRFloat(0)))
+    @test_fails log10(MPFRFloat(-1))
+end
 
 # exp / exp2 / exp10
-x = MPFRFloat(10)
-@test exp(x) == exp(10)
-@test exp2(x) == 1024
-@test exp10(x) == 10000000000
+with_precision(53) do
+    x = MPFRFloat(10)
+    @test exp(x) == exp(10)
+    @test exp2(x) == 1024
+    @test exp10(x) == 10000000000
+end
 
 # convert to integer types
 x = MPFRFloat(12.1)
@@ -273,34 +277,38 @@ with_precision(256) do
 end
 
 # bessel functions
-@test_approx_eq besselj(4, MPFRFloat(2)) besselj(4, 2.)
-@test_approx_eq besselj0(MPFRFloat(2))  besselj0(2.)
-@test_approx_eq besselj1(MPFRFloat(2))  besselj1(2.)
-@test_approx_eq bessely(4, MPFRFloat(2))  bessely(4, 2.)
-@test_approx_eq bessely0(MPFRFloat(2))  bessely0(2.)
-@test_approx_eq bessely1(MPFRFloat(2))  bessely1(2.)
+with_precision(53) do
+    @test_approx_eq besselj(4, MPFRFloat(2)) besselj(4, 2.)
+    @test_approx_eq besselj0(MPFRFloat(2))  besselj0(2.)
+    @test_approx_eq besselj1(MPFRFloat(2))  besselj1(2.)
+    @test_approx_eq bessely(4, MPFRFloat(2))  bessely(4, 2.)
+    @test_approx_eq bessely0(MPFRFloat(2))  bessely0(2.)
+    @test_approx_eq bessely1(MPFRFloat(2))  bessely1(2.)
+end
 
 # trigonometric functions
-for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
-        :cosh,:sinh,:tanh,:sech,:csch,:coth,:asinh),
-    j in (-1., -0.5, -0.25, .25, .5, 1.)
-    @eval begin
-        @test_approx_eq ($f)(MPFRFloat($j)) ($f)($j)
+with_precision(53) do
+    for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
+            :cosh,:sinh,:tanh,:sech,:csch,:coth,:asinh),
+        j in (-1., -0.5, -0.25, .25, .5, 1.)
+        @eval begin
+            @test_approx_eq ($f)(MPFRFloat($j)) ($f)($j)
+        end
     end
-end
-for f in (:acos,:asin,:acosh,:atanh),
-    j in (-2, -1.5)
-    @eval begin
-        @test_fails ($f)(MPFRFloat($j))
+    for f in (:acos,:asin,:acosh,:atanh),
+        j in (-2, -1.5)
+        @eval begin
+            @test_fails ($f)(MPFRFloat($j))
+        end
     end
-end
-for f in (:sin,:cos,:tan,:sec,:csc,:cot,:cosh,:sinh,:tanh,
-        :sech,:csch,:coth,:acosh,:asinh),
-    j in (1., 1.5, 1.9)
-    @eval begin
-        @test_approx_eq ($f)(MPFRFloat($j)) ($f)($j)
+    for f in (:sin,:cos,:tan,:sec,:csc,:cot,:cosh,:sinh,:tanh,
+            :sech,:csch,:coth,:acosh,:asinh),
+        j in (1., 1.5, 1.9)
+        @eval begin
+            @test_approx_eq ($f)(MPFRFloat($j)) ($f)($j)
+        end
     end
-end
-for j in (.25, .5)
-    @test_approx_eq atanh(MPFRFloat(j)) atanh(j)
+    for j in (.25, .5)
+        @test_approx_eq atanh(MPFRFloat(j)) atanh(j)
+    end
 end
