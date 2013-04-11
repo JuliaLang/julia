@@ -23,12 +23,12 @@ This is the GitHub repository of Julia source code, including instructions for c
 
 - **Homepage:** <http://julialang.org>
 - **Binaries:** <http://code.google.com/p/julialang/downloads/list>
+- **Documentation:** <http://docs.julialang.org/>
 - **Packages:** <http://docs.julialang.org/en/latest/packages/packagelist/>
-- **Mailing lists:** <http://julialang.org/community/>
-- **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
-- **Documentation:** <http://julialang.org/manual/>
+- **Mailing lists:** <http://julialang.org/community/>
+- **IRC:** <http://webchat.freenode.net/?channels=julia>
 
 The mailing list for developer discussion is
 <http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
@@ -45,8 +45,8 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 
 All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. 
 
-<a name="Source-Download-Compilation"/>
-## Source Download & Compilation
+<a name="Source-Download-and-Compilation"/>
+## Source Download and Compilation
 
 First, acquire the source code by cloning the git repository:
 
@@ -145,7 +145,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[DSFMT]**               — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
 - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-- **[MKL]** (optional)      – OpenBLAS & LAPACK may be replaced by Intel's MKL library.
+- **[MKL]** (optional)      – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
 - **[AMOS]**                — subroutines for computing Bessel and Airy functions.
 - **[SuiteSparse]**         — a library of linear algebra routines for sparse matrices.
 - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
@@ -193,7 +193,7 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 
 ### Intel Math Kernel Libraries
 
-To use the Intel [MKL] BLAS & LAPACK libraries, edit the following settings in `Make.inc`:
+To use the Intel [MKL] BLAS and LAPACK libraries, edit the following settings in `Make.inc`:
 
     USE_MKL = 1
     MKLLIB = /path/to/mkl/lib/arch
