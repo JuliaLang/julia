@@ -80,6 +80,11 @@ Now you should be able to run Julia like this:
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
+<a name="Uninstalling-Julia"/>
+## Uninstalling Julia
+
+Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting the directory.
+
 <a name="Platform-Specific-Notes"/>
 ### Platform-Specific Notes
 
@@ -114,16 +119,6 @@ You must use the gmake command on FreeBSD instead of make.
 #### Windows
 
 In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
-
-#### MKL
-
-To use the Intel [MKL] BLAS & LAPACK libraries, edit the following settings in `Make.inc`:
-
-    USE_MKL = 1
-    MKLLIB = /path/to/mkl/lib/arch
-
-`MKLLIB` points to the directory containing `libmkl_rt.so`. Requires v10.3 or greater.
-To rebuild a pre-built Julia source install with MKL support, delete from `deps/`, the OpenBLAS, ARPACK, and SuiteSparse dependencies, then run `make cleanall testall`.
 
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
@@ -190,7 +185,19 @@ Julia uses the following external libraries, which are automatically downloaded 
 
 If you already have one or more of these packages installed on your system, it is possible to pass `USE_SYSTEM_...=1` to `make` to prevent Julia from compiling duplicates of these libraries. The complete list of possible flags can be found in Make.inc. Please be aware that this procedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
+### SuiteSparse
+
 SuiteSparse is a special case, since it is typically only installed as a static library, while `USE_SYSTEM_SUITESPARSE=1` requires that it is a shared library. Running the script `contrib/repackage_system_suitesparse4.make` will copy your static system SuiteSparse installation into the shared library format required by Julia.
+
+### Intel Math Kernel Libraries
+
+To use the Intel [MKL] BLAS & LAPACK libraries, edit the following settings in `Make.inc`:
+
+    USE_MKL = 1
+    MKLLIB = /path/to/mkl/lib/arch
+
+`MKLLIB` points to the directory containing `libmkl_rt.so`. MKL version 10.3 or greater is required.
+To rebuild a pre-built Julia source install with MKL support, delete the OpenBLAS, ARPACK, and SuiteSparse dependencies from `deps`, and run `make cleanall testall`.
 
 <a name="Directories"/>
 ## Directories
@@ -221,8 +228,12 @@ Now you should be able to run Julia like this:
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
-An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available. Julia has also been added to [Debian](http://packages.debian.org/sid/julia). On OS X, Julia is available through [homebrew](http://mxcl.github.com/homebrew/).
+The following distributions include julia, but the versions may be out of date due to rapid development:
 
+* [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877)
+* [Debian GNU/Linux](http://packages.debian.org/sid/julia)
+* [Ubuntu](http://packages.ubuntu.com/raring/julia)
+* [OS X Homebrew](http://mxcl.github.com/homebrew/)
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
