@@ -114,7 +114,6 @@ wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
 wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
 wait_readbyte_filter(w::(AsyncStream,Uint8), args...) = w[1].open && (search(w[1].buffer,w[2]) <= 0)
 wait_readline_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
-wait_readavailable_filter(w::AsyncStream, args...) = w.open && (w.buffer.size == 0)
 
 function wait(forwhat::Vector, notify_list_name, filter_fcn)
     args = ()
@@ -142,7 +141,7 @@ end
 wait_connected(x) = wait(x, :connectnotify, wait_connect_filter)
 wait_readable(x) = wait(x, :readnotify, wait_readable_filter)
 wait_readline(x) = wait(x, :readnotify, wait_readline_filter)
-wait_readavailable(x::AsyncStream) = wait(x, :readnotify, wait_readavailable_filter)
+wait_readavailable(x::AsyncStream) = wait((x,1), :readnotify, wait_readnb_filter)
 wait_readnb(x::(AsyncStream,Int)) = wait(x, :readnotify, wait_readnb_filter)
 wait_readnb(x::AsyncStream,b::Int) = wait_readnb((x,b))
 wait_readbyte(x::AsyncStream,c::Uint8) = wait((x,c), :readnotify, wait_readbyte_filter)
