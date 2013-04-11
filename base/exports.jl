@@ -1009,6 +1009,7 @@ export
     readuntil,
     seek,
     seekend,
+    seekstart,
     serialize,
     skip,
     start_reading,
