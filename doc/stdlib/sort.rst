@@ -133,6 +133,18 @@ Sort Functions
    ``Sort.MergeSort``, or ``Sort.TimSort``), and ``ord`` to sort with
    a custom ordering (e.g., Sort.Reverse or a comparison function).
 
+.. function:: sort(A, dim, [alg[, ord]])
+
+   Sort a multidimensional array ``A`` along the given dimension.
+
+.. function:: sortrows(A, [alg[, ord]])
+
+   Sort the rows of matrix ``A`` lexicographically.
+
+.. function:: sortcols(A, [alg[, ord]])
+
+   Sort the columns of matrix ``A`` lexicographically.
+
 -------------------------
 Sorting-related Functions
 -------------------------

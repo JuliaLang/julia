@@ -206,23 +206,23 @@ DLLEXPORT double jl_stat_atime(char *statbuf)
 
 DLLEXPORT double jl_stat_mtime(char *statbuf)
 {
-  uv_statbuf_t *s;
-  s = (uv_statbuf_t*) statbuf;
+    uv_statbuf_t *s;
+    s = (uv_statbuf_t*) statbuf;
 #if defined(__WIN32__)
-  return (double)s->st_mtime;
+    return (double)s->st_mtime;
 #else
-  return (double)s->st_MTIM.tv_sec + (double)s->st_MTIM.tv_nsec * 1e-9;
+    return (double)s->st_MTIM.tv_sec + (double)s->st_MTIM.tv_nsec * 1e-9;
 #endif
 }
 
 DLLEXPORT double jl_stat_ctime(char *statbuf)
 {
-  uv_statbuf_t *s;
-  s = (uv_statbuf_t*) statbuf;
+    uv_statbuf_t *s;
+    s = (uv_statbuf_t*) statbuf;
 #if defined(__WIN32__)
-  return (double)s->st_ctime;
+    return (double)s->st_ctime;
 #else
-  return (double)s->st_CTIM.tv_sec + (double)s->st_CTIM.tv_nsec * 1e-9;
+    return (double)s->st_CTIM.tv_sec + (double)s->st_CTIM.tv_nsec * 1e-9;
 #endif
 }
 
@@ -351,7 +351,7 @@ DLLEXPORT int jl_cpu_cores(void)
 // Returns time in nanosec
 DLLEXPORT uint64_t jl_hrtime(void)
 {
-  return uv_hrtime();
+    return uv_hrtime();
 }
 
 // -- iterating the environment --

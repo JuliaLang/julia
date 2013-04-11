@@ -408,3 +408,42 @@ sort!{O<:Direct,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) =
 end # module Sort.Float
 
 end # module Sort
+
+# sorting multi-dimensional arrays
+sort(A::AbstractArray, dim::Integer, o::Base.Sort.Ordering = Base.Sort.Forward(),
+     alg::Base.Sort.Algorithm = DEFAULT_STABLE) =
+    mapslices(sort, A, [dim])
+
+sort(A::AbstractArray, dim::Integer, alg::Base.Sort.Algorithm) =
+    sort(A, dim, Base.Sort.Forward(), alg)
+
+sort(A::AbstractArray, dim::Integer, alg::Base.Sort.Algorithm, o::Base.Sort.Ordering) =
+    sort(A, dim, o, alg)
+
+function sortrows(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward(),
+                  alg::Base.Sort.Algorithm = DEFAULT_STABLE)
+    c = 1:size(A,2)
+    rows = [ sub(A,i,c) for i=1:size(A,1) ]
+    p = sortperm(rows, o, alg)
+    A[p,:]
+end
+
+sortrows(A::AbstractMatrix, alg::Base.Sort.Algorithm) =
+    sortrows(A, Base.Sort.Forward(), alg)
+
+sortrows(A::AbstractMatrix, alg::Base.Sort.Algorithm, o::Base.Sort.Ordering) =
+    sortrows(A, o, alg)
+
+function sortcols(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward(),
+                  alg::Base.Sort.Algorithm = DEFAULT_STABLE)
+    r = 1:size(A,1)
+    cols = [ sub(A,r,i) for i=1:size(A,2) ]
+    p = sortperm(cols, o, alg)
+    A[:,p]
+end
+
+sortcols(A::AbstractMatrix, alg::Base.Sort.Algorithm) =
+    sortcols(A, Base.Sort.Forward(), alg)
+
+sortcols(A::AbstractMatrix, alg::Base.Sort.Algorithm, o::Base.Sort.Ordering) =
+    sortcols(A, o, alg)

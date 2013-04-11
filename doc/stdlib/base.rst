@@ -485,7 +485,7 @@ Set-Like Collections
 
 .. function:: IntSet(i...)
 
-   Construct an ``IntSet`` of the given integers. Implemented as a bit string, and therefore good for dense integer sets.
+   Construct an ``IntSet`` of the given integers. Implemented as a bit string, and therefore designed for dense integer sets. If the set will be sparse (for example holding a single very large integer), use ``Set`` instead.
 
 .. function:: union(s1,s2...)
 

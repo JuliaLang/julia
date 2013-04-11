@@ -532,6 +532,8 @@ export
     sortby,
     sortby!,
     sortperm,
+    sortrows,
+    sortcols,
     squeeze,
     step,
     stride,
