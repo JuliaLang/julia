@@ -589,6 +589,13 @@
 
 "),
 
+("Iterable Collections","Base","collect","collect(collection)
+
+   Return an array of all items in a collection. For associative
+   collections, returns (key, value) tuples.
+
+"),
+
 ("Indexable Collections","Base","getindex","getindex(collection, key...)
 
    Retrieve the value(s) stored at the given key or index within a
@@ -646,13 +653,6 @@
 ("Associative Collections","Base","values","values(collection)
 
    Return an array of all values in a collection.
-
-"),
-
-("Associative Collections","Base","collect","collect(collection)
-
-   Return an array of all items in a collection. For associative
-   collections, returns (key, value) tuples.
 
 "),
 
@@ -1345,9 +1345,15 @@
 
 "),
 
-("I/O","Base","seek_end","seek_end(s)
+("I/O","Base","seekstart","seekstart(s)
 
-   Seek a stream to the end.
+   Seek a stream to its beginning.
+
+"),
+
+("I/O","Base","seekend","seekend(s)
+
+   Seek a stream to its end.
 
 "),
 
@@ -3259,6 +3265,23 @@
 
 "),
 
+("Arrays","Base","ind2sub","ind2sub(dims, index) -> subscripts
+
+   Returns a tuple of subscripts into an array with dimensions
+   \"dims\", corresponding to the linear index \"index\"
+
+   **Example** \"i, j, ... = ind2sub(size(A), indmax(A))\" provides
+   the indices of the maximum element
+
+"),
+
+("Arrays","Base","sub2ind","sub2ind(dims, i, j, k...) -> index
+
+   The inverse of \"ind2sub\", returns the linear index corresponding
+   to the provided subscripts
+
+"),
+
 ("Arrays","Base","Array","Array(type, dims)
 
    Construct an uninitialized dense array. \"dims\" may be a tuple or
@@ -4156,18 +4179,19 @@
 
 "),
 
-("Parallel Computing","Base","addprocs_local","addprocs_local(n)
+("Parallel Computing","Base","addprocs","addprocs(n)
 
    Add processes on the local machine. Can be used to take advantage
    of multiple cores.
 
 "),
 
-("Parallel Computing","Base","addprocs_ssh","addprocs_ssh({\"host1\", \"host2\", ...})
+("Parallel Computing","Base","addprocs","addprocs({\"host1\", \"host2\", ...}; tunnel=false)
 
    Add processes on remote machines via SSH. Requires julia to be
    installed in the same location on each node, or to be available via
-   a shared file system.
+   a shared file system. If \"tunnel\" is \"true\" then SSH tunneling
+   will be used.
 
 "),
 
@@ -4197,7 +4221,7 @@
 
 "),
 
-("Parallel Computing","Base","remote_call","remote_call(id, func, args...)
+("Parallel Computing","Base","remotecall","remotecall(id, func, args...)
 
    Call a function asynchronously on the given arguments on the
    specified processor. Returns a \"RemoteRef\".
@@ -4217,15 +4241,15 @@
 
 "),
 
-("Parallel Computing","Base","remote_call_wait","remote_call_wait(id, func, args...)
+("Parallel Computing","Base","remotecall_wait","remotecall_wait(id, func, args...)
 
-   Perform \"wait(remote_call(...))\" in one message.
+   Perform \"wait(remotecall(...))\" in one message.
 
 "),
 
-("Parallel Computing","Base","remote_call_fetch","remote_call_fetch(id, func, args...)
+("Parallel Computing","Base","remotecall_fetch","remotecall_fetch(id, func, args...)
 
-   Perform \"fetch(remote_call(...))\" in one message.
+   Perform \"fetch(remotecall(...))\" in one message.
 
 "),
 
