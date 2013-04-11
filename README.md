@@ -86,9 +86,9 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting the directory.
 
 <a name="Platform-Specific-Notes"/>
-### Platform-Specific Notes
+## Platform-Specific Notes
 
-#### Linux
+### Linux
 
 GCC version 4.6 or later is recommended to build Julia.
 
@@ -100,7 +100,7 @@ On Ubuntu systems, you may also need to install the package `libncurses5-dev`.
 
 On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build Julia.
 
-#### OS X
+### OS X
 
 It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and macports work for building Julia. If you do not use brew or macports, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires gcc to function properly. 
 
@@ -108,7 +108,7 @@ Clang is now used by default to build Julia on OS X (10.7 and above). Make sure 
 
 If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your .bashrc or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
 
-#### FreeBSD
+### FreeBSD
 
 *Release 9.0:* install the gcc46, git, and gmake packages/ports, and compile Julia with the command:
 
@@ -116,12 +116,12 @@ If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your .bashrc or equi
 
 You must use the gmake command on FreeBSD instead of make.
 
-#### Windows
+### Windows
 
 In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
 
 <a name="Required-Build-Tools-External-Libraries"/>
-## Required Build Tools & External Libraries
+## Required Build Tools and External Libraries
 
 Building Julia requires that the following software be installed:
 
@@ -183,6 +183,8 @@ Julia uses the following external libraries, which are automatically downloaded 
 [Rmath]:        http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
 [libuv]:        https://github.com/JuliaLang/libuv
 
+### Build options for make
+
 If you already have one or more of these packages installed on your system, it is possible to pass `USE_SYSTEM_...=1` to `make` to prevent Julia from compiling duplicates of these libraries. The complete list of possible flags can be found in Make.inc. Please be aware that this procedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
 ### SuiteSparse
@@ -236,7 +238,7 @@ The following distributions include julia, but the versions may be out of date d
 * [OS X Homebrew](http://mxcl.github.com/homebrew/)
 
 <a name="Editor-Terminal-Setup"/>
-## Editor & Terminal Setup
+## Editor and Terminal Setup
 
 Currently, [Julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, Textmate, Notepad++, and Kate.
 
@@ -251,7 +253,3 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
     keysym Return = Return Linefeed
 
-### Try it Online
-
-[Forio.com](http://forio.com/) is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com).
-This service is best-effort and may not always be up or stable. Be nice!
