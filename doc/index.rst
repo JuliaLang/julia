@@ -20,5 +20,5 @@ Translations
 
 * `简体中文 <http://julia_zh_cn.readthedocs.org/en/latest/>`_
 * `Português brasileiro <https://julia_pt-br.readthedocs.org/en/latest/>`_
-* `Español peruano <https://julia_es_pe.readthedocs.org/>`_
+* `Español latino <https://julia_es_pe.readthedocs.org/en/latest/>`_
 
