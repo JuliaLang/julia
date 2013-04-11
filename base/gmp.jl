@@ -43,6 +43,12 @@ import
     Base.string,
     Base.trunc
 
+type mpz_struct
+    alloc::Cint
+    size::Cint
+    d::Ptr{Void}
+end
+
 include("bigint.jl")
 include("bigfloat.jl")
 

@@ -44,7 +44,7 @@ end
 
 function BigFloat(x::BigInt)
     z = BigFloat()
-    ccall((:__gmpf_set_z, :libgmp), Void, (Ptr{Void}, Ptr{Void}), z.mpf, x.mpz)
+    ccall((:__gmpf_set_z, :libgmp), Void, (Ptr{Void}, Ptr{mpz_struct}), z.mpf, &(x.mpz))
     return z
 end
 

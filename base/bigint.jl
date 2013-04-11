@@ -1,39 +1,38 @@
-BigInt_clear(mpz::Vector{Int32}) = ccall((:__gmpz_clear, :libgmp), Void, (Ptr{Void},), mpz)
-
-immutable BigInt <: Integer
-    mpz::Vector{Int32}
+type BigInt <: Integer
+    mpz::mpz_struct
     function BigInt() 
-        z = Array(Int32, 4)
-        ccall((:__gmpz_init,:libgmp), Void, (Ptr{Void},), z)
+        z = mpz_struct(int32(0), int32(0), C_NULL)
+        ccall((:__gmpz_init,:libgmp), Void, (Ptr{mpz_struct},), &z)
         b = new(z)
         finalizer(b.mpz, BigInt_clear)
         return b
     end
 end
 
+BigInt_clear(mpz::mpz_struct) = ccall((:__gmpz_clear, :libgmp), Void, (Ptr{mpz_struct},), &mpz)
 function BigInt(x::BigInt)
     z = BigInt()
-    ccall((:__gmpz_set, :libgmp), Void, (Ptr{Void}, Ptr{Void}), z.mpz, x.mpz)
+    ccall((:__gmpz_set, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}), &(z.mpz), &(x.mpz))
     return z
 end
 
 function BigInt(x::String)
     z = BigInt()
-    err = ccall((:__gmpz_set_str, :libgmp), Int32, (Ptr{Void}, Ptr{Uint8}, Int32), z.mpz, bytestring(x), 0)
+    err = ccall((:__gmpz_set_str, :libgmp), Int32, (Ptr{mpz_struct}, Ptr{Uint8}, Int32), &(z.mpz), bytestring(x), 0)
     if err != 0; error("Invalid input"); end
     return z
 end
 
 function BigInt(x::Int)
     z = BigInt()
-    ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{Void}, Int), z.mpz, x)
+    ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{mpz_struct}, Int), &(z.mpz), x)
     return z
 end
 
 function BigInt(x::Uint)
     z = BigInt()
     ccall((:__gmpz_set_ui, :libgmp), Void,
-        (Ptr{Void}, Uint), z.mpz, x)
+        (Ptr{mpz_struct}, Uint), &(z.mpz), x)
     return z
 end
 
@@ -50,10 +49,10 @@ end
 convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
 
 convert(::Type{Int}, n::BigInt) =
-    ccall((:__gmpz_get_si, :libgmp), Int, (Ptr{Void},), n.mpz)
+    ccall((:__gmpz_get_si, :libgmp), Int, (Ptr{mpz_struct},), &(n.mpz))
 
 convert(::Type{Uint}, n::BigInt) =
-    ccall((:__gmpz_get_ui, :libgmp), Uint, (Ptr{Void},), n.mpz)
+    ccall((:__gmpz_get_ui, :libgmp), Uint, (Ptr{mpz_struct},), &(n.mpz))
 
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
@@ -65,7 +64,7 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
     @eval begin
         function ($fJ)(x::BigInt, y::BigInt)
             z = BigInt()
-            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z.mpz, x.mpz, y.mpz)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}, Ptr{mpz_struct}), &(z.mpz), &(x.mpz), &(y.mpz))
             return z
         end
     end
@@ -76,7 +75,7 @@ for (fJ, fC) in ((:-, :neg), (:~, :com))
     @eval begin
         function ($fJ)(x::BigInt)
             z = BigInt()
-            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{Void}, Ptr{Void}), z.mpz, x.mpz)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}), &(z.mpz), &(x.mpz))
             return z
         end
     end
@@ -84,7 +83,7 @@ end
 
 function <<(x::BigInt, c::Uint)
     z = BigInt()
-    ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Uint), z.mpz, x.mpz, c)
+    ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}, Uint), &(z.mpz), &(x.mpz), c)
     return z
 end
 <<(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x<<uint(c)
@@ -92,7 +91,7 @@ end
 
 function >>(x::BigInt, c::Uint)
     z = BigInt()
-    ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Uint), z.mpz, x.mpz, c)
+    ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}, Uint), &(z.mpz), &(x.mpz), c)
     return z
 end
 >>(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x>>uint(c)
@@ -101,23 +100,23 @@ end
 function divrem(x::BigInt, y::BigInt)
     z1 = BigInt()
     z2 = BigInt()
-    ccall((:__gmpz_tdiv_qr, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1.mpz, z2.mpz, x.mpz, y.mpz)
+    ccall((:__gmpz_tdiv_qr, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}, Ptr{mpz_struct}, Ptr{mpz_struct}), &(z1.mpz), &(z2.mpz), &(x.mpz), &(y.mpz))
     z1, z2
 end
 
 function cmp(x::BigInt, y::BigInt)
-    ccall((:__gmpz_cmp, :libgmp), Int32, (Ptr{Void}, Ptr{Void}), x.mpz, y.mpz)
+    ccall((:__gmpz_cmp, :libgmp), Int32, (Ptr{mpz_struct}, Ptr{mpz_struct}), &(x.mpz), &(y.mpz))
 end
 
 function sqrt(x::BigInt)
     z = BigInt()
-    ccall((:__gmpz_sqrt, :libgmp), Void, (Ptr{Void}, Ptr{Void}), z.mpz, x.mpz)
+    ccall((:__gmpz_sqrt, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}), &(z.mpz), &(x.mpz))
     return z
 end
 
 function ^(x::BigInt, y::Uint)
     z = BigInt()
-    ccall((:__gmpz_pow_ui, :libgmp), Void, (Ptr{Void}, Ptr{Void}, Uint), z.mpz, x.mpz, y)
+    ccall((:__gmpz_pow_ui, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}, Uint), &(z.mpz), &(x.mpz), y)
     return z
 end
 
@@ -139,8 +138,8 @@ function gcdx(a::BigInt, b::BigInt)
     s = BigInt()
     t = BigInt()
     ccall((:__gmpz_gcdext, :libgmp), Void,
-        (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
-        g, s, t, a.mpz, b.mpz)
+        (Ptr{mpz_struct}, Ptr{mpz_struct}, Ptr{mpz_struct}, Ptr{mpz_struct}, Ptr{mpz_struct}),
+        &(g.mpz), &(s.mpz), &(t.mpz), &(a.mpz), &(b.mpz))
     BigInt(g), BigInt(s), BigInt(t)
 end
 
@@ -152,14 +151,14 @@ function factorial(bn::BigInt)
     end
     z = BigInt()
     ccall((:__gmpz_fac_ui, :libgmp), Void,
-        (Ptr{Void}, Uint), z.mpz, n)
+        (Ptr{mpz_struct}, Uint), &(z.mpz), n)
     return z
 end
 
 function binomial(n::BigInt, k::Uint)
     z = BigInt()
     ccall((:__gmpz_bin_ui, :libgmp), Void,
-        (Ptr{Void}, Ptr{Void}, Uint), z.mpz, n.mpz, k)
+        (Ptr{mpz_struct}, Ptr{mpz_struct}, Uint), &(z.mpz), &(n.mpz), k)
     return z
 end
 binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(k))
@@ -173,7 +172,7 @@ binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(
 function string(x::BigInt)
     lng = ndigits(x) + 2
     z = Array(Uint8, lng)
-    lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{Void}...), z, lng, "%Zd", x.mpz)
+    lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{mpz_struct}...), z, lng, "%Zd", &(x.mpz))
     return bytestring(convert(Ptr{Uint8}, z[1:lng]))
 end
 
@@ -181,4 +180,4 @@ function show(io::IO, x::BigInt)
     print(io, string(x))
 end
 
-ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Uint, (Ptr{Void}, Int32), x.mpz, 10)
+ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Uint, (Ptr{mpz_struct}, Int32), &(x.mpz), 10)
