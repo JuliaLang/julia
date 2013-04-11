@@ -5,9 +5,9 @@ Julia Packages
 Where to find Julia packages
 ----------------------------
 
-- An official list of packages is available, see :ref:`available-packages`.
+- An official list of Julia packages is available at :ref:`available-packages`.
 
-- Announcements of new packages can also be found in the `julia-users Google
+- Announcements of new packages can also be found on the `julia-users Google
   Groups <https://groups.google.com/forum/?fromgroups=#!forum/julia-users>`_.
 
 .. _pkg-install:
@@ -16,7 +16,7 @@ How to use Julia packages
 -------------------------
 
 The ``Pkg`` module in Julia provides tools for installing and managing third
-party packages. It also manages the dependencies, while installing packages.
+party packages. It also manages the dependencies while installing packages.
 
 Get the updated list of packages with::
 
@@ -31,6 +31,11 @@ This installs the package to ``$HOME/.julia/MY_PACKAGE_NAME`` . In order to
 remove a package, do::
 
    Pkg.rm("MY_PACKAGE_NAME")
+
+The package system is still under active development. Sometimes, it
+can get into an inconsistent state. Deleting the ``$HOME/.julia``
+directory will wipe everything related to the package system. Repeat
+all the steps listed here to start from a clean slate.
 
 Contributing a new Julia package
 --------------------------------
