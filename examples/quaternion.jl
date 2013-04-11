@@ -1,4 +1,4 @@
-type Quaternion{T<:Real} <: Number
+immutable Quaternion{T<:Real} <: Number
     q0::T
     q1::T
     q2::T
@@ -55,12 +55,10 @@ end
 real(z::Quaternion) = z.q0
 imag(z::Quaternion) = z.q1
 
-scalar(z::Quaternion) = z.q0
-vector(z::Quaternion) = vector(z.q1,z.q2,z.q3)
-
 conj(z::Quaternion) = Quaternion(z.q0, -z.q1, -z.q2, -z.q3)
-norm(z::Quaternion) = z.q0*z.q0 + z.q1*z.q1 + z.q2*z.q2 + z.q3*z.q3
-inv(z::Quaternion) = conj(z)/norm(z)
+abs(z::Quaternion) = sqrt(z.q0*z.q0 + z.q1*z.q1 + z.q2*z.q2 + z.q3*z.q3)
+abs2(z::Quaternion) = z.q0*z.q0 + z.q1*z.q1 + z.q2*z.q2 + z.q3*z.q3
+inv(z::Quaternion) = conj(z)/abs2(z)
 
 (-)(z::Quaternion) = Quaternion(-z.q0, -z.q1, -z.q2, -z.q3)
 
