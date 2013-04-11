@@ -66,7 +66,7 @@ end
 
 function MPCComplex(x::MPFRFloat)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_fr, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Int32), z.mpc, x.mpfr, ROUNDING_MODE)
+    ccall((:mpc_set_fr, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Int32), z.mpc, &(x.mpfr), ROUNDING_MODE)
     return z
 end
 
@@ -139,7 +139,7 @@ end
 
 function MPCComplex(x::MPFRFloat, y::MPFRFloat)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_fr_fr, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Int32), z.mpc, x.mpfr, y.mpfr, ROUNDING_MODE)
+    ccall((:mpc_set_fr_fr, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Int32), z.mpc, &(x.mpfr), &(y.mpfr), ROUNDING_MODE)
     return z
 end
 
@@ -245,13 +245,13 @@ end
 
 function imag{N,P}(x::MPCComplex{N,P})
     z = MPFRFloat{N}()
-    ccall((:mpc_imag, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Int32), z.mpfr, x.mpc, ROUNDING_MODE)
+    ccall((:mpc_imag, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Int32), &(z.mpfr), x.mpc, ROUNDING_MODE)
     return z
 end
 
 function real{N,P}(x::MPCComplex{N,P})
     z = MPFRFloat{N}()
-    ccall((:mpc_real, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Int32), z.mpfr, x.mpc, ROUNDING_MODE)
+    ccall((:mpc_real, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Int32), &(z.mpfr), x.mpc, ROUNDING_MODE)
     return z
 end
 
