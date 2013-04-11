@@ -117,7 +117,9 @@ function reload_path(path)
             tls[:SOURCE_PATH] = prev
         end
     end
-    put(package_locks[path],nothing)
+    if !isready(package_locks[path])
+        put(package_locks[path],nothing)
+    end
     nothing
 end
 
