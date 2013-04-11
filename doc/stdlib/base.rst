@@ -876,9 +876,13 @@ I/O
 
    Seek a stream to the given position.
 
-.. function:: seek_end(s)
+.. function:: seekstart(s)
 
-   Seek a stream to the end.
+   Seek a stream to its beginning.
+
+.. function:: seekend(s)
+
+   Seek a stream to its end.
 
 .. function:: skip(s, offset)
 
@@ -2773,13 +2777,14 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 Parallel Computing
 ------------------
 
-.. function:: addprocs_local(n)
+.. function:: addprocs(n)
 
    Add processes on the local machine. Can be used to take advantage of multiple cores.
 
-.. function:: addprocs_ssh({"host1","host2",...})
+.. function:: addprocs({"host1","host2",...}; tunnel=false)
 
    Add processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
+   If ``tunnel`` is ``true`` then SSH tunneling will be used.
 
 .. function:: addprocs_sge(n)
 
@@ -2797,7 +2802,7 @@ Parallel Computing
 
    Transform collection ``c`` by applying ``f`` to each element in parallel.
 
-.. function:: remote_call(id, func, args...)
+.. function:: remotecall(id, func, args...)
 
    Call a function asynchronously on the given arguments on the specified processor. Returns a ``RemoteRef``.
 
@@ -2809,13 +2814,13 @@ Parallel Computing
 
    Wait for and get the value of a remote reference.
 
-.. function:: remote_call_wait(id, func, args...)
+.. function:: remotecall_wait(id, func, args...)
 
-   Perform ``wait(remote_call(...))`` in one message.
+   Perform ``wait(remotecall(...))`` in one message.
 
-.. function:: remote_call_fetch(id, func, args...)
+.. function:: remotecall_fetch(id, func, args...)
 
-   Perform ``fetch(remote_call(...))`` in one message.
+   Perform ``fetch(remotecall(...))`` in one message.
 
 .. function:: put(RemoteRef, value)
 
