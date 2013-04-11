@@ -21,7 +21,7 @@ import
         sech, csch, coth, acosh, asinh, atanh
 
 const ROUNDING_MODE = [0]
-const DEFAULT_PRECISION = [53, 53]
+const DEFAULT_PRECISION = [256]
 
 # Basic type and initialization definitions
 
@@ -46,7 +46,7 @@ type MPFRFloat{N} <: FloatingPoint
     end
 end
 
-MPFR_clear(mpfr::Vector{Int32}) = ccall((:mpfr_clear, :libmpfr), Void, (Ptr{mpfr_struct},), &mpfr)
+MPFR_clear(mpfr::mpfr_struct) = ccall((:mpfr_clear, :libmpfr), Void, (Ptr{mpfr_struct},), &mpfr)
 
 function MPFRFloat(x::MPFRFloat)
     z = MPFRFloat{DEFAULT_PRECISION[end]}()
