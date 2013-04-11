@@ -54,7 +54,7 @@ end
 
 function MPCComplex(x::BigInt)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_z, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Int32), z.mpc, x.mpz, ROUNDING_MODE)
+    ccall((:mpc_set_z, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Int32), z.mpc, &(x.mpz), ROUNDING_MODE)
     return z
 end
 
@@ -127,7 +127,7 @@ end
 
 function MPCComplex(x::BigInt, y::BigInt)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_z_z, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Int32), z.mpc, x.mpz, y.mpz, ROUNDING_MODE)
+    ccall((:mpc_set_z_z, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Int32), z.mpc, &(x.mpz), &(y.mpz), ROUNDING_MODE)
     return z
 end
 
@@ -201,7 +201,7 @@ end
 
 function ^(x::MPCComplex, y::BigInt)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_pow_z, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Int32), z.mpc, x.mpc, y.mpz, ROUNDING_MODE)
+    ccall((:mpc_pow_z, :libmpc), Int32, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Int32), z.mpc, x.mpc, &(y.mpz), ROUNDING_MODE)
     return z
 end
 
