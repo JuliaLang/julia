@@ -248,6 +248,8 @@ seek(s::IOStream, n::Integer) =
     (ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
      error("seek failed"))
 
+seekstart(s::IO) = seek(s, 0)
+
 seekend(s::IOStream) =
     (ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios)==0 ||
      error("seekend failed"))
