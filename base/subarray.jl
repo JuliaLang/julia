@@ -202,7 +202,7 @@ function translate_indexes(s::SubArray, I::Union(Real,AbstractArray)...)
     j = 1
     for i = 1:ndp
         t = s.indexes[i]
-        if s.strides[j] == sp[i]
+        if j <= nds && s.strides[j] == sp[i]
             #TODO: don't generate the dense vector indexes if they can be ranges
             if j==n && n < nds
                 newindexes[i] = translate_linear_indexes(s, j, I[j])
