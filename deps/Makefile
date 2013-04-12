@@ -1000,6 +1000,7 @@ ifeq ($(USE_LIB64), 1)
 UMFPACK_CONFIG = -DLONGBLAS='long long' 
 CHOLMOD_CONFIG = -DLONGBLAS='long long' 
 endif
+CHOLMOD_CONFIG += -I$(JULIAHOME)/deps/SuiteSparse-$(SUITESPARSE_VER)/CCOLAMD/Include -I$(JULIAHOME)/deps/SuiteSparse-$(SUITESPARSE_VER)/CAMD/Include
 
 SUITE_SPARSE_LIB = -lm
 ifneq ($(OS), Darwin)
@@ -1031,12 +1032,16 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
-	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a -o -name libspqr.a 2>/dev/null` . && \
+	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcamd.a -o -name libccolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a -o -name libspqr.a 2>/dev/null` . && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(BUILD)/lib/libamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libamd.$(SHLIB_EXT) $(BUILD)/lib/libamd.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(BUILD)/lib/libcolamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libcolamd.$(SHLIB_EXT) $(BUILD)/lib/libcolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(BUILD)/lib/libcholmod.$(SHLIB_EXT) -L$(BUILD)/lib -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libcamd.a $(NO_WHOLE_ARCHIVE) -o $(BUILD)/lib/libcamd.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CMD)libcamd.$(SHLIB_EXT) $(BUILD)/lib/libcamd.$(SHLIB_EXT) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libccolamd.a $(NO_WHOLE_ARCHIVE) -o $(BUILD)/lib/libccolamd.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CMD)libccolamd.$(SHLIB_EXT) $(BUILD)/lib/libccolamd.$(SHLIB_EXT) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(BUILD)/lib/libcholmod.$(SHLIB_EXT) -L$(BUILD)/lib -lcolamd -lamd -lcamd -lccolamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcholmod.$(SHLIB_EXT) $(BUILD)/lib/libcholmod.$(SHLIB_EXT) && \
 	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(BUILD)/lib/libumfpack.$(SHLIB_EXT) -L$(BUILD)/lib -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(BUILD)/lib/libumfpack.$(SHLIB_EXT) && \
