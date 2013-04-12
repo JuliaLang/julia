@@ -201,7 +201,7 @@
     jl_new_lambda_info;
     jl_new_struct_uninit;
     jl_new_struct;
-    jl_new_structt;
+    jl_new_structv;
     jl_nothing;
     jl_object_id;
     jl_os_name;
