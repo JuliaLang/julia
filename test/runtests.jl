@@ -4,6 +4,8 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode", "corelib",
              "bigint", "sorting", "statistics", "spawn", "parallel",
              "arpack", "bigfloat", "file", "zlib", "perf", "suitesparse"]
 
+# Disabled: "complex"
+
 if ARGS == ["all"]
     tests = testnames
 else
