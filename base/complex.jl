@@ -178,7 +178,7 @@ function sqrt(z::Complex)
     if rz >= 0
         return complex(r, iz/r/2)
     end
-    return complex(abs(iz)/r/2, iz >= 0 ? r : -r)
+    return complex(abs(iz)/r/2, copysign(r,iz))
 end
 
 cis(theta::Real) = complex(cos(theta),sin(theta))
