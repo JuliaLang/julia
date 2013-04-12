@@ -99,6 +99,9 @@ sA = sub(A, 2, 1:5, 1:8)
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
+sA = sub(A, 1:3, 1:5, 5)
+sA[1:3,1:5] = -2
+@test all(A[:,:,5] .== -2)
 
 # slice
 A = reshape(1:120, 3, 5, 8)
