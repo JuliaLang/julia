@@ -173,7 +173,7 @@ static Function *resetstkoflw_func;
 */
 
 // --- entry point ---
-
+//static int n_emit=0;
 static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
 //static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li, bool cstyle)
@@ -187,6 +187,8 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     Function *f = NULL;
     JL_TRY {
         f = emit_function(li, cstyle);
+        //JL_PRINTF(JL_STDOUT, "emit %s\n", li->name->name);
+        //n_emit++;
     }
     JL_CATCH {
         li->functionObject = NULL;

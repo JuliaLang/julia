@@ -567,6 +567,17 @@ jl_array_t *jl_lam_capt(jl_expr_t *l)
     return (jl_array_t*)ll;
 }
 
+int jl_lam_vars_captured(jl_expr_t *ast)
+{
+    jl_array_t *vinfos = jl_lam_vinfo(ast);
+    for(int i=0; i < jl_array_len(vinfos); i++) {
+        if (jl_vinfo_capt((jl_array_t*)jl_cellref(vinfos,i))) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // get array of body forms
 jl_expr_t *jl_lam_body(jl_expr_t *l)
 {
