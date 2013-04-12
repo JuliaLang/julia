@@ -28,15 +28,22 @@ function parse_requires(readable)
 end
 parse_requires(file::String) = isfile(file) ? open(parse_requires,file) : Requires()
 
-function merge!(A::Requires, B::Requires)
+function merge_requires!(A::Requires, B::Requires)
     for (pkg, ivals) in B
         A[pkg] = has(A,pkg) ? intersect(A[pkg], ivals) : ivals
     end
     return A
 end
 
+parse_version(readable) = convert(VersionNumber, readchomp(readable))
+parse_version(file::String) = isfile(file) ? open(parse_version,file) : v"0"
+
+isinstalled(pkg::String) =
+    pkg != "METADATA" && pkg != "REQUIRE" && isfile(pkg, "src", "$pkg.jl")
+
 function isfixed(pkg::String)
-    isfile("METDATA", pkg, "url") || return true
+    isinstalled(pkg) || error("$pkg is not an installed package.")
+    isfile("METADATA", pkg, "url") || return true
     ispath(pkg, ".git") || return true
     cd(pkg) do
         Git.dirty() && return true
@@ -49,12 +56,14 @@ function isfixed(pkg::String)
 end
 
 function installed()
-    pkgs = Dict{ByteString,(Bool,Requires)}()
+    pkgs = Dict{ByteString,(Bool,VersionNumber,Requires)}()
     for pkg in readdir()
-        pkg == "METADATA" && continue
-        pkg == "REQUIRE" && continue
-        isfile(pkg, "src", "$pkg.jl") || continue
-        pkgs[pkg] = (isfixed(pkg), parse_requires(joinpath(pkg, "REQUIRE")))
+        isinstalled(pkg) || continue
+        pkgs[pkg] = (
+            isfixed(pkg),
+            parse_version(joinpath(pkg, "VERSION")),
+            parse_requires(joinpath(pkg, "REQUIRE")),
+        )
     end
     return pkgs
 end
@@ -63,13 +72,13 @@ function available()
     pkgs = Dict{ByteString,Dict{VersionNumber,Requires}}()
     for pkg in readdir("METADATA")
         isfile("METADATA", pkg, "url") || continue
-        versions = joinpath("METADATA", pkg, "versions")
-        isdir(versions) || continue
-        for ver in readdir(versions)
+        versdir = joinpath("METADATA", pkg, "versions")
+        isdir(versdir) || continue
+        for ver in readdir(versdir)
             ismatch(Base.VERSION_REGEX, ver) || continue
-            isfile(versions, ver, "sha1") || continue
+            isfile(versdir, ver, "sha1") || continue
             if !has(pkgs,pkg) pkgs[pkg] = Dict{VersionNumber,Requires}() end
-            pkgs[pkg][convert(VersionNumber,ver)] = parse_requires(joinpath(versions, ver, "requires"))
+            pkgs[pkg][convert(VersionNumber,ver)] = parse_requires(joinpath(versdir, ver, "requires"))
         end
     end
     return pkgs
