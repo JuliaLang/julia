@@ -22,10 +22,10 @@ function parse_requires(readable)
         ismatch(r"^\s*(?:#|$)", line) && continue
         fields = split(replace(line, r"#.*$", ""))
         pkg = shift!(fields)
-        if !all(x->ismatch(Base.VERSION_REGEX,x), fields)
+        if !all(_->ismatch(Base.VERSION_REGEX,_), fields)
             error("invalid requires entry for $pkg: $fields")
         end
-        vers = [ convert(VersionNumber,x) for x in fields ]
+        vers = [convert(VersionNumber,_) for _ in fields]
         if !issorted(vers)
             error("invalid requires entry for $pkg: $vers")
         end
@@ -72,8 +72,7 @@ end
 
 function installed()
     pkgs = Installed[]
-    for line in eachline(`ls -1`)
-        pkg = chomp(line)
+    for pkg in readdir()
         pkg == "METADATA" && continue
         pkg == "REQUIRE" && continue
         isfile(pkg, "src", "$pkg.jl") || continue
@@ -85,13 +84,11 @@ end
 
 function available()
     pkgs = Dict{ByteString,Dict{VersionNumber,Requires}}()
-    for line in eachline(`ls -1 METADATA`)
-        pkg = chomp(line)
+    for pkg in readdir("METADATA")
         isfile("METADATA", pkg, "url") || continue
         versions = joinpath("METADATA", pkg, "versions")
         isdir(versions) || continue
-        for line in eachline(`ls -1 $versions`)
-            ver = chomp(line)
+        for ver in readdir(versions)
             ismatch(Base.VERSION_REGEX, ver) || continue
             isfile(versions, ver, "sha1") || continue
             if !has(pkgs,pkg) pkgs[pkg] = Dict{VersionNumber,Requires}() end
