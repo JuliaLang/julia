@@ -1,20 +1,4 @@
 # module Pkg2
-import Base: Git, isequal, isless, hash, isempty, contains
-
-### VersionSet ###
-
-immutable VersionInterval
-    lower::VersionNumber
-    upper::VersionNumber
-end
-
-isempty(i::VersionInterval) = i.upper <= i.lower
-contains(i::VersionInterval, v::VersionNumber) = a.lower <= v < a.upper
-intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
-intersect(A::Vector{VersionInterval}, B::Vector{VersionInterval}) =
-    sortby!(filter!(i->!isempty(i), vec([ intersect(a,b) for a in A, b in B ])), i->i.lower)
-
-typealias Requires Dict{ByteString,Vector{VersionInterval}}
 
 function parse_requires(readable)
     reqs = Requires()
@@ -51,12 +35,6 @@ function merge!(A::Requires, B::Requires)
     return A
 end
 
-immutable Installed
-    name::ByteString
-    fixed::Bool
-    reqs::Requires
-end
-
 function isfixed(pkg::String)
     isfile("METDATA", pkg, "url") || return true
     ispath(pkg, ".git") || return true
@@ -71,13 +49,12 @@ function isfixed(pkg::String)
 end
 
 function installed()
-    pkgs = Installed[]
+    pkgs = Dict{ByteString,(Bool,Requires)}()
     for pkg in readdir()
         pkg == "METADATA" && continue
         pkg == "REQUIRE" && continue
         isfile(pkg, "src", "$pkg.jl") || continue
-        reqs = parse_requires(joinpath(pkg, "REQUIRE"))
-        push!(pkgs, Installed(pkg, isfixed(pkg), reqs))
+        pkgs[pkg] = (isfixed(pkg), parse_requires(joinpath(pkg, "REQUIRE")))
     end
     return pkgs
 end
