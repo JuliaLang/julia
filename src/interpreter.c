@@ -66,6 +66,8 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
     return v;
 }
 
+int jl_has_intrinsics(jl_expr_t *e);
+
 extern int jl_boot_file_loaded;
 extern int inside_typedef;
 
@@ -120,6 +122,37 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     jl_value_t **args = &jl_cellref(ex->args,0);
     size_t nargs = jl_array_len(ex->args);
     if (ex->head == call_sym ||  ex->head == call1_sym) {
+        if (jl_is_lambda_info(args[0])) {
+            // directly calling an inner function ("let")
+            jl_lambda_info_t *li = (jl_lambda_info_t*)args[0];
+            if (jl_is_expr(li->ast) && !jl_lam_vars_captured((jl_expr_t*)li->ast) &&
+                !jl_has_intrinsics((jl_expr_t*)li->ast)) {
+                size_t na = nargs-1;
+                if (na == 0)
+                    return jl_interpret_toplevel_thunk(li);
+                jl_array_t *formals = jl_lam_args((jl_expr_t*)li->ast);
+                size_t nreq = jl_array_len(formals);
+                if (!jl_is_rest_arg(jl_cellref(formals,nreq-1))) {
+                    jl_value_t **ar;
+                    JL_GC_PUSHARGS(ar, na*2);
+                    for(int i=0; i < na*2; i++) {
+                        ar[i] = NULL;
+                    }
+                    for(int i=0; i < na; i++) {
+                        ar[i*2+1] = eval(args[i+1], locals, nl);
+                    }
+                    if (na != nreq) {
+                        jl_error("wrong number of arguments");
+                    }
+                    for(int i=0; i < na; i++) {
+                        ar[i*2] = (jl_value_t*)jl_decl_var(jl_cellref(formals,i));
+                    }
+                    jl_value_t *ret = jl_interpret_toplevel_thunk_with(li, ar, na);
+                    JL_GC_POP();
+                    return ret;
+                }
+            }
+        }
         jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl);
         if (!jl_is_func(f))
             jl_type_error("apply", (jl_value_t*)jl_function_type,

@@ -126,7 +126,7 @@ jl_module_t *jl_base_relative_to(jl_module_t *m)
     return (m==jl_core_module||m==jl_old_base_module||jl_base_module==NULL) ? m : jl_base_module;
 }
 
-static int has_intrinsics(jl_expr_t *e)
+int jl_has_intrinsics(jl_expr_t *e)
 {
     if (jl_array_len(e->args) == 0)
         return 0;
@@ -139,7 +139,7 @@ static int has_intrinsics(jl_expr_t *e)
     int i;
     for(i=0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
-        if (jl_is_expr(a) && has_intrinsics((jl_expr_t*)a))
+        if (jl_is_expr(a) && jl_has_intrinsics((jl_expr_t*)a))
             return 1;
     }
     return 0;
@@ -191,7 +191,7 @@ int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops)
             }
         }
     }
-    if (has_intrinsics(expr)) return 1;
+    if (jl_has_intrinsics(expr)) return 1;
     return 0;
 }
 
@@ -354,14 +354,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         assert(jl_is_lambda_info(thk));
         ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
         if (!ewc) {
-            jl_array_t *vinfos = jl_lam_vinfo((jl_expr_t*)thk->ast);
-            int i;
-            for(i=0; i < jl_array_len(vinfos); i++) {
-                if (jl_vinfo_capt((jl_array_t*)jl_cellref(vinfos,i))) {
-                    // interpreter doesn't handle closure environment
-                    ewc = 1;
-                    break;
-                }
+            if (jl_lam_vars_captured((jl_expr_t*)thk->ast)) {
+                // interpreter doesn't handle closure environment
+                ewc = 1;
             }
         }
     }

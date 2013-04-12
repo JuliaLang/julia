@@ -132,8 +132,11 @@ t_func[arraylen] = (1, 1, x->Int)
 #t_func[arrayref] = (2,Inf,(a,i...)->(isa(a,DataType) && subtype(a,Array) ?
 #                                     a.parameters[1] : Any))
 #t_func[arrayset] = (3, Inf, (a,v,i...)->a)
-arraysize_tfunc(a, d) = Int
-function arraysize_tfunc(a)
+#arraysize_tfunc(a, d) = Int
+arraysize_tfunc = function (a, d...)
+    if !is(d,())
+        return Int
+    end
     if isa(a,DataType) && subtype(a,Array)
         N = a.parameters[2]
         return isa(N,Int) ? NTuple{N,Int} : (Int...)
@@ -664,7 +667,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     return rt
 end
 
-function abstract_eval_arg(a, vtypes, sv)
+function abstract_eval_arg(a::ANY, vtypes::ANY, sv::StaticVarInfo)
     t = abstract_eval(a, vtypes, sv)
     if isa(a,Symbol) || isa(a,SymbolNode)
         t = typeintersect(t,Any)  # remove Undef
@@ -709,7 +712,23 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     return abstract_call(f, fargs, argtypes, vtypes, sv, e)
 end
 
-function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
+function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
+    if isa(e,QuoteNode)
+        return typeof(e.value)
+    elseif isa(e,TopNode)
+        return abstract_eval_global(_basemod(), e.name)
+    elseif isa(e,Symbol)
+        return abstract_eval_symbol(e, vtypes, sv)
+    elseif isa(e,SymbolNode)
+        return abstract_eval_symbol(e.name, vtypes, sv)
+    elseif isa(e,LambdaStaticData)
+        return Function
+    end
+
+    if !isa(e,Expr)
+        return abstract_eval_constant(e)
+    end
+    e = e::Expr
     # handle:
     # call  null  new  &  static_typeof
     if is(e.head,:call) || is(e.head,:call1)
@@ -767,14 +786,6 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
     return t
 end
 
-function abstract_eval(e::QuoteNode, vtypes, sv::StaticVarInfo)
-    return typeof(e.value)
-end
-
-function abstract_eval(e::TopNode, vtypes, sv::StaticVarInfo)
-    return abstract_eval_global(_basemod(), e.name)
-end
-
 const Type_Array = Type{Array}
 
 function abstract_eval_constant(x::ANY)
@@ -810,7 +821,7 @@ function abstract_eval_global(M, s::Symbol)
     return Any
 end
 
-function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
+function abstract_eval_symbol(s::Symbol, vtypes, sv::StaticVarInfo)
     if has(sv.cenv,s)
         # consider closed vars to always have their propagated (declared) type
         return sv.cenv[s]
@@ -840,13 +851,6 @@ function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
     end
     return t
 end
-
-abstract_eval(s::SymbolNode, vtypes, sv::StaticVarInfo) =
-    abstract_eval(s.name, vtypes, sv)
-
-abstract_eval(x, vtypes, sv::StaticVarInfo) = abstract_eval_constant(x)
-
-abstract_eval(x::LambdaStaticData, vtypes, sv::StaticVarInfo) = Function
 
 typealias VarTable ObjectIdDict
 
@@ -1294,7 +1298,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     return (fulltree, frame.result)
 end
 
-function record_var_type(e::Symbol, t, decls)
+function record_var_type(e::Symbol, t::ANY, decls)
     otherTy = get(decls::ObjectIdDict, e, false)
     # keep track of whether a variable is always the same type
     if !is(otherTy,false)
@@ -1306,7 +1310,37 @@ function record_var_type(e::Symbol, t, decls)
     end
 end
 
-function eval_annotate(e::Expr, vtypes, sv, decls, clo)
+function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
+    if isa(e, Symbol)
+        e = e::Symbol
+
+        if !is_local(sv, e) && !is_closed(sv, e)
+            # can get types of globals and static params from the environment
+            return e
+        end
+        t = abstract_eval(e, vtypes, sv)
+        record_var_type(e, t, decls)
+        return (is(t,Any) || is(t,IntrinsicFunction)) ? e : SymbolNode(e, t)
+    end
+
+    if isa(e, SymbolNode)
+        e = e::SymbolNode
+        t = abstract_eval(e.name, vtypes, sv)
+        record_var_type(e.name, t, decls)
+        e.typ = t
+        return e
+    end
+
+    if isa(e, LambdaStaticData)
+        push!(clo, e)
+        return e
+    end
+
+    if !isa(e,Expr)
+        return e
+    end
+
+    e = e::Expr
     head = e.head
     if is(head,:static_typeof) || is(head,:line) || is(head,:const)
         return e
@@ -1340,30 +1374,6 @@ function eval_annotate(e::Expr, vtypes, sv, decls, clo)
         end
     end
     e
-end
-
-function eval_annotate(e::Symbol, vtypes, sv, decls, clo)
-    if !is_local(sv, e) && !is_closed(sv, e)
-        # can get types of globals and static params from the environment
-        return e
-    end
-    t = abstract_eval(e, vtypes, sv)
-    record_var_type(e, t, decls)
-    return (is(t,Any) || is(t,IntrinsicFunction)) ? e : SymbolNode(e, t)
-end
-
-function eval_annotate(e::SymbolNode, vtypes, sv, decls, clo)
-    t = abstract_eval(e.name, vtypes, sv)
-    record_var_type(e.name, t, decls)
-    e.typ = t
-    e
-end
-
-eval_annotate(s, vtypes, sv, decls, clo) = s
-
-function eval_annotate(l::LambdaStaticData, vtypes, sv, decls, clo)
-    push!(clo, l)
-    l
 end
 
 # annotate types of all symbols in AST
@@ -1411,7 +1421,17 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
     ast
 end
 
-function sym_replace(e::Expr, from1, from2, to1, to2)
+function sym_replace(e::ANY, from1, from2, to1, to2)
+    if isa(e,Symbol)
+        return _sym_repl(e::Symbol, from1, from2, to1, to2, e)
+    end
+    if isa(e,SymbolNode)
+        return _sym_repl(e.name, from1, from2, to1, to2, e)
+    end
+    if !isa(e,Expr)
+        return e
+    end
+    e = e::Expr
     if !is(e.head,:line)
         for i=1:length(e.args)
             e.args[i] = sym_replace(e.args[i], from1, from2, to1, to2)
@@ -1434,16 +1454,6 @@ function _sym_repl(s::Symbol, from1, from2, to1, to2, deflt)
     return deflt
 end
 
-function sym_replace(e::SymbolNode, from1, from2, to1, to2)
-    return _sym_repl(e.name, from1, from2, to1, to2, e)
-end
-
-function sym_replace(s::Symbol, from1, from2, to1, to2)
-    return _sym_repl(s, from1, from2, to1, to2, s)
-end
-
-sym_replace(x, from1, from2, to1, to2) = x
-
 # return an expr to evaluate "from.sym" in module "to"
 function resolve_relative(sym, from, to, typ, orig)
     if is(from,to)
@@ -1464,7 +1474,26 @@ function resolve_relative(sym, from, to, typ, orig)
 end
 
 # annotate symbols with their original module for inlining
-function resolve_globals(e::Expr, from, to, env1, env2)
+function resolve_globals(e::ANY, from, to, env1, env2)
+    if isa(e,Symbol)
+        s = e::Symbol
+        if contains_is(env1, s) || contains_is(env2, s)
+            return s
+        end
+        return resolve_relative(s, from, to, Any, s)
+    end
+    if isa(e,SymbolNode)
+        s = e::SymbolNode
+        name = s.name
+        if contains_is(env1, name) || contains_is(env2, name)
+            return s
+        end
+        return resolve_relative(name, from, to, s.typ, s)
+    end
+    if !isa(e,Expr)
+        return e
+    end
+    e = e::Expr
     if !is(e.head,:line)
         for i=1:length(e.args)
             subex = e.args[i]
@@ -1476,37 +1505,24 @@ function resolve_globals(e::Expr, from, to, env1, env2)
     e
 end
 
-function resolve_globals(s::Symbol, from, to, env1, env2)
-    if contains_is(env1, s) || contains_is(env2, s)
-        return s
-    end
-    resolve_relative(s, from, to, Any, s)
-end
-
-function resolve_globals(s::SymbolNode, from, to, env1, env2)
-    name = s.name
-    if contains_is(env1, name) || contains_is(env2, name)
-        return s
-    end
-    resolve_relative(name, from, to, s.typ, s)
-end
-
-resolve_globals(x, from, to, env1, env2) = x
-
 # count occurrences up to n+1
-function occurs_more(e::Expr, pred, n)
-    c = 0
-    for a = e.args
-        c += occurs_more(a, pred, n)
-        if c>n
-            return c
+function occurs_more(e::ANY, pred, n)
+    if isa(e,Expr)
+        e = e::Expr
+        c = 0
+        for a = e.args
+            c += occurs_more(a, pred, n)
+            if c>n
+                return c
+            end
         end
+        return c
     end
-    c
+    if isa(e,SymbolNode)
+        e = e.name
+    end
+    return pred(e) ? 1 : 0
 end
-
-occurs_more(e::SymbolNode, pred, n) = occurs_more(e.name, pred, n)
-occurs_more(e, pred, n) = pred(e) ? 1 : 0
 
 function exprtype(x::ANY)
     if isa(x,Expr)
@@ -1546,7 +1562,7 @@ function without_linenums(a::Array{Any,1})
 end
 
 # detect some important side-effect-free calls
-function effect_free(e)
+function effect_free(e::ANY)
     if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
         isa(e,TopNode) || isa(e,QuoteNode)
         return true
@@ -1911,11 +1927,12 @@ function find_sa_vars(ast)
     av
 end
 
-function occurs_outside_tupleref(e, sym, sv, tuplen)
+function occurs_outside_tupleref(e::ANY, sym::ANY, sv::StaticVarInfo, tuplen::Int)
     if is(e, sym) || (isa(e, SymbolNode) && is(e.name, sym))
         return true
     end
     if isa(e,Expr)
+        e = e::Expr
         if is_known_call(e, tupleref, sv) && isequal(e.args[2],sym)
             targ = e.args[2]
             if !(exprtype(targ)<:Tuple)
@@ -1989,7 +2006,7 @@ function tuple_elim_pass(ast::Expr)
     end
 end
 
-function replace_tupleref(e, tupname, vals, sv, i0)
+function replace_tupleref(e::ANY, tupname, vals, sv, i0)
     if !isa(e,Expr)
         return
     end
