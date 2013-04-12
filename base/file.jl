@@ -200,5 +200,4 @@ function readdir(path::String)
     entries
 end
 
-readdir(cmd::Cmd) = readdir(string(cmd)[2:end-1])
 readdir() = readdir(".")
