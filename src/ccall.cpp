@@ -214,7 +214,8 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
 
 static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                               jl_value_t *argex, bool addressOf,
-                              int argn, jl_codectx_t *ctx)
+                              int argn, jl_codectx_t *ctx,
+                              bool *mightNeedTempSpace)
 {
     Type *vt = jv->getType();
     if (ty == jl_pvalue_llvmt) {
@@ -259,11 +260,12 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         }
         if (jl_is_structtype(aty) && jl_is_leaf_type(aty) && !jl_is_array_type(aty)) {
             if (!addressOf) {
-                emit_error("ccall: expected addressOf operator", ctx);
+                emit_error("ccall: expected & on argument", ctx);
                 return literal_pointer_val(jl_nothing);
             }
             return builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
         }
+        *mightNeedTempSpace = true;
         Value *p = builder.CreateCall4(value_to_pointer_func,
                                        literal_pointer_val(jl_tparam0(jt)), jv,
                                        ConstantInt::get(T_int32, argn),
@@ -272,7 +274,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
     }
     else if (jl_is_structtype(jt)) {
         if (addressOf)
-            jl_error("ccall: unexpected addressOf operator"); // the only "safe" thing to emit here is the expected struct
+            jl_error("ccall: unexpected & on argument"); // the only "safe" thing to emit here is the expected struct
         assert (ty->isStructTy() && (Type*)((jl_datatype_t*)jt)->struct_decl == ty);
         jl_value_t *aty = expr_type(argex, ctx);
         if (aty != jt) {
@@ -393,7 +395,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return literal_pointer_val(jl_nothing);
     }
     size_t i;
-    bool haspointers = false;
     bool isVa = false;
     size_t nargt = jl_tuple_len(tt);
     std::vector<AttributeWithIndex> attrs;
@@ -486,15 +487,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_julia_type(builder.CreateBitCast(ary,lrt),rt);
     }
 
-    // see if there are & arguments
-    for(i=4; i < nargs+1; i+=2) {
-        jl_value_t *argi = args[i];
-        if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
-            haspointers = true;
-            break;
-        }
-    }
-
     // make LLVM function object for the target
     Value *llvmf;
     FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
@@ -528,21 +520,26 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         llvmf = jl_Module->getOrInsertFunction(f_name, functype);
     }
 
-    // save temp argument area stack pointer
+    // save place before arguments, for possible insertion of temp arg
+    // area saving code.
     Value *saveloc=NULL;
     Value *stacksave=NULL;
-    if (haspointers) {
-        // TODO: inline this
-        saveloc = builder.CreateCall(save_arg_area_loc_func);
-        stacksave =
-            builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                         Intrinsic::stacksave));
+    BasicBlock::InstListType &instList = builder.GetInsertBlock()->getInstList();
+    Instruction *savespot;
+    if (instList.empty()) {
+        savespot = NULL;
+    }
+    else {
+        // hey C++, there's this thing called pointers...
+        Instruction &_savespot = builder.GetInsertBlock()->back();
+        savespot = &_savespot;
     }
 
     // emit arguments
     Value *argvals[(nargs-3)/2];
     int last_depth = ctx->argDepth;
     int nargty = jl_tuple_len(tt);
+    bool needTempSpace = false;
     for(i=4; i < nargs+1; i+=2) {
         int ai = (i-4)/2;
         jl_value_t *argi = args[i];
@@ -585,8 +582,22 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
 #endif
         */
+        bool mightNeed=false;
         argvals[ai] = julia_to_native(largty, jargty, arg, argi, addressOf,
-                                      ai+1, ctx);
+                                      ai+1, ctx, &mightNeed);
+        needTempSpace |= mightNeed;
+    }
+    if (needTempSpace) {
+        // save temp argument area stack pointer
+        // TODO: inline this
+        saveloc = CallInst::Create(save_arg_area_loc_func);
+        stacksave = CallInst::Create(Intrinsic::getDeclaration(jl_Module,
+                                                               Intrinsic::stacksave));
+        if (savespot)
+            instList.insertAfter(savespot, (Instruction*)saveloc);
+        else
+            instList.push_front((Instruction*)saveloc);
+        instList.insertAfter((Instruction*)saveloc, (Instruction*)stacksave);
     }
     // the actual call
     Value *result = builder.CreateCall(llvmf,
@@ -599,8 +610,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #else
     ((CallInst*)result)->setAttributes(AttrListPtr::get(attrs.data(),attrs.size()));
 #endif
-    // restore temp argument area stack pointer
-    if (haspointers) {
+    if (needTempSpace) {
+        // restore temp argument area stack pointer
         assert(saveloc != NULL);
         builder.CreateCall(restore_arg_area_loc_func, saveloc);
         assert(stacksave != NULL);
