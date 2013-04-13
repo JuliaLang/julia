@@ -110,10 +110,34 @@ convert(::Type{MPCComplex}, x::Complex) = MPCComplex(x)
 convert{N,P}(::Type{MPCComplex{N,P}}, x::ImaginaryUnit) = MPCComplex(x)
 convert(::Type{MPCComplex}, x::ImaginaryUnit) = MPCComplex(x)
 
-convert(::Type{Float64}, x::MPCComplex) = ccall((:mpc_get_d,:libmpc), Float64, (Ptr{mpc_struct},), &(x.mpc))
-convert(::Type{Float32}, x::MPCComplex) = ccall((:mpc_get_flt,:libmpc), Float32, (Ptr{mpc_struct},), &(x.mpc))
-#convert(::Type{FloatingPoint}, x::BigInt) = MPCComplex(x)
-
+function convert(::Type{Complex{Float64}}, x::MPCComplex)
+    return complex(
+        ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{Void},), &(realref(x))),
+        ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{Void},), &(imagref(x))))
+end
+function convert(::Type{Complex{Float32}}, x::MPCComplex)
+    return complex(
+        ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{Void},), &(realref(x))),
+        ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{Void},), &(imagref(x))))
+end
+function convert(::Type{Complex{Int64}}, x::MPCComplex)
+    if realint(x) && imagint(x)
+        return complex(
+            ccall((:mpfr_get_si,:libmpfr), Int64, (Ptr{Void}, Int32), &(realref(x)), ROUNDING_MODE[end]),
+            ccall((:mpfr_get_si,:libmpfr), Int64, (Ptr{Void}, Int32), &(imagref(x)), ROUNDING_MODE[end]))
+    else
+        throw(InexactError())
+    end
+end
+function convert(::Type{Complex{Int32}}, x::MPCComplex)
+    if realint(x) && imagint(x)
+        return complex(
+            int32(ccall((:mpfr_get_si,:libmpfr), Int64, (Ptr{Void}, Int32), &(realref(x)), ROUNDING_MODE[end])),
+            int32(ccall((:mpfr_get_si,:libmpfr), Int64, (Ptr{Void}, Int32), &(imagref(x)), ROUNDING_MODE[end])))
+    else
+        throw(InexactError())
+    end
+end
 promote_rule{T<:Real,N,P}(::Type{MPCComplex{N,P}}, ::Type{T}) = MPCComplex{N,P}
 promote_rule{T<:Real}(::Type{MPCComplex}, ::Type{T}) = MPCComplex
 promote_rule{T<:Real,N,P}(::Type{MPCComplex{N,P}}, ::Type{Complex{T}}) = MPCComplex{N,P}
@@ -266,5 +290,13 @@ string(x::MPCComplex) = "$(string(real(x))) + $(string(imag(x)))im"
 
 show(io::IO, b::MPCComplex) = print(io, string(b) * " with $(get_precision(b)) bits of precision")
 showcompact(io::IO, b::MPCComplex) = print(io, string(b))
+
+# Internal functions
+# Unsafe for general use
+realref(x::MPCComplex) = MPFR.mpfr_struct(x.mpc.reprec, x.mpc.resign, x.mpc.reexp, x.mpc.red)
+imagref(x::MPCComplex) = MPFR.mpfr_struct(x.mpc.imprec, x.mpc.imsign, x.mpc.imexp, x.mpc.imd)
+realint(x::MPCComplex) = ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{Void},), &(realref(x))) != 0
+imagint(x::MPCComplex) = ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{Void},), &(imagref(x))) != 0
+
 
 end #module
