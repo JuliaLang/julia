@@ -13,7 +13,7 @@ import
         complex, convert, div, imag, integer_valued, isfinite, isinf, isnan, 
         promote_rule, real, show, showcompact, sqrt, string, get_precision
 
-const ROUNDING_MODE = 0
+const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [53, 53]
 
 # Basic type and initialization definitions
@@ -50,7 +50,7 @@ MPC_clear(mpc::mpc_struct) = ccall((:mpc_clear, :libmpc), Void, (Ptr{mpc_struct}
 
 function MPCComplex{N,P}(x::MPCComplex{N,P})
     z = MPCComplex{N,P}()
-    ccall((:mpc_set, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Int32), &(z.mpc), &(x.mpc), ROUNDING_MODE)
+    ccall((:mpc_set, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Int32), &(z.mpc), &(x.mpc), ROUNDING_MODE[end])
     return z
 end
 
@@ -59,7 +59,7 @@ for (fJ, fC) in ((:si,:Int), (:ui,:Uint), (:d,:Float64))
     @eval begin
         function MPCComplex(x::($fC))
             z = MPCComplex{DEFAULT_PRECISION[1], DEFAULT_PRECISION[end]}()
-            ccall(($(string(:mpc_set_,fJ)), :libmpc), Int32, (Ptr{mpc_struct}, ($fC), Int32), &(z.mpc), x, ROUNDING_MODE)
+            ccall(($(string(:mpc_set_,fJ)), :libmpc), Int32, (Ptr{mpc_struct}, ($fC), Int32), &(z.mpc), x, ROUNDING_MODE[end])
             return z
         end
     end
@@ -67,25 +67,25 @@ end
 
 function MPCComplex(x::BigInt)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_z, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Int32), &(z.mpc), &(x.mpz), ROUNDING_MODE)
+    ccall((:mpc_set_z, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Int32), &(z.mpc), &(x.mpz), ROUNDING_MODE[end])
     return z
 end
 
 function MPCComplex(x::BigFloat)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_f, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Int32), &(z.mpc), x.mpf, ROUNDING_MODE)
+    ccall((:mpc_set_f, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Int32), &(z.mpc), x.mpf, ROUNDING_MODE[end])
     return z
 end
 
 function MPCComplex(x::MPFRFloat)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_fr, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Int32), &(z.mpc), &(x.mpfr), ROUNDING_MODE)
+    ccall((:mpc_set_fr, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Int32), &(z.mpc), &(x.mpfr), ROUNDING_MODE[end])
     return z
 end
 
 function MPCComplex(x::String, base::Int)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    err = ccall((:mpc_set_str, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Uint8}, Int32, Int32), &(z.mpc), x, base, ROUNDING_MODE)
+    err = ccall((:mpc_set_str, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Uint8}, Int32, Int32), &(z.mpc), x, base, ROUNDING_MODE[end])
     if err != 0; error("Invalid input"); end
     return z
 end
@@ -132,7 +132,7 @@ for (fJ, fC) in ((:si,:Int), (:ui,:Uint), (:d,:Float64))
     @eval begin
         function MPCComplex(x::($fC), y::($fC))
             z = MPCComplex{DEFAULT_PRECISION[1], DEFAULT_PRECISION[end]}()
-            ccall(($(string(:mpc_set_,fJ,'_',fJ)), :libmpc), Int32, (Ptr{mpc_struct}, ($fC), ($fC), Int32), &(z.mpc), x, y, ROUNDING_MODE)
+            ccall(($(string(:mpc_set_,fJ,'_',fJ)), :libmpc), Int32, (Ptr{mpc_struct}, ($fC), ($fC), Int32), &(z.mpc), x, y, ROUNDING_MODE[end])
             return z
         end
     end
@@ -140,19 +140,19 @@ end
 
 function MPCComplex(x::BigInt, y::BigInt)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_z_z, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Ptr{Void}, Int32), &(z.mpc), &(x.mpz), &(y.mpz), ROUNDING_MODE)
+    ccall((:mpc_set_z_z, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Ptr{Void}, Int32), &(z.mpc), &(x.mpz), &(y.mpz), ROUNDING_MODE[end])
     return z
 end
 
 function MPCComplex(x::BigFloat, y::BigFloat)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_f_f, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Ptr{Void}, Int32), &(z.mpc), x.mpf, y.mpf, ROUNDING_MODE)
+    ccall((:mpc_set_f_f, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Ptr{Void}, Int32), &(z.mpc), x.mpf, y.mpf, ROUNDING_MODE[end])
     return z
 end
 
 function MPCComplex(x::MPFRFloat, y::MPFRFloat)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_fr_fr, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Ptr{Void}, Int32), &(z.mpc), &(x.mpfr), &(y.mpfr), ROUNDING_MODE)
+    ccall((:mpc_set_fr_fr, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Ptr{Void}, Int32), &(z.mpc), &(x.mpfr), &(y.mpfr), ROUNDING_MODE[end])
     return z
 end
 
@@ -175,7 +175,7 @@ for (fJ, fC) in ((:+,:add), (:-,:sub), (:*,:mul), (:/,:div), (:^, :pow))
     @eval begin 
         function ($fJ)(x::MPCComplex, y::MPCComplex)
             z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-            ccall(($(string(:mpc_,fC)),:libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Ptr{mpc_struct}, Int32), &(z.mpc), &(x.mpc), &(y.mpc), ROUNDING_MODE)
+            ccall(($(string(:mpc_,fC)),:libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Ptr{mpc_struct}, Int32), &(z.mpc), &(x.mpc), &(y.mpc), ROUNDING_MODE[end])
             return z
         end
     end
@@ -183,7 +183,7 @@ end
 
 function -(x::MPCComplex)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_neg, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Int32), &(z.mpc), &(x.mpc), ROUNDING_MODE)
+    ccall((:mpc_neg, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Int32), &(z.mpc), &(x.mpc), ROUNDING_MODE[end])
     return z
 end
 
@@ -193,7 +193,7 @@ end
 
 function sqrt(x::MPCComplex)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_sqrt, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Int32), &(z.mpc), &(x.mpc), ROUNDING_MODE)
+    ccall((:mpc_sqrt, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Int32), &(z.mpc), &(x.mpc), ROUNDING_MODE[end])
     if isnan(z)
         throw(DomainError())
     end
@@ -202,19 +202,19 @@ end
 
 function ^(x::MPCComplex, y::Uint)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_pow_ui, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Uint, Int32), &(z.mpc), &(x.mpc), y, ROUNDING_MODE)
+    ccall((:mpc_pow_ui, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Uint, Int32), &(z.mpc), &(x.mpc), y, ROUNDING_MODE[end])
     return z
 end
 
 function ^(x::MPCComplex, y::Int)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_pow_si, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Int, Int32), &(z.mpc), &(x.mpc), y, ROUNDING_MODE)
+    ccall((:mpc_pow_si, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Int, Int32), &(z.mpc), &(x.mpc), y, ROUNDING_MODE[end])
     return z
 end
 
 function ^(x::MPCComplex, y::BigInt)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_pow_z, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Ptr{Void}, Int32), &(z.mpc), &(x.mpc), &(y.mpz), ROUNDING_MODE)
+    ccall((:mpc_pow_z, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{mpc_struct}, Ptr{Void}, Int32), &(z.mpc), &(x.mpc), &(y.mpz), ROUNDING_MODE[end])
     return z
 end
 
@@ -248,22 +248,23 @@ function with_bigcomplex_precision(f::Function, realprec::Integer, imagprec::Int
     set_bigcomplex_precision(old_precision)
     return ret
 end
+with_bigcomplex_precision(f::Function, prec::Integer) = with_bigcomplex_precision(f, prec, prec)
 
 function imag{N,P}(x::MPCComplex{N,P})
     z = MPFRFloat{N}()
-    ccall((:mpc_imag, :libmpc), Int32, (Ptr{Void}, Ptr{mpc_struct}, Int32), &(z.mpfr), &(x.mpc), ROUNDING_MODE)
+    ccall((:mpc_imag, :libmpc), Int32, (Ptr{Void}, Ptr{mpc_struct}, Int32), &(z.mpfr), &(x.mpc), ROUNDING_MODE[end])
     return z
 end
 
 function real{N,P}(x::MPCComplex{N,P})
     z = MPFRFloat{N}()
-    ccall((:mpc_real, :libmpc), Int32, (Ptr{Void}, Ptr{mpc_struct}, Int32), &(z.mpfr), &(x.mpc), ROUNDING_MODE)
+    ccall((:mpc_real, :libmpc), Int32, (Ptr{Void}, Ptr{mpc_struct}, Int32), &(z.mpfr), &(x.mpc), ROUNDING_MODE[end])
     return z
 end
 
 string(x::MPCComplex) = "$(string(real(x))) + $(string(imag(x)))im"
 
-show(io::IO, b::MPCComplex) = print(io, string(b) * " with $(prec2(b)) bits of precision")
+show(io::IO, b::MPCComplex) = print(io, string(b) * " with $(get_precision(b)) bits of precision")
 showcompact(io::IO, b::MPCComplex) = print(io, string(b))
 
 end #module

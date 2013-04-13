@@ -828,11 +828,11 @@ export
     exp10,
     get_precision,
     get_bigfloat_precision,
-    get_complex_precision,
+    get_bigcomplex_precision,
     set_bigfloat_precision,
-    set_complex_precision,
+    set_bigcomplex_precision,
     with_bigfloat_precision,
-    with_complex_precision,
+    with_bigcomplex_precision,
 
 # statistics
     cor,
