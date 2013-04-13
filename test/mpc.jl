@@ -53,6 +53,19 @@ y = MPCComplex(x)
 @test real(x) == real(y)
 @test imag(x) == imag(y)
 
+# conversion
+with_bigcomplex_precision(53) do
+    x = MPCComplex(12, 42)
+    @test typeof(convert(Complex{Float64}, x)) == Complex{Float64}
+    @test typeof(convert(Complex{Float32}, x)) == Complex{Float32}
+    @test typeof(convert(Complex{Int64}, x)) == Complex{Int64}
+    @test typeof(convert(Complex{Int32}, x)) == Complex{Int32}
+    @test 12. + 42.0im == convert(Complex{Float64}, x)
+    @test 12f0 + 42f0im == convert(Complex{Float32}, x)
+    @test 12 + 42im == convert(Complex{Int64}, x)
+    @test 12 + 42im == convert(Complex{Int32}, x)
+end
+
 # +
 x = MPCComplex(12,42)
 @test (x + x) == MPCComplex(24, 84)
