@@ -5,6 +5,8 @@ extern size_t jl_cholmod_common_size(size_t x) {
     return sizeof(cholmod_common);
 }
 
+extern int jl_cholmod_version(void) {return CHOLMOD_VERSION;}
+
 extern void jl_cholmod_common_offsets(size_t *vv) {
     vv[0] = offsetof(cholmod_common, dbound);
     vv[1] = offsetof(cholmod_common, maxrank);
