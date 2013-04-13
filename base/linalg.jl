@@ -139,27 +139,6 @@ export
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
 typealias BlasChar Char
 
-function check_openblas()
-    libblas = dlopen( Base.libblas_name )
-    if dlsym_e( libblas, :openblas_get_config ) != C_NULL
-        openblas_config = bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () ))
-        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
-        if Base.USE_LIB64 != openblas64
-            if !openblas64
-                println("ERROR: OpenBLAS was not built with 64bit integer support.")
-                println("You're seeing this error because Julia was built with USE_LIB64=1")
-                println("Please rebuild Julia with USE_LIB64=0")
-            else
-                println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
-                println("You're seeing this error because Julia was built with USE_LIB64=0")
-                println("Please rebuild Julia with USE_LIB64=1")
-            end
-            println("Quitting.")
-            quit()
-        end
-    end
-end
-
 if USE_LIB64
     typealias BlasInt Int64
     blas_int(x) = int64(x)
