@@ -302,7 +302,9 @@ function _start()
     # Initialize RNG
     librandom_init()
     # Check that OpenBLAS is correctly built
-    check_openblas()
+    if Base.libblas_name == "libopenblas"
+        check_openblas()
+    end
 
     # set default local address
     global bind_addr = getipaddr()

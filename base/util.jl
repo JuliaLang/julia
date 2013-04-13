@@ -190,6 +190,34 @@ function warn_once(msg::String...)
     warn(msg)
 end
 
+# openblas utility routines
+
+if Base.libblas_name == "libopenblas"
+
+    openblas_get_config() = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+
+    openblas_set_num_threads(n::Integer) = ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32, ), n)
+
+    function check_openblas()
+        openblas_config = openblas_get_config()
+        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
+        if Base.USE_LIB64 != openblas64
+            if !openblas64
+                println("ERROR: OpenBLAS was not built with 64bit integer support.")
+                println("You're seeing this error because Julia was built with USE_LIB64=1")
+                println("Please rebuild Julia with USE_LIB64=0")
+            else
+                println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
+                println("You're seeing this error because Julia was built with USE_LIB64=0")
+                println("Please rebuild Julia with USE_LIB64=1")
+            end
+            println("Quitting.")
+            quit()
+        end
+    end
+
+end
+
 # system information
 
 versioninfo() = versioninfo(false)
@@ -214,7 +242,7 @@ function versioninfo(io::IO, verbose::Bool)
         println(io,         cpu_info())
     end
     if Base.libblas_name == "libopenblas"
-        openblas_config = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+        openblas_config = openblas_get_config()
         println(io,         "  BLAS: ",libblas_name, " (", openblas_config, ")")
     else
         println(io,         "  BLAS: ",libblas_name)
