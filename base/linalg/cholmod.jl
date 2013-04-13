@@ -22,6 +22,7 @@ import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul
 
 include("linalg/cholmod_h.jl")
 
+const chm_ver    = ccall((:jl_cholmod_version,:libsuitesparse_wrapper),Int32,())
 const chm_com_sz = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
 const chm_com    = fill(0xff, chm_com_sz)
 const chm_l_com  = fill(0xff, chm_com_sz)             
@@ -114,51 +115,143 @@ type CholmodDense{T<:CHMVTypes}
     mat::Matrix{T}
 end
 
-type c_CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
-    n::Int
-    minor::Int
-    Perm::Ptr{Ti}
-    ColCount::Ptr{Ti}
-    nzmax::Int
-    p::Ptr{Ti}
-    i::Ptr{Ti}
-    x::Ptr{Tv}
-    z::Ptr{Void}
-    nz::Ptr{Ti}
-    next::Ptr{Ti}
-    prev::Ptr{Ti}
-    nsuper::Int
-    ssize::Int
-    xsize::Int
-    maxcsize::Int
-    maxesize::Int
-    super::Ptr{Ti}
-    pi::Ptr{Ti}
-    px::Ptr{Tv}
-    s::Ptr{Ti}
-    ordering::Cint
-    is_ll::Cint
-    is_super::Cint
-    is_monotonic::Cint
-    itype::Cint
-    xtype::Cint
-    dtype::Cint
-end
+if chm_ver >= 2001                      # CHOLMOD version 2.1.0 or later
+    type c_CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
+        n::Int
+        minor::Int
+        Perm::Ptr{Ti}                   # this pointer was added in verison 2.1.0
+        ColCount::Ptr{Ti}
+        IPerm::Ptr{Ti}
+        nzmax::Int
+        p::Ptr{Ti}
+        i::Ptr{Ti}
+        x::Ptr{Tv}
+        z::Ptr{Void}
+        nz::Ptr{Ti}
+        next::Ptr{Ti}
+        prev::Ptr{Ti}
+        nsuper::Int
+        ssize::Int
+        xsize::Int
+        maxcsize::Int
+        maxesize::Int
+        super::Ptr{Ti}
+        pi::Ptr{Ti}
+        px::Ptr{Ti}
+        s::Ptr{Ti}
+        ordering::Cint
+        is_ll::Cint
+        is_super::Cint
+        is_monotonic::Cint
+        itype::Cint
+        xtype::Cint
+        dtype::Cint
+    end
 
-type CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
-    c::c_CholmodFactor{Tv,Ti}
-    Perm::Vector{Ti}
-    ColCount::Vector{Ti}
-    p::Vector{Ti}
-    i::Vector{Ti}
-    x::Vector{Tv}
-    nz::Vector{Ti}
-    next::Vector{Ti}
-    prev::Vector{Ti}
-    super::Vector{Ti}
-    pi::Vector{Ti}
-    px::Vector{Tv}
-    s::Vector{Ti}
+    type CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
+        c::c_CholmodFactor{Tv,Ti}
+        Perm::Vector{Ti}
+        ColCount::Vector{Ti}
+        IPerm::Vector{Ti}
+        p::Vector{Ti}
+        i::Vector{Ti}
+        x::Vector{Tv}
+        nz::Vector{Ti}
+        next::Vector{Ti}
+        prev::Vector{Ti}
+        super::Vector{Ti}
+        pi::Vector{Ti}
+        px::Vector{Ti}
+        s::Vector{Ti}
+    end
+
+    function CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodFactor{Tv,Ti}})
+        cfp = unsafe_ref(cp)
+        Perm = pointer_to_array(cfp.Perm, (cfp.n,), true)
+        ColCount = pointer_to_array(cfp.ColCount, (cfp.n,), true)
+        IPerm = pointer_to_array(cfp.IPerm, (cfp.IPerm == C_NULL ? 0 : cfp.n + 1,), true)
+        p = pointer_to_array(cfp.p, (cfp.p == C_NULL ? 0 : cfp.n + 1,), true)
+        i = pointer_to_array(cfp.i, (cfp.i == C_NULL ? 0 : cfp.nzmax,), true)
+        x = pointer_to_array(cfp.x, (cfp.x == C_NULL ? 0 : max(cfp.nzmax,cfp.xsize),), true)
+        nz = pointer_to_array(cfp.nz, (cfp.nz == C_NULL ? 0 : cfp.n,), true)
+        next = pointer_to_array(cfp.next, (cfp.next == C_NULL ? 0 : cfp.n + 2,), true)
+        prev = pointer_to_array(cfp.prev, (cfp.prev == C_NULL ? 0 : cfp.n + 2,), true)
+        super = pointer_to_array(cfp.super, (cfp.super == C_NULL ? 0 : cfp.nsuper + 1,), true)
+        pi = pointer_to_array(cfp.pi, (cfp.pi == C_NULL ? 0 : cfp.nsuper + 1,), true)
+        px = pointer_to_array(cfp.px, (cfp.px == C_NULL ? 0 : cfp.nsuper + 1,), true)
+        s = pointer_to_array(cfp.s, (cfp.s == C_NULL ? 0 : cfp.ssize + 1,), true)
+        cf = CholmodFactor{Tv,Ti}(cfp, Perm, ColCount, IPerm, p, i, x, nz, next, prev,
+                                  super, pi, px, s)
+        c_free(cp)
+        cf
+    end
+else
+    type c_CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
+        n::Int
+        minor::Int
+        ColCount::Ptr{Ti}
+        IPerm::Ptr{Ti}
+        nzmax::Int
+        p::Ptr{Ti}
+        i::Ptr{Ti}
+        x::Ptr{Tv}
+        z::Ptr{Void}
+        nz::Ptr{Ti}
+        next::Ptr{Ti}
+        prev::Ptr{Ti}
+        nsuper::Int
+        ssize::Int
+        xsize::Int
+        maxcsize::Int
+        maxesize::Int
+        super::Ptr{Ti}
+        pi::Ptr{Ti}
+        px::Ptr{Ti}
+        s::Ptr{Ti}
+        ordering::Cint
+        is_ll::Cint
+        is_super::Cint
+        is_monotonic::Cint
+        itype::Cint
+        xtype::Cint
+        dtype::Cint
+    end
+
+    type CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
+        c::c_CholmodFactor{Tv,Ti}
+        Perm::Vector{Ti}
+        ColCount::Vector{Ti}
+        p::Vector{Ti}
+        i::Vector{Ti}
+        x::Vector{Tv}
+        nz::Vector{Ti}
+        next::Vector{Ti}
+        prev::Vector{Ti}
+        super::Vector{Ti}
+        pi::Vector{Ti}
+        px::Vector{Ti}
+        s::Vector{Ti}
+    end
+
+    function CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodFactor{Tv,Ti}})
+        cfp = unsafe_ref(cp)
+        Perm = pointer_to_array(cfp.Perm, (cfp.n,), true)
+        ColCount = pointer_to_array(cfp.ColCount, (cfp.n,), true)
+        p = pointer_to_array(cfp.p, (cfp.p == C_NULL ? 0 : cfp.n + 1,), true)
+        i = pointer_to_array(cfp.i, (cfp.i == C_NULL ? 0 : cfp.nzmax,), true)
+        x = pointer_to_array(cfp.x, (cfp.x == C_NULL ? 0 : max(cfp.nzmax,cfp.xsize),), true)
+        nz = pointer_to_array(cfp.nz, (cfp.nz == C_NULL ? 0 : cfp.n,), true)
+        next = pointer_to_array(cfp.next, (cfp.next == C_NULL ? 0 : cfp.n + 2,), true)
+        prev = pointer_to_array(cfp.prev, (cfp.prev == C_NULL ? 0 : cfp.n + 2,), true)
+        super = pointer_to_array(cfp.super, (cfp.super == C_NULL ? 0 : cfp.nsuper + 1,), true)
+        pi = pointer_to_array(cfp.pi, (cfp.pi == C_NULL ? 0 : cfp.nsuper + 1,), true)
+        px = pointer_to_array(cfp.px, (cfp.px == C_NULL ? 0 : cfp.nsuper + 1,), true)
+        s = pointer_to_array(cfp.s, (cfp.s == C_NULL ? 0 : cfp.ssize + 1,), true)
+        cf = CholmodFactor{Tv,Ti}(cfp, Perm, ColCount, IPerm, p, i, x, nz, next, prev,
+                                  super, pi, px, s)
+        c_free(cp)
+        cf
+    end
 end
 
 type c_CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
@@ -298,9 +391,10 @@ function CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodFactor{Tv,T
     cfp = unsafe_ref(cp)
     Perm = pointer_to_array(cfp.Perm, (cfp.n,), true)
     ColCount = pointer_to_array(cfp.ColCount, (cfp.n,), true)
+    IPerm = pointer_to_array(cfp.IPerm, (cfp.IPerm == C_NULL ? 0 : cfp.n + 1,), true)
     p = pointer_to_array(cfp.p, (cfp.p == C_NULL ? 0 : cfp.n + 1,), true)
     i = pointer_to_array(cfp.i, (cfp.i == C_NULL ? 0 : cfp.nzmax,), true)
-    x = pointer_to_array(cfp.x, (cfp.x == C_NULL ? 0 : cfp.nzmax,), true)
+    x = pointer_to_array(cfp.x, (cfp.x == C_NULL ? 0 : max(cfp.nzmax,cfp.xsize),), true)
     nz = pointer_to_array(cfp.nz, (cfp.nz == C_NULL ? 0 : cfp.n,), true)
     next = pointer_to_array(cfp.next, (cfp.next == C_NULL ? 0 : cfp.n + 2,), true)
     prev = pointer_to_array(cfp.prev, (cfp.prev == C_NULL ? 0 : cfp.n + 2,), true)
@@ -308,7 +402,7 @@ function CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodFactor{Tv,T
     pi = pointer_to_array(cfp.pi, (cfp.pi == C_NULL ? 0 : cfp.nsuper + 1,), true)
     px = pointer_to_array(cfp.px, (cfp.px == C_NULL ? 0 : cfp.nsuper + 1,), true)
     s = pointer_to_array(cfp.s, (cfp.s == C_NULL ? 0 : cfp.ssize + 1,), true)
-    cf = CholmodFactor{Tv,Ti}(cfp, Perm, ColCount, p, i, x, nz, next, prev,
+    cf = CholmodFactor{Tv,Ti}(cfp, Perm, ColCount, IPerm, p, i, x, nz, next, prev,
                               super, pi, px, s)
     c_free(cp)
     cf
@@ -885,12 +979,18 @@ function diag{Tv}(A::CholmodSparse{Tv})
 end
 
 function diag{Tv}(L::CholmodFactor{Tv})
+    xv  = L.x
+    if bool(L.c.is_super)
+        nr = diff(L.pi)
+        nc = diff(L.super)
+        return vcat([diag(reshape(xv[(L.px[i]+1):(L.px[i+1])],(nr[i],nc[i])))
+                     for i in 1:L.c.nsuper]...)
+    end
     res = zeros(Tv,L.c.n)
-    if L.c.is_super != 0 error("Method for supernodal factors not yet written") end
     c0 = L.p
     r0 = L.i
     xv = L.x
-    for j in 1:length(c0)-1
+    for j in 1:L.c.n
         jj = c0[j]+1
         assert(r0[jj] == j-1)
         res[j] = xv[jj]
@@ -899,16 +999,8 @@ function diag{Tv}(L::CholmodFactor{Tv})
 end
 
 function logdet{Tv,Ti}(L::CholmodFactor{Tv,Ti},sub)
-    if L.c.is_super != 0 error("Method for supernodal factors not yet written") end
-    c0 = L.p
-    r0 = L.i
-    xv = L.x
     res = zero(Tv)
-    for j in (1:length(c0)-1)[sub]
-        jj = c0[j]+1
-        assert(r0[jj] == j-1)
-        res += log(xv[jj])
-    end
+    for d in diag(L)[sub] res += log(abs(d)) end
     bool(L.c.is_ll) ? 2res : res
 end
 logdet(L::CholmodFactor) = logdet(L, 1:L.c.n)

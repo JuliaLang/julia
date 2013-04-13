@@ -2,9 +2,7 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode", "corelib",
              "hashing", "remote", "iostring", "arrayops", "linalg", "blas",
              "fft", "dct", "sparse", "bitarray", "random", "math", "functional",
              "bigint", "sorting", "statistics", "spawn", "parallel",
-             "arpack", "bigfloat", "file", "zlib", "perf"]
-
-# Disabled: "suitesparse"
+             "arpack", "bigfloat", "file", "zlib", "perf", "suitesparse"]
 
 if ARGS == ["all"]
     tests = testnames
