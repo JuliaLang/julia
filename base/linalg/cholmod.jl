@@ -387,27 +387,6 @@ function norm{Tv<:CHMVTypes}(D::CholmodDense{Tv},p::Number)
 end
 norm{Tv<:CHMVTypes}(D::CholmodDense{Tv}) = norm(D,1)
 
-function CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodFactor{Tv,Ti}})
-    cfp = unsafe_ref(cp)
-    Perm = pointer_to_array(cfp.Perm, (cfp.n,), true)
-    ColCount = pointer_to_array(cfp.ColCount, (cfp.n,), true)
-    IPerm = pointer_to_array(cfp.IPerm, (cfp.IPerm == C_NULL ? 0 : cfp.n + 1,), true)
-    p = pointer_to_array(cfp.p, (cfp.p == C_NULL ? 0 : cfp.n + 1,), true)
-    i = pointer_to_array(cfp.i, (cfp.i == C_NULL ? 0 : cfp.nzmax,), true)
-    x = pointer_to_array(cfp.x, (cfp.x == C_NULL ? 0 : max(cfp.nzmax,cfp.xsize),), true)
-    nz = pointer_to_array(cfp.nz, (cfp.nz == C_NULL ? 0 : cfp.n,), true)
-    next = pointer_to_array(cfp.next, (cfp.next == C_NULL ? 0 : cfp.n + 2,), true)
-    prev = pointer_to_array(cfp.prev, (cfp.prev == C_NULL ? 0 : cfp.n + 2,), true)
-    super = pointer_to_array(cfp.super, (cfp.super == C_NULL ? 0 : cfp.nsuper + 1,), true)
-    pi = pointer_to_array(cfp.pi, (cfp.pi == C_NULL ? 0 : cfp.nsuper + 1,), true)
-    px = pointer_to_array(cfp.px, (cfp.px == C_NULL ? 0 : cfp.nsuper + 1,), true)
-    s = pointer_to_array(cfp.s, (cfp.s == C_NULL ? 0 : cfp.ssize + 1,), true)
-    cf = CholmodFactor{Tv,Ti}(cfp, Perm, ColCount, IPerm, p, i, x, nz, next, prev,
-                              super, pi, px, s)
-    c_free(cp)
-    cf
-end
-
 function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
                                                      rowval::Vector{Ti},
                                                      nzval::Vector{Tv},
