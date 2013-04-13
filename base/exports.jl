@@ -826,13 +826,12 @@ export
 
 # precision
     exp10,
-    prec,
-    prec2,
     get_precision,
+    get_bigfloat_precision,
     get_complex_precision,
-    set_precision,
+    set_bigfloat_precision,
     set_complex_precision,
-    with_precision,
+    with_bigfloat_precision,
     with_complex_precision,
 
 # statistics
