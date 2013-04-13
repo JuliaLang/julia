@@ -107,29 +107,29 @@ x = MPFRFloat(15.674)
 @test_fails sqrt(MPFRFloat(-1))
 
 # precision
-old_precision = get_precision()
+old_precision = get_bigfloat_precision()
 x = MPFRFloat(0)
-@test prec(x) == old_precision
-set_precision(256)
+@test get_precision(x) == old_precision
+set_bigfloat_precision(256)
 x = MPFRFloat(0)
-@test prec(x) == 256
-set_precision(old_precision)
-z = with_precision(240) do
+@test get_precision(x) == 256
+set_bigfloat_precision(old_precision)
+z = with_bigfloat_precision(240) do
     z = x + 20
     return z
 end
 @test float(z) == 20.
-@test prec(z) == 240
+@test get_precision(z) == 240
 x = MPFRFloat(12)
-@test prec(x) == old_precision
-@test_fails set_precision(1)
+@test get_precision(x) == old_precision
+@test_fails set_bigfloat_precision(1)
 
 # integer_valued
 @test integer_valued(MPFRFloat(12))
 @test !integer_valued(MPFRFloat(12.12))
 
 # nextfloat / prevfloat
-with_precision(53) do
+with_bigfloat_precision(53) do
     x = MPFRFloat(12.12)
     @test MPFRFloat(nextfloat(12.12)) == nextfloat(x)
     @test MPFRFloat(prevfloat(12.12)) == prevfloat(x)
@@ -174,7 +174,7 @@ y = modf(x)
 @test (isnan(y[1]), isinf(y[2])) == (true, true)
 
 # rem
-with_precision(53) do
+with_bigfloat_precision(53) do
     x = MPFRFloat(2)
     y = MPFRFloat(1.67)
     @test rem(x,y) == rem(2, 1.67)
@@ -209,13 +209,13 @@ big_array = ones(MPFRFloat, 100)
 # promotion
 # the array converts everyone to the DEFAULT_PRECISION!
 x = MPFRFloat(12)
-y = with_precision(60) do
+y = with_bigfloat_precision(60) do
     MPFRFloat(42)
 end
 @test [x,y] == [MPFRFloat(12), MPFRFloat(42)]
 
 # log / log2 / log10
-with_precision(53) do
+with_bigfloat_precision(53) do
 x = MPFRFloat(42)
     @test log(x) == log(42)
     @test isinf(log(MPFRFloat(0)))
@@ -229,7 +229,7 @@ x = MPFRFloat(42)
 end
 
 # exp / exp2 / exp10
-with_precision(53) do
+with_bigfloat_precision(53) do
     x = MPFRFloat(10)
     @test exp(x) == exp(10)
     @test exp2(x) == 1024
@@ -252,7 +252,7 @@ y = MPFRFloat(42)
 
 # iround
 x = MPFRFloat(42.42)
-y = with_precision(256) do
+y = with_bigfloat_precision(256) do
     MPFRFloat("9223372036854775809.2324")
 end
 z = BigInt("9223372036854775809")
@@ -267,7 +267,7 @@ z = BigInt("9223372036854775809")
 @test typeof(iround(Uint, x)) == Uint && iround(Uint, x) == 0x2a
 
 # factorial
-with_precision(256) do
+with_bigfloat_precision(256) do
     x = MPFRFloat(42)
     @test factorial(x) == factorial(BigInt(42))
     x = MPFRFloat(10)
@@ -277,7 +277,7 @@ with_precision(256) do
 end
 
 # bessel functions
-with_precision(53) do
+with_bigfloat_precision(53) do
     @test_approx_eq besselj(4, MPFRFloat(2)) besselj(4, 2.)
     @test_approx_eq besselj0(MPFRFloat(2))  besselj0(2.)
     @test_approx_eq besselj1(MPFRFloat(2))  besselj1(2.)
@@ -287,7 +287,7 @@ with_precision(53) do
 end
 
 # trigonometric functions
-with_precision(53) do
+with_bigfloat_precision(53) do
     for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
             :cosh,:sinh,:tanh,:sech,:csch,:coth,:asinh),
         j in (-1., -0.5, -0.25, .25, .5, 1.)

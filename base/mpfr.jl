@@ -5,10 +5,9 @@ export
     MPFRFloat,
     # Functions
     exp10,
-    prec,
-    get_precision,
-    set_precision,
-    with_precision
+    get_bigfloat_precision,
+    set_bigfloat_precision,
+    with_bigfloat_precision
     
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1,
@@ -16,6 +15,7 @@ import
         exponent, factorial, floor, integer_valued, iround, isfinite, isinf, 
         isnan, log, log2, log10, max, min, mod, modf, nextfloat, prevfloat, 
         promote_rule, rem, round, show, showcompact, sum, sqrt, string, trunc,
+        get_precision,
     # import trigonometric functions
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
         sech, csch, coth, acosh, asinh, atanh
@@ -348,12 +348,12 @@ end
 <(x::MPFRFloat, y::MPFRFloat) = ccall((:mpfr_less_p, :libmpfr), Int32, (Ptr{mpfr_struct}, Ptr{mpfr_struct}), &(x.mpfr), &(y.mpfr)) != 0
 >(x::MPFRFloat, y::MPFRFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{mpfr_struct}, Ptr{mpfr_struct}), &(x.mpfr), &(y.mpfr)) != 0
 
-function prec(x::MPFRFloat)
+function get_precision(x::MPFRFloat)
     return ccall((:mpfr_get_prec, :libmpfr), Int, (Ptr{mpfr_struct},), &(x.mpfr))
 end
 
-get_precision() = DEFAULT_PRECISION[end]
-function set_precision(x::Int)
+get_bigfloat_precision() = DEFAULT_PRECISION[end]
+function set_bigfloat_precision(x::Int)
     if x < 2
         throw(DomainError())
     end
@@ -417,11 +417,11 @@ function prevfloat(x::MPFRFloat)
    return z
 end
 
-function with_precision(f::Function, precision::Integer)
-    old_precision = get_precision()
-    set_precision(precision)
+function with_bigfloat_precision(f::Function, precision::Integer)
+    old_precision = get_bigfloat_precision()
+    set_bigfloat_precision(precision)
     ret = f()
-    set_precision(old_precision)
+    set_bigfloat_precision(old_precision)
     return ret
 end
 
@@ -446,7 +446,7 @@ function string(x::MPFRFloat)
     end
 end
 
-show(io::IO, b::MPFRFloat) = print(io, string(b) * " with $(prec(b)) bits of precision")
+show(io::IO, b::MPFRFloat) = print(io, string(b) * " with $(get_precision(b)) bits of precision")
 showcompact(io::IO, b::MPFRFloat) = print(io, string(b))
 
 end #module

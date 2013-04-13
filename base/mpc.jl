@@ -4,15 +4,14 @@ export
     # Types
     MPCComplex,
     # Functions
-    prec2,
-    get_complex_precision,
-    set_complex_precision,
-    with_complex_precision
+    get_bigcomplex_precision,
+    set_bigcomplex_precision,
+    with_bigcomplex_precision
     
 import
     Base: (*), +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($), cmp,
         complex, convert, div, imag, integer_valued, isfinite, isinf, isnan, 
-        promote_rule, real, show, showcompact, sqrt, string, prec
+        promote_rule, real, show, showcompact, sqrt, string, get_precision
 
 const ROUNDING_MODE = 0
 const DEFAULT_PRECISION = [53, 53]
@@ -208,38 +207,32 @@ end
 # Utility functions
 ==(x::MPCComplex, y::MPCComplex) = ccall((:mpc_cmp, :libmpc), Int32, (Ptr{Void}, Ptr{Void}), x.mpc, y.mpc) == 0
 
-
-# TODO: decide if prec and prec2 should be just one method or not.
-function prec(x::MPCComplex)
-    return ccall((:mpc_get_prec, :libmpc), Int, (Ptr{Void},), x.mpc)
-end
-
-function prec2(x::MPCComplex)
+function get_precision(x::MPCComplex)
     a = [0]
     b = [0]
     ccall((:mpc_get_prec2, :libmpc), Int, (Ptr{Int}, Ptr{Int}, Ptr{Void}), a, b, x.mpc)
     return (a[1],b[1])
 end
 
-get_complex_precision() = (DEFAULT_PRECISION[1],DEFAULT_PRECISION[end])
-function set_complex_precision(x::Int, y::Int)
+get_bigcomplex_precision() = (DEFAULT_PRECISION[1],DEFAULT_PRECISION[end])
+function set_bigcomplex_precision(x::Int, y::Int)
     if x < 2
         throw(DomainError())
     end
     DEFAULT_PRECISION[1], DEFAULT_PRECISION[end] = x, y
 end
-set_complex_precision(x::(Int,Int)) = set_complex_precision(x...)
+set_bigcomplex_precision(x::(Int,Int)) = set_bigcomplex_precision(x...)
 
 iscomplex(::MPCComplex) = true
 isfinite(x::MPCComplex) = isfinite(real(x)) && isfinite(imag(x))
 isinf(x::MPCComplex) = !isfinite(x)
 integer_valued(x::MPCComplex) = imag(x) == 0 && integer_valued(real(x))
 
-function with_complex_precision(f::Function, realprec::Integer, imagprec::Integer)
-    old_precision = get_complex_precision()
-    set_complex_precision(realprec, imagprec)
+function with_bigcomplex_precision(f::Function, realprec::Integer, imagprec::Integer)
+    old_precision = get_bigcomplex_precision()
+    set_bigcomplex_precision(realprec, imagprec)
     ret = f()
-    set_complex_precision(old_precision)
+    set_bigcomplex_precision(old_precision)
     return ret
 end
 
