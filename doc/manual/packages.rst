@@ -198,6 +198,4 @@ Julia community on the `julia-users Google Groups <https://groups.google.com/for
     git branch -d MY_PACKAGE_NAME
     git pull --rebase       #Update local METADATA
 
-9. If `MY_PACKAGE_NAME` is a new submission, the list of :ref:`available-packages`
-   should be updated automatically within a week of your pull request to `METADATA.jl`
-   being accepted. No action is required on your part for this to happen.
+9. The list of :ref:`available-packages` is auto-generated. No action is required on your part to get your package listed in there. The script that generates the list is run manually and hence it may take a week or two before your package shows up. 
