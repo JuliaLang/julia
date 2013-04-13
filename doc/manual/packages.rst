@@ -2,6 +2,9 @@
 Julia Packages
 ==============
 
+Julia features an extensive list of packages which significantly extend the
+base functionality of the language.
+
 Where to find Julia packages
 ----------------------------
 
@@ -37,6 +40,19 @@ can get into an inconsistent state. Deleting the ``$HOME/.julia``
 directory will wipe everything related to the package system. Repeat
 all the steps listed here to start from a clean slate.
 
+.. _contrib-existing:
+
+Contributing to an existing Julia package
+-----------------------------------------
+
+The list of :ref:`available-packages` contains direct links to the homepage of each
+individual package, where further instructions on how to contribute to them may be
+found. You may be interested in addressing open issues for individual packages, or
+alternatively contribute code that you already have to an existing package.
+
+For packages hosted on Github, please ensure that pull requests go directly
+to the individual package repositories and not the main Julia repository.
+
 Contributing a new Julia package
 --------------------------------
 
@@ -65,7 +81,13 @@ actual desired names.
 Creating a new Julia package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. Initialize your package in Julia by running::
+1. Check that your proposed package will not compete directly with an existing one
+   by checking the list of  :ref:`available-packages`. If there is significant overlap
+   in scope, we strongly encourage that you work with the existing package maintainers
+   to improve the existing package rather than creating a new, competing package.
+   See ref:`contrib-existing`_.
+
+2. Initialize your package in Julia by running::
 
     Pkg.new("MY_PACKAGE_NAME")
 
@@ -74,30 +96,30 @@ Creating a new Julia package
 .. note::
    This will overwrite any existing files and git repository in ``$HOME/.julia/MY_PACKAGE_NAME``.
 
-2. If you have already created a repository for your package, overwrite the
+3. If you have already created a repository for your package, overwrite the
 skeleton by copying or symlinking over it. For example,::
 
     rm -r $HOME/.julia/MY_PACKAGE_NAME
     ln -s /path/to/existing/repo/MY_PACKAGE_NAME $HOME/.julia/MY_PACKAGE_NAME
 
-3. In ``REQUIRE``, list the names of all packages used by your new package. One
+4. In ``REQUIRE``, list the names of all packages used by your new package. One
 package per line.
 
-4. Populate the package by filling out ``README.md`` and ``LICENSE.md``, source
+5. Populate the package by filling out ``README.md`` and ``LICENSE.md``, source
 code in ``src/``, and tests in ``test/``. Ensure that each test file contains these
 lines near the beginning::
 
     using Test
     using MY_PACKAGE_NAME
 
-5. Add a publicly accessible remote repository URL, if your package doesn't
+6. Add a publicly accessible remote repository URL, if your package doesn't
 already have one. For example, create a new repository called
 ``MY_PACKAGE_NAME.jl`` on Github and then run::
 
     cd $HOME/.julia/MY_PACKAGE_NAME
     git remote add github https://github.com/MY_GITHUB_USER/MY_PACKAGE_NAME.jl
  
-6. Add at least one git commit and push it to the remote repository::
+7. Add at least one git commit and push it to the remote repository::
 
     # Do some stuff
     git add #list of files goes here
