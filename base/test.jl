@@ -1,6 +1,8 @@
 module Test
 
-export @test, @test_fails, @test_approx_eq, @test_approx_eq_eps
+export Result, Success, Failure, Error,
+       @test, @test_fails, @test_approx_eq, @test_approx_eq_eps,
+       registerhandler, withhandler
 
 abstract Result
 type Success <: Result
@@ -44,6 +46,17 @@ function do_test_fails(thk, qex)
     catch err
         Success(qex)
     end)
+end
+
+function registerhandler(handler)
+    handlers[end] = handler
+end
+
+function withhandler(f::Function, handler)
+    handler, handlers[end] = handlers[end], handler
+    ret = f()
+    handler, handlers[end] = handlers[end], handler
+    return ret
 end
 
 macro test(ex)
