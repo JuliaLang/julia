@@ -377,14 +377,27 @@ variables will not be available (unless their values are substituted with
 definitions, for example when wrapping libraries that contain many
 similar functions.
 
-Indirect calls
---------------
+Indirect calls, calling convention
+----------------------------------
 
 The first argument to ``ccall`` can also be an expression evaluated at
 run time. In this case, the expression must evaluate to a ``Ptr``,
 which will be used as the address of the native function to call. This
 behavior occurs when the first ``ccall`` argument contains references
 to non-constants, such as local variables or function arguments.
+
+The second argument to ``ccall`` can optionally be a calling convention
+specifier (immediately preceding return type). Without any specifier,
+the platform-default C calling convention is used. Other supported 
+conventions are: ``stdcall``, ``cdecl``, ``fastcall``, and ``thiscall``.
+For example (from base/libc.jl)::
+
+    hn = Array(Uint8, 256)
+    err=ccall(:gethostname, stdcall, Int32, (Ptr{Uint8}, Uint32), hn, length(hn))
+
+For more information, please see the `LLVM Language Reference`_.
+
+.. _LLVM Language Reference: http://llvm.org/docs/LangRef.html#calling-conventions
 
 C++
 ---
