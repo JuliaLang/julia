@@ -129,7 +129,6 @@ function find_source_file(file)
     return file
 end
 
-edit(file::String) = edit(file, 1)
 function edit(file::String, line::Integer)
     editor = get(ENV, "JULIA_EDITOR", "emacs")
     issrc = length(file)>2 && file[end-2:end] == ".jl"
