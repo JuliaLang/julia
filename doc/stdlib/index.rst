@@ -30,5 +30,6 @@ Built-in Modules
    :maxdepth: 1
 
    sort
+   test
 
 
