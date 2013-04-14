@@ -305,7 +305,7 @@ function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
     return a
 end
 
-function array2binary{T<:Integer}(a::Array{T},num_bits::Int)
+function array2binary{T<:Integer}(a::VecOrMat{T},num_bits::Int)
     am = size(a,1)
     an = size(a,2)
     b = mapreduce( (x) -> digits(x, 2, num_bits), vcat, a)
