@@ -70,6 +70,50 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
     end
 end
 
+# Basic arithmetic without promotion
+function +(x::BigInt, c::Culong)
+    z = BigInt()
+    ccall((:__gmpz_add_ui, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}, Culong), &(z.mpz), &(x.mpz), c)
+    return z
+end
++(c::Culong, x::BigInt) = x + c
++(c::Unsigned, x::BigInt) = x + convert(Culong, c)
++(x::BigInt, c::Unsigned) = x + convert(Culong, c)
++(x::BigInt, c::Signed) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
++(c::Signed, x::BigInt) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
+
+function -(x::BigInt, c::Culong)
+    z = BigInt()
+    ccall((:__gmpz_sub_ui, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}, Culong), &(z.mpz), &(x.mpz), c)
+    return z
+end
+function -(c::Culong, x::BigInt)
+    z = BigInt()
+    ccall((:__gmpz_ui_sub, :libgmp), Void, (Ptr{mpz_struct}, Culong, Ptr{mpz_struct}), &(z.mpz), c, &(x.mpz))
+    return z
+end
+-(x::BigInt, c::Unsigned) = -(x, convert(Culong, c))
+-(c::Unsigned, x::BigInt) = -(convert(Culong, c), x)
+-(x::BigInt, c::Signed) = c < 0 ? +(x, convert(Culong, -c)) : -(x, convert(Culong, c))
+-(c::Signed, x::BigInt) = c < 0 ? -(x + convert(Culong, -c)) : -(convert(Culong, c), x)
+
+function *(x::BigInt, c::Culong)
+    z = BigInt()
+    ccall((:__gmpz_mul_ui, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}, Culong), &(z.mpz), &(x.mpz), c)
+    return z
+end
+*(c::Culong, x::BigInt) = x * c
+*(c::Unsigned, x::BigInt) = x * convert(Culong, c)
+*(x::BigInt, c::Unsigned) = x * convert(Culong, c)
+function *(x::BigInt, c::Clong)
+    z = BigInt()
+    ccall((:__gmpz_mul_si, :libgmp), Void, (Ptr{mpz_struct}, Ptr{mpz_struct}, Culong), &(z.mpz), &(x.mpz), c)
+    return z
+end
+*(c::Clong, x::BigInt) = x * c
+*(x::BigInt, c::Signed) = x * convert(Clong, c)
+*(c::Signed, x::BigInt) = x * convert(Clong, c)
+
 # unary ops
 for (fJ, fC) in ((:-, :neg), (:~, :com))
     @eval begin
