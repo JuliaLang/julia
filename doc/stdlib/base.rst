@@ -1721,6 +1721,12 @@ Mathematical Functions
 .. function:: ndigits(n, b)
 
    Compute the number of digits in number ``n`` written in base ``b``.
+   
+.. function:: array2binary(A,pad)
+
+   Convert Integer Array to binary representation, each number uses ``pad`` bits.
+   
+   **Example**: ``array2binary([1 2; 3 4], 3) ==[1 0 0 0 1 0; 1 1 0 0 0 1]``
 
 Data Formats
 ------------
