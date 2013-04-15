@@ -175,6 +175,9 @@ include("deprecated.jl")
 include("git.jl")
 include("pkg.jl")
 
+# base graphics API
+include("graphics.jl")
+
 include = include_from_node1
 
 # prime method cache with some things we know we'll need right after startup
