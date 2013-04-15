@@ -1,15 +1,3 @@
-# TODO:
-# ^ (cpow)
-#  equivalent to exp(y*log(x))
-#    except for 0^0?
-#  conj(x)^conj(y) = conj(x^y)
-
-# cos (based on cosh)
-# tan (based on tanh)
-# asin (based on asinh)
-# atan (based on atanh)
-
-
 
 # sqrt: 
 # tests special values from csqrt man page
@@ -222,6 +210,9 @@
 #  sin(z) = -i*sinh(i*z)
 #  i.e. if sinh(a+ib) = x+iy
 #    then  sin(b-ia) = y-ix
+#  sin(conj(z)) = conj(sin(z))
+#  sin(-z) = -sin(z)
+
 
 @test isequal(sin(complex(0.0,-0.0)),complex(0.0,-0.0))
 @test isequal(sin(complex(-0.0,-0.0)),complex(-0.0,-0.0))
@@ -320,6 +311,59 @@
 @test isequal(cosh(complex(NaN,NaN)),complex(NaN,NaN))
 
 
+# cos
+#  cos(z) = cosh(iz)
+#   i.e cos(b-ia) = cosh(a+ib)
+#   and cos(b+ia) = cosh(a-ib)
+#  cos(conj(z)) = conj(cos(z))
+#  cos(-z) = cos(z)
+
+@test isequal(cos(complex(0.0,0.0)),complex(1.0,-0.0))
+@test isequal(cos(complex(0.0,-0.0)),complex(1.0,0.0))
+@test isequal(cos(complex(-0.0,0.0)),complex(1.0,0.0))
+@test isequal(cos(complex(-0.0,-0.0)),complex(1.0,-0.0))
+
+# raise invalid flag
+@test_fails cos(complex(Inf,0.0)) #complex(NaN,-0.0)
+@test_fails cos(complex(-Inf,0.0)) #complex(NaN,0.0)
+
+@test isequal(cos(complex(NaN,0.0)),complex(NaN,0.0))
+@test isequal(cos(complex(NaN,-0.0)),complex(NaN,0.0))
+
+# raise invalid flag
+@test_fails cos(complex(Inf,5.0)) #complex(NaN,NaN)
+
+@test isequal(cos(complex(NaN,5.0)),complex(NaN,NaN))
+
+@test isequal(cos(complex(0.0,-Inf)),complex(Inf,0.0))
+@test isequal(cos(complex(-0.0,-Inf)),complex(Inf,-0.0))
+@test isequal(cos(complex(-0.0,Inf)),complex(Inf,0.0))
+@test isequal(cos(complex(0.0,Inf)),complex(Inf,-0.0))
+
+@test isequal(cos(complex(5.0,-Inf)),complex(cos(5.0)*Inf,sin(5.0)*Inf))
+@test isequal(cos(complex(-5.0,-Inf)),complex(cos(5.0)*Inf,sin(5.0)*-Inf))
+@test isequal(cos(complex(-5.0,Inf)),complex(cos(5.0)*Inf,sin(5.0)*Inf))
+@test isequal(cos(complex(5.0,Inf)),complex(cos(5.0)*Inf,sin(5.0)*-Inf))
+
+# raise invalid flag
+@test_fails cos(complex(Inf,Inf)) #complex(Inf,NaN)
+@test_fails cos(complex(Inf,-Inf)) #complex(Inf,NaN)
+@test_fails cos(complex(-Inf,-Inf)) #complex(Inf,NaN)
+@test_fails cos(complex(-Inf,Inf)) #complex(Inf,NaN)
+
+@test isequal(cos(complex(NaN,Inf)),complex(Inf,NaN))
+@test isequal(cos(complex(NaN,-Inf)),complex(Inf,NaN))
+
+@test isequal(cos(complex(0.0,NaN)),complex(NaN,0.0))
+@test isequal(cos(complex(-0.0,NaN)),complex(NaN,-0.0))
+
+@test isequal(cos(complex(5.0,NaN)),complex(NaN,NaN))
+@test isequal(cos(complex(-5.0,NaN)),complex(NaN,NaN))
+
+@test isequal(cos(complex(NaN,NaN)),complex(NaN,NaN))
+
+
+
 
 # tanh
 #  tanh(conj(z)) = conj(tanh(z))
@@ -365,6 +409,39 @@
 @test isequal(tanh(complex(NaN,-5.0)),complex(NaN,NaN))
 
 @test isequal(tanh(complex(NaN,NaN)),complex(NaN,NaN))
+
+# tan
+#  tan(z) = -i tanh(iz)
+@test_fails tan(complex(Inf,5.0)) #complex(NaN,NaN)
+
+@test isequal(tan(complex(NaN,5.0)),complex(NaN,NaN))
+
+@test isequal(tan(complex(0.0,Inf)),complex(0.0,1.0))
+@test isequal(tan(complex(-0.0,Inf)),complex(-0.0,1.0))
+@test isequal(tan(complex(0.0,-Inf)),complex(0.0,-1.0))
+@test isequal(tan(complex(-0.0,-Inf)),complex(-0.0,-1.0))
+
+@test isequal(tan(complex(5.0,Inf)),complex(sin(2*5.0)*0.0,1.0))
+@test isequal(tan(complex(-5.0,Inf)),complex(sin(2*5.0)*-0.0,1.0))
+@test isequal(tan(complex(5.0,-Inf)),complex(sin(2*5.0)*0.0,-1.0))
+@test isequal(tan(complex(-5.0,-Inf)),complex(sin(2*5.0)*-0.0,-1.0))
+
+@test isequal(tan(complex(Inf,Inf)),complex(0.0,1.0))
+@test isequal(tan(complex(-Inf,Inf)),complex(-0.0,1.0))
+@test isequal(tan(complex(Inf,-Inf)),complex(0.0,-1.0))
+@test isequal(tan(complex(-Inf,-Inf)),complex(-0.0,-1.0))
+
+@test isequal(tan(complex(NaN,Inf)),complex(0.0,1.0))
+@test isequal(tan(complex(NaN,-Inf)),complex(0.0,-1.0))
+
+@test isequal(tan(complex(0.0,NaN)),complex(0.0,NaN))
+@test isequal(tan(complex(-0.0,NaN)),complex(-0.0,NaN))
+
+@test isequal(tan(complex(5.0,NaN)),complex(NaN,NaN))
+@test isequal(tan(complex(-5.0,NaN)),complex(NaN,NaN))
+
+@test isequal(tan(complex(NaN,NaN)),complex(NaN,NaN))
+
 
 
 
@@ -493,6 +570,46 @@
 @test isequal(asinh(complex(NaN,NaN)),complex(NaN,NaN))
 
 
+# asin
+#  asin(z) = -i*asinh(iz)
+@test isequal(asin(complex(0.0,0.0)),complex(0.0,0.0))
+@test isequal(asin(complex(0.0,-0.0)),complex(0.0,-0.0))
+@test isequal(asin(complex(-0.0,0.0)),complex(-0.0,0.0))
+@test isequal(asin(complex(-0.0,-0.0)),complex(-0.0,-0.0))
+
+@test isequal(asin(complex(Inf,0.0)),complex(pi/2,Inf))
+@test isequal(asin(complex(-Inf,0.0)),complex(-pi/2,Inf))
+@test isequal(asin(complex(Inf,-0.0)),complex(pi/2,-Inf))
+@test isequal(asin(complex(-Inf,-0.0)),complex(-pi/2,-Inf))
+
+@test isequal(asin(complex(Inf,5.0)),complex(pi/2,Inf))
+@test isequal(asin(complex(-Inf,5.0)),complex(-pi/2,Inf))
+@test isequal(asin(complex(Inf,-5.0)),complex(pi/2,-Inf))
+@test isequal(asin(complex(-Inf,-5.0)),complex(-pi/2,-Inf))
+
+@test isequal(asin(complex(NaN,0.0)),complex(NaN,NaN))
+@test isequal(asin(complex(NaN,5.0)),complex(NaN,NaN))
+
+@test isequal(asin(complex(Inf,Inf)),complex(pi/4,Inf))
+@test isequal(asin(complex(Inf,-Inf)),complex(pi/4,-Inf))
+@test isequal(asin(complex(-Inf,Inf)),complex(-pi/4,Inf))
+@test isequal(asin(complex(-Inf,-Inf)),complex(-pi/4,-Inf))
+
+@test isequal(asin(complex(NaN,Inf)),complex(NaN,Inf))
+@test isequal(asin(complex(NaN,-Inf)),complex(NaN,-Inf))
+
+@test isequal(asin(complex(0.0,NaN)),complex(0.0,NaN))
+@test isequal(asin(complex(-0.0,NaN)),complex(-0.0,NaN))
+
+@test isequal(asin(complex(5.0,NaN)),complex(NaN,NaN))
+
+@test isequal(asin(complex(Inf,NaN)),complex(NaN,Inf))
+@test isequal(asin(complex(-Inf,NaN)),complex(NaN,Inf))
+
+@test isequal(asin(complex(NaN,NaN)),complex(NaN,NaN))
+
+
+
 # atanh
 #  atanh(conj(z)) = conj(atanh(z))
 #  atang(-z) = -atanh(z)
@@ -544,7 +661,63 @@
 @test isequal(atanh(complex(NaN,5.0)),complex(NaN,NaN))
 @test isequal(atanh(complex(NaN,-5.0)),complex(NaN,NaN))
 
-@test isequal(atanh(complex(NaN,Inf)),complex(0,pi/2))
-@test isequal(atanh(complex(NaN,-Inf)),complex(0,-pi/2))
+@test isequal(atanh(complex(NaN,Inf)),complex(0.0,pi/2))
+@test isequal(atanh(complex(NaN,-Inf)),complex(0.0,-pi/2))
 
 @test isequal(atanh(complex(NaN,NaN)),complex(NaN,NaN))
+
+
+# atan
+#  atan(z) = -i*tanh(iz)
+
+@test isequal(atan(complex(0.0,0.0)),complex(0.0,0.0))
+@test isequal(atan(complex(0.0,-0.0)),complex(0.0,-0.0))
+@test isequal(atan(complex(-0.0,0.0)),complex(-0.0,0.0))
+@test isequal(atan(complex(-0.0,-0.0)),complex(-0.0,-0.0))
+
+@test isequal(atan(complex(NaN,0.0)),complex(NaN,0.0))
+@test isequal(atan(complex(NaN,-0.0)),complex(NaN,-0.0))
+
+# raise divide-by-zero flag
+@test isequal(atan(complex(0.0,1.0)),complex(0.0,Inf))
+
+@test isequal(atan(complex(Inf,0.0)),complex(pi/2,0.0))
+@test isequal(atan(complex(-Inf,0.0)),complex(-pi/2,0.0))
+@test isequal(atan(complex(Inf,-0.0)),complex(pi/2,-0.0))
+@test isequal(atan(complex(-Inf,-0.0)),complex(-pi/2,-0.0))
+
+@test isequal(atan(complex(Inf,5.0)),complex(pi/2,0.0))
+@test isequal(atan(complex(-Inf,5.0)),complex(-pi/2,0.0))
+@test isequal(atan(complex(Inf,-5.0)),complex(pi/2,-0.0))
+@test isequal(atan(complex(-Inf,-5.0)),complex(-pi/2,-0.0))
+
+@test isequal(atan(complex(NaN,5.0)),complex(NaN,NaN))
+@test isequal(atan(complex(NaN,-5.0)),complex(NaN,NaN))
+
+@test isequal(atan(complex(0.0,Inf)),complex(pi/2,0.0))
+@test isequal(atan(complex(-0.0,Inf)),complex(-pi/2,0.0))
+@test isequal(atan(complex(0.0,-Inf)),complex(pi/2,-0.0))
+@test isequal(atan(complex(-0.0,-Inf)),complex(-pi/2,-0.0))
+
+@test isequal(atan(complex(5.0,Inf)),complex(pi/2,0.0))
+@test isequal(atan(complex(-5.0,Inf)),complex(-pi/2,0.0))
+@test isequal(atan(complex(5.0,-Inf)),complex(pi/2,-0.0))
+@test isequal(atan(complex(-5.0,-Inf)),complex(-pi/2,-0.0))
+
+@test isequal(atan(complex(Inf,Inf)),complex(pi/2,0.0))
+@test isequal(atan(complex(Inf,-Inf)),complex(pi/2,-0.0))
+@test isequal(atan(complex(-Inf,Inf)),complex(-pi/2,0.0))
+@test isequal(atan(complex(-Inf,-Inf)),complex(-pi/2,-0.0))
+
+@test isequal(atan(complex(NaN,Inf)),complex(NaN,0.0))
+@test isequal(atan(complex(NaN,-Inf)),complex(NaN,-0.0))
+
+@test isequal(atan(complex(0.0,NaN)),complex(NaN,NaN))
+@test isequal(atan(complex(-0.0,NaN)),complex(NaN,NaN))
+@test isequal(atan(complex(5.0,NaN)),complex(NaN,NaN))
+@test isequal(atan(complex(-5.0,NaN)),complex(NaN,NaN))
+
+@test isequal(atan(complex(Inf,NaN)),complex(pi/2,0.0))
+@test isequal(atan(complex(-Inf,NaN)),complex(-pi/2,0.0))
+
+@test isequal(atan(complex(NaN,NaN)),complex(NaN,NaN))
