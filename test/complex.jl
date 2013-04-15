@@ -149,9 +149,23 @@
 #  equivalent to exp(y*log(x))
 #    except for 0^0?
 #  conj(x)^conj(y) = conj(x^y)
-@test isequal(complex(0.0,0.0)^complex(0.0,0.0), complex(1.0,0.0))
+@test isequal(complex(0.0,0.0)^complex(0.0,0.0), complex(1.0,-0.0))
+@test isequal(complex(0.0,-0.0)^complex(0.0,0.0), complex(1.0,-0.0))
+@test isequal(complex(0.0,0.0)^complex(0.0,-0.0), complex(1.0,0.0))
+@test isequal(complex(0.0,-0.0)^complex(0.0,-0.0), complex(1.0,0.0))
+@test isequal(complex(-0.0,0.0)^complex(0.0,0.0), complex(1.0,-0.0))
+@test isequal(complex(-0.0,-0.0)^complex(0.0,0.0), complex(1.0,-0.0))
+@test isequal(complex(-0.0,0.0)^complex(0.0,-0.0), complex(1.0,0.0))
+@test isequal(complex(-0.0,-0.0)^complex(0.0,-0.0), complex(1.0,0.0))
+@test isequal(complex(0.0,0.0)^complex(-0.0,0.0), complex(1.0,-0.0))
+@test isequal(complex(0.0,-0.0)^complex(-0.0,0.0), complex(1.0,-0.0))
+@test isequal(complex(0.0,0.0)^complex(-0.0,-0.0), complex(1.0,0.0))
+@test isequal(complex(0.0,-0.0)^complex(-0.0,-0.0), complex(1.0,0.0))
+@test isequal(complex(-0.0,0.0)^complex(-0.0,0.0), complex(1.0,-0.0))
+@test isequal(complex(-0.0,-0.0)^complex(-0.0,0.0), complex(1.0,-0.0))
+@test isequal(complex(-0.0,0.0)^complex(-0.0,-0.0), complex(1.0,0.0))
+@test isequal(complex(-0.0,-0.0)^complex(-0.0,-0.0), complex(1.0,0.0))
 
-@test isequal(complex(0.0,-0.0)^complex(0.0,-0.0), complex(1.0,-0.0))
 
 
 
