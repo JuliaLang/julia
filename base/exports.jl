@@ -14,6 +14,7 @@ export
     Operators,
     Errno,
     Meta,
+    Graphics,
 
 # Types
     AbstractMatrix,
