@@ -141,10 +141,10 @@ end
 wait_connected(x) = wait(x, :connectnotify, wait_connect_filter)
 wait_readable(x) = wait(x, :readnotify, wait_readable_filter)
 wait_readline(x) = wait(x, :readnotify, wait_readline_filter)
+wait_readavailable(x::AsyncStream) = wait((x,1), :readnotify, wait_readnb_filter)
 wait_readnb(x::(AsyncStream,Int)) = wait(x, :readnotify, wait_readnb_filter)
 wait_readnb(x::AsyncStream,b::Int) = wait_readnb((x,b))
 wait_readbyte(x::AsyncStream,c::Uint8) = wait((x,c), :readnotify, wait_readbyte_filter)
-
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     if status != -1
@@ -403,6 +403,14 @@ function readline(this::AsyncStream)
     start_reading(this)
     wait_readline(this)
     readline(buf)
+end
+
+function readavailable(this::AsyncStream)
+    buf = this.buffer
+    assert(buf.seekable == false)
+    start_reading(this)
+    wait_readavailable(this)
+    takebuf_string(buf)
 end
 
 function readuntil(this::AsyncStream,c::Uint8)
