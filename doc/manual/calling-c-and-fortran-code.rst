@@ -389,4 +389,5 @@ to non-constants, such as local variables or function arguments.
 C++
 ---
 
-Limited support for C++ is provided by the `Cpp` package.
+Limited support for C++ is provided by the `Cpp <http://github.com/timholy/Cpp.jl>`_ 
+and `Clang <https://github.com/ihnorton/Clang.jl>`_ packages.
