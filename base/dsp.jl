@@ -75,16 +75,25 @@ function deconv{T}(b::Vector{T}, a::Vector{T})
     filt(b, a, x)
 end
 
-function conv{T}(u::Vector{T}, v::Vector{T})
-    n = size(u,1)+size(v,1)-1
-    u, v = [u;zeros(T,size(v,1)-1)], [v;zeros(T,size(u,1)-1)]
-    p = plan_fft(u)
-    y = ifft(p(u).*p(v))
+function conv{T<:LinAlg.BlasFloat}(u::Vector{T}, v::Vector{T})
+    nu = length(u)
+    nv = length(v)
+    n = nu + nv - 1
+    np2 = n > 1024 ? nextprod([2,3,5], n) : nextpow2(n)
+    upad = [u, zeros(T, np2 - nu)]
+    vpad = [v, zeros(T, np2 - nv)]
     if T <: Real
-        return real(y)
+        p = plan_rfft(upad)
+        y = irfft(p(upad).*p(vpad), np2)
+    else
+        p = plan_fft!(upad)
+        y = ifft!(p(upad).*p(vpad))
     end
-    return y
+    return y[1:n]
 end
+conv{T<:Integer}(u::Vector{T}, v::Vector{T}) = conv(float(u), float(v))
+conv{T<:Integer, S<:LinAlg.BlasFloat}(u::Vector{T}, v::Vector{S}) = conv(float(u), v)
+conv{T<:Integer, S<:LinAlg.BlasFloat}(u::Vector{S}, v::Vector{T}) = conv(u, float(v))
 
 function conv2{T}(y::Vector{T}, x::Vector{T}, A::Matrix{T})
     m = length(y)+size(A,1)-1
