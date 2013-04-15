@@ -1,8 +1,8 @@
 .. _man-arrays:
 
-*********
- Arrays   
-*********
+**************************
+ Multi-dimensional Arrays   
+**************************
 
 Julia, like most technical computing languages, provides a first-class
 array implementation. Most technical computing languages pay a lot of
@@ -408,9 +408,8 @@ in the :ref:`stdlib-linalg` section of the standard library documentation.
 ``GeneralizedSVD``  `Generalized SVD <http://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version>`_
 =================== ===========
 
-******************
- Special matrices 
-******************
+Special matrices 
+----------------
 
 `Matrices with special symmetries and structures <http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274>`_
 arise often in linear algebra and are frequently associated with
