@@ -5,7 +5,14 @@ extern size_t jl_cholmod_common_size(size_t x) {
     return sizeof(cholmod_common);
 }
 
-extern int jl_cholmod_version(void) {return CHOLMOD_VERSION;}
+extern int jl_cholmod_version(int *ver) {
+    if (ver != (int*) NULL) {
+	ver[0] = CHOLMOD_MAIN_VERSION;
+	ver[1] = CHOLMOD_SUB_VERSION;
+	ver[2] = CHOLMOD_SUBSUB_VERSION;
+    }
+    return CHOLMOD_VERSION;
+}
 
 extern void jl_cholmod_common_offsets(size_t *vv) {
     vv[0] = offsetof(cholmod_common, dbound);
