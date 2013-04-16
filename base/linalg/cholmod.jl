@@ -22,7 +22,12 @@ import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul
 
 include("linalg/cholmod_h.jl")
 
-const chm_ver    = ccall((:jl_cholmod_version,:libsuitesparse_wrapper),Int32,())
+const chm_ver    = Array(Cint, 3)
+if dlsym(dlopen("libcholmod"), :cholmod_version) != C_NULL
+    ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), chm_ver)
+else
+    ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), chm_ver)
+end
 const chm_com_sz = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
 const chm_com    = fill(0xff, chm_com_sz)
 const chm_l_com  = fill(0xff, chm_com_sz)             
@@ -115,11 +120,11 @@ type CholmodDense{T<:CHMVTypes}
     mat::Matrix{T}
 end
 
-if chm_ver >= 2001                      # CHOLMOD version 2.1.0 or later
+if (1000chm_ver[1]+chm_ver[2]) >= 2001 # CHOLMOD version 2.1.0 or later
     type c_CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
         n::Int
         minor::Int
-        Perm::Ptr{Ti}                   # this pointer was added in verison 2.1.0
+        Perm::Ptr{Ti}        # this pointer was added in verison 2.1.0
         ColCount::Ptr{Ti}
         IPerm::Ptr{Ti}
         nzmax::Int
