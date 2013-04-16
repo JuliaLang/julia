@@ -546,21 +546,27 @@
 			`(call (top convert) ,fty ,val))
 		      (list-head field-types (length args)) args)))))
 
+;; insert a statement after line number node
+(define (prepend-stmt stmt body)
+  (if (and (pair? (cadr body)) (eq? (caadr body) 'line))
+      `(block ,(cadr body) ,stmt ,@(cddr body))
+      `(block ,stmt ,@(cdr body))))
+
 (define (rewrite-ctor ctor Tname params field-names field-types mutabl)
   (define (ctor-body body)
-    `(block ;; make type name global
-	    (global ,Tname)
-	    ,(pattern-replace (pattern-set
-			       (pattern-lambda
-				(call (-/ new) . args)
-				(new-call (if (null? params)
-					      Tname
-					      `(curly ,Tname ,@params))
-					  args
-					  field-names
-					  field-types
-					  mutabl)))
-			      body)))
+    (prepend-stmt
+     `(global ,Tname)
+     (pattern-replace (pattern-set
+		       (pattern-lambda
+			(call (-/ new) . args)
+			(new-call (if (null? params)
+				      Tname
+				      `(curly ,Tname ,@params))
+				  args
+				  field-names
+				  field-types
+				  mutabl)))
+		      body)))
   (let ((ctor2
 	 (pattern-replace
 	  (pattern-set
