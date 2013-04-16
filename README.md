@@ -244,7 +244,7 @@ The following distributions include julia, but the versions may be out of date d
 <a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
 
-Currently, [Julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, Textmate, Notepad++, and Kate.
+Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Notepad++, and Kate, in `contrib/`
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.
