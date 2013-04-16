@@ -1000,7 +1000,6 @@ ifeq ($(USE_LIB64), 1)
 UMFPACK_CONFIG = -DLONGBLAS='long long' 
 CHOLMOD_CONFIG = -DLONGBLAS='long long' 
 endif
-CHOLMOD_CONFIG += -I$(JULIAHOME)/deps/SuiteSparse-$(SUITESPARSE_VER)/CCOLAMD/Include -I$(JULIAHOME)/deps/SuiteSparse-$(SUITESPARSE_VER)/CAMD/Include
 
 SUITE_SPARSE_LIB = -lm
 ifneq ($(OS), Darwin)
