@@ -194,7 +194,7 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
     jl_value_t *bt = expr_type(x, ctx);
     if (!jl_is_bitstype(bt)) {
         if (jl_is_symbol(x)) {
-            bt = (*ctx->declTypes)[((jl_sym_t*)x)->name];
+            bt = (*ctx->declTypes)[((jl_sym_t*)x)];
         }
         if (bt == NULL || !jl_is_bitstype(bt)) {
             // TODO: make sure this code is valid; hopefully it is
