@@ -588,11 +588,11 @@ static Value *emit_arraysize(Value *t, Value *dim)
 static jl_arrayvar_t *arrayvar_for(jl_value_t *ex, jl_codectx_t *ctx)
 {
     if (ex == NULL) return NULL;
-    char *aname=NULL;
+    jl_sym_t *aname=NULL;
     if (jl_is_symbol(ex))
-        aname = ((jl_sym_t*)ex)->name;
+        aname = ((jl_sym_t*)ex);
     else if (jl_is_symbolnode(ex))
-        aname = jl_symbolnode_sym(ex)->name;
+        aname = jl_symbolnode_sym(ex);
     if (aname && ctx->arrayvars->find(aname) != ctx->arrayvars->end()) {
         return &(*ctx->arrayvars)[aname];
     }
