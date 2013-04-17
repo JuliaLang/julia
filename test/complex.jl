@@ -1,4 +1,3 @@
-
 # sqrt: 
 # tests special values from csqrt man page
 # as well as conj(sqrt(z)) = sqrt(conj(z))
@@ -98,9 +97,9 @@
 @test isequal(exp(complex(-0.0,-0.0)), complex(1.0,-0.0))
 
 # raise invalid flag
-@test_fails exp(complex(0.0,Inf) #complex(NaN,NaN)
-@test_fails exp(complex(0.0,-Inf) #complex(NaN,NaN)
-@test_fails exp(complex(5.0,Inf) #complex(NaN,NaN)
+@test_fails exp(complex(0.0,Inf)) #complex(NaN,NaN)
+@test_fails exp(complex(0.0,-Inf)) #complex(NaN,NaN)
+@test_fails exp(complex(5.0,Inf)) #complex(NaN,NaN)
 
 @test isequal(exp(complex(0.0,NaN)), complex(NaN,NaN))
 
