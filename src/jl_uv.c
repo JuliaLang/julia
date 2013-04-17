@@ -287,7 +287,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
                        uv_process_t *proc, jl_value_t *julia_struct,
                        uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
                        uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
-                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe)
+                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe, int detach)
 {
 #ifdef __APPLE__
     char **environ = *_NSGetEnviron();
@@ -304,6 +304,8 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     opts.cwd = NULL;
     opts.args = argv;
     opts.flags = 0;
+    if (detach)
+        opts.flags |= UV_PROCESS_DETACHED;
     opts.stdio = stdio;
     opts.stdio_count = 3;
     stdio[0].type = stdin_type;
