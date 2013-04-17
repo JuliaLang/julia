@@ -2,6 +2,14 @@
 ; Emacs mode for Julia
 ;
 
+; USAGE
+; =====
+
+; Put the following code in your .emacs, site-load.el, or other relevant file
+; (load "path-to-julia-mode/julia-mode.el")
+; (require 'julia-mode)
+
+
 (defvar julia-mode-hook nil)
 
 (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
