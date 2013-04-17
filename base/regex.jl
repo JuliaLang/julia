@@ -128,5 +128,8 @@ eachmatch(re::Regex, str::String)            = RegexMatchIterator(re,str,false)
 
 # miscellaneous methods that depend on Regex being defined
 
+filter!(r::Regex, v) = filter!(x->ismatch(r,x), v)
+filter(r::Regex, v)  = filter(x->ismatch(r,x), v)
+
 filter!(r::Regex, d::Dict) = filter!((k,v)->ismatch(r,k),d)
 filter(r::Regex,  d::Dict) = filter!(r,copy(d))
