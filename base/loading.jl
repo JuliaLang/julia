@@ -19,6 +19,8 @@ function find_in_path(name::String)
         is_file_readable(path) && return abspath(path)
         path = string(prefix,"/",name)
         is_file_readable(path) && return abspath(path)
+        path = string(prefix,"/",name,"/src/",name)
+        is_file_readable(path) && return abspath(path)
     end
     return abspath(name)
 end
