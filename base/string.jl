@@ -1002,7 +1002,8 @@ print_joined(io, strings) = print_joined(io, strings, "")
 
 join(args...) = sprint(print_joined, args...)
 
-chop(s::String) = s[1:end-1]
+chop(s::String, n::Int) = s[1:end-n]
+chop(s::String) = chop(s, 1)
 
 function chomp(s::String)
     i = endof(s)
