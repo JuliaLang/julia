@@ -105,7 +105,7 @@ Worker(host::String, port::Integer) =
     Worker(host, port, connect(host,uint16(port)))
 Worker(host::String, port::Integer, tunnel_user::String) =
     Worker(host, port, connect("localhost",
-           ssh_tunnel(tunnel_user, host, uint16(port))))
+                               ssh_tunnel(tunnel_user, host, uint16(port))))
 
 function send_msg_now(w::Worker, kind, args...)
     send_msg_(w, kind, args, true)
@@ -959,7 +959,7 @@ ssh_tunnel(host, port) = ssh_tunnel(ENV["USER"], host, port)
 function ssh_tunnel(user, host, port)
     global tunnel_port
     localp = tunnel_port::Int
-    while !success(`ssh -f -o ExitOnForwardFailure=yes $(user)@$host -L $localp:$host:$port -N`)
+    while !success(detach(`ssh -f -o ExitOnForwardFailure=yes $(user)@$host -L $localp:$host:$port -N`))
         localp += 1
     end
     tunnel_port = localp+1
@@ -967,7 +967,9 @@ function ssh_tunnel(user, host, port)
 end
 
 function worker_ssh_cmd(host)
-    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+    c = `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+    c.detach = true
+    c
 end
 
 #function worker_ssh_cmd(host, key)
@@ -1365,6 +1367,7 @@ function event_loop(isclient)
         try
             if iserr
                 display_error(lasterr, bt)
+                println()
                 iserr, lasterr, bt = false, nothing, {}
             else
                 while true

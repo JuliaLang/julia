@@ -3,7 +3,8 @@ abstract AbstractCmd
 type Cmd <: AbstractCmd
     exec::Executable
     ignorestatus::Bool
-    Cmd(exec::Executable) = new(exec,false)
+    detach::Bool
+    Cmd(exec::Executable) = new(exec,false,false)
 end
 
 function eachline(cmd::AbstractCmd,stdin)
@@ -91,6 +92,7 @@ end
 
 ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)
 ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
+detach(cmd::Cmd) = (cmd.detach=true; cmd)
 
 (&)(left::AbstractCmd,right::AbstractCmd) = AndCmds(left,right)
 (|)(src::AbstractCmd,dest::AbstractCmd) = OrCmds(src,dest)
@@ -154,10 +156,12 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     proc = c_malloc(ccall(:jl_sizeof_uv_process_t,Int64,()))
     error = ccall(:jl_spawn, Int32,
         (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void}),
-         cmd,        argv,            loop,      proc, pp,      uvtype(in),
-         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err))
-    if(error != 0)
+         Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void},
+         Int32),
+         cmd,        argv,            loop,      proc,      pp,  uvtype(in),
+         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
+         pp.cmd.detach)
+    if error != 0
         c_free(proc)
         throw(UVError("spawn"))
     end
