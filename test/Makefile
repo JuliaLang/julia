@@ -3,7 +3,8 @@ include ../Make.inc
 
 TESTS = core keywordargs numbers strings unicode corelib hashing remote iostring \
 arrayops linalg blas fft dsp sparse bitarray random math functional bigint \
-sorting statistics spawn parallel arpack bigfloat file zlib all git pkg pkg2 suitesparse
+sorting statistics spawn parallel arpack bigfloat file zlib all git pkg pkg2 \
+suitesparse complex
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
