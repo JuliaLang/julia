@@ -1,3 +1,9 @@
+# Convolution
+a = [1., 2., 1., 2.]
+b = [1., 2., 3.]
+@test_approx_eq conv(a, b) [1., 4., 8., 10., 7., 6.]
+@test_approx_eq conv(complex(a, ones(4)), complex(b)) complex([1., 4., 8., 10., 7., 6.], [1. 3. 6. 6. 5. 3.])
+
 # Discrete cosine transform (DCT) tests
 
 a = rand(8,11) + im*rand(8,11)
