@@ -165,6 +165,7 @@ USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_ZLIB=0
 USE_SYSTEM_GRISU=0
 USE_SYSTEM_RMATH=0
+USE_SYSTEM_LIBUV=0
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -243,6 +244,14 @@ LIBMNAME = libm
 else
 LIBM = -lopenlibm
 LIBMNAME = libopenlibm
+endif
+
+ifeq ($(USE_SYSTEM_LIBUV), 1)
+  LIBUV = /usr/lib/libuv.a
+  LIBUV_INC = /usr/include
+else
+  LIBUV = $(BUILD)/lib/libuv.a
+  LIBUV_INC = $(JULIAHOME)/deps/libuv/include
 endif
 
 ifeq ($(USE_MKL), 1)
