@@ -548,9 +548,11 @@
 
 ;; insert a statement after line number node
 (define (prepend-stmt stmt body)
-  (if (and (pair? (cadr body)) (eq? (caadr body) 'line))
-      `(block ,(cadr body) ,stmt ,@(cddr body))
-      `(block ,stmt ,@(cdr body))))
+  (if (and (pair? body) (eq? (car body) 'block))
+      (if (and (pair? (cadr body)) (eq? (caadr body) 'line))
+	  `(block ,(cadr body) ,stmt ,@(cddr body))
+	  `(block ,stmt ,@(cdr body)))
+      body))
 
 (define (rewrite-ctor ctor Tname params field-names field-types mutabl)
   (define (ctor-body body)
