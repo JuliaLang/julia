@@ -14,7 +14,7 @@ SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 LLTDIR = ../support
-LLT = $(LLTDIR)/libsupport.a $(BUILD)/lib/libuv.a
+LLT = $(LLTDIR)/libsupport.a $(LIBUV)
 
 FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) -fvisibility=hidden
@@ -33,7 +33,7 @@ release: $(EXENAME)
 
 debug: $(EXENAME)-debug
 
-HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
+HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 
 %.o: %.c $(HEADERS)
 	$(QUIET_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@

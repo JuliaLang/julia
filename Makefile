@@ -80,8 +80,11 @@ install: release
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
 		cp -a $(BUILD)/lib/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
+ifeq ($(USE_SYSTEM_LIBUV),0)
 	cp -a $(BUILD)/lib/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
-	cp -a src/julia.h $(BUILD)/include/uv* $(PREFIX)/include/julia
+	cp -a $(BUILD)/include/uv* $(PREFIX)/include/julia
+endif
+	cp -a src/julia.h $(PREFIX)/include/julia
 	# Copy system image
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well
