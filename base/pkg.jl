@@ -175,6 +175,21 @@ function add(pkgs::Union(String,VersionSet)...)
     add(pkgs_)
 end
 
+add_local(pkgs::String...) = cd_pkgdir() do
+    d = dir()
+    for pkg in pkgs
+        !isdir(d) && error("No package at $pkg.")
+
+        pkgname = last(split(pkg, '/'))
+        println(pkgname)
+        if endswith(pkg, ".jl")
+            pkgname = pkgname[1:end-3]
+        end
+
+        run(`ln -s $pkg $(string(d, "/", pkgname))`)
+    end
+end
+
 rm(pkgs::Vector{String}) = cd_pkgdir() do
     run(`git add REQUIRE`)
     try
