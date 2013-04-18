@@ -32,18 +32,24 @@ Julia array library ensures that inputs are not modified by library
 functions. User code, if it needs to exhibit similar behaviour, should
 take care to create a copy of inputs that it may modify.
 
+Arrays
+======
+
 Basic Functions
 ---------------
 
-1. ``ndims(A)`` — the number of dimensions of A
-2. ``size(A,n)`` — the size of A in a particular dimension
-3. ``size(A)`` — a tuple containing the dimensions of A
-4. ``eltype(A)`` — the type of the elements contained in A
-5. ``length(A)`` — the number of elements in A
-6. ``nnz(A)`` — the number of nonzero values in A
-7. ``stride(A,k)`` — the size of the stride along dimension k
-8. ``strides(A)`` — a tuple of the linear index distances between
-   adjacent elements in each dimension
+=============== ==============================================================================
+Function        Description
+=============== ==============================================================================
+``eltype(A)``   the type of the elements contained in A
+``length(A)``   the number of elements in A
+``ndims(A)``    the number of dimensions of A
+``nnz(A)``      the number of nonzero values in A
+``size(A)``     a tuple containing the dimensions of A
+``size(A,n)``   the size of A in a particular dimension
+``stride(A,k)`` the stride (linear index distance between adjacent elements) along dimension k
+``strides(A)``  a tuple of the strides in each dimension
+=============== ==============================================================================
 
 Construction and Initialization
 -------------------------------
@@ -53,41 +59,38 @@ the following list of such functions, calls with a ``dims...`` argument
 can either take a single tuple of dimension sizes or a series of
 dimension sizes passed as a variable number of arguments.
 
-1.  ``Array(type, dims...)`` — an uninitialized dense array
-2.  ``cell(dims...)`` — an uninitialized cell array (heterogeneous
-    array)
-3.  ``zeros(type, dims...)`` — an array of all zeros of specified type
-4.  ``ones(type, dims...)`` — an array of all ones of specified type
-5.  ``trues(dims...)`` — a ``Bool`` array with all values ``true``
-6.  ``falses(dims...)`` — a ``Bool`` array with all values ``false``
-7.  ``reshape(A, dims...)`` — an array with the same data as the given
-    array, but with different dimensions.
-8.  ``copy(A)``  — copy ``A``
-9.  ``deepcopy(A)`` — copy ``A``, recursively copying its elements
-10. ``similar(A, element_type, dims...)`` — an uninitialized array of
-    the same type as the given array (dense, sparse, etc.), but with the
-    specified element type and dimensions. The second and third
-    arguments are both optional, defaulting to the element type and
-    dimensions of ``A`` if omitted.
-11. ``reinterpret(type, A)`` — an array with the same binary data as the
-    given array, but with the specified element type.
-12. ``rand(dims)`` — random array with ``Float64`` uniformly distributed
-    values in [0,1)
-13. ``randf(dims)`` — random array with ``Float32`` uniformly
-    distributed values in [0,1)
-14. ``randn(dims)`` — random array with ``Float64`` normally distributed
-    random values with a mean of 0 and standard deviation of 1
-15. ``eye(n)`` — n-by-n identity matrix
-16. ``eye(m, n)`` — m-by-n identity matrix
-17. ``linspace(start, stop, n)`` — a vector of ``n`` linearly-spaced
-    elements from ``start`` to ``stop``.
-18. ``fill!(A, x)`` — fill the array ``A`` with value ``x``
+===================================== =====================================================================
+Function                              Description
+===================================== =====================================================================
+``Array(type, dims...)``              an uninitialized dense array
+``cell(dims...)``                     an uninitialized cell array (heterogeneous array)
+``zeros(type, dims...)``              an array of all zeros of specified type
+``ones(type, dims...)``               an array of all ones of specified type
+``trues(dims...)``                    a ``Bool`` array with all values ``true``
+``falses(dims...)``                   a ``Bool`` array with all values ``false``
+``reshape(A, dims...)``               an array with the same data as the given array, but with
+                                      different dimensions.
+``copy(A)``                           copy ``A``
+``deepcopy(A)``                       copy ``A``, recursively copying its elements
+``similar(A, element_type, dims...)`` an uninitialized array of the same type as the given array
+                                      (dense, sparse, etc.), but with the specified element type and
+                                      dimensions. The second and third arguments are both optional,
+                                      defaulting to the element type and dimensions of ``A`` if omitted.
+``reinterpret(type, A)``              an array with the same binary data as the given array, but with the
+                                      specified element type
+``rand(dims)``                        ``Array`` of ``Float64``\ s with random, iid[#]_ and uniformly
+                                      distributed values in [0,1)
+``randf(dims)``                       ``Array`` of ``Float32``\ s with random, iid and uniformly
+                                      distributed values in [0,1)
+``randn(dims)``                       ``Array`` of ``Float64``\ s with random, iid and standard normally
+                                      distributed random values
+``eye(n)``                            ``n``-by-``n`` identity matrix
+``eye(m, n)``                         ``m``-by-``n`` identity matrix
+``linspace(start, stop, n)``          vector of ``n`` linearly-spaced elements from ``start`` to ``stop``
+``fill!(A, x)``                       fill the array ``A`` with value ``x``
+===================================== =====================================================================
 
-The last function, ``fill!``, is different in that it modifies an
-existing array instead of constructing a new one. As a convention,
-functions with this property have names ending with an exclamation
-point. These functions are sometimes called "mutating" functions, or
-"in-place" functions.
+.. [#] *iid*, independently and identically distributed.
 
 Comprehensions
 --------------
@@ -108,9 +111,7 @@ ranges ``rx``, ``ry``, etc. and each ``F(x,y,...)`` evaluation returns a
 scalar.
 
 The following example computes a weighted average of the current element
-and its left and right neighbour along a 1-d grid.
-
-::
+and its left and right neighbor along a 1-d grid. ::
 
     julia> const x = rand(8)
     8-element Float64 Array:
@@ -132,9 +133,9 @@ and its left and right neighbour along a 1-d grid.
      0.245097
      0.241854
 
-NOTE: In the above example, ``x`` is declared as constant because type
-inference in Julia does not work as well on non-constant global
-variables.
+.. note:: In the above example, ``x`` is declared as constant because type
+  inference in Julia does not work as well on non-constant global
+  variables.
 
 The resulting array type is inferred from the expression; in order to control
 the type explicitly, the type can be prepended to the comprehension. For example,
@@ -235,46 +236,83 @@ Concatenation
 -------------
 
 Arrays can be concatenated along any dimension using the following
-syntax:
+functions:
 
-1. ``cat(dim, A...)`` — concatenate input n-d arrays along the dimension
-   ``dim``
-2. ``vcat(A...)`` — Shorthand for ``cat(1, A...)``
-3. ``hcat(A...)`` — Shorthand for ``cat(2, A...)``
-4. ``hvcat(A...)``
+================ ======================================================
+Function         Description
+================ ======================================================
+``cat(k, A...)`` concatenate input n-d arrays along the dimension ``k``
+``vcat(A...)``   shorthand for ``cat(1, A...)``
+``hcat(A...)``   shorthand for ``cat(2, A...)``
+``hvcat(A...)``
+================ ======================================================
 
 Concatenation operators may also be used for concatenating arrays:
 
-1. ``[A B C ...]`` — calls ``hcat``
-2. ``[A, B, C, ...]`` — calls ``vcat``
-3. ``[A B; C D; ...]`` — calls ``hvcat``
+=================== =========
+Expression          Calls
+=================== =========
+``[A B C ...]``     ``hcat``
+``[A, B, C, ...]``  ``vcat``
+``[A B; C D; ...]`` ``hvcat``
+=================== =========
 
 Vectorized Operators and Functions
 ----------------------------------
 
-The following operators are supported for arrays. In case of binary
-operators, the dot version of the operator should be used when both
-inputs are non-scalar, and any version of the operator may be used if
-one of the inputs is a scalar.
+The following operators are supported for arrays. In case of binary operators,
+the dot (element-wise) version of the operator should be used when both inputs
+are non-scalar, and any version of the operator may be used if one of the
+inputs is a scalar.
 
-1.  Unary Arithmetic — ``-``
-2.  Binary Arithmetic — ``+``, ``-``, ``*``, ``.*``, ``/``, ``./``,
+1.  Unary arithmetic — ``-``, ``+``, ``!``
+2.  Binary arithmetic — ``+``, ``-``, ``*``, ``.*``, ``/``, ``./``,
     ``\``, ``.\``, ``^``, ``.^``, ``div``, ``mod``
 3.  Comparison — ``==``, ``!=``, ``<``, ``<=``, ``>``, ``>=``
-4.  Unary Boolean or Bitwise — ``~``
-5.  Binary Boolean or Bitwise — ``&``, ``|``, ``$``
-6.  Trigonometrical functions — ``sin``, ``cos``, ``tan``, ``sinh``,
-    ``cosh``, ``tanh``, ``asin``, ``acos``, ``atan``, ``atan2``,
-    ``sec``, ``csc``, ``cot``, ``asec``, ``acsc``, ``acot``, ``sech``,
-    ``csch``, ``coth``, ``asech``, ``acsch``, ``acoth``, ``sinc``,
-    ``cosc``, ``hypot``
-7.  Logarithmic functions — ``log``, ``log2``, ``log10``, ``log1p``
-8.  Exponential functions — ``exp``, ``expm1``, ``exp2``, ``ldexp``
-9.  Rounding functions — ``ceil``, ``floor``, ``trunc``, ``round``,
-    ``ipart``, ``fpart``
-10. Other mathematical functions — ``min``, ``max,`` ``abs``, ``pow``,
-    ``sqrt``, ``cbrt``, ``erf``, ``erfc``, ``gamma``, ``lgamma``,
-    ``real``, ``conj``, ``clamp``
+4.  Unary Boolean or bitwise — ``~``
+5.  Binary Boolean or bitwise — ``&``, ``|``, ``$``
+
+The following built-in functions are also vectorized, whereby the functions act
+element-wise::
+
+    abs abs2 angle cbrt
+    airy airyai airyaiprime airybi airybiprime airyprime
+    acos acosh asin asinh atan atan2 atanh
+    cos  cosh  sin  sinh  tan  tanh  sinc  cosc
+    besselh besseli besselj besselj0 besselj1 besselk bessely bessely0 bessely1
+    exp  erf  erfc  exp2  expm1
+    beta dawson digamma erfcx erfi
+    exponent eta zeta gamma
+    hankelh1 hankelh2
+     ceil  floor  round  trunc
+    iceil ifloor iround itrunc
+    isfinite isinf isnan
+    lbeta lfact lgamma
+    log log10 log1p log2
+    copysign max min significand
+    sqrt hypot
+
+Furthermore, Julia provides the ``@vectorize_1arg`` and ``@vectorize_2arg``
+macros to automatically vectorize any function of one or two arguments
+respectively.  Each of these takes two arguments, namely the ``Type`` of
+argument (which is usually chosen to be to be the most general possible) and
+the name of the function to vectorize. Here is a simple example::
+
+    julia> square(x) = x^2
+    # methods for generic function square
+    square(x) at none:1
+    
+    julia> @vectorize_1arg Number square
+    # methods for generic function square
+    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:216
+    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:217
+    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:219
+    square(x) at none:1
+    
+    julia> square([1 2 4; 5 6 7])
+    2x3 Int64 Array:
+      1   4  16
+     25  36  49
 
 Broadcasting
 ------------
@@ -385,130 +423,8 @@ stride parameters.
      -1.175  -0.786311
       0.0    -0.414549
 
-***********************
- Matrix factorizations
-***********************
-
-`Matrix factorizations (a.k.a. matrix decompositions) <http://en.wikipedia.org/wiki/Matrix_decomposition>`_
-compute the factorization of a matrix into a product of matrices, and
-are one of the central concepts in linear algebra.
-
-The following table summarizes the types of matrix factorizations that have been
-implemented in Julia. Details of their associated methods can be found
-in the :ref:`stdlib-linalg` section of the standard library documentation.
-
-=================== ===========
-``Cholesky``        `Cholesky factorization <http://en.wikipedia.org/wiki/Cholesky_decomposition>`_
-``CholeskyPivoted`` `Pivoted <http://en.wikipedia.org/wiki/Pivot_element>`_ Cholesky factorization
-``LU``              `LU factorization <http://en.wikipedia.org/wiki/LU_decomposition>`_
-``QRPivoted``       Pivoted `QR factorization <http://en.wikipedia.org/wiki/QR_decomposition>`_
-``Hessenberg``      `Hessenberg decomposition <http://mathworld.wolfram.com/HessenbergDecomposition.html>`_
-``Eigen``           `Spectral decomposition <http://en.wikipedia.org/wiki/Eigendecomposition_(matrix)>`_
-``SVD``             `Singular value decomposition <http://en.wikipedia.org/wiki/Singular_value_decomposition>`_
-``GeneralizedSVD``  `Generalized SVD <http://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version>`_
-=================== ===========
-
-Special matrices 
-----------------
-
-`Matrices with special symmetries and structures <http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274>`_
-arise often in linear algebra and are frequently associated with
-various matrix factorizations.
-Julia features a rich collection of special matrix types, which allow for fast
-computation with specialized routines that are specially developed for
-particular matrix types.
-
-The following tables summarize the types of special matrices that have been
-implemented in Julia, as well as whether hooks to various optimized methods
-for them in LAPACK are available.
-
-+--------------------+-----------------------------------------------------------------------------------+
-| ``Hermitian``      | `Hermitian matrix <http://en.wikipedia.org/wiki/Hermitian_matrix>`_               |
-+--------------------+-----------------------------------------------------------------------------------+
-| ``Triangular``     | Upper/lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_ |
-+--------------------+-----------------------------------------------------------------------------------+
-| ``Tridiagonal``    | `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_           | 
-+--------------------+-----------------------------------------------------------------------------------+
-| ``SymTridiagonal`` | Symmetric tridiagonal matrix                                                      |
-+--------------------+-----------------------------------------------------------------------------------+
-| ``Bidiagonal``     | Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_ | 
-+--------------------+-----------------------------------------------------------------------------------+
-| ``Diagonal``       | `Diagonal matrix <http://en.wikipedia.org/wiki/Diagonal_matrix>`_                 |
-+--------------------+-----------------------------------------------------------------------------------+
-
-
-Elementary operations
----------------------
-
-+--------------------+-------+-------+-------+-------+---------------------+
-| Matrix type        | ``+`` | ``-`` | ``*`` | ``\`` | Other functions with|
-|                    |       |       |       |       | optimized methods   |
-+--------------------+-------+-------+-------+-------+---------------------+
-| ``Hermitian``      |       |       |       |   XY  | ``inv``,            |
-|                    |       |       |       |       | ``sqrtm``, ``expm`` |
-+--------------------+-------+-------+-------+-------+---------------------+
-| ``Triangular``     |       |       |  XY   |   XY  | ``inv``, ``det``    |
-+--------------------+-------+-------+-------+-------+---------------------+
-| ``SymTridiagonal`` |   X   |   X   |  XZ   |   XY  | ``eigmax/min``      |
-+--------------------+-------+-------+-------+-------+---------------------+
-| ``Tridiagonal``    |   X   |   X   |  XZ   |   XY  |                     |
-+--------------------+-------+-------+-------+-------+---------------------+
-| ``Bidiagonal``     |   X   |   X   |  XZ   |   XY  |                     |
-+--------------------+-------+-------+-------+-------+---------------------+
-| ``Diagonal``       |   X   |   X   |  XY   |   XY  | ``inv``, ``det``,   |
-|                    |       |       |       |       | ``logdet``, ``/``   |
-+--------------------+-------+-------+-------+-------+---------------------+
-
-Legend:
-
-+---+---------------------------------------------------------------+
-| X | An optimized method for matrix-matrix operations is available |
-+---+---------------------------------------------------------------+
-| Y | An optimized method for matrix-vector operations is available |
-+---+---------------------------------------------------------------+
-| Z | An optimized method for matrix-scalar operations is available |
-+---+---------------------------------------------------------------+
-
-Matrix factorizations
----------------------
-
-+--------------------+-------------------------------------+-----------------------------+
-| Matrix type        | Eigensystems                        | Singular values and vectors |
-|                    +---------+-------------+-------------+---------+-------------------+
-|                    | ``eig`` | ``eigvals`` | ``eigvecs`` | ``svd`` | ``svdvals``       |
-+--------------------+---------+-------------+-------------+---------+-------------------+
-| ``Hermitian``      |         |     ABC     |             |         |                   |
-|                    |         |             |             |         |                   |
-+--------------------+---------+-------------+-------------+---------+-------------------+
-| ``Triangular``     |         |             |             |         |                   |
-+--------------------+---------+-------------+-------------+---------+-------------------+
-| ``SymTridiagonal`` |    A    |     ABC     |     AD      |         |                   |
-+--------------------+---------+-------------+-------------+---------+-------------------+
-| ``Tridiagonal``    |         |             |             |         |                   |
-+--------------------+---------+-------------+-------------+---------+-------------------+
-| ``Bidiagonal``     |         |             |             |    A    |         A         |
-+--------------------+---------+-------------+-------------+---------+-------------------+
-| ``Diagonal``       |         |      A      |             |         |                   |
-|                    |         |             |             |         |                   |
-+--------------------+---------+-------------+-------------+---------+-------------------+
-
-Legend:
-
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-| A | An optimized method to find all the characteristic values and/or vectors is available                                             | e.g. ``eigvals(M)``    |
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-| B | An optimized method to find the ``il``:sup:`th` through the ``ih``:sup:`th` characteristic values are available                   | ``eigvals(M, il, ih)`` |
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-| C | An optimized method to find the characteristic values in the interval [``vl``, ``vh``] is available                               | ``eigvals(M, vl, vh)`` |
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-| D | An optimized method to find the characteristic vectors corresponding to the characteristic values ``x=[x1, x2,...]`` is available | ``eigvecs(M, x)``      |
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-
-
-
-******************
- Sparse Matrices
-******************
+Sparse Matrices
+===============
 
 `Sparse matrices <http://en.wikipedia.org/wiki/Sparse_matrix>`_ are
 matrices that contain enough zeros that storing them in a special data

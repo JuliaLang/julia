@@ -197,18 +197,33 @@ The last point is potentially surprising and thus worth noting::
     julia> NaN > NaN
     false
 
-For situations where one wants to compare floating-point values so that
-``NaN`` equals ``NaN``, such as hash key comparisons, the function
-``isequal`` is also provided, which considers ``NaN``\ s to be equal to
-each other: ::
+and can cause especial headaches with :ref:`Arrays`::
+
+    julia> [1 NaN] == [1 NaN]
+    false
+
+Julia provides additional functions to test numbers for special values,
+which can be useful in situations like hash key comparisons::
+
+================= ==================================
+Function          Tests if
+================= ==================================
+``isequal(x, y)`` ``x`` and ``y`` are equal in value
+``isfinite(x)``   ``x`` is a finite number
+``isinf(x)``      ``x`` is infinite
+``isnan(x)``      ``x`` is not a number
+================= ==================================
+
+``isequal`` considers ``NaN``\ s of the same type to be equal to each other::
 
     julia> isequal(NaN,NaN)
     true
 
-Alternatively, the ``isnan`` function tests directly for ``NaN``\ s: ::
-
-    julia> isnan(NaN32)
+    julia> isequal([1 NaN], [1 NaN])
     true
+    
+    julia> isequal(NaN,NaN32)
+    false
 
 Mixed-type comparisons between signed integers, unsigned integers, and
 floats can be very tricky. A great deal of care has been taken to ensure

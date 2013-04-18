@@ -13,6 +13,7 @@
 
    introduction
    getting-started
+   variables
    integers-and-floating-point-numbers
    mathematical-operations
    complex-and-rational-numbers
@@ -27,6 +28,7 @@
    modules
    metaprogramming
    arrays
+   linear-algebra
    parallel-computing
    running-external-programs
    calling-c-and-fortran-code

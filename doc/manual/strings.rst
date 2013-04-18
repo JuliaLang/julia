@@ -454,9 +454,13 @@ Non-Standard String Literals
 There are situations when you want to construct a string or use string
 semantics, but the behavior of the standard string construct is not
 quite what is needed. For these kinds of situations, Julia provides
-*non-standard string literals*. A non-standard string literal looks like
+:ref:`non-standard string literals <man-non-standard-string-literals2>`.
+A non-standard string literal looks like
 a regular double-quoted string literal, but is immediately prefixed by
 an identifier, and doesn't behave quite like a normal string literal.
+Regular expressions, as described below, are one example of a non-standard
+string literal. Other examples are given in the :ref:`metaprogramming
+<man-non-standard-string-literals2>` section.
 
 Regular Expressions
 -------------------

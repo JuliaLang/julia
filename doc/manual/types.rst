@@ -70,27 +70,6 @@ the need to write code that explicitly uses types. Some kinds of
 programming, however, become clearer, simpler, faster and more robust
 with declared types.
 
-.. raw:: html
-
-   <div class="sidebar">
-
-A Note On Capitalization. There is no semantic significance to
-capitalization of names in Julia, unlike, for example, Ruby, where
-identifiers beginning with an uppercase letter (including type names)
-are constants. By convention, however, the first letter of each word in
-a Julia type name begins with a capital letter and underscores are not
-used to separate words. Variables, on the other hand, are conventionally
-given lowercase names, with word separation indicated by underscores
-("\_"). In numerical code it is not uncommon to use single-letter
-uppercase variable names, especially for matrices. Since types rarely
-have single-letter names, this does not generally cause confusion,
-although type parameter placeholders (see below) also typically use
-single-letter uppercase names like T or S.
-
-.. raw:: html
-
-   </div>
-
 Type Declarations
 -----------------
 
@@ -150,7 +129,7 @@ The "declaration" behavior only occurs in specific contexts::
 
 In value contexts, such as ``f(x::Int8)``, the ``::`` is a type
 assertion again and not a declaration. Note that these declarations
-cannot be used in global scope currently, in the REPL, since julia
+cannot be used in global scope currently, in the REPL, since Julia
 does not yet have constant-type globals.
 
 .. _man-abstract-types:
@@ -266,7 +245,7 @@ the standard bits types are all defined in the language itself::
     bitstype 64 Int64  <: Signed
     bitstype 64 Uint64 <: Unsigned
 
-The general syntaxes for declaration of a bitstypes are::
+The general syntaxes for declaration of a ``bitstype`` are::
 
     bitstype «bits» «name»
     bitstype «bits» «name» <: «supertype»
@@ -300,7 +279,7 @@ Composite Types
 ---------------
 
 `Composite types <http://en.wikipedia.org/wiki/Composite_data_type>`_
-are called records, structures ("structs" in C), or objects in various
+are called records, structures (``structs`` in C), or objects in various
 languages. A composite type is a collection of named fields, an instance
 of which can be treated as a single value. In many languages, composite
 types are the only kind of user-definable type, and they are by far the
@@ -400,7 +379,7 @@ Immutable Composite Types
 -------------------------
 
 It is also possible to define *immutable* composite types by using
-the keyword ``immutable`` instead of ``type``:
+the keyword ``immutable`` instead of ``type``::
 
     immutable Complex
       real::Float64
