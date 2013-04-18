@@ -659,6 +659,7 @@ for Ti in (:Int32,:Int64)
                             Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
                            &A.c, &L.c, cmn($Ti))
             if status != CHOLMOD_TRUE throw(CholmodException) end
+            L
         end
         function chm_pack!{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti})
             status = ccall((@chm_nm "pack_factor" $Ti
@@ -666,6 +667,7 @@ for Ti in (:Int32,:Int64)
                            (Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
                            &L.c,cmn($Ti))
             if status != CHOLMOD_TRUE throw(CholmodException) end
+            L
         end
         function chm_print{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti},lev,nm)
             cm = cmn($Ti)
@@ -697,6 +699,7 @@ for Ti in (:Int32,:Int64)
                            (Ptr{c_CholmodDense{Tv}},Cint,Ptr{c_CholmodSparse{Tv,$Ti}},
                             Ptr{Uint8}), &S.c, typ, &A.c, cmn($Ti))
             if status != CHOLMOD_TRUE throw(CholmodException) end
+            A
         end
         function chm_sdmult{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},
                                            trans::Bool,
