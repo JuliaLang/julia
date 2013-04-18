@@ -73,8 +73,8 @@ to its remaining arguments.
 
 .. _man-return-keyword:
 
-The "return" Keyword
---------------------
+The ``return`` Keyword
+----------------------
 
 The value returned by a function is the value of the last expression
 evaluated, which, by default, is the last expression in the body of the
@@ -138,7 +138,7 @@ Operators Are Functions
 In Julia, most operators are just functions with support for special
 syntax. The exceptions are operators with special evaluation semantics
 like ``&&`` and ``||``. These operators cannot be functions since
-short-circuit evaluation (see :ref:`man-short-circuit-evaluation`) requires that
+:ref:`short circuit evaluation <man-short-circuit-evaluation` requires that
 their operands are not evaluated before evaluation of the operator.
 Accordingly, you can also apply them using parenthesized argument lists,
 just as you would any other function::
@@ -167,16 +167,17 @@ however.
 Anonymous Functions
 -------------------
 
-Functions in Julia are first-class objects: they can be assigned to
+Functions in Julia are `first-class objects
+<http://en.wikipedia.org/wiki/First-class_citizen>`_: they can be assigned to
 variables, called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
-without giving them a name::
+without being given a name::
 
     julia> x -> x^2 + 2x - 1
     #<function>
 
-This creates an unnamed function taking one argument and returning the
+This creates an unnamed function taking one argument *x* and returning the
 value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
 use for anonymous functions is passing them to functions which take
 other functions as arguments. A classic example is the ``map`` function,
