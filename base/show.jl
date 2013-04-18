@@ -140,8 +140,8 @@ function show_indented(io::IO, ex::Expr, indent::Int)
 end
 const paren_quoted_syms = Set{Symbol}(:(:),:(::),:(:=),:(=),:(==),:(===),:(=>))
 function show_indented(io::IO, sym::Symbol, indent::Int)
-    if has(paren_quoted_syms, sym); print(io, ":($sym)")        
-    else                            print(io, ":$sym")        
+    if contains(paren_quoted_syms, sym); print(io, ":($sym)")
+    else                                 print(io, ":$sym")
     end
 end
 function default_show_quoted(io::IO, ex, indent::Int)
@@ -227,9 +227,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
             show_unquoted(io, args[2], indent + indent_width)
             print(io, ')')
         end                  
-    elseif (has(_expr_infix, head) && nargs==2) || (is(head,:(:)) && nargs==3)
+    elseif (contains(_expr_infix, head) && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
-    elseif has(_expr_infix_wide, head) && nargs == 2
+    elseif contains(_expr_infix_wide, head) && nargs == 2
         show_list(io, args, " $head ", indent)
     elseif is(head, symbol("::")) && nargs == 1
         print(io, "::")        

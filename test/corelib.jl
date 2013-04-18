@@ -118,7 +118,7 @@ let
 end
 
 _d = {"a"=>0}
-@test isa([k for k in filter(x->length(x)==1, keys(_d))], Vector{Any})
+@test isa([k for k in filter(x->length(x)==1, collect(keys(_d)))], Vector{Any})
 
 # issue #1821
 let
@@ -154,7 +154,7 @@ begin
         if id > 0
             x = xs[id]
             add!(s, x)
-            @test has(s, x)                 # check that x can be found
+            @test contains(s, x)                 # check that x can be found
         else
             delete!(s, xs[-id])
         end
@@ -258,8 +258,6 @@ for i in 1:2:1000
     delete!(s, i)
 end
 for i in 1:2:1000
-    @test !has(s, i)
-    @test  has(s, i+1)
     @test !contains(s, i)
     @test  contains(s, i+1)
 end
@@ -351,8 +349,8 @@ c = copy(s)
 @test isequal(s,c)
 add!(s,100)
 add!(c,200)
-@test !has(c, 100)
-@test !has(s, 200)
+@test !contains(c, 100)
+@test !contains(s, 200)
 
 # start, done, next
 for data_in in ((7,8,4,5),
@@ -368,7 +366,7 @@ for data_in in ((7,8,4,5),
     t = tuple(s...)
     @test length(t) == length(s)
     for e in t
-        @test has(s,e)
+        @test contains(s,e)
     end
 end
 
@@ -388,8 +386,8 @@ origs = Set(1,2,3,"apple")
 s = copy(origs)
 for i in 1:length(origs)
     el = pop!(s)
-    @test !has(s, el)
-    @test has(origs, el)
+    @test !contains(s, el)
+    @test contains(origs, el)
 end
 @test isempty(s)
 # isequal

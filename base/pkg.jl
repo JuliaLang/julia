@@ -310,7 +310,7 @@ function _resolve()
     end
     want = Resolve.resolve(reqs,vers,deps)
 
-    pkgs = sort!(keys(merge(want,have)))
+    pkgs = sort!(collect(keys(merge(want,have))))
     for pkg in pkgs
         if has(have,pkg)
             managed = cd(pkg) do

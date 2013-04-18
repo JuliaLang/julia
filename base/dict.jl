@@ -4,8 +4,12 @@ abstract Associative{K,V}
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-has(t::Associative, key) = !is(get(t, key, secret_table_token),
-                               secret_table_token)
+has(d::Associative, k) = contains(keys(d),k)
+
+function contains(a::Associative, p::(Any,Any))
+    v = get(a,p[1],secret_table_token)
+    !is(v, secret_table_token) && isequal(v, p[2])
+end
 
 function show{K,V}(io::IO, t::Associative{K,V})
     if isempty(t)
@@ -29,25 +33,36 @@ function show{K,V}(io::IO, t::Associative{K,V})
     end
 end
 
-function keys(T, a::Associative)
-    i = 0
-    keyz = Array(T,length(a))
-    for (k,v) in a
-        keyz[i+=1] = k
-    end
-    return keyz
+immutable KeyIterator{T<:Associative}
+    dict::T
 end
-keys{K,V}(a::Associative{K,V}) = keys(K,a)
+immutable ValueIterator{T<:Associative}
+    dict::T
+end
 
-function values(T, a::Associative)
-    i = 0
-    vals = Array(T,length(a))
-    for (k,v) in a
-        vals[i+=1] = v
-    end
-    return vals
+length(v::Union(KeyIterator,ValueIterator)) = length(v.dict)
+isempty(v::Union(KeyIterator,ValueIterator)) = isempty(v.dict)
+eltype(v::KeyIterator) = eltype(v.dict)[1]
+eltype(v::ValueIterator) = eltype(v.dict)[2]
+
+start(v::Union(KeyIterator,ValueIterator)) = start(v.dict)
+done(v::Union(KeyIterator,ValueIterator), state) = done(v.dict, state)
+
+function next(v::KeyIterator, state)
+    n = next(v.dict, state)
+    n[1][1], n[2]
 end
-values{K,V}(a::Associative{K,V}) = values(V,a)
+
+function next(v::ValueIterator, state)
+    n = next(v.dict, state)
+    n[1][2], n[2]
+end
+
+contains(v::KeyIterator, k) = !is(get(v.dict, k, secret_table_token),
+                                  secret_table_token)
+
+keys(a::Associative) = KeyIterator(a)
+values(a::Associative) = ValueIterator(a)
 
 function copy(a::Associative)
     b = similar(a)
@@ -451,6 +466,7 @@ function get{K,V}(h::Dict{K,V}, key, deflt)
 end
 
 has(h::Dict, key) = (ht_keyindex(h, key) >= 0)
+contains{T<:Dict}(v::KeyIterator{T}, key) = (ht_keyindex(v.dict, key) >= 0)
 
 function getkey{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
@@ -491,6 +507,9 @@ next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
+
+next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
+next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
 
 # weak key dictionaries
 

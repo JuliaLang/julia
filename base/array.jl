@@ -1331,9 +1331,9 @@ end
 
 function findin(a, b)
     ind = Array(Int, 0)
-    bset = Set(b...)
+    bset = add_each!(Set(), b)
     for i = 1:length(a)
-        if has(bset, a[i])
+        if contains(bset, a[i])
             push!(ind, i)
         end
     end
@@ -1486,14 +1486,17 @@ ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) for i=1:size(x,2), j
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-# algorithm: do intersect on sets first, then iterate through the first
-# vector and produce only those in the set
 function intersect(vs...)
     args_type = promote_type([eltype(v) for v in vs]...)
     ret = Array(args_type,0)
-    all_elems = intersect([Set(v...) for v in vs]...)
     for v_elem in vs[1]
-        if has(all_elems, v_elem)
+        inall = true
+        for i = 2:length(vs)
+            if !contains(vs[i], v_elem)
+                inall=false; break
+            end
+        end
+        if inall
             push!(ret, v_elem)
         end
     end
@@ -1505,7 +1508,7 @@ function union(vs...)
     seen = Set()
     for v in vs
         for v_elem in v
-            if !has(seen, v_elem)
+            if !contains(seen, v_elem)
                 push!(ret, v_elem)
                 add!(seen, v_elem)
             end
@@ -1520,7 +1523,7 @@ function setdiff(a, b)
     ret = Array(args_type,0)
     seen = Set()
     for a_elem in a
-        if !has(seen, a_elem) && !has(bset, a_elem)
+        if !contains(seen, a_elem) && !contains(bset, a_elem)
             push!(ret, a_elem)
             add!(seen, a_elem)
         end
