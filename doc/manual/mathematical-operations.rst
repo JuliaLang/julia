@@ -203,7 +203,7 @@ and can cause especial headaches with :ref:`Arrays`::
     false
 
 Julia provides additional functions to test numbers for special values,
-which can be useful in situations like hash key comparisons::
+which can be useful in situations like hash key comparisons:
 
 ================= ==================================
 Function          Tests if
