@@ -185,7 +185,7 @@ end
             pkgname = pkgname[1:end-3]
         end
 
-        run(`ln -s $pkg $(string(d, "/", pkgname))`)
+        run(`ln -s $pkg $(joinpath(d, pkgname))`)
     end
 end
 
