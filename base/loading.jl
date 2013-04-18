@@ -10,14 +10,16 @@ function find_in_path(name::String)
     isfile(name) && return abspath(name)
     base = name
     if endswith(name,".jl")
-        base = match(r"^(.*)\.jl$",name).captures[1]
+        base = name[1:end-3]
     else
         name = string(base,".jl")
     end
     for prefix in LOAD_PATH
-        path = string(prefix,"/",base,"/src/",name)
+        path = joinpath(prefix, name)
         is_file_readable(path) && return abspath(path)
-        path = string(prefix,"/",name)
+        path = joinpath(prefix, base, "src", name)
+        is_file_readable(path) && return abspath(path)
+        path = joinpath(prefix, name, "src", name)
         is_file_readable(path) && return abspath(path)
     end
     return abspath(name)
