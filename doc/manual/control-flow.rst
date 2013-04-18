@@ -466,7 +466,7 @@ built-in ``Exception``\ s listed below all interrupt the normal flow of control.
 ``UndefRefError``
 ======================
 
-For example, the ``sqrt`` function returns a ``DomainError()`` if applied to a
+For example, the ``sqrt`` function throws a ``DomainError()`` if applied to a
 negative real value::
 
     julia> sqrt(-1)
@@ -491,8 +491,8 @@ if the argument is negative. ::
     ERROR: DomainError()
      in f at none:1
 
-Note that the ``DomainError`` should be called with the parentheses lest the
-throw statement return something other than an exception. ::
+Note that ``DomainError`` without parentheses is not an exception, but a type of
+exception. It needs to be called to obtain an ``Exception`` object ::
 
     julia> typeof(DomainError()) <: Exception
     true
@@ -564,7 +564,7 @@ The ``try/catch`` statement
 The ``try/catch`` statement allows for ``Exception``\ s to be tested for. For
 example, a customized square root function can be written to automatically
 call either the real or complex square root method on demand using
-``Exception`` \s ::
+``Exception``\ s ::
 
     julia> f(x) = try
              sqrt(x)
@@ -580,6 +580,10 @@ call either the real or complex square root method on demand using
     julia> f(-1)
     0.0 + 1.0im
 
+It is important to note that in real code computing this function, one would
+compare ``x`` to zero instead of catching an exception. The exception is much
+slower than simply comparing and branching.
+
 ``try/catch`` statements also allow the ``Exception`` to be saved in a
 variable. In this contrived example, the following example calculates the
 square root of the second element of ``x`` if ``x`` is indexable, otherwise
@@ -588,9 +592,9 @@ assumes ``x`` is a real number and returns its square root::
     julia> sqrt_second(x) = try
              sqrt(x[2])
            catch y
-             if y == DomainError() 
+             if isa(y, DomainError)
                sqrt(complex(x[2], 0))
-             elseif y == BoundsError()
+             elseif isa(y, BoundsError)
                sqrt(x)
              end  
            end
@@ -612,23 +616,6 @@ assumes ``x`` is a real number and returns its square root::
      in sqrt at math.jl:117
      in sqrt_second at none:7
      
-This next example, shows an example when ``DivideByZeroError`` is thrown::
-
-    julia> div(1,0)
-    error: integer divide by zero
-
-    julia> try
-             div(1,0)
-           catch x
-             println(typeof(x))
-           end
-    DivideByZeroError
-
-``DivideByZeroError`` is a concrete subtype of ``Exception``, thrown to
-indicate that an integer division by zero has occurred. Floating-point
-functions, on the other hand, can simply return ``NaN`` rather than
-throwing an exception.
-
 The power of the ``try/catch`` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling
 functions. There are situations where no error has occurred, but the ability to
