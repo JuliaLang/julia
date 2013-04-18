@@ -10,7 +10,7 @@ export quot,
 quot(ex) = Expr(:quote, ex)
 
 isexpr(ex::Expr, head)          = ex.head === head
-isexpr(ex::Expr, heads::Set)    = has(heads,      ex.head)
+isexpr(ex::Expr, heads::Set)    = contains(heads, ex.head)
 isexpr(ex::Expr, heads::Vector) = contains(heads, ex.head)
 isexpr(ex,       head)          = false
 

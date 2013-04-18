@@ -106,7 +106,7 @@ function copy!(to::IntSet, from::IntSet)
     union!(to, from)
 end
 
-function has(s::IntSet, n::Integer)
+function contains(s::IntSet, n::Integer)
     if n >= s.limit
         s.fill1s && n >= 0
     else

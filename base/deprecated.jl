@@ -185,6 +185,8 @@ export PipeString
 @deprecate  remote_call         remotecall
 @deprecate  remote_call_fetch   remotecall_fetch
 @deprecate  remote_call_wait    remotecall_wait
+@deprecate  has(s::Set, x)      contains(s, x)
+@deprecate  has(s::IntSet, x)   contains(s, x)
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)

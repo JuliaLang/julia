@@ -14,8 +14,7 @@ isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 eltype{T}(s::Set{T}) = T
 
-has(s::Set, x) = has(s.dict, x)
-contains(s::Set, x) = has(s, x)
+contains(s::Set, x) = has(s.dict, x)
 
 add!(s::Set, x) = (s.dict[x] = nothing; s)
 delete!(s::Set, x) = (delete!(s.dict, x); x)
@@ -62,7 +61,7 @@ function intersect(s::Set, sets::Set...)
     i = copy(s)
     for x in s
         for t in sets
-            if !has(t,x) & has(i,x)
+            if !contains(t,x) & contains(i,x)
                 delete!(i,x)
             end
         end
@@ -73,7 +72,7 @@ end
 function setdiff(a::Set, b::Set)
     d = copy(a)
     for x in b
-        if has(d, x)
+        if contains(d, x)
             delete!(d, x)
         end
     end
@@ -88,7 +87,7 @@ isequal(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
 isless(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 function <=(l::Set, r::Set)
     for elt in l
-        if !has(r, elt)
+        if !contains(r, elt)
             return false
         end
     end

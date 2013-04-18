@@ -111,7 +111,7 @@ end
 
 function write_config(file::String, cfg::Dict)
     tmp = tempname()
-    for key in sort!(keys(cfg))
+    for key in sort!(collect(keys(cfg)))
         val = cfg[key]
         if isa(val,Array)
             for x in val

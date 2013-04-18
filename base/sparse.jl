@@ -183,9 +183,9 @@ end
 
 # Construct a sparse vector
 
-sparsevec{K<:Integer,V}(d::Dict{K,V}, len::Int) = sparsevec(keys(d), values(d), len)
+sparsevec{K<:Integer,V}(d::Dict{K,V}, len::Int) = sparsevec(collect(keys(d)), collect(values(d)), len)
 
-sparsevec{K<:Integer,V}(d::Dict{K,V}) = sparsevec(keys(d), values(d))
+sparsevec{K<:Integer,V}(d::Dict{K,V}) = sparsevec(collect(keys(d)), collect(values(d)))
 
 sparsevec(I::AbstractVector, V, m::Integer) = sparsevec(I, V, m, +)
 
