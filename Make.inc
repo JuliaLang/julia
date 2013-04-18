@@ -247,7 +247,7 @@ LIBMNAME = libopenlibm
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 1)
-  LIBUV = /usr/lib/libuv.a
+  LIBUV = /usr/lib/libuv-julia.a
   LIBUV_INC = /usr/include
 else
   LIBUV = $(BUILD)/lib/libuv.a
