@@ -35,8 +35,24 @@ function merge_requires!(A::Requires, B::Requires)
     return A
 end
 
-parse_version(readable) = convert(VersionNumber, readchomp(readable))
-parse_version(file::String) = isfile(file) ? open(parse_version,file) : v"0"
+function available()
+    pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
+    for pkg in readdir("METADATA")
+        isfile("METADATA", pkg, "url") || continue
+        versdir = joinpath("METADATA", pkg, "versions")
+        isdir(versdir) || continue
+        for ver in readdir(versdir)
+            ismatch(Base.VERSION_REGEX, ver) || continue
+            isfile(versdir, ver, "sha1") || continue
+            has(pkgs,pkg) || (pkgs[pkg] = eltype(pkgs)[2]())
+            pkgs[pkg][convert(VersionNumber,ver)] = Available(
+                readchomp(joinpath(versdir, ver, "sha1")),
+                parse_requires(joinpath(versdir, ver, "requires"))
+            )
+        end
+    end
+    return pkgs
+end
 
 isinstalled(pkg::String) =
     pkg != "METADATA" && pkg != "REQUIRE" && isfile(pkg, "src", "$pkg.jl")
@@ -56,30 +72,13 @@ function isfixed(pkg::String)
 end
 
 function installed()
-    pkgs = Dict{ByteString,(Bool,VersionNumber,Requires)}()
+    pkgs = Dict{ByteString,Installed}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        pkgs[pkg] = (
-            isfixed(pkg),
-            parse_version(joinpath(pkg, "VERSION")),
-            parse_requires(joinpath(pkg, "REQUIRE")),
-        )
-    end
-    return pkgs
-end
-
-function available()
-    pkgs = Dict{ByteString,Dict{VersionNumber,Requires}}()
-    for pkg in readdir("METADATA")
-        isfile("METADATA", pkg, "url") || continue
-        versdir = joinpath("METADATA", pkg, "versions")
-        isdir(versdir) || continue
-        for ver in readdir(versdir)
-            ismatch(Base.VERSION_REGEX, ver) || continue
-            isfile(versdir, ver, "sha1") || continue
-            if !has(pkgs,pkg) pkgs[pkg] = Dict{VersionNumber,Requires}() end
-            pkgs[pkg][convert(VersionNumber,ver)] = parse_requires(joinpath(versdir, ver, "requires"))
-        end
+        pkgs[pkg] = isfixed(pkg) ? Fixed(
+            typemax(VersionNumber), # TODO: figure out a proxy version number
+            parse_requires(joinpath(pkg, "REQUIRE"))
+        ) : Free()
     end
     return pkgs
 end
