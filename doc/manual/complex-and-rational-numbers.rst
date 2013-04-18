@@ -5,9 +5,9 @@
 ******************************
 
 Julia ships with predefined types representing both complex and rational
-numbers, and supports all the mathematical operations discussed in
-:ref:`man-mathematical-operations` on them.
-Promotions are defined so that operations on any combination of
+numbers, and supports all :ref:`standard mathematical operations
+<man-mathematical-operations>` on them. :ref:`man-promotions`
+are defined so that operations on any combination of
 predefined numeric types, whether primitive or composite, behave as
 expected.
 
@@ -20,8 +20,8 @@ The global constant ``im`` is bound to the complex number *i*,
 representing the principal square root of -1. It was deemed harmful to
 co-opt the name ``i`` for a global constant, since it is such a popular
 index variable name. Since Julia allows numeric literals to be
-:ref:`juxtaposed with identifiers as
-coefficients <man-numeric-literal-coefficients>`,
+:ref:`juxtaposed with identifiers as coefficients
+<man-numeric-literal-coefficients>`,
 this binding suffices to provide convenient syntax for complex numbers,
 similar to the traditional mathematical notation::
 
@@ -144,22 +144,22 @@ versus ``-1 + 0im`` even though ``-1 == -1 + 0im``::
     julia> sqrt(-1 + 0im)
     0.0 + 1.0im
 
-If you need to construct a complex number using variables, the literal
-numeric coefficient notation will not work, although explicitly writing
-the multiplication operation will::
+The :ref:`literal numeric coefficient notation <numeric-literal-coefficients>`
+does work when constructing complex number from variables. Instead, the
+multiplication must be explicitly written out::
 
     julia> a = 1; b = 2; a + b*im
     1 + 2im
 
-Constructing complex numbers from variable values like this, however,
-is not recommended. Use the ``complex`` function to construct a
-complex value directly from its real and imaginary parts instead. This
-construction is preferred for variable arguments because it is more
-efficient than the multiplication and addition construct, but also
-because certain values of ``b`` can yield unexpected results::
+Hoever, this is *not* recommended; Use the ``complex`` function instead to
+construct a complex value directly from its real and imaginary parts.::
 
     julia> complex(a,b)
     1 + 2im
+
+This construction avoids the multiplication and addition operations, and also
+sidesteps unexpected results that can arise with the former for certain values
+of ``b``.
 
 ``Inf`` and ``NaN`` propagate through complex numbers in the real
 and imaginary parts of a complex number as described in the 
@@ -260,7 +260,7 @@ Constructing infinite rational values is acceptable::
     julia> typeof(ans)
     Rational{Int64}
 
-Trying to construct a NaN rational value, however, is not::
+Trying to construct a ``NaN`` rational value, however, is not::
 
     julia> 0//0
     invalid rational: 0//0

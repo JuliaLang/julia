@@ -4,7 +4,7 @@
  Constructors  
 **************
 
-Constructors are functions that create new objects — specifically,
+Constructors [#]_ are functions that create new objects — specifically,
 instances of :ref:`man-composite-types`. In Julia,
 type objects also serve as constructor functions: they create new
 instances of themselves when applied to an argument tuple as a function.
@@ -39,6 +39,15 @@ construct objects with fewer or different types of parameters than they
 have fields. Julia's system for object construction addresses all of
 these cases and more.
 
+.. [#] Nomenclature: while the term “constructor” generally refers to
+  the entire function which constructs objects of a type, it is common to
+  abuse terminology slightly and refer to specific constructor methods as
+  “constructors”. In such situations, it is generally clear from context
+  that the term is used to mean “constructor method” rather than
+  “constructor function”, especially as it is often used in the sense of
+  singling out a particular method of the constructor from all of the
+  others.
+
 Outer Constructor Methods
 -------------------------
 
@@ -70,23 +79,6 @@ shortly, additional constructor methods declared as normal methods like
 this are called *outer* constructor methods. Outer constructor methods
 can only ever create a new instance by calling another constructor
 method, such as the automatically provided default one.
-
-.. raw:: html
-
-   <div class="sidebar">
-
-A Note On Nomenclature. While the term “constructor” generally refers to
-the entire function which constructs objects of a type, it is common to
-abuse terminology slightly and refer to specific constructor methods as
-“constructors”. In such situations, it is generally clear from context
-that the term is used to mean “constructor method” rather than
-“constructor function”, especially as it is often used in the sense of
-singling out a particular method of the constructor from all of the
-others.
-
-.. raw:: html
-
-   </div>
 
 Inner Constructor Methods
 -------------------------
@@ -178,11 +170,9 @@ with an explicit constructor::
 
     julia> T1(1.0)
     no method T1(Float64,)
-     in method_missing at /Users/stefan/projects/julia/base/base.jl:58
 
     julia> T2(1.0)
     no method T2(Float64,)
-     in method_missing at /Users/stefan/projects/julia/base/base.jl:58
 
 It is considered good form to provide as few inner constructor methods
 as possible: only those taking all arguments explicitly and enforcing
@@ -307,7 +297,6 @@ types of the arguments given to the constructor. Here are some examples::
 
     julia> Point(1,2.5)
     no method Point(Int64,Float64)
-     in method_missing at /Users/stefan/projects/julia/base/base.jl:58
 
     ## explicit T ##
 
@@ -316,14 +305,12 @@ types of the arguments given to the constructor. Here are some examples::
 
     julia> Point{Int64}(1.0,2.5)
     no method Point(Float64,Float64)
-     in method_missing at /Users/stefan/projects/julia/base/base.jl:58
 
     julia> Point{Float64}(1.0,2.5)
     Point(1.0,2.5)
 
     julia> Point{Float64}(1,2)
     no method Point(Int64,Int64)
-     in method_missing at /Users/stefan/projects/julia/base/base.jl:58
 
 As you can see, for constructor calls with explicit type parameters, the
 arguments must match that specific type: ``Point{Int64}(1,2)`` works,

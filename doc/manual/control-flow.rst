@@ -80,10 +80,9 @@ anatomy of the ``if``-``elseif``-``else`` conditional syntax::
       println("x is equal to y")
     end
 
-The semantics are just what you'd expect: if the condition expression
-``x < y`` is ``true``, then the corresponding block is evaluated;
-otherwise the condition expression ``x > y`` is evaluated, and if it is
-``true``, the corresponding block is evaluated; if neither expression is
+If the condition expression ``x < y`` is ``true``, then the corresponding block
+is evaluated; otherwise the condition expression ``x > y`` is evaluated, and if
+it is ``true``, the corresponding block is evaluated; if neither expression is
 true, the ``else`` block is evaluated. Here it is in action::
 
     julia> function test(x, y)
@@ -252,9 +251,8 @@ this behavior::
 You can easily experiment in the same way with the associativity and
 precedence of various combinations of ``&&`` and ``||`` operators.
 
-If you want to perform boolean operations *without* short-circuit
-evaluation behavior, you can use the bitwise boolean operators
-introduced in :ref:`man-mathematical-operations`:
+Boolean operations *without* short-circuit evaluation can be done with the
+bitwise boolean operators introduced in :ref:`man-mathematical-operations`:
 ``&`` and ``|``. These are normal functions, which happen to support
 infix operator syntax, but always evaluate their arguments::
 
@@ -440,13 +438,73 @@ diagnostic error message, or if the programmer has provided code to
 handle such exceptional circumstances, allow that code to take the
 appropriate action.
 
-The ``error`` function is used to indicate that an unexpected condition
-has occurred which should interrupt the normal flow of control. The
-built in ``sqrt`` function returns ``DomainError()`` if applied to a negative real
-value::
+Built-in ``Exception``\ s
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``Exception``\ s are thrown when an unexpected condition has occurred. The
+built-in ``Exception``\ s listed below all interrupt the normal flow of control.
+
+======================
+``Exception``         
+----------------------  
+``ArgumentError``
+``BoundsError``
+``DivideError``
+``DomainError``
+``EOFError``
+``ErrorException``
+``InexactError``
+``InterruptException``
+``KeyError``
+``LoadError``
+``MemoryError``
+``MethodError``
+``OverflowError``
+``ParseError``
+``SystemError``
+``TypeError``
+``UndefRefError``
+======================
+
+For example, the ``sqrt`` function returns a ``DomainError()`` if applied to a
+negative real value::
 
     julia> sqrt(-1)
-    DomainError()
+    ERROR: DomainError()
+     in sqrt at math.jl:117
+
+The ``throw`` function
+~~~~~~~~~~~~~~~~~~~~~~
+
+Exceptions can be created explicitly with ``throw``. For example, a function
+defined only for nonnegative numbers could be written to ``throw`` a ``DomainError``
+if the argument is negative. ::
+
+    julia> f(x) = x>=0 ? exp(-x) : throw(DomainError())
+    # methods for generic function f
+    f(x) at none:1
+    
+    julia> f(1)
+    0.36787944117144233
+    
+    julia> f(-1)
+    ERROR: DomainError()
+     in f at none:1
+
+Note that the ``DomainError`` should be called with the parentheses lest the
+throw statement return something other than an exception. ::
+
+    julia> typeof(DomainError()) <: Exception
+    true
+    
+    julia> typeof(DomainError) <: Exception
+    false
+
+Errors
+~~~~~~
+
+The ``error`` function is used to produce an ``ErrorException`` that
+interrupts the normal flow of control.
 
 Suppose we want to stop execution immediately if the square root of a
 negative number is taken. To do this, we can define a fussy version of
@@ -481,61 +539,80 @@ session::
     before fussy_sqrt
     negative x not allowed
 
-Now suppose we want to handle this circumstance rather than just giving
-up with an error. To catch an error, you use the ``try`` and ``catch``
-keywords. Here is a rather contrived example that computes the square
-root of the absolute value of ``x`` by handling the error raised by
-``fussy_sqrt``::
+Warnings and informational messages
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    function sqrt_abs(x)
-      try
-        fussy_sqrt(x)
-      catch
-        fussy_sqrt(-x)
-      end
-    end
+Julia also provides other functions that write messages to the standard error
+I/O, but do not throw any ``Exception``\ s and hence do not interrupt
+execution.::
 
-    julia> sqrt_abs(2)
-    1.4142135623730951
+    julia> info("Hi"); 1+1
+    MESSAGE: Hi
+    2
+    
+    julia> warn("Hi"); 1+1
+    WARNING: Hi
+    2
+    
+    julia> error("Hi"); 1+1
+    ERROR: Hi
+     in error at error.jl:21
 
-    julia> sqrt_abs(-2)
-    1.4142135623730951
+The ``try/catch`` statement
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Of course, it would be far simpler and more efficient to just return
-``sqrt(abs(x))``. However, this demonstrates how ``try`` and ``catch``
-operate: the ``try`` block is executed initially, and the value of the
-entire construct is the value of the last expression if no exceptions
-are thrown during execution; if an exception is thrown during the
-evaluation of the ``try`` block, however, execution of the ``try`` code
-ceases immediately and the ``catch`` block is evaluated instead. If the
-``catch`` block succeeds without incident (it can in turn raise an
-exception, which would unwind the call stack further), the value of the
-entire ``try``-``catch`` construct is that of the last expression in the
-``catch`` block.
+The ``try/catch`` statement allows for ``Exception``\ s to be tested for. For
+example, a customized square root function can be written to automatically
+call either the real or complex square root method on demand using
+``Exception`` \s ::
 
-Throw versus Error
-~~~~~~~~~~~~~~~~~~
+    julia> f(x) = try
+             sqrt(x)
+           catch
+             sqrt(complex(x, 0))
+           end
+    # methods for generic function f
+    f(x) at none:1
+    
+    julia> f(1)
+    1.0
+    
+    julia> f(-1)
+    0.0 + 1.0im
 
-The ``error`` function is convenient for indicating that an error has
-occurred, but it is built on a more fundamental function: ``throw``.
-Perhaps ``throw`` should be introduced first, but typical usage calls
-for ``error``, so we have deferred the introduction of ``throw``. Above,
-we use a form of the ``try``-``catch`` expression in which no value is
-captured by the ``catch`` block, but there is another form::
+``try/catch`` statements also allow the ``Exception`` to be saved in a
+variable. In this contrived example, the following example calculates the
+square root of the second element of ``x`` if ``x`` is indexable, otherwise
+assumes ``x`` is a real number and returns its square root::
 
-    try
-      # execute some code
-    catch x
-      # do something with x
-    end
+    julia> sqrt_second(x) = try
+             sqrt(x[2])
+           catch y
+             if y == DomainError() 
+               sqrt(complex(x[2], 0))
+             elseif y == BoundsError()
+               sqrt(x)
+             end  
+           end
 
-In this form, if the built-in ``throw`` function is called by the
-"execute some code" expression, or any callee thereof, the catch block
-is executed with the argument of the ``throw`` function bound to the
-variable ``x``. The ``error`` function is simply a convenience which
-always throws an instance of the type ``ErrorException``. Here we can
-see that the object thrown when a divide-by-zero error occurs is of type
-``DivideByZeroError``::
+    # methods for generic function sqrt_second
+    sqrt_second(x) at none:1
+    
+    julia> sqrt_second([1 4])
+    2.0
+    
+    julia> sqrt_second([1 -4])
+    0.0 + 2.0im
+    
+    julia> sqrt_second(9)
+    3.0
+    
+    julia> sqrt_second(-9)
+    ERROR: DomainError()
+     in sqrt at math.jl:117
+     in sqrt_second at none:7
+     
+This next example, shows an example when ``DivideByZeroError`` is thrown::
 
     julia> div(1,0)
     error: integer divide by zero
@@ -552,35 +629,22 @@ indicate that an integer division by zero has occurred. Floating-point
 functions, on the other hand, can simply return ``NaN`` rather than
 throwing an exception.
 
-Unlike ``error``, which should only be used to indicate an unexpected
-condition, ``throw`` is merely a control construct, and can be used to
-pass any value back to an enclosing ``try``-``catch``::
-
-    julia> try
-             throw("Hello, world.")
-           catch x
-             println(x)
-           end
-    Hello, world.
-
-This example is contrived, of course — the power of the
-``try``-``catch`` construct lies in the ability to unwind a deeply
-nested computation immediately to a much higher level in the stack of
-calling functions. There are situations where no error has occurred, but
-the ability to unwind the stack and pass a value to a higher level is
-desirable. These are the circumstances in which ``throw`` should be used
-rather than ``error``.
+The power of the ``try/catch`` construct lies in the ability to unwind a deeply
+nested computation immediately to a much higher level in the stack of calling
+functions. There are situations where no error has occurred, but the ability to
+unwind the stack and pass a value to a higher level is desirable. Julia
+provides the ``rethrow``, ``backtrace`` and ``catch_backtrace`` functions for
+more advanced error handling.
 
 finally Clauses
 ~~~~~~~~~~~~~~~
 
-In code that performs state changes or uses resources like files, there
-is typically clean-up work (such as closing files) that needs to be done
-when the code is finished. Exceptions potentially complicate this task,
-since they can cause a block of code to exit before reaching its
-normal end. The ``finally`` keyword solves this problem, by providing
-a way to run some code when a given block of code exits, regardless of
-how it exits.
+In code that performs state changes or uses resources like files, there is
+typically clean-up work (such as closing files) that needs to be done when the
+code is finished. Exceptions potentially complicate this task, since they can
+cause a block of code to exit before reaching its normal end. The ``finally``
+keyword provides a way to run some code when a given block of code exits,
+regardless of how it exits.
 
 For example, here is how we can guarantee that an opened file is closed::
 
@@ -615,7 +679,7 @@ resumed, at which point it will pick up right where it left off. At
 first, this may seem similar to a function call. However there are two
 key differences. First, switching tasks does not use any space, so any
 number of task switches can occur without consuming the call stack.
-Second, you may switch among tasks in any order, unlike function calls,
+Second, switching among tasks can occur in any order, unlike function calls,
 where the called function must finish executing before control returns
 to the calling function.
 

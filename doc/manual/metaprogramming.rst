@@ -100,6 +100,9 @@ quoting form::
       +(x,y)
     end
 
+Symbols
+~~~~~~~
+
 When the argument to ``:`` is just a symbol, a ``Symbol`` object results
 instead of an ``Expr``::
 
@@ -111,10 +114,29 @@ instead of an ``Expr``::
 
 In the context of an expression, symbols are used to indicate access to
 variables, and when an expression is evaluated, a symbol evaluates to
-the value bound to that symbol in the appropriate scope (see :ref:`man-variables-and-scoping` for further details).
+the value bound to that symbol in the appropriate :ref:`scope
+<man-variables-and-scoping>`.
 
-Eval and Interpolation
-~~~~~~~~~~~~~~~~~~~~~~
+Sometimes extra parentheses around the argument to ``:`` are needed to avoid
+ambiguity in parsing.::
+
+    julia> :(:)
+    :(:)
+
+    julia> :(::)
+    :(::)
+
+``Symbol``\ s can also be created using the ``symbol`` function, which takes
+a character or string as its argument::
+
+    julia> symbol('\'')
+    :'
+
+    julia> symbol("'")
+    :'
+
+``eval`` and Interpolation
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Given an expression object, one can cause Julia to evaluate (execute) it
 at the *top level* scope — i.e. in effect like loading from a file or
@@ -413,6 +435,8 @@ following macro sets ``x`` to zero in the call environment::
 
 This kind of manipulation of variables should be used judiciously, but
 is occasionally quite handy.
+
+.. _man-non-standard-string-literals2:
 
 Non-Standard String Literals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

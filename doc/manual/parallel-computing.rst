@@ -579,6 +579,6 @@ Sending Instructions To All Processors
 
 It is often useful to execute a statement on all processors, particularly
 for setup tasks such as loading source files and defining common variables.
-This can be done with the ``@everywhere`` macro:
+This can be done with the ``@everywhere`` macro::
 
     @everywhere include("defs.jl")

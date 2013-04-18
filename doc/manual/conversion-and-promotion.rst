@@ -189,6 +189,8 @@ simply converts both numerator and denominator to that floating point
 type and then divides. To convert to integer, one can use the ``div``
 operator for truncated integer division (rounded towards zero).
 
+.. _man-promotion:
+
 Promotion
 ---------
 

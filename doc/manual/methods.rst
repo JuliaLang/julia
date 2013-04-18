@@ -39,10 +39,10 @@ on the types of all of the function's arguments. This is different than
 traditional object-oriented languages, where dispatch occurs based only
 on the first argument, which often has a special argument syntax, and is
 sometimes implied rather than explicitly written as an
-argument.\ `1 <#footnote-1>`_\  Using all of a function's arguments to
+argument. [#]_ Using all of a function's arguments to
 choose which method should be invoked, rather than just the first, is
-known as `*multiple
-dispatch* <http://en.wikipedia.org/wiki/Multiple_dispatch>`_. Multiple
+known as `multiple dispatch
+<http://en.wikipedia.org/wiki/Multiple_dispatch>`_. Multiple
 dispatch is particularly useful for mathematical code, where it makes
 little sense to artificially deem the operations to "belong" to one
 argument more than any of the others: does the addition operation in
@@ -52,20 +52,13 @@ of all of its arguments. Even beyond mathematical operations, however,
 multiple dispatch ends up being a very powerful and convenient paradigm
 for structuring and organizing programs.
 
-.. raw:: html
+.. [#] In C++ or Java, for example, in a method call like
+  ``obj.meth(arg1,arg2)``, the object obj "receives" the method call and is
+  implicitly passed to the method via the ``this`` keyword, rather then as an
+  explicit method argument. When the current ``this`` object is the receiver of a
+  method call, it can be omitted altogether, writing just ``meth(arg1,arg2)``,
+  with this implied as the receiving object.
 
-   <div class="sidebar">
-
-Footnote 1: In C++ or Java, for example, in a method call like
-obj.meth(arg1,arg2), the object obj "receives" the method call and is
-implicitly passed to the method via the *this* keyword, rather then as an
-explicit method argument. When the current *this* object is the receiver
-of a method call, it can be omitted altogether, writing just
-meth(arg1,arg2), with this implied as the receiving object.
-
-.. raw:: html
-
-   </div>
 
 Defining Methods
 ----------------
@@ -156,7 +149,7 @@ The ``2x + y`` definition is only used in the first case, while the
 conversion of function arguments is ever performed: all conversion in
 Julia is non-magical and completely explicit. :ref:`man-conversion-and-promotion`, however, shows how clever
 application of sufficiently advanced technology can be indistinguishable
-from magic. [#]_
+from magic.[Clarke61]_
 
 For non-numeric values, and for fewer or more than two arguments, the
 function ``f`` remains undefined, and applying it will still result in a
@@ -422,4 +415,5 @@ In particular, they do not participate in method dispatch. Methods are
 dispatched based only on positional arguments, with named arguments processed
 after the matching method is identified.
 
-.. [#] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
+.. [Clarke61] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
+
