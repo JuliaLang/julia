@@ -82,7 +82,7 @@ easily::
     julia> typeof(ans)
     Int64
 
-On 32-bit architectures, ``typeof(ans)`` will be Int32. You can convert an integer 
+On 32-bit architectures, ``typeof(ans)`` will be ``Int32``. You can convert an integer 
 value back to a ``Char`` just as easily::
 
     julia> char(120)
@@ -238,7 +238,7 @@ Unicode and UTF-8
 
 Julia fully supports Unicode characters and strings. As `discussed
 above <#characters>`_, in character literals, Unicode code points can be
-represented using unicode ``\u`` and ``\U`` escape sequences, as well as
+represented using Unicode ``\u`` and ``\U`` escape sequences, as well as
 all the standard C escape sequences. These can likewise be used to write
 string literals::
 
@@ -461,7 +461,7 @@ an identifier, and doesn't behave quite like a normal string literal.
 Regular Expressions
 -------------------
 
-Julia has Perl-compatible regular expressions, as provided by the
+Julia has Perl-compatible regular expressions (regexes), as provided by the
 `PCRE <http://www.pcre.org/>`_ library. Regular expressions are related
 to strings in two ways: the obvious connection is that regular
 expressions are used to find regular patterns in strings; the other
@@ -677,7 +677,7 @@ allowed to represent the code point 255, because characters *always*
 represent code points. In strings, however, ``\x`` escapes always
 represent bytes, not code points, whereas ``\u`` and ``\U`` escapes
 always represent code points, which are encoded in one or more bytes.
-For code points less than ``\u80``, it happens that the the UTF-8
+For code points less than ``\u80``, it happens that the UTF-8
 encoding of each code point is just the single byte produced by the
 corresponding ``\x`` escape, so the distinction can safely be ignored.
 For the escapes ``\x80`` through ``\xff`` as compared to ``\u80``

@@ -93,6 +93,7 @@ A few walkthrough-style tutorials are available online:
 
 - `Forio Julia Tutorials <http://forio.com/julia/tutorials-list>`_
 - `Tutorial for Homer Reid's numerical analysis class <http://homerreid.ath.cx/teaching/18.330/JuliaProgramming.shtml#SimplePrograms>`_
+- `Videos from the Julia tutorial at MIT <http://julialang.org/blog/2013/03/julia-tutorial-MIT/>`_
 
 Noteworthy differences from MATLAB
 ----------------------------------

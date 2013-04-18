@@ -17,7 +17,7 @@ Complex Numbers
 ---------------
 
 The global constant ``im`` is bound to the complex number *i*,
-representing one of the square roots of -1. It was deemed harmful to
+representing the principal square root of -1. It was deemed harmful to
 co-opt the name ``i`` for a global constant, since it is such a popular
 index variable name. Since Julia allows numeric literals to be
 :ref:`juxtaposed with identifiers as
@@ -114,7 +114,7 @@ Standard functions to manipulate complex values are provided::
 As is common, the absolute value of a complex number is its distance
 from zero. The ``abs2`` function gives the square of the absolute value,
 and is of particular use for complex numbers, where it avoids taking a
-square root. The full gamut of other mathematical functions are also
+square root. The full gamut of other :ref:`man-elementary-functions` is also
 defined for complex numbers::
 
     julia> sqrt(im)
@@ -162,7 +162,8 @@ because certain values of ``b`` can yield unexpected results::
     1 + 2im
 
 ``Inf`` and ``NaN`` propagate through complex numbers in the real
-and imaginary parts of a complex number as per IEEE-754 arithmetic::
+and imaginary parts of a complex number as described in the 
+:ref:`man-special-floats` section::
 
     julia> 1 + Inf*im
     complex(1.0,Inf)

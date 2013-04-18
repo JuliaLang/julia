@@ -582,7 +582,7 @@ normal end. The ``finally`` keyword solves this problem, by providing
 a way to run some code when a given block of code exits, regardless of
 how it exits.
 
-For example, here is how we can guarantee that an opened file is closed:
+For example, here is how we can guarantee that an opened file is closed::
 
     f = open("file")
     try
