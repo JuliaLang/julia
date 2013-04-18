@@ -30,6 +30,14 @@ Expression  Name           Description
 ``x % y``   remainder      equivalent to ``rem(x,y)``
 ==========  ============== ======================================
 
+as well as the negation on ``Bool`` types:
+
+==========  ============== ============================================
+Expression  Name           Description
+==========  ============== ============================================
+``!x``      negation       changes ``true`` to ``false`` and vice versa
+==========  ============== ============================================
+
 Julia's promotion system makes arithmetic operations on mixtures of argument
 types "just work" naturally and automatically. See :ref:`man-conversion-and-promotion`
 for details of the promotion system.
@@ -260,18 +268,18 @@ such definitions make sense.
 Rounding functions
 ~~~~~~~~~~~~~~~~~~
 
-============= ==================================  ==============
+============= ==================================  =================
 Function      Description                         Return type
-============= ==================================  ==============
-``round(x)``  round ``x`` to the nearest integer  Floating point
-``iround(x)`` round ``x`` to the nearest integer  Integer
-``floor(x)``  round ``x`` towards ``-Inf``        Floating point
-``ifloor(x)`` round ``x`` towards ``-Inf``        Integer
-``ceil(x)``   round ``x`` towards ``+Inf``        Floating point
-``iceil(x)``  round ``x`` towards ``+Inf``        Integer
-``trunc(x)``  round ``x`` towards zero            Floating point
-``itrunc(x)`` round ``x`` towards zero            Integer
-============= ==================================  ==============
+============= ==================================  =================
+``round(x)``  round ``x`` to the nearest integer  ``FloatingPoint``
+``iround(x)`` round ``x`` to the nearest integer  ``Integer``
+``floor(x)``  round ``x`` towards ``-Inf``        ``FloatingPoint``
+``ifloor(x)`` round ``x`` towards ``-Inf``        ``Integer``
+``ceil(x)``   round ``x`` towards ``+Inf``        ``FloatingPoint``
+``iceil(x)``  round ``x`` towards ``+Inf``        ``Integer``
+``trunc(x)``  round ``x`` towards zero            ``FloatingPoint``
+``itrunc(x)`` round ``x`` towards zero            ``Integer``
+============= ==================================  =================
 
 Division functions
 ~~~~~~~~~~~~~~~~~~

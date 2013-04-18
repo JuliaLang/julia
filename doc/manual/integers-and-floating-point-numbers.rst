@@ -10,25 +10,34 @@ called numeric primitives, while representations of integers and
 floating-point numbers as immediate values in code are known as numeric
 literals. For example, ``1`` is an integer literal, while ``1.0`` is a
 floating-point literal; their binary in-memory representations as
-objects are numeric primitives. Julia provides a broad range of
-primitive numeric types, and a full complement of arithmetic and bitwise
-operators as well as standard mathematical functions are defined over
-them. The following are Julia's primitive numeric types:
+objects are numeric primitives.
+
+Julia provides a broad range of primitive numeric types, and a full complement
+of arithmetic and bitwise operators as well as standard mathematical functions
+are defined over them. These map directly onto numeric types and operations
+that are natively supported on modern computers, thus allowing Julia to take
+full advantage of computational resources. Additionally, Julia provides
+software support for :ref:`man-arbitrary-precision-arithmetic`, which can
+handle operations on numeric values that cannot be represented effectively in
+native hardware representations, but at the cost of relatively slower
+performance.
+
+The following are Julia's primitive numeric types:
 
 -  **Integer types:**
 
 ===========  =======  ==============  ============== ==================
 Type         Signed?  Number of bits  Smallest value Largest value
 -----------  -------  --------------  -------------- ------------------
-``Int8``           X       8            -2^7             2^7 - 1
+``Int8``           ✓       8            -2^7             2^7 - 1
 ``Uint8``                  8             0               2^8 - 1
-``Int16``          X       16           -2^15            2^15 - 1
+``Int16``          ✓       16           -2^15            2^15 - 1
 ``Uint16``                 16            0               2^16 - 1
-``Int32``          X       32           -2^31            2^31 - 1
+``Int32``          ✓       32           -2^31            2^31 - 1
 ``Uint32``                 32            0               2^32 - 1
-``Int64``          X       64           -2^63            2^63 - 1
+``Int64``          ✓       64           -2^63            2^63 - 1
 ``Uint64``                 64            0               2^64 - 1
-``Int128``         X       128           -2^127          2^127 - 1
+``Int128``         ✓       128           -2^127          2^127 - 1
 ``Uint128``                128           0               2^128 - 1
 ``Bool``         N/A       8           ``false`` (0)  ``true`` (1)
 ``Char``         N/A       32          ``'\0'``       ``'\Uffffffff'``
@@ -49,10 +58,8 @@ Type        Precision Number of bits Precision
 
 Additionally, full support for :ref:`man-complex-and-rational-numbers` is built
 on top of these primitive numeric types. All numeric types interoperate
-naturally without explicit casting, thanks to a flexible type promotion system.
-Moreover, this promotion system, detailed in
-:ref:`man-conversion-and-promotion`, is user-extensible, so user-defined
-numeric types can be made to interoperate just as naturally as built-in types.
+naturally without explicit casting, thanks to a flexible, user-extensible
+:ref:`type promotion system <man-conversion-and-promotion>`.
 
 Integers
 --------
@@ -174,10 +181,11 @@ such as integers are given by the ``typemin`` and ``typemax`` functions::
     Uint128: [0x00000000000000000000000000000000,0xffffffffffffffffffffffffffffffff]
 
 The values returned by ``typemin`` and ``typemax`` are always of the
-given argument type. The above expression uses several features we have
+given argument type. (The above expression uses several features we have
 yet to introduce, including :ref:`for loops <man-loops>`,
 :ref:`man-strings`, and :ref:`man-string-interpolation`,
-but should be easy enough to understand for people with some programming experience.
+but should be easy enough to understand for users with some existing
+programming experience.)
 
 
 Overflow behavior
@@ -195,8 +203,12 @@ a wraparound behavior.::
     julia> x + 1 == typemin(Int64)
     true
 
-Thus, arithmetic in Julia integers is actually a form of `modular arithmetic
-<http://en.wikipedia.org/wiki/Modular_arithmetic>`_.
+Thus, arithmetic with Julia integers is actually a form of `modular arithmetic
+<http://en.wikipedia.org/wiki/Modular_arithmetic>`_. This reflects the
+characteristics of the underlying arithmetic of integers as implemented on
+modern computers. In applications where overflow is possible, explicit checking
+for wraparound produced by overflow is essential; otherwise, the ``BigInt`` type
+in :ref:`man-arbitrary-precision-arithmetic` is recommended instead.
 
 Floating-Point Numbers
 ----------------------
@@ -247,9 +259,10 @@ Values can be converted to ``Float32`` easily::
 Floating-point zero
 ~~~~~~~~~~~~~~~~~~~
 
-Floating-point numbers have two zeros, positive zero and negative zero. They
-are equal to each other but have different binary representations, as can be
-seen using the ``bits`` function: ::
+Floating-point numbers have `two zeros
+<http://en.wikipedia.org/wiki/Signed_zero>`_, positive zero and negative zero.
+They are equal to each other but have different binary representations, as can
+be seen using the ``bits`` function: ::
 
     julia> 0.0 == -0.0
     true
@@ -266,7 +279,7 @@ Special floating-point values
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 There are three specified standard floating-point values that do not
-correspond to a point on the real number line:
+correspond to any point on the real number line:
 
 =========== ===========  ================= =================================================================
 Special value            Name               Description 
@@ -437,7 +450,7 @@ computation, and also in the following references:
   Man of Floating-Point
   <http://www.cs.berkeley.edu/~wkahan/ieee754status/754story.html>`_.
 
-.. _man_arbitrary_precision_arithmetic:
+.. _man-arbitrary-precision-arithmetic:
 
 Arbitrary Precision Arithmetic
 ------------------------------
@@ -449,7 +462,7 @@ integer and floating point numbers respectively.
 
 Constructors exist to create these types from primitive numerical types, or from ``String``. 
 Once created, they participate in arithmetic with all other numeric types thanks to Julia's 
-type promotion and conversion mechanism. ::
+:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. ::
 
     julia> BigInt(typemax(Int64)) + 1
     9223372036854775808
@@ -551,7 +564,7 @@ identifier or parenthesized expression which it multiplies.
 Syntax Conflicts
 ~~~~~~~~~~~~~~~~
 
-Juxtaposed literal coefficient syntax conflicts with two numeric literal
+Juxtaposed literal coefficient syntax may conflict with two numeric literal
 syntaxes: hexadecimal integer literals and engineering notation for
 floating-point literals. Here are some situations where syntactic
 conflicts arise:
@@ -569,4 +582,36 @@ numeric literals:
 -  Expressions starting with ``0x`` are always hexadecimal literals.
 -  Expressions starting with a numeric literal followed by ``e`` or
    ``E`` are always floating-point literals.
+
+Literal zero and one
+--------------------
+
+Julia provides functions which return literal 0 and 1 corresponding to a
+specified type or the type of a given variable.
+
+===========  =====================================================
+Function     Description
+-----------  -----------------------------------------------------
+``zero(x)``  Literal zero of type ``x`` or type of variable ``x``
+``one(x)``   Literal one of type ``x`` or type of variable ``x``
+===========  =====================================================
+
+These functions are useful in :ref:`man-numeric-comparisons` to avoid overhead
+from unnecessary :ref:`type conversion <man-conversion-and-promotion>`.
+
+Examples::
+
+    julia> zero(Float32)
+    0.0f0
+    
+    julia> zero(1.0)
+    0.0
+
+    julia> one(Int32)
+    1
+
+    julia> one(BigFloat)
+    1e+00
+    
+
 
