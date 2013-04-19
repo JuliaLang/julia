@@ -5,7 +5,13 @@
 
 Julia provides an extremely flexible system for naming variables.
 Capitalization carries no semantic meaning, nor does the first letter of a
-variable. ::
+variable.
+
+.. raw:: latex
+
+    \begin{CJK*}{UTF8}{gbsn}
+
+.. code-block:: guess
 
     julia> ix = 1.0
     1.0
@@ -19,16 +25,30 @@ variable. ::
     julia> customary_phrase = "Hello world!"
     "Hello world!"
 
-    julia> BeginningOfTheUniversalDeclarationOfHumanRightsInChinese = "人人生而自由，在尊严和权力上一律平等。"
+    julia> UniversalDeclarationOfHumanRightsStart = "人人生而自由，在尊严和权力上一律平等。"
     "人人生而自由，在尊严和权力上一律平等。"
 
-They can even be given Unicode names::
+.. raw:: latex
+
+    \end{CJK*}
+
+They can even be given Unicode names:
+
+.. raw:: latex
+
+    \begin{CJK*}{UTF8}{mj}
+
+.. code-block:: guess
 
     julia> δ = 0.00001
     0.00001
 
     julia> 안녕하세요 = "Hello" 
     "Hello"
+
+.. raw:: latex
+
+    \end{CJK*}
 
 Julia will even let you redefine built-in constants and functions if needed::
 

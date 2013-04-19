@@ -70,6 +70,9 @@ ATLAS_LIBDIR = $(BUILD)/lib
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
 endif
+ifeq ($(BUILD_OS), MINGW32_NT-6.1)
+BUILD_OS=WINNT
+endif
 
 ifeq ($(OS), WINNT)
 fPIC = 
