@@ -278,12 +278,11 @@ end
 
 function tan(z::Complex)
     rz, iz = reim(z)
-    u = sinh(iz)
-    v = cosh(iz)
-    sinre = sin(rz)
-    cosre = cos(rz)
-    d = cosre*cosre + v*v
-    complex(sinre*cosre/d, u*v/d)
+    sinhi = sinh(iz)
+    coshi = cosh(iz)
+    sinr = sin(rz)
+    cosr = cos(rz)
+    complex(sinr*coshi,cosr*sinhi)/complex(cosr*coshi,-sinr*sinhi)
 end
 
 function asin(z::Complex)
@@ -316,29 +315,17 @@ function atan(z::Complex)
 end
 
 function sinh(z::Complex)
-    u = exp(real(z))
-    v = 1/u
-    u = (u+v)/2
-    v = u-v
-    complex(v*cos(imag(z)), u*sin(imag(z)))
+    w = sin(complex(imag(z),real(z)))
+    complex(imag(w),real(w))
 end
 
 function cosh(z::Complex)
-    u = exp(real(z))
-    v = 1/u
-    u = (u+v)/2
-    v = u-v
-    complex(u*cos(imag(z)), v*sin(imag(z)))
+    cos(complex(-imag(z),real(z)))
 end
 
 function tanh(z::Complex)
-    cosim = cos(imag(z))
-    u = exp(real(z))
-    v = 1/u
-    u = (u+v)/2
-    v = u-v
-    d = cosim*cosim + v*v
-    complex(u*v/d, sin(imag(z))*cosim/d)
+    w = tan(complex(imag(z),real(z)))
+    complex(imag(w),real(w))
 end
 
 asinh(z::Complex) = log(z + sqrt(z*z + 1))
