@@ -176,6 +176,8 @@ search(s::String, c::Chars) = search(s,c,start(s))
 
 contains(s::String, c::Char) = (search(s,c)!=0)
 
+contains(s::String, substring::String) = ismatch(Regex(substring),s)
+
 function search(s::String, t::String, i::Integer)
     if isempty(t)
         return 1 <= i <= endof(s)+1 ? (i:i-1) :
