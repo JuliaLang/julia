@@ -277,12 +277,11 @@ function ^{T<:Complex}(z::T, p::T)
 end
 
 function tan(z::Complex)
-    u = exp(imag(z))
-    v = 1/u
-    u = (u+v)/2
-    v = u-v
-    sinre = sin(real(z))
-    cosre = cos(real(z))
+    rz, iz = reim(z)
+    u = sinh(iz)
+    v = cosh(iz)
+    sinre = sin(rz)
+    cosre = cos(rz)
     d = cosre*cosre + v*v
     complex(sinre*cosre/d, u*v/d)
 end
