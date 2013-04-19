@@ -174,6 +174,29 @@ function /(a::Real, b::Complex)
     end
 end
 
+function sqrt{T<:FloatingPoint}(z::Complex{T})
+    ρ,k::Int=ssqs(z)
+    x,y=reim(z)
+    if isfinite(x) ρ=ldexp(abs(x),-k)+sqrt(ρ) end
+    if isodd(k)
+        k = (k-1)/2
+    else
+        k = k/2-1
+        ρ+=ρ
+    end
+    ρ=ldexp(sqrt(ρ),k) #sqrt((abs(z)+abs(x))/2) without over/underflow
+    ξ=ρ
+    η=y
+    if ρ != zero(ρ)
+        if isfinite(η) η=(η/ρ)/2 end
+        if x<0
+            ξ=abs(η)
+            η=copysign(ρ,y)
+        end
+    end
+    complex(ξ,η)
+end
+ 
 function sqrt(z::Complex)
     rz = float(real(z))
     iz = float(imag(z))
@@ -205,13 +228,44 @@ function cos(z::Complex)
     complex(cos(r)*cosh(i),-sin(r)*sinh(i))
 end
 
+function ssqs{T}(z::Complex{T})
+    k::Int=0
+    ρ=abs2(z)
+    x, y=reim(z)
+    if !isfinite(ρ) && (isinf(x) || isinf(y))
+        ρ=convert(T, Inf)
+    elseif 0<ρ<nextfloat(zero(T))/(2*eps(T)^2)
+        k=exponent(max(abs(x), abs(y)))
+        ρ=ldexp(x,-k)^2+ldexp(y,-k)^2
+    end
+    ρ, k
+end
+
+function log{T<:FloatingPoint}(z::Complex{T})
+    const T0::T = convert(T, 0.7071067811865475)
+    const T1::T = convert(T, 1.25)
+    const T2::T = convert(T, 3)
+    ρ, k=ssqs(z)
+    x, y=reim(z)
+    ax = abs(x)
+    ay = abs(y)
+    β=max(ax, ay)
+    θ=min(ax, ay)
+    if k==zero(k) && T0 < β && (β <= T1 || ρ < T2)
+        ρρ=log1p((β-1)*(β+1)+θ*θ)/2
+    else
+        ρρ=log(ρ)/2 + k*log(2)
+    end
+    θθ = angle(z)
+    complex(ρρ, θθ)
+end
+
 function log(z::Complex)
     ar = abs(real(z))
     ai = abs(imag(z))
     if ar < ai
         r = ar/ai
         re = log(ai) + log1p(r*r)/2
-    else
         if ar == 0
             re = -inv(ar)
         else
@@ -229,6 +283,34 @@ function exp(z::Complex)
     er = exp(real(z))
     complex(er*cos(imag(z)), er*sin(imag(z)))
 end
+
+#XXX This appear to break tests. Why?
+#function ^{T<:FloatingPoint}(z::Complex{T}, p::Complex{T})
+#    if p==2 #square
+#        x = (realz-imagz)*(realz+imagz)
+#        y = 2realz*imagz
+#        if isnan(x)
+#            if isinf(y)
+#                x=copysign(zero(T),realz)
+#            elseif isinf(imagz)
+#                x=-Inf
+#            elseif isinf(realz)
+#                x=Inf
+#            end
+#        elseif isnan(y) && isinf(x)
+#            y=copysign(zero(T), y)
+#        end
+#        complex(x,y)
+#    elseif z!=zero(z)
+#    if z!=zero(z)
+#        exp(p*log(z))
+#    elseif p!=zero(p) #0^p
+#        zero(z) #CHECK SIGNS
+#    else #0^0
+#        zer=copysign(zero(T),real(p))*copysign(zero(T),imag(z))
+#        complex(one(T), zer)
+#    end
+#end
 
 function ^{T<:Complex}(z::T, p::T)
     realp = real(p); imagp = imag(p)
@@ -282,6 +364,7 @@ function ^{T<:Complex}(z::T, p::T)
     complex(re, im)
 end
 
+
 function tan(z::Complex)
     rz, iz = reim(z)
     sinhi = sinh(iz)
@@ -292,32 +375,20 @@ function tan(z::Complex)
 end
 
 function asin(z::Complex)
-    re = 1 - (real(z)*real(z) - imag(z)*imag(z))
-    im = -2real(z)*imag(z)
-    x = sqrt(complex(re,im))
-    re = real(x) - imag(z)
-    im = imag(x) + real(z)
-    complex(atan2(im, re), -log(hypot(re, im)))
+    ξ=atan2(x, real(sqrt(1-z)*sqrt(1+z)))
+    η=asinh(imag(sqrt(conj(1-z))*sqrt(1+z)))
+    complex(ξ,η)
 end
-
+ 
 function acos(z::Complex)
-    re = 1 - (real(z)*real(z) - imag(z)*imag(z))
-    im = -2real(z)*imag(z)
-    x = sqrt(complex(re,im))
-    re = real(z) - imag(x)
-    im = imag(z) + real(x)
-    complex(atan2(im, re), -log(hypot(re, im)))
+    ξ = 2*atan2(real(sqrt(1-z)), real(sqrt(1+z)))
+    η = asinh(imag(sqrt(conj(1+z))*sqrt(1-z)))
+    complex(ξ,η)
 end
-
+ 
 function atan(z::Complex)
-    xsq = real(z)*real(z)
-    ysq = imag(z)*imag(z)
-    m1y = 1-imag(z)
-    yp1 = 1+imag(z)
-    m1ysq = m1y*m1y
-    yp1sq = yp1*yp1
-    complex((atan2(real(z),m1y) - atan2(-real(z),yp1))/2,
-            log((yp1sq + xsq)/(xsq + m1ysq))/4)
+    w = atanh(complex(-imag(z),real(z)))
+    complex(imag(w),-real(w))
 end
 
 function sinh(z::Complex)
@@ -329,11 +400,53 @@ function cosh(z::Complex)
     cos(complex(-imag(z),real(z)))
 end
 
-function tanh(z::Complex)
-    w = tan(complex(imag(z),real(z)))
-    complex(imag(w),real(w))
+function tanh{T}(z::Complex{T})
+    const Ω=prevfloat(typemax(T))
+    ξ=real(z)
+    η=imag(z)
+    if 4*abs(ξ) > asinh(Ω) #Overflow?
+        complex(copysign(one(T),ξ), copysign(zero(T),η))
+    else
+        t = tan(η)
+        β = 1+t^2 #sec(η)^2
+        s = sinh(ξ)
+        ρ = sqrt(1 + s^2) #cosh(ξ)
+        if isinf(t)
+            complex(ρ/s,1/t)
+        else
+            complex(β*ρ*s,t)/(1+β*s^2)
+        end
+    end
 end
 
-asinh(z::Complex) = log(z + sqrt(z*z + 1))
-acosh(z::Complex) = log(z + sqrt(z*z - 1))
-atanh(z::Complex) = log(sqrt((1+z)/(1-z)))
+function asinh(z::Complex)
+    w=asin(complex(-imag(z),real(z)))
+    complex(imag(w),-real(w))
+end
+
+function acosh(z::Complex)
+    ξ=asinh(real(sqrt(conj(z-1))*sqrt(z+1)))
+    η=2atan2(imag(sqrt(z-1)),real(sqrt(z+1)))
+    complex(ξ, η)
+end
+
+function atanh{T}(z::Complex{T})
+    const Ω=prevfloat(typemax(T))
+    const θ=sqrt(Ω)/4
+    const ρ=1/θ
+    x=real(z)
+    y=imag(z)
+    if x > θ || abs(y) > θ #Prevent overflow
+        return complex(copysign(pi/2, y), real(1/z))
+    elseif x==one(x)
+        ym=abs(y)+ρ
+        ξ=log(sqrt(sqrt(4+y^2))/sqrt(ym))
+        η=copysign(pi/2+atan(ym/2), y)/2
+    else #Normal case
+        ysq=(abs(y)+ρ)^2
+        ξ=log1p(4x/((1-x)^2 + ysq))/4
+        η=angle(complex(((1-x)*(1+x)-ysq)/2, y))
+    end
+    complex(ξ, η)
+end
+
