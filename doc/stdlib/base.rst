@@ -3001,7 +3001,19 @@ C Interface
 
 .. function:: cfunction(fun::Function, RetType::Type, (ArgTypes...))
    
-   Generate C-callable function pointer from Julia function.
+   Generate C-callable function pointer from Julia function. Type annotation of the return value in the 
+   callback function is a must for situations where Julia cannot infer the return type automatically.
+
+   For example::
+
+    function foo()
+      # body
+
+      retval::Float64  
+    end
+
+    bar = cfunction(foo, Float64, ())
+
 
 .. function:: dlopen(libfile::String [, flags::Integer])
 

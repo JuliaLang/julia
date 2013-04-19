@@ -192,6 +192,9 @@ latex_elements = {
         \DeclareUnicodeCharacter{2203}{\ensuremath{\exists}}
         \DeclareUnicodeCharacter{2200}{\ensuremath{\forall}}
         \DeclareUnicodeCharacter{27FA}{\ensuremath{\Longleftrightarrow}}
+        \usepackage{amsfonts}
+        \DeclareUnicodeCharacter{2713}{\checkmark}
+        \usepackage{CJKutf8}
     ''',
 }
 
