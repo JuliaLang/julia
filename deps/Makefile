@@ -17,6 +17,9 @@ ifneq ($(XC_HOST),)
 CONFIG_GUESS := $(shell ./config.guess)
 CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
 endif
+ifeq ($(OS),WINNT)
+CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
+endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp patchelf
 #custom configure-driven script: zlib
