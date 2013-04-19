@@ -227,7 +227,7 @@ device_to_user_distance!(gc::GraphicsContext, c::Vector{Float64}) = c
 # drawing and properties
 
 @mustimplement set_line_width(gc::GraphicsContext, ::Real)
-@mustimplement set_dash(gc::GraphicsContext, ::Vector{Float64})
+@mustimplement set_dash(gc::GraphicsContext, ::Vector{Float64}, ::Real)
 @mustimplement set_source_rgb(gc::GraphicsContext, ::Real, ::Real, ::Real)
 @mustimplement set_source_rgba(gc::GraphicsContext, ::Real, ::Real, ::Real, ::Real)
 
