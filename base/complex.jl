@@ -190,21 +190,13 @@ end
 angle(z::Complex) = atan2(imag(z), real(z))
 
 function sin(z::Complex)
-    u = exp(imag(z))
-    v = 1/u
-    rz = real(z)
-    u = (u+v)/2
-    v = u-v
-    complex(u*sin(rz), v*cos(rz))
+    r, i = reim(z)
+    complex(sin(r)*cosh(i), cos(r)*sinh(i))
 end
 
 function cos(z::Complex)
-    u = exp(imag(z))
-    v = 1/u
-    rz = real(z)
-    u = (u+v)/2
-    v = u-v
-    complex(u*cos(rz), -v*sin(rz))
+    r, i = reim(z)
+    complex(cos(r)*cosh(i),-sin(r)*sinh(i))
 end
 
 function log(z::Complex)
