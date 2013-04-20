@@ -59,6 +59,7 @@ dot(x::Number, y::Number) = conj(x) * y
 
 # Matrix-vector multiplication
 
+(*){T<:Union(Float32,Complex64,Integer,Rational)}(A::Union(StridedMatrix{Float64},StridedMatrix{Complex128}), X::StridedVector{T}) = A*convert(Vector{eltype(A)},X)
 function (*){T<:BlasFloat}(A::StridedMatrix{T}, X::StridedVector{T})
     Y = similar(A, size(A,1))
     gemv(Y, 'N', A, X)
@@ -67,6 +68,7 @@ end
 A_mul_B{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = gemv(y, 'N', A, x)
 A_mul_B(y::StridedVector, A::StridedMatrix, x::StridedVector) = generic_matvecmul(y, 'N', A, x)
 
+At_mul_B{T<:Union(Float32,Complex64,Integer,Rational)}(A::Union(StridedMatrix{Float64},StridedMatrix{Complex128}), X::StridedVector{T}) = At_mul_B(A,convert(Vector{eltype(A)},X))
 function At_mul_B{T<:BlasFloat}(A::StridedMatrix{T}, x::StridedVector{T})
     y = similar(A, size(A, 2))
     gemv(y, 'T', A, x)
@@ -75,6 +77,7 @@ end
 At_mul_B{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = gemv(y, 'T', A, x)
 At_mul_B(y::StridedVector, A::StridedMatrix, x::StridedVector) = generic_matvecmul(y, 'T', A, x)
 
+Ac_mul_B{T<:Union(Float32,Complex64,Integer,Rational)}(A::Union(StridedMatrix{Float64},StridedMatrix{Complex128}), X::StridedVector{T}) = Ac_mul_B(A,convert(Vector{eltype(A)},X))
 Ac_mul_B{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, x::StridedVector{T}) = At_mul_B(A, x)
 function Ac_mul_B{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T}, x::StridedVector{T})
     y = similar(A, size(A, 2))
