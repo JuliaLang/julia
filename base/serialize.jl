@@ -204,7 +204,7 @@ end
 function serialize(s, linfo::LambdaStaticData)
     writetag(s, LambdaStaticData)
     serialize(s, lambda_number(linfo))
-    serialize(s, linfo.ast)
+    serialize(s, uncompressed_ast(linfo))
     if isdefined(linfo.def, :roots)
         serialize(s, linfo.def.roots)
     else

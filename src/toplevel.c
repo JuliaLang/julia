@@ -60,7 +60,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_old_base_module = jl_base_module;
         // pick up Base module during bootstrap
         jl_base_module = newm;
-    } else {
+    }
+    else {
         base_module_conflict = 1;
     }
     // export all modules from Main

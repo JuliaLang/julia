@@ -286,6 +286,7 @@ typedef struct _jl_module_t {
     struct _jl_module_t *parent;
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
+    jl_array_t *constant_table;
 } jl_module_t;
 
 typedef struct _jl_methlist_t {

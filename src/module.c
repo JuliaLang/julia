@@ -14,6 +14,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     jl_module_t *m = (jl_module_t*)allocobj(sizeof(jl_module_t));
     m->type = (jl_value_t*)jl_module_type;
     m->name = name;
+    m->constant_table = NULL;
     htable_new(&m->bindings, 0);
     jl_set_const(m, name, (jl_value_t*)m);
     arraylist_new(&m->usings, 0);
