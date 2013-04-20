@@ -527,6 +527,8 @@ static void gc_mark_module(jl_module_t *m)
                 gc_push_root(b->type);
         }
     }
+    if (m->constant_table)
+        gc_push_root(m->constant_table);
 }
 
 // for chasing down unwanted references

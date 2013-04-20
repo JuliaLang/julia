@@ -167,6 +167,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
             jl_serialize_value(s, (jl_value_t*)m->usings.items[i]);
         }
     }
+    jl_serialize_value(s, m->constant_table);
 }
 
 static int is_ast_node(jl_value_t *v)
@@ -635,6 +636,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         for(size_t i=0; i < ni; i++) {
             arraylist_push(&m->usings, jl_deserialize_value(s));
         }
+        m->constant_table = (jl_array_t*)jl_deserialize_value(s);
         return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)SmallInt64_tag) {
@@ -814,7 +816,7 @@ jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 {
     if (jl_is_expr(ast))
         return jl_lam_body((jl_expr_t*)ast)->etype;
-    tree_literal_values = li->def->roots;
+    tree_literal_values = li->module->constant_table;
     ios_t src;
     jl_array_t *bytes = (jl_array_t*)ast;
     ios_mem(&src, 0);
@@ -834,11 +836,9 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     int en = jl_gc_is_enabled();
     jl_gc_disable();
 
-    jl_lambda_info_t *def = li->def;
-    if (def->roots == NULL) {
-        def->roots = jl_alloc_cell_1d(0);
-    }
-    tree_literal_values = def->roots;
+    if (li->module->constant_table == NULL)
+        li->module->constant_table = jl_alloc_cell_1d(0);
+    tree_literal_values = li->module->constant_table;
     li->capt = (jl_value_t*)jl_lam_capt((jl_expr_t*)ast);
     if (jl_array_len(li->capt) == 0)
         li->capt = NULL;
@@ -849,7 +849,7 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
     if (jl_array_len(tree_literal_values) == 0) {
-        def->roots = NULL;
+        li->module->constant_table = NULL;
     }
     tree_literal_values = last_tlv;
     if (en)
@@ -861,7 +861,7 @@ DLLEXPORT
 jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 {
     jl_array_t *bytes = (jl_array_t*)data;
-    tree_literal_values = li->def->roots;
+    tree_literal_values = li->module->constant_table;
     ios_t src;
     ios_mem(&src, 0);
     ios_setbuf(&src, bytes->data, jl_array_len(bytes), 0);

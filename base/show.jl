@@ -39,16 +39,12 @@ function show(io::IO, m::Module)
     end
 end
 
-uncompress_ast(l::LambdaStaticData) = ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
+uncompressed_ast(l::LambdaStaticData) =
+    isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 function show(io::IO, l::LambdaStaticData)
     print(io, "AST(")
-    if isa(l.ast,Expr)
-        show(io, l.ast)
-    else
-        ast = uncompress_ast(l)
-        show(io, ast)
-    end
+    show(io, uncompressed_ast(l))
     print(io, ")")
 end
 
@@ -341,10 +337,7 @@ function show(io::IO, m::Method)
         show_delim_array(io, tv, '{', ',', '}', false)
     end
     li = m.func.code
-    e = li.ast
-    if !isa(e,Expr)
-        e = uncompress_ast(li)
-    end
+    e = uncompressed_ast(li)
     argnames = e.args[1]
     decls = map(argtype_decl_string, argnames, {m.sig...})
     print(io, "(")
