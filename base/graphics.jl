@@ -1,12 +1,12 @@
 module Graphics
 
-import Base.norm, Base.contains, Base.copy
+import Base.norm
 
 export
     # Part 1. 2D Geometry
     Vec2, Point, BoundingBox,
     # limits in world coordinates
-    xmin, xmax, ymin, ymax, center, xrange, yrange,
+    isinside, xmin, xmax, ymin, ymax, center, xrange, yrange,
     aspect_ratio, with_aspect_ratio, diagonal, shift, deform,
     # TODO: more
     
@@ -154,8 +154,8 @@ function with_aspect_ratio(bb::BoundingBox, ratio::Real)
     end
 end
 
-contains(bb::BoundingBox, x, y) = (bb.xmin <= x <= bb.xmax) && (bb.ymin <= y <= bb.ymax)
-contains(bb::BoundingBox, p::Point) = contains(bb, p.x, p.y)
+isinside(bb::BoundingBox, x, y) = (bb.xmin <= x <= bb.xmax) && (bb.ymin <= y <= bb.ymax)
+isinside(bb::BoundingBox, p::Point) = isinside(bb, p.x, p.y)
 
 
 # Part 2. Drawing
