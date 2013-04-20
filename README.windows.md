@@ -52,6 +52,7 @@ The recommended way to setup your environment follows:
 1. Download and extract mingw to C:/MinGW (or similar location) from http://sourceforge.net/projects/mingwbuilds/files/external-binary-packages/
 2. Download and extract msys to C:/MinGW/msys/1.0 (or similar location) from http://sourceforge.net/projects/mingwbuilds/files/host-windows/releases/4.7.2/64-bit/threads-win32/sjlj/
 3. Add the line "C:/MinGW /mingw" to C:/MinGW/msys/1.0/etc/fstab (create the file if it doesn't exist)
+4. Replace C:/MinGW/msys/1.0/bin/make.exe with a copy of make.exe extracted from the installer in step 1 of the not-recommended setup
 
 These sections assume you are familiar with building code. If you are not, you should stop reading now and go the the section on binaries. Regardless of which set of steps you followed above, you are now ready to compile julia. Open a unix shell by launching C:/MinGW/msys/1.0/msys.bat (or your favorite shortcut to that file). 
 
