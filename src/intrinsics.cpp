@@ -475,6 +475,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     return typed_load(thePtr, im1, ety, ctx);
 }
 
+// e[i] = x
 static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
 {
     jl_value_t *aty = expr_type(e, ctx);
