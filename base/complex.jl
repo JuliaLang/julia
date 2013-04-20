@@ -228,13 +228,14 @@ function cos(z::Complex)
     complex(cos(r)*cosh(i),-sin(r)*sinh(i))
 end
 
+
 function ssqs{T}(z::Complex{T})
     k::Int=0
     ρ=abs2(z)
     x, y=reim(z)
     if !isfinite(ρ) && (isinf(x) || isinf(y))
         ρ=convert(T, Inf)
-    elseif 0<ρ<nextfloat(zero(T))/(2*eps(T)^2)
+    elseif isinf(ρ) || (ρ==zero(ρ) && (x!=zero(x) || y!=zero(y)) && ρ<nextfloat(zero(T))/(2*eps(T)^2))
         k=exponent(max(abs(x), abs(y)))
         ρ=ldexp(x,-k)^2+ldexp(y,-k)^2
     end
@@ -245,6 +246,7 @@ function log{T<:FloatingPoint}(z::Complex{T})
     const T0::T = convert(T, 0.7071067811865475)
     const T1::T = convert(T, 1.25)
     const T2::T = convert(T, 3)
+    const ln2::T= convert(T, 0.6931471805599453)
     ρ, k=ssqs(z)
     x, y=reim(z)
     ax = abs(x)
@@ -254,7 +256,7 @@ function log{T<:FloatingPoint}(z::Complex{T})
     if k==zero(k) && T0 < β && (β <= T1 || ρ < T2)
         ρρ=log1p((β-1)*(β+1)+θ*θ)/2
     else
-        ρρ=log(ρ)/2 + k*log(2)
+        ρρ=log(ρ)/2 + k*ln2
     end
     θθ = angle(z)
     complex(ρρ, θθ)
