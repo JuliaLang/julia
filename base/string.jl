@@ -32,12 +32,12 @@ bytestring() = ""
 bytestring(s::Array{Uint8,1}) = bytestring(pointer(s),length(s))
 bytestring(s::String...) = print_to_string(s...)
 
-function bytestring(p::Ptr{Uint8})
+function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}))
     p == C_NULL ? error("cannot convert NULL to string") :
     ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
-function bytestring(p::Ptr{Uint8},len::Int)
+function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}),len::Int)
     p == C_NULL ? error("cannot convert NULL to string") :
     ccall(:jl_pchar_to_string, ByteString, (Ptr{Uint8},Int), p, len)
 end
@@ -264,7 +264,8 @@ cmp(a::ByteString, b::ByteString)     = cmp(a.data, b.data)
 isequal(a::ByteString, b::ByteString) = endof(a)==endof(b) && cmp(a,b)==0
 beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
 
-beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) = (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
+beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) =
+    (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
 
 # TODO: fast endswith
 
@@ -451,9 +452,6 @@ write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 
 uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
 lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
-
-uppercase(c::Uint8) = ccall(:toupper, Uint8, (Uint8,), c)
-lowercase(c::Uint8) = ccall(:tolower, Uint8, (Uint8,), c)
 
 uppercase(s::String) = map(uppercase, s)
 lowercase(s::String) = map(lowercase, s)
@@ -1187,7 +1185,7 @@ end
 
 # find the index of the first occurrence of a value in a byte array
 
-function search(a::Array{Uint8,1}, b, i::Integer)
+function search(a::Union(Array{Uint8,1},Array{Int8,1}), b, i::Integer)
     if i < 1 error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
@@ -1195,7 +1193,7 @@ function search(a::Array{Uint8,1}, b, i::Integer)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
 end
-search(a::Array{Uint8,1}, b) = search(a,b,1)
+search(a::Union(Array{Uint8,1},Array{Int8,1}), b) = search(a,b,1)
 
 # return a random string (often useful for temporary filenames/dirnames)
 let
