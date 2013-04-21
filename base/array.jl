@@ -35,23 +35,28 @@ isassigned(a::Array, i::Int...) = isdefined(a, i...)
 
 ## copy ##
 
-function copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
-    if so+N-1 > length(src) || dsto+N-1 > length(dest) || dsto < 1 || so < 1
-        throw(BoundsError())
-    end
-    copy_unsafe!(dest, dsto, src, so, N)
+function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, N)
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+          dest, src, N*sizeof(T))
+    return dest
 end
 
-function copy_unsafe!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
+function unsafe_copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
     if isbits(T)
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
-              pointer(dest, dsto), pointer(src, so), N*sizeof(T))
+        unsafe_copy!(pointer(dest, dsto), pointer(src, so), N)
     else
         for i=0:N-1
             arrayset(dest, src[i+so], i+dsto)
         end
     end
     return dest
+end
+
+function copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
+    if so+N-1 > length(src) || dsto+N-1 > length(dest) || dsto < 1 || so < 1
+        throw(BoundsError())
+    end
+    unsafe_copy!(dest, dsto, src, so, N)
 end
 
 copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
@@ -83,6 +88,7 @@ function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A:
         end
     end
 end
+
 function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
         error("copy_transpose!: size mismatch")
@@ -277,18 +283,18 @@ function getindex(A::Array, I::Range1{Int}, j::Real)
     j = to_index(j)
     checkbounds(A, I, j)
     X = similar(A,length(I))
-    copy_unsafe!(X, 1, A, (j-1)*size(A,1) + first(I), length(I))
+    unsafe_copy!(X, 1, A, (j-1)*size(A,1) + first(I), length(I))
     return X
 end
 function getindex(A::Array, I::Range1{Int}, J::Range1{Int})
     checkbounds(A, I, J)
     X = similar(A, index_shape(I, J))
     if length(I) == size(A,1)
-        copy_unsafe!(X, 1, A, (first(J)-1)*size(A,1) + 1, size(A,1)*length(J))
+        unsafe_copy!(X, 1, A, (first(J)-1)*size(A,1) + 1, size(A,1)*length(J))
     else
         storeoffset = 1
         for j = J
-            copy_unsafe!(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
+            unsafe_copy!(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
             storeoffset += length(I)
         end
     end
@@ -299,7 +305,7 @@ function getindex(A::Array, I::Range1{Int}, J::AbstractVector{Int})
     X = similar(A, index_shape(I, J))
     storeoffset = 1
     for j = J
-        copy_unsafe!(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
+        unsafe_copy!(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
         storeoffset += length(I)
     end
     return X
@@ -461,7 +467,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, j::Real)
     j = to_index(j)
     checkbounds(A, I, j)
     if length(X) != length(I); error("argument dimensions must match"); end
-    copy_unsafe!(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
+    unsafe_copy!(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
     return A
 end
 
@@ -473,11 +479,11 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::Range1{Int})
         error("argument dimensions must match")
     end
     if length(I) == size(A,1)
-        copy_unsafe!(A, first(I) + (first(J)-1)*size(A,1), X, 1, size(A,1)*length(J))
+        unsafe_copy!(A, first(I) + (first(J)-1)*size(A,1), X, 1, size(A,1)*length(J))
     else
         refoffset = 1
         for j = J
-            copy_unsafe!(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
+            unsafe_copy!(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
             refoffset += length(I)
         end
     end
@@ -493,7 +499,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::AbstractVecto
     end
     refoffset = 1
     for j = J
-        copy_unsafe!(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
+        unsafe_copy!(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
         refoffset += length(I)
     end
     return A
