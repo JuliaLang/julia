@@ -1142,6 +1142,7 @@ export
     pointer_to_array,
     cfunction,
     strerror,
+    unsafe_copy,
     unsafe_ref,
     unsafe_assign,
     unsafe_pointer_to_objref,
