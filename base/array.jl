@@ -169,12 +169,12 @@ function getindex{T<:Number}(::Type{T}, r::Ranges)
 end
 
 function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
-    ccall(:memset, Void, (Ptr{T}, Int32, Int), a, x, length(a))
+    ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a, x, length(a))
     return a
 end
 function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
     if isbits(T) && convert(T,x) == 0
-        ccall(:memset, Ptr{T}, (Ptr{T}, Int32, Int32), a,0,length(a)*sizeof(T))
+        ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a,0,length(a)*sizeof(T))
     else
         for i = 1:length(a)
             a[i] = x

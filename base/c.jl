@@ -50,6 +50,7 @@ else
 end
 typealias Cptrdiff_t Int
 typealias Csize_t Uint
+typealias Cssize_t Int
 typealias Clonglong Int64
 typealias Culonglong Uint64
 typealias Cfloat Float32

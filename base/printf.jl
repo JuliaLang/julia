@@ -683,7 +683,7 @@ function _ini_dec(x::FloatingPoint, n::Int)
     if x == 0.0
         POINT[1] = 1
         NEG[1] = signbit(x)
-        ccall(:memset, Void, (Ptr{Uint8}, Int32, Int), DIGITS, '0', n)
+        ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), DIGITS, '0', n)
     else
         @grisu_ccall x Grisu.PRECISION n
     end

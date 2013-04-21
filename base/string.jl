@@ -1192,7 +1192,7 @@ function search(a::Union(Array{Uint8,1},Array{Int8,1}), b, i::Integer)
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
     p = pointer(a)
-    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
+    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
 end
 search(a::Union(Array{Uint8,1},Array{Int8,1}), b) = search(a,b,1)

@@ -139,6 +139,7 @@ export
     Culong,
     Cptrdiff_t,
     Csize_t,
+    Cssize_t,
     Clonglong,
     Culonglong,
     Cfloat,
