@@ -235,7 +235,7 @@ function ssqs{T}(z::Complex{T})
     x, y=reim(z)
     if !isfinite(ρ) && (isinf(x) || isinf(y))
         ρ=convert(T, Inf)
-    elseif isinf(ρ) || (ρ==zero(ρ) && (x!=zero(x) || y!=zero(y)) && ρ<nextfloat(zero(T))/(2*eps(T)^2))
+    elseif isinf(ρ) || (ρ==zero(ρ) && (x!=zero(x) || y!=zero(y))) || ρ<nextfloat(zero(T))/(2*eps(T)^2)
         k=exponent(max(abs(x), abs(y)))
         ρ=ldexp(x,-k)^2+ldexp(y,-k)^2
     end
