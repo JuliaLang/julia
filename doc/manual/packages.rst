@@ -128,6 +128,42 @@ already have one. For example, create a new repository called
     git commit
     git push -u github master
 
+Setting up continuous integration testing with Travis
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The [Travis](https://travis-ci.org) continuous integration service provides
+convenient testing for open source projects on the [Ubuntu
+Linux](http://ubuntu.com) platform.
+
+To set up testing for your package, see the [Getting
+Started](http://about.travis-ci.org/docs/user/getting-started/) section of the
+Travis manual.
+
+Here is a sample `.travis.yml` that runs all tests until one fails::
+
+    language: cpp 
+    compiler: 
+        - gcc 
+    notifications:
+        email: false
+    before_install:
+        - sudo add-apt-repository ppa:staticfloat/julia-deps -y
+        - sudo add-apt-repository ppa:staticfloat/julianightlies -y
+        - sudo apt-get update -qq -y
+        - sudo apt-get upgrade -y
+        - sudo apt-get install julia -y
+        - git config --global user.name "Dummy Travis User"
+        - git config --global user.email "travis@example.net"
+    script:
+        - julia -e 'versioninfo(); Pkg.init();'
+        - mkdir -p ~/.julia/MY_PACKAGE_NAME/
+        - cp -R ./* ~/.julia/MY_PACKAGE_NAME/
+        - for a in ~/.julia/MY_PACKAGE_NAME/test/*.jl; do julia $a; errcode=$?; if test $errcode -ne 0; then exit $errcode; fi; done
+
+Be sure to install [Ubuntu packages](http://packages.ubuntu.com) for all
+necessary binary dependencies as well as any Julia package dependencies within
+Julia.
+
 Distributing a Julia package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
