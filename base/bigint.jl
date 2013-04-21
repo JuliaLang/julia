@@ -21,14 +21,13 @@ end
 
 function BigInt(x::Int)
     z = BigInt()
-    ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{BigInt}, Int), &z, x)
+    ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{BigInt}, Clong), &z, x)
     return z
 end
 
 function BigInt(x::Uint)
     z = BigInt()
-    ccall((:__gmpz_set_ui, :libgmp), Void,
-        (Ptr{BigInt}, Uint), &z, x)
+    ccall((:__gmpz_set_ui, :libgmp), Void,(Ptr{BigInt}, Culong), &z, x)
     return z
 end
 
@@ -45,10 +44,10 @@ end
 convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
 
 convert(::Type{Int}, n::BigInt) =
-    ccall((:__gmpz_get_si, :libgmp), Int, (Ptr{BigInt},), &n)
+    convert(Int, ccall((:__gmpz_get_si, :libgmp), Clong, (Ptr{BigInt},), &n))
 
 convert(::Type{Uint}, n::BigInt) =
-    ccall((:__gmpz_get_ui, :libgmp), Uint, (Ptr{BigInt},), &n)
+    convert(Uint, ccall((:__gmpz_get_ui, :libgmp), Culong, (Ptr{BigInt},), &n))
 
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
@@ -123,7 +122,7 @@ end
 
 function <<(x::BigInt, c::Uint)
     z = BigInt()
-    ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Uint), &z, &x, c)
+    ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
 <<(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x<<uint(c)
@@ -131,7 +130,7 @@ end
 
 function >>(x::BigInt, c::Uint)
     z = BigInt()
-    ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Uint), &z, &x, c)
+    ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
 >>(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x>>uint(c)
@@ -156,7 +155,7 @@ end
 
 function ^(x::BigInt, y::Uint)
     z = BigInt()
-    ccall((:__gmpz_pow_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Uint), &z, &x, y)
+    ccall((:__gmpz_pow_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, y)
     return z
 end
 
@@ -191,14 +190,14 @@ function factorial(bn::BigInt)
     end
     z = BigInt()
     ccall((:__gmpz_fac_ui, :libgmp), Void,
-        (Ptr{BigInt}, Uint), &z, n)
+        (Ptr{BigInt}, Culong), &z, n)
     return z
 end
 
 function binomial(n::BigInt, k::Uint)
     z = BigInt()
     ccall((:__gmpz_bin_ui, :libgmp), Void,
-        (Ptr{BigInt}, Ptr{BigInt}, Uint), &z, &n, k)
+        (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &n, k)
     return z
 end
 binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(k))
@@ -212,7 +211,7 @@ binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(
 function string(x::BigInt)
     lng = ndigits(x) + 2
     z = Array(Uint8, lng)
-    lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{BigInt}...), z, lng, "%Zd", &x)
+    lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigInt}...), z, lng, "%Zd", &x)
     return bytestring(convert(Ptr{Uint8}, z[1:lng]))
 end
 
@@ -220,4 +219,4 @@ function show(io::IO, x::BigInt)
     print(io, string(x))
 end
 
-ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Uint, (Ptr{BigInt}, Int32), &x, 10)
+ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 10)
