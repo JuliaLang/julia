@@ -197,7 +197,7 @@ readbytes(io::IOBuffer,nb::Integer) = bytestring(read(io, Array(Uint8, nb)))
 readall(io::IOBuffer) = readbytes(io,nb_available(io))
 function search(buf::IOBuffer, delim)
     p = pointer(buf.data, buf.ptr)
-    q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Int32),p,delim,nb_available(buf))
+    q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Csize_t),p,delim,nb_available(buf))
     nb = (q == C_NULL ? 0 : q-p+1)
 end
 function readuntil(io::IOBuffer, delim::Uint8)

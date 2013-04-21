@@ -189,7 +189,7 @@ function readdir(path::String)
 
     for i = 1:file_count
         entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Ptr{Uint8},
-                                 (Ptr{Uint8}, Int), uv_readdir_req, offset))
+                                 (Ptr{Uint8}, Int32), uv_readdir_req, offset))
         push!(entries, entry)
         offset += length(entry) + 1   # offset to the next entry
     end
