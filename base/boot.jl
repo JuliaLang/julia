@@ -160,7 +160,7 @@ export
     #ule_int, ult_int, unbox, urem_int, xor_int, sext_int, zext_int
 
 
-type Nothing; end
+immutable Nothing; end
 const nothing = Nothing()
 
 const (===) = is
