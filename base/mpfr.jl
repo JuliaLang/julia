@@ -66,7 +66,7 @@ end
 
 function MPFRFloat(x::BigInt)
     z = MPFRFloat{DEFAULT_PRECISION[end]}()
-    ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{mpfr_struct}, Ptr{Void}, Int32), &(z.mpfr), &(x.mpz), ROUNDING_MODE[end])   
+    ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{mpfr_struct}, Ptr{BigInt}, Int32), &(z.mpfr), &x, ROUNDING_MODE[end])   
     return z
 end
 
@@ -112,7 +112,7 @@ convert(::Type{Uint64}, x::MPFRFloat) = integer_valued(x) ?
 function convert(::Type{BigInt}, x::MPFRFloat) 
     if integer_valued(x)
         z = BigInt()
-        ccall((:mpfr_get_z,:libmpfr), Int32, (Ptr{Void}, Ptr{mpfr_struct}, Int32), &(z.mpz), &(x.mpfr), ROUNDING_MODE[end])
+        ccall((:mpfr_get_z,:libmpfr), Int32, (Ptr{BigInt}, Ptr{mpfr_struct}, Int32), &z, &(x.mpfr), ROUNDING_MODE[end])
         return z
     else
         throw(InexactError())
@@ -189,7 +189,7 @@ end
 
 function ^(x::MPFRFloat, y::BigInt)
     z = MPFRFloat{DEFAULT_PRECISION[end]}()
-    ccall((:mpfr_pow_z, :libmpfr), Int32, (Ptr{mpfr_struct}, Ptr{mpfr_struct}, Ptr{Void}, Int32), &(z.mpfr), &(x.mpfr), &(y.mpz), ROUNDING_MODE[end])
+    ccall((:mpfr_pow_z, :libmpfr), Int32, (Ptr{mpfr_struct}, Ptr{mpfr_struct}, Ptr{BigInt}, Int32), &(z.mpfr), &(x.mpfr), &y, ROUNDING_MODE[end])
     return z
 end
 
@@ -384,7 +384,7 @@ function iround(x::MPFRFloat)
         return ccall((:mpfr_get_si, :libmpfr), Int64, (Ptr{mpfr_struct}, Int32), &(x.mpfr), ROUNDING_MODE[end])
     end
     z = BigInt()
-    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{Void}, Ptr{mpfr_struct}, Int32), &(z.mpz), &(x.mpfr), ROUNDING_MODE[end])
+    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{mpfr_struct}, Int32), &z, &(x.mpfr), ROUNDING_MODE[end])
     return z
 end
 
