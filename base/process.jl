@@ -429,7 +429,7 @@ kill(ps::ProcessChain) = map(kill, ps.processes)
 kill(p::Process) = kill(p,15) #SIGTERM
 
 function _contains_newline(bufptr::Ptr{Void},len::Int32)
-    return (ccall(:memchr,Ptr{Uint8},(Ptr{Void},Int32,Uint),bufptr,'\n',len)!=C_NULL)
+    return (ccall(:memchr,Ptr{Void},(Ptr{Void},Int32,Csize_t),bufptr,'\n',len)!=C_NULL)
 end
 
 ## process status ##
