@@ -55,6 +55,11 @@ function transact(f::Function)
     end
 end
 
+function is_ancestor_of(a::String, b::String)
+    A = readchomp(`git rev-parse $a`)
+    readchomp(`git merge-base $A $b`) == A
+end
+
 function each_tagged_version()
     git_dir = abspath(dir())
     @task for line in eachline(`git --git-dir=$git_dir show-ref --tags`)
