@@ -46,7 +46,7 @@ function grisu_sig(x::Real, n::Integer)
     grisu(float64(x), PRECISION, int32(n))
 end
 
-function _show(io, x::FloatingPoint, mode::Int32, n::Int)
+function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int)
     if isnan(x) return write(io, isa(x,Float32) ? "NaN32" : "NaN") end
     if isinf(x)
         if x < 0 write(io,'-') end
@@ -101,9 +101,9 @@ function _show(io, x::FloatingPoint, mode::Int32, n::Int)
     nothing
 end
 
-show(io, x::Float64) = _show(io, x, SHORTEST, 0)
-show(io, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0)
-showcompact(io, x::FloatingPoint) = _show(io, x, PRECISION, 6)
+show(io::IO, x::Float64) = _show(io, x, SHORTEST, 0)
+show(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0)
+showcompact(io::IO, x::FloatingPoint) = _show(io, x, PRECISION, 6)
 
 # normal:
 #   0 < pt < len        ####.####           len+1
@@ -114,7 +114,7 @@ showcompact(io, x::FloatingPoint) = _show(io, x, PRECISION, 6)
 #   pt <= 0             ########e-###       len+k+2
 #   0 < pt              ########e###        len+k+1
 
-function _print_shortest(io, x::FloatingPoint, dot::Bool, mode::Int32)
+function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32)
     if isnan(x); return write(io, isa(x,Float32) ? "NaN32" : "NaN"); end
     if x < 0 write(io,'-') end
     if isinf(x); return write(io, isa(x,Float32) ? "Inf32" : "Inf"); end
@@ -157,8 +157,8 @@ function _print_shortest(io, x::FloatingPoint, dot::Bool, mode::Int32)
     nothing
 end
 
-print_shortest(io, x::Float64, dot::Bool) = _print_shortest(io, x, dot, SHORTEST)
-print_shortest(io, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST_SINGLE)
-print_shortest(io, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
+print_shortest(io::IO, x::Float64, dot::Bool) = _print_shortest(io, x, dot, SHORTEST)
+print_shortest(io::IO, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST_SINGLE)
+print_shortest(io::IO, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
 
 end # module

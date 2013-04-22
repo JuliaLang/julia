@@ -1,11 +1,12 @@
 ## indexing ##
 
 length(t::Tuple) = tuplelen(t)
+endof(t::Tuple) = tuplelen(t)
 size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension")
-ref(t::Tuple, i::Int) = tupleref(t, i)
-ref(t::Tuple, i::Real) = tupleref(t, convert(Int, i))
-ref(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
-ref(t::Tuple, b::AbstractArray{Bool}) = ref(t,find(b))
+getindex(t::Tuple, i::Int) = tupleref(t, i)
+getindex(t::Tuple, i::Real) = tupleref(t, convert(Int, i))
+getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
+getindex(t::Tuple, b::AbstractArray{Bool}) = getindex(t,find(b))
 
 ## iterating ##
 
@@ -16,17 +17,20 @@ next(t::Tuple, i::Int) = (t[i], i+1)
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
 indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
-indexed_next(I, i, state) = next(I, state)
+indexed_next(a::Array, i::Int, state) = (a[i], i+1)
+indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
 
 ## mapping ##
 
-ntuple(n::Integer, f) = n<=0 ? () :
-                        n==1 ? (f(1),) :
-                        n==2 ? (f(1),f(2),) :
-                        n==3 ? (f(1),f(2),f(3),) :
-                        n==4 ? (f(1),f(2),f(3),f(4),) :
-                        n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
-                        tuple(ntuple(n-2,f)..., f(n-1), f(n))
+ntuple(n::Integer, f::Function) = ntuple(f, n) # TODO: deprecate this?
+ntuple(f::Function, n::Integer) =
+    n<=0 ? () :
+    n==1 ? (f(1),) :
+    n==2 ? (f(1),f(2),) :
+    n==3 ? (f(1),f(2),f(3),) :
+    n==4 ? (f(1),f(2),f(3),f(4),) :
+    n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
+    tuple(ntuple(n-2,f)..., f(n-1), f(n))
 
 # 0 argument function
 map(f) = f()

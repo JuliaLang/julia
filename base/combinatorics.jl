@@ -1,5 +1,3 @@
-import Sort.@in_place_matrix_op
-
 function factorial(n::Integer)
     if n < 0
         return zero(n)
@@ -24,12 +22,8 @@ function factorial{T<:Integer}(n::T, k::T)
     return f
 end
 
-nPr(n, r) = factorial(n, n-r)
-
 function binomial{T<:Integer}(n::T, k::T)
-    if k < 0
-        return zero(T)
-    end
+    k < 0 && return zero(T)
     sgn = one(T)
     if n < 0
         n = -n + k -1
@@ -37,15 +31,9 @@ function binomial{T<:Integer}(n::T, k::T)
             sgn = -sgn
         end
     end
-    if k > n # TODO: is this definitely right?
-        return zero(T)
-    end
-    if k == 0 || k == n
-        return sgn
-    end
-    if k == 1
-        return sgn*n
-    end
+    k > n && return zero(T)
+    (k == 0 || k == n) && return sgn
+    k == 1 && return sgn*n
     if k > (n>>1)
         k = (n - k)
     end
@@ -53,14 +41,12 @@ function binomial{T<:Integer}(n::T, k::T)
     nn += 1.0
     rr = 2.0
     while rr <= k
-        x *= (nn/rr)
+        x *= nn/rr
         rr += 1
         nn += 1
     end
-    return sgn*iround(T,x)
+    sgn*iround(T,x)
 end
-
-const nCr = binomial
 
 pascal(n) = [binomial(i+j-2,i-1) for i=1:n,j=1:n]
 
@@ -68,19 +54,17 @@ pascal(n) = [binomial(i+j-2,i-1) for i=1:n,j=1:n]
 
 function shuffle!(a::AbstractVector)
     for i = length(a):-1:2
-        j = randi(i)
+        j = rand(1:i)
         a[i], a[j] = a[j], a[i]
     end
     return a
 end
 
-@in_place_matrix_op shuffle
-
 function randperm(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
     for i = 2:n
-        j = randi(i)
+        j = rand(1:i)
         a[i] = a[j]
         a[j] = i
     end
@@ -91,7 +75,7 @@ function randcycle(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
     for i = 2:n
-        j = randi(i-1)
+        j = rand(1:i-1)
         a[i] = a[j]
         a[j] = i
     end
@@ -99,8 +83,8 @@ function randcycle(n::Integer)
 end
 
 function nthperm!(a::AbstractVector, k::Integer)
+    k -= 1 # make k 1-indexed
     n = length(a)
-    k -= 1   # make k 1-indexed
     f = factorial(oftype(k, n-1))
     for i=1:n-1
         j = div(k, f) + 1
@@ -145,6 +129,54 @@ function isperm(a::AbstractVector)
     b = _invperm(a)
     return isempty(b) || b[1]!=0
 end
+
+function permute!!(a, p::AbstractVector{Int})
+    count = 0
+    start = 0
+    while count < length(a)
+        ptr = start = findnext(p, start+1)
+        temp = a[start]
+        next = p[start]
+        count += 1
+        while next != start
+            a[ptr] = a[next]
+            p[ptr] = 0
+            ptr = next
+            next = p[next]
+            count += 1
+        end
+        a[ptr] = temp
+        p[ptr] = 0
+    end
+    a
+end
+
+permute!(a, p::AbstractVector{Int}) = permute!!(a, copy(p))
+
+function ipermute!!(a, p::AbstractVector{Int})
+    count = 0
+    start = 0
+    while count < length(a)
+        start = findnext(p, start+1)
+        temp = a[start]
+        next = p[start]
+        count += 1
+        while next != start
+            temp_next = a[next]
+            a[next] = temp
+            temp = temp_next
+            ptr = p[next]
+            p[next] = 0
+            next = ptr
+            count += 1
+        end
+        a[next] = temp
+        p[next] = 0
+    end
+    a
+end
+
+ipermute!(a, p::AbstractVector{Int}) = ipermute!!(a, copy(p))
 
 # Algorithm T from TAoCP 7.2.1.3
 function combinations(a::AbstractVector, t::Integer)

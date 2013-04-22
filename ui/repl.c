@@ -17,14 +17,14 @@ static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
     " -v --version             Display version information\n"
     " -q --quiet               Quiet startup without banner\n"
-    " -H --home=<dir>          Load files relative to <dir>\n"
-    " -T --tab=<size>          Set REPL tab width to <size>\n\n"
+    " -H --home <dir>          Load files relative to <dir>\n"
+    " -T --tab <size>          Set REPL tab width to <size>\n\n"
 
-    " -e --eval=<expr>         Evaluate <expr>\n"
-    " -E --print=<expr>        Evaluate and show <expr>\n"
-    " -P --post-boot=<expr>    Evaluate <expr> right after boot\n"
-    " -L --load=file           Load <file> right after boot\n"
-    " -J --sysimage=file       Start up with the given system image file\n\n"
+    " -e --eval <expr>         Evaluate <expr>\n"
+    " -E --print <expr>        Evaluate and show <expr>\n"
+    " -P --post-boot <expr>    Evaluate <expr> right after boot\n"
+    " -L --load file           Load <file> right after boot\n"
+    " -J --sysimage file       Start up with the given system image file\n\n"
 
     " -p n                     Run n local processes\n"
     " --machinefile file       Run processes on hosts listed in file\n\n"
@@ -160,13 +160,13 @@ static int exec_program(void)
             }
             else {
                 while (1) {
-                    if (jl_typeof(e) == (jl_type_t*)jl_loaderror_type) {
+                    if (jl_typeof(e) == (jl_value_t*)jl_loaderror_type) {
                         e = jl_fieldref(e, 2);
                         // TODO: show file and line
                     }
                     else break;
                 }
-                if (jl_typeof(e) == (jl_type_t*)jl_errorexception_type) {
+                if (jl_typeof(e) == (jl_value_t*)jl_errorexception_type) {
                     jl_printf(JL_STDERR, "error during bootstrap: %s\n",
                                jl_string_data(jl_fieldref(e,0)));
                 }
@@ -261,7 +261,6 @@ int true_main(int argc, char *argv[])
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
-        uv_tty_reset_mode();
         //rl_cleanup_after_signal();
         return 0;
     }
@@ -278,7 +277,7 @@ int true_main(int argc, char *argv[])
             jl_printf(JL_STDERR, "\n\n");
             iserr = 0;
         }
-    uv_run(jl_global_event_loop());
+    uv_run(jl_global_event_loop(),UV_RUN_DEFAULT);
     }
     JL_CATCH {
         iserr = 1;

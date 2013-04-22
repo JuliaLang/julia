@@ -1,7 +1,7 @@
 #define hash_size(h) (jl_array_len(h)/2)
 
 // compute empirical max-probe for a given size
-#define max_probe(size) ((size)<=(HT_N_INLINE*2) ? (HT_N_INLINE/2) : (size)>>3)
+#define max_probe(size) ((size)<=1024 ? 16 : (size)>>6)
 
 #define keyhash(k)     jl_object_id(k)
 #define h2index(hv,sz) (index_t)(((hv) & ((sz)-1))*2)
@@ -121,14 +121,14 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
 }
 
 DLLEXPORT
-int jl_eqtable_del(jl_array_t *h, void *key)
+jl_value_t *jl_eqtable_del(jl_array_t *h, void *key, jl_value_t *deflt)
 {
     void **bp = jl_table_peek_bp(h, key);
-    if (bp != NULL) {
-        *bp = NULL;
-        return 1;
-    }
-    return 0;
+    if (bp == NULL || *bp == NULL)
+        return deflt;
+    jl_value_t *val = *bp;
+    *bp = NULL;
+    return val;
 }
 
 DLLEXPORT

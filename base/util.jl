@@ -1,22 +1,26 @@
 # timing
 
+# system date in seconds
 time() = ccall(:clock_now, Float64, ())
 
+# high-resolution relative time, in nanoseconds
+time_ns() = ccall(:jl_hrtime, Uint64, ())
+
 function tic()
-    t0 = time()
-    tls(:TIMERS, (t0, get(tls(), :TIMERS, ())))
+    t0 = time_ns()
+    task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
     return t0
 end
 
 function toq()
-    t1 = time()
-    timers = get(tls(), :TIMERS, ())
+    t1 = time_ns()
+    timers = get(task_local_storage(), :TIMERS, ())
     if is(timers,())
         error("toc() without tic()")
     end
     t0 = timers[1]
-    tls(:TIMERS, timers[2])
-    t1-t0
+    task_local_storage(:TIMERS, timers[2])
+    (t1-t0)/1e9
 end
 
 function toc()
@@ -25,19 +29,13 @@ function toc()
     return t
 end
 
-# high-resolution time
-# returns in nanoseconds
-function time_ns()
-    return ccall(:jl_hrtime, Uint64, ())
-end
-
 # print elapsed time, return expression value
 macro time(ex)
     quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $(esc(ex))
-        local t1 = time()
-        println("elapsed time: ", t1-t0, " seconds")
+        local t1 = time_ns()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds")
         val
     end
 end
@@ -45,18 +43,18 @@ end
 # print nothing, return elapsed time
 macro elapsed(ex)
     quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $(esc(ex))
-        time()-t0
+        (time_ns()-t0)/1e9
     end
 end
 
 # print nothing, return value & elapsed time
 macro timed(ex)
     quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $(esc(ex))
-        val, time()-t0
+        val, (time_ns()-t0)/1e9
     end
 end
 
@@ -71,21 +69,7 @@ end
 
 peakflops() = peakflops(2000)
 
-# source files, editing, function reflection
-
-function function_loc(f::Function, types)
-    for m = methods(f, types)
-        if isa(m[3],LambdaStaticData)
-            lsd = m[3]::LambdaStaticData
-            ln = lsd.line
-            if ln > 0
-                return (find_in_path(string(lsd.file)), ln)
-            end
-        end
-    end
-    error("could not find function definition")
-end
-function_loc(f::Function) = function_loc(f, (Any...))
+# searching definitions
 
 function whicht(f, types)
     for m = methods(f, types)
@@ -106,352 +90,316 @@ end
 
 which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 
-edit(file::String) = edit(file, 1)
-function edit(file::String, line::Int)
-    editor = get(ENV, "JULIA_EDITOR", "emacs")
-    issrc = file[end-2:end] == ".jl"
-    if issrc
-        if file[1]!='/' && !is_file_readable(file)
-            file2 = "$JULIA_HOME/../lib/julia/base/$file"
-            if is_file_readable(file2)
-                file = file2
+macro which(ex)
+    ex = expand(ex)
+    exret = Expr(:call, :error, "expression is not a function call")
+    if !isa(ex, Expr)
+        # do nothing -> error
+    elseif ex.head == :call
+        exret = Expr(:call, :which, map(esc, ex.args)...)
+    elseif ex.head == :body
+        a1 = ex.args[1]
+        if isa(a1, Expr) && a1.head == :call
+            a11 = a1.args[1]
+            if isa(a11, TopNode) && a11.name == :setindex!
+                exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
             end
         end
-        if editor == "emacs"
+    elseif ex.head == :thunk
+        exret = Expr(:call, :error, "expression is not a function call, or is too complex for @which to analyze; "
+                                  * "break it down to simpler parts if possible")
+    end
+    exret
+end
+
+# source files, editing
+
+function find_source_file(file)
+    if file[1]!='/' && !is_file_readable(file)
+        file2 = find_in_path(file)
+        if is_file_readable(file2)
+            return file2
+        else
+            file2 = "$JULIA_HOME/../share/julia/base/$file"
+            if is_file_readable(file2)
+                return file2
+            end
+        end
+    end
+    return file
+end
+
+function edit(file::String, line::Integer)
+    editor = get(ENV, "JULIA_EDITOR", "emacs")
+    issrc = length(file)>2 && file[end-2:end] == ".jl"
+    if issrc
+        file = find_source_file(file)
+    end
+    if editor == "emacs"
+        if issrc
             jmode = "$JULIA_HOME/../../contrib/julia-mode.el"
             run(`emacs $file --eval "(progn
                                      (require 'julia-mode \"$jmode\")
                                      (julia-mode)
                                      (goto-line $line))"`)
-        elseif editor == "vim"
-            run(`vim $file +$line`)
-        elseif editor == "textmate"
-            run(`mate $file -l $line`)
-        elseif editor == "subl"
-            run(`subl $file:$line`)
         else
-            error("Invalid JULIA_EDITOR value: $(repr(editor))")
+            run(`emacs $file --eval "(goto-line $line)"`)
+        end
+    elseif editor == "vim"
+        run(`vim $file +$line`)
+    elseif editor == "textmate"
+        run(`mate $file -l $line`)
+    elseif editor == "subl"
+        run(`subl $file:$line`)
+    elseif editor == "notepad"
+        run(`notepad $file`)
+    elseif editor == "start" || editor == "open"
+        if OS_NAME == :Windows
+            run(`start /b $file`)
+        elseif OS_NAME == :Darwin
+            run(`open -t $file`)
+        else
+            error("Don't know how to launch the default editor on your platform")
         end
     else
-        if editor == "emacs"
-            run(`emacs $file --eval "(goto-line $line)"`)
-        elseif editor == "vim"
-            run(`vim $file +$line`)
-        elseif editor == "textmate"
-            run(`mate $file -l $line`)
-        elseif editor == "subl"
-            run(`subl $file:$line`)
-        else
-            error("Invalid JULIA_EDITOR value: $(repr(editor))")
-        end
+        error("Invalid JULIA_EDITOR value: $(repr(editor))")
     end
     nothing
 end
 edit(file::String) = edit(file, 1)
 
-function less(file::String, line::Int)
+function less(file::String, line::Integer)
     pager = get(ENV, "PAGER", "less")
     run(`$pager +$(line)g $file`)
 end
 less(file::String) = less(file, 1)
 
-edit(f::Function)    = edit(function_loc(f)...)
-edit(f::Function, t) = edit(function_loc(f,t)...)
-less(f::Function)    = less(function_loc(f)...)
-less(f::Function, t) = less(function_loc(f,t)...)
+edit(f::Function)    = edit(functionloc(f)...)
+edit(f::Function, t) = edit(functionloc(f,t)...)
+less(f::Function)    = less(functionloc(f)...)
+less(f::Function, t) = less(functionloc(f,t)...)
 
-disassemble(f::Function, types::Tuple) =
-    print(ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString)
+# print a warning only once
 
-function methods(f::Function)
-    if !isgeneric(f)
-        error("methods: error: not a generic function")
-    end
-    f.env
+const have_warned = (ByteString=>Bool)[]
+function warn_once(msg::String...)
+    msg = bytestring(msg...)
+    has(have_warned,msg) && return
+    have_warned[msg] = true
+    warn(msg)
 end
 
-methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
-                             t.env)
+# openblas utility routines
 
-# require
+if Base.libblas_name == "libopenblas"
 
-function is_file_readable(path)
-    s = stat(bytestring(path))
-    return isfile(s) && isreadable(s)
-end
+    openblas_get_config() = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
 
-function find_in_path(name::String)
-    name[1] == '/' && return abspath(name)
-    isfile(name) && return abspath(name)
-    base = name
-    if ends_with(name,".jl")
-        base = match(r"^(.*)\.jl$",name).captures[1]
-    else
-        name = strcat(base,".jl")
-    end
-    for prefix in LOAD_PATH
-        path = strcat(prefix,"/",base,"/src/",name)
-        is_file_readable(path) && return abspath(path)
-        path = strcat(prefix,"/",name)
-        is_file_readable(path) && return abspath(path)
-    end
-    return abspath(name)
-end
+    openblas_set_num_threads(n::Integer) = ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32, ), n)
 
-function find_in_node1_path(name)
-    if myid()==1
-        return find_in_path(name)
-    else
-        return remote_call_fetch(1, find_in_path, name)
-    end
-end
-
-# Store list of files and their load time
-package_list = (ByteString=>Float64)[]
-require(fname::String) = require(bytestring(fname))
-require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
-function require(name::ByteString)
-    if myid() == 1
-        @sync begin
-            for p = 2:nprocs()
-                @spawnat p require(name)
-            end
-        end
-    end
-    path = find_in_node1_path(name)
-    if !has(package_list,path)
-        reload_path(path)
-    end
-end
-
-function reload(name::String)
-    if myid() == 1
-        @sync begin
-            for p = 2:nprocs()
-                @spawnat p reload(name)
-            end
-        end
-    end
-    reload_path(find_in_node1_path(name))
-end
-
-# remote/parallel load
-
-include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
-
-function include_from_node1(path)
-    if myid()==1
-        Core.include(path)
-    else
-        include_string(remote_call_fetch(1, readall, path))
-    end
-end
-
-function reload_path(path)
-    had = has(package_list, path)
-    package_list[path] = time()
-    try
-        eval(Main, :(Base.include_from_node1($path)))
-    catch e
-        if !had
-            delete!(package_list, path)
-        end
-        rethrow(e)
-    end
-    nothing
-end
-
-# deprecated
-const load = require
-
-evalfile(fname::String) = eval(Main, parse(readall(fname))[1])
-
-# help
-
-help_category_list = nothing
-help_category_dict = nothing
-help_module_dict = nothing
-help_function_dict = nothing
-
-function decor_help_desc(func::String, mfunc::String, desc::String)
-    sd = split(desc, '\n')
-    for i = 1:length(sd)
-        if begins_with(sd[i], func)
-            sd[i] = mfunc * sd[i][length(func)+1:end]
-        else
-            break
-        end
-    end
-    return join(sd, '\n')
-end
-
-function init_help()
-    global help_category_list, help_category_dict,
-           help_module_dict, help_function_dict
-    if help_category_dict == nothing
-        println("Loading help data...")
-        helpdb = evalfile("$JULIA_HOME/../share/julia/helpdb.jl")
-        help_category_list = {}
-        help_category_dict = Dict()
-        help_module_dict = Dict()
-        help_function_dict = Dict()
-        for (cat,mod,func,desc) in helpdb
-            if !has(help_category_dict, cat)
-                push!(help_category_list, cat)
-                help_category_dict[cat] = {}
-            end
-            if !isempty(mod)
-                if begins_with(func, '@')
-                    mfunc = "@" * mod * "." * func[2:]
-                else
-                    mfunc = mod * "." * func
-                end
-                desc = decor_help_desc(func, mfunc, desc)
+    function check_openblas()
+        openblas_config = openblas_get_config()
+        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
+        if Base.USE_LIB64 != openblas64
+            if !openblas64
+                println("ERROR: OpenBLAS was not built with 64bit integer support.")
+                println("You're seeing this error because Julia was built with USE_LIB64=1")
+                println("Please rebuild Julia with USE_LIB64=0")
             else
-                mfunc = func
+                println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
+                println("You're seeing this error because Julia was built with USE_LIB64=0")
+                println("Please rebuild Julia with USE_LIB64=1")
             end
-            push!(help_category_dict[cat], mfunc)
-            if !has(help_function_dict, mfunc)
-                help_function_dict[mfunc] = {}
-            end
-            push!(help_function_dict[mfunc], desc)
-            if !has(help_module_dict, func)
-                help_module_dict[func] = {}
-            end
-            if !contains(help_module_dict[func], mod)
-                push!(help_module_dict[func], mod)
-            end
+            println("Quitting.")
+            quit()
         end
     end
+
 end
 
+# system information
 
-function help()
-    init_help()
-    print(
-" Welcome to Julia. The full manual is available at
+versioninfo() = versioninfo(false)
+versioninfo(verbose::Bool) = versioninfo(OUTPUT_STREAM, verbose)
+function versioninfo(io::IO, verbose::Bool)
+    println(io,             "Julia $version_string")
+    println(io,             commit_string)
+    println(io,             "Platform Info:")
+    println(io,             "  OS_NAME: ", OS_NAME)
+    println(io,             "  WORD_SIZE: ", WORD_SIZE)
+    if verbose
+        lsb = readchomp(ignorestatus(`lsb_release -ds`) .> SpawnNullStream())
+        if lsb != ""
+            println(io,     "           ", lsb)
+        end
+        println(io,         "  uname: ",readchomp(`uname -mprsv`))
+        println(io,         "Memory: $(total_memory()/2^30) GB ($(free_memory()/2^20) MB free)")
+        try println(io,     "Uptime: $(uptime()) sec") catch end
+        print(io,           "Load Avg: ")
+        print_matrix(io,    Base.loadavg()')
+        println(io          )
+        println(io,         cpu_info())
+    end
+    if Base.libblas_name == "libopenblas"
+        openblas_config = openblas_get_config()
+        println(io,         "  BLAS: ",libblas_name, " (", openblas_config, ")")
+    else
+        println(io,         "  BLAS: ",libblas_name)
+    end
+    println(io,             "  LAPACK: ",liblapack_name)
+    println(io,             "  LIBM: ",libm_name)
+    if verbose
+        println(io,         "Environment:")
+        for (k,v) in ENV
+            if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME",k), nothing)
+                println(io, "  $(k) = $(v)")
+            end
+        end
+        println(io          )
+        println(io,         "Packages Installed:")
+        Pkg.status(io       )
+    end
+end
 
-    http://docs.julialang.org
+type UV_cpu_info_t
+    model::Ptr{Uint8}
+    speed::Int32
+    cpu_times!user::Uint64
+    cpu_times!nice::Uint64
+    cpu_times!sys::Uint64
+    cpu_times!idle::Uint64
+    cpu_times!irq::Uint64
+end
+type CPUinfo
+    model::ASCIIString
+    speed::Int32
+    cpu_times!user::Uint64
+    cpu_times!nice::Uint64
+    cpu_times!sys::Uint64
+    cpu_times!idle::Uint64
+    cpu_times!irq::Uint64
+    SC_CLK_TCK::Int
+    CPUinfo(model,speed,u,n,s,id,ir,ticks)=new(model,speed,u,n,s,id,ir,ticks)
+end
+CPUinfo(info::UV_cpu_info_t, ticks) = CPUinfo(bytestring(info.model), info.speed,
+    info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
+    info.cpu_times!idle, info.cpu_times!irq, ticks)
 
- To get help on a function, try help(function). To search all help text,
- try apropos(\"string\"). To see available functions, try help(category),
- for one of the following categories:
-
-")
-    for cat = help_category_list
-        if !isempty(help_category_dict[cat])
-            print("  ")
-            show(cat); println()
+show(io::IO, cpu::CPUinfo) = show(io, cpu, true, "    ")
+function show(io::IO, info::CPUinfo, header::Bool, prefix::String)
+    tck = info.SC_CLK_TCK 
+    if header
+        println(io, info.model, ": ")
+        print(" "^length(prefix))
+        if tck > 0
+            @printf io "    %5s    %9s    %9s    %9s    %9s    %9s\n" "speed" "user" "nice" "sys" "idle" "irq"
+        else
+            @printf io "    %5s    %9s  %9s  %9s  %9s  %9s ticks\n" "speed" "user" "nice" "sys" "idle" "irq"
         end
     end
-end
-
-function help(cat::String)
-    init_help()
-    if !has(help_category_dict, cat)
-        # if it's not a category, try another named thing
-        return help_for(cat)
-    end
-    println("Help is available for the following items:")
-    for func = help_category_dict[cat]
-        print(func, " ")
-    end
-    println()
-end
-
-function print_help_entries(entries)
-    first = true
-    for desc in entries
-        if !first
-            println()
-        end
-        println(strip(desc))
-        first = false
+    print(prefix)
+    if tck > 0
+        @printf io "%5d MHz  %9d s  %9d s  %9d s  %9d s  %9d s" info.speed info.cpu_times!user/tck info.cpu_times!nice/tck info.cpu_times!sys/tck info.cpu_times!idle/tck info.cpu_times!irq/tck
+    else
+        @printf io "%5d MHz  %9d  %9d  %9d  %9d  %9d ticks" info.speed info.cpu_times!user info.cpu_times!nice info.cpu_times!sys info.cpu_times!idle info.cpu_times!irq
     end
 end
-
-help_for(s::String) = help_for(s, 0)
-function help_for(fname::String, obj)
-    init_help()
-    found = false
-    if contains(fname, '.')
-        if has(help_function_dict, fname)
-            print_help_entries(help_function_dict[fname])
-            found = true
+function cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
+    if j-i < 9
+        header = true
+        for x = i:j
+            if header == false println() end
+            show(io,cpu[x],header,"#$(x-i+1) ")
+            header = false
         end
     else
-        macrocall = ""
-        if begins_with(fname, '@')
-            sfname = fname[2:]
-            macrocall = "@"
-        else
-            sfname = fname
+        summary = CPUinfo(cpu[i].model,0,0,0,0,0,0,cpu[i].SC_CLK_TCK)
+        count = j-i+1
+        for x = i:j
+            summary.speed += cpu[i].speed
+            summary.cpu_times!user += cpu[x].cpu_times!user
+            summary.cpu_times!nice += cpu[x].cpu_times!nice
+            summary.cpu_times!sys += cpu[x].cpu_times!sys
+            summary.cpu_times!idle += cpu[x].cpu_times!idle
+            summary.cpu_times!irq += cpu[x].cpu_times!irq
         end
-        if has(help_module_dict, fname)
-            allmods = help_module_dict[fname]
-            alldesc = {}
-            for mod in allmods
-                mod_prefix = isempty(mod) ? "" : mod * "."
-                append!(alldesc, help_function_dict[macrocall * mod_prefix * sfname])
+        summary.speed = div(summary.speed,count)
+        show(io,summary,true,"#1-$(count) ") 
+    end
+end
+function show(io::IO, cpu::Array{CPUinfo})
+    model = cpu[1].model
+    first = 1
+    for i = 2:length(cpu)
+        if model != cpu[i].model
+            cpu_summary(io,cpu,first,i-1)
+            first = i
+        end
+    end
+    cpu_summary(io,cpu,first,length(cpu))
+end
+repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
+function cpu_info()
+    SC_CLK_TCK = ccall(:SC_CLK_TCK, Int, ())
+    UVcpus = Array(Ptr{UV_cpu_info_t},1)
+    count = Array(Int32,1)
+    uv_error("uv_cpu_info",ccall(:uv_cpu_info, UV_error_t, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
+    cpus = Array(CPUinfo,count[1])
+    for i = 1:length(cpus)
+        cpus[i] = CPUinfo(unsafe_ref(UVcpus[1],i),SC_CLK_TCK)
+    end
+    ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[1], count[1])
+    cpus
+end
+
+function uptime()
+    uptime_ = Array(Float64,1)
+    uv_error("uv_uptime",ccall(:uv_uptime, UV_error_t, (Ptr{Float64},), uptime_))
+    return uptime_[1]
+end
+
+function loadavg()
+    loadavg_ = Array(Float64,3)
+    ccall(:uv_loadavg, Void, (Ptr{Float64},), loadavg_)
+    return loadavg_
+end
+
+free_memory() = ccall(:uv_get_free_memory, Uint64, ())
+total_memory() = ccall(:uv_get_total_memory, Uint64, ())
+
+
+# `methodswith` -- shows a list of methods using the type given
+
+function methodswith(io::IO, t::Type, m::Module, showparents::Bool)
+    for nm in names(m)
+        try
+           mt = eval(nm)
+           d = mt.env.defs
+           while !is(d,())
+               if any(map(x -> x == t || (showparents && t <: x && x != Any && x != ANY && !isa(x, TypeVar)), d.sig))
+                   print(io, nm)
+                   show(io, d)
+                   println(io)
+               end
+               d = d.next
+           end
+        end
+    end
+end
+
+methodswith(t::Type, m::Module, showparents::Bool) = methodswith(OUTPUT_STREAM, t, m, showparents)
+methodswith(t::Type, showparents::Bool) = methodswith(OUTPUT_STREAM, t, showparents)
+methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m, false)
+methodswith(t::Type) = methodswith(OUTPUT_STREAM, t, false)
+function methodswith(io::IO, t::Type, showparents::Bool)
+    mainmod = ccall(:jl_get_current_module, Any, ())::Module
+    # find modules in Main
+    for nm in names(mainmod)
+        if isdefined(mainmod,nm)
+            mod = eval(mainmod, nm)
+            if isa(mod, Module)
+                methodswith(io, t, mod, showparents)
             end
-            print_help_entries(alldesc)
-            found = true
-        end
-    end
-    if !found
-        if isgeneric(obj)
-            repl_show(obj); println()
-        else
-            println("No help information found.")
         end
     end
 end
-
-function apropos(txt::String)
-    init_help()
-    n = 0
-    r = Regex("\\Q$txt", PCRE.CASELESS)
-    for (cat, _) in help_category_dict
-        if ismatch(r, cat)
-            println("Category: \"$cat\"")
-        end
-    end
-    for (func, entries) in help_function_dict
-        if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
-            for desc in entries
-                nl = search(desc,'\n')
-                if nl[1] != 0
-                    println(desc[1:(nl[1]-1)])
-                else
-                    println(desc)
-                end
-            end
-            n+=1
-        end
-    end
-    if n == 0
-        println("No help information found.")
-    end
-end
-
-function help(f::Function)
-    if is(f,help)
-        return help()
-    end
-    help_for(string(f), f)
-end
-
-help(t::CompositeKind) = help_for(string(t.name),t)
-
-function help(x)
-    show(x)
-    t = typeof(x)
-    println(" is of type $t")
-    if isa(t,CompositeKind)
-        println("  which has fields $(t.names)")
-    end
-end
-
-# misc
-
-times(f::Function, n::Int) = for i=1:n f() end

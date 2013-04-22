@@ -6,14 +6,15 @@
 /double-conversion-*
 /dsfmt-*
 /fftw-*
-/glpk-*
+!fftw-config-nopthreads.patch
+/git-*
 /gmp-*
 /grisu-*
+/libgrisu.so
 /lapack-*
 /libunwind-*
 /lighttpd-*
 /llvm-*
-/nginx-*
 /openblas-*
 /patchelf-*
 /pcre-*

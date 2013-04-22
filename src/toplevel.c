@@ -28,6 +28,15 @@ jl_module_t *jl_old_base_module = NULL;
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
+void jl_add_standard_imports(jl_module_t *m)
+{
+    // using Base
+    jl_module_using(m, jl_base_module);
+    // importall Base.Operators
+    jl_module_importall(m, (jl_module_t*)jl_get_global(jl_base_module,
+                                                       jl_symbol("Operators")));
+}
+
 extern int base_module_conflict;
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
@@ -51,7 +60,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_old_base_module = jl_base_module;
         // pick up Base module during bootstrap
         jl_base_module = newm;
-    } else {
+    }
+    else {
         base_module_conflict = 1;
     }
     // export all modules from Main
@@ -60,8 +70,9 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 
     // add standard imports unless baremodule
     if (std_imports) {
-        if (jl_base_module != NULL)
-            jl_module_using(newm, jl_base_module); // using Base
+        if (jl_base_module != NULL) {
+            jl_add_standard_imports(newm);
+        }
     }
 
     JL_GC_PUSH(&last_module);
@@ -104,7 +115,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 static int is_intrinsic(jl_module_t *m, jl_sym_t *s)
 {
     jl_value_t *v = jl_get_global(m, s);
-    return (v != NULL && jl_typeof(v)==(jl_type_t*)jl_intrinsic_type);
+    return (v != NULL && jl_typeof(v)==(jl_value_t*)jl_intrinsic_type);
 }
 
 // module referenced by TopNode from within m
@@ -116,7 +127,7 @@ jl_module_t *jl_base_relative_to(jl_module_t *m)
     return (m==jl_core_module||m==jl_old_base_module||jl_base_module==NULL) ? m : jl_base_module;
 }
 
-static int has_intrinsics(jl_expr_t *e)
+int jl_has_intrinsics(jl_expr_t *e)
 {
     if (jl_array_len(e->args) == 0)
         return 0;
@@ -129,7 +140,7 @@ static int has_intrinsics(jl_expr_t *e)
     int i;
     for(i=0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
-        if (jl_is_expr(a) && has_intrinsics((jl_expr_t*)a))
+        if (jl_is_expr(a) && jl_has_intrinsics((jl_expr_t*)a))
             return 1;
     }
     return 0;
@@ -181,33 +192,64 @@ int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops)
             }
         }
     }
-    if (has_intrinsics(expr)) return 1;
+    if (jl_has_intrinsics(expr)) return 1;
     return 0;
 }
 
 extern int jl_in_inference;
 
-static jl_module_t *eval_import_path(jl_array_t *args)
+static jl_value_t *require_func=NULL;
+
+static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
 {
-    // in A.B.C, first find a binding for A in the chain of module scopes
+    // in .A.B.C, first find a binding for A in the chain of module scopes
     // following parent links. then evaluate the rest of the path from there.
+    // in A.B, look for A in Main first.
     jl_sym_t *var = (jl_sym_t*)jl_cellref(args,0);
+    size_t i=1;
     assert(jl_is_symbol(var));
-    jl_module_t *m = jl_current_module;
+    jl_module_t *m;
+
+    if (var != dot_sym) {
+        m = jl_main_module;
+    }
+    else {
+        m = jl_current_module;
+        while (1) {
+            var = (jl_sym_t*)jl_cellref(args,i);
+            i++;
+            if (var != dot_sym)
+                break;
+            m = m->parent;
+        }
+    }
+
     while (1) {
-        jl_binding_t *mb = jl_get_binding(m, var);
-        if (mb != NULL) {
+        if (jl_binding_resolved_p(m, var)) {
+            jl_binding_t *mb = jl_get_binding(m, var);
+            assert(mb != NULL);
             if (mb->value == NULL || !jl_is_module(mb->value))
                 jl_errorf("invalid module path");
             m = (jl_module_t*)mb->value;
             break;
         }
-        if (m == jl_main_module)
-            jl_errorf("in module path: %s not defined", var->name);
-        m = m->parent;
+        if (m == jl_main_module) {
+            if (!retrying) {
+                if (require_func == NULL && jl_base_module != NULL)
+                    require_func = jl_get_global(jl_base_module, jl_symbol("require"));
+                if (require_func != NULL) {
+                    jl_value_t *str = jl_cstr_to_string(var->name);
+                    JL_GC_PUSH(&str);
+                    jl_apply((jl_function_t*)require_func, &str, 1);
+                    JL_GC_POP();
+                    return eval_import_path_(args, 1);
+                }
+            }
+        }
+        jl_errorf("in module path: %s not defined", var->name);
     }
 
-    for(size_t i=1; i < jl_array_len(args)-1; i++) {
+    for(; i < jl_array_len(args)-1; i++) {
         jl_value_t *s = jl_cellref(args,i);
         assert(jl_is_symbol(s));
         m = (jl_module_t*)jl_eval_global_var(m, (jl_sym_t*)s);
@@ -215,6 +257,11 @@ static jl_module_t *eval_import_path(jl_array_t *args)
             jl_errorf("invalid import statement");
     }
     return m;
+}
+
+static jl_module_t *eval_import_path(jl_array_t *args)
+{
+    return eval_import_path_(args, 0);
 }
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
@@ -234,15 +281,29 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         return jl_eval_module_expr(ex);
     }
 
-    // handle import, using, export toplevel-only forms
-    if (ex->head == using_sym) {
+    // handle import, using, importall, export toplevel-only forms
+    if (ex->head == importall_sym) {
         jl_module_t *m = eval_import_path(ex->args);
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         assert(jl_is_symbol(name));
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
-            jl_errorf("invalid using statement");
-        jl_module_using(jl_current_module, m);
+	    jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
+        jl_module_importall(jl_current_module, m);
+        return jl_nothing;
+    }
+
+    if (ex->head == using_sym) {
+        jl_module_t *m = eval_import_path(ex->args);
+        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
+        assert(jl_is_symbol(name));
+        jl_module_t *u = (jl_module_t*)jl_eval_global_var(m, name);
+        if (jl_is_module(u)) {
+            jl_module_using(jl_current_module, u);
+        }
+        else {
+            jl_module_use(jl_current_module, m, name);
+        }
         return jl_nothing;
     }
 
@@ -294,14 +355,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         assert(jl_is_lambda_info(thk));
         ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
         if (!ewc) {
-            jl_array_t *vinfos = jl_lam_vinfo((jl_expr_t*)thk->ast);
-            int i;
-            for(i=0; i < jl_array_len(vinfos); i++) {
-                if (jl_vinfo_capt((jl_array_t*)jl_cellref(vinfos,i))) {
-                    // interpreter doesn't handle closure environment
-                    ewc = 1;
-                    break;
-                }
+            if (jl_lam_vars_captured((jl_expr_t*)thk->ast)) {
+                // interpreter doesn't handle closure environment
+                ewc = 1;
             }
         }
     }
@@ -352,7 +408,7 @@ void jl_parse_eval_all(char *fname)
                 break;
             if (jl_is_expr(form)) {
                 if (((jl_expr_t*)form)->head == jl_continue_sym) {
-                    jl_errorf("syntax error: %s", jl_string_data(jl_exprarg(form,0)));
+                    jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
                 }
                 if (((jl_expr_t*)form)->head == error_sym) {
                     jl_interpret_toplevel_expr(form);
@@ -380,7 +436,7 @@ void jl_load(const char *fname)
 {
     if (jl_current_module == jl_base_module) {
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
-        jl_printf(JL_STDOUT, "\e[0G\e[2K %s", fname);
+        jl_printf(JL_STDOUT, "%s\n", fname);
     }
     char *fpath = (char*)fname;
     uv_statbuf_t stbuf;
@@ -390,6 +446,9 @@ void jl_load(const char *fname)
     jl_start_parsing_file(fpath);
     jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
+    if (jl_current_module == jl_base_module) {
+        jl_printf(JL_STDOUT, "\e[1F\e[2K");
+    }
 }
 
 // load from filename given as a ByteString object
@@ -400,12 +459,11 @@ DLLEXPORT void jl_load_(jl_value_t *str)
 
 // type definition ------------------------------------------------------------
 
-void jl_reinstantiate_inner_types(jl_tag_type_t *t);
+void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
 {
-    size_t i;
-    for(i=0; i < jl_tuple_len(t); i++) {
+    for(size_t i=0; i < jl_tuple_len(t); i++) {
         jl_value_t *elt = jl_tupleref(t,i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
@@ -413,23 +471,24 @@ void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
     }
 }
 
-void jl_set_tag_type_super(jl_tag_type_t *tt, jl_value_t *super)
+void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
-    if (!jl_is_tag_type(super) || super == (jl_value_t*)jl_undef_type ||
+    if (!jl_is_datatype(super) || super == (jl_value_t*)jl_undef_type ||
+        !jl_is_abstracttype(super) ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
         jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
     }
-    tt->super = (jl_tag_type_t*)super;
+    tt->super = (jl_datatype_t*)super;
     if (jl_tuple_len(tt->parameters) > 0) {
         tt->name->cache = (jl_value_t*)jl_null;
-        jl_reinstantiate_inner_types((jl_tag_type_t*)tt);
+        jl_reinstantiate_inner_types(tt);
     }
 }
 
 // method definition ----------------------------------------------------------
 
 extern int jl_boot_file_loaded;
-void jl_add_constructors(jl_struct_type_t *t);
+void jl_add_constructors(jl_datatype_t *t);
 
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f, jl_tuple_t *t)
@@ -450,9 +509,9 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     else {
         gf = *bp;
         if (!jl_is_gf(gf)) {
-            if (jl_is_struct_type(gf) &&
+            if (jl_is_datatype(gf) &&
                 ((jl_function_t*)gf)->fptr == jl_f_ctor_trampoline) {
-                jl_add_constructors((jl_struct_type_t*)gf);
+                jl_add_constructors((jl_datatype_t*)gf);
             }
             if (!jl_is_gf(gf)) {
                 jl_error("invalid method definition: not a generic function");
@@ -463,7 +522,19 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     assert(jl_is_function(f));
     assert(jl_is_tuple(argtypes));
     assert(jl_is_tuple(t));
-    jl_check_type_tuple(argtypes, name, "method definition");
+
+    for(size_t i=0; i < jl_tuple_len(argtypes); i++) {
+        jl_value_t *elt = jl_tupleref(argtypes,i);
+        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+            jl_lambda_info_t *li = f->linfo;
+            jl_errorf("invalid type for argument %s in method definition for %s at %s:%d",
+                      jl_is_expr(li->ast) ?
+                      ((jl_sym_t*)jl_arrayref(jl_lam_args((jl_expr_t*)li->ast),i))->name :
+                      "?",
+                      name->name, li->file->name, li->line);
+        }
+    }
+
     for(size_t i=0; i < jl_tuple_len(t); i++) {
         if (!jl_is_typevar(jl_tupleref(t,i)))
             jl_type_error_rt(name->name, "method definition",

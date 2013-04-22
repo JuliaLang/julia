@@ -4,11 +4,11 @@
  Getting Started  
 *****************
 
-The latest version of Julia can be downloaded and installed by following
-the instructions on the `main GitHub
-page <https://github.com/JuliaLang/julia#readme>`_. The easiest way to
-learn and experiment with Julia is by starting an interactive session
-(also known as a read-eval-print loop or "repl")::
+Julia installation is straightforward, whether using precompiled binaries or compiling from source. Download and install Julia by following the instructions at
+`http://julialang.org/downloads/ <http://julialang.org/downloads/>`_.
+
+The easiest way to learn and experiment with Julia is by starting an
+interactive session (also known as a read-eval-print loop or "repl")::
 
     $ julia
                    _
@@ -26,17 +26,18 @@ learn and experiment with Julia is by starting an interactive session
     julia> ans
     3
 
-    julia> load("file")
+To exit the interactive session, type ``^D`` — the control key
+together with the ``d`` key or type ``quit()``. When run in interactive
+mode, ``julia`` displays a banner and prompts the user for input. Once
+the user has entered a complete expression, such as ``1 + 2``, and
+hits enter, the interactive session evaluates the expression and shows
+its value. If an expression is entered into an interactive session
+with a trailing semicolon, its value is not shown. The variable
+``ans`` is bound to the value of the last evaluated expression whether
+it is shown or not.
 
-To exit the interactive session, type ``^D`` — the control key together
-with the ``d`` key. When run in interactive mode, ``julia`` displays a
-banner and prompts the user for input. Once the user has entered a
-complete expression, such as ``1 + 2``, and hits enter, the interactive
-session evaluates the expression and shows its value. If an expression
-is entered into an interactive session with a trailing semicolon, its
-value is not shown. The variable ``ans`` is bound to the value of the
-last evaluated expression whether it is shown or not. The ``load``
-function reads and evaluates the contents of the given file.
+To evaluate expressions written in a source file ``file.jl``, write
+``include("file.jl")``.
 
 To run code in a file non-interactively, you can give it as the first
 argument to the julia command::
@@ -70,30 +71,40 @@ those available for the ``perl`` and ``ruby`` programs::
      -H --home=<dir>          Load files relative to <dir>
      -T --tab=<size>          Set REPL tab width to <size>
 
-     -e --eval=<expr>         Evaluate <expr> and don't print
-     -E --print=<expr>        Evaluate and print <expr>
+     -e --eval=<expr>         Evaluate <expr>
+     -E --print=<expr>        Evaluate and show <expr>
      -P --post-boot=<expr>    Evaluate <expr> right after boot
      -L --load=file           Load <file> right after boot
      -J --sysimage=file       Start up with the given system image file
 
      -p n                     Run n local processes
+     --machinefile file       Run processes on hosts listed in file
+
+     --no-history             Don't load or save history
+     -f --no-startup          Don't load ~/.juliarc.jl
+     -F                       Load ~/.juliarc.jl, then handle remaining inputs
 
      -h --help                Print this message
 
-Example Code
-------------
+Tutorials
+---------
 
-At this point it is useful to take a look at some :ref:`man-example-programs`.
+A few walkthrough-style tutorials are available online:
 
-Major Differences From MATLAB®
-------------------------------
+- `Forio Julia Tutorials <http://forio.com/julia/tutorials-list>`_
+- `Tutorial for Homer Reid's numerical analysis class <http://homerreid.ath.cx/teaching/18.330/JuliaProgramming.shtml#SimplePrograms>`_
+- `Videos from the Julia tutorial at MIT <http://julialang.org/blog/2013/03/julia-tutorial-MIT/>`_
 
-Julia's syntax is intended to be familiar to users of MATLAB®. However,
-Julia is in no way a MATLAB® clone: there are major syntactic and
-functional differences. The following are the most significant
-differences that may trip up Julia users accustomed to MATLAB®:
+Noteworthy differences from MATLAB
+----------------------------------
+
+MATLAB users may find Julia's syntax familiar. However,
+Julia is in no way a MATLAB clone: there are major syntactic and
+functional differences. The following are some noteworthy
+differences that may trip up Julia users accustomed to MATLAB:
 
 -  Arrays are indexed with square brackets, ``A[i,j]``.
+-  The imaginary unit ``sqrt(-1)`` is represented in julia with ``im``.
 -  Multiple values are returned and assigned with parentheses,
    ``return (a, b)`` and ``(a, b) = f(x)``.
 -  Values are passed and assigned by reference. If a function modifies
@@ -132,3 +143,37 @@ differences that may trip up Julia users accustomed to MATLAB®:
    operators, ``<``, ``>``, ``!=``, etc.
 -  The elements of a collection can be passed as arguments to a function
    using ``...``, as in ``xs=[1,2]; f(xs...)``.
+-  Julia's ``svd`` returns singular values as a vector instead of as a
+   full diagonal matrix.
+
+Noteworthy differences from R
+-----------------------------
+
+One of Julia's goals is to provide an effective language for data analysis and statistical programming. For users coming to Julia from R, these are some noteworthy differences:
+
+- Julia uses ``=`` for assignment. Julia does not provide any operator like ``<-`` or ``<-``.
+- Julia constructs vectors using brackets. Julia's ``[1, 2, 3]`` is the equivalent of R's ``c(1, 2, 3)``.
+- Julia's matrix operations are more like traditional mathematical notation than R's. If ``A`` and ``B`` are matrices, then ``A * B`` defines a matrix multiplication in Julia equivalent to R's ``A %*% B``. In R, this some notation would perform an elementwise Hadamard product. To get the elementwise multiplication operation, you need to write ``A .* B`` in Julia.
+- Julia performs matrix transposition using the ``'`` operator. Julia's ``A'`` is therefore equivalent to R's ``t(A)``.
+- Julia does not require parentheses when writing ``if`` statements or ``for`` loops: use ``for i in [1, 2, 3]`` instead of ``for (i in c(1, 2, 3))`` and ``if i == 1`` instead of ``if (i == 1)``.
+- Julia does not treat the numbers ``0`` and ``1`` as Booleans. You cannot write ``if (1)`` in Julia, because ``if`` statements accept only booleans. Instead, you can write ``if true``.
+- Julia does not provide ``nrow`` and ``ncol``. Instead, use ``size(M, 1)`` for ``nrow(M)`` and ``size(M, 2)`` for ``ncol(M)``.
+- Julia's SVD is not thinned by default, unlike R. To get results like R's, you will often want to call ``svd(X, true)`` on a matrix ``X``.
+- Julia is very careful to distinguish scalars, vectors and matrices. In R, ``1`` and ``c(1)`` are the same. In Julia, they can not be used interchangeably. One potentially confusing result of this is that ``x' * y`` for vectors ``x`` and ``y`` is a 1-element vector, not a scalar. To get a scalar, use ``dot(x, y)``.
+- Julia's ``diag()`` and ``diagm()`` are not like R's.
+- Julia cannot assign to the results of function calls on the left-hand of an assignment operation: you cannot write ``diag(M) = ones(n)``.
+- Julia discourages populating the main namespace with functions. Most statistical functionality for Julia is found in `packages <http://docs.julialang.org/en/latest/packages/packagelist/>`_ like the DataFrames and Distributions packages:
+	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
+	- The `DataFrames package <https://github.com/HarlanH/DataFrames.jl>`_ provides data frames.
+	- Formulas for GLM's must be escaped: use ``:(y ~ x)`` instead of ``y ~ x``.
+- Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of ``list(a = 1, b = 2)``, use ``(1, 2)``. 
+- Julia encourages all users to write their own types. Julia's types are much easier to use than S3 or S4 objects in R. Julia's multiple dispatch system means that ``table(x::TypeA)`` and ``table(x::TypeB)`` act like R's ``table.TypeA(x)`` and ``table.TypeB(x)``.
+- In Julia, values are passed and assigned by reference. If a function modifies an array, the changes will be visible in the caller. This is very different from R and allows new functions to operate on large data structures much more efficiently.
+- Concatenation of vectors and matrices is done using ``hcat`` and ``vcat``, not ``c``, ``rbind`` and ``cbind``.
+- A Julia range object like ``a:b`` is not shorthand for a vector like in R, but is a specialized type of object that is used for iteration without high memory overhead. To convert a range into a vector, you need to wrap the range with brackets ``[a:b]``.
+- Julia has several functions that can mutate their arguments. For example, it has ``sort(v)`` and ``sort!(v)``.
+- ``colMeans()`` and ``rowMeans()``, ``size(m, 1)`` and ``size(m, 2)``
+- In R, performance requires vectorization. In Julia, almost the opposite is true: the best performing code is often achieved by using devectorized loops.
+- Unlike R, there is no delayed evaluation in Julia. For most users, this means that there are very few unquoted expressions or column names.
+- Julia does not ``NULL`` type.
+- There is no equivalent of R's ``assign`` or ``get`` in Julia.

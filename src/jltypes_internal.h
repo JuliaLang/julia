@@ -1,7 +1,7 @@
 #ifndef JLTYPES_INTERNAL_H
 #define JLTYPES_INTERNAL_H
 
-jl_value_t *jl_cache_type_(jl_tag_type_t *type);
+jl_value_t *jl_cache_type_(jl_datatype_t *type);
 
 int  jl_get_t_uid_ctr(void);
 void jl_set_t_uid_ctr(int i);

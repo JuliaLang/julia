@@ -16,7 +16,7 @@ function life_rule(old)
 end
 
 function life_step(d)
-    DArray(size(d),[2:nprocs()]) do I
+    DArray(size(d),procs(d)) do I
         # fetch neighborhood - toroidal boundaries
         top   = mod(first(I[1])-2,size(d,1))+1
         bot   = mod( last(I[1])  ,size(d,1))+1
@@ -48,12 +48,12 @@ function plife(m, n)
     c.mouse.button1press = (c,x,y)->(done=true)
     cr = cairo_context(c)
 
-    grid = DArray(I->randbool(map(length,I)), (m, n), [2:nprocs()])
+    grid = DArray(I->convert(Array{Bool,2},randbool(map(length,I))), (m, n), [2:nprocs()])
 
     last = time(); f = 1
     while !done
         @async begin
-            img = convert(Array,grid) .* 0x00ffffff
+            img = convert(Array{Uint32,2},grid) .* 0x00ffffff
             set_source_surface(cr, CairoRGBSurface(img), 0, 0)
             paint(cr)
             reveal(c)

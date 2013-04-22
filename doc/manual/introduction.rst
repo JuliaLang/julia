@@ -24,10 +24,10 @@ implemented using
 multi-paradigm, combining features of imperative, functional, and
 object-oriented programming. The syntax of Julia is similar to
 `MATLAB® <http://en.wikipedia.org/wiki/Matlab>`_ and consequently
-MATLAB® programmers should feel immediately comfortable with Julia.
-While MATLAB® is quite effective for prototyping and exploring numerical
+MATLAB programmers should feel immediately comfortable with Julia.
+While MATLAB is quite effective for prototyping and exploring numerical
 linear algebra, it has limitations for programming tasks outside of this
-relatively narrow scope. Julia keeps MATLAB®'s ease and expressiveness
+relatively narrow scope. Julia keeps MATLAB's ease and expressiveness
 for high-level numerical computing, but transcends its general
 programming limitations. To achieve this, Julia builds upon the lineage
 of mathematical programming languages, but also borrows much from
@@ -92,6 +92,7 @@ advantages of Julia over comparable systems include:
 -  Free and open source (`MIT
    licensed <https://github.com/JuliaLang/julia/blob/master/LICENSE>`_)
 -  User-defined types are as fast and compact as built-ins
+-  No need to vectorize code for performance; devectorized code is fast
 -  Designed for parallelism and distributed computation
 -  Lightweight "green" threading
    (`coroutines <http://en.wikipedia.org/wiki/Coroutine>`_)

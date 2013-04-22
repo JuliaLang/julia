@@ -1,4 +1,3 @@
-
 %%%%%%%%%%%%%%%%%%%%%
  Julia Documentation
 %%%%%%%%%%%%%%%%%%%%%
@@ -10,9 +9,15 @@
    stdlib/index
    packages/packagelist
 
-Indices and tables
-==================
+Index and search
+================
 
 * :ref:`genindex`
 * :ref:`search`
 
+Translations
+============
+
+* `简体中文 <http://julia-zh-cn.readthedocs.org/>`_
+* `Português brasileiro <http://julia-pt-br.readthedocs.org/>`_
+* `Español latino <http://julia-es-la.readthedocs.org/>`_

@@ -476,7 +476,7 @@ end
 function main(args)
   n = 10
   if length(args) > 0
-    n = parse_int(args[1])
+    n = parseint(args[1])
   end
   @time benchmark(n)
 end

@@ -39,10 +39,10 @@ on the types of all of the function's arguments. This is different than
 traditional object-oriented languages, where dispatch occurs based only
 on the first argument, which often has a special argument syntax, and is
 sometimes implied rather than explicitly written as an
-argument.\ `1 <#footnote-1>`_\  Using all of a function's arguments to
+argument. [#]_ Using all of a function's arguments to
 choose which method should be invoked, rather than just the first, is
-known as `*multiple
-dispatch* <http://en.wikipedia.org/wiki/Multiple_dispatch>`_. Multiple
+known as `multiple dispatch
+<http://en.wikipedia.org/wiki/Multiple_dispatch>`_. Multiple
 dispatch is particularly useful for mathematical code, where it makes
 little sense to artificially deem the operations to "belong" to one
 argument more than any of the others: does the addition operation in
@@ -52,20 +52,13 @@ of all of its arguments. Even beyond mathematical operations, however,
 multiple dispatch ends up being a very powerful and convenient paradigm
 for structuring and organizing programs.
 
-.. raw:: html
+.. [#] In C++ or Java, for example, in a method call like
+  ``obj.meth(arg1,arg2)``, the object obj "receives" the method call and is
+  implicitly passed to the method via the ``this`` keyword, rather then as an
+  explicit method argument. When the current ``this`` object is the receiver of a
+  method call, it can be omitted altogether, writing just ``meth(arg1,arg2)``,
+  with this implied as the receiving object.
 
-   <div class="sidebar">
-
-Footnote 1: In C++ or Java, for example, in a method call like
-obj.meth(arg1,arg2), the object obj "receives" the method call and is
-implicitly passed to the method via the this keyword, rather then as an
-explicit method argument. When the current this object is the receiver
-of a method call, it can be omitted altogether, writing just
-meth(arg1,arg2), with this implied as the receiving object.
-
-.. raw:: html
-
-   </div>
 
 Defining Methods
 ----------------
@@ -156,7 +149,7 @@ The ``2x + y`` definition is only used in the first case, while the
 conversion of function arguments is ever performed: all conversion in
 Julia is non-magical and completely explicit. :ref:`man-conversion-and-promotion`, however, shows how clever
 application of sufficiently advanced technology can be indistinguishable
-from magic. [#]_
+from magic.[Clarke61]_
 
 For non-numeric values, and for fewer or more than two arguments, the
 function ``f`` remains undefined, and applying it will still result in a
@@ -200,42 +193,52 @@ Julia language. Core operations typically have dozens of methods::
 
     julia> +
     Methods for generic function +
-    +(Int8,Int8)
-    +(Int16,Int16)
-    +(Int32,Int32)
-    +(Int64,Int64)
-    +(Uint8,Uint8)
-    +(Uint16,Uint16)
-    +(Uint32,Uint32)
-    +(Uint64,Uint64)
-    +(Float32,Float32)
-    +(Float64,Float64)
-    +(Char,Char)
-    +(Int,Ptr{T})
-    +(Rational{T<:Int},Rational{T<:Int})
-    +(Real,Range{T<:Real})
-    +(Real,Range1{T<:Real})
-    +(Union(Range{T<:Real},Range1{T<:Real}),Real)
-    +(Union(Range{T<:Real},Range1{T<:Real}),Union(Range{T<:Real},Range1{T<:Real}))
-    +(Ptr{T},Int)
-    +()
-    +(Complex,Complex)
-    +(T<:Number,T<:Number)
-    +(Number,)
-    +(Number,Number)
-    +(AbstractArray{T<:Number,N},)
-    +(SparseMatrixCSC{T1},SparseMatrixCSC{T2})
-    +(SparseMatrixCSC{T},Union(Array{T,N},Number))
-    +(Number,DArray{T,N,distdim})
-    +(Number,AbstractArray{T,N})
-    +(Union(Array{T,N},Number),SparseMatrixCSC{T})
-    +(AbstractArray{S,N},AbstractArray{T,N})
-    +(DArray{T,N,distdim},Number)
-    +(AbstractArray{T,N},Number)
-    +(Any,Any,Any)
-    +(Any,Any,Any,Any)
-    +(Any,Any,Any,Any,Any)
-    +(Any,Any,Any,Any...)
+    +(Real,Range{T<:Real}) at range.jl:136
+    +(Real,Range1{T<:Real}) at range.jl:137
+    +(Ranges{T<:Real},Real) at range.jl:138
+    +(Ranges{T<:Real},Ranges{T<:Real}) at range.jl:150
+    +(Bool,) at bool.jl:45
+    +(Bool,Bool) at bool.jl:48
+    +(Int64,Int64) at int.jl:224
+    +(Int128,Int128) at int.jl:226
+    +(Union(Array{Bool,N},SubArray{Bool,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Union(Array{Bool,N},SubArray{Bool,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:902
+    +{T<:Signed}(T<:Signed,T<:Signed) at int.jl:207
+    +(Uint64,Uint64) at int.jl:225
+    +(Uint128,Uint128) at int.jl:227
+    +{T<:Unsigned}(T<:Unsigned,T<:Unsigned) at int.jl:211
+    +(Float32,Float32) at float.jl:113
+    +(Float64,Float64) at float.jl:114
+    +(Complex{T<:Real},Complex{T<:Real}) at complex.jl:207
+    +(Rational{T<:Integer},Rational{T<:Integer}) at rational.jl:101
+    +(Bool,Union(Array{Bool,N},SubArray{Bool,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:896
+    +(Union(Array{Bool,N},SubArray{Bool,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Bool) at array.jl:899
+    +(Char,Char) at char.jl:46
+    +(Char,Int64) at char.jl:47
+    +(Int64,Char) at char.jl:48
+    +{T<:Number}(T<:Number,T<:Number) at promotion.jl:68
+    +(Number,Number) at promotion.jl:40
+    +() at operators.jl:30
+    +(Number,) at operators.jl:36
+    +(Any,Any,Any) at operators.jl:44
+    +(Any,Any,Any,Any) at operators.jl:45
+    +(Any,Any,Any,Any,Any) at operators.jl:46
+    +(Any,Any,Any,Any...) at operators.jl:48
+    +{T}(Ptr{T},Integer) at pointer.jl:52
+    +(Integer,Ptr{T}) at pointer.jl:54
+    +{T<:Number}(AbstractArray{T<:Number,N},) at abstractarray.jl:232
+    +{S,T}(Union(Array{S,N},SubArray{S,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Union(Array{T,N},SubArray{T,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:850
+    +{T}(Number,Union(Array{T,N},SubArray{T,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:857
+    +{T}(Union(Array{T,N},SubArray{T,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Number) at array.jl:864
+    +{S,T<:Real}(Union(Array{S,N},SubArray{S,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)}),Ranges{T<:Real}) at array.jl:872
+    +{S<:Real,T}(Ranges{S<:Real},Union(Array{T,N},SubArray{T,N,A<:Array{T,N},I<:(Union(Int64,Range1{Int64},Range{Int64})...,)})) at array.jl:881
+    +(BitArray{N},BitArray{N}) at bitarray.jl:922
+    +(BitArray{N},Number) at bitarray.jl:923
+    +(Number,BitArray{N}) at bitarray.jl:924
+    +(BitArray{N},AbstractArray{T,N}) at bitarray.jl:986
+    +(AbstractArray{T,N},BitArray{N}) at bitarray.jl:987
+    +{Tv,Ti}(SparseMatrixCSC{Tv,Ti},SparseMatrixCSC{Tv,Ti}) at sparse.jl:536
+    +(SparseMatrixCSC{Tv,Ti<:Integer},Union(Array{T,N},Number)) at sparse.jl:626
+    +(Union(Array{T,N},Number),SparseMatrixCSC{Tv,Ti<:Integer}) at sparse.jl:627
 
 Multiple dispatch together with the flexible parametric type system give
 Julia its ability to abstractly express high-level algorithms decoupled
@@ -261,7 +264,7 @@ arguments::
     julia> g(2, 3.0)
     8.0
 
-    julia> f(2.0, 3.0)
+    julia> g(2.0, 3.0)
     7.0
 
 Here the call ``g(2.0, 3.0)`` could be handled by either the
@@ -283,7 +286,7 @@ the intersection case::
     julia> g(2, 3.0)
     8.0
 
-    julia> f(2.0, 3.0)
+    julia> g(2.0, 3.0)
     10.0
 
 To suppress Julia's warning, the disambiguating method must be defined
@@ -336,7 +339,11 @@ signature::
     julia> myappend{T}(v::Vector{T}, x::T) = [v..., x]
 
     julia> myappend([1,2,3],4)
-    [1,2,3,4]
+    4-element Int64 Array:
+    1
+    2
+    3
+    4
 
     julia> myappend([1,2,3],2.5)
     no method myappend(Array{Int64,1},Float64)
@@ -388,4 +395,25 @@ can also constrain type parameters of methods::
 The ``same_type_numeric`` function behaves much like the ``same_type``
 function defined above, but is only defined for pairs of numbers.
 
-.. [#] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
+Note on Optional and Named Arguments
+------------------------------------
+
+As mentioned briefly in :ref:`man-functions`, optional arguments are
+implemented as syntax for multiple method definitions. For example,
+this definition::
+
+    f(a=1,b=2) = a+2b
+
+translates to the following three methods::
+
+    f(a,b) = a+2b
+    f(a) = f(a,2)
+    f() = f(1,2)
+
+Named arguments behave quite differently from ordinary positional arguments.
+In particular, they do not participate in method dispatch. Methods are
+dispatched based only on positional arguments, with named arguments processed
+after the matching method is identified.
+
+.. [Clarke61] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
+

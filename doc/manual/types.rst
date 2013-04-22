@@ -70,27 +70,6 @@ the need to write code that explicitly uses types. Some kinds of
 programming, however, become clearer, simpler, faster and more robust
 with declared types.
 
-.. raw:: html
-
-   <div class="sidebar">
-
-A Note On Capitalization. There is no semantic significance to
-capitalization of names in Julia, unlike, for example, Ruby, where
-identifiers beginning with an uppercase letter (including type names)
-are constants. By convention, however, the first letter of each word in
-a Julia type name begins with a capital letter and underscores are not
-used to separate words. Variables, on the other hand, are conventionally
-given lowercase names, with word separation indicated by underscores
-("\_"). In numerical code it is not uncommon to use single-letter
-uppercase variable names, especially for matrices. Since types rarely
-have single-letter names, this does not generally cause confusion,
-although type parameter placeholders (see below) also typically use
-single-letter uppercase names like T or S.
-
-.. raw:: html
-
-   </div>
-
 Type Declarations
 -----------------
 
@@ -150,7 +129,7 @@ The "declaration" behavior only occurs in specific contexts::
 
 In value contexts, such as ``f(x::Int8)``, the ``::`` is a type
 assertion again and not a declaration. Note that these declarations
-cannot be used in global scope currently, in the REPL, since julia
+cannot be used in global scope currently, in the REPL, since Julia
 does not yet have constant-type globals.
 
 .. _man-abstract-types:
@@ -266,7 +245,7 @@ the standard bits types are all defined in the language itself::
     bitstype 64 Int64  <: Signed
     bitstype 64 Uint64 <: Unsigned
 
-The general syntaxes for declaration of a bitstypes are::
+The general syntaxes for declaration of a ``bitstype`` are::
 
     bitstype «bits» «name»
     bitstype «bits» «name» <: «supertype»
@@ -279,7 +258,7 @@ declaration of ``Bool`` above therefore means that a boolean value takes
 eight bits to store, and has ``Integer`` as its immediate supertype.
 Currently, only sizes that are multiples of 8 bits are supported.
 Therefore, boolean values, although they really need just a single bit,
-cannot be declared to be any smaller then eight bits.
+cannot be declared to be any smaller than eight bits.
 
 The types ``Bool``, ``Int8`` and ``Uint8`` all have identical
 representations: they are eight-bit chunks of memory. Since Julia's type
@@ -291,7 +270,7 @@ All other differences between ``Bool``, ``Int8``, and ``Uint8`` are
 matters of behavior — the way functions are defined to act when given
 objects of these types as arguments. This is why a nominative type
 system is necessary: if structure determined type, which in turn
-dictates behavior, it would be impossible to make ``Bool`` behave any
+dictates behavior, then it would be impossible to make ``Bool`` behave any
 differently than ``Int8`` or ``Uint8``.
 
 .. _man-composite-types:
@@ -300,11 +279,13 @@ Composite Types
 ---------------
 
 `Composite types <http://en.wikipedia.org/wiki/Composite_data_type>`_
-are called records, structures ("structs" in C), or objects in various
+are called records, structures (``structs`` in C), or objects in various
 languages. A composite type is a collection of named fields, an instance
 of which can be treated as a single value. In many languages, composite
 types are the only kind of user-definable type, and they are by far the
-most commonly used user-defined type in Julia as well. In mainstream
+most commonly used user-defined type in Julia as well.
+
+In mainstream
 object oriented languages, such as C++, Java, Python and Ruby, composite
 types also have named functions associated with them, and the
 combination is called an "object". In purer object-oriented languages,
@@ -312,15 +293,15 @@ such as Python and Ruby, all values are objects whether they are
 composites or not. In less pure object oriented languages, including C++
 and Java, some values, such as integers and floating-point values, are
 not objects, while instances of user-defined composite types are true
-objects with associated methods. In Julia, all values are objects, as in
-Python and Ruby, but functions are not bundled with the objects they
+objects with associated methods. In Julia, all values are objects,
+but functions are not bundled with the objects they
 operate on. This is necessary since Julia chooses which method of a
 function to use by multiple dispatch, meaning that the types of *all* of
 a function's arguments are considered when selecting a method, rather
 than just the first one (see :ref:`man-methods` for more
 information on methods and dispatch). Thus, it would be inappropriate
 for functions to "belong" to only their first argument. Organizing
-methods by association with function objects rather than simply having
+methods into function objects rather than having
 named bags of methods "inside" each object ends up being a highly
 beneficial aspect of the language design.
 
@@ -394,6 +375,42 @@ Types <#man-parametric-types>`_ and on :ref:`man-methods`, and is
 sufficiently important to be addressed in its own section:
 :ref:`man-constructors`.
 
+Immutable Composite Types
+-------------------------
+
+It is also possible to define *immutable* composite types by using
+the keyword ``immutable`` instead of ``type``::
+
+    immutable Complex
+      real::Float64
+      imag::Float64
+    end
+
+Such types behave just like other composite types, except that instances
+of them cannot be modified. Immutable types have several advantages:
+
+- They are more efficient in some cases. Types like the ``Complex``
+  example above can be packed efficiently into arrays, and in some
+  cases the compiler is able to avoid allocating immutable objects
+  entirely.
+- It is not possible to violate the invariants provided by the
+  type's constructors.
+- Code using immutable objects can be easier to reason about.
+
+An immutable object might contain mutable objects, such as arrays, as
+fields. Those contained objects will remain mutable; only the fields of the
+immutable object itself cannot be changed to point to different objects.
+
+A useful way to think about immutable composites is that each instance is
+associated with specific field values --- the field values alone tell
+you everything about the object. In contrast, a mutable object is like a
+little container that might contain different values over time, and so is
+not identified with specific field values. In deciding whether to make a
+type immutable, ask whether two instances with the same field values
+would be considered identical, or if they might need to change independently
+over time. If they would be considered identical, the type should probably
+be immutable.
+
 Type Unions
 -----------
 
@@ -423,7 +440,7 @@ union of no types is the "bottom" type, ``None``::
 Recall from the `discussion above <#Any+and+None>`_ that ``None`` is the
 abstract type which is the subtype of all other types, and which no
 object is an instance of. Since a zero-argument ``Union`` call has no
-argument types for objects to be instances of, it should produce the a
+argument types for objects to be instances of, it should produce a
 type which no objects are instances of — i.e. ``None``.
 
 Tuple Types
@@ -883,9 +900,9 @@ specifying the dimension::
     true
 
 However, there is no way to equally simply restrict just the dimension
-but not the element type. Yet, one often needs to program to just
-vectors or matrices. For that reason, the following type aliases are
-provided::
+but not the element type. Yet, one often needs to ensure an object
+is a vector or a matrix (imposing restrictions on the number of dimensions). For 
+that reason, the following type aliases are provided::
 
     typealias Vector{T} Array{T,1}
     typealias Matrix{T} Array{T,2}

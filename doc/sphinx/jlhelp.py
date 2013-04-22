@@ -11,7 +11,7 @@ from sphinx.util.console import bold, purple, darkgreen, term_width_line
 
 def jl_escape(text):
     # XXX: crude & fragile
-    return text.replace('\\',r'\\').replace('"',"\\\"")
+    return text.replace('\\',r'\\').replace('$',"\\$").replace('"',"\\\"")
 
 class JuliaHelpTranslator(TextTranslator):
 
@@ -58,7 +58,7 @@ class JuliaHelpTranslator(TextTranslator):
         name = self._desc_name
         if self._current_class:
             name = self._current_class
-        self.end_state(first='(E"%s",E"%s",E"%s",E"' % ( \
+        self.end_state(first='("%s","%s","%s","' % ( \
             jl_escape(category), \
             jl_escape(module), \
             jl_escape(name)))

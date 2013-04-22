@@ -1,5 +1,6 @@
-require("test")   # for running perf standalone
-using Test
+using Base.Test
+
+print_output = isempty(ARGS) || contains(ARGS, "perf/perf.jl") || contains(ARGS, "perf")
 
 macro timeit(ex,name)
     quote
@@ -7,7 +8,9 @@ macro timeit(ex,name)
         for i=1:5
             t = min(t, @elapsed $ex)
         end
-        println("julia,", $name, ",", t*1000)
+        if print_output
+            println("julia,", $name, ",", t*1000)
+        end
         #gc()
     end
 end
@@ -24,9 +27,9 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 function parseintperf(t)
     local n, m
     for i=1:t
-        n = randi(Uint32)
+        n = rand(Uint32)
         s = hex(n)
-        m = uint32(parse_hex(s))
+        m = uint32(parseint(s,16))
     end
     @test m == n
     return n
@@ -105,6 +108,20 @@ end
 @test abs(pisum()-1.644834071848065) < 1e-12
 @timeit pisum() "pi_sum"
 
+## slow pi series, vectorized ##
+
+function pisumvec()
+    s = 0.0
+    a = [1:10000]
+    for j = 1:500
+        s = sum(1./(a.^2))
+    end
+    s
+end
+
+#@test abs(pisumvec()-1.644834071848065) < 1e-12
+#@timeit pisumvec() "pi_sum_vec"
+
 ## random matrix statistics ##
 
 function randmatstat(t)
@@ -135,14 +152,14 @@ end
 ## printfd ##
 
 @unix_only begin
-function printfd(n)
-    open("/dev/null","w") do io
-        for i = 1:n
-            @printf(io,"%d %d\n",i,i+1)
+    function printfd(n)
+        open("/dev/null","w") do io
+            for i = 1:n
+                @printf(io,"%d %d\n",i,i+1)
+            end
         end
     end
-end
 
-printfd(1)
-@timeit printfd(100000) "printfd"
+    printfd(1)
+    @timeit printfd(100000) "printfd"
 end

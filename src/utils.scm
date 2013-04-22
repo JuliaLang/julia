@@ -17,12 +17,7 @@
 	((memq (car s1) s2) (diff (cdr s1) s2))
 	(else               (cons (car s1) (diff (cdr s1) s2)))))
 
-(define (unique lst)
-  (if (null? lst)
-      '()
-      (if (memq (car lst) (cdr lst))
-	  (unique (cdr lst))
-	  (cons (car lst) (unique (cdr lst))))))
+(define (unique lst) (delete-duplicates lst))
 
 (define (has-dups lst)
   (if (null? lst)

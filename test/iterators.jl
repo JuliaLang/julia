@@ -1,4 +1,5 @@
-require("extras/iterators")
+require("iterators")
+
 using Iterators
 
 # aux function emulating a comprehension [x for x in f]

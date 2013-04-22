@@ -32,10 +32,10 @@ function DArray(init, dims, procs, dist)
     idxs, cuts = chunk_idxs([dims...], dist)
     chunks = Array(RemoteRef, dist...)
     for i = 1:np
-        chunks[i] = remote_call(procs[i], init, idxs[i])
+        chunks[i] = remotecall(procs[i], init, idxs[i])
     end
-    p = max(1, localpiece(procs))
-    A = remote_call_fetch(procs[p], r->typeof(fetch(r)), chunks[p])
+    p = max(1, localpartindex(procs))
+    A = remotecall_fetch(procs[p], r->typeof(fetch(r)), chunks[p])
     DArray{eltype(A),length(dims),A}(dims, chunks, procs, idxs, cuts)
 end
 
@@ -60,7 +60,7 @@ function defaultdist(dims, procs)
     dims = [dims...]
     chunks = ones(Int, length(dims))
     np = length(procs)
-    f = sortr(keys(factor(np)))
+    f = sort!(collect(keys(factor(np))), Sort.Reverse)
     k = 1
     while np > 1
         # repeatedly allocate largest factor to largest dim
@@ -86,7 +86,7 @@ end
 # get array of start indexes for dividing sz into nc chunks
 function defaultdist(sz::Int, nc::Int)
     if sz >= nc
-        linspace(1, sz+1, nc+1)
+        iround(linspace(1, sz+1, nc+1))
     else
         [[1:(sz+1)], zeros(Int, nc-sz)]
     end
@@ -97,13 +97,13 @@ function chunk_idxs(dims, chunks)
     cuts = map(defaultdist, dims, chunks)
     n = length(dims)
     idxs = Array(NTuple{n,Range1{Int}},chunks...)
-    cartesian_map(tuple(chunks...)) do cidx...
+    cartesianmap(tuple(chunks...)) do cidx...
         idxs[cidx...] = ntuple(n, i->(cuts[i][cidx[i]]:cuts[i][cidx[i]+1]-1))
     end
     idxs, cuts
 end
 
-function localpiece(pmap::Vector{Int})
+function localpartindex(pmap::Vector{Int})
     mi = myid()
     for i = 1:length(pmap)
         if pmap[i] == mi
@@ -113,20 +113,26 @@ function localpiece(pmap::Vector{Int})
     return 0
 end
 
-localpiece(d::DArray) = localpiece(d.pmap)
+localpartindex(d::DArray) = localpartindex(d.pmap)
 
-localize{T,N,A}(d::DArray{T,N,A}) = fetch(d.chunks[localpiece(d)])::A
-myindexes(d::DArray) = d.indexes[localpiece(d)]
+localpart{T,N,A}(d::DArray{T,N,A}) = fetch(d.chunks[localpartindex(d)])::A
+myindexes(d::DArray) = d.indexes[localpartindex(d)]
 
 # find which piece holds index (I...)
 function locate(d::DArray, I::Int...)
-    ntuple(ndims(d), i->search_sorted_last(d.cuts[i], I[i]))
+    ntuple(ndims(d), i->searchsortedlast(d.cuts[i], I[i]))
 end
 
 chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(d.chunks[i...])::A
 
 ## convenience constructors ##
 
+dzeros(args...) = DArray(I->zeros(map(length,I)), args...)
+dzeros(d::Int...) = dzeros(d)
+dones(args...) = DArray(I->ones(map(length,I)), args...)
+dones(d::Int...) = dones(d)
+dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)
+dfill(v, d::Int...) = dfill(v, d)
 drand(args...)  = DArray(I->rand(map(length,I)), args...)
 drand(d::Int...) = drand(d)
 drandn(args...) = DArray(I->randn(map(length,I)), args...)
@@ -139,7 +145,7 @@ function distribute(a::Array)
     rr = RemoteRef()
     put(rr, a)
     DArray(size(a)) do I
-        remote_call_fetch(owner, ()->fetch(rr)[I...])
+        remotecall_fetch(owner, ()->fetch(rr)[I...])
     end
 end
 
@@ -197,18 +203,18 @@ end
 
 ## indexing ##
 
-function ref(r::RemoteRef, args...)
+function getindex(r::RemoteRef, args...)
     if r.where==myid()
-        ref(fetch(r), args...)
+        getindex(fetch(r), args...)
     else
-        remote_call_fetch(r.where, ref, r, args...)
+        remotecall_fetch(r.where, getindex, r, args...)
     end
 end
 
-ref(d::DArray, i::Int) = ref(d, ind2sub(size(d), i))
-ref(d::DArray, i::Int...) = ref(d, sub2ind(size(d), i...))
+getindex(d::DArray, i::Int) = getindex(d, ind2sub(size(d), i))
+getindex(d::DArray, i::Int...) = getindex(d, sub2ind(size(d), i...))
 
-function ref{T}(d::DArray{T}, I::(Int...))
+function getindex{T}(d::DArray{T}, I::(Int...))
     chidx = locate(d, I...)
     chunk = d.chunks[chidx...]
     idxs = d.indexes[chidx...]
@@ -216,15 +222,15 @@ function ref{T}(d::DArray{T}, I::(Int...))
     chunk[localidx...]::T
 end
 
-ref(d::DArray) = d[1]
-ref(d::DArray, I::Union(Int,Range1{Int})...) = sub(d,I)
+getindex(d::DArray) = d[1]
+getindex(d::DArray, I::Union(Int,Range1{Int})...) = sub(d,I)
 
 copy(d::SubOrDArray) = d
 
 # local copies are obtained by convert(Array, ) or assigning from
 # a SubDArray to a local Array.
 
-function assign(a::Array, d::DArray, I::Range1{Int}...)
+function setindex!(a::Array, d::DArray, I::Range1{Int}...)
     n = length(I)
     @sync begin
         for i = 1:length(d.chunks)
@@ -235,7 +241,7 @@ function assign(a::Array, d::DArray, I::Range1{Int}...)
     a
 end
 
-function assign(a::Array, s::SubDArray, I::Range1{Int}...)
+function setindex!(a::Array, s::SubDArray, I::Range1{Int}...)
     n = length(I)
     d = s.parent
     J = s.indexes
@@ -248,7 +254,7 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
         for i = 1:length(d.chunks)
             K_c = {d.indexes[i]...}
             K = [ intersect(J[j],K_c[j]) for j=1:n ]
-            if !anyp(isempty, K)
+            if !any(isempty, K)
                 idxs = [ I[j][K[j]-offs[j]] for j=1:n ]
                 if isequal(K, K_c)
                     # whole chunk
@@ -256,7 +262,7 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
                 else
                     # partial chunk
                     ch = d.chunks[i]
-                    @async a[idxs...] = remote_call_fetch(ch.where, ()->sub(fetch(ch), [K[j]-first(K_c[j])+1 for j=1:n]...))
+                    @async a[idxs...] = remotecall_fetch(ch.where, ()->sub(fetch(ch), [K[j]-first(K_c[j])+1 for j=1:n]...))
                 end
             end
         end
@@ -265,7 +271,7 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
 end
 
 # to disambiguate
-assign(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
+setindex!(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
 
-assign(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
-    assign(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
+setindex!(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
+    setindex!(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)

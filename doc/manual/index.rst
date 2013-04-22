@@ -13,6 +13,7 @@
 
    introduction
    getting-started
+   variables
    integers-and-floating-point-numbers
    mathematical-operations
    complex-and-rational-numbers
@@ -24,13 +25,13 @@
    methods
    constructors
    conversion-and-promotion
-   arrays
-   sparse-matrices
    modules
-   running-external-programs
    metaprogramming
+   arrays
+   linear-algebra
    parallel-computing
+   running-external-programs
    calling-c-and-fortran-code
+   packages
    performance-tips
-   potential-features
 

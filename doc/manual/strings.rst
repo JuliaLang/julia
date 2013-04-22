@@ -28,7 +28,7 @@ ASCII strings, and they will work as expected, both in terms of
 performance and semantics. If such code encounters non-ASCII text, it
 will gracefully fail with a clear error message, rather than silently
 introducing corrupt results. When this happens, modifying the code to
-handle non-ASCII data is straightforward and easy.
+handle non-ASCII data is straightforward.
 
 There are a few noteworthy high-level features about Julia's strings:
 
@@ -54,8 +54,7 @@ There are a few noteworthy high-level features about Julia's strings:
    `Unicode <http://en.wikipedia.org/wiki/Unicode>`_ characters: literal
    strings are always `ASCII <http://en.wikipedia.org/wiki/ASCII>`_ or
    `UTF-8 <http://en.wikipedia.org/wiki/UTF-8>`_ but other encodings for
-   strings from external sources can be supported easily and
-   efficiently.
+   strings from external sources can be supported.
 
 .. _man-characters:
 
@@ -81,9 +80,10 @@ easily::
     120
 
     julia> typeof(ans)
-    Int32
+    Int64
 
-You can convert an integer value back to a ``Char`` just as easily::
+On 32-bit architectures, ``typeof(ans)`` will be ``Int32``. You can convert an integer 
+value back to a ``Char`` just as easily::
 
     julia> char(120)
     'x'
@@ -91,13 +91,7 @@ You can convert an integer value back to a ``Char`` just as easily::
 Not all integer values are valid Unicode code points, but for
 performance, the ``char`` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
-value code point, use the ``safe_char`` conversion instead::
-
-    julia> char(0xd800)
-    '???'
-
-    julia> safe_char(0xd800)
-    invalid Unicode code point: U+d800
+valid code point, use the ``safe_char`` conversion instead::
 
     julia> char(0x110000)
     '\U110000'
@@ -155,11 +149,8 @@ also be used::
     julia> int('\xff')
     255
 
-Like any integers, you can do arithmetic and comparisons with ``Char``
-values::
-
-    julia> 'x' - 'a'
-    23
+You can do comparisons and a limited amount of arithmetic with
+``Char`` values::
 
     julia> 'A' < 'a'
     true
@@ -170,14 +161,10 @@ values::
     julia> 'A' <= 'X' <= 'Z'
     true
 
-Arithmetic with ``Char`` values always yields integer values. To create
-a new ``Char`` value, explicit conversion back to the ``Char`` type is
-required::
+    julia> 'x' - 'a'
+    23
 
     julia> 'A' + 1
-    66
-
-    julia> char(ans)
     'B'
 
 String Basics
@@ -200,13 +187,12 @@ If you want to extract a character from a string, you index into it::
     '\n'
 
 All indexing in Julia is 1-based: the first element of any
-integer-indexed object is found at index 1, not index 0, and the last
-element is found at index ``n`` rather than ``n-1``, when the string has
+integer-indexed object is found at index 1, and the last
+element is found at index ``n``, when the string has
 a length of ``n``.
 
-In any indexing expression, the keyword, ``end``, can be used as a
-shorthand for ``length(x)``, where ``x`` is the object being indexed
-into, whether it is a string, an array, or some other indexable object.
+In any indexing expression, the keyword ``end`` can be used as a
+shorthand for the last index (computed by ``endof(str)``).
 You can perform arithmetic and other operations with ``end``, just like
 a normal value::
 
@@ -225,10 +211,10 @@ a normal value::
 Using an index less than 1 or greater than ``end`` raises an error::
 
     julia> str[0]
-    in next: arrayref: index out of range
+    BoundsError()
 
     julia> str[end+1]
-    in next: arrayref: index out of range
+    BoundsError()
 
 You can also extract a substring using range indexing::
 
@@ -252,7 +238,7 @@ Unicode and UTF-8
 
 Julia fully supports Unicode characters and strings. As `discussed
 above <#characters>`_, in character literals, Unicode code points can be
-represented using unicode ``\u`` and ``\U`` escape sequences, as well as
+represented using Unicode ``\u`` and ``\U`` escape sequences, as well as
 all the standard C escape sequences. These can likewise be used to write
 string literals::
 
@@ -286,17 +272,16 @@ such an invalid byte index, an error is thrown::
 In this case, the character ``∀`` is a three-byte character, so the
 indices 2 and 3 are invalid and the next character's index is 4.
 
-Because of variable-length encodings, ``strlen(s)`` and ``length(s)``
-are not always the same: ``strlen(s)`` gives the number of characters in
-``s`` while ``length(s)`` gives the maximum valid byte index into ``s``.
-If you iterate through the indices 1 through ``length(s)`` and index
+Because of variable-length encodings, the number of character in a
+string (given by ``length(s)``) is not always the same as the last index.
+If you iterate through the indices 1 through ``endof(s)`` and index
 into ``s``, the sequence of characters returned, when errors aren't
-thrown, is the sequence of characters comprising the string, ``s``.
-Thus, we do have the identity that ``strlen(s) <= length(s)`` since each
+thrown, is the sequence of characters comprising the string ``s``.
+Thus, we do have the identity that ``length(s) <= endof(s)`` since each
 character in a string must have its own index. The following is an
 inefficient and verbose way to iterate through the characters of ``s``::
 
-    julia> for i = 1:length(s)
+    julia> for i = 1:endof(s)
              try
                println(s[i])
              catch
@@ -316,7 +301,7 @@ awkward idiom is unnecessary for iterating through the characters in a
 string, since you can just use the string as an iterable object, no
 exception handling required::
 
-    julia> for c = s
+    julia> for c in s
              println(c)
            end
     ∀
@@ -347,11 +332,11 @@ One of the most common and useful string operations is concatenation::
     julia> whom = "world"
     "world"
 
-    julia> strcat(greet, ", ", whom, ".\n")
+    julia> string(greet, ", ", whom, ".\n")
     "Hello, world.\n"
 
 Constructing strings like this can become a bit cumbersome, however. To
-reduce the need for these verbose calls to ``strcat``, Julia allows
+reduce the need for these verbose calls to ``string``, Julia allows
 interpolation into string literals using ``$``, as in Perl::
 
     julia> "$greet, $whom.\n"
@@ -368,26 +353,19 @@ can interpolate any expression into a string using parentheses::
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
 
-The expression need not be contained in parentheses, however. For
-example, since a literal array expression is not complete until the
-opening ``[`` is closed by a matching ``]``, you can interpolate an
-array like this::
-
-    julia> x = 2; y = 3; z = 5;
-
-    julia> "x,y,z: $[x,y,z]."
-    "x,y,z: [2,3,5]."
-
 Both concatenation and string interpolation call the generic ``string``
 function to convert objects into ``String`` form. Most non-``String``
 objects are converted to strings as they are shown in interactive
 sessions::
 
     julia> v = [1,2,3]
-    [1,2,3]
+    3-element Int64 Array:
+     1
+     2
+     3
 
     julia> "v: $v"
-    "v: [1,2,3]"
+    "v: [1, 2, 3]"
 
 The ``string`` function is the identity for ``String`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
@@ -454,17 +432,15 @@ Another handy string function is ``repeat``::
 
 Some other useful functions include:
 
--  ``length(str)`` gives the maximal (byte) index that can be used to
+-  ``endof(str)`` gives the maximal (byte) index that can be used to
    index into ``str``.
--  ``strlen(str)`` the number of characters in ``str``; this is *not*
-   the same as ``length(str)``.
+-  ``length(str)`` the number of characters in ``str``.
 -  ``i = start(str)`` gives the first valid index at which a character
    can be found in ``str`` (typically 1).
 -  ``c, j = next(str,i)`` returns next character at or after the index
-   ``i`` and the next valid character index following that. With the
-   ``start`` and ``length``, can be used to iterate through the
-   characters in ``str``. With ``length`` and ``start`` can be used to
-   iterate through the characters in ``str`` in reverse.
+   ``i`` and the next valid character index following that. With
+   ``start`` and ``endof``, can be used to iterate through the
+   characters in ``str``.
 -  ``ind2chr(str,i)`` gives the number of characters in ``str`` up to
    and including any at index ``i``.
 -  ``chr2ind(str,j)`` gives the index at which the ``j``\ th character
@@ -478,153 +454,18 @@ Non-Standard String Literals
 There are situations when you want to construct a string or use string
 semantics, but the behavior of the standard string construct is not
 quite what is needed. For these kinds of situations, Julia provides
-*non-standard string literals*. A non-standard string literal looks like
+:ref:`non-standard string literals <man-non-standard-string-literals2>`.
+A non-standard string literal looks like
 a regular double-quoted string literal, but is immediately prefixed by
 an identifier, and doesn't behave quite like a normal string literal.
-
-Two types of interpretation are performed on normal Julia string
-literals: interpolation and unescaping (escaping is the act of
-expressing a non-standard character with a sequence like ``\n``, whereas
-unescaping is the process of interpreting such escape sequences as
-actual characters). There are cases where its convenient to disable
-either or both of these behaviors. For such situations, Julia provides
-three types of non-standard string literals:
-
--  ``E"..."`` interpret escape sequences but do not interpolate, thereby
-   rendering ``$`` a harmless, normal character.
--  ``I"..."`` perform interpolation but do not interpret escape
-   sequences specially.
--  ``L"..."`` perform neither unescaping nor interpolation.
-
-Suppose, for example, you would like to write strings that will contain
-many ``$`` characters without interpolation. You can, as described
-above, escape the ``$`` characters with a preceding backslash. This can
-become tedious, however. Non-standard string literals prefixed with
-``E`` do not perform string interpolation::
-
-    julia> E"I have $100 in my account.\n"
-    "I have \$100 in my account.\n"
-
-This allows you to have ``$`` characters inside of string literals
-without triggering interpolation and without needing to escape those
-``$``\ s by preceding them with a ``\``. Escape sequences, such as the
-``\n`` above, still behave as usual, so '' becomes a newline character.
-
-On the other hand, ``I"..."`` string literals perform interpolation but
-no unescaping::
-
-    julia> I"I have $100 in my account.\n"
-    "I have 100 in my account.\\n"
-
-The value of the expression ``100`` is interpolated into the string,
-yielding the decimal string representation of the value 100 — namely
-``"100"`` (sorry, that might be a bit confusing). The trailing ``\n``
-sequence is taken as literal backslash and ``n`` characters, rather than
-being interpreted as a single newline character.
-
-The third non-standard string form interprets all the characters between
-the opening and closing quotes literally: the ``L"..."`` form. Here is
-an example usage::
-
-    julia> L"I have $100 in my account.\n"
-    "I have \$100 in my account.\\n"
-
-Neither the ``$`` nor the ``\n`` sequence are specially interpreted.
-
-Byte Array Literals
-~~~~~~~~~~~~~~~~~~~
-
-Some string literal forms don't create strings at all. In the `next
-section <#regular-expressions>`_, we will see that regular expressions
-are written as non-standard string literals. Another useful non-standard
-string literal, however, is the byte-array string literal: ``b"..."``.
-This form lets you use string notation to express literal byte arrays —
-i.e. arrays of ``Uint8`` values. The convention is that non-standard
-literals with uppercase prefixes produce actual string objects, while
-those with lowercase prefixes produce non-string objects like byte
-arrays or compiled regular expressions. The rules for byte array
-literals are the following:
-
--  ASCII characters and ASCII escapes produce a single byte.
--  ``\x`` and octal escape sequences produce the *byte* corresponding to
-   the escape value.
--  Unicode escape sequences produce a sequence of bytes encoding that
-   code point in UTF-8.
-
-There is some overlap between these rules since the behavior of ``\x``
-and octal escapes less than 0x80 (128) are covered by both of the first
-two rules, but here these rules agree. Together, these rules allow one
-to easily use ASCII characters, arbitrary byte values, and UTF-8
-sequences to produce arrays of bytes. Here is an example using all
-three::
-
-    julia> b"DATA\xff\u2200"
-    [68,65,84,65,255,226,136,128]
-
-The ASCII string "DATA" corresponds to the bytes 68, 65, 84, 65.
-``\xff`` produces the single byte 255. The Unicode escape ``\u2200`` is
-encoded in UTF-8 as the three bytes 226, 136, 128. Note that the
-resulting byte array does not correspond to a valid UTF-8 string — if
-you try to use this as a regular string literal, you will get a syntax
-error::
-
-    julia> "DATA\xff\u2200"
-    syntax error: invalid UTF-8 sequence
-
-Also observe the significant distinction between ``\xff`` and ``\uff``:
-the former escape sequence encodes the *byte 255*, whereas the latter
-escape sequence represents the *code point 255*, which is encoded as two
-bytes in UTF-8::
-
-    julia> b"\xff"
-    [255]
-
-    julia> b"\uff"
-    [195,191]
-
-In character literals, this distinction is glossed over and ``\xff`` is
-allowed to represent the code point 255, because characters *always*
-represent code points. In strings, however, ``\x`` escapes always
-represent bytes, not code points, whereas ``\u`` and ``\U`` escapes
-always represent code points, which are encoded in one or more bytes.
-For code points less than ``\u80``, it happens that the the UTF-8
-encoding of each code point is just the single byte produced by the
-corresponding ``\x`` escape, so the distinction can safely be ignored.
-For the escapes ``\x80`` through ``\xff`` as compared to ``\u80``
-through ``\uff``, however, there is a major difference: the former
-escapes all encode single bytes, which — unless followed by very
-specific continuation bytes — do not form valid UTF-8 data, whereas the
-latter escapes all represent Unicode code points with two-byte
-encodings.
-
-If this is all extremely confusing, try reading `"The Absolute Minimum
-Every Software Developer Absolutely, Positively Must Know About Unicode
-and Character
-Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_. It's an
-excellent introduction to Unicode and UTF-8, and may help alleviate some
-confusion regarding the matter.
-
-In byte array literals, objects interpolate as their binary
-representation rather than as their string representation::
-
-    julia> msg = "Hello."
-    "Hello."
-
-    julia> len = uint16(length(msg))
-    6
-
-    julia> b"$len$msg"
-    [6,0,72,101,108,108,111,46]
-
-Here the first two bytes are the native (little-endian on x86) binary
-representation of the length of the string "Hello.", encoded as a
-unsigned 16-bit integer, while the following bytes are the ASCII bytes
-of the string "Hello." itself.
+Regular expressions, as described below, are one example of a non-standard
+string literal. Other examples are given in the :ref:`metaprogramming
+<man-non-standard-string-literals2>` section.
 
 Regular Expressions
 -------------------
 
-Julia has Perl-compatible regular expressions, as provided by the
+Julia has Perl-compatible regular expressions (regexes), as provided by the
 `PCRE <http://www.pcre.org/>`_ library. Regular expressions are related
 to strings in two ways: the obvious connection is that regular
 expressions are used to find regular patterns in strings; the other
@@ -701,13 +542,19 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "acd"
 
     julia> m.captures
-    ("a","c","d")
+    3-element Union(UTF8String,ASCIIString,Nothing) Array:
+     "a"
+     "c"
+     "d"
 
     julia> m.offset
     1
 
     julia> m.offsets
-    [1,2,3]
+    3-element Int64 Array:
+     1
+     2
+     3
 
     julia> m = match(r"(a|b)(c)?(d)", "ad")
     RegexMatch("ad", 1="a", 2=nothing, 3="d")
@@ -716,21 +563,24 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "ad"
 
     julia> m.captures
-    ("a",nothing,"d")
+    3-element Union(UTF8String,ASCIIString,Nothing) Array:
+     "a"
+     nothing
+     "d"
 
     julia> m.offset
     1
 
     julia> m.offsets
-    [1,0,2]
+    3-element Int64 Array:
+     1
+     0
+     2
 
 It is convenient to have captures returned as a tuple so that one can
 use tuple destructuring syntax to bind them to local variables::
 
-    julia> first, second, third = m.captures
-    ("a",nothing,"d")
-
-    julia> first
+    julia> first, second, third = m.captures; first
     "a"
 
 You can modify the behavior of regular expressions by some combination of
@@ -775,8 +625,75 @@ For example, the following regex has all three flags turned on::
     julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
     RegexMatch("angry,\nBad world")
 
-.. raw:: html
+Byte Array Literals
+~~~~~~~~~~~~~~~~~~~
 
-   <!-- ### Exercises
-   - Given an ASCIIString `s`, print it in reverse order. [Answer](answer_reverse.md)
-   - Write a function to generate a random string consisting of the letters A-Z, a-z, and the numbers 0-9. [Answer](answer_randstring.md) -->
+Another useful non-standard string literal is the byte-array string literal:
+``b"..."``. This form lets you use string notation to express literal byte
+arrays — i.e. arrays of ``Uint8`` values. The convention is that non-standard
+literals with uppercase prefixes produce actual string objects, while
+those with lowercase prefixes produce non-string objects like byte
+arrays or compiled regular expressions. The rules for byte array
+literals are the following:
+
+-  ASCII characters and ASCII escapes produce a single byte.
+-  ``\x`` and octal escape sequences produce the *byte* corresponding to
+   the escape value.
+-  Unicode escape sequences produce a sequence of bytes encoding that
+   code point in UTF-8.
+
+There is some overlap between these rules since the behavior of ``\x``
+and octal escapes less than 0x80 (128) are covered by both of the first
+two rules, but here these rules agree. Together, these rules allow one
+to easily use ASCII characters, arbitrary byte values, and UTF-8
+sequences to produce arrays of bytes. Here is an example using all
+three::
+
+    julia> b"DATA\xff\u2200"
+    [68,65,84,65,255,226,136,128]
+
+The ASCII string "DATA" corresponds to the bytes 68, 65, 84, 65.
+``\xff`` produces the single byte 255. The Unicode escape ``\u2200`` is
+encoded in UTF-8 as the three bytes 226, 136, 128. Note that the
+resulting byte array does not correspond to a valid UTF-8 string — if
+you try to use this as a regular string literal, you will get a syntax
+error::
+
+    julia> "DATA\xff\u2200"
+    syntax error: invalid UTF-8 sequence
+
+Also observe the significant distinction between ``\xff`` and ``\uff``:
+the former escape sequence encodes the *byte 255*, whereas the latter
+escape sequence represents the *code point 255*, which is encoded as two
+bytes in UTF-8::
+
+    julia> b"\xff"
+    1-element Uint8 Array:
+     0xff
+
+    julia> b"\uff"
+    2-element Uint8 Array:
+     0xc3
+     0xbf
+
+In character literals, this distinction is glossed over and ``\xff`` is
+allowed to represent the code point 255, because characters *always*
+represent code points. In strings, however, ``\x`` escapes always
+represent bytes, not code points, whereas ``\u`` and ``\U`` escapes
+always represent code points, which are encoded in one or more bytes.
+For code points less than ``\u80``, it happens that the UTF-8
+encoding of each code point is just the single byte produced by the
+corresponding ``\x`` escape, so the distinction can safely be ignored.
+For the escapes ``\x80`` through ``\xff`` as compared to ``\u80``
+through ``\uff``, however, there is a major difference: the former
+escapes all encode single bytes, which — unless followed by very
+specific continuation bytes — do not form valid UTF-8 data, whereas the
+latter escapes all represent Unicode code points with two-byte
+encodings.
+
+If this is all extremely confusing, try reading `"The Absolute Minimum
+Every Software Developer Absolutely, Positively Must Know About Unicode
+and Character
+Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_. It's an
+excellent introduction to Unicode and UTF-8, and may help alleviate some
+confusion regarding the matter.

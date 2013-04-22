@@ -21,12 +21,12 @@ int64_t conv_to_int64(void *data, numerictype_t tag);
 uint64_t conv_to_uint64(void *data, numerictype_t tag);
 int32_t conv_to_int32(void *data, numerictype_t tag);
 uint32_t conv_to_uint32(void *data, numerictype_t tag);
-#ifdef __LP64__
-#define conv_to_long conv_to_int64
-#define conv_to_ulong conv_to_uint64
+#ifdef _P64
+#define conv_to_ptrdiff conv_to_int64
+#define conv_to_size conv_to_uint64
 #else
-#define conv_to_long conv_to_int32
-#define conv_to_ulong conv_to_uint32
+#define conv_to_ptrdiff conv_to_int32
+#define conv_to_size conv_to_uint32
 #endif
 int cmp_same_lt(void *a, void *b, numerictype_t tag);
 int cmp_same_eq(void *a, void *b, numerictype_t tag);

@@ -19,61 +19,103 @@
 @test Array{Int8,1} <: Array{Int8,1}
 @test !subtype(Type{None}, Type{Int32})
 @test !subtype(Vector{Float64},Vector{Union(Float64,Float32)})
-@test is(None, tintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
+@test is(None, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
 
 @test !isa(Array,Type{Any})
-@test subtype(Type{ComplexPair},CompositeKind)
+@test subtype(Type{ComplexPair},DataType)
 @test isa(ComplexPair,Type{ComplexPair})
 @test !subtype(Type{Ptr{None}},Type{Ptr})
 @test !subtype(Type{Rational{Int}}, Type{Rational})
 let T = TypeVar(:T,true)
-    @test !is(None, tintersect(Array{None},AbstractArray{T}))
-    @test  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
-                                 (Type{Ptr{T}},Ptr{T})))
+    @test !is(None, typeintersect(Array{None},AbstractArray{T}))
+    @test  is(None, typeintersect((Type{Ptr{Uint8}},Ptr{None}),
+                                  (Type{Ptr{T}},Ptr{T})))
     @test !subtype(Type{T},TypeVar)
 
-    @test isequal(tintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
-                    (Range{Int},(Int,Int)))
+    @test isequal(typeintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
+                  (Range{Int},(Int,Int)))
+    
+    @test isequal(typeintersect((T, AbstractArray{T}),(Number, Array{Int,1})),
+                  (Int, Array{Int,1}))
 
-    @test isequal(tintersect((T, AbstractArray{T}),(Number, Array{Int,1})),
-                    (Int, Array{Int,1}))
+    @test isequal(typeintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
+                  None)
 
-    @test isequal(tintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
-                    None)
-
-    @test isequal(tintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
-                    (Number, Array{Number,1}))
-    @test !is(None, tintersect((Array{T}, Array{T}), (Array, Array{Any})))
-    @test is(None, tintersect((Vector{Vector{Int}},Vector{Vector}),
-                                (Vector{Vector{T}},Vector{Vector{T}})))
+    @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
+                  (Number, Array{Number,1}))
+    @test !is(None, typeintersect((Array{T}, Array{T}), (Array, Array{Any})))
+    @test is(None, typeintersect((Vector{Vector{Int}},Vector{Vector}),
+                                 (Vector{Vector{T}},Vector{Vector{T}})))
 end
 let N = TypeVar(:N,true)
-    @test isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
-                               ((Integer,Integer), (Integer...))),
-                    ((Integer,Integer), (Integer,Integer)))
-    @test isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
-                               ((Integer...), (Integer,Integer))),
-                    ((Integer,Integer), (Integer,Integer)))
-    local A = tintersect((NTuple{N,Any},Array{Int,N}),
-                         ((Int,Int...),Array))
+    @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
+                                ((Integer,Integer), (Integer...))),
+                  ((Integer,Integer), (Integer,Integer)))
+    @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
+                                ((Integer...), (Integer,Integer))),
+                  ((Integer,Integer), (Integer,Integer)))
+    local A = typeintersect((NTuple{N,Any},Array{Int,N}),
+                            ((Int,Int...),Array))
     local B = ((Int,Int...),Array{Int,N})
     @test A<:B && B<:A
-    @test isequal(tintersect((NTuple{N,Any},Array{Int,N}),
-                               ((Int,Int...),Array{Int,2})),
-                    ((Int,Int), Array{Int,2}))
+    @test isequal(typeintersect((NTuple{N,Any},Array{Int,N}),
+                                ((Int,Int...),Array{Int,2})),
+                  ((Int,Int), Array{Int,2}))
 end
-@test is(None, tintersect(Type{Any},Type{ComplexPair}))
-@test is(None, tintersect(Type{Any},Type{TypeVar(:T,Real)}))
+@test is(None, typeintersect(Type{Any},Type{ComplexPair}))
+@test is(None, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
 @test !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
 @test !subtype(Type{Array{Integer}},Type{Array{TypeVar(:T,Integer)}})
-@test is(None, tintersect(Type{Function},BitsKind))
-@test is(Type{Int32}, tintersect(Type{Int32},BitsKind))
+@test is(None, typeintersect(Type{Function},UnionType))
+@test is(Type{Int32}, typeintersect(Type{Int32},DataType))
 @test !subtype(Type,TypeVar)
-@test !is(None, tintersect(BitsKind, Type))
-@test !is(None, tintersect(BitsKind, Type{Int}))
-@test is(None, tintersect(BitsKind, Type{Integer}))
-@test !is(None, tintersect(BitsKind, Type{TypeVar(:T,Int)}))
-@test !is(None, tintersect(BitsKind, Type{TypeVar(:T,Integer)}))
+@test !is(None, typeintersect(DataType, Type))
+@test !is(None, typeintersect(UnionType, Type))
+@test !is(None, typeintersect(DataType, Type{Int}))
+@test !is(None, typeintersect(DataType, Type{TypeVar(:T,Int)}))
+@test !is(None, typeintersect(DataType, Type{TypeVar(:T,Integer)}))
+
+@test isa(Int,Type{TypeVar(:T,Number)})
+@test !isa(DataType,Type{TypeVar(:T,Number)})
+@test subtype(DataType,Type{TypeVar(:T,Type)})
+
+@test isa((),Type{()})
+@test subtype((DataType,),Type{TypeVar(:T,Tuple)})
+@test !subtype((Int,),Type{TypeVar(:T,Tuple)})
+@test isa((Int,),Type{TypeVar(:T,Tuple)})
+
+@test !isa(Type{(Int,Int)},Tuple)
+@test subtype(Type{(Int,Int)},Tuple)
+@test subtype(Type{(Int,)}, (DataType,))
+
+# this is fancy: know that any type T<:Number must be either a DataType or a UnionType
+@test subtype(Type{TypeVar(:T,Number)},Union(DataType,UnionType))
+@test !subtype(Type{TypeVar(:T,Number)},DataType)
+@test subtype(Type{TypeVar(:T,Tuple)},Union(Tuple,UnionType))
+@test !subtype(Type{TypeVar(:T,Tuple)},Union(DataType,UnionType))
+
+@test !is(None, typeintersect((DataType,DataType),Type{TypeVar(:T,(Number,Number))}))
+@test !is(None, typeintersect((DataType,UnionType),Type{(Number,None)}))
+
+# join
+@test typejoin(Int8,Int16) === Signed
+@test typejoin(Int,String) === Any
+@test typejoin(Array{Float64},BitArray) <: AbstractArray
+@test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
+@test typejoin((Int,Int8),(Int8,Float64)) === (Signed,Real)
+@test Base.typeseq(typejoin((ASCIIString,ASCIIString),(UTF8String,ASCIIString),
+                            (ASCIIString,UTF8String),(Int,ASCIIString,Int)),
+                   (Any,String,Int...))
+@test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8)),
+                   (Int8,Signed...))
+@test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8...)),
+                   (Int8,Signed...))
+@test Base.typeseq(typejoin((Int8,Uint8,Int...),(Int8,Int8...)),
+                   (Int8,Integer...))
+@test Base.typeseq(typejoin(Union(Int,String),Int), Union(Int,String))
+@test Base.typeseq(typejoin(Union(Int,String),Int8), Any)
+
+@test promote_type(Bool,None) === Bool
 
 # ntuples
 nttest1{n}(x::NTuple{n,Int}) = n
@@ -292,10 +334,10 @@ end
 begin
     local mytype
     function mytype(vec)
-        convert(Vector{(ASCIIString, BitsKind)}, vec)
+        convert(Vector{(ASCIIString, DataType)}, vec)
     end
     some_data = {("a", Int32), ("b", Int32)}
-    @test isa(mytype(some_data),Vector{(ASCIIString, BitsKind)})
+    @test isa(mytype(some_data),Vector{(ASCIIString, DataType)})
 end
 
 type MyArray{N} <: AbstractArray{Int, N}
@@ -360,6 +402,17 @@ begin
     end
     @test b == 42
     @test after == 1
+
+    glo = 0
+    function retfinally()
+        try
+            return 5
+        finally
+            glo = 18
+        end
+    end
+    @test retfinally() == 5
+    @test glo == 18
 end
 
 # allow typevar in Union to match as long as the arguments contain
@@ -390,8 +443,8 @@ end
 begin
     local baar, foor, boor
     # issue #1131
-    baar(x::CompositeKind) = 0
-    baar(x::UnionKind) = 1
+    baar(x::DataType) = 0
+    baar(x::UnionType) = 1
     baar(x::TypeConstructor) = 2
     @test baar(StridedArray) == 2
     @test baar(StridedArray.body) == 1
@@ -399,12 +452,12 @@ begin
     @test baar(Vector.body) == 0
 
     boor(x) = 0
-    boor(x::UnionKind) = 1
+    boor(x::UnionType) = 1
     @test boor(StridedArray) == 0
     @test boor(StridedArray.body) == 1
 
     # issue #1202
-    foor(x::UnionKind) = 1
+    foor(x::UnionType) = 1
     @test_fails foor(StridedArray)
     @test foor(StridedArray.body) == 1
     @test_fails foor(StridedArray)
@@ -438,8 +491,25 @@ begin
     a2 = Any[101,102,103]
     p2 = pointer(a2)
     @test unsafe_ref(p2) == 101
-    unsafe_assign(p2, 909, 3)
-    @test a2 == [101,102,909]
+    @test_fails unsafe_assign(p2, 909, 3)
+    @test a2 == [101,102,103]
+end
+
+@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
+                                     x -> x+1, 314158)) == 314159
+@test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
+
+immutable FooBar
+    foo::Int
+    bar::Int
+end
+begin
+    local X, p
+    X = FooBar[ FooBar(3,1), FooBar(4,4) ]
+    p = convert(Ptr{FooBar}, X)
+    @test unsafe_ref(p, 2) == FooBar(4,4)
+    unsafe_assign(p, FooBar(7,3), 1)
+    @test X[1] == FooBar(7,3)
 end
 
 # issue #1287, combinations of try, catch, return
@@ -469,11 +539,11 @@ end
 
 begin
     local f1442
-    f1442(::CompositeKind) = 1
+    f1442(::DataType) = 1
     f1442{T}(::Type{S1442{T}}) = 2
 
     @test f1442(S1442{Int}) == 2
-    @test f1442(CompositeKind) == 1
+    @test f1442(DataType) == 1
 end
 
 # issue #1727
@@ -546,19 +616,19 @@ type I1628{X}
 end
 let
     # here the potential problem is that the run-time value of static
-    # parameter X in the I1628 constructor is (AbstractKind,BitsKind),
+    # parameter X in the I1628 constructor is (DataType,DataType),
     # but type inference will track it more accurately as
     # (Type{Integer}, Type{Int}).
     f1628() = I1628((Integer,Int))
-    @test isa(f1628(), I1628{(AbstractKind,BitsKind)})
+    @test isa(f1628(), I1628{(DataType,DataType)})
 end
 
 let
     fT{T}(x::T) = T
-    @test fT(Any) === AbstractKind
-    @test fT(Int) === BitsKind
-    @test fT(Type{Any}) === AbstractKind
-    @test fT(Type{Int}) === AbstractKind
+    @test fT(Any) === DataType
+    @test fT(Int) === DataType
+    @test fT(Type{Any}) === DataType
+    @test fT(Type{Int}) === DataType
 
     ff{T}(x::Type{T}) = T
     @test ff(Type{Any}) === Type{Any}
@@ -566,3 +636,88 @@ let
     @test ff(Any) === Any
     @test ff(Int) === Int
 end
+
+# issue #2098
+let
+    i2098() = (c={2.0};[1:1:c[1]])
+    @test isequal(i2098(), [1.0,2.0])
+end
+
+# issue #2161
+let
+    i2161_1() = promote(2,2,2.0,2)
+    i2161_2() = i2161_1()[1]
+    @test i2161_2() === 2.0
+end
+
+# issue #2169
+let
+    i2169{T}(a::Array{T}) = typemin(T)
+    @test invoke(i2169,(Array,),Int8[1]) === int8(-128)
+end
+
+# issue #2365
+type B2365{T}
+     v::Union(T, Nothing)
+end
+@test B2365{Int}(nothing).v === nothing
+@test B2365{Int}(0).v === 0
+
+# issue #2352
+Sum=0.0; for n=1:2:10000
+Sum += -1/n + 1/(n+1)
+end
+@test Sum < -0.69
+
+include("test_sourcepath.jl")
+
+# issue #2509
+immutable Foo2509; foo::Int; end
+@test Foo2509(1) != Foo2509(2)
+@test Foo2509(42) == Foo2509(42)
+
+# issue #2517
+immutable Foo2517; end
+@test repr(Foo2517()) == "Foo2517()"
+@test repr(Array(Foo2517,1)) == "[Foo2517()]"
+@test Foo2517() === Foo2517()
+
+# issue #1474
+type X1474{a,b} end
+begin
+    local Y
+    Y{A,B}(::Type{X1474{A,B}}) = 1
+    Y{A}(::Type{X1474{A}}) = 2
+    Y(::Type{X1474}) = 3
+    @test Y(X1474) == 3
+    @test Y(X1474{Int}) == 2
+    @test Y(X1474{Int,String}) == 1
+end
+
+# issue #2562
+type Node2562{T}
+    value::T
+    Node2562(value::T) = new(value)
+end
+Node2562{T}(value::T, args...) = Node2562{T}(value, args...)
+makenode2562(value) = Node2562(value)
+@test isa(Node2562(0), Node2562)
+@test isa(makenode2562(0), Node2562)
+
+# issue #2619
+type I2619{T}
+    v::T
+    I2619(v) = new(convert(T,v))
+end
+bad2619 = false
+function i2619()
+    global e2619 = try
+        I2619{Float64}(0.0f)
+        global bad2619 = true
+    catch _e
+        _e
+    end
+end
+i2619()
+@test !bad2619
+@test isa(e2619,ErrorException) && e2619.msg == "in i2619: f not defined"

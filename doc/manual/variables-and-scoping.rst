@@ -1,14 +1,8 @@
 .. _man-variables-and-scoping:
 
-***********************
- Variables and Scoping  
-***********************
-
-Until now, we have simply used variables without any explanation.
-Julia's usage of variables closely resembles that of other dynamic
-languages, so we have hopefully gotten away with this liberty. In what
-follows, however, we address this oversight and provide details of how
-variables are used, declared, and scoped in Julia.
+********************
+ Scope of Variables
+********************
 
 The *scope* of a variable is the region of code within which a variable
 is visible. Variable scoping helps avoid variable naming conflicts. The

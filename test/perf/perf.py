@@ -85,6 +85,10 @@ def pisum():
             sum += 1.0/(k*k)
     return sum
 
+#### Is this single threaded?
+# def pisumvec():
+#     return numpy.sum(1./(numpy.arange(1,10000)**2))
+
 def print_perf(name, time):
     print("python," + name + "," + str(time*1000))
 
@@ -132,7 +136,6 @@ if __name__=="__main__":
         if t < tmin: tmin = t
     print_perf ("quicksort", tmin)
 
-    pi = pisum()
     assert abs(pisum()-1.644834071848065) < 1e-6
     tmin = float('inf')
     for i in range(5):
@@ -141,6 +144,15 @@ if __name__=="__main__":
         t = time.time()-t
         if t < tmin: tmin = t
     print_perf ("pi_sum", tmin)
+
+    # assert abs(pisumvec()-1.644834071848065) < 1e-6
+    # tmin = float('inf')
+    # for i in range(5):
+    #     t = time.time()
+    #     pisumvec()
+    #     t = time.time()-t
+    #     if t < tmin: tmin = t
+    # print_perf ("pi_sum_vec", tmin)
 
     (s1, s2) = randmatstat(1000)
     assert s1 > 0.5 and s1 < 1.0

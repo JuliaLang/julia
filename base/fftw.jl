@@ -175,6 +175,9 @@ execute_r2r{T<:fftwSingle}(plan, X::StridedArray{T}, Y::StridedArray{T}) =
     ccall((:fftwf_execute_r2r,libfftwf), Void, 
           (Ptr{Void},Ptr{T},Ptr{T}), plan, X, Y)
 
+execute{T<:fftwReal}(plan, X::StridedArray{T}, Y::StridedArray{T}) =
+    execute_r2r(plan, X, Y)
+
 # Destroy plan
 
 destroy_plan(precision::fftwTypeDouble, plan) =
@@ -252,6 +255,9 @@ end
 function dims_howmany(X::StridedArray, Y::StridedArray, 
                       sz::Array{Int,1}, region)
     reg = [region...]
+    if length(unique(reg)) < length(reg)
+        throw(ArgumentError("each dimension can be transformed at most once"))
+    end
     ist = [strides(X)...]
     ost = [strides(Y)...]
     dims = [sz[reg] ist[reg] ost[reg]]'
@@ -526,7 +532,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
         function rfft(X::StridedArray{$Tr}, region)
             d1 = region[1]
             osize = [size(X)...]
-            osize[d1] = ifloor(osize[d1]/2) + 1
+            osize[d1] = osize[d1]>>1 + 1
             Y = Array($Tc, osize...)
             p = Plan(X, Y, region, ESTIMATE, NO_TIMELIMIT)
             execute($Tr, p.plan)
@@ -543,7 +549,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
                            flags::Unsigned, tlim::Real)
             d1 = region[1]
             osize = [size(X)...]
-            osize[d1] = ifloor(osize[d1]/2) + 1
+            osize[d1] = osize[d1]>>1 + 1
             Y = Array($Tc, osize...)
             p = Plan(X, Y, region, flags, tlim)
             return Z::StridedArray{$Tr} -> begin
@@ -560,7 +566,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
 
         function brfft(X::StridedArray{$Tc}, d::Integer, region::Integer)
             osize = [size(X)...]
-            @assert osize[region] == ifloor(d/2) + 1
+            @assert osize[region] == d>>1 + 1
             osize[region] = d
             Y = Array($Tr, osize...)
             p = Plan(X, Y, region, ESTIMATE | PRESERVE_INPUT, NO_TIMELIMIT)
@@ -573,7 +579,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
         function brfftd(X::StridedArray{$Tc}, d::Integer, region) 
             d1 = region[1]
             osize = [size(X)...]
-            @assert osize[d1] == ifloor(d/2) + 1
+            @assert osize[d1] == d>>1 + 1
             osize[d1] = d
             Y = Array($Tr, osize...)
             p = Plan(X, Y, region, ESTIMATE, NO_TIMELIMIT)
@@ -598,7 +604,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
         function plan_brfft(X::StridedArray{$Tc}, d::Integer, region::Integer,
                             flags::Unsigned, tlim::Real)
             osize = [size(X)...]
-            @assert osize[region] == ifloor(d/2) + 1
+            @assert osize[region] == d>>1 + 1
             osize[region] = d
             Y = Array($Tr, osize...)
             p = Plan(X, Y, region, flags | PRESERVE_INPUT, tlim)
@@ -617,7 +623,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             end
             d1 = region[1]
             osize = [size(X)...]
-            @assert osize[d1] == ifloor(d/2) + 1
+            @assert osize[d1] == d>>1 + 1
             osize[d1] = d
             Y = Array($Tr, osize...)
             X = copy(X)

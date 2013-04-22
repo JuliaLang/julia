@@ -1,5 +1,5 @@
 macro timeit(ex,name)
-    t, i = gensym(2)
+    @gensym t i
     quote
         $t = Inf
         for $i=1:5

@@ -128,7 +128,7 @@ static void _probe_arch(void)
 */
 
 extern size_t jl_page_size;
-jl_struct_type_t *jl_task_type;
+jl_datatype_t *jl_task_type;
 DLLEXPORT jl_task_t * volatile jl_current_task;
 jl_task_t *jl_root_task;
 jl_value_t * volatile jl_task_arg_in_transit;
@@ -402,7 +402,7 @@ static void init_task(jl_task_t *t)
     // this runs when the task is created
     ptrint_t local_sp = (ptrint_t)&t;
     ptrint_t new_sp = (ptrint_t)t->stack + t->ssize - _frame_offset;
-#ifdef __LP64__
+#ifdef _P64
     // SP must be 16-byte aligned
     new_sp = new_sp&-16;
     local_sp = local_sp&-16;
@@ -419,61 +419,38 @@ static size_t bt_size = 0;
 
 void getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer);
 
+static const char* name_unknown = "???";
 static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip, int doCframes)
 {
     int fromC = 0;
 
     getFunctionInfo(func_name, line_num, file_name, ip);
     if (*func_name == NULL && doCframes) {
+        fromC = 1;
 #if defined(__WIN32__)
+        *func_name = name_unknown;   // FIXME
+        *file_name = name_unknown;
+        *line_num = 0;
 #else
         Dl_info dlinfo;
-        if (dladdr((void*) ip, &dlinfo) != 0 && dlinfo.dli_sname != NULL) {
-            *func_name = dlinfo.dli_sname;
-            *file_name = dlinfo.dli_fname;
-            // line number in C looks tricky. addr2line and libbfd seem promising. For now, punt and just return address offset.
-            *line_num = ip-(size_t)dlinfo.dli_saddr;
-            fromC = 1;
+        if (dladdr((void*) ip, &dlinfo) != 0) {
+            *file_name = (dlinfo.dli_fname != NULL) ? dlinfo.dli_fname : name_unknown;
+            if (dlinfo.dli_sname != NULL) {
+                *func_name = dlinfo.dli_sname;
+                // line number in C looks tricky. addr2line and libbfd seem promising. For now, punt and just return address offset.
+                *line_num = ip-(size_t)dlinfo.dli_saddr;
+            } else {
+                *func_name = name_unknown;
+                *line_num = 0;
+            }
+        } else {
+            *func_name = name_unknown;
+            *file_name = name_unknown;
+            *line_num = 0;
         }
 #endif
     }
     return fromC;
-}
-
-static void push_frame_info_from_ip(jl_array_t *a, size_t ip, int doCframes)
-{
-    const char *func_name;
-    int line_num;
-    const char *file_name;
-    int fromC;
-    int i = jl_array_len(a);
-    fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip, doCframes);
-    if (func_name != NULL) {
-        jl_array_grow_end(a, 3);
-        //ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
-        jl_arrayset(a, (jl_value_t*)jl_symbol(func_name), i); i++;
-        jl_arrayset(a, (jl_value_t*)jl_symbol(file_name), i); i++;
-        if (fromC)
-            jl_arrayset(a, jl_box_ulong(line_num), i); // while offset, not line #
-        else
-            jl_arrayset(a, jl_box_long(line_num), i);
-    }
-}
-
-DLLEXPORT jl_value_t *jl_parse_backtrace(ptrint_t *data, size_t n, int doCframes)
-{
-    jl_array_t *a = jl_alloc_cell_1d(0);
-    JL_GC_PUSH(&a);
-    for(size_t i=0; i < n; i++) {
-        push_frame_info_from_ip(a, (size_t)data[i], doCframes);
-    }
-    JL_GC_POP();
-    return (jl_value_t*)a;
-}
-
-DLLEXPORT jl_value_t *jl_get_backtrace()
-{
-    return jl_parse_backtrace(bt_data, bt_size, 0);
 }
 
 #if defined(__WIN32__)
@@ -503,7 +480,7 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
     }
     FreeLibrary(kernel32);
 #else
-    return RtlCaptureStackBackTrace(0, maxsize, data, NULL);
+    return RtlCaptureStackBackTrace(0, maxsize, (void**)data, NULL);
 #endif
 }
 #else
@@ -537,6 +514,49 @@ static void record_backtrace(void)
     bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
 }
 
+static jl_value_t *array_ptr_void_type = NULL;
+DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
+{
+    if (array_ptr_void_type == NULL)
+        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type,
+                                            jl_tuple2(jl_voidpointer_type,
+                                                      jl_box_long(1)));
+    jl_array_t *bt = jl_alloc_array_1d(array_ptr_void_type, MAX_BT_SIZE);
+    size_t n = rec_backtrace(jl_array_data(bt), MAX_BT_SIZE);
+    if (n < MAX_BT_SIZE)
+        jl_array_del_end(bt, MAX_BT_SIZE-n);
+    return (jl_value_t*)bt;
+}
+
+DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int doCframes)
+{
+    const char *func_name;
+    int line_num;
+    const char *file_name;
+    (void)frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
+    if (func_name != NULL) {
+        jl_value_t *r = (jl_value_t*)jl_alloc_tuple(3);
+        JL_GC_PUSH(&r);
+        jl_tupleset(r, 0, jl_symbol(func_name));
+        jl_tupleset(r, 1, jl_symbol(file_name));
+        jl_tupleset(r, 2, jl_box_long(line_num));
+        JL_GC_POP();
+        return r;
+    }
+    return (jl_value_t*)jl_null;
+}
+
+DLLEXPORT jl_value_t *jl_get_backtrace(void)
+{
+    if (array_ptr_void_type == NULL)
+        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type,
+                                            jl_tuple2(jl_voidpointer_type,
+                                                      jl_box_long(1)));
+    jl_array_t *bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
+    memcpy(bt->data, bt_data, bt_size*sizeof(void*));
+    return (jl_value_t*)bt;
+}
+
 //for looking up functions from gdb:
 DLLEXPORT void gdblookup(ptrint_t ip)
 {
@@ -559,6 +579,13 @@ DLLEXPORT void gdbbacktrace()
         gdblookup(bt_data[i]);
 }
 
+DLLEXPORT void jlbacktrace()
+{
+    for(size_t i=0; i < bt_size; i++)
+        gdblookup(bt_data[i]);
+}
+
+
 // yield to exception handler
 static void NORETURN throw_internal(jl_value_t *e)
 {
@@ -567,8 +594,12 @@ static void NORETURN throw_internal(jl_value_t *e)
         jl_longjmp(jl_current_task->eh->eh_ctx, 1);
     }
     else {
+        if (jl_current_task == jl_root_task) {
+            JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
+            exit(1);
+        }
         jl_task_t *cont = jl_current_task->on_exit;
-        while (cont->done)
+        while (cont->done || cont->eh == NULL)
             cont = cont->on_exit;
         // for now, exit the task
         finish_task(jl_current_task, e);
@@ -604,12 +635,12 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;
     jl_task_t *t = (jl_task_t*)allocobj(sizeof(jl_task_t));
-    t->type = (jl_type_t*)jl_task_type;
+    t->type = (jl_value_t*)jl_task_type;
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
     t->on_exit = NULL;
     t->last = jl_current_task;
-    t->tls = jl_current_task->tls;
+    t->tls = jl_nothing;
     t->consumers = jl_nothing;
     t->done = 0;
     t->runnable = 1;
@@ -703,22 +734,28 @@ jl_function_t *jl_unprotect_stack_func;
 void jl_init_tasks(void *stack, size_t ssize)
 {
     _probe_arch();
-    jl_task_type = jl_new_struct_type(jl_symbol("Task"), jl_any_type,
-                                      jl_null,
-                                      jl_tuple(6, jl_symbol("parent"),
-                                               jl_symbol("last"),
-                                               jl_symbol("tls"),
-                                               jl_symbol("consumers"),
-                                               jl_symbol("done"),
-                                               jl_symbol("runnable")),
-                                      jl_tuple(6, jl_any_type, jl_any_type,
-                                               jl_any_type, jl_any_type,
-                                               jl_bool_type, jl_bool_type));
+    jl_task_type = jl_new_datatype(jl_symbol("Task"),
+                                   jl_any_type,
+                                   jl_null,
+                                   jl_tuple(7,
+                                            jl_symbol("parent"),
+                                            jl_symbol("last"),
+                                            jl_symbol("storage"),
+                                            jl_symbol("consumers"),
+                                            jl_symbol("done"),
+                                            jl_symbol("runnable"),
+                                            jl_symbol("result")),
+                                   jl_tuple(7,
+                                            jl_any_type, jl_any_type,
+                                            jl_any_type, jl_any_type,
+                                            jl_bool_type, jl_bool_type,
+                                            jl_any_type),
+                                   0, 1);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;
 
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
-    jl_current_task->type = (jl_type_t*)jl_task_type;
+    jl_current_task->type = (jl_value_t*)jl_task_type;
 #ifdef COPY_STACKS
     jl_current_task->stackbase = stack+ssize;
     jl_current_task->ssize = 0;  // size of saved piece

@@ -129,7 +129,7 @@ int ios_prevutf8(ios_t *s);
 DLLEXPORT int ios_putc(int c, ios_t *s);
 //wint_t ios_putwc(ios_t *s, wchar_t wc);
 DLLEXPORT int ios_getc(ios_t *s);
-int ios_peekc(ios_t *s);
+DLLEXPORT int ios_peekc(ios_t *s);
 //wint_t ios_getwc(ios_t *s);
 int ios_ungetc(int c, ios_t *s);
 //wint_t ios_ungetwc(ios_t *s, wint_t wc);

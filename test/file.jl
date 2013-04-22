@@ -28,7 +28,7 @@ run(`chmod +w $file`)
 # On windows the filesize of a folder is the accumulation of all the contained 
 # files and is thus zero in this case. 
 @windows_only begin
-    @test filesize(di) == 0
+    @test filesize(dir) == 0
 end
 @unix_only begin
     @test filesize(dir) > 0

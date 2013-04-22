@@ -15,6 +15,7 @@ const COMPILE_MASK      =
       DOTALL            |
       EXTENDED          |
       FIRSTLINE         |
+      JAVASCRIPT_COMPAT |
       MULTILINE         |
       NEWLINE_ANY       |
       NEWLINE_ANYCRLF   |
@@ -69,9 +70,9 @@ function compile(pattern::String, options::Integer)
                         (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
                         pattern, options, errstr, erroff, C_NULL))()
     if re_ptr == C_NULL
-        error("compile: $(errstr[1])",
+        error("compile: $(bytestring(errstr[1]))",
               " at position $(erroff[1]+1)",
-              " in $(quote_string(pattern))")
+              " in $(repr(pattern))")
     end
     size = info(re_ptr, C_NULL, INFO_SIZE, Int32)
     regex = Array(Uint8,size)
@@ -86,7 +87,7 @@ function study(regex::Array{Uint8}, options::Integer)
                   (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
                   regex, options, errstr)
     if errstr[1] != C_NULL
-        error("study: $(errstr[1])")
+        error("study: $(bytestring(errstr[1]))")
     end
     extra
 end
@@ -97,7 +98,7 @@ free_study(extra::Ptr{Void}) =
 
 function exec(regex::Array{Uint8}, extra::Ptr{Void},
               str::ByteString, offset::Integer, options::Integer, cap::Bool)
-    if offset < 0 || length(str) < offset
+    if offset < 0 || length(str.data) < offset
         error(BoundsError)
     end
     ncap = info(regex, extra, INFO_CAPTURECOUNT, Int32)
@@ -105,7 +106,7 @@ function exec(regex::Array{Uint8}, extra::Ptr{Void},
     n = ccall((:pcre_exec, :libpcre), Int32,
               (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
-              regex, extra, str, length(str),
+              regex, extra, str, length(str.data),
               offset, options, ovec, length(ovec))
     if n < -1
         error("exec: error $n")

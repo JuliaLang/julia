@@ -1,9 +1,11 @@
 ## symbols ##
 
+symbol(s::Symbol) = s
 symbol(s::ASCIIString) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =
     ccall(:jl_symbol_n, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
+symbol(x::Char) = symbol(string(x))
 
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 
@@ -14,7 +16,7 @@ gensym(a::Array{Uint8,1}) =
 gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
 
 macro gensym(names...)
-    blk = expr(:block)
+    blk = Expr(:block)
     for name in names
         push!(blk.args, :($(esc(name)) = gensym($(string(name)))))
     end
@@ -22,13 +24,15 @@ macro gensym(names...)
     return blk
 end
 
-esc(e::ANY) = expr(:escape, {e})
+esc(e::ANY) = Expr(:escape, e)
 
 ## expressions ##
 
-expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)
-expr(hd::Symbol, args::Array{Any,1}) = Expr(hd, args, Any)
-copy(e::Expr) = Expr(e.head, isempty(e.args) ? e.args : astcopy(e.args), e.typ)
+splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
+copy(e::Expr) = (n = Expr(e.head);
+                 n.args = astcopy(e.args);
+                 n.typ = e.typ;
+                 n)
 copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 copy(n::GetfieldNode) = GetfieldNode(n.value, n.name, n.typ)
 
@@ -42,7 +46,7 @@ isequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
 isequal(x::SymbolNode, y::Symbol)     = is(x.name,y)
 isequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
 
-function show(io, tv::TypeVar)
+function show(io::IO, tv::TypeVar)
     if !is(tv.lb, None)
         show(io, tv.lb)
         print(io, "<:")
@@ -60,5 +64,5 @@ macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
 ## misc syntax ##
 
 macro eval(x)
-    :($(esc(:eval))($(expr(:quote,x))))
+    :($(esc(:eval))($(Expr(:quote,x))))
 end

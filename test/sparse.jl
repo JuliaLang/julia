@@ -1,7 +1,14 @@
+# check sparse matrix construction
+@test isequal(full(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
+
 # check matrix operations
 se33 = speye(3)
 do33 = ones(3)
 @test isequal(se33 * se33, se33)
+
+# check sparse binary op
+@test all(full(se33 + convert(SparseMatrixCSC{Float32,Int32}, se33)) == 2*eye(3))
+@test all(full(se33 * convert(SparseMatrixCSC{Float32,Int32}, se33)) == eye(3))
 
 # check horiz concatenation
 @test all([se33 se33] == sparse([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 5, 6], ones(6)))
@@ -58,7 +65,7 @@ s116[p, p] = reshape(1:9, 3, 3)
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = sprand(5, 10, 0.1)
-    @assert_approx_eq max(abs(a*b - dense(a)*dense(b))) 0.0
+    @test max(abs(a*b - dense(a)*dense(b))) < 100*eps()
 end
 
 # reductions

@@ -54,7 +54,10 @@ As a complete but simple example, the following calls the ``clock``
 function from the standard C library::
 
     julia> t = ccall( (:clock, "libc"), Int32, ())
-    5380445
+    2292761
+
+    julia> t
+    2292761
 
     julia> typeof(ans)
     Int32
@@ -65,10 +68,10 @@ example, to call the ``getenv`` function to get a pointer to the value
 of an environment variable, one makes a call like this::
 
     julia> path = ccall( (:getenv, "libc"), Ptr{Uint8}, (Ptr{Uint8},), "SHELL")
-    Ptr{Uint8} @0x00007fff5fbfd670
+    Ptr{Uint8} @0x00007fff5fbffc45
 
     julia> bytestring(path)
-    "/bin/zsh"
+    "/bin/bash"
 
 Note that the argument type tuple must be written as ``(Ptr{Uint8},)``,
 rather than ``(Ptr{Uint8})``. This is because ``(Ptr{Uint8})`` is just
@@ -106,7 +109,7 @@ throws an exception clearly indicating the problem if the caller tries
 to get a non-existent environment variable::
 
     julia> getenv("SHELL")
-    "/bin/zsh"
+    "/bin/bash"
 
     julia> getenv("FOOBAR")
     getenv: undefined variable: FOOBAR
@@ -152,10 +155,11 @@ example computes a dot product using a BLAS function.
 
 The meaning of prefix ``&`` is not quite the same as in C. In
 particular, any changes to the referenced variables will not be visible
-in Julia. However, it will not cause any harm for called functions to
-attempt such modifications (that is, writing through the passed
-pointers). Since this ``&`` is not a real address operator, it may be
-used with any syntax, such as ``&0`` or ``&f(x)``.
+in Julia. However, it will
+never cause any harm for called functions to attempt such modifications
+(that is, writing through the passed pointers). Since this ``&`` is not
+a real address operator, it may be used with any syntax, such as
+``&0`` or ``&f(x)``.
 
 Note that no C header files are used anywhere in the process. Currently,
 it is not possible to pass structs and other non-primitive types from
@@ -200,43 +204,94 @@ Type correspondences
 ~~~~~~~~~~~~~~~~~~~~
 
 On all systems we currently support, basic C/C++ value types may be
-translated to Julia types as follows.
+translated to Julia types as follows. Every C type also has a corresponding
+Julia type with the same name, prefixed by C. This can help for writing portable code (and remembering that an int in C is not the same as an Int in Julia).
 
 **System-independent:**
 
--  ``bool`` ⟺ ``Bool``
--  ``char`` ⟺ ``Uint8``
--  ``signed char`` ⟺ ``Int8``
--  ``unsigned char`` ⟺ ``Uint8``
--  ``short`` ⟺ ``Int16``
--  ``unsigned short`` ⟺ ``Uint16``
--  ``int`` ⟺ ``Int32``
--  ``unsigned int`` ⟺ ``Uint32``
--  ``long long`` ⟺ ``Int64``
--  ``unsigned long long`` ⟺ ``Uint64``
--  ``float`` ⟺ ``Float32``
--  ``double`` ⟺ ``Float64``
++------------------------+-------------------+--------------------------------+
+| ``bool`` (8 bits)      | ``Cbool``         | ``Bool``                       |
++------------------------+-------------------+--------------------------------+
+| ``signed char``        |                   | ``Int8``                       |
++------------------------+-------------------+--------------------------------+
+| ``unsigned char``      | ``Cuchar``        | ``Uint8``                      |
++------------------------+-------------------+--------------------------------+
+| ``short``              | ``Cshort``        | ``Int16``                      |
++------------------------+-------------------+--------------------------------+
+| ``unsigned short``     | ``Cushort``       | ``Uint16``                     |
++------------------------+-------------------+--------------------------------+
+| ``int``                | ``Cint``          | ``Int32``                      |
++------------------------+-------------------+--------------------------------+
+| ``unsigned int``       | ``Cuint``         | ``Uint32``                     |
++------------------------+-------------------+--------------------------------+
+| ``long long``          | ``Clonglong``     | ``Int64``                      |
++------------------------+-------------------+--------------------------------+
+| ``unsigned long long`` | ``Culonglong``    | ``Uint64``                     |
++------------------------+-------------------+--------------------------------+
+| ``float``              | ``Cfloat``        | ``Float32``                    |
++------------------------+-------------------+--------------------------------+
+| ``double``             | ``Cdouble``       | ``Float64``                    |
++------------------------+-------------------+--------------------------------+
+| ``ptrdiff_t``          | ``Cptrdiff_t``    | ``Int``                        |
++------------------------+-------------------+--------------------------------+
+| ``ssize_t``            | ``Cssize_t``      | ``Int``                        |
++------------------------+-------------------+--------------------------------+
+| ``size_t``             | ``Csize_t``       | ``Uint``                       |
++------------------------+-------------------+--------------------------------+
+| ``complex float``      | ``Ccomplex_float`` (future addition)               |
++------------------------+-------------------+--------------------------------+
+| ``complex double``     | ``Ccomplex_double`` (future addition)              |
++------------------------+-------------------+--------------------------------+
+| ``void``               |                   | ``Void``                       |
++------------------------+-------------------+--------------------------------+
+| ``void*``              |                   | ``Ptr{Void}``                  |
++------------------------+-------------------+--------------------------------+
+| ``char*`` (or ``char[]``, e.g. a string)   | ``Ptr{Uint8}``                 |
++------------------------+-------------------+--------------------------------+
+| ``char**`` (or ``*char[]``)                | ``Ptr{Ptr{Uint8}}``            |
++------------------------+-------------------+--------------------------------+
+| ``struct T*`` (where T represents an       | ``Ptr{T}`` (call using         |
+| appropriately defined bits type)           | &variable_name in the          |
+|                                            | parameter list)                |
++------------------------+-------------------+--------------------------------+
+| ``struct T`` (where T represents  an       | ``T`` (call using              |
+| appropriately defined bits type)           | &variable_name in the          |
+|                                            | parameter list)                |
++------------------------+-------------------+--------------------------------+
+| ``jl_value_t*`` (any Julia Type)           | ``Ptr{Any}``                   |
++------------------------+-------------------+--------------------------------+
 
 *Note:* the ``bool`` type is only defined by C++, where it is 8 bits
 wide. In C, however, ``int`` is often used for boolean values. Since
 ``int`` is 32-bits wide (on all supported systems), there is some
 potential for confusion here.
 
+Julia's ``Char`` type is 32 bits, which is not the same as the wide
+character type (``wchar_t`` or ``wint_t``) on all platforms.
+
 A C function declared to return ``void`` will give ``nothing`` in Julia.
 
 **System-dependent:**
 
--  ``long`` ⟺ ``Int``
--  ``unsigned long`` ⟺ ``Uint``
--  ``size_t`` ⟺ ``Uint``
--  ``wchar_t`` ⟺ ``Char``
+======================  ==============  =======
+``char``                ``Cchar``       ``Int8`` (x86, x86_64)
 
-*Note:* Although ``wchar_t`` is technically system-dependent, on all the
-systems we currently support (UNIX), it is a 32 bits.
+                                        ``Uint8`` (powerpc, arm)
+``long``                ``Clong``       ``Int`` (UNIX)
 
-C functions that take an arguments of the type ``char**`` can be called
-by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, C
-functions of the form::
+                                        ``Int32`` (Windows)
+``unsigned long``       ``Culong``      ``Uint`` (UNIX)
+
+                                        ``Uint32`` (Windows)
+``wchar_t``             ``Cwchar_t``    ``Int32`` (UNIX)
+
+                                        ``Uint16`` (Windows)
+======================  ==============  =======
+
+For string arguments (``char*``) the Julia type should be ``Ptr{Uint8}``,
+not ``ASCIIString``. C functions that take an argument of the type ``char**``
+can be called by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, 
+C functions of the form::
 
     int main(int argc, char **argv);
 
@@ -245,6 +300,70 @@ can be called via the following Julia code::
     argv = [ "a.out", "arg1", "arg2" ]
     ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
 
+
+Accessing Data through a Pointer
+--------------------------------
+The following methods are described as "unsafe" because they can cause Julia
+to terminate abruptly or corrupt arbitrary process memory due to a bad pointer
+or type declaration.
+
+Given a ``Ptr{T}``, the contents of type ``T`` can generally be copied from
+the referenced memory into a Julia object using ``unsafe_ref(ptr, [index])``. The
+index argument is optional (default is 1), and performs 1-based indexing. This
+function is intentionally similar to the behavior of ``getindex()`` and ``setindex!()``
+(e.g. ``[]`` access syntax).
+
+The return value will be a new object initialized
+to contain a copy of the contents of the referenced memory. The referenced
+memory can safely be freed or released.
+
+If ``T`` is ``Any``, then the memory is assumed to contain a reference to
+a Julia object (a ``jl_value_t*``), the result will be a reference to this object,
+and the object will not be copied. You must be careful in this case to ensure
+that the object was always visible to the garbage collector (pointers do not
+count, but the new reference does) to ensure the memory is not prematurely freed.
+Note that if the object was not originally allocated by Julia, the new object
+will never be finalized by Julia's garbage collector.  If the ``Ptr`` itself
+is actually a ``jl_value_t*``, it can be converted back to a Julia object
+reference by ``unsafe_pointer_to_objref(ptr)``.  (Julia values ``v``
+can be converted to ``jl_value_t*`` pointers, as ``Ptr{Void}``, by calling
+``pointer_from_objref(v)``.)
+
+The reverse operation (writing data to a Ptr{T}), can be performed using
+``unsafe_assign(ptr, value, [index])``.  Currently, this is only supported
+for bitstypes or other pointer-free (``isbits``) immutable types.
+
+Any operation that throws an error is probably currently unimplemented
+and should be posted as a bug so that it can be resolved.
+
+If the pointer of interest is a plan-data array (bitstype or immutable), the
+function ``pointer_to_array(ptr,dims,[own])`` may be more more useful. The final
+parameter should be true if Julia should "take ownership" of the underlying
+buffer and call ``free(ptr)`` when the returned ``Array`` object is finalized.
+If the ``own`` parameter is omitted or false, the caller must ensure the
+buffer remains in existence until all access is complete.
+
+
+Garbage Collection Safety
+-------------------------
+When passing data to a ccall, it is best to avoid using the ``pointer()``
+function. Instead define a convert method and pass the variables directly to
+the ccall. ccall automatically arranges that all of its arguments will be
+preserved from garbage collection until the call returns. If a C API will
+store a reference to memory allocated by Julia, after the ccall returns, you
+must arrange that the object remains visible to the garbage collector. The
+suggested way to handle this is to make a global variable of type 
+``Array{Any,1}`` to hold these values, until C interface notifies you that
+it is finished with them.
+
+Whenever you have created a pointer to Julia data, you must ensure the original data
+exists until you are done with using the pointer. Many methods in Julia such as
+``unsafe_ref()`` and ``bytestring()`` make copies of data instead of taking ownership
+of the buffer, so that it is safe to free (or alter) the original data without
+affecting Julia. A notable exception is ``pointer_to_array()`` which, for performance
+reasons, shares (or can be told to take ownership of) the underlying buffer.
+
+
 Non-constant Function Specifications
 ------------------------------------
 
@@ -252,9 +371,9 @@ A ``(name, library)`` function specification must be a constant expression.
 However, it is possible to use computed values as function names by staging
 through ``eval`` as follows:
 
-    @eval ccall(($(strcat("a","b")), :lib), ...
+    @eval ccall(($(string("a","b")),"lib"), ...
 
-This expression constructs a name using ``strcat``, then substitutes this
+This expression constructs a name using ``string``, then substitutes this
 name into a new ``ccall`` expression, which is then evaluated. Keep in mind that
 ``eval`` only operates at the top level, so within this expression local
 variables will not be available (unless their values are substituted with
@@ -262,16 +381,33 @@ variables will not be available (unless their values are substituted with
 definitions, for example when wrapping libraries that contain many
 similar functions.
 
-Indirect calls
+Indirect Calls
 --------------
 
-The first argument to ``call`` can also be an expression evaluated at
+The first argument to ``ccall`` can also be an expression evaluated at
 run time. In this case, the expression must evaluate to a ``Ptr``,
 which will be used as the address of the native function to call. This
 behavior occurs when the first ``ccall`` argument contains references
 to non-constants, such as local variables or function arguments.
 
+Calling Convention
+------------------
+
+The second argument to ``ccall`` can optionally be a calling convention
+specifier (immediately preceding return type). Without any specifier,
+the platform-default C calling convention is used. Other supported 
+conventions are: ``stdcall``, ``cdecl``, ``fastcall``, and ``thiscall``.
+For example (from base/libc.jl)::
+
+    hn = Array(Uint8, 256)
+    err=ccall(:gethostname, stdcall, Int32, (Ptr{Uint8}, Uint32), hn, length(hn))
+
+For more information, please see the `LLVM Language Reference`_.
+
+.. _LLVM Language Reference: http://llvm.org/docs/LangRef.html#calling-conventions
+
 C++
 ---
 
-Limited support for C++ is provided by the :mod:`cpp.jl` module.
+Limited support for C++ is provided by the `Cpp <http://github.com/timholy/Cpp.jl>`_ 
+and `Clang <https://github.com/ihnorton/Clang.jl>`_ packages.

@@ -1,5 +1,4 @@
-load("timing")
-load("bigint")
+include("timing.jl")
 
 function pidigits(N::Int, printOut::Bool)
     """
@@ -28,7 +27,7 @@ function pidigits(N::Int, printOut::Bool)
 
     while true
         k += 1
-        t = lshift(n,uint(1))
+        t = n << 1
         n *= k
         a += t
         k1 += 2
@@ -36,14 +35,14 @@ function pidigits(N::Int, printOut::Bool)
         d *= k1
 
         if a >= n
-            t,u = divmod(n*3 +a, d)
+            t,u = Base.GMP.divrem(n*3 +a, d)
             u += n
             if d > u
                 ns = ns*10 + t
                 i += 1
                 if mod(i,10) == 0
                     if printOut
-                        show(ns)
+                        print(ns)
                         @printf("\t:%d\n", i)
                     end
                     if i >= N
@@ -73,5 +72,4 @@ else
     N = 1000
 end
 @timeit pidigits(N) "pidigits"
-
 

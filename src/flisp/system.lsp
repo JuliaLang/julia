@@ -308,14 +308,24 @@
 (define (reverse! l) (reverse!- () l))
 
 (define (delete-duplicates lst)
-  (if (atom? lst)
-      lst
-      (let ((elt  (car lst))
-	    (tail (cdr lst)))
-	(if (member elt tail)
-	    (delete-duplicates tail)
-	    (cons elt
-		  (delete-duplicates tail))))))
+  (if (length> lst 20)
+      (let ((t (table)))
+	(let loop ((l lst) (acc '()))
+	  (if (atom? l)
+	      (reverse! acc)
+	      (if (has? t (car l))
+		  (loop (cdr l) acc)
+		  (begin
+		    (put! t (car l) #t)
+		    (loop (cdr l) (cons (car l) acc)))))))
+      (if (atom? lst)
+	  lst
+	  (let ((elt  (car lst))
+		(tail (cdr lst)))
+	    (if (member elt tail)
+		(delete-duplicates tail)
+		(cons elt
+		      (delete-duplicates tail)))))))
 
 ; backquote -------------------------------------------------------------------
 

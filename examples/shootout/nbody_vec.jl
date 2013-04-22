@@ -6,7 +6,7 @@
 # A vectorized version of the Java port from nbody.jl
 # 
 
-load("timing")
+include("timing.jl")
 
 # Constants
 const solar_mass = 4 * pi * pi

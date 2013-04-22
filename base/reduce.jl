@@ -29,7 +29,7 @@ end
 function max(itr)
     s = start(itr)
     if done(itr, s)
-        return typemin(eltype(itr))
+        error("max: argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
@@ -42,7 +42,7 @@ end
 function min(itr)
     s = start(itr)
     if done(itr, s)
-        return typemax(eltype(itr))
+        error("min: argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
@@ -106,7 +106,7 @@ function reduce(op::Function, v0, itr)
     return v
 end
 
-function mapreduce(op, f, itr)
+function mapreduce(f, op, itr)
     s = start(itr)
     if done(itr, s)
         return op()  # empty collection
@@ -120,7 +120,7 @@ function mapreduce(op, f, itr)
     return v
 end
 
-function mapreduce(op::Function, f::Function, v0, itr)
+function mapreduce(f::Function, op::Function, v0, itr)
     v = v0
     for x in itr
         v = op(v,f(x))
@@ -136,7 +136,7 @@ function any(itr)
     end
     return false
 end
-any(args::Bool...) = any(args)
+
 function all(itr)
     for x in itr
         if !x
@@ -145,35 +145,13 @@ function all(itr)
     end
     return true
 end
-all(args::Bool...) = all(args)
 
-max(f::Function, itr)   = mapreduce(max, f, itr)
-min(f::Function, itr)   = mapreduce(min, f, itr)
-sum(f::Function, itr)   = mapreduce(+,   f, itr)
-prod(f::Function, itr)  = mapreduce(*,   f, itr)
-any(f::Function, itr)   = anyp(f, itr)
-all(f::Function, itr)   = allp(f, itr)
-count(f::Function, itr) = countp(f, itr)
+max(f::Function, itr)   = mapreduce(f, max, itr)
+min(f::Function, itr)   = mapreduce(f, min, itr)
+sum(f::Function, itr)   = mapreduce(f, +  , itr)
+prod(f::Function, itr)  = mapreduce(f, *  , itr)
 
-function count(itr)
-    c = 0
-    for x in itr
-        c += (x ? 1 : 0)
-    end
-    return c
-end
-
-function countp(pred, itr)
-    c = 0
-    for x in itr
-        if pred(x)
-            c += 1
-        end
-    end
-    return c
-end
-
-function anyp(pred, itr)
+function any(pred::Function, itr)
     for x in itr
         if pred(x)
             return true
@@ -182,7 +160,7 @@ function anyp(pred, itr)
     return false
 end
 
-function allp(pred, itr)
+function all(pred::Function, itr)
     for x in itr
         if !pred(x)
             return false
@@ -200,9 +178,9 @@ function contains(itr, x)
     return false
 end
 
-function contains_is(itr, x::ANY)
+function contains(eq::Function, itr, x)
     for y in itr
-        if is(y,x)
+        if eq(y,x)
             return true
         end
     end

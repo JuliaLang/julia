@@ -2,11 +2,11 @@
 
 @unix_only begin
     _getenv(var::String) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), var)
-    hasenv(s::String) = _getenv(s) != C_NULL
+    _hasenv(s::String) = _getenv(s) != C_NULL
 end
 @windows_only begin
 _getenvlen(var::String) = ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),var,C_NULL,0)
-hasenv(s::String) = _getenvlen(s)!=0
+_hasenv(s::String) = _getenvlen(s)!=0
 function _jl_win_getenv(s::String,len::Uint32)
     val=zeros(Uint8,len-1)
     ret=ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),s,val,len)
@@ -35,31 +35,29 @@ end
 end
 end
 
-getenv(var::String) = @accessEnv var error("getenv: undefined variable: ", var)
-
-function setenv(var::String, val::String, overwrite::Bool)
+function _setenv(var::String, val::String, overwrite::Bool)
 @unix_only begin
     ret = ccall(:setenv, Int32, (Ptr{Uint8},Ptr{Uint8},Int32), var, val, overwrite)
-    system_error(:setenv, ret != 0)
+    systemerror(:setenv, ret != 0)
 end
 @windows_only begin
-    if(overwrite||!hasenv(var))
+    if(overwrite||!_hasenv(var))
         ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,val)
-        system_error(:setenv, ret == 0)
+        systemerror(:setenv, ret == 0)
     end
 end
 end
 
-setenv(var::String, val::String) = setenv(var, val, true)
+_setenv(var::String, val::String) = _setenv(var, val, true)
 
-function unsetenv(var::String)
+function _unsetenv(var::String)
 @unix_only begin
     ret = ccall(:unsetenv, Int32, (Ptr{Uint8},), var)
-    system_error(:unsetenv, ret != 0)
+    systemerror(:unsetenv, ret != 0)
 end
 @windows_only begin
     ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,C_NULL)
-    system_error(:setenv, ret == 0)
+    systemerror(:setenv, ret == 0)
 end
 end
 
@@ -72,11 +70,12 @@ end
 end
 const ENV = EnvHash()
 
-ref(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
-get(::EnvHash, k::String, deflt) = @accessEnv k (return deflt)
-has(::EnvHash, k::String) = hasenv(k)
-delete!(::EnvHash, k::String) = unsetenv(k)
-assign(::EnvHash, v, k::String) = setenv(k,string(v))
+getindex(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
+get(::EnvHash, k::String, def) = @accessEnv k (return def)
+contains(::KeyIterator{EnvHash}, k::String) = _hasenv(k)
+delete!(::EnvHash, k::String) = (v = ENV[k]; _unsetenv(k); v)
+delete!(::EnvHash, k::String, def) = has(ENV,k) ? delete!(ENV,k) : def
+setindex!(::EnvHash, v, k::String) = _setenv(k,string(v))
 
 @unix_only begin
 start(::EnvHash) = 0
@@ -126,7 +125,7 @@ function length(::EnvHash)
     return i
 end
 
-function show(io, ::EnvHash)
+function show(io::IO, ::EnvHash)
     for (k,v) = ENV
         println(io, "$k=$v")
     end
@@ -134,5 +133,5 @@ end
 
 ## misc environment-related functionality ##
 
-tty_cols() = parse_int(Int32, get(ENV,"COLUMNS","80"), 10)
-tty_rows() = parse_int(Int32, get(ENV,"LINES","25"), 10)
+tty_cols() = parseint(Int32, get(ENV,"COLUMNS","80"), 10)
+tty_rows() = parseint(Int32, get(ENV,"LINES","25"), 10)

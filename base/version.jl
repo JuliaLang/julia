@@ -1,49 +1,49 @@
 ## semantic version numbers (http://semver.org)
 
-type VersionNumber
+immutable VersionNumber
     major::Int
     minor::Int
     patch::Int
-    prerelease::Vector{Union(Int,ASCIIString)}
-    build::Vector{Union(Int,ASCIIString)}
+    prerelease::(Union(Int,ASCIIString)...)
+    build::(Union(Int,ASCIIString)...)
 
-    function VersionNumber(major::Int, minor::Int, patch::Int, pre::Vector, bld::Vector)
+    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::(Union(Int,ASCIIString)...), bld::(Union(Int,ASCIIString)...))
         if major < 0 error("invalid major version: $major") end
         if minor < 0 error("invalid minor version: $minor") end
         if patch < 0 error("invalid patch version: $patch") end
-        prerelease = Array(Union(Int,ASCIIString),length(pre))
-        for i in 1:length(pre)
-            ident = ascii(string(pre[i]))
-            if isempty(ident) && !(length(pre)==1 && isempty(bld))
-                error("invalid pre-release identifier: empty string")
+        for ident in pre
+            if isa(ident,Int)
+                ident >= 0 || error("invalid negative pre-release identifier: $ident")
+            else
+                if !ismatch(r"^[0-9a-z-]*$"i, ident)
+                    error("invalid pre-release identifier: $ident")
+                end
+                if isempty(ident) && !(length(pre)==1 && isempty(bld))
+                    error("invalid pre-release identifier: empty string")
+                end
             end
-            if !ismatch(r"^(?:[0-9a-z-]*)?$"i, ident)
-                error("invalid pre-release identifier: $ident")
-            end
-            if ismatch(r"^\d+$", ident)
-                ident = parse_int(ident)
-            end
-            prerelease[i] = ident
         end
-        build = Array(Union(Int,ASCIIString),length(bld))
-        for i in 1:length(bld)
-            ident = ascii(string(bld[i]))
-            if !ismatch(r"^(?:[0-9a-z-]+)?$"i, ident)
-                error("invalid build identifier: $ident")
+        for ident in bld
+            if isa(ident,Int)
+                ident >= 0 || error("invalid negative build identifier: $ident")
+            else
+                if !ismatch(r"^[0-9a-z-]*$"i, ident)
+                    error("invalid build identifier: $ident")
+                end
+                if isempty(ident) && length(bld)!=1
+                    error("invalid pre-release identifier: empty string")
+                end
             end
-            if ismatch(r"^\d+$", ident)
-                ident = parse_int(ident)
-            end
-            build[i] = ident
         end
-        new(major, minor, patch, prerelease, build)
+        new(major, minor, patch, pre, bld)
     end
 end
-VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, [], [])
-VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, [], [])
-VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, [], [])
+VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, (), ())
+VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, (), ())
+VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, (), ())
 
 function print(io::IO, v::VersionNumber)
+    v == typemax(VersionNumber) && return print(io, "∞")
     print(io, v.major)
     print(io, '.')
     print(io, v.minor)
@@ -58,7 +58,7 @@ function print(io::IO, v::VersionNumber)
         print_joined(io, v.build,'.')
     end
 end
-show(io, v::VersionNumber) = print(io, "v\"", v, "\"")
+show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
 convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
@@ -70,31 +70,43 @@ const VERSION_REGEX = r"^
     (?:\.(\d+))?                            # patch         (optional)
     (?:(-)|
     (?:-((?:[0-9a-z-]+\.)*[0-9a-z-]+))?     # pre-release   (optional)
+    (?:(\+)|
     (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
-    )
+    ))
 $"ix
+
+function split_idents(s::String)
+    idents = split(s, '.')
+    ntuple(length(idents)) do i
+        ident = idents[i]
+        ismatch(r"^\d+$", ident) ? parseint(ident) : ident
+    end
+end
 
 function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)
     if m == nothing error("invalid version string: $v") end
-    major, minor, patch, minus, prerl, build = m.captures
+    major, minor, patch, minus, prerl, plus, build = m.captures
     major = int(major)
     minor = minor != nothing ? int(minor) : 0
     patch = patch != nothing ? int(patch) : 0
-    prerl = prerl != nothing ? split(prerl,'.') : minus != nothing ? [""] : []
-    build = build != nothing ? split(build,'.') : []
+    prerl = prerl != nothing ? split_idents(prerl) : minus == "-" ? ("",) : ()
+    build = build != nothing ? split_idents(build) : plus  == "+" ? ("",) : ()
     VersionNumber(major, minor, patch, prerl, build)
 end
 
 macro v_str(v); convert(VersionNumber, v); end
+
+typemin(::Type{VersionNumber}) = v"0-"
+typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))
 
 ident_cmp(a::Int, b::Int) = cmp(a,b)
 ident_cmp(a::Int, b::ASCIIString) = isempty(b) ? +1 : -1
 ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
 ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
 
-function ident_cmp(A::Vector{Union(Int,ASCIIString)},
-                       B::Vector{Union(Int,ASCIIString)})
+function ident_cmp(A::(Union(Int,ASCIIString)...),
+                   B::(Union(Int,ASCIIString)...))
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)
@@ -116,6 +128,8 @@ function isequal(a::VersionNumber, b::VersionNumber)
     return true
 end
 
+issupbuild(v::VersionNumber) = length(v.build)==1 && isempty(v.build[1])
+
 function isless(a::VersionNumber, b::VersionNumber)
     (a.major < b.major) && return true
     (a.major > b.major) && return false
@@ -128,81 +142,79 @@ function isless(a::VersionNumber, b::VersionNumber)
     c = ident_cmp(a.prerelease,b.prerelease)
     (c < 0) && return true
     (c > 0) && return false
+    (!issupbuild(a) && issupbuild(b)) && return true
+    (issupbuild(a) && !issupbuild(b)) && return false
     c = ident_cmp(a.build,b.build)
     (c < 0) && return true
     return false
 end
 
+hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
+
 ## julia version info
 
-if(isfile("$JULIA_HOME/../../VERSION"))
-const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
-elseif(isfile("$JULIA_HOME/../share/julia/VERSION"))
-	const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../share/julia/VERSION"))
-else
-	const VERSION = convert(VersionNumber,"0.0.0")
-end
-if(isfile("$JULIA_HOME/../../COMMIT"))
-    const VERSION_COMMIT = ""
-    const commit_string = readchomp("$JULIA_HOME/../../COMMIT")
-elseif(isfile("JULIA_HOME/../share/julia/COMMIT"))
-    const VERSION_COMMIT = ""
-    const commit_string = readchomp("$JULIA_HOME/../share/julia/COMMIT")
-else
-
 let
-    expected = ErrorException("error: don't copy this code, for breaking out of uv_run during boot-strapping only")
+    local version::VersionNumber
+    if isfile("$JULIA_HOME/../../VERSION")
+        version = readchomp("$JULIA_HOME/../../VERSION")
+    elseif isfile("$JULIA_HOME/../share/julia/VERSION")
+        version = readchomp("$JULIA_HOME/../share/julia/VERSION")
+    else
+        println("ERROR: VERSION file not found")
+        error()
+    end
+
+    expected = ErrorException("don't copy this code, for breaking out of uv_run during boot-strapping only")
     acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
                                               # this point in the bootstrapping, conflicts between old and new
                                               # defintions for write, TTY, ASCIIString, and STDOUT make it fail
-    ver = string(VERSION)
-    (outver,ps) = read_from(`git rev-parse HEAD`)
+
+    outctim,ps = readsfrom(`git log -1 --pretty=format:%ct`)
     ps.closecb = function(proc)
         if !success(proc)
-            #acceptable.msg = "failed process: $proc [$(proc.exit_code)]"
+            #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
             error(acceptable)
         end
-        commit = readchomp(proc.out.buffer)
-        (outtag,ps) = read_from(`git rev-parse --verify --quiet v$ver`)
+
+        ctim = int(readall(proc.out.buffer))
+
+        outdesc,ps = readsfrom(`git describe --tags --dirty --long --abbrev=10`)
         ps.closecb = function(proc)
-            tagged = if success(proc)
-                readchomp(proc.out.buffer)
-            elseif proc.exit_code == 1 && proc.term_signal == 0
-                "doesn't reference a commit"
-            else
-                #acceptable.msg = "failed process: $proc [$(proc.exit_code)]"
+            if !success(proc)
+                #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
                 error(acceptable)
             end
-            tagged = success(proc) ? readchomp(proc.out.buffer) : "doesn't reference a commit"
-            (outctim,ps) = read_from(`git log -1 --pretty=format:%ct`)
-            ps.closecb = function(proc)
-                if !success(proc)
-                    #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
-                    error(acceptable)
-                end
-                ctim = int(readall(proc.out.buffer))
-                if commit != tagged
-                    # 1250998746: ctime of first commit (Sat Aug 23 3:39:06 2009 UTC)
-                    push!(VERSION.build, ctim - 1250998746)
-                    push!(VERSION.build, "r$(commit[1:4])")
-                end
-                ps = spawn(`git diff --quiet HEAD`)
-                ps.closecb = function(proc)
-                    clean = if success(proc)
-                        ""
-                    elseif proc.exit_code == 1 && proc.term_signal == 0
-                        push!(VERSION.build, "dirty")
-                        "*" 
-                    else
-                        #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
-                        error(acceptable)
-                    end
-                    isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
-                    global const commit_string = "Commit $(commit[1:10]) ($isotime)$clean"
-                    global const VERSION_COMMIT = commit[1:10]
-                    error(expected)
-                end
+
+            description = readchomp(proc.out.buffer)
+            m = match(r"^(v\d+(?:\.\d+)+)-(\d+)-g([0-9a-f]{10})(-dirty)?$", description)
+            if m == nothing
+                error(acceptable)
             end
+            tag = convert(VersionNumber, m.captures[1])
+            commits_after_tag = int(m.captures[2])
+            commit = m.captures[3]
+            dirty = m.captures[4] != nothing
+
+            if commits_after_tag > 0
+                field = tag < version ? version.prerelease : version.build
+                field = tuple(field..., commits_after_tag, "r$(commit[1:8])")
+                if dirty
+                    field = tuple(field..., "dirty")
+                end
+                tag = VersionNumber(
+                    version.major,
+                    version.minor,
+                    version.patch,
+                    tag < version ? field : version.prerelease,
+                    tag < version ? version.build : field,
+                )
+            end
+            isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
+            global const commit_string = "Commit $commit $isotime" * (dirty ? "*" : "")
+
+            global const VERSION = tag
+            global const VERSION_COMMIT = commit
+            error(expected)
         end
     end
     try
@@ -211,7 +223,14 @@ let
                          # so we do what we must, but don't do this in user-land code or you'll regret it
     catch err
         if err != expected
-            global const commit_string = ""
+            if isfile("$JULIA_HOME/../../COMMIT")
+                global const commit_string = readchomp("$JULIA_HOME/../../COMMIT")
+            elseif isfile("$JULIA_HOME/../share/julia/COMMIT")
+                global const commit_string = readchomp("$JULIA_HOME/../share/julia/COMMIT")
+            else
+                global const commit_string = ""
+            end
+            global const VERSION = VersionNumber(0,0,0)
             global const VERSION_COMMIT = ""
             if err == acceptable
                 println("Warning: git failed in version.jl")
@@ -222,20 +241,20 @@ let
         end
     end
 end
-end
 begin
 const version_string = "Version $VERSION"
 const banner_plain =
-I"               _
+"""
+               _
    _       _ _(_)_     |  A fresh approach to technical computing
   (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-   _ _   _| |_  __ _   |  Type \"help()\" to list help topics
+   _ _   _| |_  __ _   |  Type "help()" to list help topics
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  $version_string
- _/ |\__'_|_|_|\__'_|  |  $commit_string
+ _/ |\\__'_|_|_|\\__'_|  |  $commit_string
 |__/                   |
 
-"
+"""
 local tx = "\033[0m\033[1m" # text
 local jl = "\033[0m\033[1m" # julia
 local d1 = "\033[34m" # first dot

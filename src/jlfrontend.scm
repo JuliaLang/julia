@@ -18,11 +18,11 @@
 	       `(continue ,msg)
 	       e))
 	 (begin
-	   (newline)
-	   (display "unexpected error: ")
-	   (prn e)
-	   (print-stack-trace (stacktrace))
-	   #f)))
+	   ;;(newline)
+	   ;;(display "unexpected error: ")
+	   ;;(prn e)
+	   ;;(print-stack-trace (stacktrace))
+	   '(error "malformed expression"))))
    thk))
 
 ;; assigned variables except those marked local or inside inner functions
@@ -31,7 +31,10 @@
 	((quoted? e) '())
 	(else (case (car e)
 		((=)            (list (decl-var (cadr e))))
-		((method)       (list (cadr e)))
+		((method)       (let ((n (method-expr-name e)))
+				  (if (symbol? n)
+				      (list n)
+				      '())))
 		((lambda)       '())
 		((local local!) '())
 		((break-block)  (find-possible-globals (caddr e)))
@@ -94,7 +97,8 @@
 
 (define (expand-toplevel-expr- e)
   (let ((ex (expand-toplevel-expr-- e)))
-    (cond ((simple-assignment? ex)  (cadr ex))
+    (cond ((contains (lambda (x) (equal? x '(top ccall))) ex) ex)
+          ((simple-assignment? ex)  (cadr ex))
 	  ((and (length= ex 2) (eq? (car ex) 'body)
 		(not (lambda-ex? (cadadr ex))))
 	   ;; (body (return x)) => x
@@ -107,7 +111,10 @@
 
 (define (expand-toplevel-expr e)
   (if (and (pair? e) (eq? (car e) 'toplevel))
-      `(toplevel ,@(map expand-toplevel-expr (cdr e)))
+      ;;`(toplevel ,@(map expand-toplevel-expr (cdr e)))
+      ;; delay expansion so defined global variables take effect for later
+      ;; toplevel expressions.
+      e
       (let ((last *in-expand*))
 	(if (not last)
 	    (begin (reset-gensyms)
@@ -129,13 +136,24 @@
 
 (define (jl-parse-string s)
   (parser-wrap (lambda ()
-		 (let* ((inp  (make-token-stream (open-input-string s)))
-			(expr (julia-parse inp)))
-		   (expand-toplevel-expr expr)))))
+		 (let ((inp  (make-token-stream (open-input-string s))))
+		   ;; parse all exprs into a (toplevel ...) form
+		   (let loop ((exprs '()))
+		     ;; delay expansion so macros run in the Task executing
+		     ;; the input, not the task parsing it (issue #2378)
+		     ;; used to be (expand-toplevel-expr expr)
+		     (let ((expr (julia-parse inp)))
+		       (if (eof-object? expr)
+			   (cond ((null? exprs)     expr)
+				 ((length= exprs 1) (car exprs))
+				 (else (cons 'toplevel (reverse! exprs))))
+			   (if (and (pair? expr) (eq? (car expr) 'toplevel))
+			       (loop (nreconc (cdr expr) exprs))
+			       (loop (cons expr exprs))))))))))
 
 ;; parse file-in-a-string
-(define (jl-parse-string-stream str)
-  (jl-parser-set-stream "string" (open-input-string str)))
+(define (jl-parse-string-stream str filename)
+  (jl-parser-set-stream filename (open-input-string str)))
 
 (define (jl-parse-file s)
   (jl-parser-set-stream s (open-input-file s)))
@@ -162,7 +180,7 @@
   (let ((e (parser-wrap (lambda ()
 			  (julia-parse current-token-stream)))))
     (if (eof-object? e)
-	#f
+	e
 	(cons (+ (input-port-line (ts:port current-token-stream))
 		 (if (eqv? (peek-token current-token-stream) #\newline)
 		     -1 0))

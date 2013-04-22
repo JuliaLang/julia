@@ -62,7 +62,11 @@ is an example of the short form used to quote an arithmetic expression::
     Symbol
 
     julia> ex.args
-    {+,a,*(b,c),1}
+    4-element Any Array:
+      +        
+      a        
+      :(*(b,c))
+     1         
 
     julia> typeof(ex.args[1])
     Symbol
@@ -96,6 +100,9 @@ quoting form::
       +(x,y)
     end
 
+Symbols
+~~~~~~~
+
 When the argument to ``:`` is just a symbol, a ``Symbol`` object results
 instead of an ``Expr``::
 
@@ -107,10 +114,29 @@ instead of an ``Expr``::
 
 In the context of an expression, symbols are used to indicate access to
 variables, and when an expression is evaluated, a symbol evaluates to
-the value bound to that symbol in the appropriate scope (see :ref:`man-variables-and-scoping` for further details).
+the value bound to that symbol in the appropriate :ref:`scope
+<man-variables-and-scoping>`.
 
-Eval and Interpolation
-~~~~~~~~~~~~~~~~~~~~~~
+Sometimes extra parentheses around the argument to ``:`` are needed to avoid
+ambiguity in parsing.::
+
+    julia> :(:)
+    :(:)
+
+    julia> :(::)
+    :(::)
+
+``Symbol``\ s can also be created using the ``symbol`` function, which takes
+a character or string as its argument::
+
+    julia> symbol('\'')
+    :'
+
+    julia> symbol("'")
+    :'
+
+``eval`` and Interpolation
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Given an expression object, one can cause Julia to evaluate (execute) it
 at the *top level* scope — i.e. in effect like loading from a file or
@@ -160,7 +186,7 @@ dynamically generate arbitrary code which can then be run using
     julia> a = 1;
 
     julia> ex = Expr(:call, {:+,a,:b}, Any)
-    +(1,b)
+    :(+(1,b))
 
     julia> a = 0; b = 2;
 
@@ -194,7 +220,7 @@ clearly and concisely using interpolation::
     1
 
     julia> ex = :($a + b)
-    +(1,b)
+    :(+(1,b))
 
 This syntax is automatically rewritten to the form above where we
 explicitly called ``Expr``. The use of ``$`` for expression
@@ -264,12 +290,20 @@ in the final syntax tree. Macros are invoked with the following general
 syntax::
 
     @name expr1 expr2 ...
+    @name(expr1, expr2, ...)
 
 Note the distinguishing ``@`` before the macro name and the lack of
-commas between the argument expressions. Before the program runs, this
-statement will be replaced with the result of calling an expander
-function for ``name`` on the expression arguments. Expanders are defined
-with the ``macro`` keyword::
+commas between the argument expressions in the first form, and the
+lack of whitespace after ``@name`` in the second form. The two styles
+should not be mixed. For example, the following syntax is different
+from the examples above; it passes the tuple ``(expr1, expr2, ...)`` as
+one argument to the macro::
+
+    @name (expr1, expr2, ...)
+
+Before the program runs, this statement will be replaced with the
+result of calling an expander function for ``name`` on the expression
+arguments. Expanders are defined with the ``macro`` keyword::
 
     macro name(expr1, expr2, ...)
         ...
@@ -291,9 +325,7 @@ This macro can be used like this::
     Assertion failed: 1==0
 
 Macro calls are expanded so that the above calls are precisely
-equivalent to writing
-
-::
+equivalent to writing::
 
     1==1.0 ? nothing : error("Assertion failed: ", "1==1.0")
     1==0 ? nothing : error("Assertion failed: ", "1==0")
@@ -308,6 +340,11 @@ expression is false, an error is raised indicating the asserted
 expression that was false. Notice that it would not be possible to write
 this as a function, since only the *value* of the condition and not the
 expression that computed it would be available.
+
+The ``@assert`` example also shows how macros can include a ``quote``
+block, which allows for convenient manipulation of expressions inside
+the macro body.
+
 
 Hygiene
 ~~~~~~~
@@ -399,6 +436,8 @@ following macro sets ``x`` to zero in the call environment::
 This kind of manipulation of variables should be used judiciously, but
 is occasionally quite handy.
 
+.. _man-non-standard-string-literals2:
+
 Non-Standard String Literals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -481,20 +520,14 @@ is, well, invaluable.
 The mechanism for user-defined string literals is deeply, profoundly
 powerful. Not only are Julia's non-standard literals implemented using
 it, but also the command literal syntax (```echo "Hello, $person"```)
-and regular string interpolation are implemented using it. These two
-powerful facilities are implemented with the following innocuous-looking
-pair of macros::
+is implemented with the following innocuous-looking macro::
 
     macro cmd(str)
       :(cmd_gen($shell_parse(str)))
     end
 
-    macro str(s)
-      interp_parse(s)
-    end
-
 Of course, a large amount of complexity is hidden in the functions used
-in these macro definitions, but they are just functions, written
+in this macro definition, but they are just functions, written
 entirely in Julia. You can read their source and see precisely what they
 do — and all they do is construct expression objects to be inserted into
 your program's syntax tree.

@@ -240,7 +240,7 @@ static value_t fl_fixnum(value_t *args, u_int32_t nargs)
     }
     else if (iscprim(args[0])) {
         cprim_t *cp = (cprim_t*)ptr(args[0]);
-        return fixnum(conv_to_long(cp_data(cp), cp_numtype(cp)));
+        return fixnum(conv_to_ptrdiff(cp_data(cp), cp_numtype(cp)));
     }
     type_error("fixnum", "number", args[0]);
 }
@@ -279,7 +279,7 @@ static value_t fl_vector_alloc(value_t *args, u_int32_t nargs)
     value_t f, v;
     if (nargs == 0)
         lerror(ArgError, "vector.alloc: too few arguments");
-    i = (fixnum_t)toulong(args[0], "vector.alloc");
+    i = (fixnum_t)tosize(args[0], "vector.alloc");
     if (i < 0)
         lerror(ArgError, "vector.alloc: invalid size");
     if (nargs == 2)

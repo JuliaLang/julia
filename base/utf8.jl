@@ -1,6 +1,6 @@
 ## from base/boot.jl:
 #
-# type UTF8String <: String
+# immutable UTF8String <: String
 #     data::Array{Uint8,1}
 # end
 #
@@ -28,10 +28,10 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 
 ## required core functionality ##
 
-length(s::UTF8String) = length(s.data)
-strlen(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
+endof(s::UTF8String) = thisind(s,length(s.data))
+length(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
 
-function ref(s::UTF8String, i::Int)
+function getindex(s::UTF8String, i::Int)
     d = s.data
     b = d[i]
     if !is_utf8_start(b)
@@ -72,32 +72,27 @@ end
 ## overload methods for efficiency ##
 
 isvalid(s::UTF8String, i::Integer) =
-    (1 <= i <= length(s.data)) && is_utf8_start(s.data[i])
+    (1 <= i <= endof(s.data)) && is_utf8_start(s.data[i])
 
-function ref(s::UTF8String, r::Range1{Int})
-    i = isvalid(s,first(r)) ? first(r) : nextind(s,first(r))
-    j = nextind(s,last(r))-1
+function getindex(s::UTF8String, r::Range1{Int})
+    a, b = first(r), last(r)
+    i = isvalid(s,a) ? a : nextind(s,a)
+    j = b < endof(s) ? nextind(s,b)-1 : endof(s.data)
     UTF8String(s.data[i:j])
 end
 
-function strchr(s::UTF8String, c::Char, i::Integer)
-    if c < 0x80 return memchr(s.data, c, i) end
+function search(s::UTF8String, c::Char, i::Integer)
+    if c < 0x80 return search(s.data, c, i) end
     while true
-        i = memchr(s.data, first_utf8_byte(c), i)
+        i = search(s.data, first_utf8_byte(c), i)
         if i==0 || s[i]==c return i end
         i = next(s,i)[2]
     end
 end
 
-strcat(a::ByteString, b::ByteString, c::ByteString...) =
+string(a::ByteString, b::ByteString, c::ByteString...) =
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
     UTF8String([a.data,b.data,map(s->s.data,c)...])
-
-transform_to_utf8(s::String, f::Function) =
-    sprint(length(s), io->for c in s; write(io,f(c)::Char); end)
-
-uppercase(s::UTF8String) = transform_to_utf8(s, uppercase)
-lowercase(s::UTF8String) = transform_to_utf8(s, lowercase)
 
 ucfirst(s::UTF8String) = string(uppercase(s[1]), s[2:])
 lcfirst(s::UTF8String) = string(lowercase(s[1]), s[2:])
@@ -112,5 +107,5 @@ write(io::IO, s::UTF8String) = write(io, s.data)
 utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
-convert(::Type{UTF8String}, a::Array{Uint8,1}) = check_utf8(UTF8String(a))
+convert(::Type{UTF8String}, a::Array{Uint8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("invalid UTF-8 sequence")
 convert(::Type{UTF8String}, s::String) = utf8(bytestring(s))

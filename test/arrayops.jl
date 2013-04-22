@@ -85,6 +85,59 @@ B[4,[2,3]] = 7
 
 @test isequal(reshape(1:27, 3, 3, 3)[1,:], [1  4  7  10  13  16  19  22  25])
 
+a = [3, 5, -7, 6]
+b = [4, 6, 2, -7, 1]
+ind = findin(a, b)
+@test ind == [3,4]
+
+# sub
+A = reshape(1:120, 3, 5, 8)
+sA = sub(A, 2, 1:5, 1:8)
+@test size(sA) == (1, 5, 8)
+@test_fails sA[2, 1:8]
+@test sA[1, 2, 1:8][:] == 5:15:120
+sA[2:5:end] = -1
+@test all(sA[2:5:end] .== -1)
+@test all(A[5:15:120] .== -1)
+sA = sub(A, 1:3, 1:5, 5)
+sA[1:3,1:5] = -2
+@test all(A[:,:,5] .== -2)
+
+# slice
+A = reshape(1:120, 3, 5, 8)
+sA = slice(A, 2, 1:5, 1:8)
+@test size(sA) == (5, 8)
+@test sA[2, 1:8][:] == 5:15:120
+@test sA[:,1] == 2:3:14
+@test sA[2:5:end] == 5:15:120
+sA[2:5:end] = -1
+@test all(sA[2:5:end] .== -1)
+@test all(A[5:15:120] .== -1)
+
+
+# get
+let
+    A = reshape(1:24, 3, 8)
+    x = get(A, 32, -12)
+    @test x == -12
+    x = get(A, 14, -12)
+    @test x == 14
+    x = get(A, (2,4), -12)
+    @test x == 11
+    x = get(A, (4,4), -12)
+    @test x == -12
+    X = get(A, -5:5, nan(Float32))
+    @test eltype(X) == Float32
+    @test isnan(X) == [trues(6),falses(5)]
+    @test X[7:11] == 1:5
+    X = get(A, (2:4, 9:-2:-13), 0)
+    Xv = zeros(Int, 3, 12)
+    Xv[1:2, 2:5] = A[2:3, 7:-2:1]
+    @test X == Xv
+    X2 = get(A, Vector{Int}[[2:4], [9:-2:-13]], 0)
+    @test X == X2
+end
+
 ## arrays as dequeues
 l = {1,2,3}
 push!(l,8)
@@ -98,6 +151,20 @@ v = pop!(l)
 # concatenation
 @test isequal([ones(2,2)  2*ones(2,1)], [1 1 2; 1 1 2])
 @test isequal([ones(2,2), 2*ones(1,2)], [1 1; 1 1; 2 2])
+
+# typed array literals
+X = Float64[1 2 3]
+Y = [1. 2. 3.]
+@test size(X) == size(Y)
+for i = 1:3 @test X[i] === Y[i] end
+X = Float64[1;2;3]
+Y = [1.,2.,3.]
+@test size(X) == size(Y)
+for i = 1:3 @test X[i] === Y[i] end
+X = Float64[1 2 3; 4 5 6]
+Y = [1. 2. 3.; 4. 5. 6.]
+@test size(X) == size(Y)
+for i = 1:length(X) @test X[i] === Y[i] end
 
 # "end"
 X = [ i+2j for i=1:5, j=1:5 ]
@@ -143,13 +210,13 @@ end
 @assert indmax([10,12,9,11]) == 2
 @assert indmin([10,12,9,11]) == 3
 
-## permute ##
+## permutedims ##
 
 #keeps the num of dim
 p = randperm(5)
 q = randperm(5)
 a = rand(p...)
-b = permute(a,q)
+b = permutedims(a,q)
 @test isequal(size(b), tuple(p[q]...))
 
 #hand made case
@@ -165,22 +232,22 @@ for i = 1:3
 end
 
 #permutes correctly
-@test isequal(z,permute(y,(3,1,2))) 
+@test isequal(z,permutedims(y,(3,1,2))) 
 
 # of a subarray
 a = rand(5,5)
 s = sub(a,2:3,2:3)
-p = permute(s, [2,1])
+p = permutedims(s, [2,1])
 @test p[1,1]==a[2,2] && p[1,2]==a[3,2]
 @test p[2,1]==a[2,3] && p[2,2]==a[3,3]
 
-## ipermute ##
+## ipermutedims ##
 
 tensors = {rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)}
 for i = tensors
     perm = randperm(4)
-    @test isequal(i,ipermute(permute(i,perm),perm))
-    @test isequal(i,permute(ipermute(i,perm),perm))
+    @test isequal(i,ipermutedims(permutedims(i,perm),perm))
+    @test isequal(i,permutedims(ipermutedims(i,perm),perm))
 end
 
 
@@ -203,17 +270,11 @@ v[2,2,1,1] = 40.0
 
 ## large matrices transpose ##
 
-for i = 1 : 5
+for i = 1 : 3
     a = rand(200, 300)
 
-    @test isequal(a', permute(a, (2, 1)))
+    @test isequal(a', permutedims(a, (2, 1)))
 end
-
-## basic darray ##
-
-d = drand(10,10)
-#@test isequal(d'', d)
-@test isequal(convert(Array,d), d)
 
 ## cumsum, cummin, cummax
 
@@ -279,3 +340,95 @@ begin
 end
 
 @test (1:5)[[true,false,true,false,true]] == [1,3,5]
+
+# issue #2342
+@test isequal(cumsum([1 2 3]), [1 2 3])
+
+# set-like operations
+@test isequal(union([1,2,3], [4,3,4]), [1,2,3,4])
+@test isequal(union(['e','c','a'], ['b','a','d']), ['e','c','a','b','d'])
+@test isequal(union([1,2,3], [4,3], [5]), [1,2,3,4,5])
+@test isequal(union([1,2,3]), [1,2,3])
+@test isequal(union([1,2,3], Int64[]), [1,2,3])
+@test isequal(union([1,2,3], Float64[]), [1.0,2,3])
+@test isequal(union(Int64[], [1,2,3]), [1,2,3])
+@test isequal(union(Int64[]), Int64[])
+@test isequal(intersect([1,2,3], [4,3,4]), [3])
+@test isequal(intersect(['e','c','a'], ['b','a','d']), ['a'])
+@test isequal(intersect([1,2,3], [3,1], [2,1,3]), [1,3])
+@test isequal(intersect([1,2,3]), [1,2,3])
+@test isequal(intersect([1,2,3], Int64[]), Int64[])
+@test isequal(intersect([1,2,3], Float64[]), Float64[])
+@test isequal(intersect(Int64[], [1,2,3]), Int64[])
+@test isequal(intersect(Int64[]), Int64[])
+@test isequal(setdiff([1,2,3,4], [2,5,4]), [1,3])
+@test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
+@test isequal(setdiff([1,2,3,4], Int64[]), [1,2,3,4])
+@test isequal(setdiff([1,2,3,4], [1,2,3,4,5]), Int64[])
+@test isequal(symdiff([1,2,3], [4,3,4]), [1,2,4])
+@test isequal(symdiff(['e','c','a'], ['b','a','d']), ['e','c','b','d'])
+@test isequal(symdiff([1,2,3], [4,3], [5]), [1,2,4,5])
+@test isequal(symdiff([1,2,3,4,5], [1,2,3], [3,4]), [3,5])
+@test isequal(symdiff([1,2,3]), [1,2,3])
+@test isequal(symdiff([1,2,3], Int64[]), [1,2,3])
+@test isequal(symdiff([1,2,3], Float64[]), [1.0,2,3])
+@test isequal(symdiff(Int64[], [1,2,3]), [1,2,3])
+@test isequal(symdiff(Int64[]), Int64[])
+
+# mapslices
+begin
+    local a,h,i
+    a = rand(5,5)
+    h = mapslices(v -> hist(v,0:0.1:1)[2], a, 1)
+    H = mapslices(v -> hist(v,0:0.1:1)[2], a, 2)
+    s = mapslices(sort, a, [1])
+    S = mapslices(sort, a, [2])
+    for i = 1:5
+        @test h[:,i] == hist(a[:,i],0:0.1:1)[2]
+        @test vec(H[i,:]) == hist(vec(a[i,:]),0:0.1:1)[2]
+        @test s[:,i] == sort(a[:,i])
+        @test vec(S[i,:]) == sort(vec(a[i,:]))
+    end
+end
+
+# single multidimensional index
+let
+    a = rand(6,6)
+    I = [1 4 5; 4 2 6; 5 6 3]
+    a2 = a[I]
+    @test size(a2) == size(I)
+    for i = 1:length(a2)
+        @test a2[i] == a[I[i]]
+    end
+end
+
+# sort on arrays
+begin
+    local a = rand(3,3)
+
+    asr = sortrows(a)
+    @test isless(asr[1,:],asr[2,:])
+    @test isless(asr[2,:],asr[3,:])
+
+    asc = sortcols(a)
+    @test isless(asc[:,1],asc[:,2])
+    @test isless(asc[:,2],asc[:,3])
+
+    asr = sortrows(a, Sort.Reverse())
+    @test isless(asr[2,:],asr[1,:])
+    @test isless(asr[3,:],asr[2,:])
+
+    asc = sortcols(a, Sort.Reverse())
+    @test isless(asc[:,2],asc[:,1])
+    @test isless(asc[:,3],asc[:,2])
+
+    as = sort(a, 1)
+    @test issorted(as[:,1])
+    @test issorted(as[:,2])
+    @test issorted(as[:,3])
+
+    as = sort(a, 2)
+    @test issorted(as[1,:])
+    @test issorted(as[2,:])
+    @test issorted(as[3,:])
+end

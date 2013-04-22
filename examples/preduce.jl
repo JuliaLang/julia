@@ -1,3 +1,5 @@
+importall Base
+
 # figure 5.2 from principles of parallel programming, ported to julia.
 # sum a vector using a tree on top of local reductions.
 function sum(v::DArray)
@@ -9,7 +11,7 @@ function sum(v::DArray)
     for i=0:np-1
         @spawnat P[i+1] begin
             stride=1
-            tally = sum(localize(v))
+            tally = sum(localpart(v))
             while stride < np
                 if i%(2*stride) == 0
                     tally = tally + take(nodeval[i+stride])
@@ -28,8 +30,8 @@ function sum(v::DArray)
 end
 
 function reduce(f, v::DArray)
-    mapreduce(f, fetch,
-              { @spawnat p reduce(f,localize(v)) for p = procs(v) })
+    mapreduce(fetch, f,
+              { @spawnat p reduce(f,localpart(v)) for p = procs(v) })
 end
 
 # possibly-useful abstraction:
@@ -40,5 +42,5 @@ type RefGroup
     RefGroup(P) = new([ RemoteRef(p) for p=P ])
 end
 
-ref(r::RefGroup, i) = fetch(r.refs[i])
-assign(r::RefGroup, v, i) = put(r.refs[i], v)
+getindex(r::RefGroup, i) = fetch(r.refs[i])
+setindex!(r::RefGroup, v, i) = put(r.refs[i], v)

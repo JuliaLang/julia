@@ -7,12 +7,13 @@
 @rem
 
 set SYS_PATH=%PATH%
-set PATH=%~dp0bin;%~dp0usr\bin;%~dp0..\usr\bin;%~dp0..\..\usr\bin
+set PATH=%~dp0bin;%~dp0usr\bin;%~dp0..\usr\bin;%~dp0..\..\usr\bin;%SYS_PATH%
 set JULIA_EXE=julia-release-readline.exe
 for %%A in (%JULIA_EXE%) do set JULIA_HOME=%%~dp$PATH:A
 set JULIA=%JULIA_HOME%%JULIA_EXE%
-set PATH=%JULIA_HOME%..\lib\julia;%JULIA_HOME%..\lib;.;%SYS_PATH%;%~dp0\Git\bin
-set HOME=%JULIA_HOME%..\..
+set PATH=%JULIA_HOME%;%JULIA_HOME%..\lib\julia;%JULIA_HOME%..\lib;.;%SYS_PATH%;%~dp0\Git\bin;C:\MinGW\msys\1.0\bin;C:\MinGW\bin;C:\Program Files\Git\bin;C:\Program Files (x86)\Git\bin;C:\Python27;C:\Python26;C:\Python25
+set HOME=%APPDATA%\julia
 set JL_PRIVATE_LIBDIR=lib\julia
+set JULIA_EDITOR=start
 
-if not exist "%JULIA_HOME%..\lib\julia\sys.ji" (echo "Preparing Julia for first launch. This may take a while" && echo "You may see two git related errors. This is completely normal" && cd "%JULIA_HOME%..\share\julia\base" && "%JULIA%" -b sysimg.jl && popd && pushd %cd%)
+if not exist "%JULIA_HOME%..\lib\julia\sys.ji" (echo "Preparing Julia for first launch. This may take a while" && echo "You may see two git related errors. This is completely normal" && cd "%JULIA_HOME%..\share\julia\base" && "%JULIA%" -b sysimg.jl && popd && pushd "%cd%")

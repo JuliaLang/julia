@@ -1,5 +1,3 @@
-## abstractarray.jl : Generic array interfaces.
-
 ## Type aliases for convenience ##
 
 typealias AbstractVector{T} AbstractArray{T,1}
@@ -8,6 +6,7 @@ typealias AbstractMatrix{T} AbstractArray{T,2}
 ## Basic functions ##
 
 size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
+eltype(x) = Any
 eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
 eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
@@ -15,6 +14,7 @@ ndims{T,n}(::AbstractArray{T,n}) = n
 ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
 length(t::AbstractArray) = prod(size(t))
+endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
 
@@ -49,26 +49,26 @@ function trailingsize(A, n)
 end
 
 ## Bounds checking ##
-function check_bounds(sz::Int, I::Real)
+function checkbounds(sz::Int, I::Real)
     I = to_index(I)
     if I < 1 || I > sz
         throw(BoundsError())
     end
 end
 
-function check_bounds(sz::Int, I::AbstractVector{Bool})
+function checkbounds(sz::Int, I::AbstractVector{Bool})
     if length(I) > sz
         throw(BoundsError())
     end
 end
 
-function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
-    if min(I) < 1 || max(I) > sz
+function checkbounds{T<:Integer}(sz::Int, I::Ranges{T})
+    if !isempty(I) && (min(I) < 1 || max(I) > sz)
         throw(BoundsError())
     end
 end
 
-function check_bounds{T <: Real}(sz::Int, I::AbstractVector{T})
+function checkbounds{T <: Real}(sz::Int, I::AbstractVector{T})
     for i in I
         i = to_index(i)
         if i < 1 || i > sz
@@ -77,38 +77,54 @@ function check_bounds{T <: Real}(sz::Int, I::AbstractVector{T})
     end
 end
 
-function check_bounds(A::AbstractArray, I::AbstractArray{Bool})
+function checkbounds(A::AbstractArray, I::AbstractArray{Bool})
     if !isequal(size(A), size(I)) throw(BoundsError()) end
 end
 
-check_bounds(A::AbstractArray, I) = check_bounds(length(A), I)
+checkbounds(A::AbstractArray, I) = checkbounds(length(A), I)
 
-function check_bounds(A::AbstractMatrix, I, J)
-    check_bounds(size(A,1), I)
-    check_bounds(size(A,2), J)
+function checkbounds(A::AbstractMatrix, I, J)
+    checkbounds(size(A,1), I)
+    checkbounds(size(A,2), J)
 end
 
-function check_bounds(A::AbstractArray, I, J)
-    check_bounds(size(A,1), I)
+function checkbounds(A::AbstractArray, I, J)
+    checkbounds(size(A,1), I)
     sz = size(A,2)
     for i = 3:ndims(A)
         sz *= size(A, i) # TODO: sync. with decision on issue #1030
     end
-    check_bounds(sz, J)
+    checkbounds(sz, J)
 end
 
-function check_bounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
+function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
     n = length(I)
     if n > 0
         for dim = 1:(n-1)
-            check_bounds(size(A,dim), I[dim])
+            checkbounds(size(A,dim), I[dim])
         end
         sz = size(A,n)
         for i = n+1:ndims(A)
             sz *= size(A,i)     # TODO: sync. with decision on issue #1030
         end
-        check_bounds(sz, I[n])
+        checkbounds(sz, I[n])
     end
+end
+
+## Bounds-checking without errors ##
+in_bounds(l::Int, i::Integer) = 1 <= i <= l
+function in_bounds(sz::Dims, I::Int...)
+    n = length(I)
+    for dim = 1:(n-1)
+        if !(1 <= I[dim] <= sz[dim])
+            return false
+        end
+    end
+    s = sz[n]
+    for i = n+1:length(sz)
+        s *= sz[i]
+    end
+    1 <= I[n] <= s
 end
 
 ## Constructors ##
@@ -124,21 +140,21 @@ function reshape(a::AbstractArray, dims::Dims)
     if prod(dims) != length(a)
         error("reshape: invalid dimensions")
     end
-    b = similar(a, dims)
-    for i=1:length(a)
-        b[i] = a[i]
-    end
-    return b
+    copy!(similar(a, dims), a)
 end
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
-vec(a::AbstractArray) = reshape(a,max(size(a)))
+vec(a::AbstractArray) = reshape(a,length(a))
 
-function squeeze(A::AbstractArray)
+function squeeze(A::AbstractArray, dims)
     d = ()
-    for i in size(A)
-        if i != 1
-            d = tuple(d..., i)
+    for i in 1:ndims(A)
+        if contains(dims,i)
+            if size(A,i) != 1
+                error("squeezed dims must all be size 1")
+            end
+        else
+            d = tuple(d..., size(A,i))
         end
     end
     reshape(A, d)
@@ -151,7 +167,7 @@ function fill!(A::AbstractArray, x)
     return A
 end
 
-function copy_to(dest::AbstractArray, src)
+function copy!(dest::AbstractArray, src)
     i = 1
     for x in src
         dest[i] = x
@@ -160,7 +176,8 @@ function copy_to(dest::AbstractArray, src)
     return dest
 end
 
-copy(a::AbstractArray) = copy_to(similar(a), a)
+copy(a::AbstractArray) = copy!(similar(a), a)
+copy(a::AbstractArray{None}) = a # cannot be assigned into so is immutable
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
@@ -188,23 +205,26 @@ for (f,t) in ((:char,   Char),
               (:int16,  Int16),
               (:int32,  Int32),
               (:int64,  Int64),
+              (:int128, Int128),
+              (:uint,   Uint),
               (:uint8,  Uint8),
               (:uint16, Uint16),
               (:uint32, Uint32),
-              (:uint64, Uint64))
+              (:uint64, Uint64),
+              (:uint128,Uint128))
     @eval ($f)(x::AbstractArray{$t}) = x
     @eval ($f)(x::AbstractArray) = iround_to(similar(x,$t), x)
 end
 
 bool(x::AbstractArray{Bool}) = x
-bool(x::AbstractArray) = copy_to(similar(x,Bool), x)
+bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
 for (f,t) in ((:float32,    Float32),
               (:float64,    Float64),
               (:complex64,  Complex64),
               (:complex128, Complex128))
     @eval ($f)(x::AbstractArray{$t}) = x
-    @eval ($f)(x::AbstractArray) = copy_to(similar(x,$t), x)
+    @eval ($f)(x::AbstractArray) = copy!(similar(x,$t), x)
 end
 
 integer{T<:Integer}(x::AbstractArray{T}) = x
@@ -214,8 +234,8 @@ complex{T<:Complex}(x::AbstractArray{T}) = x
 
 integer (x::AbstractArray) = iround_to(similar(x,typeof(integer(one(eltype(x))))), x)
 unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
-float   (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
-complex (x::AbstractArray) = copy_to(similar(x,typeof(complex(one(eltype(x))))), x)
+float   (x::AbstractArray) = copy!(similar(x,typeof(float(one(eltype(x))))), x)
+complex (x::AbstractArray) = copy!(similar(x,typeof(complex(one(eltype(x))))), x)
 
 dense(x::AbstractArray) = x
 full(x::AbstractArray) = x
@@ -441,9 +461,18 @@ end
 
 
 
-## Indexing: ref ##
+## Indexing: getindex ##
 
-ref(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
+getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
+
+# linear indexing with a single multi-dimensional index
+function getindex(A::AbstractArray, I::AbstractArray)
+    x = similar(A, size(I))
+    for i=1:length(I)
+        x[i] = A[I[i]]
+    end
+    return x
+end
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
@@ -490,12 +519,12 @@ function circshift(a, shiftamts)
     a[I...]::typeof(a)
 end
 
-## Indexing: assign ##
+## Indexing: setindex! ##
 
 # 1-d indexing is assumed defined on subtypes
-assign(t::AbstractArray, x, i::Real) =
-    error("assign not defined for ",typeof(t))
-assign(t::AbstractArray, x) = throw(MethodError(assign, (t, x)))
+setindex!(t::AbstractArray, x, i::Real) =
+    error("setindex! not defined for ",typeof(t))
+setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
 
 ## Concatenation ##
 
@@ -552,7 +581,7 @@ function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
         for k=1:nargs
             Ak = A[k]
             n = length(Ak)
-            copy_to(B, pos, Ak, 1, n)
+            copy!(B, pos, Ak, 1, n)
             pos += n
         end
     else
@@ -860,7 +889,8 @@ end
 for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
     @eval function ($f)(v::AbstractVector)
         n = length(v)
-        c = similar(v, n)
+        c = $(op===:+ ? (:(similar(v,typeof(+zero(eltype(v)))))) :
+                        (:(similar(v))))
         if n == 0; return c; end
 
         c[1] = v[1]
@@ -879,11 +909,12 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
             axis_stride *= size(A,i)
         end
 
-        if axis_size <= 1
-            return A
-        end
+        B = $(op===:+ ? (:(similar(A,typeof(+zero(eltype(A)))))) :
+                        (:(similar(A))))
 
-        B = similar(A)
+        if axis_size < 1
+            return B
+        end
 
         for i = 1:length(A)
             if div(i-1, axis_stride) % axis_size == 0
@@ -921,7 +952,7 @@ for (f, op) = ((:cummin, :min), (:cummax, :max))
             axis_stride *= size(A,i)
         end
 
-        if axis_size <= 1
+        if axis_size < 1
             return A
         end
 
@@ -941,14 +972,14 @@ for (f, op) = ((:cummin, :min), (:cummax, :max))
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
 
-## ipermute in terms of permute ##
+## ipermutedims in terms of permutedims ##
 
-function ipermute(A::AbstractArray,perm)
+function ipermutedims(A::AbstractArray,perm)
     iperm = Array(Int,length(perm))
     for i = 1:length(perm)
 	iperm[perm[i]] = i
     end
-    return permute(A,iperm)
+    return permutedims(A,iperm)
 end
 
 ## Other array functions ##
@@ -1051,36 +1082,8 @@ indices(I::Tuple) = map(indices, I)
 
 ## iteration utilities ##
 
-# TODO: something sensible should happen when each_col et. al. are used with a
-# pure function argument
-function each_col!(f::Function, a::AbstractMatrix)
-    m = size(a,1)
-    for i = 1:m:length(a)
-        f(sub(a, i:(i+m-1)))
-    end
-    return a
-end
-
-function each_row!(f::Function, a::AbstractMatrix)
-    m = size(a,1)
-    for i = 1:m
-        f(sub(a, i:m:length(a)))
-    end
-    return a
-end
-
-function each_vec!(f::Function, a::AbstractMatrix, dim::Integer)
-    if dim == 1; return each_col!(f,a); end
-    if dim == 2; return each_row!(f,a); end
-    error("invalid matrix dimensions: ", dim)
-end
-
-each_col(f::Function, a::AbstractMatrix) = each_col!(f,copy(a))
-each_row(f::Function, a::AbstractMatrix) = each_row!(f,copy(a))
-each_vec(f::Function, a::AbstractMatrix, d::Integer) = each_vec!(f,copy(a),d)
-
 # slow, but useful
-function cartesian_map(body, t::(Int...), it...)
+function cartesianmap(body, t::(Int...), it...)
     idx = length(t)-length(it)
     if idx == 1
         for i = 1:t[1]
@@ -1095,23 +1098,23 @@ function cartesian_map(body, t::(Int...), it...)
     elseif idx > 1
         for j = 1:t[idx]
             for i = 1:t[idx-1]
-                cartesian_map(body, t, i, j, it...)
+                cartesianmap(body, t, i, j, it...)
             end
         end
     else
-        throw(ArgumentError("cartesian_map"))
+        throw(ArgumentError("cartesianmap"))
     end
 end
 
-cartesian_map(body, t::()) = (body(); nothing)
+cartesianmap(body, t::()) = (body(); nothing)
 
-function cartesian_map(body, t::(Int,))
+function cartesianmap(body, t::(Int,))
     for i = 1:t[1]
         body(i)
     end
 end
 
-function cartesian_map(body, t::(Int,Int))
+function cartesianmap(body, t::(Int,Int))
     for j = 1:t[2]
         for i = 1:t[1]
             body(i,j)
@@ -1119,7 +1122,7 @@ function cartesian_map(body, t::(Int,Int))
     end
 end
 
-function cartesian_map(body, t::(Int,Int,Int))
+function cartesianmap(body, t::(Int,Int,Int))
     for k = 1:t[3]
         for j = 1:t[2]
             for i = 1:t[1]
@@ -1191,7 +1194,7 @@ function bsxfun(f, a::AbstractArray, b::AbstractArray)
         end
         c[cidxs...] = f(aa, bb)
     end
-    cartesian_map(sliceop, range)
+    cartesianmap(sliceop, range)
     c
 end
 
@@ -1199,3 +1202,312 @@ bsxfun(f, a, b) = f(a, b)
 bsxfun(f, a::AbstractArray, b) = f(a, b)
 bsxfun(f, a, b::AbstractArray) = f(a, b)
 bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)
+
+# Basic AbstractArray functions
+
+function nnz{T}(a::AbstractArray{T})
+    n = 0
+    for i = 1:length(a)
+        n += a[i] != zero(T) ? 1 : 0 
+    end
+    return n
+end
+
+# for reductions that expand 0 dims to 1
+reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 :
+                                               size(A,i)))
+
+# keep 0 dims in place
+reduced_dims0(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
+                                                contains(region, i) ? 1 :
+                                                size(A,i)))
+
+reducedim(f::Function, A, region, v0) =
+    reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
+
+max{T}(A::AbstractArray{T}, b::(), region) =
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
+min{T}(A::AbstractArray{T}, b::(), region) =
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
+sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
+prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
+
+all(A::AbstractArray{Bool}, region) = reducedim(all,A,region,true)
+any(A::AbstractArray{Bool}, region) = reducedim(any,A,region,false)
+sum(A::AbstractArray{Bool}, region) = reducedim(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
+sum(A::AbstractArray{Bool}) = sum(A, [1:ndims(A)])[1]
+prod(A::AbstractArray{Bool}) =
+    error("use all() instead of prod() for boolean arrays")
+prod(A::AbstractArray{Bool}, region) =
+    error("use all() instead of prod() for boolean arrays")
+
+function sum{T}(A::AbstractArray{T})
+    if isempty(A)
+        return zero(T)
+    end
+    v = A[1]
+    for i=2:length(A)
+        v += A[i]
+    end
+    v
+end
+
+function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
+    n = length(A)
+    if (n == 0)
+        return zero(T)
+    end
+    s = A[1]
+    c = zero(T)
+    for i in 2:n
+        Ai = A[i]
+        t = s + Ai
+        if abs(s) >= abs(Ai)
+            c += ((s-t) + Ai)
+        else
+            c += ((Ai-t) + s)
+        end
+        s = t
+    end
+
+    s + c
+end
+
+# Uses K-B-N summation
+function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
+    n = length(v)
+    r = similar(v, n)
+    if n == 0; return r; end
+
+    s = r[1] = v[1]
+    c = zero(T)
+    for i=2:n
+        vi = v[i]
+        t = s + vi
+        if abs(s) >= abs(vi)
+            c += ((s-t) + vi)
+        else
+            c += ((vi-t) + s)
+        end
+        s = t
+        r[i] = s+c
+    end
+    return r
+end
+
+# Uses K-B-N summation
+function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer)
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+    axis_stride = 1
+    for i = 1:(axis-1)
+        axis_stride *= size(A,i)
+    end
+
+    if axis_size <= 1
+        return A
+    end
+
+    B = similar(A)
+    C = similar(A)
+
+    for i = 1:length(A)
+        if div(i-1, axis_stride) % axis_size == 0
+            B[i] = A[i]
+            C[i] = zero(T)
+        else
+            s = B[i-axis_stride]
+            Ai = A[i]
+            B[i] = t = s + Ai
+            if abs(s) >= abs(Ai)
+                C[i] = C[i-axis_stride] + ((s-t) + Ai)
+            else
+                C[i] = C[i-axis_stride] + ((Ai-t) + s)
+            end
+        end
+    end
+
+    return B + C
+end
+
+function prod{T}(A::AbstractArray{T})
+    if isempty(A)
+        return one(T)
+    end
+    v = A[1]
+    for i=2:length(A)
+        v *= A[i]
+    end
+    v
+end
+
+function min{T<:Integer}(A::AbstractArray{T})
+    if isempty(A); error("min: argument is empty"); end
+    v = A[1]
+    for i=2:length(A)
+        x = A[i]
+        if x < v
+            v = x
+        end
+    end
+    v
+end
+
+function max{T<:Integer}(A::AbstractArray{T})
+    if isempty(A); error("max: argument is empty"); end
+    v = A[1]
+    for i=2:length(A)
+        x = A[i]
+        if x > v
+            v = x
+        end
+    end
+    v
+end
+
+## map over arrays ##
+
+## along an axis
+function amap(f::Function, A::AbstractArray, axis::Integer)
+    warn_once("amap is deprecated, use mapslices(f, A, dims) instead")
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+
+    if axis_size == 0
+        return f(A)
+    end
+
+    idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
+    r = f(sub(A, idx))
+    R = Array(typeof(r), axis_size)
+    R[1] = r
+
+    for i = 2:axis_size
+        idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
+        R[i] = f(sub(A, idx))
+    end
+
+    return R
+end
+
+## transform any set of dimensions
+## dims specifies which dimensions will be transformed. for example
+## dims==1:2 will call f on all slices A[:,:,...]
+mapslices(f::Function, A::AbstractArray, dims) = mapslices(f, A, [dims...])
+function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
+    if isempty(dims)
+        return A
+    end
+
+    dimsA = [size(A)...]
+    ndimsA = ndims(A)
+    alldims = [1:ndimsA]
+
+    if dims == alldims
+        return f(A)
+    end
+
+    otherdims = setdiff(alldims, dims)
+
+    idx = cell(ndimsA)
+    fill!(idx, 1)
+    Asliceshape = tuple(dimsA[dims]...)
+    itershape   = tuple(dimsA[otherdims]...)
+    for d in dims
+        idx[d] = 1:size(A,d)
+    end
+
+    r1 = f(reshape(A[idx...], Asliceshape))
+
+    # determine result size and allocate
+    Rsize = copy(dimsA)
+    # TODO: maybe support removing dimensions
+    if isempty(size(r1))
+        r1 = [r1]
+    end
+    Rsize[dims] = [size(r1)...]
+    R = similar(r1, tuple(Rsize...))
+
+    ridx = cell(ndims(R))
+    fill!(ridx, 1)
+    for d in dims
+        ridx[d] = 1:size(R,d)
+    end
+
+    R[ridx...] = r1
+
+    first = true
+    cartesianmap(itershape) do idxs...
+        if first
+            first = false
+        else
+            ia = [idxs...]
+            idx[otherdims] = ia
+            ridx[otherdims] = ia
+            R[ridx...] = f(reshape(A[idx...], Asliceshape))
+        end
+    end
+
+    return R
+end
+
+
+## 1 argument
+function map_to2(f, first, dest::AbstractArray, A::AbstractArray)
+    dest[1] = first
+    for i=2:length(A)
+        dest[i] = f(A[i])
+    end
+    return dest
+end
+
+function map(f, A::AbstractArray)
+    if isempty(A); return A; end
+    first = f(A[1])
+    dest = similar(A, typeof(first))
+    return map_to2(f, first, dest, A)
+end
+
+## 2 argument
+function map_to2(f, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+    dest[1] = first
+    for i=2:length(A)
+        dest[i] = f(A[i], B[i])
+    end
+    return dest
+end
+
+function map(f, A::AbstractArray, B::AbstractArray)
+    shp = promote_shape(size(A),size(B))
+    if isempty(A)
+        return similar(A, eltype(A), shp)
+    end
+    first = f(A[1], B[1])
+    dest = similar(A, typeof(first), shp)
+    return map_to2(f, first, dest, A, B)
+end
+
+## N argument
+function map_to2(f, first, dest::AbstractArray, As::AbstractArray...)
+    n = length(As[1])
+    i = 1
+    ith = a->a[i]
+    dest[1] = first
+    for i=2:n
+        dest[i] = f(map(ith, As)...)
+    end
+    return dest
+end
+
+function map(f, As::AbstractArray...)
+    shape = mapreduce(size, promote_shape, As)
+    if prod(shape) == 0
+        return similar(As[1], eltype(As[1]), shape)
+    end
+    first = f(map(a->a[1], As)...)
+    dest = similar(As[1], typeof(first), shape)
+    return map_to2(f, first, dest, As...)
+end
+

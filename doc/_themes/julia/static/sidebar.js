@@ -187,4 +187,10 @@ $(function() {
   $(window).scroll(set_sidebar_pos);
   sidebarview.scroll(set_button_margin);
   $(window).resize(set_sidebar_pos);
+
+  $("img[alt]").each(function(){
+      $(this).attr('title', $(this).attr('alt'));
+  });
+
 });
+

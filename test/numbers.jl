@@ -502,8 +502,11 @@ end
 for x=int64(2)^53-2:int64(2)^53+5,
     y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
     u = uint64(x)
-    @test y == float64(itrunc(y))
-    # println("x=$x; y=float64($(itrunc(y)));")
+    if WORD_SIZE == 64
+        @test y == float64(itrunc(y))
+    else
+        @test y == float64(int64(trunc(y)))
+    end
 
     @test (x==y)==(y==x)
     @test (x!=y)==!(x==y)
@@ -616,6 +619,37 @@ end
 
 @test typemax(Uint64) != 2.0^64
 
+@test typemax(Uint64) < float64(typemax(Uint64))
+@test typemax(Int64) < float64(typemax(Int64))
+@test typemax(Uint64) <= float64(typemax(Uint64))
+@test typemax(Int64) <= float64(typemax(Int64))
+
+@test float64(typemax(Uint64)) > typemax(Uint64)
+@test float64(typemax(Int64)) > typemax(Int64)
+@test float64(typemax(Uint64)) >= typemax(Uint64)
+@test float64(typemax(Int64)) >= typemax(Int64)
+
+@test float64(int128(0)) == 0.0
+@test float32(int128(0)) == 0.0f0
+@test float64(int128(-1)) == -1.0
+@test float32(int128(-1)) == -1.0f0
+@test float64(int128(3)) == 3.0
+@test float32(int128(3)) == 3.0f0
+@test float64(uint128(10121)) == 10121.0
+@test float32(uint128(10121)) == 10121.0f0
+@test float64(typemin(Int128)) == -2.0^127
+@test float32(typemin(Int128)) == -2.0f0^127
+@test float64(typemax(Int128)) == 2.0^127
+@test float32(typemax(Int128)) == 2.0f0^127
+@test float64(typemin(Uint128)) == 0.0
+@test float32(typemin(Uint128)) == 0.0f0
+@test float64(typemax(Uint128)) == 2.0^128
+@test float32(typemax(Uint128)) == 2.0f0^128
+
+@test int128(-2.0^127) == typemin(Int128)
+@test float64(uint128(3.7e19)) == 3.7e19
+@test float64(uint128(3.7e30)) == 3.7e30
+
 @test !(NaN <= 1)
 @test !(NaN >= 1)
 @test !(NaN < 1)
@@ -644,7 +678,7 @@ for a = -5:5, b = -5:5
     if a == b == 0; continue; end
     @test a//b == a/b
     @test a//b == a//b
-    @test a//b == rational(a/b)
+    @test a//b == convert(Rational,a/b)
     if b == 0
         @test_fails integer(a//b) == integer(a/b)
     else
@@ -686,6 +720,18 @@ end
 @test (ComplexPair(1,2) + 1//2) * 0.5 == ComplexPair(0.75,1.0)
 @test (ComplexPair(1,2)/ComplexPair(2.5,3.0))*ComplexPair(2.5,3.0) == ComplexPair(1,2)
 @test 0.7 < real(sqrt(ComplexPair(0,1))) < 0.707107
+
+for T in {Int8,Int16,Int32,Int64,Int128}
+    @test abs(typemin(T)) == -typemin(T)
+    for x in {typemin(T),convert(T,-1),zero(T),one(T),typemax(T)}
+        @test signed(unsigned(x)) == x
+    end
+end
+
+for T in {Uint8,Uint16,Uint32,Uint64,Uint128},
+    x in {typemin(T),one(T),typemax(T)}
+    @test unsigned(signed(x)) == x
+end
 
 for S = {Int8,  Int16,  Int32,  Int64},
     U = {Uint8, Uint16, Uint32, Uint64}
@@ -1017,14 +1063,16 @@ end
 
 for x = 2^53-10:2^53+10
     y = float64(x)
-    i = itrunc(y)
+    i = WORD_SIZE == 64 ? itrunc(y) : int64(trunc(y))
     @test int64(trunc(y)) == i
     @test int64(round(y)) == i
     @test int64(floor(y)) == i
     @test int64(ceil(y))  == i
-    @test iround(y)       == i
-    @test ifloor(y)       == i
-    @test iceil(y)        == i
+    if WORD_SIZE == 64
+        @test iround(y)       == i
+        @test ifloor(y)       == i
+        @test iceil(y)        == i
+    end
 end
 
 for x = 2^24-10:2^24+10

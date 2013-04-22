@@ -47,4 +47,4 @@ function main(args, stream)
 end
 
 #main([1600], open("mandel.txt", "w"))
-main(ARGS, stdout_stream)
+main(ARGS, STDOUT)

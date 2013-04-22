@@ -16,7 +16,7 @@ BUILD = $(JULIAHOME)/usr
 JL_PRIVATE_LIBDIR = lib/julia
 JL_LIBDIR = lib
 
-# If we're on debian, default to arch-dependent library dirs
+# This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH = $(shell gcc -print-multiarch)
 JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
@@ -25,6 +25,7 @@ endif
 
 # Cross-compile
 #XC_HOST = i686-w64-mingw32
+#XC_HOST = x86_64-w64-mingw32
 
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
@@ -34,7 +35,13 @@ override OS = WINNT
 override ARCH = i686
 override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
-export WINEPATH := $(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed 's/^programs: =//' | sed 's/:/;/g')
+export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin;$(BUILD)/Git/bin'
+else ifeq ($(XC_HOST),x86_64-w64-mingw32)
+override OS = WINNT
+override ARCH = x86_64
+override OPENBLAS_DYNAMIC_ARCH = 1
+override CROSS_COMPILE=$(XC_HOST)-
+export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin;$(BUILD)/Git/bin'
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -53,7 +60,7 @@ endif
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
 
-# ATLAS must have been previously built with "make -C deps build-atlas" (without -jN),
+# ATLAS must have been previously built with "make -C deps compile-atlas" (without -jN),
 # or installed to usr/lib/libatlas from some another source (built as
 # a shared library, for your platform, single threaded)
 USE_ATLAS = 0
@@ -62,6 +69,9 @@ ATLAS_LIBDIR = $(BUILD)/lib
 
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
+endif
+ifeq ($(BUILD_OS), MINGW32_NT-6.1)
+BUILD_OS=WINNT
 endif
 
 ifeq ($(OS), WINNT)
@@ -88,8 +98,9 @@ USECLANG = 0
 endif
 
 ifeq ($(OS), Darwin)
-OSVER = $(shell uname -r | cut -b 1-2)
-ifeq ($(OSVER), 10)
+DARWINVER = $(shell uname -r | cut -b 1-2)
+OSXVER = $(shell sw_vers -productVersion | cut -b 1-4)
+ifeq ($(DARWINVER), 10)
 USEGCC = 1
 USECLANG = 0
 else
@@ -103,7 +114,7 @@ CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -ggdb3 -DDEBUG
+DEBUGFLAGS = -ggdb3 -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3 -DNDEBUG -falign-functions
 ifneq ($(ARCH), ppc64)
   SHIPFLAGS += -momit-leaf-frame-pointer
@@ -115,7 +126,7 @@ CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -g -DDEBUG
+DEBUGFLAGS = -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3 -DNDEBUG
 ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=10.6
@@ -143,24 +154,33 @@ OPENBLAS_TARGET_ARCH=
 # Use libraries available on the system instead of building them
 
 USE_SYSTEM_LLVM=0
-USE_SYSTEM_LIGHTTPD=0
 USE_SYSTEM_LIBUNWIND=0
 USE_SYSTEM_READLINE=0
 USE_SYSTEM_PCRE=0
 USE_SYSTEM_LIBM=0
+USE_SYSTEM_OPENLIBM=0
 USE_SYSTEM_BLAS=0
 USE_SYSTEM_LAPACK=0
 USE_SYSTEM_FFTW=0
 USE_SYSTEM_GMP=0
 USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
-USE_SYSTEM_GLPK=0
-USE_SYSTEM_LIGHTTPD=0
-USE_SYSTEM_NGINX=0
 USE_SYSTEM_ZLIB=0
+USE_SYSTEM_GRISU=0
+USE_SYSTEM_RMATH=0
+USE_SYSTEM_LIBUV=0
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
+endif
+
+# Snow Leopard specific configuration
+ifeq ($(OS), Darwin)
+ifeq ($(OSXVER), 10.6)
+USE_SYSTEM_LIBM = 1
+USE_SYSTEM_BLAS = 1
+USE_SYSTEM_LAPACK = 1
+endif
 endif
 
 # ===========================================================================
@@ -172,7 +192,7 @@ LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG=llvm-config
+LLVM_CONFIG ?= llvm-config
 else
 LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
 endif
@@ -229,6 +249,14 @@ LIBM = -lopenlibm
 LIBMNAME = libopenlibm
 endif
 
+ifeq ($(USE_SYSTEM_LIBUV), 1)
+  LIBUV = /usr/lib/libuv-julia.a
+  LIBUV_INC = /usr/include
+else
+  LIBUV = $(BUILD)/lib/libuv.a
+  LIBUV_INC = $(JULIAHOME)/deps/libuv/include
+endif
+
 ifeq ($(USE_MKL), 1)
   USE_LIB64 = 0
 endif
@@ -281,7 +309,7 @@ else
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 JLDFLAGS = -Wl,-Bdynamic
 endif
 
@@ -306,6 +334,10 @@ OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.e
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
 LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
+JLDFLAGS = -Wl,--stack,8388608
+ifeq ($(ARCH),i686)
+JLDFLAGS += -Wl,--large-address-aware
+endif
 endif
 
 # MKL
@@ -372,7 +404,6 @@ JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
 else
 JULIA_EXECUTABLE = $(JULIAHOME)/julia
 endif
-
 
 # Colors for make
 ifndef USE_QUIET

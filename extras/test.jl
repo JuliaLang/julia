@@ -70,16 +70,16 @@ function test_printer_raw(hdl::Task)
             print(".")
         else
             println("")
-            dump(stdout_stream, t)
+            dump(STDOUT, t)
             println("")
         end
     end
     println("")
 end
 
-function dump(io::IOStream, t::TestResult)
+function dump(io, t::TestResult)
     println(io, "In $(t.context) / $(t.group)")
-    println(io, strcat(t.expr_str, " ", t.succeed ? "succeeded" : "FAILED"))
+    println(io, string(t.expr_str, " ", t.succeed ? "succeeded" : "FAILED"))
     println(io, "$(t.operation) with args:")
     println(io, "1: $(t.arg1)\n2: $(t.arg2)\n3: $(t.arg3)")
     println(io, "Exception: $(t.exception_thrown)")
@@ -88,10 +88,10 @@ end
 
 # things to set state
 function test_context(context::String)
-    tls(:context, context)
+    task_local_storage(:context, context)
 end
 function test_group(group::String)
-    tls(:group, group)
+    task_local_storage(:group, group)
 end
 
 
@@ -99,21 +99,21 @@ end
 # that does the real work
 macro test(ex)
     quote
-        $(_test(expr(:quote, ex), true))
+        $(_test(Expr(:quote, ex), true))
     end
 end
 
 macro testfails(ex)
     quote
-        $(_test(expr(:quote, ex), false))
+        $(_test(Expr(:quote, ex), false))
     end
 end
 
 function _test(ex::Expr, expect_succeed::Bool)
     local tr = TestResult()
     try
-        tr.context = tls(:context)
-        tr.group = tls(:group)
+        tr.context = task_local_storage(:context)
+        tr.group = task_local_storage(:group)
     catch x
         # not running in a context -- oh well!
     end
@@ -151,11 +151,9 @@ function _test(ex::Expr, expect_succeed::Bool)
         end
     end
     
-    # if we failed with an exception, handle throws_exception
-    if tr.exception_thrown != NoException() && ex.args[1] == :throws_exception
-        if isa(tr.exception_thrown, eval(ex.args[3])) # we got the right one
-            tr.succeed = true
-        end
+    # if we expected an exception, see if we got the right one
+    if ex.args[1] == :throws_exception
+        tr.succeed = isa(tr.exception_thrown, eval(ex.args[3])) # we got the right one
     end
     
     # if we're running takes_less_than, see how we did
