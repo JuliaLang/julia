@@ -79,7 +79,7 @@ end
 
 function MPCComplex(x::MPFRFloat)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_fr, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Int32), &(z.mpc), &(x.mpfr), ROUNDING_MODE[end])
+    ccall((:mpc_set_fr, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{MPFRFloat}, Int32), &(z.mpc), &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -176,7 +176,7 @@ end
 
 function MPCComplex(x::MPFRFloat, y::MPFRFloat)
     z = MPCComplex{DEFAULT_PRECISION[1],DEFAULT_PRECISION[end]}()
-    ccall((:mpc_set_fr_fr, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{Void}, Ptr{Void}, Int32), &(z.mpc), &(x.mpfr), &(y.mpfr), ROUNDING_MODE[end])
+    ccall((:mpc_set_fr_fr, :libmpc), Int32, (Ptr{mpc_struct}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &(z.mpc), &x, &y, ROUNDING_MODE[end])
     return z
 end
 
@@ -275,14 +275,18 @@ end
 with_bigcomplex_precision(f::Function, prec::Integer) = with_bigcomplex_precision(f, prec, prec)
 
 function imag{N,P}(x::MPCComplex{N,P})
-    z = MPFRFloat{N}()
-    ccall((:mpc_imag, :libmpc), Int32, (Ptr{Void}, Ptr{mpc_struct}, Int32), &(z.mpfr), &(x.mpc), ROUNDING_MODE[end])
+    z = with_bigfloat_precision(N) do
+        MPFRFloat()
+    end
+    ccall((:mpc_imag, :libmpc), Int32, (Ptr{MPFRFloat}, Ptr{mpc_struct}, Int32), &z, &(x.mpc), ROUNDING_MODE[end])
     return z
 end
 
 function real{N,P}(x::MPCComplex{N,P})
-    z = MPFRFloat{N}()
-    ccall((:mpc_real, :libmpc), Int32, (Ptr{Void}, Ptr{mpc_struct}, Int32), &(z.mpfr), &(x.mpc), ROUNDING_MODE[end])
+    z = with_bigfloat_precision(N) do
+        MPFRFloat()
+    end
+    ccall((:mpc_real, :libmpc), Int32, (Ptr{MPFRFloat}, Ptr{mpc_struct}, Int32), &z, &(x.mpc), ROUNDING_MODE[end])
     return z
 end
 
@@ -293,8 +297,8 @@ showcompact(io::IO, b::MPCComplex) = print(io, string(b))
 
 # Internal functions
 # Unsafe for general use
-realref(x::MPCComplex) = MPFR.mpfr_struct(x.mpc.reprec, x.mpc.resign, x.mpc.reexp, x.mpc.red)
-imagref(x::MPCComplex) = MPFR.mpfr_struct(x.mpc.imprec, x.mpc.imsign, x.mpc.imexp, x.mpc.imd)
+realref(x::MPCComplex) = MPFRFloat(x.mpc.reprec, x.mpc.resign, x.mpc.reexp, x.mpc.red)
+imagref(x::MPCComplex) = MPFRFloat(x.mpc.imprec, x.mpc.imsign, x.mpc.imexp, x.mpc.imd)
 realint(x::MPCComplex) = ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{Void},), &(realref(x))) != 0
 imagint(x::MPCComplex) = ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{Void},), &(imagref(x))) != 0
 
