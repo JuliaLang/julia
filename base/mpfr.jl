@@ -33,7 +33,7 @@ type MPFRFloat <: FloatingPoint
     function MPFRFloat()
         N = get_bigfloat_precision()
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{MPFRFloat}, Int), &z, N)
+        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{MPFRFloat}, Clong), &z, N)
         finalizer(z, MPFR_clear)
         return z
     end
@@ -87,17 +87,19 @@ end
 MPFRFloat(x::Float32) = MPFRFloat(float64(x))
 MPFRFloat(x::Rational) = MPFRFloat(num(x)) / MPFRFloat(den(x))
 
-# TODO: fix the precision support here
 convert(::Type{MPFRFloat}, x::Rational) = MPFRFloat(x) # to resolve ambiguity
 convert(::Type{MPFRFloat}, x::Real) = MPFRFloat(x)
 
 
-convert(::Type{Int64}, x::MPFRFloat) = integer_valued(x) ?
-    ccall((:mpfr_get_si,:libmpfr), Int64, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end]) :
+convert(::Type{Int64}, x::MPFRFloat) = int64(convert(Clong, x))
+convert(::Type{Int32}, x::MPFRFloat) = int32(convert(Clong, x))
+convert(::Type{Clong}, x::MPFRFloat) = integer_valued(x) ?
+    ccall((:mpfr_get_si,:libmpfr), Clong, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end]) :
     throw(InexactError())
-convert(::Type{Int32}, x::MPFRFloat) = int32(convert(Int64, x))
-convert(::Type{Uint64}, x::MPFRFloat) = integer_valued(x) ?
-    ccall((:mpfr_get_ui,:libmpfr), Uint64, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end]) :
+convert(::Type{Uint32}, x::MPFRFloat) = uint64(convert(Culong, x))
+convert(::Type{Uint32}, x::MPFRFloat) = uint32(convert(Culong, x))
+convert(::Type{Culong}, x::MPFRFloat) = integer_valued(x) ?
+    ccall((:mpfr_get_ui,:libmpfr), Culong, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end]) :
     throw(InexactError())
 function convert(::Type{BigInt}, x::MPFRFloat) 
     if integer_valued(x)
@@ -108,7 +110,6 @@ function convert(::Type{BigInt}, x::MPFRFloat)
         throw(InexactError())
     end
 end
-convert(::Type{Uint32}, x::MPFRFloat) = uint32(convert(Int64, x))
 convert(::Type{Float64}, x::MPFRFloat) = ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{MPFRFloat},), &x)
 convert(::Type{Float32}, x::MPFRFloat) = ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{MPFRFloat},), &x)
 
@@ -160,15 +161,15 @@ for f in (:ceil, :floor, :trunc)
     end
 end
 
-function ^(x::MPFRFloat, y::Uint)
+function ^(x::MPFRFloat, y::Unsigned)
     z = MPFRFloat()
-    ccall((:mpfr_pow_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Uint, Int32), &z, &x, y, ROUNDING_MODE[end])
+    ccall((:mpfr_pow_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Culong, Int32), &z, &x, y, ROUNDING_MODE[end])
     return z
 end
 
-function ^(x::MPFRFloat, y::Int)
+function ^(x::MPFRFloat, y::Signed)
     z = MPFRFloat()
-    ccall((:mpfr_pow_si, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int, Int32), &z, &x, y, ROUNDING_MODE[end])
+    ccall((:mpfr_pow_si, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Clong, Int32), &z, &x, y, ROUNDING_MODE[end])
     return z
 end
 
@@ -208,10 +209,9 @@ function besselj1(x::MPFRFloat)
     return z
 end
 
-function besselj(nu::Integer, x::MPFRFloat)
-    n = int64(nu)
+function besselj(n::Integer, x::MPFRFloat)
     z = MPFRFloat()
-    ccall((:mpfr_jn, :libmpfr), Int32, (Ptr{MPFRFloat}, Int64, Ptr{MPFRFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
+    ccall((:mpfr_jn, :libmpfr), Int32, (Ptr{MPFRFloat}, Clong, Ptr{MPFRFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -227,10 +227,9 @@ function bessely1(x::MPFRFloat)
     return z
 end
 
-function bessely(nu::Integer, x::MPFRFloat)
-    n = int64(nu)
+function bessely(n::Integer, x::MPFRFloat)
     z = MPFRFloat()
-    ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{MPFRFloat}, Int64, Ptr{MPFRFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
+    ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{MPFRFloat}, Clong, Ptr{MPFRFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -238,9 +237,9 @@ function factorial(x::MPFRFloat)
     if x < 0 || !integer_valued(x)
         throw(DomainError())
     end
-    ui = uint64(x)
+    ui = convert(Culong, x)
     z = MPFRFloat()
-    ccall((:mpfr_fac_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Uint64, Int32), &z, ui, ROUNDING_MODE[end])
+    ccall((:mpfr_fac_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Culong, Int32), &z, ui, ROUNDING_MODE[end])
     return z
 end
 
@@ -304,7 +303,7 @@ end
 #     n = length(arr)
 #     ptrarr = [pointer(&x) for x in arr]
 #     ccall((:mpfr_sum, :libmpfr), Int32,
-#         (Ptr{MPFRFloat}, Ptr{Void}, Uint, Int32), 
+#         (Ptr{MPFRFloat}, Ptr{Void}, Culong, Int32), 
 #         &z, ptrarr, n, ROUNDING_MODE[1])
 #     return z
 # end
@@ -334,7 +333,7 @@ end
 >(x::MPFRFloat, y::MPFRFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}), &x, &y) != 0
 
 function get_precision(x::MPFRFloat)
-    return ccall((:mpfr_get_prec, :libmpfr), Int, (Ptr{MPFRFloat},), &x)
+    return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ptr{MPFRFloat},), &x)
 end
 
 get_bigfloat_precision() = DEFAULT_PRECISION[end]
@@ -356,7 +355,7 @@ function exponent(x::MPFRFloat)
         throw(DomainError())
     end
     # The '- 1' is to make it work as Base.exponent
-    return ccall((:mpfr_get_exp, :libmpfr), Int, (Ptr{MPFRFloat},), &x) - 1
+    return ccall((:mpfr_get_exp, :libmpfr), Clong, (Ptr{MPFRFloat},), &x) - 1
 end
 
 function integer_valued(x::MPFRFloat)
@@ -366,7 +365,7 @@ end
 function iround(x::MPFRFloat)
     fits = ccall((:mpfr_fits_slong_p, :libmpfr), Int32, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end])
     if fits != 0
-        return ccall((:mpfr_get_si, :libmpfr), Int64, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end])
+        return ccall((:mpfr_get_si, :libmpfr), Clong, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end])
     end
     z = BigInt()
     ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
@@ -416,13 +415,13 @@ function with_bigfloat_precision(f::Function, precision::Integer)
     return ret
 end
 
-function round(x::MPFRFloat, prec::Int)
+function round(x::MPFRFloat, prec::Integer)
     if prec < 1
         throw(DomainError())
     end
     prec = int(ceil(log2(10^prec)))
     z = MPFRFloat(x)
-    ccall((:mpfr_prec_round, :libmpfr), Int32, (Ptr{MPFRFloat}, Int, Int32), &z, prec, ROUNDING_MODE[end])
+    ccall((:mpfr_prec_round, :libmpfr), Int32, (Ptr{MPFRFloat}, Clong, Int32), &z, prec, ROUNDING_MODE[end])
     return z
 end
 
@@ -430,7 +429,7 @@ function string(x::MPFRFloat)
     lng = 128
     for i = 1:2
         z = Array(Uint8, lng)
-        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Uint, Ptr{Uint8}, Ptr{MPFRFloat}...), z, lng, "%.Re", &x)
+        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{MPFRFloat}...), z, lng, "%.Re", &x)
         if lng < 128 || i == 2
             return bytestring(convert(Ptr{Uint8}, z[1:lng]))
         end
