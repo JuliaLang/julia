@@ -950,7 +950,9 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     int last_depth = ctx->argDepth;
     if (arg1 && !varg1) {
         varg1 = emit_expr(arg1, ctx);
-        if (arg2 && !varg2 && varg1->getType() == jl_pvalue_llvmt) {
+        if (arg2 && !varg2 && varg1->getType() == jl_pvalue_llvmt &&
+            rt1 != (jl_value_t*)jl_sym_type && !jl_is_symbol(arg1) &&
+            !jl_is_symbolnode(arg1)) {
             make_gcroot(varg1, ctx);
         }
     }
