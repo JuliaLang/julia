@@ -57,26 +57,28 @@ end
 isinstalled(pkg::String) =
     pkg != "METADATA" && pkg != "REQUIRE" && isfile(pkg, "src", "$pkg.jl")
 
-function isfixed(pkg::String)
+function isfixed(pkg::String, avail::Dict=available())
     isinstalled(pkg) || error("$pkg is not an installed package.")
     isfile("METADATA", pkg, "url") || return true
     ispath(pkg, ".git") || return true
     cd(pkg) do
         Git.dirty() && return true
         Git.attached() && return true
-        for line in eachline(`git branch -r --contains`)
-            return false
+        head = Git.head()
+        for (ver,info) in avail[pkg]
+            Git.is_ancestor_of(head,info.sha1) && return false
         end
         return true
     end
 end
 
-function installed()
+function installed(avail::Dict=available())
     pkgs = Dict{ByteString,Installed}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        pkgs[pkg] = isfixed(pkg) ? Fixed(
-            typemax(VersionNumber), # TODO: figure out a proxy version number
+        pkgs[pkg] = isfixed(pkg,avail) ? Fixed(
+            # TODO: figure out a good proxy version here
+            typemax(VersionNumber),
             parse_requires(joinpath(pkg, "REQUIRE"))
         ) : Free()
     end
