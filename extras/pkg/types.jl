@@ -24,3 +24,4 @@ immutable Fixed <: Installed
 	version::VersionNumber
 	requires::Requires
 end
+Fixed(v::VersionNumber) = Fixed(v,Requires())

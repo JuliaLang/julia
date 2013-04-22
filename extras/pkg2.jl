@@ -95,6 +95,7 @@ function installed(avail::Dict=available())
             parse_requires(requires_path(pkg,avail))
         )
     end
+    pkgs["julia"] = Fixed(VERSION)
     return pkgs
 end
 
