@@ -1,5 +1,8 @@
 # constructors
-x = MPFRFloat{53}()
+with_bigfloat_precision(53) do
+    x = MPFRFloat()
+    x = MPFRFloat(12)
+end
 x = MPFRFloat(12)
 y = MPFRFloat(x)
 @test_approx_eq x y
@@ -86,10 +89,10 @@ y = MPFRFloat(1)
 @test isnan(y) == false
 
 # convert to
-@test convert(MPFRFloat{53}, 1//2) == MPFRFloat("0.5")
-@test convert(MPFRFloat{53}, 0.5) == MPFRFloat("0.5")
-@test convert(MPFRFloat{53}, 40) == MPFRFloat("40")
-@test convert(MPFRFloat{53}, float32(0.5)) == MPFRFloat("0.5")
+@test convert(MPFRFloat, 1//2) == MPFRFloat("0.5")
+@test convert(MPFRFloat, 0.5) == MPFRFloat("0.5")
+@test convert(MPFRFloat, 40) == MPFRFloat("40")
+@test convert(MPFRFloat, float32(0.5)) == MPFRFloat("0.5")
 
 # convert from
 @test convert(Float64, MPFRFloat(0.5)) == 0.5
@@ -102,6 +105,15 @@ x = MPFRFloat(Inf)
 @test_fails exponent(x)
 x = MPFRFloat(15.674)
 @test exponent(x) == exponent(15.674)
+
+# nextfloat/prevfloat should be immutable
+x = 12.
+y = MPFRFloat(x)
+@test x == y
+nextfloat(y)
+@test x == y
+prevfloat(y)
+@test x == y
 
 # sqrt DomainError
 @test_fails sqrt(MPFRFloat(-1))
