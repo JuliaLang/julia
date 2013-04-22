@@ -144,6 +144,7 @@ export
     Culonglong,
     Cfloat,
     Cdouble,
+    Cwchar_t,
     #Ccomplex_float,
     #Ccomplex_double,
 

@@ -234,6 +234,8 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +------------------------+-------------------+--------------------------------+
 | ``ptrdiff_t``          | ``Cptrdiff_t``    | ``Int``                        |
 +------------------------+-------------------+--------------------------------+
+| ``ssize_t``            | ``Cssize_t``      | ``Int``                        |
++------------------------+-------------------+--------------------------------+
 | ``size_t``             | ``Csize_t``       | ``Uint``                       |
 +------------------------+-------------------+--------------------------------+
 | ``complex float``      | ``Ccomplex_float`` (future addition)               |
@@ -264,6 +266,9 @@ wide. In C, however, ``int`` is often used for boolean values. Since
 ``int`` is 32-bits wide (on all supported systems), there is some
 potential for confusion here.
 
+Julia's ``Char`` type is 32 bits, which is not the same as the wide
+character type (``wchar_t`` or ``wint_t``) on all platforms.
+
 A C function declared to return ``void`` will give ``nothing`` in Julia.
 
 **System-dependent:**
@@ -277,11 +282,10 @@ A C function declared to return ``void`` will give ``nothing`` in Julia.
                                         ``Int32`` (Windows)
 ``unsigned long``       ``Culong``      ``Uint`` (UNIX)
 
-                                        ``Int32`` (Windows)
-``wchar_t``             ``Char``        Although ``wchar_t`` is technically
-                                        system-dependent, on all the
-                                        systems we currently support (UNIX),
-                                        it is 32-bit.
+                                        ``Uint32`` (Windows)
+``wchar_t``             ``Cwchar_t``    ``Int32`` (UNIX)
+
+                                        ``Uint16`` (Windows)
 ======================  ==============  =======
 
 For string arguments (``char*``) the Julia type should be ``Ptr{Uint8}``,

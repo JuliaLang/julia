@@ -44,9 +44,11 @@ typealias Cuint Uint32
 if OS_NAME === :Windows
     typealias Clong Int32
     typealias Culong Uint32
+    typealias Cwchar_t Uint16
 else
     typealias Clong Int
     typealias Culong Uint
+    typealias Cwchar_t Int32
 end
 typealias Cptrdiff_t Int
 typealias Csize_t Uint
