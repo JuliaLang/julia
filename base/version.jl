@@ -24,11 +24,15 @@ immutable VersionNumber
             end
         end
         for ident in bld
-            if !ismatch(r"^[0-9a-z-]*$"i, ident)
-                error("invalid build identifier: $ident")
-            end
-            if isempty(ident) && length(bld)!=1
-                error("invalid pre-release identifier: empty string")
+            if isa(ident,Int)
+                ident >= 0 || error("invalid negative build identifier: $ident")
+            else
+                if !ismatch(r"^[0-9a-z-]*$"i, ident)
+                    error("invalid build identifier: $ident")
+                end
+                if isempty(ident) && length(bld)!=1
+                    error("invalid pre-release identifier: empty string")
+                end
             end
         end
         new(major, minor, patch, pre, bld)
@@ -149,27 +153,21 @@ hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
 
 ## julia version info
 
-if(isfile("$JULIA_HOME/../../VERSION"))
-const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
-elseif(isfile("$JULIA_HOME/../share/julia/VERSION"))
-    const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../share/julia/VERSION"))
-else
-    const VERSION = convert(VersionNumber,"0.0.0")
-end
-if(isfile("$JULIA_HOME/../../COMMIT"))
-    const VERSION_COMMIT = ""
-    const commit_string = readchomp("$JULIA_HOME/../../COMMIT")
-elseif(isfile("$JULIA_HOME/../share/julia/COMMIT"))
-    const VERSION_COMMIT = ""
-    const commit_string = readchomp("$JULIA_HOME/../share/julia/COMMIT")
-else
-
 let
+    local version::VersionNumber
+    if isfile("$JULIA_HOME/../../VERSION")
+        version = readchomp("$JULIA_HOME/../../VERSION")
+    elseif isfile("$JULIA_HOME/../share/julia/VERSION")
+        version = readchomp("$JULIA_HOME/../share/julia/VERSION")
+    else
+        println("ERROR: VERSION file not found")
+        error()
+    end
+
     expected = ErrorException("don't copy this code, for breaking out of uv_run during boot-strapping only")
     acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
                                               # this point in the bootstrapping, conflicts between old and new
                                               # defintions for write, TTY, ASCIIString, and STDOUT make it fail
-    ver = string(VERSION)
 
     outctim,ps = readsfrom(`git log -1 --pretty=format:%ct`)
     ps.closecb = function(proc)
@@ -198,22 +196,23 @@ let
             dirty = m.captures[4] != nothing
 
             if commits_after_tag > 0
-                field = tag < VERSION ? VERSION.prerelease : VERSION.build
+                field = tag < version ? version.prerelease : version.build
                 field = tuple(field..., commits_after_tag, "r$(commit[1:8])")
                 if dirty
                     field = tuple(field..., "dirty")
                 end
                 tag = VersionNumber(
-                    tag.major,
-                    tag.minor,
-                    tag.patch,
-                    tag < VERSION ? field : tag.prerelease,
-                    tag < VERSION ? tag.build : field,
+                    version.major,
+                    version.minor,
+                    version.patch,
+                    tag < version ? field : version.prerelease,
+                    tag < version ? version.build : field,
                 )
             end
-
             isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
             global const commit_string = "Commit $commit $isotime" * (dirty ? "*" : "")
+
+            global const VERSION = tag
             global const VERSION_COMMIT = commit
             error(expected)
         end
@@ -224,7 +223,14 @@ let
                          # so we do what we must, but don't do this in user-land code or you'll regret it
     catch err
         if err != expected
-            global const commit_string = ""
+            if isfile("$JULIA_HOME/../../COMMIT")
+                global const commit_string = readchomp("$JULIA_HOME/../../COMMIT")
+            elseif isfile("$JULIA_HOME/../share/julia/COMMIT")
+                global const commit_string = readchomp("$JULIA_HOME/../share/julia/COMMIT")
+            else
+                global const commit_string = ""
+            end
+            global const VERSION = VersionNumber(0,0,0)
             global const VERSION_COMMIT = ""
             if err == acceptable
                 println("Warning: git failed in version.jl")
@@ -234,7 +240,6 @@ let
             end
         end
     end
-end
 end
 begin
 const version_string = "Version $VERSION"
