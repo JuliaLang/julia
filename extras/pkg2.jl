@@ -72,15 +72,28 @@ function isfixed(pkg::String, avail::Dict=available())
     end
 end
 
+function requires_path(pkg::String, avail::Dict=available())
+    cd(pkg) do
+        Git.dirty("REQUIRE") && return joinpath(pkg, "REQUIRE")
+        head = Git.head()
+        for (ver,info) in avail[pkg]
+            if head == info.sha1
+                return joinpath("METADATA", pkg, "versions", string(ver), "requires")
+            end
+        end
+        return joinpath(pkg, "REQUIRE")
+    end
+end
+
 function installed(avail::Dict=available())
     pkgs = Dict{ByteString,Installed}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        pkgs[pkg] = isfixed(pkg,avail) ? Fixed(
+        pkgs[pkg] = !isfixed(pkg,avail) ? Free() : Fixed(
             # TODO: figure out a good proxy version here
             typemax(VersionNumber),
-            parse_requires(joinpath(pkg, "REQUIRE"))
-        ) : Free()
+            parse_requires(requires_path(pkg,avail))
+        )
     end
     return pkgs
 end
