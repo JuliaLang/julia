@@ -195,6 +195,7 @@ export
 # Operators
     !,
     !=,
+    !==,
     $,
     %,
     &,
