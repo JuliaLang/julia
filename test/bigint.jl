@@ -104,16 +104,16 @@ end
 @test int64(-1)-a == -b
 
 # Unsigned subtraction
-@test a+true == b
-@test a+uint8(1) == b
-@test a+uint16(1) == b
-@test a+uint32(1) == b
-@test a+uint64(1) == b
-@test true+a == b
-@test uint8(1)+ a == b
-@test uint16(1)+a == b
-@test uint32(1)+a == b
-@test uint64(1)+a == b
+@test b-true == a
+@test b-uint8(1) == a
+@test b-uint16(1) == a
+@test b-uint32(1) == a
+@test b-uint64(1) == a
+@test true-b == -a
+@test uint8(1)- b == -a
+@test uint16(1)-b == -a
+@test uint32(1)-b == -a
+@test uint64(1)-b == -a
 
 # Signed multiplication
 @test a*int8(1) == a

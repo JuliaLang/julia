@@ -102,7 +102,7 @@ end
 *(x::BigInt, c::Unsigned) = x * convert(Culong, c)
 function *(x::BigInt, c::Clong)
     z = BigInt()
-    ccall((:__gmpz_mul_si, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
+    ccall((:__gmpz_mul_si, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Clong), &z, &x, c)
     return z
 end
 *(c::Clong, x::BigInt) = x * c
