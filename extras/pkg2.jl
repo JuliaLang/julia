@@ -73,14 +73,11 @@ function isfixed(pkg::String, avail::Dict=available())
 end
 
 function version_number(pkg::String, avail::Dict=available())
-    head, dirty = cd(pkg) do
-        Git.head(), Git.dirty()
-    end
+    head = cd(Git.head,pkg)
     lo = typemin(VersionNumber)
     hi = typemin(VersionNumber)
     for (ver,info) in avail[pkg]
-        head == info.sha1 && return !dirty ? ver :
-            VersionNumber(ver.major, ver.minor, ver.patch, (), ("",))
+        head == info.sha1 && return ver
         base = cd(()->readchomp(`git merge-base $head $(info.sha1)`), pkg)
         if base == head # Git.is_ancestor_of(head, info.sha1)
             lo = max(lo,ver)
