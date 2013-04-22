@@ -3,7 +3,6 @@ tol = 1e-12
 a = BigFloat("12.34567890121")
 b = BigFloat("12.34567890122")
 
-@test typeof(a+1e-11) == BigFloat
 @test_approx_eq_eps a+1e-11 b tol
 @test !(b == a)
 @test b > a

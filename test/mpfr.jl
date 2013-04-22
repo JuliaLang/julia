@@ -324,3 +324,170 @@ with_bigfloat_precision(53) do
         @test_approx_eq atanh(MPFRFloat(j)) atanh(j)
     end
 end
+
+# basic arithmetic
+# Signed addition
+a = MPFRFloat("123456789012345678901234567890")
+b = MPFRFloat("123456789012345678901234567891")
+@test a+int8(1) == b
+@test a+int16(1) == b
+@test a+int32(1) == b
+@test a+int64(1) == b
+@test int8(1)+ a == b
+@test int16(1)+a == b
+@test int32(1)+a == b
+@test int64(1)+a == b
+@test b+int8(-1) == a
+@test b+int16(-1) == a
+@test b+int32(-1) == a
+@test b+int64(-1) == a
+@test int8(-1)+ b == a
+@test int16(-1)+b == a
+@test int32(-1)+b == a
+@test int64(-1)+b == a
+
+# Unsigned addition
+@test a+true == b
+@test a+uint8(1) == b
+@test a+uint16(1) == b
+@test a+uint32(1) == b
+@test a+uint64(1) == b
+@test true+a == b
+@test uint8(1)+ a == b
+@test uint16(1)+a == b
+@test uint32(1)+a == b
+@test uint64(1)+a == b
+
+# Float64 addition
+@test a + 1.0f0 == b
+@test 1.0f0 + a == b
+@test a + 1.0 == b
+@test 1.0 + a == b
+
+# BigInt addition
+@test a + BigInt(1) == b
+@test BigInt(1) + a == b
+
+# Signed subtraction
+@test b-int8(1) == a
+@test b-int16(1) == a
+@test b-int32(1) == a
+@test b-int64(1) == a
+@test int8(1)- b == -a
+@test int16(1)-b == -a
+@test int32(1)-b == -a
+@test int64(1)-b == -a
+@test a-int8(-1) == b
+@test a-int16(-1) == b
+@test a-int32(-1) == b
+@test a-int64(-1) == b
+@test int8(-1)- a == -b
+@test int16(-1)-a == -b
+@test int32(-1)-a == -b
+@test int64(-1)-a == -b
+
+# Unsigned subtraction
+@test b-true == a
+@test b-uint8(1) == a
+@test b-uint16(1) == a
+@test b-uint32(1) == a
+@test b-uint64(1) == a
+@test true-b == -a
+@test uint8(1)- b == -a
+@test uint16(1)-b == -a
+@test uint32(1)-b == -a
+@test uint64(1)-b == -a
+
+# Float64 subtraction
+@test b - 1.0f0 == a
+@test 1.0f0 - b == -a
+@test b - 1.0 == a
+@test 1.0 - b == -a
+
+# BigInt subtraction
+@test b - BigInt(1) == a
+@test BigInt(1) - b == -a
+
+# Signed multiplication
+@test a*int8(1) == a
+@test a*int16(1) == a
+@test a*int32(1) == a
+@test a*int64(1) == a
+@test int8(1)* a == a
+@test int16(1)*a == a
+@test int32(1)*a == a
+@test int64(1)*a == a
+@test a*int8(-1) == -a
+@test a*int16(-1) == -a
+@test a*int32(-1) == -a
+@test a*int64(-1) == -a
+@test int8(-1)* a == -a
+@test int16(-1)*a == -a
+@test int32(-1)*a == -a
+@test int64(-1)*a == -a
+
+# Unsigned multiplication
+@test a*true == a
+@test a*uint8(1) == a
+@test a*uint16(1) == a
+@test a*uint32(1) == a
+@test a*uint64(1) == a
+@test true*a == a
+@test uint8(1)* a == a
+@test uint16(1)*a == a
+@test uint32(1)*a == a
+@test uint64(1)*a == a
+
+# Float64 multiplication
+@test a * 1.0f0 == a
+@test 1.0f0 * a == a
+@test a * 1.0 == a
+@test 1.0 * a == a
+
+# BigInt multiplication
+@test a * BigInt(1) == a
+@test BigInt(1) * a == a
+
+# Signed division
+c = BigInt("61728394506172839450617283945")
+# d = 2^200
+d = MPFRFloat("1606938044258990275541962092341162602522202993782792835301376")
+e = MPFRFloat("6.223015277861141707144064053780124240590252168721167133101116614789698834035383e-61")
+
+@test a/int8(2) == c
+@test a/int16(2) == c
+@test a/int32(2) == c
+@test a/int64(2) == c
+@test int8(1)/ d == e
+@test int16(1)/d == e
+@test int32(1)/d == e
+@test int64(1)/d == e
+@test a/int8(-2) == -c
+@test a/int16(-2) == -c
+@test a/int32(-2) == -c
+@test a/int64(-2) == -c
+@test int8(-1)/ d == -e
+@test int16(-1)/d == -e
+@test int32(-1)/d == -e
+@test int64(-1)/d == -e
+
+# Unsigned division
+@test a/true == a
+@test a/uint8(2) == c
+@test a/uint16(2) == c
+@test a/uint32(2) == c
+@test a/uint64(2) == c
+@test true/d == e
+@test uint8(1)/ d == e
+@test uint16(1)/d == e
+@test uint32(1)/d == e
+@test uint64(1)/d == e
+
+# Float64 division
+@test a / 2.0f0 == c
+@test 1.0f0 / d == e
+@test a / 2.0 == c
+@test 1.0 / d == e
+
+# BigInt division
+@test a / BigInt(2) == c
