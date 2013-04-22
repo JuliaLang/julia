@@ -72,7 +72,7 @@ function isfixed(pkg::String, avail::Dict=available())
     end
 end
 
-function version_number(pkg::String, avail::Dict=available())
+function installed_version(pkg::String, avail::Dict=available())
     head = cd(Git.head,pkg)
     lo = typemin(VersionNumber)
     hi = typemin(VersionNumber)
@@ -110,7 +110,7 @@ function installed(avail::Dict=available())
     for pkg in readdir()
         isinstalled(pkg) || continue
         pkgs[pkg] = !isfixed(pkg,avail) ? Free() :
-            Fixed(version_number(pkg,avail), requires_dict(pkg,avail))
+            Fixed(installed_version(pkg,avail), requires_dict(pkg,avail))
     end
     pkgs["julia"] = Fixed(VERSION)
     return pkgs
