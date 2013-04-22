@@ -325,6 +325,9 @@ with_bigfloat_precision(53) do
     end
 end
 
+# hypot
+@test hypot(MPFRFloat(3), MPFRFloat(4)) == 5
+
 # basic arithmetic
 # Signed addition
 a = MPFRFloat("123456789012345678901234567890")
@@ -452,24 +455,24 @@ b = MPFRFloat("123456789012345678901234567891")
 c = BigInt("61728394506172839450617283945")
 # d = 2^200
 d = MPFRFloat("1606938044258990275541962092341162602522202993782792835301376")
-e = MPFRFloat("6.223015277861141707144064053780124240590252168721167133101116614789698834035383e-61")
+f = MPFRFloat("6.223015277861141707144064053780124240590252168721167133101116614789698834035383e-61")
 
 @test a/int8(2) == c
 @test a/int16(2) == c
 @test a/int32(2) == c
 @test a/int64(2) == c
-@test int8(1)/ d == e
-@test int16(1)/d == e
-@test int32(1)/d == e
-@test int64(1)/d == e
+@test int8(1)/ d == f
+@test int16(1)/d == f
+@test int32(1)/d == f
+@test int64(1)/d == f
 @test a/int8(-2) == -c
 @test a/int16(-2) == -c
 @test a/int32(-2) == -c
 @test a/int64(-2) == -c
-@test int8(-1)/ d == -e
-@test int16(-1)/d == -e
-@test int32(-1)/d == -e
-@test int64(-1)/d == -e
+@test int8(-1)/ d == -f
+@test int16(-1)/d == -f
+@test int32(-1)/d == -f
+@test int64(-1)/d == -f
 
 # Unsigned division
 @test a/true == a
@@ -477,17 +480,17 @@ e = MPFRFloat("6.223015277861141707144064053780124240590252168721167133101116614
 @test a/uint16(2) == c
 @test a/uint32(2) == c
 @test a/uint64(2) == c
-@test true/d == e
-@test uint8(1)/ d == e
-@test uint16(1)/d == e
-@test uint32(1)/d == e
-@test uint64(1)/d == e
+@test true/d == f
+@test uint8(1)/ d == f
+@test uint16(1)/d == f
+@test uint32(1)/d == f
+@test uint64(1)/d == f
 
 # Float64 division
 @test a / 2.0f0 == c
-@test 1.0f0 / d == e
+@test 1.0f0 / d == f
 @test a / 2.0 == c
-@test 1.0 / d == e
+@test 1.0 / d == f
 
 # BigInt division
 @test a / BigInt(2) == c

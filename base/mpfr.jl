@@ -11,11 +11,11 @@ export
     
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1,
-        bessely, bessely0, bessely1, ceil, cmp, convert, copysign, exp, exp2, 
-        exponent, factorial, floor, integer_valued, iround, isfinite, isinf, 
-        isnan, log, log2, log10, max, min, mod, modf, nextfloat, prevfloat, 
-        promote_rule, rem, round, show, showcompact, sum, sqrt, string, trunc,
-        get_precision,
+        bessely, bessely0, bessely1, ceil, cmp, convert, copysign, exp, exp2,
+        exponent, factorial, floor, hypot, integer_valued, iround, isfinite,
+        isinf, isnan, log, log2, log10, max, min, mod, modf, nextfloat,
+        prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
+        string, trunc, get_precision,
     # import trigonometric functions
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
         sech, csch, coth, acosh, asinh, atanh
@@ -419,6 +419,12 @@ function factorial(x::MPFRFloat)
     ui = convert(Culong, x)
     z = MPFRFloat()
     ccall((:mpfr_fac_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Culong, Int32), &z, ui, ROUNDING_MODE[end])
+    return z
+end
+
+function hypot(x::MPFRFloat, y::MPFRFloat)
+    z = MPFRFloat()
+    ccall((:mpfr_hypot, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
 
