@@ -9,6 +9,7 @@ super(T::DataType) = T.super
 isequal(x,y) = is(x,y)
 ==(x,y) = isequal(x,y)
 !=(x,y) = !(x==y)
+!==(x,y) = !is(x,y)
 
 < (x,y) = isless(x,y)
 > (x,y) = y < x
@@ -244,6 +245,7 @@ module Operators
 export
     !,
     !=,
+    !==,
     $,
     %,
     &,
@@ -289,6 +291,7 @@ import
     Base..+, Base..-, Base..*, Base../, Base..<, Base..<=, Base..==, Base..>,
     Base..>=, Base..\, Base..^, Base./, Base.//, Base.<, Base.<:, Base.<<,
     Base.<=, Base.==, Base.>, Base.>=, Base.>>, Base..>>, Base..<<, Base.>>>,
-    Base.&>, Base.&>>, Base.&<, Base.&<<, Base.\, Base.^, Base.|, Base.~
+    Base.&>, Base.&>>, Base.&<, Base.&<<, Base.\, Base.^, Base.|, Base.~,
+    Base.!==
 
 end
