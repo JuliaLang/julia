@@ -66,10 +66,31 @@ function isfixed(pkg::String, avail::Dict=available())
         Git.attached() && return true
         head = Git.head()
         for (ver,info) in avail[pkg]
-            Git.is_ancestor_of(head,info.sha1) && return false
+            Git.is_ancestor_of(head, info.sha1) && return false
         end
         return true
     end
+end
+
+function version_number(pkg::String, avail::Dict=available())
+    head, dirty = cd(pkg) do
+        Git.head(), Git.dirty()
+    end
+    lo = typemin(VersionNumber)
+    hi = typemin(VersionNumber)
+    for (ver,info) in avail[pkg]
+        head == info.sha1 && return !dirty ? ver :
+            VersionNumber(ver.major, ver.minor, ver.patch, (), ("",))
+        base = cd(()->readchomp(`git merge-base $head $(info.sha1)`), pkg)
+        if base == head # Git.is_ancestor_of(head, info.sha1)
+            lo = max(lo,ver)
+        elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
+            hi = max(hi,ver)
+        end
+    end
+    typemin(VersionNumber) < lo ?
+        VersionNumber(lo.major, lo.minor, lo.patch, ("",), ()) :
+        VersionNumber(hi.major, hi.minor, hi.patch, (), ("",))
 end
 
 function requires_path(pkg::String, avail::Dict=available())
@@ -84,16 +105,15 @@ function requires_path(pkg::String, avail::Dict=available())
         return joinpath(pkg, "REQUIRE")
     end
 end
+requires_dict(pkg::String, avail::Dict=available()) =
+    parse_requires(requires_path(pkg,avail))
 
 function installed(avail::Dict=available())
     pkgs = Dict{ByteString,Installed}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        pkgs[pkg] = !isfixed(pkg,avail) ? Free() : Fixed(
-            # TODO: figure out a good proxy version here
-            typemax(VersionNumber),
-            parse_requires(requires_path(pkg,avail))
-        )
+        pkgs[pkg] = !isfixed(pkg,avail) ? Free() :
+            Fixed(version_number(pkg,avail), requires_dict(pkg,avail))
     end
     pkgs["julia"] = Fixed(VERSION)
     return pkgs
