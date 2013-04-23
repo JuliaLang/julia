@@ -2,8 +2,8 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
              "corelib", "hashing", "remote", "iostring", "arrayops",
              "linalg", "blas", "fft", "dsp", "sparse", "bitarray",
              "random", "math", "functional", "bigint", "sorting",
-             "statistics", "spawn", "parallel", "arpack", "bigfloat",
-             "file", "perf", "suitesparse", "version"]
+             "statistics", "spawn", "parallel", "priorityqueue",
+             "arpack", "bigfloat", "file", "perf", "suitesparse", "version"]
 
 # Disabled: "complex"
 
