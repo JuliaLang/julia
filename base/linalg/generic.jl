@@ -173,8 +173,8 @@ end
 
 #diagmm!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
 
-diagmm!(A::AbstractMatrix, b::AbstractVector) = diagmm!(A,A,b)
-diagmm!(b::AbstractVector, A::AbstractMatrix) = diagmm!(A,b,A)
+scale!(A::AbstractMatrix, b::AbstractVector) = scale!(A,A,b)
+scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
 
 #diagmm(A::AbstractMatrix, b::AbstractVector)
 #diagmm(b::AbstractVector, A::AbstractMatrix)
