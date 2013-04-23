@@ -230,7 +230,7 @@ let
             else
                 global const commit_string = ""
             end
-            global const VERSION = VersionNumber(0,0,0)
+            global const VERSION = version
             global const VERSION_COMMIT = ""
             if err == acceptable
                 println("Warning: git failed in version.jl")
