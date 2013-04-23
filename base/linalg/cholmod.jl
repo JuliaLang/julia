@@ -17,8 +17,8 @@ import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
              isvalid, nnz, show, size, sort!, transpose, vcat
 
 import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                 Factorization, cholfact, cholfact!, copy, dense, det, diag, diagmm,
-                 diagmm!, full, logdet, norm, solve, sparse
+                 Factorization, cholfact, cholfact!, copy, dense, det, diag, #diagmm, diagmm!,
+                 full, logdet, norm, scale, scale!, solve, sparse
 
 include("linalg/cholmod_h.jl")
 
@@ -886,16 +886,16 @@ chm_speye(n::Integer) = chm_speye(n, n, 1.)             # default shape is squar
 
 chm_spzeros(m::Integer,n::Integer,nzmax::Integer) = chm_spzeros(m,n,nzmax,1.)
 
-function diagmm!{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T})
+function scale!{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T})
     chm_scale!(A,CholmodDense(b),CHOLMOD_ROW)
     A
 end
-diagmm{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T}) = diagmm!(b,copy(A))
-function diagmm!{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T})
+scale{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T}) = scale!(b,copy(A))
+function scale!{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T})
     chm_scale!(A,CholmodDense(b),CHOLMOD_COL)
     A
 end
-diagmm{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T}) = diagmm!(copy(A), b)
+scale{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T}) = scale!(copy(A), b)
 
 norm(A::CholmodSparse) = norm(A,1)
                           

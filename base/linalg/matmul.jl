@@ -1,7 +1,7 @@
 # matmul.jl: Everything to do with dense matrix multiplication
 
 # multiply by diagonal matrix as vector
-function diagmm!(C::Matrix, A::Matrix, b::Vector)
+function scale!(C::Matrix, A::Matrix, b::Vector)
     m, n = size(A)
     if n != length(b)
         error("argument dimensions do not match")
@@ -15,7 +15,7 @@ function diagmm!(C::Matrix, A::Matrix, b::Vector)
     return C
 end
 
-function diagmm!(C::Matrix, b::Vector, A::Matrix)
+function scale!(C::Matrix, b::Vector, A::Matrix)
     m, n = size(A)
     if m != length(b)
         error("argument dimensions do not match")
@@ -28,11 +28,11 @@ function diagmm!(C::Matrix, b::Vector, A::Matrix)
     return C
 end
 
-diagmm(A::Matrix, b::Vector) =
-    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), A, b)
+scale(A::Matrix, b::Vector) =
+    scale!(Array(promote_type(eltype(A),eltype(b)),size(A)), A, b)
 
-diagmm(b::Vector, A::Matrix) =
-    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), b, A)
+scale(b::Vector, A::Matrix) =
+    scale!(Array(promote_type(eltype(A),eltype(b)),size(A)), b, A)
 
 # Dot products
 

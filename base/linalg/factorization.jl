@@ -454,7 +454,7 @@ function eigmin(A::Union(Number, StridedMatrix))
     iscomplex(v) ? error("Complex eigenvalues cannot be ordered") : min(v)
 end
 
-inv(A::Eigen) = diagmm(A.vectors, 1.0/A.values)*A.vectors'
+inv(A::Eigen) = scale(A.vectors, 1.0/A.values)*A.vectors'
 det(A::Eigen) = prod(A.values)
 
 # SVD
@@ -506,7 +506,7 @@ function \{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
     n = length(A.S)
     Sinv = zeros(T, n)
     Sinv[A.S .> sqrt(eps())] = 1.0 ./ A.S
-    return diagmm(A.Vt', Sinv) * A.U[:,1:n]'B
+    scale(A.Vt', Sinv) * A.U[:,1:n]'B
 end
 
 # Generalized svd
