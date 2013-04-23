@@ -1,5 +1,7 @@
 # real constructors
-x = MPCComplex{53,53}()
+with_bigcomplex_precision(53,53) do
+	x = MPCComplex()
+end
 x = MPCComplex(12)
 y = MPCComplex(x)
 @test x == y
