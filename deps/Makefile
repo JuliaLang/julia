@@ -98,9 +98,9 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
-ifeq ($(USE_SYSTEM_ZLIB), 0)
-STAGE1_DEPS += zlib
-endif
+#ifeq ($(USE_SYSTEM_ZLIB), 0)
+#STAGE1_DEPS += zlib
+#endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
 STAGE2_DEPS += arpack
