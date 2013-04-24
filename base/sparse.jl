@@ -1075,6 +1075,14 @@ function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::Abstra
 
 end
 
+# logical getindex
+
+getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
+getindex{T<:Real}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = A[I,find(J)]
+getindex{T<:Real}(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
+
 ## setindex!
 setindex!(A::SparseMatrixCSC, v, i::Integer) = setindex!(A, v, ind2sub(size(A),i)...)
 
@@ -1309,6 +1317,14 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, 
     A.nzval = nzvalS
     return A
 end
+
+# logical setindex!
+
+setindex!(A::Array, x, I::Integer, J::AbstractVector{Bool}) = setindex!(A, x, I,find(J))
+setindex!(A::Array, x, I::AbstractVector{Bool}, J::Integer) = setindex!(A,x,find(I),J)
+setindex!(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, x, find(I),find(J))
+setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, x, I,find(J))
+setindex!{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, x, find(I),J)
 
 # Sparse concatenation
 
