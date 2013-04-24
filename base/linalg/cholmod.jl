@@ -661,6 +661,17 @@ for Ti in (:Int32,:Int64)
             if status != CHOLMOD_TRUE throw(CholmodException) end
             L
         end
+        function chm_factorize_p!{Tv<:Float64}(L::CholmodFactor{Tv,$Ti},
+                                               A::CholmodSparse{Tv,$Ti},
+                                               beta::Tv)
+            status = ccall((@chm_nm "factorize_p" $Ti
+                            ,:libcholmod), Cint,
+                           (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Tv}, Ptr{Cint}, Csize_t,
+                            Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
+                           &A.c, &beta, C_NULL, zero(Csize_t), &L.c, cmn($Ti))
+            if status != CHOLMOD_TRUE throw(CholmodException) end
+            L
+        end
         function chm_pack!{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti})
             status = ccall((@chm_nm "pack_factor" $Ti
                             ,:libcholmod), Cint,
