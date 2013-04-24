@@ -1189,6 +1189,14 @@ end
 @test 0xf.fp0 == 15.9375
 @test 0xf.fp1 == 31.875
 
+# eps / realmin / realmax
+@test 0x1p-52 == eps()
+@test 0x1p-52 + 1 != 1
+@test 0x1p-53 + 1 == 1
+@test 0x1p-1022 == realmin()
+@test 0x1.fffffffffffffp1023 == realmax()
+@test isinf(nextfloat(0x1.fffffffffffffp1023))
+
 # custom rounding and significant-digit ops
 function approx_eq(a, b, tol)
     abs(a - b) < tol
