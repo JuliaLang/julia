@@ -41,17 +41,17 @@ eigmin(A::Hermitian) = eigvals(A, 1, 1)[1]
 
 function expm(A::Hermitian)
     F = eigfact(A)
-    diagmm(F[:vectors], exp(F[:values])) * F[:vectors]'
+    scale(F[:vectors], exp(F[:values])) * F[:vectors]'
 end
 
 function sqrtm(A::Hermitian, cond::Bool)
     F = eigfact(A)
     vsqrt = sqrt(complex(F[:values]))
     if all(imag(vsqrt) .== 0)
-        retmat = symmetrize!(diagmm(F[:vectors], real(vsqrt)) * F[:vectors]')
+        retmat = symmetrize!(scale(F[:vectors], real(vsqrt)) * F[:vectors]')
     else
         zc = complex(F[:vectors])
-        retmat = symmetrize!(diagmm(zc, vsqrt) * zc')
+        retmat = symmetrize!(scale(zc, vsqrt) * zc')
     end
     if cond
         return retmat, norm(vsqrt, Inf)^2/norm(F[:values], Inf)
