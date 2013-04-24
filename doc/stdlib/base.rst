@@ -2113,10 +2113,6 @@ Basic functions
 
    Counts the number of nonzero values in array A (dense or sparse)
 
-.. function:: scale!(A, k)
-
-   Scale the contents of an array A with k (in-place)
-
 .. function:: conj!(A)
 
    Convert an array to its complex conjugate in-place

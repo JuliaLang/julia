@@ -42,21 +42,31 @@ for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
 end
 
 # SUBROUTINE DSCAL(N,DA,DX,INCX)
+scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
+
 for (fname, elty) in ((:dscal_,:Float64),    (:sscal_,:Float32),
                       (:zscal_,:Complex128), (:cscal_,:Complex64))
     @eval begin
-        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+        function scal!(n::Integer, DA::$elty, 
+                       DX::Union(Ptr{$elty},Array{$elty}), incx::Integer)
             ccall(($(string(fname)),libblas), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
                   &n, &DA, DX, &incx)
-            DX
+            return DX
         end
-        function scal(n::Integer, DA::$elty, DX_orig::Union(Ptr{$elty},Array{$elty}), incx::Integer)
-            DX = copy(DX_orig)
+    end
+end
+
+# In case DX is complex, and DA is real, use dscal/sscal to save flops
+for (fname, elty, celty) in ((:sscal_, :Float32, :Complex64),
+                             (:dscal_, :Float64, :Complex128))
+    @eval begin
+        function scal!(n::Integer, DA::$elty,
+                       DX::Union(Ptr{$celty},Array{$celty}), incx::Integer)
             ccall(($(string(fname)),libblas), Void,
-                  (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
-                  &n, &DA, DX, &incx)
-            DX
+                  (Ptr{BlasInt}, Ptr{$elty}, Ptr{$celty}, Ptr{BlasInt}),
+                  &(2*n), &DA, DX, &incx)
+            return DX
         end
     end
 end
