@@ -1,5 +1,5 @@
 
-using Base.DataStructures
+using Base.Collections
 
 
 # Test dequeing in sorted order.

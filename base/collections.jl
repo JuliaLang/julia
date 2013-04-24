@@ -1,5 +1,5 @@
 
-module DataStructures
+module Collections
 
 import Base: setindex!, done, get, has, isempty, length, next, getindex, start
 import ..Sort: Forward, Ordering, It, lt
