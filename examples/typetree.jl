@@ -100,7 +100,7 @@ function show_tree(root, prefix, norm_ex)
     if children != None
         ch = to_array(children)
         sort!(ch)
-        del(children_map, r)
+        delete!(children_map, r)
         iter = start(ch)
         cpre = prefix * "   +"
         dpre = prefix * "    "
