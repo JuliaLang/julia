@@ -2,7 +2,7 @@ export
 # Modules
     PCRE,
     FFTW,
-    DataStructures,
+    Collections,
     DSP,
     LinAlg,
     LibRandom,
