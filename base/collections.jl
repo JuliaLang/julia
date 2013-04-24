@@ -283,5 +283,5 @@ function next(pq::PriorityQueue, i)
 end
 
 
-end # module DataStructures
+end # module Collections
 
