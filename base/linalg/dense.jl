@@ -226,7 +226,7 @@ function ^(A::Matrix, p::Number)
     else
         Xinv = inv(X)
     end
-    diagmm(X, v.^p)*Xinv
+    scale(X, v.^p)*Xinv
 end
 
 function rref{T}(A::Matrix{T})
@@ -454,7 +454,7 @@ function pinv{T<:BlasFloat}(A::StridedMatrix{T})
     Sinv        = zeros(T, length(SVD[:S]))
     index       = SVD[:S] .> eps(real(one(T)))*max(size(A))*max(SVD[:S])
     Sinv[index] = 1.0 ./ SVD[:S][index]
-    SVD[:Vt]'diagmm(Sinv, SVD[:U]')
+    SVD[:Vt]'scale(Sinv, SVD[:U]')
 end
 pinv{T<:Integer}(A::StridedMatrix{T}) = pinv(float(A))
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
