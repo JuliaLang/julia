@@ -191,11 +191,21 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
 
-.. function:: scale(matrix, vector)
+.. function:: scale(A, B)
 
-   Multiply matrices, interpreting the vector argument as a diagonal matrix.
-   The arguments may occur in the other order to multiply with the diagonal
-   matrix on the left.
+   ``scale(A::Matrix, B::Number)`` scales all values in ``A`` with ``B``.
+
+   ``scale(A::Matrix, B::Vector)`` is the same as multiplying with a
+   diagonal matrix on the right, and scales the columns of ``A`` with
+   the values in ``B``. 
+
+   ``scale(A::Vector, B::Matrix)`` is the same as multiplying with a
+   diagonal matrix on the left, and scales the rows of ``B`` with the
+   values in ``A``.
+
+.. function:: scale!(A, B)
+
+   ``scale!(A,B)`` overwrites the input matrix with the scaled result.
 
 .. function:: Tridiagonal(dl, d, du)
 

@@ -1,7 +1,8 @@
 ## linalg.jl: Some generic Linear Algebra definitions
 
-function scale!{T<:Number}(X::AbstractArray{T}, s::Real)
-    # FIXME: could use BLAS in more cases
+scale{T<:Number}(X::AbstractArray{T}, s::Number) = scale!(copy(X), s)
+
+function scale!{T<:Number}(X::AbstractArray{T}, s::Number)
     for i in 1:length(X)
         X[i] *= s;
     end
