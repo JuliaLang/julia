@@ -294,6 +294,7 @@ type SingleAsyncWork <: AsyncWork
         end
         this=new(cb)
         this.handle=ccall(:jl_make_async,Ptr{Void},(Ptr{Void},Any),loop,this)
+        finalizer(this,close)
         this
     end
 end
@@ -305,6 +306,7 @@ type IdleAsyncWork <: AsyncWork
     function IdleAsyncWork(loop::Ptr{Void},cb::Function)
         this=new(cb)
         this.handle=ccall(:jl_make_idle,Ptr{Void},(Ptr{Void},Any),loop,this)
+        finalizer(this,close)
         this
     end
 end
@@ -324,7 +326,7 @@ TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 
 close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
-function poll_fd(s, events::Int32, timeout_ms::Int32)
+function poll_fd(s, events::Integer, timeout_ms::Integer)
     timeout_at = int64((time() * 1000)) + timeout_ms
     wt = WaitTask()
 
@@ -336,28 +338,13 @@ function poll_fd(s, events::Int32, timeout_ms::Int32)
         start_timer(timer, int64(timeout_ms), int64(0))
     end
 
-    cont = 1
-    local args
-    while(cont == 1)
-        args = yield(wt)
-        cont = 0
-        
-        now = int64(time() * 1000)
-#        println((timeout_at - now))
-        if ((args == (:timeout, 0)) && (timeout_at > now))
-            println("poll_fd : premature timeout...adding timer again...")
-            stop_timer(timer)
-            start_timer(timer, int64(timeout_at - now), int64(0))
-            
-            cont = 1
-        end
-    end
+    args = yield(wt)
 
     if (timeout_ms > 0) stop_timer(timer) end
 
     stop_watching(fdw)
     if isa(args,InterruptException)
-        error(args)
+        rethrow(args)
     end
     args
 end
@@ -377,12 +364,13 @@ _uv_hook_asynccb(async::AsyncWork, status::Int32) = async.cb(status)
 
 function start_timer(timer::TimeoutAsyncWork,timeout::Int64,repeat::Int64)
     associate_julia_struct(timer.handle,timer)
+    ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
     ccall(:jl_timer_start,Int32,(Ptr{Void},Int64,Int64),timer.handle,timeout,repeat)
 end
 
 function stop_timer(timer::TimeoutAsyncWork)
     disassociate_julia_struct(timer.handle)
-    ccall(:jl_timer_stop,Int32,(Ptr{Void},),timer.handle)
+    ccall(:uv_timer_stop,Int32,(Ptr{Void},),timer.handle)
 end
 
 function sleep(sec::Real)
