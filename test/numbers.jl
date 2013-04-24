@@ -1139,6 +1139,56 @@ end
 @test isa(1f1,Float32)
 @test 1f1 == 10.
 
+# hexadecimal float literals
+@test isa(0x1p0, Float64)
+@test isa(0x1p1, Float64)
+@test isa(0x.1p0, Float64)
+@test isa(0x.1p1, Float64)
+@test isa(0xfp0, Float64)
+@test isa(0xfp1, Float64)
+@test isa(0x.fp0, Float64)
+@test isa(0x.fp1, Float64)
+@test isa(0x1.p0, Float64)
+@test isa(0x1.p1, Float64)
+@test isa(0xf.p0, Float64)
+@test isa(0xf.p1, Float64)
+@test isa(0x1.0p0, Float64)
+@test isa(0x1.0p1, Float64)
+@test isa(0x1.1p0, Float64)
+@test isa(0x1.1p1, Float64)
+@test isa(0x1.fp0, Float64)
+@test isa(0x1.fp1, Float64)
+@test isa(0xf.0p0, Float64)
+@test isa(0xf.0p1, Float64)
+@test isa(0xf.1p0, Float64)
+@test isa(0xf.1p1, Float64)
+@test isa(0xf.fp0, Float64)
+@test isa(0xf.fp1, Float64)
+@test 0x1p0   == 1
+@test 0x1p1   == 2
+@test 0x.1p0  == 0.0625
+@test 0x.1p1  == 0.125
+@test 0xfp0   == 15
+@test 0xfp1   == 30
+@test 0x.fp0  == 0.9375
+@test 0x.fp1  == 1.875
+@test 0x1.p0  == 1
+@test 0x1.p1  == 2
+@test 0xf.p0  == 15
+@test 0xf.p1  == 30
+@test 0x1.0p0 == 1
+@test 0x1.0p1 == 2
+@test 0x1.1p0 == 1.0625
+@test 0x1.1p1 == 2.125
+@test 0x1.fp0 == 1.9375
+@test 0x1.fp1 == 3.875
+@test 0xf.0p0 == 15
+@test 0xf.0p1 == 30
+@test 0xf.1p0 == 15.0625
+@test 0xf.1p1 == 30.125
+@test 0xf.fp0 == 15.9375
+@test 0xf.fp1 == 31.875
+
 # custom rounding and significant-digit ops
 function approx_eq(a, b, tol)
     abs(a - b) < tol
