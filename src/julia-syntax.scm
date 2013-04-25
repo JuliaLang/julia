@@ -59,6 +59,9 @@
   (and (length= e 3) (eq? (car e) '|.|)
        (symbol? (cadr e))))
 
+(define (effect-free? e)
+  (or (not (pair? e)) (sym-dot? e) (quoted? e) (equal? e '(null))))
+
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
 ; retuns a pair (expr . assignments)
@@ -68,8 +71,7 @@
     (if (not (pair? e))
 	(cons e '())
 	(cons (map (lambda (x)
-		     (if (and (pair? x) (not (quoted? x))
-			      (not (sym-dot? x)))
+		     (if (not (effect-free? x))
 			 (let ((g (gensy)))
 			   (if (or (eq? (car x) '...) (eq? (car x) '&))
 			       (if (and (pair? (cadr x))
@@ -1022,8 +1024,9 @@
 	    ,(cadr __))))
 
 ;; convert (lhss...) = (tuple ...) to assignments, eliminating the tuple
-(define (tuple-to-assignments lhss x)
-  (let loop ((lhss lhss)
+(define (tuple-to-assignments lhss0 x)
+  (let loop ((lhss lhss0)
+	     (assigned lhss0)
 	     (rhss (cdr x))
 	     (stmts '())
 	     (after '())
@@ -1035,15 +1038,19 @@
 	(let ((L (car lhss))
 	      (R (car rhss)))
 	  (if (and (symbol? L)
+		   (or (not (pair? R)) (quoted? R) (equal? R '(null)))
 		   ;; overwrite var immediately if it doesn't occur elsewhere
-		   (not (contains (lambda (e) (eq? e L)) (cdr rhss))))
+		   (not (contains (lambda (e) (eq? e L)) (cdr rhss)))
+		   (not (contains (lambda (e) (eq? e R)) assigned)))
 	      (loop (cdr lhss)
+		    (cons L assigned)
 		    (cdr rhss)
 		    (cons (make-assignment L R) stmts)
 		    after
-		    (cons L elts))
+		    (cons R elts))
 	      (let ((temp (gensy)))
 		(loop (cdr lhss)
+		      (cons L assigned)
 		      (cdr rhss)
 		      (cons (make-assignment temp R) stmts)
 		      (cons (make-assignment L temp) after)
@@ -1811,9 +1818,13 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (or (not (pair? e)) (memq (car e) '(quote top))
-	    (equal? e '(null)))
-	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
+    (if (effect-free? e)
+	(cond ((symbol? dest)
+	       (if (and (pair? e) (eq? (car e) 'break))
+		   ;; odd corner case: sometimes try/finally generates
+		   ;; a (break ) as an assignment RHS
+		   (to-lff e #f #f)
+		   (cons `(= ,dest ,e) '())))
 	      (dest (cons (if tail `(return ,e) e)
 			  '()))
 	      (else (cons e '())))
@@ -1823,15 +1834,29 @@
 	   (if (or (not (symbol? (cadr e)))
 		   (eq? (cadr e) 'true)
 		   (eq? (cadr e) 'false))
-	       (error (string "invalid assignment location " (cadr e)))
-	       (let ((r (to-lff (caddr e) (cadr e) #f)))
-		 (cond ((symbol? dest)
-			(cons `(block ,(car r)
-				      (= ,dest ,(cadr e)))
-			      (cdr r)))
-		       (dest
-			(cons (if tail `(return ,(cadr e)) (cadr e)) r))
-		       (else r)))))
+	       (error (string "invalid assignment location " (cadr e))))
+	   (let ((LHS (cadr e))
+		 (RHS (caddr e)))
+	     (cond ((not dest)
+		    (to-lff RHS LHS #f))
+		   ((assignment? RHS)
+		    (let ((r (to-lff RHS dest #f)))
+		      (list* (if tail `(return ,(car r)) (car r))
+			     `(= ,LHS ,(car r))
+			     (cdr r))))
+		   ((effect-free? RHS)
+		    (cond ((symbol? dest)  (list `(= ,LHS ,RHS)
+						 `(= ,dest ,RHS)))
+			  (dest  (list (if tail `(return ,RHS) RHS)
+				       `(= ,LHS ,RHS)))
+			  (else  (list e))))
+		   (else
+		    (to-lff (let ((val (gensy)))
+			      `(block (local! ,val)
+				      (= ,val ,RHS)
+				      (= ,LHS ,val)
+				      ,val))
+			    dest tail)))))
 
 	  ((if)
 	   (cond ((or tail (eq? dest #f) (symbol? dest))
@@ -1854,8 +1879,9 @@
 	  ((trycatch)
 	   (cond ((and (eq? dest #t) (not tail))
 		  (let ((g (gensy)))
-		    (cons g
-			  (cons `(local! ,g) (to-lff e g #f)))))
+		    (list* g
+			   `(local! ,g)
+			   (to-lff e g #f))))
 		 (else
 		  (cons `(trycatch ,(fix-try-block-returns
 				     (to-blk (to-lff (cadr e) dest tail)))
