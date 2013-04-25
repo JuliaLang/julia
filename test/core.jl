@@ -187,6 +187,18 @@ function fooo()
     x
 end
 @test int32(fooo()) == -24
+function fooo_2()
+    local x::Int8
+    x = 1000
+end
+@test fooo_2() == 1000
+function fooo_3()
+    local x::Int8
+    y = x = 1000
+    @test x == -24
+    y
+end
+@test fooo_3() == 1000
 function foo()
     local x::Int8
     function bar()
@@ -413,6 +425,32 @@ begin
     end
     @test retfinally() == 5
     @test glo == 18
+end
+
+# chained and multiple assignment behavior (issue #2913)
+begin
+    local x, a, b, c, d, e
+    x = (a,b,b,b,e) = (1,2,3,4,5)
+    @test x === (1,2,3,4,5)
+    @test a == 1
+    @test b == 4
+    @test e == 5
+    x = (a,b,b,e) = (1,2,3,4,5)
+    @test x === (1,2,3,4,5)
+    @test a == 1
+    @test b == 3
+    @test e == 4
+
+    a = complex(1,2)
+    b = 3
+    b, a = a.re, b
+    @test b == 1
+    @test a == 3
+    a = complex(1,2)
+    b = 3
+    a, b = b, a.re
+    @test a == 3
+    @test b == 1
 end
 
 # allow typevar in Union to match as long as the arguments contain
