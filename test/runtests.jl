@@ -7,19 +7,13 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
 
 # Disabled: "complex"
 
-if ARGS == ["all"]
-    tests = testnames
-else
-    tests = ARGS
-end
+tests = ARGS==["all"] ? testnames : ARGS
+n = min(CPU_CORES,length(tests))
+n > 1 && addprocs(n)
 
 ENV["OPENBLAS_NUM_THREADS"] = 1
 
-if CPU_CORES > 1 && length(tests)>2
-    addprocs(2)
-end
-
-require("testdefs.jl")
+@everywhere include("testdefs.jl")
 
 reduce(propagate_errors, nothing, pmap(runtests, tests))
 
