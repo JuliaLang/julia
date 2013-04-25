@@ -272,6 +272,12 @@ string(x::MPCComplex) = "$(string(real(x))) + $(string(imag(x)))im"
 show(io::IO, b::MPCComplex) = print(io, string(b) * " with $(get_precision(b)) bits of precision")
 showcompact(io::IO, b::MPCComplex) = print(io, string(b))
 
+function copy(x::MPCComplex)
+    z = MPCComplex()
+    ccall((:mpc_set, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE)
+    return z
+end
+
 # Internal functions
 # Unsafe for general use
 realref(x::MPCComplex) = MPFRFloat(x.reprec, x.resign, x.reexp, x.red)
