@@ -525,19 +525,28 @@
    (params bounds) (sparam-name-bounds params '() '())
    (struct-def-expr- name params bounds super (flatten-blocks fields) mut)))
 
+;; replace field names with gensyms if they conflict with field-types
+(define (safe-field-names field-names field-types)
+  (if (any (lambda (v) (contains (lambda (e) (eq? e v)) field-types))
+	   field-names)
+      (map (lambda (x) (gensy)) field-names)
+      field-names))
+
 (define (default-inner-ctor name field-names field-types)
-  `(function (call ,name
-		   ,@(map make-decl field-names field-types))
-	     (block
-	      (call new ,@field-names))))
+  (let ((field-names (safe-field-names field-names field-types)))
+    `(function (call ,name
+		     ,@(map make-decl field-names field-types))
+	       (block
+		(call new ,@field-names)))))
 
 (define (default-outer-ctor name field-names field-types params bounds)
-  `(function (call (curly ,name
-			  ,@(map (lambda (p b) `(<: ,p ,b))
-				 params bounds))
-		   ,@(map make-decl field-names field-types))
-	     (block
-	      (call (curly ,name ,@params) ,@field-names))))
+  (let ((field-names (safe-field-names field-names field-types)))
+    `(function (call (curly ,name
+			    ,@(map (lambda (p b) `(<: ,p ,b))
+				   params bounds))
+		     ,@(map make-decl field-names field-types))
+	       (block
+		(call (curly ,name ,@params) ,@field-names)))))
 
 (define (new-call Texpr args field-names field-types mutabl)
   (cond ((length> args (length field-names))
