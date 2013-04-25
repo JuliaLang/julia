@@ -187,6 +187,8 @@ export PipeString
 @deprecate  remote_call_wait    remotecall_wait
 @deprecate  has(s::Set, x)      contains(s, x)
 @deprecate  has(s::IntSet, x)   contains(s, x)
+@deprecate  diagmm              scale
+@deprecate  diagmm!             scale!
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)

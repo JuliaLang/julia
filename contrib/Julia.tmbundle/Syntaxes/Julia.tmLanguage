@@ -21,6 +21,10 @@
 	<array>
 		<dict>
 			<key>include</key>
+			<string>#bracket</string>
+		</dict>
+		<dict>
+			<key>include</key>
 			<string>#function_decl</string>
 		</dict>
 		<dict>

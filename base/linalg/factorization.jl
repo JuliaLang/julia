@@ -17,6 +17,7 @@ cholfact(A::StridedMatrix, uplo::Symbol) = cholfact!(copy(A), uplo)
 cholfact!(A::StridedMatrix) = cholfact!(A, :U)
 cholfact(A::StridedMatrix) = cholfact(A, :U)
 cholfact{T<:Integer}(A::StridedMatrix{T}, args...) = cholfact(float(A), args...)
+cholfact!{T<:Integer}(A::StridedMatrix{T}, args...) = cholfact(A, args...)
 cholfact(x::Number) = imag(x) == 0 && real(x) > 0 ? Cholesky(fill(sqrt(x), 1, 1), 'U') : throw(LinAlg.LAPACK.PosDefException(1))
 
 chol(A::Union(Number, StridedMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
@@ -132,8 +133,8 @@ end
 
 lufact!(A::StridedMatrix) = LU(A)
 lufact(A::StridedMatrix) = lufact!(copy(A))
-lufact!{T<:Integer}(A::StridedMatrix{T}) = lufact!(float(A))
-lufact{T<:Integer}(A::StridedMatrix{T}) = lufact(float(A))
+lufact{T<:Integer}(A::StridedMatrix{T}) = lufact!(float(A))
+lufact!{T<:Integer}(A::StridedMatrix{T}) = lufact(A)
 lufact(x::Number) = LU(fill(x, 1, 1), [1], x == 0 ? 1 : 0)
 
 function lu(A::Union(Number, StridedMatrix))
@@ -196,7 +197,8 @@ QR(A::StridedMatrix) = QR(LAPACK.geqrt3!(A)...)
 
 qrfact!(A::StridedMatrix) = QR(A)
 qrfact(A::StridedMatrix) = qrfact!(copy(A))
-qrfact{T<:Integer}(A::StridedMatrix{T}) = qrfact(float(A))
+qrfact{T<:Integer}(A::StridedMatrix{T}) = qrfact!(float(A))
+qrfact!{T<:Integer}(A::StridedMatrix{T}) = qrfact(A)
 qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
 qrfact(x::Integer) = qrfact(float(x))
 
@@ -273,8 +275,8 @@ type QRPivoted{T} <: Factorization{T}
         new(hh,tau,jpvt)
     end
 end
-qrpfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPivoted{T}(LAPACK.geqp3!(A)...)
 
+qrpfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPivoted{T}(LAPACK.geqp3!(A)...)
 qrpfact(A::StridedMatrix) = qrpfact!(copy(A))
 
 function qrp(A::StridedMatrix, thin::Bool)
@@ -454,7 +456,7 @@ function eigmin(A::Union(Number, StridedMatrix))
     iscomplex(v) ? error("Complex eigenvalues cannot be ordered") : min(v)
 end
 
-inv(A::Eigen) = diagmm(A.vectors, 1.0/A.values)*A.vectors'
+inv(A::Eigen) = scale(A.vectors, 1.0/A.values)*A.vectors'
 det(A::Eigen) = prod(A.values)
 
 # SVD
@@ -500,13 +502,15 @@ end
 
 svdvals(A) = svdvals!(copy(A))
 svdvals(A::Number) = [A]
+svdvals{T<:Integer}(A::StridedMatrix{T}) = svdvals!(float(A))
+svdvals!{T<:Integer}(A::StridedMatrix{T}) = svdvals(A)
 
 # SVD least squares
 function \{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
     n = length(A.S)
     Sinv = zeros(T, n)
     Sinv[A.S .> sqrt(eps())] = 1.0 ./ A.S
-    return diagmm(A.Vt', Sinv) * A.U[:,1:n]'B
+    scale(A.Vt', Sinv) * A.U[:,1:n]'B
 end
 
 # Generalized svd

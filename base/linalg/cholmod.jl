@@ -17,8 +17,8 @@ import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
              isvalid, nnz, show, size, sort!, transpose, vcat
 
 import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                 Factorization, cholfact, cholfact!, copy, dense, det, diag, diagmm,
-                 diagmm!, full, logdet, norm, solve, sparse
+                 Factorization, cholfact, cholfact!, copy, dense, det, diag, #diagmm, diagmm!,
+                 full, logdet, norm, scale, scale!, solve, sparse
 
 include("linalg/cholmod_h.jl")
 
@@ -831,12 +831,12 @@ end
 (*){Tv<:CHMVTypes}(A::CholmodSparse{Tv},B::VecOrMat{Tv}) = chm_sdmult(A,false,1.,0.,CholmodDense(B))
 
 (\){T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
-(\){T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense(B),CHOLMOD_A)
+(\){T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense(B),CHOLMOD_A).mat
 function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)
 end
 function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::SparseMatrixCSC{Tv,Ti})
-    solve(L,CholmodSparse(B),CHOLMOD_A)
+    sparse!(solve(L,CholmodSparse(B),CHOLMOD_A))
 end
 
 function A_mul_Bt{Tv<:Union(Float32,Float64),Ti<:CHMITypes}(A::CholmodSparse{Tv,Ti},
@@ -845,12 +845,12 @@ function A_mul_Bt{Tv<:Union(Float32,Float64),Ti<:CHMITypes}(A::CholmodSparse{Tv,
 end
 
 Ac_ldiv_B{T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
-Ac_ldiv_B{T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense(B),CHOLMOD_A)
+Ac_ldiv_B{T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense(B),CHOLMOD_A).mat
 function Ac_ldiv_B{Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)
 end
 function Ac_ldiv_B{Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::SparseMatrixCSC{Tv,Ti})
-    solve(L,CholmodSparse(B),CHOLMOD_A)
+    sparse!(solve(L,CholmodSparse(B),CHOLMOD_A))
 end
  
 function Ac_mul_B{Tv<:CHMVTypes}(A::CholmodSparse{Tv},B::CholmodDense{Tv})
@@ -886,16 +886,16 @@ chm_speye(n::Integer) = chm_speye(n, n, 1.)             # default shape is squar
 
 chm_spzeros(m::Integer,n::Integer,nzmax::Integer) = chm_spzeros(m,n,nzmax,1.)
 
-function diagmm!{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T})
+function scale!{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T})
     chm_scale!(A,CholmodDense(b),CHOLMOD_ROW)
     A
 end
-diagmm{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T}) = diagmm!(b,copy(A))
-function diagmm!{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T})
+scale{T<:CHMVTypes}(b::Vector{T}, A::CholmodSparse{T}) = scale!(b,copy(A))
+function scale!{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T})
     chm_scale!(A,CholmodDense(b),CHOLMOD_COL)
     A
 end
-diagmm{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T}) = diagmm!(copy(A), b)
+scale{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T}) = scale!(copy(A), b)
 
 norm(A::CholmodSparse) = norm(A,1)
                           
@@ -913,10 +913,10 @@ size(L::CholmodFactor,d::Integer) = d < 1 ? error("dimension out of range") : (d
 
 function solve{Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},
                                             B::SparseMatrixCSC{Tv,Ti},typ::Integer)
-    solve(L,CholmodSparse(B),typ)
+    sparse!(solve(L,CholmodSparse(B),typ))
 end
 function solve{Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::SparseMatrixCSC{Tv,Ti})
-    solve(L,CholmodSparse(B),CHOLMOD_A)
+    sparse!(solve(L,CholmodSparse(B),CHOLMOD_A))
 end
 function solve{Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)
@@ -924,7 +924,7 @@ end
 function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)
 end
-solve{T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T},typ::Integer)=solve(L,CholmodDense(B),typ)
+solve{T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T},typ::Integer)=solve(L,CholmodDense(B),typ).mat
 solve{T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
 
 function findnz{Tv,Ti}(A::CholmodSparse{Tv,Ti})
@@ -994,6 +994,7 @@ logdet(L::CholmodFactor) = logdet(L, 1:L.c.n)
 det(L::CholmodFactor) = exp(logdet(L))
 
 dense(A::CholmodSparse) = CholmodDense(A).mat
+dense(A::CholmodDense) = A.mat
 full(A::CholmodSparse) = dense(A)
 function sparse(A::CholmodSparse)
     if bool(A.c.stype) return sparse!(copysym(A)) end

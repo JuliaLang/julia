@@ -29,8 +29,8 @@ isposdef(D::Diagonal) = all(D.diag .> 0)
 
 *(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 *(D::Diagonal, V::Vector) = D.diag .* V
-*(A::Matrix, D::Diagonal) = diagmm(A,D.diag)
-*(D::Diagonal, A::Matrix) = diagmm(D.diag,A)
+*(A::Matrix, D::Diagonal) = scale(A,D.diag)
+*(D::Diagonal, A::Matrix) = scale(D.diag,A)
 
 \(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag )
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )

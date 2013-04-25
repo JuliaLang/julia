@@ -1,9 +1,10 @@
 # Linear algebra functions for dense matrices in column major format
 
-scale!(X::Array{Float32}, s::Real) = BLAS.scal!(length(X), float32(s), X, 1)
-scale!(X::Array{Float64}, s::Real) = BLAS.scal!(length(X), float64(s), X, 1)
-scale!(X::Array{Complex64}, s::Real) = (ccall(("sscal_",Base.libblas_name), Void, (Ptr{BlasInt}, Ptr{Float32}, Ptr{Complex64}, Ptr{BlasInt}), &(2*length(X)), &s, X, &1); X)
-scale!(X::Array{Complex128}, s::Real) = (ccall(("dscal_",Base.libblas_name), Void, (Ptr{BlasInt}, Ptr{Float64}, Ptr{Complex128}, Ptr{BlasInt}), &(2*length(X)), &s, X, &1); X)
+scale!{T<:BlasFloat}(X::Array{T}, s::T) = BLAS.scal!(length(X), s, X, 1)
+scale!(X::Array{Complex64}, s::Real) = BLAS.scal!(length(X), float32(s), X, 1)
+scale!(X::Array{Complex128}, s::Real) = BLAS.scal!(length(X), float64(s), X, 1)
+scale!{Tx<:BlasFloat,Ts<:BlasFloat}(X::Array{Tx}, s::Ts) = 
+    BLAS.scal!(length(X), convert(Tx, s), X, 1)
 
 #Test whether a matrix is positive-definite
 
@@ -226,7 +227,7 @@ function ^(A::Matrix, p::Number)
     else
         Xinv = inv(X)
     end
-    diagmm(X, v.^p)*Xinv
+    scale(X, v.^p)*Xinv
 end
 
 function rref{T}(A::Matrix{T})
@@ -454,7 +455,7 @@ function pinv{T<:BlasFloat}(A::StridedMatrix{T})
     Sinv        = zeros(T, length(SVD[:S]))
     index       = SVD[:S] .> eps(real(one(T)))*max(size(A))*max(SVD[:S])
     Sinv[index] = 1.0 ./ SVD[:S][index]
-    SVD[:Vt]'diagmm(Sinv, SVD[:U]')
+    SVD[:Vt]'scale(Sinv, SVD[:U]')
 end
 pinv{T<:Integer}(A::StridedMatrix{T}) = pinv(float(A))
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))

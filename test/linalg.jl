@@ -56,7 +56,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
         d,v   = eig(asym)              # symmetric eigen-decomposition
         @test_approx_eq asym*v[:,1] d[1]*v[:,1]
-        @test_approx_eq v*diagmm(d,v') asym
+        @test_approx_eq v*scale(d,v') asym
 
         d,v   = eig(a)                 # non-symmetric eigen decomposition
         for i in 1:size(a,2) @test_approx_eq a*v[:,i] d[i]*v[:,i] end
@@ -74,7 +74,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test istriu(f[:T]) || isreal(a)
 
         usv = svdfact(a)                # singular value decomposition
-        @test_approx_eq usv[:U]*diagmm(usv[:S],usv[:Vt]) a
+        @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
     
         gsvd = svdfact(a,a[1:5,:])         # Generalized svd
         @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
@@ -382,7 +382,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         A = convert(Array{elty, 2}, Ainit)
         Asym = A'A
         vals, Z = LinAlg.LAPACK.syevr!('V', copy(Asym))
-        @test_approx_eq Z*diagmm(vals, Z') Asym
+        @test_approx_eq Z*scale(vals, Z') Asym
         @test all(vals .> 0.0)
         @test_approx_eq LinAlg.LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
         @test_approx_eq LinAlg.LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]

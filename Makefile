@@ -42,36 +42,31 @@ $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl $(BUILD)/share/julia/helpdb.jl
-	@#echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
+	@echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
 	$(QUIET_JULIA) cd base && \
 	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***"
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
 run-julia:
-	#winedbg --gdb
+	#wine winedbg
 	$(JULIA_EXECUTABLE)
 
 # public libraries, that are installed in $(PREFIX)/lib
 JL_LIBS = julia-release julia-debug
 
 # private libraries, that are installed in $(PREFIX)/lib/julia
-JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
-                  fftw3f_threads gmp grisu \
-                  openlibm openlibm-extras pcre \
-		  random Rmath spqr suitesparse_wrapper \
-		  umfpack z openblas
+JL_PRIVATE_LIBS = amd arpack camd ccolamd cholmod colamd \
+                  fftw3 fftw3f fftw3_threads fftw3f_threads \
+                  gmp grisu openlibm openlibm-extras pcre \
+                  random Rmath spqr suitesparse_wrapper \
+                  umfpack z openblas
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
 	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" "share/julia/site/"$(VERSDIR) ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
-#ifeq ($(OS), Darwin)
-#	$(MAKE) -C deps install-git
-#	-cp -a $(BUILD)/libexec $(PREFIX)
-#	-cp -a $(BUILD)/share $(PREFIX)
-#endif
 	cp -a $(BUILD)/bin $(PREFIX)
 	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
 	-for suffix in $(JL_LIBS) ; do \
@@ -93,7 +88,7 @@ ifeq ($(OS), WINNT)
 	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
 endif
 	cp $(JULIAHOME)/VERSION $(PREFIX)/share/julia/VERSION
-	echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > $(PREFIX)/share/julia/COMMIT
+	cp $(JULIAHOME)/COMMIT $(PREFIX)/share/julia/COMMIT
 
 dist: 
 	rm -fr julia-*.tar.gz julia-$(JULIA_COMMIT)
