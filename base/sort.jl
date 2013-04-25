@@ -69,6 +69,10 @@ issorted             (itr)            = issorted(itr, Forward())
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     lo <= k <= hi || error("select index $k is out of range $lo:$hi")
     while lo < hi
+        if hi-lo == 1 
+            lt(o, v[hi], v[lo]) && ((v[lo],v[hi]) = (v[hi], v[lo]))
+            return v[k]
+        end
         pivot = v[(lo+hi)>>>1]
         i, j = lo, hi
         while true
