@@ -257,7 +257,7 @@
 		   (if (and (not (eof-object? d))
 			    (or (char-numeric? d) (eqv? d #\+) (eqv? d #\-)))
 		       (begin (set! is-float32-literal (eqv? c #\f))
-                  (set! is-hex-float-literal (eqv? c #\p))
+                  (set! is-hex-float-literal (or (eqv? c #\p) (eqv? c #\P)))
 			      (write-char c str)
 			      (write-char (read-char port) str)
 			      (read-digs #f)

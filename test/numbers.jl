@@ -1140,54 +1140,54 @@ end
 @test 1f1 == 10.
 
 # hexadecimal float literals
-@test isa(0x1p0, Float64)
-@test isa(0x1p1, Float64)
-@test isa(0x.1p0, Float64)
-@test isa(0x.1p1, Float64)
-@test isa(0xfp0, Float64)
-@test isa(0xfp1, Float64)
-@test isa(0x.fp0, Float64)
-@test isa(0x.fp1, Float64)
-@test isa(0x1.p0, Float64)
-@test isa(0x1.p1, Float64)
-@test isa(0xf.p0, Float64)
-@test isa(0xf.p1, Float64)
-@test isa(0x1.0p0, Float64)
-@test isa(0x1.0p1, Float64)
-@test isa(0x1.1p0, Float64)
-@test isa(0x1.1p1, Float64)
-@test isa(0x1.fp0, Float64)
-@test isa(0x1.fp1, Float64)
-@test isa(0xf.0p0, Float64)
-@test isa(0xf.0p1, Float64)
-@test isa(0xf.1p0, Float64)
-@test isa(0xf.1p1, Float64)
-@test isa(0xf.fp0, Float64)
-@test isa(0xf.fp1, Float64)
-@test 0x1p0   == 1
-@test 0x1p1   == 2
-@test 0x.1p0  == 0.0625
-@test 0x.1p1  == 0.125
-@test 0xfp0   == 15
-@test 0xfp1   == 30
-@test 0x.fp0  == 0.9375
-@test 0x.fp1  == 1.875
-@test 0x1.p0  == 1
-@test 0x1.p1  == 2
-@test 0xf.p0  == 15
-@test 0xf.p1  == 30
-@test 0x1.0p0 == 1
-@test 0x1.0p1 == 2
-@test 0x1.1p0 == 1.0625
-@test 0x1.1p1 == 2.125
-@test 0x1.fp0 == 1.9375
-@test 0x1.fp1 == 3.875
-@test 0xf.0p0 == 15
-@test 0xf.0p1 == 30
-@test 0xf.1p0 == 15.0625
-@test 0xf.1p1 == 30.125
-@test 0xf.fp0 == 15.9375
-@test 0xf.fp1 == 31.875
+@test 0x1p0   === 1.
+@test 0x1p1   === 2.
+@test 0x.1p0  === 0.0625
+@test 0x.1p1  === 0.125
+@test 0xfp0   === 15.
+@test 0xfp1   === 30.
+@test 0x.fp0  === 0.9375
+@test 0x.fp1  === 1.875
+@test 0x1.p0  === 1.
+@test 0x1.p1  === 2.
+@test 0xf.p0  === 15.
+@test 0xf.p1  === 30.
+@test 0x1.0p0 === 1.
+@test 0x1.0p1 === 2.
+@test 0x1.1p0 === 1.0625
+@test 0x1.1p1 === 2.125
+@test 0x1.fp0 === 1.9375
+@test 0x1.fp1 === 3.875
+@test 0xf.0p0 === 15.
+@test 0xf.0p1 === 30.
+@test 0xf.1p0 === 15.0625
+@test 0xf.1p1 === 30.125
+@test 0xf.fp0 === 15.9375
+@test 0xf.fp1 === 31.875
+@test 0x1P0   === 1.
+@test 0x1P1   === 2.
+@test 0x.1P0  === 0.0625
+@test 0x.1P1  === 0.125
+@test 0xfP0   === 15.
+@test 0xfP1   === 30.
+@test 0x.fP0  === 0.9375
+@test 0x.fP1  === 1.875
+@test 0x1.P0  === 1.
+@test 0x1.P1  === 2.
+@test 0xf.P0  === 15.
+@test 0xf.P1  === 30.
+@test 0x1.0P0 === 1.
+@test 0x1.0P1 === 2.
+@test 0x1.1P0 === 1.0625
+@test 0x1.1P1 === 2.125
+@test 0x1.fP0 === 1.9375
+@test 0x1.fP1 === 3.875
+@test 0xf.0P0 === 15.
+@test 0xf.0P1 === 30.
+@test 0xf.1P0 === 15.0625
+@test 0xf.1P1 === 30.125
+@test 0xf.fP0 === 15.9375
+@test 0xf.fP1 === 31.875
 
 # eps / realmin / realmax
 @test 0x1p-52 == eps()
