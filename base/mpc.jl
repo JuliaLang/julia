@@ -10,8 +10,11 @@ export
     
 import
     Base: (*), +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($), cmp,
-        complex, convert, div, imag, integer_valued, isfinite, isinf, isnan, 
-        promote_rule, real, show, showcompact, sqrt, string, get_precision
+        complex, convert, div, exp, imag, integer_valued, isfinite, isinf, log,
+        promote_rule, real, show, showcompact, sqrt, string, get_precision,
+
+        # trigonometric functions
+        sin, cos, tan, acos, asin, atan, cosh, sinh, tanh, acosh, asinh, atanh
 
 const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [256, 256]
@@ -195,9 +198,6 @@ end
 function sqrt(x::MPCComplex)
     z = MPCComplex()
     ccall((:mpc_sqrt, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
-    if isnan(z)
-        throw(DomainError())
-    end
     return z
 end
 
@@ -217,6 +217,32 @@ function ^(x::MPCComplex, y::BigInt)
     z = MPCComplex()
     ccall((:mpc_pow_z, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPCComplex}, Ptr{BigInt}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
+end
+
+function exp(x::MPCComplex)
+    z = MPCComplex()
+    ccall((:mpc_exp, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
+    return z
+end
+
+function log(x::MPCComplex)
+    z = MPCComplex()
+    ccall((:mpc_log, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
+    return z
+end
+
+# Trigonometric functions
+# No error handling is done, and NaN are returned directly
+# the Base functions behavior
+for f in (:sin,:cos,:tan,:acos,:asin,:atan,
+        :cosh,:sinh,:tanh,:acosh,:asinh,:atanh)
+    @eval begin
+        function ($f)(x::MPCComplex)
+            z = MPCComplex()
+            ccall(($(string(:mpc_,f)), :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
+            return z
+        end
+    end
 end
 
 # Utility functions
