@@ -289,7 +289,7 @@ isascii(c::Char) = c < 0x80
 for name = ("alnum", "alpha", "cntrl", "digit", "graph",
             "lower", "print", "punct", "space", "upper")
     f = symbol(string("is",name))
-    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Char,), c))
+    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Cwchar_t,), c))
 end
 
 isblank(c::Char) = c==' ' || c=='\t'
@@ -456,8 +456,8 @@ write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 
 ## uppercase and lowercase transformations ##
 
-uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
-lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
+uppercase(c::Char) = convert(Char, ccall(:towupper, Cwchar_t, (Cwchar_t,), c))
+lowercase(c::Char) = convert(Char, ccall(:towlower, Cwchar_t, (Cwchar_t,), c))
 
 uppercase(s::String) = map(uppercase, s)
 lowercase(s::String) = map(lowercase, s)
