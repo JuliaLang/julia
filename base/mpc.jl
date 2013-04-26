@@ -10,8 +10,9 @@ export
     
 import
     Base: (*), +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($), cmp,
-        complex, convert, div, exp, imag, integer_valued, isfinite, isinf, log,
-        promote_rule, real, show, showcompact, sqrt, string, get_precision,
+        complex, conj, convert, div, exp, imag, integer_valued, isfinite, 
+        isinf, log, promote_rule, real, show, showcompact, sqrt, string, 
+        get_precision,
 
         # trigonometric functions
         sin, cos, tan, acos, asin, atan, cosh, sinh, tanh, acosh, asinh, atanh
@@ -293,6 +294,12 @@ function real(x::MPCComplex)
     return z
 end
 
+function conj(x::MPCComplex)
+    z = MPCComplex()
+    ccall((:mpc_conj, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
+    return z
+end
+
 string(x::MPCComplex) = "$(string(real(x))) + $(string(imag(x)))im"
 
 show(io::IO, b::MPCComplex) = print(io, string(b) * " with $(get_precision(b)) bits of precision")
@@ -300,7 +307,7 @@ showcompact(io::IO, b::MPCComplex) = print(io, string(b))
 
 function copy(x::MPCComplex)
     z = MPCComplex()
-    ccall((:mpc_set, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE)
+    ccall((:mpc_set, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
