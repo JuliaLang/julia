@@ -1337,7 +1337,7 @@ end
 
 function findin(a, b)
     ind = Array(Int, 0)
-    bset = add_each!(Set(), b)
+    bset = union!(Set(), b)
     for i = 1:length(a)
         if contains(bset, a[i])
             push!(ind, i)
