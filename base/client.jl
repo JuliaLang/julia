@@ -122,21 +122,19 @@ end
 function run_repl()
     global const repl_channel = RemoteRef()
 
-    if have_color
-        ccall(:jl_enable_color, Void, ())
-    end
-
     # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
     STDIN.closecb = (x...)->put(repl_channel,(nothing,-1))
 
     while true
-        ccall(:repl_callback_enable, Void, ())
+        if have_color
+            prompt_string = "\01\033[1m\033[32m\02julia> \01\033[0m"*input_color()*"\02"
+        else
+            prompt_string = "julia> "
+        end
+        ccall(:repl_callback_enable, Void, (Ptr{Uint8},), prompt_string)
         global _repl_enough_stdin = false
         start_reading(STDIN, readBuffer)
-        if have_color
-            print(input_color())
-        end
         (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
