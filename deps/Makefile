@@ -189,6 +189,9 @@ endif
 else
 LLVM_FLAGS += --disable-assertions --enable-optimized
 endif
+ifeq ($(OS), WINNT)
+LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
+endif
 
 ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),1)
@@ -389,7 +392,11 @@ $(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)"
 ifeq ($(OS),WINNT)
-LIBUV_MAKE_FLAGS += OS=mingw
+LIBUV_MAKE_FLAGS += PLATFORM=mingw
+else
+ifneq ($(OS),$(BUILD_OS))
+$(error libuv may autodetect your cross-compile PLATFORM incorrectly)
+endif
 endif
 $(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
@@ -406,7 +413,7 @@ $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	cp -r libuv/include/* $(BUILD)/include
 
 clean-uv:
-	-$(MAKE) clean $(LIBUV_MAKE_FLAGS)
+	-$(MAKE) clean $(LIBUV_MAKE_FLAGS) RUNNER_LIBS=
 	-rm -rf $(BUILD)/lib/libuv.a $(BUILD)/include/uv.h $(BUILD)/include/uv-private
 distclean-uv: clean-uv
 
