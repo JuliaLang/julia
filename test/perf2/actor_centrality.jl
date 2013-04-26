@@ -8,7 +8,7 @@ end
 typealias Graph Dict{UTF8String, Node}
 
 function get(G::Graph, name)
-    if has(G, name)
+    if haskey(G, name)
         return G[name]
     end
     G[name] = Node(name)
@@ -22,7 +22,7 @@ function centrality_mean(G::Graph, start_node)
     while !isempty(next)
         nnext = Set{Node}()
         for n in next
-            if !has(dists, n) 
+            if !haskey(dists, n)
                 dists[n] = cdist
                 for neigh in n.n
                     add!(nnext, neigh)

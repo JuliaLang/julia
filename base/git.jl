@@ -96,7 +96,7 @@ function read_config(file::String)
     # TODO: use --null option for better handling of weird values.
     for line in eachline(`git config -f $file --get-regexp '.*'`)
         key, val = match(r"^(\S+)\s+(.*)$", line).captures
-        cfg[key] = has(cfg,key) ? [cfg[key],val] : val
+        cfg[key] = haskey(cfg,key) ? [cfg[key],val] : val
     end
     return cfg
 end

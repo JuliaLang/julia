@@ -20,7 +20,7 @@ function deepcopy_internal(x::Function, stackdict::ObjectIdDict)
 end
 
 function deepcopy_internal(x, stackdict::ObjectIdDict)
-    if has(stackdict, x)
+    if haskey(stackdict, x)
         return stackdict[x]
     end
     _deepcopy_t(x, typeof(x), stackdict)
@@ -42,7 +42,7 @@ end
 
 
 function deepcopy_internal(x::Array, stackdict::ObjectIdDict)
-    if has(stackdict, x)
+    if haskey(stackdict, x)
         return stackdict[x]
     end
     _deepcopy_array_t(x, eltype(x), stackdict)

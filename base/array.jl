@@ -1429,7 +1429,7 @@ function reducedim(f::Function, A, region, v0, R)
         key = (fname, ndimsA)
     end
 
-    if !has(reducedim_cache,key)
+    if !haskey(reducedim_cache,key)
         fexpr = gen_reducedim_func(ndimsA, fname)
         func = eval(fexpr)
         reducedim_cache[key] = func

@@ -312,7 +312,7 @@ function _start()
         if !isdir(user_data_dir)
             mkdir(user_data_dir)
         end
-        if !has(ENV,"HOME")
+        if !haskey(ENV,"HOME")
             ENV["HOME"] = user_data_dir
         end
     end
@@ -342,7 +342,7 @@ function _start()
             global is_interactive = true
             quiet || banner()
 
-            if has(ENV,"JL_ANSWER_COLOR")
+            if haskey(ENV,"JL_ANSWER_COLOR")
                 warn("JL_ANSWER_COLOR is deprecated, use JULIA_ANSWER_COLOR instead.")
                 ENV["JULIA_ANSWER_COLOR"] = ENV["JL_ANSWER_COLOR"]
             end

@@ -23,7 +23,7 @@ function verify_tree(d::Dict, tree::String)
         m = match(r"^(\d{6}) (\w+) ([0-9a-f]{40})\t(.*)$", line)
         @test m != nothing
         perm, kind, sha1, name = m.captures
-        @test has(d,name)
+        @test haskey(d,name)
         data = d[name]
         if isa(data, String)
             @test kind == "blob"
@@ -64,7 +64,7 @@ function verify_work(d::Dict)
     # check for anything that's not in d
     for line in eachline(`ls -A`)
         name = chomp(line)
-        @test name == ".git" || has(d,name)
+        @test name == ".git" || haskey(d,name)
     end
 end
 

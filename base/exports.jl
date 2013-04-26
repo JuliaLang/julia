@@ -682,7 +682,7 @@ export
     eltype,
     get,
     getindex,
-    has,
+    haskey,
     intersect,
     intersect!,
     isempty,

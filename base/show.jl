@@ -230,13 +230,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif is(head, symbol("::")) && nargs == 1
         print(io, "::")        
         show_unquoted(io, args[1], indent)
-    elseif has(_expr_parens, head)               # :tuple/:vcat/:cell1d
+    elseif haskey(_expr_parens, head)               # :tuple/:vcat/:cell1d
         op, cl = _expr_parens[head]
         print(io, op)
         show_list(io, args, ",", indent)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
         print(io, cl)
-    elseif has(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly
+    elseif haskey(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         op, cl = _expr_calls[head]
         show_unquoted(io, args[1], indent)
         show_enclosed_list(io, op, args[2:end], ",", cl, indent)

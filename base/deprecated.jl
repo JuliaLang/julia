@@ -187,6 +187,7 @@ export PipeString
 @deprecate  remote_call_wait    remotecall_wait
 @deprecate  has(s::Set, x)      contains(s, x)
 @deprecate  has(s::IntSet, x)   contains(s, x)
+@deprecate  has(d,k)            haskey(d,k)
 @deprecate  diagmm              scale
 @deprecate  diagmm!             scale!
 @deprecate  unsafe_ref          unsafe_load
