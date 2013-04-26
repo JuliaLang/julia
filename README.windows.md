@@ -100,9 +100,4 @@ If you are building for 64-bit windows. The steps are pretty much the same. Just
 Important Build Errata
 ----------------------
 
-- Arpack 3.1.2 has an error in the tar file (a symlink from ./depcomp to a nonexistant file) that prevents it from being extracted on windows (cross-build is fine). To resolve this, we need a tar file that doesn't contain this symlink file. I found the easiest way to solve this was to run `make -C deps get-arpack` and then edit the arpack-*.tar.gz in 7zip to delete the depcomp symlink file before running the primary make target.
-
-- LLVM 3.x has an error on when compiling for 64-bit Windows that causes the build to fail when building the shared library file. Therefore, before building, you will need to change `--enable-shared` to `--disable-shared` in the `LLVM_FLAGS` variable in `deps/Makefile`.
-
-- The cross-build does not have access to git. If you want your sysimg to contain version information from the commit, remove the `#` from the line in Makefile that begins with @#echo `git rev-parse --short HEAD ...` and ends with `... > COMMIT`
-
+- None currently
