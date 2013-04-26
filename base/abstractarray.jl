@@ -310,7 +310,7 @@ end
 ## If genbodies creates an array it must of length N.
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
     N = length(ranges)
-    if !has(cache,N)
+    if !haskey(cache,N)
         if isdefined(genbodies,:code)
             mod = genbodies.code.module
         else
@@ -436,7 +436,7 @@ end
 #     turn are used for computing the linear index)
 function gen_array_index_map(cache, genbody, ranges, exargnames, exargs...)
     N = length(ranges)
-    if !has(cache,N)
+    if !haskey(cache,N)
         dimargnames = { symbol(string("_d",i)) for i=1:N }
         loopvars = { symbol(string("_l",i)) for i=1:N }
         offsetvars = { symbol(string("_offs",i)) for i=1:N }

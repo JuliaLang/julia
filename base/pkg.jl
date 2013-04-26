@@ -32,7 +32,7 @@ dir(pkg::String...) = joinpath(dir(),pkg...)
 function cd_pkgdir(f::Function)
     d = dir()
     if !isdir(d)
-        if has(ENV,"JULIA_PKGDIR")
+        if haskey(ENV,"JULIA_PKGDIR")
             error("Package directory $d doesn't exist; run Pkg.init() to create it.")
         else
             info("Auto-initializing default package repository $d.")
@@ -275,7 +275,7 @@ function _resolve()
     vers = Metadata.versions(pkgs)
     deps = Metadata.dependencies(union(pkgs,keys(fixed)))
     filter!(reqs) do r
-        if has(fixed, r.package)
+        if haskey(fixed, r.package)
             if !contains(r, Version(r.package,fixed[r.package]))
                 warn("$(r.package) is fixed at $(repr(fixed[r.package])) which doesn't satisfy $(r.versions).")
             end
@@ -285,15 +285,15 @@ function _resolve()
         end
     end
     filter!(pkgs) do p
-        !has(fixed, p)
+        !haskey(fixed, p)
     end
     filter!(vers) do v
-        !has(fixed, v.package)
+        !haskey(fixed, v.package)
     end
     unsatisfiable = Set{Version}()
     filter!(deps) do d
         p = d[2].package
-        if has(fixed, p)
+        if haskey(fixed, p)
             if !contains(d[2], Version(p, fixed[p]))
                 add!(unsatisfiable, d[1])
             end
@@ -312,12 +312,12 @@ function _resolve()
 
     pkgs = sort!(collect(keys(merge(want,have))))
     for pkg in pkgs
-        if has(have,pkg)
+        if haskey(have,pkg)
             managed = cd(pkg) do
                 !Git.dirty() && !Git.attached()
             end
             if !managed continue end
-            if has(want,pkg)
+            if haskey(want,pkg)
                 if have[pkg] != want[pkg]
                     oldver = Metadata.version(pkg,have[pkg])
                     newver = Metadata.version(pkg,want[pkg])
@@ -525,7 +525,7 @@ pull() = cd_pkgdir() do
 
     # merge submodules
     Git.each_submodule(false) do name, path, sha1
-        if has(Rs,"submodule.$name") && Git.different(L,R,path)
+        if haskey(Rs,"submodule.$name") && Git.different(L,R,path)
             alt = readchomp(`git rev-parse $R:$path`)
             cd(path) do
                 run(`git merge --no-edit $alt`)

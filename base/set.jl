@@ -14,12 +14,12 @@ isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 eltype{T}(s::Set{T}) = T
 
-contains(s::Set, x) = has(s.dict, x)
+contains(s::Set, x) = haskey(s.dict, x)
 
 add!(s::Set, x) = (s.dict[x] = nothing; s)
 delete!(s::Set, x) = (delete!(s.dict, x); x)
 # TODO: this method doesn't make much sense for sets:
-delete!(s::Set, x, deflt) = has(s.dict, x) ? delete!(s.dict, x) : deflt
+delete!(s::Set, x, deflt) = haskey(s.dict, x) ? delete!(s.dict, x) : deflt
 
 add_each!(s::Set, xs) = (for x=xs; add!(s,x); end; s)
 del_each!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
