@@ -2839,7 +2839,11 @@ Distributed Arrays
 
 .. function:: DArray(init, dims, [procs, dist])
 
-   Construct a distributed array. ``init`` is a function accepting a tuple of index ranges. This function should return a chunk of the distributed array for the specified indexes. ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of processor IDs to use. ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
+   Construct a distributed array. ``init`` is a function that accepts a tuple of index ranges. This function should allocate a local chunk of the distributed array and initialize it for the specified indices. ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of processor IDs to use. ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
+
+   For example, the `dfill` function that creates a distributed array and fills it with a value ``v`` is implemented as:
+
+   ``dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)``
 
 .. function:: dzeros(dims, ...)
 
