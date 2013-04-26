@@ -13,12 +13,12 @@ import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1,
         bessely, bessely0, bessely1, ceil, cmp, convert, copysign, exp, exp2,
         exponent, factorial, floor, hypot, integer_valued, iround, isfinite,
-        isinf, isnan, log, log2, log10, max, min, mod, modf, nextfloat,
+        isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf, nextfloat,
         prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
         string, trunc, get_precision,
     # import trigonometric functions
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
-        sech, csch, coth, acosh, asinh, atanh
+        sech, csch, coth, acosh, asinh, atanh, atan2
 
 const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [256]
@@ -376,6 +376,19 @@ function exp10(x::MPFRFloat)
     return z
 end
 
+function ldexp(x::MPFRFloat, n::Clong)
+    z = MPFRFloat()
+    ccall((:mpfr_mul_2si, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Clong, Int32), &z, &x, n, ROUNDING_MODE[end])
+    return z
+end
+function ldexp(x::MPFRFloat, n::Culong)
+    z = MPFRFloat()
+    ccall((:mpfr_mul_2ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Culong, Int32), &z, &x, n, ROUNDING_MODE[end])
+    return z
+end
+ldexp(x::MPFRFloat, n::Signed) = ldexp(x, convert(Clong, n))
+ldexp(x::MPFRFloat, n::Unsigned) = ldexp(x, convert(Culong, n))
+
 function besselj0(x::MPFRFloat)
     z = MPFRFloat()
     ccall((:mpfr_j0, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
@@ -508,6 +521,12 @@ for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
             return z
         end
     end
+end
+
+function atan2(y::MPFRFloat, x::MPFRFloat)
+    z = MPFRFloat()
+    ccall((:mpfr_atan2, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &y, &x, ROUNDING_MODE[end])
+    return z
 end
 
 # Utility functions
