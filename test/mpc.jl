@@ -79,6 +79,12 @@ x = MPCComplex(12,42)
 @test !integer_valued(MPCComplex(2,3))
 @test integer_valued(MPCComplex(2))
 
+# conj
+@test isequal(conj(MPCComplex(2,1)), MPCComplex(2,-1))
+@test isequal(conj(MPCComplex(2.,NaN)), MPCComplex(2.,NaN))
+@test isequal(conj(MPCComplex(2.,Inf)), MPCComplex(2.,-Inf))
+@test isequal(conj(MPCComplex(2.,-Inf)), MPCComplex(2.,Inf))
+
 # Kahan tests from #2845 by @simonbyrne
 with_bigcomplex_precision(53,53) do 
 # sqrt: 
