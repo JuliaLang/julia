@@ -14,7 +14,7 @@ import
         promote_rule, real, show, showcompact, sqrt, string, get_precision
 
 const ROUNDING_MODE = [0]
-const DEFAULT_PRECISION = [53, 53]
+const DEFAULT_PRECISION = [256, 256]
 
 # Basic type and initialization definitions
 
