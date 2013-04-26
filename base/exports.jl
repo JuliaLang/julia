@@ -668,7 +668,6 @@ export
 
 # collections
     add!,
-    add_each!,
     all,
     any,
     collect,
@@ -678,7 +677,6 @@ export
     delete!,
     empty!,
     endof,
-    del_each!,
     eltype,
     get,
     getindex,
@@ -699,6 +697,7 @@ export
     sizehint,
     similar,
     setdiff,
+    setdiff!,
     symdiff,
     symdiff!,
     union,
