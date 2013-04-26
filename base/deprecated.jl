@@ -189,6 +189,8 @@ export PipeString
 @deprecate  has(s::IntSet, x)   contains(s, x)
 @deprecate  diagmm              scale
 @deprecate  diagmm!             scale!
+@deprecate  unsafe_ref          unsafe_load
+@deprecate  unsafe_assign       unsafe_store!
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)

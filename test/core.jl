@@ -523,13 +523,13 @@ begin
     local a,p, a2,p2
     a = [11,12,13]
     p = pointer(a)
-    @test unsafe_ref(p, 1) == 11
-    unsafe_assign(p, 99, 2)
+    @test unsafe_load(p, 1) == 11
+    unsafe_store!(p, 99, 2)
     @test a == [11,99,13]
     a2 = Any[101,102,103]
     p2 = pointer(a2)
-    @test unsafe_ref(p2) == 101
-    @test_fails unsafe_assign(p2, 909, 3)
+    @test unsafe_load(p2) == 101
+    @test_fails unsafe_store!(p2, 909, 3)
     @test a2 == [101,102,103]
 end
 
@@ -545,8 +545,8 @@ begin
     local X, p
     X = FooBar[ FooBar(3,1), FooBar(4,4) ]
     p = convert(Ptr{FooBar}, X)
-    @test unsafe_ref(p, 2) == FooBar(4,4)
-    unsafe_assign(p, FooBar(7,3), 1)
+    @test unsafe_load(p, 2) == FooBar(4,4)
+    unsafe_store!(p, FooBar(7,3), 1)
     @test X[1] == FooBar(7,3)
 end
 

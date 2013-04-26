@@ -171,7 +171,7 @@ if (1000chm_ver[1]+chm_ver[2]) >= 2001 # CHOLMOD version 2.1.0 or later
     end
 
     function CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodFactor{Tv,Ti}})
-        cfp = unsafe_ref(cp)
+        cfp = unsafe_load(cp)
         Perm = pointer_to_array(cfp.Perm, (cfp.n,), true)
         ColCount = pointer_to_array(cfp.ColCount, (cfp.n,), true)
         IPerm = pointer_to_array(cfp.IPerm, (cfp.IPerm == C_NULL ? 0 : cfp.n + 1,), true)
@@ -239,7 +239,7 @@ else
     end
 
     function CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodFactor{Tv,Ti}})
-        cfp = unsafe_ref(cp)
+        cfp = unsafe_load(cp)
         Perm = pointer_to_array(cfp.Perm, (cfp.n,), true)
         ColCount = pointer_to_array(cfp.ColCount, (cfp.n,), true)
         p = pointer_to_array(cfp.p, (cfp.p == C_NULL ? 0 : cfp.n + 1,), true)
@@ -328,7 +328,7 @@ function CholmodDense{T<:CHMVTypes}(aa::VecOrMat{T})
 end
 
 function CholmodDense{T<:CHMVTypes}(c::Ptr{c_CholmodDense{T}})
-    cp = unsafe_ref(c)
+    cp = unsafe_load(c)
     if cp.lda != cp.m || cp.nzmax != cp.m * cp.n
         error("overallocated cholmod_dense returned object of size $(cp.m) by $(cp.n) with leading dim $(cp.lda) and nzmax $(cp.nzmax)")
     end
@@ -441,7 +441,7 @@ function CholmodSparse(A::SparseMatrixCSC)
     CholmodSparse(stype > 0 ? triu(A) : A, stype)
 end
 function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodSparse{Tv,Ti}})
-    csp = unsafe_ref(cp)
+    csp = unsafe_load(cp)
     colptr0 = pointer_to_array(csp.ppt, (csp.n + 1,), true)
     nnz = int(colptr0[end])
     cms = CholmodSparse{Tv,Ti}(csp, colptr0,
@@ -454,7 +454,7 @@ CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodSparse{Tv,Ti}}) = C
 CholmodSparse{Tv<:CHMVTypes}(D::CholmodDense{Tv}) = CholmodSparse(D,1) # default Ti is Int
 
 function CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}(tp::Ptr{c_CholmodTriplet{Tv,Ti}})
-    ctp = unsafe_ref(tp)
+    ctp = unsafe_load(tp)
     i = pointer_to_array(ctp.i, (ctp.nnz,), true)
     j = pointer_to_array(ctp.j, (ctp.nnz,), true)    
     x = pointer_to_array(ctp.x, (ctp.x == C_NULL ? 0 : ctp.nnz), true)
@@ -519,7 +519,7 @@ for Ti in (:Int32,:Int64)
                            (Ptr{Ptr{c_CholmodSparse{Tv,$Ti}}}, Ptr{Uint8}), aa, cm)
             if status != CHOLMOD_TRUE throw(CholmodException) end
             aa[1] = aa[2]
-            r = unsafe_ref(aa[1])
+            r = unsafe_load(aa[1])
             ## Now transpose the lower triangle to the upper triangle to do the sorting
             rpt = ccall((@chm_nm "allocate_sparse" $Ti
                          ,:libcholmod),Ptr{c_CholmodSparse{Tv,$Ti}},
