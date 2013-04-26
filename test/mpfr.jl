@@ -328,6 +328,21 @@ end
 # hypot
 @test hypot(MPFRFloat(3), MPFRFloat(4)) == 5
 
+# atan2
+with_bigfloat_precision(53) do
+    @test isequal(atan2(12,2), atan2(MPFRFloat(12), MPFRFloat(2)))
+end
+
+# ldexp
+with_bigfloat_precision(53) do
+    @test ldexp(MPFRFloat(24.5), 72) == ldexp(24.5, 72)
+    @test ldexp(MPFRFloat(24.5), int16(72)) == ldexp(24.5, 72)
+    @test ldexp(MPFRFloat(24.5), -72) == ldexp(24.5, -72)
+    @test ldexp(MPFRFloat(24.5), int16(-72)) == ldexp(24.5, -72)
+    @test ldexp(MPFRFloat(24.5), uint(72)) == ldexp(24.5, 72)
+    @test ldexp(MPFRFloat(24.5), 0x48) == ldexp(24.5, 72)
+end
+
 # basic arithmetic
 # Signed addition
 a = MPFRFloat("123456789012345678901234567890")
