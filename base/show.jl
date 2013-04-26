@@ -753,8 +753,8 @@ function show_nd(io::IO, a::AbstractArray)
 end
 
 function whos(m::Module, pattern::Regex)
-    for s in sort!(map(string, names(m)))
-        v = symbol(s)
+    for v in sort(names(m))
+        s = string(v)
         if isdefined(m,v) && ismatch(pattern, s)
             println(rpad(s, 30), summary(eval(m,v)))
         end

@@ -269,6 +269,10 @@ beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
 beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) =
     (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
 
+cmp(a::Symbol, b::Symbol) =
+    int(sign(ccall(:strcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}), a, b)))
+isless(a::Symbol, b::Symbol) = cmp(a,b)<0
+
 # TODO: fast endswith
 
 ## character column width function ##
