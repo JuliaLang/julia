@@ -86,6 +86,14 @@
 (assert (not (eqv? -0.0 0.0)))
 (assert (= 0.0 -0.0))
 
+; hexadecimal float literals
+(assert (= 12.0 0x1.8p3))
+(assert (= 0.1875 0x1.8p-3))
+(assert (= 0.5 0x.8p0))
+(assert (= 12.0 0x1.8p3f))
+(assert (= 0.1875 0x1.8p-3f))
+(assert (= 0.5 0x.8p0f))
+
 ; this crashed once
 (for 1 10 (lambda (i) 0))
 
