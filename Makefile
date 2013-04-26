@@ -40,9 +40,13 @@ julia-debug julia-release:
 $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 	@cp $< $@
 
+COMMIT:
+	@#this is a .PHONY target so that it will always run
+	@echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
+
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl $(BUILD)/share/julia/helpdb.jl
-	@echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
+	$(MAKE) $(QUIET_MAKE) COMMIT
 	$(QUIET_JULIA) cd base && \
 	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***"
 
@@ -88,6 +92,7 @@ ifeq ($(OS), WINNT)
 	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
 endif
 	cp $(JULIAHOME)/VERSION $(PREFIX)/share/julia/VERSION
+	$(MAKE) $(QUIET_MAKE) COMMIT
 	cp $(JULIAHOME)/COMMIT $(PREFIX)/share/julia/COMMIT
 
 dist: 
@@ -142,7 +147,7 @@ distclean: cleanall
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* clean distclean cleanall \
-	run-julia run-julia-debug run-julia-release
+	run-julia run-julia-debug run-julia-release COMMIT
 
 test: release
 	@$(MAKE) $(QUIET_MAKE) -C test default
