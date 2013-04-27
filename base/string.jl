@@ -1210,7 +1210,7 @@ let
 end
 
 
-function hex2bin(s::ASCIIString)
+function hex2bytes(s::ASCIIString)
     len = length(s)
     if isodd(len)
         error("Input string length should be even")
@@ -1232,5 +1232,5 @@ function hex2bin(s::ASCIIString)
     return arr
 end
 
-bin2hex(arr::Array{Uint8,1}) = join([hex(i, 2) for i in arr])
+bytes2hex(arr::Array{Uint8,1}) = join([hex(i, 2) for i in arr])
 
