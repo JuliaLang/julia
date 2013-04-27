@@ -1183,4 +1183,5 @@ export
     @vectorize_2arg,
     @show,
     @printf,
-    @sprintf
+    @sprintf,
+    @deprecate
