@@ -361,24 +361,6 @@ void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where);
 extern jl_jmp_buf * volatile jl_jmp_target;
 #endif
 
-#ifdef __WIN32__
-static long chachedPagesize = 0;
-long getPageSize (void)
-{
-    if (!chachedPagesize) {
-        SYSTEM_INFO systemInfo;
-        GetSystemInfo (&systemInfo);
-        chachedPagesize = systemInfo.dwPageSize;
-    }
-    return chachedPagesize;
-}
-#else
-long getPageSize (void)
-{
-    return sysconf(_SC_PAGESIZE);
-}
-#endif
-
 void *init_stdio_handle(uv_file fd,int readable)
 {
     void *handle;
@@ -417,7 +399,7 @@ void init_stdio()
 
 void julia_init(char *imageFile)
 {
-    jl_page_size = getPageSize();
+    jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
 #ifdef __WIN32__
