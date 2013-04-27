@@ -8,18 +8,16 @@ immutable VersionNumber
     build::(Union(Int,ASCIIString)...)
 
     function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::(Union(Int,ASCIIString)...), bld::(Union(Int,ASCIIString)...))
-        if major < 0 error("invalid major version: $major") end
-        if minor < 0 error("invalid minor version: $minor") end
-        if patch < 0 error("invalid patch version: $patch") end
+        major >= 0 || error("invalid negative major version: $major")
+        minor >= 0 || error("invalid negative minor version: $minor")
+        patch >= 0 || error("invalid negative patch version: $patch")
         for ident in pre
             if isa(ident,Int)
                 ident >= 0 || error("invalid negative pre-release identifier: $ident")
             else
-                if !ismatch(r"^[0-9a-z-]*$"i, ident)
-                    error("invalid pre-release identifier: $ident")
-                end
-                if isempty(ident) && !(length(pre)==1 && isempty(bld))
-                    error("invalid pre-release identifier: empty string")
+                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                    isempty(ident) && !(length(pre)==1 && isempty(bld))
+                    error("invalid pre-release identifier: ", repr(ident))
                 end
             end
         end
@@ -27,11 +25,9 @@ immutable VersionNumber
             if isa(ident,Int)
                 ident >= 0 || error("invalid negative build identifier: $ident")
             else
-                if !ismatch(r"^[0-9a-z-]*$"i, ident)
-                    error("invalid build identifier: $ident")
-                end
-                if isempty(ident) && length(bld)!=1
-                    error("invalid pre-release identifier: empty string")
+                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                    isempty(ident) && length(bld)!=1
+                    error("invalid build identifier: ", repr(ident))
                 end
             end
         end
