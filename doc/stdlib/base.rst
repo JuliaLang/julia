@@ -1891,6 +1891,15 @@ Data Formats
 
    Convert a hexadecimal string to the floating point number it represents
 
+.. function:: hex2bytes(s::ASCIIString)
+
+   Convert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{Uint8, 1}, i.e. an array of bytes.
+
+.. function:: bytes2hex(bin_arr::Array{Uint8, 1})
+
+   Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ASCIIString.
+
+   
 Numbers
 -------
 
