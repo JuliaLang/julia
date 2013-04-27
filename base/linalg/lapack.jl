@@ -946,7 +946,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                       info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0 
-                    lwork = blas_int(work[1])
+                    lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -1820,7 +1820,7 @@ for (syevr, elty) in
                     info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
-                    lwork = blas_int(work[1])
+                    lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                     liwork = iwork[1]
                     iwork = Array(BlasInt, liwork)
@@ -2000,7 +2000,7 @@ for (gehrd, elty) in
                     info)
                 if info[1] < 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
-                    lwork = blas_int(work[1])
+                    lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2040,7 +2040,7 @@ for (orghr, elty) in
                     info)
                 if info[1] < 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
-                    lwork = blas_int(work[1])
+                    lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2085,7 +2085,7 @@ for (gees, gges, elty) in
                         &lwork, [], info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
-                    lwork = blas_int(work[1])
+                    lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2134,7 +2134,7 @@ for (gees, gges, elty) in
                     &ldvsr, work, &lwork, [], 
                     info)
                 if i == 1
-                    lwork = blas_int(work[1])
+                    lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2180,7 +2180,7 @@ for (gees, gges, elty, relty) in
                         rwork, [], info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
-                    lwork = blas_int(work[1])
+                    lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
@@ -2226,7 +2226,7 @@ for (gees, gges, elty, relty) in
                     work, &lwork, rwork, [], 
                     info)
                 if i == 1
-                        lwork = blas_int(work[1])
+                        lwork = blas_int(real(work[1]))
                         work = Array($elty, lwork)
                 end
             end

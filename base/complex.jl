@@ -31,6 +31,7 @@ promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
 
 complex(x, y) = Complex(x, y)
 complex(x) = Complex(x)
+complex(z::Complex) = z
 
 complex128(r::Float64, i::Float64) = Complex{Float64}(r, i)
 complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
@@ -38,6 +39,12 @@ complex128(z) = complex128(real(z), imag(z))
 complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
 complex64(z) = complex64(real(z), imag(z))
+
+for fn in (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,
+           :uint,:unsigned,:uint8,:uint16,:uint32,:uint64,:uint128,
+           :float,:float32,:float64)
+    @eval $fn(z::Complex) = complex($fn(real(z)),$fn(imag(z)))
+end
 
 iscomplex(x::Complex) = true
 iscomplex(x::Number) = false
