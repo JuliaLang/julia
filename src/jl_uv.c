@@ -265,7 +265,7 @@ DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *dat
     handle->data = data;
 }
 
-DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle)
+DLLEXPORT int32_t jl_start_reading(uv_stream_t *handle)
 {
     if (!handle)
         return -2;
