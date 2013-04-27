@@ -340,7 +340,7 @@ function show(io::IO, cpu::Array{CPUinfo})
 end
 repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
 function cpu_info()
-    SC_CLK_TCK = ccall(:SC_CLK_TCK, Int, ())
+    SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     UVcpus = Array(Ptr{UV_cpu_info_t},1)
     count = Array(Int32,1)
     uv_error("uv_cpu_info",ccall(:uv_cpu_info, UV_error_t, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))

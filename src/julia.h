@@ -827,7 +827,7 @@ DLLEXPORT uv_loop_t *jl_global_event_loop();
 DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only, jl_value_t *julia_struct);
 DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 
-DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle);
+DLLEXPORT int32_t jl_start_reading(uv_stream_t *handle);
 
 DLLEXPORT void jl_callback(void *callback);
 
@@ -1181,6 +1181,7 @@ DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 DLLEXPORT void jl_free2(void *p, void *hint);
 
 DLLEXPORT int jl_cpu_cores(void);
+DLLEXPORT long jl_getpagesize(void);
 
 DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);

@@ -33,10 +33,10 @@ show(io::IO, st::Stat) = print("Stat(mode=$(oct(st.mode,6)), size=$(st.size))")
 # stat & lstat functions
 
 const stat_buf = Array(Uint8, ccall(:jl_sizeof_stat, Int32, ()))
-macro stat_call(sym,arg)
+macro stat_call(sym,arg1type,arg)
     quote
         fill!(stat_buf,0)
-        r = ccall($(Expr(:quote,sym)), Int32, (Ptr{Uint8},Ptr{Uint8}), $arg, stat_buf)
+        r = ccall($(Expr(:quote,sym)), Int32, ($arg1type,Ptr{Uint8}), $arg, stat_buf)
         uv_errno = _uv_lasterror(eventloop())
         ENOENT, ENOTDIR = 34, 27
         systemerror(:stat, r!=0 && uv_errno!=ENOENT && uv_errno!=ENOTDIR)
@@ -48,9 +48,9 @@ macro stat_call(sym,arg)
     end
 end
 
-stat(fd::Integer)   = @stat_call jl_fstat fd
-stat(path::String)  = @stat_call jl_stat  path
-lstat(path::String) = @stat_call jl_lstat path
+stat(fd::Integer)   = @stat_call jl_fstat Int32 fd
+stat(path::String)  = @stat_call jl_stat  Ptr{Uint8} path
+lstat(path::String) = @stat_call jl_lstat Ptr{Uint8} path
 
 stat(path...) = stat(joinpath(path...))
 lstat(path...) = lstat(joinpath(path...))
