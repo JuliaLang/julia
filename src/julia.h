@@ -86,6 +86,9 @@ typedef struct _jl_mallocptr_t {
     struct _jl_mallocptr_t *next;
     size_t sz;
     void *ptr;
+#if defined(_WIN32) && !defined(_WIN64)
+    int isaligned;
+#endif
 } jl_mallocptr_t;
 
 // how much space we're willing to waste if an array outgrows its
@@ -1080,7 +1083,7 @@ void jl_gc_unpreserve(void);
 int jl_gc_n_preserved_values(void);
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
-jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz);
+jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz, int isaligned);
 jl_mallocptr_t *jl_gc_managed_malloc(size_t sz);
 void *alloc_2w(void);
 void *alloc_3w(void);
