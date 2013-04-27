@@ -695,14 +695,6 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
     return lib;
 }
 
-DLLEXPORT long SC_CLK_TCK() {
-#ifndef __WIN32__
-    return sysconf(_SC_CLK_TCK);
-#else
-    return 0;
-#endif
-}
-
 #ifdef __cplusplus
 }
 #endif
