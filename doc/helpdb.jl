@@ -6352,6 +6352,29 @@ GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
 "),
 
+("Linear Algebra","","eigs","eigs(A; nev=6, evtype=\"LM\",
+ritzvec=true)
+
+
+   *eigs* computes the eigenvalues of A using Arnoldi factorization.
+   The following keyword arguments are supported:
+      nev: Number of eigenvalues evtype: Which eigenvalues (\"LM\",
+      \"SM\") ritzvec: Returns the Ritz vectors (eigenvectors) if
+      *true*
+
+"),
+
+("Linear Algebra","","svds","svds(A; nev=6, evtype=\"LA\",
+ritzvec=true)
+
+
+   *svds* computes the singular values of A using Arnoldi
+   factorization. The following keyword arguments are supported:
+      nsv: Number of singular values evtype: Which singular values
+      (\"LA\") ritzvec: Returns the singular vectors if *true*
+
+"),
+
 ("BLAS Functions","","copy!","copy!(n, X, incx, Y, incy)
 
 
