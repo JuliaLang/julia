@@ -775,6 +775,8 @@ export
     oct,
     parsefloat,
     parseint,
+    hex2bytes,
+    bytes2hex,
     print,
     print_escaped,
     print_joined,
