@@ -285,9 +285,9 @@ extern char **environ;
 
 DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
                        uv_process_t *proc, jl_value_t *julia_struct,
-                       uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
-                       uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
-                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe, int detach)
+                       uv_handle_type stdin_type, uv_pipe_t *stdin_pipe,
+                       uv_handle_type stdout_type, uv_pipe_t *stdout_pipe,
+                       uv_handle_type stderr_type, uv_pipe_t *stderr_pipe, int detach)
 {
 #ifdef __APPLE__
     char **environ = *_NSGetEnviron();
