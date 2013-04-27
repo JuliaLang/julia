@@ -304,18 +304,22 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The conjugate transpose operator (').
 
-.. function:: eigs(A; nev=6, evtype="LM", ritzvec=true)
+.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, ritzvec=true)
 
    `eigs` computes the eigenvalues of A using Arnoldi factorization. The following keyword arguments are supported:
    	  nev: Number of eigenvalues
-	  evtype: Which eigenvalues ("LM", "SM")
+	  which: type of eigenvalues ("LM", "SM")
+	  tol: tolerance (tol <= 0.0 defaults to `DLAMCH('EPS')`)
+	  maxiter: Maximum number of iterations
 	  ritzvec: Returns the Ritz vectors (eigenvectors) if `true`
 
-.. function:: svds(A; nev=6, evtype="LA", ritzvec=true)
+.. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)
 
    `svds` computes the singular values of A using Arnoldi factorization. The following keyword arguments are supported:
    	  nsv: Number of singular values
-	  evtype: Which singular values ("LA")
+	  which: type of singular values ("LA")
+	  tol: tolerance (tol <= 0.0 defaults to `DLAMCH('EPS')`)
+	  maxiter: Maximum number of iterations
 	  ritzvec: Returns the singular vectors if `true`
 
 BLAS Functions
