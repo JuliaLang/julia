@@ -201,7 +201,7 @@ function _uv_hook_getaddrinfo(cb::Function,addrinfo::Ptr{Void}, status::Int32)
         throw(UVError("getaddrinfo callback"))
     end
     sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
-    if(ccall(:jl_sockaddr_is_ip4,Int,(Ptr{Void},),sockaddr)==1)
+    if(ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr)==1)
         cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,Uint32,(Ptr{Void},),sockaddr))))
     else
         cb(IPv6(ntoh(ccall(:jl_sockaddr_host6,Uint128,(Ptr{Void},),sockaddr))))
