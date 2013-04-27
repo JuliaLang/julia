@@ -2,7 +2,7 @@ using .ARPACK
 
 ## eigs
 
-function eigs{T <: BlasFloat}(A::AbstractMatrix{T}, nev::Integer, evtype::ASCIIString, rvec::Bool)
+function eigs{T <: BlasFloat}(A::AbstractMatrix{T}; nev::Integer=6, evtype::ASCIIString="LM", ritzvec::Bool=true)
     (m, n) = size(A)
     if m != n; error("Input must be square"); end
     sym   = issym(A)
@@ -14,16 +14,10 @@ function eigs{T <: BlasFloat}(A::AbstractMatrix{T}, nev::Integer, evtype::ASCIIS
           aupd_wrapper(T, n, sym, cmplx, bmat, nev, evtype, (x) -> A * x)
 
     # Postprocessing to get eigenvalues and eigenvectors
-    return eupd_wrapper(T, n, sym, cmplx, bmat, nev, evtype, rvec,
+    return eupd_wrapper(T, n, sym, cmplx, bmat, nev, evtype, ritzvec,
                         select, tol, resid, ncv, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork)
 
 end
-
-eigs(A::AbstractMatrix, nev::Integer, typ::ASCIIString) = eigs(A, nev, which, true)
-eigs(A::AbstractMatrix, nev::Integer, rvec::Bool) = eigs(A, nev, "LM", rvec)
-eigs(A::AbstractMatrix, rvec::Bool) = eigs(A, 6, "LM", rvec)
-eigs(A::AbstractMatrix, nev::Integer) = eigs(A, nev, "LM", true)
-eigs(A::AbstractMatrix) = eigs(A, 6, "LM", true)
 
 ## svds
 
@@ -31,8 +25,8 @@ eigs(A::AbstractMatrix) = eigs(A, 6, "LM", true)
 sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = BLAS.symv('U', one(T), At, X)
 sarupdate{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, At::SparseMatrixCSC{Tv,Ti}, X::StridedVector{Tv}) = At*(A*X)
 
-function svds{T <: Union(Float64,Float32)}(A::AbstractMatrix{T}, nev::Integer, 
-                                           which::ASCIIString, rvec::Bool)
+function svds{T<:Union(Float64,Float32)}(A::AbstractMatrix{T};
+                                         nsv::Integer=6, which::ASCIIString="LA", ritzvec::Bool=true)
 
     (m, n) = size(A)
     if m < n error("m = $m, n = $n and only the m >= n case is implemented") end
@@ -43,22 +37,16 @@ function svds{T <: Union(Float64,Float32)}(A::AbstractMatrix{T}, nev::Integer,
 
     # Compute the Ritz values and Ritz vectors
     (select, tol, resid, ncv, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork) = 
-         aupd_wrapper(T, n, sym, cmplx, bmat, nev, which, (x) -> sarupdate(A, At, x))
+         aupd_wrapper(T, n, sym, cmplx, bmat, nsv, which, (x) -> sarupdate(A, At, x))
 
     # Postprocessing to get eigenvalues and eigenvectors
-    (svals, svecs) = eupd_wrapper(T, n, sym, cmplx, bmat, nev, which, rvec, 
+    (svals, svecs) = eupd_wrapper(T, n, sym, cmplx, bmat, nsv, which, ritzvec, 
                                   select, tol, resid, ncv, v, ldv, iparam, ipntr, 
                                   workd, workl, lworkl, rwork)
     
     svals = sqrt(svals)
-    rvec ? (A*svecs*diagm(1./svals), svals, v.') : svals
+    ritzvec ? (A*svecs*diagm(1./svals), svals, v.') : svals
 end
-
-svds(A::AbstractMatrix, nev::Integer, which::ASCIIString) = svds(A, nev, which, true)
-svds(A::AbstractMatrix, nev::Integer, rvec::Bool) = svds(A, nev, "LA", rvec)
-svds(A::AbstractMatrix, rvec::Bool) = svds(A, 6, "LA", rvec)
-svds(A::AbstractMatrix, nev::Integer) = svds(A, nev, "LA", true)
-svds(A::AbstractMatrix) = svds(A, 6, "LA", true)
 
 ## aupd and eupd wrappers 
 
@@ -110,7 +98,7 @@ function aupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
 end
 
 function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
-                      nev::Integer, evtype::ASCIIString, rvec::Bool, 
+                      nev::Integer, evtype::ASCIIString, ritzvec::Bool, 
                       select, tol, resid, ncv, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork)
 
     howmny = "A"
@@ -121,21 +109,21 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
         d = Array(T, nev+1)
         sigma = zeros(T, 1)
         workev = Array(T, 2ncv)
-        neupd(rvec, howmny, select, d, v, ldv, workev, sigma,
+        neupd(ritzvec, howmny, select, d, v, ldv, workev, sigma,
               bmat, n, evtype, nev, tol, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, rwork, info)
         if info[1] != 0; error("error code $(info[1]) from ARPACK eupd"); end
-        return rvec ? (d, v[1:n, 1:nev]) : d
+        return ritzvec ? (d, v[1:n, 1:nev]) : d
 
     elseif sym
 
         d = Array(T, nev)
         sigma = zeros(T, 1)
-        seupd(rvec, howmny, select, d, v, ldv, sigma,
+        seupd(ritzvec, howmny, select, d, v, ldv, sigma,
               bmat, n, evtype, nev, tol, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info) 
         if info[1] != 0; error("error code $(info[1]) from ARPACK eupd"); end
-        return rvec ? (d, v[1:n, 1:nev]) : d
+        return ritzvec ? (d, v[1:n, 1:nev]) : d
 
     else
 
@@ -144,7 +132,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
         sigmar = zeros(T, 1)
         sigmai = zeros(T, 1)
         workev = Array(T, 3*ncv)
-        neupd(rvec, howmny, select, dr, di, v, ldv, sigmar, sigmai,
+        neupd(ritzvec, howmny, select, dr, di, v, ldv, sigmar, sigmai,
               workev, bmat, n, evtype, nev, tol, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info)
         if info[1] != 0; error("error code $(info[1]) from ARPACK eupd"); end
@@ -161,7 +149,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
             j += 1
         end
         d = complex(dr[1:nev],di[1:nev])
-        return rvec ? (d, evec[1:n, 1:nev]) : d
+        return ritzvec ? (d, evec[1:n, 1:nev]) : d
     end
     
 end

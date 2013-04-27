@@ -365,26 +365,41 @@ void *init_stdio_handle(uv_file fd,int readable)
 {
     void *handle;
     uv_handle_type type = uv_guess_handle(fd);
+    //printf("%d: %d -- %d\n", fd, type);
     switch(type)
     {
         case UV_TTY:
             handle = malloc(sizeof(uv_tty_t));
-            uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable);
+            if (uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable)) {
+                jl_errorf("Error initializing stdio in uv_tty_init (%d, %d)\n", fd, type);
+                abort();
+            }
             ((uv_tty_t*)handle)->data=0;
             uv_tty_set_mode((void*)handle,0); //cooked stdio
             break;
-        case UV_NAMED_PIPE:
         case UV_FILE:
+#ifdef _WIN32
+            jl_errorf("This type of handle for stdio is not yet supported on Windows (%d, %d)!\n", fd, type);
+            handle = NULL;
+            break;
+#endif
+        case UV_NAMED_PIPE:
             handle = malloc(sizeof(uv_pipe_t));
-            uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle,(readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE));
-            uv_pipe_open((uv_pipe_t*)handle,fd);
+            if (uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, (readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE))) {
+                jl_errorf("Error initializing stdio in uv_pipe_init (%d, %d)\n", fd, type);
+                abort();
+            }
+            if (uv_pipe_open((uv_pipe_t*)handle,fd)) {
+                jl_errorf("Error initializing stdio in uv_pipe_open (%d, %d)\n", fd, type);
+                abort();
+            }
             ((uv_pipe_t*)handle)->data=0;
             break;
         case UV_TCP:
         case UV_UDP:
         default:
-            handle=NULL;
-            jl_errorf("This type of handle for stdio is not yet supported (%d)!\n",type);
+            jl_errorf("This type of handle for stdio is not yet supported (%d, %d)!\n", fd, type);
+            handle = NULL;
             break;
     }
     return handle;
