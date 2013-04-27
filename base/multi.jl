@@ -906,8 +906,7 @@ function start_remote_workers(machines, cmds, tunnel=false)
         stream = outs[i]
         stream.line_buffered = true
         while true
-            wait_readline(stream)
-            conninfo = readline(stream.buffer)
+            conninfo = readline(stream)
             hostname, port = parse_connection_info(conninfo)
             if hostname != ""
                 break
