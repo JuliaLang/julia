@@ -6352,26 +6352,29 @@ GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
 "),
 
-("Linear Algebra","","eigs","eigs(A; nev=6, evtype=\"LM\",
-ritzvec=true)
+("Linear Algebra","","eigs","eigs(A; nev=6, which=\"LM\", tol=0.0,
+maxiter=1000, ritzvec=true)
 
 
    *eigs* computes the eigenvalues of A using Arnoldi factorization.
    The following keyword arguments are supported:
-      nev: Number of eigenvalues evtype: Which eigenvalues (\"LM\",
-      \"SM\") ritzvec: Returns the Ritz vectors (eigenvectors) if
-      *true*
+      nev: Number of eigenvalues which: type of eigenvalues (\"LM\",
+      \"SM\") tol: tolerance (tol <= 0.0 defaults to *DLAMCH('EPS')*)
+      maxiter: Maximum number of iterations ritzvec: Returns the Ritz
+      vectors (eigenvectors) if *true*
 
 "),
 
-("Linear Algebra","","svds","svds(A; nev=6, evtype=\"LA\",
-ritzvec=true)
+("Linear Algebra","","svds","svds(A; nev=6, which=\"LA\", tol=0.0,
+maxiter=1000, ritzvec=true)
 
 
    *svds* computes the singular values of A using Arnoldi
    factorization. The following keyword arguments are supported:
-      nsv: Number of singular values evtype: Which singular values
-      (\"LA\") ritzvec: Returns the singular vectors if *true*
+      nsv: Number of singular values which: type of singular values
+      (\"LA\") tol: tolerance (tol <= 0.0 defaults to *DLAMCH('EPS')*)
+      maxiter: Maximum number of iterations ritzvec: Returns the
+      singular vectors if *true*
 
 "),
 
