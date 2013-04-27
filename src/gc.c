@@ -223,15 +223,17 @@ static int szclass(size_t sz)
     return 41;
 }
 
-#ifdef __LP64__
+#ifdef _P64
 #define malloc_a16(sz) malloc(((sz)+15)&-16)
-#else
-#if defined(WIN32)
-// TODO - use _aligned_malloc, which requires _aligned_free
-#define malloc_a16(sz) malloc(((sz)+15)&-16)
+#define free_a16(p) free(p)
+
+#elif defined(_WIN32) //&& !defined(_WIN64) is implicit here
+#define malloc_a16(sz) _aligned_malloc(sz?((sz)+15)&-16:1, 16)
+#define free_a16(p) _aligned_free(p)
 
 #elif defined(__APPLE__)
 #define malloc_a16(sz) malloc(((sz)+15)&-16)
+#define free_a16(p) free(p)
 
 #else
 static inline void *malloc_a16(size_t sz)
@@ -241,7 +243,8 @@ static inline void *malloc_a16(size_t sz)
         return NULL;
     return ptr;
 }
-#endif
+#define free_a16(p) free(p)
+
 #endif
 
 static void *alloc_big(size_t sz)
@@ -280,13 +283,13 @@ static void sweep_big(void)
 #ifdef MEMDEBUG
             memset(v, 0xbb, v->sz+BVOFFS*sizeof(void*));
 #endif
-            free(v);
+            free_a16(v);
         }
         v = nxt;
     }
 }
 
-jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz)
+jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz, int isaligned)
 {
     jl_mallocptr_t *mp;
     if (malloc_ptrs_freelist == NULL) {
@@ -296,6 +299,11 @@ jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz)
         mp = malloc_ptrs_freelist;
         malloc_ptrs_freelist = malloc_ptrs_freelist->next;
     }
+#if defined(_WIN32) && !defined(_WIN64)
+    mp->isaligned = isaligned;
+#else
+    (void)isaligned;
+#endif
     mp->sz = sz;
     mp->ptr = b;
     mp->next = malloc_ptrs;
@@ -313,7 +321,7 @@ jl_mallocptr_t *jl_gc_managed_malloc(size_t sz)
     if (b == NULL)
         jl_throw(jl_memory_exception);
     allocd_bytes += sz;
-    return jl_gc_acquire_buffer(b, sz);
+    return jl_gc_acquire_buffer(b, sz, 1);
 }
 
 static void sweep_malloc_ptrs(void)
@@ -330,7 +338,15 @@ static void sweep_malloc_ptrs(void)
             *pmp = nxt;
             if (mp->ptr) {
                 freed_bytes += mp->sz;
-                free(mp->ptr);
+#if defined(_WIN32) && !defined(_WIN64)
+                if (mp->isaligned) {
+                    free_a16(mp->ptr);
+                } else {
+                    free(mp->ptr);
+                }
+#else
+                free_a16(mp->ptr);
+#endif
             }
             mp->next = malloc_ptrs_freelist;
             malloc_ptrs_freelist = mp;
@@ -425,7 +441,7 @@ static void sweep_pool(pool_t *p)
 #ifdef MEMDEBUG
             memset(pg, 0xbb, sizeof(gcpage_t));
 #endif
-            free(pg);
+            free_a16(pg);
             //freed_bytes += GC_PAGE_SZ;
         }
         else {
