@@ -8,7 +8,7 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
 # Disabled: "complex"
 
 tests = ARGS==["all"] ? testnames : ARGS
-n = min(CPU_CORES,length(tests))
+n = min(CPU_CORES,length(tests),8)
 n > 1 && addprocs(n)
 
 ENV["OPENBLAS_NUM_THREADS"] = 1
