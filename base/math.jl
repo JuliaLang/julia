@@ -679,8 +679,8 @@ if WORD_SIZE == 64
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
-        ($fname)(z::Complex128) = complex128(ccall(($(string("Faddeeva_",f)),openlibm_extras), ComplexPair{Float64}, (ComplexPair{Float64}, Float64), z, zero(Float64)))
-        ($fname)(z::Complex64) = complex64(ccall(($(string("Faddeeva_",f)),openlibm_extras), ComplexPair{Float64}, (ComplexPair{Float64}, Float64), complex128(z), float64(eps(Float32))))
+        ($fname)(z::Complex128) = complex128(ccall(($(string("Faddeeva_",f)),openlibm_extras), Complex{Float64}, (Complex{Float64}, Float64), z, zero(Float64)))
+        ($fname)(z::Complex64) = complex64(ccall(($(string("Faddeeva_",f)),openlibm_extras), Complex{Float64}, (Complex{Float64}, Float64), complex128(z), float64(eps(Float32))))
         ($fname)(z::Complex) = ($fname)(complex128(z))
     end
 end

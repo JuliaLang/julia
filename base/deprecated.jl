@@ -206,3 +206,6 @@ const ref = getindex
 export ref
 const assign = setindex!
 export assign
+
+typealias ComplexPair Complex
+export ComplexPair

@@ -7,7 +7,6 @@ Complex(x::Real) = Complex(x, zero(x))
 
 typealias Complex128 Complex{Float64}
 typealias Complex64  Complex{Float32}
-typealias ComplexPair Complex
 
 real(z::Complex) = z.re
 imag(z::Complex) = z.im

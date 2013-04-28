@@ -22,8 +22,8 @@
 @test is(None, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
 
 @test !isa(Array,Type{Any})
-@test subtype(Type{ComplexPair},DataType)
-@test isa(ComplexPair,Type{ComplexPair})
+@test subtype(Type{Complex},DataType)
+@test isa(Complex,Type{Complex})
 @test !subtype(Type{Ptr{None}},Type{Ptr})
 @test !subtype(Type{Rational{Int}}, Type{Rational})
 let T = TypeVar(:T,true)
@@ -62,7 +62,7 @@ let N = TypeVar(:N,true)
                                 ((Int,Int...),Array{Int,2})),
                   ((Int,Int), Array{Int,2}))
 end
-@test is(None, typeintersect(Type{Any},Type{ComplexPair}))
+@test is(None, typeintersect(Type{Any},Type{Complex}))
 @test is(None, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
 @test !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
 @test !subtype(Type{Array{Integer}},Type{Array{TypeVar(:T,Integer)}})
@@ -210,14 +210,14 @@ end
 @test int32(foo()) == -24
 
 function bar{T}(x::T)
-    local z::ComplexPair{T}
+    local z::Complex{T}
     z = x
     z
 end
-@test bar(3.0) == ComplexPair(3.0,0.0)
+@test bar(3.0) == Complex(3.0,0.0)
 
-z = convert(ComplexPair{Float64},2)
-@test z == ComplexPair(2.0,0.0)
+z = convert(Complex{Float64},2)
+@test z == Complex(2.0,0.0)
 
 # misc
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
