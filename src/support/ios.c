@@ -527,9 +527,9 @@ int ios_trunc(ios_t *s, size_t size)
 #if !defined(_OS_WINDOWS_)
         if (ftruncate(s->fd, size) == 0)
 #else
-		if (_chsize_s(s->fd, size) == 0)
+        if (_chsize_s(s->fd, size) == 0)
 #endif
-			return 0;
+            return 0;
     }
     return 1;
 }
