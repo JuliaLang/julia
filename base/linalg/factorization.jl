@@ -46,7 +46,7 @@ end
     
 function inv(C::Cholesky)
     Ci, info = LAPACK.potri!(C.uplo, copy(C.UL))
-    if info != 0; throw(LAPACK.SingularException(info)); end 
+    if info != 0; throw(SingularException(info)); end 
     symmetrize_conj!(Ci, C.uplo)
 end
 
@@ -93,12 +93,12 @@ function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
 end
 
 function \{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
-    if C.rank < size(C.UL, 1); throw(LAPACK.RankDeficientException(C.info)); end
+    if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
     LAPACK.potrs!(C.uplo, C.UL, copy(B)[C.piv])[invperm(C.piv)]
 end
 
 function \{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
-    if C.rank < size(C.UL, 1); throw(LAPACK.RankDeficientException(C.info)); end
+    if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
     LAPACK.potrs!(C.uplo, C.UL, copy(B)[C.piv,:])[invperm(C.piv),:]
 end
 
@@ -113,9 +113,9 @@ function det{T}(C::CholeskyPivoted{T})
 end
     
 function inv(C::CholeskyPivoted)
-    if C.rank < size(C.UL, 1) throw(LAPACK.RankDeficientException(C.info)) end
+    if C.rank < size(C.UL, 1) throw(RankDeficientException(C.info)) end
     Ci, info = LAPACK.potri!(C.uplo, copy(C.UL))
-    if info != 0 throw(LAPACK.RankDeficientException(info)) end
+    if info != 0 throw(RankDeficientException(info)) end
     ipiv = invperm(C.piv)
     (symmetrize!(Ci, C.uplo))[ipiv, ipiv]
 end
@@ -177,12 +177,12 @@ function det{T}(A::LU{T})
 end
 
 function (\)(A::LU, B::StridedVecOrMat)
-    if A.info > 0; throw(LAPACK.SingularException(A.info)); end
+    if A.info > 0; throw(SingularException(A.info)); end
     LAPACK.getrs!('N', A.factors, A.ipiv, copy(B))
 end
 
 function inv(A::LU)
-    if A.info > 0; return throw(LAPACK.SingularException(A.info)); end
+    if A.info > 0; return throw(SingularException(A.info)); end
     LAPACK.getri!(copy(A.factors), A.ipiv)
 end
 
@@ -241,7 +241,7 @@ function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
     elseif m == size(A.vs, 2)
         Bc = [B; zeros(T, size(A.vs, 1) - m, n)]
     else
-        throw(LAPACK.DimensionMismatch(""))
+        throw(DimensionMismatch(""))
     end
     LAPACK.gemqrt!('L', 'N', A.vs, A.T, Bc)
 end
@@ -255,7 +255,7 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     elseif n == size(B.vs, 2)
         Ac = [B zeros(T, m, size(B.vs, 1) - n)]
     else
-        throw(LAPACK.DimensionMismatch(""))
+        throw(DimensionMismatch(""))
     end
     LAPACK.gemqrt!('R', iscomplex(B.vs[1]) ? 'C' : 'T', B.vs, B.T, Ac)
 end
@@ -270,7 +270,7 @@ type QRPivoted{T} <: Factorization{T}
     function QRPivoted(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{BlasInt})
         m, n = size(hh)
         if length(tau) != min(m,n) || length(jpvt) != n
-            throw(LAPACK.DimensionMismatch(""))
+            throw(DimensionMismatch(""))
         end
         new(hh,tau,jpvt)
     end
@@ -335,7 +335,7 @@ function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
     elseif m == size(A.hh, 2)
         Bc = [B; zeros(T, size(A.hh, 1) - m, n)]
     else
-        throw(LAPACK.DimensionMismatch(""))
+        throw(DimensionMismatch(""))
     end
     LAPACK.ormqr!('L', 'N', A.hh, A.tau, Bc)
 end
@@ -349,7 +349,7 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
     elseif n == size(B.hh, 2)
         Ac = [B zeros(T, m, size(B.hh, 1) - n)]
     else
-        throw(LAPACK.DimensionMismatch(""))
+        throw(DimensionMismatch(""))
     end
     LAPACK.ormqr!('R', iscomplex(B.hh[1]) ? 'C' : 'T', B.hh, B.tau, Ac)
 end
@@ -363,7 +363,7 @@ type Hessenberg{T} <: Factorization{T}
     hh::Matrix{T}
     tau::Vector{T}
     function Hessenberg(hh::Matrix{T}, tau::Vector{T})
-        if size(hh, 1) != size(hh, 2) throw(LAPACK.DimensionMismatch("")) end
+        if size(hh, 1) != size(hh, 2) throw(DimensionMismatch("")) end
         return new(hh, tau)
     end
 end
