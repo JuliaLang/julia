@@ -1,6 +1,29 @@
 #ifndef DTYPES_H
 #define DTYPES_H
 
+#include "platform.h"
+
+#if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
+#include <mathimf.h>
+#else
+#include <math.h>
+#endif /* _OS_WINDOWS_ && _COMPILER_INTEL_ */
+
+#if defined(_OS_WINDOWS_)
+
+#define snprintf _snprintf
+
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+
+#if defined(_COMPILER_MICROSOFT_)
+#define isnan _isnan
+#endif /* _COMPILER_MICROSOFT_ */
+
+#endif /* _OS_WINDOWS_ */
+
+
 /*
   This file defines sane integer types for our target platforms. This
   library only runs on machines with the following characteristics:
@@ -16,7 +39,7 @@
   We assume the LP64 convention for 64-bit platforms.
 */
 
-#ifdef WIN32
+#ifdef _OS_WINDOWS_
 #define STDCALL __stdcall
 # ifdef IMPORT_EXPORTS
 #  define DLLEXPORT __declspec(dllimport)
@@ -28,7 +51,7 @@
 #define DLLEXPORT __attribute__ ((visibility("default")))
 #endif
 
-#ifdef __linux__
+#ifdef _OS_LINUX_
 #include <features.h>
 #include <endian.h>
 #define LITTLE_ENDIAN  __LITTLE_ENDIAN
@@ -45,7 +68,7 @@
 #define __BYTE_ORDER     BYTE_ORDER
 #endif
 
-#ifdef WIN32
+#ifdef _OS_WINDOWS_
 #define __LITTLE_ENDIAN	1234
 #define __BIG_ENDIAN	4321
 #define __PDP_ENDIAN	3412
@@ -78,7 +101,7 @@
 #define LLT_REALLOC(p,n) realloc((p),(n))
 #define LLT_FREE(x) free(x)
 
-#if defined(__INTEL_COMPILER) && defined(WIN32)
+#if defined(_COMPILER_INTEL_) && defined(_OS_WINDOWS_)
 # define STATIC_INLINE static
 # define INLINE
 #else
@@ -171,4 +194,5 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 # define T_SIZE T_UINT32
 #endif
 
-#endif
+#endif /* DTYPES_H */
+
