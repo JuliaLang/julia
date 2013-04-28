@@ -388,6 +388,7 @@
 	,(method-def-expr-
 	  name sparams (append pargl vararg)
 	  `(block
+	    (line 0 || ||)
 	    ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
 	    (return (call ,mangled
 			  ,@vals
@@ -401,7 +402,7 @@
 	  (list 'kw name) sparams
 	  `((:: ,kw (top Tuple)) ,@pargl ,@vararg)
 	  `(block
-	    ,@lno
+	    (line 0 || ||)
 	    ;; initialize keyword args to their defaults, or set a flag telling
 	    ;; whether this keyword needs to be set.
 	    ,@(map (lambda (name dflt flag)
