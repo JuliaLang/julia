@@ -257,7 +257,7 @@ size_t u8_strlen(const char *s)
     return count;
 }
 
-#if defined(__WIN32__) || defined(__linux__)
+#if defined(_OS_WINDOWS_) || defined(_OS_LINUX_)
 extern int wcwidth(uint32_t ch);
 #endif
 
@@ -357,7 +357,11 @@ char read_escape_control_char(char c)
     else if (c == 'r')
         return '\r';
     else if (c == 'e')
+#if defined(_COMPILER_GCC_) || defined(_COMPILER_MINGW_)
         return '\e';
+#else
+        return '\x1B';
+#endif /* _COMPILER_GCC_ || _COMPILER_MINGW_ */
     else if (c == 'b')
         return '\b';
     else if (c == 'f')
@@ -453,7 +457,11 @@ int u8_escape_wchar(char *buf, size_t sz, uint32_t ch)
         return buf_put2c(buf, "\\t");
     else if (ch == L'\r')
         return buf_put2c(buf, "\\r");
+#if defined(_COMPILER_GCC_) || defined(_COMPILER_MINGW_)
     else if (ch == L'\e')
+#else
+    else if (ch == L'\x1B')
+#endif /* _COMPILER_GCC_ || _COMPILER_MINGW_ */
         return buf_put2c(buf, "\\e");
     else if (ch == L'\b')
         return buf_put2c(buf, "\\b");
@@ -613,7 +621,7 @@ size_t u8_vprintf(const char *fmt, va_list ap)
     sz = 512;
     buf = (char*)alloca(sz);
     cnt = vsnprintf(buf, sz, fmt, ap);
-    if ((ssize_t)cnt < 0)
+    if ((intptr_t)cnt < 0)
         return 0;
     if (cnt >= sz) {
         buf = (char*)malloc(cnt + 1);
