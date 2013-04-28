@@ -36,7 +36,7 @@ export
     Complex,
     Complex128,
     Complex64,
-    ComplexPair,
+    #ComplexPair,
     DArray,
     Dict,
     Dims,

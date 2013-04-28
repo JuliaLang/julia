@@ -37,9 +37,9 @@
 @test bool(1.0) == true
 @test bool(0.1) == true
 @test bool(-1.0) == true
-@test bool(ComplexPair(0,0)) == false
-@test bool(ComplexPair(1,0)) == true
-@test_fails bool(ComplexPair(0,1)) == true
+@test bool(Complex(0,0)) == false
+@test bool(Complex(1,0)) == true
+@test_fails bool(Complex(0,1)) == true
 @test bool(0//1) == false
 @test bool(1//1) == true
 @test bool(1//2) == true
@@ -708,18 +708,18 @@ end
 @test 1+1.5 == 2.5
 @test 1.5+1 == 2.5
 @test 1+1.5+2 == 4.5
-@test is(typeof(convert(ComplexPair{Int16},1)),ComplexPair{Int16})
-@test ComplexPair(1,2)+1 == ComplexPair(2,2)
-@test ComplexPair(1,2)+1.5 == ComplexPair(2.5,2.0)
-@test 1/ComplexPair(2,2) == ComplexPair(.25,-.25)
-@test ComplexPair(1.5,1.0) + 1//2 == ComplexPair(2.0,1.0)
-@test real(ComplexPair(1//2,2//3)) == 1//2
-@test imag(ComplexPair(1//2,2//3)) == 2//3
-@test ComplexPair(1,2) + 1//2 == ComplexPair(3//2,2//1)
-@test ComplexPair(1,2) + 1//2 * 0.5 == ComplexPair(1.25,2.0)
-@test (ComplexPair(1,2) + 1//2) * 0.5 == ComplexPair(0.75,1.0)
-@test (ComplexPair(1,2)/ComplexPair(2.5,3.0))*ComplexPair(2.5,3.0) == ComplexPair(1,2)
-@test 0.7 < real(sqrt(ComplexPair(0,1))) < 0.707107
+@test is(typeof(convert(Complex{Int16},1)),Complex{Int16})
+@test Complex(1,2)+1 == Complex(2,2)
+@test Complex(1,2)+1.5 == Complex(2.5,2.0)
+@test 1/Complex(2,2) == Complex(.25,-.25)
+@test Complex(1.5,1.0) + 1//2 == Complex(2.0,1.0)
+@test real(Complex(1//2,2//3)) == 1//2
+@test imag(Complex(1//2,2//3)) == 2//3
+@test Complex(1,2) + 1//2 == Complex(3//2,2//1)
+@test Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0)
+@test (Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0)
+@test (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2)
+@test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
 for T in {Int8,Int16,Int32,Int64,Int128}
     @test abs(typemin(T)) == -typemin(T)
@@ -754,7 +754,7 @@ real_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32,
               Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}}
 for A = real_types, B = real_types
     T = promote_type(A,B)
-    @test typeof(ComplexPair(convert(A,2),convert(B,3))) <: ComplexPair{T}
+    @test typeof(Complex(convert(A,2),convert(B,3))) <: Complex{T}
 end
 
 # comparison should fail on complex
