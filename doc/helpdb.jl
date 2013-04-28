@@ -3369,6 +3369,23 @@ FloatingPoint
 
 "),
 
+("Data Formats","Base","hex2bytes","hex2bytes(s::ASCIIString)
+
+
+   Convert an arbitrarily long hexadecimal string to its binary
+   representation. Returns an Array{Uint8, 1}, i.e. an array of bytes.
+
+"),
+
+("Data Formats","Base","bytes2hex","bytes2hex(bin_arr::Array{Uint8,
+1})
+
+
+   Convert an array of bytes to its hexadecimal representation. All
+   characters are in lower-case. Returns an ASCIIString.
+
+"),
+
 ("Numbers","Base","one","one(x)
 
 
@@ -6151,8 +6168,9 @@ GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 ("Linear Algebra","","scale","scale(A, B)
 
 
-   \"scale(A::Matrix, B::Number)\" scales all values in \"A\" with
-   \"B\".
+   \"scale(A::Array, B::Number)\" scales all values in \"A\" with
+   \"B\". Note: In cases where the array is big enough, *scale* can be
+   much faster than *A .* B*, due to the use of BLAS.
 
    \"scale(A::Matrix, B::Vector)\" is the same as multiplying with a
    diagonal matrix on the right, and scales the columns of \"A\" with
@@ -6167,7 +6185,7 @@ GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 ("Linear Algebra","","scale!","scale!(A, B)
 
 
-   \"scale!(A,B)\" overwrites the input matrix with the scaled result.
+   \"scale!(A,B)\" overwrites the input array with the scaled result.
 
 "),
 
