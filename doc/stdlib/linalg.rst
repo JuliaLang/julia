@@ -193,8 +193,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: scale(A, B)
 
-   ``scale(A::Matrix, B::Number)`` scales all values in ``A`` with ``B``.
-
+   ``scale(A::Array, B::Number)`` scales all values in ``A`` with ``B``.
+   Note: In cases where the array is big enough, `scale` can be much
+   faster than `A .* B`, due to the use of BLAS.
+   
    ``scale(A::Matrix, B::Vector)`` is the same as multiplying with a
    diagonal matrix on the right, and scales the columns of ``A`` with
    the values in ``B``. 
@@ -205,7 +207,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: scale!(A, B)
 
-   ``scale!(A,B)`` overwrites the input matrix with the scaled result.
+   ``scale!(A,B)`` overwrites the input array with the scaled result.
 
 .. function:: Tridiagonal(dl, d, du)
 
