@@ -104,7 +104,7 @@ for (fname, elty, relty) in ((:zdotc_,:Complex128,:Float64), (:cdotc_,:Complex64
 end
 function dot{T<:BlasFloat}(DX::Array{T}, DY::Array{T})
     n = length(DX)
-    if n != length(DY) throw(BlasDimMisMatch) end
+    if n != length(DY) throw(DimensionMismatch) end
     return dot(n, DX, 1, DY, 1)
 end
 
@@ -467,8 +467,8 @@ for (fname, elty) in
 #       DOUBLE PRECISION A(LDA,*),X(*)
     function trmv!(uplo::Char, trans::Char, diag::Char, A::StridedMatrix{$elty}, x::StridedVector{$elty})
       n, m = size(A)
-      if m != n throw(BlasDimMisMatch("Matrix must be square")) end
-      if n != length(x) throw(BlasDimMisMatch("Length of Vector must match matrix dimension")) end
+      if m != n throw(DimensionMismatch("Matrix must be square")) end
+      if n != length(x) throw(DimensionMismatch("Length of Vector must match matrix dimension")) end
       lda = max(1,stride(A, 2))
       ccall(($(string(fname)), libblas), Void,
         (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
@@ -500,9 +500,9 @@ for (fname, elty) in
     function trmm!(side::Char, uplo::Char, transa::Char, diag::Char, alpha::Number, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
       m, n = size(B)
       mA, nA = size(A)
-      if mA != nA throw(BlasDimMisMatch("Matrix must be square")) end
-      if side == 'L' && nA != m throw(BlasDimMisMatch("")) end
-      if side == 'R' && nA != n throw(BlasDimMisMatch("")) end
+      if mA != nA throw(DimensionMismatch("Matrix must be square")) end
+      if side == 'L' && nA != m throw(DimensionMismatch("")) end
+      if side == 'R' && nA != n throw(DimensionMismatch("")) end
       lda = max(1,stride(A, 2))
       ldb = max(1,stride(B, 2))
       ccall(($(string(fname)), libblas), Void,
