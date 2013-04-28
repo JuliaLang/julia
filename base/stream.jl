@@ -110,7 +110,6 @@ function tasknotify(waittasks::Vector{WaitTask}, args...)
 end
 
 wait_connect_filter(w::AsyncStream, args...) = !w.open
-wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
 wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
 wait_readbyte_filter(w::(AsyncStream,Uint8), args...) = w[1].open && (search(w[1].buffer,w[2]) <= 0)
 wait_readline_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
@@ -139,9 +138,7 @@ function wait(forwhat, notify_list_name, filter_fcn)
 end
 
 wait_connected(x) = wait(x, :connectnotify, wait_connect_filter)
-wait_readable(x) = wait(x, :readnotify, wait_readable_filter)
 wait_readline(x) = wait(x, :readnotify, wait_readline_filter)
-wait_readavailable(x::AsyncStream) = wait((x,1), :readnotify, wait_readnb_filter)
 wait_readnb(x::(AsyncStream,Int)) = wait(x, :readnotify, wait_readnb_filter)
 wait_readnb(x::AsyncStream,b::Int) = wait_readnb((x,b))
 wait_readbyte(x::AsyncStream,c::Uint8) = wait((x,c), :readnotify, wait_readbyte_filter)
@@ -321,8 +318,8 @@ run_event_loop() = run_event_loop(eventloop())
 malloc_pipe() = c_malloc(_sizeof_uv_pipe)
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool,pipe::AsyncStream)
     #make the pipe an unbuffered stream for now
-    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,Any), read_end, 0, readable_julia_only, pipe)
-    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,Any), write_end, 1, readable_julia_only, pipe)
+    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Int32,Int32,Any), read_end, 0, readable_julia_only, pipe)
+    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Int32,Int32,Any), write_end, 1, readable_julia_only, pipe)
     error = ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end)
     if error != 0 # don't use assert here as $string isn't be defined yet
         error("uv_pipe_link failed")
@@ -365,7 +362,7 @@ function start_reading(stream::AsyncStream,cb::Function)
 end
 start_reading(stream::AsyncStream,cb::Bool) = (start_reading(stream); stream.readcb = cb)
 
-stop_reading(stream::AsyncStream) = ccall(:uv_read_stop,Bool,(Ptr{Void},),handle(stream))
+stop_reading(stream::AsyncStream) = ccall(:uv_read_stop,Int32,(Ptr{Void},),handle(stream))
 
 function readall(stream::AsyncStream)
     start_reading(stream)
@@ -409,7 +406,7 @@ function readavailable(this::AsyncStream)
     buf = this.buffer
     assert(buf.seekable == false)
     start_reading(this)
-    wait_readavailable(this)
+    wait_readnb(this,1)
     takebuf_string(buf)
 end
 
@@ -437,7 +434,7 @@ write(s::AsyncStream, b::ASCIIString) =
 write(s::AsyncStream, b::Uint8) =
     int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s)))
 write(s::AsyncStream, c::Char) =
-    int(ccall(:jl_pututf8, Int32, (Ptr{Void},Char), handle(s), c))
+    int(ccall(:jl_pututf8, Int32, (Ptr{Void},Uint32), handle(s), c))
 function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
         ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint32), handle(s), a, uint(length(a)*sizeof(T)))
@@ -446,9 +443,9 @@ function write{T}(s::AsyncStream, a::Array{T})
     end
 end
 write(s::AsyncStream, p::Ptr, nb::Integer) = 
-    ccall(:jl_write, Int,(Ptr{Void}, Ptr{Void}, Uint),handle(s), p, uint(nb))
+    int(ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb)))
 _write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = 
-    ccall(:jl_write, Int,(Ptr{Void}, Ptr{Void}, Uint),handle(s),p,uint(nb))
+    int(ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb)))
 
 ## Libuv error handling
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)

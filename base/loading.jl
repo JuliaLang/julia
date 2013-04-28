@@ -42,7 +42,7 @@ function require(name::ByteString)
         end
     end
     path = find_in_node1_path(name)
-    if has(package_list,path)
+    if haskey(package_list,path)
         wait(package_locks[path])
     else
         reload_path(path)
@@ -69,7 +69,7 @@ function source_path(default)
     t = current_task()
     while true
         s = t.storage
-        if !is(s, nothing) && has(s, :SOURCE_PATH)
+        if !is(s, nothing) && haskey(s, :SOURCE_PATH)
             return s[:SOURCE_PATH]
         end
         if is(t, t.parent)
@@ -102,7 +102,7 @@ function include_from_node1(path)
 end
 
 function reload_path(path)
-    had = has(package_list, path)
+    had = haskey(package_list, path)
     if !had
         package_locks[path] = RemoteRef()
     end

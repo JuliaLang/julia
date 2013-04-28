@@ -184,7 +184,7 @@ less(f::Function, t) = less(functionloc(f,t)...)
 const have_warned = (ByteString=>Bool)[]
 function warn_once(msg::String...)
     msg = bytestring(msg...)
-    has(have_warned,msg) && return
+    haskey(have_warned,msg) && return
     have_warned[msg] = true
     warn(msg)
 end
@@ -340,13 +340,13 @@ function show(io::IO, cpu::Array{CPUinfo})
 end
 repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
 function cpu_info()
-    SC_CLK_TCK = ccall(:SC_CLK_TCK, Int, ())
+    SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     UVcpus = Array(Ptr{UV_cpu_info_t},1)
     count = Array(Int32,1)
     uv_error("uv_cpu_info",ccall(:uv_cpu_info, UV_error_t, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
     cpus = Array(CPUinfo,count[1])
     for i = 1:length(cpus)
-        cpus[i] = CPUinfo(unsafe_ref(UVcpus[1],i),SC_CLK_TCK)
+        cpus[i] = CPUinfo(unsafe_load(UVcpus[1],i),SC_CLK_TCK)
     end
     ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[1], count[1])
     cpus

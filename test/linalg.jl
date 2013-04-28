@@ -261,7 +261,7 @@ A2 = A1 + A1'
 @test_approx_eq expm(A2) expm(Hermitian(A2))
 
                                         # matmul for types w/o sizeof (issue #1282)
-A = Array(ComplexPair{Int},10,10)
+A = Array(Complex{Int},10,10)
 A[:] = complex(1,1)
 A2 = A^2
 @test A2[1,1] == 20im

@@ -482,9 +482,17 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     if (fptr == &jl_value_ptr) {
         assert(lrt->isPointerTy());
-        Value *ary = emit_expr(args[4], ctx);
+        jl_value_t *argi = args[4];
+        bool addressOf = false;
+        if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
+            addressOf = true;
+            argi = jl_exprarg(argi,0);
+        }
+        Value *ary = boxed(emit_expr(argi, ctx));
         JL_GC_POP();
-        return mark_julia_type(builder.CreateBitCast(ary,lrt),rt);
+        return mark_julia_type(
+                builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0),lrt),
+                rt);
     }
 
     // make LLVM function object for the target
