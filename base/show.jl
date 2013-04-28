@@ -230,13 +230,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif is(head, symbol("::")) && nargs == 1
         print(io, "::")        
         show_unquoted(io, args[1], indent)
-    elseif has(_expr_parens, head)               # :tuple/:vcat/:cell1d
+    elseif haskey(_expr_parens, head)               # :tuple/:vcat/:cell1d
         op, cl = _expr_parens[head]
         print(io, op)
         show_list(io, args, ",", indent)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
         print(io, cl)
-    elseif has(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly
+    elseif haskey(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         op, cl = _expr_calls[head]
         show_unquoted(io, args[1], indent)
         show_enclosed_list(io, op, args[2:end], ",", cl, indent)
@@ -319,7 +319,7 @@ function argtype_decl_string(n, t)
         n = n.args[1]  # handle n::T in arg list
     end
     n = clean_gensym(n)
-    if t === Any
+    if t === Any && !isempty(n)
         return n
     end
     if t <: Vararg && t.parameters[1] === Any
@@ -753,8 +753,8 @@ function show_nd(io::IO, a::AbstractArray)
 end
 
 function whos(m::Module, pattern::Regex)
-    for s in sort!(map(string, names(m)))
-        v = symbol(s)
+    for v in sort(names(m))
+        s = string(v)
         if isdefined(m,v) && ismatch(pattern, s)
             println(rpad(s, 30), summary(eval(m,v)))
         end

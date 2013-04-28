@@ -3369,6 +3369,23 @@ FloatingPoint
 
 "),
 
+("Data Formats","Base","hex2bytes","hex2bytes(s::ASCIIString)
+
+
+   Convert an arbitrarily long hexadecimal string to its binary
+   representation. Returns an Array{Uint8, 1}, i.e. an array of bytes.
+
+"),
+
+("Data Formats","Base","bytes2hex","bytes2hex(bin_arr::Array{Uint8,
+1})
+
+
+   Convert an array of bytes to its hexadecimal representation. All
+   characters are in lower-case. Returns an ASCIIString.
+
+"),
+
 ("Numbers","Base","one","one(x)
 
 
@@ -4935,13 +4952,18 @@ func, args...)
 dist])
 
 
-   Construct a distributed array. \"init\" is a function accepting a
-   tuple of index ranges. This function should return a chunk of the
-   distributed array for the specified indexes. \"dims\" is the
-   overall size of the distributed array. \"procs\" optionally
-   specifies a vector of processor IDs to use. \"dist\" is an integer
-   vector specifying how many chunks the distributed array should be
-   divided into in each dimension.
+   Construct a distributed array. \"init\" is a function that accepts
+   a tuple of index ranges. This function should allocate a local
+   chunk of the distributed array and initialize it for the specified
+   indices. \"dims\" is the overall size of the distributed array.
+   \"procs\" optionally specifies a vector of processor IDs to use.
+   \"dist\" is an integer vector specifying how many chunks the
+   distributed array should be divided into in each dimension.
+
+   For example, the *dfill* function that creates a distributed array
+   and fills it with a value \"v\" is implemented as:
+
+   \"dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)\"
 
 "),
 
@@ -6146,8 +6168,9 @@ GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 ("Linear Algebra","","scale","scale(A, B)
 
 
-   \"scale(A::Matrix, B::Number)\" scales all values in \"A\" with
-   \"B\".
+   \"scale(A::Array, B::Number)\" scales all values in \"A\" with
+   \"B\". Note: In cases where the array is big enough, *scale* can be
+   much faster than *A .* B*, due to the use of BLAS.
 
    \"scale(A::Matrix, B::Vector)\" is the same as multiplying with a
    diagonal matrix on the right, and scales the columns of \"A\" with
@@ -6162,7 +6185,7 @@ GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 ("Linear Algebra","","scale!","scale!(A, B)
 
 
-   \"scale!(A,B)\" overwrites the input matrix with the scaled result.
+   \"scale!(A,B)\" overwrites the input array with the scaled result.
 
 "),
 
@@ -6344,6 +6367,32 @@ GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
 
    The conjugate transpose operator (').
+
+"),
+
+("Linear Algebra","","eigs","eigs(A; nev=6, which=\"LM\", tol=0.0,
+maxiter=1000, ritzvec=true)
+
+
+   *eigs* computes the eigenvalues of A using Arnoldi factorization.
+   The following keyword arguments are supported:
+      nev: Number of eigenvalues which: type of eigenvalues (\"LM\",
+      \"SM\") tol: tolerance (tol <= 0.0 defaults to *DLAMCH('EPS')*)
+      maxiter: Maximum number of iterations ritzvec: Returns the Ritz
+      vectors (eigenvectors) if *true*
+
+"),
+
+("Linear Algebra","","svds","svds(A; nev=6, which=\"LA\", tol=0.0,
+maxiter=1000, ritzvec=true)
+
+
+   *svds* computes the singular values of A using Arnoldi
+   factorization. The following keyword arguments are supported:
+      nsv: Number of singular values which: type of singular values
+      (\"LA\") tol: tolerance (tol <= 0.0 defaults to *DLAMCH('EPS')*)
+      maxiter: Maximum number of iterations ritzvec: Returns the
+      singular vectors if *true*
 
 "),
 

@@ -4,7 +4,7 @@ abstract Associative{K,V}
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-has(d::Associative, k) = contains(keys(d),k)
+haskey(d::Associative, k) = contains(keys(d),k)
 
 function contains(a::Associative, p::(Any,Any))
     v = get(a,p[1],secret_table_token)
@@ -465,7 +465,7 @@ function get{K,V}(h::Dict{K,V}, key, deflt)
     return (index<0) ? deflt : h.vals[index]::V
 end
 
-has(h::Dict, key) = (ht_keyindex(h, key) >= 0)
+haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 contains{T<:Dict}(v::KeyIterator{T}, key) = (ht_keyindex(v.dict, key) >= 0)
 
 function getkey{K,V}(h::Dict{K,V}, key, deflt)
@@ -552,7 +552,7 @@ get{K}(wkh::WeakKeyDict{K}, key, def) = get(wkh.ht, key, def)
 delete!{K}(wkh::WeakKeyDict{K}, key) = delete!(wkh.ht, key)
 delete!{K}(wkh::WeakKeyDict{K}, key, def) = delete!(wkh.ht, key, def)
 empty!(wkh::WeakKeyDict)  = (empty!(wkh.ht); wkh)
-has{K}(wkh::WeakKeyDict{K}, key) = has(wkh.ht, key)
+haskey{K}(wkh::WeakKeyDict{K}, key) = haskey(wkh.ht, key)
 getindex{K}(wkh::WeakKeyDict{K}, key) = getindex(wkh.ht, key)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 

@@ -16,16 +16,16 @@ type BTree{K,V}
     BTree() = new(EmptyTree{K,V}())
 end
 
-has(t::EmptyTree, key) = false
-has(t::BTree, key) = has(t.root, key)
+haskey(t::EmptyTree, key) = false
+haskey(t::BTree, key) = haskey(t.root, key)
 
-function has(t::TreeNode, key)
+function haskey(t::TreeNode, key)
     if t.key == key
         true
     elseif key < t.key
-        has(t.left, key)
+        haskey(t.left, key)
     else
-        has(t.right, key)
+        haskey(t.right, key)
     end
 end
 

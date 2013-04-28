@@ -906,8 +906,7 @@ function start_remote_workers(machines, cmds, tunnel=false)
         stream = outs[i]
         stream.line_buffered = true
         while true
-            wait_readline(stream)
-            conninfo = readline(stream.buffer)
+            conninfo = readline(stream)
             hostname, port = parse_connection_info(conninfo)
             if hostname != ""
                 break
@@ -1008,8 +1007,8 @@ function start_sge_workers(n)
     sgedir = joinpath(pwd(),"SGE")
     run(`mkdir -p $sgedir`)
     qsub_cmd = `echo $home/julia-release-basic --worker` | `qsub -N JULIA -terse -cwd -j y -o $sgedir -t 1:$n`
-    out,_ = readsfrom(qsub_cmd)
-    if !success(qsub_cmd)
+    out,qsub_proc = readsfrom(qsub_cmd)
+    if !success(qsub_proc)
         error("batch queue not available (could not run qsub)")
     end
     id = chomp(split(readline(out),'.')[1])

@@ -256,6 +256,20 @@ Values can be converted to ``Float32`` easily::
     julia> typeof(ans)
     Float32
 
+Hexadecimal floating-point literals are also valid, but only as ``Float64`` values::
+
+    julia> 0x1p0
+    1.0
+
+    julia> 0x1.8p3
+    12.0
+
+    julia> 0x.4p-1
+    0.125
+
+    julia> typeof(ans)
+    Float64
+
 Floating-point zero
 ~~~~~~~~~~~~~~~~~~~
 

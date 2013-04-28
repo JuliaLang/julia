@@ -11,7 +11,7 @@ macro memoize(ex)
     quote
         $(esc(ex))
         const ($f_cache) = (Tuple=>Any)[]
-        $(esc(f))(args...) = has(($f_cache),args) ?
+        $(esc(f))(args...) = haskey(($f_cache),args) ?
             ($f_cache)[args] : (($f_cache)[args] = $(esc(u))(args...))
     end
 end

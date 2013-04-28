@@ -22,7 +22,7 @@ function parse_requires(readable)
                 push!(ivals, VersionInterval(shift!(vers), shift!(vers)))
             end
         end
-        reqs[pkg] = has(reqs,pkg) ? intersect(reqs[pkg], ivals) : ivals
+        reqs[pkg] = haskey(reqs,pkg) ? intersect(reqs[pkg], ivals) : ivals
     end
     return reqs
 end
@@ -30,7 +30,7 @@ parse_requires(file::String) = isfile(file) ? open(parse_requires,file) : Requir
 
 function merge_requires!(A::Requires, B::Requires)
     for (pkg, ivals) in B
-        A[pkg] = has(A,pkg) ? intersect(A[pkg], ivals) : ivals
+        A[pkg] = haskey(A,pkg) ? intersect(A[pkg], ivals) : ivals
     end
     return A
 end
@@ -44,7 +44,7 @@ function available()
         for ver in readdir(versdir)
             ismatch(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
-            has(pkgs,pkg) || (pkgs[pkg] = eltype(pkgs)[2]())
+            haskey(pkgs,pkg) || (pkgs[pkg] = eltype(pkgs)[2]())
             pkgs[pkg][convert(VersionNumber,ver)] = Available(
                 readchomp(joinpath(versdir, ver, "sha1")),
                 parse_requires(joinpath(versdir, ver, "requires"))

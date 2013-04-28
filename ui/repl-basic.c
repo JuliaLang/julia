@@ -1,9 +1,6 @@
 #include "repl.h"
 #include <unistd.h>
 
-char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m\033[1m";
-char *prompt_string = "julia> ";
-
 char *stdin_buf = NULL;
 unsigned long stdin_buf_len = 0;
 unsigned long stdin_buf_maxlen = 128;
@@ -11,11 +8,6 @@ unsigned long stdin_buf_maxlen = 128;
 void init_repl_environment(int argc, char *argv[])
 {
     stdin_buf = malloc(stdin_buf_maxlen);
-}
-
-DLLEXPORT void jl_enable_color(void)
-{
-    prompt_string = jl_prompt_color;
 }
 
 void jl_prep_terminal(int meta_flag)
@@ -43,9 +35,26 @@ void jl_input_line_callback(char *input)
     }
 }
 
-void repl_callback_enable()
+static char *given_prompt=NULL;
+static char *prompt_to_use=NULL;
+
+void repl_callback_enable(char *prompt)
 {
-    jl_write(jl_uv_stdout, prompt_string, strlen(prompt_string));
+    if (given_prompt == NULL || strcmp(prompt, given_prompt)) {
+        if (given_prompt) free(given_prompt);
+        given_prompt = strdup(prompt);
+        if (prompt_to_use) free(prompt_to_use);
+        // remove \001 and \002
+        size_t n = strlen(prompt);
+        prompt_to_use = malloc(n+1);
+        size_t o=0;
+        for(size_t i=0; i < n; i++) {
+            if (prompt[i] > 2)
+                prompt_to_use[o++] = prompt[i];
+        }
+        prompt_to_use[o] = '\0';
+    }
+    jl_write(jl_uv_stdout, prompt_to_use, strlen(prompt_to_use));
     jl_prep_terminal(1);
 }
 
@@ -135,5 +144,5 @@ void jl_clear_input(void)
     stdin_buf_len = 0;
     stdin_buf[0] = 0;
     JL_WRITE(jl_uv_stdout,"\n",1);
-    repl_callback_enable();
+    repl_callback_enable(prompt_to_use);
 }

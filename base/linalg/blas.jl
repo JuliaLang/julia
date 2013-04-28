@@ -96,7 +96,7 @@ for (fname, elty, relty) in ((:zdotc_,:Complex128,:Float64), (:cdotc_,:Complex64
 # *     .. Array Arguments ..
 #       DOUBLE COMPLEX ZX(*),ZY(*)
         function dot(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
-            convert($elty, ccall(($(string(fname)),libblas), ComplexPair{$relty},
+            convert($elty, ccall(($(string(fname)),libblas), Complex{$relty},
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &n, DX, &incx, DY, &incy))
         end

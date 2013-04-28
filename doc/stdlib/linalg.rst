@@ -193,8 +193,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: scale(A, B)
 
-   ``scale(A::Matrix, B::Number)`` scales all values in ``A`` with ``B``.
-
+   ``scale(A::Array, B::Number)`` scales all values in ``A`` with ``B``.
+   Note: In cases where the array is big enough, `scale` can be much
+   faster than `A .* B`, due to the use of BLAS.
+   
    ``scale(A::Matrix, B::Vector)`` is the same as multiplying with a
    diagonal matrix on the right, and scales the columns of ``A`` with
    the values in ``B``. 
@@ -205,7 +207,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: scale!(A, B)
 
-   ``scale!(A,B)`` overwrites the input matrix with the scaled result.
+   ``scale!(A,B)`` overwrites the input array with the scaled result.
 
 .. function:: Tridiagonal(dl, d, du)
 
@@ -304,6 +306,23 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The conjugate transpose operator (').
 
+.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, ritzvec=true)
+
+   `eigs` computes the eigenvalues of A using Arnoldi factorization. The following keyword arguments are supported:
+   	  nev: Number of eigenvalues
+	  which: type of eigenvalues ("LM", "SM")
+	  tol: tolerance (tol <= 0.0 defaults to `DLAMCH('EPS')`)
+	  maxiter: Maximum number of iterations
+	  ritzvec: Returns the Ritz vectors (eigenvectors) if `true`
+
+.. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)
+
+   `svds` computes the singular values of A using Arnoldi factorization. The following keyword arguments are supported:
+   	  nsv: Number of singular values
+	  which: type of singular values ("LA")
+	  tol: tolerance (tol <= 0.0 defaults to `DLAMCH('EPS')`)
+	  maxiter: Maximum number of iterations
+	  ritzvec: Returns the singular vectors if `true`
 
 BLAS Functions
 --------------

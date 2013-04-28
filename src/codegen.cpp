@@ -2313,26 +2313,36 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
     ctx.lineno = lno;
     
-    // TODO: Fix when moving to new LLVM version
-    dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0); 
+    BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
+    builder.SetInsertPoint(b0);
+
     llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(ArrayRef<Value*>());
-    DIFile fil = dbuilder->createFile(filename, ".");
-    DISubprogram SP =
-        dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
-                                 dbgFuncName, dbgFuncName,
-                                 fil,
-                                 0,
-                                 dbuilder->createSubroutineType(fil,EltTypeArray),
-                                 false, true,
-                                 0, true, f);
+    DIFile fil;
+    DISubprogram SP;
     //ios_printf(ios_stderr, "\n*** compiling %s at %s:%d\n\n",
     //           lam->name->name, filename.c_str(), lno);
     
-    BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
-    builder.SetInsertPoint(b0);
-    
-    // set initial line number
-    builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
+    DebugLoc noDbg;
+    bool debug_enabled = true;
+    if (dbgFuncName[0] == 0) {
+        // special value: if function name is empty, disable debug info
+        builder.SetCurrentDebugLocation(noDbg);
+        debug_enabled = false;
+    }
+    else {
+        // TODO: Fix when moving to new LLVM version
+        dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        fil = dbuilder->createFile(filename, ".");
+        SP = dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
+                                      dbgFuncName, dbgFuncName,
+                                      fil,
+                                      0,
+                                      dbuilder->createSubroutineType(fil,EltTypeArray),
+                                      false, true,
+                                      0, true, f);
+        // set initial line number
+        builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
+    }
     
     Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
     if (specsig) {
@@ -2617,12 +2627,14 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_linenode(stmt)) {
             int lno = jl_linenode_line(stmt);
-            builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
+            if (debug_enabled)
+                builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
             ctx.lineno = lno;
         }
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             int lno = jl_unbox_long(jl_exprarg(stmt, 0));
-            builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
+            if (debug_enabled)
+                builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
             ctx.lineno = lno;
         }
         if (jl_is_labelnode(stmt)) {
