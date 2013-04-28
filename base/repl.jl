@@ -82,7 +82,7 @@ function show_trace_entry(io, fname, file, line, n)
     end
 end
 
-function show_backtrace(io::IO, t)
+function show_backtrace(io::IO, t, set=1:typemax(Int))
     # we may not declare :eval_user_input
     # directly so that we get a compile error
     # in case its name changes in the future
@@ -94,6 +94,7 @@ function show_backtrace(io::IO, t)
     n = 1
     lastfile = ""; lastline = -11; lastname = symbol("#")
     local fname, file, line
+    count = 0
     for i = 1:length(t)
         lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), t[i], 0)
         if lkup === ()
@@ -102,6 +103,8 @@ function show_backtrace(io::IO, t)
         fname, file, line = lkup
         if i == 1 && fname == :error; continue; end
         if fname == eval_function; break; end
+        count += 1
+        if !contains(set, count); continue; end
         if file != lastfile || line != lastline || fname != lastname
             if lastline != -11
                 show_trace_entry(io, lastname, lastfile, lastline, n)
