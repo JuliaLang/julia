@@ -4,7 +4,7 @@ type Hermitian{T<:BlasFloat} <: AbstractMatrix{T}
     S::Matrix{T}
     uplo::Char
     function Hermitian(S::Matrix{T}, uplo::Char)
-        if size(S, 1) != size(S, 2) throw(LAPACK.DimensionMismatch("Matrix must be square")); end
+        if size(S, 1) != size(S, 2) throw(DimensionMismatch("Matrix must be square")); end
         return new(S, uplo)
     end
 end
@@ -25,7 +25,7 @@ ctranspose(A::Hermitian) = A
 
 function \(A::Hermitian, B::StridedVecOrMat)
     r, _, _, info = LAPACK.sysv!(A.uplo, copy(A.S), copy(B))
-    if info > 0 throw(LAPACK.SingularException(info)) end
+    if info > 0 throw(SingularException(info)) end
     return r
 end
 
