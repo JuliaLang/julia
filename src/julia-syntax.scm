@@ -436,7 +436,7 @@
 				   ,else)))
 			  (if (null? restkw)
 			      ;; if no rest kw, give error for unrecognized
-			      `(call (top error) "unrecognized keyword " ,elt)
+			      `(call (top error) "unrecognized named argument " ,elt)
 			      ;; otherwise add to rest keywords
 			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
 				      ,rkw (tuple ,elt
@@ -1086,7 +1086,7 @@
 					      (vararg? x))))
 			 kw)))
     (if (pair? invalid)
-	(error (string "invalid keyword argument " (car invalid))))))
+	(error (string "invalid named argument " (car invalid))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
@@ -2586,6 +2586,23 @@ So far only the second case can actually occur.
 				 (else
 				  (resolve-expansion-vars- x env m))))
 			 (cadddr e))))
+	   ((keywords parameters)
+	    ;; in keyword arg A=B, don't transform "A"
+	    `(,(car e) ,@(map (lambda (x)
+				(if (and (length= x 3) (assignment? x))
+				    (if (and (pair? (cadr x))
+					     (eq? (caadr x) '|::|))
+					`(= (|::|
+					     ,(cadr (cadr x))
+					     ,(resolve-expansion-vars-
+					       (caddr (cadr x)) env m))
+					    ,(resolve-expansion-vars-
+					      (caddr x) env m))
+					`(= ,(cadr x)
+					    ,(resolve-expansion-vars-
+					      (caddr x) env m)))
+				    (resolve-expansion-vars- x env m)))
+			      (cdr e))))
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)
@@ -2623,7 +2640,7 @@ So far only the second case can actually occur.
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-	((escape)  '())
+	((escape call)  '())
 	((= function)
 	 (append! (filter
 		   symbol?
