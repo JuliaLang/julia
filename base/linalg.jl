@@ -148,6 +148,7 @@ else
     blas_int(x) = int32(x)
 end
 
+include("linalg/exceptions.jl")
 include("linalg/generic.jl")
 
 include("linalg/blas.jl")
