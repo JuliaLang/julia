@@ -436,7 +436,7 @@
 				   ,else)))
 			  (if (null? restkw)
 			      ;; if no rest kw, give error for unrecognized
-			      `(call (top error) "unrecognized keyword " ,elt)
+			      `(call (top error) "unrecognized named argument " ,elt)
 			      ;; otherwise add to rest keywords
 			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
 				      ,rkw (tuple ,elt
@@ -504,6 +504,7 @@
 	    ;; and a series of optional-positional-defs that delegate keywords
 	    (let ((kw   (car argl))
 		  (argl (cdr argl)))
+	      (check-kw-args (cdr kw))
 	      (receive
 	       (vararg req) (separate vararg? argl)
 	       (optional-positional-defs name sparams req opt dfl body
@@ -516,7 +517,8 @@
 				       (append req opt vararg)))))
       (if (has-parameters? argl)
 	  ;; keywords only
-	  (keywords-method-def-expr name sparams argl body)
+	  (begin (check-kw-args (cdar argl))
+		 (keywords-method-def-expr name sparams argl body))
 	  ;; neither
 	  (method-def-expr- name sparams argl body))))
 
@@ -1079,25 +1081,27 @@
 			  (+ i 1)))))
       ,t)))
 
-(define (lower-kw-call f kw pa)
-  (let ((invalid (filter (lambda (x)
-			   (not (or (assignment? x)
-				    (vararg? x))))
+(define (check-kw-args kw)
+  (let ((invalid (filter (lambda (x) (not (or (assignment? x)
+					      (vararg? x))))
 			 kw)))
     (if (pair? invalid)
-	(error (string "invalid keyword argument " (car invalid))))
-    (receive
-     (keys restkeys) (separate assignment? kw)
-     `(call (top kwcall) ,f ,(length keys)
-	    ,@(apply append
-		     (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
-			  keys))
-	    ,(if (null? restkeys)
-		 '(tuple)
-		 (if (length= restkeys 1)
-		     (cadr (car restkeys))
-		     `(call (top append_any) ,@(map cadr restkeys))))
-	    ,@pa))))
+	(error (string "invalid named argument " (car invalid))))))
+
+(define (lower-kw-call f kw pa)
+  (check-kw-args kw)
+  (receive
+   (keys restkeys) (separate assignment? kw)
+   `(call (top kwcall) ,f ,(length keys)
+	  ,@(apply append
+		   (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
+			keys))
+	  ,(if (null? restkeys)
+	       '(tuple)
+	       (if (length= restkeys 1)
+		   (cadr (car restkeys))
+		   `(call (top append_any) ,@(map cadr restkeys))))
+	  ,@pa)))
 
 (define patterns
   (pattern-set
@@ -2582,6 +2586,23 @@ So far only the second case can actually occur.
 				 (else
 				  (resolve-expansion-vars- x env m))))
 			 (cadddr e))))
+	   ((keywords parameters)
+	    ;; in keyword arg A=B, don't transform "A"
+	    `(,(car e) ,@(map (lambda (x)
+				(if (and (length= x 3) (assignment? x))
+				    (if (and (pair? (cadr x))
+					     (eq? (caadr x) '|::|))
+					`(= (|::|
+					     ,(cadr (cadr x))
+					     ,(resolve-expansion-vars-
+					       (caddr (cadr x)) env m))
+					    ,(resolve-expansion-vars-
+					      (caddr x) env m))
+					`(= ,(cadr x)
+					    ,(resolve-expansion-vars-
+					      (caddr x) env m)))
+				    (resolve-expansion-vars- x env m)))
+			      (cdr e))))
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)
@@ -2619,7 +2640,7 @@ So far only the second case can actually occur.
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-	((escape)  '())
+	((escape call)  '())
 	((= function)
 	 (append! (filter
 		   symbol?
