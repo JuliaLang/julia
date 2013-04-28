@@ -1087,6 +1087,23 @@ for x = 2^24-10:2^24+10
     @test iceil(y)      == i
 end
 
+@test_fails iround(Inf)
+@test_fails iround(NaN)
+@test iround(2.5) == 3
+@test iround(-1.9) == -2
+@test_fails iround(Int64, 9.223372036854776e18)
+@test       iround(Int64, 9.223372036854775e18) == 9223372036854774784
+@test_fails iround(Int64, -9.223372036854778e18)
+@test       iround(Int64, -9.223372036854776e18) == typemin(Int64)
+@test_fails iround(Uint64, 1.8446744073709552e19)
+@test       iround(Uint64, 1.844674407370955e19) == 0xfffffffffffff800
+@test_fails iround(Int32, 2.1474836f9)
+@test       iround(Int32, 2.1474835f9) == 2147483520
+@test_fails iround(Int32, -2.147484f9)
+@test       iround(Int32, -2.1474836f9) == typemin(Int32)
+@test_fails iround(Uint32, 4.2949673f9)
+@test       iround(Uint32, 4.294967f9) == 0xffffff00
+
 for n = 1:100
     m = 1
     for (p,k) in factor(n)

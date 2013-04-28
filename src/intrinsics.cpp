@@ -444,6 +444,7 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
     int64_t topbit;
     Type *intt, *floatt;
     Value *bits = JL_INT(x);
+    Value *max, *min;
 
     if (bits->getType()->getPrimitiveSizeInBits() == 32) {
         nmantissa = 23;
@@ -451,6 +452,14 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         expbits = 0xff;
         topbit = BIT31;
         intt = T_int32; floatt = T_float32;
+        if (issigned) {
+            max = ConstantFP::get(floatt,  2.1474835e9);
+            min = ConstantFP::get(floatt, -2.1474836e9);
+        }
+        else {
+            max = ConstantFP::get(floatt, 4.294967e9);
+            min = ConstantFP::get(floatt, 0.0);
+        }
     }
     else {
         nmantissa = 52;
@@ -458,6 +467,14 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         expbits = 0x7ff;
         topbit = BIT63;
         intt = T_int64; floatt = T_float64;
+        if (issigned) {
+            max = ConstantFP::get(floatt,  9.223372036854775e18);
+            min = ConstantFP::get(floatt, -9.223372036854776e18);
+        }
+        else {
+            max = ConstantFP::get(floatt, 1.844674407370955e19);
+            min = ConstantFP::get(floatt, 0.0);
+        }
     }
 
     // itrunc(x + copysign(0.5,x))
@@ -476,6 +493,9 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
                                     builder.CreateBitCast(signedhalf, floatt));
 
     Value *src = builder.CreateSelect(isint, FP(x), sum);
+    raise_exception_unless(builder.CreateAnd(builder.CreateFCmpOLE(src, max),
+                                             builder.CreateFCmpOGE(src, min)),
+                           jlinexacterr_var, ctx);
     if (issigned)
         return builder.CreateFPToSI(src, intt);
     else
