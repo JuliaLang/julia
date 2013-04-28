@@ -848,7 +848,7 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     //JL_PRINTF(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
-    if (jl_array_len(tree_literal_values) == 0) {
+    if (jl_array_len(tree_literal_values) == 0 && last_tlv == NULL) {
         li->module->constant_table = NULL;
     }
     tree_literal_values = last_tlv;

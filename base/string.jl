@@ -269,11 +269,15 @@ beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
 beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) =
     (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
 
+cmp(a::Symbol, b::Symbol) =
+    int(sign(ccall(:strcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}), a, b)))
+isless(a::Symbol, b::Symbol) = cmp(a,b)<0
+
 # TODO: fast endswith
 
 ## character column width function ##
 
-charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Char,), c)))
+charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Uint32,), c)))
 strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
 strwidth(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
 # TODO: implement and use u8_strnwidth that takes a length argument
@@ -285,7 +289,7 @@ isascii(c::Char) = c < 0x80
 for name = ("alnum", "alpha", "cntrl", "digit", "graph",
             "lower", "print", "punct", "space", "upper")
     f = symbol(string("is",name))
-    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Char,), c))
+    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Cwchar_t,), c))
 end
 
 isblank(c::Char) = c==' ' || c=='\t'
@@ -452,8 +456,8 @@ write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 
 ## uppercase and lowercase transformations ##
 
-uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
-lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
+uppercase(c::Char) = convert(Char, ccall(:towupper, Cwchar_t, (Cwchar_t,), c))
+lowercase(c::Char) = convert(Char, ccall(:towlower, Cwchar_t, (Cwchar_t,), c))
 
 uppercase(s::String) = map(uppercase, s)
 lowercase(s::String) = map(lowercase, s)
@@ -1204,3 +1208,29 @@ let
     randstring(n::Int) = ASCIIString(b[rand(1:length(b),n)])
     randstring() = randstring(8)
 end
+
+
+function hex2bytes(s::ASCIIString)
+    len = length(s)
+    if isodd(len)
+        error("Input string length should be even")
+    end
+    arr = zeros(Uint8, div(len,2))
+    i = j = 0
+    while i < len
+        n = 0
+        c = s[i+=1]
+        n = '0' <= c <= '9' ? c - '0' :
+            'a' <= c <= 'f' ? c - 'a' + 10 :
+            'A' <= c <= 'F' ? c - 'A' + 10 : error("Input string isn't a hexadecimal string")
+        c = s[i+=1]
+        n = '0' <= c <= '9' ? n << 4 + c - '0' :
+            'a' <= c <= 'f' ? n << 4 + c - 'a' + 10 :
+            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 : error("Input string isn't a hexadecimal string")
+        arr[j+=1] = n
+    end
+    return arr
+end
+
+bytes2hex(arr::Array{Uint8,1}) = join([hex(i, 2) for i in arr])
+

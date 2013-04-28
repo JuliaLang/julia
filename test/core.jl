@@ -22,8 +22,8 @@
 @test is(None, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
 
 @test !isa(Array,Type{Any})
-@test subtype(Type{ComplexPair},DataType)
-@test isa(ComplexPair,Type{ComplexPair})
+@test subtype(Type{Complex},DataType)
+@test isa(Complex,Type{Complex})
 @test !subtype(Type{Ptr{None}},Type{Ptr})
 @test !subtype(Type{Rational{Int}}, Type{Rational})
 let T = TypeVar(:T,true)
@@ -62,7 +62,7 @@ let N = TypeVar(:N,true)
                                 ((Int,Int...),Array{Int,2})),
                   ((Int,Int), Array{Int,2}))
 end
-@test is(None, typeintersect(Type{Any},Type{ComplexPair}))
+@test is(None, typeintersect(Type{Any},Type{Complex}))
 @test is(None, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
 @test !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
 @test !subtype(Type{Array{Integer}},Type{Array{TypeVar(:T,Integer)}})
@@ -187,6 +187,18 @@ function fooo()
     x
 end
 @test int32(fooo()) == -24
+function fooo_2()
+    local x::Int8
+    x = 1000
+end
+@test fooo_2() == 1000
+function fooo_3()
+    local x::Int8
+    y = x = 1000
+    @test x == -24
+    y
+end
+@test fooo_3() == 1000
 function foo()
     local x::Int8
     function bar()
@@ -198,14 +210,14 @@ end
 @test int32(foo()) == -24
 
 function bar{T}(x::T)
-    local z::ComplexPair{T}
+    local z::Complex{T}
     z = x
     z
 end
-@test bar(3.0) == ComplexPair(3.0,0.0)
+@test bar(3.0) == Complex(3.0,0.0)
 
-z = convert(ComplexPair{Float64},2)
-@test z == ComplexPair(2.0,0.0)
+z = convert(Complex{Float64},2)
+@test z == Complex(2.0,0.0)
 
 # misc
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
@@ -415,6 +427,32 @@ begin
     @test glo == 18
 end
 
+# chained and multiple assignment behavior (issue #2913)
+begin
+    local x, a, b, c, d, e
+    x = (a,b,b,b,e) = (1,2,3,4,5)
+    @test x === (1,2,3,4,5)
+    @test a == 1
+    @test b == 4
+    @test e == 5
+    x = (a,b,b,e) = (1,2,3,4,5)
+    @test x === (1,2,3,4,5)
+    @test a == 1
+    @test b == 3
+    @test e == 4
+
+    a = complex(1,2)
+    b = 3
+    b, a = a.re, b
+    @test b == 1
+    @test a == 3
+    a = complex(1,2)
+    b = 3
+    a, b = b, a.re
+    @test a == 3
+    @test b == 1
+end
+
 # allow typevar in Union to match as long as the arguments contain
 # sufficient information
 # issue #814
@@ -485,13 +523,13 @@ begin
     local a,p, a2,p2
     a = [11,12,13]
     p = pointer(a)
-    @test unsafe_ref(p, 1) == 11
-    unsafe_assign(p, 99, 2)
+    @test unsafe_load(p, 1) == 11
+    unsafe_store!(p, 99, 2)
     @test a == [11,99,13]
     a2 = Any[101,102,103]
     p2 = pointer(a2)
-    @test unsafe_ref(p2) == 101
-    @test_fails unsafe_assign(p2, 909, 3)
+    @test unsafe_load(p2) == 101
+    @test_fails unsafe_store!(p2, 909, 3)
     @test a2 == [101,102,103]
 end
 
@@ -507,8 +545,8 @@ begin
     local X, p
     X = FooBar[ FooBar(3,1), FooBar(4,4) ]
     p = convert(Ptr{FooBar}, X)
-    @test unsafe_ref(p, 2) == FooBar(4,4)
-    unsafe_assign(p, FooBar(7,3), 1)
+    @test unsafe_load(p, 2) == FooBar(4,4)
+    unsafe_store!(p, FooBar(7,3), 1)
     @test X[1] == FooBar(7,3)
 end
 
@@ -721,3 +759,8 @@ end
 i2619()
 @test !bad2619
 @test isa(e2619,ErrorException) && e2619.msg == "in i2619: f not defined"
+
+# issue #2919
+typealias Foo2919 Int
+type Baz2919; Foo2919::Foo2919; end
+@test Baz2919(3).Foo2919 === 3

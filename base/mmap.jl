@@ -1,7 +1,7 @@
 # Low-level routines
 # These are needed for things like MAP_ANONYMOUS
 function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::FileOffset)
-    const pagesize::Int = 4096
+    const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
     # Check that none of the computations will overflow
     if len > typemax(Int)-pagesize
         error("Cannot map such a large buffer")

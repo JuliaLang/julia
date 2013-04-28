@@ -37,9 +37,9 @@
 @test bool(1.0) == true
 @test bool(0.1) == true
 @test bool(-1.0) == true
-@test bool(ComplexPair(0,0)) == false
-@test bool(ComplexPair(1,0)) == true
-@test_fails bool(ComplexPair(0,1)) == true
+@test bool(Complex(0,0)) == false
+@test bool(Complex(1,0)) == true
+@test_fails bool(Complex(0,1)) == true
 @test bool(0//1) == false
 @test bool(1//1) == true
 @test bool(1//2) == true
@@ -708,18 +708,18 @@ end
 @test 1+1.5 == 2.5
 @test 1.5+1 == 2.5
 @test 1+1.5+2 == 4.5
-@test is(typeof(convert(ComplexPair{Int16},1)),ComplexPair{Int16})
-@test ComplexPair(1,2)+1 == ComplexPair(2,2)
-@test ComplexPair(1,2)+1.5 == ComplexPair(2.5,2.0)
-@test 1/ComplexPair(2,2) == ComplexPair(.25,-.25)
-@test ComplexPair(1.5,1.0) + 1//2 == ComplexPair(2.0,1.0)
-@test real(ComplexPair(1//2,2//3)) == 1//2
-@test imag(ComplexPair(1//2,2//3)) == 2//3
-@test ComplexPair(1,2) + 1//2 == ComplexPair(3//2,2//1)
-@test ComplexPair(1,2) + 1//2 * 0.5 == ComplexPair(1.25,2.0)
-@test (ComplexPair(1,2) + 1//2) * 0.5 == ComplexPair(0.75,1.0)
-@test (ComplexPair(1,2)/ComplexPair(2.5,3.0))*ComplexPair(2.5,3.0) == ComplexPair(1,2)
-@test 0.7 < real(sqrt(ComplexPair(0,1))) < 0.707107
+@test is(typeof(convert(Complex{Int16},1)),Complex{Int16})
+@test Complex(1,2)+1 == Complex(2,2)
+@test Complex(1,2)+1.5 == Complex(2.5,2.0)
+@test 1/Complex(2,2) == Complex(.25,-.25)
+@test Complex(1.5,1.0) + 1//2 == Complex(2.0,1.0)
+@test real(Complex(1//2,2//3)) == 1//2
+@test imag(Complex(1//2,2//3)) == 2//3
+@test Complex(1,2) + 1//2 == Complex(3//2,2//1)
+@test Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0)
+@test (Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0)
+@test (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2)
+@test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
 for T in {Int8,Int16,Int32,Int64,Int128}
     @test abs(typemin(T)) == -typemin(T)
@@ -754,7 +754,7 @@ real_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32,
               Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}}
 for A = real_types, B = real_types
     T = promote_type(A,B)
-    @test typeof(ComplexPair(convert(A,2),convert(B,3))) <: ComplexPair{T}
+    @test typeof(Complex(convert(A,2),convert(B,3))) <: Complex{T}
 end
 
 # comparison should fail on complex
@@ -1087,6 +1087,23 @@ for x = 2^24-10:2^24+10
     @test iceil(y)      == i
 end
 
+@test_fails iround(Inf)
+@test_fails iround(NaN)
+@test iround(2.5) == 3
+@test iround(-1.9) == -2
+@test_fails iround(Int64, 9.223372036854776e18)
+@test       iround(Int64, 9.223372036854775e18) == 9223372036854774784
+@test_fails iround(Int64, -9.223372036854778e18)
+@test       iround(Int64, -9.223372036854776e18) == typemin(Int64)
+@test_fails iround(Uint64, 1.8446744073709552e19)
+@test       iround(Uint64, 1.844674407370955e19) == 0xfffffffffffff800
+@test_fails iround(Int32, 2.1474836f9)
+@test       iround(Int32, 2.1474835f9) == 2147483520
+@test_fails iround(Int32, -2.147484f9)
+@test       iround(Int32, -2.1474836f9) == typemin(Int32)
+@test_fails iround(Uint32, 4.2949673f9)
+@test       iround(Uint32, 4.294967f9) == 0xffffff00
+
 for n = 1:100
     m = 1
     for (p,k) in factor(n)
@@ -1138,6 +1155,64 @@ end
 @test 1f0 == 1.
 @test isa(1f1,Float32)
 @test 1f1 == 10.
+
+# hexadecimal float literals
+@test 0x1p0   === 1.
+@test 0x1p1   === 2.
+@test 0x.1p0  === 0.0625
+@test 0x.1p1  === 0.125
+@test 0xfp0   === 15.
+@test 0xfp1   === 30.
+@test 0x.fp0  === 0.9375
+@test 0x.fp1  === 1.875
+@test 0x1.p0  === 1.
+@test 0x1.p1  === 2.
+@test 0xf.p0  === 15.
+@test 0xf.p1  === 30.
+@test 0x1.0p0 === 1.
+@test 0x1.0p1 === 2.
+@test 0x1.1p0 === 1.0625
+@test 0x1.1p1 === 2.125
+@test 0x1.fp0 === 1.9375
+@test 0x1.fp1 === 3.875
+@test 0xf.0p0 === 15.
+@test 0xf.0p1 === 30.
+@test 0xf.1p0 === 15.0625
+@test 0xf.1p1 === 30.125
+@test 0xf.fp0 === 15.9375
+@test 0xf.fp1 === 31.875
+@test 0x1P0   === 1.
+@test 0x1P1   === 2.
+@test 0x.1P0  === 0.0625
+@test 0x.1P1  === 0.125
+@test 0xfP0   === 15.
+@test 0xfP1   === 30.
+@test 0x.fP0  === 0.9375
+@test 0x.fP1  === 1.875
+@test 0x1.P0  === 1.
+@test 0x1.P1  === 2.
+@test 0xf.P0  === 15.
+@test 0xf.P1  === 30.
+@test 0x1.0P0 === 1.
+@test 0x1.0P1 === 2.
+@test 0x1.1P0 === 1.0625
+@test 0x1.1P1 === 2.125
+@test 0x1.fP0 === 1.9375
+@test 0x1.fP1 === 3.875
+@test 0xf.0P0 === 15.
+@test 0xf.0P1 === 30.
+@test 0xf.1P0 === 15.0625
+@test 0xf.1P1 === 30.125
+@test 0xf.fP0 === 15.9375
+@test 0xf.fP1 === 31.875
+
+# eps / realmin / realmax
+@test 0x1p-52 == eps()
+@test 0x1p-52 + 1 != 1
+@test 0x1p-53 + 1 == 1
+@test 0x1p-1022 == realmin()
+@test 0x1.fffffffffffffp1023 == realmax()
+@test isinf(nextfloat(0x1.fffffffffffffp1023))
 
 # custom rounding and significant-digit ops
 function approx_eq(a, b, tol)

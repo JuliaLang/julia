@@ -52,7 +52,7 @@ function contains_is(itr, x::ANY)
 end
 
 is_local(sv::StaticVarInfo, s::Symbol) = contains_is(sv.vars, s)
-is_closed(sv::StaticVarInfo, s::Symbol) = has(sv.cenv, s)
+is_closed(sv::StaticVarInfo, s::Symbol) = haskey(sv.cenv, s)
 is_global(sv::StaticVarInfo, s::Symbol) =
     !is_local(sv,s) && !is_closed(sv,s) && !is_static_parameter(sv,s)
 
@@ -822,7 +822,7 @@ function abstract_eval_global(M, s::Symbol)
 end
 
 function abstract_eval_symbol(s::Symbol, vtypes, sv::StaticVarInfo)
-    if has(sv.cenv,s)
+    if haskey(sv.cenv,s)
         # consider closed vars to always have their propagated (declared) type
         return sv.cenv[s]
     end
@@ -1910,14 +1910,14 @@ function find_sa_vars(ast)
         e = body[i]
         if isa(e,Expr) && is(e.head,:(=))
             lhs = e.args[1]
-            if !has(av, lhs)
+            if !haskey(av, lhs)
                 av[lhs] = e.args[2]
             else
                 av2[lhs] = true
             end
         end
     end
-    filter!((var,_)->!has(av2,var), av)
+    filter!((var,_)->!haskey(av2,var), av)
     for vi in ast.args[2][2]
         if (vi[3]&1)!=0
             # remove captured vars
@@ -1966,7 +1966,7 @@ function tuple_elim_pass(ast::Expr)
     i = 1
     while i < length(body)
         e = body[i]
-        if !(isa(e,Expr) && is(e.head,:(=)) && has(vs, e.args[1]))
+        if !(isa(e,Expr) && is(e.head,:(=)) && haskey(vs, e.args[1]))
             i += 1
             continue
         end

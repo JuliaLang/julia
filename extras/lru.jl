@@ -18,7 +18,7 @@
 
 import Base.isempty, Base.length, Base.sizeof
 import Base.start, Base.next, Base.done
-import Base.has, Base.get
+import Base.haskey, Base.get
 import Base.setindex!, Base.getindex, Base.delete!, Base.empty!
 import Base.show
 
@@ -55,14 +55,14 @@ BoundedLRU() = BoundedLRU{Any, Any}()
 
 isempty(lru::LRU) = isempty(lru.q)
 length(lru::LRU) = length(lru.q)
-has(lru::LRU, key) = has(lru.ht, key)
+haskey(lru::LRU, key) = haskey(lru.ht, key)
 
 ## associative ##
 
 # Should this check count as an access?
-has(lru::LRU, key) = has(lru.ht, key)
+haskey(lru::LRU, key) = haskey(lru.ht, key)
 
-get(lru::LRU, key, default) = has(lru, key) ? lru[key] : default
+get(lru::LRU, key, default) = haskey(lru, key) ? lru[key] : default
 
 function empty!(lru::LRU)
     empty!(lru.ht)
@@ -94,7 +94,7 @@ function getindex(lru::LRU, key)
 end
 
 function setindex!(lru::LRU, v, key)
-    if has(lru, key)
+    if haskey(lru, key)
         item = lru.ht[key]
         idx = locate(lru.q, item)
         item.v = v

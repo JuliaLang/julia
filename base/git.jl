@@ -55,6 +55,11 @@ function transact(f::Function)
     end
 end
 
+function is_ancestor_of(a::String, b::String)
+    A = readchomp(`git rev-parse $a`)
+    readchomp(`git merge-base $A $b`) == A
+end
+
 function each_tagged_version()
     git_dir = abspath(dir())
     @task for line in eachline(`git --git-dir=$git_dir show-ref --tags`)
@@ -91,7 +96,7 @@ function read_config(file::String)
     # TODO: use --null option for better handling of weird values.
     for line in eachline(`git config -f $file --get-regexp '.*'`)
         key, val = match(r"^(\S+)\s+(.*)$", line).captures
-        cfg[key] = has(cfg,key) ? [cfg[key],val] : val
+        cfg[key] = haskey(cfg,key) ? [cfg[key],val] : val
     end
     return cfg
 end

@@ -52,6 +52,22 @@ int isnumtok_base(char *tok, value_t *pval, int base)
             return 1;
         }
     }
+    // hexadecimal float literals
+    else if (((tok[0]=='0' && tok[1]=='x') || (base == 16)) &&
+        strpbrk(tok, "pP")) {
+        d = strtod(tok, &end);
+        if (*end == '\0') {
+            if (pval) *pval = mk_double(d);
+            return 1;
+        }
+        // floats can end in f or f0
+        if (end > tok && end[0] == 'f' &&
+            (end[1] == '\0' ||
+             (end[1] == '0' && end[2] == '\0'))) {
+            if (pval) *pval = mk_float((float)d);
+            return 1;
+        }
+    }
 
     if (tok[0] == '+') {
         if (!strcmp(tok,"+NaN") || !strcasecmp(tok,"+nan.0")) {

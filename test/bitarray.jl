@@ -319,8 +319,8 @@ cf1 = complex(f1)
 @check_bit_operation (.*) Matrix{Uint8} (u1, b2)
 
 for (x1,t1) = {(f1, Float64),
-               (ci1, ComplexPair{Int}),
-               (cu1, ComplexPair{Uint8}),
+               (ci1, Complex{Int}),
+               (cu1, Complex{Uint8}),
                (cf1, Complex128)}
     @check_bit_operation (+) Matrix{t1} (x1, b2)
     @check_bit_operation (-) Matrix{t1} (x1, b2)
@@ -363,10 +363,10 @@ b2 = randbool(n1, n2)
 @check_bit_operation (.^) Matrix{Float64} (1.0, b2)
 @check_bit_operation (.^) Matrix{Complex128} (0.0im, b2)
 @check_bit_operation (.^) Matrix{Complex128} (1.0im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Int}} (0im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Int}} (1im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint}} (0x0im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint}} (0x1im, b2)
+@check_bit_operation (.^) Matrix{Complex{Int}} (0im, b2)
+@check_bit_operation (.^) Matrix{Complex{Int}} (1im, b2)
+@check_bit_operation (.^) Matrix{Complex{Uint}} (0x0im, b2)
+@check_bit_operation (.^) Matrix{Complex{Uint}} (0x1im, b2)
 
 # Matrix/Number
 b1 = randbool(n1, n2)
@@ -421,14 +421,14 @@ cf2 = complex(f2)
 @check_bit_operation div Matrix{Float64} (b1, f2)
 @check_bit_operation mod Matrix{Float64} (b1, f2)
 
-@check_bit_operation (+) Matrix{ComplexPair{Int}} (b1, ci2)
-@check_bit_operation (-) Matrix{ComplexPair{Int}} (b1, ci2)
-@check_bit_operation (.*) Matrix{ComplexPair{Int}} (b1, ci2)
+@check_bit_operation (+) Matrix{Complex{Int}} (b1, ci2)
+@check_bit_operation (-) Matrix{Complex{Int}} (b1, ci2)
+@check_bit_operation (.*) Matrix{Complex{Int}} (b1, ci2)
 @check_bit_operation (./) Matrix{Complex128} (b1, ci2)
 
-@check_bit_operation (+) Matrix{ComplexPair{Uint8}} (b1, cu2)
-@check_bit_operation (-) Matrix{ComplexPair{Uint8}} (b1, cu2)
-@check_bit_operation (.*) Matrix{ComplexPair{Uint8}} (b1, cu2)
+@check_bit_operation (+) Matrix{Complex{Uint8}} (b1, cu2)
+@check_bit_operation (-) Matrix{Complex{Uint8}} (b1, cu2)
+@check_bit_operation (.*) Matrix{Complex{Uint8}} (b1, cu2)
 @check_bit_operation (./) Matrix{Complex64} (b1, cu2)
 
 @check_bit_operation (+) Matrix{Complex128} (b1, cf2)

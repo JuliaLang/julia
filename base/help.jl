@@ -49,7 +49,7 @@ function init_help()
         MODULE_DICT = Dict()
         FUNCTION_DICT = Dict()
         for (cat,mod,func,desc) in helpdb
-            if !has(CATEGORY_DICT, cat)
+            if !haskey(CATEGORY_DICT, cat)
                 push!(CATEGORY_LIST, cat)
                 CATEGORY_DICT[cat] = {}
             end
@@ -64,11 +64,11 @@ function init_help()
                 mfunc = func
             end
             push!(CATEGORY_DICT[cat], mfunc)
-            if !has(FUNCTION_DICT, mfunc)
+            if !haskey(FUNCTION_DICT, mfunc)
                 FUNCTION_DICT[mfunc] = {}
             end
             push!(FUNCTION_DICT[mfunc], desc)
-            if !has(MODULE_DICT, func)
+            if !haskey(MODULE_DICT, func)
                 MODULE_DICT[func] = {}
             end
             if !contains(MODULE_DICT[func], mod)
@@ -102,7 +102,7 @@ end
 
 function help(cat::String)
     init_help()
-    if !has(CATEGORY_DICT, cat)
+    if !haskey(CATEGORY_DICT, cat)
         # if it's not a category, try another named thing
         return help_for(cat)
     end
@@ -128,7 +128,7 @@ help_for(s::String) = help_for(s, 0)
 function help_for(fname::String, obj)
     init_help()
     found = false
-    if has(FUNCTION_DICT, fname)
+    if haskey(FUNCTION_DICT, fname)
         print_help_entries(FUNCTION_DICT[fname])
         found = true
     else
@@ -139,7 +139,7 @@ function help_for(fname::String, obj)
         else
             sfname = fname
         end
-        if has(MODULE_DICT, fname)
+        if haskey(MODULE_DICT, fname)
             allmods = MODULE_DICT[fname]
             alldesc = {}
             for mod in allmods

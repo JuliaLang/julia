@@ -231,7 +231,7 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
 
     if (own_buffer) {
         a->ismalloc = 1;
-        jl_array_data_owner(a) = (jl_value_t*)jl_gc_acquire_buffer(data,nel*elsz);
+        jl_array_data_owner(a) = (jl_value_t*)jl_gc_acquire_buffer(data,nel*elsz,0);
     }
     else {
         a->ismalloc = 0;
@@ -277,7 +277,7 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
 
     if (own_buffer) {
         a->ismalloc = 1;
-        jl_array_data_owner(a) = (jl_value_t*)jl_gc_acquire_buffer(data,nel*elsz);
+        jl_array_data_owner(a) = (jl_value_t*)jl_gc_acquire_buffer(data,nel*elsz,0);
     }
     else {
         a->ismalloc = 0;

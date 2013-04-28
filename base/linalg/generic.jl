@@ -1,7 +1,8 @@
 ## linalg.jl: Some generic Linear Algebra definitions
 
-function scale!{T<:Number}(X::AbstractArray{T}, s::Real)
-    # FIXME: could use BLAS in more cases
+scale{T<:Number}(X::AbstractArray{T}, s::Number) = scale!(copy(X), s)
+
+function scale!{T<:Number}(X::AbstractArray{T}, s::Number)
     for i in 1:length(X)
         X[i] *= s;
     end
@@ -173,8 +174,8 @@ end
 
 #diagmm!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
 
-diagmm!(A::AbstractMatrix, b::AbstractVector) = diagmm!(A,A,b)
-diagmm!(b::AbstractVector, A::AbstractMatrix) = diagmm!(A,b,A)
+scale!(A::AbstractMatrix, b::AbstractVector) = scale!(A,A,b)
+scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
 
 #diagmm(A::AbstractMatrix, b::AbstractVector)
 #diagmm(b::AbstractVector, A::AbstractMatrix)

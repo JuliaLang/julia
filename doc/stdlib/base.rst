@@ -1891,6 +1891,15 @@ Data Formats
 
    Convert a hexadecimal string to the floating point number it represents
 
+.. function:: hex2bytes(s::ASCIIString)
+
+   Convert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{Uint8, 1}, i.e. an array of bytes.
+
+.. function:: bytes2hex(bin_arr::Array{Uint8, 1})
+
+   Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ASCIIString.
+
+   
 Numbers
 -------
 
@@ -2112,10 +2121,6 @@ Basic functions
 .. function:: nnz(A)
 
    Counts the number of nonzero values in array A (dense or sparse)
-
-.. function:: scale!(A, k)
-
-   Scale the contents of an array A with k (in-place)
 
 .. function:: conj!(A)
 
@@ -2843,7 +2848,11 @@ Distributed Arrays
 
 .. function:: DArray(init, dims, [procs, dist])
 
-   Construct a distributed array. ``init`` is a function accepting a tuple of index ranges. This function should return a chunk of the distributed array for the specified indexes. ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of processor IDs to use. ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
+   Construct a distributed array. ``init`` is a function that accepts a tuple of index ranges. This function should allocate a local chunk of the distributed array and initialize it for the specified indices. ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of processor IDs to use. ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
+
+   For example, the `dfill` function that creates a distributed array and fills it with a value ``v`` is implemented as:
+
+   ``dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)``
 
 .. function:: dzeros(dims, ...)
 

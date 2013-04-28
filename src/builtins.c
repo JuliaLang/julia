@@ -649,7 +649,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
             jl_show_gf = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("show"));
         }
         if (jl_show_gf==NULL || stream==NULL) {
-            JL_PRINTF(JL_STDERR, "could not show value of type %s",
+            JL_PRINTF(JL_STDERR, " could not show value of type %s",
                       jl_is_tuple(v) ? "Tuple" : 
                       ((jl_datatype_t*)jl_typeof(v))->name->name->name);
             return;

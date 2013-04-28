@@ -236,7 +236,7 @@ IOStream(name::String) = IOStream(name, true)
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
-fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
+fd(s::IOStream) = int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
@@ -267,7 +267,7 @@ eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
 # "own" means the descriptor will be closed with the IOStream
 function fdio(name::String, fd::Integer, own::Bool)
     s = IOStream(name)
-    ccall(:ios_fd, Void, (Ptr{Uint8}, Int, Int32, Int32),
+    ccall(:ios_fd, Ptr{Void}, (Ptr{Void}, Clong, Int32, Int32),
           s.ios, fd, 0, own);
     return s
 end
