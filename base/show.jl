@@ -319,7 +319,7 @@ function argtype_decl_string(n, t)
         n = n.args[1]  # handle n::T in arg list
     end
     n = clean_gensym(n)
-    if t === Any
+    if t === Any && !isempty(n)
         return n
     end
     if t <: Vararg && t.parameters[1] === Any
