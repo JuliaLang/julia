@@ -376,10 +376,10 @@ jl_value_t *jl_env_done(char *pos)
     return (*pos==0)?jl_true:jl_false;
 }
 #endif
+
 // -- child process status --
 
 #if defined _MSC_VER || defined __WIN32__
-
 /* Native Woe32 API.  */
 #include <process.h>
 #define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
@@ -407,9 +407,9 @@ JL_STREAM *JL_STDIN=0;
 JL_STREAM *JL_STDOUT=0;
 JL_STREAM *JL_STDERR=0;
 
-JL_STREAM *jl_stdin_stream(void)  { return (JL_STREAM*) JL_STDIN; }
-JL_STREAM *jl_stdout_stream(void) { return (JL_STREAM*) JL_STDOUT; }
-JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*) JL_STDERR; }
+JL_STREAM *jl_stdin_stream(void)  { return (JL_STREAM*)JL_STDIN; }
+JL_STREAM *jl_stdout_stream(void) { return (JL_STREAM*)JL_STDOUT; }
+JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*)JL_STDERR; }
 
 // -- set/clear the FZ/DAZ flags on x86 & x86-64 --
 
@@ -496,4 +496,33 @@ DLLEXPORT void jl_native_alignment(uint_t* int8align, uint_t* int16align, uint_t
 DLLEXPORT jl_value_t *jl_is_char_signed()
 {
     return ((char)255) < 0 ? jl_true : jl_false;
+}
+
+// -- misc sysconf info --
+
+#ifdef __WIN32__
+static long chachedPagesize = 0;
+long jl_getpagesize(void)
+{
+    if (!chachedPagesize) {
+        SYSTEM_INFO systemInfo;
+        GetSystemInfo (&systemInfo);
+        chachedPagesize = systemInfo.dwPageSize;
+    }
+    return chachedPagesize;
+}
+#else
+long jl_getpagesize(void)
+{
+    return sysconf(_SC_PAGESIZE);
+}
+#endif
+
+DLLEXPORT long jl_SC_CLK_TCK(void)
+{
+#ifndef __WIN32__
+    return sysconf(_SC_CLK_TCK);
+#else
+    return 0;
+#endif
 }

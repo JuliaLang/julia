@@ -1073,7 +1073,7 @@ function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::V
         vs = d[2]
         push!(pdeps[p0][v0], vs)
         p1 = pdict[vs.package]
-        if !has(prevdeps[p1], p0)
+        if !haskey(prevdeps[p1], p0)
             prevdeps[p1][p0] = (Int=>VersionSet)[]
         end
         prevdeps[p1][p0][v0] = vs
@@ -1287,7 +1287,7 @@ function sanity_check()
         eqclass0 = eq_classes_map[p0]
         reveqclass0 = rev_eq_classes_map[p0]
         for (v,vtop) in eqclass0
-            if !has(reveqclass0, vtop)
+            if !haskey(reveqclass0, vtop)
                 reveqclass0[vtop] = VersionNumber[v]
             else
                 push!(reveqclass0[vtop], v)

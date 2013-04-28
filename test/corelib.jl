@@ -324,14 +324,14 @@ for (operator, name) in ((|, union), (&, intersect), (-, setdiff))
     end
 end
     
-# add_each
+# union!
 s = Set(1,3,5,7)
-add_each!(s,(2,3,4,5))
+union!(s,(2,3,4,5))
 @test isequal(s,Set(1,2,3,4,5,7))
 
-# del_each
+# setdiff!
 s = Set(1,3,5,7)
-del_each!(s,(3,5))
+setdiff!(s,(3,5))
 @test isequal(s,Set(1,7))
 
 # similar

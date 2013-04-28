@@ -26,7 +26,7 @@ namespace JL_I {
         // conversion
         sext_int, zext_int, trunc_int,
         fptoui32, fptosi32, fptoui64, fptosi64,
-        fpsiround32, fpsiround64, fpuiround32, fpuiround64,
+        fpsiround, fpuiround,
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
         // functions
@@ -436,6 +436,70 @@ static Value *emit_checked_fptoui(Type *to, Value *x, jl_codectx_t *ctx)
 static Value *emit_checked_fptoui(jl_value_t *targ, Value *x, jl_codectx_t *ctx)
 {
     return emit_checked_fptoui(staticeval_bitstype(targ, "checked_fptoui", ctx), x, ctx);
+}
+
+static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
+{
+    int nmantissa, expoffs, expbits;
+    int64_t topbit;
+    Type *intt, *floatt;
+    Value *bits = JL_INT(x);
+    Value *max, *min;
+
+    if (bits->getType()->getPrimitiveSizeInBits() == 32) {
+        nmantissa = 23;
+        expoffs = 127;
+        expbits = 0xff;
+        topbit = BIT31;
+        intt = T_int32; floatt = T_float32;
+        if (issigned) {
+            max = ConstantFP::get(floatt,  2.1474835e9);
+            min = ConstantFP::get(floatt, -2.1474836e9);
+        }
+        else {
+            max = ConstantFP::get(floatt, 4.294967e9);
+            min = ConstantFP::get(floatt, 0.0);
+        }
+    }
+    else {
+        nmantissa = 52;
+        expoffs = 1023;
+        expbits = 0x7ff;
+        topbit = BIT63;
+        intt = T_int64; floatt = T_float64;
+        if (issigned) {
+            max = ConstantFP::get(floatt,  9.223372036854775e18);
+            min = ConstantFP::get(floatt, -9.223372036854776e18);
+        }
+        else {
+            max = ConstantFP::get(floatt, 1.844674407370955e19);
+            min = ConstantFP::get(floatt, 0.0);
+        }
+    }
+
+    // itrunc(x + copysign(0.5,x))
+    // values with exponent >= nbits are already integers, and this
+    // rounding method doesn't always give the right answer there.
+    Value *expo = builder.CreateAShr(bits, ConstantInt::get(intt,nmantissa));
+    expo = builder.CreateAnd(expo, ConstantInt::get(intt,expbits));
+    Value *isint = builder.CreateICmpSGE(expo,
+                                         ConstantInt::get(intt,expoffs+nmantissa));
+    Value *half = builder.CreateBitCast(ConstantFP::get(floatt, 0.5), intt);
+    Value *signedhalf =
+        builder.CreateOr(half,
+                         builder.CreateAnd(bits,
+                                           ConstantInt::get(intt,topbit)));
+    Value *sum = builder.CreateFAdd(FP(x),
+                                    builder.CreateBitCast(signedhalf, floatt));
+
+    Value *src = builder.CreateSelect(isint, FP(x), sum);
+    raise_exception_unless(builder.CreateAnd(builder.CreateFCmpOLE(src, max),
+                                             builder.CreateFCmpOGE(src, min)),
+                           jlinexacterr_var, ctx);
+    if (issigned)
+        return builder.CreateFPToSI(src, intt);
+    else
+        return builder.CreateFPToUI(src, intt);
 }
 
 static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
@@ -884,66 +948,10 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(fptosi32,1) return builder.CreateFPToSI(FP(x), T_int32);
     HANDLE(fptoui64,1) return builder.CreateFPToUI(FP(x), T_int64);
     HANDLE(fptosi64,1) return builder.CreateFPToSI(FP(x), T_int64);
-    HANDLE(fpsiround32,1)
-    HANDLE(fpuiround32,1)
+    HANDLE(fpsiround,1)
+    HANDLE(fpuiround,1)
     {
-        // itrunc(x + copysign(0.5,x))
-        Value *bits = JL_INT(x);
-        // values with exponent >= nbits are already integers, and this
-        // rounding method doesn't always give the right answer there.
-        Value *expo = builder.CreateAShr(bits, ConstantInt::get(T_int32,23));
-        expo = builder.CreateAnd(expo, ConstantInt::get(T_int32,0xff));
-        Value *isint = builder.CreateICmpSGE(expo,
-                                             ConstantInt::get(T_int32,127+23));
-        Value *half = builder.CreateBitCast(ConstantFP::get(T_float32, 0.5),
-                                            T_int32);
-        Value *signedhalf =
-            builder.CreateOr(half,
-                             builder.CreateAnd(bits,
-                                               ConstantInt::get(T_int32,
-                                                                BIT31)));
-        Value *sum = builder.CreateFAdd(FP(x),
-                                        builder.CreateBitCast(signedhalf,
-                                                              T_float32));
-        if (f == fpuiround32) {
-            return builder.CreateSelect(isint,
-                                        builder.CreateFPToUI(FP(x), T_int32),
-                                        builder.CreateFPToUI(sum, T_int32));
-        }
-        else {
-            return builder.CreateSelect(isint,
-                                        builder.CreateFPToSI(FP(x), T_int32),
-                                        builder.CreateFPToSI(sum, T_int32));
-        }
-    }
-    HANDLE(fpsiround64,1)
-    HANDLE(fpuiround64,1)
-    {
-        Value *bits = JL_INT(x);
-        Value *expo = builder.CreateAShr(bits, ConstantInt::get(T_int64,52));
-        expo = builder.CreateAnd(expo, ConstantInt::get(T_int64,0x7ff));
-        Value *isint = builder.CreateICmpSGE(expo,
-                                             ConstantInt::get(T_int64,1023+52));
-        Value *half = builder.CreateBitCast(ConstantFP::get(T_float64, 0.5),
-                                            T_int64);
-        Value *signedhalf =
-            builder.CreateOr(half,
-                             builder.CreateAnd(bits,
-                                               ConstantInt::get(T_int64,
-                                                                BIT63)));
-        Value *sum = builder.CreateFAdd(FP(x),
-                                        builder.CreateBitCast(signedhalf,
-                                                              T_float64));
-        if (f == fpuiround64) {
-            return builder.CreateSelect(isint,
-                                        builder.CreateFPToUI(FP(x), T_int64),
-                                        builder.CreateFPToUI(sum, T_int64));
-        }
-        else {
-            return builder.CreateSelect(isint,
-                                        builder.CreateFPToSI(FP(x), T_int64),
-                                        builder.CreateFPToSI(sum, T_int64));
-        }
+        return emit_iround(x, f == fpsiround, ctx);
     }
     HANDLE(uitofp32,1)  return builder.CreateUIToFP(JL_INT(x), T_float32);
     HANDLE(sitofp32,1)  return builder.CreateSIToFP(JL_INT(x), T_float32);
@@ -1096,8 +1104,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
     ADD_I(sext_int); ADD_I(zext_int); ADD_I(trunc_int);
     ADD_I(fptoui32); ADD_I(fptosi32); ADD_I(fptoui64); ADD_I(fptosi64);
-    ADD_I(fpsiround32); ADD_I(fpsiround64);
-    ADD_I(fpuiround32); ADD_I(fpuiround64);
+    ADD_I(fpsiround); ADD_I(fpuiround);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
     ADD_I(abs_float); ADD_I(copysign_float);

@@ -35,14 +35,20 @@ julia-debug julia-release:
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
 	@$(MAKE) $(QUIET_MAKE) -C base
 	@$(MAKE) $(QUIET_MAKE) -C ui $@
+ifneq ($(OS),WINNT)
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
+endif
 
 $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 	@cp $< $@
 
+COMMIT:
+	@#this is a .PHONY target so that it will always run
+	echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
+
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl $(BUILD)/share/julia/helpdb.jl
-	@echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
+	@$(MAKE) $(QUIET_MAKE) COMMIT
 	$(QUIET_JULIA) cd base && \
 	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***"
 
@@ -63,12 +69,16 @@ JL_PRIVATE_LIBS = amd arpack camd ccolamd cholmod colamd \
                   umfpack z openblas
 
 PREFIX ?= julia-$(JULIA_COMMIT)
-install: release
+install:
+	@$(MAKE) $(QUIET_MAKE) debug
+	@$(MAKE) $(QUIET_MAKE) release
 	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" "share/julia/site/"$(VERSDIR) ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp -a $(BUILD)/bin $(PREFIX)
+ifneq ($(OS),WINNT)
 	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
+endif
 	-for suffix in $(JL_LIBS) ; do \
 		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
@@ -85,15 +95,19 @@ endif
 	# Copy in all .jl sources as well
 	cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
 ifeq ($(OS), WINNT)
-	-cp $(JULIAHOME)/contrib/windows/* $(PREFIX)
+	cp $(JULIAHOME)/contrib/windows/*.bat $(PREFIX)
 endif
 	cp $(JULIAHOME)/VERSION $(PREFIX)/share/julia/VERSION
+	$(MAKE) $(QUIET_MAKE) COMMIT
 	cp $(JULIAHOME)/COMMIT $(PREFIX)/share/julia/COMMIT
 
-dist: 
+dist:
 	rm -fr julia-*.tar.gz julia-$(JULIA_COMMIT)
-#	-$(MAKE) -C deps clean-openblas
-	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
+ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
+	@echo OpenBLAS must be rebuilt with OPENBLAS_DYNAMIC_ARCH=1 to use dist target
+	@false
+endif
+	@$(MAKE) install
 ifeq ($(OS), Darwin)
 	-./contrib/mac/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
@@ -108,7 +122,7 @@ ifeq ($(shell uname),MINGW32_NT-6.1)
 	done
 else
 	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_sjlj-1" "libstdc++-6" "libssp-0" ; do \
-		cp /usr/lib/gcc/i686-w64-mingw32/4.6/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
+		cp /usr/lib/gcc/$(ARCH)-w64-mingw32/4.6/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
 	done
 endif
 	zip -r -9 julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).zip julia-$(JULIA_COMMIT)
@@ -142,7 +156,8 @@ distclean: cleanall
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* clean distclean cleanall \
-	run-julia run-julia-debug run-julia-release
+	run-julia run-julia-debug run-julia-release COMMIT \
+	install dist
 
 test: release
 	@$(MAKE) $(QUIET_MAKE) -C test default

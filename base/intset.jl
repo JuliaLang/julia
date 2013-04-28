@@ -39,7 +39,7 @@ function add!(s::IntSet, n::Integer)
     return s
 end
 
-function add_each!(s::IntSet, ns)
+function union!(s::IntSet, ns)
     for n in ns
         add!(s, n)
     end
@@ -70,14 +70,14 @@ function delete!(s::IntSet, n::Integer)
     return n
 end
 
-function del_each!(s::IntSet, ns)
+function setdiff!(s::IntSet, ns)
     for n in ns
         delete!(s, n)
     end
     return s
 end
 
-setdiff(a::IntSet, b::IntSet) = del_each!(copy(a),b)
+setdiff(a::IntSet, b::IntSet) = setdiff!(copy(a),b)
 symdiff(a::IntSet, b::IntSet) = a $ b
 
 function empty!(s::IntSet)
@@ -181,8 +181,6 @@ function union!(s::IntSet, s2::IntSet)
 end
 
 union(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? union!(copy(s1), s2) : union!(copy(s2), s1))
-
-add_each!(s::IntSet, s2::IntSet) = union!(s, s2)
 
 function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit

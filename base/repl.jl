@@ -95,7 +95,7 @@ function show_backtrace(io::IO, t)
     lastfile = ""; lastline = -11; lastname = symbol("#")
     local fname, file, line
     for i = 1:length(t)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Bool), t[i], false)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), t[i], 0)
         if lkup === ()
             continue
         end

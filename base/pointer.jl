@@ -35,11 +35,11 @@ function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool)
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
           Array{T,N}, p, dims, own)
 end
-unsafe_ref(p::Ptr,i::Integer) = pointerref(p, int(i))
-unsafe_ref(p::Ptr) = unsafe_ref(p, 1)
-unsafe_assign(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, int(i))
-unsafe_assign{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T, x), int(i))
-unsafe_assign{T}(p::Ptr{T}, x) = unsafe_assign(p, convert(T,x), 1)
+unsafe_load(p::Ptr,i::Integer) = pointerref(p, int(i))
+unsafe_load(p::Ptr) = unsafe_load(p, 1)
+unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, int(i))
+unsafe_store!{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T, x), int(i))
+unsafe_store!{T}(p::Ptr{T}, x) = unsafe_store!(p, convert(T,x), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
 unsafe_pointer_to_objref(p::Ptr) = pointertoref(unbox(Ptr{Void},p))

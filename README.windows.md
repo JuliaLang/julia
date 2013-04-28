@@ -45,7 +45,9 @@ On Windows, you can get the mingw/msys environment from http://www.mingw.org/wik
 4. At command prompt, type - "mingw-get install wget" - to install wget
 5. Install 7-zip (http://www.7-zip.org/download.html), if you don't have it already
 5. Download Python-2.6.7_msys.7z from [here](https://osspack32.googlecode.com/files/python-2.6.7_msys.7z) and extract files (using 7-Zip) to respective locations in C:\MinGw\msys\1.0 path, i.e., bin, lib, libs, to get Python 2.6.7
-6. Add the following line -  _CRTIMP int __cdecl _resetstkoflw (void); - to C:\MinGW\include\malloc.h at Line 76. This helped in tackling _resetstkoflw errors being showed in compiling codegen.cpp
+6. Download msysGIT from [here](https://code.google.com/p/msysgit/downloads/list), install (choose the option to use Git from the Windows Command Prompt when asked)
+7. Add the following line -  _CRTIMP int __cdecl _resetstkoflw (void); - to C:\MinGW\include\malloc.h at Line 76. This helped in tackling _resetstkoflw errors being showed in compiling codegen.cpp
+8. Log out and back in to make sure the changes to the Path variable are available
 
 The recommended way to setup your environment follows:
 
@@ -100,9 +102,4 @@ If you are building for 64-bit windows. The steps are pretty much the same. Just
 Important Build Errata
 ----------------------
 
-- Arpack 3.1.2 has an error in the tar file (a symlink from ./depcomp to a nonexistant file) that prevents it from being extracted on windows (cross-build is fine). To resolve this, we need a tar file that doesn't contain this symlink file. I found the easiest way to solve this was to run `make -C deps get-arpack` and then edit the arpack-*.tar.gz in 7zip to delete the depcomp symlink file before running the primary make target.
-
-- LLVM 3.x has an error on when compiling for 64-bit Windows that causes the build to fail when building the shared library file. Therefore, before building, you will need to change `--enable-shared` to `--disable-shared` in the `LLVM_FLAGS` variable in `deps/Makefile`.
-
-- The cross-build does not have access to git. If you want your sysimg to contain version information from the commit, remove the `#` from the line in Makefile that begins with @#echo `git rev-parse --short HEAD ...` and ends with `... > COMMIT`
-
+- None currently

@@ -187,8 +187,13 @@ export PipeString
 @deprecate  remote_call_wait    remotecall_wait
 @deprecate  has(s::Set, x)      contains(s, x)
 @deprecate  has(s::IntSet, x)   contains(s, x)
+@deprecate  has(d,k)            haskey(d,k)
 @deprecate  diagmm              scale
 @deprecate  diagmm!             scale!
+@deprecate  unsafe_ref          unsafe_load
+@deprecate  unsafe_assign       unsafe_store!
+@deprecate  add_each!           union!
+@deprecate  del_each!           setdiff!
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)
@@ -201,3 +206,6 @@ const ref = getindex
 export ref
 const assign = setindex!
 export assign
+
+typealias ComplexPair Complex
+export ComplexPair
