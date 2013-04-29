@@ -26,7 +26,7 @@ export copy!,
 
 const libblas = Base.libblas_name
 
-import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int
+import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, DimensionMismatch
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
@@ -104,7 +104,8 @@ for (fname, elty, relty) in ((:zdotc_,:Complex128,:Float64), (:cdotc_,:Complex64
 end
 function dot{T<:BlasFloat}(DX::Array{T}, DY::Array{T})
     n = length(DX)
-    if n != length(DY) throw(DimensionMismatch) end
+    if n != length(DY) throw(DimensionMismatch("Cannot form dot product of vectors of different lengths: ",
+        size(DX), " and ", size(DY))) end
     return dot(n, DX, 1, DY, 1)
 end
 

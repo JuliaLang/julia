@@ -5,26 +5,6 @@ const liblapack = Base.liblapack_name
 
 import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int
 
-type LAPACKException <: Exception
-    info::BlasInt
-end
-
-type SingularException <: Exception
-    info::BlasInt
-end
-
-type PosDefException <: Exception
-    info::BlasInt
-end
-
-type RankDeficientException <: Exception
-    info::BlasInt
-end
-
-type DimensionMismatch <: Exception
-    name::ASCIIString
-end
-
 function chkstride1(A::StridedVecOrMat...)
     for a in A
         if stride(a,1) != 1 error("LAPACK: Matrix must have contiguous columns") end
