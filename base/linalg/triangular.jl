@@ -4,7 +4,7 @@ type Triangular{T<:BlasFloat} <: AbstractMatrix{T}
     uplo::Char
     unitdiag::Char
     function Triangular(A::Matrix{T}, uplo::Char, unitdiag::Char)
-        if size(A, 1) != size(A, 2) throw(LAPACK.DimensionMismatch("Matrix must be square")) end
+        if size(A, 1) != size(A, 2) throw(DimensionMismatch("Matrix must be square")) end
         return new(A, uplo, unitdiag)
     end
 end
@@ -45,17 +45,17 @@ A_mul_Bc{T<:Union(Float64, Float32)}(A::StridedMatrix{T}, B::Triangular{T}) = BL
 
 function \(A::Triangular, B::StridedVecOrMat)
     r, info = LAPACK.trtrs!(A.uplo, 'N', A.unitdiag, A.UL, copy(B))
-    if info > 0 throw(LAPACK.SingularException(info)) end
+    if info > 0 throw(SingularException(info)) end
     return r
 end
 function Ac_ldiv_B{T<:Union(Float64, Float32)}(A::Triangular{T}, B::StridedVecOrMat{T}) 
     r, info = LAPACK.trtrs!(A.uplo, 'T', A.unitdiag, A.UL, copy(B))
-    if info > 0 throw(LAPACK.SingularException(info)) end
+    if info > 0 throw(SingularException(info)) end
     return r
 end
 function Ac_ldiv_B{T<:Union(Complex128, Complex64)}(A::Triangular{T}, B::StridedVecOrMat{T})
     r, info = LAPACK.trtrs!(A.uplo, 'C', A.unitdiag, A.UL, copy(B))
-    if info > 0 throw(LAPACK.SingularException(info)) end
+    if info > 0 throw(SingularException(info)) end
     return r
 end
 /{T<:BlasFloat}(A::StridedVecOrMat{T}, B::Triangular{T}) = BLAS.trsm!('R', B.uplo, 'N', B.unitdiag, one(T), B.UL, copy(A))
