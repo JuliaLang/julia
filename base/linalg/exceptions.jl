@@ -1,7 +1,15 @@
-export LAPACKException, SingularException, PosDefException,
-    RankDeficientException, DimensionMismatch
+export LAPACKException,
+       ARPACKException,
+       SingularException,
+       PosDefException,
+       RankDeficientException,
+       DimensionMismatch
 
 type LAPACKException <: Exception
+    info::BlasInt
+end
+
+type ARPACKException <: Exception
     info::BlasInt
 end
 
