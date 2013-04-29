@@ -157,13 +157,13 @@ for s in {:searchsortedfirst, :searchsortedlast}
     end
 end
 
-searchsortedlast{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real, o::Ordering) = searchsortedlast(a, x)
-searchsortedfirst{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real, o::Ordering) = searchsortedfirst(a, x)
-function searchsortedlast{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real)
-    max(min(int(fld(x - a[1], step(a))) + 1, length(a)), 0)
+searchsortedlast{T <: Real}(a::Ranges{T}, x::Real, o::Ordering) = searchsortedlast(a, x)
+searchsortedfirst{T <: Real}(a::Ranges{T}, x::Real, o::Ordering) = searchsortedfirst(a, x)
+function searchsortedlast{T <: Real}(a::Ranges{T}, x::Real)
+    max(min(int(fld(x - first(a), step(a))) + 1, length(a)), 0)
 end
-function searchsortedfirst{T <: Real}(a::Union(Range{T}, Range1{T}), x::Real)
-    n = x - a[1]
+function searchsortedfirst{T <: Real}(a::Ranges{T}, x::Real)
+    n = x - first(a)
     s = step(a)
     max(min(int(fld(n, s)) + (rem(n, s) != 0), length(a)), 0) + 1
 end
