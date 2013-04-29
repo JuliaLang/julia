@@ -53,7 +53,7 @@ function colon{T<:Real}(start::T, step::T, stop::T)
             end
         else
             n = nf
-            len = iround(n)
+            len = itrunc(n)
         end
         if n >= typemax(Int)
             error("Range: length ",n," is too large")
@@ -65,11 +65,17 @@ function colon{T<:Real}(start::T, stop::T)
     if stop < start
         len = 0
     else
-        n = round(stop-start+1)
+        nf = stop - start + 1
+        if T <: FloatingPoint
+            n = round(nf)
+            len = abs(n-nf) < eps(n)*3 ? itrunc(n) : itrunc(nf)
+        else
+            n = nf
+            len = itrunc(n)
+        end
         if n >= typemax(Int)
             error("Range: length ",n," is too large")
         end
-        len = itrunc(n)
     end
     Range1(start, len)
 end
@@ -279,3 +285,8 @@ function map!(f, dest, r::Ranges)
 end
 
 map(f, r::Ranges) = [ f(x) for x in r ]
+
+function contains(r::Ranges, x)
+    n = ifloor((x-first(r))/step(r))+1
+    n >= 1 && n <= length(r) && r[n] == x
+end
