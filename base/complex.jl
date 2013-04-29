@@ -219,15 +219,31 @@ end
 angle(z::Complex) = atan2(imag(z), real(z))
 
 function sin(z::Complex)
-    r, i = reim(z)
-    complex(sin(r)*cosh(i), cos(r)*sinh(i))
+    zr, zi = reim(z)
+    if !isfinite(zi) && zr == 0 return complex(zr, zi) end
+    if isnan(zr) && !isfinite(zi) return complex(zr, zi) end
+    if !isfinite(zr) && zi == 0 return complex(oftype(zr, NaN), zi) end
+    if !isfinite(zr) && isfinite(zi) return complex(oftype(zr, NaN), oftype(zi, NaN)) end
+    if !isfinite(zr) && !isfinite(zi) return complex(zr, oftype(zi, NaN)) end
+    wr = sin(zr)*cosh(zi)
+    wi = cos(zr)*sinh(zi)
+    complex(wr, wi)
 end
 
 function cos(z::Complex)
-    r, i = reim(z)
-    complex(cos(r)*cosh(i),-sin(r)*sinh(i))
+    zr, zi = reim(z)
+    if !isfinite(zi) && zr == 0 
+        return complex(isnan(zi) ? zi : oftype(zi, Inf),
+                       isnan(zi) ? zr : zr*-sign(zi)) end
+    if !isfinite(zr) && isinf(zi)
+        return complex(oftype(zr, Inf), oftype(zi, NaN)) end
+    if isinf(zr)
+        return complex(oftype(zr, NaN), zi==0 ? -copysign(zi, zr) : oftype(zi, NaN)) end
+    if isnan(zr) && zi==0 return complex(zr, abs(zi)) end
+    wr =  cos(zr)*cosh(zi)
+    wi = -sin(zr)*sinh(zi)
+    complex(wr, wi)
 end
-
 
 function ssqs{T}(z::Complex{T})
     k::Int=0
@@ -236,7 +252,8 @@ function ssqs{T}(z::Complex{T})
     if !isfinite(ρ) && (isinf(x) || isinf(y))
         ρ=convert(T, Inf)
     elseif isinf(ρ) || (ρ==zero(ρ) && (x!=zero(x) || y!=zero(y))) || ρ<nextfloat(zero(T))/(2*eps(T)^2)
-        k=exponent(max(abs(x), abs(y)))
+        z::T=max(abs(x), abs(y))
+        k= z==0 ? z : exponent(z)
         ρ=ldexp(x,-k)^2+ldexp(y,-k)^2
     end
     ρ, k
@@ -282,48 +299,55 @@ log10(z::Complex) = log(z)/oftype(real(z),2.302585092994046)
 log2(z::Complex) = log(z)/oftype(real(z),0.6931471805599453)
 
 function exp(z::Complex)
-    er = exp(real(z))
-    complex(er*cos(imag(z)), er*sin(imag(z)))
+    zr, zi = reim(z)
+    if isfinite(zr) && !isfinite(zi) return complex(oftype(zr, NaN), oftype(zi, NaN)) end
+    if zr==Inf && zi==0 return complex(zr, zi) end
+    if zr==-Inf && !isfinite(zi) return complex(-zero(zr), copysign(zero(zi), zi)) end
+    if zr==Inf && !isfinite(zi) return complex(-zr, oftype(zr, NaN)) end
+    if isnan(zr) return complex(zr, zi==0 ? zi : zr) end
+    er = zr==Inf ? zr : exp(zr)
+    wr = er*(isfinite(zi) ? cos(zi) : zi) 
+    wi = er*(isfinite(zi) ? sin(zi) : zi) 
+    complex(wr, wi) 
 end
 
-#XXX This appear to break tests. Why?
-#function ^{T<:FloatingPoint}(z::Complex{T}, p::Complex{T})
-#    if p==2 #square
-#        x = (realz-imagz)*(realz+imagz)
-#        y = 2realz*imagz
-#        if isnan(x)
-#            if isinf(y)
-#                x=copysign(zero(T),realz)
-#            elseif isinf(imagz)
-#                x=-Inf
-#            elseif isinf(realz)
-#                x=Inf
-#            end
-#        elseif isnan(y) && isinf(x)
-#            y=copysign(zero(T), y)
-#        end
-#        complex(x,y)
-#    elseif z!=zero(z)
-#    if z!=zero(z)
-#        exp(p*log(z))
-#    elseif p!=zero(p) #0^p
-#        zero(z) #CHECK SIGNS
-#    else #0^0
-#        zer=copysign(zero(T),real(p))*copysign(zero(T),imag(z))
-#        complex(one(T), zer)
-#    end
-#end
+function ^{T<:FloatingPoint}(z::Complex{T}, p::Complex{T})
+    if p==2 #square
+        zr, zi = reim(z)
+        x = (zr-zi)*(zr+zi)
+        y = 2zr*zi
+        if isnan(x)
+            if isinf(y)
+                x=copysign(zero(T),zr)
+            elseif isinf(zi)
+                x=-Inf
+            elseif isinf(zr)
+                x=Inf
+            end
+        elseif isnan(y) && isinf(x)
+            y=copysign(zero(T), y)
+        end
+        complex(x,y)
+    elseif z!=zero(z)
+        exp(p*log(z))
+    elseif p!=zero(p) #0^p
+        zero(z) #CHECK SIGNS
+    else #0^0
+        zer=copysign(zero(T),real(p))*copysign(zero(T),imag(z))
+        complex(one(T), zer)
+    end
+end
 
 function ^{T<:Complex}(z::T, p::T)
-    realp = real(p); imagp = imag(p)
-    realz = real(z); imagz = imag(z)
+    pr, pim = reim(p)
+    zr, zi = reim(z)
     r = abs(z)
-    rp = r^realp
-    theta = atan2(imagz, realz)
-    ntheta = realp*theta
-    if imagp != 0 && r != 0
-        rp = rp*exp(-imagp*theta)
-        ntheta = ntheta + imagp*log(r)
+    rp = r^pr
+    theta = atan2(zi, zr)
+    ntheta = pr*theta
+    if pim != 0 && r != 0
+        rp = rp*exp(-pim*theta)
+        ntheta = ntheta + pim*log(r)
     end
     cosntheta = cos(ntheta)
     sinntheta = sin(ntheta)
@@ -338,12 +362,12 @@ function ^{T<:Complex}(z::T, p::T)
     end
 
     # apply some corrections to force known zeros
-    if imagp == 0
-        ip = itrunc(realp)
-        if ip == realp
-            if imagz == 0
+    if pim == 0
+        ip = itrunc(pr)
+        if ip == pr
+            if zi == 0
                 im = copysign(zero(im), im)
-            elseif realz == 0
+            elseif zr == 0
                 if isodd(ip)
                     re = copysign(zero(re), re)
                 else
@@ -351,10 +375,10 @@ function ^{T<:Complex}(z::T, p::T)
                 end
             end
         else
-            dr = realp*2
+            dr = pr*2
             ip = itrunc(dr)
-            if ip == dr && imagz == 0
-                if realz < 0
+            if ip == dr && zi == 0
+                if zr < 0
                     re = copysign(zero(re), re)
                 else
                     im = copysign(zero(im), im)
@@ -368,23 +392,40 @@ end
 
 
 function tan(z::Complex)
-    rz, iz = reim(z)
-    sinhi = sinh(iz)
-    coshi = cosh(iz)
-    sinr = sin(rz)
-    cosr = cos(rz)
-    complex(sinr*coshi,cosr*sinhi)/complex(cosr*coshi,-sinr*sinhi)
+    zr, zi = reim(z)
+    w=tanh(complex(-zi, zr))
+    complex(imag(w), -real(w))
 end
 
 function asin(z::Complex)
-    ξ=atan2(x, real(sqrt(1-z)*sqrt(1+z)))
-    η=asinh(imag(sqrt(conj(1-z))*sqrt(1+z)))
+    zr, zi= reim(z)
+    if isinf(zr) && isinf(zi)
+        return complex(copysign(pi/4, zr),zi) 
+    elseif isnan(zi) && isinf(zr) return complex(zi, oftype(zr, Inf)) end
+    ξ= zr==0 ? zr : !isfinite(zr) ? pi/2*sign(zr) : atan2(zr, real(sqrt(1-z)*sqrt(1+z)))
+    η=asinh(copysign(imag(sqrt(conj(1-z))*sqrt(1+z)), imag(z)))
     complex(ξ,η)
 end
  
 function acos(z::Complex)
+    zr, zi=reim(z)
+    if isnan(zr)
+        if isinf(zi) return complex(zr, -zi)
+        else return complex(zr, zr) end
+    elseif isnan(zi)
+        if isinf(zr) return complex(zi, abs(zr))
+        elseif zr==0 return complex(pi/2, zi)
+        else return complex(zi, zi) end
+    elseif zr==zi==0
+        return complex(pi/2, -zi)
+    elseif zr==Inf && zi===0.0
+        return complex(zi, -zr)
+    elseif zr==-Inf && zi===-0.0
+        return complex(oftype(zi, pi), -zr)
+    end
     ξ = 2*atan2(real(sqrt(1-z)), real(sqrt(1+z)))
     η = asinh(imag(sqrt(conj(1+z))*sqrt(1-z)))
+    if isinf(zr) && isinf(zi) ξ -= pi/4 * sign(zr) end
     complex(ξ,η)
 end
  
@@ -394,20 +435,26 @@ function atan(z::Complex)
 end
 
 function sinh(z::Complex)
-    w = sin(complex(imag(z),real(z)))
+    zr, zi = reim(z)
+    if isinf(zr) && isinf(zi)
+        return complex(zr, oftype(zi, NaN)) end
+    w = sin(complex(zi, zr))
     complex(imag(w),real(w))
 end
 
 function cosh(z::Complex)
-    cos(complex(-imag(z),real(z)))
+    zr, zi = reim(z)
+    if isnan(zr) && zi==0 return complex(zr, zi) end
+    cos(complex(-zi,zr))
 end
 
 function tanh{T}(z::Complex{T})
     const Ω=prevfloat(typemax(T))
     ξ=real(z)
     η=imag(z)
+    if isnan(ξ) && η==0 return complex(ξ, η) end
     if 4*abs(ξ) > asinh(Ω) #Overflow?
-        complex(copysign(one(T),ξ), copysign(zero(T),η))
+        complex(copysign(one(T),ξ), copysign(zero(T),η*(isfinite(η) ? sin(2*abs(η)) : 1)))
     else
         t = tan(η)
         β = 1+t^2 #sec(η)^2
@@ -427,8 +474,20 @@ function asinh(z::Complex)
 end
 
 function acosh(z::Complex)
+    zr, zi=reim(z)
+    if isnan(zr) || isnan(zi)
+        if isinf(zr) || isinf(zi)
+            return complex(oftype(zr, Inf), oftype(zi, NaN))
+        else
+            return complex(oftype(zr, NaN), oftype(zi, NaN))
+        end
+    elseif zr==-Inf && zi===-0.0 #Edge case is wrong - WHY?
+        return complex(Inf, -pi)
+    end
     ξ=asinh(real(sqrt(conj(z-1))*sqrt(z+1)))
     η=2atan2(imag(sqrt(z-1)),real(sqrt(z+1)))
+    if isinf(zr) && isinf(zi)
+        η -= pi/4 * sign(zi) * sign(zr) end
     complex(ξ, η)
 end
 
