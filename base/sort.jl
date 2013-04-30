@@ -15,6 +15,7 @@ export # also exported by Base
     select,
     select!,
     issorted,
+    searchsorted,
     searchsortedfirst,
     searchsortedlast,
     InsertionSort,
@@ -149,7 +150,27 @@ function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     return lo
 end
 
-for s in {:searchsortedfirst, :searchsortedlast}
+# returns the range of indices of v equal to x
+# if v does not contain x, returns a 0-length range 
+# indicating the insertion point of x
+function searchsorted(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
+    lo = lo-1
+    hi = hi+1
+    while lo < hi-1
+        m = (lo+hi)>>>1
+        if lt(o, v[m], x)
+            lo = m
+        elseif lt(o, x, v[m])
+            hi = m
+        else
+            return searchsortedfirst(v, x, max(lo,1), m, o):searchsortedlast(v, x, m, min(hi,length(v)), o)
+        end
+    end
+    return lo+1:hi-1
+end
+
+
+for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}
     @eval begin
         $s             (v::AbstractVector, x, o::Ordering) = $s(v, x, 1, length(v), o)
         $s{O<:Ordering}(v::AbstractVector, x, ::Type{O})   = $s(v, x, O())
@@ -158,15 +179,16 @@ for s in {:searchsortedfirst, :searchsortedlast}
 end
 
 searchsortedlast{T <: Real}(a::Ranges{T}, x::Real, o::Ordering) = searchsortedlast(a, x)
+searchsortedlast{T <: Real}(a::Ranges{T}, x::Real) = max(min(int(fld(x - first(a), step(a))) + 1, length(a)), 0)
+
 searchsortedfirst{T <: Real}(a::Ranges{T}, x::Real, o::Ordering) = searchsortedfirst(a, x)
-function searchsortedlast{T <: Real}(a::Ranges{T}, x::Real)
-    max(min(int(fld(x - first(a), step(a))) + 1, length(a)), 0)
-end
 function searchsortedfirst{T <: Real}(a::Ranges{T}, x::Real)
     n = x - first(a)
     s = step(a)
     max(min(int(fld(n, s)) + (rem(n, s) != 0), length(a)), 0) + 1
 end
+
+searchsorted{T <: Real}(a::Ranges{T}, x::Real) = searchsortedfirst(a,x):searchsortedlast(a,x)
 
 ## sorting algorithms ##
 
