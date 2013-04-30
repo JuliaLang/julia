@@ -524,6 +524,7 @@ export
     rot180,
     rotl90,
     rotr90,
+    searchsorted,
     searchsortedfirst,
     searchsortedlast,
     select,
