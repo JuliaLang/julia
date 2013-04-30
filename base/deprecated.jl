@@ -50,7 +50,6 @@ end
 @deprecate  nCr             binomial
 @deprecate  julia_pkgdir    Pkg.dir
 @deprecate  tintersect      typeintersect
-@deprecate  searchsorted    searchsortedfirst
 @deprecate  choose          first
 @deprecate  system          run
 @deprecate  order           sortperm
