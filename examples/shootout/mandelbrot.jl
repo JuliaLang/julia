@@ -8,7 +8,7 @@ const ITER = 50
 function mandel(z::Complex128)
     c = z
     for n = 1:ITER
-        if abs(z) > 2
+        if abs2(z) > 4
             return false
         end
         z = z^2 + c
@@ -46,5 +46,5 @@ function main(args, stream)
     flush(stream)
 end
 
-#main([1600], open("mandel.txt", "w"))
+#@time main([16000], open("mandel.txt", "w"))
 main(ARGS, STDOUT)
