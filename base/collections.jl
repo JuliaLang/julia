@@ -1,8 +1,8 @@
 
 module Collections
 
-import Base: setindex!, done, get, has, isempty, length, next, getindex, start
-import ..Sort: Forward, Ordering, It, lt
+import Base: setindex!, done, get, haskey, isempty, length, next, getindex, start
+import ..Sort: Forward, Ordering, lt
 
 export
     PriorityQueue,
@@ -141,7 +141,7 @@ type PriorityQueue{K,V} <: Associative{K,V}
         index = Dict{K, Int}()
         for (i, (k, v)) in enumerate(zip(ks, vs))
             xs[i] = (k, v)
-            if has(index, k)
+            if haskey(index, k)
                 error("PriorityQueue keys must be unique.")
             end
             index[k] = i
@@ -180,7 +180,7 @@ end
 
 length(pq::PriorityQueue) = length(pq.xs)
 isempty(pq::PriorityQueue) = isempty(pq.xs)
-has(pq::PriorityQueue, key) = has(pq.index, key)
+haskey(pq::PriorityQueue, key) = haskey(pq.index, key)
 peek(pq::PriorityQueue) = pq.xs[1]
 
 
@@ -232,7 +232,7 @@ end
 
 # Change the priority of an existing element, or equeue it if it isn't present.
 function setindex!{K,V}(pq::PriorityQueue{K, V}, value, key)
-    if has(pq, key)
+    if haskey(pq, key)
         i = pq.index[key]
         _, oldvalue = pq.xs[i]
         pq.xs[i] = (key, value)
@@ -248,7 +248,7 @@ end
 
 
 function enqueue!{K,V}(pq::PriorityQueue{K,V}, key, value)
-    if has(pq, key)
+    if haskey(pq, key)
         error("PriorityQueue keys must be unique.")
     end
 
