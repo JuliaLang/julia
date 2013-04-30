@@ -101,7 +101,7 @@ macro which(ex)
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
-            if isa(a11, TopNode) && a11.name == :setindex!
+            if a11 == :setindex!
                 exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
             end
         end
