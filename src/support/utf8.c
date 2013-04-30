@@ -357,11 +357,7 @@ char read_escape_control_char(char c)
     else if (c == 'r')
         return '\r';
     else if (c == 'e')
-#if defined(_COMPILER_GCC_) || defined(_COMPILER_MINGW_)
-        return '\e';
-#else
         return '\x1B';
-#endif /* _COMPILER_GCC_ || _COMPILER_MINGW_ */
     else if (c == 'b')
         return '\b';
     else if (c == 'f')
@@ -457,11 +453,7 @@ int u8_escape_wchar(char *buf, size_t sz, uint32_t ch)
         return buf_put2c(buf, "\\t");
     else if (ch == L'\r')
         return buf_put2c(buf, "\\r");
-#if defined(_COMPILER_GCC_) || defined(_COMPILER_MINGW_)
-    else if (ch == L'\e')
-#else
     else if (ch == L'\x1B')
-#endif /* _COMPILER_GCC_ || _COMPILER_MINGW_ */
         return buf_put2c(buf, "\\e");
     else if (ch == L'\b')
         return buf_put2c(buf, "\\b");
