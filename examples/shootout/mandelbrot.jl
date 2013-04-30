@@ -1,50 +1,40 @@
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
 #
-# Contributed by David Campbell
-
-const ITER = 50
-
-function mandel(z::Complex128)
-    c = z
-    for n = 1:ITER
-        if abs(z) > 2
-            return false
-        end
-        z = z^2 + c
-    end
-    return true
+# Based on C/Scala implementations
+function mandel(n)
+    f = open("mandelbrot-output.txt","w")
+	bit_num = 0
+	byte_acc = 0
+	write(f,"P4\n$n $n\n")
+	for y = 0:n-1, x = 0:n-1
+		zr = zi = 0.0 
+		tr = ti = 0.0
+		cr = (2.0*x/n - 1.5)
+		ci = (2.0*y/n - 1.0)
+		for i = 1:50
+			zi = 2.0*zr*zi + ci
+			zr = tr - ti + cr
+			tr = zr*zr
+			ti = zi*zi
+			tr+ti > 4.0 && break
+		end
+		byte_acc <<= 1
+		tr+ti <= 4.0 && (byte_acc += 1)
+		bit_num += 1
+		if x == n-1
+			byte_acc <<= 8
+			bit_num = 8
+		end
+		if bit_num == 8
+			write(f,char(byte_acc))
+			byte_acc = 0
+			bit_num = 0
+		end
+	end
+	close(f)
 end
-
-function draw_mandel(M::Array{Uint8, 2}, n::Int)
-    for y = 0:n-1
-        ci = 2y/n - 1
-        for x = 0:n-1
-            c = complex(2x/n - 1.5, ci)
-            if mandel(c)
-                M[div(x, 8) + 1, y + 1] |= 1 << uint8(7 - x%8)
-            end
-        end
-    end
-end
-
-function main(args, stream)
-    if length(args) > 0
-        n = int(args[1])
-    else
-        n = 200
-    end
-
-    if n%8 != 0
-        error("Error: n of $n is not divisible by 8")
-    end
-
-    M = zeros(Uint8, div(n, 8), n)
-    draw_mandel(M, n)
-    write(stream, "P4\n$n $n\n")
-    write(stream, M)
-    flush(stream)
-end
-
-#main([1600], open("mandel.txt", "w"))
-main(ARGS, STDOUT)
+mandel(int(ARGS[1]))
+#@time mandel(1000)
+#@time mandel(4000)
+#@time mandel(16000)
