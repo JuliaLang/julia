@@ -18,6 +18,11 @@
 @test searchsortedlast([1, 1, 2, 2, 3, 3], 2) == 4
 @test searchsortedlast([1, 1, 2, 2, 3, 3], 4) == 6
 @test searchsortedlast([1.0, 1, 2, 2, 3, 3], 2.5) == 4
+@test searchsorted([1, 1, 2, 2, 3, 3], 0) == 1:0
+@test searchsorted([1, 1, 2, 2, 3, 3], 1) == 1:2
+@test searchsorted([1, 1, 2, 2, 3, 3], 2) == 3:4
+@test searchsorted([1, 1, 2, 2, 3, 3], 4) == 7:6
+@test searchsorted([1.0, 1, 2, 2, 3, 3], 2.5) == 5:4
 
 rg = 49:57; rgv = [rg]
 rg_r = 57:-1:49; rgv_r = [rg_r]
