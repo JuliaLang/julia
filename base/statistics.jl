@@ -111,17 +111,6 @@ midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 
 ## hist ##
-function hist(v::AbstractVector, r::Ranges)
-    n = length(r)-1
-    h = zeros(Int, n)
-    for x in v
-        i = iceil((x-first(r))/step(r))
-        if 1 <= i <= n
-            h[i] += 1
-        end
-    end
-    r,h
-end
 hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
 hist(v::AbstractVector) = hist(v,iceil(log2(length(v)))+1) # Sturges' formula 
 

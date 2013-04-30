@@ -44,6 +44,6 @@ end
 
 function inv(A::CholeskyDenseRFP)
     B, info = LAPACK.pftri!(A.transr, A.uplo, copy(A.data))
-    if info > 0 throw(LAPACK.SingularException(info)) end
+    if info > 0 throw(SingularException(info)) end
     return B
 end

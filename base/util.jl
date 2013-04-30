@@ -130,7 +130,15 @@ function find_source_file(file)
 end
 
 function edit(file::String, line::Integer)
-    editor = get(ENV, "JULIA_EDITOR", "emacs")
+    if OS_NAME == :Windows || OS_NAME == :Darwin
+        default_editor = "open"
+    elseif isreadable("/etc/alternatives/editor")
+        default_editor = "/etc/alternatives/editor"
+    else
+        default_editor = "emacs"
+    end
+    envvar = haskey(ENV,"JULIA_EDITOR") ? "JULIA_EDITOR" : "EDITOR"
+    editor = get(ENV, envvar, default_editor)
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         file = find_source_file(file)
@@ -151,18 +159,12 @@ function edit(file::String, line::Integer)
         run(`mate $file -l $line`)
     elseif editor == "subl"
         run(`subl $file:$line`)
-    elseif editor == "notepad"
-        run(`notepad $file`)
-    elseif editor == "start" || editor == "open"
-        if OS_NAME == :Windows
-            run(`start /b $file`)
-        elseif OS_NAME == :Darwin
-            run(`open -t $file`)
-        else
-            error("Don't know how to launch the default editor on your platform")
-        end
+    elseif OS_NAME == :Windows && (editor == "start" || editor == "open")
+        run(`start /b $file`)
+    elseif OS_NAME == :Darwin && (editor == "start" || editor == "open")
+        run(`open -t $file`)
     else
-        error("Invalid JULIA_EDITOR value: $(repr(editor))")
+        run(`$editor $file`)
     end
     nothing
 end
