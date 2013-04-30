@@ -68,7 +68,7 @@ function checkbounds{T<:Integer}(sz::Int, I::Ranges{T})
     end
 end
 
-function checkbounds{T <: Real}(sz::Int, I::AbstractVector{T})
+function checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
     for i in I
         i = to_index(i)
         if i < 1 || i > sz
