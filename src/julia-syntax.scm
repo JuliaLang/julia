@@ -2641,7 +2641,13 @@ So far only the second case can actually occur.
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-	((escape call)  '())
+	((escape)  '())
+	((keywords parameters)
+	 (find-assigned-vars-in-expansion
+	  (map (lambda (x) (if (and (length= x 3) (assignment? x))
+			       (caddr x)
+			       '()))
+	       (cdr e))))
 	((= function)
 	 (append! (filter
 		   symbol?
