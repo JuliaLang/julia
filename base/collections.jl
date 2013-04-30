@@ -122,8 +122,8 @@ type PriorityQueue{K,V} <: Associative{K,V}
     xs::Array{(K, V), 1}
     o::Ordering
 
-    # Map elements to their index is xs
-    index::Dict
+    # Map elements to their index in xs
+    index::Dict{K, Int}
 
     function PriorityQueue(o::Ordering)
         new(Array((K, V), 0), o, Dict{K, Int}())
