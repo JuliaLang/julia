@@ -8,7 +8,7 @@ const ITER = 50
 function mandel(z::Complex128)
     c = z
     for n = 1:ITER
-        if abs2(z) > 4 #most expensive
+        if abs2(z) > 4
             return false
         end
         z = z^2 + c
