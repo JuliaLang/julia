@@ -22,15 +22,16 @@ function parse_requires(readable)
                 push!(ivals, VersionInterval(shift!(vers), shift!(vers)))
             end
         end
-        reqs[pkg] = haskey(reqs,pkg) ? intersect(reqs[pkg], ivals) : ivals
+        vset = VersionSet(ivals)
+        reqs[pkg] = haskey(reqs,pkg) ? intersect(reqs[pkg],vset) : vset
     end
     return reqs
 end
 parse_requires(file::String) = isfile(file) ? open(parse_requires,file) : Requires()
 
 function merge_requires!(A::Requires, B::Requires)
-    for (pkg, ivals) in B
-        A[pkg] = haskey(A,pkg) ? intersect(A[pkg], ivals) : ivals
+    for (pkg,vers) in B
+        A[pkg] = haskey(A,pkg) ? intersect(A[pkg],vers) : vers
     end
     return A
 end
