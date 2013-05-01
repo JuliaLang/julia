@@ -156,11 +156,10 @@ Sorting-related Functions
 
 .. function:: searchsorted(a, x[, ord])
 
-   Returns the index of the first value of ``a`` equal to or
-   succeeding ``x``, according to ordering ``ord`` (default:
-   ``Sort.Forward``).
-
-   Alias for ``searchsortedfirst()``
+   Returns the range of indices of ``a`` equal to ``x``, assuming ``a``
+   is sorted according to ordering ``ord`` (default:
+   ``Sort.Forward``).  Returns an empty range located at the insertion
+   point if ``a`` does not contain ``x``.
 
 .. function:: searchsortedfirst(a, x[, ord])
 
