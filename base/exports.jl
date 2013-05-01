@@ -318,6 +318,8 @@ export
     erfc,
     erfcx,
     erfi,
+    erfinv,
+    erfcinv,
     exp,
     exp2,
     expm1,

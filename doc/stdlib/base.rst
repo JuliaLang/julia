@@ -1527,6 +1527,16 @@ Mathematical Functions
    Compute the Dawson function (scaled imaginary error function) of ``x``,
    defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
 
+.. function:: erfinv(x)
+
+   Compute the inverse error function of a real ``x``,
+   defined by :math:`\operatorname{erf}(\operatorname{erfinv}(x)) = x`.
+
+.. function:: erfcinv(x)
+
+   Compute the inverse error complementary function of a real ``x``,
+   defined by :math:`\operatorname{erfc}(\operatorname{erfcinv}(x)) = x`.
+
 .. function:: real(z)
 
    Return the real part of the complex number ``z``
