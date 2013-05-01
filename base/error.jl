@@ -75,7 +75,7 @@ function info(msg::String...; depth=0)
     println(STDERR)
 end
 function warn(msg::String...; depth=0)
-    stack::Range1{Int} = 3 +
+    stack::Range1{Int} = 2 +
         if isa(depth,Int)
             depth:depth
         else
