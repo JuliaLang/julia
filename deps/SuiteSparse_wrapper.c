@@ -1,7 +1,7 @@
 #include <string.h>
 #include <cholmod.h>
 
-extern size_t jl_cholmod_common_size(size_t x) {
+extern size_t jl_cholmod_common_size(void) {
     return sizeof(cholmod_common);
 }
 
