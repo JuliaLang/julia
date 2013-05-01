@@ -693,7 +693,7 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
                 if (i > 0)
                     outc(' ', f);
                 cvalue_printdata(f, data, elsize, eltype, 1);
-                data += elsize;
+                data = (char *)data + elsize;
             }
             if (!weak)
                 outc(')', f);

@@ -11,11 +11,16 @@
 
 #if defined(_OS_WINDOWS_)
 
-#define snprintf _snprintf
+#define strtoull                                            _strtoui64
+#define strtoll                                             _strtoi64
+#define strcasecmp                                          _stricmp 
+#define strncasecmp                                         _strnicmp
+#define snprintf                                            _snprintf
+#define stat                                                _stat
 
-#define STDIN_FILENO 0
-#define STDOUT_FILENO 1
-#define STDERR_FILENO 2
+#define STDIN_FILENO                                        0
+#define STDOUT_FILENO                                       1
+#define STDERR_FILENO                                       2
 
 #if defined(_COMPILER_MICROSOFT_)
 #define isnan _isnan

@@ -42,8 +42,20 @@
 #include <locale.h>
 #include <limits.h>
 #include <errno.h>
+
+#include "platform.h"
+
+#if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
+#include <mathimf.h>
+#else
 #include <math.h>
+#endif
+#if defined(_OS_WINDOWS_)
+#include "libgen.h"
+#else
 #include <libgen.h>
+#endif
+
 #include "libsupport.h"
 #include "flisp.h"
 #include "opcodes.h"
@@ -2296,11 +2308,11 @@ static void lisp_init(size_t initial_heapsize)
     setc(symbol("procedure?"), builtin(OP_FUNCTIONP));
     setc(symbol("top-level-bound?"), builtin(OP_BOUNDP));
 
-#ifdef __linux__
+#if defined(_OS_LINUX_)
     set(symbol("*os-name*"), symbol("linux"));
-#elif defined(_WIN32) || defined(_WIN64)
+#elif defined(_OS_WINDOWS_)
     set(symbol("*os-name*"), symbol("win32"));
-#elif defined(__APPLE__)
+#elif defined(_OS_DARWIN_)
     set(symbol("*os-name*"), symbol("macos"));
 #else
     set(symbol("*os-name*"), symbol("unknown"));
