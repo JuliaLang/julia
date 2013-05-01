@@ -188,7 +188,7 @@ function warn_once(msg::String...; depth=0)
     msg = bytestring(msg...)
     haskey(have_warned,msg) && return
     have_warned[msg] = true
-    warn(msg; depth=depth+2)
+    warn(msg; depth=depth+1)
 end
 
 # openblas utility routines
