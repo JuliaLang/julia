@@ -26,6 +26,9 @@ end
 
 typealias Requires Dict{ByteString,VersionSet}
 
+satisfies(pkg::String, ver::VersionNumber, reqs::Requires) =
+	!haskey(reqs,pkg) || contains(reqs[pkg], ver)
+
 immutable Available
 	sha1::ASCIIString
 	requires::Requires
