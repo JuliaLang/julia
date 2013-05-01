@@ -1202,6 +1202,11 @@
 			  (call setindex! ,arr ,r ,@new-idxs)
 			  ,r)))))
 
+   (pattern-lambda (= (typed_hcat . any) rhs)
+		   (error "invalid spacing in left side of indexed assignment"))
+   (pattern-lambda (= (typed_vcat . any) rhs)
+		   (error "unexpected ; in left side of indexed assignment"))
+
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)
 				      (contains (lambda (x)
