@@ -9,6 +9,8 @@
 @test_approx_eq erfc(1) 0.15729920705028513066
 @test_approx_eq erfcx(1) 0.42758357615580700442
 @test_approx_eq erfi(1) 1.6504257587975428760
+@test_approx_eq erfinv(0.84270079294971486934) 1
+@test_approx_eq erfcinv(0.15729920705028513066) 1
 @test_approx_eq dawson(1) 0.53807950691276841914
 # TODO: complex versions only supported on 64-bit for now
 if WORD_SIZE==64
@@ -17,6 +19,17 @@ if WORD_SIZE==64
     @test_approx_eq erfcx(1+2im) 0.14023958136627794370-0.22221344017989910261im
     @test_approx_eq erfi(1+2im) -0.011259006028815025076+1.0036063427256517509im
     @test_approx_eq dawson(1+2im) -13.388927316482919244-11.828715103889593303im
+end
+for x in logspace(-200, -0.01)
+    @test_approx_eq_eps erf(erfinv(x)) x 1e-12*x
+    @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
+    @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
+    if x > 1e-20
+        xf = float32(x)
+        @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
+        @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
+        @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
+    end
 end
 
 # airy
