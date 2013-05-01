@@ -784,9 +784,9 @@ function erfinv(x::Float32)
     a = abs(x)
     if a >= 1.0f0
         if x == 1.0f0
-            return inf(Float64)
+            return inf(Float32)
         elseif x == -1.0f0
-            return -inf(Float64)
+            return -inf(Float32)
         end
         throw(DomainError())
     elseif a <= 0.75f0 # Table 10 in Blair et al.
