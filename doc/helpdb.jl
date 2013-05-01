@@ -2695,6 +2695,22 @@ FloatingPoint
 
 "),
 
+("Mathematical Functions","Base","erfinv","erfinv(x)
+
+
+   Compute the inverse error function of a real \"x\", 
+   so that \\operatorname{erf}(\\operatorname{erfinv}(x)) = x.
+
+"),
+
+("Mathematical Functions","Base","erfcinv","erfcinv(x)
+
+
+   Compute the inverse complementary error function of a real \"x\", 
+   so that \\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x.
+
+"),
+
 ("Mathematical Functions","Base","dawson","dawson(x)
 
 
