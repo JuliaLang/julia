@@ -51,7 +51,8 @@
 #include <math.h>
 #endif
 #if defined(_OS_WINDOWS_)
-#include "libgen.h"
+char * basename(char *);
+char * dirname(char *);
 #else
 #include <libgen.h>
 #endif
