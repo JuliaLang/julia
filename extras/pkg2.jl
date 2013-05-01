@@ -119,14 +119,14 @@ function installed(avail::Dict=available())
     return pkgs
 end
 
-function requirements(reqs::Dict, inst::Dict, avail::Dict)
+function requirements(reqs::Dict, inst::Dict)
     fixed = filter((p,f)->isa(f,Fixed), inst)
     for (p1,f1) in fixed
-        if haskey(reqs,p1) && !contains(reqs[p1], f1.version)
+        if !satisfies(p1, f1.version, reqs)
             warn("$p1 is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
         end
         for (p2,f2) in fixed
-            if haskey(f2.requires,p1) && !contains(f2.requires[p1], f1.version)
+            if !satisfies(p1, f1.version, f2.requires)
                 warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
             end
             merge_requires!(reqs,f2.requires)
@@ -135,8 +135,15 @@ function requirements(reqs::Dict, inst::Dict, avail::Dict)
     end
     reqs
 end
-requirements(reqs::Dict, inst::Dict) = requirements(reqs, inst, available())
-requirements(reqs::Dict) = (a=available(); requirements(reqs, installed(a), a))
-requirements() = requirements(parse_requires("REQUIRE"))
+requirements() = requirements(parse_requires("REQUIRE"), installed())
+
+function dependencies(avail::Dict, inst::Dict)
+    fixed = filter((p,f)->isa(f,Fixed), inst)
+    for (pkg,vers) in avail
+        for (ver,avail) in vers
+            
+        end
+    end
+end
 
 # end # module
