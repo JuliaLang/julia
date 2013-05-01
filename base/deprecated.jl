@@ -5,7 +5,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old)),
             :(function $(esc(old))(args...)
-                  warn_once(string($oldname," is deprecated, use ",$newname," instead."))
+                  warn_once(string($oldname," is deprecated, use ",$newname," instead."); depth=1)
                   $(esc(new))(args...)
               end))
     elseif isa(old,Expr) && old.head == :call
@@ -14,7 +14,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old.args[1])),
             :($(esc(old)) = begin
-                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."))
+                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."); depth=1)
                   $(esc(new))
               end))
     else
@@ -119,12 +119,12 @@ end
 @deprecate  unsetenv(var)           delete!(ENV,var)
 
 function svd(a::StridedMatrix, vecs::Bool, thin::Bool)
-    warn_once("The second argument ``vecs`` is no longer supported. Use svd(a, thin) instead.")
+    warn_once("The second argument ``vecs`` is no longer supported. Use svd(a, thin) instead."; depth=1)
     svd(a, thin)
 end
 
 function svdt(a::StridedMatrix, vecs::Bool, thin::Bool)
-    warn_once("The second argument ``vecs`` is no longer supported. Use svdt(a, thin) instead.")
+    warn_once("The second argument ``vecs`` is no longer supported. Use svdt(a, thin) instead."; depth=1)
     svdt(a, thin)
 end
 
