@@ -14,6 +14,7 @@ function gen_listpkg()
 
 	Pkg.update()
 	io=open("packages/packagelist.rst","w+");
+	print(io, ".. _available-packages:\n\n")
 	print(io, "********************\n Available Packages  \n********************\n\n")
 	cd(Pkg.dir()) do
 	for pkg in Pkg.Metadata.each_package()

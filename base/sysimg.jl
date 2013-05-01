@@ -137,6 +137,9 @@ include("sort.jl")
 importall .Sort
 include("combinatorics.jl")
 
+# basic data structures
+include("collections.jl")
+
 # distributed arrays and memory-mapped arrays
 include("darray2.jl")
 include("mmap.jl")

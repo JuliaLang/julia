@@ -2,6 +2,7 @@ export
 # Modules
     PCRE,
     FFTW,
+    Collections,
     DSP,
     LinAlg,
     LibRandom,
@@ -523,6 +524,7 @@ export
     rot180,
     rotl90,
     rotr90,
+    searchsorted,
     searchsortedfirst,
     searchsortedlast,
     select,

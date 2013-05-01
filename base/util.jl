@@ -101,7 +101,7 @@ macro which(ex)
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
-            if isa(a11, TopNode) && a11.name == :setindex!
+            if a11 == :setindex!
                 exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
             end
         end
@@ -184,11 +184,11 @@ less(f::Function, t) = less(functionloc(f,t)...)
 # print a warning only once
 
 const have_warned = (ByteString=>Bool)[]
-function warn_once(msg::String...)
+function warn_once(msg::String...; depth=0)
     msg = bytestring(msg...)
     haskey(have_warned,msg) && return
     have_warned[msg] = true
-    warn(msg)
+    warn(msg; depth=depth+1)
 end
 
 # openblas utility routines

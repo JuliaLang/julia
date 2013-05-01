@@ -414,6 +414,9 @@ end
 function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
+    if is(X,A)
+        X = copy(X)
+    end
     for i in I
         A[i] = X[count]
         count += 1

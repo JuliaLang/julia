@@ -22,22 +22,23 @@ function parse_requires(readable)
                 push!(ivals, VersionInterval(shift!(vers), shift!(vers)))
             end
         end
-        reqs[pkg] = haskey(reqs,pkg) ? intersect(reqs[pkg], ivals) : ivals
+        vset = VersionSet(ivals)
+        reqs[pkg] = haskey(reqs,pkg) ? intersect(reqs[pkg],vset) : vset
     end
     return reqs
 end
 parse_requires(file::String) = isfile(file) ? open(parse_requires,file) : Requires()
 
 function merge_requires!(A::Requires, B::Requires)
-    for (pkg, ivals) in B
-        A[pkg] = haskey(A,pkg) ? intersect(A[pkg], ivals) : ivals
+    for (pkg,vers) in B
+        A[pkg] = haskey(A,pkg) ? intersect(A[pkg],vers) : vers
     end
     return A
 end
 
-function available()
+function available(names=readdir("METADATA"))
     pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
-    for pkg in readdir("METADATA")
+    for pkg in names
         isfile("METADATA", pkg, "url") || continue
         versdir = joinpath("METADATA", pkg, "versions")
         isdir(versdir) || continue
@@ -53,11 +54,12 @@ function available()
     end
     return pkgs
 end
+available(pkg::String) = available([pkg])[pkg]
 
 isinstalled(pkg::String) =
     pkg != "METADATA" && pkg != "REQUIRE" && isfile(pkg, "src", "$pkg.jl")
 
-function isfixed(pkg::String, avail::Dict=available())
+function isfixed(pkg::String, avail::Dict=available(pkg))
     isinstalled(pkg) || error("$pkg is not an installed package.")
     isfile("METADATA", pkg, "url") || return true
     ispath(pkg, ".git") || return true
@@ -65,18 +67,18 @@ function isfixed(pkg::String, avail::Dict=available())
         Git.dirty() && return true
         Git.attached() && return true
         head = Git.head()
-        for (ver,info) in avail[pkg]
+        for (ver,info) in avail
             Git.is_ancestor_of(head, info.sha1) && return false
         end
         return true
     end
 end
 
-function installed_version(pkg::String, avail::Dict=available())
+function installed_version(pkg::String, avail::Dict=available(pkg))
     head = cd(Git.head,pkg)
     lo = typemin(VersionNumber)
     hi = typemin(VersionNumber)
-    for (ver,info) in avail[pkg]
+    for (ver,info) in avail
         head == info.sha1 && return ver
         base = cd(()->readchomp(`git merge-base $head $(info.sha1)`), pkg)
         if base == head # Git.is_ancestor_of(head, info.sha1)
@@ -90,11 +92,11 @@ function installed_version(pkg::String, avail::Dict=available())
         VersionNumber(hi.major, hi.minor, hi.patch, (), ("",))
 end
 
-function requires_path(pkg::String, avail::Dict=available())
+function requires_path(pkg::String, avail::Dict=available(pkg))
     cd(pkg) do
         Git.dirty("REQUIRE") && return joinpath(pkg, "REQUIRE")
         head = Git.head()
-        for (ver,info) in avail[pkg]
+        for (ver,info) in avail
             if head == info.sha1
                 return joinpath("METADATA", pkg, "versions", string(ver), "requires")
             end
@@ -102,18 +104,46 @@ function requires_path(pkg::String, avail::Dict=available())
         return joinpath(pkg, "REQUIRE")
     end
 end
-requires_dict(pkg::String, avail::Dict=available()) =
+requires_dict(pkg::String, avail::Dict=available(pkg)) =
     parse_requires(requires_path(pkg,avail))
 
 function installed(avail::Dict=available())
     pkgs = Dict{ByteString,Installed}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        pkgs[pkg] = !isfixed(pkg,avail) ? Free() :
-            Fixed(installed_version(pkg,avail), requires_dict(pkg,avail))
+        availpkg = avail[pkg]
+        pkgs[pkg] = !isfixed(pkg,availpkg) ? Free() :
+            Fixed(installed_version(pkg,availpkg), requires_dict(pkg,availpkg))
     end
     pkgs["julia"] = Fixed(VERSION)
     return pkgs
+end
+
+function requirements(reqs::Dict, inst::Dict)
+    fixed = filter((p,f)->isa(f,Fixed), inst)
+    for (p1,f1) in fixed
+        if !satisfies(p1, f1.version, reqs)
+            warn("$p1 is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
+        end
+        for (p2,f2) in fixed
+            if !satisfies(p1, f1.version, f2.requires)
+                warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
+            end
+            merge_requires!(reqs,f2.requires)
+        end
+        delete!(reqs,p1)
+    end
+    reqs
+end
+requirements() = requirements(parse_requires("REQUIRE"), installed())
+
+function dependencies(avail::Dict, inst::Dict)
+    fixed = filter((p,f)->isa(f,Fixed), inst)
+    for (pkg,vers) in avail
+        for (ver,avail) in vers
+            
+        end
+    end
 end
 
 # end # module
