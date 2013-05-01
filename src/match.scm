@@ -160,7 +160,7 @@
 ; for example
 ; (pattern-lambda (/ 2 3) '(/ 3 2)), (pattern-lambda (/ 3 2) '(/ 2 3))
 (define (pattern-expand plist expr)
-  (if (or (not (pair? expr)) (eq? (car expr) 'quote))
+  (if (or (not (pair? expr)) (eq? (car expr) 'quote) (eq? (car expr) 'varlist))
       expr
       (let ((enew (apply-patterns plist expr)))
 	(if (eq? enew expr)
