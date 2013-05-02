@@ -1,5 +1,5 @@
-#ifndef _PLATFORM_H_
-#define _PLATFORM_H_
+#ifndef PLATFORM_H
+#define PLATFORM_H
 
 /*
  * This file provides convenient macros to be used to identify the platform
@@ -79,5 +79,5 @@
 #define _CPU_ARM_
 #endif
 
-#endif /* !_PLATFORM_H_ */
+#endif /* !PLATFORM_H */
 
