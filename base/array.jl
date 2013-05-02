@@ -165,11 +165,17 @@ end
 
 # T[a:b] and T[a:s:b] also contruct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Ranges)
-    a = Array(T,length(r))
-    i = 1
-    for x in r
-        a[i] = x
-        i += 1
+    copy!(Array(T,length(r)), r)
+end
+
+function getindex{T<:Number}(::Type{T}, r1::Ranges, rs::Ranges...)
+    a = Array(T,length(r1)+sum(length,rs))
+    o = 1
+    copy!(a, r1, o)
+    o += length(r1)
+    for r in rs
+        copy!(a, r, o)
+        o += length(r)
     end
     return a
 end

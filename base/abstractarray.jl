@@ -167,8 +167,8 @@ function fill!(A::AbstractArray, x)
     return A
 end
 
-function copy!(dest::AbstractArray, src)
-    i = 1
+function copy!(dest::AbstractArray, src, dsto::Integer=1)
+    i = dsto
     for x in src
         dest[i] = x
         i += 1
