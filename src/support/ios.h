@@ -2,7 +2,7 @@
 #define IOS_H
 
 #include <stdarg.h>
-#include "../../usr/include/uv.h"
+#include "uv.h"
 
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
