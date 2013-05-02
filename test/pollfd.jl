@@ -12,7 +12,6 @@ function test_poll(timeout_ms)
     produce(rc)
 end
 
-
 function test_timeout(tval)
     t1 = int64(time() * 1000)
     t = Task(()->test_poll(tval))
@@ -54,4 +53,5 @@ test_timeout(100)
 test_timeout(1000)
 test_read(100)
 test_read(1000)
+
 end

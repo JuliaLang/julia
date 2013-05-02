@@ -25,6 +25,9 @@
 extern "C" {
 #endif
 
+// To be removed once we upgrade libuv
+#define uv_stat_t uv_statbuf_t
+
 /** libuv callbacks */
 
 /*
@@ -44,7 +47,9 @@ extern "C" {
 	XX(connectioncb) \
 	XX(asynccb) \
     XX(getaddrinfo) \
-    XX(pollcb)
+    XX(pollcb) \
+    XX(fspollcb) \
+    XX(fseventscb)
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
@@ -177,6 +182,19 @@ void jl_asynccb(uv_handle_t *handle, int status)
 void jl_pollcb(uv_poll_t *handle, int status, int events)
 {
     JULIA_CB(pollcb,handle->data,2,CB_INT32,status,CB_INT32,events)
+    (void)ret;
+}
+
+void jl_fspollcb(uv_fs_poll_t* handle, int status, const uv_stat_t* prev, const uv_stat_t* curr)
+{
+    JULIA_CB(fspollcb,handle->data,3,CB_INT32,status,CB_PTR,prev,CB_PTR,curr)
+    (void)ret;
+}
+
+
+void jl_fseventscb(uv_fs_event_t* handle, const char* filename, int events, int status)
+{
+    JULIA_CB(fseventscb,handle->data,3,CB_PTR,filename,CB_INT32,events,CB_INT32,status)
     (void)ret;
 }
 
@@ -378,6 +396,17 @@ DLLEXPORT int jl_poll_start(uv_poll_t* handle, int32_t events)
     return uv_poll_start(handle, events, &jl_pollcb);
 }
 
+DLLEXPORT int jl_fs_poll_start(uv_fs_poll_t* handle, char *file, uint32_t interval)
+{
+    return uv_fs_poll_start(handle,&jl_fspollcb,file,interval);
+}
+
+DLLEXPORT int jl_fs_event_init(uv_loop_t* loop, uv_fs_event_t* handle,
+    const char* filename, int flags)
+{
+    return uv_fs_event_init(loop,handle,filename,&jl_fseventscb,flags);
+}
+
 //units are in ms
 DLLEXPORT int jl_timer_start(uv_timer_t* timer, int64_t timeout, int64_t repeat)
 {
@@ -536,6 +565,16 @@ DLLEXPORT size_t jl_sizeof_uv_pipe_t()
 DLLEXPORT size_t jl_sizeof_uv_process_t()
 {
     return sizeof(uv_process_t);
+}
+
+DLLEXPORT size_t jl_sizeof_uv_fs_poll_t()
+{
+    return sizeof(uv_fs_poll_t);
+}
+
+DLLEXPORT size_t jl_sizeof_uv_fs_events_t()
+{
+    return sizeof(jl_sizeof_uv_fs_events_t);
 }
 
 DLLEXPORT void uv_atexit_hook();
