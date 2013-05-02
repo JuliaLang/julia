@@ -1,3 +1,4 @@
+
 export
 # Modules
     PCRE,
@@ -45,6 +46,7 @@ export
     Enumerate,
     EnvHash,
     #FileDes,
+    FileMonitor,
     FileOffset,
     Filter,
     IO,
@@ -60,6 +62,7 @@ export
     #PipeIn,
     #PipeOut,
     PipeBuffer,
+    PollingFileWatcher,
     #Port,
     #Ports,
     #ProcessExited,
@@ -1036,6 +1039,7 @@ export
     start_timer,
     stop_timer,
     poll_fd,
+    poll_file,
     takebuf_array,
     takebuf_string,
     truncate,
