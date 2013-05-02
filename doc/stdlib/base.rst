@@ -3149,10 +3149,10 @@ Tasks
 
    For scheduled tasks, switch back to the scheduler to allow another scheduled task to run.
 
-.. function:: tls(symbol)
+.. function:: task_local_storage(symbol)
 
    Look up the value of a symbol in the current task's task-local storage.
 
-.. function:: tls(symbol, value)
+.. function:: task_local_storage(symbol, value)
 
    Assign a value to a symbol in the current task's task-local storage.
