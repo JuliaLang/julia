@@ -764,3 +764,22 @@ i2619()
 typealias Foo2919 Int
 type Baz2919; Foo2919::Foo2919; end
 @test Baz2919(3).Foo2919 === 3
+
+# issue #2959
+@test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
+@test 1.0:(.3-.1)/.1 == 1.0:2.0
+
+# issue #2982
+module M2982
+abstract U
+macro bad(Y)
+    quote
+        type $(esc(Y)) <: U
+        end
+    end
+end
+export @bad
+end
+
+@M2982.bad(T2982)
+@test T2982.super === M2982.U

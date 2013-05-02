@@ -986,6 +986,18 @@
    (pattern-lambda (try tryb var catchb)
 		   (if var (list 'varlist var) '()))
 
+   ;; type definition
+   (pattern-lambda (type mut (<: (curly tn . tvars) super) body)
+		   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
+			  (map typevar-expr-name tvars)))
+   (pattern-lambda (type mut (curly tn . tvars) body)
+		   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
+			  (map typevar-expr-name tvars)))
+   (pattern-lambda (type mut (<: tn super) body)
+		   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
+   (pattern-lambda (type mut tn body)
+		   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
+
    )) ; vars-introduced-by-patterns
 
 ; local x, y=2, z => local x;local y;local z;y = 2
@@ -1189,6 +1201,11 @@
 			  ,@rini
 			  (call setindex! ,arr ,r ,@new-idxs)
 			  ,r)))))
+
+   (pattern-lambda (= (typed_hcat . any) rhs)
+		   (error "invalid spacing in left side of indexed assignment"))
+   (pattern-lambda (= (typed_vcat . any) rhs)
+		   (error "unexpected ; in left side of indexed assignment"))
 
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)
@@ -2551,12 +2568,30 @@ So far only the second case can actually occur.
 	 (map julia-expand-macros e))))
 
 (define (pair-with-gensyms v)
-  (map (lambda (s) (cons s (named-gensy s))) v))
+  (map (lambda (s)
+	 (if (pair? s)
+	     s
+	     (cons s (named-gensy s))))
+       v))
 
 (define (unescape e)
   (if (and (pair? e) (eq? (car e) 'escape))
       (cadr e)
       e))
+
+(define (typevar-expr-name e)
+  (if (symbol? e) e
+      (cadr e)))
+
+(define (resolve-expansion-vars-with-new-env x env m)
+  (resolve-expansion-vars-
+   x
+   (append!
+    (filter (lambda (x)
+	      (not (assq (car x) env)))
+	    (pair-with-gensyms (vars-introduced-by x)))
+    env)
+   m))
 
 (define (resolve-expansion-vars- e env m)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
@@ -2576,7 +2611,7 @@ So far only the second case can actually occur.
 				 (resolve-expansion-vars- x env m))
 			       (cdr e))))
 	   ((type)
-	    `(type ,(cadr e) ,(unescape (caddr e))
+	    `(type ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m)
 		   ;; type has special behavior: identifiers inside are
 		   ;; field names, not expressions.
 		   ,(map (lambda (x)
@@ -2585,7 +2620,7 @@ So far only the second case can actually occur.
 				  `(|::| ,(cadr x)
 				    ,(resolve-expansion-vars- (caddr x) env m)))
 				 (else
-				  (resolve-expansion-vars- x env m))))
+				  (resolve-expansion-vars-with-new-env x env m))))
 			 (cadddr e))))
 	   ((keywords parameters)
 	    ;; in keyword arg A=B, don't transform "A"
@@ -2608,14 +2643,7 @@ So far only the second case can actually occur.
 	   (else
 	    (cons (car e)
 		  (map (lambda (x)
-			 (resolve-expansion-vars-
-			  x
-			  (append!
-			   (filter (lambda (x)
-				     (not (assq (car x) env)))
-				   (pair-with-gensyms (vars-introduced-by x)))
-			   env)
-			  m))
+			 (resolve-expansion-vars-with-new-env x env m))
 		       (cdr e))))))))
 
 ;; decl-var that also identifies f in f()=...
@@ -2641,7 +2669,13 @@ So far only the second case can actually occur.
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-	((escape call)  '())
+	((escape)  '())
+	((keywords parameters)
+	 (find-assigned-vars-in-expansion
+	  (map (lambda (x) (if (and (length= x 3) (assignment? x))
+			       (caddr x)
+			       '()))
+	       (cdr e))))
 	((= function)
 	 (append! (filter
 		   symbol?
@@ -2662,7 +2696,9 @@ So far only the second case can actually occur.
   (let ((v (diff (delete-duplicates
 		  (append! (find-declared-vars-in-expansion e 'local)
 			   (find-assigned-vars-in-expansion e)
-			   (vars-introduced-by e)))
+			   (map (lambda (x)
+				  (if (pair? x) (car x) x))
+				(vars-introduced-by e))))
 		 (find-declared-vars-in-expansion e 'global))))
     (pair-with-gensyms v)))
 

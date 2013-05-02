@@ -400,7 +400,17 @@ let
     for i = 1:length(a2)
         @test a2[i] == a[I[i]]
     end
+    a = [1,3,5]
+    b = [1 3]
+    a[b] = 8
+    @test a == [8,3,8]
 end
+
+# assigning an array into itself
+a = [1,3,5]
+b = [3,1,2]
+a[b] = a
+@test a == [3,5,1]
 
 # sort on arrays
 begin

@@ -414,6 +414,9 @@ end
 function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
+    if is(X,A)
+        X = copy(X)
+    end
     for i in I
         A[i] = X[count]
         count += 1
@@ -880,10 +883,18 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
 .^(x::StridedArray, y::StridedArray) =
     reshape([ x[i] ^ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-.^(x::Number,       y::StridedArray) =
+.^{T<:Integer}(x::StridedArray{Bool}, y::StridedArray{T}) =
+    reshape([ bool(x[i] ^ y[i]) for i=1:length(x) ], promote_shape(size(x),size(y)))
+
+.^(x::Number, y::StridedArray) =
     reshape([ x    ^ y[i] for i=1:length(y) ], size(y))
+.^(x::Bool  , y::StridedArray) =
+    reshape([ bool(x ^ y[i]) for i=1:length(y) ], size(y))
+
 .^(x::StridedArray, y::Number      ) =
     reshape([ x[i] ^ y    for i=1:length(x) ], size(x))
+.^(x::StridedArray{Bool}, y::Integer) =
+    reshape([ bool(x[i] ^ y) for i=1:length(x) ], size(x))
 
 for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
     @eval begin

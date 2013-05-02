@@ -101,7 +101,7 @@ macro which(ex)
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
-            if isa(a11, TopNode) && a11.name == :setindex!
+            if a11 == :setindex!
                 exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
             end
         end
@@ -130,7 +130,15 @@ function find_source_file(file)
 end
 
 function edit(file::String, line::Integer)
-    editor = get(ENV, "JULIA_EDITOR", "emacs")
+    if OS_NAME == :Windows || OS_NAME == :Darwin
+        default_editor = "open"
+    elseif isreadable("/etc/alternatives/editor")
+        default_editor = "/etc/alternatives/editor"
+    else
+        default_editor = "emacs"
+    end
+    envvar = haskey(ENV,"JULIA_EDITOR") ? "JULIA_EDITOR" : "EDITOR"
+    editor = get(ENV, envvar, default_editor)
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         file = find_source_file(file)
@@ -151,18 +159,12 @@ function edit(file::String, line::Integer)
         run(`mate $file -l $line`)
     elseif editor == "subl"
         run(`subl $file:$line`)
-    elseif editor == "notepad"
-        run(`notepad $file`)
-    elseif editor == "start" || editor == "open"
-        if OS_NAME == :Windows
-            run(`start /b $file`)
-        elseif OS_NAME == :Darwin
-            run(`open -t $file`)
-        else
-            error("Don't know how to launch the default editor on your platform")
-        end
+    elseif OS_NAME == :Windows && (editor == "start" || editor == "open")
+        run(`start /b $file`)
+    elseif OS_NAME == :Darwin && (editor == "start" || editor == "open")
+        run(`open -t $file`)
     else
-        error("Invalid JULIA_EDITOR value: $(repr(editor))")
+        run(`$editor $file`)
     end
     nothing
 end
@@ -182,11 +184,11 @@ less(f::Function, t) = less(functionloc(f,t)...)
 # print a warning only once
 
 const have_warned = (ByteString=>Bool)[]
-function warn_once(msg::String...)
+function warn_once(msg::String...; depth=0)
     msg = bytestring(msg...)
     haskey(have_warned,msg) && return
     have_warned[msg] = true
-    warn(msg)
+    warn(msg; depth=depth+1)
 end
 
 # openblas utility routines
