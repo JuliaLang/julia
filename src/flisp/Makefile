@@ -17,7 +17,8 @@ LLTDIR = ../support
 LLT = $(LLTDIR)/libsupport.a $(LIBUV)
 
 FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
-	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) -fvisibility=hidden
+	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) $(LIBDIRS:%=-L%) \
+        -fvisibility=hidden
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES) -lm
 ifneq ($(OS),WINNT)
