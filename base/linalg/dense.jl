@@ -414,7 +414,7 @@ sqrtm(a::Number) = isreal(a) ? (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b
 
 function det(A::Matrix)
     m, n = size(A)
-    if m != n; throw(LAPACK.DimensionMismatch("det only defined for square matrices")); end
+    if m != n; throw(DimensionMismatch("det only defined for square matrices")); end
     if istriu(A) | istril(A); return det(Triangular(A, 'U', false)); end
     return det(lufact(A))
 end

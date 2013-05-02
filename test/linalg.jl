@@ -15,6 +15,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq apd * inv(capd) eye(elty, n)
         @test_approx_eq a*(capd\(a'*b)) b # least squares soln for square a
         @test_approx_eq det(capd) det(apd)
+        @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
         l     = cholfact(apd, :L)[:L] # lower Cholesky factor
         @test_approx_eq l*l' apd

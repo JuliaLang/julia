@@ -17,7 +17,7 @@ import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
              isvalid, nnz, show, size, sort!, transpose, vcat
 
 import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                 Factorization, cholfact, cholfact!, copy, dense, det, diag, #diagmm, diagmm!,
+                 cholfact, cholfact!, copy, dense, det, diag,
                  full, logdet, norm, scale, scale!, solve, sparse
 
 include("linalg/cholmod_h.jl")
@@ -661,6 +661,17 @@ for Ti in (:Int32,:Int64)
             if status != CHOLMOD_TRUE throw(CholmodException) end
             L
         end
+        function chm_factorize_p!{Tv<:Float64}(L::CholmodFactor{Tv,$Ti},
+                                               A::CholmodSparse{Tv,$Ti},
+                                               beta::Tv)
+            status = ccall((@chm_nm "factorize_p" $Ti
+                            ,:libcholmod), Cint,
+                           (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Tv}, Ptr{Cint}, Csize_t,
+                            Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
+                           &A.c, &beta, C_NULL, zero(Csize_t), &L.c, cmn($Ti))
+            if status != CHOLMOD_TRUE throw(CholmodException) end
+            L
+        end
         function chm_pack!{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti})
             status = ccall((@chm_nm "pack_factor" $Ti
                             ,:libcholmod), Cint,
@@ -831,7 +842,7 @@ end
 (*){Tv<:CHMVTypes}(A::CholmodSparse{Tv},B::VecOrMat{Tv}) = chm_sdmult(A,false,1.,0.,CholmodDense(B))
 
 (\){T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
-(\){T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense(B),CHOLMOD_A).mat
+(\){T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense!(B),CHOLMOD_A).mat
 function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)
 end
@@ -845,7 +856,7 @@ function A_mul_Bt{Tv<:Union(Float32,Float64),Ti<:CHMITypes}(A::CholmodSparse{Tv,
 end
 
 Ac_ldiv_B{T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
-Ac_ldiv_B{T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense(B),CHOLMOD_A).mat
+Ac_ldiv_B{T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense!(B),CHOLMOD_A).mat
 function Ac_ldiv_B{Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)
 end
@@ -924,7 +935,12 @@ end
 function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)
 end
-solve{T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T},typ::Integer)=solve(L,CholmodDense(B),typ).mat
+function solve{T<:CHMVTypes}(L::CholmodFactor{T},B::Vector{T},typ::Integer)
+    solve(L,CholmodDense!(B),typ).mat[:]
+end
+function solve{T<:CHMVTypes}(L::CholmodFactor{T},B::Matrix{T},typ::Integer)
+    solve(L,CholmodDense!(B),typ).mat
+end
 solve{T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
 
 function findnz{Tv,Ti}(A::CholmodSparse{Tv,Ti})
@@ -966,21 +982,31 @@ function diag{Tv}(A::CholmodSparse{Tv})
 end
 
 function diag{Tv}(L::CholmodFactor{Tv})
+    res = zeros(Tv,L.c.n)
     xv  = L.x
     if bool(L.c.is_super)
-        nr = diff(L.pi)
-        nc = diff(L.super)
-        return vcat([diag(reshape(xv[(L.px[i]+1):(L.px[i+1])],(nr[i],nc[i])))
-                     for i in 1:L.c.nsuper]...)
-    end
-    res = zeros(Tv,L.c.n)
-    c0 = L.p
-    r0 = L.i
-    xv = L.x
-    for j in 1:L.c.n
-        jj = c0[j]+1
-        assert(r0[jj] == j-1)
-        res[j] = xv[jj]
+        nec = decrement!(diff(L.super))  # number of excess columns per supernode
+        dstride = increment!(diff(L.pi)) # stride of diagonal elements (nrow + 1)
+        px = L.px
+        pos = 1
+        for i in 1:length(nec)
+            base = px[i] + 1
+            res[pos] = xv[base]
+            pos += 1
+            for j in 1:nec[i]
+                res[pos] = xv[base + j*dstride[i]]
+                pos += 1
+            end
+        end
+    else
+        c0 = L.p
+        r0 = L.i
+        xv = L.x
+        for j in 1:L.c.n
+            jj = c0[j]+1
+            assert(r0[jj] == j-1)
+            res[j] = xv[jj]
+        end
     end
     res
 end
