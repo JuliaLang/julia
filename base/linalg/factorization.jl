@@ -43,7 +43,13 @@ function det{T}(C::Cholesky{T})
     for i in 1:size(C.UL,1) dd *= abs2(C.UL[i,i]) end
     dd
 end
-    
+
+function logdet{T}(C::Cholesky{T})
+    dd = zero(T)
+    for i in 1:size(C.UL,1) dd += log(C.UL[i,i]) end
+    dd + dd # instead of 2.0dd which can change the type
+end
+
 function inv(C::Cholesky)
     Ci, info = LAPACK.potri!(C.uplo, copy(C.UL))
     if info != 0; throw(SingularException(info)); end 

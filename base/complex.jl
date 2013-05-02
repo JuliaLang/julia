@@ -39,9 +39,7 @@ complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
 complex64(z) = complex64(real(z), imag(z))
 
-for fn in (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,
-           :uint,:unsigned,:uint8,:uint16,:uint32,:uint64,:uint128,
-           :float,:float32,:float64)
+for fn in _numeric_conversion_func_names
     @eval $fn(z::Complex) = complex($fn(real(z)),$fn(imag(z)))
 end
 

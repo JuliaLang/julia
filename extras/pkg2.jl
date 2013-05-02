@@ -22,15 +22,16 @@ function parse_requires(readable)
                 push!(ivals, VersionInterval(shift!(vers), shift!(vers)))
             end
         end
-        reqs[pkg] = haskey(reqs,pkg) ? intersect(reqs[pkg], ivals) : ivals
+        vset = VersionSet(ivals)
+        reqs[pkg] = haskey(reqs,pkg) ? intersect(reqs[pkg],vset) : vset
     end
     return reqs
 end
 parse_requires(file::String) = isfile(file) ? open(parse_requires,file) : Requires()
 
 function merge_requires!(A::Requires, B::Requires)
-    for (pkg, ivals) in B
-        A[pkg] = haskey(A,pkg) ? intersect(A[pkg], ivals) : ivals
+    for (pkg,vers) in B
+        A[pkg] = haskey(A,pkg) ? intersect(A[pkg],vers) : vers
     end
     return A
 end
@@ -116,6 +117,33 @@ function installed(avail::Dict=available())
     end
     pkgs["julia"] = Fixed(VERSION)
     return pkgs
+end
+
+function requirements(reqs::Dict, inst::Dict)
+    fixed = filter((p,f)->isa(f,Fixed), inst)
+    for (p1,f1) in fixed
+        if !satisfies(p1, f1.version, reqs)
+            warn("$p1 is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
+        end
+        for (p2,f2) in fixed
+            if !satisfies(p1, f1.version, f2.requires)
+                warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
+            end
+            merge_requires!(reqs,f2.requires)
+        end
+        delete!(reqs,p1)
+    end
+    reqs
+end
+requirements() = requirements(parse_requires("REQUIRE"), installed())
+
+function dependencies(avail::Dict, inst::Dict)
+    fixed = filter((p,f)->isa(f,Fixed), inst)
+    for (pkg,vers) in avail
+        for (ver,avail) in vers
+            
+        end
+    end
 end
 
 # end # module
