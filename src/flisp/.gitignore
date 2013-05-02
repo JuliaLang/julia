@@ -5,3 +5,9 @@
 /flisp-debug
 /flisp-release
 *.exe
+*.obj
+*.lib
+*.pdb
+*.exp
+*.map
+
