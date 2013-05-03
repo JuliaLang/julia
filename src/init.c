@@ -312,16 +312,36 @@ DLLEXPORT void uv_atexit_hook()
                 jl_close_uv(handle);
             }
             break;
+        //Don't close these directly, but rather let the GC take care of it
         case UV_POLL:
+            uv_poll_stop((uv_poll_t*)handle);
+            handle->data = NULL;
+            uv_unref(handle);
+            break;
         case UV_TIMER:
+            uv_timer_stop((uv_timer_t*)handle);
+            handle->data = NULL;
+            uv_unref(handle);
+            break;
+        case UV_IDLE:
+            uv_idle_stop((uv_idle_t*)handle);
+        case UV_ASYNC:
+            handle->data = NULL;
+            uv_unref(handle);
+            break;
+        case UV_FS_EVENT:
+            handle->data = NULL;
+            uv_unref(handle);
+            break;
+        case UV_FS_POLL:
+            uv_fs_poll_stop((uv_fs_poll_t*)handle);
+            handle->data = NULL;
+            uv_unref(handle);
+            break;
         case UV_PREPARE:
         case UV_CHECK:
-        case UV_IDLE:
-        case UV_ASYNC:
         case UV_SIGNAL:
         case UV_PROCESS:
-        case UV_FS_EVENT:
-        case UV_FS_POLL:
             jl_close_uv(handle);
             break;
         case UV_HANDLE:

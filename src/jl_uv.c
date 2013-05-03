@@ -25,8 +25,18 @@
 extern "C" {
 #endif
 
+// To be removed once we upgrade libuv
+#define uv_stat_t uv_statbuf_t
 
 /** libuv callbacks */
+
+/*
+ * Notes for adding new callbacks
+ * - Make sure to type annotate the callback, so we'll get the one in the new
+ *   Base module rather than the old one.
+ *
+ */
+
 //These callbacks are implemented in stream.jl
 #define JL_CB_TYPES(XX) \
 	XX(close) \
@@ -36,7 +46,10 @@ extern "C" {
 	XX(connectcb) \
 	XX(connectioncb) \
 	XX(asynccb) \
-    XX(getaddrinfo)
+    XX(getaddrinfo) \
+    XX(pollcb) \
+    XX(fspollcb) \
+    XX(fseventscb)
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
@@ -112,8 +125,9 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 
 void closeHandle(uv_handle_t* handle)
 {
-    JULIA_CB(close,handle->data,0); (void)ret;
-    //TODO: maybe notify Julia handle to close itself
+    if(handle->data) {
+        JULIA_CB(close,handle->data,0); (void)ret;
+    }
     free(handle);
 }
 
@@ -162,6 +176,25 @@ void jl_getaddrinfocb(uv_getaddrinfo_t *req,int status, struct addrinfo *addr)
 void jl_asynccb(uv_handle_t *handle, int status)
 {
     JULIA_CB(asynccb,handle->data,1,CB_INT32,status);
+    (void)ret;
+}
+
+void jl_pollcb(uv_poll_t *handle, int status, int events)
+{
+    JULIA_CB(pollcb,handle->data,2,CB_INT32,status,CB_INT32,events)
+    (void)ret;
+}
+
+void jl_fspollcb(uv_fs_poll_t* handle, int status, const uv_stat_t* prev, const uv_stat_t* curr)
+{
+    JULIA_CB(fspollcb,handle->data,3,CB_INT32,status,CB_PTR,prev,CB_PTR,curr)
+    (void)ret;
+}
+
+
+void jl_fseventscb(uv_fs_event_t* handle, const char* filename, int events, int status)
+{
+    JULIA_CB(fseventscb,handle->data,3,CB_PTR,filename,CB_INT32,events,CB_INT32,status)
     (void)ret;
 }
 
@@ -265,6 +298,11 @@ DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *dat
     handle->data = data;
 }
 
+DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
+{
+    handle->data = NULL;
+}
+
 DLLEXPORT int32_t jl_start_reading(uv_stream_t *handle)
 {
     if (!handle)
@@ -317,7 +355,6 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
     opts.exit_cb = &jl_return_spawn;
     error = uv_spawn(loop,proc,opts);
-    proc->data = julia_struct;
     return error;
 }
 
@@ -354,15 +391,26 @@ DLLEXPORT int jl_idle_start(uv_idle_t *idle)
     return uv_idle_start(idle,(uv_idle_cb)&jl_asynccb);
 }
 
+DLLEXPORT int jl_poll_start(uv_poll_t* handle, int32_t events)
+{
+    return uv_poll_start(handle, events, &jl_pollcb);
+}
+
+DLLEXPORT int jl_fs_poll_start(uv_fs_poll_t* handle, char *file, uint32_t interval)
+{
+    return uv_fs_poll_start(handle,&jl_fspollcb,file,interval);
+}
+
+DLLEXPORT int jl_fs_event_init(uv_loop_t* loop, uv_fs_event_t* handle,
+    const char* filename, int flags)
+{
+    return uv_fs_event_init(loop,handle,filename,&jl_fseventscb,flags);
+}
+
 //units are in ms
 DLLEXPORT int jl_timer_start(uv_timer_t* timer, int64_t timeout, int64_t repeat)
 {
     return uv_timer_start(timer,(uv_timer_cb)&jl_asynccb,timeout,repeat);
-}
-
-DLLEXPORT int jl_timer_stop(uv_timer_t* timer)
-{
-    return uv_timer_stop(timer);
 }
 
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
@@ -504,6 +552,11 @@ DLLEXPORT size_t jl_sizeof_uv_stream_t()
     return sizeof(uv_stream_t);
 }
 
+DLLEXPORT size_t jl_sizeof_uv_poll_t()
+{
+    return sizeof(uv_poll_t);
+}
+
 DLLEXPORT size_t jl_sizeof_uv_pipe_t()
 {
     return sizeof(uv_pipe_t);
@@ -512,6 +565,16 @@ DLLEXPORT size_t jl_sizeof_uv_pipe_t()
 DLLEXPORT size_t jl_sizeof_uv_process_t()
 {
     return sizeof(uv_process_t);
+}
+
+DLLEXPORT size_t jl_sizeof_uv_fs_poll_t()
+{
+    return sizeof(uv_fs_poll_t);
+}
+
+DLLEXPORT size_t jl_sizeof_uv_fs_events_t()
+{
+    return sizeof(jl_sizeof_uv_fs_events_t);
 }
 
 DLLEXPORT void uv_atexit_hook();
