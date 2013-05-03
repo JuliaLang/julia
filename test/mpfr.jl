@@ -1,51 +1,51 @@
 # constructors
 with_bigfloat_precision(53) do
-    x = MPFRFloat()
-    x = MPFRFloat(12)
+    x = BigFloat()
+    x = BigFloat(12)
 end
-x = MPFRFloat(12)
-y = MPFRFloat(x)
+x = BigFloat(12)
+y = BigFloat(x)
 @test_approx_eq x y
-y = MPFRFloat(0xc)
+y = BigFloat(0xc)
 @test_approx_eq x y
-y = MPFRFloat(12.)
+y = BigFloat(12.)
 @test_approx_eq x y
-y = MPFRFloat(BigInt(12))
+y = BigFloat(BigInt(12))
 @test_approx_eq x y
-y = MPFRFloat(BigFloat(12))
+y = BigFloat(BigFloat(12))
 @test_approx_eq x y
-y = MPFRFloat("12")
+y = BigFloat("12")
 @test_approx_eq x y
-y = MPFRFloat(float32(12.))
+y = BigFloat(float32(12.))
 @test_approx_eq x y
-y = MPFRFloat(12//1)
+y = BigFloat(12//1)
 @test_approx_eq x y
 
 # +
-x = MPFRFloat(12)
-y = MPFRFloat(30)
-@test x + y == MPFRFloat(42)
+x = BigFloat(12)
+y = BigFloat(30)
+@test x + y == BigFloat(42)
 
 # -
-x = MPFRFloat(12)
-y = MPFRFloat(-30)
-@test x - y == MPFRFloat(42)
+x = BigFloat(12)
+y = BigFloat(-30)
+@test x - y == BigFloat(42)
 
 # *
-x = MPFRFloat(6)
-y = MPFRFloat(9)
-@test x * y != MPFRFloat(42)
-@test x * y == MPFRFloat(54)
+x = BigFloat(6)
+y = BigFloat(9)
+@test x * y != BigFloat(42)
+@test x * y == BigFloat(54)
 
 # /
-x = MPFRFloat(9)
-y = MPFRFloat(6)
-@test x / y == MPFRFloat(9/6)
+x = BigFloat(9)
+y = BigFloat(6)
+@test x / y == BigFloat(9/6)
 
 # < / > / <= / >=
-x = MPFRFloat(12)
-y = MPFRFloat(42)
-z = MPFRFloat(30)
+x = BigFloat(12)
+y = BigFloat(42)
+z = BigFloat(30)
 @test y > x
 @test y >= x
 @test y > z
@@ -63,68 +63,68 @@ z = MPFRFloat(30)
 with_bigfloat_precision(4) do
     # default mode is round to nearest
     down, up =  with_bigfloat_rounding(MPFR.RoundToNearest) do
-        MPFRFloat("0.0938"), MPFRFloat("0.102")
+        BigFloat("0.0938"), BigFloat("0.102")
     end
     with_bigfloat_rounding(MPFR.RoundDown) do
-        @test MPFRFloat(0.1) == down
-        @test MPFRFloat(0.1) != up
+        @test BigFloat(0.1) == down
+        @test BigFloat(0.1) != up
     end
     with_bigfloat_rounding(MPFR.RoundUp) do
-        @test MPFRFloat(0.1) != down
-        @test MPFRFloat(0.1) == up
+        @test BigFloat(0.1) != down
+        @test BigFloat(0.1) == up
     end
 end
 
 # ^
-x = MPFRFloat(12)
-y = MPFRFloat(4)
-@test x^y == MPFRFloat(20736)
+x = BigFloat(12)
+y = BigFloat(4)
+@test x^y == BigFloat(20736)
 
 # ceil
-x = MPFRFloat(12.042)
-@test MPFRFloat(13) == ceil(x)
+x = BigFloat(12.042)
+@test BigFloat(13) == ceil(x)
 
 # copysign
-x = MPFRFloat(1)
-y = MPFRFloat(-1)
+x = BigFloat(1)
+y = BigFloat(-1)
 @test copysign(x, y) == y
 @test copysign(y, x) == x
 
 # isfinite / isinf
-x = MPFRFloat(Inf)
-y = MPFRFloat(1)
+x = BigFloat(Inf)
+y = BigFloat(1)
 @test isinf(x) == true
 @test isinf(y) == false
 @test isfinite(x) == false
 @test isinf(x) == true
 
 # isnan
-x = MPFRFloat(NaN)
-y = MPFRFloat(1)
+x = BigFloat(NaN)
+y = BigFloat(1)
 @test isnan(x) == true
 @test isnan(y) == false
 
 # convert to
-@test convert(MPFRFloat, 1//2) == MPFRFloat("0.5")
-@test convert(MPFRFloat, 0.5) == MPFRFloat("0.5")
-@test convert(MPFRFloat, 40) == MPFRFloat("40")
-@test convert(MPFRFloat, float32(0.5)) == MPFRFloat("0.5")
+@test convert(BigFloat, 1//2) == BigFloat("0.5")
+@test convert(BigFloat, 0.5) == BigFloat("0.5")
+@test convert(BigFloat, 40) == BigFloat("40")
+@test convert(BigFloat, float32(0.5)) == BigFloat("0.5")
 
 # convert from
-@test convert(Float64, MPFRFloat(0.5)) == 0.5
-@test convert(Float32, MPFRFloat(0.5)) == float32(0.5)
+@test convert(Float64, BigFloat(0.5)) == 0.5
+@test convert(Float32, BigFloat(0.5)) == float32(0.5)
 
 # exponent
-x = MPFRFloat(0)
+x = BigFloat(0)
 @test_fails exponent(x)
-x = MPFRFloat(Inf)
+x = BigFloat(Inf)
 @test_fails exponent(x)
-x = MPFRFloat(15.674)
+x = BigFloat(15.674)
 @test exponent(x) == exponent(15.674)
 
 # nextfloat/prevfloat should be immutable
 x = 12.
-y = MPFRFloat(x)
+y = BigFloat(x)
 @test x == y
 nextfloat(y)
 @test x == y
@@ -132,14 +132,14 @@ prevfloat(y)
 @test x == y
 
 # sqrt DomainError
-@test_fails sqrt(MPFRFloat(-1))
+@test_fails sqrt(BigFloat(-1))
 
 # precision
 old_precision = get_bigfloat_precision()
-x = MPFRFloat(0)
+x = BigFloat(0)
 @test get_precision(x) == old_precision
 set_bigfloat_precision(256)
-x = MPFRFloat(0)
+x = BigFloat(0)
 @test get_precision(x) == 256
 set_bigfloat_precision(old_precision)
 z = with_bigfloat_precision(240) do
@@ -148,29 +148,29 @@ z = with_bigfloat_precision(240) do
 end
 @test float(z) == 20.
 @test get_precision(z) == 240
-x = MPFRFloat(12)
+x = BigFloat(12)
 @test get_precision(x) == old_precision
 @test_fails set_bigfloat_precision(1)
 
 # integer_valued
-@test integer_valued(MPFRFloat(12))
-@test !integer_valued(MPFRFloat(12.12))
+@test integer_valued(BigFloat(12))
+@test !integer_valued(BigFloat(12.12))
 
 # nextfloat / prevfloat
 with_bigfloat_precision(53) do
-    x = MPFRFloat(12.12)
-    @test MPFRFloat(nextfloat(12.12)) == nextfloat(x)
-    @test MPFRFloat(prevfloat(12.12)) == prevfloat(x)
+    x = BigFloat(12.12)
+    @test BigFloat(nextfloat(12.12)) == nextfloat(x)
+    @test BigFloat(prevfloat(12.12)) == prevfloat(x)
 end
-@test isnan(nextfloat(MPFRFloat(NaN)))
-@test isnan(prevfloat(MPFRFloat(NaN)))
+@test isnan(nextfloat(BigFloat(NaN)))
+@test isnan(prevfloat(BigFloat(NaN)))
 
 # comparisons
-x = MPFRFloat(1)
-y = MPFRFloat(-1)
-z = MPFRFloat(NaN)
-ipl = MPFRFloat(Inf)
-imi = MPFRFloat(-Inf)
+x = BigFloat(1)
+y = BigFloat(-1)
+z = BigFloat(NaN)
+ipl = BigFloat(Inf)
+imi = BigFloat(-Inf)
 @test x > y
 @test x >= y
 @test x >= x
@@ -192,81 +192,81 @@ imi = MPFRFloat(-Inf)
 @test !(z > z)
 
 # modf
-x = MPFRFloat(12)
-y = MPFRFloat(0.5)
+x = BigFloat(12)
+y = BigFloat(0.5)
 @test modf(x+y) == (y, x)
-x = MPFRFloat(NaN)
+x = BigFloat(NaN)
 @test map(isnan, modf(x)) == (true, true)
-x = MPFRFloat(Inf)
+x = BigFloat(Inf)
 y = modf(x)
 @test (isnan(y[1]), isinf(y[2])) == (true, true)
 
 # rem
 with_bigfloat_precision(53) do
-    x = MPFRFloat(2)
-    y = MPFRFloat(1.67)
+    x = BigFloat(2)
+    y = BigFloat(1.67)
     @test rem(x,y) == rem(2, 1.67)
-    y = MPFRFloat(NaN)
+    y = BigFloat(NaN)
     @test isnan(rem(x,y))
     @test isnan(rem(y,x))
-    y = MPFRFloat(Inf)
+    y = BigFloat(Inf)
     @test rem(x,y) == x
     @test isnan(rem(y,x))
 end
 
 # min/max
-x = MPFRFloat(4)
-y = MPFRFloat(2)
+x = BigFloat(4)
+y = BigFloat(2)
 @test max(x,y) == x
 @test min(x,y) == y
-y = MPFRFloat(NaN)
+y = BigFloat(NaN)
 @test max(x,y) == x
 @test min(x,y) == x
 @test isnan(max(y,y))
 @test isnan(min(y,y))
 
 # sum
-x = MPFRFloat(1)
-y = MPFRFloat(2)
-z = MPFRFloat(3)
-w = MPFRFloat(4)
-@test sum([x,y,z,w]) == MPFRFloat(10)
-big_array = ones(MPFRFloat, 100)
-@test sum(big_array) == MPFRFloat(100)
+x = BigFloat(1)
+y = BigFloat(2)
+z = BigFloat(3)
+w = BigFloat(4)
+@test sum([x,y,z,w]) == BigFloat(10)
+big_array = ones(BigFloat, 100)
+@test sum(big_array) == BigFloat(100)
 
 # promotion
 # the array converts everyone to the DEFAULT_PRECISION!
-x = MPFRFloat(12)
+x = BigFloat(12)
 y = with_bigfloat_precision(60) do
-    MPFRFloat(42)
+    BigFloat(42)
 end
-@test [x,y] == [MPFRFloat(12), MPFRFloat(42)]
+@test [x,y] == [BigFloat(12), BigFloat(42)]
 
 # log / log2 / log10
 with_bigfloat_precision(53) do
-x = MPFRFloat(42)
+x = BigFloat(42)
     @test log(x) == log(42)
-    @test isinf(log(MPFRFloat(0)))
-    @test_fails log(MPFRFloat(-1))
+    @test isinf(log(BigFloat(0)))
+    @test_fails log(BigFloat(-1))
     @test log2(x) == log2(42)
-    @test isinf(log2(MPFRFloat(0)))
-    @test_fails log2(MPFRFloat(-1))
+    @test isinf(log2(BigFloat(0)))
+    @test_fails log2(BigFloat(-1))
     @test log10(x) == log10(42)
-    @test isinf(log10(MPFRFloat(0)))
-    @test_fails log10(MPFRFloat(-1))
+    @test isinf(log10(BigFloat(0)))
+    @test_fails log10(BigFloat(-1))
 end
 
 # exp / exp2 / exp10
 with_bigfloat_precision(53) do
-    x = MPFRFloat(10)
+    x = BigFloat(10)
     @test exp(x) == exp(10)
     @test exp2(x) == 1024
     @test exp10(x) == 10000000000
 end
 
 # convert to integer types
-x = MPFRFloat(12.1)
-y = MPFRFloat(42)
+x = BigFloat(12.1)
+y = BigFloat(42)
 @test_fails convert(Int32, x)
 @test_fails convert(Int64, x)
 @test_fails convert(BigInt, x)
@@ -279,9 +279,9 @@ y = MPFRFloat(42)
 @test convert(Uint32, y) == 42
 
 # iround
-x = MPFRFloat(42.42)
+x = BigFloat(42.42)
 y = with_bigfloat_precision(256) do
-    MPFRFloat("9223372036854775809.2324")
+    BigFloat("9223372036854775809.2324")
 end
 z = BigInt("9223372036854775809")
 @test iround(x) == 42
@@ -296,22 +296,22 @@ z = BigInt("9223372036854775809")
 
 # factorial
 with_bigfloat_precision(256) do
-    x = MPFRFloat(42)
+    x = BigFloat(42)
     @test factorial(x) == factorial(BigInt(42))
-    x = MPFRFloat(10)
+    x = BigFloat(10)
     @test factorial(x) == factorial(10)
-    @test_fails factorial(MPFRFloat(-1))
-    @test_fails factorial(MPFRFloat(331.3))
+    @test_fails factorial(BigFloat(-1))
+    @test_fails factorial(BigFloat(331.3))
 end
 
 # bessel functions
 with_bigfloat_precision(53) do
-    @test_approx_eq besselj(4, MPFRFloat(2)) besselj(4, 2.)
-    @test_approx_eq besselj0(MPFRFloat(2))  besselj0(2.)
-    @test_approx_eq besselj1(MPFRFloat(2))  besselj1(2.)
-    @test_approx_eq bessely(4, MPFRFloat(2))  bessely(4, 2.)
-    @test_approx_eq bessely0(MPFRFloat(2))  bessely0(2.)
-    @test_approx_eq bessely1(MPFRFloat(2))  bessely1(2.)
+    @test_approx_eq besselj(4, BigFloat(2)) besselj(4, 2.)
+    @test_approx_eq besselj0(BigFloat(2))  besselj0(2.)
+    @test_approx_eq besselj1(BigFloat(2))  besselj1(2.)
+    @test_approx_eq bessely(4, BigFloat(2))  bessely(4, 2.)
+    @test_approx_eq bessely0(BigFloat(2))  bessely0(2.)
+    @test_approx_eq bessely1(BigFloat(2))  bessely1(2.)
 end
 
 # trigonometric functions
@@ -320,49 +320,49 @@ with_bigfloat_precision(53) do
             :cosh,:sinh,:tanh,:sech,:csch,:coth,:asinh),
         j in (-1., -0.5, -0.25, .25, .5, 1.)
         @eval begin
-            @test_approx_eq ($f)(MPFRFloat($j)) ($f)($j)
+            @test_approx_eq ($f)(BigFloat($j)) ($f)($j)
         end
     end
     for f in (:acos,:asin,:acosh,:atanh),
         j in (-2, -1.5)
         @eval begin
-            @test_fails ($f)(MPFRFloat($j))
+            @test_fails ($f)(BigFloat($j))
         end
     end
     for f in (:sin,:cos,:tan,:sec,:csc,:cot,:cosh,:sinh,:tanh,
             :sech,:csch,:coth,:acosh,:asinh),
         j in (1., 1.5, 1.9)
         @eval begin
-            @test_approx_eq ($f)(MPFRFloat($j)) ($f)($j)
+            @test_approx_eq ($f)(BigFloat($j)) ($f)($j)
         end
     end
     for j in (.25, .5)
-        @test_approx_eq atanh(MPFRFloat(j)) atanh(j)
+        @test_approx_eq atanh(BigFloat(j)) atanh(j)
     end
 end
 
 # hypot
-@test hypot(MPFRFloat(3), MPFRFloat(4)) == 5
+@test hypot(BigFloat(3), BigFloat(4)) == 5
 
 # atan2
 with_bigfloat_precision(53) do
-    @test isequal(atan2(12,2), atan2(MPFRFloat(12), MPFRFloat(2)))
+    @test isequal(atan2(12,2), atan2(BigFloat(12), BigFloat(2)))
 end
 
 # ldexp
 with_bigfloat_precision(53) do
-    @test ldexp(MPFRFloat(24.5), 72) == ldexp(24.5, 72)
-    @test ldexp(MPFRFloat(24.5), int16(72)) == ldexp(24.5, 72)
-    @test ldexp(MPFRFloat(24.5), -72) == ldexp(24.5, -72)
-    @test ldexp(MPFRFloat(24.5), int16(-72)) == ldexp(24.5, -72)
-    @test ldexp(MPFRFloat(24.5), uint(72)) == ldexp(24.5, 72)
-    @test ldexp(MPFRFloat(24.5), 0x48) == ldexp(24.5, 72)
+    @test ldexp(BigFloat(24.5), 72) == ldexp(24.5, 72)
+    @test ldexp(BigFloat(24.5), int16(72)) == ldexp(24.5, 72)
+    @test ldexp(BigFloat(24.5), -72) == ldexp(24.5, -72)
+    @test ldexp(BigFloat(24.5), int16(-72)) == ldexp(24.5, -72)
+    @test ldexp(BigFloat(24.5), uint(72)) == ldexp(24.5, 72)
+    @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
 end
 
 # basic arithmetic
 # Signed addition
-a = MPFRFloat("123456789012345678901234567890")
-b = MPFRFloat("123456789012345678901234567891")
+a = BigFloat("123456789012345678901234567890")
+b = BigFloat("123456789012345678901234567891")
 @test a+int8(1) == b
 @test a+int16(1) == b
 @test a+int32(1) == b
@@ -485,8 +485,8 @@ b = MPFRFloat("123456789012345678901234567891")
 # Signed division
 c = BigInt("61728394506172839450617283945")
 # d = 2^200
-d = MPFRFloat("1606938044258990275541962092341162602522202993782792835301376")
-f = MPFRFloat("6.223015277861141707144064053780124240590252168721167133101116614789698834035383e-61")
+d = BigFloat("1606938044258990275541962092341162602522202993782792835301376")
+f = BigFloat("6.223015277861141707144064053780124240590252168721167133101116614789698834035383e-61")
 
 @test a/int8(2) == c
 @test a/int16(2) == c
@@ -525,3 +525,82 @@ f = MPFRFloat("6.223015277861141707144064053780124240590252168721167133101116614
 
 # BigInt division
 @test a / BigInt(2) == c
+
+# old tests
+tol = 1e-12
+
+a = BigFloat("12.34567890121")
+b = BigFloat("12.34567890122")
+
+@test_approx_eq_eps a+1e-11 b tol
+@test !(b == a)
+@test b > a
+@test b >= a
+@test !(b < a)
+@test !(b <= a)
+
+c = BigFloat("24.69135780242")
+@test typeof(a * 2) == BigFloat
+@test_approx_eq_eps a*2 c tol
+@test_approx_eq_eps (c-a) a tol
+
+
+d = BigFloat("-24.69135780242")
+@test typeof(d) == BigFloat
+@test_approx_eq_eps d+c 0 tol
+
+@test_approx_eq_eps (BigFloat(3)/BigFloat(2)) BigFloat(1.5) tol
+
+@test typeof(BigFloat(typemax(Int8))) == BigFloat
+@test typeof(BigFloat(typemax(Int16))) == BigFloat
+@test typeof(BigFloat(typemax(Int32))) == BigFloat
+@test typeof(BigFloat(typemax(Int64))) == BigFloat
+#@test typeof(BigFloat(typemax(Int128))) == BigFloat
+
+@test typeof(BigFloat(true)) == BigFloat
+@test typeof(BigFloat(typemax(Uint8))) == BigFloat
+@test typeof(BigFloat(typemax(Uint16))) == BigFloat
+@test typeof(BigFloat(typemax(Uint32))) == BigFloat
+@test typeof(BigFloat(typemax(Uint64))) == BigFloat
+#@test typeof(BigFloat(typemax(Uint128))) == BigFloat
+
+@test typeof(BigFloat(realmax(Float32))) == BigFloat
+@test typeof(BigFloat(realmax(Float64))) == BigFloat
+
+@test typeof(BigFloat(BigInt(1))) == BigFloat
+@test typeof(BigFloat(BigFloat(1))) == BigFloat
+
+@test typeof(BigFloat(1//1)) == BigFloat
+@test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
+
+f = BigFloat("1234567890.123")
+g = BigFloat("1234567891.123")
+
+tol = 1e-3
+
+@test_approx_eq_eps f+int8(1) g tol
+@test_approx_eq_eps f+int16(1) g tol
+@test_approx_eq_eps f+int32(1) g tol
+@test_approx_eq_eps f+int64(1) g tol
+#@test_approx_eq_eps f+int128(1) g tol
+
+@test_approx_eq_eps f+true g tol
+@test_approx_eq_eps f+uint8(1) g tol
+@test_approx_eq_eps f+uint16(1) g tol
+@test_approx_eq_eps f+uint32(1) g tol
+@test_approx_eq_eps f+uint64(1) g tol
+#@test_approx_eq_eps f+uint128(1) g tol
+
+@test_approx_eq_eps f+BigInt(1) g tol
+
+@test_approx_eq_eps f+1f0 g tol
+@test_approx_eq_eps f+1e0 g tol
+
+@test_approx_eq_eps f+BigFloat(1) g tol
+
+@test_approx_eq_eps f+(1//1) g tol
+
+@test_approx_eq_eps f+one(Rational{BigInt}) g tol
+
+# new tests
+
