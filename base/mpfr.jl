@@ -7,8 +7,11 @@ export
     exp10,
     get_bigfloat_precision,
     set_bigfloat_precision,
-    with_bigfloat_precision
-    
+    with_bigfloat_precision,
+    set_bigfloat_rounding,
+    get_bigfloat_rounding,
+    with_bigfloat_rounding
+
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1,
         bessely, bessely0, bessely1, ceil, cmp, convert, copysign, exp, exp2,
@@ -22,6 +25,13 @@ import
 
 const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [256]
+
+# Rounding modes
+const RoundToNearest = 0
+const RoundToZero = 1
+const RoundUp = 2
+const RoundDown = 3
+const RoundAwayZero = 4
 
 # Basic type and initialization definitions
 
@@ -548,6 +558,14 @@ function set_bigfloat_precision(x::Int)
     DEFAULT_PRECISION[end] = x
 end
 
+get_bigfloat_rounding() = ROUNDING_MODE[end]
+function set_bigfloat_rounding(x::Int)
+    if x < 0 || x > 4
+        throw(DomainError())
+    end
+    ROUNDING_MODE[end] = x
+end
+
 function copysign(x::MPFRFloat, y::MPFRFloat)
     z = MPFRFloat()
     ccall((:mpfr_copysign, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
@@ -616,6 +634,14 @@ function with_bigfloat_precision(f::Function, precision::Integer)
     set_bigfloat_precision(precision)
     ret = f()
     set_bigfloat_precision(old_precision)
+    return ret
+end
+
+function with_bigfloat_rounding(f::Function, rounding::Integer)
+    old_rounding = get_bigfloat_rounding()
+    set_bigfloat_rounding(rounding)
+    ret = f()
+    set_bigfloat_rounding(old_rounding)
     return ret
 end
 

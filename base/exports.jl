@@ -833,6 +833,9 @@ export
     set_bigcomplex_precision,
     with_bigfloat_precision,
     with_bigcomplex_precision,
+    get_bigfloat_rounding,
+    set_bigfloat_rounding,
+    with_bigfloat_rounding,
 
 # statistics
     cor,
