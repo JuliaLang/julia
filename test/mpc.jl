@@ -13,8 +13,6 @@ y = MPCComplex(BigInt(12))
 @test x == y
 y = MPCComplex(BigFloat(12))
 @test x == y
-y = MPCComplex(MPFRFloat(12))
-@test x == y
 y = MPCComplex("12")
 @test x == y
 y = MPCComplex(float32(12.))
@@ -34,8 +32,6 @@ y = MPCComplex(BigInt(12), BigInt(42))
 @test x == y
 y = MPCComplex(BigFloat(12), BigFloat(42))
 @test x == y
-y = MPCComplex(MPFRFloat(12), MPFRFloat(42))
-@test x == y
 y = MPCComplex("(12 42)")
 @test x == y
 y = MPCComplex(float32(12.), float32(42))
@@ -47,8 +43,8 @@ y = MPCComplex(12 + 42im)
 
 # real/imag
 x = MPCComplex(12, 42)
-y = MPFRFloat(12)
-z = MPFRFloat(42)
+y = BigFloat(12)
+z = BigFloat(42)
 @test real(x) == y
 @test imag(x) == z
 y = MPCComplex(x)

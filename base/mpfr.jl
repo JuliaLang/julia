@@ -2,7 +2,7 @@ module MPFR
 
 export
     # Types
-    MPFRFloat,
+    BigFloat,
     # Functions
     exp10,
     get_bigfloat_precision,
@@ -35,305 +35,297 @@ const RoundAwayZero = 4
 
 # Basic type and initialization definitions
 
-type MPFRFloat <: FloatingPoint
+type BigFloat <: FloatingPoint
     prec::Clong
     sign::Cint
     exp::Clong
     d::Ptr{Void}
-    function MPFRFloat()
+    function BigFloat()
         N = get_bigfloat_precision()
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{MPFRFloat}, Clong), &z, N)
+        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
         finalizer(z, MPFR_clear)
         return z
     end
     # Not recommended for general use
-    function MPFRFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Void})
+    function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Void})
         new(prec, sign, exp, d)
     end
 end
-MPFR_clear(mpfr::MPFRFloat) = ccall((:mpfr_clear, :libmpfr), Void, (Ptr{MPFRFloat},), &mpfr)
+MPFR_clear(mpfr::BigFloat) = ccall((:mpfr_clear, :libmpfr), Void, (Ptr{BigFloat},), &mpfr)
 
-MPFRFloat(x::MPFRFloat) = x
+BigFloat(x::BigFloat) = x
 
 for (fJ, fC) in ((:si,:Int), (:ui,:Uint), (:d,:Float64))
     @eval begin
-        function MPFRFloat(x::($fC))
-            z = MPFRFloat()
-            ccall(($(string(:mpfr_set_,fJ)), :libmpfr), Int32, (Ptr{MPFRFloat}, ($fC), Int32), &z, x, ROUNDING_MODE[end])
+        function BigFloat(x::($fC))
+            z = BigFloat()
+            ccall(($(string(:mpfr_set_,fJ)), :libmpfr), Int32, (Ptr{BigFloat}, ($fC), Int32), &z, x, ROUNDING_MODE[end])
             return z
         end
     end
 end
 
-function MPFRFloat(x::BigInt)
-    z = MPFRFloat()
-    ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{BigInt}, Int32), &z, &x, ROUNDING_MODE[end])   
+function BigFloat(x::BigInt)
+    z = BigFloat()
+    ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, ROUNDING_MODE[end])   
     return z
 end
 
-function MPFRFloat(x::BigFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_set_f, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{Void}, Int32), &z, x.mpf, ROUNDING_MODE[end])   
-    return z
-end
-
-function MPFRFloat(x::String, base::Int)
-    z = MPFRFloat()
-    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{Uint8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
+function BigFloat(x::String, base::Int)
+    z = BigFloat()
+    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{Uint8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
     if err != 0; error("Invalid input"); end
     return z
 end
-MPFRFloat(x::String) = MPFRFloat(x, 10)
+BigFloat(x::String) = BigFloat(x, 10)
 
 
-MPFRFloat(x::Bool) = MPFRFloat(uint(x))
-MPFRFloat(x::Signed) = MPFRFloat(int(x))
-MPFRFloat(x::Unsigned) = MPFRFloat(uint(x))
+BigFloat(x::Bool) = BigFloat(uint(x))
+BigFloat(x::Signed) = BigFloat(int(x))
+BigFloat(x::Unsigned) = BigFloat(uint(x))
 if WORD_SIZE == 32
-    MPFRFloat(x::Int64) = MPFRFloat(string(x))
-    MPFRFloat(x::Uint64) = MPFRFloat(BigInt(x))
+    BigFloat(x::Int64) = BigFloat(string(x))
+    BigFloat(x::Uint64) = BigFloat(BigInt(x))
 end
-MPFRFloat(x::Float32) = MPFRFloat(float64(x))
-MPFRFloat(x::Rational) = MPFRFloat(num(x)) / MPFRFloat(den(x))
+BigFloat(x::Float32) = BigFloat(float64(x))
+BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
-convert(::Type{MPFRFloat}, x::Rational) = MPFRFloat(x) # to resolve ambiguity
-convert(::Type{MPFRFloat}, x::Real) = MPFRFloat(x)
+convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
+convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 
 
-convert(::Type{Int64}, x::MPFRFloat) = int64(convert(Clong, x))
-convert(::Type{Int32}, x::MPFRFloat) = int32(convert(Clong, x))
-convert(::Type{Clong}, x::MPFRFloat) = integer_valued(x) ?
-    ccall((:mpfr_get_si,:libmpfr), Clong, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end]) :
+convert(::Type{Int64}, x::BigFloat) = int64(convert(Clong, x))
+convert(::Type{Int32}, x::BigFloat) = int32(convert(Clong, x))
+convert(::Type{Clong}, x::BigFloat) = integer_valued(x) ?
+    ccall((:mpfr_get_si,:libmpfr), Clong, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end]) :
     throw(InexactError())
-convert(::Type{Uint32}, x::MPFRFloat) = uint64(convert(Culong, x))
-convert(::Type{Uint32}, x::MPFRFloat) = uint32(convert(Culong, x))
-convert(::Type{Culong}, x::MPFRFloat) = integer_valued(x) ?
-    ccall((:mpfr_get_ui,:libmpfr), Culong, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end]) :
+convert(::Type{Uint32}, x::BigFloat) = uint64(convert(Culong, x))
+convert(::Type{Uint32}, x::BigFloat) = uint32(convert(Culong, x))
+convert(::Type{Culong}, x::BigFloat) = integer_valued(x) ?
+    ccall((:mpfr_get_ui,:libmpfr), Culong, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end]) :
     throw(InexactError())
-function convert(::Type{BigInt}, x::MPFRFloat) 
+function convert(::Type{BigInt}, x::BigFloat) 
     if integer_valued(x)
         z = BigInt()
-        ccall((:mpfr_get_z,:libmpfr), Int32, (Ptr{BigInt}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+        ccall((:mpfr_get_z,:libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
         return z
     else
         throw(InexactError())
     end
 end
-convert(::Type{Float64}, x::MPFRFloat) = ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{MPFRFloat},), &x)
-convert(::Type{Float32}, x::MPFRFloat) = ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{MPFRFloat},), &x)
+convert(::Type{Float64}, x::BigFloat) = ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},), &x)
+convert(::Type{Float32}, x::BigFloat) = ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},), &x)
 
-promote_rule{T<:Real}(::Type{MPFRFloat}, ::Type{T}) = MPFRFloat
+promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
 
-
-# TODO: Decide if overwriting the default BigFloat rule is good
-promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = MPFRFloat
-promote_rule{T<:FloatingPoint}(::Type{BigFloat},::Type{T}) = MPFRFloat
+promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
+promote_rule{T<:FloatingPoint}(::Type{BigFloat},::Type{T}) = BigFloat
 
 # Basic arithmetic without promotion
 # Unsigned addition
-function +(x::MPFRFloat, c::Culong)
-    z = MPFRFloat()
-    ccall((:mpfr_add_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
+function +(x::BigFloat, c::Culong)
+    z = BigFloat()
+    ccall((:mpfr_add_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-+(c::Culong, x::MPFRFloat) = x + c
-+(c::Unsigned, x::MPFRFloat) = x + convert(Culong, c)
-+(x::MPFRFloat, c::Unsigned) = x + convert(Culong, c)
++(c::Culong, x::BigFloat) = x + c
++(c::Unsigned, x::BigFloat) = x + convert(Culong, c)
++(x::BigFloat, c::Unsigned) = x + convert(Culong, c)
 
 # Signed addition
-function +(x::MPFRFloat, c::Clong)
-    z = MPFRFloat()
-    ccall((:mpfr_add_si, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
+function +(x::BigFloat, c::Clong)
+    z = BigFloat()
+    ccall((:mpfr_add_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-+(c::Clong, x::MPFRFloat) = x + c
-+(x::MPFRFloat, c::Signed) = x + convert(Clong, c)
-+(c::Signed, x::MPFRFloat) = x + convert(Clong, c)
++(c::Clong, x::BigFloat) = x + c
++(x::BigFloat, c::Signed) = x + convert(Clong, c)
++(c::Signed, x::BigFloat) = x + convert(Clong, c)
 
 # Float64 addition
-function +(x::MPFRFloat, c::Float64)
-    z = MPFRFloat()
-    ccall((:mpfr_add_d, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
+function +(x::BigFloat, c::Float64)
+    z = BigFloat()
+    ccall((:mpfr_add_d, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-+(c::Float64, x::MPFRFloat) = x + c
-+(c::Float32, x::MPFRFloat) = x + convert(Float64, c)
-+(x::MPFRFloat, c::Float32) = x + convert(Float64, c)
++(c::Float64, x::BigFloat) = x + c
++(c::Float32, x::BigFloat) = x + convert(Float64, c)
++(x::BigFloat, c::Float32) = x + convert(Float64, c)
 
 # BigInt addition
-function +(x::MPFRFloat, c::BigInt)
-    z = MPFRFloat()
-    ccall((:mpfr_add_z, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
+function +(x::BigFloat, c::BigInt)
+    z = BigFloat()
+    ccall((:mpfr_add_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
     return z
 end
-+(c::BigInt, x::MPFRFloat) = x + c
++(c::BigInt, x::BigFloat) = x + c
 
 # Unsigned subtraction
-function -(x::MPFRFloat, c::Culong)
-    z = MPFRFloat()
-    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
+function -(x::BigFloat, c::Culong)
+    z = BigFloat()
+    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-function -(c::Culong, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_ui_sub, :libmpfr), Int32, (Ptr{MPFRFloat}, Culong, Ptr{MPFRFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
+function -(c::Culong, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_ui_sub, :libmpfr), Int32, (Ptr{BigFloat}, Culong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
     return z
 end
--(x::MPFRFloat, c::Unsigned) = -(x, convert(Culong, c))
--(c::Unsigned, x::MPFRFloat) = -(convert(Culong, c), x)
+-(x::BigFloat, c::Unsigned) = -(x, convert(Culong, c))
+-(c::Unsigned, x::BigFloat) = -(convert(Culong, c), x)
 
 # Signed subtraction
-function -(x::MPFRFloat, c::Clong)
-    z = MPFRFloat()
-    ccall((:mpfr_sub_si, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
+function -(x::BigFloat, c::Clong)
+    z = BigFloat()
+    ccall((:mpfr_sub_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-function -(c::Clong, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_si_sub, :libmpfr), Int32, (Ptr{MPFRFloat}, Clong, Ptr{MPFRFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
+function -(c::Clong, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_si_sub, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
     return z
 end
--(x::MPFRFloat, c::Signed) = -(x, convert(Clong, c))
--(c::Signed, x::MPFRFloat) = -(convert(Clong, c), x)
+-(x::BigFloat, c::Signed) = -(x, convert(Clong, c))
+-(c::Signed, x::BigFloat) = -(convert(Clong, c), x)
 
 # Float64 subtraction
-function -(x::MPFRFloat, c::Float64)
-    z = MPFRFloat()
-    ccall((:mpfr_sub_d, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
+function -(x::BigFloat, c::Float64)
+    z = BigFloat()
+    ccall((:mpfr_sub_d, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-function -(c::Float64, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_d_sub, :libmpfr), Int32, (Ptr{MPFRFloat}, Float64, Ptr{MPFRFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
+function -(c::Float64, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_d_sub, :libmpfr), Int32, (Ptr{BigFloat}, Float64, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
     return z
 end
--(x::MPFRFloat, c::Float32) = -(x, convert(Float64, c))
--(c::Float32, x::MPFRFloat) = -(convert(Float64, c), x)
+-(x::BigFloat, c::Float32) = -(x, convert(Float64, c))
+-(c::Float32, x::BigFloat) = -(convert(Float64, c), x)
 
 # BigInt subtraction
-function -(x::MPFRFloat, c::BigInt)
-    z = MPFRFloat()
-    ccall((:mpfr_sub_z, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
+function -(x::BigFloat, c::BigInt)
+    z = BigFloat()
+    ccall((:mpfr_sub_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
     return z
 end
-function -(c::BigInt, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_z_sub, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{BigInt}, Ptr{MPFRFloat}, Int32), &z, &c, &x, ROUNDING_MODE[end])
+function -(c::BigInt, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_z_sub, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &c, &x, ROUNDING_MODE[end])
     return z
 end
 
 # Unsigned multiplication
-function *(x::MPFRFloat, c::Culong)
-    z = MPFRFloat()
-    ccall((:mpfr_mul_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
+function *(x::BigFloat, c::Culong)
+    z = BigFloat()
+    ccall((:mpfr_mul_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-*(c::Culong, x::MPFRFloat) = x * c
-*(c::Unsigned, x::MPFRFloat) = x * convert(Culong, c)
-*(x::MPFRFloat, c::Unsigned) = x * convert(Culong, c)
+*(c::Culong, x::BigFloat) = x * c
+*(c::Unsigned, x::BigFloat) = x * convert(Culong, c)
+*(x::BigFloat, c::Unsigned) = x * convert(Culong, c)
 
 # Signed multiplication
-function *(x::MPFRFloat, c::Clong)
-    z = MPFRFloat()
-    ccall((:mpfr_mul_si, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
+function *(x::BigFloat, c::Clong)
+    z = BigFloat()
+    ccall((:mpfr_mul_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-*(c::Clong, x::MPFRFloat) = x * c
-*(x::MPFRFloat, c::Signed) = x * convert(Clong, c)
+*(c::Clong, x::BigFloat) = x * c
+*(x::BigFloat, c::Signed) = x * convert(Clong, c)
 
 # Float64 multiplication
-function *(x::MPFRFloat, c::Float64)
-    z = MPFRFloat()
-    ccall((:mpfr_mul_d, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
+function *(x::BigFloat, c::Float64)
+    z = BigFloat()
+    ccall((:mpfr_mul_d, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-*(c::Float64, x::MPFRFloat) = x * c
-*(c::Float32, x::MPFRFloat) = x * convert(Float64, c)
-*(x::MPFRFloat, c::Float32) = x * convert(Float64, c)
+*(c::Float64, x::BigFloat) = x * c
+*(c::Float32, x::BigFloat) = x * convert(Float64, c)
+*(x::BigFloat, c::Float32) = x * convert(Float64, c)
 
 # BigInt multiplication
-*(c::Signed, x::MPFRFloat) = x * convert(Clong, c)
-function *(x::MPFRFloat, c::BigInt)
-    z = MPFRFloat()
-    ccall((:mpfr_mul_z, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
+*(c::Signed, x::BigFloat) = x * convert(Clong, c)
+function *(x::BigFloat, c::BigInt)
+    z = BigFloat()
+    ccall((:mpfr_mul_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
     return z
 end
-*(c::BigInt, x::MPFRFloat) = x * c
+*(c::BigInt, x::BigFloat) = x * c
 
 # Unsigned division
-function /(x::MPFRFloat, c::Culong)
-    z = MPFRFloat()
-    ccall((:mpfr_div_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
+function /(x::BigFloat, c::Culong)
+    z = BigFloat()
+    ccall((:mpfr_div_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-function /(c::Culong, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_ui_div, :libmpfr), Int32, (Ptr{MPFRFloat}, Culong, Ptr{MPFRFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
+function /(c::Culong, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_ui_div, :libmpfr), Int32, (Ptr{BigFloat}, Culong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
     return z
 end
-/(x::MPFRFloat, c::Unsigned) = /(x, convert(Culong, c))
-/(c::Unsigned, x::MPFRFloat) = /(convert(Culong, c), x)
+/(x::BigFloat, c::Unsigned) = /(x, convert(Culong, c))
+/(c::Unsigned, x::BigFloat) = /(convert(Culong, c), x)
 
 # Signed division
-function /(x::MPFRFloat, c::Clong)
-    z = MPFRFloat()
-    ccall((:mpfr_div_si, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
+function /(x::BigFloat, c::Clong)
+    z = BigFloat()
+    ccall((:mpfr_div_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-function /(c::Clong, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_si_div, :libmpfr), Int32, (Ptr{MPFRFloat}, Clong, Ptr{MPFRFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
+function /(c::Clong, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_si_div, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
     return z
 end
-/(x::MPFRFloat, c::Signed) = /(x, convert(Clong, c))
-/(c::Signed, x::MPFRFloat) = /(convert(Clong, c), x)
+/(x::BigFloat, c::Signed) = /(x, convert(Clong, c))
+/(c::Signed, x::BigFloat) = /(convert(Clong, c), x)
 
 # Float64 division
-function /(x::MPFRFloat, c::Float64)
-    z = MPFRFloat()
-    ccall((:mpfr_div_d, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
+function /(x::BigFloat, c::Float64)
+    z = BigFloat()
+    ccall((:mpfr_div_d, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
     return z
 end
-function /(c::Float64, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_d_div, :libmpfr), Int32, (Ptr{MPFRFloat}, Float64, Ptr{MPFRFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
+function /(c::Float64, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_d_div, :libmpfr), Int32, (Ptr{BigFloat}, Float64, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
     return z
 end
-/(x::MPFRFloat, c::Float32) = /(x, convert(Float64, c))
-/(c::Float32, x::MPFRFloat) = /(convert(Float64, c), x)
+/(x::BigFloat, c::Float32) = /(x, convert(Float64, c))
+/(c::Float32, x::BigFloat) = /(convert(Float64, c), x)
 
 # BigInt division
-function /(x::MPFRFloat, c::BigInt)
-    z = MPFRFloat()
-    ccall((:mpfr_div_z, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
+function /(x::BigFloat, c::BigInt)
+    z = BigFloat()
+    ccall((:mpfr_div_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
     return z
 end
 
 # Basic operations
 for (fJ, fC) in ((:+,:add), (:-,:sub), (:*,:mul), (:/,:div), (:^, :pow))
     @eval begin 
-        function ($fJ)(x::MPFRFloat, y::MPFRFloat)
-            z = MPFRFloat()
-            ccall(($(string(:mpfr_,fC)),:libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+        function ($fJ)(x::BigFloat, y::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC)),:libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
             return z
         end
     end
 end
 
-function -(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_neg, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+function -(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_neg, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function cmp(x::MPFRFloat, y::MPFRFloat)
-    ccall((:mpfr_cmp, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}), &x, &y)
+function cmp(x::BigFloat, y::BigFloat)
+    ccall((:mpfr_cmp, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y)
 end
 
-function sqrt(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_sqrt, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+function sqrt(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_sqrt, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     if isnan(z)
         throw(DomainError())
     end
@@ -342,176 +334,176 @@ end
 
 for f in (:ceil, :floor, :trunc)
     @eval begin
-        function ($f)(x::MPFRFloat)
-            z = MPFRFloat()
-            ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}), &z, &x)
+        function ($f)(x::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &x)
             return z
         end
     end
 end
 
-function ^(x::MPFRFloat, y::Unsigned)
-    z = MPFRFloat()
-    ccall((:mpfr_pow_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Culong, Int32), &z, &x, y, ROUNDING_MODE[end])
+function ^(x::BigFloat, y::Unsigned)
+    z = BigFloat()
+    ccall((:mpfr_pow_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, y, ROUNDING_MODE[end])
     return z
 end
 
-function ^(x::MPFRFloat, y::Signed)
-    z = MPFRFloat()
-    ccall((:mpfr_pow_si, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Clong, Int32), &z, &x, y, ROUNDING_MODE[end])
+function ^(x::BigFloat, y::Signed)
+    z = BigFloat()
+    ccall((:mpfr_pow_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, y, ROUNDING_MODE[end])
     return z
 end
 
-function ^(x::MPFRFloat, y::BigInt)
-    z = MPFRFloat()
-    ccall((:mpfr_pow_z, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{BigInt}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+function ^(x::BigFloat, y::BigInt)
+    z = BigFloat()
+    ccall((:mpfr_pow_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
 
-function exp(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_exp, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+function exp(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_exp, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function exp2(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_exp2, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+function exp2(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_exp2, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function exp10(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_exp10, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+function exp10(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_exp10, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function ldexp(x::MPFRFloat, n::Clong)
-    z = MPFRFloat()
-    ccall((:mpfr_mul_2si, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Clong, Int32), &z, &x, n, ROUNDING_MODE[end])
+function ldexp(x::BigFloat, n::Clong)
+    z = BigFloat()
+    ccall((:mpfr_mul_2si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, n, ROUNDING_MODE[end])
     return z
 end
-function ldexp(x::MPFRFloat, n::Culong)
-    z = MPFRFloat()
-    ccall((:mpfr_mul_2ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Culong, Int32), &z, &x, n, ROUNDING_MODE[end])
+function ldexp(x::BigFloat, n::Culong)
+    z = BigFloat()
+    ccall((:mpfr_mul_2ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, n, ROUNDING_MODE[end])
     return z
 end
-ldexp(x::MPFRFloat, n::Signed) = ldexp(x, convert(Clong, n))
-ldexp(x::MPFRFloat, n::Unsigned) = ldexp(x, convert(Culong, n))
+ldexp(x::BigFloat, n::Signed) = ldexp(x, convert(Clong, n))
+ldexp(x::BigFloat, n::Unsigned) = ldexp(x, convert(Culong, n))
 
-function besselj0(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_j0, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
-    return z
-end
-
-function besselj1(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_j1, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+function besselj0(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_j0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function besselj(n::Integer, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_jn, :libmpfr), Int32, (Ptr{MPFRFloat}, Clong, Ptr{MPFRFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
+function besselj1(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_j1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function bessely0(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_y0, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+function besselj(n::Integer, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_jn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
     return z
 end
 
-function bessely1(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_y1, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+function bessely0(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_y0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function bessely(n::Integer, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{MPFRFloat}, Clong, Ptr{MPFRFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
+function bessely1(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_y1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function factorial(x::MPFRFloat)
+function bessely(n::Integer, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
+    return z
+end
+
+function factorial(x::BigFloat)
     if x < 0 || !integer_valued(x)
         throw(DomainError())
     end
     ui = convert(Culong, x)
-    z = MPFRFloat()
-    ccall((:mpfr_fac_ui, :libmpfr), Int32, (Ptr{MPFRFloat}, Culong, Int32), &z, ui, ROUNDING_MODE[end])
+    z = BigFloat()
+    ccall((:mpfr_fac_ui, :libmpfr), Int32, (Ptr{BigFloat}, Culong, Int32), &z, ui, ROUNDING_MODE[end])
     return z
 end
 
-function hypot(x::MPFRFloat, y::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_hypot, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+function hypot(x::BigFloat, y::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_hypot, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
 
-function log(x::MPFRFloat)
+function log(x::BigFloat)
     if x < 0
         throw(DomainError())
     end
-    z = MPFRFloat()
-    ccall((:mpfr_log, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    z = BigFloat()
+    ccall((:mpfr_log, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function log2(x::MPFRFloat)
+function log2(x::BigFloat)
     if x < 0
         throw(DomainError())
     end
-    z = MPFRFloat()
-    ccall((:mpfr_log2, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    z = BigFloat()
+    ccall((:mpfr_log2, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function log10(x::MPFRFloat)
+function log10(x::BigFloat)
     if x < 0
         throw(DomainError())
     end
-    z = MPFRFloat()
-    ccall((:mpfr_log10, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    z = BigFloat()
+    ccall((:mpfr_log10, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
-function max(x::MPFRFloat, y::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_max, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+function max(x::BigFloat, y::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_max, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
 
-function min(x::MPFRFloat, y::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_min, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+function min(x::BigFloat, y::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_min, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
 
-function modf(x::MPFRFloat)
+function modf(x::BigFloat)
     if isinf(x)
-        return (MPFRFloat(NaN), x)
+        return (BigFloat(NaN), x)
     end
-    zint = MPFRFloat()
-    zfloat = MPFRFloat()
-    ccall((:mpfr_modf, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &zint, &zfloat, &x, ROUNDING_MODE[end])
+    zint = BigFloat()
+    zfloat = BigFloat()
+    ccall((:mpfr_modf, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &zint, &zfloat, &x, ROUNDING_MODE[end])
     return (zfloat, zint)
 end
 
-function rem(x::MPFRFloat, y::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_remainder, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+function rem(x::BigFloat, y::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_remainder, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
 
-# function sum{T<:MPFRFloat}(arr::AbstractArray{T})
-#     z = MPFRFloat()
+# function sum{T<:BigFloat}(arr::AbstractArray{T})
+#     z = BigFloat()
 #     n = length(arr)
 #     ptrarr = [pointer(&x) for x in arr]
 #     ccall((:mpfr_sum, :libmpfr), Int32,
-#         (Ptr{MPFRFloat}, Ptr{Void}, Culong, Int32), 
+#         (Ptr{BigFloat}, Ptr{Void}, Culong, Int32), 
 #         &z, ptrarr, n, ROUNDING_MODE[1])
 #     return z
 # end
@@ -522,9 +514,9 @@ end
 for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
         :cosh,:sinh,:tanh,:sech,:csch,:coth,:acosh,:asinh,:atanh)
     @eval begin
-        function ($f)(x::MPFRFloat)
-            z = MPFRFloat()
-            ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+        function ($f)(x::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
             if isnan(z)
                 throw(DomainError())
             end
@@ -533,21 +525,21 @@ for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
     end
 end
 
-function atan2(y::MPFRFloat, x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_atan2, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &y, &x, ROUNDING_MODE[end])
+function atan2(y::BigFloat, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_atan2, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &y, &x, ROUNDING_MODE[end])
     return z
 end
 
 # Utility functions
-==(x::MPFRFloat, y::MPFRFloat) = ccall((:mpfr_equal_p, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}), &x, &y) != 0
-<=(x::MPFRFloat, y::MPFRFloat) = ccall((:mpfr_lessequal_p, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}), &x, &y) != 0
->=(x::MPFRFloat, y::MPFRFloat) = ccall((:mpfr_greaterequal_p, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}), &x, &y) != 0
-<(x::MPFRFloat, y::MPFRFloat) = ccall((:mpfr_less_p, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}), &x, &y) != 0
->(x::MPFRFloat, y::MPFRFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}), &x, &y) != 0
+==(x::BigFloat, y::BigFloat) = ccall((:mpfr_equal_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
+<=(x::BigFloat, y::BigFloat) = ccall((:mpfr_lessequal_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
+>=(x::BigFloat, y::BigFloat) = ccall((:mpfr_greaterequal_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
+<(x::BigFloat, y::BigFloat) = ccall((:mpfr_less_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
+>(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 
-function get_precision(x::MPFRFloat)
-    return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ptr{MPFRFloat},), &x)
+function get_precision(x::BigFloat)
+    return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ptr{BigFloat},), &x)
 end
 
 get_bigfloat_precision() = DEFAULT_PRECISION[end]
@@ -566,31 +558,31 @@ function set_bigfloat_rounding(x::Int)
     ROUNDING_MODE[end] = x
 end
 
-function copysign(x::MPFRFloat, y::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_copysign, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+function copysign(x::BigFloat, y::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_copysign, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
 
-function exponent(x::MPFRFloat)
+function exponent(x::BigFloat)
     if x == 0 || !isfinite(x)
         throw(DomainError())
     end
     # The '- 1' is to make it work as Base.exponent
-    return ccall((:mpfr_get_exp, :libmpfr), Clong, (Ptr{MPFRFloat},), &x) - 1
+    return ccall((:mpfr_get_exp, :libmpfr), Clong, (Ptr{BigFloat},), &x) - 1
 end
 
-function integer_valued(x::MPFRFloat)
-    return ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{MPFRFloat},), &x) != 0
+function integer_valued(x::BigFloat)
+    return ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 end
 
-function iround(x::MPFRFloat)
-    fits = ccall((:mpfr_fits_slong_p, :libmpfr), Int32, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end])
+function iround(x::BigFloat)
+    fits = ccall((:mpfr_fits_slong_p, :libmpfr), Int32, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end])
     if fits != 0
-        return ccall((:mpfr_get_si, :libmpfr), Clong, (Ptr{MPFRFloat}, Int32), &x, ROUNDING_MODE[end])
+        return ccall((:mpfr_get_si, :libmpfr), Clong, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end])
     end
     z = BigInt()
-    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -599,33 +591,33 @@ for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
               # requires int128/uint128(::Type{BigInt}) support
               # (:int128,:Int128), (:uint128,:Uint128),
               (:unsigned,:Uint), (:uint,:Uint))
-    @eval iround(::Type{$t}, x::MPFRFloat) = ($f)(iround(x))
+    @eval iround(::Type{$t}, x::BigFloat) = ($f)(iround(x))
 end
 
-isfinite(x::MPFRFloat) = !isinf(x)
-function isinf(x::MPFRFloat)
-    return ccall((:mpfr_inf_p, :libmpfr), Int32, (Ptr{MPFRFloat},), &x) != 0
+isfinite(x::BigFloat) = !isinf(x)
+function isinf(x::BigFloat)
+    return ccall((:mpfr_inf_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 end
 
-function isnan(x::MPFRFloat)
-    return ccall((:mpfr_nan_p, :libmpfr), Int32, (Ptr{MPFRFloat},), &x) != 0
+function isnan(x::BigFloat)
+    return ccall((:mpfr_nan_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 end
 
-function nextfloat(x::MPFRFloat)
+function nextfloat(x::BigFloat)
    z = copy(x)
-   ccall((:mpfr_nextabove, :libmpfr), Int32, (Ptr{MPFRFloat},), &z) != 0
+   ccall((:mpfr_nextabove, :libmpfr), Int32, (Ptr{BigFloat},), &z) != 0
    return z
 end
 
-function prevfloat(x::MPFRFloat)
+function prevfloat(x::BigFloat)
     z = copy(x)
-   ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ptr{MPFRFloat},), &z) != 0
+   ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ptr{BigFloat},), &z) != 0
    return z
 end
 
-function copy(x::MPFRFloat)
-    z = MPFRFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+function copy(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -645,28 +637,28 @@ function with_bigfloat_rounding(f::Function, rounding::Integer)
     return ret
 end
 
-function round(x::MPFRFloat, prec::Integer)
+function round(x::BigFloat, prec::Integer)
     if prec < 1
         throw(DomainError())
     end
     prec = int(ceil(log2(10^prec)))
-    z = MPFRFloat(x)
-    ccall((:mpfr_prec_round, :libmpfr), Int32, (Ptr{MPFRFloat}, Clong, Int32), &z, prec, ROUNDING_MODE[end])
+    z = BigFloat(x)
+    ccall((:mpfr_prec_round, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Int32), &z, prec, ROUNDING_MODE[end])
     return z
 end
 
-function string(x::MPFRFloat)
+function string(x::BigFloat)
     lng = 128
     for i = 1:2
         z = Array(Uint8, lng)
-        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{MPFRFloat}...), z, lng, "%.Re", &x)
+        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), z, lng, "%.Re", &x)
         if lng < 128 || i == 2
             return bytestring(convert(Ptr{Uint8}, z[1:lng]))
         end
     end
 end
 
-show(io::IO, b::MPFRFloat) = print(io, string(b) * " with $(get_precision(b)) bits of precision")
-showcompact(io::IO, b::MPFRFloat) = print(io, string(b))
+show(io::IO, b::BigFloat) = print(io, string(b) * " with $(get_precision(b)) bits of precision")
+showcompact(io::IO, b::BigFloat) = print(io, string(b))
 
 end #module

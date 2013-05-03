@@ -1,6 +1,6 @@
 module GMP
 
-export BigInt, BigFloat
+export BigInt
 
 import
     Base.(*),
@@ -50,6 +50,5 @@ type mpz_struct
 end
 
 include("bigint.jl")
-include("bigfloat.jl")
 
 end # module

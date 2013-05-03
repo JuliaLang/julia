@@ -7,11 +7,11 @@ export
     get_bigcomplex_precision,
     set_bigcomplex_precision,
     with_bigcomplex_precision
-    
+
 import
     Base: (*), +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($), cmp,
-        complex, conj, convert, div, exp, imag, integer_valued, isfinite, 
-        isinf, log, promote_rule, real, show, showcompact, sqrt, string, 
+        complex, conj, convert, div, exp, imag, integer_valued, isfinite,
+        isinf, log, promote_rule, real, show, showcompact, sqrt, string,
         get_precision,
 
         # trigonometric functions
@@ -66,13 +66,7 @@ end
 
 function MPCComplex(x::BigFloat)
     z = MPCComplex()
-    ccall((:mpc_set_f, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{Void}, Int32), &z, x.mpf, ROUNDING_MODE[end])
-    return z
-end
-
-function MPCComplex(x::MPFRFloat)
-    z = MPCComplex()
-    ccall((:mpc_set_fr, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPFRFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpc_set_fr, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -151,13 +145,7 @@ end
 
 function MPCComplex(x::BigFloat, y::BigFloat)
     z = MPCComplex()
-    ccall((:mpc_set_f_f, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{Void}, Ptr{Void}, Int32), &z, x.mpf, y.mpf, ROUNDING_MODE[end])
-    return z
-end
-
-function MPCComplex(x::MPFRFloat, y::MPFRFloat)
-    z = MPCComplex()
-    ccall((:mpc_set_fr_fr, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{MPFRFloat}, Ptr{MPFRFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+    ccall((:mpc_set_fr_fr, :libmpc), Int32, (Ptr{MPCComplex}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
 
@@ -171,8 +159,8 @@ if WORD_SIZE == 32
     MPCComplex(x::Uint64, y::Uint64) = MPCComplex(BigInt(x), BigInt(y))
 end
 MPCComplex(x::Float32, y::Float32) = MPCComplex(float64(x), float64(y))
-MPCComplex(x::Rational, y::Rational) = MPCComplex(MPFRFloat(num(x))/MPFRFloat(den(x)),
-                                        MPFRFloat(num(y))/MPFRFloat(den(y)))
+MPCComplex(x::Rational, y::Rational) = MPCComplex(BigFloat(num(x))/BigFloat(den(x)),
+                                        BigFloat(num(y))/BigFloat(den(y)))
 
 # Basic operations
 
@@ -280,17 +268,17 @@ with_bigcomplex_precision(f::Function, prec::Integer) = with_bigcomplex_precisio
 
 function imag(x::MPCComplex)
     z = with_bigfloat_precision(get_bigcomplex_precision()[end]) do
-        MPFRFloat()
+        BigFloat()
     end
-    ccall((:mpc_imag, :libmpc), Int32, (Ptr{MPFRFloat}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpc_imag, :libmpc), Int32, (Ptr{BigFloat}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
 function real(x::MPCComplex)
     z = with_bigfloat_precision(get_bigcomplex_precision()[1]) do
-        MPFRFloat()
+        BigFloat()
     end
-    ccall((:mpc_real, :libmpc), Int32, (Ptr{MPFRFloat}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpc_real, :libmpc), Int32, (Ptr{BigFloat}, Ptr{MPCComplex}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -313,8 +301,8 @@ end
 
 # Internal functions
 # Unsafe for general use
-realref(x::MPCComplex) = MPFRFloat(x.reprec, x.resign, x.reexp, x.red)
-imagref(x::MPCComplex) = MPFRFloat(x.imprec, x.imsign, x.imexp, x.imd)
+realref(x::MPCComplex) = BigFloat(x.reprec, x.resign, x.reexp, x.red)
+imagref(x::MPCComplex) = BigFloat(x.imprec, x.imsign, x.imexp, x.imd)
 realint(x::MPCComplex) = ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{Void},), &(realref(x))) != 0
 imagint(x::MPCComplex) = ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{Void},), &(imagref(x))) != 0
 

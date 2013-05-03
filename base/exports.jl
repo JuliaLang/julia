@@ -59,7 +59,6 @@ export
     LocalProcess,
     Matrix,
     MPCComplex,
-    MPFRFloat,
     ObjectIdDict,
     #Pipe,
     #PipeEnd,

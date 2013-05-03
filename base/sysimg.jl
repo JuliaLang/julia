@@ -172,8 +172,6 @@ importall .DSP
 # BigInts and BigFloats
 include("gmp.jl")
 importall .GMP
-
-# MPFR and MPC
 include("mpfr.jl")
 importall .MPFR
 include("mpc.jl")
