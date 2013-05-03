@@ -422,7 +422,12 @@ function poll_fd(s, events::Integer, timeout_ms::Integer)
     if isa(args,InterruptException)
         rethrow(args)
     end
-    args
+
+    if (args[2] != 0) error ("fd in error") end 
+    if (args[1] == :poll) return args[3] end
+    if (args[1] == :timeout) return 0 end
+
+    error("Error while polling") 
 end
 
 function poll_file(s, interval::Integer, timeout_ms::Integer)
@@ -445,7 +450,12 @@ function poll_file(s, interval::Integer, timeout_ms::Integer)
     if isa(args,InterruptException)
         rethrow(args)
     end
-    args
+
+    if (args[2] != 0) error ("fd in error") end 
+    if (args[1] == :poll) return 1 end
+    if (args[1] == :timeout) return 0 end
+
+    error("Error while polling")
 end
 
 function watch_file(cb, s; poll=false)

@@ -18,7 +18,7 @@ function test_timeout(tval)
     tr = consume(t)
     t2 = int64(time() * 1000)
 
-    @test tr == (:timeout, 0)
+    @test tr == 0
 
     tdiff = t2-t1
     @test tval <= tdiff
@@ -35,9 +35,7 @@ function test_read(slval)
     tr = consume(t)
     t2 = int64(time() * 1000)
 
-    @test tr[1] == :poll
-    @test tr[2] == 0
-    @test tr[3] == UV_READABLE || (UV_READABLE | UV_WRITEABLE)
+    @test tr == UV_READABLE || (UV_READABLE | UV_WRITEABLE)
 
     dout = Array(Uint8, 1)
     @test 1 == ccall(:read, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[1], dout, 1)
@@ -53,5 +51,8 @@ test_timeout(100)
 test_timeout(1000)
 test_read(100)
 test_read(1000)
+
+ccall(:close, Cint, (Cint,), pipe_fds[1])
+ccall(:close, Cint, (Cint,), pipe_fds[2])
 
 end

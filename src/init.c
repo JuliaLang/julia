@@ -329,12 +329,19 @@ DLLEXPORT void uv_atexit_hook()
             handle->data = NULL;
             uv_unref(handle);
             break;
+        case UV_FS_EVENT:
+            handle->data = NULL;
+            uv_unref(handle);
+            break;
+        case UV_FS_POLL:
+            uv_fs_poll_stop((uv_fs_poll_t*)handle);
+            handle->data = NULL;
+            uv_unref(handle);
+            break;
         case UV_PREPARE:
         case UV_CHECK:
         case UV_SIGNAL:
         case UV_PROCESS:
-        case UV_FS_EVENT:
-        case UV_FS_POLL:
             jl_close_uv(handle);
             break;
         case UV_HANDLE:
