@@ -621,7 +621,14 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         }
     }
     else {
-        return (jl_value_t*)jl_bottom_type;
+        if (var == covariant) {
+            b = jl_type_intersect(a->ub, b, penv, eqc, var);
+            if (b == jl_bottom_type)
+                return b;
+        }
+        else {
+            return (jl_value_t*)jl_bottom_type;
+        }
     }
     if (var == invariant && !jl_has_typevars_(b,0)) {
         int i;
