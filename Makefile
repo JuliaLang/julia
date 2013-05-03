@@ -66,7 +66,7 @@ JL_PRIVATE_LIBS = amd arpack camd ccolamd cholmod colamd \
                   fftw3 fftw3f fftw3_threads fftw3f_threads \
                   gmp grisu openlibm openlibm-extras pcre \
                   random Rmath spqr suitesparse_wrapper \
-                  umfpack z openblas mpfr mpc
+                  umfpack z openblas mpfr
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install:

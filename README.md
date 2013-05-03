@@ -153,7 +153,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[PCRE]**                — Perl-compatible regular expressions library.
 - **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
 - **[MPFR]**                — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
-- **[MPC]**                 — the GNU multiple precision complex arithmetic library, needed for arbitrary precision complex number support.
 - **[double-conversion]**   — efficient number-to-text conversion.
 - **[Rmath]**               — basic RNGs and distributions.
 
@@ -182,7 +181,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 [readline]:     http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [GMP]:          http://gmplib.org/
 [MPFR]:         http://www.mpfr.org/
-[MPC]:          http://www.multiprecision.org/
 [double-conversion]: http://double-conversion.googlecode.com/
 [Rmath]:        http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
 [libuv]:        https://github.com/JuliaLang/libuv
