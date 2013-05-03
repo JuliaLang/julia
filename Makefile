@@ -62,19 +62,11 @@ run-julia:
 JL_LIBS = julia-release julia-debug
 
 # private libraries, that are installed in $(PREFIX)/lib/julia
-<<<<<<< HEAD
 JL_PRIVATE_LIBS = amd arpack camd ccolamd cholmod colamd \
                   fftw3 fftw3f fftw3_threads fftw3f_threads \
                   gmp grisu openlibm openlibm-extras pcre \
                   random Rmath spqr suitesparse_wrapper \
-                  umfpack z openblas mpfr
-=======
-JL_PRIVATE_LIBS = amd arpack cholmod colamd fftw3 fftw3f fftw3_threads \
-                  fftw3f_threads gmp grisu mpfr mpc \
-                  openlibm openlibm-extras pcre \
-		  random Rmath spqr suitesparse_wrapper \
-		  umfpack z openblas
->>>>>>> Add mpc to the build system and basic documentation
+                  umfpack z openblas mpfr mpc
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install:
