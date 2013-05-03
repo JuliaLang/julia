@@ -59,6 +59,22 @@ z = MPFRFloat(30)
 @test !(x >= z)
 @test !(y <= z)
 
+# rounding modes
+with_bigfloat_precision(4) do
+    # default mode is round to nearest
+    down, up =  with_bigfloat_rounding(MPFR.RoundToNearest) do
+        MPFRFloat("0.0938"), MPFRFloat("0.102")
+    end
+    with_bigfloat_rounding(MPFR.RoundDown) do
+        @test MPFRFloat(0.1) == down
+        @test MPFRFloat(0.1) != up
+    end
+    with_bigfloat_rounding(MPFR.RoundUp) do
+        @test MPFRFloat(0.1) != down
+        @test MPFRFloat(0.1) == up
+    end
+end
+
 # ^
 x = MPFRFloat(12)
 y = MPFRFloat(4)
