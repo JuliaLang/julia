@@ -146,7 +146,7 @@ function rand{T<:Integer}(r::Range1{T})
     hi = r[end]
 
     m = typemax(T)
-    s = abs(rand(T))
+    s = rand(T) & m
     if (hi-lo == m)
         return s + lo
     end
@@ -158,7 +158,7 @@ function rand{T<:Integer}(r::Range1{T})
     # note: m>=0 && r>=0
     lim = m - rem(rem(m,r)+1, r)
     while s > lim
-        s = rand(T)
+        s = rand(T) & m
     end
     return rem(s,r) + lo
 end
