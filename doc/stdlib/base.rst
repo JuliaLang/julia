@@ -1419,21 +1419,21 @@ Mathematical Functions
 
    Compute :math:`x^2`
 
-.. function:: round(x, [digits, [base]]) -> FloatingPoint
+.. function:: round(x, [digits, [base]])
 
-   ``round(x)`` returns the nearest integer to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
+   ``round(x)`` returns the nearest integral value of the same type as ``x`` to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
 
-.. function:: ceil(x, [digits, [base]]) -> FloatingPoint
+.. function:: ceil(x, [digits, [base]])
 
-   Returns the nearest integer not less than ``x``. ``digits`` and ``base`` work as above.
+   Returns the nearest integral value of the same type as ``x`` not less than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: floor(x, [digits, [base]]) -> FloatingPoint
+.. function:: floor(x, [digits, [base]])
 
-   Returns the nearest integer not greater than ``x``. ``digits`` and ``base`` work as above.
+   Returns the nearest integral value of the same type as ``x`` not greater than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: trunc(x, [digits, [base]]) -> FloatingPoint
+.. function:: trunc(x, [digits, [base]])
 
-   Returns the nearest integer not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
+   Returns the nearest integral value of the same type as ``x`` not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
 
 .. function:: iround(x) -> Integer
 
@@ -1451,7 +1451,7 @@ Mathematical Functions
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
-.. function:: signif(x, digits, [base]) -> FloatingPoint
+.. function:: signif(x, digits, [base])
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``. 
 
@@ -3149,10 +3149,10 @@ Tasks
 
    For scheduled tasks, switch back to the scheduler to allow another scheduled task to run.
 
-.. function:: tls(symbol)
+.. function:: task_local_storage(symbol)
 
    Look up the value of a symbol in the current task's task-local storage.
 
-.. function:: tls(symbol, value)
+.. function:: task_local_storage(symbol, value)
 
    Assign a value to a symbol in the current task's task-local storage.
