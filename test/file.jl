@@ -57,7 +57,7 @@ function test_timeout(tval)
     tr = take(channel)
     t2 = int64(time() * 1000)
 
-    @test tr == (:timeout, 0)
+    @test tr == 0
 
     tdiff = t2-t1
     @test tval <= tdiff
@@ -75,8 +75,7 @@ function test_touch(slval)
 
     tr = take(channel)
 
-    @test tr[1] == :poll
-    @test tr[2] == 0
+    @test tr == 1
 end
 
 
