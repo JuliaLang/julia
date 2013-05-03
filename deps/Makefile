@@ -104,6 +104,9 @@ endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE1_DEPS += mpfr
+ifeq ($(USE_SYSTEM_GMP), 0)
+MPFR_OPTS = -with-gmp=$(abspath $(BUILD))
+endif
 endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
@@ -1186,9 +1189,13 @@ compile-gmp: $(GMP_SRC_TARGET)
 check-gmp: gmp-$(GMP_VER)/checked
 install-gmp: $(GMP_OBJ_TARGET)
 
+ifeq ($(USE_SYSTEM_GMP), 0)
+MPFR_DEPS = $(GMP_OBJ_TARGET)
+endif
+
 ## MPFR ##
 
-MPFR_SRC_TARGET = mpfr-$(MPFR_VER)/.libs/libmpfr.$(SHLIB_EXT)
+MPFR_SRC_TARGET = mpfr-$(MPFR_VER)/src/.libs/libmpfr.$(SHLIB_EXT)
 MPFR_OBJ_TARGET = $(BUILD)/lib/libmpfr.$(SHLIB_EXT)
 
 mpfr-$(MPFR_VER).tar.bz2:
@@ -1196,9 +1203,9 @@ mpfr-$(MPFR_VER).tar.bz2:
 mpfr-$(MPFR_VER)/configure: mpfr-$(MPFR_VER).tar.bz2
 	tar jxf $<
 	touch -c $@
-mpfr-$(MPFR_VER)/config.status: mpfr-$(MPFR_VER)/configure
+mpfr-$(MPFR_VER)/config.status: mpfr-$(MPFR_VER)/configure $(MPFR_DEPS)
 	cd mpfr-$(MPFR_VER) && \
-	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
+	./configure $(CONFIGURE_COMMON) $(MPFR_OPTS) F77= --enable-shared --disable-static
 	touch -c $@
 $(MPFR_SRC_TARGET): mpfr-$(MPFR_VER)/config.status
 	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD)
