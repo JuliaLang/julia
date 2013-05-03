@@ -97,6 +97,11 @@ end
 @test !is(None, typeintersect((DataType,DataType),Type{TypeVar(:T,(Number,Number))}))
 @test !is(None, typeintersect((DataType,UnionType),Type{(Number,None)}))
 
+# issue #2997
+let T = TypeVar(:T,Union(Float64,Array{Float64,1}),true)
+    @test typeintersect(T,Real) === Float64
+end
+
 # join
 @test typejoin(Int8,Int16) === Signed
 @test typejoin(Int,String) === Any
