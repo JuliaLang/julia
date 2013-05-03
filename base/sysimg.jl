@@ -174,8 +174,6 @@ include("gmp.jl")
 importall .GMP
 include("mpfr.jl")
 importall .MPFR
-include("mpc.jl")
-importall .MPC
 
 # deprecated functions
 include("deprecated.jl")

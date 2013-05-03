@@ -4,7 +4,7 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
              "random", "math", "functional", "bigint", "sorting",
              "statistics", "spawn", "parallel", "priorityqueue",
              "arpack", "file", "perf", "suitesparse", "version",
-             "pollfd", "mpfr", "mpc"]
+             "pollfd", "mpfr"]
 
 # Disabled: "complex"
 
