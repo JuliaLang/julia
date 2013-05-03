@@ -172,6 +172,8 @@ importall .DSP
 # BigInts and BigFloats
 include("gmp.jl")
 importall .GMP
+include("mpfr.jl")
+importall .MPFR
 
 # deprecated functions
 include("deprecated.jl")
