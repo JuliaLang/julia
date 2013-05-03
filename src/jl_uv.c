@@ -574,7 +574,7 @@ DLLEXPORT size_t jl_sizeof_uv_fs_poll_t()
 
 DLLEXPORT size_t jl_sizeof_uv_fs_events_t()
 {
-    return sizeof(jl_sizeof_uv_fs_events_t);
+    return sizeof(uv_fs_event_t);
 }
 
 DLLEXPORT void uv_atexit_hook();
