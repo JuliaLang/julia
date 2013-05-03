@@ -13,7 +13,7 @@ immutable Stat
     ctime   :: Float64
 end
 
-Stat(buf::Vector{Uint8}) = Stat(
+Stat(buf::Union(Vector{Uint8},Ptr{Uint8})) = Stat(
     uint(ccall(:jl_stat_dev,     Uint32,  (Ptr{Uint8},), buf)),
     uint(ccall(:jl_stat_ino,     Uint32,  (Ptr{Uint8},), buf)),
     uint(ccall(:jl_stat_mode,    Uint32,  (Ptr{Uint8},), buf)),

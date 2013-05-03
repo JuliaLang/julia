@@ -155,14 +155,16 @@ function edit(file::String, line::Integer)
         end
     elseif editor == "vim"
         run(`vim $file +$line`)
-    elseif editor == "textmate"
-        run(`mate $file -l $line`)
+    elseif editor == "textmate" || editor == "mate"
+        spawn(`mate $file -l $line`)
     elseif editor == "subl"
-        run(`subl $file:$line`)
+        spawn(`subl $file:$line`)
     elseif OS_NAME == :Windows && (editor == "start" || editor == "open")
-        run(`start /b $file`)
+        spawn(`start /b $file`)
     elseif OS_NAME == :Darwin && (editor == "start" || editor == "open")
-        run(`open -t $file`)
+        spawn(`open -t $file`)
+    elseif editor == "kate"
+        spawn(`kate $file -l $line`)
     else
         run(`$editor $file`)
     end
