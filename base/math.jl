@@ -20,7 +20,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
        Base.tanh, Base.asin, Base.acos, Base.atan, Base.asinh, Base.acosh,
        Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.max, Base.min,
-       Base.ceil, Base.floor, Base.trunc, Base.round, Base.^
+       Base.ceil, Base.floor, Base.trunc, Base.round, Base.^, Base.exp2, Base.exp10
 
 import Core.Intrinsics.nan_dom_err
 
