@@ -34,7 +34,7 @@
 #if defined(__APPLE__) || defined(_OS_WINDOWS_)
 void *memrchr(const void *s, int c, size_t n)
 {
-    const unsigned char *src = (char *)s + n;
+    const unsigned char *src = (unsigned char *)s + n;
     unsigned char uc = c;
     while (--src >= (unsigned char *) s)
         if (*src == uc)
@@ -527,7 +527,7 @@ int ios_trunc(ios_t *s, size_t size)
 #if !defined(_OS_WINDOWS_)
         if (ftruncate(s->fd, size) == 0)
 #else
-        if (_chsize_s(s->fd, size) == 0)
+        if (_chsize(s->fd, size) == 0)
 #endif
             return 0;
     }
