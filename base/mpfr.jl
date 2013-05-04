@@ -4,7 +4,9 @@ export
     # Types
     BigFloat,
     # Functions
-    exp10,
+    bigfloat_pi,
+    bigfloat_eulergamma,
+    bigfloat_catalan,
     get_bigfloat_precision,
     set_bigfloat_precision,
     with_bigfloat_precision,
@@ -18,7 +20,8 @@ import
         exponent, factorial, floor, hypot, integer_valued, iround, isfinite,
         isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf, nextfloat,
         prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
-        string, trunc, get_precision,
+        string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
+        erf, erfc, zeta, log1p, airyai,
     # import trigonometric functions
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
         sech, csch, coth, acosh, asinh, atanh, atan2
@@ -360,21 +363,18 @@ function ^(x::BigFloat, y::BigInt)
     return z
 end
 
-function exp(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_exp, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
-    return z
+for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
+          :cosh,:sinh,:tanh,:sech,:csch,:coth,)
+    @eval function $f(x::BigFloat)
+        z = BigFloat()
+        ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+        return z
+    end
 end
 
-function exp2(x::BigFloat)
+function airyai(x::BigFloat)
     z = BigFloat()
-    ccall((:mpfr_exp2, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
-    return z
-end
-
-function exp10(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_exp10, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpfr_ai, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -443,30 +443,23 @@ function hypot(x::BigFloat, y::BigFloat)
     return z
 end
 
-function log(x::BigFloat)
-    if x < 0
-        throw(DomainError())
+for f in (:log, :log2, :log10)
+    @eval function $f(x::BigFloat)
+        if x < 0
+            throw(DomainError())
+        end
+        z = BigFloat()
+        ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+        return z
     end
-    z = BigFloat()
-    ccall((:mpfr_log, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
-    return z
 end
 
-function log2(x::BigFloat)
-    if x < 0
+function log1p(x::BigFloat)
+    if x < -1
         throw(DomainError())
     end
     z = BigFloat()
-    ccall((:mpfr_log2, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
-    return z
-end
-
-function log10(x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_log10, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpfr_log1p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -508,13 +501,14 @@ end
 #     return z
 # end
 
-# Trigonometric functions
-# Every NaN is thrown as an error, and it follows somewhat closely
-# the Base functions behavior
-for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
-        :cosh,:sinh,:tanh,:sech,:csch,:coth,:acosh,:asinh,:atanh)
+# Functions for which NaN results are converted to DomainError, following Base
+for f in (:sin,:cos,:tan,:sec,:csc,
+          :acos,:asin,:atan,:acosh,:asinh,:atanh, :gamma)
     @eval begin
         function ($f)(x::BigFloat)
+            if isnan(x)
+                return x
+            end
             z = BigFloat()
             ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
             if isnan(z)
@@ -525,10 +519,29 @@ for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
     end
 end
 
+# log of absolute value of gamma function
+const lgamma_signp = Array(Cint, 1)
+function lgamma(x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_lgamma,:libmpfr), Cint, (Ptr{BigFloat}, Ptr{Cint}, Ptr{BigFloat}, Int32), &z, lgamma_signp, &x, ROUNDING_MODE[end])
+    return z
+end
+
 function atan2(y::BigFloat, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_atan2, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &y, &x, ROUNDING_MODE[end])
     return z
+end
+
+# Mathematical constants:
+for (c, cmpfr) in ((:pi,:pi), (:eulergamma, :euler), (:catalan, :catalan))
+    @eval function $(symbol(string("bigfloat_", c)))()
+        c = BigFloat()
+        ccall(($(string("mpfr_const_", cmpfr)), :libmpfr), 
+              Cint, (Ptr{BigFloat}, Int32),
+              &c, ROUNDING_MODE[end])
+        return c
+    end
 end
 
 # Utility functions

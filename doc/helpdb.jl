@@ -2473,6 +2473,13 @@ stream[, offset])
 
 "),
 
+("Mathematical Functions","Base","exp10","exp10(x)
+
+
+   Compute 10^x
+
+"),
+
 ("Mathematical Functions","Base","ldexp","ldexp(x, n)
 
 
