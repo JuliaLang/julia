@@ -326,6 +326,7 @@ export
     erfcinv,
     exp,
     exp2,
+    exp10,
     expm1,
     exponent,
     factor,
@@ -821,8 +822,10 @@ export
     randn,
     srand,
 
-# precision
-    exp10,
+# bigfloat & precision
+    bigfloat_pi,
+    bigfloat_eulergamma,
+    bigfloat_catalan,
     get_precision,
     get_bigfloat_precision,
     set_bigfloat_precision,
