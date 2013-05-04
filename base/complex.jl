@@ -228,6 +228,18 @@ function exp(z::Complex)
     complex(er*cos(imag(z)), er*sin(imag(z)))
 end
 
+function exp2{T}(z::Complex{T})
+    er = exp2(real(z))
+    theta = imag(z) * log(convert(T, 2))
+    complex(er*cos(theta), er*sin(theta))
+end
+
+function exp10{T}(z::Complex{T})
+    er = exp10(real(z))
+    theta = imag(z) * log(convert(T, 10))
+    complex(er*cos(theta), er*sin(theta))
+end
+
 function ^{T<:Complex}(z::T, p::T)
     realp = real(p); imagp = imag(p)
     realz = real(z); imagz = imag(z)
