@@ -317,7 +317,7 @@
 (define (sym-ref? e)
   (or (symbol? e)
       (and (length= e 3) (eq? (car e) '|.|)
-	   (sym-ref? (cadr e))
+	   (or (atom? (cadr e)) (sym-ref? (cadr e)))
 	   (pair? (caddr e)) (eq? (car (caddr e)) 'quote)
 	   (symbol? (cadr (caddr e))))))
 
