@@ -637,17 +637,21 @@ end
 function with_bigfloat_precision(f::Function, precision::Integer)
     old_precision = get_bigfloat_precision()
     set_bigfloat_precision(precision)
-    ret = f()
-    set_bigfloat_precision(old_precision)
-    return ret
+    try
+        return f()
+    finally
+        set_bigfloat_precision(old_precision)
+    end
 end
 
 function with_bigfloat_rounding(f::Function, rounding::Integer)
     old_rounding = get_bigfloat_rounding()
     set_bigfloat_rounding(rounding)
-    ret = f()
-    set_bigfloat_rounding(old_rounding)
-    return ret
+    try
+        return f()
+    finally
+        set_bigfloat_rounding(old_rounding)
+    end
 end
 
 function round(x::BigFloat, prec::Integer)
