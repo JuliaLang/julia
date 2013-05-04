@@ -11,6 +11,12 @@
 
 #if defined(_OS_WINDOWS_)
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+
+#if !defined(_COMPILER_MINGW_)
+
 #define strtoull                                            _strtoui64
 #define strtoll                                             _strtoi64
 #define strcasecmp                                          _stricmp 
@@ -21,6 +27,8 @@
 #define STDIN_FILENO                                        0
 #define STDOUT_FILENO                                       1
 #define STDERR_FILENO                                       2
+
+#endif /* !_COMPILER_MINGW_ */
 
 #if defined(_COMPILER_MICROSOFT_)
 #define isnan _isnan
