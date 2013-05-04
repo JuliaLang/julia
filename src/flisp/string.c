@@ -11,9 +11,12 @@
 #include <wchar.h>
 #include <wctype.h>
 #include <sys/types.h>
-#include <sys/time.h>
 #include <errno.h>
+
 #include "flisp.h"
+#if !defined(_OS_WINDOWS_)
+#include <sys/time.h>
+#endif /* !_OS_WINDOWS_ */
 
 value_t fl_stringp(value_t *args, u_int32_t nargs)
 {
@@ -46,10 +49,11 @@ value_t fl_string_count(value_t *args, u_int32_t nargs)
     return size_wrap(u8_charnum(str+start, stop-start));
 }
 
-#if defined(__WIN32__) || defined(__linux__)
+#if defined(_OS_WINDOWS_)
+extern int wcwidth(uint32_t c);
+#elif defined(_OS_LINUX_)
 extern int wcwidth(wchar_t c);
 #endif
-
 
 value_t fl_string_width(value_t *args, u_int32_t nargs)
 {

@@ -4,7 +4,7 @@ include ../Make.inc
 TESTS = all core keywordargs numbers strings unicode corelib hashing	\
 	remote iostring arrayops linalg blas fft dsp sparse bitarray		\
 	random math functional bigint sorting statistics spawn	parallel	\
-	arpack bigfloat file git pkg pkg2 suitesparse complex version
+	arpack bigfloat file git pkg pkg2 suitesparse complex version pollfd
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@

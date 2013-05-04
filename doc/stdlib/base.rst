@@ -1402,6 +1402,10 @@ Mathematical Functions
 
    Compute :math:`2^x`
 
+.. function:: exp10(x)
+
+   Compute :math:`10^x`
+
 .. function:: ldexp(x, n)
 
    Compute :math:`x \times 2^n`
@@ -1419,21 +1423,21 @@ Mathematical Functions
 
    Compute :math:`x^2`
 
-.. function:: round(x, [digits, [base]]) -> FloatingPoint
+.. function:: round(x, [digits, [base]])
 
-   ``round(x)`` returns the nearest integer to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
+   ``round(x)`` returns the nearest integral value of the same type as ``x`` to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
 
-.. function:: ceil(x, [digits, [base]]) -> FloatingPoint
+.. function:: ceil(x, [digits, [base]])
 
-   Returns the nearest integer not less than ``x``. ``digits`` and ``base`` work as above.
+   Returns the nearest integral value of the same type as ``x`` not less than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: floor(x, [digits, [base]]) -> FloatingPoint
+.. function:: floor(x, [digits, [base]])
 
-   Returns the nearest integer not greater than ``x``. ``digits`` and ``base`` work as above.
+   Returns the nearest integral value of the same type as ``x`` not greater than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: trunc(x, [digits, [base]]) -> FloatingPoint
+.. function:: trunc(x, [digits, [base]])
 
-   Returns the nearest integer not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
+   Returns the nearest integral value of the same type as ``x`` not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
 
 .. function:: iround(x) -> Integer
 
@@ -1451,7 +1455,7 @@ Mathematical Functions
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
-.. function:: signif(x, digits, [base]) -> FloatingPoint
+.. function:: signif(x, digits, [base])
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``. 
 
@@ -1526,6 +1530,16 @@ Mathematical Functions
 
    Compute the Dawson function (scaled imaginary error function) of ``x``,
    defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
+
+.. function:: erfinv(x)
+
+   Compute the inverse error function of a real ``x``,
+   defined by :math:`\operatorname{erf}(\operatorname{erfinv}(x)) = x`.
+
+.. function:: erfcinv(x)
+
+   Compute the inverse error complementary function of a real ``x``,
+   defined by :math:`\operatorname{erfc}(\operatorname{erfcinv}(x)) = x`.
 
 .. function:: real(z)
 
@@ -2786,10 +2800,11 @@ Parallel Computing
 
    Add processes on the local machine. Can be used to take advantage of multiple cores.
 
-.. function:: addprocs({"host1","host2",...}; tunnel=false)
+.. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME)
 
    Add processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
-   If ``tunnel`` is ``true`` then SSH tunneling will be used.
+   If ``tunnel`` is ``true`` then SSH tunneling will be used. Named argument ``dir``
+   optionally specifies the location of the julia binaries on the worker nodes.
 
 .. function:: addprocs_sge(n)
 
@@ -3138,10 +3153,10 @@ Tasks
 
    For scheduled tasks, switch back to the scheduler to allow another scheduled task to run.
 
-.. function:: tls(symbol)
+.. function:: task_local_storage(symbol)
 
    Look up the value of a symbol in the current task's task-local storage.
 
-.. function:: tls(symbol, value)
+.. function:: task_local_storage(symbol, value)
 
    Assign a value to a symbol in the current task's task-local storage.

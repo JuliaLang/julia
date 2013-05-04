@@ -317,7 +317,7 @@
 (define (sym-ref? e)
   (or (symbol? e)
       (and (length= e 3) (eq? (car e) '|.|)
-	   (sym-ref? (cadr e))
+	   (or (atom? (cadr e)) (sym-ref? (cadr e)))
 	   (pair? (caddr e)) (eq? (car (caddr e)) 'quote)
 	   (symbol? (cadr (caddr e))))))
 
@@ -1201,6 +1201,11 @@
 			  ,@rini
 			  (call setindex! ,arr ,r ,@new-idxs)
 			  ,r)))))
+
+   (pattern-lambda (= (typed_hcat . any) rhs)
+		   (error "invalid spacing in left side of indexed assignment"))
+   (pattern-lambda (= (typed_vcat . any) rhs)
+		   (error "unexpected ; in left side of indexed assignment"))
 
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)

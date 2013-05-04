@@ -186,7 +186,7 @@ Example::
 
     julia> x = reshape(1:16, 4, 4)
     4x4 Int64 Array
-    1 5 9 13
+    1 5  9 13
     2 6 10 14
     3 7 11 15
     4 8 12 16
@@ -216,7 +216,7 @@ the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
 
 Index assignment syntax is equivalent to a call to ``setindex!``::
 
-      A = setindex!(A, X, I_1, I_2, ..., I_n)
+      setindex!(A, X, I_1, I_2, ..., I_n)
 
 Example::
 
@@ -230,7 +230,7 @@ Example::
     3x3 Int64 Array
     1 -1 -1
     2 -1 -1
-    3 6 9
+    3  6  9
 
 Concatenation
 -------------

@@ -965,12 +965,6 @@ function ssh_tunnel(user, host, port)
     localp
 end
 
-function worker_ssh_cmd(host)
-    c = `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
-    c.detach = true
-    c
-end
-
 #function worker_ssh_cmd(host, key)
 #    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
 #end
@@ -979,9 +973,13 @@ end
 # optionally through an SSH tunnel.
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
-function addprocs(machines::AbstractVector; tunnel=false)
-    add_workers(PGRP, start_remote_workers(machines,
-                                           map(worker_ssh_cmd, machines), tunnel))
+function addprocs(machines::AbstractVector;
+                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic")
+    add_workers(PGRP,
+        start_remote_workers(machines,
+            map(m->detach(`ssh -n $m "bash -l -c \"cd $dir && $exename --worker\""`),
+                machines),
+            tunnel))
 end
 
 #function addprocs_ssh(machines, keys)

@@ -43,6 +43,66 @@ mv(file, newfile)
 file = newfile
 
 #######################################################################
+# This section tests file watchers.                                   #
+#######################################################################
+function test_file_poll(channel,timeout_ms)
+    rc = poll_file(file, iround(timeout_ms/10), timeout_ms)
+    put(channel,rc)
+end
+
+function test_timeout(tval)
+    t1 = int64(time() * 1000)
+    channel = RemoteRef()
+    @async test_file_poll(channel,tval)
+    tr = take(channel)
+    t2 = int64(time() * 1000)
+
+    @test tr == 0
+
+    tdiff = t2-t1
+    @test tval <= tdiff
+end
+
+function test_touch(slval)
+    tval = slval+100
+    channel = RemoteRef()
+    @async test_file_poll(channel,iround(tval))
+
+    sleep(slval/10_000) # ~one poll period
+    f = open(file,"a")
+    write(f,"Hello World\n")
+    close(f)
+
+    tr = take(channel)
+
+    @test tr == 1
+end
+
+
+function test_monitor(slval)
+    FsMonitorPassed = false
+    fm = FileMonitor(file) do args...
+        FsMonitorPassed = true
+    end
+    sleep(slval/10_000)
+    f = open(file,"a")
+    write(f,"Hello World\n")
+    close(f)
+    sleep(9slval/10_000)
+    @test FsMonitorPassed
+    close(fm)
+end
+
+test_timeout(100)
+test_timeout(1000)
+test_touch(100)
+test_touch(1000)
+test_monitor(1000)
+test_monitor(100)
+
+
+
+#######################################################################
 # This section tests temporary file and directory creation.           #
 #######################################################################
 

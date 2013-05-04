@@ -513,9 +513,17 @@ next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1
 
 # weak key dictionaries
 
+function weak_key_delete!(t::Dict, k)
+    # when a weak key is finalized, remove from dictionary if it is still there
+    wk = getkey(t, k, secret_table_token)
+    if !is(wk,secret_table_token) && is(wk.value, k)
+        delete!(t, k)
+    end
+end
+
 function add_weak_key(t::Dict, k, v)
     if is(t.deleter, identity)
-        t.deleter = x->delete!(t, x)
+        t.deleter = x->weak_key_delete!(t, x)
     end
     t[WeakRef(k)] = v
     # TODO: it might be better to avoid the finalizer, allow
@@ -525,9 +533,17 @@ function add_weak_key(t::Dict, k, v)
     return t
 end
 
+function weak_value_delete!(t::Dict, k, v)
+    # when a weak value is finalized, remove from dictionary if it is still there
+    wv = get(t, k, secret_table_token)
+    if !is(wv,secret_table_token) && is(wv.value, v)
+        delete!(t, k)
+    end
+end
+
 function add_weak_value(t::Dict, k, v)
     t[k] = WeakRef(v)
-    finalizer(v, x->delete!(t, k))
+    finalizer(v, x->weak_value_delete!(t, k, x))
     return t
 end
 

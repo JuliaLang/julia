@@ -165,11 +165,17 @@ end
 
 # T[a:b] and T[a:s:b] also contruct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Ranges)
-    a = Array(T,length(r))
-    i = 1
-    for x in r
-        a[i] = x
-        i += 1
+    copy!(Array(T,length(r)), r)
+end
+
+function getindex{T<:Number}(::Type{T}, r1::Ranges, rs::Ranges...)
+    a = Array(T,length(r1)+sum(length,rs))
+    o = 1
+    copy!(a, r1, o)
+    o += length(r1)
+    for r in rs
+        copy!(a, r, o)
+        o += length(r)
     end
     return a
 end
@@ -883,10 +889,18 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
 .^(x::StridedArray, y::StridedArray) =
     reshape([ x[i] ^ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-.^(x::Number,       y::StridedArray) =
+.^{T<:Integer}(x::StridedArray{Bool}, y::StridedArray{T}) =
+    reshape([ bool(x[i] ^ y[i]) for i=1:length(x) ], promote_shape(size(x),size(y)))
+
+.^(x::Number, y::StridedArray) =
     reshape([ x    ^ y[i] for i=1:length(y) ], size(y))
+.^(x::Bool  , y::StridedArray) =
+    reshape([ bool(x ^ y[i]) for i=1:length(y) ], size(y))
+
 .^(x::StridedArray, y::Number      ) =
     reshape([ x[i] ^ y    for i=1:length(x) ], size(x))
+.^(x::StridedArray{Bool}, y::Integer) =
+    reshape([ bool(x[i] ^ y) for i=1:length(x) ], size(x))
 
 for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
     @eval begin

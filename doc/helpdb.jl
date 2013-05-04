@@ -2473,6 +2473,13 @@ stream[, offset])
 
 "),
 
+("Mathematical Functions","Base","exp10","exp10(x)
+
+
+   Compute 10^x
+
+"),
+
 ("Mathematical Functions","Base","ldexp","ldexp(x, n)
 
 
@@ -2692,6 +2699,22 @@ FloatingPoint
 
    Compute the imaginary error function of \"x\", defined by -i
    \\operatorname{erf}(ix).
+
+"),
+
+("Mathematical Functions","Base","erfinv","erfinv(x)
+
+
+   Compute the inverse error function of a real \"x\", 
+   so that \\operatorname{erf}(\\operatorname{erfinv}(x)) = x.
+
+"),
+
+("Mathematical Functions","Base","erfcinv","erfcinv(x)
+
+
+   Compute the inverse complementary error function of a real \"x\", 
+   so that \\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x.
 
 "),
 

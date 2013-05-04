@@ -167,8 +167,8 @@ function fill!(A::AbstractArray, x)
     return A
 end
 
-function copy!(dest::AbstractArray, src)
-    i = 1
+function copy!(dest::AbstractArray, src, dsto::Integer=1)
+    i = dsto
     for x in src
         dest[i] = x
         i += 1
@@ -239,6 +239,15 @@ complex (x::AbstractArray) = copy!(similar(x,typeof(complex(one(eltype(x))))), x
 
 dense(x::AbstractArray) = x
 full(x::AbstractArray) = x
+
+## range conversions ##
+
+for fn in _numeric_conversion_func_names
+    @eval begin
+        $fn(r::Range ) = Range($fn(r.start), $fn(r.step), r.len)
+        $fn(r::Range1) = Range1($fn(r.start), r.len)
+    end
+end
 
 ## Unary operators ##
 

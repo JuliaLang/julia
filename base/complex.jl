@@ -39,9 +39,7 @@ complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
 complex64(z) = complex64(real(z), imag(z))
 
-for fn in (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,
-           :uint,:unsigned,:uint8,:uint16,:uint32,:uint64,:uint128,
-           :float,:float32,:float64)
+for fn in _numeric_conversion_func_names
     @eval $fn(z::Complex) = complex($fn(real(z)),$fn(imag(z)))
 end
 
@@ -228,6 +226,18 @@ log2(z::Complex) = log(z)/oftype(real(z),0.6931471805599453)
 function exp(z::Complex)
     er = exp(real(z))
     complex(er*cos(imag(z)), er*sin(imag(z)))
+end
+
+function exp2{T}(z::Complex{T})
+    er = exp2(real(z))
+    theta = imag(z) * log(convert(T, 2))
+    complex(er*cos(theta), er*sin(theta))
+end
+
+function exp10{T}(z::Complex{T})
+    er = exp10(real(z))
+    theta = imag(z) * log(convert(T, 10))
+    complex(er*cos(theta), er*sin(theta))
 end
 
 function ^{T<:Complex}(z::T, p::T)
