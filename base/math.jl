@@ -6,7 +6,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cosd, cotd, cscd, secd, sind, tand,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
-       log, log2, log10, log1p, exponent, exp, exp2, expm1,
+       log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, square, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
        lgamma, hypot, gamma, lfact, max, min, ldexp, frexp,
@@ -20,7 +20,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
        Base.tanh, Base.asin, Base.acos, Base.atan, Base.asinh, Base.acosh,
        Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.max, Base.min,
-       Base.ceil, Base.floor, Base.trunc, Base.round, Base.^
+       Base.ceil, Base.floor, Base.trunc, Base.round, Base.^, Base.exp2, Base.exp10
 
 import Core.Intrinsics.nan_dom_err
 
@@ -108,6 +108,12 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :
         @vectorize_1arg Number $f
     end
 end
+
+# TODO: GNU libc has exp10 as an extension; should openlibm?
+exp10(x::Float64) = 10.0^x
+exp10(x::Float32) = 10.0f0^x
+exp10(x::Integer) = exp10(float(x))
+@vectorize_1arg Number exp10
 
 # functions that return NaN on non-NaN argument for domain error
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,

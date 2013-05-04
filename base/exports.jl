@@ -9,6 +9,7 @@ export
     LibRandom,
     Random,
     Math,
+    MPFR,
     GMP,
     Sort,
     Test,
@@ -325,6 +326,7 @@ export
     erfcinv,
     exp,
     exp2,
+    exp10,
     expm1,
     exponent,
     factor,
@@ -819,6 +821,18 @@ export
     randn!,
     randn,
     srand,
+
+# bigfloat & precision
+    bigfloat_pi,
+    bigfloat_eulergamma,
+    bigfloat_catalan,
+    get_precision,
+    get_bigfloat_precision,
+    set_bigfloat_precision,
+    with_bigfloat_precision,
+    get_bigfloat_rounding,
+    set_bigfloat_rounding,
+    with_bigfloat_rounding,
 
 # statistics
     cor,

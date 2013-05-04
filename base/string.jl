@@ -45,6 +45,7 @@ end
 convert(::Type{Array{Uint8,1}}, s::String) = bytestring(s).data
 convert(::Type{Array{Uint8}}, s::String) = bytestring(s).data
 convert(::Type{ByteString}, s::String) = bytestring(s)
+convert(::Type{Array{Char,1}}, s::String) = collect(s)
 
 ## generic supplied functions ##
 

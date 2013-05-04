@@ -54,18 +54,96 @@ end
 
 @test typeof(BigInt(BigInt(1))) == BigInt
 
+
+# Signed addition
 @test a+int8(1) == b
 @test a+int16(1) == b
 @test a+int32(1) == b
 @test a+int64(1) == b
-#@test a+int128(1) == b
+@test int8(1)+ a == b
+@test int16(1)+a == b
+@test int32(1)+a == b
+@test int64(1)+a == b
+@test b+int8(-1) == a
+@test b+int16(-1) == a
+@test b+int32(-1) == a
+@test b+int64(-1) == a
+@test int8(-1)+ b == a
+@test int16(-1)+b == a
+@test int32(-1)+b == a
+@test int64(-1)+b == a
 
+# Unsigned addition
 @test a+true == b
 @test a+uint8(1) == b
 @test a+uint16(1) == b
 @test a+uint32(1) == b
 @test a+uint64(1) == b
-#@test a+uint128(1) == b
+@test true+a == b
+@test uint8(1)+ a == b
+@test uint16(1)+a == b
+@test uint32(1)+a == b
+@test uint64(1)+a == b
+
+# Signed subtraction
+@test b-int8(1) == a
+@test b-int16(1) == a
+@test b-int32(1) == a
+@test b-int64(1) == a
+@test int8(1)- b == -a
+@test int16(1)-b == -a
+@test int32(1)-b == -a
+@test int64(1)-b == -a
+@test a-int8(-1) == b
+@test a-int16(-1) == b
+@test a-int32(-1) == b
+@test a-int64(-1) == b
+@test int8(-1)- a == -b
+@test int16(-1)-a == -b
+@test int32(-1)-a == -b
+@test int64(-1)-a == -b
+
+# Unsigned subtraction
+@test b-true == a
+@test b-uint8(1) == a
+@test b-uint16(1) == a
+@test b-uint32(1) == a
+@test b-uint64(1) == a
+@test true-b == -a
+@test uint8(1)- b == -a
+@test uint16(1)-b == -a
+@test uint32(1)-b == -a
+@test uint64(1)-b == -a
+
+# Signed multiplication
+@test a*int8(1) == a
+@test a*int16(1) == a
+@test a*int32(1) == a
+@test a*int64(1) == a
+@test int8(1)* a == a
+@test int16(1)*a == a
+@test int32(1)*a == a
+@test int64(1)*a == a
+@test a*int8(-1) == -a
+@test a*int16(-1) == -a
+@test a*int32(-1) == -a
+@test a*int64(-1) == -a
+@test int8(-1)* a == -a
+@test int16(-1)*a == -a
+@test int32(-1)*a == -a
+@test int64(-1)*a == -a
+
+# Unsigned multiplication
+@test a*true == a
+@test a*uint8(1) == a
+@test a*uint16(1) == a
+@test a*uint32(1) == a
+@test a*uint64(1) == a
+@test true*a == a
+@test uint8(1)* a == a
+@test uint16(1)*a == a
+@test uint32(1)*a == a
+@test uint64(1)*a == a
 
 @test a+BigInt(1) == b
 
