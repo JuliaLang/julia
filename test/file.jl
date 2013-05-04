@@ -51,15 +51,15 @@ function test_file_poll(channel,timeout_ms)
 end
 
 function test_timeout(tval)
-    t1 = int64(time() * 1000)
+    tic()
     channel = RemoteRef()
     @async test_file_poll(channel,tval)
     tr = take(channel)
-    t2 = int64(time() * 1000)
+    t_elapsed = toq()
 
     @test tr == 0
 
-    tdiff = t2-t1
+    tdiff = t_elapsed * 1000
     @test tval <= tdiff
 end
 
