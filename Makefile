@@ -117,14 +117,18 @@ ifeq ($(OS), WINNT)
 	-[ -e dist-extras/PortableGit-1.8.1.2-preview20130201.7z ] && \
 	  mkdir $(PREFIX)/Git && \
 	  7z x dist-extras/PortableGit-1.8.1.2-preview20130201.7z -o"$(PREFIX)/Git"
-ifeq ($(shell uname),MINGW32_NT-6.1)
-	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
-		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
-	done
+ifeq ($(BUILD_OS),WINNT)
+	cp $(call pathsearch,libgfortran-3.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call pathsearch,libquadmath-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call pathsearch,libgcc_s_sjlj-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call pathsearch,libstdc++-6.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	#cp $(call pathsearch,libssp-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 else
-	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_seh-1" "libstdc++-6" "libssp-0" ; do \
-		cp /usr/lib/gcc/$(ARCH)-w64-mingw32/4.6/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
-	done
+	cp $(call wine_pathsearch,libgfortran-3.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call wine_pathsearch,libquadmath-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call wine_pathsearch,libgcc_s_seh-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call wine_pathsearch,libstdc++-6.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call wine_pathsearch,libssp-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 endif
 	zip -r -9 julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).zip julia-$(JULIA_COMMIT)
 else
