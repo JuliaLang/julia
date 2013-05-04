@@ -403,7 +403,6 @@ TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 function poll_fd(s, events::Integer, timeout_ms::Integer)
-    timeout_at = int64((time() * 1000)) + timeout_ms
     wt = WaitTask()
 
     fdw = FDWatcher(s)
@@ -431,7 +430,6 @@ function poll_fd(s, events::Integer, timeout_ms::Integer)
 end
 
 function poll_file(s, interval::Integer, timeout_ms::Integer)
-    timeout_at = int64((time() * 1000)) + timeout_ms
     wt = WaitTask()
 
     pfw = PollingFileWatcher(s)
