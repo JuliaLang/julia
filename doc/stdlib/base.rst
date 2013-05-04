@@ -1402,6 +1402,10 @@ Mathematical Functions
 
    Compute :math:`2^x`
 
+.. function:: exp10(x)
+
+   Compute :math:`10^x`
+
 .. function:: ldexp(x, n)
 
    Compute :math:`x \times 2^n`
