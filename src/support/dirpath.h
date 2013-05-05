@@ -1,7 +1,7 @@
 #ifndef DIRPATH_H
 #define DIRPATH_H
 
-#ifdef WIN32
+#ifdef _OS_WINDOWS_
 #define PATHSEP '\\'
 #define PATHSEPSTRING "\\"
 #define PATHLISTSEP ';'

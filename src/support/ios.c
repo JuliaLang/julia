@@ -48,7 +48,7 @@ extern void *memrchr(const void *s, int c, size_t n);
 /*
 static int _fd_available(long fd)
 {
-#ifndef WIN32
+#ifndef _OS_WINDOWS_
     fd_set set;
     struct timeval tv = {0, 0};
 

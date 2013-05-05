@@ -1,7 +1,6 @@
 /*.o
 /*.do
+/*.obj
+/*.lib
+/*.pdb
 /libsupport.a
-*.obj
-*.lib
-*.pdb
-
