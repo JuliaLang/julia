@@ -1198,7 +1198,7 @@ endif
 MPFR_SRC_TARGET = mpfr-$(MPFR_VER)/src/.libs/libmpfr.$(SHLIB_EXT)
 MPFR_OBJ_TARGET = $(BUILD)/lib/libmpfr.$(SHLIB_EXT)
 ifeq ($(OS),Darwin)
-MPRF_CHECK_MFLAGS = LDFLAGS="-Wl,-rpath,'$(BUILD)/$(JL_LIBDIR)'"
+MPFR_CHECK_MFLAGS = LDFLAGS="-Wl,-rpath,'$(BUILD)/$(JL_LIBDIR)'"
 endif
 
 mpfr-$(MPFR_VER).tar.bz2:
@@ -1214,7 +1214,7 @@ $(MPFR_SRC_TARGET): mpfr-$(MPFR_VER)/config.status
 	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD)
 mpfr-$(MPFR_VER)/checked: $(MPFR_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD) check $(MPRF_CHECK_MFLAGS)
+	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD) check $(MPFR_CHECK_MFLAGS)
 endif
 	echo 1 > $@
 $(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET) mpfr-$(MPFR_VER)/checked
