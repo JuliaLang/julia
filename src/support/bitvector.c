@@ -36,7 +36,7 @@
 #include "dtypes.h"
 #include "bitvector.h"
 
-#ifdef WIN32
+#ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 

@@ -203,7 +203,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
         it = argNumberStrings.find(argn);
     }
     jl_value_t *targ=NULL, *pty=NULL;
-    JL_GC_PUSH(&targ, &pty);
+    JL_GC_PUSH2(&targ, &pty);
     targ = (jl_value_t*)jl_tuple1(jt);
     pty = (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
                                      (jl_tuple_t*)targ);
@@ -312,7 +312,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_NARGSV(ccall, 3);
     jl_value_t *ptr=NULL, *rt=NULL, *at=NULL;
     Value *jl_ptr=NULL;
-    JL_GC_PUSH(&ptr, &rt, &at);
+    JL_GC_PUSH3(&ptr, &rt, &at);
     ptr = static_eval(args[1], ctx, true);
     if (ptr == NULL) {
         jl_value_t *ptr_ty = expr_type(args[1], ctx);
@@ -346,7 +346,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             f_name = jl_string_data(ptr);
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
          //TODO: store the f_lib name instead of fptr
         fptr = jl_dlsym_win32(f_name);
 #else

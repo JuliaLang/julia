@@ -22,7 +22,7 @@
 
 #include "dtypes.h"
 
-#ifdef WIN32
+#ifdef _OS_WINDOWS_
 #include <malloc.h>
 #define snprintf _snprintf
 #else
