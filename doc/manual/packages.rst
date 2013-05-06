@@ -131,12 +131,12 @@ already have one. For example, create a new repository called
 Setting up continuous integration testing with Travis
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The [Travis](https://travis-ci.org) continuous integration service provides
-convenient testing for open source projects on the [Ubuntu
-Linux](http://ubuntu.com) platform.
+The `Travis <https://travis-ci.org>`_ continuous integration service provides
+convenient testing for open source projects on the `Ubuntu
+Linux <http://ubuntu.com>`_ platform.
 
-To set up testing for your package, see the [Getting
-Started](http://about.travis-ci.org/docs/user/getting-started/) section of the
+To set up testing for your package, see the `Getting
+Started <http://about.travis-ci.org/docs/user/getting-started/>`_ section of the
 Travis manual.
 
 Here is a sample `.travis.yml` that runs all tests until one fails::
@@ -160,7 +160,7 @@ Here is a sample `.travis.yml` that runs all tests until one fails::
         - cp -R ./* ~/.julia/MY_PACKAGE_NAME/
         - for a in ~/.julia/MY_PACKAGE_NAME/test/*.jl; do julia $a; errcode=$?; if test $errcode -ne 0; then exit $errcode; fi; done
 
-Be sure to install [Ubuntu packages](http://packages.ubuntu.com) for all
+Be sure to install `Ubuntu packages <http://packages.ubuntu.com>`_ for all
 necessary binary dependencies as well as any Julia package dependencies within
 Julia.
 

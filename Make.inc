@@ -35,13 +35,19 @@ override OS = WINNT
 override ARCH = i686
 override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
-export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin;$(BUILD)/Git/bin'
+export WINE_PATH := $(shell winepath -w $(BUILD)/lib/julia);$(shell winepath -w $(BUILD)/lib)
+export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export WINE_PATH := $(WINE_PATH);C:\MinGW\\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
 else ifeq ($(XC_HOST),x86_64-w64-mingw32)
 override OS = WINNT
 override ARCH = x86_64
 override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
-export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin;$(BUILD)/Git/bin'
+export WINE_PATH := $(shell winepath -w $(BUILD)/lib/julia);$(shell winepath -w $(BUILD)/lib)
+export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export WINE_PATH := $(WINE_PATH);C:\MinGW\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -334,7 +340,6 @@ ifeq ($(OS), WINNT)
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
-LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
 JLDFLAGS = -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
@@ -386,6 +391,7 @@ $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1)
 $$(abspath $(2)/$(1)): | $$(abspath $(2))
 	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),) 
 endef
+spawn = $(1)
 else
 define symlink_target
 CLEAN_TARGETS += clean-$(2)/$(1)
@@ -395,7 +401,16 @@ $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1)
 $$(abspath $(2)/$(1)): | $$(abspath $(2))
 	@ln -sf $$(abspath $(1)) $$@ 
 endef
+ifeq ($(OS),WINNT)
+spawn = wine cmd /c "set PATH=$(WINE_PATH) && $$(exec winepath -w '$(1)')"
+else
+spawn = $(1)
 endif
+endif
+exec = $(shell $(call spawn,$(1)))
+
+wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '$(2)' | xargs -d";" winepath -u | tr '\n' ' '))))
+pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
 JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)$(EXE)
 JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-release-$(DEFAULT_REPL)$(EXE)
