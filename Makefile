@@ -50,13 +50,14 @@ COMMIT:
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl $(BUILD)/share/julia/helpdb.jl
 	@$(MAKE) $(QUIET_MAKE) COMMIT
 	$(QUIET_JULIA) cd base && \
-	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***"
+	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(call spawn,$(JULIA_EXECUTABLE)) -bf sysimg.jl) && $(call spawn,$(JULIA_EXECUTABLE)) -f sysimg.jl || echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***"
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
 run-julia:
-	#wine winedbg
-	$(JULIA_EXECUTABLE)
+	@$(call spawn,$(JULIA_EXECUTABLE))
+run:
+	@$(call spawn,$(cmd))
 
 # public libraries, that are installed in $(PREFIX)/lib
 JL_LIBS = julia-release julia-debug
@@ -116,14 +117,18 @@ ifeq ($(OS), WINNT)
 	-[ -e dist-extras/PortableGit-1.8.1.2-preview20130201.7z ] && \
 	  mkdir $(PREFIX)/Git && \
 	  7z x dist-extras/PortableGit-1.8.1.2-preview20130201.7z -o"$(PREFIX)/Git"
-ifeq ($(shell uname),MINGW32_NT-6.1)
-	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
-		cp /mingw/bin/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
-	done
+ifeq ($(BUILD_OS),WINNT)
+	cp $(call pathsearch,libgfortran-3.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call pathsearch,libquadmath-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call pathsearch,libgcc_s_sjlj-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call pathsearch,libstdc++-6.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	#cp $(call pathsearch,libssp-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 else
-	for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_sjlj-1" "libstdc++-6" "libssp-0" ; do \
-		cp /usr/lib/gcc/$(ARCH)-w64-mingw32/4.6/$${dllname}.dll $(PREFIX)/$(JL_LIBDIR) ; \
-	done
+	cp $(call wine_pathsearch,libgfortran-3.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call wine_pathsearch,libquadmath-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call wine_pathsearch,libgcc_s_seh-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call wine_pathsearch,libstdc++-6.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+	cp $(call wine_pathsearch,libssp-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 endif
 	zip -r -9 julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).zip julia-$(JULIA_COMMIT)
 else
@@ -156,8 +161,8 @@ distclean: cleanall
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* clean distclean cleanall \
-	run-julia run-julia-debug run-julia-release COMMIT \
-	install dist
+	run-julia run-julia-debug run-julia-release run \
+   	COMMIT install dist
 
 test: release
 	@$(MAKE) $(QUIET_MAKE) -C test default
@@ -169,9 +174,12 @@ test-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
 
 # download target for some hardcoded windows dependencies
-.PHONY: win-extras
+.PHONY: win-extras, wine_path
 win-extras:
 	cd dist-extras && \
 	wget -O 7za920.zip http://downloads.sourceforge.net/sevenzip/7za920.zip && \
 	wget -O PortableGit-1.8.1.2-preview20130201.7z https://msysgit.googlecode.com/files/PortableGit-1.8.1.2-preview20130201.7z
-
+wine_path:
+	$(info $(WINE_PATH))
+	@echo "wine cmd /c \"set \$$PATH=...\";%PATH% && program"
+	@echo
