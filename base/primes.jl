@@ -18,7 +18,12 @@ function primesmask(n::Int)
     end
     return s
 end
-primes(n::Int) = find(primesmask(n))
+function primesmask(n::Integer)
+    n <= typemax(Int) || error("primesmask: you want WAY too many primes ($n)")
+    primesmask(int(n))
+end
+
+primes(n::Integer) = find(primesmask(n))
 
 function isprime(n::Integer)
     n == 2 && return true

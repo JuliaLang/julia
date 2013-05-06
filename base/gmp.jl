@@ -4,7 +4,7 @@ export BigInt
 
 import Base: *, +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, sqrt, string
+             ndigits, promote_rule, rem, show, sqrt, string, isprime
 
 type BigInt <: Integer
     alloc::Cint
@@ -223,5 +223,6 @@ function show(io::IO, x::BigInt)
 end
 
 ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 10)
+isprime(x::BigInt) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt},), &x) > 0
 
 end # module
