@@ -50,26 +50,21 @@ end
 # TODO: replace this factorization routine
 
 function factor{T<:Integer}(n::T)
-    if n <= 0
-        error("factor: number to be factored must be positive")
-    end
+    0 < n || error("factor: number to be factored must be positive")
     h = (T=>Int)[]
-    if n == 1 return h end
-    local p::T
+    n == 1 && return h
+    n <= 3 && (h[n] = 1; return h)
+    local s::T, p::T
     s = ifloor(sqrt(n))
-    P = primes(n)
+    P = primes(s)
     for p in P
-        if p > s
-            break
-        end
+        p <= s || break
         if n % p == 0
             while n % p == 0
                 h[p] = get(h,p,0)+1
                 n = div(n,p)
             end
-            if n == 1
-                return h
-            end
+            n == 1 && return h
             s = ifloor(sqrt(n))
         end
     end
