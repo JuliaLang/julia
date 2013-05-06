@@ -27,27 +27,22 @@ function BigInt(x::String)
     return z
 end
 
-function BigInt(x::Int)
+function BigInt(x::Clong)
     z = BigInt()
     ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{BigInt}, Clong), &z, x)
     return z
 end
-
-function BigInt(x::Uint)
+function BigInt(x::Culong)
     z = BigInt()
     ccall((:__gmpz_set_ui, :libgmp), Void,(Ptr{BigInt}, Culong), &z, x)
     return z
 end
 
 BigInt(x::Bool) = BigInt(uint(x))
-BigInt(x::Signed) = BigInt(int(x))
-BigInt(x::Unsigned) = BigInt(uint(x))
-#BigInt(x::Int128) = BigInt(string(x))
-#BigInt(x::Uint128) = BigInt(string(x))
-if WORD_SIZE == 32
-    BigInt(x::Int64) = BigInt(string(x))
-    BigInt(x::Uint64) = BigInt(string(x))
-end
+BigInt(x::Integer) =
+    typemin(Clong) <= x <= typemax(Clong) ? BigInt(convert(Clong,x)) : BigInt(string(x))
+BigInt(x::Unsigned) =
+    x <= typemax(Culong) ? BigInt(convert(Culong,x)) : BigInt(string(x))
 
 convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
 
