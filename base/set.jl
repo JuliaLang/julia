@@ -105,4 +105,3 @@ function filter!(f::Function, s::Set)
     return s
 end
 filter(f::Function, s::Set) = filter!(f, copy(s))
-
