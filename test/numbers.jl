@@ -1372,9 +1372,13 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
     9949, 9967, 9973 ]
 
 for n = [1:1000,1000000]
+    f = factor(n)
+    @test n == prod([p^k for (p,k)=f])
+    prime = n!=1 && length(f)==1 && get(f,n,0)==1
+    @test isprime(n) == prime
+
     s = Base.primesmask(n)
     for k = 1:n
         @test s[k] == isprime(k)
     end
-    @test prod([p^k for (p,k)=factor(n)]) == n
 end

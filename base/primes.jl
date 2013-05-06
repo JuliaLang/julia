@@ -20,12 +20,12 @@ function primesmask(n::Int)
 end
 primes(n::Int) = find(primesmask(n))
 
-function isprime(n::Int)
+function isprime(n::Integer)
     n == 2 && return true
     n <= 2 | iseven(n) && return false
     s = trailing_zeros(n-1)
     d = (n-1) >>> s
-    for a in (2,3,5,7,11,13,17) # TODO: more checks for larger n
+    for a in witnesses(n)
         a < n || break
         x = powermod(a,d,n)
         x == 1 && continue
@@ -37,6 +37,14 @@ function isprime(n::Int)
         end
     end
     return true
+end
+@eval begin
+    witnesses(n::Union(Uint32,Int32)) = n < 1373653 ?
+        $(map(int32,(2,3))) :
+        $(map(int32,(2,7,61)))
+    witnesses(n::Union(Uint64,Int64)) = n < 341550071728321 ?
+        $(map(int64,(2,3,5,7,11,13,17))) :
+        $(map(int64,(2,325,9375,28178,450775,9780504,1795265022)))
 end
 
 # TODO: replace this factorization routine
