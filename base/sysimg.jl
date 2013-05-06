@@ -124,10 +124,10 @@ include("loading.jl")
 
 # core math functions
 include("intfuncs.jl")
-include("primes.jl")
 include("floatfuncs.jl")
 include("math.jl")
 importall .Math
+include("primes.jl")
 
 # random number generation and statistics
 include("statistics.jl")

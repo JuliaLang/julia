@@ -54,6 +54,8 @@ end
 
 # TODO: replace this factorization routine
 
+const PRIMES = primes(10000)
+
 function factor{T<:Integer}(n::T)
     0 < n || error("factor: number to be factored must be positive")
     h = (T=>Int)[]
@@ -61,8 +63,7 @@ function factor{T<:Integer}(n::T)
     n <= 3 && (h[n] = 1; return h)
     local s::T, p::T
     s = ifloor(sqrt(n))
-    P = primes(s)
-    for p in P
+    for p in PRIMES
         p <= s || break
         if n % p == 0
             while n % p == 0
@@ -73,7 +74,7 @@ function factor{T<:Integer}(n::T)
             s = ifloor(sqrt(n))
         end
     end
-    p = P[end]+2
+    p = PRIMES[end]+2
     while p <= s
         if n % p == 0
             while n % p == 0
