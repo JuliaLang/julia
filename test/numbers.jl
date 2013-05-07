@@ -1402,3 +1402,9 @@ end
 @test  isprime(9223372036854775783)
 @test !isprime(9223372036854775785)
 @test !isprime(9223372036854775787)
+
+@test !isprime(0xffffffffffffffc1)
+@test !isprime(0xffffffffffffffc3)
+@test  isprime(0xffffffffffffffc5)
+@test !isprime(0xffffffffffffffc7)
+@test !isprime(0xffffffffffffffc9)

@@ -37,7 +37,7 @@ function isprime(n::Integer)
         t = s
         while x != n-1
             (t-=1) <= 0 && return false
-            x = x*x % n
+            x = oftype(n, widemul(x,x) % n)
             x == 1 && return false
         end
     end
