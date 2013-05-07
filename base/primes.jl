@@ -18,7 +18,12 @@ function primesmask(n::Int)
     end
     return s
 end
-primes(n::Int) = find(primesmask(n))
+function primesmask(n::Integer)
+    n <= typemax(Int) || error("primesmask: you want WAY too many primes ($n)")
+    primesmask(int(n))
+end
+
+primes(n::Integer) = find(primesmask(n))
 
 function isprime(n::Integer)
     n == 2 && return true
@@ -49,31 +54,27 @@ end
 
 # TODO: replace this factorization routine
 
+const PRIMES = primes(10000)
+
 function factor{T<:Integer}(n::T)
-    if n <= 0
-        error("factor: number to be factored must be positive")
-    end
+    0 < n || error("factor: number to be factored must be positive")
     h = (T=>Int)[]
-    if n == 1 return h end
-    local p::T
-    s = ifloor(sqrt(n))
-    P = primes(n)
-    for p in P
-        if p > s
-            break
-        end
+    n == 1 && return h
+    n <= 3 && (h[n] = 1; return h)
+    local s::T, p::T
+    s = isqrt(n)
+    for p in PRIMES
+        p <= s || break
         if n % p == 0
             while n % p == 0
                 h[p] = get(h,p,0)+1
                 n = div(n,p)
             end
-            if n == 1
-                return h
-            end
-            s = ifloor(sqrt(n))
+            n == 1 && return h
+            s = isqrt(n)
         end
     end
-    p = P[end]+2
+    p = PRIMES[end]+2
     while p <= s
         if n % p == 0
             while n % p == 0
@@ -83,7 +84,7 @@ function factor{T<:Integer}(n::T)
             if n == 1
                 return h
             end
-            s = ifloor(sqrt(n))
+            s = isqrt(n)
         end
         p += 2
     end

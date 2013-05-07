@@ -4,7 +4,7 @@ export BigInt
 
 import Base: *, +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, sqrt, string
+             ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod
 
 type BigInt <: Integer
     alloc::Cint
@@ -27,27 +27,22 @@ function BigInt(x::String)
     return z
 end
 
-function BigInt(x::Int)
+function BigInt(x::Clong)
     z = BigInt()
     ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{BigInt}, Clong), &z, x)
     return z
 end
-
-function BigInt(x::Uint)
+function BigInt(x::Culong)
     z = BigInt()
     ccall((:__gmpz_set_ui, :libgmp), Void,(Ptr{BigInt}, Culong), &z, x)
     return z
 end
 
 BigInt(x::Bool) = BigInt(uint(x))
-BigInt(x::Signed) = BigInt(int(x))
-BigInt(x::Unsigned) = BigInt(uint(x))
-#BigInt(x::Int128) = BigInt(string(x))
-#BigInt(x::Uint128) = BigInt(string(x))
-if WORD_SIZE == 32
-    BigInt(x::Int64) = BigInt(string(x))
-    BigInt(x::Uint64) = BigInt(string(x))
-end
+BigInt(x::Integer) =
+    typemin(Clong) <= x <= typemax(Clong) ? BigInt(convert(Clong,x)) : BigInt(string(x))
+BigInt(x::Unsigned) =
+    x <= typemax(Culong) ? BigInt(convert(Culong,x)) : BigInt(string(x))
 
 convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
 
@@ -155,7 +150,7 @@ function cmp(x::BigInt, y::BigInt)
     ccall((:__gmpz_cmp, :libgmp), Int32, (Ptr{BigInt}, Ptr{BigInt}), &x, &y)
 end
 
-function sqrt(x::BigInt)
+function isqrt(x::BigInt)
     z = BigInt()
     ccall((:__gmpz_sqrt, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}), &z, &x)
     return z
@@ -179,6 +174,16 @@ end
 ^(x::BigInt , y::Bool   ) = y ? x : one(x)
 ^(x::BigInt , y::Integer) = bigint_pow(x, y)
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
+
+function powermod(x::BigInt, p::BigInt, m::BigInt)
+    r = BigInt()
+    ccall((:__gmpz_powm, :libgmp), Void,
+          (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
+          &r, &x, &p, &m)
+    return r
+end
+powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
+powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
 
 function gcdx(a::BigInt, b::BigInt)
     g = BigInt()
@@ -228,5 +233,6 @@ function show(io::IO, x::BigInt)
 end
 
 ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 10)
+isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
 end # module

@@ -1949,7 +1949,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                 if (jl_isbits(sty)) {
                     Type *lt = julia_type_to_llvm(ty);
                     Value *strct = UndefValue::get(lt);
-                    for(size_t i=0; i < nf; i++) {
+                    size_t na = nargs-1 < nf ? nargs-1 : nf;
+                    for(size_t i=0; i < na; i++) {
                         unsigned idx = i;
                         Type *fty = julia_type_to_llvm(jl_tupleref(sty->types,i));
                         Value *fval = emit_unbox(fty, PointerType::get(fty,0), emit_unboxed(args[i+1],ctx));

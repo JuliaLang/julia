@@ -414,6 +414,22 @@ end
 
 # ########## end of set tests ##########
 
+## IntSet
+
+s = IntSet(0,1,10,20,200,300,1000,10000,10002)
+@test last(s) == 10002
+@test first(s) == 0
+@test length(s) == 9
+@test pop!(s) == 10002
+@test length(s) == 8
+@test shift!(s) == 0
+@test length(s) == 7
+@test !contains(s,0)
+@test !contains(s,10002)
+@test contains(s,10000)
+@test_fails first(IntSet())
+@test_fails last(IntSet())
+
 # Ensure denormal flags functions don't segfault
 @test any(ccall("jl_zero_denormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
 @test any(ccall("jl_zero_denormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
