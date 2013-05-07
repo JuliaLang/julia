@@ -4,7 +4,7 @@ export BigInt
 
 import Base: *, +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, isqrt, string, isprime
+             ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod
 
 type BigInt <: Integer
     alloc::Cint
@@ -174,6 +174,16 @@ end
 ^(x::BigInt , y::Bool   ) = y ? x : one(x)
 ^(x::BigInt , y::Integer) = bigint_pow(x, y)
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
+
+function powermod(x::BigInt, p::BigInt, m::BigInt)
+    r = BigInt()
+    ccall((:__gmpz_powm, :libgmp), Void,
+          (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
+          &r, &x, &p, &m)
+    return r
+end
+powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
+powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
 
 function gcdx(a::BigInt, b::BigInt)
     g = BigInt()
