@@ -372,12 +372,70 @@ c = BigInt("123456789012345678901234567891")
 @test typeof(floor(x)) == BigFloat
 @test trunc(x) == y
 @test typeof(trunc(x)) == BigFloat
+
 @test iceil(x) == z
 @test typeof(iceil(x)) == BigInt
 @test ifloor(x) == y
 @test typeof(ifloor(x)) == BigInt
 @test itrunc(x) == y
 @test typeof(itrunc(x)) == BigInt
+
+@test iceil(Int64, x) == int64(z)
+@test typeof(iceil(Int64, x)) == Int64
+@test ifloor(Int64, x) == int64(y)
+@test typeof(ifloor(Int64, x)) == Int64
+@test itrunc(Int64, x) == int64(y)
+@test typeof(itrunc(Int64, x)) == Int64
+
+@test iceil(Int32, x) == int32(z)
+@test typeof(iceil(Int32, x)) == Int32
+@test ifloor(Int32, x) == int32(y)
+@test typeof(ifloor(Int32, x)) == Int32
+@test itrunc(Int32, x) == int32(y)
+@test typeof(itrunc(Int32, x)) == Int32
+
+@test iceil(Int16, x) == int16(z)
+@test typeof(iceil(Int16, x)) == Int16
+@test ifloor(Int16, x) == int16(y)
+@test typeof(ifloor(Int16, x)) == Int16
+@test itrunc(Int16, x) == int16(y)
+@test typeof(itrunc(Int16, x)) == Int16
+
+@test iceil(Int8, x) == int8(z)
+@test typeof(iceil(Int8, x)) == Int8
+@test ifloor(Int8, x) == int8(y)
+@test typeof(ifloor(Int8, x)) == Int8
+@test itrunc(Int8, x) == int8(y)
+@test typeof(itrunc(Int8, x)) == Int8
+
+@test iceil(Uint64, x) == uint64(z)
+@test typeof(iceil(Uint64, x)) == Uint64
+@test ifloor(Uint64, x) == uint64(y)
+@test typeof(ifloor(Uint64, x)) == Uint64
+@test itrunc(Uint64, x) == uint64(y)
+@test typeof(itrunc(Uint64, x)) == Uint64
+
+@test iceil(Uint32, x) == uint32(z)
+@test typeof(iceil(Uint32, x)) == Uint32
+@test ifloor(Uint32, x) == uint32(y)
+@test typeof(ifloor(Uint32, x)) == Uint32
+@test itrunc(Uint32, x) == uint32(y)
+@test typeof(itrunc(Uint32, x)) == Uint32
+
+@test iceil(Uint16, x) == uint16(z)
+@test typeof(iceil(Uint16, x)) == Uint16
+@test ifloor(Uint16, x) == uint16(y)
+@test typeof(ifloor(Uint16, x)) == Uint16
+@test itrunc(Uint16, x) == uint16(y)
+@test typeof(itrunc(Uint16, x)) == Uint16
+
+@test iceil(Uint8, x) == uint8(z)
+@test typeof(iceil(Uint8, x)) == Uint8
+@test ifloor(Uint8, x) == uint8(y)
+@test typeof(ifloor(Uint8, x)) == Uint8
+@test itrunc(Uint8, x) == uint8(y)
+@test typeof(itrunc(Uint8, x)) == Uint8
+
 @test iceil(a) == c
 @test typeof(iceil(a)) == BigInt
 @test ifloor(a) == b
