@@ -373,11 +373,11 @@ c = BigInt("123456789012345678901234567891")
 @test trunc(x) == y
 @test typeof(trunc(x)) == BigFloat
 @test iceil(x) == z
-@test typeof(iceil(x)) == Int64
+@test typeof(iceil(x)) == BigInt
 @test ifloor(x) == y
-@test typeof(ifloor(x)) == Int64
+@test typeof(ifloor(x)) == BigInt
 @test itrunc(x) == y
-@test typeof(itrunc(x)) == Int64
+@test typeof(itrunc(x)) == BigInt
 @test iceil(a) == c
 @test typeof(iceil(a)) == BigInt
 @test ifloor(a) == b
