@@ -107,38 +107,34 @@ end
 requires_dict(pkg::String, avail::Dict=available(pkg)) =
     parse_requires(requires_path(pkg,avail))
 
-function installed(avail::Dict=available())
-    pkgs = Dict{ByteString,Installed}()
+function fixed(avail::Dict=available())
+    pkgs = Dict{ByteString,Fixed}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        availpkg = avail[pkg]
-        pkgs[pkg] = !isfixed(pkg,availpkg) ? Free() :
-            Fixed(installed_version(pkg,availpkg), requires_dict(pkg,availpkg))
+        ap = avail[pkg]
+        isfixed(pkg,ap) || continue
+        pkgs[pkg] = Fixed(installed_version(pkg,ap),requires_dict(pkg,ap))
     end
     pkgs["julia"] = Fixed(VERSION)
     return pkgs
 end
 
-function requirements(reqs::Dict, inst::Dict)
-    fixed = filter((p,f)->isa(f,Fixed), inst)
-    for (p1,f1) in fixed
-        if !satisfies(p1, f1.version, reqs)
+function requirements(reqs::Dict, fix::Dict=fixed())
+    for (p1,f1) in fix
+        satisfies(p1, f1.version, reqs) ||
             warn("$p1 is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
-        end
-        for (p2,f2) in fixed
-            if !satisfies(p1, f1.version, f2.requires)
+        for (p2,f2) in fix
+            satisfies(p1, f1.version, f2.requires) ||
                 warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
-            end
-            merge_requires!(reqs,f2.requires)
+            merge_requires!(reqs, f2.requires)
         end
-        delete!(reqs,p1)
+        delete!(reqs, p1, nothing)
     end
     reqs
 end
-requirements() = requirements(parse_requires("REQUIRE"), installed())
+requirements() = requirements(parse_requires("REQUIRE"))
 
-function dependencies(avail::Dict, inst::Dict)
-    fixed = filter((p,f)->isa(f,Fixed), inst)
+function dependencies(avail::Dict, fixed::Dict=fixed())
     for (pkg,vers) in avail
         for (ver,avail) in vers
             

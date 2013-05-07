@@ -223,6 +223,6 @@ function show(io::IO, x::BigInt)
 end
 
 ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 10)
-isprime(x::BigInt) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt},), &x) > 0
+isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
 end # module
