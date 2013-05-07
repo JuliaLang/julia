@@ -4,7 +4,8 @@ export BigInt
 
 import Base: *, +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod
+             ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
+             widemul
 
 type BigInt <: Integer
     alloc::Cint
@@ -51,6 +52,17 @@ convert(::Type{Int}, n::BigInt) =
 
 convert(::Type{Uint}, n::BigInt) =
     convert(Uint, ccall((:__gmpz_get_ui, :libgmp), Culong, (Ptr{BigInt},), &n))
+
+if sizeof(Int64) == sizeof(Clong)
+    function convert(::Type{Int128}, x::BigInt)
+        ax = abs(x)
+        top = ax>>64
+        bot = ax - (top<<64)
+        n = int128(convert(Uint,top))<<64 + int128(convert(Uint,bot))
+        return x<0 ? -n : n
+    end
+    convert(::Type{Uint128}, x::BigInt) = uint128(convert(Int128,x))
+end
 
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
@@ -234,5 +246,8 @@ end
 
 ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 10)
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
+
+widemul(x::BigInt, y::BigInt) = x*y
+widemul(x::Union(Int128,Uint128), y::Union(Int128,Uint128)) = BigInt(x)*BigInt(y)
 
 end # module
