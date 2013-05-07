@@ -304,3 +304,5 @@ function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
     end
     return a
 end
+
+isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))

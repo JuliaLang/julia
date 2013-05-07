@@ -4,7 +4,7 @@ export BigInt
 
 import Base: *, +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, sqrt, string, isprime
+             ndigits, promote_rule, rem, show, isqrt, string, isprime
 
 type BigInt <: Integer
     alloc::Cint
@@ -150,7 +150,7 @@ function cmp(x::BigInt, y::BigInt)
     ccall((:__gmpz_cmp, :libgmp), Int32, (Ptr{BigInt}, Ptr{BigInt}), &x, &y)
 end
 
-function sqrt(x::BigInt)
+function isqrt(x::BigInt)
     z = BigInt()
     ccall((:__gmpz_sqrt, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}), &z, &x)
     return z
