@@ -185,7 +185,8 @@ function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     return a
 end
 function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
-    if isbits(T) && convert(T,x) == 0
+    # note: preserve -0.0 for floats
+    if isbits(T) && T<:Integer && convert(T,x) == 0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a,0,length(a)*sizeof(T))
     else
         for i = 1:length(a)
