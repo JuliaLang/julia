@@ -1383,3 +1383,22 @@ for T in [Int,BigInt], n = [1:1000,1000000]
         @test s[k] == isprime(k)
     end
 end
+
+@test !isprime(1000000003)
+@test !isprime(1000000005)
+@test  isprime(1000000007)
+@test  isprime(1000000009)
+@test !isprime(1000000011)
+@test !isprime(1000000013)
+
+@test !isprime(10000000015)
+@test !isprime(10000000017)
+@test  isprime(10000000019)
+@test !isprime(10000000021)
+@test !isprime(10000000023)
+
+@test !isprime(9223372036854775779)
+@test !isprime(9223372036854775781)
+@test  isprime(9223372036854775783)
+@test !isprime(9223372036854775785)
+@test !isprime(9223372036854775787)
