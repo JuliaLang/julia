@@ -110,30 +110,22 @@ end
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
-# x^p mod m
-function powermod(x::Integer, p::Integer, m::Integer)
-    if p == 0
-        return one(x)
-    elseif p < 0
-        throw(DomainError())
-    end
-    t = 1
-    while t <= p
-        t *= 2
-    end
-    t = div(t,2)
+# b^p mod m
+function powermod{T}(b::Integer, p::Integer, m::T)
+    p < 0 && throw(DomainError())
+    p == 0 && return one(b)
+    b = oftype(m,mod(b,m))
+    t = prevpow2(p)
+    local r::T
     r = 1
     while true
         if p >= t
-            r = mod(r*x, m)
+            r = mod(widemul(r,b),m)
             p -= t
         end
-        t = div(t,2)
-        if t > 0
-            r = mod(r*r, m)
-        else
-            break
-        end
+        t >>>= 1
+        t <= 0 && break
+        r = mod(widemul(r,r),m)
     end
     return r
 end
