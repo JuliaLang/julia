@@ -160,9 +160,12 @@ function squeeze(A::AbstractArray, dims)
     reshape(A, d)
 end
 
-fill!{T}(A::AbstractArray{T}, x::T) = (for i=1:length(A) A[i]=x end; A)
-fill!(A::AbstractArray{Any}, x) = (for i=1:length(A) A[i]=x end; A)
-fill!{T}(A::AbstractArray{T}, x) = fill!(A,convert(T,x))
+function fill!(A::AbstractArray, x)
+    for i = 1:length(A)
+        A[i] = x
+    end
+    return A
+end
 
 function copy!(dest::AbstractArray, src, dsto::Integer=1)
     i = dsto

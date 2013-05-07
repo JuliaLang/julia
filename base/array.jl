@@ -180,19 +180,18 @@ function getindex{T<:Number}(::Type{T}, r1::Ranges, rs::Ranges...)
     return a
 end
 
-function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::T)
-    ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
+function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
+    ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a, x, length(a))
     return a
 end
-function fill!{T}(a::Array{T}, x::T)
-    if isbits(T)
-        bytes = reinterpret(Uint8,[x])
-        if all(b->b==bytes[1],bytes)
-            ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, bytes[1], length(a)*sizeof(T))
-            return a
+function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
+    if isbits(T) && convert(T,x) == 0
+        ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a,0,length(a)*sizeof(T))
+    else
+        for i = 1:length(a)
+            a[i] = x
         end
     end
-    for i=1:length(a) a[i] = x end
     return a
 end
 
