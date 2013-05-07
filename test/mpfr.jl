@@ -359,6 +359,32 @@ with_bigfloat_precision(53) do
     @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
 end
 
+# ceil / iceil / floor / ifloor / trunc / itrunc
+x = BigFloat("28273.2312487489135135135")
+y = BigInt(28273)
+z = BigInt(28274)
+a = BigFloat("123456789012345678901234567890.2414")
+b = BigInt("123456789012345678901234567890")
+c = BigInt("123456789012345678901234567891")
+@test ceil(x) == z
+@test typeof(ceil(x)) == BigFloat
+@test floor(x) == y
+@test typeof(floor(x)) == BigFloat
+@test trunc(x) == y
+@test typeof(trunc(x)) == BigFloat
+@test iceil(x) == z
+@test typeof(iceil(x)) == Int64
+@test ifloor(x) == y
+@test typeof(ifloor(x)) == Int64
+@test itrunc(x) == y
+@test typeof(itrunc(x)) == Int64
+@test iceil(a) == c
+@test typeof(iceil(a)) == BigInt
+@test ifloor(a) == b
+@test typeof(ifloor(a)) == BigInt
+@test itrunc(a) == b
+@test typeof(itrunc(a)) == BigInt
+
 # basic arithmetic
 # Signed addition
 a = BigFloat("123456789012345678901234567890")

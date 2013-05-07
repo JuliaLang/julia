@@ -21,7 +21,7 @@ import
         isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf, nextfloat,
         prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
         string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
-        erf, erfc, zeta, log1p, airyai,
+        erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc,
     # import trigonometric functions
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
         sech, csch, coth, acosh, asinh, atanh, atan2
@@ -343,6 +343,20 @@ for f in (:ceil, :floor, :trunc)
             z = BigFloat()
             ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &x)
             return z
+        end
+    end
+end
+
+for (f, g) in ((:iceil, :ceil), (:ifloor, :floor), (:itrunc, :trunc))
+    @eval begin
+        function ($f)(x::BigFloat)
+            fits = ccall((:mpfr_fits_slong_p, :libmpfr), Int32, (Ptr{BigFloat}, Int32), &x, RoundUp)
+            if fits != 0
+                z = BigFloat()
+                ccall(($(string(:mpfr_,g)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &x)
+                return ccall((:mpfr_get_si, :libmpfr), Clong, (Ptr{BigFloat}, Int32), &z, ROUNDING_MODE[end])
+            end
+            return convert(BigInt, ($g)(x))
         end
     end
 end
