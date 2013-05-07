@@ -62,7 +62,7 @@ function factor{T<:Integer}(n::T)
     n == 1 && return h
     n <= 3 && (h[n] = 1; return h)
     local s::T, p::T
-    s = ifloor(sqrt(n))
+    s = isqrt(n)
     for p in PRIMES
         p <= s || break
         if n % p == 0
@@ -71,7 +71,7 @@ function factor{T<:Integer}(n::T)
                 n = div(n,p)
             end
             n == 1 && return h
-            s = ifloor(sqrt(n))
+            s = isqrt(n)
         end
     end
     p = PRIMES[end]+2
@@ -84,7 +84,7 @@ function factor{T<:Integer}(n::T)
             if n == 1
                 return h
             end
-            s = ifloor(sqrt(n))
+            s = isqrt(n)
         end
         p += 2
     end

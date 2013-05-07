@@ -335,6 +335,8 @@ function sqrt(x::BigFloat)
     return z
 end
 
+sqrt(x::BigInt) = sqrt(BigFloat(x))
+
 for f in (:ceil, :floor, :trunc)
     @eval begin
         function ($f)(x::BigFloat)
