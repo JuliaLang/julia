@@ -59,9 +59,9 @@ function gen_listpkg()
 		print(io, "`$(pkg) <$(html_url)>`_\n"); 
 		print(io, "_"^(length("`$(pkg) <$(html_url)>`_")) * "\n\n")
 		print(io, "  .. image:: $(u[:avatar])\n     :height: 80px\n     :width: 80px\n     :align: right\n     :alt: $(u[:fullname])\n     :target: $(u[:url])\n\n")
-		print(io, "  Current Version: ``$(maxv.version)``\n\n"); 
+		print(io, "  Current Version: ``$(maxv.version)``"); 
 		if date != nothing
-			print(io, "  Last update: $(date[1:10]) \n\n")
+			print(io, "  (updated: $(date[1:10])) \n\n")
 		end
 		print(io, "  $(desc) \n\n")
 		print(io, "  Maintainer: `$(u[:fullname]) <$(u[:url])>`_\n\n") 
