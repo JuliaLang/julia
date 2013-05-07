@@ -838,6 +838,7 @@ export
     cor,
     cov,
     hist,
+    hist2d,
     histrange,
     mean,
     median,
