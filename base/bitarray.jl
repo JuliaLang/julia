@@ -124,7 +124,7 @@ similar(B::BitArray, T::Type{Bool}, dims::Dims) = BitArray(dims)
 # (this triggers conversions like float(bitvector) etc.)
 similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
 
-function fill!(B::BitArray, x)
+function fill!(B::BitArray, x::Bool)
     y = convert(Bool, x)
     Bc = B.chunks
     if !y
