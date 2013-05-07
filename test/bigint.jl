@@ -164,6 +164,13 @@ end
 @test binomial(BigInt(-53), 42) == BigInt("959509335087854414441273718")
 @test binomial(BigInt(113), BigInt(42)) == BigInt("18672199984318438125634054194360")
 
+@test isprime(BigInt(1000000007))
+@test isprime(BigInt(1000000007), 1)
+@test isprime(BigInt(10000000019))
+@test isprime(BigInt("359334085968622831041960188598043661065388726959079837"))
+@test !isprime(BigInt(1))
+@test !isprime(BigInt(10000000020))
+
 # Large Fibonacci to exercise BigInt
 # from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633
 function mul(a::Vector{BigInt}, b::Vector{BigInt})
