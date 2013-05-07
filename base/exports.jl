@@ -1048,6 +1048,7 @@ export
     seekend,
     seekstart,
     serialize,
+    set_output_stream,
     skip,
     start_reading,
     start_watching,

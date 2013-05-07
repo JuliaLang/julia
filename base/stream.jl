@@ -216,16 +216,14 @@ function _uv_tty2tty(handle::Ptr{Void})
     tty
 end
 
-#macro init_stdio()
-#begin
-    const STDIN  = _uv_tty2tty(ccall(:jl_stdin_stream ,Ptr{Void},()))
-    const STDOUT = _uv_tty2tty(ccall(:jl_stdout_stream,Ptr{Void},()))
-    const STDERR = _uv_tty2tty(ccall(:jl_stderr_stream,Ptr{Void},()))
-    OUTPUT_STREAM = STDOUT
-#end
-#end
+const STDIN  = _uv_tty2tty(ccall(:jl_stdin_stream ,Ptr{Void},()))
+const STDOUT = _uv_tty2tty(ccall(:jl_stdout_stream,Ptr{Void},()))
+const STDERR = _uv_tty2tty(ccall(:jl_stderr_stream,Ptr{Void},()))
+OUTPUT_STREAM = STDOUT
 
-#@init_stdio
+function set_output_stream(stream)
+    global OUTPUT_STREAM = stream
+end
 
 function _init_buf(stream::AsyncStream)
     if(!isa(stream.buf,IOStream))
