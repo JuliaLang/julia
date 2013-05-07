@@ -100,14 +100,24 @@ convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 
 convert(::Type{Int64}, x::BigFloat) = int64(convert(Clong, x))
 convert(::Type{Int32}, x::BigFloat) = int32(convert(Clong, x))
-convert(::Type{Clong}, x::BigFloat) = integer_valued(x) ?
-    ccall((:mpfr_get_si,:libmpfr), Clong, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end]) :
-    throw(InexactError())
-convert(::Type{Uint32}, x::BigFloat) = uint64(convert(Culong, x))
+function convert(::Type{Clong}, x::BigFloat)
+    fits = ccall((:mpfr_fits_slong_p, :libmpfr), Int32, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end]) != 0
+    if integer_valued(x) && fits
+        ccall((:mpfr_get_si,:libmpfr), Clong, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end])
+    else
+        throw(InexactError())
+    end
+end
+convert(::Type{Uint64}, x::BigFloat) = uint64(convert(Culong, x))
 convert(::Type{Uint32}, x::BigFloat) = uint32(convert(Culong, x))
-convert(::Type{Culong}, x::BigFloat) = integer_valued(x) ?
-    ccall((:mpfr_get_ui,:libmpfr), Culong, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end]) :
-    throw(InexactError())
+function convert(::Type{Culong}, x::BigFloat) 
+    fits = ccall((:mpfr_fits_ulong_p, :libmpfr), Int32, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end]) != 0
+    if integer_valued(x) && fits
+        ccall((:mpfr_get_ui,:libmpfr), Culong, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end])
+    else
+        throw(InexactError())
+    end
+end
 function convert(::Type{BigInt}, x::BigFloat) 
     if integer_valued(x)
         z = BigInt()
@@ -336,20 +346,6 @@ function sqrt(x::BigFloat)
 end
 
 sqrt(x::BigInt) = sqrt(BigFloat(x))
-
-for f in (:ceil, :floor, :trunc)
-    @eval begin
-        function ($f)(x::BigFloat)
-            z = BigFloat()
-            ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &x)
-            return z
-        end
-    end
-end
-
-for (f, g) in ((:iceil, :ceil), (:ifloor, :floor), (:itrunc, :trunc))
-    @eval ($f)(x::BigFloat) = convert(BigInt, ($g)(x))
-end
 
 function ^(x::BigFloat, y::Unsigned)
     z = BigFloat()
@@ -595,6 +591,32 @@ function integer_valued(x::BigFloat)
     return ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 end
 
+for f in (:ceil, :floor, :trunc)
+    @eval begin
+        function ($f)(x::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &x)
+            return z
+        end
+    end
+end
+
+for (f, g) in ((:iceil, :ceil), (:ifloor, :floor), (:itrunc, :trunc))
+    @eval ($f)(x::BigFloat) = convert(BigInt, ($g)(x))
+end
+
+for (c,t) in ((:uint8,:Uint8),   (:int8,:Int8),
+              (:uint16,:Uint16), (:int16,:Int16),
+              (:uint32,:Uint32), (:int32,:Int32),
+              (:uint64,:Uint64), (:int64,:Int64),
+              (:uint,:Uint),     (:int, :Int))
+    for (f, g) in ((:iceil, :ceil), (:ifloor, :floor), (:itrunc, :trunc))
+        @eval begin
+            @eval ($f)(::Type{$t}, x::BigFloat) = ($c)(($f)(x))
+        end
+    end
+end
+
 function iround(x::BigFloat)
     fits = ccall((:mpfr_fits_slong_p, :libmpfr), Int32, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end])
     if fits != 0
@@ -605,11 +627,11 @@ function iround(x::BigFloat)
     return z
 end
 
-for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
-              (:int64,:Int64), (:uint64,:Uint64),
-              # requires int128/uint128(::Type{BigInt}) support
-              # (:int128,:Int128), (:uint128,:Uint128),
-              (:unsigned,:Uint), (:uint,:Uint))
+for (f,t) in ((:uint8,:Uint8),   (:int8,:Int8),
+              (:uint16,:Uint16), (:int16,:Int16),
+              (:uint32,:Uint32), (:int32,:Int32),
+              (:uint64,:Uint64), (:int64,:Int64),
+              (:uint,:Uint),     (:int, :Int))
     @eval iround(::Type{$t}, x::BigFloat) = ($f)(iround(x))
 end
 
