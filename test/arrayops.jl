@@ -442,3 +442,6 @@ begin
     @test issorted(as[2,:])
     @test issorted(as[3,:])
 end
+
+# fill
+@test fill!(Array(Float64,1),-0.0)[1] === -0.0
