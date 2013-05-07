@@ -14,7 +14,7 @@ __________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
-  Current Version: ``0.2.1``
+  Current Version: ``0.2.1``  (updated: 2013-04-18) 
 
   Package for parsing command-line arguments to Julia programs. 
 
@@ -51,14 +51,14 @@ __________________________________________________________
 `BSplines <https://github.com/gusl/BSplines.jl>`_
 _________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/c982f9823bc3cb987b614baf5678ec31?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/25d0ed671b01595bb0a6c12bfa90c9b2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
      :width: 80px
      :align: right
      :alt: gusl
      :target: https://github.com/gusl
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-11) 
 
    
 
@@ -70,7 +70,7 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://secure.gravatar.com/avatar/c982f9823bc3cb987b614baf5678ec31?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/25d0ed671b01595bb0a6c12bfa90c9b2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: gusl
@@ -88,7 +88,7 @@ _____________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-19) 
 
   A package for benchmarking code and packages 
 
@@ -130,7 +130,7 @@ ___________________________________________________
      :alt: Keno Fischer
      :target: https://github.com/loladiro
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.1``  (updated: 2013-04-05) 
 
   Tool for building binary dependencies for Julia modules 
 
@@ -172,7 +172,7 @@ _________________________________________________
      :alt: Diego Javier Zea
      :target: https://github.com/diegozea
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-05-03) 
 
   Julia's package for working on Bioinformatics with DNA, RNA and Protein Sequences 
 
@@ -208,7 +208,7 @@ ___________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-03) 
 
   Bloom filters in Julia 
 
@@ -238,7 +238,7 @@ ________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.1``  (updated: 2013-04-05) 
 
   Bindings to the Cairo graphics library. 
 
@@ -318,7 +318,7 @@ ___________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.1.1``
+  Current Version: ``0.1.1``  (updated: 2013-04-27) 
 
   Calculus functions in Julia 
 
@@ -366,7 +366,7 @@ __________________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-03-21) 
 
   Calendar time package for Julia 
 
@@ -409,7 +409,7 @@ ___________________________________________________
      :alt: Alessandro Andrioni
      :target: https://github.com/andrioni
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-05-07) 
 
   Catalan: a combinatorics library for Julia 
 
@@ -441,6 +441,36 @@ ___________________________________________________
 
 ----
 
+`ChainedVectors <https://github.com/tanmaykm/ChainedVectors.jl>`_
+_________________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tanmay Mohapatra
+     :target: https://github.com/tanmaykm
+
+  Current Version: ``0.0.0``  (updated: 2013-05-03) 
+
+  Few utility types over Julia Vector type 
+
+  Maintainer: `Tanmay Mohapatra <https://github.com/tanmaykm>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tanmay Mohapatra
+        :target: https://github.com/tanmaykm
+
+----
+
 `Clang <https://github.com/ihnorton/Clang.jl>`_
 _______________________________________________
 
@@ -451,7 +481,7 @@ _______________________________________________
      :alt: Isaiah
      :target: https://github.com/ihnorton
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-13) 
 
   Julia access to the libclang interface of the LLVM Clang compiler. 
 
@@ -512,7 +542,7 @@ _________________________________________
      :alt: Miles Lubin
      :target: https://github.com/mlubin
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.1``  (updated: 2013-04-09) 
 
   Interface to the Coin-OR Linear Programming solver (CLP) 
 
@@ -543,7 +573,7 @@ _______________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.2.0``  (updated: 2013-05-03) 
 
   Basic functions for clustering data: k-means, dp-means, etc. 
 
@@ -554,21 +584,21 @@ _______________________________________________________________
       Devectorize    Any Version
       Distance       Any Version
       MLBase         Any Version
-      Options        Any Version
+      julia          [v"0.2.0-"]
 
   Contributors:
-
-    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: John Myles White
-        :target: https://github.com/johnmyleswhite
 
     .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
 
     .. image:: https://secure.gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -588,7 +618,7 @@ ________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-14) 
 
   Common data encoding algorithms 
 
@@ -618,7 +648,7 @@ _______________________________________________
      :alt: Miles Lubin
      :target: https://github.com/mlubin
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.1``  (updated: 2013-04-22) 
 
   Interface to the Coin-OR CBC solver for mixed-integer programming 
 
@@ -649,7 +679,7 @@ ________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-01) 
 
   Basic color manipulation utilities. 
 
@@ -697,7 +727,7 @@ __________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-12) 
 
   Declarative vector graphics 
 
@@ -770,7 +800,7 @@ _______________________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-07) 
 
   Types and functions for working with continued fractions in Julia 
 
@@ -800,7 +830,7 @@ __________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-15) 
 
   Utilities for calling C++ from Julia 
 
@@ -830,7 +860,7 @@ _____________________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
-  Current Version: ``0.1.0``
+  Current Version: ``0.1.0``  (updated: 2013-04-08) 
 
   One- and multi-dimensional adaptive integration routines for the Julia language 
 
@@ -855,7 +885,7 @@ __________________________________________
      :alt: Forio Online Simulations
      :target: https://github.com/forio
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.1``  (updated: 2013-04-08) 
 
   a Julia HTTP curl library 
 
@@ -891,7 +921,7 @@ _______________________________________________
      :alt: Isaiah
      :target: https://github.com/ihnorton
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-01) 
 
   DICOM for Julia 
 
@@ -951,7 +981,7 @@ ________________________________________________________
      :alt: Harlan Harris
      :target: https://github.com/HarlanH
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.2``  (updated: 2013-05-04) 
 
   library for working with tabular data in Julia 
 
@@ -1068,17 +1098,11 @@ ________________________________________________________
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/756973876a839bde0544818d2dee6961?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Keno Fischer
-        :target: https://github.com/loladiro
-
-    .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Daniel Jones
-        :target: https://github.com/dcjones
+        :alt: timema
+        :target: https://github.com/timema
 
     .. image:: https://secure.gravatar.com/avatar/4206b43cb025b0c1fd8cd9fa89dd6086?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1086,11 +1110,23 @@ ________________________________________________________
         :alt: catawbasam
         :target: https://github.com/catawbasam
 
+    .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Daniel Jones
+        :target: https://github.com/dcjones
+
     .. image:: https://secure.gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Andreas Noack Jensen
         :target: https://github.com/andreasnoackjensen
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
     .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1116,12 +1152,6 @@ ________________________________________________________
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://secure.gravatar.com/avatar/756973876a839bde0544818d2dee6961?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: timema
-        :target: https://github.com/timema
-
 ----
 
 `DataStructures <https://github.com/lindahua/DataStructures.jl>`_
@@ -1134,7 +1164,7 @@ _________________________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.2.3``
+  Current Version: ``0.2.3``  (updated: 2013-04-21) 
 
   Julia implementation of Data structures 
 
@@ -1164,7 +1194,7 @@ _____________________________________________
      :alt: toivoh
      :target: https://github.com/toivoh
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-17) 
 
   Prototype interactive debugger for Julia 
 
@@ -1206,7 +1236,7 @@ _______________________________________________________________
      :alt: Ben Sadeghi
      :target: https://github.com/bensadeghi
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-21) 
 
   Decision Tree Classifier in Julia 
 
@@ -1230,7 +1260,7 @@ ___________________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.2.1``
+  Current Version: ``0.2.1``  (updated: 2013-04-15) 
 
   A Julia framework for delayed expression evaluation 
 
@@ -1260,7 +1290,7 @@ __________________________________________________________
      :alt: David de Laat
      :target: https://github.com/daviddelaat
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-23) 
 
   KeysView and ValuesView types for dynamic low-overhead views into the entries of dictionaries 
 
@@ -1290,7 +1320,7 @@ ________________________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-17) 
 
   Methods for dimensionality reduction: PCA, ICA, NMF 
 
@@ -1320,7 +1350,7 @@ _____________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.2.1``
+  Current Version: ``0.2.1``  (updated: 2013-04-15) 
 
   Julia module for Distance evaluation 
 
@@ -1351,7 +1381,7 @@ _________________________________________________________________
      :alt: JuliaStats
      :target: https://github.com/JuliaStats
 
-  Current Version: ``0.1.2``
+  Current Version: ``0.1.2``  (updated: 2013-04-28) 
 
   A Julia package for probability distributions and associated funtions. 
 
@@ -1387,23 +1417,23 @@ _________________________________________________________________
         :alt: dmbates
         :target: https://github.com/dmbates
 
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
     .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://secure.gravatar.com/avatar/c982f9823bc3cb987b614baf5678ec31?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/25d0ed671b01595bb0a6c12bfa90c9b2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: gusl
         :target: https://github.com/gusl
-
-    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Dahua Lin
-        :target: https://github.com/lindahua
 
     .. image:: https://secure.gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1441,7 +1471,7 @@ _________________________________________________________
      :alt: Theodore Papamarkou
      :target: https://github.com/scidom
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-21) 
 
   Julia package for representing dual numbers and for performing dual algebra 
 
@@ -1471,7 +1501,7 @@ __________________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-13) 
 
   Elliptic integral and Jacobi elliptic special functions 
 
@@ -1501,7 +1531,7 @@ ____________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2012-11-22) 
 
   Example Julia package repo. 
 
@@ -1531,7 +1561,7 @@ _____________________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
   Utilities for working with the Julia `Expr` type 
 
@@ -1561,7 +1591,7 @@ ______________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2012-12-09) 
 
   FITS file package for Julia 
 
@@ -1591,7 +1621,7 @@ _________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.1``  (updated: 2013-04-24) 
 
   Midje-like testing for Julia 
 
@@ -1621,7 +1651,7 @@ ____________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-03-08) 
 
   A fast FASTA reader for Julia 
 
@@ -1658,7 +1688,7 @@ ___________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-19) 
 
   File::Find implementation in Julia 
 
@@ -1688,7 +1718,7 @@ ________________________________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
   Functional and and persistent data structures for Julia 
 
@@ -1730,7 +1760,7 @@ _____________________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
   Functional Julia – based on fogus/lemonad 
 
@@ -1760,7 +1790,7 @@ _____________________________________________
      :alt: Jay Weisskopf
      :target: https://github.com/jayschwa
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-02) 
 
   GLFW bindings for Julia. GLFW is a multi-platform library for opening a window, creating an OpenGL context, and managing input. 
 
@@ -1792,7 +1822,7 @@ _____________________________________________
      :alt: JuliaStats
      :target: https://github.com/JuliaStats
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-15) 
 
   Generalized linear models in Julia 
 
@@ -1841,7 +1871,7 @@ __________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-18) 
 
   GLPK wrapper module for Julia 
 
@@ -1877,7 +1907,7 @@ ______________________________________________
      :alt: Robert J. Ennis
      :target: https://github.com/rennis250
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-18) 
 
   Julia interface to GLUT 
 
@@ -1908,7 +1938,7 @@ _________________________________________
      :alt: Jiahao Chen
      :target: https://github.com/jiahao
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-04) 
 
   Julia interface to the GNU Scientific Library (GSL) 
 
@@ -1944,7 +1974,7 @@ _____________________________________________
      :alt: Kevin Squire
      :target: https://github.com/kmsquire
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-30) 
 
   A Julia interface for gzip functions in zlib 
 
@@ -1976,7 +2006,7 @@ ________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-28) 
 
   Crafty statistical graphics for Julia. 
 
@@ -2056,7 +2086,7 @@ _____________________________________________
      :alt: mbaz
      :target: https://github.com/mbaz
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-05-05) 
 
   A julia front-end for gnuplot. 
 
@@ -2064,7 +2094,7 @@ _____________________________________________
 
   Dependencies::
 
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-"]
 
   Contributors:
 
@@ -2092,7 +2122,7 @@ _____________________________________________________________
      :alt: Theodore Papamarkou
      :target: https://github.com/scidom
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-12) 
 
   Geometric MCMC algorithms and zero-variance (ZV) Monte Carlo Bayesian routines 
 
@@ -2122,7 +2152,7 @@ ______________________________________________
      :alt: Robert J. Ennis
      :target: https://github.com/rennis250
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-15) 
 
   Minimal implementation of Jasper's Julia FFI 
 
@@ -2158,7 +2188,7 @@ _____________________________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-25) 
 
   Julia interface to Google Chart Tools 
 
@@ -2191,7 +2221,7 @@ _______________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.2.1``
+  Current Version: ``0.2.2``  (updated: 2013-05-01) 
 
   Working with graphs in Julia 
 
@@ -2264,7 +2294,7 @@ ____________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-03-23) 
 
   Interpolation and related operations on grids 
 
@@ -2294,7 +2324,7 @@ __________________________________________
      :alt: Jameson Nash
      :target: https://github.com/vtjnash
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.1.0``  (updated: 2013-05-06) 
 
   Julia interface to Gtk windowing toolkit. 
 
@@ -2302,7 +2332,8 @@ __________________________________________
 
   Dependencies::
 
-      Cairo          Any Version
+      Cairo          [v"0.0.1"]
+      julia          [v"0.2.0-"]
 
   Contributors:
 
@@ -2324,7 +2355,7 @@ _________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-09) 
 
   Julia Port of Gurobi Optimizer 
 
@@ -2342,6 +2373,18 @@ _________________________________________________
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
+    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Miles Lubin
+        :target: https://github.com/mlubin
+
+    .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Iain Dunning
+        :target: https://github.com/IainNZ
+
 ----
 
 `HDF5 <https://github.com/timholy/HDF5.jl>`_
@@ -2354,7 +2397,7 @@ ____________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-07) 
 
   HDF5 interface for the Julia language 
 
@@ -2403,7 +2446,7 @@ _____________________________________________
      :alt: Tanmay Mohapatra
      :target: https://github.com/tanmaykm
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-16) 
 
   HDFS interface for Julia as a wrapper over Hadoop HDFS library. 
 
@@ -2433,7 +2476,7 @@ _________________________________________
      :alt: Dirk Gadsden
      :target: https://github.com/dirk
 
-  Current Version: ``0.0.2``
+  Current Version: ``0.0.2``  (updated: 2013-03-06) 
 
   HTTP library (server, client, parser) for the Julia language 
 
@@ -2463,7 +2506,7 @@ _____________________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-13) 
 
   Fast Walsh-Hadamard transforms for the Julia language 
 
@@ -2487,7 +2530,7 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
    
 
@@ -2506,17 +2549,17 @@ _____________________________________________________________
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
-    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Zach Allaun
-        :target: https://github.com/zachallaun
-
     .. image:: https://secure.gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
+
+    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Zach Allaun
+        :target: https://github.com/zachallaun
 
 ----
 
@@ -2530,7 +2573,7 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
    
 
@@ -2578,7 +2621,7 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
    
 
@@ -2621,7 +2664,7 @@ ____________________________________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-16) 
 
   T-tests, Wilcoxon rank sum (Mann-Whitney U), signed rank, and circular statistics in Julia 
 
@@ -2653,7 +2696,7 @@ ________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-08) 
 
   Julia wrapper for the International Components for Unicode (ICU) library 
 
@@ -2701,7 +2744,7 @@ ________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-16) 
 
   An image library for Julia 
 
@@ -2751,7 +2794,7 @@ ____________________________________________________________________
      :alt: Tracy Wadleigh
      :target: https://github.com/twadleigh
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-31) 
 
   Statically-sized immutable vectors and matrices. 
 
@@ -2799,7 +2842,7 @@ ____________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-11) 
 
   Reading and writing Windows-style INI files (writing not yet implemented). 
 
@@ -2847,7 +2890,7 @@ ________________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-20) 
 
   Common functional iterator patterns. 
 
@@ -2895,7 +2938,7 @@ ________________________________________
      :alt: Avik Sengupta
      :target: https://github.com/aviks
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-03) 
 
   A Julia package for quantitative finance 
 
@@ -2934,7 +2977,7 @@ __________________________________________
      :alt: Avik Sengupta
      :target: https://github.com/aviks
 
-  Current Version: ``0.1.0``
+  Current Version: ``0.1.0``  (updated: 2013-05-01) 
 
   JSON parsing and printing 
 
@@ -3024,7 +3067,7 @@ _______________________________________________________
      :alt: Tanmay Mohapatra
      :target: https://github.com/tanmaykm
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-11) 
 
   Judy Array for Julia 
 
@@ -3054,7 +3097,7 @@ ____________________________________________________________
      :alt: Jameson Nash
      :target: https://github.com/vtjnash
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-08) 
 
    
 
@@ -3085,7 +3128,7 @@ ___________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-17) 
 
   KL-divergence estimation in Julia 
 
@@ -3115,7 +3158,7 @@ __________________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-15) 
 
   LIBSVM bindings for Julia 
 
@@ -3145,7 +3188,7 @@ _____________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-19) 
 
   A package for working with human languages 
 
@@ -3175,7 +3218,7 @@ ______________________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-14) 
 
   Lazy sequences. 
 
@@ -3205,7 +3248,7 @@ ________________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-18) 
 
   High-level linear programming functionality for Julia via GLPK library (transitional package) 
 
@@ -3236,7 +3279,7 @@ ___________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2012-12-23) 
 
   Loss functions 
 
@@ -3266,7 +3309,7 @@ ____________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-24) 
 
   Julia module for reading MATLAB files 
 
@@ -3316,7 +3359,7 @@ _________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-06) 
 
   Calling MATLAB in Julia through MATLAB Engine 
 
@@ -3346,7 +3389,7 @@ ___________________________________________
      :alt: Chris DuBois
      :target: https://github.com/doobwa
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2012-11-23) 
 
   MCMC tools for Julia 
 
@@ -3388,7 +3431,7 @@ _____________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-05) 
 
   fast modified discrete cosine transform (MDCT and IMDCT) for the Julia language 
 
@@ -3412,7 +3455,7 @@ _________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.1.0``  (updated: 2013-05-05) 
 
   A set of functions to support the development of machine learning algorithms 
 
@@ -3420,8 +3463,7 @@ _________________________________________________
 
   Dependencies::
 
-      Devectorize    Any Version
-      Distance       Any Version
+      None
 
   Contributors:
 
@@ -3443,7 +3485,7 @@ _____________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-12) 
 
   Tools for working with the MNIST data set 
 
@@ -3473,7 +3515,7 @@ _______________________________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-02) 
 
   Technical analysis of financial time series in Julia 
 
@@ -3508,7 +3550,7 @@ ___________________________________________________
      :alt: Iain Dunning
      :target: https://github.com/IainNZ
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-09) 
 
   Modelling language for Linear, Integer, and Quadratic Programming 
 
@@ -3547,7 +3589,7 @@ ___________________________________________________________
      :alt: Miles Lubin
      :target: https://github.com/mlubin
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-09) 
 
   Provides standard interface to linear programming solvers, including linprog function. 
 
@@ -3577,7 +3619,7 @@ _____________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-29) 
 
    
 
@@ -3619,7 +3661,7 @@ __________________________________________________
      :alt: Tracy Wadleigh
      :target: https://github.com/twadleigh
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-03) 
 
   Generation and manipulation of triangular meshes. 
 
@@ -3655,7 +3697,7 @@ ______________________________________________
      :alt: dmbates
      :target: https://github.com/dmbates
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
   Julia interface to Metis graph partitioning 
 
@@ -3686,7 +3728,7 @@ __________________________________________________________
      :alt: dmbates
      :target: https://github.com/dmbates
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-09) 
 
   A Julia package for fitting (statistical) mixed-effects models 
 
@@ -3718,7 +3760,7 @@ ____________________________________________
      :alt: Patrick O'Leary
      :target: https://github.com/pao
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-05) 
 
   Monadic expressions and sequences for Julia 
 
@@ -3750,7 +3792,7 @@ ____________________________________________
      :alt: Brian Smith
      :target: https://github.com/Lytol
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-14) 
 
   Mongo bindings for the Julia programming language 
 
@@ -3780,7 +3822,7 @@ __________________________________________________
      :alt: Avik Sengupta
      :target: https://github.com/aviks
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-26) 
 
   Mongrel2 handlers in Julia 
 
@@ -3823,7 +3865,7 @@ _____________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
    
 
@@ -3849,17 +3891,17 @@ _____________________________________________________
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://secure.gravatar.com/avatar/72ee26065724239b61be271722b682dd?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Nick Collins
-        :target: https://github.com/ncollins
-
     .. image:: https://secure.gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
+
+    .. image:: https://secure.gravatar.com/avatar/72ee26065724239b61be271722b682dd?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Nick Collins
+        :target: https://github.com/ncollins
 
     .. image:: https://secure.gravatar.com/avatar/2bf4378d854e6f9e8cdba9505b90520e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -3879,7 +3921,7 @@ _____________________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-06) 
 
   Port of mustache.js to julia 
 
@@ -3927,7 +3969,7 @@ ___________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2012-11-22) 
 
   Null hypothesis significance tests 
 
@@ -3957,7 +3999,7 @@ ________________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-24) 
 
   Julia module for reading NIfTI MRI files 
 
@@ -3966,6 +4008,7 @@ ________________________________________________
   Dependencies::
 
       StrPack        Any Version
+      julia          [v"0.2.0-"]
 
   Contributors:
 
@@ -3987,7 +4030,7 @@ _______________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-28) 
 
   Package to call the NLopt nonlinear-optimization library from the Julia language 
 
@@ -4011,7 +4054,7 @@ ______________________________________________
      :alt: Harlan Harris
      :target: https://github.com/HarlanH
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2012-11-17) 
 
   Julia named index and named vector types 
 
@@ -4041,7 +4084,7 @@ ______________________________________________
      :alt: Jacob Quinn
      :target: https://github.com/karbarcca
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-25) 
 
   A low-level ODBC interface for the Julia programming language 
 
@@ -4077,7 +4120,7 @@ __________________________________________
      :alt: Jameson Nash
      :target: https://github.com/vtjnash
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-01) 
 
   Assorted basic Ordinary Differential Equation solvers 
 
@@ -4107,7 +4150,7 @@ __________________________________________________
      :alt: Robert J. Ennis
      :target: https://github.com/rennis250
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-18) 
 
   Julia interface to OpenGL 
 
@@ -4137,7 +4180,7 @@ _______________________________________________
      :alt: Dirk Gadsden
      :target: https://github.com/dirk
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-06) 
 
   WIP OpenSSL bindings for Julia 
 
@@ -4167,7 +4210,7 @@ _____________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.1.2``
+  Current Version: ``0.1.4``  (updated: 2013-05-06) 
 
   Optimization functions for Julia 
 
@@ -4232,7 +4275,7 @@ ____________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-03-17) 
 
   A framework for providing optional arguments to functions. 
 
@@ -4286,7 +4329,7 @@ ____________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-02) 
 
   Julia module for reading Plexon PLX files 
 
@@ -4306,6 +4349,36 @@ ____________________________________________
 
 ----
 
+`PTools <https://github.com/amitmurthy/PTools.jl>`_
+___________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Amit Murthy
+     :target: https://github.com/amitmurthy
+
+  Current Version: ``0.0.0``  (updated: 2013-05-03) 
+
+  Collection of utilities for parallel processing in Julia  
+
+  Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
+
+  Dependencies::
+
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Amit Murthy
+        :target: https://github.com/amitmurthy
+
+----
+
 `PatternDispatch <https://github.com/toivoh/PatternDispatch.jl>`_
 _________________________________________________________________
 
@@ -4316,7 +4389,7 @@ _________________________________________________________________
      :alt: toivoh
      :target: https://github.com/toivoh
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.1``  (updated: 2013-05-01) 
 
   Method dispatch based on pattern matching for Julia 
 
@@ -4352,7 +4425,7 @@ ________________________________________________________
      :alt: Jameson Nash
      :target: https://github.com/vtjnash
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-01) 
 
   Polynomial manipulations 
 
@@ -4382,7 +4455,7 @@ __________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-11) 
 
   Profilers for Julia 
 
@@ -4430,7 +4503,7 @@ _________________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-19) 
 
   ProjectTemplate for Julia 
 
@@ -4461,7 +4534,7 @@ _________________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-24) 
 
   Package to call Python functions from the Julia language 
 
@@ -4509,7 +4582,7 @@ ___________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.1``  (updated: 2013-04-09) 
 
   Julia api to Quandl open source financial, economic and social datasets 
 
@@ -4540,7 +4613,7 @@ ____________________________________________________
      :alt: Patrick O'Leary
      :target: https://github.com/pao
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-22) 
 
   QuickCheck specification-based testing for Julia 
 
@@ -4572,7 +4645,7 @@ _____________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-01) 
 
   Julia package for loading many of the data sets available in R 
 
@@ -4614,7 +4687,7 @@ _____________________________________________________________
      :alt: Andreas Noack Jensen
      :target: https://github.com/andreasnoackjensen
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-25) 
 
   Code for testing of Julia's random numbers 
 
@@ -4650,7 +4723,7 @@ _______________________________________________________________
      :alt: Jiahao Chen
      :target: https://github.com/jiahao
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-28) 
 
   Random matrices package for Julia 
 
@@ -4689,7 +4762,7 @@ _______________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-19) 
 
   Tools for resampling data in Julia 
 
@@ -4719,7 +4792,7 @@ ___________________________________________
      :alt: Laurent Gautier
      :target: https://github.com/lgautier
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-05) 
 
   Julia-to-R interface 
 
@@ -4755,7 +4828,7 @@ ______________________________________________
      :alt: dmbates
      :target: https://github.com/dmbates
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-04) 
 
   Archive of functions that emulate R's d-p-q-r functions for probability distributions 
 
@@ -4785,7 +4858,7 @@ _____________________________________________
      :alt: John Travers
      :target: https://github.com/jtravs
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-11) 
 
   Root finding functions for Julia 
 
@@ -4815,7 +4888,7 @@ ___________________________________________
      :alt: M. Schauer
      :target: https://github.com/mschauer
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-26) 
 
   Simulation and inference for Ito processes and diffusions. 
 
@@ -4845,7 +4918,7 @@ ____________________________________________
      :alt: Robert J. Ennis
      :target: https://github.com/rennis250
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-18) 
 
   Julia interface to SDL 
 
@@ -4876,7 +4949,7 @@ _________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-14) 
 
   SVM's for Julia 
 
@@ -4906,7 +4979,7 @@ ________________________________________________________________________________
      :alt: David de Laat
      :target: https://github.com/daviddelaat
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-08) 
 
   Interface to semidefinite programming libraries. 
 
@@ -4936,7 +5009,7 @@ _______________________________________________________
      :alt: Ben Lauwens
      :target: https://github.com/BenLauwens
 
-  Current Version: ``0.1.1``
+  Current Version: ``0.1.2``  (updated: 2013-05-03) 
 
   Process oriented simulation library written in Julia 
 
@@ -4966,7 +5039,7 @@ ___________________________________________
      :alt: Tom Short
      :target: https://github.com/tshort
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2012-11-23) 
 
   Experiments with non-causal, equation-based modeling in Julia 
 
@@ -4996,7 +5069,7 @@ ___________________________________________________
      :alt: Amit Murthy
      :target: https://github.com/amitmurthy
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-24) 
 
   Julia wrapper for libsodium 
 
@@ -5026,7 +5099,7 @@ _________________________________________________
      :alt: JuliaStats
      :target: https://github.com/JuliaStats
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-15) 
 
   Basic statistics for Julia 
 
@@ -5037,6 +5110,12 @@ _________________________________________________
       julia          [v"0.2.0-"]
 
   Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
 
     .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -5062,7 +5141,7 @@ ______________________________________________
      :alt: Patrick O'Leary
      :target: https://github.com/pao
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-23) 
 
   Swiss Army Knife for encoding and decoding binary streams 
 
@@ -5118,7 +5197,7 @@ ___________________________________________________
      :alt: Tom Short
      :target: https://github.com/tshort
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-05-07) 
 
   Julia interface to Sundials, including a nonlinear solver (KINSOL), ODE's (CVODE), and DAE's (IDA). 
 
@@ -5142,7 +5221,7 @@ _______________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
-  Current Version: ``0.2.0``
+  Current Version: ``0.2.0``  (updated: 2013-04-25) 
 
   Start of Julia interface to SymPy via PyCall 
 
@@ -5174,7 +5253,7 @@ ________________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-25) 
 
   Symbolic linear programming and linear constraints 
 
@@ -5204,7 +5283,7 @@ _________________________________________
      :alt: pygy
      :target: https://github.com/pygy
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-06) 
 
   A TOML parser for Julia. 
 
@@ -5235,7 +5314,7 @@ ___________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-22) 
 
   Julia package for text analysis 
 
@@ -5266,7 +5345,7 @@ __________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-11) 
 
   Package for wrapping text into paragraphs. 
 
@@ -5302,7 +5381,7 @@ ___________________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-08) 
 
   Modeling time series in Julia 
 
@@ -5343,7 +5422,7 @@ ___________________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-15) 
 
   Time series toolkit for Julia 
 
@@ -5383,7 +5462,7 @@ __________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.0.1``
+  Current Version: ``0.0.1``  (updated: 2013-04-05) 
 
   Julia interface to Tk windowing toolkit. 
 
@@ -5457,7 +5536,7 @@ ___________________________________________________________
      :alt: Jonathan Chang
      :target: https://github.com/slycoder
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-17) 
 
   TopicModels for Julia 
 
@@ -5487,7 +5566,7 @@ _________________________________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-01) 
 
   Downloading financial time series data and providing financial asset types in Julia 
 
@@ -5522,7 +5601,7 @@ ______________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2012-11-13) 
 
   Implementation of the trie data structure. 
 
@@ -5552,7 +5631,7 @@ _____________________________________________________
      :alt: Tanmay Mohapatra
      :target: https://github.com/tanmaykm
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-05-01) 
 
   Parse URL strings into components and re-create the URL string back from components. 
 
@@ -5582,7 +5661,7 @@ ____________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-01-14) 
 
   UTF16 string type for Julia 
 
@@ -5618,7 +5697,7 @@ ______________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-04) 
 
   Infrastructure for handling physical units for the Julia programming language 
 
@@ -5648,7 +5727,7 @@ _________________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
   Function dispatch on values 
 
@@ -5678,7 +5757,7 @@ ______________________________________________
      :alt: Daniel Casimiro
      :target: https://github.com/dancasimiro
 
-  Current Version: ``0.1.0``
+  Current Version: ``0.1.0``  (updated: 2013-01-16) 
 
   Julia package for working with WAV files 
 
@@ -5709,7 +5788,7 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
    
 
@@ -5752,7 +5831,7 @@ ________________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-09) 
 
   2D plotting for Julia 
 
@@ -5821,7 +5900,7 @@ ________________________________________
      :alt: Avik Sengupta
      :target: https://github.com/aviks
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-02-15) 
 
   Julia interface to ZMQ 
 
@@ -5869,7 +5948,7 @@ ____________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-03-12) 
 
   zlib bindings for Julia 
 
@@ -5899,7 +5978,7 @@ _________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-04-12) 
 
   The k-nearest neighbors algorithm in Julia 
 
@@ -5929,7 +6008,7 @@ _____________________________________________________
      :alt: Amit Murthy
      :target: https://github.com/amitmurthy
 
-  Current Version: ``0.0.0``
+  Current Version: ``0.0.0``  (updated: 2013-05-01) 
 
   Thin Julia wrapper of libCURL 
 
@@ -5949,5 +6028,5 @@ _____________________________________________________
 
 ----
 
-.. footer: 154 packages, generated 1 May 2013 10:09:43 GMT+01:00 
+.. footer: 156 packages, generated 7 May 2013 21:46:51 GMT+01:00 
 

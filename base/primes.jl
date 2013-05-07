@@ -37,20 +37,20 @@ function isprime(n::Integer)
         t = s
         while x != n-1
             (t-=1) <= 0 && return false
-            x = x*x % n
+            x = oftype(n, widemul(x,x) % n)
             x == 1 && return false
         end
     end
     return true
 end
-@eval begin
-    witnesses(n::Union(Uint32,Int32)) = n < 1373653 ?
-        $(map(int32,(2,3))) :
-        $(map(int32,(2,7,61)))
-    witnesses(n::Union(Uint64,Int64)) = n < 341550071728321 ?
-        $(map(int64,(2,3,5,7,11,13,17))) :
-        $(map(int64,(2,325,9375,28178,450775,9780504,1795265022)))
-end
+witnesses(n::Union(Uint8,Int8,Uint16,Int16)) = (2,3)
+witnesses(n::Union(Uint32,Int32)) = n < 1373653 ? (2,3) : (2,7,61)
+witnesses(n::Union(Uint64,Int64)) =
+        n < 1373653         ? (2,3) :
+        n < 4759123141      ? (2,7,61) :
+        n < 2152302898747   ? (2,3,5,7,11) :
+        n < 3474749660383   ? (2,3,5,7,11,13) :
+                              (2,325,9375,28178,450775,9780504,1795265022)
 
 # TODO: replace this factorization routine
 
