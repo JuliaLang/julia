@@ -1048,6 +1048,9 @@ end
 @test signed(fld(typemax(Uint),typemin(Int)>>1))     == -4
 @test signed(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
 
+# issue #3046
+@test mod(int64(2),typemax(Int64)) == 2
+
 # things related to floating-point epsilon
 @test eps(float(0)) == 5e-324
 @test .1+.1+.1 != .3

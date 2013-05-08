@@ -641,7 +641,13 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(urem_int,2) return builder.CreateURem(JL_INT(x), JL_INT(y));
     HANDLE(smod_int,2)
         x = JL_INT(x); y = JL_INT(y);
-        return builder.CreateSRem(builder.CreateAdd(y,builder.CreateSRem(x,y)),y);
+        return builder.
+            CreateSelect(builder.CreateICmpEQ(builder.CreateICmpSLT(x,ConstantInt::get(x->getType(),0)),
+                                              builder.CreateICmpSLT(y,ConstantInt::get(y->getType(),0))),
+                         // mod == rem for arguments with same sign
+                         builder.CreateSRem(x,y),
+                         builder.
+                         CreateSRem(builder.CreateAdd(y,builder.CreateSRem(x,y)),y));
 
     HANDLE(neg_float,1) return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
     HANDLE(add_float,2) return builder.CreateFAdd(FP(x), FP(y));
