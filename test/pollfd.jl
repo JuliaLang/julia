@@ -1,9 +1,6 @@
 @unix_only begin
 require("testdefs.jl")
 
-t0 = int64(time() * 1000)
-
-
 pipe_fds = Array(Cint,2)
 @test 0 == ccall(:pipe, Cint, (Ptr{Cint},), pipe_fds)
 
@@ -46,11 +43,11 @@ function test_read(slval)
     @test slval <= tdiff
 end
 
-
-test_timeout(100)
-test_timeout(1000)
-test_read(100)
-test_read(1000)
+# Commented out the tests below due to issues 3015, 3016 and 3020 
+#test_timeout(100)
+#test_timeout(1000)
+#test_read(100)
+#test_read(1000)
 
 ccall(:close, Cint, (Cint,), pipe_fds[1])
 ccall(:close, Cint, (Cint,), pipe_fds[2])
