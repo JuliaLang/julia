@@ -1048,6 +1048,9 @@ end
 @test signed(fld(typemax(Uint),typemin(Int)>>1))     == -4
 @test signed(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
 
+# issue #3046
+@test mod(int64(2),typemax(Int64)) == 2
+
 # things related to floating-point epsilon
 @test eps(float(0)) == 5e-324
 @test .1+.1+.1 != .3
@@ -1383,3 +1386,28 @@ for T in [Int,BigInt], n = [1:1000,1000000]
         @test s[k] == isprime(k)
     end
 end
+
+@test !isprime(1000000003)
+@test !isprime(1000000005)
+@test  isprime(1000000007)
+@test  isprime(1000000009)
+@test !isprime(1000000011)
+@test !isprime(1000000013)
+
+@test !isprime(10000000015)
+@test !isprime(10000000017)
+@test  isprime(10000000019)
+@test !isprime(10000000021)
+@test !isprime(10000000023)
+
+@test !isprime(9223372036854775779)
+@test !isprime(9223372036854775781)
+@test  isprime(9223372036854775783)
+@test !isprime(9223372036854775785)
+@test !isprime(9223372036854775787)
+
+@test !isprime(0xffffffffffffffc1)
+@test !isprime(0xffffffffffffffc3)
+@test  isprime(0xffffffffffffffc5)
+@test !isprime(0xffffffffffffffc7)
+@test !isprime(0xffffffffffffffc9)

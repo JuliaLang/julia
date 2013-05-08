@@ -497,6 +497,9 @@ end
 
 ## wide multiplication, Int128 multiply and divide ##
 
+widemul(x::Union(Int8,Uint8,Int16), y::Union(Int8,Uint8,Int16)) = int32(x)*int32(y)
+widemul(x::Uint16, y::Uint16) = uint32(x)*uint32(y)
+
 widemul(x::Int32, y::Int32) = int64(x)*int64(y)
 widemul(x::Uint32, y::Uint32) = uint64(x)*uint64(y)
 
