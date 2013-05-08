@@ -75,7 +75,7 @@ to_power_type(x) = x
 function power_by_squaring(x, p::Integer)
     x = to_power_type(x)
     if p == 1
-        return x
+        return copy(x)
     elseif p == 0
         return one(x)
     elseif p == 2
