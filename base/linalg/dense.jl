@@ -1,6 +1,7 @@
 # Linear algebra functions for dense matrices in column major format
 
 scale!{T<:BlasFloat}(X::Array{T}, s::Number) = BLAS.scal!(length(X), convert(T,s), X, 1)
+scale!{T<:Union(Float32,Float64)}(X::Array{T}, s::Complex) = scale!(complex(X), s)
 scale!{T<:Union(Complex64,Complex128)}(X::Array{T}, s::Real) =
     BLAS.scal!(length(X), oftype(real(zero(T)),s), X, 1)
 
