@@ -646,8 +646,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                               builder.CreateICmpSLT(y,ConstantInt::get(y->getType(),0))),
                          // mod == rem for arguments with same sign
                          builder.CreateSRem(x,y),
-                         builder.
-                         CreateSRem(builder.CreateAdd(y,builder.CreateSRem(x,y)),y));
+                         builder.CreateSRem(builder.CreateAdd(y,builder.CreateSRem(x,y)),y));
 
     HANDLE(neg_float,1) return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
     HANDLE(add_float,2) return builder.CreateFAdd(FP(x), FP(y));
