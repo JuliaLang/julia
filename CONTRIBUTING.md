@@ -35,11 +35,11 @@ Before submitting, make sure that all tests pass by running `make testall`. Add 
 
 ##### Adding to base libraries
 
-***Note:** Changing stuff in the base can potentially break a lot of things. Make sure you test your code as described above, together with the latest Julia updates, to avoid problems.*
+***Note:** These instructions are for adding functionality to the base library. Usually, this is not encouraged, and before doing so, it is essential to discuss the proposed changes or additions on the mailing list or in a github issue. Changing stuff in the base can potentially break a lot of things. Make sure you test your code as described above, together with the latest Julia updates, to avoid problems.*
 
 To add a new code file into Julia's base libraries, you need to do the following:
 
- 1. Add your code file into the `base/` directory, and your test file into `test/`.
+ 1. Add your code file into the `base/` directory, and your test file into `test/`. Often, this may not be necessary and you may be able to add your code to an existing file in `base/`.
 
  2. Add hooks to build your code with the rest of the base library, by adding appropriate lines in `sysimg.jl` and `exports.jl`.
 
