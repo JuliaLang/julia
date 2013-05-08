@@ -52,8 +52,10 @@ witnesses(n::Union(Uint64,Int64)) =
         n < 3474749660383   ? (2,3,5,7,11,13) :
                               (2,325,9375,28178,450775,9780504,1795265022)
 
-isprime(n::Uint128) = n <= typemax(Uint64) ? isprime(uint64(n)) : isprime(BigInt(n))
-isprime(n::Int128)  = n <= typemax(Int64)  ? isprime(int64(n))  : isprime(BigInt(n))
+isprime(n::Uint128) =
+    n <= typemax(Uint64) ? isprime(uint64(n)) : isprime(BigInt(n))
+isprime(n::Int128) = n < 2 ? false :
+    n <= typemax(Int64)  ? isprime(int64(n))  : isprime(BigInt(n))
 
 # TODO: replace this factorization routine
 
