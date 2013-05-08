@@ -47,11 +47,31 @@ BigInt(x::Unsigned) =
 
 convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
 
-convert(::Type{Int}, n::BigInt) =
-    convert(Int, ccall((:__gmpz_get_si, :libgmp), Clong, (Ptr{BigInt},), &n))
+convert(::Type{Int64}, n::BigInt) = int64(convert(Clong, n))
+convert(::Type{Int32}, n::BigInt) = int32(convert(Clong, n))
+convert(::Type{Int16}, n::BigInt) = int16(convert(Clong, n))
+convert(::Type{Int8}, n::BigInt) = int8(convert(Clong, n))
+function convert(::Type{Clong}, n::BigInt)
+    fits = ccall((:__gmpz_fits_slong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
+    if fits
+        convert(Int, ccall((:__gmpz_get_si, :libgmp), Clong, (Ptr{BigInt},), &n))
+    else
+        throw(InexactError())
+    end
+end
 
-convert(::Type{Uint}, n::BigInt) =
-    convert(Uint, ccall((:__gmpz_get_ui, :libgmp), Culong, (Ptr{BigInt},), &n))
+convert(::Type{Uint64}, x::BigInt) = uint64(convert(Culong, x))
+convert(::Type{Uint32}, x::BigInt) = uint32(convert(Culong, x))
+convert(::Type{Uint16}, x::BigInt) = uint16(convert(Culong, x))
+convert(::Type{Uint8}, x::BigInt) = uint8(convert(Culong, x))
+function convert(::Type{Culong}, n::BigInt)
+    fits = ccall((:__gmpz_fits_ulong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
+    if fits
+        convert(Uint, ccall((:__gmpz_get_ui, :libgmp), Culong, (Ptr{BigInt},), &n))
+    else
+        throw(InexactError())
+    end
+end
 
 if sizeof(Int64) == sizeof(Clong)
     function convert(::Type{Int128}, x::BigInt)
