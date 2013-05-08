@@ -11,7 +11,6 @@ immutable Range{T<:Real} <: Ranges{T}
 
     function Range(start::T, step::T, len::Int)
         if step != step; error("Range: step cannot be NaN"); end
-        if step == 0;    error("Range: step cannot be zero"); end
         if !(len >= 0);  error("Range: length must be non-negative"); end
         new(start, step, len)
     end
@@ -32,12 +31,15 @@ immutable Range1{T<:Real} <: Ranges{T}
 end
 Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 
-colon{T<:Integer}(start::T, step::T, stop::T) =
+function colon{T<:Integer}(start::T, step::T, stop::T)
+    step != 0 || error("step cannot be zero in colon syntax")
     Range(start, step, max(0, div(stop-start+step, step)))
+end
 colon{T<:Integer}(start::T, stop::T) =
     Range1(start, max(0, stop-start+1))
 
 function colon{T<:Real}(start::T, step::T, stop::T)
+    step != 0 || error("step cannot be zero in colon syntax")
     if (step<0) != (stop<start)
         len = 0
     else
@@ -117,7 +119,13 @@ getindex(r::Range, s::Range1{Int}) =
 getindex(r::Range1, s::Range1{Int}) =
     r.len < last(s) ? error(BoundsError) : Range1(r[s.start], s.len)
 
-show(io::IO, r::Range)  = print(io, repr(r.start),':',repr(step(r)),':',repr(last(r)))
+function show(io::IO, r::Range)
+    if step(r) == 0
+        print(io, "Range(",r.start,",",step(r),",",r.len,")")
+    else
+        print(io, repr(r.start),':',repr(step(r)),':',repr(last(r)))
+    end
+end
 show(io::IO, r::Range1) = print(io, repr(r.start),':',repr(last(r)))
 
 start(r::Ranges) = 0
