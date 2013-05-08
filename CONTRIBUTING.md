@@ -17,6 +17,12 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 ## Submitting your contributions
 
+### Contributing a Julia package
+
+Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://docs.julialang.org/en/latest/packages/packagelist/) across many domains are already available for julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating julia packages](http://docs.julialang.org/en/latest/manual/packages/). 
+
+For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
+
 ### Contributing to core functionality or base libraries
 
 The Julia team uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests.
@@ -27,11 +33,20 @@ Before submitting, make sure that all tests pass by running `make testall`. Add 
 
 *By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
-### Contributing a Julia package
+##### Adding to base libraries
 
-Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://docs.julialang.org/en/latest/packages/packagelist/) across many domains are already available for julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating julia packages](http://docs.julialang.org/en/latest/manual/packages/). 
+***Note:** Changing stuff in the base can potentially break a lot of things. Make sure you test your code as described above, together with the latest Julia updates, to avoid problems.*
 
-For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
+To add a new code file into Julia's base libraries, you need to do the following:
+
+ 1. Add your code file into the `base/` directory, and your test file into `test/`.
+
+ 2. Add hooks to build your code with the rest of the base library, by adding appropriate lines in `sysimg.jl` and `exports.jl`.
+
+ 3. Add hooks to include your tests in the test suite by adding the name of your test file to the list in `test/Makefile`.
+
+You can now build Julia with your code, and test it, using `make clean testall` as usual. This takes quite a lot of time, however, compared to just extending Julia outside of the base library, so the recommendation is to wait with these steps until your code is ready for submittal.
+
 
 ## Getting help
 
