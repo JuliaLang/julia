@@ -1,3 +1,5 @@
+
+
 #ISAPPROX Check for nearly equal values.
 #   ISAPPROX(x::T1, y::T2) checks if x and y are nearly equal. The default tolerance is
 #   determined by the types. If tol = max(eps(T1), eps(T2)), then the values need to be
@@ -42,6 +44,17 @@ for fun in (:isapprox, :isapproxn)
             Z = similar(X, Bool)
             for i in 1:length(X)
                 Z[i] = ($fun)(X[i], Y[i])
+            end
+            Z
+        end
+
+        function ($fun)(X::AbstractArray, Y::AbstractArray, rtol::FloatingPoint, atol::FloatingPoint)
+            if size(X) != size(Y)
+                error("Arrays must have the same sizes(first is $(size(X)), second is $(size(Y))).")
+            end
+            Z = similar(X,Bool)
+            for i in 1:length(X)
+                Z[i] = ($fun)(X[i], Y[i], rtol, atol)
             end
             Z
         end
