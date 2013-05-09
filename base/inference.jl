@@ -1748,8 +1748,9 @@ function inlining_pass(e::Expr, sv, ast)
         end
     end
     if isccall
-        for i=5:2:length(eargs)
-            if isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode)
+        le = length(eargs)
+        for i=5:2:le
+            if i<le && (isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode))
                 eargs[i+1] = 0
             end
         end
