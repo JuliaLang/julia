@@ -496,15 +496,15 @@ function rem(x::BigFloat, y::BigFloat)
     return z
 end
 
-# function sum{T<:BigFloat}(arr::AbstractArray{T})
-#     z = BigFloat()
-#     n = length(arr)
-#     ptrarr = [pointer(&x) for x in arr]
-#     ccall((:mpfr_sum, :libmpfr), Int32,
-#         (Ptr{BigFloat}, Ptr{Void}, Culong, Int32), 
-#         &z, ptrarr, n, ROUNDING_MODE[1])
-#     return z
-# end
+function sum(arr::AbstractArray{BigFloat})
+    z = BigFloat(0)
+    for i in arr
+        ccall((:mpfr_add, :libmpfr), Int32,
+            (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Cint),
+            &z, &z, &i, 0)
+    end
+    return z
+end
 
 # Functions for which NaN results are converted to DomainError, following Base
 for f in (:sin,:cos,:tan,:sec,:csc,
