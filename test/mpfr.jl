@@ -294,6 +294,16 @@ z = BigInt("9223372036854775809")
 @test typeof(iround(Int, x)) == Int && iround(Int, x) == 42
 @test typeof(iround(Uint, x)) == Uint && iround(Uint, x) == 0x2a
 
+# string representation
+str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012e+00"
+with_bigfloat_precision(406) do
+    @test string(nextfloat(BigFloat(1))) == str
+end
+
+# eps
+x = eps(BigFloat)
+@test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
+
 # factorial
 with_bigfloat_precision(256) do
     x = BigFloat(42)
