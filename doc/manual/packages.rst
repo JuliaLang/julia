@@ -137,7 +137,7 @@ Linux <http://ubuntu.com>`_ platform.
 
 To set up testing for your package, see the `Getting
 Started <http://about.travis-ci.org/docs/user/getting-started/>`_ section of the
-Travis manual.
+Travis manual. Make sure that you enable the Travis service hook for your package on github. Check out the [Example.jl](https://github.com/JuliaLang/Example.jl) package to see this in action.
 
 Here is a sample `.travis.yml` that runs all tests until one fails::
 
