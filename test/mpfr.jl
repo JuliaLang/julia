@@ -106,9 +106,17 @@ y = BigFloat(1)
 
 # convert to
 @test convert(BigFloat, 1//2) == BigFloat("0.5")
+@test typeof(convert(BigFloat, 1//2)) == BigFloat
 @test convert(BigFloat, 0.5) == BigFloat("0.5")
+@test typeof(convert(BigFloat, 0.5)) == BigFloat
 @test convert(BigFloat, 40) == BigFloat("40")
+@test typeof(convert(BigFloat, 40)) == BigFloat
 @test convert(BigFloat, float32(0.5)) == BigFloat("0.5")
+@test typeof(convert(BigFloat, float32(0.5))) == BigFloat
+@test convert(BigFloat, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
+@test typeof(convert(BigFloat, BigInt("9223372036854775808"))) == BigFloat
+@test convert(FloatingPoint, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
+@test typeof(convert(FloatingPoint, BigInt("9223372036854775808"))) == BigFloat
 
 # convert from
 @test convert(Float64, BigFloat(0.5)) == 0.5
