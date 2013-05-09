@@ -5,7 +5,7 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             widemul
+             widemul, sum
 
 type BigInt <: Integer
     alloc::Cint
@@ -225,6 +225,16 @@ function gcdx(a::BigInt, b::BigInt)
         (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
         &g, &s, &t, &a, &b)
     BigInt(g), BigInt(s), BigInt(t)
+end
+
+function sum(arr::AbstractArray{BigInt})
+    n = BigInt(0)
+    for i in arr
+        ccall((:__gmpz_add, :libgmp), Void,
+            (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
+            &n, &n, &i)
+    end
+    return n
 end
 
 function factorial(bn::BigInt)
