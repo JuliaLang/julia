@@ -21,7 +21,7 @@ import
         isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf, nextfloat,
         prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
         string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
-        erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc,
+        erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc, eps,
     # import trigonometric functions
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
         sech, csch, coth, acosh, asinh, atanh, atan2
@@ -96,6 +96,7 @@ BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
 convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
 convert(::Type{BigFloat}, x::Real) = BigFloat(x)
+convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
 
 
 for to in (Int8, Int16, Int32, Int64)
@@ -118,7 +119,7 @@ for to in (Uint8, Uint16, Uint32, Uint64)
     end
 end
 
-function convert(::Type{BigInt}, x::BigFloat) 
+function convert(::Type{BigInt}, x::BigFloat)
     if integer_valued(x)
         return itrunc(x)
     else
@@ -670,12 +671,14 @@ function string(x::BigFloat)
     lng = 128
     for i = 1:2
         z = Array(Uint8, lng)
-        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), z, lng, "%.Re", &x)
+        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), z, lng, "%.Re", &x) + 1
         if lng < 128 || i == 2
             return bytestring(convert(Ptr{Uint8}, z[1:lng]))
         end
     end
 end
+
+eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
 show(io::IO, b::BigFloat) = print(io, string(b) * " with $(get_precision(b)) bits of precision")
 showcompact(io::IO, b::BigFloat) = print(io, string(b))

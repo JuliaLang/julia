@@ -106,9 +106,17 @@ y = BigFloat(1)
 
 # convert to
 @test convert(BigFloat, 1//2) == BigFloat("0.5")
+@test typeof(convert(BigFloat, 1//2)) == BigFloat
 @test convert(BigFloat, 0.5) == BigFloat("0.5")
+@test typeof(convert(BigFloat, 0.5)) == BigFloat
 @test convert(BigFloat, 40) == BigFloat("40")
+@test typeof(convert(BigFloat, 40)) == BigFloat
 @test convert(BigFloat, float32(0.5)) == BigFloat("0.5")
+@test typeof(convert(BigFloat, float32(0.5))) == BigFloat
+@test convert(BigFloat, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
+@test typeof(convert(BigFloat, BigInt("9223372036854775808"))) == BigFloat
+@test convert(FloatingPoint, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
+@test typeof(convert(FloatingPoint, BigInt("9223372036854775808"))) == BigFloat
 
 # convert from
 @test convert(Float64, BigFloat(0.5)) == 0.5
@@ -293,6 +301,16 @@ z = BigInt("9223372036854775809")
 @test typeof(iround(Int64, x)) == Int64 && iround(Int64, x) == 42
 @test typeof(iround(Int, x)) == Int && iround(Int, x) == 42
 @test typeof(iround(Uint, x)) == Uint && iround(Uint, x) == 0x2a
+
+# string representation
+str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012e+00"
+with_bigfloat_precision(406) do
+    @test string(nextfloat(BigFloat(1))) == str
+end
+
+# eps
+x = eps(BigFloat)
+@test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
 
 # factorial
 with_bigfloat_precision(256) do
