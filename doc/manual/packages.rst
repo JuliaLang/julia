@@ -109,7 +109,7 @@ package per line.
 code in ``src/``, and tests in ``test/``. Ensure that each test file contains these
 lines near the beginning::
 
-    using Test
+    using Base.Test
     using MY_PACKAGE_NAME
 
 6. Add a publicly accessible remote repository URL, if your package doesn't
