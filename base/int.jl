@@ -304,7 +304,7 @@ for to in (Uint8, Uint16, Uint32, Uint64)
     end
 end
 
-function convert(::Type{Int128}, x::Float64)
+function convert(::Type{Int128}, x::FloatingPoint)
     ax = abs(x)
     top = trunc(ldexp(ax,-64))
     bot = ax - ldexp(top,64)
@@ -313,7 +313,7 @@ function convert(::Type{Int128}, x::Float64)
 end
 convert(::Type{Int128}, x::Float32) = convert(Int128, float64(x))
 
-function convert(::Type{Uint128}, x::Float64)
+function convert(::Type{Uint128}, x::FloatingPoint)
     ax = abs(x)
     top = trunc(ldexp(ax,-64))
     bot = ax - ldexp(top,64)

@@ -111,8 +111,13 @@ midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 
 ## hist ##
+function sturges(n)  # Sturges' formula
+    n==0 && return one(n)
+    iceil(log2(n))+1
+end
+
 hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
-hist(v::AbstractVector) = hist(v,iceil(log2(length(v)))+1) # Sturges' formula 
+hist(v::AbstractVector) = hist(v,sturges(length(v)))
 
 function hist(v::AbstractVector, edg::AbstractVector)
     n = length(edg)-1
@@ -135,7 +140,7 @@ function hist(A::AbstractMatrix, edg::AbstractVector)
     edg,H
 end
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
-hist(A::AbstractMatrix) = hist(A,iceil(log2(size(A,1)))+1) # Sturges' formula 
+hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
 ## pearson covariance functions ##
 
