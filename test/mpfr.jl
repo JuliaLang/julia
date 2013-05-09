@@ -241,6 +241,7 @@ w = BigFloat(4)
 @test sum([x,y,z,w]) == BigFloat(10)
 big_array = ones(BigFloat, 100)
 @test sum(big_array) == BigFloat(100)
+@test sum(BigFloat[]) == BigFloat(0)
 
 # promotion
 # the array converts everyone to the DEFAULT_PRECISION!
