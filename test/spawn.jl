@@ -41,3 +41,14 @@ if false
     @test  success(ignorestatus(`false` | `false`))
     @test  success(ignorestatus(`false` & `false`))
 end
+
+# Here we test that if we close a stream with pending writes, we don't lose the writes.
+str = ""
+for i=1:10
+  str = "$str\n $(randstring(10))"
+end
+stdout, stdin, proc = readandwrite(`cat -`)
+write(stdin, str)
+close(stdin)
+str2 = readall(stdout)
+@test str2 == str

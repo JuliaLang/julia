@@ -246,12 +246,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
-static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status)
-{
-    //if (status == 0)
-        jl_close_uv((uv_handle_t*)req->handle);
-    free(req);
-}
+
 static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue *queue)
 {
     struct uv_shutdown_queue_item *item = malloc(sizeof(struct uv_shutdown_queue_item));
@@ -300,17 +295,8 @@ DLLEXPORT void uv_atexit_hook()
 //#endif
         case UV_TCP:
         case UV_NAMED_PIPE:
-            if (uv_is_writable((uv_stream_t*)handle)) { // uv_shutdown returns an error if not writable
-                uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
-                int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
-                if (err != 0) {
-                    printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));
-                    jl_close_uv(handle);
-                }
-            }
-            else {
-                jl_close_uv(handle);
-            }
+            // These will be shut down in jl_close_uv.
+            jl_close_uv(handle);
             break;
         //Don't close these directly, but rather let the GC take care of it
         case UV_POLL:
