@@ -96,6 +96,7 @@ BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
 convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
 convert(::Type{BigFloat}, x::Real) = BigFloat(x)
+convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
 
 
 convert(::Type{Int64}, x::BigFloat) = int64(convert(Clong, x))
@@ -110,7 +111,7 @@ function convert(::Type{Clong}, x::BigFloat)
 end
 convert(::Type{Uint64}, x::BigFloat) = uint64(convert(Culong, x))
 convert(::Type{Uint32}, x::BigFloat) = uint32(convert(Culong, x))
-function convert(::Type{Culong}, x::BigFloat) 
+function convert(::Type{Culong}, x::BigFloat)
     fits = ccall((:mpfr_fits_ulong_p, :libmpfr), Int32, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end]) != 0
     if integer_valued(x) && fits
         ccall((:mpfr_get_ui,:libmpfr), Culong, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[end])
@@ -118,7 +119,7 @@ function convert(::Type{Culong}, x::BigFloat)
         throw(InexactError())
     end
 end
-function convert(::Type{BigInt}, x::BigFloat) 
+function convert(::Type{BigInt}, x::BigFloat)
     if integer_valued(x)
         z = BigInt()
         ccall((:mpfr_get_z,:libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
