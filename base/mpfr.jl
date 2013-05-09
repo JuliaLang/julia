@@ -21,7 +21,7 @@ import
         isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf, nextfloat,
         prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
         string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
-        erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc,
+        erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc, eps,
     # import trigonometric functions
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
         sech, csch, coth, acosh, asinh, atanh, atan2
@@ -702,6 +702,8 @@ function string(x::BigFloat)
         end
     end
 end
+
+eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
 show(io::IO, b::BigFloat) = print(io, string(b) * " with $(get_precision(b)) bits of precision")
 showcompact(io::IO, b::BigFloat) = print(io, string(b))

@@ -300,6 +300,10 @@ with_bigfloat_precision(406) do
     @test string(nextfloat(BigFloat(1))) == str
 end
 
+# eps
+x = eps(BigFloat)
+@test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
+
 # factorial
 with_bigfloat_precision(256) do
     x = BigFloat(42)
