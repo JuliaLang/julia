@@ -43,9 +43,22 @@ convert(::Type{FloatingPoint}, x::Uint128) = convert(Float64, x) # LOSSY
 
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
-float(x)   = convert(FloatingPoint,   x)
+float(x)   = convert(FloatingPoint, x)
 
 ## conversions from floating-point ##
+
+# fallbacks using only convert, trunc, ceil, floor, round
+itrunc(x::FloatingPoint) = convert(Integer,trunc(x))
+iceil (x::FloatingPoint) = convert(Integer,ceil(x))  # TODO: fast primitive for iceil
+ifloor(x::FloatingPoint) = convert(Integer,floor(x)) # TOOD: fast primitive for ifloor
+iround(x::FloatingPoint) = convert(Integer,round(x))
+
+itrunc{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,trunc(x))
+iceil {T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,ceil(x))
+ifloor{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,floor(x))
+iround{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,round(x))
+
+## fast specific type converions ##
 
 if WORD_SIZE == 64
     iround(x::Float32) = iround(float64(x))
@@ -83,9 +96,6 @@ iround(::Type{Uint128}, x::Float64) = convert(Uint128,round(x))
 # this is needed very early because it is used by Range and colon
 round(x::Float64) = ccall((:round, Base.libm_name), Float64, (Float64,), x)
 floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
-
-iceil(x::FloatingPoint)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
-ifloor(x::FloatingPoint) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
 
 ## floating point promotions ##
 
