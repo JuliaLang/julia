@@ -131,6 +131,12 @@ void closeHandle(uv_handle_t* handle)
     free(handle);
 }
 
+void shutdownCallback(uv_shutdown_t* req, int status)
+{
+    uv_close((uv_handle_t*) req->handle,&closeHandle);
+    free(req);
+}
+
 void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal)
 {
     JULIA_CB(return_spawn,p->data,2,CB_INT32,exit_status,CB_INT32,term_signal);
@@ -290,7 +296,28 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
        return;
     if (handle->type==UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
-    uv_close(handle,&closeHandle);
+
+    // We probably shouldn't be using these flags...
+    int UV_CLOSING          = 0x01;   /* uv_close() called but not finished. */
+    int UV_CLOSED           = 0x02;
+    int UV_STREAM_SHUTTING  = 0x08;
+    // libuv will give an error if we try to close an already closed handle.
+    // If the handle is shutting down, it will be closed in the shutdown callback.
+    if (handle->flags & (UV_CLOSING | UV_CLOSED | UV_STREAM_SHUTTING))
+        return;
+
+    if (uv_is_writable((uv_stream_t*)handle) && // uv_shutdown returns an error if not writable
+          (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP)) { 
+        uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
+        int err = uv_shutdown(req, (uv_stream_t*)handle, &shutdownCallback);
+        if (err != 0) {
+            printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));
+            uv_close(handle, &closeHandle);
+        }
+    }
+    else{
+        uv_close(handle,&closeHandle);
+    }
 }
 
 DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data)
