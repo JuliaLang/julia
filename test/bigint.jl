@@ -164,6 +164,10 @@ end
 @test binomial(BigInt(-53), 42) == BigInt("959509335087854414441273718")
 @test binomial(BigInt(113), BigInt(42)) == BigInt("18672199984318438125634054194360")
 
+a = rand(1:100, 10000)
+b = map(BigInt, a)
+@test sum(a) == sum(b)
+
 @test isprime(BigInt(1000000007))
 @test isprime(BigInt(1000000007), 1)
 @test isprime(BigInt(10000000019))
