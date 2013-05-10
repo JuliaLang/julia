@@ -329,6 +329,33 @@ for (fJ, fC) in ((:+,:add), (:-,:sub), (:*,:mul), (:/,:div), (:^, :pow))
     end
 end
 
+# More efficient commutative operations
+for (fJ, fC, fI) in ((:+, :add, 0), (:*, :mul, 1))
+    @eval begin
+        function ($fJ)(a::BigFloat, b::BigFloat, c::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &a, &b, ROUNDING_MODE[end])
+            ccall(($(string(:mpfr_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &z, &c, ROUNDING_MODE[end])
+            return z
+        end
+        function ($fJ)(a::BigFloat, b::BigFloat, c::BigFloat, d::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &a, &b, ROUNDING_MODE[end])
+            ccall(($(string(:mpfr_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &z, &c, ROUNDING_MODE[end])
+            ccall(($(string(:mpfr_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &z, &d, ROUNDING_MODE[end])
+            return z
+        end
+        function ($fJ)(a::BigFloat, b::BigFloat, c::BigFloat, d::BigFloat, e::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &a, &b, ROUNDING_MODE[end])
+            ccall(($(string(:mpfr_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &z, &c, ROUNDING_MODE[end])
+            ccall(($(string(:mpfr_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &z, &d, ROUNDING_MODE[end])
+            ccall(($(string(:mpfr_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &z, &e, ROUNDING_MODE[end])
+            return z
+        end
+    end
+end
+
 function -(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_neg, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
@@ -496,15 +523,15 @@ function rem(x::BigFloat, y::BigFloat)
     return z
 end
 
-# function sum{T<:BigFloat}(arr::AbstractArray{T})
-#     z = BigFloat()
-#     n = length(arr)
-#     ptrarr = [pointer(&x) for x in arr]
-#     ccall((:mpfr_sum, :libmpfr), Int32,
-#         (Ptr{BigFloat}, Ptr{Void}, Culong, Int32), 
-#         &z, ptrarr, n, ROUNDING_MODE[1])
-#     return z
-# end
+function sum(arr::AbstractArray{BigFloat})
+    z = BigFloat(0)
+    for i in arr
+        ccall((:mpfr_add, :libmpfr), Int32,
+            (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Cint),
+            &z, &z, &i, 0)
+    end
+    return z
+end
 
 # Functions for which NaN results are converted to DomainError, following Base
 for f in (:sin,:cos,:tan,:sec,:csc,

@@ -42,6 +42,25 @@ x = BigFloat(9)
 y = BigFloat(6)
 @test x / y == BigFloat(9/6)
 
+# iterated arithmetic
+a = BigFloat(12.25)
+b = BigFloat(23.125)
+c = BigFloat(-7)
+d = BigFloat(-12.75)
+f = BigFloat(2.0625)
+g = BigFloat(0.03125)
+@test +(a, b) == BigFloat(35.375)
+@test +(a, b, c) == BigFloat(28.375)
+@test +(a, b, c, d) == BigFloat(15.625)
+@test +(a, b, c, d, f) == BigFloat(17.6875)
+@test +(a, b, c, d, f, g) == BigFloat(17.71875)
+
+@test *(a, b) == BigFloat("2.8328125e+02")
+@test *(a, b, c) == BigFloat("-1.98296875e+03")
+@test *(a, b, c, d) == BigFloat("2.52828515625e+04")
+@test *(a, b, c, d, f) == BigFloat("5.214588134765625e+04")
+@test *(a, b, c, d, f, g) == BigFloat("1.6295587921142578125e+03")
+
 # < / > / <= / >=
 x = BigFloat(12)
 y = BigFloat(42)
@@ -241,6 +260,7 @@ w = BigFloat(4)
 @test sum([x,y,z,w]) == BigFloat(10)
 big_array = ones(BigFloat, 100)
 @test sum(big_array) == BigFloat(100)
+@test sum(BigFloat[]) == BigFloat(0)
 
 # promotion
 # the array converts everyone to the DEFAULT_PRECISION!
