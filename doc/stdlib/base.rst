@@ -1771,10 +1771,6 @@ Data Formats
 
    Convert a number or numeric array to boolean
 
-.. function:: isbool(x)
-
-   Test whether number or array is boolean
-
 .. function:: int(x)
 
    Convert a number or array to the default integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an integer.
@@ -1786,10 +1782,6 @@ Data Formats
 .. function:: integer(x)
 
    Convert a number or array to integer type. If ``x`` is already of integer type it is unchanged, otherwise it converts it to the default integer type on your platform.
-
-.. function:: isinteger(x)
-
-   Test whether a number or array is of integer type
 
 .. function:: signed(x)
 
@@ -1861,7 +1853,7 @@ Data Formats
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: float64_valued(x::Rational)
+.. function:: isfloat64valued(x::Rational)
 
    True if ``x`` can be losslessly represented as a ``Float64`` data type
 
@@ -1880,14 +1872,6 @@ Data Formats
 .. function:: complex(r,i)
 
    Convert real numbers or arrays to complex
-
-.. function:: iscomplex(x) -> Bool
-
-   Test whether a number or array is of a complex type
-
-.. function:: isreal(x) -> Bool
-
-   Test whether a number or array is of a real type
 
 .. function:: bswap(n)
 
@@ -1981,11 +1965,11 @@ Numbers
 
    Get the previous floating point number in lexicographic order
 
-.. function:: integer_valued(x)
+.. function:: isintegervalued(x)
 
    Test whether ``x`` is numerically equal to some integer
 
-.. function:: real_valued(x)
+.. function:: isrealvalued(x)
 
    Test whether ``x`` is numerically equal to some real number
 
@@ -2123,6 +2107,10 @@ Basic functions
 .. function:: eltype(A)
 
    Returns the type of the elements contained in A
+
+.. function:: isela(A,T)
+
+   Tests whether A or its elements are of type T
 
 .. function:: length(A) -> Integer
 

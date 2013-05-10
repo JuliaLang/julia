@@ -43,11 +43,8 @@ for fn in _numeric_conversion_func_names
     @eval $fn(z::Complex) = complex($fn(real(z)),$fn(imag(z)))
 end
 
-iscomplex(x::Complex) = true
-iscomplex(x::Number) = false
-
-real_valued{T<:Real}(z::Complex{T}) = imag(z) == 0
-integer_valued(z::Complex) = real_valued(z) && integer_valued(real(z))
+isrealvalued{T<:Real}(z::Complex{T}) = imag(z) == 0
+isintegervalued(z::Complex) = isrealvalued(z) && isintegervalued(real(z))
 
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
@@ -91,8 +88,6 @@ end
 type ImaginaryUnit <: Number end
 const im = ImaginaryUnit()
 
-iscomplex(::ImaginaryUnit) = true
-
 convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex{T}(zero(T),one(T))
 convert(::Type{Complex}, ::ImaginaryUnit) = Complex(real(im),imag(im))
 
@@ -109,14 +104,14 @@ convert(::Type{Complex}, z::Complex) = z
 convert(::Type{Complex}, x::Real) = complex(x)
 
 ==(z::Complex, w::Complex) = real(z) == real(w) && imag(z) == imag(w)
-==(z::Complex, x::Real) = real_valued(z) && real(z) == x
-==(x::Real, z::Complex) = real_valued(z) && real(z) == x
+==(z::Complex, x::Real) = isrealvalued(z) && real(z) == x
+==(x::Real, z::Complex) = isrealvalued(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) && isequal(imag(z),imag(w))
-isequal(z::Complex, x::Real) = real_valued(z) && isequal(real(z),x)
-isequal(x::Real, z::Complex) = real_valued(z) && isequal(real(z),x)
+isequal(z::Complex, x::Real) = isrealvalued(z) && isequal(real(z),x)
+isequal(x::Real, z::Complex) = isrealvalued(z) && isequal(real(z),x)
 
-hash(z::Complex) = (r = hash(real(z)); real_valued(z) ? r : bitmix(r,hash(imag(z))))
+hash(z::Complex) = (r = hash(real(z)); isrealvalued(z) ? r : bitmix(r,hash(imag(z))))
 
 conj(z::Complex) = complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))

@@ -193,10 +193,18 @@ export PipeString
 @deprecate  unsafe_assign       unsafe_store!
 @deprecate  add_each!           union!
 @deprecate  del_each!           setdiff!
+@deprecate  real_valued         isrealvalued
+@deprecate  integer_valued      isintegervalued
+@deprecate  float64_valued      isfloat64valued
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)
 @deprecate  readdir(cmd::Cmd)           readdir(string(cmd)[2:end-1])
+@deprecate  isbool(x)                   isela(x,Bool)
+@deprecate  isinteger(x)                isela(x,Integer)
+@deprecate  isreal(x)                   isela(x,Real)
+@deprecate  iscomplex(x)                isela(x,Complex)
+
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 

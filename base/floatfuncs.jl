@@ -29,7 +29,7 @@ maxintfloat(::Type{Float32}) = float32(16777216.)
 maxintfloat{T<:FloatingPoint}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
-integer_valued(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
+isintegervalued(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
 
 ## precision, as defined by the effective number of bits in the mantissa ##
 get_precision(::Float32) = 24
