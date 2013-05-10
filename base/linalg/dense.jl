@@ -419,7 +419,7 @@ function det(A::Matrix)
 end
 det(x::Number) = x
 
-logdet(A::Matrix) = 2.0 * sum(log(diag(cholfact(A)[:U])))
+logdet(A::Matrix) = logdet(cholfact(A))
 
 function inv(A::StridedMatrix)
     if istriu(A) return inv(Triangular(A, 'U')) end
