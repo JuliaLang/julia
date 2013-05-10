@@ -10,6 +10,7 @@ eltype(x) = Any
 eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
 eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
+isela{Ta,n,Tb}(::AbstractArray{Ta,n},::Type{Tb}) = Ta <: Tb
 ndims{T,n}(::AbstractArray{T,n}) = n
 ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
@@ -19,15 +20,6 @@ first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
 
 strides(a::AbstractArray) = ntuple(ndims(a), i->stride(a,i))::Dims
-
-isinteger{T<:Integer}(::AbstractArray{T}) = true
-isinteger(::AbstractArray) = false
-isreal{T<:Real}(::AbstractArray{T}) = true
-isreal(::AbstractArray) = false
-iscomplex{T<:Complex}(::AbstractArray{T}) = true
-iscomplex(::AbstractArray) = false
-isbool(::AbstractArray{Bool}) = true
-isbool(::AbstractArray) = false
 
 function isassigned(a::AbstractArray, i::Int...)
     # TODO
