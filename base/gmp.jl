@@ -5,7 +5,7 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             widemul
+             widemul, sum
 
 type BigInt <: Integer
     alloc::Cint
@@ -95,6 +95,33 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
         function ($fJ)(x::BigInt, y::BigInt)
             z = BigInt()
             ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &y)
+            return z
+        end
+    end
+end
+
+# More efficient commutative operations
+for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
+    @eval begin
+        function ($fJ)(a::BigInt, b::BigInt, c::BigInt)
+            z = BigInt()
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &a, &b)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &c)
+            return z
+        end
+        function ($fJ)(a::BigInt, b::BigInt, c::BigInt, d::BigInt)
+            z = BigInt()
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &a, &b)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &c)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &d)
+            return z
+        end
+        function ($fJ)(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt)
+            z = BigInt()
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &a, &b)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &c)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &d)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &e)
             return z
         end
     end
@@ -225,6 +252,16 @@ function gcdx(a::BigInt, b::BigInt)
         (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
         &g, &s, &t, &a, &b)
     BigInt(g), BigInt(s), BigInt(t)
+end
+
+function sum(arr::AbstractArray{BigInt})
+    n = BigInt(0)
+    for i in arr
+        ccall((:__gmpz_add, :libgmp), Void,
+            (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
+            &n, &n, &i)
+    end
+    return n
 end
 
 function factorial(bn::BigInt)
