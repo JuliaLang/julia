@@ -1870,7 +1870,7 @@
 		 (RHS (caddr e)))
 	     (cond ((not dest)
 		    (to-lff RHS LHS #f))
-		   ((assignment? RHS)
+		   #;((assignment? RHS)
 		    (let ((r (to-lff RHS dest #f)))
 		      (list* (if tail `(return ,(car r)) (car r))
 			     `(= ,LHS ,(car r))

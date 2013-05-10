@@ -279,8 +279,13 @@ end
 # Algorithm H from TAoCP 7.2.1.5
 # Set partitions
 function partitions{T}(s::AbstractVector{T})
-
   n = length(s)
+  n == 0 && return
+  if n == 1
+    produce(Array{T,1}[s])
+    return
+  end
+
   # H1
   a = zeros(Int,n)
   b = ones(Int,n-1)
