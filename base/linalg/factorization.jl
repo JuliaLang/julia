@@ -7,18 +7,18 @@ type Cholesky{T<:BlasFloat} <: Factorization{T}
     uplo::Char
 end
 
-function cholfact!(A::StridedMatrix, uplo::Symbol)
+function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol)
     uplochar = string(uplo)[1]
     C, info = LAPACK.potrf!(uplochar, A)
     if info > 0 throw(LinAlg.LAPACK.PosDefException(info)) end
     Cholesky(uplochar == 'L' ? tril(C) : triu(C), uplochar)
 end
-cholfact(A::StridedMatrix, uplo::Symbol) = cholfact!(copy(A), uplo)
-cholfact!(A::StridedMatrix) = cholfact!(A, :U)
-cholfact(A::StridedMatrix) = cholfact(A, :U)
-cholfact{T<:Integer}(A::StridedMatrix{T}, args...) = cholfact(float(A), args...)
-cholfact!{T<:Integer}(A::StridedMatrix{T}, args...) = cholfact(A, args...)
+cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol) = cholfact!(copy(A), uplo)
+cholfact!{T<:BlasFloat}(A::StridedMatrix{T}) = cholfact!(A, :U)
+cholfact{T<:BlasFloat}(A::StridedMatrix{T}) = cholfact!(copy(A), :U)
 cholfact(x::Number) = imag(x) == 0 && real(x) > 0 ? Cholesky(fill(sqrt(x), 1, 1), 'U') : throw(LinAlg.LAPACK.PosDefException(1))
+cholfact(A::StridedMatrix, args...) = cholfact!(float(A), args...)
+cholfact!(A::StridedMatrix, args...) = cholfact!(float(A), args...)
 
 chol(A::Union(Number, StridedMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
 chol(A::Union(Number, StridedMatrix)) = cholfact(A, :U)[:U]
@@ -127,7 +127,7 @@ function inv(C::CholeskyPivoted)
 end
 
 ## LU
-type LU{T} <: Factorization{T}
+type LU{T<:BlasFloat} <: Factorization{T}
     factors::Matrix{T}
     ipiv::Vector{BlasInt}
     info::BlasInt
@@ -136,12 +136,13 @@ function LU{T<:BlasFloat}(A::StridedMatrix{T})
     factors, ipiv, info = LAPACK.getrf!(A)
     LU{T}(factors, ipiv, info)
 end
+lufact!{T<:BlasFloat}(A::StridedMatrix{T}) = LU(A)
+lufact{T<:BlasFloat}(A::StridedMatrix{T}) = lufact!(copy(A))
 
-lufact!(A::StridedMatrix) = LU(A)
-lufact(A::StridedMatrix) = lufact!(copy(A))
-lufact{T<:Integer}(A::StridedMatrix{T}) = lufact!(float(A))
-lufact!{T<:Integer}(A::StridedMatrix{T}) = lufact(A)
 lufact(x::Number) = LU(fill(x, 1, 1), [1], x == 0 ? 1 : 0)
+
+lufact(A::StridedMatrix) = lufact!(float(A))
+lufact!(A::StridedMatrix) = lufact!(float(A))
 
 function lu(A::Union(Number, StridedMatrix))
     F = lufact(A)
@@ -199,14 +200,14 @@ type QR{S<:BlasFloat} <: Factorization{S}
     vs::Matrix{S}                     # the elements on and above the diagonal contain the N-by-N upper triangular matrix R; the elements below the diagonal are the columns of V
     T::Matrix{S}                      # upper triangular factor of the block reflector.
 end
-QR(A::StridedMatrix) = QR(LAPACK.geqrt3!(A)...)
+QR{T<:BlasFloat}(A::StridedMatrix{T}) = QR(LAPACK.geqrt3!(A)...)
 
-qrfact!(A::StridedMatrix) = QR(A)
-qrfact(A::StridedMatrix) = qrfact!(copy(A))
-qrfact{T<:Integer}(A::StridedMatrix{T}) = qrfact!(float(A))
-qrfact!{T<:Integer}(A::StridedMatrix{T}) = qrfact(A)
-qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QR(A)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(copy(A))
 qrfact(x::Integer) = qrfact(float(x))
+qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
+qrfact(A::StridedMatrix) = qrfact!(float(A))
+qrfact!(A::StridedMatrix) = qrfact(A)
 
 function qr(A::Union(Number, StridedMatrix), thin::Bool)
     F = qrfact(A)
@@ -505,11 +506,10 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T})
     if m == 0 || n == 0 return zeros(T, 0) end
     return LAPACK.gesdd!('N', A)[2]
 end
-
-svdvals(A) = svdvals!(copy(A))
-svdvals(A::Number) = [A]
-svdvals{T<:Integer}(A::StridedMatrix{T}) = svdvals!(float(A))
-svdvals!{T<:Integer}(A::StridedMatrix{T}) = svdvals(A)
+svdvals{T<:BlasFloat}(A::StridedMatrix{T}) = svdvals!(copy(A))
+svdvals(x::Number) = [x]
+svdvals(A::StridedMatrix) = svdvals!(float(A))
+svdvals!(A::StridedMatrix) = svdvals!(float(A))
 
 # SVD least squares
 function \{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
