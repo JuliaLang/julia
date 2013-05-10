@@ -61,3 +61,9 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Create a random sparse boolean matrix with the specified density.
 
+.. function:: etree(A[, post])
+
+   Compute the elimination tree of a symmetric sparse matrix ``A`` from ``triu(A)`` and, optionally, its post-ordering permutation.
+
+
+

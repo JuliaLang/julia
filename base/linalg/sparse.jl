@@ -581,8 +581,8 @@ scale{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
 # there may be more than one root, indicating complete separability.
 # A trivial example is speye(n, n) in which every node is a root.
 function etree(A::SparseMatrixCSC, postorder::Bool)
-    m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ti = eltype(Ai)
-    parent = zeros(Ti, n); ancestor = zeros(Ti, n)
+    m,n = size(A); Ap = A.colptr; Ai = A.rowval; T = eltype(Ai)
+    parent = zeros(T, n); ancestor = zeros(T, n)
     for k in 1:n, p in Ap[k]:(Ap[k+1] - 1)
         i = Ai[p]
         while i != 0 && i < k
