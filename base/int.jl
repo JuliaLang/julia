@@ -304,7 +304,7 @@ for to in (Uint8, Uint16, Uint32, Uint64)
     end
 end
 
-function convert(::Type{Int128}, x::Float64)
+function convert(::Type{Int128}, x::FloatingPoint)
     ax = abs(x)
     top = trunc(ldexp(ax,-64))
     bot = ax - ldexp(top,64)
@@ -313,7 +313,7 @@ function convert(::Type{Int128}, x::Float64)
 end
 convert(::Type{Int128}, x::Float32) = convert(Int128, float64(x))
 
-function convert(::Type{Uint128}, x::Float64)
+function convert(::Type{Uint128}, x::FloatingPoint)
     ax = abs(x)
     top = trunc(ldexp(ax,-64))
     bot = ax - ldexp(top,64)
@@ -496,6 +496,9 @@ for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
 end
 
 ## wide multiplication, Int128 multiply and divide ##
+
+widemul(x::Union(Int8,Uint8,Int16), y::Union(Int8,Uint8,Int16)) = int32(x)*int32(y)
+widemul(x::Uint16, y::Uint16) = uint32(x)*uint32(y)
 
 widemul(x::Int32, y::Int32) = int64(x)*int64(y)
 widemul(x::Uint32, y::Uint32) = uint64(x)*uint64(y)

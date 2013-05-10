@@ -46,11 +46,23 @@ function gen_listpkg()
 			desc = get(gh_repo, "description", "No description provided")
 			homepage = get(gh_repo, "homepage", nothing)
 			html_url = gh_repo["html_url"]
+
+			sha1_file = "METADATA/$pkg/versions/$(maxv.version)/sha1"
+			if isfile(sha1_file)
+				sha1 = readchomp(sha1_file)
+				gh_update_url = "https://api.github.com/repos/$(user)/$(repo)/git/commits/$(sha1)?access_token=$(gh_auth)"
+				gh_update = JSON.parse(readall(download_file(gh_update_url)))
+				author = get(gh_update, "author", nothing)
+				date = author != nothing ? get(author, "date", nothing) : nothing
+			end
 		end
 		print(io, "`$(pkg) <$(html_url)>`_\n"); 
 		print(io, "_"^(length("`$(pkg) <$(html_url)>`_")) * "\n\n")
 		print(io, "  .. image:: $(u[:avatar])\n     :height: 80px\n     :width: 80px\n     :align: right\n     :alt: $(u[:fullname])\n     :target: $(u[:url])\n\n")
-		print(io, "  Current Version: ``$(maxv.version)``\n\n"); 
+		print(io, "  Current Version: ``$(maxv.version)``"); 
+		if date != nothing
+			print(io, "  (updated: $(date[1:10])) \n\n")
+		end
 		print(io, "  $(desc) \n\n")
 		print(io, "  Maintainer: `$(u[:fullname]) <$(u[:url])>`_\n\n") 
 		

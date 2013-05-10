@@ -475,25 +475,21 @@ Set-Like Collections
 
    Add an element to a set-like collection.
 
-.. function:: add_each!(collection, iterable)
-
-   Adds each element in iterable to the collection.
-
 .. function:: Set(x...)
 
-   Construct a ``Set`` with the given elements. Should be used instead of ``IntSet`` for sparse integer sets.
+   Construct a ``Set`` with the given elements. Should be used instead of ``IntSet`` for sparse integer sets, or for sets of arbitrary objects.
 
 .. function:: IntSet(i...)
 
-   Construct an ``IntSet`` of the given integers. Implemented as a bit string, and therefore designed for dense integer sets. If the set will be sparse (for example holding a single very large integer), use ``Set`` instead.
+   Construct a sorted set of the given integers. Implemented as a bit string, and therefore designed for dense integer sets. If the set will be sparse (for example holding a single very large integer), use ``Set`` instead.
 
 .. function:: union(s1,s2...)
 
    Construct the union of two or more sets. Maintains order with arrays.
 
-.. function:: union!(s1,s2)
+.. function:: union!(s, iterable)
 
-   Constructs the union of IntSets s1 and s2, stores the result in ``s1``.
+   Union each element of ``iterable`` into set ``s`` in-place.
 
 .. function:: intersect(s1,s2...)
 
@@ -502,6 +498,10 @@ Set-Like Collections
 .. function:: setdiff(s1,s2)
 
    Construct the set of elements in ``s1`` but not ``s2``. Maintains order with arrays.
+
+.. function:: setdiff!(s, iterable)
+
+   Remove each element of ``iterable`` from set ``s`` in-place.
 
 .. function:: symdiff(s1,s2...)
 
@@ -526,10 +526,6 @@ Set-Like Collections
 .. function:: complement!(s)
 
    Mutates IntSet s into its set-complement.
-
-.. function:: del_each!(s, itr)
-
-   Deletes each element of itr in set s in-place.
 
 .. function:: intersect!(s1, s2)
 

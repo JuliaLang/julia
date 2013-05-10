@@ -18,7 +18,12 @@ function primesmask(n::Int)
     end
     return s
 end
-primes(n::Int) = find(primesmask(n))
+function primesmask(n::Integer)
+    n <= typemax(Int) || error("primesmask: you want WAY too many primes ($n)")
+    primesmask(int(n))
+end
+
+primes(n::Integer) = find(primesmask(n))
 
 function isprime(n::Integer)
     n == 2 && return true
@@ -32,48 +37,49 @@ function isprime(n::Integer)
         t = s
         while x != n-1
             (t-=1) <= 0 && return false
-            x = x*x % n
+            x = oftype(n, widemul(x,x) % n)
             x == 1 && return false
         end
     end
     return true
 end
-@eval begin
-    witnesses(n::Union(Uint32,Int32)) = n < 1373653 ?
-        $(map(int32,(2,3))) :
-        $(map(int32,(2,7,61)))
-    witnesses(n::Union(Uint64,Int64)) = n < 341550071728321 ?
-        $(map(int64,(2,3,5,7,11,13,17))) :
-        $(map(int64,(2,325,9375,28178,450775,9780504,1795265022)))
-end
+witnesses(n::Union(Uint8,Int8,Uint16,Int16)) = (2,3)
+witnesses(n::Union(Uint32,Int32)) = n < 1373653 ? (2,3) : (2,7,61)
+witnesses(n::Union(Uint64,Int64)) =
+        n < 1373653         ? (2,3) :
+        n < 4759123141      ? (2,7,61) :
+        n < 2152302898747   ? (2,3,5,7,11) :
+        n < 3474749660383   ? (2,3,5,7,11,13) :
+                              (2,325,9375,28178,450775,9780504,1795265022)
+
+isprime(n::Uint128) =
+    n <= typemax(Uint64) ? isprime(uint64(n)) : isprime(BigInt(n))
+isprime(n::Int128) = n < 2 ? false :
+    n <= typemax(Int64)  ? isprime(int64(n))  : isprime(BigInt(n))
 
 # TODO: replace this factorization routine
 
+const PRIMES = primes(10000)
+
 function factor{T<:Integer}(n::T)
-    if n <= 0
-        error("factor: number to be factored must be positive")
-    end
+    0 < n || error("factor: number to be factored must be positive")
     h = (T=>Int)[]
-    if n == 1 return h end
-    local p::T
-    s = ifloor(sqrt(n))
-    P = primes(n)
-    for p in P
-        if p > s
-            break
-        end
+    n == 1 && return h
+    n <= 3 && (h[n] = 1; return h)
+    local s::T, p::T
+    s = isqrt(n)
+    for p in PRIMES
+        p <= s || break
         if n % p == 0
             while n % p == 0
                 h[p] = get(h,p,0)+1
                 n = div(n,p)
             end
-            if n == 1
-                return h
-            end
-            s = ifloor(sqrt(n))
+            n == 1 && return h
+            s = isqrt(n)
         end
     end
-    p = P[end]+2
+    p = PRIMES[end]+2
     while p <= s
         if n % p == 0
             while n % p == 0
@@ -83,7 +89,7 @@ function factor{T<:Integer}(n::T)
             if n == 1
                 return h
             end
-            s = ifloor(sqrt(n))
+            s = isqrt(n)
         end
         p += 2
     end

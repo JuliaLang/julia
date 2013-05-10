@@ -42,6 +42,25 @@ x = BigFloat(9)
 y = BigFloat(6)
 @test x / y == BigFloat(9/6)
 
+# iterated arithmetic
+a = BigFloat(12.25)
+b = BigFloat(23.125)
+c = BigFloat(-7)
+d = BigFloat(-12.75)
+f = BigFloat(2.0625)
+g = BigFloat(0.03125)
+@test +(a, b) == BigFloat(35.375)
+@test +(a, b, c) == BigFloat(28.375)
+@test +(a, b, c, d) == BigFloat(15.625)
+@test +(a, b, c, d, f) == BigFloat(17.6875)
+@test +(a, b, c, d, f, g) == BigFloat(17.71875)
+
+@test *(a, b) == BigFloat("2.8328125e+02")
+@test *(a, b, c) == BigFloat("-1.98296875e+03")
+@test *(a, b, c, d) == BigFloat("2.52828515625e+04")
+@test *(a, b, c, d, f) == BigFloat("5.214588134765625e+04")
+@test *(a, b, c, d, f, g) == BigFloat("1.6295587921142578125e+03")
+
 # < / > / <= / >=
 x = BigFloat(12)
 y = BigFloat(42)
@@ -106,9 +125,17 @@ y = BigFloat(1)
 
 # convert to
 @test convert(BigFloat, 1//2) == BigFloat("0.5")
+@test typeof(convert(BigFloat, 1//2)) == BigFloat
 @test convert(BigFloat, 0.5) == BigFloat("0.5")
+@test typeof(convert(BigFloat, 0.5)) == BigFloat
 @test convert(BigFloat, 40) == BigFloat("40")
+@test typeof(convert(BigFloat, 40)) == BigFloat
 @test convert(BigFloat, float32(0.5)) == BigFloat("0.5")
+@test typeof(convert(BigFloat, float32(0.5))) == BigFloat
+@test convert(BigFloat, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
+@test typeof(convert(BigFloat, BigInt("9223372036854775808"))) == BigFloat
+@test convert(FloatingPoint, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
+@test typeof(convert(FloatingPoint, BigInt("9223372036854775808"))) == BigFloat
 
 # convert from
 @test convert(Float64, BigFloat(0.5)) == 0.5
@@ -233,6 +260,7 @@ w = BigFloat(4)
 @test sum([x,y,z,w]) == BigFloat(10)
 big_array = ones(BigFloat, 100)
 @test sum(big_array) == BigFloat(100)
+@test sum(BigFloat[]) == BigFloat(0)
 
 # promotion
 # the array converts everyone to the DEFAULT_PRECISION!
@@ -293,6 +321,16 @@ z = BigInt("9223372036854775809")
 @test typeof(iround(Int64, x)) == Int64 && iround(Int64, x) == 42
 @test typeof(iround(Int, x)) == Int && iround(Int, x) == 42
 @test typeof(iround(Uint, x)) == Uint && iround(Uint, x) == 0x2a
+
+# string representation
+str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012e+00"
+with_bigfloat_precision(406) do
+    @test string(nextfloat(BigFloat(1))) == str
+end
+
+# eps
+x = eps(BigFloat)
+@test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
 
 # factorial
 with_bigfloat_precision(256) do
@@ -358,6 +396,90 @@ with_bigfloat_precision(53) do
     @test ldexp(BigFloat(24.5), uint(72)) == ldexp(24.5, 72)
     @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
 end
+
+# ceil / iceil / floor / ifloor / trunc / itrunc
+x = BigFloat("28273.2312487489135135135")
+y = BigInt(28273)
+z = BigInt(28274)
+a = BigFloat("123456789012345678901234567890.2414")
+b = BigInt("123456789012345678901234567890")
+c = BigInt("123456789012345678901234567891")
+@test ceil(x) == z
+@test typeof(ceil(x)) == BigFloat
+@test floor(x) == y
+@test typeof(floor(x)) == BigFloat
+@test trunc(x) == y
+@test typeof(trunc(x)) == BigFloat
+
+@test iceil(x) == z
+@test typeof(iceil(x)) == BigInt
+@test ifloor(x) == y
+@test typeof(ifloor(x)) == BigInt
+@test itrunc(x) == y
+@test typeof(itrunc(x)) == BigInt
+
+@test iceil(Int64, x) == int64(z)
+@test typeof(iceil(Int64, x)) == Int64
+@test ifloor(Int64, x) == int64(y)
+@test typeof(ifloor(Int64, x)) == Int64
+@test itrunc(Int64, x) == int64(y)
+@test typeof(itrunc(Int64, x)) == Int64
+
+@test iceil(Int32, x) == int32(z)
+@test typeof(iceil(Int32, x)) == Int32
+@test ifloor(Int32, x) == int32(y)
+@test typeof(ifloor(Int32, x)) == Int32
+@test itrunc(Int32, x) == int32(y)
+@test typeof(itrunc(Int32, x)) == Int32
+
+@test iceil(Int16, x) == int16(z)
+@test typeof(iceil(Int16, x)) == Int16
+@test ifloor(Int16, x) == int16(y)
+@test typeof(ifloor(Int16, x)) == Int16
+@test itrunc(Int16, x) == int16(y)
+@test typeof(itrunc(Int16, x)) == Int16
+
+#@test iceil(Int8, x) == int8(z)
+#@test typeof(iceil(Int8, x)) == Int8
+#@test ifloor(Int8, x) == int8(y)
+#@test typeof(ifloor(Int8, x)) == Int8
+#@test itrunc(Int8, x) == int8(y)
+#@test typeof(itrunc(Int8, x)) == Int8
+
+@test iceil(Uint64, x) == uint64(z)
+@test typeof(iceil(Uint64, x)) == Uint64
+@test ifloor(Uint64, x) == uint64(y)
+@test typeof(ifloor(Uint64, x)) == Uint64
+@test itrunc(Uint64, x) == uint64(y)
+@test typeof(itrunc(Uint64, x)) == Uint64
+
+@test iceil(Uint32, x) == uint32(z)
+@test typeof(iceil(Uint32, x)) == Uint32
+@test ifloor(Uint32, x) == uint32(y)
+@test typeof(ifloor(Uint32, x)) == Uint32
+@test itrunc(Uint32, x) == uint32(y)
+@test typeof(itrunc(Uint32, x)) == Uint32
+
+@test iceil(Uint16, x) == uint16(z)
+@test typeof(iceil(Uint16, x)) == Uint16
+@test ifloor(Uint16, x) == uint16(y)
+@test typeof(ifloor(Uint16, x)) == Uint16
+@test itrunc(Uint16, x) == uint16(y)
+@test typeof(itrunc(Uint16, x)) == Uint16
+
+#@test iceil(Uint8, x) == uint8(z)
+#@test typeof(iceil(Uint8, x)) == Uint8
+#@test ifloor(Uint8, x) == uint8(y)
+#@test typeof(ifloor(Uint8, x)) == Uint8
+#@test itrunc(Uint8, x) == uint8(y)
+#@test typeof(itrunc(Uint8, x)) == Uint8
+
+@test iceil(a) == c
+@test typeof(iceil(a)) == BigInt
+@test ifloor(a) == b
+@test typeof(ifloor(a)) == BigInt
+@test itrunc(a) == b
+@test typeof(itrunc(a)) == BigInt
 
 # basic arithmetic
 # Signed addition

@@ -109,7 +109,7 @@ package per line.
 code in ``src/``, and tests in ``test/``. Ensure that each test file contains these
 lines near the beginning::
 
-    using Test
+    using Base.Test
     using MY_PACKAGE_NAME
 
 6. Add a publicly accessible remote repository URL, if your package doesn't
@@ -137,28 +137,28 @@ Linux <http://ubuntu.com>`_ platform.
 
 To set up testing for your package, see the `Getting
 Started <http://about.travis-ci.org/docs/user/getting-started/>`_ section of the
-Travis manual.
+Travis manual. Make sure that you enable the Travis service hook for your package on github. Check out the [Example.jl](https://github.com/JuliaLang/Example.jl) package to see this in action.
 
 Here is a sample `.travis.yml` that runs all tests until one fails::
 
-    language: cpp 
+    language: cpp
     compiler: 
-        - gcc 
+        - clang
     notifications:
         email: false
     before_install:
         - sudo add-apt-repository ppa:staticfloat/julia-deps -y
         - sudo add-apt-repository ppa:staticfloat/julianightlies -y
         - sudo apt-get update -qq -y
-        - sudo apt-get upgrade -y
+        - sudo apt-get install -y libpcre3-dev
         - sudo apt-get install julia -y
-        - git config --global user.name "Dummy Travis User"
+        - git config --global user.name "Travis User"
         - git config --global user.email "travis@example.net"
     script:
-        - julia -e 'versioninfo(); Pkg.init();'
-        - mkdir -p ~/.julia/MY_PACKAGE_NAME/
+        - julia -e "Pkg.init()"
+        - mkdir -p ~/.julia/MY_PACKAGE_NAME
         - cp -R ./* ~/.julia/MY_PACKAGE_NAME/
-        - for a in ~/.julia/MY_PACKAGE_NAME/test/*.jl; do julia $a; errcode=$?; if test $errcode -ne 0; then exit $errcode; fi; done
+        - julia ~/.julia/MY_PACKAGE_NAME/test/test.jl
 
 Be sure to install `Ubuntu packages <http://packages.ubuntu.com>`_ for all
 necessary binary dependencies as well as any Julia package dependencies within

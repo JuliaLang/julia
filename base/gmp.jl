@@ -4,7 +4,8 @@ export BigInt
 
 import Base: *, +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, sqrt, string
+             ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
+             widemul, sum
 
 type BigInt <: Integer
     alloc::Cint
@@ -27,35 +28,61 @@ function BigInt(x::String)
     return z
 end
 
-function BigInt(x::Int)
+function BigInt(x::Clong)
     z = BigInt()
     ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{BigInt}, Clong), &z, x)
     return z
 end
-
-function BigInt(x::Uint)
+function BigInt(x::Culong)
     z = BigInt()
     ccall((:__gmpz_set_ui, :libgmp), Void,(Ptr{BigInt}, Culong), &z, x)
     return z
 end
 
 BigInt(x::Bool) = BigInt(uint(x))
-BigInt(x::Signed) = BigInt(int(x))
-BigInt(x::Unsigned) = BigInt(uint(x))
-#BigInt(x::Int128) = BigInt(string(x))
-#BigInt(x::Uint128) = BigInt(string(x))
-if WORD_SIZE == 32
-    BigInt(x::Int64) = BigInt(string(x))
-    BigInt(x::Uint64) = BigInt(string(x))
-end
+BigInt(x::Integer) =
+    typemin(Clong) <= x <= typemax(Clong) ? BigInt(convert(Clong,x)) : BigInt(string(x))
+BigInt(x::Unsigned) =
+    x <= typemax(Culong) ? BigInt(convert(Culong,x)) : BigInt(string(x))
 
 convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
 
-convert(::Type{Int}, n::BigInt) =
-    convert(Int, ccall((:__gmpz_get_si, :libgmp), Clong, (Ptr{BigInt},), &n))
+convert(::Type{Int64}, n::BigInt) = int64(convert(Clong, n))
+convert(::Type{Int32}, n::BigInt) = int32(convert(Clong, n))
+convert(::Type{Int16}, n::BigInt) = int16(convert(Clong, n))
+convert(::Type{Int8}, n::BigInt) = int8(convert(Clong, n))
+function convert(::Type{Clong}, n::BigInt)
+    fits = ccall((:__gmpz_fits_slong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
+    if fits
+        convert(Int, ccall((:__gmpz_get_si, :libgmp), Clong, (Ptr{BigInt},), &n))
+    else
+        throw(InexactError())
+    end
+end
 
-convert(::Type{Uint}, n::BigInt) =
-    convert(Uint, ccall((:__gmpz_get_ui, :libgmp), Culong, (Ptr{BigInt},), &n))
+convert(::Type{Uint64}, x::BigInt) = uint64(convert(Culong, x))
+convert(::Type{Uint32}, x::BigInt) = uint32(convert(Culong, x))
+convert(::Type{Uint16}, x::BigInt) = uint16(convert(Culong, x))
+convert(::Type{Uint8}, x::BigInt) = uint8(convert(Culong, x))
+function convert(::Type{Culong}, n::BigInt)
+    fits = ccall((:__gmpz_fits_ulong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
+    if fits
+        convert(Uint, ccall((:__gmpz_get_ui, :libgmp), Culong, (Ptr{BigInt},), &n))
+    else
+        throw(InexactError())
+    end
+end
+
+if sizeof(Int64) == sizeof(Clong)
+    function convert(::Type{Int128}, x::BigInt)
+        ax = abs(x)
+        top = ax>>64
+        bot = ax - (top<<64)
+        n = int128(convert(Uint,top))<<64 + int128(convert(Uint,bot))
+        return x<0 ? -n : n
+    end
+    convert(::Type{Uint128}, x::BigInt) = uint128(convert(Int128,x))
+end
 
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
@@ -68,6 +95,33 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
         function ($fJ)(x::BigInt, y::BigInt)
             z = BigInt()
             ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &y)
+            return z
+        end
+    end
+end
+
+# More efficient commutative operations
+for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
+    @eval begin
+        function ($fJ)(a::BigInt, b::BigInt, c::BigInt)
+            z = BigInt()
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &a, &b)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &c)
+            return z
+        end
+        function ($fJ)(a::BigInt, b::BigInt, c::BigInt, d::BigInt)
+            z = BigInt()
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &a, &b)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &c)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &d)
+            return z
+        end
+        function ($fJ)(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt)
+            z = BigInt()
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &a, &b)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &c)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &d)
+            ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &z, &e)
             return z
         end
     end
@@ -155,7 +209,7 @@ function cmp(x::BigInt, y::BigInt)
     ccall((:__gmpz_cmp, :libgmp), Int32, (Ptr{BigInt}, Ptr{BigInt}), &x, &y)
 end
 
-function sqrt(x::BigInt)
+function isqrt(x::BigInt)
     z = BigInt()
     ccall((:__gmpz_sqrt, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}), &z, &x)
     return z
@@ -180,6 +234,16 @@ end
 ^(x::BigInt , y::Integer) = bigint_pow(x, y)
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 
+function powermod(x::BigInt, p::BigInt, m::BigInt)
+    r = BigInt()
+    ccall((:__gmpz_powm, :libgmp), Void,
+          (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
+          &r, &x, &p, &m)
+    return r
+end
+powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
+powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
+
 function gcdx(a::BigInt, b::BigInt)
     g = BigInt()
     s = BigInt()
@@ -188,6 +252,16 @@ function gcdx(a::BigInt, b::BigInt)
         (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
         &g, &s, &t, &a, &b)
     BigInt(g), BigInt(s), BigInt(t)
+end
+
+function sum(arr::AbstractArray{BigInt})
+    n = BigInt(0)
+    for i in arr
+        ccall((:__gmpz_add, :libgmp), Void,
+            (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
+            &n, &n, &i)
+    end
+    return n
 end
 
 function factorial(bn::BigInt)
@@ -228,5 +302,9 @@ function show(io::IO, x::BigInt)
 end
 
 ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 10)
+isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
+
+widemul(x::BigInt, y::BigInt) = x*y
+widemul(x::Union(Int128,Uint128), y::Union(Int128,Uint128)) = BigInt(x)*BigInt(y)
 
 end # module

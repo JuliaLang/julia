@@ -8,7 +8,7 @@ function ndgrid{T}(v1::AbstractVector{T}, v2::AbstractVector{T})
 end
 
 function ndgrid_fill(a, v, s, snext)
-    for j = 1:numel(a)
+    for j = 1:length(a)
         a[j] = v[div(rem(j-1, snext), s)+1]
     end
 end
@@ -43,8 +43,8 @@ function meshgrid{T}(vx::AbstractVector{T}, vy::AbstractVector{T},
     vx = reshape(vx, 1, n, 1)
     vy = reshape(vy, m, 1, 1)
     vz = reshape(vz, 1, 1, o)
-    om = ones(Size, m)
-    on = ones(Size, n)
-    oo = ones(Size, o)
+    om = ones(Int, m)
+    on = ones(Int, n)
+    oo = ones(Int, o)
     (vx[om, :, oo], vy[:, on, oo], vz[om, on, :])
 end
