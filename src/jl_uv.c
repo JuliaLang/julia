@@ -297,18 +297,14 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     if (handle->type==UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
 
-    // We probably shouldn't be using these flags...
-    int UV_CLOSING          = 0x01;   /* uv_close() called but not finished. */
-    int UV_CLOSED           = 0x02;
-    int UV_STREAM_SHUTTING  = 0x08;
-
-    // libuv will give an error if we try to close an already closed handle.
-    // If the handle is shutting down, it will be closed in the shutdown callback.
-    if (handle->flags & (UV_CLOSING | UV_CLOSED | UV_STREAM_SHUTTING))
-        return;
-
     if (uv_is_writable((uv_stream_t*)handle) && // uv_shutdown returns an error if not writable
           (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP)) { 
+        // Make sure that the stream has not already been marked closed in Julia.
+        jl_function_t* jl_is_open = (jl_function_t*) jl_get_global(jl_base_module, jl_symbol("is_open"));
+        if ( jl_apply(jl_is_open, (jl_value_t **) &(handle->data), 1) == jl_false){
+            return;
+        }
+
         uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
         int err = uv_shutdown(req, (uv_stream_t*)handle, &shutdownCallback);
         if (err != 0) {

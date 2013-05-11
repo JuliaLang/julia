@@ -1000,6 +1000,7 @@ export
     bind,
     connect,
     close,
+    is_open,
     countlines,
     readcsv,
     writecsv,
