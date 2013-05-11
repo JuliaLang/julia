@@ -37,14 +37,14 @@ There are a few environments you can use to build julia. Making this easy requir
 Native Compile
 --------------
 
-On Windows, do not use the mingw/msys environment from http://www.mingw.org) as it will miscompile the OpenBlas math library
+On Windows, do not use the mingw/msys environment from http://www.mingw.org as it will miscompile the OpenBLAS math library
 
 The recommended way to setup your environment follows:
 
 1. Download and extract mingw (e.g. x64-4.8.0-release-win32-seh-rev2.7z) to C:/MinGW (or similar location) from [Mingw64](http://sourceforge.net/projects/mingwbuilds/files/host-windows/releases/4.8.0/64-bit/threads-win32/seh/)
 2. Download and extract msys (e.g. msys+7za+wget+svn+git+mercurial+cvs-rev12.7z) to C:/MinGW/msys/1.0 (or similar location) from [Mingw64/Msys](http://sourceforge.net/projects/mingwbuilds/files/external-binary-packages/)
 3. Add the line "C:/MinGW /mingw" to C:/MinGW/msys/1.0/etc/fstab (create the file if it doesn't exist)
-4. Replace C:/MinGW/msys/1.0/bin/make.exe with a copy of make.exe extracted from [mingw-msys](http://sourceforge.net/projects/mingw/files/MSYS/Base/make/make-3.81-3/) (e.g. make-3.81-3-msys-1.0.13-bin.tar.lzma)
+4. You may need to replace C:/MinGW/msys/1.0/bin/make.exe with C:/MinGW/msys/1.0/bin/make-old.exe or with a copy of make.exe extracted from [mingw-msys](http://sourceforge.net/projects/mingw/files/MSYS/Base/make/make-3.81-3/) (e.g. make-3.81-3-msys-1.0.13-bin.tar.lzma) if the build does not start correctly
 
 These sections assume you are familiar with building code. If you are not, you should stop reading now and go the the section on binaries. Regardless of which set of steps you followed above, you are now ready to compile julia. Open a unix shell by launching C:/MinGW/msys/1.0/msys.bat (or your favorite shortcut to that file). 
 
@@ -52,7 +52,7 @@ Run the following commands in your build directory ($HOME at C:/MinGW/msys/1.0/h
 1. `git clone https://github.com/JuliaLang/julia.git`
 2. `cd julia`
 3. `make`
-NEVER use the `-j` argument to make. Windows will sometimes corrupt your build files. Additionally, make will probably lock up several times during the process, using 100% cpu, but not show progress. The only solution appears to be to kill make from the Task Manager and rerunning make. It should pickup where it left off. Expect this to take a very long time (dozens of hours is not uncommon).
+Avoid using the `-j` argument to make. Windows will sometimes corrupt your build files. Additionally, make will probably lock up several times during the process, using 100% cpu, but not show progress. The only solution appears to be to kill make from the Task Manager and rerunning make. It should pickup where it left off. Expect this to take a very long time (dozens of hours is not uncommon).
 
 Running julia can be done in two ways:
 1. `make run-julia[-release|-debug] [DEFAULT_REPL=(basic|readline)]` (e.g. `make run-julia`)
@@ -74,17 +74,17 @@ apt-get install \
   mingw-w64-tools \
   binutils-mingw-w64 \
   gcc-mingw-w64 \
-  wine \
-  subversion cvs
+  wine
 ```
 
-Unfortunately, the version of gcc installed by Ubuntu is currently 4.6, which does not compile OpenBLAS correctly. So first we need to replace it. Most binary packages appear to not include gfortran, so we will need to compile it from source. This is typically quite a bit of work, so we will use a [script](https://code.google.com/p/mingw-w64-dgn/) to make it easier.
+Unfortunately, the version of gcc installed by Ubuntu is currently 4.6, which does not compile OpenBLAS correctly. So first we need to replace it. Most binary packages appear to not include gfortran, so we will need to compile it from source. This is typically quite a bit of work, so we will use [this script](https://code.google.com/p/mingw-w64-dgn/) to make it easier.
 
+0. `apt-get install wine subversion cvs`
 1. `svn checkout http://mingw-w64-dgn.googlecode.com/svn/trunk/ mingw-w64-dgn`
 2. `cd mingw-w64-dgn`
 3. edit `rebuild_cross.sh` and make the following two changes:
-  (a) uncomment `export MAKE_OPT="-j 2"` if appropriate for you machine
-  (b) add `,fortran` to the end of `--enable-languages=c,c++,objc,obj-c++`
+(a) uncomment `export MAKE_OPT="-j 2"`, if appropriate for your machine
+(b) add `fortran` to the end of `--enable-languages=c,c++,objc,obj-c++`
 5. `bash update_source.sh`
 4. `bash rebuild_cross.sh`
 5. `mv cross ~/cross-w64`
@@ -110,9 +110,9 @@ Finally, the build and install process:
 4. `make dist`
 6. move the julia-* directory/zipfile to the target machine
 
-If you are building for 64-bit windows. The steps are the same. Just replace i686 in XC_HOST with x86_64.
+If you are building for 64-bit windows. The steps are essentially the same. Just replace i686 in XC_HOST with x86_64.
 
 Important Build Errata
 ----------------------
 
-- None currently
+- Do not use GCC 4.6 or earlier
