@@ -150,8 +150,7 @@ Here is a sample `.travis.yml` that runs all tests until one fails::
         - sudo add-apt-repository ppa:staticfloat/julia-deps -y
         - sudo add-apt-repository ppa:staticfloat/julianightlies -y
         - sudo apt-get update -qq -y
-        - sudo apt-get install -y libpcre3-dev
-        - sudo apt-get install julia -y
+	- sudo apt-get install libpcre3-dev julia -y
         - git config --global user.name "Travis User"
         - git config --global user.email "travis@example.net"
     script:

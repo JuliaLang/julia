@@ -44,7 +44,6 @@ bswap(x::Char) = char(bswap(uint32(x)))
 >>(x::Char, y::Int32)  = uint32(x) >>> y
 >>>(x::Char, y::Int32) = uint32(x) >>> y
 
-==(x::Char, y::Char) = uint32(x) == uint32(y)
 < (x::Char, y::Char) = uint32(x) <  uint32(y)
 <=(x::Char, y::Char) = uint32(x) <= uint32(y)
 
