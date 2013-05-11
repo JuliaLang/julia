@@ -82,7 +82,7 @@ typedef struct _jl_mallocptr_t {
     struct _jl_mallocptr_t *next;
     size_t sz;
     void *ptr;
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_X64_)
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     int isaligned;
 #endif
 } jl_mallocptr_t;
