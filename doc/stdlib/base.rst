@@ -1200,6 +1200,18 @@ Mathematical Functions
 
    Bitwise exclusive or
 
+.. function:: isapprox(x, y [, rtol::Real, atol::Real])
+
+   Inexact equality comparison; true if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``
+
+.. function:: isapproxn(x, y [, rtol::Real, atol::Real])
+
+   Like ``isapprox``, but treats ``NaN``-values as equal
+
+.. function:: isequaln(x, y)
+
+   Like ``isequal``, but treats ``NaN``-values as equal
+
 .. function:: sin(x)
 
    Compute sine of ``x``, where ``x`` is in radians
