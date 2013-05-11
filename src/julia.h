@@ -1231,12 +1231,14 @@ DLLEXPORT void jl_pop_handler(int n);
 #if defined(_COMPILER_MINGW_)
 int __attribute__ ((__nothrow__,__returns_twice__)) jl_setjmp(jmp_buf _Buf);
 __declspec(noreturn) __attribute__ ((__nothrow__)) void jl_longjmp(jmp_buf _Buf,int _Value);
+#define jl_setjmp_f jl_setjmp
+#define jl_setjmp(a,b) jl_setjmp(a)
+#define jl_longjmp(a,b) jl_longjmp(a,b)
 #else
-__declspec(noreturn) int jl_setjmp(jmp_buf _Buf);
-#endif
 #define jl_setjmp_f setjmp
 #define jl_setjmp(a,b) setjmp(a)
 #define jl_longjmp(a,b) longjmp(a,b)
+#endif
 #else
 // determine actual entry point name
 #if defined(sigsetjmp)
