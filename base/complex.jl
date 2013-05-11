@@ -108,11 +108,11 @@ promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = Complex{T}
 convert(::Type{Complex}, z::Complex) = z
 convert(::Type{Complex}, x::Real) = complex(x)
 
-==(z::Complex, w::Complex) = real(z) == real(w) && imag(z) == imag(w)
+==(z::Complex, w::Complex) = (real(z) == real(w)) & (imag(z) == imag(w))
 ==(z::Complex, x::Real) = real_valued(z) && real(z) == x
 ==(x::Real, z::Complex) = real_valued(z) && real(z) == x
 
-isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) && isequal(imag(z),imag(w))
+isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
 isequal(z::Complex, x::Real) = real_valued(z) && isequal(real(z),x)
 isequal(x::Real, z::Complex) = real_valued(z) && isequal(real(z),x)
 
