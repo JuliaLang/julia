@@ -218,6 +218,14 @@ imi = BigFloat(-Inf)
 @test !(z >= z)
 @test !(z > z)
 
+@test !isequal(BigFloat(0.0),BigFloat(-0.0))
+@test isequal(z, BigFloat(NaN))
+
+# signbit
+@test signbit(BigFloat(-1.0)) == 1
+@test signbit(BigFloat(1.0)) == 0
+@test signbit(BigFloat(-0.0)) == 1
+
 # modf
 x = BigFloat(12)
 y = BigFloat(0.5)

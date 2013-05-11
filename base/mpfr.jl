@@ -21,7 +21,7 @@ import
         isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf, nextfloat,
         prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
         string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
-        erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc, eps,
+        erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc, eps, signbit,
     # import trigonometric functions
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
         sech, csch, coth, acosh, asinh, atanh, atan2
@@ -582,6 +582,9 @@ end
 >=(x::BigFloat, y::BigFloat) = ccall((:mpfr_greaterequal_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 <(x::BigFloat, y::BigFloat) = ccall((:mpfr_less_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 >(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
+
+signbit(x::BigFloat) =
+    int(ccall((:mpfr_signbit, :libmpfr), Int32, (Ptr{BigFloat},), &x)!=0)
 
 function get_precision(x::BigFloat)
     return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ptr{BigFloat},), &x)
