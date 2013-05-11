@@ -179,9 +179,9 @@ x = BigFloat(12)
 @test get_precision(x) == old_precision
 @test_fails set_bigfloat_precision(1)
 
-# isintegervalued
-@test isintegervalued(BigFloat(12))
-@test !isintegervalued(BigFloat(12.12))
+# isinteger
+@test isinteger(BigFloat(12))
+@test !isinteger(BigFloat(12.12))
 
 # nextfloat / prevfloat
 with_bigfloat_precision(53) do

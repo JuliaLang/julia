@@ -265,7 +265,7 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     else
         throw(DimensionMismatch(""))
     end
-    LAPACK.gemqrt!('R', isela(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
+    LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
 end
 ## Least squares solution.  Should be more careful about cases with m < n
 (\)(A::QR, B::StridedVector) = Triangular(A[:R], 'U')\(A[:Q]'B)[1:size(A, 2)]
@@ -360,7 +360,7 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
     else
         throw(DimensionMismatch(""))
     end
-    LAPACK.ormqr!('R', isela(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, Ac)
+    LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, Ac)
 end
 
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
@@ -467,11 +467,11 @@ eigvals(x::Number) = [one(x)]
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union(Number, StridedMatrix))
     v = eigvals(A)
-    isela(v,Complex) ? error("Complex eigenvalues cannot be ordered") : max(v)
+    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : max(v)
 end
 function eigmin(A::Union(Number, StridedMatrix))
     v = eigvals(A)
-    isela(v,Complex) ? error("Complex eigenvalues cannot be ordered") : min(v)
+    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : min(v)
 end
 
 inv(A::Eigen) = scale(A.vectors, 1.0/A.values)*A.vectors'

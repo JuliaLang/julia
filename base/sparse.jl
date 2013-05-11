@@ -442,7 +442,7 @@ function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v
     I = rand!(1:m, Array(Int, numnz))
     J = rand!(1:n, Array(Int, numnz))
     S = sparse(I, J, v, m, n)
-    if !isela(v,Bool)
+    if !iseltype(v,Bool)
         S.nzval = rng(nnz(S))
     end
 

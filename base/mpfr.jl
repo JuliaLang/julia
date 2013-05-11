@@ -17,7 +17,7 @@ export
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1,
         bessely, bessely0, bessely1, ceil, cmp, convert, copysign, exp, exp2,
-        exponent, factorial, floor, hypot, isintegervalued, iround, isfinite,
+        exponent, factorial, floor, hypot, isinteger, iround, isfinite,
         isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf, nextfloat,
         prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
         string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
@@ -102,7 +102,7 @@ convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
 for to in (Int8, Int16, Int32, Int64)
     @eval begin
         function convert(::Type{$to}, x::BigFloat)
-            (isintegervalued(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
+            (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
             convert($to, ccall((:mpfr_get_si,:libmpfr),
                                Clong, (Ptr{BigFloat}, Int32), &x, RoundToZero))
         end
@@ -112,7 +112,7 @@ end
 for to in (Uint8, Uint16, Uint32, Uint64)
     @eval begin
         function convert(::Type{$to}, x::BigFloat)
-            (isintegervalued(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
+            (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
             convert($to, ccall((:mpfr_get_ui,:libmpfr),
                                Culong, (Ptr{BigFloat}, Int32), &x, RoundToZero))
         end
@@ -120,7 +120,7 @@ for to in (Uint8, Uint16, Uint32, Uint64)
 end
 
 function convert(::Type{BigInt}, x::BigFloat)
-    if isintegervalued(x)
+    if isinteger(x)
         return itrunc(x)
     else
         throw(InexactError())
@@ -460,7 +460,7 @@ function bessely(n::Integer, x::BigFloat)
 end
 
 function factorial(x::BigFloat)
-    if x < 0 || !isintegervalued(x)
+    if x < 0 || !isinteger(x)
         throw(DomainError())
     end
     ui = convert(Culong, x)
@@ -617,7 +617,7 @@ function exponent(x::BigFloat)
     return ccall((:mpfr_get_exp, :libmpfr), Clong, (Ptr{BigFloat},), &x) - 1
 end
 
-function isintegervalued(x::BigFloat)
+function isinteger(x::BigFloat)
     return ccall((:mpfr_integer_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 end
 
