@@ -96,3 +96,70 @@ for f in (:round, :ceil, :floor, :trunc)
         ($f)(x, digits) = ($f)(x, digits, 10)
     end
 end
+
+
+typealias RealNonFloats{T<:Union(Integer,Rational)} Union(Integer, Rational{T})
+typealias NonFloats Union(RealNonFloats, Complex{RealNonFloats})
+typealias RealOrComplexFloat{T<:FloatingPoint} Union(FloatingPoint, Complex{T})
+
+
+# isapprox: Tolerant comparison of floating point numbers
+function isapprox(x::FloatingPoint, y::FloatingPoint, rtol::Real, atol::Real)
+    (isinf(x) || isinf(y)) ? x == y : abs(x-y) <= atol + rtol.*max(abs(x), abs(y))
+end
+# isapproxn: Like isapprox, but with nan==nan
+isapproxn(x::FloatingPoint, y::FloatingPoint, rtol::Real, atol::Real) = (isnan(x) && isnan(y)) || isapprox(x, y, rtol, atol)
+# isequaln: Like isequal, but with nan==nan
+isequaln(x::FloatingPoint, y::FloatingPoint) = (isnan(x) && isnan(y)) || isequal(x,y)
+
+
+# isapprox for real non-floats
+# isapproxn is not relevant for integers, because they cannot be nan
+isapprox(x::RealNonFloats, y::RealNonFloats) = isequal(x, y)
+isapprox(x::RealNonFloats, y::RealNonFloats, tol::Real) = abs(x-y) <= tol
+
+# isapprox for complex non-floats
+isapprox{T1<:RealNonFloats, T2<:RealNonFloats}(z::Complex{T1}, w::Complex{T2}, tol::Integer=0) = 
+    isapprox(real(z), real(w), tol) && isapprox(imag(z), imag(w), tol)
+
+# here we create methods for both functions for a wide variety of input arguments.
+# the goal is to cover isapprox(x::Number, y::Number) with optional arguments for tolerances, as well as support for arrays
+for fun in [:isapprox, :isapproxn]
+    @eval begin
+        # Complex floats
+        ($fun){T1<:FloatingPoint, T2<:FloatingPoint}(x::Complex{T1}, y::Complex{T2}, rtol::Real, atol::Real) = 
+            ($fun)(real(x), real(y), rtol, atol) && ($fun)(imag(x), imag(y), rtol, atol)
+
+        # One real, one complex
+        ($fun)(x::Real, z::Complex, rtol::Real, atol::Real) = ($fun)(x, real(z), rtol, atol) && ($fun)(imag(z), 0, rtol, atol)
+        ($fun)(z::Complex, x::Real, rtol::Real, atol::Real) = ($fun)(x, z, rtol, atol)
+
+        # array versions
+        ($fun){T<:Number}(X::AbstractArray{T}, y::Number, args...) = all(map(x -> ($fun)(x, y, args...), X))
+        ($fun){T<:Number}(x::Number, Y::AbstractArray{T}, args...) = ($fun)(Y, x, args...)
+        ($fun){T1<:Number, T2<:Number}(X::AbstractArray{T1}, Y::AbstractArray{T2}, args...) = 
+            (size(X) == size(Y)) && all(map((x, y) -> ($fun)(x, y, args...), X, Y))
+
+        # default tolerances
+        ($fun)(x::RealOrComplexFloat, y::RealOrComplexFloat) = ($fun)(x, y, defaulttols(x, y)...)
+        ($fun){T<:RealOrComplexFloat}(X::AbstractArray{T}, y::RealOrComplexFloat) = ($fun)(X, y, defaulttols(X, y)...)
+        ($fun){T<:RealOrComplexFloat}(x::RealOrComplexFloat, Y::AbstractArray{T}) = ($fun)(Y, x, defaulttols(Y, x)...)
+        ($fun){T1<:RealOrComplexFloat, T2<:RealOrComplexFloat}(X::AbstractArray{T1}, Y::AbstractArray{T2}) = ($fun)(X, Y,defaulttols(X, Y)...)
+
+        # Catch-all with promotion
+        ($fun)(x::Number, y::Number) = ($fun)(promote(x,y)..., defaulttols(x,y)...)
+        ($fun)(x::Number, y::Number, rtol::Real, atol::Real) = ($fun)(promote(x,y)..., rtol, atol)
+    end
+end
+
+isequaln{T1<:FloatingPoint, T2<:FloatingPoint}(z::Complex{T1}, w::Complex{T2}) = isequaln(real(z), real(w)) && isequaln(imag(z), imag(w))
+isequaln{T1<:RealOrComplexFloat, T2<:RealOrComplexFloat}(X::AbstractArray{T1}, Y::AbstractArray{T2}) = all(map((x,y) -> isequaln(x,y), X, Y))
+
+typealias FloatOrDerivative{T<:FloatingPoint} Union(T,Complex{T},AbstractArray{T},AbstractArray{Complex{T}},Rational{T},AbstractArray{Rational{T}})
+
+function defaulttols{T1<:FloatingPoint, T2<:FloatingPoint}(z::FloatOrDerivative{T1}, w::FloatOrDerivative{T2})
+    epsilon = max(eps(T1), eps(T2))
+    return cbrt(epsilon), sqrt(epsilon)
+end
+defaulttols{T<:FloatingPoint}(x::NonFloats, y::FloatOrDerivative{T}) = defaulttols(y, y)
+defaulttols{T<:FloatingPoint}(x::FloatOrDerivative{T}, y::NonFloats) = defaulttols(y, x)
