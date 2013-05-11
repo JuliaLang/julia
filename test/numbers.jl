@@ -333,6 +333,11 @@ end
 @test !isequal(+1.0,-1.0)
 @test !isequal(+Inf,-Inf)
 
+@test isequal(-0.0f0, -0.0)
+@test isequal(0.0f0, 0.0)
+@test !isequal(-0.0f0, 0.0)
+@test !isequal(0.0f0, -0.0)
+
 @test !isless(-Inf,-Inf)
 @test  isless(-Inf,-1.0)
 @test  isless(-Inf,-0.0)
@@ -1114,6 +1119,9 @@ for n = 1:100
     end
     @test n == m
 end
+
+@test iround(Uint,-0.0) == 0
+@test iround(Int,-0.0) == 0
 
 # binary literals
 
