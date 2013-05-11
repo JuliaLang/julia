@@ -18,8 +18,7 @@ namespace JL_I {
         lefsi64, lefui64,
         ltsif64, ltuif64,
         lesif64, leuif64,
-        fpiseq32, fpiseq64,
-        fpislt32, fpislt64,
+        fpiseq, fpislt,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int, ctpop_int, ctlz_int, cttz_int,
@@ -458,7 +457,8 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         }
         else {
             max = ConstantFP::get(floatt, 4.294967e9);
-            min = ConstantFP::get(floatt, 0.0);
+            // most negative number that truncates to zero
+            min = ConstantFP::get(floatt, -0.99999994);
         }
     }
     else {
@@ -473,13 +473,14 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         }
         else {
             max = ConstantFP::get(floatt, 1.844674407370955e19);
-            min = ConstantFP::get(floatt, 0.0);
+            min = ConstantFP::get(floatt, -0.9999999999999999);
         }
     }
 
     // itrunc(x + copysign(0.5,x))
     // values with exponent >= nbits are already integers, and this
     // rounding method doesn't always give the right answer there.
+    x = FP(x);
     Value *expo = builder.CreateAShr(bits, ConstantInt::get(intt,nmantissa));
     expo = builder.CreateAnd(expo, ConstantInt::get(intt,expbits));
     Value *isint = builder.CreateICmpSGE(expo,
@@ -489,10 +490,18 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         builder.CreateOr(half,
                          builder.CreateAnd(bits,
                                            ConstantInt::get(intt,topbit)));
-    Value *sum = builder.CreateFAdd(FP(x),
+    Value *sum = builder.CreateFAdd(x,
                                     builder.CreateBitCast(signedhalf, floatt));
 
-    Value *src = builder.CreateSelect(isint, FP(x), sum);
+    Value *src = builder.
+        CreateSelect(builder.
+                     CreateOr(isint, builder.
+                              // need to give 0 for -0.5 < x < 0.5 (exponent < -1)
+                              // otherwise iround(prevfloat(0.5)) == 1
+                              CreateICmpSLT(expo,
+                                            ConstantInt::get(intt,expoffs-1))),
+                     x, sum);
+
     raise_exception_unless(builder.CreateAnd(builder.CreateFCmpOLE(src, max),
                                              builder.CreateFCmpOGE(src, min)),
                            jlinexacterr_var, ctx);
@@ -823,43 +832,21 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                );
     }
 
-    HANDLE(fpiseq32,2) {
+    HANDLE(fpiseq,2) {
+        Value *xi = JL_INT(x);
+        Value *yi = JL_INT(y);
         x = FP(x);
         fy = FP(y);
-        Value *xi = builder.CreateBitCast(x,  T_int32);
-        Value *yi = builder.CreateBitCast(fy, T_int32);
-        return builder.CreateOr(
-            builder.CreateAnd(
-                builder.CreateFCmpUNO(x, x),
-                builder.CreateFCmpUNO(fy, fy)
-            ),
-            builder.CreateAnd(
-                builder.CreateICmpEQ(xi, yi),
-                builder.CreateFCmpORD(x, fy)
-            )
-        );
+        return builder.CreateOr(builder.CreateAnd(builder.CreateFCmpUNO(x, x),
+                                                  builder.CreateFCmpUNO(fy, fy)),
+                                builder.CreateICmpEQ(xi, yi));
     }
-    HANDLE(fpiseq64,2) {
+
+    HANDLE(fpislt,2) {
+        Value *xi = JL_INT(x);
+        Value *yi = JL_INT(y);
         x = FP(x);
         fy = FP(y);
-        Value *xi = builder.CreateBitCast(x,  T_int64);
-        Value *yi = builder.CreateBitCast(fy, T_int64);
-        return builder.CreateOr(
-            builder.CreateAnd(
-                builder.CreateFCmpUNO(x, x),
-                builder.CreateFCmpUNO(fy, fy)
-            ),
-            builder.CreateAnd(
-                builder.CreateICmpEQ(xi, yi),
-                builder.CreateFCmpORD(x, fy)
-            )
-        );
-    }
-    HANDLE(fpislt32,2) {
-        x = FP(x);
-        fy = FP(y);
-        Value *xi = builder.CreateBitCast(x,  T_int32);
-        Value *yi = builder.CreateBitCast(fy, T_int32);
         return builder.CreateOr(
             builder.CreateAnd(
                 builder.CreateFCmpORD(x, x),
@@ -869,36 +856,11 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                 builder.CreateFCmpORD(x, fy),
                 builder.CreateOr(
                     builder.CreateAnd(
-                        builder.CreateICmpSGE(xi, ConstantInt::get(T_int32, 0)),
+                        builder.CreateICmpSGE(xi, ConstantInt::get(xi->getType(), 0)),
                         builder.CreateICmpSLT(xi, yi)
                     ),
                     builder.CreateAnd(
-                        builder.CreateICmpSLT(xi, ConstantInt::get(T_int32, 0)),
-                        builder.CreateICmpUGT(xi, yi)
-                    )
-                )
-            )
-        );
-    }
-    HANDLE(fpislt64,2) {
-        x = FP(x);
-        fy = FP(y);
-        Value *xi = builder.CreateBitCast(x,  T_int64);
-        Value *yi = builder.CreateBitCast(fy, T_int64);
-        return builder.CreateOr(
-            builder.CreateAnd(
-                builder.CreateFCmpORD(x, x),
-                builder.CreateFCmpUNO(fy, fy)
-            ),
-            builder.CreateAnd(
-                builder.CreateFCmpORD(x, fy),
-                builder.CreateOr(
-                    builder.CreateAnd(
-                        builder.CreateICmpSGE(xi, ConstantInt::get(T_int64, 0)),
-                        builder.CreateICmpSLT(xi, yi)
-                    ),
-                    builder.CreateAnd(
-                        builder.CreateICmpSLT(xi, ConstantInt::get(T_int64, 0)),
+                        builder.CreateICmpSLT(xi, ConstantInt::get(xi->getType(), 0)),
                         builder.CreateICmpUGT(xi, yi)
                     )
                 )
@@ -1103,8 +1065,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(lefsi64); ADD_I(lefui64);
     ADD_I(ltsif64); ADD_I(ltuif64);
     ADD_I(lesif64); ADD_I(leuif64);
-    ADD_I(fpiseq32); ADD_I(fpiseq64);
-    ADD_I(fpislt32); ADD_I(fpislt64);
+    ADD_I(fpiseq); ADD_I(fpislt);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);

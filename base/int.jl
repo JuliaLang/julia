@@ -212,30 +212,6 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##
 
-==(x::Int8,   y::Int8 )  = eq_int(unbox(Int8,x),unbox(Int8,y))
-==(x::Int16,  y::Int16)  = eq_int(unbox(Int16,x),unbox(Int16,y))
-==(x::Int32,  y::Int32)  = eq_int(unbox(Int32,x),unbox(Int32,y))
-==(x::Int64,  y::Int64)  = eq_int(unbox(Int64,x),unbox(Int64,y))
-==(x::Int128, y::Int128) = eq_int(unbox(Int128,x),unbox(Int128,y))
-
-==(x::Uint8,   y::Uint8 )  = eq_int(unbox(Uint8,x),unbox(Uint8,y))
-==(x::Uint16,  y::Uint16)  = eq_int(unbox(Uint16,x),unbox(Uint16,y))
-==(x::Uint32,  y::Uint32)  = eq_int(unbox(Uint32,x),unbox(Uint32,y))
-==(x::Uint64,  y::Uint64)  = eq_int(unbox(Uint64,x),unbox(Uint64,y))
-==(x::Uint128, y::Uint128) = eq_int(unbox(Uint128,x),unbox(Uint128,y))
-
-!=(x::Int8,   y::Int8)   = ne_int(unbox(Int8,x),unbox(Int8,y))
-!=(x::Int16,  y::Int16)  = ne_int(unbox(Int16,x),unbox(Int16,y))
-!=(x::Int32,  y::Int32)  = ne_int(unbox(Int32,x),unbox(Int32,y))
-!=(x::Int64,  y::Int64)  = ne_int(unbox(Int64,x),unbox(Int64,y))
-!=(x::Int128, y::Int128) = ne_int(unbox(Int128,x),unbox(Int128,y))
-
-!=(x::Uint8,   y::Uint8)   = ne_int(unbox(Uint8,x),unbox(Uint8,y))
-!=(x::Uint16,  y::Uint16)  = ne_int(unbox(Uint16,x),unbox(Uint16,y))
-!=(x::Uint32,  y::Uint32)  = ne_int(unbox(Uint32,x),unbox(Uint32,y))
-!=(x::Uint64,  y::Uint64)  = ne_int(unbox(Uint64,x),unbox(Uint64,y))
-!=(x::Uint128, y::Uint128) = ne_int(unbox(Uint128,x),unbox(Uint128,y))
-
 <(x::Int8,   y::Int8)   = slt_int(unbox(Int8,x),unbox(Int8,y))
 <(x::Int16,  y::Int16)  = slt_int(unbox(Int16,x),unbox(Int16,y))
 <(x::Int32,  y::Int32)  = slt_int(unbox(Int32,x),unbox(Int32,y))
