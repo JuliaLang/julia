@@ -150,7 +150,7 @@ export
     #checked_smul, checked_ssub, checked_uadd, checked_umul, checked_usub,
     #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
     #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int,
-    #fpext64, fpiseq32, fpiseq64, fpislt32, fpislt64,
+    #fpext64, fpiseq, fpislt,
     #fpsiround, fpuiround, fptosi32, fptosi64, fptoui32, fptoui64,
     #fptrunc32, le_float, lefsi64, lefui64, lesif64,
     #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,

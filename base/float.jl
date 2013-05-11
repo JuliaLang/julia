@@ -157,10 +157,13 @@ rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float
 <=(x::Float32, y::Float32) = le_float(unbox(Float32,x),unbox(Float32,y))
 <=(x::Float64, y::Float64) = le_float(unbox(Float64,x),unbox(Float64,y))
 
-isequal(x::Float32, y::Float32) = fpiseq32(unbox(Float32,x),unbox(Float32,y))
-isequal(x::Float64, y::Float64) = fpiseq64(unbox(Float64,x),unbox(Float64,y))
-isless (x::Float32, y::Float32) = fpislt32(unbox(Float32,x),unbox(Float32,y))
-isless (x::Float64, y::Float64) = fpislt64(unbox(Float64,x),unbox(Float64,y))
+isequal(x::FloatingPoint, y::FloatingPoint) =
+    ((x==y) & (signbit(x)==signbit(y))) | (isnan(x)&isnan(y))
+
+isequal(x::Float32, y::Float32) = fpiseq(unbox(Float32,x),unbox(Float32,y))
+isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
+isless (x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
+isless (x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
 
 isequal(a::Integer, b::FloatingPoint) = (a==b) & isequal(float(a),b)
 isequal(a::FloatingPoint, b::Integer) = isequal(b, a)
@@ -197,14 +200,14 @@ isless (a::FloatingPoint, b::Integer) = (a<b) | isless(a,float(b))
 <=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Float64,float64(y)))
 <=(x::Uint64 , y::Float32) = leuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
 
-==(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)==float64(y)
-==(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)==float64(y)
+==(x::Float32, y::Union(Int32,Uint32)) = float64(x)==float64(y)
+==(x::Union(Int32,Uint32), y::Float32) = float64(x)==float64(y)
 
-<(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)<float64(y)
-<(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)<float64(y)
+<(x::Float32, y::Union(Int32,Uint32)) = float64(x)<float64(y)
+<(x::Union(Int32,Uint32), y::Float32) = float64(x)<float64(y)
 
-<=(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)<=float64(y)
-<=(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)<=float64(y)
+<=(x::Float32, y::Union(Int32,Uint32)) = float64(x)<=float64(y)
+<=(x::Union(Int32,Uint32), y::Float32) = float64(x)<=float64(y)
 
 ## floating point traits ##
 
