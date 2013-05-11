@@ -480,6 +480,7 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
     // itrunc(x + copysign(0.5,x))
     // values with exponent >= nbits are already integers, and this
     // rounding method doesn't always give the right answer there.
+    x = FP(x);
     Value *expo = builder.CreateAShr(bits, ConstantInt::get(intt,nmantissa));
     expo = builder.CreateAnd(expo, ConstantInt::get(intt,expbits));
     Value *isint = builder.CreateICmpSGE(expo,
@@ -489,10 +490,18 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         builder.CreateOr(half,
                          builder.CreateAnd(bits,
                                            ConstantInt::get(intt,topbit)));
-    Value *sum = builder.CreateFAdd(FP(x),
+    Value *sum = builder.CreateFAdd(x,
                                     builder.CreateBitCast(signedhalf, floatt));
 
-    Value *src = builder.CreateSelect(isint, FP(x), sum);
+    Value *src = builder.
+        CreateSelect(builder.
+                     CreateOr(isint, builder.
+                              // need to give 0 for -0.5 < x < 0.5 (exponent < -1)
+                              // otherwise iround(prevfloat(0.5)) == 1
+                              CreateICmpSLT(expo,
+                                            ConstantInt::get(intt,expoffs-1))),
+                     x, sum);
+
     raise_exception_unless(builder.CreateAnd(builder.CreateFCmpOLE(src, max),
                                              builder.CreateFCmpOGE(src, min)),
                            jlinexacterr_var, ctx);
