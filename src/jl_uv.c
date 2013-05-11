@@ -297,8 +297,8 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     if (handle->type==UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
 
-    if (uv_is_writable((uv_stream_t*)handle) && // uv_shutdown returns an error if not writable
-          (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP)) { 
+    if ((handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) && // uv_shutdown returns an error if not writable
+          uv_is_writable((uv_stream_t*)handle)) { 
         // Make sure that the stream has not already been marked closed in Julia.
         jl_function_t* jl_is_open = (jl_function_t*) jl_get_global(jl_base_module, jl_symbol("isopen"));
         if ( jl_apply(jl_is_open, (jl_value_t **) &(handle->data), 1) == jl_false){
