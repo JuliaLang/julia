@@ -3294,7 +3294,7 @@ stream[, offset])
 
 "),
 
-("Data Formats","Base","isfloat64valued","isfloat64valued(x::Rational)
+("Data Formats","Base","isfloat64","isfloat64(x::Rational)
 
 
    True if \"x\" can be losslessly represented as a \"Float64\" data
@@ -3494,14 +3494,14 @@ stream[, offset])
 
 "),
 
-("Numbers","Base","isintegervalued","isintegervalued(x)
+("Numbers","Base","isinteger","isinteger(x)
 
 
    Test whether \"x\" is numerically equal to some integer
 
 "),
 
-("Numbers","Base","isrealvalued","isrealvalued(x)
+("Numbers","Base","isreal","isreal(x)
 
 
    Test whether \"x\" is numerically equal to some real number
@@ -3729,7 +3729,7 @@ Integer
 
 "),
 
-("Arrays","Base","isela","isela(A, T)
+("Arrays","Base","iseltype","iseltype(A, T)
 
 
    Tests whether A or its elements are of type T

@@ -1853,7 +1853,7 @@ Data Formats
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: isfloat64valued(x::Rational)
+.. function:: isfloat64(x::Rational)
 
    True if ``x`` can be losslessly represented as a ``Float64`` data type
 
@@ -1965,11 +1965,11 @@ Numbers
 
    Get the previous floating point number in lexicographic order
 
-.. function:: isintegervalued(x)
+.. function:: isinteger(x)
 
    Test whether ``x`` is numerically equal to some integer
 
-.. function:: isrealvalued(x)
+.. function:: isreal(x)
 
    Test whether ``x`` is numerically equal to some real number
 
@@ -2108,7 +2108,7 @@ Basic functions
 
    Returns the type of the elements contained in A
 
-.. function:: isela(A,T)
+.. function:: iseltype(A,T)
 
    Tests whether A or its elements are of type T
 

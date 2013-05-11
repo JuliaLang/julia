@@ -1,13 +1,12 @@
 ## generic operations on numbers ##
 
-isrealvalued(x::Real) = true
-isintegervalued(x::Integer) = true
+isreal(x::Real) = true
+isinteger(x::Integer) = true
 
 size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
 eltype(x::Number) = typeof(x)
 eltype{T<:Number}(::Type{T}) = T
-isela{Ta,Tb}(::Ta,::Type{Tb}) = Ta <: Tb
 ndims(x::Number) = 0
 ndims{T<:Number}(::Type{T}) = 0
 length(x::Number) = 1

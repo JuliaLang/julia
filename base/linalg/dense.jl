@@ -206,7 +206,7 @@ randsym(n) = symmetrize!(randn(n,n))
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)
-    if isintegervalued(p)
+    if isinteger(p)
         ip = integer(real(p))
         if ip < 0
             return inv(Base.power_by_squaring(A, -ip))
@@ -382,7 +382,7 @@ function sqrtm(A::StridedMatrix, cond::Bool)
     if ishermitian(A) 
         return sqrtm(Hermitian(A), cond)
     else
-        SchurF = schurfact!(isela(A,Complex) ? copy(A) : complex(A))
+        SchurF = schurfact!(iseltype(A,Complex) ? copy(A) : complex(A))
         R = zeros(eltype(SchurF[:T]), n, n)
         for j = 1:n
             R[j,j] = sqrt(SchurF[:T][j,j])
