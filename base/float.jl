@@ -64,12 +64,12 @@ if WORD_SIZE == 64
     iround(x::Float32) = iround(float64(x))
     itrunc(x::Float32) = itrunc(float64(x))
     iround(x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
-    itrunc(x::Float64) = box(Int64,fptosi64(unbox(Float64,x)))
+    itrunc(x::Float64) = box(Int64,fptosi(unbox(Float64,x)))
 else
     iround(x::Float32) = box(Int32,fpsiround(unbox(Float32,x)))
-    itrunc(x::Float32) = box(Int32,fptosi32(unbox(Float32,x)))
+    itrunc(x::Float32) = box(Int32,fptosi(unbox(Float32,x)))
     iround(x::Float64) = int32(box(Int64,fpsiround(unbox(Float64,x))))
-    itrunc(x::Float64) = int32(box(Int64,fptosi64(unbox(Float64,x))))
+    itrunc(x::Float64) = int32(box(Int64,fptosi(unbox(Float64,x))))
 end
 
 for to in (Int8, Uint8, Int16, Uint16)
