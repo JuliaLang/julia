@@ -7,7 +7,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
-             prevpow2, nextpow2
+             prevpow2, nextpow2, rand, rand!
 
 type BigInt <: Integer
     alloc::Cint
@@ -17,6 +17,13 @@ type BigInt <: Integer
         b = new(zero(Cint), zero(Cint), C_NULL)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
         finalizer(b, BigInt_clear)
+        return b
+    end
+    function BigInt(x_alloc::Cint, x_size::Cint, x_d::Ptr{Void})
+        b = BigInt()
+        b.alloc = x_alloc
+        b.size = x_size
+        b.d = x_d
         return b
     end
 end
@@ -420,5 +427,48 @@ widemul{T<:Integer}(x::T, y::T) = BigInt(x)*BigInt(y)
 
 prevpow2(x::BigInt) = x < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
+
+############################
+# Random number generation #
+############################
+#Corresponds to __gmp_randstate_struct
+type BigIntRand <: AbstractRNG
+    seed_alloc::Cint
+    seed_size::Cint
+    seed_d::Ptr{Void}
+    alg::Cint
+    alg_data::Ptr{Void}
+    function BigIntRand()
+        randstate=new(zero(Cint), zero(Cint), C_NULL, zero(Cint), C_NULL)
+        #The default algorithm in GMP is currently MersenneTwister
+        ccall((:__gmp_randinit_default, :libgmp), Void, (Ptr{BigIntRand},),
+          &randstate)
+        finalizer(randstate, BigIntRand_clear)
+        randstate
+    end
+
+    #Initialize with seed
+    function BigIntRand(seed::Uint64)
+        randstate=BigIntRand()
+        ccall((:__gmp_randseed_ui, :libgmp), Void, (Ptr{BigIntRand}, Culong),
+          &randstate, seed)
+    end
+    function BigIntRand(seed::BigInt)
+        randstate=BigIntRand()
+        ccall((:__gmp_randseed, :libgmp), Void, (Ptr{BigIntRand}, Ptr{BigInt}),
+          &randstate, &seed)
+    end
+end
+
+BigIntRand_clear(x::BigIntRand) = ccall((:__gmp_randclear, :libgmp), Void,
+    (Ptr{BigIntRand},), &x)
+
+function rand{T<:Integer}(randstate::BigIntRand, x::Range1{T})
+    rop=BigInt()
+    n=BigInt(x.len)
+    ccall((:__gmpz_urandomm, :libgmp), Void,
+      (Ptr{BigInt}, Ptr{BigIntRand}, Ptr{BigInt}), &rop, &randstate, &n)
+    rop + x.start
+end
 
 end # module
