@@ -301,6 +301,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     int UV_CLOSING          = 0x01;   /* uv_close() called but not finished. */
     int UV_CLOSED           = 0x02;
     int UV_STREAM_SHUTTING  = 0x08;
+
     // libuv will give an error if we try to close an already closed handle.
     // If the handle is shutting down, it will be closed in the shutdown callback.
     if (handle->flags & (UV_CLOSING | UV_CLOSED | UV_STREAM_SHUTTING))

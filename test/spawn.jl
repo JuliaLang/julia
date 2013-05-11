@@ -44,7 +44,7 @@ end
 
 # Here we test that if we close a stream with pending writes, we don't lose the writes.
 str = ""
-for i=1:10
+for i=1:1000
   str = "$str\n $(randstring(10))"
 end
 stdout, stdin, proc = readandwrite(`cat -`)
@@ -52,3 +52,9 @@ write(stdin, str)
 close(stdin)
 str2 = readall(stdout)
 @test str2 == str
+
+# This test hangs if the end of run walk across uv streams calls shutdown on a stream that is shutting down.
+file = tempname()
+stdout, stdin, proc = readandwrite(`cat -` > file)
+write(stdin, str)
+close(stdin)
