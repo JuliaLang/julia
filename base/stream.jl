@@ -558,10 +558,14 @@ function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Name
 end
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
+function is_open(stream::AsyncStream)
+    stream.open
+end
+
 function close(stream::AsyncStream)
     if stream.open
-        stream.open = false
         ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
+        stream.open = false
     end
 end
 
