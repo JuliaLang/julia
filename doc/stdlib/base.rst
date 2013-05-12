@@ -1855,7 +1855,7 @@ Data Formats
 
 .. function:: isfloat64(x::Rational)
 
-   True if ``x`` can be losslessly represented as a ``Float64`` data type
+   Tests whether ``x`` or all its elements can be losslessly represented as a ``Float64`` data type
 
 .. function:: complex64(r,i)
 
@@ -1967,11 +1967,11 @@ Numbers
 
 .. function:: isinteger(x)
 
-   Test whether ``x`` is numerically equal to some integer
+   Test whether ``x`` or all its elements are numerically equal to some integer
 
 .. function:: isreal(x)
 
-   Test whether ``x`` is numerically equal to some real number
+   Test whether ``x`` or all its elements are numerically equal to some real number
 
 .. function:: BigInt(x)
 

@@ -3297,8 +3297,8 @@ stream[, offset])
 ("Data Formats","Base","isfloat64","isfloat64(x::Rational)
 
 
-   True if \"x\" can be losslessly represented as a \"Float64\" data
-   type
+   Tests whether \"x\" or all its elements can be losslessly
+   represented as a \"Float64\" data type
 
 "),
 
@@ -3497,14 +3497,16 @@ stream[, offset])
 ("Numbers","Base","isinteger","isinteger(x)
 
 
-   Test whether \"x\" is numerically equal to some integer
+   Test whether \"x\" or all its elements are numerically equal to
+   some integer
 
 "),
 
 ("Numbers","Base","isreal","isreal(x)
 
 
-   Test whether \"x\" is numerically equal to some real number
+   Test whether \"x\" or all its elements are numerically equal to
+   some real number
 
 "),
 
