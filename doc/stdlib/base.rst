@@ -1200,19 +1200,23 @@ Mathematical Functions
 
    Bitwise exclusive or
 
-.. function:: isapprox(x, y [, rtol::Real, atol::Real])
+.. function:: isapprox(x::FloatingPoint, y::FloatingPoint)
 
-   Inexact equality comparison. ``isapprox`` behaves differently depending on the specific types of `x` and `y`:
-   
-   * For `FloatingPoint` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``. If no tolerance values are provided, they are calculated as ``rtol = cbrt(tol)`` and ``atol = sqrt(tol)`` with ``tol = max(eps(x), eps(y))``.
+   Inexact equality comparison. ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``, where ``rtol`` and ``atol`` can either be set as named arguments, or calculated as ``rtol = cbrt(tol)`` and ``atol = sqrt(tol)`` with ``tol = max(eps(x), eps(y))``. If ``x`` (or ``y``) is ``NaN``, ``one(x)`` (or ``one(y)``) is considered in its place.
 
-   * For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= tol``; thus, for such ``x`` and ``y`` only one tolerance argument is allowed. If no tolerance argument is provided, ``isapprox`` behaves just like ``isequal``.
+.. function:: isapprox(x::Real, y::Real)
 
-   * For complex numbers, real and imaginary parts are compared individually.
+   For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= tol``, where ``tol`` is a named argument. If no tolerance argument is provided, ``isapprox`` behaves just like ``isequal``. If at one of ``x`` and ``y`` is ``FloatingPoint``, the other is promoted, and the method above is called instead.
 
-   There are also methods where one or both of `x` and `y` are arrays. If one of them is an array, `isapprox` compares each element in the array to the scalar. If both are arrays, `isapprox` returns `false` if they have different dimensions, and otherwise compares element-wise and returns a scalar `true` or `false`. To return an array with the result of an element-wise comparison, use `map((x,y) -> isapprox(x,y), X, Y)`.
+.. function:: isapprox(x::Complex, y::Complex)
 
-.. function:: isapproxn(x, y [, rtol::Real, atol::Real])
+   For ``Complex`` numbers, real and imaginary parts are compared separately, using the methods above. This method takes twice as many named arguments as those; arguments prefixed with ``r`` are forwarded to the comparison of real parts, and arguments prefixed with ``i`` are forwarded to the imaginary part comparison.
+
+   Example: ``isapprox(1.0 + 2im, 1.0 + 1.99im; ratol=0.001; irtol=0.01)`` compares two numbers of type ``Complex{T<:FloatingPoint}``, and will thus call the first method above. The named argument ``ratol`` will be used for ``atol`` when comparing the real part, and the value of ``irtol`` will be used for ``rtol`` when comparing the imaginary parts. For all other tolerances, the defaults are used.
+
+   For ``Integer`` and ``Rational`` complex numbers, the available arguments are instead called ``rtol`` and ``itol``, and are applied in the same way.
+
+.. function:: isapprox(x, y) 
 
    Like ``isapprox``, but treats ``NaN``-values as equal
 
