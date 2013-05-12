@@ -1035,6 +1035,10 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
     if (!jl_is_##type(v)) {                                             \
         jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (v));      \
     }
+#define JL_TYPECHKS(fname, type, v)                                     \
+    if (!jl_is_##type(v)) {                                             \
+        jl_type_error(fname, (jl_value_t*)jl_##type##_type, (v));       \
+    }
 
 // gc
 
