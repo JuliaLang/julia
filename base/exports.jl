@@ -896,7 +896,6 @@ export
     deepcopy,
     deepcopy_internal,
     isequal,
-    isequaln,
     isapprox,
     isapproxn,
     isless,
