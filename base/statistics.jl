@@ -165,7 +165,7 @@ function hist2d(v::AbstractMatrix, n1::Integer, n2::Integer)
     m = size(v,1)
     hist2d(v, histrange(sub(v, 1:m,1),n1), histrange(sub(v, 1:m,2),n2))
 end
-hist2d(v::AbstractMatrix) = hist2d(v, iceil(log2(size(v,1)))+1) # Sturges' formula
+hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 
 ## pearson covariance functions ##
 
