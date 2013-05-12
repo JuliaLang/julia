@@ -1202,15 +1202,19 @@ Mathematical Functions
 
 .. function:: isapprox(x, y [, rtol::Real, atol::Real])
 
-   Inexact equality comparison; true if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``
+   Inexact equality comparison. ``isapprox`` behaves differently depending on the specific types of `x` and `y`:
+   
+   * For `FloatingPoint` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``. If no tolerance values are provided, they are calculated as ``rtol = cbrt(tol)`` and ``atol = sqrt(tol)`` with ``tol = max(eps(x), eps(y))``.
+
+   * For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= tol``; thus, for such ``x`` and ``y`` only one tolerance argument is allowed. If no tolerance argument is provided, ``isapprox`` behaves just like ``isequal``.
+
+   * For complex numbers, real and imaginary parts are compared individually.
+
+   There are also methods where one or both of `x` and `y` are arrays. If one of them is an array, `isapprox` compares each element in the array to the scalar. If both are arrays, `isapprox` returns `false` if they have different dimensions, and otherwise compares element-wise and returns a scalar `true` or `false`. To return an array with the result of an element-wise comparison, use `map((x,y) -> isapprox(x,y), X, Y)`.
 
 .. function:: isapproxn(x, y [, rtol::Real, atol::Real])
 
    Like ``isapprox``, but treats ``NaN``-values as equal
-
-.. function:: isequaln(x, y)
-
-   Like ``isequal``, but treats ``NaN``-values as equal
 
 .. function:: sin(x)
 
