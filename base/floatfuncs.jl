@@ -98,41 +98,44 @@ for f in (:round, :ceil, :floor, :trunc)
 end
 
 
-typealias RealNonFloats{T<:Union(Integer,Rational)} Union(Integer, Rational{T})
-typealias NonFloats Union(RealNonFloats, Complex{RealNonFloats})
+
 typealias RealOrComplexFloat{T<:FloatingPoint} Union(FloatingPoint, Complex{T})
 
+export isapprox, isapproxn
 
 # isapprox: Tolerant comparison of floating point numbers
-function isapprox(x::FloatingPoint, y::FloatingPoint, rtol::Real, atol::Real)
+function isapprox{T1<:FloatingPoint, T2<:FloatingPoint}(x::T1, y::T2; rtol::Real=rtoldefault(T1,T2), atol::Real=atoldefault(T1,T2))
     (isinf(x) || isinf(y)) ? x == y : abs(x-y) <= atol + rtol.*max(abs(x), abs(y))
 end
 # isapproxn: Like isapprox, but with nan==nan
-isapproxn(x::FloatingPoint, y::FloatingPoint, rtol::Real, atol::Real) = (isnan(x) && isnan(y)) || isapprox(x, y, rtol, atol)
-# isequaln: Like isequal, but with nan==nan
-isequaln(x::FloatingPoint, y::FloatingPoint) = (isnan(x) && isnan(y)) || isequal(x,y)
-
+isapproxn{T1<:FloatingPoint, T2<:FloatingPoint}(x::T1, y::T2; rtol::Real=rtoldefault(T1,T2), atol::Real=atoldefault(T1,T2)) = (isnan(x) && isnan(y)) || isapprox(x, y, rtol=rtol, atol=atol)
 
 # isapprox for real non-floats
-# isapproxn is not relevant for integers, because they cannot be nan
-isapprox(x::RealNonFloats, y::RealNonFloats) = isequal(x, y)
-isapprox(x::RealNonFloats, y::RealNonFloats, tol::Real) = abs(x-y) <= tol
+isapprox(x::Real, y::Real) = isequal(x, y)
+isapprox(x::Real, y::Real; tol::Real=0) = abs(x-y) <= tol
 
 # isapprox for complex non-floats
-isapprox{T1<:RealNonFloats, T2<:RealNonFloats}(z::Complex{T1}, w::Complex{T2}, tol::Integer=0) = 
-    isapprox(real(z), real(w), tol) && isapprox(imag(z), imag(w), tol)
+isapprox(z::Complex, w::Complex) = isequal(real(z), real(w)) && isequal(imag(z), imag(w))
+isapprox(z::Complex, w::Complex; tol::Real = 0) = isapprox(real(z), real(w); tol=tol) && isapprox(imag(z), imag(w); tol=tol)
+
+# isapprox for real-complex combinations of non-floats
+isapprox(z::Complex, x::Real) = isequal(real(z), x) && isequal(imag(z), 0)
+isapprox(z::Complex, x::Real; tol=0) = isapprox(real(z), x; tol=tol) && isapprox(imag(z), 0; tol=tol)
+isapprox(x::Real, z::Complex) = isapprox(z,x)
+isapprox(x::Real, z::Complex; tol=0) = isapprox(z,x; tol=0)
 
 # here we create methods for both functions for a wide variety of input arguments.
 # the goal is to cover isapprox(x::Number, y::Number) with optional arguments for tolerances, as well as support for arrays
 for fun in [:isapprox, :isapproxn]
     @eval begin
-        # Complex floats
-        ($fun){T1<:FloatingPoint, T2<:FloatingPoint}(x::Complex{T1}, y::Complex{T2}, rtol::Real, atol::Real) = 
-            ($fun)(real(x), real(y), rtol, atol) && ($fun)(imag(x), imag(y), rtol, atol)
+        # complex floats
+        ($fun){T1<:FloatingPoint, T2<:FloatingPoint}(x::Complex{T1}, y::Complex{T2}; rtol::Real=rtoldefault(T1,T2), atol::Real=atoldefault(T1,T2)) = 
+            ($fun)(real(x), real(y); rtol=rtol, atol=atol) && ($fun)(imag(x), imag(y); rtol=rtol, atol=atol)
 
-        # One real, one complex
-        ($fun)(x::Real, z::Complex, rtol::Real, atol::Real) = ($fun)(x, real(z), rtol, atol) && ($fun)(imag(z), 0, rtol, atol)
-        ($fun)(z::Complex, x::Real, rtol::Real, atol::Real) = ($fun)(x, z, rtol, atol)
+        # real-complex combinations of floats
+        ($fun){T1<:FloatingPoint, T2<:FloatingPoint}(x::T1, z::Complex{T2}; rtol::Real=rtoldefault(T1,T2), atol::Real=atoldefault(T1,T2)) = 
+            ($fun)(x, real(z); rtol=rtol, atol=atol) && ($fun)(imag(z), 0; rtol=rtol, atol=atol)
+        ($fun)(z::Complex, x::Real; rtol::Real=rtoldefault(T1,T2), atol::Real=atoldefault(T1,T2)) = ($fun)(x, z; rtol=rtol, atol=atol)
 
         # array versions
         ($fun){T<:Number}(X::AbstractArray{T}, y::Number, args...) = all(map(x -> ($fun)(x, y, args...), X))
@@ -140,26 +143,11 @@ for fun in [:isapprox, :isapproxn]
         ($fun){T1<:Number, T2<:Number}(X::AbstractArray{T1}, Y::AbstractArray{T2}, args...) = 
             (size(X) == size(Y)) && all(map((x, y) -> ($fun)(x, y, args...), X, Y))
 
-        # default tolerances
-        ($fun)(x::RealOrComplexFloat, y::RealOrComplexFloat) = ($fun)(x, y, defaulttols(x, y)...)
-        ($fun){T<:RealOrComplexFloat}(X::AbstractArray{T}, y::RealOrComplexFloat) = ($fun)(X, y, defaulttols(X, y)...)
-        ($fun){T<:RealOrComplexFloat}(x::RealOrComplexFloat, Y::AbstractArray{T}) = ($fun)(Y, x, defaulttols(Y, x)...)
-        ($fun){T1<:RealOrComplexFloat, T2<:RealOrComplexFloat}(X::AbstractArray{T1}, Y::AbstractArray{T2}) = ($fun)(X, Y,defaulttols(X, Y)...)
-
         # Catch-all with promotion
-        ($fun)(x::Number, y::Number) = ($fun)(promote(x,y)..., defaulttols(x,y)...)
-        ($fun)(x::Number, y::Number, rtol::Real, atol::Real) = ($fun)(promote(x,y)..., rtol, atol)
+        ($fun){T<:FloatingPoint}(x::T, y::Number; rtol::Real=rtoldefault(T,T), atol::Real=atoldefault(T,T)) = ($fun)(promote(x,y); rtol=rtol, atol=atol)
+        ($fun){T<:FloatingPoint}(x::Number, y::T; rtol::Real=rtoldefault(T,T), atol::Real=atoldefault(T,T)) = ($fun)(y,x); rtol=rtol, atol=atol)
     end
 end
 
-isequaln{T1<:FloatingPoint, T2<:FloatingPoint}(z::Complex{T1}, w::Complex{T2}) = isequaln(real(z), real(w)) && isequaln(imag(z), imag(w))
-isequaln{T1<:RealOrComplexFloat, T2<:RealOrComplexFloat}(X::AbstractArray{T1}, Y::AbstractArray{T2}) = all(map((x,y) -> isequaln(x,y), X, Y))
-
-typealias FloatOrDerivative{T<:FloatingPoint} Union(T,Complex{T},AbstractArray{T},AbstractArray{Complex{T}},Rational{T},AbstractArray{Rational{T}})
-
-function defaulttols{T1<:FloatingPoint, T2<:FloatingPoint}(z::FloatOrDerivative{T1}, w::FloatOrDerivative{T2})
-    epsilon = max(eps(T1), eps(T2))
-    return cbrt(epsilon), sqrt(epsilon)
-end
-defaulttols{T<:FloatingPoint}(x::NonFloats, y::FloatOrDerivative{T}) = defaulttols(y, y)
-defaulttols{T<:FloatingPoint}(x::FloatOrDerivative{T}, y::NonFloats) = defaulttols(y, x)
+rtoldefault{T1<:FloatingPoint, T2<:FloatingPoint}(xt::Type{T1}, yt::Type{T2}) = cbrt(max(eps(xt), eps(yt)))
+atoldefault{T1<:FloatingPoint, T2<:FloatingPoint}(xt::Type{T1}, yt::Type{T2}) = sqrt(max(eps(xt), eps(yt)))
