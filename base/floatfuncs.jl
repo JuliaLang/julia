@@ -30,6 +30,9 @@ maxintfloat{T<:FloatingPoint}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
+isfloat64(x::Number) = float64(x) == x
+isfloat64(::Float64) = true
+isfloat64(::Float32) = true
 
 ## precision, as defined by the effective number of bits in the mantissa ##
 get_precision(::Float32) = 24
