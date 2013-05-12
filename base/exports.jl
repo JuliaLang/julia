@@ -99,6 +99,7 @@ export
     SubString,
     SymTridiagonal,
     TcpSocket,
+    TmStruct,
     Tridiagonal,
     UVError,
     VecOrMat,
