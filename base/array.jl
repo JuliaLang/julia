@@ -967,6 +967,7 @@ end
 ## promotion to complex ##
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
+    if size(A) != size(B); error("argument dimensions must match"); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for i=1:length(A)
         F[i] = complex(A[i], B[i])
