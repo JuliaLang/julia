@@ -1002,6 +1002,7 @@ export
     bind,
     connect,
     close,
+    isopen,
     countlines,
     readcsv,
     writecsv,

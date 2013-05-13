@@ -49,6 +49,7 @@ extern "C" {
     XX(getaddrinfo) \
     XX(pollcb) \
     XX(fspollcb) \
+    XX(isopen) \
     XX(fseventscb)
 //TODO add UDP and other missing callbacks
 
@@ -69,6 +70,7 @@ DLLEXPORT void jl_get_uv_hooks()
 int base_module_conflict = 0; //set to 1 if Base is getting redefined since it means there are two place to try the callbacks
 // warning: this is defined without the standard do {...} while (0) wrapper, since I wanted ret to escape
 // warning: during bootstrapping, callbacks will be called twice if a MethodError occured at ANY time during callback call
+// Use:  JULIA_CB(hook, arg1, numberOfAdditionalArgs, arg2Type, arg2, ..., argNType, argN)
 #define JULIA_CB(hook,args...) \
     jl_value_t *ret; \
     if (!base_module_conflict) { \
@@ -129,6 +131,12 @@ void closeHandle(uv_handle_t* handle)
         JULIA_CB(close,handle->data,0); (void)ret;
     }
     free(handle);
+}
+
+void shutdownCallback(uv_shutdown_t* req, int status)
+{
+    uv_close((uv_handle_t*) req->handle,&closeHandle);
+    free(req);
 }
 
 void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal)
@@ -286,11 +294,32 @@ DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only,
 
 DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
-    if (!handle)
+    if (!handle || uv_is_closing(handle))
        return;
     if (handle->type==UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
-    uv_close(handle,&closeHandle);
+
+    if ( (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) && uv_is_writable( (uv_stream_t *) handle)) { 
+        // Make sure that the stream has not already been marked closed in Julia.
+        // A double shutdown would cause the process to hang on exit.
+        JULIA_CB(isopen, handle->data, 0);
+        if (!jl_is_int32(ret)) {
+            jl_error("jl_close_uv: _uv_hook_isopen must return an int32.");
+        }
+        if (!jl_unbox_int32(ret)){
+            return;
+        }
+
+        uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
+        int err = uv_shutdown(req, (uv_stream_t*)handle, &shutdownCallback);
+        if (err != 0) {
+            printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));
+            uv_close(handle, &closeHandle);
+        }
+    }
+    else {
+        uv_close(handle,&closeHandle);
+    }
 }
 
 DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data)
