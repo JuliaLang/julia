@@ -308,7 +308,7 @@ to terminate abruptly or corrupt arbitrary process memory due to a bad pointer
 or type declaration.
 
 Given a ``Ptr{T}``, the contents of type ``T`` can generally be copied from
-the referenced memory into a Julia object using ``unsafe_ref(ptr, [index])``. The
+the referenced memory into a Julia object using ``unsafe_load(ptr, [index])``. The
 index argument is optional (default is 1), and performs 1-based indexing. This
 function is intentionally similar to the behavior of ``getindex()`` and ``setindex!()``
 (e.g. ``[]`` access syntax).
@@ -330,7 +330,7 @@ can be converted to ``jl_value_t*`` pointers, as ``Ptr{Void}``, by calling
 ``pointer_from_objref(v)``.)
 
 The reverse operation (writing data to a Ptr{T}), can be performed using
-``unsafe_assign(ptr, value, [index])``.  Currently, this is only supported
+``unsafe_store!(ptr, value, [index])``.  Currently, this is only supported
 for bitstypes or other pointer-free (``isbits``) immutable types.
 
 Any operation that throws an error is probably currently unimplemented
@@ -358,7 +358,7 @@ it is finished with them.
 
 Whenever you have created a pointer to Julia data, you must ensure the original data
 exists until you are done with using the pointer. Many methods in Julia such as
-``unsafe_ref()`` and ``bytestring()`` make copies of data instead of taking ownership
+``unsafe_load()`` and ``bytestring()`` make copies of data instead of taking ownership
 of the buffer, so that it is safe to free (or alter) the original data without
 affecting Julia. A notable exception is ``pointer_to_array()`` which, for performance
 reasons, shares (or can be told to take ownership of) the underlying buffer.

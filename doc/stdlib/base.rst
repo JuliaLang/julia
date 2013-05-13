@@ -3031,6 +3031,13 @@ C Interface
 
    Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively, ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
 
+.. function:: cglobal((symbol, library) or ptr [, Type=Void])
+
+   Obtain a pointer to a global variable in a C-exported shared library,
+specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting
+to ``Ptr{Void}`` if no Type argument is supplied.  The values can be
+read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
+
 .. function:: cfunction(fun::Function, RetType::Type, (ArgTypes...))
    
    Generate C-callable function pointer from Julia function. Type annotation of the return value in the 
@@ -3079,11 +3086,11 @@ C Interface
   
    Call free() from C standard library.
 
-.. function:: unsafe_ref(p::Ptr{T},i::Integer)
+.. function:: unsafe_load(p::Ptr{T},i::Integer)
 
    Dereference the pointer ``p[i]`` or ``*p``, returning a copy of type T.
 
-.. function:: unsafe_assign(p::Ptr{T},x,i::Integer)
+.. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
    Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
 
