@@ -367,7 +367,8 @@ instance of such types::
     true
 
 The ``is`` function confirms that the "two" constructed instances of
-``NoFields`` are actually one and the same.
+``NoFields`` are actually one and the same. Singleton types are
+described in further detail `below <#man-singleton-types>`_.
 
 There is much more to say about how instances of composite types are
 created, but that discussion depends on both `Parametric
