@@ -474,6 +474,15 @@ for elty in (Float32, Float64, Complex64, Complex128)
 end
 
 
+# Test gglse
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
+    c = convert(Array{elty, 1}, [2, 1, 6, 3, 1])
+    B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
+    d = convert(Array{elty, 1}, [1, 3, -1])
+    @test_approx_eq_eps LinAlg.LAPACK.gglse!(A, c, B, d) [0.5, -0.5, 1.5, 0.5] 1e-6
+end
+
 
 ## Issue related tests
 # issue 1447
