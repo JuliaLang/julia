@@ -461,9 +461,9 @@ typemax(::Type{FieldValue}) = FieldValue([typemax(Int) for i = 1:5])
 (-)(a::FieldValue, b::FieldValue) = FieldValue(a.v - b.v)
 (+)(a::FieldValue, b::FieldValue) = FieldValue(a.v + b.v)
 
-(==)(a::FieldValue, b::FieldValue) = (a.v == b.v)
+isequal(a::FieldValue, b::FieldValue) = (a.v == b.v)
 
-function (<)(a::FieldValue, b::FieldValue)
+function isless(a::FieldValue, b::FieldValue)
     va = a.v
     vb = b.v
     va[1] < vb[1] && return true
@@ -477,8 +477,6 @@ function (<)(a::FieldValue, b::FieldValue)
     va[5] < vb[5] && return true
     return false
 end
-
-isless(a::FieldValue, b::FieldValue) = a < b
 
 abs(a::FieldValue) = FieldValue(abs(a.v))
 abs(v::Vector{FieldValue}) = FieldValue[abs(a) for a in v]
