@@ -16,8 +16,8 @@ rules; this section spells them out in detail.
 Certain constructs in the language introduce *scope blocks*, which are
 regions of code that are eligible to be the scope of some set of
 variables. The scope of a variable cannot be an arbitrary set of source
-lines, but will always line up with one of these blocks. The constructs
-introducing such blocks are:
+lines; instead, it will always line up with one of these blocks.
+The constructs introducing such blocks are:
 
 -  ``function`` bodies (:ref:`either syntax <man-functions>`)
 -  ``while`` loops
@@ -44,7 +44,7 @@ current scope are as follows:
    function's body scope.
 -  An assignment ``x = y`` introduces a new local variable ``x`` only if
    ``x`` is neither declared global nor explicitly introduced as local
-   by any enclosing scope, before or *after* the current line of code.
+   by any enclosing scope before *or after* the current line of code.
 
 In the following example, there is only one ``x`` assigned both inside
 and outside the ``for`` loop::
@@ -113,14 +113,14 @@ not come before an inner usage::
     julia> foo(10)
     13
 
-This last example may seem slightly odd for a normal variable, but
-allows for named functions — which are just normal variables holding
-function objects — to be used before they are defined. This allows
-functions to be defined in whatever order is intuitive and convenient,
-rather than forcing bottom up ordering or requiring forward
-declarations, both of which one typically sees in C programs. As an
-example, here is an inefficient, mutually recursive way to test if
-positive integers are even or odd::
+This behavior may seem slightly odd for a normal variable, but allows
+for named functions — which are just normal variables holding function
+objects — to be used before they are defined. This allows functions to
+be defined in whatever order is intuitive and convenient, rather than
+forcing bottom up ordering or requiring forward declarations, both of
+which one typically sees in C programs. As an example, here is an
+inefficient, mutually recursive way to test if positive integers are
+even or odd::
 
     even(n) = n == 0 ? true  :  odd(n-1)
     odd(n)  = n == 0 ? false : even(n-1)
