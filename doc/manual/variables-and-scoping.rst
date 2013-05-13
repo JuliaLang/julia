@@ -19,7 +19,7 @@ variables. The scope of a variable cannot be an arbitrary set of source
 lines, but will always line up with one of these blocks. The constructs
 introducing such blocks are:
 
--  ``function`` bodies (either syntax)
+-  ``function`` bodies (:ref:`either syntax <man-functions>`)
 -  ``while`` loops
 -  ``for`` loops
 -  ``try`` blocks
@@ -47,7 +47,7 @@ current scope are as follows:
    by any enclosing scope, before or *after* the current line of code.
 
 In the following example, there is only one ``x`` assigned both inside
-and outside a loop::
+and outside the ``for`` loop::
 
     function foo(n)
       x = 0
@@ -99,7 +99,7 @@ would introduce a new local rather than assigning to the global. This
 rule works out well in practice, since the vast majority of variables
 assigned inside functions are intended to be local variables, and using
 global variables should be the exception rather than the rule,
-especially assigning new values to them.
+and assigning new values to them even more so.
 
 One last example shows that an outer assignment introducing ``x`` need
 not come before an inner usage::
@@ -142,7 +142,7 @@ declarations is necessary, and definitions can be ordered arbitrarily.
 At the interactive prompt, variable scope works the same way as anywhere
 else. The prompt behaves as if there is scope block wrapped around
 everything you type, except that this scope block is identified with the
-global scope. This is especially apparent in the case of assignments::
+global scope. This is especially evident in the case of assignments::
 
     julia> for i = 1:1; y = 10; end
 
