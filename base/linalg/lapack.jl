@@ -568,7 +568,10 @@ for (gglse, elty) in ((:dgglse_, :Float64),
                         B::StridedMatrix{$elty}, d::StridedVector{$elty})
             chkstride1(A, B)
             m, n  = size(A)
-            if size(B, 2) != n; throw(DimensionMismatch("gglse!")); end
+            p = size(B, 1)
+            if size(B, 2) != n || length(c) != m || length(d) != p
+                throw(DimensionMismatch("gglse!"))
+            end
             X = zeros($elty, n)
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
@@ -579,8 +582,8 @@ for (gglse, elty) in ((:dgglse_, :Float64),
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}),
-                      &m, &n, &size(B, 1), A, &stride(A,2),
-                      B, &stride(B,2), c, d, X, work, &lwork, info)
+                      &m, &n, &p, A, &stride(A,2), B, &stride(B,2), c, d, X,
+                      work, &lwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
