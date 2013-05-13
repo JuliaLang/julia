@@ -5278,6 +5278,16 @@ RetType, (ArgType1, ...), ArgVar1, ...)
 
 "),
 
+("C Interface","Base","cglobal","cglobal((symbol, library) or ptr [, Type=Void])
+
+
+   Obtain a pointer to a global variable in a C-exported shared library,
+   specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting
+   to ``Ptr{Void}`` if no Type argument is supplied.  The values can be
+   read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
+
+"),
+
 ("C Interface","Base","cfunction","cfunction(fun::Function,
 RetType::Type, (ArgTypes...))
 
@@ -5349,7 +5359,7 @@ flags::Integer])
 
 "),
 
-("C Interface","Base","unsafe_ref","unsafe_ref(p::Ptr{T}, i::Integer)
+("C Interface","Base","unsafe_load","unsafe_load(p::Ptr{T}, i::Integer)
 
 
    Dereference the pointer \"p[i]\" or \"*p\", returning a copy of
@@ -5357,7 +5367,7 @@ flags::Integer])
 
 "),
 
-("C Interface","Base","unsafe_assign","unsafe_assign(p::Ptr{T}, x,
+("C Interface","Base","unsafe_store!","unsafe_store!(p::Ptr{T}, x,
 i::Integer)
 
 
