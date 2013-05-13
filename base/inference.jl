@@ -107,14 +107,15 @@ t_func[ltsif64] = (2, 2, cmp_tfunc)
 t_func[ltuif64] = (2, 2, cmp_tfunc)
 t_func[lesif64] = (2, 2, cmp_tfunc)
 t_func[leuif64] = (2, 2, cmp_tfunc)
-t_func[fpiseq32] = (2, 2, cmp_tfunc)
-t_func[fpiseq64] = (2, 2, cmp_tfunc)
-t_func[fpislt32] = (2, 2, cmp_tfunc)
-t_func[fpislt64] = (2, 2, cmp_tfunc)
+t_func[fpiseq] = (2, 2, cmp_tfunc)
+t_func[fpislt] = (2, 2, cmp_tfunc)
 t_func[nan_dom_err] = (2, 2, (a, b)->a)
-t_func[eval(Core,:ccall)] =
+t_func[eval(Core.Intrinsics,:ccall)] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
+t_func[eval(Core.Intrinsics,:cglobal)] =
+    (1, 2, (fptr, t...)->(isempty(t) ? Ptr{Void} :
+                          isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
@@ -440,6 +441,9 @@ function isconstantfunc(f::ANY, sv::StaticVarInfo)
         end
     end
 
+    if isa(f,QuoteNode) && isa(f.value, Function)
+        return f.value
+    end
     if isa(f,SymbolNode)
         f = f.name
     end
