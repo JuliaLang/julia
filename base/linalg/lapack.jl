@@ -551,6 +551,46 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
         gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
     end
 end
+for (gglse, elty) in ((:dgglse_, :Float64),
+                      (:sgglse_, :Float32),
+                      (:zgglse_, :Complex128),
+                      (:cgglse_, :Complex64))
+    @eval begin
+        # SUBROUTINE DGGLSE( M, N, P, A, LDA, B, LDB, C, D, X, WORK, LWORK,
+        #      $                   INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LDB, LWORK, M, N, P
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), C( * ), D( * ),
+        #      $                   WORK( * ), X( * )
+        function gglse!(A::StridedMatrix{$elty}, c::StridedVector{$elty},
+                        B::StridedMatrix{$elty}, d::StridedVector{$elty})
+            chkstride1(A, B)
+            m, n  = size(A)
+            if size(B, 2) != n; throw(DimensionMismatch("gglse!")); end
+            X = zeros($elty, n)
+            info  = Array(BlasInt, 1)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            for i in 1:2
+                ccall(($(string(gglse)),liblapack), Void,
+                      (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{BlasInt}),
+                      &m, &n, &size(B, 1), A, &stride(A,2),
+                      B, &stride(B,2), c, d, X, work, &lwork, info)
+                if info[1] != 0 throw(LAPACKException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            X
+        end
+    end
+end
 
 # (GE) general matrices eigenvalue-eigenvector and singular value decompositions
 for (geev, gesvd, gesdd, ggsvd, elty, relty) in
