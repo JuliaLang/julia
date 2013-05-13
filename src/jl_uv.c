@@ -49,6 +49,7 @@ extern "C" {
     XX(getaddrinfo) \
     XX(pollcb) \
     XX(fspollcb) \
+    XX(isopen) \
     XX(fseventscb)
 //TODO add UDP and other missing callbacks
 
@@ -69,6 +70,7 @@ DLLEXPORT void jl_get_uv_hooks()
 int base_module_conflict = 0; //set to 1 if Base is getting redefined since it means there are two place to try the callbacks
 // warning: this is defined without the standard do {...} while (0) wrapper, since I wanted ret to escape
 // warning: during bootstrapping, callbacks will be called twice if a MethodError occured at ANY time during callback call
+// Use:  JULIA_CB(hook, arg1, numberOfAdditionalArgs, arg2Type, arg2, ..., argNType, argN)
 #define JULIA_CB(hook,args...) \
     jl_value_t *ret; \
     if (!base_module_conflict) { \
@@ -300,8 +302,11 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     if ( (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) && uv_is_writable( (uv_stream_t *) handle)) { 
         // Make sure that the stream has not already been marked closed in Julia.
         // A double shutdown would cause the process to hang on exit.
-        jl_function_t* jl_is_open = (jl_function_t*) jl_get_global(jl_base_module, jl_symbol("isopen"));
-        if ( jl_apply(jl_is_open, (jl_value_t **) &(handle->data), 1) == jl_false ){
+        JULIA_CB(isopen, handle->data, 0);
+        if (!jl_is_int32(ret)) {
+            jl_error("jl_close_uv: _uv_hook_isopen must return an int32.");
+        }
+        if (!jl_unbox_int32(ret)){
             return;
         }
 

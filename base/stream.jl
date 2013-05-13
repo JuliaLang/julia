@@ -562,6 +562,8 @@ function isopen(stream::AsyncStream)
     stream.open
 end
 
+_uv_hook_isopen(stream::AsyncStream) = int32(isopen(stream))
+
 function close(stream::AsyncStream)
     if stream.open
         ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
