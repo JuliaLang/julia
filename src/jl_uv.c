@@ -292,17 +292,16 @@ DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only,
 
 DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
-    if (!handle)
+    if (!handle || uv_is_closing(handle))
        return;
     if (handle->type==UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
 
-    if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) { 
-        // Make sure that the stream has not already been marked closed in Julia, which would cause a hang.
-        // and has not been marked not writable by libuv (eg. by calling uv_shutdown on Windows), which would cause an abort.
+    if ( (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) && uv_is_writable( (uv_stream_t *) handle)) { 
+        // Make sure that the stream has not already been marked closed in Julia.
+        // A double shutdown would cause the process to hang on exit.
         jl_function_t* jl_is_open = (jl_function_t*) jl_get_global(jl_base_module, jl_symbol("isopen"));
-        if ( jl_apply(jl_is_open, (jl_value_t **) &(handle->data), 1) == jl_false ||
-             uv_is_writable((uv_stream_t*)handle)){ 
+        if ( jl_apply(jl_is_open, (jl_value_t **) &(handle->data), 1) == jl_false ){
             return;
         }
 
@@ -313,7 +312,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             uv_close(handle, &closeHandle);
         }
     }
-    else{
+    else {
         uv_close(handle,&closeHandle);
     }
 }
