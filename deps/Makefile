@@ -672,6 +672,9 @@ endif
 endif
 endif
 
+# don't touch scheduler affinity since we manage this ourselves
+OPENBLAS_BUILD_OPTS += NO_AFFINITY=1
+
 ifeq ($(USE_LIB64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1
 endif
