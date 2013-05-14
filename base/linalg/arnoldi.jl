@@ -10,7 +10,7 @@ function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
     if m != n; error("Input must be square"); end
     if n <= 6 && nev > n-1; nev = n-1; end
     sym   = issym(A)
-    cmplx = iscomplex(A)
+    cmplx = iseltype(A,Complex)
     bmat  = "I"
 
     # Compute the Ritz values and Ritz vectors

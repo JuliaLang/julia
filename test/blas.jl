@@ -50,7 +50,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @assert all(LinAlg.BLAS.gemm('N', 'N', I4, U4) .== U4)
     @assert all(LinAlg.BLAS.gemm('N', 'T', I4, U4) .== L4)
                                         # gemm compared to (sy)(he)rk
-    if iscomplex(elm1)
+    if iseltype(elm1,Complex)
         @assert all(triu(LinAlg.BLAS.herk('U', 'N', U4)) .== triu(LinAlg.BLAS.gemm('N', 'T', U4, U4)))
         @assert all(tril(LinAlg.BLAS.herk('L', 'N', U4)) .== tril(LinAlg.BLAS.gemm('N', 'T', U4, U4)))
         @assert all(triu(LinAlg.BLAS.herk('U', 'N', L4)) .== triu(LinAlg.BLAS.gemm('N', 'T', L4, L4)))
