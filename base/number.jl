@@ -1,16 +1,7 @@
 ## generic operations on numbers ##
 
-isreal(x::Number) = false
 isreal(x::Real) = true
-
-isinteger(x::Number) = false
 isinteger(x::Integer) = true
-
-real_valued(x::Real) = true
-integer_valued(x::Integer) = true
-
-isbool(x::Number) = false
-isbool(x::Bool) = true
 
 size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1

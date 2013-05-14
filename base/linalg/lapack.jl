@@ -234,7 +234,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
-            cmplx = iscomplex(A)
+            cmplx = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 2n); end
             for i in 1:2
                 if cmplx
@@ -618,7 +618,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             rvecs = jobvr == 'V'
             VL    = Array($elty, (n, lvecs ? n : 0))
             VR    = Array($elty, (n, rvecs ? n : 0))
-            cmplx = iscomplex(A)
+            cmplx = iseltype(A,Complex)
             if cmplx
                 W     = Array($elty, n)
                 rwork = Array($relty, 2n)
@@ -685,7 +685,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             work   = Array($elty, 1)
             lwork  = blas_int(-1)
             S      = Array($relty, minmn)
-            cmplx  = iscomplex(A)
+            cmplx  = iseltype(A,Complex)
             if cmplx
                 rwork = Array($relty, job == 'N' ? 7*minmn : 5*minmn*minmn + 5*minmn)
             end
@@ -737,7 +737,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             U      = Array($elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
             VT     = Array($elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
             work   = Array($elty, 1)
-            cmplx  = iscomplex(A)
+            cmplx  = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 5minmn); end
             lwork  = blas_int(-1)
             info   = Array(BlasInt, 1)
@@ -798,7 +798,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             ldq = max(1, n)
             Q = jobq == 'Q' ? Array($elty, ldq, n) : Array($elty, 0)
             work = Array($elty, max(3n, m, p) + n)
-            cmplx = iscomplex(A)
+            cmplx = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 2n); end
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
@@ -1519,7 +1519,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
         function syev!(jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty})
             chkstride1(A)
             chksquare(A)
-            cmplx = iscomplex(A)
+            cmplx = iseltype(A,Complex)
             n     = size(A, 1)
             W     = Array($relty, n)
             work  = Array($elty, 1)
