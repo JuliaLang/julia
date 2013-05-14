@@ -265,7 +265,24 @@ typedef enum {invariant, covariant} variance_t;
 typedef struct {
     jl_value_t **data;
     size_t n;
+    jl_tuple_t *tvars;
 } cenv_t;
+
+static inline int is_bnd(jl_tvar_t *tv, cenv_t *env)
+{
+    if (jl_is_typevar(env->tvars))
+        return (jl_tvar_t*)env->tvars == tv;
+    for(size_t i=0; i < jl_tuple_len(env->tvars); i++) {
+        if ((jl_tvar_t*)jl_tupleref(env->tvars,i) == tv)
+            return 1;
+    }
+    return 0;
+}
+
+static inline int is_unspec(jl_datatype_t *dt)
+{
+    return (jl_datatype_t*)dt->name->primary == dt;
+}
 
 static inline int is_btv(jl_value_t *v)
 {
@@ -459,7 +476,8 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
             jl_value_t *bp = jl_tupleref(b->parameters,i);
             if (jl_is_typevar(ap)) {
                 if (var==invariant && jl_is_typevar(bp)) {
-                    if (((jl_tvar_t*)ap)->bound != ((jl_tvar_t*)bp)->bound) {
+                    if ((is_unspec(a) && is_bnd((jl_tvar_t*)bp,penv)) ||
+                        (is_bnd((jl_tvar_t*)ap,penv) && is_unspec(b))) {
                         // Foo{T} and Foo can never be equal since the former
                         // is always a subtype of the latter
                         JL_GC_POP();
@@ -1169,6 +1187,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     memset(rts, 0, (1+2*MAX_CENV_SIZE)*sizeof(void*));
     cenv_t eqc; eqc.n = 0; eqc.data = &rts[1];
     cenv_t env; env.n = 0; env.data = &rts[1+MAX_CENV_SIZE];
+    eqc.tvars = tvars; env.tvars = tvars;
     jl_value_t **pti = &rts[0];
 
     has_ntuple_intersect_tuple = 0;

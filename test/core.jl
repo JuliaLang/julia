@@ -44,8 +44,9 @@ let T = TypeVar(:T,true)
     @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
                   (Number, Array{Number,1}))
     @test !is(None, typeintersect((Array{T}, Array{T}), (Array, Array{Any})))
-    @test is(None, typeintersect((Vector{Vector{Int}},Vector{Vector}),
-                                 (Vector{Vector{T}},Vector{Vector{T}})))
+    f47{T}(x::Vector{Vector{T}}) = 0
+    @test_fails f47(Array(Vector,0))
+    @test f47(Array(Vector{Int},0)) == 0
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
