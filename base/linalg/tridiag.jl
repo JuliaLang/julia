@@ -325,10 +325,8 @@ LDLTTridiagonal{S<:BlasFloat,T<:BlasFloat}(D::Vector{S}, E::Vector{T}) = LDLTTri
 ldltd!{T<:BlasFloat}(A::SymTridiagonal{T}) = LDLTTridiagonal(LAPACK.pttrf!(real(A.dv),A.ev)...)
 ldltd{T<:BlasFloat}(A::SymTridiagonal{T}) = ldltd!(copy(A))
 
-function (\){T<:BlasFloat}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T})
-    if iscomplex(B) return LAPACK.pttrs!('L', C.D, C.E, copy(B)) end
-    LAPACK.pttrs!(C.D, C.E, copy(B))
-end
+(\){T<:BlasReal}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) = LAPACK.pttrs!(C.D, C.E, copy(B))
+(\){T<:BlasComplex}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) = LAPACK.pttrs!('L', C.D, C.E, copy(B))
 
 type LUTridiagonal{T} <: Factorization{T}
     dl::Vector{T}

@@ -333,6 +333,11 @@ end
 @test !isequal(+1.0,-1.0)
 @test !isequal(+Inf,-Inf)
 
+@test isequal(-0.0f0, -0.0)
+@test isequal(0.0f0, 0.0)
+@test !isequal(-0.0f0, 0.0)
+@test !isequal(0.0f0, -0.0)
+
 @test !isless(-Inf,-Inf)
 @test  isless(-Inf,-1.0)
 @test  isless(-Inf,-0.0)
@@ -1114,6 +1119,33 @@ for n = 1:100
     end
     @test n == m
 end
+
+@test iround(Uint,-0.0) == 0
+@test iround(Int,-0.0) == 0
+
+@test iround(Int, 0.5) == 1
+@test iround(Int, prevfloat(0.5)) == 0
+@test iround(Int, -0.5) == -1
+@test iround(Int, prevfloat(-0.5)) == 0
+
+@test iround(Uint, 0.5) == 1
+@test iround(Uint, prevfloat(0.5)) == 0
+@test_fails iround(Uint, -0.5)
+@test iround(Uint, prevfloat(-0.5)) == 0
+
+@test iround(Int, 0.5f0) == 1
+@test iround(Int, prevfloat(0.5f0)) == 0
+@test iround(Int, -0.5f0) == -1
+@test iround(Int, prevfloat(-0.5f0)) == 0
+
+@test iround(Uint, 0.5f0) == 1
+@test iround(Uint, prevfloat(0.5f0)) == 0
+@test_fails iround(Uint, -0.5f0)
+@test iround(Uint, prevfloat(-0.5f0)) == 0
+
+# numbers that can't be rounded by trunc(x+0.5)
+@test iround(Int64, 2.0^52 + 1) == 4503599627370497
+@test iround(Int32, 2.0f0^23 + 1) == 8388609
 
 # binary literals
 

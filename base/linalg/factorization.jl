@@ -7,18 +7,18 @@ type Cholesky{T<:BlasFloat} <: Factorization{T}
     uplo::Char
 end
 
-function cholfact!(A::StridedMatrix, uplo::Symbol)
+function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol)
     uplochar = string(uplo)[1]
     C, info = LAPACK.potrf!(uplochar, A)
     if info > 0 throw(LinAlg.LAPACK.PosDefException(info)) end
     Cholesky(uplochar == 'L' ? tril(C) : triu(C), uplochar)
 end
-cholfact(A::StridedMatrix, uplo::Symbol) = cholfact!(copy(A), uplo)
-cholfact!(A::StridedMatrix) = cholfact!(A, :U)
-cholfact(A::StridedMatrix) = cholfact(A, :U)
-cholfact{T<:Integer}(A::StridedMatrix{T}, args...) = cholfact(float(A), args...)
-cholfact!{T<:Integer}(A::StridedMatrix{T}, args...) = cholfact(A, args...)
+cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol) = cholfact!(copy(A), uplo)
+cholfact!{T<:BlasFloat}(A::StridedMatrix{T}) = cholfact!(A, :U)
+cholfact{T<:BlasFloat}(A::StridedMatrix{T}) = cholfact!(copy(A), :U)
 cholfact(x::Number) = imag(x) == 0 && real(x) > 0 ? Cholesky(fill(sqrt(x), 1, 1), 'U') : throw(LinAlg.LAPACK.PosDefException(1))
+cholfact(A::StridedMatrix, args...) = cholfact!(float(A), args...)
+cholfact!(A::StridedMatrix, args...) = cholfact!(float(A), args...)
 
 chol(A::Union(Number, StridedMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
 chol(A::Union(Number, StridedMatrix)) = cholfact(A, :U)[:U]
@@ -127,7 +127,7 @@ function inv(C::CholeskyPivoted)
 end
 
 ## LU
-type LU{T} <: Factorization{T}
+type LU{T<:BlasFloat} <: Factorization{T}
     factors::Matrix{T}
     ipiv::Vector{BlasInt}
     info::BlasInt
@@ -136,12 +136,13 @@ function LU{T<:BlasFloat}(A::StridedMatrix{T})
     factors, ipiv, info = LAPACK.getrf!(A)
     LU{T}(factors, ipiv, info)
 end
+lufact!{T<:BlasFloat}(A::StridedMatrix{T}) = LU(A)
+lufact{T<:BlasFloat}(A::StridedMatrix{T}) = lufact!(copy(A))
 
-lufact!(A::StridedMatrix) = LU(A)
-lufact(A::StridedMatrix) = lufact!(copy(A))
-lufact{T<:Integer}(A::StridedMatrix{T}) = lufact!(float(A))
-lufact!{T<:Integer}(A::StridedMatrix{T}) = lufact(A)
 lufact(x::Number) = LU(fill(x, 1, 1), [1], x == 0 ? 1 : 0)
+
+lufact(A::StridedMatrix) = lufact!(float(A))
+lufact!(A::StridedMatrix) = lufact!(float(A))
 
 function lu(A::Union(Number, StridedMatrix))
     F = lufact(A)
@@ -199,14 +200,14 @@ type QR{S<:BlasFloat} <: Factorization{S}
     vs::Matrix{S}                     # the elements on and above the diagonal contain the N-by-N upper triangular matrix R; the elements below the diagonal are the columns of V
     T::Matrix{S}                      # upper triangular factor of the block reflector.
 end
-QR(A::StridedMatrix) = QR(LAPACK.geqrt3!(A)...)
+QR{T<:BlasFloat}(A::StridedMatrix{T}) = QR(LAPACK.geqrt3!(A)...)
 
-qrfact!(A::StridedMatrix) = QR(A)
-qrfact(A::StridedMatrix) = qrfact!(copy(A))
-qrfact{T<:Integer}(A::StridedMatrix{T}) = qrfact!(float(A))
-qrfact!{T<:Integer}(A::StridedMatrix{T}) = qrfact(A)
-qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QR(A)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(copy(A))
 qrfact(x::Integer) = qrfact(float(x))
+qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
+qrfact(A::StridedMatrix) = qrfact!(float(A))
+qrfact!(A::StridedMatrix) = qrfact(A)
 
 function qr(A::Union(Number, StridedMatrix), thin::Bool)
     F = qrfact(A)
@@ -251,7 +252,9 @@ function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
     end
     LAPACK.gemqrt!('L', 'N', A.vs, A.T, Bc)
 end
-Ac_mul_B(A::QRPackedQ, B::StridedVecOrMat) = LAPACK.gemqrt!('L', iscomplex(A.vs[1]) ? 'C' : 'T', A.vs, A.T, copy(B))
+Ac_mul_B{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat) = LAPACK.gemqrt!('L','T',A.vs,A.T,copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat) = LAPACK.gemqrt!('L','C',A.vs,A.T,copy(B))
+
 *(A::StridedVecOrMat, B::QRPackedQ) = LAPACK.gemqrt!('R', 'N', B.vs, B.T, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     m = size(A, 1)
@@ -263,7 +266,7 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     else
         throw(DimensionMismatch(""))
     end
-    LAPACK.gemqrt!('R', iscomplex(B.vs[1]) ? 'C' : 'T', B.vs, B.T, Ac)
+    LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
 end
 ## Least squares solution.  Should be more careful about cases with m < n
 (\)(A::QR, B::StridedVector) = Triangular(A[:R], 'U')\(A[:Q]'B)[1:size(A, 2)]
@@ -345,7 +348,8 @@ function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
     end
     LAPACK.ormqr!('L', 'N', A.hh, A.tau, Bc)
 end
-Ac_mul_B(A::QRPivotedQ, B::StridedVecOrMat) = LAPACK.ormqr!('L', iscomplex(A.hh[1]) ? 'C' : 'T', A.hh, A.tau, copy(B))
+Ac_mul_B{T<:BlasReal}(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr!('L','T',A.hh,A.tau,copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr!('L','C',A.hh,A.tau,copy(B))
 *(A::StridedVecOrMat, B::QRPivotedQ) = LAPACK.ormqr!('R', 'N', B.hh, B.tau, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
     m = size(A, 1)
@@ -357,7 +361,7 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
     else
         throw(DimensionMismatch(""))
     end
-    LAPACK.ormqr!('R', iscomplex(B.hh[1]) ? 'C' : 'T', B.hh, B.tau, Ac)
+    LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, Ac)
 end
 
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
@@ -407,11 +411,10 @@ function getindex(A::Eigen, d::Symbol)
     error("No such type field")
 end
 
-function eigfact!{T<:BlasFloat}(A::StridedMatrix{T})
+function eigfact!{T<:BlasReal}(A::StridedMatrix{T})
     n = size(A, 2)
     if n == 0; return Eigen(zeros(T, 0), zeros(T, 0, 0)) end
     if ishermitian(A) return eigfact!(Hermitian(A)) end
-    if iscomplex(A) return Eigen(LAPACK.geev!('N', 'V', A)[[1,3]]...) end
 
     WR, WI, VL, VR = LAPACK.geev!('N', 'V', A)
     if all(WI .== 0.) return Eigen(WR, VR) end
@@ -430,6 +433,13 @@ function eigfact!{T<:BlasFloat}(A::StridedMatrix{T})
     return Eigen(complex(WR, WI), evec)
 end
 
+function eigfact!{T<:BlasComplex}(A::StridedMatrix{T})
+    n = size(A, 2)
+    if n == 0; return Eigen(zeros(T, 0), zeros(T, 0, 0)) end
+    if ishermitian(A) return eigfact!(Hermitian(A)) end
+    Eigen(LAPACK.geev!('N', 'V', A)[[1,3]]...)
+end
+
 eigfact(A::StridedMatrix) = eigfact!(copy(A))
 eigfact{T<:Integer}(x::StridedMatrix{T}) = eigfact(float64(x))
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
@@ -442,12 +452,15 @@ end
 #Calculates eigenvectors
 eigvecs(A::Union(Number, StridedMatrix)) = eigfact(A)[:vectors]
 
-function eigvals(A::StridedMatrix)
+function eigvals{T<:BlasReal}(A::StridedMatrix{T})
     if ishermitian(A) return eigvals(Hermitian(A)) end
-    if iscomplex(A) return LAPACK.geev!('N', 'N', copy(A))[1] end
     valsre, valsim, _, _ = LAPACK.geev!('N', 'N', copy(A))
     if all(valsim .== 0) return valsre end
     return complex(valsre, valsim)
+end
+function eigvals{T<:BlasReal}(A::StridedMatrix{T})
+    if ishermitian(A) return eigvals(Hermitian(A)) end
+    LAPACK.geev!('N', 'N', copy(A))[1]
 end
 
 eigvals(x::Number) = [one(x)]
@@ -455,11 +468,11 @@ eigvals(x::Number) = [one(x)]
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union(Number, StridedMatrix))
     v = eigvals(A)
-    iscomplex(v) ? error("Complex eigenvalues cannot be ordered") : max(v)
+    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : max(v)
 end
 function eigmin(A::Union(Number, StridedMatrix))
     v = eigvals(A)
-    iscomplex(v) ? error("Complex eigenvalues cannot be ordered") : min(v)
+    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : min(v)
 end
 
 inv(A::Eigen) = scale(A.vectors, 1.0/A.values)*A.vectors'
@@ -505,11 +518,10 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T})
     if m == 0 || n == 0 return zeros(T, 0) end
     return LAPACK.gesdd!('N', A)[2]
 end
-
-svdvals(A) = svdvals!(copy(A))
-svdvals(A::Number) = [A]
-svdvals{T<:Integer}(A::StridedMatrix{T}) = svdvals!(float(A))
-svdvals!{T<:Integer}(A::StridedMatrix{T}) = svdvals(A)
+svdvals{T<:BlasFloat}(A::StridedMatrix{T}) = svdvals!(copy(A))
+svdvals(x::Number) = [x]
+svdvals(A::StridedMatrix) = svdvals!(float(A))
+svdvals!(A::StridedMatrix) = svdvals!(float(A))
 
 # SVD least squares
 function \{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})

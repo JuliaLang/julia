@@ -126,7 +126,11 @@ ifeq ($(BUILD_OS),WINNT)
 else
 	cp $(call wine_pathsearch,libgfortran-3.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 	cp $(call wine_pathsearch,libquadmath-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+ifeq ($(ARCH),i686)
+	cp $(call wine_pathsearch,libgcc_s_sjlj-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+else
 	cp $(call wine_pathsearch,libgcc_s_seh-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+endif
 	cp $(call wine_pathsearch,libstdc++-6.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 	cp $(call wine_pathsearch,libssp-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 endif

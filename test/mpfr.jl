@@ -179,9 +179,9 @@ x = BigFloat(12)
 @test get_precision(x) == old_precision
 @test_fails set_bigfloat_precision(1)
 
-# integer_valued
-@test integer_valued(BigFloat(12))
-@test !integer_valued(BigFloat(12.12))
+# isinteger
+@test isinteger(BigFloat(12))
+@test !isinteger(BigFloat(12.12))
 
 # nextfloat / prevfloat
 with_bigfloat_precision(53) do
@@ -217,6 +217,14 @@ imi = BigFloat(-Inf)
 @test !(z < z)
 @test !(z >= z)
 @test !(z > z)
+
+@test !isequal(BigFloat(0.0),BigFloat(-0.0))
+@test isequal(z, BigFloat(NaN))
+
+# signbit
+@test signbit(BigFloat(-1.0)) == 1
+@test signbit(BigFloat(1.0)) == 0
+@test signbit(BigFloat(-0.0)) == 1
 
 # modf
 x = BigFloat(12)

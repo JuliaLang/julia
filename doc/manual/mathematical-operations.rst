@@ -208,13 +208,13 @@ which can be useful in situations like hash key comparisons:
 ================= ==================================
 Function          Tests if
 ================= ==================================
-``isequal(x, y)`` ``x`` and ``y`` are equal in value
+``isequal(x, y)`` ``x`` and ``y`` are identical
 ``isfinite(x)``   ``x`` is a finite number
 ``isinf(x)``      ``x`` is infinite
 ``isnan(x)``      ``x`` is not a number
 ================= ==================================
 
-``isequal`` considers ``NaN``\ s of the same type to be equal to each other::
+``isequal`` considers ``NaN``\ s equal to each other::
 
     julia> isequal(NaN,NaN)
     true
@@ -223,6 +223,14 @@ Function          Tests if
     true
     
     julia> isequal(NaN,NaN32)
+    false
+
+``isequal`` can also be used to distinguish signed zeros::
+
+    julia> -0.0 == 0.0
+    true
+
+    julia> isequal(-0.0, 0.0)
     false
 
 Mixed-type comparisons between signed integers, unsigned integers, and

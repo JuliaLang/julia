@@ -92,11 +92,11 @@ isfinite(x::Rational) = x.den != 0
 typemin{T<:Integer}(::Type{Rational{T}}) = -one(T)//zero(T)
 typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 
-integer_valued(x::Rational) = x.den == 1
-float64_valued(x::Rational) = abs(x.num) <= x.den*maxintfloat(Float64)
+isinteger(x::Rational) = x.den == 1
+isfloat64(x::Rational) = abs(x.num) <= x.den*maxintfloat(Float64)
 
-hash(x::Rational) = integer_valued(x) ? hash(x.num) :
-                    float64_valued(x) ? hash(float64(x)) :
+hash(x::Rational) = isinteger(x) ? hash(x.num) :
+                    isfloat64(x) ? hash(float64(x)) :
                     bitmix(hash(x.num),hash(x.den))
 
 -(x::Rational) = (-x.num) // x.den
@@ -106,13 +106,13 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
 /(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 /(x::Rational, z::Complex ) = inv(z/x)
 
-==(x::Rational, y::Rational) = x.den == y.den && x.num == y.num
-==(x::Rational, y::Integer ) = x.den == 1 && x.num == y
+==(x::Rational, y::Rational) = (x.den == y.den) & (x.num == y.num)
+==(x::Rational, y::Integer ) = (x.den == 1) & (x.num == y)
 ==(x::Integer , y::Rational) = y == x
 
 # needed to avoid ambiguity between ==(x::Real, z::Complex) and ==(x::Rational, y::Number)
-==(z::Complex , x::Rational) = real_valued(z) && real(z) == x
-==(x::Rational, z::Complex ) = real_valued(z) && real(z) == x
+==(z::Complex , x::Rational) = isreal(z) && real(z) == x
+==(x::Rational, z::Complex ) = isreal(z) && real(z) == x
 
 ==(x::Rational, y::Number  ) = x.num == x.den*y
 ==(x::Number  , y::Rational) = y == x
