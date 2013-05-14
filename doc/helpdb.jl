@@ -808,26 +808,19 @@ collection)
 
 "),
 
-("Set-Like Collections","Base","add_each!","add_each!(collection,
-iterable)
-
-
-   Adds each element in iterable to the collection.
-
-"),
-
 ("Set-Like Collections","Base","Set","Set(x...)
 
 
    Construct a \"Set\" with the given elements. Should be used instead
-   of \"IntSet\" for sparse integer sets.
+   of \"IntSet\" for sparse integer sets, or for sets of arbitrary
+   objects.
 
 "),
 
 ("Set-Like Collections","Base","IntSet","IntSet(i...)
 
 
-   Construct an \"IntSet\" of the given integers. Implemented as a bit
+   Construct a sorted set of the given integers. Implemented as a bit
    string, and therefore designed for dense integer sets. If the set
    will be sparse (for example holding a single very large integer),
    use \"Set\" instead.
@@ -842,11 +835,10 @@ iterable)
 
 "),
 
-("Set-Like Collections","Base","union!","union!(s1, s2)
+("Set-Like Collections","Base","union!","union!(s, iterable)
 
 
-   Constructs the union of IntSets s1 and s2, stores the result in
-   \"s1\".
+   Union each element of \"iterable\" into set \"s\" in-place.
 
 "),
 
@@ -863,6 +855,13 @@ iterable)
 
    Construct the set of elements in \"s1\" but not \"s2\". Maintains
    order with arrays.
+
+"),
+
+("Set-Like Collections","Base","setdiff!","setdiff!(s, iterable)
+
+
+   Remove each element of \"iterable\" from set \"s\" in-place.
 
 "),
 
@@ -909,13 +908,6 @@ iterable)
 
 
    Mutates IntSet s into its set-complement.
-
-"),
-
-("Set-Like Collections","Base","del_each!","del_each!(s, itr)
-
-
-   Deletes each element of itr in set s in-place.
 
 "),
 
@@ -2510,41 +2502,39 @@ stream[, offset])
 "),
 
 ("Mathematical Functions","Base","round","round(x[, digits[, base]])
--> FloatingPoint
 
 
-   \"round(x)\" returns the nearest integer to \"x\". \"round(x,
-   digits)\" rounds to the specified number of digits after the
-   decimal place, or before if negative, e.g., \"round(pi,2)\" is
-   \"3.14\". \"round(x, digits, base)\" rounds using a different base,
-   defaulting to 10, e.g., \"round(pi, 3, 2)\" is \"3.125\".
+   \"round(x)\" returns the nearest integral value of the same type as
+   \"x\" to \"x\". \"round(x, digits)\" rounds to the specified number
+   of digits after the decimal place, or before if negative, e.g.,
+   \"round(pi,2)\" is \"3.14\". \"round(x, digits, base)\" rounds
+   using a different base, defaulting to 10, e.g., \"round(pi, 3, 2)\"
+   is \"3.125\".
 
 "),
 
-("Mathematical Functions","Base","ceil","ceil(x[, digits[, base]]) ->
-FloatingPoint
+("Mathematical Functions","Base","ceil","ceil(x[, digits[, base]])
 
 
-   Returns the nearest integer not less than \"x\". \"digits\" and
-   \"base\" work as above.
+   Returns the nearest integral value of the same type as \"x\" not
+   less than \"x\". \"digits\" and \"base\" work as above.
 
 "),
 
 ("Mathematical Functions","Base","floor","floor(x[, digits[, base]])
--> FloatingPoint
 
 
-   Returns the nearest integer not greater than \"x\". \"digits\" and
-   \"base\" work as above.
+   Returns the nearest integral value of the same type as \"x\" not
+   greater than \"x\". \"digits\" and \"base\" work as above.
 
 "),
 
 ("Mathematical Functions","Base","trunc","trunc(x[, digits[, base]])
--> FloatingPoint
 
 
-   Returns the nearest integer not greater in magnitude than \"x\".
-   \"digits\" and \"base\" work as above.
+   Returns the nearest integral value of the same type as \"x\" not
+   greater in magnitude than \"x\". \"digits\" and \"base\" work as
+   above.
 
 "),
 
@@ -2577,7 +2567,6 @@ FloatingPoint
 "),
 
 ("Mathematical Functions","Base","signif","signif(x, digits[, base])
--> FloatingPoint
 
 
    Rounds (in the sense of \"round\") \"x\" so that there are
@@ -2702,28 +2691,28 @@ FloatingPoint
 
 "),
 
-("Mathematical Functions","Base","erfinv","erfinv(x)
-
-
-   Compute the inverse error function of a real \"x\", 
-   so that \\operatorname{erf}(\\operatorname{erfinv}(x)) = x.
-
-"),
-
-("Mathematical Functions","Base","erfcinv","erfcinv(x)
-
-
-   Compute the inverse complementary error function of a real \"x\", 
-   so that \\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x.
-
-"),
-
 ("Mathematical Functions","Base","dawson","dawson(x)
 
 
    Compute the Dawson function (scaled imaginary error function) of
    \"x\", defined by \\frac{\\sqrt{\\pi}}{2} e^{-x^2}
    \\operatorname{erfi}(x).
+
+"),
+
+("Mathematical Functions","Base","erfinv","erfinv(x)
+
+
+   Compute the inverse error function of a real \"x\", defined by
+   \\operatorname{erf}(\\operatorname{erfinv}(x)) = x.
+
+"),
+
+("Mathematical Functions","Base","erfcinv","erfcinv(x)
+
+
+   Compute the inverse error complementary function of a real \"x\",
+   defined by \\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x.
 
 "),
 
@@ -3153,13 +3142,6 @@ FloatingPoint
 
 "),
 
-("Data Formats","Base","isbool","isbool(x)
-
-
-   Test whether number or array is boolean
-
-"),
-
 ("Data Formats","Base","int","int(x)
 
 
@@ -3184,13 +3166,6 @@ FloatingPoint
    Convert a number or array to integer type. If \"x\" is already of
    integer type it is unchanged, otherwise it converts it to the
    default integer type on your platform.
-
-"),
-
-("Data Formats","Base","isinteger","isinteger(x)
-
-
-   Test whether a number or array is of integer type
 
 "),
 
@@ -3319,11 +3294,11 @@ FloatingPoint
 
 "),
 
-("Data Formats","Base","float64_valued","float64_valued(x::Rational)
+("Data Formats","Base","isfloat64","isfloat64(x::Rational)
 
 
-   True if \"x\" can be losslessly represented as a \"Float64\" data
-   type
+   Tests whether \"x\" or all its elements can be losslessly
+   represented as a \"Float64\" data type
 
 "),
 
@@ -3352,20 +3327,6 @@ FloatingPoint
 
 
    Convert real numbers or arrays to complex
-
-"),
-
-("Data Formats","Base","iscomplex","iscomplex(x) -> Bool
-
-
-   Test whether a number or array is of a complex type
-
-"),
-
-("Data Formats","Base","isreal","isreal(x) -> Bool
-
-
-   Test whether a number or array is of a real type
 
 "),
 
@@ -3533,17 +3494,19 @@ FloatingPoint
 
 "),
 
-("Numbers","Base","integer_valued","integer_valued(x)
+("Numbers","Base","isinteger","isinteger(x)
 
 
-   Test whether \"x\" is numerically equal to some integer
+   Test whether \"x\" or all its elements are numerically equal to
+   some integer
 
 "),
 
-("Numbers","Base","real_valued","real_valued(x)
+("Numbers","Base","isreal","isreal(x)
 
 
-   Test whether \"x\" is numerically equal to some real number
+   Test whether \"x\" or all its elements are numerically equal to
+   some real number
 
 "),
 
@@ -3765,6 +3728,13 @@ Integer
 
 
    Returns the type of the elements contained in A
+
+"),
+
+("Arrays","Base","iseltype","iseltype(A, T)
+
+
+   Tests whether A or its elements are of type T
 
 "),
 
@@ -4860,13 +4830,14 @@ flags[, timelimit]]])
 "),
 
 ("Parallel Computing","Base","addprocs","addprocs({\"host1\",
-\"host2\", ...}; tunnel=false)
+\"host2\", ...}; tunnel=false, dir=JULIA_HOME)
 
 
    Add processes on remote machines via SSH. Requires julia to be
    installed in the same location on each node, or to be available via
    a shared file system. If \"tunnel\" is \"true\" then SSH tunneling
-   will be used.
+   will be used. Named argument \"dir\" optionally specifies the
+   location of the julia binaries on the worker nodes.
 
 "),
 
@@ -5502,7 +5473,7 @@ own])
 
 "),
 
-("Tasks","Base","tls","tls(symbol)
+("Tasks","Base","task_local_storage","task_local_storage(symbol)
 
 
    Look up the value of a symbol in the current task's task-local
@@ -5510,11 +5481,79 @@ own])
 
 "),
 
-("Tasks","Base","tls","tls(symbol, value)
+("Tasks","Base","task_local_storage","task_local_storage(symbol,
+value)
 
 
    Assign a value to a symbol in the current task's task-local
    storage.
+
+"),
+
+("Base.Collections","Base.Collections","PriorityQueue{K,V}","Priority
+Queue{K,V}([ord])
+
+
+   Construct a new PriorityQueue, with keys of type K and
+   values/priorites of type V. If an order is not given, the priority
+   queue is min-ordered using the default comparison for V.
+
+"),
+
+("Base.Collections","Base.Collections","enqueue!","enqueue!(pq, k, v)
+
+
+   Insert the a key \"k\" into a priority queue \"pq\" with priority
+   \"v\".
+
+"),
+
+("Base.Collections","Base.Collections","dequeue!","dequeue!(pq)
+
+
+   Remove and return the lowest priority key from a priority queue.
+
+"),
+
+("Base.Collections","Base.Collections","heapify","heapify(v[, ord])
+
+
+   Return a new vector in binary heap order, optionally using the
+   given ordering.
+
+"),
+
+("Base.Collections","Base.Collections","heapify!","heapify!(v[, ord])
+
+
+   In-place heapify.
+
+"),
+
+("Base.Collections","Base.Collections","isheap","isheap(v[, ord])
+
+
+   Return true iff an array is heap-ordered according to the given
+   order.
+
+"),
+
+("Base.Collections","Base.Collections","heappush!","heappush!(v[,
+ord])
+
+
+   Given a binary heap-ordered array, push a new element, preserving
+   the heap property. For efficiency, this function does not check
+   that the array is indeed heap-ordered.
+
+"),
+
+("Base.Collections","Base.Collections","heappop!","heappop!(v[, ord])
+
+
+   Given a binary heap-ordered array, remove and return the lowest
+   ordered element. For efficiency, this function does not check that
+   the array is indeed heap-ordered.
 
 "),
 
@@ -6712,11 +6751,10 @@ y)
 ("Base.Sort","Base.Sort","searchsorted","searchsorted(a, x[, ord])
 
 
-   Returns the index of the first value of \"a\" equal to or
-   succeeding \"x\", according to ordering \"ord\" (default:
-   \"Sort.Forward\").
-
-   Alias for \"searchsortedfirst()\"
+   Returns the range of indices of \"a\" equal to \"x\", assuming
+   \"a\" is sorted according to ordering \"ord\" (default:
+   \"Sort.Forward\").  Returns an empty range located at the insertion
+   point if \"a\" does not contain \"x\".
 
 "),
 
