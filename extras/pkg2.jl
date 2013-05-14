@@ -128,7 +128,9 @@ function requirements(reqs::Dict=parse_requires("REQUIRE"), fix::Dict=fixed())
                 warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
             merge_requires!(reqs, f2.requires)
         end
-        delete!(reqs, p1, nothing)
+    end
+    for (p,f) in fix
+        delete!(reqs, p, nothing)
     end
     reqs
 end

@@ -1,4 +1,4 @@
-import Base: Git, isequal, isless, hash, isempty, contains, show
+import Base: Git,  show, isempty, contains, intersect
 
 immutable VersionInterval
     lower::VersionNumber
