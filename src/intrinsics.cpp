@@ -12,34 +12,32 @@ namespace JL_I {
         sle_int, ule_int,
         eq_float, ne_float,
         lt_float, le_float,
+        fpiseq, fpislt,
         // mixed-type comparisons
         eqfsi64, eqfui64,
         ltfsi64, ltfui64,
         lefsi64, lefui64,
         ltsif64, ltuif64,
         lesif64, leuif64,
-        fpiseq, fpislt,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int, ctpop_int, ctlz_int, cttz_int,
         // conversion
         sext_int, zext_int, trunc_int,
-        fptoui32, fptosi32, fptoui64, fptosi64,
-        fpsiround, fpuiround,
-        uitofp32, sitofp32, uitofp64, sitofp64,
+        fptoui, fptosi, uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
-        // functions
-        abs_float, copysign_float,
-        flipsign_int,
-        // pointer access
-        pointerref, pointerset, pointertoref,
+        // checked conversion
+        fpsiround, fpuiround, checked_fptoui, checked_fptosi,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
-        checked_fptoui, checked_fptosi,
         nan_dom_err,
+        // functions
+        abs_float, copysign_float, flipsign_int,
+        // pointer access
+        pointerref, pointerset, pointertoref,
         // c interface
-        ccall, jl_alloca
+        ccall, cglobal, jl_alloca
     };
 };
 
@@ -581,6 +579,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 {
     switch (f) {
     case ccall: return emit_ccall(args, nargs, ctx);
+    case cglobal: return emit_cglobal(args, nargs, ctx);
 
     HANDLE(box,2)         return generic_box(args[1], args[2], ctx);
     HANDLE(unbox,2)       return generic_unbox(args[1], args[2], ctx);
@@ -912,10 +911,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 #endif
 
-    HANDLE(fptoui32,1) return builder.CreateFPToUI(FP(x), T_int32);
-    HANDLE(fptosi32,1) return builder.CreateFPToSI(FP(x), T_int32);
-    HANDLE(fptoui64,1) return builder.CreateFPToUI(FP(x), T_int64);
-    HANDLE(fptosi64,1) return builder.CreateFPToSI(FP(x), T_int64);
+    HANDLE(fptoui,1) return builder.CreateFPToUI(FP(x), JL_INTT(x->getType()));
+    HANDLE(fptosi,1) return builder.CreateFPToSI(FP(x), JL_INTT(x->getType()));
     HANDLE(fpsiround,1)
     HANDLE(fpuiround,1)
     {
@@ -1070,7 +1067,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
     ADD_I(sext_int); ADD_I(zext_int); ADD_I(trunc_int);
-    ADD_I(fptoui32); ADD_I(fptosi32); ADD_I(fptoui64); ADD_I(fptosi64);
+    ADD_I(fptoui); ADD_I(fptosi);
     ADD_I(fpsiround); ADD_I(fpuiround);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
@@ -1082,6 +1079,6 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_smul); ADD_I(checked_umul);
     ADD_I(checked_fptosi); ADD_I(checked_fptoui);
     ADD_I(nan_dom_err);
-    ADD_I(ccall);
+    ADD_I(ccall); ADD_I(cglobal);
     ADD_I(jl_alloca);
 }

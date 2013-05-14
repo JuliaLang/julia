@@ -138,6 +138,8 @@ export
 
 
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
+typealias BlasReal Union(Float64,Float32)
+typealias BlasComplex Union(Complex128,Complex64)
 typealias BlasChar Char
 
 if USE_LIB64

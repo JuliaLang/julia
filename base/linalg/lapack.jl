@@ -234,7 +234,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
-            cmplx = iscomplex(A)
+            cmplx = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 2n); end
             for i in 1:2
                 if cmplx
@@ -551,6 +551,49 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
         gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
     end
 end
+for (gglse, elty) in ((:dgglse_, :Float64),
+                      (:sgglse_, :Float32),
+                      (:zgglse_, :Complex128),
+                      (:cgglse_, :Complex64))
+    @eval begin
+        # SUBROUTINE DGGLSE( M, N, P, A, LDA, B, LDB, C, D, X, WORK, LWORK,
+        #      $                   INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LDB, LWORK, M, N, P
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), C( * ), D( * ),
+        #      $                   WORK( * ), X( * )
+        function gglse!(A::StridedMatrix{$elty}, c::StridedVector{$elty},
+                        B::StridedMatrix{$elty}, d::StridedVector{$elty})
+            chkstride1(A, B)
+            m, n  = size(A)
+            p = size(B, 1)
+            if size(B, 2) != n || length(c) != m || length(d) != p
+                throw(DimensionMismatch("gglse!"))
+            end
+            X = zeros($elty, n)
+            info  = Array(BlasInt, 1)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            for i in 1:2
+                ccall(($(string(gglse)),liblapack), Void,
+                      (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{BlasInt}),
+                      &m, &n, &p, A, &stride(A,2), B, &stride(B,2), c, d, X,
+                      work, &lwork, info)
+                if info[1] != 0 throw(LAPACKException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            X
+        end
+    end
+end
 
 # (GE) general matrices eigenvalue-eigenvector and singular value decompositions
 for (geev, gesvd, gesdd, ggsvd, elty, relty) in
@@ -575,7 +618,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             rvecs = jobvr == 'V'
             VL    = Array($elty, (n, lvecs ? n : 0))
             VR    = Array($elty, (n, rvecs ? n : 0))
-            cmplx = iscomplex(A)
+            cmplx = iseltype(A,Complex)
             if cmplx
                 W     = Array($elty, n)
                 rwork = Array($relty, 2n)
@@ -642,7 +685,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             work   = Array($elty, 1)
             lwork  = blas_int(-1)
             S      = Array($relty, minmn)
-            cmplx  = iscomplex(A)
+            cmplx  = iseltype(A,Complex)
             if cmplx
                 rwork = Array($relty, job == 'N' ? 7*minmn : 5*minmn*minmn + 5*minmn)
             end
@@ -694,7 +737,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             U      = Array($elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
             VT     = Array($elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
             work   = Array($elty, 1)
-            cmplx  = iscomplex(A)
+            cmplx  = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 5minmn); end
             lwork  = blas_int(-1)
             info   = Array(BlasInt, 1)
@@ -755,7 +798,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             ldq = max(1, n)
             Q = jobq == 'Q' ? Array($elty, ldq, n) : Array($elty, 0)
             work = Array($elty, max(3n, m, p) + n)
-            cmplx = iscomplex(A)
+            cmplx = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 2n); end
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
@@ -1476,7 +1519,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
         function syev!(jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty})
             chkstride1(A)
             chksquare(A)
-            cmplx = iscomplex(A)
+            cmplx = iseltype(A,Complex)
             n     = size(A, 1)
             W     = Array($relty, n)
             work  = Array($elty, 1)
