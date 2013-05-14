@@ -304,38 +304,35 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
 
 static jl_value_t *jl_signed_type=NULL;
 
-// --- code generator for ccall itself ---
+typedef struct {
+    Value *jl_ptr;  // if the argument is a run-time computed pointer
+    void *fptr;     // if the argument is a constant pointer
+    char *f_name;   // if the symbol name is known
+    char *f_lib;    // if a library name is specified
+} native_sym_arg_t;
 
-// ccall(pointer, rettype, (argtypes...), args...)
-static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
+// --- parse :sym or (:sym, :lib) argument into address info ---
+static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx, const char *fname)
 {
-    JL_NARGSV(ccall, 3);
-    jl_value_t *ptr=NULL, *rt=NULL, *at=NULL;
-    Value *jl_ptr=NULL;
-    JL_GC_PUSH3(&ptr, &rt, &at);
-    ptr = static_eval(args[1], ctx, true);
+    jl_value_t *ptr = NULL;
+    Value *jl_ptr = NULL;
+
+    ptr = static_eval(arg, ctx, true);
     if (ptr == NULL) {
-        jl_value_t *ptr_ty = expr_type(args[1], ctx);
-        Value *arg1 = emit_unboxed(args[1], ctx);
+        jl_value_t *ptr_ty = expr_type(arg, ctx);
+        Value *arg1 = emit_unboxed(arg, ctx);
         if (!jl_is_cpointer_type(ptr_ty)) {
-            emit_cpointercheck(arg1, 
-                    "ccall: function argument not a pointer or valid, constant expression", ctx);
+            emit_cpointercheck(arg1,
+                               !strcmp(fname,"ccall") ?
+                               "ccall: first argument not a pointer or valid constant expression" :
+                               "cglobal: first argument not a pointer or valid constant expression",
+                               ctx);
         }
         jl_ptr = emit_unbox(T_size, T_psize, arg1);
     }
-    rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                        &jl_tupleref(ctx->sp,0),
-                                        jl_tuple_len(ctx->sp)/2);
-    if (jl_is_tuple(rt)) {
-        std::string msg = "in " + ctx->funcName +
-            ": ccall: missing return type";
-        jl_error(msg.c_str());
-    }
-    at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                        &jl_tupleref(ctx->sp,0),
-                                        jl_tuple_len(ctx->sp)/2);
-    void *fptr=NULL;
-    char *f_name=NULL, *f_lib=NULL;
+
+    void *fptr = NULL;
+    char *f_name = NULL, *f_lib = NULL;
     if (ptr != NULL) {
         if (jl_is_tuple(ptr) && jl_tuple_len(ptr)==1) {
             ptr = jl_tupleref(ptr,0);
@@ -347,8 +344,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
 #ifdef _OS_WINDOWS_
-         //TODO: store the f_lib name instead of fptr
-        fptr = jl_dlsym_win32(f_name);
+            //TODO: store the f_lib name instead of fptr
+            fptr = jl_dlsym_win32(f_name);
 #else
             // will look in process symbol table
 #endif
@@ -364,23 +361,117 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             else if (jl_is_byte_string(t0))
                 f_name = jl_string_data(t0);
             else
-                JL_TYPECHK(ccall, symbol, t0);
+                JL_TYPECHKS(fname, symbol, t0);
             if (jl_is_symbol(t1))
                 f_lib = ((jl_sym_t*)t1)->name;
             else if (jl_is_byte_string(t1))
                 f_lib = jl_string_data(t1);
             else
-                JL_TYPECHK(ccall, symbol, t1);
+                JL_TYPECHKS(fname, symbol, t1);
         }
         else {
-            JL_TYPECHK(ccall, pointer, ptr);
+            JL_TYPECHKS(fname, pointer, ptr);
         }
     }
+    native_sym_arg_t r;
+    r.jl_ptr = jl_ptr;
+    r.fptr = fptr;
+    r.f_name = f_name;
+    r.f_lib = f_lib;
+    return r;
+}
+
+// --- code generator for cglobal ---
+
+static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
+{
+    JL_NARGS(cglobal, 1, 2);
+    jl_value_t *rt=NULL;
+    Value *res;
+    JL_GC_PUSH1(&rt);
+
+    if (nargs == 2) {
+        rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
+                                           &jl_tupleref(ctx->sp,0),
+                                           jl_tuple_len(ctx->sp)/2);
+        JL_TYPECHK(cglobal, type, rt);
+        rt = (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type, jl_tuple1(rt));
+    }
+    else {
+        rt = (jl_value_t*)jl_voidpointer_type;
+    }
+    Type *lrt = julia_type_to_llvm(rt);
+    if (lrt == NULL) lrt = T_pint8;
+
+    native_sym_arg_t sym = interpret_symbol_arg(args[1], ctx, "cglobal");
+
+    if (sym.jl_ptr != NULL) {
+        res = builder.CreateIntToPtr(sym.jl_ptr, lrt);
+    }
+    else if (sym.fptr != NULL) {
+        res = literal_pointer_val(sym.fptr, lrt);
+    }
+    else {
+        void *symaddr;
+        if (sym.f_lib != NULL)
+            symaddr = add_library_sym(sym.f_name, sym.f_lib);
+        else
+            symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(sym.f_name);
+        if (symaddr == NULL) {
+            std::stringstream msg;
+            msg << "cglobal: could not find symbol ";
+            msg << sym.f_name;
+            if (sym.f_lib != NULL) {
+                msg << " in library ";
+                msg << sym.f_lib;
+            }
+            emit_error(msg.str(), ctx);
+            res = literal_pointer_val(NULL, lrt);
+        }
+        else {
+            res = jl_Module->getOrInsertGlobal(sym.f_name,
+                                               lrt->getContainedType(0));
+        }
+    }
+
+    JL_GC_POP();
+    return mark_julia_type(res, rt);
+}
+
+// --- code generator for ccall itself ---
+
+// ccall(pointer, rettype, (argtypes...), args...)
+static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
+{
+    JL_NARGSV(ccall, 3);
+    jl_value_t *rt=NULL, *at=NULL;
+    JL_GC_PUSH2(&rt, &at);
+
+    native_sym_arg_t symarg = interpret_symbol_arg(args[1], ctx, "ccall");
+    Value *jl_ptr=NULL;
+    void *fptr = NULL;
+    char *f_name = NULL, *f_lib = NULL;
+    jl_ptr = symarg.jl_ptr;
+    fptr = symarg.fptr;
+    f_name = symarg.f_name;
+    f_lib = symarg.f_lib;
     if (f_name == NULL && fptr == NULL && jl_ptr == NULL) {
         JL_GC_POP();
         emit_error("ccall: null function pointer", ctx);
         return literal_pointer_val(jl_nothing);
     }
+
+    rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
+                                        &jl_tupleref(ctx->sp,0),
+                                        jl_tuple_len(ctx->sp)/2);
+    if (jl_is_tuple(rt)) {
+        std::string msg = "in " + ctx->funcName +
+            ": ccall: missing return type";
+        jl_error(msg.c_str());
+    }
+    at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
+                                        &jl_tupleref(ctx->sp,0),
+                                        jl_tuple_len(ctx->sp)/2);
 
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, tuple, at);
@@ -503,7 +594,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         null_pointer_check(jl_ptr,ctx);
         Type *funcptype = PointerType::get(functype,0);
         llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
-    } else if (fptr != NULL) {
+    }
+    else if (fptr != NULL) {
         Type *funcptype = PointerType::get(functype,0);
         llvmf = literal_pointer_val(fptr, funcptype);
     }

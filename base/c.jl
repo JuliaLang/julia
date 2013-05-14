@@ -1,5 +1,7 @@
 # definitions related to C interface
 
+import Core.Intrinsics.cglobal
+
 ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
 ptr_arg_convert(::Type{Ptr{Void}}, x) = x
 

@@ -1771,10 +1771,6 @@ Data Formats
 
    Convert a number or numeric array to boolean
 
-.. function:: isbool(x)
-
-   Test whether number or array is boolean
-
 .. function:: int(x)
 
    Convert a number or array to the default integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an integer.
@@ -1786,10 +1782,6 @@ Data Formats
 .. function:: integer(x)
 
    Convert a number or array to integer type. If ``x`` is already of integer type it is unchanged, otherwise it converts it to the default integer type on your platform.
-
-.. function:: isinteger(x)
-
-   Test whether a number or array is of integer type
 
 .. function:: signed(x)
 
@@ -1861,9 +1853,9 @@ Data Formats
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: float64_valued(x::Rational)
+.. function:: isfloat64(x::Rational)
 
-   True if ``x`` can be losslessly represented as a ``Float64`` data type
+   Tests whether ``x`` or all its elements can be losslessly represented as a ``Float64`` data type
 
 .. function:: complex64(r,i)
 
@@ -1880,14 +1872,6 @@ Data Formats
 .. function:: complex(r,i)
 
    Convert real numbers or arrays to complex
-
-.. function:: iscomplex(x) -> Bool
-
-   Test whether a number or array is of a complex type
-
-.. function:: isreal(x) -> Bool
-
-   Test whether a number or array is of a real type
 
 .. function:: bswap(n)
 
@@ -1981,13 +1965,13 @@ Numbers
 
    Get the previous floating point number in lexicographic order
 
-.. function:: integer_valued(x)
+.. function:: isinteger(x)
 
-   Test whether ``x`` is numerically equal to some integer
+   Test whether ``x`` or all its elements are numerically equal to some integer
 
-.. function:: real_valued(x)
+.. function:: isreal(x)
 
-   Test whether ``x`` is numerically equal to some real number
+   Test whether ``x`` or all its elements are numerically equal to some real number
 
 .. function:: BigInt(x)
 
@@ -2123,6 +2107,10 @@ Basic functions
 .. function:: eltype(A)
 
    Returns the type of the elements contained in A
+
+.. function:: iseltype(A,T)
+
+   Tests whether A or its elements are of type T
 
 .. function:: length(A) -> Integer
 
@@ -2984,13 +2972,25 @@ System
 
    Get julia's process ID.
 
-.. function:: time()
+.. function:: time([t::TmStruct])
 
-   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution. When passed a ``TmStruct``, converts it to a number of seconds since the epoch.
 
 .. function:: time_ns()
 
    Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+
+.. function:: strftime([format], time)
+
+   Convert time, given as a number of seconds since the epoch or a ``TmStruct``, to a formatted string using the given format. Supported formats are the same as those in the standard C library.
+
+.. function:: strptime([format], timestr)
+
+   Parse a formatted time string into a ``TmStruct`` giving the seconds, minute, hour, date, etc. Supported formats are the same as those in the standard C library. On some platforms, timezones will not be parsed correctly. If the result of this function will be passed to ``time`` to convert it to seconds since the epoch, the ``isdst`` field should be filled in manually. Setting it to ``-1`` will tell the C library to use the current system settings to determine the timezone.
+
+.. function:: TmStruct([seconds])
+
+   Convert a number of seconds since the epoch to broken-down format, with fields ``sec``, ``min``, ``hour``, ``mday``, ``month``, ``year``, ``wday``, ``yday``, and ``isdst``.
 
 .. function:: tic()
 
@@ -3018,6 +3018,13 @@ C Interface
 .. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
    Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively, ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
+
+.. function:: cglobal((symbol, library) or ptr [, Type=Void])
+
+   Obtain a pointer to a global variable in a C-exported shared library,
+specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting
+to ``Ptr{Void}`` if no Type argument is supplied.  The values can be
+read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
 
 .. function:: cfunction(fun::Function, RetType::Type, (ArgTypes...))
    
@@ -3067,11 +3074,11 @@ C Interface
   
    Call free() from C standard library.
 
-.. function:: unsafe_ref(p::Ptr{T},i::Integer)
+.. function:: unsafe_load(p::Ptr{T},i::Integer)
 
    Dereference the pointer ``p[i]`` or ``*p``, returning a copy of type T.
 
-.. function:: unsafe_assign(p::Ptr{T},x,i::Integer)
+.. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
    Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
 

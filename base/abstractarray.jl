@@ -10,6 +10,14 @@ eltype(x) = Any
 eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
 eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
+iseltype(x,T) = eltype(x) <: T
+isinteger(x::AbstractArray) = all(isinteger,x)
+isinteger{T<:Integer,n}(x::AbstractArray{T,n}) = true
+isreal(x::AbstractArray) = all(isreal,x)
+isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
+isfloat64(x::AbstractArray) = all(isfloat64,x)
+isfloat64{T<:Float64,n}(x::AbstractArray{T,n}) = true
+isfloat64{T<:Float32,n}(x::AbstractArray{T,n}) = true
 ndims{T,n}(::AbstractArray{T,n}) = n
 ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
@@ -19,15 +27,6 @@ first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
 
 strides(a::AbstractArray) = ntuple(ndims(a), i->stride(a,i))::Dims
-
-isinteger{T<:Integer}(::AbstractArray{T}) = true
-isinteger(::AbstractArray) = false
-isreal{T<:Real}(::AbstractArray{T}) = true
-isreal(::AbstractArray) = false
-iscomplex{T<:Complex}(::AbstractArray{T}) = true
-iscomplex(::AbstractArray) = false
-isbool(::AbstractArray{Bool}) = true
-isbool(::AbstractArray) = false
 
 function isassigned(a::AbstractArray, i::Int...)
     # TODO

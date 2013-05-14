@@ -206,7 +206,7 @@ randsym(n) = symmetrize!(randn(n,n))
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)
-    if integer_valued(p)
+    if isinteger(p)
         ip = integer(real(p))
         if ip < 0
             return inv(Base.power_by_squaring(A, -ip))
@@ -218,7 +218,7 @@ function ^(A::Matrix, p::Number)
         error("matrix must be square")
     end
     (v, X) = eig(A)
-    if isreal(v) && any(v.<0)
+    if any(v.<0)
         v = complex(v)
     end
     if ishermitian(A)
@@ -382,7 +382,7 @@ function sqrtm(A::StridedMatrix, cond::Bool)
     if ishermitian(A) 
         return sqrtm(Hermitian(A), cond)
     else
-        SchurF = schurfact!(iscomplex(A) ? copy(A) : complex(A))
+        SchurF = schurfact!(iseltype(A,Complex) ? copy(A) : complex(A))
         R = zeros(eltype(SchurF[:T]), n, n)
         for j = 1:n
             R[j,j] = sqrt(SchurF[:T][j,j])
@@ -409,7 +409,8 @@ end
 sqrtm{T<:Integer}(A::StridedMatrix{T}, cond::Bool) = sqrtm(float(A), cond)
 sqrtm{T<:Integer}(A::StridedMatrix{Complex{T}}, cond::Bool) = sqrtm(complex128(A), cond)
 sqrtm(A::StridedMatrix) = sqrtm(A, false)
-sqrtm(a::Number) = isreal(a) ? (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)  : sqrt(a)
+sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
+sqrtm(a::Complex) = sqrt(a)
 
 function det(A::Matrix)
     m, n = size(A)

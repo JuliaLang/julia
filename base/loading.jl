@@ -47,6 +47,7 @@ function require(name::ByteString)
     else
         reload_path(path)
     end
+    nothing
 end
 
 function reload(name::String)
