@@ -114,10 +114,29 @@ hash(x::Rational) = isinteger(x) ? hash(x.num) :
 ==(z::Complex , x::Rational) = isreal(z) && real(z) == x
 ==(x::Rational, z::Complex ) = isreal(z) && real(z) == x
 
-==(x::Rational, y::Number  ) = x.num == x.den*y
-==(x::Number  , y::Rational) = y == x
-==(x::Rational, y::FloatingPoint) = x.den==0 ? oftype(y,x)==y : x.num == x.den*y
+function ==(x::Float64, y::Rational)
+    a, b = y.num, y.den
+    ((x==0) & (a==0) | isinf(x) & (b==0) & (a==sign(x))) && return true
+    u = reinterpret(Uint64, x)
+    s = copysign(int(uint(!isdenormal(x))<<52 + u & 0x000fffffffffffff), x)
+    p = min(1074, 1075-int((u>>52) & 0x7ff))
+    za, zb, zs = trailing_zeros(a), trailing_zeros(b), trailing_zeros(s)
+    (za+p == zb+zs) & ((a>>>za) == (b>>>zb)*(s>>>zs)) # a*2^p == b*s
+end
+==(x::Rational, y::Float64) = y == x
 
+function ==(x::Float32, y::Rational)
+    a, b = y.num, y.den
+    ((x==0) & (a==0) | isinf(x) & (b==0) & (a==sign(x))) && return true
+    u = reinterpret(Uint32, x)
+    s = copysign(int(uint(!isdenormal(x))<<23 + u & 0x007fffff), x)
+    p = min(149, 150-int((u>>23) & 0xff))
+    za, zb, zs = trailing_zeros(a), trailing_zeros(b), trailing_zeros(s)
+    (za+p == zb+zs) & ((a>>>za) == (b>>>zb)*(s>>>zs)) # a*2^p == b*s
+end
+==(x::Rational, y::Float32) = y == x
+
+# TODO: fix inequalities to be in line with equality check
 < (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num : x.num*y.den < x.den*y.num
 < (x::Rational, y::Real    ) = x.num < x.den*y
 < (x::Real    , y::Rational) = x*y.den < y.num
