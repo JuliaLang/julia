@@ -97,63 +97,28 @@ for f in (:round, :ceil, :floor, :trunc)
     end
 end
 
-
-
-typealias RealOrComplexFloat{T<:FloatingPoint} Union(FloatingPoint, Complex{T})
-
-export isapprox, isapproxn
-
 # isapprox: Tolerant comparison of floating point numbers
 function isapprox(x::FloatingPoint, y::FloatingPoint; rtol::Real=rtoldefault(x,y), atol::Real=atoldefault(x,y))
     (isinf(x) || isinf(y)) ? x == y : abs(x-y) <= atol + rtol.*max(abs(x), abs(y))
 end
-# isapproxn: Like isapprox, but with nan==nan
-function isapproxn(x::FloatingPoint, y::FloatingPoint; rtol::Real=rtoldefault(x,y), atol::Real=atoldefault(x,y)) 
-    (isnan(x) && isnan(y)) || isapprox(x, y, rtol=rtol, atol=atol)
-end
 
-# here we create methods for both functions for a wide variety of input arguments.
-# the goal is to cover isapprox(x::Number, y::Number) with optional arguments for tolerances, as well as support for arrays
-for fun in [:isapprox, :isapproxn]
-    @eval begin
-        # complex floats
-        ($fun){T1<:FloatingPoint, T2<:FloatingPoint}(x::Complex{T1}, y::Complex{T2}; 
-                                                     rrtol::Real=rtoldefault(real(x), real(y)), ratol::Real=atoldefault(real(x), real(y)),
-                                                     irtol::Real=rtoldefault(imag(x), imag(y)), iatol::Real=atoldefault(imag(x), imag(y))) = 
-            ($fun)(real(x), real(y); rtol=rrtol, atol=ratol) && ($fun)(imag(x), imag(y); rtol=irtol, atol=iatol)
+# promotion of non-floats
+isapprox(x::Real, y::FloatingPoint; rtol::Real=rtoldefault(x, x), atol::Real=atoldefault(x, x)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
+isapprox(x::FloatingPoint, y::Real; rtol::Real=rtoldefault(x, x), atol::Real=atoldefault(x, x)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
 
-        # real-complex combinations of floats
-        ($fun){T1<:FloatingPoint, T2<:FloatingPoint}(x::T1, z::Complex{T2};  
-                                                     rrtol::Real=rtoldefault(x, real(z)), ratol::Real=atoldefault(x, real(z)),
-                                                     irtol::Real=rtoldefault(x, imag(z)), iatol::Real=atoldefault(x, imag(z))) = 
-            ($fun)(x, real(z); rtol=rrtol, atol=ratol) && ($fun)(imag(z), 0; rtol=irtol, atol=iatol)
-        ($fun){T1<:FloatingPoint, T2<:FloatingPoint}(z::Complex{T1}, x::T2;  
-                                                     rrtol::Real=rtoldefault(x, real(z)), ratol::Real=atoldefault(x, real(z)),
-                                                     irtol::Real=rtoldefault(x, imag(z)), iatol::Real=atoldefault(x, imag(z))) = 
-            ($fun)(x, z; rrtol=rrtol, ratol=ratol, irtol=irtol, iatol=iatol)
+# other real numbers
+isapprox(x::Real, y::Real; rtol::Real=0, atol::Real=0) = atol == 0 ? isequal(x, y) : abs(x-y) <= atol
 
-        # Catch-all with promotion
-        ($fun)(x::FloatingPoint, y::Real; rtol::Real=rtoldefault(x,x), atol::Real=atoldefault(x,x)) = ($fun)(promote(x,y)...; rtol=rtol, atol=atol)
-        ($fun)(x::Real, y::FloatingPoint; rtol::Real=rtoldefault(y,y), atol::Real=atoldefault(y,y)) = ($fun)(y,x; rtol=rtol, atol=atol)
-    end
-end
+# complex numbers
+isapprox(z::Complex, w::Complex; rtol::Real=rtoldefault(abs(z), abs(w)), atol::Real=atoldefault(abs(z), abs(w))) = abs(z-w) <= atol + rtol*max(abs(z), abs(w))
 
-# isapprox for real non-floats
-isapprox(x::Real, y::Real) = isequal(x, y)
-isapprox(x::Real, y::Real; tol::Real=0) = abs(x-y) <= tol
+# real-complex combinations
+isapprox(x::Real, z::Complex; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x, 0), z; rtol=rtol, atol=atol)
+isapprox(z::Complex, x::Real; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x, 0), z; rtol=rtol, atol=atol)
 
-# isapprox for complex non-floats
-isapprox(z::Complex, w::Complex) = isequal(real(z), real(w)) && isequal(imag(z), imag(w))
-isapprox(z::Complex, w::Complex; rtol::Real=0, itol::Real=0) = isapprox(real(z), real(w); tol=rtol) && isapprox(imag(z), imag(w); tol=itol)
-
-# isapprox for real-complex combinations of non-floats
-isapprox(z::Complex, x::Real) = isequal(real(z), x) && isequal(imag(z), 0)
-isapprox(x::Real, z::Complex) = isapprox(z,x)
-isapprox(z::Complex, x::Real; rtol=0, itol=0) = isapprox(real(z), x; tol=rtol) && isapprox(imag(z), 0; tol=itol)
-isapprox(x::Real, z::Complex; rtol=0, itol=0) = isapprox(z,x; rtol=rtol, itol=itol)
-
-rtoldefault(x::FloatingPoint, y::FloatingPoint) = cbrt(max(!isnan(x) ? eps(x) : eps(one(x)), !isnan(y) ? eps(y) : eps(one(y))))
-atoldefault(x::FloatingPoint, y::FloatingPoint) = sqrt(max(!isnan(x) ? eps(x) : eps(one(x)), !isnan(y) ? eps(y) : eps(one(y))))
+# default tolerance arguments
+rtoldefault(x::FloatingPoint, y::FloatingPoint) = cbrt(max(eps(x), eps(y)))
+atoldefault(x::FloatingPoint, y::FloatingPoint) = sqrt(max(eps(x), eps(y)))
 
 for fun in [:rtoldefault, :atoldefault]
     @eval begin
