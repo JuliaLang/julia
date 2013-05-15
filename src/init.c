@@ -182,12 +182,12 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             fputs("error: GetThreadContext failed\n",stderr);
             return 0;
         }
-#ifdef _CPU_X86_64_
+#if defined(_CPU_X86_64_)
         ctxThread.Rip = (DWORD64)&win_raise_exception;
         ctxThread.Rcx = (DWORD64)jl_interrupt_exception;
         ctxThread.Rsp &= (DWORD64)-16;
         ctxThread.Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif _CPU_X86_
+#elif defined(_CPU_X86_)
         ctxThread.Eip = (DWORD)&win_raise_exception;
         ctxThread.Ecx = (DWORD)jl_interrupt_exception;
         ctxThread.Esp &= (DWORD)-16;
@@ -213,12 +213,12 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) 
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_STACK_OVERFLOW:
-#ifdef _CPU_X86_64_
+#if defined(_CPU_X86_64_)
             ExceptionInfo->ContextRecord->Rip = (DWORD64)&win_raise_exception;
             ExceptionInfo->ContextRecord->Rcx = (DWORD64)jl_stackovf_exception;
             ExceptionInfo->ContextRecord->Rsp &= (DWORD64)-16;
             ExceptionInfo->ContextRecord->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif _CPU_X86_
+#elif defined(_CPU_X86_)
             ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception;
             ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception;
             ExceptionInfo->ContextRecord->Esp &= (DWORD)-16;
