@@ -178,14 +178,20 @@ for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}
     end
 end
 
-searchsortedlast{T <: Real}(a::Ranges{T}, x::Real, o::Ordering) = searchsortedlast(a, x)
-searchsortedlast{T <: Real}(a::Ranges{T}, x::Real) = max(min(int(fld(x - first(a), step(a))) + 1, length(a)), 0)
+function searchsortedlast{T <: Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+    if step(a) == 0
+        lt(o, x, first(a)) ? 0 : length(a)
+    else
+        max(min(int(fld(x - first(a), step(a))) + 1, length(a)), 0)
+    end
+end
 
-searchsortedfirst{T <: Real}(a::Ranges{T}, x::Real, o::Ordering) = searchsortedfirst(a, x)
-function searchsortedfirst{T <: Real}(a::Ranges{T}, x::Real)
-    n = x - first(a)
-    s = step(a)
-    max(min(int(fld(n, s)) + (rem(n, s) != 0), length(a)), 0) + 1
+function searchsortedfirst{T <: Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+    if step(a) == 0
+        lt(o, first(a), x) ? length(a) + 1 : 1
+    else
+        max(min(int(-fld(first(a) - x, step(a))), length(a)), 0) + 1
+    end
 end
 
 searchsorted{T <: Real}(a::Ranges{T}, x::Real) = searchsortedfirst(a,x):searchsortedlast(a,x)
