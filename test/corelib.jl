@@ -36,6 +36,12 @@ let
     r = 15:-2:-38
     @test findin(r, span) == 1:6
 end
+@test isempty(findin(5+0*(1:6), 2:4))
+@test findin(5+0*(1:6), 2:5) == 1:6
+@test findin(5+0*(1:6), 2:7) == 1:6
+@test findin(5+0*(1:6), 5:7) == 1:6
+@test isempty(findin(5+0*(1:6), 6:7))
+@test findin(5+0*(1:6), 5:5) == 1:6
 
 @test intersect(1:5, 2:3) == 2:3
 @test intersect(-3:5, 2:8) == 2:5
