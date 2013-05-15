@@ -2,7 +2,7 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, <=, ==, >, >=, ^, (~), (&), (|), ($),
+import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum
@@ -187,16 +187,19 @@ function <<(x::BigInt, c::Uint)
     ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
-<<(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x<<uint(c)
-<<(x::BigInt, c::Integer) = c<0 ? throw(DomainError()) : x<<uint(c)
 
-function >>(x::BigInt, c::Uint)
+function >>>(x::BigInt, c::Uint)
     z = BigInt()
     ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
->>(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x>>uint(c)
->>(x::BigInt, c::Integer) = c<0 ? throw(DomainError()) : x>>uint(c)
+
+<<(x::BigInt, c::Int32) = c < 0 ? throw(DomainError()) : x << uint(c)
+>>>(x::BigInt, c::Int32) = c < 0 ? throw(DomainError()) : x >>> uint(c)
+>>(x::BigInt, c::Int32) = x >>> c
+
+trailing_zeros(x::BigInt) = int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
+ trailing_ones(x::BigInt) = int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
 
 function divrem(x::BigInt, y::BigInt)
     z1 = BigInt()
