@@ -164,6 +164,9 @@ push!(I18n.CALLBACKS, Help.clear_cache)
 include("sparse.jl")
 include("linalg.jl")
 importall .LinAlg
+include("broadcast.jl")
+import .Broadcast.broadcast
+import .Broadcast.broadcast_getindex, .Broadcast.broadcast_setindex!
 
 # signal processing
 include("fftw.jl")
