@@ -50,7 +50,7 @@ XX(ISUNIX)              - OS Traits
 #define JL_OS_MAP(X) JL_OS_MAP2(X,NOP)
 #define OS_INDEX_MAP(x) x
 
-#if defined(__WIN32__)
+#if defined(_OS_WINDOWS_)
     #define OS_CURRENT Windows
 #elif defined(__linux__)
     #define OS_CURRENT  Linux

@@ -3,7 +3,8 @@ module LAPACK
 
 const liblapack = Base.liblapack_name
 
-import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int
+import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, LAPACKException,
+    DimensionMismatch, SingularException
 
 function chkstride1(A::StridedVecOrMat...)
     for a in A
