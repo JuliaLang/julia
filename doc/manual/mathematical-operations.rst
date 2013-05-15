@@ -197,7 +197,7 @@ The last point is potentially surprising and thus worth noting::
     julia> NaN > NaN
     false
 
-and can cause especial headaches with :ref:`Arrays`::
+and can cause especial headaches with :ref:`Arrays <man-arrays>`::
 
     julia> [1 NaN] == [1 NaN]
     false

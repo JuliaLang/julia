@@ -128,6 +128,10 @@ All Objects
 Types
 -----
 
+.. function:: super(T::DataType)
+
+   Return the supertype of DataType T
+
 .. function:: subtype(type1, type2)
 
    True if and only if all values of ``type1`` are also of ``type2``. Can also be written using the ``<:`` infix operator as ``type1 <: type2``.
@@ -135,6 +139,14 @@ Types
 .. function:: <:(T1, T2)
 
    Subtype operator, equivalent to ``subtype(T1,T2)``.
+
+.. function:: subtypes(T::DataType)
+
+   Return a list of immediate subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
+
+.. function:: subtypetree(T::DataType)
+
+   Return a nested list of all subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
 
 .. function:: typemin(type)
 
@@ -186,6 +198,18 @@ Types
 .. function:: fieldtype(value, name::Symbol)
 
    Determine the declared type of a named field in a value of composite type.
+
+.. function:: isimmutable(v)
+
+   True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
+
+.. function:: isabstract(T)
+
+   True if ``T`` is an abstract type.
+
+.. function:: isbits(T)
+
+   True if ``T`` is a bits type (e.g., Uint8, Int64, Float64).
 
 Generic Functions
 -----------------
@@ -1117,7 +1141,7 @@ Mathematical Functions
 
    Unsigned right shift operator.
 
-.. function:: :(start, [step], stop)
+.. function:: \:(start, [step], stop)
 
    Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1,
    and ``a:s:b`` is similar but uses a step size of ``s``. These syntaxes call the
@@ -3021,10 +3045,7 @@ C Interface
 
 .. function:: cglobal((symbol, library) or ptr [, Type=Void])
 
-   Obtain a pointer to a global variable in a C-exported shared library,
-specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting
-to ``Ptr{Void}`` if no Type argument is supplied.  The values can be
-read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
+   Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting to ``Ptr{Void}`` if no Type argument is supplied.  The values can be read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
 
 .. function:: cfunction(fun::Function, RetType::Type, (ArgTypes...))
    

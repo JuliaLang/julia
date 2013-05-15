@@ -915,6 +915,7 @@ export
     promote_rule,
     promote_type,
     super,
+    subtypes,
     typeintersect,
     typejoin,
 
