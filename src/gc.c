@@ -173,7 +173,7 @@ static void run_finalizers(void)
     void *o = NULL;
     jl_function_t *f=NULL;
     jl_value_t *ff=NULL;
-    JL_GC_PUSH(&o, &f, &ff);
+    JL_GC_PUSH3(&o, &f, &ff);
     while (to_finalize.len > 0) {
         o = arraylist_pop(&to_finalize);
         ff = (jl_value_t*)ptrhash_get(&finalizer_table, o);
@@ -227,7 +227,7 @@ static int szclass(size_t sz)
 #define malloc_a16(sz) malloc(((sz)+15)&-16)
 #define free_a16(p) free(p)
 
-#elif defined(_WIN32) //&& !defined(_WIN64) is implicit here
+#elif defined(_OS_WINDOWS_) /* 32-bit OS is implicit here. */
 #define malloc_a16(sz) _aligned_malloc(sz?((sz)+15)&-16:1, 16)
 #define free_a16(p) _aligned_free(p)
 
@@ -299,7 +299,7 @@ jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz, int isaligned)
         mp = malloc_ptrs_freelist;
         malloc_ptrs_freelist = malloc_ptrs_freelist->next;
     }
-#if defined(_WIN32) && !defined(_WIN64)
+#if defined(_OS_WINDOWS) && !defined(_CPU_X86_64_)
     mp->isaligned = isaligned;
 #else
     (void)isaligned;
@@ -338,7 +338,7 @@ static void sweep_malloc_ptrs(void)
             *pmp = nxt;
             if (mp->ptr) {
                 freed_bytes += mp->sz;
-#if defined(_WIN32) && !defined(_WIN64)
+#if defined(_OS_WINDOWS) && !defined(_CPU_X86_64_)
                 if (mp->isaligned) {
                     free_a16(mp->ptr);
                 } else {
@@ -622,7 +622,7 @@ static void gc_mark_all()
                 gc_mark_stack(jl_pgcstack, offset);
             }
             else {
-                offset = ta->stkbuf - (ta->stackbase-ta->ssize);
+                offset = (char *)ta->stkbuf - ((char *)ta->stackbase - ta->ssize);
                 gc_mark_stack(ta->gcstack, offset);
             }
 #else

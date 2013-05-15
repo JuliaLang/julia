@@ -379,7 +379,7 @@ DLLEXPORT void jl_set_current_module(jl_value_t *m)
 DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
-    JL_GC_PUSH(&a);
+    JL_GC_PUSH1(&a);
     size_t i;
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {

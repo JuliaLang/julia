@@ -962,14 +962,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *sbits = builder.CreateBitCast(fy, intt);
         unsigned nb = ((IntegerType*)intt)->getBitWidth();
         APInt notsignbit = APInt::getSignedMaxValue(nb);
-        APInt signbit(nb, 0); signbit.setBit(nb-1);
+        APInt signbit0(nb, 0); signbit0.setBit(nb-1);
         Value *rbits =
             builder.CreateOr(builder.CreateAnd(bits,
                                                ConstantInt::get(intt,
                                                                 notsignbit)),
                              builder.CreateAnd(sbits,
                                                ConstantInt::get(intt,
-                                                                signbit)));
+                                                                signbit0)));
         return builder.CreateBitCast(rbits, x->getType());
     }
     HANDLE(flipsign_int,2)

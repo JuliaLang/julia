@@ -140,7 +140,7 @@ jl_value_t *jl_eqtable_next(jl_array_t *t, uint32_t i)
         i+=2;
     if (i >= alen) return (jl_value_t*)jl_null;
     jl_value_t *vi=NULL, *vt=NULL, *vv=NULL;
-    JL_GC_PUSH(&vi, &vt);
+    JL_GC_PUSH2(&vi, &vt);
     vi = jl_box_uint32(i+2);
     vt = (jl_value_t*)jl_tuple2(((jl_value_t**)t->data)[i],
                                 ((jl_value_t**)t->data)[i+1]);
