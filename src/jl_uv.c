@@ -1,18 +1,25 @@
+#include "platform.h"
+
+/*
+ * There is no need to define WINVER because it is already defined in Makefile.
+ */
+#if defined(_COMPILER_MINGW_)
 #define WINVER                 _WIN32_WINNT
 #define _WIN32_WINDOWS         _WIN32_WINNT
+#endif
+
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-#ifdef __WIN32__
-#include <w32api.h>
+#ifdef _OS_WINDOWS_
 #include <ws2tcpip.h>
 #include <malloc.h>
 #else
 #include "errno.h"
+#include <unistd.h>
 #include <sys/socket.h>
 #endif
 
@@ -71,20 +78,20 @@ int base_module_conflict = 0; //set to 1 if Base is getting redefined since it m
 // warning: this is defined without the standard do {...} while (0) wrapper, since I wanted ret to escape
 // warning: during bootstrapping, callbacks will be called twice if a MethodError occured at ANY time during callback call
 // Use:  JULIA_CB(hook, arg1, numberOfAdditionalArgs, arg2Type, arg2, ..., argNType, argN)
-#define JULIA_CB(hook,args...) \
+#define JULIA_CB(hook, ...) \
     jl_value_t *ret; \
     if (!base_module_conflict) { \
-        ret = jl_callback_call(JULIA_HOOK(hook),args); \
+        ret = jl_callback_call(JULIA_HOOK(hook),__VA_ARGS__); \
     } else { \
         JL_TRY { \
-            ret = jl_callback_call(JULIA_HOOK(hook),args); \
+            ret = jl_callback_call(JULIA_HOOK(hook),__VA_ARGS__); \
             /* jl_puts(#hook " original succeeded\n",jl_uv_stderr); */ \
         } \
         JL_CATCH { \
             if (jl_typeof(jl_exception_in_transit) == (jl_value_t*)jl_methoderror_type) { \
                 /* jl_puts("\n" #hook " being retried with new Base bindings --> ",jl_uv_stderr); */ \
                 jl_function_t *cb_func = JULIA_HOOK_((jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base")), hook); \
-                ret = jl_callback_call(cb_func,args); \
+                ret = jl_callback_call(cb_func,__VA_ARGS__); \
                 /* jl_puts(#hook " succeeded\n",jl_uv_stderr); */ \
             } else { \
                 jl_rethrow(); \
@@ -347,7 +354,9 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog)
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
+#if defined(_COMPILER_MINGW_)
 extern char **environ;
+#endif
 #endif
 
 DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
@@ -363,7 +372,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     uv_stdio_container_t stdio[3];
     int error;
     opts.file = name;
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
     opts.env = environ;
 #else
     opts.env = NULL;
@@ -387,7 +396,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     return error;
 }
 
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 #include <time.h>
 DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm)
 {
@@ -548,7 +557,11 @@ int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
     char *str=NULL;
     int c;
     va_list al;
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+    al = args;
+#else
     va_copy(al, args);
+#endif
 
     c = vasprintf(&str, format, al);
 
@@ -624,7 +637,7 @@ DLLEXPORT int jl_cwd(char *buffer, size_t size)
 
 DLLEXPORT int jl_getpid()
 {
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
     return GetCurrentProcessId();
 #else
     return getpid();
@@ -660,7 +673,7 @@ DLLEXPORT void getlocalip(char *buf, size_t len)
         ifa = (ifAddrStruct+i)->address.address4;
         if (ifa.sin_family==AF_INET) { // check it is IP4
             // is a valid IP4 Address
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
             tmpAddrPtr=&(ifa.sin_addr);
             inet_ntop(AF_INET, tmpAddrPtr, buf, len); //Not available on WinXP
 #else
