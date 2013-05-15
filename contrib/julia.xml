@@ -235,7 +235,7 @@
 
       <context name="_normal" attribute="Normal Text" lineEndContext="#stay">
 
-	<DetectSpaces />
+        <DetectSpaces />
 
         <!-- Blocks -->
         <keyword context="#stay" attribute="Keyword" String="block_begin" 
@@ -252,13 +252,13 @@ endRegion="block" />
         <keyword context="#stay" attribute="Data Type" String="types" />
         <DetectChar char="#" context="1-comment" attribute="Comment"/>
 
-	<!-- Lists and arrays -->
+        <!-- Lists and arrays -->
         <!-- <DetectChar char="(" context="nested" beginRegion="nested" attribute="Delimiter" />
         <DetectChar char="[" context="squared" beginRegion="squared" attribute="Delimiter" />
         <DetectChar char="{" context="curly" beginRegion="curly" attribute="Delimiter" /> -->
 
         <!-- Strings -->
-	<DetectChar attribute="String" context="String" char="&quot;"/>
+        <DetectChar attribute="String" context="String" char="&quot;"/>
 
         <!-- Multi-character operators -->
         <StringDetect context="#stay" attribute="Operator" String="..."/>
