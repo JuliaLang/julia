@@ -59,7 +59,6 @@ export
     expm,
     sqrtm,
     eye,
-    factors,
     hess,
     hessfact,
     hessfact!,
