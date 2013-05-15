@@ -82,8 +82,8 @@ easily::
     julia> typeof(ans)
     Int64
 
-On 32-bit architectures, ``typeof(ans)`` will be ``Int32``. You can convert an integer 
-value back to a ``Char`` just as easily::
+On 32-bit architectures, ``typeof(ans)`` will be ``Int32``. You can
+convert an integer value back to a ``Char`` just as easily::
 
     julia> char(120)
     'x'
@@ -91,13 +91,13 @@ value back to a ``Char`` just as easily::
 Not all integer values are valid Unicode code points, but for
 performance, the ``char`` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
-valid code point, use the ``safe_char`` conversion instead::
+valid code point, use the ``is_valid_char`` function::
 
     julia> char(0x110000)
     '\U110000'
 
-    julia> safe_char(0x110000)
-    invalid Unicode code point: U+110000
+    julia> is_valid_char(0x110000)
+    false
 
 As of this writing, the valid Unicode code points are ``U+00`` through
 ``U+d7ff`` and ``U+e000`` through ``U+10ffff``. These have not all been
@@ -458,16 +458,16 @@ quite what is needed. For these kinds of situations, Julia provides
 A non-standard string literal looks like
 a regular double-quoted string literal, but is immediately prefixed by
 an identifier, and doesn't behave quite like a normal string literal.
-Regular expressions, as described below, are one example of a non-standard
-string literal. Other examples are given in the :ref:`metaprogramming
-<man-non-standard-string-literals2>` section.
+Regular expressions, as described below, are one example of a
+non-standard string literal. Other examples are given in the
+:ref:`metaprogramming <man-non-standard-string-literals2>` section.
 
 Regular Expressions
 -------------------
 
-Julia has Perl-compatible regular expressions (regexes), as provided by the
-`PCRE <http://www.pcre.org/>`_ library. Regular expressions are related
-to strings in two ways: the obvious connection is that regular
+Julia has Perl-compatible regular expressions (regexes), as provided by
+the `PCRE <http://www.pcre.org/>`_ library. Regular expressions are
+related to strings in two ways: the obvious connection is that regular
 expressions are used to find regular patterns in strings; the other
 connection is that regular expressions are themselves input as strings,
 which are parsed into a state machine that can be used to efficiently
@@ -583,10 +583,10 @@ use tuple destructuring syntax to bind them to local variables::
     julia> first, second, third = m.captures; first
     "a"
 
-You can modify the behavior of regular expressions by some combination of
-the flags ``i``, ``m``, ``s``, and ``x`` after the closing double quote
-mark. These flags have the same meaning as they do in Perl, as explained
-in this excerpt from the `perlre
+You can modify the behavior of regular expressions by some combination
+of the flags ``i``, ``m``, ``s``, and ``x`` after the closing double
+quote mark. These flags have the same meaning as they do in Perl, as
+explained in this excerpt from the `perlre
 manpage <http://perldoc.perl.org/perlre.html#Modifiers>`_::
 
     i   Do case-insensitive pattern matching.
@@ -628,13 +628,13 @@ For example, the following regex has all three flags turned on::
 Byte Array Literals
 ~~~~~~~~~~~~~~~~~~~
 
-Another useful non-standard string literal is the byte-array string literal:
-``b"..."``. This form lets you use string notation to express literal byte
-arrays — i.e. arrays of ``Uint8`` values. The convention is that non-standard
-literals with uppercase prefixes produce actual string objects, while
-those with lowercase prefixes produce non-string objects like byte
-arrays or compiled regular expressions. The rules for byte array
-literals are the following:
+Another useful non-standard string literal is the byte-array string
+literal: ``b"..."``. This form lets you use string notation to express
+literal byte arrays — i.e. arrays of ``Uint8`` values. The convention is
+that non-standard literals with uppercase prefixes produce actual string
+objects, while those with lowercase prefixes produce non-string objects
+like byte arrays or compiled regular expressions. The rules for byte
+array literals are the following:
 
 -  ASCII characters and ASCII escapes produce a single byte.
 -  ``\x`` and octal escape sequences produce the *byte* corresponding to
