@@ -232,7 +232,7 @@ function intersect(r::Ranges, s::Ranges...)
 end
 
 # findin (the index of intersection)
-function findin(r::Ranges, span::Range1)
+function findin{T1<:Integer, T2<:Integer}(r::Ranges{T1}, span::Range1{T2})
     local ifirst
     local ilast
     fspan = first(span)
@@ -243,9 +243,12 @@ function findin(r::Ranges, span::Range1)
     if sr > 0
         ifirst = fr >= fspan ? 1 : iceil((fspan-fr)/sr)+1
         ilast = lr <= lspan ? length(r) : length(r) - iceil((lr-lspan)/sr)
-    else
+    elseif sr < 0
         ifirst = fr <= lspan ? 1 : iceil((lspan-fr)/sr)+1
         ilast = lr >= fspan ? length(r) : length(r) - iceil((lr-fspan)/sr)
+    else
+        ifirst = fr >= fspan ? 1 : length(r)+1
+        ilast = fr <= lspan ? length(r) : 0
     end
     ifirst:ilast
 end
