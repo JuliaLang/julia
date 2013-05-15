@@ -681,7 +681,7 @@ end
 
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
-    # @test a//b == a/b
+    @test !ispow2(b) || a//b == a/b
     @test a//b == a//b
     @test a//b == convert(Rational,a/b)
     if b == 0
@@ -770,11 +770,11 @@ end
 for yr = {
     1:6,
     0.25:0.25:6.0,
-    # 1//4:1//4:6//1
+    1//4:1//4:6//1
 }, xr = {
     0:6,
     0.0:0.25:6.0,
-    # 0//1:1//4:6//1
+    0//1:1//4:6//1
 }
     for y = yr, x = xr
         # check basic div functionality
