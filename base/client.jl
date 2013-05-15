@@ -318,7 +318,11 @@ function _start()
     end
 
     # set CPU core count
-    global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
+    global const CPU_CORES = int(
+        haskey(ENV,"JULIA_CPU_CORES") ?
+        ENV["JULIA_CPU_CORES"] :
+        ccall(:jl_cpu_cores, Int32, ())
+    )
 
     #atexit(()->flush(STDOUT))
     try
