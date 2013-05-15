@@ -708,6 +708,19 @@ for a = -5:5, b = -5:5
     end
 end
 
+@test 0.5 == 1//2
+@test 0.1 != 1//10
+@test 0.1 == 3602879701896397//36028797018963968
+@test realmin() != 1//(BigInt(2)^1022+1)
+@test realmin() == 1//(BigInt(2)^1022)
+@test realmin() != 1//(BigInt(2)^1022-1)
+@test realmin()/2 != 1//(BigInt(2)^1023+1)
+@test realmin()/2 == 1//(BigInt(2)^1023)
+@test realmin()/2 != 1//(BigInt(2)^1023-1)
+@test nextfloat(0.0) != 1//(BigInt(2)^1074+1)
+@test nextfloat(0.0) == 1//(BigInt(2)^1074)
+@test nextfloat(0.0) != 1//(BigInt(2)^1074-1)
+
 @test sqrt(2) == 1.4142135623730951
 
 @test 1+1.5 == 2.5
