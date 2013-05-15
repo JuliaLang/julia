@@ -201,6 +201,7 @@ function help(f::Function)
 end
 
 help(t::DataType) = help_for(string(t.name),t)
+help(t::Module) = help(string(t))
 
 function help(x)
     show(x)
