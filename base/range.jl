@@ -344,7 +344,7 @@ reverse{T<:Real}(r::Ranges{T}) = Range(last(r), -step(r), r.len)
 ## sorting ##
 
 issorted(r::Range1) = true
-issorted(r::Ranges) = step(r) > 0
+issorted(r::Ranges) = step(r) >= 0
 
 sort(r::Range1) = r
 sort!(r::Range1) = r
@@ -368,6 +368,6 @@ end
 map(f, r::Ranges) = [ f(x) for x in r ]
 
 function contains(r::Ranges, x)
-    n = ifloor((x-first(r))/step(r))+1
+    n = step(r) == 0 ? 1 : ifloor((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
