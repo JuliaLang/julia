@@ -82,6 +82,12 @@ end
 @test intersect(-10:3:24, -10:3:24) == -10:3:23
 @test isempty(intersect(-11:3:24, -10:3:24))
 
+@test !contains(1:5, 3.5)
+@test contains(1:5, 3)
+@test contains(5:-1:1, 3)
+@test contains(3+0*(1:5), 3)
+@test !contains(3+0*(1:5), 4)
+
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
 @test X[2,3] == 8
