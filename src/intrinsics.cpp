@@ -37,7 +37,7 @@ namespace JL_I {
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
-        ccall, jl_alloca
+        ccall, cglobal, jl_alloca
     };
 };
 
@@ -579,6 +579,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 {
     switch (f) {
     case ccall: return emit_ccall(args, nargs, ctx);
+    case cglobal: return emit_cglobal(args, nargs, ctx);
 
     HANDLE(box,2)         return generic_box(args[1], args[2], ctx);
     HANDLE(unbox,2)       return generic_unbox(args[1], args[2], ctx);
@@ -961,14 +962,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *sbits = builder.CreateBitCast(fy, intt);
         unsigned nb = ((IntegerType*)intt)->getBitWidth();
         APInt notsignbit = APInt::getSignedMaxValue(nb);
-        APInt signbit(nb, 0); signbit.setBit(nb-1);
+        APInt signbit0(nb, 0); signbit0.setBit(nb-1);
         Value *rbits =
             builder.CreateOr(builder.CreateAnd(bits,
                                                ConstantInt::get(intt,
                                                                 notsignbit)),
                              builder.CreateAnd(sbits,
                                                ConstantInt::get(intt,
-                                                                signbit)));
+                                                                signbit0)));
         return builder.CreateBitCast(rbits, x->getType());
     }
     HANDLE(flipsign_int,2)
@@ -1078,6 +1079,6 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_smul); ADD_I(checked_umul);
     ADD_I(checked_fptosi); ADD_I(checked_fptoui);
     ADD_I(nan_dom_err);
-    ADD_I(ccall);
+    ADD_I(ccall); ADD_I(cglobal);
     ADD_I(jl_alloca);
 }

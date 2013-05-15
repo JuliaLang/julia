@@ -1,4 +1,4 @@
-import Base: Git, isequal, isless, hash, isempty, contains, show
+import Base: Git,  show, isempty, contains, intersect
 
 immutable VersionInterval
     lower::VersionNumber
@@ -27,12 +27,16 @@ end
 typealias Requires Dict{ByteString,VersionSet}
 
 satisfies(pkg::String, ver::VersionNumber, reqs::Requires) =
-	!haskey(reqs,pkg) || contains(reqs[pkg], ver)
+	!haskey(reqs, pkg) || contains(reqs[pkg], ver)
 
 immutable Available
 	sha1::ASCIIString
 	requires::Requires
 end
+
+show(io::IO, a::Available) = isempty(a.requires) ?
+	print(io, "Available(", repr(a.sha1), ")") :
+	print(io, "Available(", repr(a.sha1), ",", a.requires, ")")
 
 abstract Installed
 immutable Free <: Installed end
@@ -41,3 +45,11 @@ immutable Fixed <: Installed
 	requires::Requires
 end
 Fixed(v::VersionNumber) = Fixed(v,Requires())
+
+show(io::IO, f::Fixed) = isempty(f.requires) ?
+	print(io, "Fixed(", repr(f.version), ")") :
+	print(io, "Fixed(", repr(f.version), ",", f.requires, ")")
+
+# TODO: Available & Fixed are almost the same – merge them?
+# Free could include the same information too, it just isn't
+# required by anything that processes these things.
