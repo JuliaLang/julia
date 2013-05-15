@@ -221,7 +221,7 @@ const STDOUT = _uv_tty2tty(ccall(:jl_stdout_stream,Ptr{Void},()))
 const STDERR = _uv_tty2tty(ccall(:jl_stderr_stream,Ptr{Void},()))
 OUTPUT_STREAM = STDOUT
 
-function set_output_stream(stream)
+function set_output_stream(stream::IO)
     global OUTPUT_STREAM = stream
 end
 
