@@ -151,7 +151,14 @@ function help_for(fname::String, obj)
         end
     end
     if !found
-        if isgeneric(obj)
+        if isa(obj, DataType)
+            print("DataType: ")
+            repl_show(obj)
+            println()
+            if length(obj.names) > 0
+                println("  fields: ", obj.names)
+            end
+        elseif isgeneric(obj)
             repl_show(obj); println()
         else
             println("No help information found.")
