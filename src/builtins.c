@@ -747,10 +747,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         assert(jl_is_datatype(t));
         jl_datatype_t *dt = (jl_datatype_t*)t;
-        JL_PUTS(dt->name->name->name, s);
-        if (dt->parameters != jl_null) {
-            jl_show_tuple(str, dt->parameters, '{', '}', 0);
-        }
+        show_type(str, t);
         JL_PUTC('(', s);
         if (jl_tuple_len(dt->names)>0 || dt->size==0) {
             size_t i;
