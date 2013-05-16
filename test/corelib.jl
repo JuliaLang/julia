@@ -36,6 +36,57 @@ let
     r = 15:-2:-38
     @test findin(r, span) == 1:6
 end
+@test isempty(findin(5+0*(1:6), 2:4))
+@test findin(5+0*(1:6), 2:5) == 1:6
+@test findin(5+0*(1:6), 2:7) == 1:6
+@test findin(5+0*(1:6), 5:7) == 1:6
+@test isempty(findin(5+0*(1:6), 6:7))
+@test findin(5+0*(1:6), 5:5) == 1:6
+
+@test intersect(1:5, 2:3) == 2:3
+@test intersect(-3:5, 2:8) == 2:5
+@test intersect(-8:-3, -8:-3) == -8:-3
+@test intersect(1:5, 5:13) == 5:5
+@test isempty(intersect(-8:-3, -2:2))
+@test isempty(intersect(-3:7, 2:1))
+@test intersect(1:11, -2:3:15) == 1:3:10
+@test intersect(1:11, -2:2:15) == 2:2:10
+@test intersect(1:11, -2:1:15) == 1:11
+@test intersect(1:11, 15:-1:-2) == 1:11
+@test intersect(1:11, 15:-4:-2) == 3:4:11
+@test intersect(-20:-5, -10:3:-2) == -10:3:-7
+@test isempty(intersect(-5:5, -6:13:20))
+@test isempty(intersect(1:11, 15:4:-2))
+@test isempty(intersect(11:1, 15:-4:-2))
+@test intersect(-5:5, 1+0*(1:3)) == 1:1
+@test isempty(intersect(-5:5, 6+0*(1:3)))
+@test intersect(-15:4:7, -10:-2) == -7:4:-3
+@test intersect(13:-2:1, -2:8) == 7:-2:1
+@test isempty(intersect(13:2:1, -2:8))
+@test isempty(intersect(13:-2:1, 8:-2))
+@test intersect(5+0*(1:4), 2:8) == 5+0*(1:4)
+@test isempty(intersect(5+0*(1:4), -7:3))
+@test intersect(0:3:24, 0:4:24) == 0:12:24
+@test intersect(0:4:24, 0:3:24) == 0:12:24
+@test intersect(0:3:24, 24:-4:0) == 0:12:24
+@test intersect(24:-3:0, 0:4:24) == 24:-12:0
+@test intersect(24:-3:0, 24:-4:0) == 24:-12:0
+@test intersect(1:3:24, 0:4:24) == 4:12:16
+@test intersect(0:6:24, 0:4:24) == 0:12:24
+@test isempty(intersect(1:6:2400, 0:4:2400))
+@test intersect(-51:5:100, -33:7:125) == -26:35:79
+@test intersect(-51:5:100, -32:7:125) == -11:35:94
+@test intersect(0:6:24, 6+0*(0:4:24)) == 6:6:6
+@test intersect(12+0*(0:6:24), 0:4:24) == Range(12, 0, 5)
+@test isempty(intersect(6+0*(0:6:24), 0:4:24))
+@test intersect(-10:3:24, -10:3:24) == -10:3:23
+@test isempty(intersect(-11:3:24, -10:3:24))
+
+@test !contains(1:5, 3.5)
+@test contains(1:5, 3)
+@test contains(5:-1:1, 3)
+@test contains(3+0*(1:5), 3)
+@test !contains(3+0*(1:5), 4)
 
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
