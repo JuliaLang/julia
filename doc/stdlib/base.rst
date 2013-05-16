@@ -493,7 +493,7 @@ Set-Like Collections
 
 .. function:: intersect(s1,s2...)
 
-   Construct the intersection of two or more sets. Maintains order with arrays.
+   Construct the intersection of two or more sets. Maintains order and multiplicity of the first argument for arrays and ranges.
 
 .. function:: setdiff(s1,s2)
 
