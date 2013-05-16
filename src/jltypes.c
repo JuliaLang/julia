@@ -279,9 +279,9 @@ static inline int is_bnd(jl_tvar_t *tv, cenv_t *env)
     return 0;
 }
 
-static inline int is_unspec(jl_datatype_t *dt)
+static inline int is_unspec(jl_tag_type_t *dt)
 {
-    return (jl_datatype_t*)dt->name->primary == dt;
+    return (jl_tag_type_t*)dt->name->primary == dt;
 }
 
 static inline int is_btv(jl_value_t *v)

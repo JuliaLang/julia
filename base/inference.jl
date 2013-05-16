@@ -595,9 +595,10 @@ end
 
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,apply) && length(fargs)>0
-        if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
+        if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1]) &&
+           isa(argtypes[1].parameters[1],CompositeKind)
             af = argtypes[1].parameters[1]
-            _methods(af,(),0)
+            methods(af,(),0)
         else
             af = isconstantfunc(fargs[1], sv)
         end
