@@ -55,6 +55,17 @@ for i = -5:.5:4
           searchsortedlast(rgv_r, i, Sort.Reverse)
 end
 
+rg = 3+0*(1:5); rgv = [rg]
+rg_r = rg; rgv_r = [rg_r]
+for i = 2:4
+    @test searchsortedfirst(rg, i) == searchsortedfirst(rgv, i)
+    @test searchsortedlast(rg, i) == searchsortedlast(rgv, i)
+    @test searchsortedfirst(rg_r, i, Sort.Reverse) ==
+          searchsortedfirst(rgv_r, i, Sort.Reverse)
+    @test searchsortedlast(rg_r, i, Sort.Reverse) ==
+          searchsortedlast(rgv_r, i, Sort.Reverse)
+end
+
 a = rand(1:10000, 1000)
 
 for alg in [InsertionSort, MergeSort, TimSort]
