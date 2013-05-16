@@ -315,10 +315,16 @@ function deserialize(s, ::Type{Function})
     b = read(s, Uint8)
     if b==0
         name = deserialize(s)::Symbol
+        if !isdefined(Base,name)
+            return (args...)->error("function $name not defined on process $(myid())")
+        end
         return eval(Base,name)
     elseif b==2
         mod = deserialize(s)::Module
         name = deserialize(s)::Symbol
+        if !isdefined(mod,name)
+            return (args...)->error("function $name not defined on process $(myid())")
+        end
         return eval(mod,name)
     elseif b==3
         env = deserialize(s)
