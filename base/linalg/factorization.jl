@@ -456,7 +456,7 @@ function eigvals{T<:BlasReal}(A::StridedMatrix{T})
     if all(valsim .== 0) return valsre end
     return complex(valsre, valsim)
 end
-function eigvals{T<:BlasReal}(A::StridedMatrix{T})
+function eigvals{T<:BlasComplex}(A::StridedMatrix{T})
     if ishermitian(A) return eigvals(Hermitian(A)) end
     LAPACK.geev!('N', 'N', copy(A))[1]
 end
