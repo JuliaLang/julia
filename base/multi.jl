@@ -1221,17 +1221,16 @@ function pmap(f, lsts...)
     results
 end
 
-function preduce(reducer, f, r::Range1{Int})
+function preduce(reducer, f, N::Int)
     np = nprocs()
-    N = length(r)
     each = div(N,np)
     rest = rem(N,np)
     if each < 1
-        return fetch(@spawn f(first(r), first(r)+N-1))
+        return fetch(@spawn f(1, N))
     end
     results = cell(np)
     for i=1:np
-        lo = first(r) + (i-1)*each
+        lo = 1 + (i-1)*each
         hi = lo + each-1
         if i==np
             hi += rest
@@ -1241,17 +1240,16 @@ function preduce(reducer, f, r::Range1{Int})
     mapreduce(fetch, reducer, results)
 end
 
-function pfor(f, r::Range1{Int})
+function pfor(f, N::Int)
     np = nprocs()
-    N = length(r)
     each = div(N,np)
     rest = rem(N,np)
     if each < 1
-        @spawn f(first(r), first(r)+N-1)
+        @spawn f(1, N)
         return
     end
     for i=1:np
-        lo = first(r) + (i-1)*each
+        lo = 1 + (i-1)*each
         hi = lo + each-1
         if i==np
             hi += rest
@@ -1261,13 +1259,14 @@ function pfor(f, r::Range1{Int})
     nothing
 end
 
-function make_preduce_body(reducer, var, body)
+function make_preduce_body(reducer, var, body, ran)
     localize_vars(
     quote
         function (lo::Int, hi::Int)
-            $(esc(var)) = lo
+            R = $(esc(ran))
+            $(esc(var)) = R[lo]
             ac = $(esc(body))
-            for $(esc(var)) = (lo+1):hi
+            for $(esc(var)) in R[(lo+1):hi]
                 ac = ($(esc(reducer)))(ac, $(esc(body)))
             end
             ac
@@ -1276,11 +1275,11 @@ function make_preduce_body(reducer, var, body)
                   )
 end
 
-function make_pfor_body(var, body)
+function make_pfor_body(var, body, ran)
     localize_vars(
     quote
         function (lo::Int, hi::Int)
-            for $(esc(var)) = lo:hi
+            for $(esc(var)) in ($(esc(ran)))[lo:hi]
                 $(esc(body))
             end
         end
@@ -1318,12 +1317,12 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         quote
-            pfor($(make_pfor_body(var, body)), $(esc(r)))
+            pfor($(make_pfor_body(var, body, r)), length($(esc(r))))
         end
     else
         quote
             preduce($(esc(reducer)),
-                    $(make_preduce_body(reducer, var, body)), $(esc(r)))
+                    $(make_preduce_body(reducer, var, body, r)), length($(esc(r))))
         end
     end
 end
