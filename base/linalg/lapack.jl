@@ -260,6 +260,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             A, tau, jpvt
         end
         function geqrt3!(A::StridedMatrix{$elty})
+            chkstride1(A)
             m, n = size(A)
             lda = max(1, stride(A, 2))
             T = Array($elty, n, n)
@@ -466,7 +467,7 @@ for (gelsd, elty) in ((:dgelsd_, :Float64),
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), S( * ), WORK( * )
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
-            LAPACK.chkstride1(A, B)
+            chkstride1(A, B)
             m, n  = size(A)
             if size(B, 1) != m; throw(DimensionMismatch("gelsd!")); end
             if size(B, 1) < n
@@ -515,7 +516,7 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
         #       DOUBLE PRECISION   RWORK( * ), S( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
-            LAPACK.chkstride1(A, B)
+            chkstride1(A, B)
             m, n  = size(A)
             if size(B,1) != m; throw(DimensionMismatch("gelsd!")); end
             if size(B, 1) < n
@@ -783,6 +784,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
 #       COMPLEX*16         A( LDA, * ), B( LDB, * ), Q( LDQ, * ),
 #      $                   U( LDU, * ), V( LDV, * ), WORK( * )
         function ggsvd!(jobu::BlasChar, jobv::BlasChar, jobq::BlasChar, A::Matrix{$elty}, B::Matrix{$elty})
+            chkstride1(A, B)
             m, n = size(A)
             if size(B, 2) != n; throw(DimensionMismatch); end
             p = size(B, 1)
@@ -1045,6 +1047,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             C
         end
         function gemqrt!(side::Char, trans::Char, V::Matrix{$elty}, T::Matrix{$elty}, C::StridedVecOrMat{$elty})
+            chkstride1(T, C)
             m = size(C, 1)
             n = size(C, 2)
             k = size(T, 1)
@@ -1703,7 +1706,7 @@ for (bdsqr, relty, elty) in
         #*> zero-shift QR algorithm.
         function bdsqr!(uplo::BlasChar, d::Vector{$relty}, e_::Vector{$relty},
             vt::StridedMatrix{$elty}, u::StridedMatrix{$elty}, c::StridedMatrix{$elty})
-            
+
             validate(uplo)
             n = length(d)
             if length(e_) != n-1 throw(DimensionMismatch("bdsqr!")) end
@@ -2129,6 +2132,7 @@ for (gees, gges, elty) in
 #       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
 #      $                   B( LDB, * ), BETA( * ), VSL( LDVSL, * ),
 #      $                   VSR( LDVSR, * ), WORK( * )
+            chkstride1(A, B)
             n = size(A, 1)
             if size(A, 2) != n || size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
             if size(B, 1) != n throw(DimensionMismatch("Matrices are not of same size")) end
@@ -2221,6 +2225,7 @@ for (gees, gges, elty, relty) in
 #       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
 #      $                   BETA( * ), VSL( LDVSL, * ), VSR( LDVSR, * ),
 #      $                   WORK( * )
+            chkstride1(A, B)
             n = size(A, 1)
             if size(A, 2) != n || size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
             if size(B, 1) != n throw(DimensionMismatch("Matrices are not of same size")) end
@@ -2269,6 +2274,7 @@ for (fn, elty, relty) in ((:dsfrk_, :Float64, :Float64),
                    (:chfrk_, :Complex64, :Float32))
     @eval begin
         function sfrk!(transr::Char, uplo::Char, trans::Char, alpha::Real, A::StridedMatrix{$elty}, beta::Real, C::StridedVector{$elty})
+            chkstride1(A)
             if trans == 'N'
                 n, k = size(A)
             elseif trans == 'T'
@@ -2336,6 +2342,7 @@ for (fn, elty) in ((:dpftrs_, :Float64),
                    (:cpftrs_, :Complex64))
     @eval begin
         function pftrs!(transr::Char, uplo::Char, A::StridedVector{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(B)
             n = int(div(sqrt(8length(A)), 2))
             if n != size(B, 1) throw(DimensionMismatch("A and B must have the same number of rows")) end
             nhrs = size(B, 2)
@@ -2359,6 +2366,7 @@ for (fn, elty) in ((:dtfsm_, :Float64),
                    (:ctfsm_, :Complex64))
     @eval begin
         function pftrs!(transr::Char, side::Char, uplo::Char, trans::Char, diag::Char, alpha::Real, A::StridedVector{$elty}, B::StridedMatrix{$elty})
+            chkstride1(B)
             m, n = size(B)
             if int(div(sqrt(8length(A)), 2)) != m throw(DimensionMismatch("")) end
             ldb = max(1, stride(B, 2))
@@ -2422,6 +2430,7 @@ for (fn, elty) in ((:dtrttf_, :Float64),
                    (:ctrttf_, :Complex64))
     @eval begin
         function trttf!(transr::Char, uplo::Char, A::StridedMatrix{$elty})
+            chkstride1(A)
             n = size(A, 1)
             lda = max(1, stride(A, 2))
             info = Array(BlasInt, 1)

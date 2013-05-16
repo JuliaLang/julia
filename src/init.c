@@ -2,10 +2,13 @@
   init.c
   system initialization and global state
 */
+#include "platform.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <setjmp.h>
 #include <assert.h>
+
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -13,18 +16,28 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
+
 #include <errno.h>
 #include <signal.h>
-#include <libgen.h>
+
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
 #include <getopt.h>
+#endif
+
 #include "julia.h"
 #include <stdio.h>
-#ifdef __WIN32__
-# define WIN32_LEAN_AND_MEAN
+
+#ifdef _OS_WINDOWS_
+#define WIN32_LEAN_AND_MEAN
 // Copied from MINGW_FLOAT_H which may not be found due to a colision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
+#if defined(_COMPILER_MINGW_)
 void __cdecl __MINGW_NOTHROW _fpreset (void);
 void __cdecl __MINGW_NOTHROW fpreset (void);
+#else
+void __cdecl _fpreset (void);
+void __cdecl fpreset (void);
+#endif
 #define _FPE_INVALID        0x81
 #define _FPE_DENORMAL       0x82
 #define _FPE_ZERODIVIDE     0x83
@@ -36,7 +49,7 @@ void __cdecl __MINGW_NOTHROW fpreset (void);
 #define _FPE_STACKOVERFLOW  0x8a
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
-# include <windows.h>
+#include <windows.h>
 #endif
 #if defined(__linux__)
 //#define _GNU_SOURCE
@@ -63,14 +76,14 @@ static void jl_find_stack_bottom(void)
     jl_stack_lo = jl_stack_hi - stack_size;
 }
 
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 void __cdecl fpe_handler(int arg,int num)
 #else
 void fpe_handler(int arg)
 #endif
 {
     (void)arg;
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
     sigset_t sset;
     sigemptyset(&sset);
     sigaddset(&sset, SIGFPE);
@@ -88,13 +101,13 @@ void fpe_handler(int arg)
     case _FPE_ZERODIVIDE:
 #endif
         jl_throw(jl_diverror_exception);
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
         break;
     }
 #endif
 }
 
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
@@ -131,7 +144,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 volatile HANDLE hMainThread = NULL;
 void restore_signals()
 {
@@ -169,12 +182,12 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             fputs("error: GetThreadContext failed\n",stderr);
             return 0;
         }
-#ifdef _WIN64
+#if defined(_CPU_X86_64_)
         ctxThread.Rip = (DWORD64)&win_raise_exception;
         ctxThread.Rcx = (DWORD64)jl_interrupt_exception;
         ctxThread.Rsp &= (DWORD64)-16;
         ctxThread.Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif _WIN32
+#elif defined(_CPU_X86_)
         ctxThread.Eip = (DWORD)&win_raise_exception;
         ctxThread.Ecx = (DWORD)jl_interrupt_exception;
         ctxThread.Esp &= (DWORD)-16;
@@ -200,12 +213,12 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) 
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_STACK_OVERFLOW:
-#ifdef _WIN64
+#if defined(_CPU_X86_64_)
             ExceptionInfo->ContextRecord->Rip = (DWORD64)&win_raise_exception;
             ExceptionInfo->ContextRecord->Rcx = (DWORD64)jl_stackovf_exception;
             ExceptionInfo->ContextRecord->Rsp &= (DWORD64)-16;
             ExceptionInfo->ContextRecord->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif _WIN32
+#elif defined(_CPU_X86_)
             ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception;
             ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception;
             ExceptionInfo->ContextRecord->Esp &= (DWORD)-16;
@@ -288,7 +301,7 @@ DLLEXPORT void uv_atexit_hook()
         switch(handle->type) {
         case UV_TTY:
         case UV_UDP:
-//#ifndef __WIN32__ // unix only supports shutdown on TCP and NAMED_PIPE
+//#ifndef _OS_WINDOWS_ // unix only supports shutdown on TCP and NAMED_PIPE
 // but uv_shutdown doesn't seem to be particularly reliable, so we'll avoid it in general
             jl_close_uv(handle);
             break;
@@ -347,7 +360,7 @@ DLLEXPORT void uv_atexit_hook()
 void jl_get_builtin_hooks(void);
 
 uv_lib_t *jl_dl_handle;
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 uv_lib_t _jl_ntdll_handle;
 uv_lib_t _jl_exe_handle;
 uv_lib_t _jl_kernel32_handle;
@@ -384,7 +397,7 @@ void *init_stdio_handle(uv_file fd,int readable)
             uv_tty_set_mode((void*)handle,0); //cooked stdio
             break;
         case UV_FILE:
-#ifdef _WIN32
+#ifdef _OS_WINDOWS_
             jl_errorf("This type of handle for stdio is not yet supported on Windows (%d, %d)!\n", fd, type);
             handle = NULL;
             break;
@@ -423,7 +436,7 @@ void julia_init(char *imageFile)
     jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
     uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
     uv_dlopen("Kernel32.dll",jl_kernel32_handle);
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
@@ -509,7 +522,7 @@ void julia_init(char *imageFile)
     jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
     jl_current_module = jl_main_module;
 
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
@@ -552,7 +565,7 @@ void julia_init(char *imageFile)
 
 DLLEXPORT void jl_install_sigint_handler()
 {
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
     if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
         GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
         TRUE, DUPLICATE_SAME_ACCESS )) {
@@ -578,7 +591,7 @@ extern void * __stack_chk_guard;
 
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {
-#if defined(_WIN32) //&& !defined(_WIN64)
+#if defined(_OS_WINDOWS_) //&& !defined(_WIN64)
     SetUnhandledExceptionFilter(exception_handler);
 #endif
     unsigned char * p = (unsigned char *) &__stack_chk_guard;
