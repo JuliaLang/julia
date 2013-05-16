@@ -1,5 +1,6 @@
 #ifndef OS_DETECT_H
 #define OS_DETECT_H
+#include "support/platform.h"
 
 /* This file uses is used by both Julia and C
    After a major refactor, the C parts are now no longer necessary
@@ -60,6 +61,7 @@ XX(ISUNIX)              - OS Traits
     #define OS_CURRENT Darwin
 #else
     #define OS_CURRENT Unknown
+    #warning OS_CURRENT is Unknown
 #endif
 
 #ifndef JULIA
