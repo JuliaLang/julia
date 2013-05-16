@@ -350,6 +350,10 @@ const apply_type_tfunc = function (A, args...)
         elseif isa(A[i],Int)
             tparams = tuple(tparams..., A[i])
         else
+            if i-1 > length(headtype.parameters)
+                # too many parameters for type
+                return None
+            end
             uncertain = true
             tparams = tuple(tparams..., headtype.parameters[i-1])
         end
