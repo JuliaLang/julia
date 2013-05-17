@@ -61,8 +61,35 @@
           <keyword>true|false</keyword>
         </context>
 
+        <context id="math-constant" style-ref="def:constant">
+          <!-- base/float.jl -->
+          <keyword>pi</keyword> 
+          <keyword>e</keyword>
+          <keyword>Inf(32)?</keyword>
+          <keyword>NaN(32)?</keyword>
+          <!-- base/complex.jl -->
+          <keyword>im</keyword> 
+        </context>
+
         <context id="special-constant" style-ref="def:special-constant">
-          <keyword>C_NULL|Inf|NaN|Inf32|NaN32|nothing</keyword>
+          <keyword>nothing</keyword>
+          <!-- http://docs.julialang.org/en/latest/stdlib/constants/ -->
+          <keyword>ARGS</keyword>
+          <keyword>LOAD_PATH</keyword>
+          <keyword>CPU_CORES</keyword>
+          <keyword>OS_NAME</keyword>
+          <keyword>C_NULL</keyword>
+          <keyword>WORD_SIZE</keyword>
+          <keyword>VERSION</keyword>
+          <!-- exports.jl -->
+          <keyword>ENDIAN_BOM</keyword>
+          <keyword>ENV</keyword>
+          <keyword>STDERR</keyword>
+          <keyword>STDIN</keyword>
+          <keyword>STDOUT</keyword>
+          <!-- type-related -->
+          <keyword>T</keyword>
+          <keyword>ANY</keyword>
         </context>
 
         <!--
@@ -84,11 +111,11 @@
         <context id="operator" style-ref="def:operator">
           <!-- override the default boundaries for keywords -->
           <prefix></prefix><suffix></suffix>
-          <!-- Delimiters -->
+          <!-- delimiters -->
           <keyword>\(|\)</keyword>
           <keyword>\[|\]</keyword>
           <keyword>\{|\}</keyword>
-          <!-- Single-character operators -->
+          <!-- single-character operators -->
           <keyword>\*</keyword>
           <keyword>\+</keyword>
           <keyword>-</keyword>
@@ -109,7 +136,7 @@
           <keyword>:</keyword>
           <keyword>\\</keyword>
           <keyword>(?&lt;=\S)'</keyword>
-          <!-- Multi-character operators -->
+          <!-- multi-character operators -->
           <keyword>\.\.\.</keyword>
           <keyword>::</keyword>
           <keyword>&gt;&gt;&gt;</keyword>
@@ -137,7 +164,9 @@
           <keyword>&lt;&lt;=</keyword>
         </context>
 
-        <context id="block" style-ref="def:keyword">
+        <!-- See *lang_keywords[] in ui/repl-readline.c for a list -->
+        <context id="keyword" style-ref="def:keyword">
+          <!-- code blocks -->
           <keyword>begin</keyword>
           <keyword>do</keyword>
           <keyword>for</keyword>
@@ -155,9 +184,7 @@
           <keyword>else</keyword>
           <keyword>elseif</keyword>
           <keyword>end</keyword>
-        </context>
-
-        <context id="keyword" style-ref="def:keyword">
+          <!-- keywords -->
           <keyword>abstract</keyword>
           <keyword>bitstype</keyword>
           <keyword>break</keyword>
@@ -181,6 +208,54 @@
           <match>@\w+</match>
         </context>
 
+        <!-- jl_init_primitives() in src/builtins.c -->
+        <!-- TODO: once the standard library is stabilized,
+             add more from exports.jl -->
+        <context id="builtin-functions" style-ref="def:builtin">
+          <keyword>is</keyword>
+          <keyword>typeof</keyword>
+          <keyword>subtype</keyword>
+          <keyword>isa</keyword>
+          <keyword>typeassert</keyword>
+          <keyword>apply</keyword>
+          <keyword>kwcall</keyword>
+          <keyword>throw</keyword>
+          <keyword>tuple</keyword>
+          <keyword>Union</keyword>
+          <keyword>method_exists</keyword>
+          <keyword>applicable</keyword>
+          <keyword>invoke</keyword>
+          <keyword>eval</keyword>
+          <keyword>isdefined</keyword>
+          <keyword>yieldto</keyword>
+        </context>
+
+        <context id="modules" style-ref="def:builtin">
+          <!-- exports.jl -->
+          <keyword>PCRE</keyword>
+          <keyword>FFTW</keyword>
+          <keyword>Collections</keyword>
+          <keyword>DSP</keyword>
+          <keyword>LinAlg</keyword>
+          <keyword>LibRandom</keyword>
+          <keyword>Random</keyword>
+          <keyword>Math</keyword>
+          <keyword>MPFR</keyword>
+          <keyword>GMP</keyword>
+          <keyword>Sort</keyword>
+          <keyword>Test</keyword>
+          <keyword>Pkg</keyword>
+          <keyword>Operators</keyword>
+          <keyword>Errno</keyword>
+          <keyword>Meta</keyword>
+          <keyword>Graphics</keyword>
+          <!-- http://docs.julialang.org/en/latest/manual/modules/#standard-modules -->
+          <keyword>Base</keyword>
+          <keyword>Core</keyword> 
+          <keyword>Main</keyword> 
+        </context>
+
+        <!-- Sources: base/exports.jl and examples/typetree.jl -->
         <context id="type" style-ref="def:type">
           <keyword>Any|None|Nothing|Void</keyword>
           <keyword>Type(Constructor|Name|Var|_Array)?|(Union|Data|NonTuple)Type</keyword>
