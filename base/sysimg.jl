@@ -176,6 +176,10 @@ importall .GMP
 include("mpfr.jl")
 importall .MPFR
 
+# Numerical integration
+include("quadgk.jl")
+importall .QuadGK
+
 # deprecated functions
 include("deprecated.jl")
 
