@@ -11,6 +11,7 @@ export
     Math,
     MPFR,
     GMP,
+    QuadGK,
     Sort,
     Test,
     Pkg,
@@ -861,6 +862,9 @@ export
     plan_idct,
     plan_dct!,
     plan_idct!,
+
+#   numerical integration
+    quadgk,
 
 # iteration
     start,
