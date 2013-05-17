@@ -2804,7 +2804,7 @@ Parallel Computing
 
 .. function:: pmap(f, c)
 
-   Transform collection ``c`` by applying ``f`` to each element in parallel.
+   Transform collection ``c`` by applying ``f`` to each element in parallel. If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks. All other available processes will be used as parallel workers.
 
 .. function:: remotecall(id, func, args...)
 

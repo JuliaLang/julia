@@ -1201,13 +1201,13 @@ function pmap(f, lsts...)
     i = 1
     # function to produce the next work item from the queue.
     # in this case it's just an index.
-    next_idx() = (idx=i; i+=1; idx)
+    nextidx() = (idx=i; i+=1; idx)
     @sync begin
         for p=1:np
             if p != myid() || np == 1
-                @spawnat myid() begin
+                @async begin
                     while true
-                        idx = next_idx()
+                        idx = nextidx()
                         if idx > n
                             break
                         end
