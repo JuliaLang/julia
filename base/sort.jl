@@ -178,19 +178,37 @@ for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}
     end
 end
 
-function searchsortedlast{T <: Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+function searchsortedlast{T<:Real}(a::Ranges{T},x::Real,o::Ordering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
-        max(min(int(fld(x - first(a), step(a))) + 1, length(a)), 0)
+        n = max(min(iround((x-first(a))/step(a))+1,length(a)),1)
+        lt(o,x,a[n]) ? n-1 : n
     end
 end
 
-function searchsortedfirst{T <: Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+function searchsortedfirst{T<:Real}(a::Ranges{T},x::Real,o::Ordering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
-        max(min(int(-fld(first(a) - x, step(a))), length(a)), 0) + 1
+        n = max(min(iround((x-first(a))/step(a))+1,length(a)),1)
+        lt(o,a[n],x) ? n+1 : n
+    end
+end
+
+function searchsortedlast{T<:Integer}(a::Ranges{T},x::Real,o::Ordering)
+    if step(a) == 0
+        lt(o, x, first(a)) ? 0 : length(a)
+    else
+        max(min(fld(ifloor(x)-first(a),step(a))+1,length(a)),0)
+    end
+end
+
+function searchsortedfirst{T<:Integer}(a::Ranges{T},x::Real,o::Ordering)
+    if step(a) == 0
+        lt(o, first(a), x) ? length(a) + 1 : 1
+    else
+        max(min(-fld(ifloor(-x)+first(a),step(a))+1,length(a)+1),1)
     end
 end
 
