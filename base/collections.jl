@@ -40,7 +40,7 @@ function percolate_down!(xs::AbstractArray, i::Integer, o::Ordering)
     end
 end
 
-percolate_down!(xs::AbstractArray, i::Integer) = percolate_down!(xs, i, Forward())
+percolate_down!(xs::AbstractArray, i::Integer) = percolate_down!(xs, i, Forward)
 
 
 
@@ -57,7 +57,7 @@ function percolate_up!(xs::AbstractArray, i::Integer, o::Ordering)
     end
 end
 
-percolate_up!(xs::AbstractArray, i::Integer) = percolate_up!(xs, i, Forward())
+percolate_up!(xs::AbstractArray, i::Integer) = percolate_up!(xs, i, Forward)
 
 
 # Binary min-heap pop.
@@ -71,7 +71,7 @@ function heappop!(xs::AbstractArray, o::Ordering)
     x
 end
 
-heappop!(xs::AbstractArray) = heappop!(xs, Forward())
+heappop!(xs::AbstractArray) = heappop!(xs, Forward)
 
 
 # Binary min-heap push.
@@ -81,7 +81,7 @@ function heappush!(xs::AbstractArray, x, o::Ordering)
     xs
 end
 
-heappush!(xs::AbstractArray, x) = heappush!(xs, x, Forward())
+heappush!(xs::AbstractArray, x) = heappush!(xs, x, Forward)
 
 
 # Turn an arbitrary array into a binary min-heap in linear time.
@@ -92,9 +92,9 @@ function heapify!(xs::AbstractArray, o::Ordering)
     xs
 end
 
-heapify!(xs::AbstractArray) = heapify!(xs, Forward())
+heapify!(xs::AbstractArray) = heapify!(xs, Forward)
 heapify(xs::AbstractArray, o::Ordering) = heapify!(copy(xs), o)
-heapify(xs::AbstractArray) = heapify(xs, Forward())
+heapify(xs::AbstractArray) = heapify(xs, Forward)
 
 
 # Is an arbitrary array heap ordered?
@@ -108,7 +108,7 @@ function isheap(xs::AbstractArray, o::Ordering)
     true
 end
 
-isheap(xs::AbstractArray) = isheap(xs, Forward())
+isheap(xs::AbstractArray) = isheap(xs, Forward)
 
 
 # PriorityQueue
@@ -129,7 +129,7 @@ type PriorityQueue{K,V} <: Associative{K,V}
         new(Array((K, V), 0), o, Dict{K, Int}())
     end
 
-    PriorityQueue() = PriorityQueue{K,V}(Forward())
+    PriorityQueue() = PriorityQueue{K,V}(Forward)
 
     function PriorityQueue(ks::AbstractArray{K}, vs::AbstractArray{V},
                            o::Ordering)
@@ -158,7 +158,7 @@ type PriorityQueue{K,V} <: Associative{K,V}
 end
 
 PriorityQueue(o::Ordering) = PriorityQueue{Any,Any}(o)
-PriorityQueue() = PriorityQueue{Any,Any}(Forward())
+PriorityQueue() = PriorityQueue{Any,Any}(Forward)
 
 function PriorityQueue{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V},
                             o::Ordering)
@@ -166,7 +166,7 @@ function PriorityQueue{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V},
 end
 
 function PriorityQueue{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V})
-    PriorityQueue{K,V}(ks, vs, Forward())
+    PriorityQueue{K,V}(ks, vs, Forward)
 end
 
 function PriorityQueue{K,V}(kvs::Dict{K,V}, o::Ordering)
@@ -174,7 +174,7 @@ function PriorityQueue{K,V}(kvs::Dict{K,V}, o::Ordering)
 end
 
 function PriorityQueue{K,V}(kvs::Dict{K,V})
-    PriorityQueue(kvs, Forward())
+    PriorityQueue(kvs, Forward)
 end
 
 
