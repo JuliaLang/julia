@@ -396,7 +396,7 @@ methodswith(t::Type, showparents::Bool) = methodswith(OUTPUT_STREAM, t, showpare
 methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m, false)
 methodswith(t::Type) = methodswith(OUTPUT_STREAM, t, false)
 function methodswith(io::IO, t::Type, showparents::Bool)
-    mainmod = ccall(:jl_get_current_module, Any, ())::Module
+    mainmod = current_module()
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)
