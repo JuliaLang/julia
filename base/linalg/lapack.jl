@@ -415,7 +415,8 @@ for (gels, gesv, getrs, getri, elty) in
         function getrs!(trans::BlasChar, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A, B)
             m, n    = size(A)
-            if m != n || size(B, 1) != m throw(DimensionMismatch("Matrix must be square")) end
+            if m != n throw(DimensionMismatch("Matrix must be square")) end
+            if size(B, 1) != m throw(DimensionMismatch("Left and right hand side do not fit")) end
             nrhs    = size(B, 2)
             info    = Array(BlasInt, 1)
             ccall(($(string(getrs)),liblapack), Void,
@@ -1154,7 +1155,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkstride1(A, B)
             chksquare(A)
             n    =  size(A,2)
-            if size(B,1) != n throw(DimensionMismatch("Left and right hand side does not fit")) end
+            if size(B,1) != n throw(DimensionMismatch("Left and right hand side do not fit")) end
             info = Array(BlasInt, 1)
             ccall(($(string(potrs)),liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},

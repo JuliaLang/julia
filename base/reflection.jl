@@ -1,9 +1,12 @@
 # name and module reflection
-names(m::Module, all::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32), m, all)
-names(m::Module) = names(m,false)
 module_name(m::Module) = ccall(:jl_module_name, Any, (Any,), m)::Symbol
 module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
+current_module() = ccall(:jl_get_current_module, Any, ())::Module
+
+names(m::Module, all::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32), m, all)
+names(m::Module) = names(m,false)
 names(t::DataType) = t.names
+
 function names(v)
     t = typeof(v)
     if isa(t,DataType)
@@ -53,16 +56,25 @@ methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
 disassemble(f::Function, types::Tuple) =
     print(ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString)
 
-function functionloc(f::Function, types)
+function functionlocs(f::Function, types)
+    locs = Array(Tuple, 0)
     for m = methods(f, types)
         if isa(m[3],LambdaStaticData)
             lsd = m[3]::LambdaStaticData
             ln = lsd.line
             if ln > 0
-                return (find_source_file(string(lsd.file)), ln)
+                push!(locs, (find_source_file(string(lsd.file)), ln))
             end
         end
     end
-    error("could not find function definition")
+    if length(locs) == 0
+       error("could not find function definition")
+    end
+    locs
 end
+functionlocs(f::Function) = functionlocs(f, (Any...))
+
+functionloc(f::Function, types) = functionlocs(f, types)[1]
 functionloc(f::Function) = functionloc(f, (Any...))
+
+
