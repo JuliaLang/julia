@@ -88,6 +88,10 @@ end
 @test contains(3+0*(1:5), 3)
 @test !contains(3+0*(1:5), 4)
 
+r = 0.0:0.01:1.0
+@test contains(r,r[30])
+
+
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
 @test X[2,3] == 8
