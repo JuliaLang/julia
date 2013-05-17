@@ -98,6 +98,17 @@ function BoundingBox(points::Point...)
     return BoundingBox(xmin, xmax, ymin, ymax)
 end
 
+function BoundingBox(bboxes::BoundingBox...)
+    xmin, xmax, ymin, ymax = NaN, NaN, NaN, NaN
+    for bb in bboxes
+        xmin = min(xmin, bb.xmin)
+        xmax = max(xmax, bb.xmax)
+        ymin = min(ymin, bb.ymin)
+        ymax = max(ymax, bb.ymax)
+    end
+    return BoundingBox(xmin, xmax, ymin, ymax)
+end
+
 width(bb::BoundingBox) = bb.xmax - bb.xmin
 height(bb::BoundingBox) = bb.ymax - bb.ymin
 diagonal(bb::BoundingBox) = hypot(width(bb), height(bb))
