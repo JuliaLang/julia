@@ -371,3 +371,5 @@ function contains(r::Ranges, x)
     n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
+
+contains{T<:Integer}(r::Ranges{T}, x) = isinteger(x) && x>=min(r) && x<=max(r) && (step(r)==0 || mod(int(x)-first(r),step(r))==0)

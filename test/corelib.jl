@@ -90,7 +90,9 @@ end
 
 r = 0.0:0.01:1.0
 @test contains(r,r[30])
-
+r = (-4*int64(maxintfloat())):5
+@test contains(r,3)
+@test contains(r,3.0)
 
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
