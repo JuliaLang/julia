@@ -55,7 +55,6 @@ export
     LocalProcess,
     Matrix,
     ObjectIdDict,
-    PipeBuffer,
     PollingFileWatcher,
     ProcessGroup,
     Range,
@@ -117,6 +116,7 @@ export
     InsertionSort,
     QuickSort,
     MergeSort,
+    TimeoutAsyncWork,
     TimSort,
 
 # Ccall types
@@ -1015,6 +1015,7 @@ export
     open_any_tcp_port,
     OS_FD,
     OS_SOCKET,
+    PipeBuffer,
     position,
     read,
     readall,

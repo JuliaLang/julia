@@ -836,7 +836,7 @@ I/O
 
    **Example**: ``open(readall, "file.txt")``
 
-.. function:: memio([size[, finalize::Bool]]) -> IOStream
+.. function:: IOBuffer([size]) -> IOBuffer
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
@@ -3147,10 +3147,6 @@ Tasks
 .. function:: produce(value)
 
    Send the given value to the last ``consume`` call, switching to the consumer task.
-
-.. function:: make_scheduled(task)
-
-   Register a task with the main event loop, so it will automatically run when possible.
 
 .. function:: yield()
 
