@@ -6,8 +6,7 @@ function print(io::IO, s::Symbol)
 end
 
 function show(io::IO, x::ANY)
-    t = typeof(x)
-    assert(isa(t,DataType))
+    t = typeof(x)::DataType
     show(io, t)
     print(io, '(')
     if t.names !== () || t.size==0
@@ -56,11 +55,11 @@ function show(io::IO, x::UnionType)
     end
 end
 
+show(io::IO, x::TypeConstructor) = show(io, x.body)
+
 function show(io::IO, x::DataType)
     if isvarargtype(x)
         print(io, x.parameters[1], "...")
-    elseif isa(x, TypeConstructor)
-        show(io, x.body)
     else
         print(io, x.name.name)
         if length(x.parameters) > 0
