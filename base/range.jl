@@ -368,6 +368,6 @@ end
 map(f, r::Ranges) = [ f(x) for x in r ]
 
 function contains(r::Ranges, x)
-    n = step(r) == 0 ? 1 : ifloor((x-first(r))/step(r))+1
+    n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
