@@ -3,6 +3,8 @@
 @test broadcast(+, [1  0], [1, 4]) == [2 1; 5 4]
 @test broadcast(+, [1, 0], [1  4]) == [2 5; 1 4]
 @test broadcast(+, [1, 0], [1, 4]) == [2, 4]
+@test broadcast(+) == 0
+@test broadcast(*) == 1
 
 @test eye(2) .+ [1, 4] == [2 1; 4 5]
 @test eye(2) .+ [1  4] == [2 4; 1 5]
