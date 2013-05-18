@@ -355,22 +355,19 @@
 
 "),
 
-("Types","Base","isimmutable","isimmutable(T)
+("Types","Base","isimmutable","isimmutable(v)
 
-   True if T is immutable.  See *Immutable Composite Types* for a
-   discussion of immutability.
-
-"),
-
-("Types","Base","isabstract","isabstract(T)
-
-   True if T is an abstract type.
+   True if value \"v\" is immutable.  See *Immutable Composite Types*
+   for a discussion of immutability.
 
 "),
 
 ("Types","Base","isbits","isbits(T)
 
-   True if T is a bits type (e.g., Uint8, Int64, Float64).
+   True if \"T\" is a \"plain data\" type, meaning it is immutable and
+   contains no references to other values. Typical examples are
+   numeric types such as \"Uint8\", \"Float64\", and
+   \"Complex{Float64}\".
 
 "),
 
@@ -775,8 +772,8 @@
 
 ("Set-Like Collections","Base","intersect","intersect(s1, s2...)
 
-   Construct the intersection of two or more sets. Maintains order
-   with arrays.
+   Construct the intersection of two or more sets. Maintains order and
+   multiplicity of the first argument for arrays and ranges.
 
 "),
 
@@ -1318,7 +1315,7 @@
 
 "),
 
-("I/O","Base","memio","memio([size[, finalize::Bool]]) -> IOStream
+("I/O","Base","IOBuffer","IOBuffer([size]) -> IOBuffer
 
    Create an in-memory I/O stream, optionally specifying how much
    initial space is needed.
@@ -4269,7 +4266,9 @@
 ("Parallel Computing","Base","pmap","pmap(f, c)
 
    Transform collection \"c\" by applying \"f\" to each element in
-   parallel.
+   parallel. If \"nprocs() > 1\", the calling process will be
+   dedicated to assigning tasks. All other available processes will be
+   used as parallel workers.
 
 "),
 
@@ -4809,13 +4808,6 @@
 
    Send the given value to the last \"consume\" call, switching to the
    consumer task.
-
-"),
-
-("Tasks","Base","make_scheduled","make_scheduled(task)
-
-   Register a task with the main event loop, so it will automatically
-   run when possible.
 
 "),
 
@@ -5892,7 +5884,7 @@
    Sort a vector in ascending order.  Specify \"alg\" to choose a
    particular sorting algorithm (\"Sort.InsertionSort\",
    \"Sort.QuickSort\", \"Sort.MergeSort\", or \"Sort.TimSort\"), and
-   \"ord\" to sort with a custom ordering (e.g., Sort.Reverse or a
+   \"ord\" to sort with a custom ordering (e.g., \"Sort.Reverse\" or a
    comparison function).
 
 "),
@@ -5923,7 +5915,8 @@
    \"v\" will sort it.  Specify \"alg\" to choose a particular sorting
    algorithm (\"Sort.InsertionSort\", \"Sort.QuickSort\",
    \"Sort.MergeSort\", or \"Sort.TimSort\"), and \"ord\" to sort with
-   a custom ordering (e.g., Sort.Reverse or a comparison function).
+   a custom ordering (e.g., \"Sort.Reverse\" or a comparison
+   function).
 
 "),
 

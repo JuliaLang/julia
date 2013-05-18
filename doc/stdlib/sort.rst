@@ -108,7 +108,7 @@ Sort Functions
    Sort a vector in ascending order.  Specify ``alg`` to choose a
    particular sorting algorithm (``Sort.InsertionSort``,
    ``Sort.QuickSort``, ``Sort.MergeSort``, or ``Sort.TimSort``), and
-   ``ord`` to sort with a custom ordering (e.g., Sort.Reverse or a
+   ``ord`` to sort with a custom ordering (e.g., ``Sort.Reverse`` or a
    comparison function).
 
 .. function:: sort!(...)
@@ -131,7 +131,7 @@ Sort Functions
    ``v`` will sort it.  Specify ``alg`` to choose a particular sorting
    algorithm (``Sort.InsertionSort``, ``Sort.QuickSort``,
    ``Sort.MergeSort``, or ``Sort.TimSort``), and ``ord`` to sort with
-   a custom ordering (e.g., Sort.Reverse or a comparison function).
+   a custom ordering (e.g., ``Sort.Reverse`` or a comparison function).
 
 .. function:: sort(A, dim, [alg[, ord]])
 

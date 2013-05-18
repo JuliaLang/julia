@@ -203,13 +203,9 @@ Types
 
    True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
 
-.. function:: isabstract(T)
-
-   True if ``T`` is an abstract type.
-
 .. function:: isbits(T)
 
-   True if ``T`` is a bits type (e.g., Uint8, Int64, Float64).
+   True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``Uint8``, ``Float64``, and ``Complex{Float64}``.
 
 Generic Functions
 -----------------
