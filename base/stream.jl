@@ -573,7 +573,7 @@ end
 
 ##stream functions
 
-start_reading(stream::AsyncStream) = (stream.handle != 0 ? ccall(:jl_start_reading,Int32,(Ptr{Void},),handle(stream)) : int32(0))
+start_reading(stream::AsyncStream) = (stream.handle != C_NULL ? ccall(:jl_start_reading,Int32,(Ptr{Void},),handle(stream)) : int32(0))
 function start_reading(stream::AsyncStream,cb::Function)
     start_reading(stream)
     stream.readcb = cb
