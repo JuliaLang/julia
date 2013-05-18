@@ -74,8 +74,17 @@ end
 
 function broadcast_args(shape::Dims, As::(Array...))
     loopshape, strides = calc_loop_strides(shape, As...)
-    # todo: Peel subarrays to expose their arrays and offsets
-    (loopshape, As, strides)
+    (loopshape, As, ones(Int, length(As)), strides)
+end
+function broadcast_args(shape::Dims, As::(StridedArray...))
+    loopshape, strides = calc_loop_strides(shape, As...)
+    nA = length(As)
+    offs = Array(Int, nA)
+    baseAs = Array(Array, nA)
+    for (k, A) in enumerate(As)
+        offs[k],baseAs[k] = isa(A,SubArray) ? (A.first_index,A.parent) : (1,A)
+    end
+    (loopshape, tuple(baseAs...), offs, strides)
 end
 
 
@@ -83,33 +92,35 @@ end
 
 function code_inner_loop(fname::Symbol, extra_args::Vector, initial,
                          innermost::Function, narrays::Int, nd::Int)
-    arrays  = [gensym("A$a") for a=1:narrays]
-    inds    = [gensym("k$a") for a=1:narrays]
-    axes    = [gensym("i$d") for d=1:nd]
-    sizes   = [gensym("n$d") for d=1:nd]
-    strides = [gensym("s$(a)_$d") for a=1:narrays, d=1:nd]
+    Asyms      = [gensym("A$a") for a=1:narrays]
+    indsyms    = [gensym("k$a") for a=1:narrays]
+    axissyms   = [gensym("i$d") for d=1:nd]
+    sizesyms   = [gensym("n$d") for d=1:nd]
+    stridesyms = [gensym("s$(a)_$d") for a=1:narrays, d=1:nd]
         
-    loop = innermost([:($arr[$ind]) for (arr, ind) in zip(arrays, inds)]...)
-    for (d, (axis, n)) in enumerate(zip(axes, sizes))
+    loop = innermost([:($arr[$ind]) for (arr, ind) in zip(Asyms, indsyms)]...)
+    for (d, (axis, n)) in enumerate(zip(axissyms, sizesyms))
         loop = :(
             for $axis=1:$n
                 $loop
-                $([:($ind += $(strides[a, d]))
-                   for (a, ind) in enumerate(inds)]...)
+                $([:($ind += $(stridesyms[a, d]))
+                   for (a, ind) in enumerate(indsyms)]...)
             end
         )
     end
-
+    
+    @gensym shape arrays offsets strides
     quote
-        function $fname(shape::NTuple{$nd, Int},
-                        arrays::NTuple{$narrays, Array},
-                        strides::Matrix{Int}, $(extra_args...))
-            @assert size(strides) == ($narrays, $nd)
-            ($(sizes...),) = shape
-            $([:(if $n==0; return; end) for n in sizes]...)
-            ($(arrays...),)  = arrays
-            $([:($ind = 1) for ind in inds]...)
-            ($(strides...),) = strides
+        function $fname($shape::NTuple{$nd, Int},
+                        $arrays::NTuple{$narrays, StridedArray},
+                        $offsets::Vector{Int},
+                        $strides::Matrix{Int}, $(extra_args...))
+            @assert size($strides) == ($narrays, $nd)
+            ($(sizesyms...),)   = $shape
+            $([:(if $n==0; return; end) for n in sizesyms]...)
+            ($(Asyms...), )     = $arrays
+            ($(stridesyms...),) = $strides
+            ($(indsyms...), )   = $offsets
             $initial
             $loop
         end
@@ -122,12 +133,13 @@ end
 function code_inner(fname::Symbol, extra_args::Vector, initial,
                     innermost::Function)
     quote
-        function $fname(shape::(Int...), arrays::(Array...), 
-                        strides::Matrix{Int}, $(extra_args...))
+        function $fname(shape::(Int...), arrays::(StridedArray...), 
+                        offsets::Vector{Int}, strides::Matrix{Int},
+                        $(extra_args...))
             f = eval(code_inner_loop($(quot(fname)), $(quot(extra_args)),
                                      $(quot(initial)), $(quot(innermost)),
                                      length(arrays), length(shape)))
-            f(shape, arrays, strides, $(extra_args...))
+            f(shape, arrays, offsets, strides, $(extra_args...))
         end
     end
 end
@@ -155,7 +167,7 @@ function code_broadcast(fname::Symbol, op)
     quote
         $innerdef
         $fname() = $op()
-        function $fname(As::Array...)
+        function $fname(As::StridedArray...)
             shape = broadcast_shape(As...)
             result = Array(promote_type([eltype(A) for A in As]...), shape)
             $inner!(broadcast_args(shape, As)..., result)
@@ -170,7 +182,7 @@ function code_broadcast!(fname::Symbol, op)
                                   (dest, els...) -> :( $dest=$op($(els...)) ))
     quote
         $innerdef
-        function $fname(dest::Array, As::Array...)
+        function $fname(dest::StridedArray, As::StridedArray...)
             shape = size(dest)
             check_broadcast_shape(shape, As...)
             $inner!(broadcast_args(shape, tuple(dest, As...))...)
@@ -182,7 +194,9 @@ end
 eval(code_map!_inner(:broadcast_getindex_inner!,
                      :(result::Array), [:(A::AbstractArray)],
                      (dest, inds...) -> :( A[$(inds...)] )))
-function broadcast_getindex(A::AbstractArray, ind1::Array, inds::Array...)
+function broadcast_getindex(A::AbstractArray,
+                            ind1::StridedArray{Int},
+                            inds::StridedArray{Int}...)
     inds = tuple(ind1, inds...)
     shape = broadcast_shape(inds...)
     result = Array(eltype(A), shape)
@@ -192,8 +206,9 @@ end
 
 eval(code_foreach_inner(:broadcast_setindex!_inner!, [:(A::AbstractArray)],
                         (x, inds...)->:( A[$(inds...)] = $x )))
-function broadcast_setindex!(A::AbstractArray, X::Array,
-                             ind1::Array, inds::Array...)
+function broadcast_setindex!(A::AbstractArray, X::StridedArray,
+                             ind1::StridedArray{Int}, 
+                             inds::StridedArray{Int}...)
     Xinds = tuple(X, ind1, inds...)
     shape = broadcast_shape(Xinds...)
     broadcast_setindex!_inner!(broadcast_args(shape, Xinds)..., A)
@@ -214,7 +229,7 @@ function broadcast_function(op::Function)
                                                  quot(op)))))
 end
 broadcast(op::Function) = op()
-broadcast(op::Function, As::Array...) = broadcast_function(op)(As...)
+broadcast(op::Function, As::StridedArray...) = broadcast_function(op)(As...)
 
 broadcast!funs = (Function=>Function)[]
 function broadcast!_function(op::Function)
@@ -222,7 +237,7 @@ function broadcast!_function(op::Function)
         (broadcast!funs[op] = eval(code_broadcast!(gensym("broadcast!_$(op)"), 
                                                    quot(op)))))
 end
-function broadcast!(op::Function, dest::Array, As::Array...)
+function broadcast!(op::Function, dest::StridedArray, As::StridedArray...)
     broadcast!_function(op)(dest, As...)
 end
 
