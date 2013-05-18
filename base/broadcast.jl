@@ -2,7 +2,7 @@ module Broadcast
 
 using ..Meta.quot
 import Base.(.+), Base.(.-), Base.(.*), Base.(./) 
-export broadcast, broadcast_getindex, broadcast_setindex!
+export broadcast, broadcast!, broadcast_getindex, broadcast_setindex!
 
 
 ## Broadcasting utilities ##
@@ -163,6 +163,21 @@ function code_broadcast(fname::Symbol, op)
     end
 end
 
+function code_broadcast!(fname::Symbol, op)
+    inner! = gensym("$(fname)!_inner!")
+    innerdef = code_foreach_inner(inner!, [],
+                                  (dest, els...) -> :( $dest=$op($(els...)) ))
+    quote
+        $innerdef
+        function $fname(dest::Array, As::Array...)
+            shape = size(dest)
+            check_broadcast_shape(shape, As...)
+            $inner!(broadcast_args(shape, tuple(dest, As...))...)
+            dest
+        end        
+    end
+end
+
 eval(code_map!_inner(:broadcast_getindex_inner!,
                      :(result::Array), [:(A::AbstractArray)],
                      (dest, inds...) -> :( A[$(inds...)] )))
@@ -185,19 +200,29 @@ function broadcast_setindex!(A::AbstractArray, X::Array,
 end
 
 
-## the actual broadcast function ##
+## actual functions for broadcast and broadcast! ##
 
 for (fname, op) in {(:.+, +), (:.-, -), (:.*, *), (:./, /)}
     eval(code_broadcast(fname, quot(op)))
 end
 
 broadcastfuns = (Function=>Function)[]
-function get_broadcastfun(op::Function)
+function broadcast(op::Function)
     (haskey(broadcastfuns, op) ? broadcastfuns[op] :
         (broadcastfuns[op] = eval(code_broadcast(gensym("broadcast_$(op)"), 
                                                  quot(op)))))
 end
-broadcast(op::Function, As::Array...) = get_broadcastfun(op)(As...)
+broadcast(op::Function, As::Array...) = broadcast(op)(As...)
+
+broadcast!funs = (Function=>Function)[]
+function broadcast!(op::Function)
+    (haskey(broadcast!funs, op) ? broadcast!funs[op] :
+        (broadcast!funs[op] = eval(code_broadcast!(gensym("broadcast!_$(op)"), 
+                                                   quot(op)))))
+end
+function broadcast!(op::Function, dest::Array, As::Array...)
+    broadcast!(op)(dest, As...)
+end
 
 
 end # module

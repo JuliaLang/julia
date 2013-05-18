@@ -470,6 +470,7 @@ export
     mapslices,
     reducedim,
     broadcast,
+    broadcast!,
     broadcast_getindex,
     broadcast_setindex!,
     cartesianmap,
