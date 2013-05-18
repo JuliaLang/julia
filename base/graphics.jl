@@ -1,6 +1,6 @@
 module Graphics
 
-import Base.norm
+import Base.norm, Base.scale
 
 export
     # Part 1. 2D Geometry
@@ -94,6 +94,17 @@ function BoundingBox(points::Point...)
         xmax = max(xmax, p.x)
         ymin = min(ymin, p.y)
         ymax = max(ymax, p.y)
+    end
+    return BoundingBox(xmin, xmax, ymin, ymax)
+end
+
+function BoundingBox(bboxes::BoundingBox...)
+    xmin, xmax, ymin, ymax = NaN, NaN, NaN, NaN
+    for bb in bboxes
+        xmin = min(xmin, bb.xmin)
+        xmax = max(xmax, bb.xmax)
+        ymin = min(ymin, bb.ymin)
+        ymax = max(ymax, bb.ymax)
     end
     return BoundingBox(xmin, xmax, ymin, ymax)
 end

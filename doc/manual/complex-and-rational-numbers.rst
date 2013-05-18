@@ -6,7 +6,7 @@
 
 Julia ships with predefined types representing both complex and rational
 numbers, and supports all :ref:`standard mathematical operations
-<man-mathematical-operations>` on them. :ref:`man-promotions`
+<man-mathematical-operations>` on them. :ref:`man-conversion-and-promotion`
 are defined so that operations on any combination of
 predefined numeric types, whether primitive or composite, behave as
 expected.
@@ -144,7 +144,7 @@ versus ``-1 + 0im`` even though ``-1 == -1 + 0im``::
     julia> sqrt(-1 + 0im)
     0.0 + 1.0im
 
-The :ref:`literal numeric coefficient notation <numeric-literal-coefficients>`
+The :ref:`literal numeric coefficient notation <man-numeric-literal-coefficients>`
 does work when constructing complex number from variables. Instead, the
 multiplication must be explicitly written out::
 

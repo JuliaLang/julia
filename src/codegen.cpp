@@ -971,9 +971,12 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
         jl_is_mutable_datatype(rt1) || jl_is_mutable_datatype(rt2))
         ptr_comparable = 1;
     int last_depth = ctx->argDepth;
+    bool isleaf = jl_is_leaf_type(rt1) && jl_is_leaf_type(rt2);
+    bool isteq = jl_types_equal(rt1, rt2);
+    bool isbits = isleaf && isteq && jl_is_bitstype(rt1);
     if (arg1 && !varg1) {
-        varg1 = emit_expr(arg1, ctx);
-        if (arg2 && !varg2 && varg1->getType() == jl_pvalue_llvmt &&
+        varg1 = isbits ? auto_unbox(arg1, ctx) : emit_expr(arg1, ctx);
+        if (arg2 && !varg2 && !isbits && varg1->getType() == jl_pvalue_llvmt &&
             rt1 != (jl_value_t*)jl_sym_type && !jl_is_symbol(arg1) &&
             !jl_is_symbolnode(arg1)) {
             make_gcroot(varg1, ctx);
@@ -981,14 +984,14 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     }
     Value *answer;
     if (arg2 && !varg2)
-        varg2 = emit_expr(arg2, ctx);
+        varg2 = isbits ? auto_unbox(arg2, ctx) : emit_expr(arg2, ctx);
+    if (isleaf && !isteq && !jl_is_type_type(rt1) && !jl_is_type_type(rt2)) {
+        ctx->argDepth = last_depth;
+        return ConstantInt::get(T_int1, 0);
+    }
     Type *at1 = varg1->getType();
     Type *at2 = varg2->getType();
     if (at1 != jl_pvalue_llvmt && at2 != jl_pvalue_llvmt) {
-        if (julia_type_of(varg1) != julia_type_of(varg2)) {
-            answer = ConstantInt::get(T_int1, 0);
-            goto done;
-        }
         if (at1 == at2) {
             if (at1->isIntegerTy() || at1->isPointerTy() ||
                 at1->isFloatingPointTy()) {

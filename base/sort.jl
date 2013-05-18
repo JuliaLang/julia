@@ -26,6 +26,7 @@ export # also exported by Base
 export # not exported by Base
     Ordering, Algorithm,
     Forward, By, Lt, lt,
+    ReverseOrdering, ForwardOrdering,
     # Reverse, # TODO: clashes with Reverse iterator
     DEFAULT_UNSTABLE,
     DEFAULT_STABLE,
@@ -41,19 +42,22 @@ export # not exported by Base
 
 abstract Ordering
 
-type Forward <: Ordering end
-type Reverse <: Ordering end
+type ForwardOrdering <: Ordering end
+type ReverseOrdering <: Ordering end
 immutable By <: Ordering by::Function end
 immutable Lt <: Ordering lt::Function end
 
-lt(o::Forward, a, b) = isless(a,b)
-lt(o::Reverse, a, b) = isless(b,a)
-lt(o::By,      a, b) = isless(o.by(a),o.by(b))
-lt(o::Lt,      a, b) = o.lt(a,b)
+const Forward = ForwardOrdering()
+const Reverse = ReverseOrdering()
+
+lt(o::ForwardOrdering, a, b) = isless(a,b)
+lt(o::ReverseOrdering, a, b) = isless(b,a)
+lt(o::By,              a, b) = isless(o.by(a),o.by(b))
+lt(o::Lt,              a, b) = o.lt(a,b)
 
 ## functions requiring only ordering ##
 
-function issorted(itr, o::Ordering)
+function issorted(itr, o::Ordering = Forward)
     state = start(itr)
     done(itr,state) && return true
     prev, state = next(itr, state)
@@ -64,8 +68,6 @@ function issorted(itr, o::Ordering)
     end
     return true
 end
-issorted{T<:Ordering}(itr, ::Type{T}) = issorted(itr, T())
-issorted             (itr)            = issorted(itr, Forward())
 
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     lo <= k <= hi || error("select index $k is out of range $lo:$hi")
@@ -93,13 +95,8 @@ function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     end
     return v[lo]
 end
-select!             (v::AbstractVector, k::Int, o::Ordering) = select!(v, k, 1, length(v), o)
-select!{T<:Ordering}(v::AbstractVector, k::Int, ::Type{T})   = select!(v, k, T())
-select!             (v::AbstractVector, k::Int)              = select!(v, k, Forward)
-
-select             (v::AbstractVector, k::Int, o::Ordering) = select!(copy(v), k, o)
-select{T<:Ordering}(v::AbstractVector, k::Int, ::Type{T})   = select (v,       k, T())
-select             (v::AbstractVector, k::Int)              = select!(copy(v), k)
+select!(v::AbstractVector, k::Int, o::Ordering=Forward) = select!(v, k, 1, length(v), o)
+select (v::AbstractVector, k::Int, o::Ordering=Forward) = select!(copy(v), k, o)
 
 for s in {:select!, :select}
     @eval begin
@@ -169,28 +166,44 @@ function searchsorted(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     return lo+1:hi-1
 end
 
-
 for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}
     @eval begin
-        $s             (v::AbstractVector, x, o::Ordering) = $s(v, x, 1, length(v), o)
-        $s{O<:Ordering}(v::AbstractVector, x, ::Type{O})   = $s(v, x, O())
-        $s             (v::AbstractVector, x)              = $s(v, x, Forward())
+        $s(v::AbstractVector, x, o::Ordering) = $s(v, x, 1, length(v), o)
+        $s(v::AbstractVector, x)              = $s(v, x, Forward)
     end
 end
 
-function searchsortedlast{T <: Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+function searchsortedlast{T<:Real}(a::Ranges{T},x::Real,o::Ordering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
-        max(min(int(fld(x - first(a), step(a))) + 1, length(a)), 0)
+        n = max(min(iround((x-first(a))/step(a))+1,length(a)),1)
+        lt(o,x,a[n]) ? n-1 : n
     end
 end
 
-function searchsortedfirst{T <: Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+function searchsortedfirst{T<:Real}(a::Ranges{T},x::Real,o::Ordering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
-        max(min(int(-fld(first(a) - x, step(a))), length(a)), 0) + 1
+        n = max(min(iround((x-first(a))/step(a))+1,length(a)),1)
+        lt(o,a[n],x) ? n+1 : n
+    end
+end
+
+function searchsortedlast{T<:Integer}(a::Ranges{T},x::Real,o::Ordering)
+    if step(a) == 0
+        lt(o, x, first(a)) ? 0 : length(a)
+    else
+        max(min(fld(ifloor(x)-first(a),step(a))+1,length(a)),0)
+    end
+end
+
+function searchsortedfirst{T<:Integer}(a::Ranges{T},x::Real,o::Ordering)
+    if step(a) == 0
+        lt(o, first(a), x) ? length(a) + 1 : 1
+    else
+        max(min(-fld(ifloor(-x)+first(a),step(a))+1,length(a)+1),1)
     end
 end
 
@@ -200,14 +213,19 @@ searchsorted{T <: Real}(a::Ranges{T}, x::Real) = searchsortedfirst(a,x):searchso
 
 abstract Algorithm
 
-type InsertionSort <: Algorithm end
-type QuickSort     <: Algorithm end
-type MergeSort     <: Algorithm end
-type TimSort       <: Algorithm end
+type InsertionSortAlg <: Algorithm end
+type QuickSortAlg     <: Algorithm end
+type MergeSortAlg     <: Algorithm end
+type TimSortAlg       <: Algorithm end
 
-const DEFAULT_UNSTABLE = QuickSort()
-const DEFAULT_STABLE   = MergeSort()
-const SMALL_ALGORITHM  = InsertionSort()
+const InsertionSort = InsertionSortAlg()
+const QuickSort     = QuickSortAlg()
+const MergeSort     = MergeSortAlg()
+const TimSort       = TimSortAlg()
+
+const DEFAULT_UNSTABLE = QuickSort
+const DEFAULT_STABLE   = MergeSort
+const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, 1, length(v), a, o)
@@ -219,7 +237,7 @@ sort {T<:Number}(v::AbstractVector{T}, o::Ordering) = sort (v, DEFAULT_UNSTABLE,
 sort!(v::AbstractVector, o::Ordering) = sort!(v, DEFAULT_STABLE, o)
 sort (v::AbstractVector, o::Ordering) = sort (v, DEFAULT_STABLE, o)
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSort, o::Ordering)
+function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSortAlg, o::Ordering)
     for i = lo+1:hi
         j = i
         x = v[i]
@@ -236,7 +254,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSort, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSort, o::Ordering)
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering)
     while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         pivot = v[(lo+hi)>>>1]
@@ -254,7 +272,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSort, o::Ordering)
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSort, o::Ordering, t::AbstractVector)
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t::AbstractVector)
     if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
@@ -289,7 +307,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSort, o::Ordering, t
 
     return v
 end
-sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSort, o::Ordering) = sort!(v, lo, hi, a, o, similar(v))
+sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering) = sort!(v, lo, hi, a, o, similar(v))
 
 include("timsort.jl")
 
@@ -313,39 +331,29 @@ sortperm(v::AbstractVector, o::Ordering) = sortperm(v, DEFAULT_STABLE, o)
 for s in {:sort!, :sort, :sortperm}
     @eval begin
         # default to forward sort ordering
-        $s(v::AbstractVector, a::Algorithm) = $s(v, a, Forward())
-        $s(v::AbstractVector              ) = $s(v,    Forward())
-
-        # auto-instntiate algorithms and orderings from types
-        $s{A<:Algorithm,O<:Ordering}(v::AbstractVector, ::Type{A},    ::Type{O})   = $s(v, A(), O())
-        $s{A<:Algorithm            }(v::AbstractVector, ::Type{A},    o::Ordering) = $s(v, A(), o)
-        $s{             O<:Ordering}(v::AbstractVector, a::Algorithm, ::Type{O})   = $s(v, a,   O())
-        $s{A<:Algorithm            }(v::AbstractVector, ::Type{A})                 = $s(v, A())
-        $s{             O<:Ordering}(v::AbstractVector,               ::Type{O})   = $s(v,      O())
+        $s(v::AbstractVector, a::Algorithm) = $s(v, a, Forward)
+        $s(v::AbstractVector              ) = $s(v,    Forward)
 
         # also allow ordering before algorithm
-        $s                          (v::AbstractVector, o::Ordering, a::Algorithm) = $s(v, a, o)
-        $s{A<:Algorithm,O<:Ordering}(v::AbstractVector, ::Type{O},   ::Type{A})    = $s(v, A(), O())
-        $s{A<:Algorithm            }(v::AbstractVector, o::Ordering, ::Type{A})    = $s(v, A(), o)
-        $s{             O<:Ordering}(v::AbstractVector, ::Type{O},   a::Algorithm) = $s(v, a,   O())
+        $s(v::AbstractVector, o::Ordering, a::Algorithm) = $s(v, a, o)
     end
 end
 
 for s in {:sort!, :sort, :sortperm}
     @eval begin
-        $s{A<:Algorithm}(v::AbstractVector, a::Union(A,Type{A}), lt::Function) = $s(v, a, Sort.Lt(lt))
-        $s{A<:Algorithm}(v::AbstractVector, lt::Function, a::Union(A,Type{A})) = $s(v, a, lt)
-        $s              (v::AbstractVector, lt::Function)                      = $s(v, Sort.Lt(lt))
-        $s              (lt::Function, v::AbstractVector, args...)             = $s(v, lt, args...)
+        $s(v::AbstractVector, a::Algorithm, lt::Function) = $s(v, a, Sort.Lt(lt))
+        $s(v::AbstractVector, lt::Function, a::Algorithm) = $s(v, a, lt)
+        $s(v::AbstractVector, lt::Function)               = $s(v, Sort.Lt(lt))
+        $s(lt::Function, v::AbstractVector, args...)      = $s(v, lt, args...)
     end
 end
 
 for (sb,s) in {(:sortby!, :sort!), (:sortby, :sort), (:sortpermby, :sortperm)}
     @eval begin
-        $sb{A<:Algorithm}(v::AbstractVector, a::Union(A,Type{A}), by::Function) = $s(v, a, Sort.By(by))
-        $sb{A<:Algorithm}(v::AbstractVector, by::Function, a::Union(A,Type{A})) = $s(v, a, Sort.By(by))
-        $sb              (v::AbstractVector, by::Function)                      = $s(v, Sort.By(by))
-        $sb              (by::Function, v::AbstractVector, args...)             = $s(v, Sort.By(by), args...)
+        $sb(v::AbstractVector, a::Algorithm, by::Function) = $s(v, a, Sort.By(by))
+        $sb(v::AbstractVector, by::Function, a::Algorithm) = $s(v, a, Sort.By(by))
+        $sb(v::AbstractVector, by::Function)               = $s(v, Sort.By(by))
+        $sb(by::Function, v::AbstractVector, args...)      = $s(v, Sort.By(by), args...)
     end
 end
 
@@ -354,11 +362,11 @@ end
 module Float
 using ..Sort
 
-import ..Sort.sort!, ..Sort.Perm, ..Sort.lt, ..Sort.Reverse
+import ..Sort: sort!, Perm, lt, Reverse
 import Core.Intrinsics.slt_int, Core.Intrinsics.unbox
 
 typealias Floats Union(Float32,Float64)
-typealias Direct Union(Forward,Reverse)
+typealias Direct Union(ForwardOrdering,ReverseOrdering)
 
 type Left <: Ordering end
 type Right <: Ordering end
@@ -420,10 +428,10 @@ end
 nans2left!(v::AbstractVector, o::Ordering) = nans2left!(v, 1, length(v), o)
 nans2right!(v::AbstractVector, o::Ordering) = nans2right!(v, 1, length(v), o)
 
-nans2end!(v::AbstractVector, o::Forward) = nans2right!(v, o)
-nans2end!(v::AbstractVector, o::Reverse) = nans2left!(v, o)
-nans2end!{O<:Forward}(v::AbstractVector{Int}, o::Perm{O}) = nans2right!(v, o)
-nans2end!{O<:Reverse}(v::AbstractVector{Int}, o::Perm{O}) = nans2left!(v, o)
+nans2end!(v::AbstractVector, o::ForwardOrdering) = nans2right!(v, o)
+nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v, o)
+nans2end!{O<:ForwardOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2right!(v, o)
+nans2end!{O<:ReverseOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2left!(v, o)
 
 issignleft(o::Direct, x::Floats) = lt(o, x, zero(x))
 issignleft{O<:Direct}(o::Perm{O}, i::Int) = issignleft(O(), o.vec[i])
@@ -453,17 +461,17 @@ end # module Sort.Float
 end # module Sort
 
 # sorting multi-dimensional arrays
-sort(A::AbstractArray, dim::Integer, o::Base.Sort.Ordering = Base.Sort.Forward(),
+sort(A::AbstractArray, dim::Integer, o::Base.Sort.Ordering = Base.Sort.Forward,
      alg::Base.Sort.Algorithm = DEFAULT_STABLE) =
     mapslices(sort, A, [dim])
 
 sort(A::AbstractArray, dim::Integer, alg::Base.Sort.Algorithm) =
-    sort(A, dim, Base.Sort.Forward(), alg)
+    sort(A, dim, Base.Sort.Forward, alg)
 
 sort(A::AbstractArray, dim::Integer, alg::Base.Sort.Algorithm, o::Base.Sort.Ordering) =
     sort(A, dim, o, alg)
 
-function sortrows(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward(),
+function sortrows(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward,
                   alg::Base.Sort.Algorithm = DEFAULT_STABLE)
     c = 1:size(A,2)
     rows = [ sub(A,i,c) for i=1:size(A,1) ]
@@ -472,12 +480,12 @@ function sortrows(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward()
 end
 
 sortrows(A::AbstractMatrix, alg::Base.Sort.Algorithm) =
-    sortrows(A, Base.Sort.Forward(), alg)
+    sortrows(A, Base.Sort.Forward, alg)
 
 sortrows(A::AbstractMatrix, alg::Base.Sort.Algorithm, o::Base.Sort.Ordering) =
     sortrows(A, o, alg)
 
-function sortcols(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward(),
+function sortcols(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward,
                   alg::Base.Sort.Algorithm = DEFAULT_STABLE)
     r = 1:size(A,1)
     cols = [ sub(A,r,i) for i=1:size(A,2) ]
@@ -486,7 +494,7 @@ function sortcols(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward()
 end
 
 sortcols(A::AbstractMatrix, alg::Base.Sort.Algorithm) =
-    sortcols(A, Base.Sort.Forward(), alg)
+    sortcols(A, Base.Sort.Forward, alg)
 
 sortcols(A::AbstractMatrix, alg::Base.Sort.Algorithm, o::Base.Sort.Ordering) =
     sortcols(A, o, alg)
