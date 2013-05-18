@@ -376,6 +376,8 @@ Types <#man-parametric-types>`_ and on :ref:`man-methods`, and is
 sufficiently important to be addressed in its own section:
 :ref:`man-constructors`.
 
+.. _man-immutable-composite-types:
+
 Immutable Composite Types
 -------------------------
 
