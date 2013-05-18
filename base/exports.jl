@@ -471,6 +471,8 @@ export
     reducedim,
     broadcast,
     broadcast!,
+    broadcast_function,
+    broadcast!_function,
     broadcast_getindex,
     broadcast_setindex!,
     cartesianmap,

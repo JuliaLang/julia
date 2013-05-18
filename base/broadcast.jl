@@ -2,7 +2,8 @@ module Broadcast
 
 using ..Meta.quot
 import Base.(.+), Base.(.-), Base.(.*), Base.(./) 
-export broadcast, broadcast!, broadcast_getindex, broadcast_setindex!
+export broadcast, broadcast!, broadcast_function, broadcast!_function
+export broadcast_getindex, broadcast_setindex!
 
 
 ## Broadcasting utilities ##
@@ -153,8 +154,8 @@ function code_broadcast(fname::Symbol, op)
                                (dest, els...) -> :( $op($(els...)) ))
     quote
         $innerdef
-        function $fname(A1::Array, As::Array...)
-            As = tuple(A1, As...)
+        $fname() = $op()
+        function $fname(As::Array...)
             shape = broadcast_shape(As...)
             result = Array(promote_type([eltype(A) for A in As]...), shape)
             $inner!(broadcast_args(shape, As)..., result)
@@ -207,21 +208,22 @@ for (fname, op) in {(:.+, +), (:.-, -), (:.*, *), (:./, /)}
 end
 
 broadcastfuns = (Function=>Function)[]
-function broadcast(op::Function)
+function broadcast_function(op::Function)
     (haskey(broadcastfuns, op) ? broadcastfuns[op] :
         (broadcastfuns[op] = eval(code_broadcast(gensym("broadcast_$(op)"), 
                                                  quot(op)))))
 end
-broadcast(op::Function, As::Array...) = broadcast(op)(As...)
+broadcast(op::Function) = op()
+broadcast(op::Function, As::Array...) = broadcast_function(op)(As...)
 
 broadcast!funs = (Function=>Function)[]
-function broadcast!(op::Function)
+function broadcast!_function(op::Function)
     (haskey(broadcast!funs, op) ? broadcast!funs[op] :
         (broadcast!funs[op] = eval(code_broadcast!(gensym("broadcast!_$(op)"), 
                                                    quot(op)))))
 end
 function broadcast!(op::Function, dest::Array, As::Array...)
-    broadcast!(op)(dest, As...)
+    broadcast!_function(op)(dest, As...)
 end
 
 
