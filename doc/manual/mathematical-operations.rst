@@ -371,7 +371,7 @@ All the standard trigonometric and hyperbolic functions are also defined::
     sin    cos    tan    cot    sec    csc
     sinh   cosh   tanh   coth   sech   csch
     asin   acos   atan   acot   asec   acsc
-    acoth  asech  acsch  sinc   cosc   atan2
+    sinc   cosc   atan2  acoth  asech  acsch
 
 These are all single-argument functions, with the exception of
 `atan2 <http://en.wikipedia.org/wiki/Atan2>`_, which gives the angle
