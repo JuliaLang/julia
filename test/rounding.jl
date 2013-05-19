@@ -1,5 +1,7 @@
 # Small sanity tests to ensure changing the rounding of float functions work
 using Base.Test
+
+## Float64 checks
 # a + b returns a number exactly between prevfloat(1.) and 1., so its
 # final result depends strongly on the utilized rounding direction.
 a = prevfloat(0.5)
@@ -41,4 +43,47 @@ with_rounding(RoundDown) do
     @test - a - b === -1.
     @test a - b === -c
     @test b - a === c
+end
+
+## Float32 checks
+
+a32 = prevfloat(0.5f0)
+b32 = 0.5f0
+c32 = (1.f0 - prevfloat(1.f0))/2
+d32 = prevfloat(1.0f0)
+
+# Default rounding direction, RoundToNearest
+@test a32 + b32 === 1.0f0
+@test - a32 - b32 === -1.0f0
+@test a32 - b32 === -c32
+@test b32 - a32 === c32
+
+# RoundToZero
+with_rounding(RoundToZero) do 
+    @test a32 + b32 === d32
+    @test - a32 - b32 === -d32
+    @test a32 - b32 === -c32
+    @test b32 - a32 === c32
+end
+
+# Sanity check to see if we have returned to RoundToNearest
+@test a32 + b32 === 1.0f0
+@test - a32 - b32 === -1.0f0
+@test a32 - b32 == -c32
+@test b32 - a32 == c32
+
+# RoundUp
+with_rounding(RoundUp) do 
+    @test a32 + b32 === 1.0f0
+    @test - a32 - b32 === -d32
+    @test a32 - b32 === -c32
+    @test b32 - a32 === c32
+end
+
+# RoundDown
+with_rounding(RoundDown) do 
+    @test a32 + b32 === d32
+    @test - a32 - b32 === -1.0f0
+    @test a32 - b32 === -c32
+    @test b32 - a32 === c32
 end
