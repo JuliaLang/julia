@@ -82,6 +82,7 @@ export
     Reverse,
     RevString,
     RopeString,
+    RoundAwayZero,
     RoundDown,
     RoundingMode,
     RoundToNearest,
