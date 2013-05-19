@@ -12,35 +12,32 @@ namespace JL_I {
         sle_int, ule_int,
         eq_float, ne_float,
         lt_float, le_float,
+        fpiseq, fpislt,
         // mixed-type comparisons
         eqfsi64, eqfui64,
         ltfsi64, ltfui64,
         lefsi64, lefui64,
         ltsif64, ltuif64,
         lesif64, leuif64,
-        fpiseq32, fpiseq64,
-        fpislt32, fpislt64,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int, ctpop_int, ctlz_int, cttz_int,
         // conversion
         sext_int, zext_int, trunc_int,
-        fptoui32, fptosi32, fptoui64, fptosi64,
-        fpsiround, fpuiround,
-        uitofp32, sitofp32, uitofp64, sitofp64,
+        fptoui, fptosi, uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
-        // functions
-        abs_float, copysign_float,
-        flipsign_int,
-        // pointer access
-        pointerref, pointerset, pointertoref,
+        // checked conversion
+        fpsiround, fpuiround, checked_fptoui, checked_fptosi,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
-        checked_fptoui, checked_fptosi,
         nan_dom_err,
+        // functions
+        abs_float, copysign_float, flipsign_int,
+        // pointer access
+        pointerref, pointerset, pointertoref,
         // c interface
-        ccall, jl_alloca
+        ccall, cglobal, jl_alloca
     };
 };
 
@@ -458,7 +455,8 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         }
         else {
             max = ConstantFP::get(floatt, 4.294967e9);
-            min = ConstantFP::get(floatt, 0.0);
+            // most negative number that truncates to zero
+            min = ConstantFP::get(floatt, -0.99999994);
         }
     }
     else {
@@ -473,13 +471,14 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         }
         else {
             max = ConstantFP::get(floatt, 1.844674407370955e19);
-            min = ConstantFP::get(floatt, 0.0);
+            min = ConstantFP::get(floatt, -0.9999999999999999);
         }
     }
 
     // itrunc(x + copysign(0.5,x))
     // values with exponent >= nbits are already integers, and this
     // rounding method doesn't always give the right answer there.
+    x = FP(x);
     Value *expo = builder.CreateAShr(bits, ConstantInt::get(intt,nmantissa));
     expo = builder.CreateAnd(expo, ConstantInt::get(intt,expbits));
     Value *isint = builder.CreateICmpSGE(expo,
@@ -489,10 +488,18 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         builder.CreateOr(half,
                          builder.CreateAnd(bits,
                                            ConstantInt::get(intt,topbit)));
-    Value *sum = builder.CreateFAdd(FP(x),
+    Value *sum = builder.CreateFAdd(x,
                                     builder.CreateBitCast(signedhalf, floatt));
 
-    Value *src = builder.CreateSelect(isint, FP(x), sum);
+    Value *src = builder.
+        CreateSelect(builder.
+                     CreateOr(isint, builder.
+                              // need to give 0 for -0.5 < x < 0.5 (exponent < -1)
+                              // otherwise iround(prevfloat(0.5)) == 1
+                              CreateICmpSLT(expo,
+                                            ConstantInt::get(intt,expoffs-1))),
+                     x, sum);
+
     raise_exception_unless(builder.CreateAnd(builder.CreateFCmpOLE(src, max),
                                              builder.CreateFCmpOGE(src, min)),
                            jlinexacterr_var, ctx);
@@ -572,6 +579,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 {
     switch (f) {
     case ccall: return emit_ccall(args, nargs, ctx);
+    case cglobal: return emit_cglobal(args, nargs, ctx);
 
     HANDLE(box,2)         return generic_box(args[1], args[2], ctx);
     HANDLE(unbox,2)       return generic_unbox(args[1], args[2], ctx);
@@ -641,7 +649,13 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(urem_int,2) return builder.CreateURem(JL_INT(x), JL_INT(y));
     HANDLE(smod_int,2)
         x = JL_INT(x); y = JL_INT(y);
-        return builder.CreateSRem(builder.CreateAdd(y,builder.CreateSRem(x,y)),y);
+        fy = builder.CreateSRem(x,y);
+        return builder.
+            CreateSelect(builder.CreateICmpEQ(builder.CreateICmpSLT(x,ConstantInt::get(x->getType(),0)),
+                                              builder.CreateICmpSLT(y,ConstantInt::get(y->getType(),0))),
+                         // mod == rem for arguments with same sign
+                         fy,
+                         builder.CreateSRem(builder.CreateAdd(y,fy),y));
 
     HANDLE(neg_float,1) return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
     HANDLE(add_float,2) return builder.CreateFAdd(FP(x), FP(y));
@@ -817,43 +831,21 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                );
     }
 
-    HANDLE(fpiseq32,2) {
+    HANDLE(fpiseq,2) {
+        Value *xi = JL_INT(x);
+        Value *yi = JL_INT(y);
         x = FP(x);
         fy = FP(y);
-        Value *xi = builder.CreateBitCast(x,  T_int32);
-        Value *yi = builder.CreateBitCast(fy, T_int32);
-        return builder.CreateOr(
-            builder.CreateAnd(
-                builder.CreateFCmpUNO(x, x),
-                builder.CreateFCmpUNO(fy, fy)
-            ),
-            builder.CreateAnd(
-                builder.CreateICmpEQ(xi, yi),
-                builder.CreateFCmpORD(x, fy)
-            )
-        );
+        return builder.CreateOr(builder.CreateAnd(builder.CreateFCmpUNO(x, x),
+                                                  builder.CreateFCmpUNO(fy, fy)),
+                                builder.CreateICmpEQ(xi, yi));
     }
-    HANDLE(fpiseq64,2) {
+
+    HANDLE(fpislt,2) {
+        Value *xi = JL_INT(x);
+        Value *yi = JL_INT(y);
         x = FP(x);
         fy = FP(y);
-        Value *xi = builder.CreateBitCast(x,  T_int64);
-        Value *yi = builder.CreateBitCast(fy, T_int64);
-        return builder.CreateOr(
-            builder.CreateAnd(
-                builder.CreateFCmpUNO(x, x),
-                builder.CreateFCmpUNO(fy, fy)
-            ),
-            builder.CreateAnd(
-                builder.CreateICmpEQ(xi, yi),
-                builder.CreateFCmpORD(x, fy)
-            )
-        );
-    }
-    HANDLE(fpislt32,2) {
-        x = FP(x);
-        fy = FP(y);
-        Value *xi = builder.CreateBitCast(x,  T_int32);
-        Value *yi = builder.CreateBitCast(fy, T_int32);
         return builder.CreateOr(
             builder.CreateAnd(
                 builder.CreateFCmpORD(x, x),
@@ -863,36 +855,11 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                 builder.CreateFCmpORD(x, fy),
                 builder.CreateOr(
                     builder.CreateAnd(
-                        builder.CreateICmpSGE(xi, ConstantInt::get(T_int32, 0)),
+                        builder.CreateICmpSGE(xi, ConstantInt::get(xi->getType(), 0)),
                         builder.CreateICmpSLT(xi, yi)
                     ),
                     builder.CreateAnd(
-                        builder.CreateICmpSLT(xi, ConstantInt::get(T_int32, 0)),
-                        builder.CreateICmpUGT(xi, yi)
-                    )
-                )
-            )
-        );
-    }
-    HANDLE(fpislt64,2) {
-        x = FP(x);
-        fy = FP(y);
-        Value *xi = builder.CreateBitCast(x,  T_int64);
-        Value *yi = builder.CreateBitCast(fy, T_int64);
-        return builder.CreateOr(
-            builder.CreateAnd(
-                builder.CreateFCmpORD(x, x),
-                builder.CreateFCmpUNO(fy, fy)
-            ),
-            builder.CreateAnd(
-                builder.CreateFCmpORD(x, fy),
-                builder.CreateOr(
-                    builder.CreateAnd(
-                        builder.CreateICmpSGE(xi, ConstantInt::get(T_int64, 0)),
-                        builder.CreateICmpSLT(xi, yi)
-                    ),
-                    builder.CreateAnd(
-                        builder.CreateICmpSLT(xi, ConstantInt::get(T_int64, 0)),
+                        builder.CreateICmpSLT(xi, ConstantInt::get(xi->getType(), 0)),
                         builder.CreateICmpUGT(xi, yi)
                     )
                 )
@@ -944,10 +911,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 #endif
 
-    HANDLE(fptoui32,1) return builder.CreateFPToUI(FP(x), T_int32);
-    HANDLE(fptosi32,1) return builder.CreateFPToSI(FP(x), T_int32);
-    HANDLE(fptoui64,1) return builder.CreateFPToUI(FP(x), T_int64);
-    HANDLE(fptosi64,1) return builder.CreateFPToSI(FP(x), T_int64);
+    HANDLE(fptoui,1) return builder.CreateFPToUI(FP(x), JL_INTT(x->getType()));
+    HANDLE(fptosi,1) return builder.CreateFPToSI(FP(x), JL_INTT(x->getType()));
     HANDLE(fpsiround,1)
     HANDLE(fpuiround,1)
     {
@@ -997,14 +962,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *sbits = builder.CreateBitCast(fy, intt);
         unsigned nb = ((IntegerType*)intt)->getBitWidth();
         APInt notsignbit = APInt::getSignedMaxValue(nb);
-        APInt signbit(nb, 0); signbit.setBit(nb-1);
+        APInt signbit0(nb, 0); signbit0.setBit(nb-1);
         Value *rbits =
             builder.CreateOr(builder.CreateAnd(bits,
                                                ConstantInt::get(intt,
                                                                 notsignbit)),
                              builder.CreateAnd(sbits,
                                                ConstantInt::get(intt,
-                                                                signbit)));
+                                                                signbit0)));
         return builder.CreateBitCast(rbits, x->getType());
     }
     HANDLE(flipsign_int,2)
@@ -1097,13 +1062,12 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(lefsi64); ADD_I(lefui64);
     ADD_I(ltsif64); ADD_I(ltuif64);
     ADD_I(lesif64); ADD_I(leuif64);
-    ADD_I(fpiseq32); ADD_I(fpiseq64);
-    ADD_I(fpislt32); ADD_I(fpislt64);
+    ADD_I(fpiseq); ADD_I(fpislt);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
     ADD_I(sext_int); ADD_I(zext_int); ADD_I(trunc_int);
-    ADD_I(fptoui32); ADD_I(fptosi32); ADD_I(fptoui64); ADD_I(fptosi64);
+    ADD_I(fptoui); ADD_I(fptosi);
     ADD_I(fpsiround); ADD_I(fpuiround);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
@@ -1115,6 +1079,6 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_smul); ADD_I(checked_umul);
     ADD_I(checked_fptosi); ADD_I(checked_fptoui);
     ADD_I(nan_dom_err);
-    ADD_I(ccall);
+    ADD_I(ccall); ADD_I(cglobal);
     ADD_I(jl_alloca);
 }

@@ -34,9 +34,17 @@ function readdlm{T<:Number}(a::Array{T}, io, dlm, nr, nc, row, eol)
     tmp = Array(Float64,1)
     for i=1:nr
         for j=1:nc
-            if float64_isvalid(row[j], tmp)
+            if T <: Char
+                if length(row[j]) != 1
+                    error("file entry \"$(row[j])\" is not a Char")
+                end
+                a[i,j] = row[j][1]
+            elseif float64_isvalid(row[j], tmp)
                 a[i,j] = tmp[1]
             else
+                if !(T <: FloatingPoint)
+                    error("file entry \"$(row[j])\" cannot be converted to $T")
+                end
                 a[i,j] = NaN
             end
         end

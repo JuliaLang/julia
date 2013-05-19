@@ -12,6 +12,8 @@ similar(s::IntSet) = IntSet()
 
 copy(s::IntSet) = union!(IntSet(), s)
 
+eltype(s::IntSet) = Int64
+
 function sizehint(s::IntSet, top::Integer)
     if top >= s.limit
         lim = ((top+31) & -32)>>>5
@@ -108,7 +110,9 @@ end
 
 function contains(s::IntSet, n::Integer)
     if n >= s.limit
-        s.fill1s && n >= 0
+        # max IntSet length is typemax(Int), so highest possible element is
+        # typemax(Int)-1
+        s.fill1s && n >= 0 && n < typemax(Int)
     else
         (s.bits[n>>5 + 1] & (uint32(1)<<(n&31))) != 0
     end
@@ -118,7 +122,7 @@ start(s::IntSet) = int64(0)
 done(s::IntSet, i) = (!s.fill1s && next(s,i)[1] >= s.limit) || i == typemax(Int)
 function next(s::IntSet, i)
     if i >= s.limit
-        n = i
+        n = int64(i)
     else
         n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit)
     end
@@ -137,6 +141,20 @@ function first(s::IntSet)
 end
 
 shift!(s::IntSet) = delete!(s, first(s))
+
+function last(s::IntSet)
+    if !s.fill1s
+        for i = length(s.bits):-1:1
+            w = s.bits[i]
+            if w != 0
+                return (i-1)<<5 + (31-leading_zeros(w))
+            end
+        end
+    end
+    error("last: set has no last element")
+end
+
+pop!(s::IntSet) = delete!(s, last(s))
 
 length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)) +
     (s.fill1s ? typemax(Int) - s.limit : 0)

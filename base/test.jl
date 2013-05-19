@@ -69,12 +69,12 @@ end
 
 function test_approx_eq(va, vb, Eps, astr, bstr)
     diff = max(abs(va - vb))
-    sdiff = string("|", astr, " - ", bstr, "| < ", Eps)
-    if diff < Eps
-        nothing
-    else
-        error("assertion failed: ", sdiff, "\n  ", astr, " = ", va, "\n  ",
-              bstr, " = ", vb)
+    sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
+    if diff > Eps
+        error("assertion failed: ", sdiff,
+	      "\n  ", astr, " = ", va,
+	      "\n  ", bstr, " = ", vb,
+	      "\n  difference = ", diff, " > ", Eps)
     end
 end
 

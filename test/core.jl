@@ -44,8 +44,9 @@ let T = TypeVar(:T,true)
     @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
                   (Number, Array{Number,1}))
     @test !is(None, typeintersect((Array{T}, Array{T}), (Array, Array{Any})))
-    @test is(None, typeintersect((Vector{Vector{Int}},Vector{Vector}),
-                                 (Vector{Vector{T}},Vector{Vector{T}})))
+    f47{T}(x::Vector{Vector{T}}) = 0
+    @test_fails f47(Array(Vector,0))
+    @test f47(Array(Vector{Int},0)) == 0
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -96,6 +97,11 @@ end
 
 @test !is(None, typeintersect((DataType,DataType),Type{TypeVar(:T,(Number,Number))}))
 @test !is(None, typeintersect((DataType,UnionType),Type{(Number,None)}))
+
+# issue #2997
+let T = TypeVar(:T,Union(Float64,Array{Float64,1}),true)
+    @test typeintersect(T,Real) === Float64
+end
 
 # join
 @test typejoin(Int8,Int16) === Signed
@@ -768,3 +774,18 @@ type Baz2919; Foo2919::Foo2919; end
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
 @test 1.0:(.3-.1)/.1 == 1.0:2.0
+
+# issue #2982
+module M2982
+abstract U
+macro bad(Y)
+    quote
+        type $(esc(Y)) <: U
+        end
+    end
+end
+export @bad
+end
+
+@M2982.bad(T2982)
+@test T2982.super === M2982.U

@@ -1,6 +1,8 @@
 /*
   implementations of some built-in functions and utilities
 */
+#include "platform.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,12 +12,18 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <unistd.h>
-#ifdef __WIN32__
+#if defined(_OS_WINDOWS_)
 #include <malloc.h>
+#if defined(_COMPILER_INTEL_)
+#include <mathimf.h>
+#else
+#include <math.h>
+#endif
+#else
+#include <unistd.h>
+#include <math.h>
 #endif
 #include <ctype.h>
-#include <math.h>
 #include "julia.h"
 #include "builtin_proto.h"
 
@@ -28,7 +36,7 @@ void jl_error(const char *str)
         jl_exit(1);
     }
     jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
-    JL_GC_PUSH(&msg);
+    JL_GC_PUSH1(&msg);
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
@@ -44,7 +52,7 @@ void jl_errorf(const char *fmt, ...)
         jl_exit(1);
     }
     jl_value_t *msg = jl_pchar_to_string(buf, nc);
-    JL_GC_PUSH(&msg);
+    JL_GC_PUSH1(&msg);
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
@@ -63,7 +71,7 @@ void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got)
 {
     jl_value_t *ctxt=NULL;
-    JL_GC_PUSH(&ctxt, &got);
+    JL_GC_PUSH2(&ctxt, &got);
     ctxt = jl_pchar_to_string((char*)context, strlen(context));
     jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname),
                                    ctxt, ty, got);
@@ -226,7 +234,7 @@ JL_CALLABLE(jl_f_apply)
             if (jl_is_array(args[1])) {
                 size_t n = jl_array_len(args[1]);
                 jl_tuple_t *t = jl_alloc_tuple(n);
-                JL_GC_PUSH(&t);
+                JL_GC_PUSH1(&t);
                 for(size_t i=0; i < n; i++) {
                     jl_tupleset(t, i, jl_arrayref((jl_array_t*)args[1], i));
                 }
@@ -278,7 +286,7 @@ JL_CALLABLE(jl_f_apply)
 
  fancy_apply: ;
     jl_value_t *argarr = jl_apply(jl_append_any_func, &args[1], nargs-1);
-    JL_GC_PUSH(&argarr);
+    JL_GC_PUSH1(&argarr);
     assert(jl_typeis(argarr, jl_array_any_type));
     jl_value_t *result = jl_apply((jl_function_t*)args[0],
                                   jl_cell_data(argarr), jl_array_len(argarr));
@@ -526,7 +534,7 @@ JL_CALLABLE(jl_f_convert_tuple)
         return (jl_value_t*)x;
     size_t i, cl=jl_tuple_len(x), pl=jl_tuple_len(to);
     jl_tuple_t *out = jl_alloc_tuple(cl);
-    JL_GC_PUSH(&out);
+    JL_GC_PUSH1(&out);
     jl_value_t *ce, *pe=NULL;
     int pseq=0;
     jl_function_t *f = (jl_function_t*)args[2];
@@ -612,7 +620,11 @@ DLLEXPORT int jl_strtof(char *str, float *out)
 {
     char *p;
     errno = 0;
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+    *out = (float)strtod(str, &p);
+#else
     *out = strtof(str, &p);
+#endif
     if (p == str ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
         return 1;
@@ -735,10 +747,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         assert(jl_is_datatype(t));
         jl_datatype_t *dt = (jl_datatype_t*)t;
-        JL_PUTS(dt->name->name->name, s);
-        if (dt->parameters != jl_null) {
-            jl_show_tuple(str, dt->parameters, '{', '}', 0);
-        }
+        show_type(str, t);
         JL_PUTC('(', s);
         if (jl_tuple_len(dt->names)>0 || dt->size==0) {
             size_t i;
@@ -856,7 +865,7 @@ JL_CALLABLE(jl_f_union)
             jl_tupleset(argt, i, args[i]);
         }
     }
-    JL_GC_PUSH(&argt);
+    JL_GC_PUSH1(&argt);
     jl_value_t *u = jl_type_union(argt);
     JL_GC_POP();
     return u;

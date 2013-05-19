@@ -17,7 +17,6 @@ typemax(::Type{Bool}) = true
 ## boolean operations ##
 
 !(x::Bool) = box(Bool,not_int(unbox(Bool,x)))
-isequal(x::Bool, y::Bool) = eq_int(unbox(Bool,x),unbox(Bool,y))
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = box(Bool,and_int(unbox(Bool,x),unbox(Bool,y)))
@@ -32,19 +31,18 @@ abs(x::Bool) = int(x)
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x
-==(x::Bool, y::Bool) = eq_int(unbox(Bool,x),unbox(Bool,y))
 
 +(x::Bool) =  int(x)
 -(x::Bool) = -int(x)
 
 +(x::Bool, y::Bool) = int(x)+int(y)
 -(x::Bool, y::Bool) = int(x)-int(y)
-*(x::Bool, y::Bool) = x&y
+*(x::Bool, y::Bool) = int(x&y)
 /(x::Bool, y::Bool) = int(x)/int(y)
-^(x::Bool, y::Bool) = x|!y
+^(x::Bool, y::Bool) = int(x|!y)
 ^(x::Integer, y::Bool) = y ? x : one(x)
 
-div(x::Bool, y::Bool) = y ? x : throw(DivideError())
+div(x::Bool, y::Bool) = y ? int(x) : throw(DivideError())
 fld(x::Bool, y::Bool) = div(x,y)
-rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
+rem(x::Bool, y::Bool) = y ? 0 : throw(DivideError())
 mod(x::Bool, y::Bool) = rem(x,y)

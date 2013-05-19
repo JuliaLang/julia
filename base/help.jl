@@ -151,7 +151,23 @@ function help_for(fname::String, obj)
         end
     end
     if !found
-        if isgeneric(obj)
+        if isa(obj, DataType)
+            print("DataType   : ")
+            repl_show(obj)
+            println()
+            println("  supertype: ", super(obj))
+            if obj.abstract
+                st = subtypes(obj)
+                if length(st) > 0
+                    print("  subtypes : ")
+                    showcompact(st)
+                    println()
+                end
+            end
+            if length(obj.names) > 0
+                println("  fields   : ", obj.names)
+            end
+        elseif isgeneric(obj)
             repl_show(obj); println()
         else
             println("No help information found.")
@@ -194,13 +210,16 @@ function help(f::Function)
 end
 
 help(t::DataType) = help_for(string(t.name),t)
+help(t::Module) = help(string(t))
 
 function help(x)
     show(x)
     t = typeof(x)
-    println(" is of type $t")
-    if isa(t,DataType) && length(t.names)>0
-        println("  which has fields $(t.names)")
+    if isa(t,DataType)
+        println(" is of type")
+        help(t)
+    else
+        println(" is of type $t")
     end
 end
 

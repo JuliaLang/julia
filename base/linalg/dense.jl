@@ -1,10 +1,9 @@
 # Linear algebra functions for dense matrices in column major format
 
-scale!{T<:BlasFloat}(X::Array{T}, s::T) = BLAS.scal!(length(X), s, X, 1)
-scale!(X::Array{Complex64}, s::Real) = BLAS.scal!(length(X), float32(s), X, 1)
-scale!(X::Array{Complex128}, s::Real) = BLAS.scal!(length(X), float64(s), X, 1)
-scale!{Tx<:BlasFloat,Ts<:BlasFloat}(X::Array{Tx}, s::Ts) = 
-    BLAS.scal!(length(X), convert(Tx, s), X, 1)
+scale!{T<:BlasFloat}(X::Array{T}, s::Number) = BLAS.scal!(length(X), convert(T,s), X, 1)
+scale!{T<:Union(Float32,Float64)}(X::Array{T}, s::Complex) = scale!(complex(X), s)
+scale!{T<:Union(Complex64,Complex128)}(X::Array{T}, s::Real) =
+    BLAS.scal!(length(X), oftype(real(zero(T)),s), X, 1)
 
 #Test whether a matrix is positive-definite
 
@@ -207,7 +206,7 @@ randsym(n) = symmetrize!(randn(n,n))
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)
-    if integer_valued(p)
+    if isinteger(p)
         ip = integer(real(p))
         if ip < 0
             return inv(Base.power_by_squaring(A, -ip))
@@ -219,7 +218,7 @@ function ^(A::Matrix, p::Number)
         error("matrix must be square")
     end
     (v, X) = eig(A)
-    if isreal(v) && any(v.<0)
+    if any(v.<0)
         v = complex(v)
     end
     if ishermitian(A)
@@ -383,7 +382,7 @@ function sqrtm(A::StridedMatrix, cond::Bool)
     if ishermitian(A) 
         return sqrtm(Hermitian(A), cond)
     else
-        SchurF = schurfact!(iscomplex(A) ? copy(A) : complex(A))
+        SchurF = schurfact!(iseltype(A,Complex) ? copy(A) : complex(A))
         R = zeros(eltype(SchurF[:T]), n, n)
         for j = 1:n
             R[j,j] = sqrt(SchurF[:T][j,j])
@@ -410,17 +409,18 @@ end
 sqrtm{T<:Integer}(A::StridedMatrix{T}, cond::Bool) = sqrtm(float(A), cond)
 sqrtm{T<:Integer}(A::StridedMatrix{Complex{T}}, cond::Bool) = sqrtm(complex128(A), cond)
 sqrtm(A::StridedMatrix) = sqrtm(A, false)
-sqrtm(a::Number) = isreal(a) ? (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)  : sqrt(a)
+sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
+sqrtm(a::Complex) = sqrt(a)
 
 function det(A::Matrix)
     m, n = size(A)
-    if m != n; throw(LAPACK.DimensionMismatch("det only defined for square matrices")); end
+    if m != n; throw(DimensionMismatch("det only defined for square matrices")); end
     if istriu(A) | istril(A); return det(Triangular(A, 'U', false)); end
     return det(lufact(A))
 end
 det(x::Number) = x
 
-logdet(A::Matrix) = 2.0 * sum(log(diag(cholfact(A)[:U])))
+logdet(A::Matrix) = logdet(cholfact(A))
 
 function inv(A::StridedMatrix)
     if istriu(A) return inv(Triangular(A, 'U')) end
@@ -435,7 +435,7 @@ function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         if istril(A) return Triangular(A, 'L')\B end
         if ishermitian(A) return Hermitian(A)\B end
         ans, _, _, info = LAPACK.gesv!(copy(A), copy(B))
-        if info > 0; throw(LinAlg.LAPACK.SingularException(info)); end
+        if info > 0; throw(SingularException(info)); end
         return ans
     end
     LAPACK.gelsd!(copy(A), copy(B))[1]

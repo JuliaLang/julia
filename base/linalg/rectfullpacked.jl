@@ -34,16 +34,19 @@ type CholeskyDenseRFP{T<:BlasFloat} <: Factorization{T}
     uplo::Char
 end
 
-function chol(A::SymmetricRFP)
+function cholfact!{T<:BlasFloat}(A::SymmetricRFP{T})
     C, info = LAPACK.pftrf!(A.transr, A.uplo, copy(A.data))
     return CholeskyDenseRFP(C, A.transr, A.uplo)
 end
+cholfact{T<:BlasFloat}(A::SymmetricRFP) = cholfact!(copy(A))
+
+copy(A::SymmetricRFP) = SymmetricRFP(copy(A.data), A.transr, A.uplo)
 
 # Least squares
 \(A::CholeskyDenseRFP, B::VecOrMat) = LAPACK.pftrs!(A.transr, A.uplo, A.data, copy(B))
 
 function inv(A::CholeskyDenseRFP)
     B, info = LAPACK.pftri!(A.transr, A.uplo, copy(A.data))
-    if info > 0 throw(LAPACK.SingularException(info)) end
+    if info > 0 throw(SingularException(info)) end
     return B
 end

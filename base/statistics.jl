@@ -111,19 +111,13 @@ midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 
 ## hist ##
-function hist(v::AbstractVector, r::Ranges)
-    n = length(r)-1
-    h = zeros(Int, n)
-    for x in v
-        i = iceil((x-first(r))/step(r))
-        if 1 <= i <= n
-            h[i] += 1
-        end
-    end
-    r,h
+function sturges(n)  # Sturges' formula
+    n==0 && return one(n)
+    iceil(log2(n))+1
 end
+
 hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
-hist(v::AbstractVector) = hist(v,iceil(log2(length(v)))+1) # Sturges' formula 
+hist(v::AbstractVector) = hist(v,sturges(length(v)))
 
 function hist(v::AbstractVector, edg::AbstractVector)
     n = length(edg)-1
@@ -146,7 +140,32 @@ function hist(A::AbstractMatrix, edg::AbstractVector)
     edg,H
 end
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
-hist(A::AbstractMatrix) = hist(A,iceil(log2(size(A,1)))+1) # Sturges' formula 
+hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
+
+function hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector)
+    @assert size(v,2) == 2
+    n = length(edg1)-1
+    m = length(edg2)-1
+    h = zeros(Int, n, m)
+    for i = 1:size(v,1)
+        x = searchsortedfirst(edg1, v[i, 1])-1
+        y = searchsortedfirst(edg2, v[i, 2])-1
+        if 1 <= x <= n && 1 <= y <= m
+            h[x,y] += 1
+        end
+    end
+    edg1,edg2,h
+end
+hist2d(v::AbstractMatrix, edg::AbstractVector) = hist2d(v, edg, edg)
+function hist2d(v::AbstractMatrix, n::Integer)
+    m = size(v,1)
+    hist2d(v, histrange(sub(v, 1:m, 1),n), histrange(sub(v, 1:m, 2),n))
+end
+function hist2d(v::AbstractMatrix, n1::Integer, n2::Integer)
+    m = size(v,1)
+    hist2d(v, histrange(sub(v, 1:m,1),n1), histrange(sub(v, 1:m,2),n2))
+end
+hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 
 ## pearson covariance functions ##
 

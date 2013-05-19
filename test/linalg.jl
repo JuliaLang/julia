@@ -15,6 +15,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq apd * inv(capd) eye(elty, n)
         @test_approx_eq a*(capd\(a'*b)) b # least squares soln for square a
         @test_approx_eq det(capd) det(apd)
+        @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
         l     = cholfact(apd, :L)[:L] # lower Cholesky factor
         @test_approx_eq l*l' apd
@@ -65,13 +66,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq f[:vectors]*f[:Schur]*f[:vectors]' a
         @test_approx_eq sort(real(f[:values])) sort(real(d))
         @test_approx_eq sort(imag(f[:values])) sort(imag(d))
-        @test istriu(f[:Schur]) || isreal(a)
+        @test istriu(f[:Schur]) || iseltype(a,Real)
 
         f = schurfact(a[1:5,1:5], a[6:10,6:10]) # Generalized Schur
         @test_approx_eq f[:Q]*f[:S]*f[:Z]' a[1:5,1:5]
         @test_approx_eq f[:Q]*f[:T]*f[:Z]' a[6:10,6:10]
-        @test istriu(f[:S]) || isreal(a)
-        @test istriu(f[:T]) || isreal(a)
+        @test istriu(f[:S]) || iseltype(a,Real)
+        @test istriu(f[:T]) || iseltype(a,Real)
 
         usv = svdfact(a)                # singular value decomposition
         @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
@@ -472,6 +473,15 @@ for elty in (Float32, Float64, Complex64, Complex128)
     end
 end
 
+
+# Test gglse
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
+    c = convert(Array{elty, 1}, [2, 1, 6, 3, 1])
+    B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
+    d = convert(Array{elty, 1}, [1, 3, -1])
+    @test_approx_eq_eps LinAlg.LAPACK.gglse!(A, c, B, d) [0.5, -0.5, 1.5, 0.5] 1e-6
+end
 
 
 ## Issue related tests

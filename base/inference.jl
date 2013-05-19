@@ -107,14 +107,15 @@ t_func[ltsif64] = (2, 2, cmp_tfunc)
 t_func[ltuif64] = (2, 2, cmp_tfunc)
 t_func[lesif64] = (2, 2, cmp_tfunc)
 t_func[leuif64] = (2, 2, cmp_tfunc)
-t_func[fpiseq32] = (2, 2, cmp_tfunc)
-t_func[fpiseq64] = (2, 2, cmp_tfunc)
-t_func[fpislt32] = (2, 2, cmp_tfunc)
-t_func[fpislt64] = (2, 2, cmp_tfunc)
+t_func[fpiseq] = (2, 2, cmp_tfunc)
+t_func[fpislt] = (2, 2, cmp_tfunc)
 t_func[nan_dom_err] = (2, 2, (a, b)->a)
-t_func[eval(Core,:ccall)] =
+t_func[eval(Core.Intrinsics,:ccall)] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
+t_func[eval(Core.Intrinsics,:cglobal)] =
+    (1, 2, (fptr, t...)->(isempty(t) ? Ptr{Void} :
+                          isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
@@ -336,6 +337,10 @@ const apply_type_tfunc = function (A, args...)
         elseif isa(A[i],Int)
             tparams = tuple(tparams..., A[i])
         else
+            if i-1 > length(headtype.parameters)
+                # too many parameters for type
+                return None
+            end
             uncertain = true
             tparams = tuple(tparams..., headtype.parameters[i-1])
         end
@@ -440,6 +445,9 @@ function isconstantfunc(f::ANY, sv::StaticVarInfo)
         end
     end
 
+    if isa(f,QuoteNode) && isa(f.value, Function)
+        return f.value
+    end
     if isa(f,SymbolNode)
         f = f.name
     end
@@ -582,6 +590,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,apply) && length(fargs)>0
         if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
             af = argtypes[1].parameters[1]
+            _methods(af,(),0)
         else
             af = isconstantfunc(fargs[1], sv)
         end
@@ -1789,8 +1798,9 @@ function inlining_pass(e::Expr, sv, ast)
         end
     end
     if isccall
-        for i=5:2:length(eargs)
-            if isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode)
+        le = length(eargs)
+        for i=5:2:le
+            if i<le && (isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode))
                 eargs[i+1] = 0
             end
         end

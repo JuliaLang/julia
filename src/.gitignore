@@ -1,6 +1,10 @@
 /*.o
 /*.do
 /*.exe
+/*.obj
+/*.lib
+/*.pdb
+/*.exp
 
 /boot.j.inc
 julia_flisp.boot

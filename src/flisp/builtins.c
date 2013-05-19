@@ -10,10 +10,14 @@
 #include <assert.h>
 #include <ctype.h>
 #include <sys/types.h>
-#include <sys/time.h>
 #include <sys/stat.h>
 #include <errno.h>
+
 #include "flisp.h"
+
+#if !defined(_OS_WINDOWS_)
+#include <sys/time.h>
+#endif /* !_OS_WINDOWS_ */
 
 size_t llength(value_t v)
 {
@@ -321,9 +325,6 @@ static value_t fl_path_cwd(value_t *args, uint32_t nargs)
     return FL_T;
 }
 
-#ifdef WIN32
-#define stat _stat
-#endif
 static value_t fl_path_exists(value_t *args, uint32_t nargs)
 {
     argcount("path.exists?", nargs, 1);
@@ -351,9 +352,9 @@ static value_t fl_os_setenv(value_t *args, uint32_t nargs)
     char *name = tostring(args[0], "os.setenv");
     int result;
     if (args[1] == FL_F) {
-#ifdef __linux__
+#ifdef _OS_LINUX_
         result = unsetenv(name);
-#elif defined(__WIN32__)
+#elif defined(_OS_WINDOWS_)
         result = SetEnvironmentVariable(name,NULL);
 #else
         (void)unsetenv(name);
@@ -363,7 +364,7 @@ static value_t fl_os_setenv(value_t *args, uint32_t nargs)
     }
     else {
         char *val = tostring(args[1], "os.setenv");
-#if defined (__WIN32__)
+#if defined (_OS_WINDOWS_)
         result = SetEnvironmentVariable(name,val);
 #else
 		result = setenv(name, val, 1);

@@ -58,6 +58,7 @@ External libraries, if used, include their own licenses:
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt)
 - [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
 - [LLVM](http://llvm.org/releases/3.0/LICENSE.TXT)
+- [MPFR](http://www.mpfr.org/mpfr-current/mpfr.html#Copying)
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE)
 - [PCRE](http://www.pcre.org/licence.txt)
 - [READLINE](http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html)

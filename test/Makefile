@@ -4,16 +4,17 @@ include ../Make.inc
 TESTS = all core keywordargs numbers strings unicode corelib hashing	\
 	remote iostring arrayops linalg blas fft dsp sparse bitarray		\
 	random math functional bigint sorting statistics spawn	parallel	\
-	arpack bigfloat file git pkg pkg2 suitesparse complex version
+	arpack bigfloat file git pkg pkg2 suitesparse complex version		\
+	pollfd mpfr
 
 $(TESTS) ::
-	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
+	$(QUIET_JULIA) $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@
 
 perf:
 ifneq ($(MAKECMDGOALS),perf)
-	$(QUIET_JULIA) $(JULIA_EXECUTABLE) perf/$@.jl
+	$(QUIET_JULIA) $(call spawn,$(JULIA_EXECUTABLE)) perf/$@.jl
 else
-	@$(JULIA_EXECUTABLE) perf/$@.jl | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
+	@$(call spawn,$(JULIA_EXECUTABLE)) perf/$@.jl | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
 endif
 
 benchmark:

@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
@@ -80,7 +80,7 @@ static jl_array_t *_new_array(jl_value_t *atype,
         }
         tsz = (tsz+15)&-16; // align whole object size 16
         a = allocobj(tsz);
-        JL_GC_PUSH(&a);
+        JL_GC_PUSH1(&a);
         a->type = atype;
         a->ismalloc = 1;
         a->isinline = 0;
@@ -140,7 +140,7 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
         a->elsize = sizeof(void*);
         a->ptrarray = 1;
     }
-    JL_GC_PUSH(&a);
+    JL_GC_PUSH1(&a);
 
     char *d = data->data;
     if (data->ndims == 1) d -= data->offset*data->elsize;
@@ -352,7 +352,7 @@ jl_value_t *jl_array_to_string(jl_array_t *a)
 jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
     jl_array_t *a = jl_pchar_to_array(str, len);
-    JL_GC_PUSH(&a);
+    JL_GC_PUSH1(&a);
     jl_value_t *s = jl_array_to_string(a);
     JL_GC_POP();
     return s;
@@ -405,7 +405,7 @@ JL_CALLABLE(jl_f_arraysize)
         JL_NARGS(arraysize, 1, 1);
     }
     jl_tuple_t *d = jl_alloc_tuple(nd);
-    JL_GC_PUSH(&d);
+    JL_GC_PUSH1(&d);
     size_t i;
     for(i=0; i < nd; i++)
         jl_tupleset(d, i, jl_box_long(jl_array_dim(a,i)));

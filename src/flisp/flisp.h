@@ -2,8 +2,10 @@
 #define FLISP_H
 
 #include <setjmp.h>
-#include "libsupport.h"
 #include <stdint.h>
+
+#include "platform.h"
+#include "libsupport.h"
 #include "../../deps/libuv/include/uv.h"
 
 typedef uptrint_t value_t;
@@ -14,7 +16,6 @@ typedef int_t fixnum_t;
 #else
 #define T_FIXNUM T_INT32
 #endif
-
 
 typedef struct {
     value_t car;
@@ -185,15 +186,26 @@ extern value_t fl_lasterror;
   else \
     for(l__ca=1; l__ca; l__ca=0, fl_restorestate(&_ctx))
 
+#if defined(_OS_WINDOWS_)
+__declspec(noreturn) void lerrorf(value_t e, char *format, ...);
+__declspec(noreturn) void lerror(value_t e, const char *msg);
+__declspec(noreturn) void fl_raise(value_t e);
+__declspec(noreturn) void type_error(char *fname, char *expected, value_t got);
+__declspec(noreturn) void bounds_error(char *fname, value_t arr, value_t ind);
+#else
 void lerrorf(value_t e, char *format, ...) __attribute__ ((__noreturn__));
 void lerror(value_t e, const char *msg) __attribute__ ((__noreturn__));
-void fl_savestate(fl_exception_context_t *_ctx);
-void fl_restorestate(fl_exception_context_t *_ctx);
 void fl_raise(value_t e) __attribute__ ((__noreturn__));
 void type_error(char *fname, char *expected, value_t got) __attribute__ ((__noreturn__));
 void bounds_error(char *fname, value_t arr, value_t ind) __attribute__ ((__noreturn__));
+#endif
+
+void fl_savestate(fl_exception_context_t *_ctx);
+void fl_restorestate(fl_exception_context_t *_ctx);
+
 extern value_t ArgError, IOError, KeyError, MemoryError, EnumerationError;
 extern value_t UnboundError;
+
 static inline void argcount(char *fname, uint32_t nargs, uint32_t c)
 {
     if (__unlikely(nargs != c))

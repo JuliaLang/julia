@@ -34,7 +34,6 @@ export
     chol,
     cholfact,
     cholfact!,
-    cholp,
     cholpfact,
     cholpfact!,
     cond,
@@ -44,8 +43,6 @@ export
     det,
     diag,
     diagm,
-#    diagmm,
-#    diagmm!,
     diff,
     dot,
     eig,
@@ -59,8 +56,7 @@ export
     expm,
     sqrtm,
     eye,
-    factors,
-    hess,
+    gradient,
     hessfact,
     hessfact!,
     ishermitian,
@@ -87,8 +83,6 @@ export
     qrp,
     qrpfact!,
     qrpfact,
-    qmulQR,
-    qTmulQR,
     randsym,
     rank,
     rref,
@@ -138,6 +132,8 @@ export
 
 
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
+typealias BlasReal Union(Float64,Float32)
+typealias BlasComplex Union(Complex128,Complex64)
 typealias BlasChar Char
 
 if USE_LIB64
@@ -148,6 +144,7 @@ else
     blas_int(x) = int32(x)
 end
 
+include("linalg/exceptions.jl")
 include("linalg/generic.jl")
 
 include("linalg/blas.jl")

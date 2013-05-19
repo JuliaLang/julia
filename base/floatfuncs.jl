@@ -29,7 +29,14 @@ maxintfloat(::Type{Float32}) = float32(16777216.)
 maxintfloat{T<:FloatingPoint}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
-integer_valued(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
+isinteger(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
+isfloat64(x::Number) = float64(x) == x
+isfloat64(::Float64) = true
+isfloat64(::Float32) = true
+
+## precision, as defined by the effective number of bits in the mantissa ##
+get_precision(::Float32) = 24
+get_precision(::Float64) = 53
 
 num2hex(x::Float32) = hex(box(Uint32,unbox(Float32,x)),8)
 num2hex(x::Float64) = hex(box(Uint64,unbox(Float64,x)),16)

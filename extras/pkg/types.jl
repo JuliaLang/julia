@@ -1,27 +1,64 @@
-import Base: Git, isequal, isless, hash, isempty, contains
+module Types
+
+export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies
 
 immutable VersionInterval
     lower::VersionNumber
     upper::VersionNumber
 end
 
-isempty(i::VersionInterval) = i.upper <= i.lower
-contains(i::VersionInterval, v::VersionNumber) = a.lower <= v < a.upper
-intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
-intersect(A::Vector{VersionInterval}, B::Vector{VersionInterval}) =
-    sortby!(filter!(i->!isempty(i), vec([ intersect(a,b) for a in A, b in B ])), i->i.lower)
+Base.show(io::IO, i::VersionInterval) = print(io, "[$(i.lower),$(i.upper))")
+Base.isempty(i::VersionInterval) = i.upper <= i.lower
+Base.contains(i::VersionInterval, v::VersionNumber) = i.lower <= v < i.upper
+Base.intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
 
-typealias Requires Dict{ByteString,Vector{VersionInterval}}
+immutable VersionSet
+	intervals::Vector{VersionInterval}
+end
+
+Base.show(io::IO, s::VersionSet) = print_joined(io, s.intervals, " ∪ ")
+Base.isempty(s::VersionSet) = all(i->isempty(i), s.intervals)
+Base.contains(s::VersionSet, v::VersionNumber) = any(i->contains(i,v), s.intervals)
+function Base.intersect(A::VersionSet, B::VersionSet)
+	ivals = vec([ intersect(a,b) for a in A.intervals, b in B.intervals ])
+	filter!(i->!isempty(i), ivals)
+    sortby!(ivals, i->i.lower)
+    VersionSet(ivals)
+end
+
+typealias Requires Dict{ByteString,VersionSet}
+
+function merge_requires!(A::Requires, B::Requires)
+    for (pkg,vers) in B
+        A[pkg] = haskey(A,pkg) ? intersect(A[pkg],vers) : vers
+    end
+    return A
+end
+
+satisfies(pkg::String, ver::VersionNumber, reqs::Requires) =
+	!haskey(reqs, pkg) || contains(reqs[pkg], ver)
 
 immutable Available
 	sha1::ASCIIString
 	requires::Requires
 end
 
-abstract Installed
-immutable Free <: Installed end
-immutable Fixed <: Installed
+Base.show(io::IO, a::Available) = isempty(a.requires) ?
+	print(io, "Available(", repr(a.sha1), ")") :
+	print(io, "Available(", repr(a.sha1), ",", a.requires, ")")
+
+immutable Fixed
 	version::VersionNumber
 	requires::Requires
 end
 Fixed(v::VersionNumber) = Fixed(v,Requires())
+
+Base.show(io::IO, f::Fixed) = isempty(f.requires) ?
+	print(io, "Fixed(", repr(f.version), ")") :
+	print(io, "Fixed(", repr(f.version), ",", f.requires, ")")
+
+# TODO: Available & Fixed are almost the same – merge them?
+# Free could include the same information too, it just isn't
+# required by anything that processes these things.
+
+end # module

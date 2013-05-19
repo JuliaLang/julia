@@ -1,18 +1,25 @@
+#include "platform.h"
+
+/*
+ * There is no need to define WINVER because it is already defined in Makefile.
+ */
+#if defined(_COMPILER_MINGW_)
 #define WINVER                 _WIN32_WINNT
 #define _WIN32_WINDOWS         _WIN32_WINNT
+#endif
+
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-#ifdef __WIN32__
-#include <w32api.h>
+#ifdef _OS_WINDOWS_
 #include <ws2tcpip.h>
 #include <malloc.h>
 #else
 #include "errno.h"
+#include <unistd.h>
 #include <sys/socket.h>
 #endif
 
@@ -25,8 +32,18 @@
 extern "C" {
 #endif
 
+// To be removed once we upgrade libuv
+#define uv_stat_t uv_statbuf_t
 
 /** libuv callbacks */
+
+/*
+ * Notes for adding new callbacks
+ * - Make sure to type annotate the callback, so we'll get the one in the new
+ *   Base module rather than the old one.
+ *
+ */
+
 //These callbacks are implemented in stream.jl
 #define JL_CB_TYPES(XX) \
 	XX(close) \
@@ -36,7 +53,11 @@ extern "C" {
 	XX(connectcb) \
 	XX(connectioncb) \
 	XX(asynccb) \
-    XX(getaddrinfo)
+    XX(getaddrinfo) \
+    XX(pollcb) \
+    XX(fspollcb) \
+    XX(isopen) \
+    XX(fseventscb)
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
@@ -56,20 +77,21 @@ DLLEXPORT void jl_get_uv_hooks()
 int base_module_conflict = 0; //set to 1 if Base is getting redefined since it means there are two place to try the callbacks
 // warning: this is defined without the standard do {...} while (0) wrapper, since I wanted ret to escape
 // warning: during bootstrapping, callbacks will be called twice if a MethodError occured at ANY time during callback call
-#define JULIA_CB(hook,args...) \
+// Use:  JULIA_CB(hook, arg1, numberOfAdditionalArgs, arg2Type, arg2, ..., argNType, argN)
+#define JULIA_CB(hook, ...) \
     jl_value_t *ret; \
     if (!base_module_conflict) { \
-        ret = jl_callback_call(JULIA_HOOK(hook),args); \
+        ret = jl_callback_call(JULIA_HOOK(hook),__VA_ARGS__); \
     } else { \
         JL_TRY { \
-            ret = jl_callback_call(JULIA_HOOK(hook),args); \
+            ret = jl_callback_call(JULIA_HOOK(hook),__VA_ARGS__); \
             /* jl_puts(#hook " original succeeded\n",jl_uv_stderr); */ \
         } \
         JL_CATCH { \
             if (jl_typeof(jl_exception_in_transit) == (jl_value_t*)jl_methoderror_type) { \
                 /* jl_puts("\n" #hook " being retried with new Base bindings --> ",jl_uv_stderr); */ \
                 jl_function_t *cb_func = JULIA_HOOK_((jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base")), hook); \
-                ret = jl_callback_call(cb_func,args); \
+                ret = jl_callback_call(cb_func,__VA_ARGS__); \
                 /* jl_puts(#hook " succeeded\n",jl_uv_stderr); */ \
             } else { \
                 jl_rethrow(); \
@@ -112,9 +134,16 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 
 void closeHandle(uv_handle_t* handle)
 {
-    JULIA_CB(close,handle->data,0); (void)ret;
-    //TODO: maybe notify Julia handle to close itself
+    if(handle->data) {
+        JULIA_CB(close,handle->data,0); (void)ret;
+    }
     free(handle);
+}
+
+void shutdownCallback(uv_shutdown_t* req, int status)
+{
+    uv_close((uv_handle_t*) req->handle,&closeHandle);
+    free(req);
 }
 
 void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal)
@@ -162,6 +191,25 @@ void jl_getaddrinfocb(uv_getaddrinfo_t *req,int status, struct addrinfo *addr)
 void jl_asynccb(uv_handle_t *handle, int status)
 {
     JULIA_CB(asynccb,handle->data,1,CB_INT32,status);
+    (void)ret;
+}
+
+void jl_pollcb(uv_poll_t *handle, int status, int events)
+{
+    JULIA_CB(pollcb,handle->data,2,CB_INT32,status,CB_INT32,events)
+    (void)ret;
+}
+
+void jl_fspollcb(uv_fs_poll_t* handle, int status, const uv_stat_t* prev, const uv_stat_t* curr)
+{
+    JULIA_CB(fspollcb,handle->data,3,CB_INT32,status,CB_PTR,prev,CB_PTR,curr)
+    (void)ret;
+}
+
+
+void jl_fseventscb(uv_fs_event_t* handle, const char* filename, int events, int status)
+{
+    JULIA_CB(fseventscb,handle->data,3,CB_PTR,filename,CB_INT32,events,CB_INT32,status)
     (void)ret;
 }
 
@@ -253,16 +301,42 @@ DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only,
 
 DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
-    if (!handle)
+    if (!handle || uv_is_closing(handle))
        return;
     if (handle->type==UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
-    uv_close(handle,&closeHandle);
+
+    if ( (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) && uv_is_writable( (uv_stream_t *) handle)) { 
+        // Make sure that the stream has not already been marked closed in Julia.
+        // A double shutdown would cause the process to hang on exit.
+        JULIA_CB(isopen, handle->data, 0);
+        if (!jl_is_int32(ret)) {
+            jl_error("jl_close_uv: _uv_hook_isopen must return an int32.");
+        }
+        if (!jl_unbox_int32(ret)){
+            return;
+        }
+
+        uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
+        int err = uv_shutdown(req, (uv_stream_t*)handle, &shutdownCallback);
+        if (err != 0) {
+            printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));
+            uv_close(handle, &closeHandle);
+        }
+    }
+    else {
+        uv_close(handle,&closeHandle);
+    }
 }
 
 DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data)
 {
     handle->data = data;
+}
+
+DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
+{
+    handle->data = NULL;
 }
 
 DLLEXPORT int32_t jl_start_reading(uv_stream_t *handle)
@@ -280,7 +354,9 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog)
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
+#if defined(_COMPILER_MINGW_)
 extern char **environ;
+#endif
 #endif
 
 DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
@@ -296,7 +372,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     uv_stdio_container_t stdio[3];
     int error;
     opts.file = name;
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
     opts.env = environ;
 #else
     opts.env = NULL;
@@ -317,11 +393,10 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
     opts.exit_cb = &jl_return_spawn;
     error = uv_spawn(loop,proc,opts);
-    proc->data = julia_struct;
     return error;
 }
 
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 #include <time.h>
 DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm)
 {
@@ -354,15 +429,26 @@ DLLEXPORT int jl_idle_start(uv_idle_t *idle)
     return uv_idle_start(idle,(uv_idle_cb)&jl_asynccb);
 }
 
+DLLEXPORT int jl_poll_start(uv_poll_t* handle, int32_t events)
+{
+    return uv_poll_start(handle, events, &jl_pollcb);
+}
+
+DLLEXPORT int jl_fs_poll_start(uv_fs_poll_t* handle, char *file, uint32_t interval)
+{
+    return uv_fs_poll_start(handle,&jl_fspollcb,file,interval);
+}
+
+DLLEXPORT int jl_fs_event_init(uv_loop_t* loop, uv_fs_event_t* handle,
+    const char* filename, int flags)
+{
+    return uv_fs_event_init(loop,handle,filename,&jl_fseventscb,flags);
+}
+
 //units are in ms
 DLLEXPORT int jl_timer_start(uv_timer_t* timer, int64_t timeout, int64_t repeat)
 {
     return uv_timer_start(timer,(uv_timer_cb)&jl_asynccb,timeout,repeat);
-}
-
-DLLEXPORT int jl_timer_stop(uv_timer_t* timer)
-{
-    return uv_timer_stop(timer);
 }
 
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
@@ -471,7 +557,11 @@ int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
     char *str=NULL;
     int c;
     va_list al;
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+    al = args;
+#else
     va_copy(al, args);
+#endif
 
     c = vasprintf(&str, format, al);
 
@@ -504,6 +594,11 @@ DLLEXPORT size_t jl_sizeof_uv_stream_t()
     return sizeof(uv_stream_t);
 }
 
+DLLEXPORT size_t jl_sizeof_uv_poll_t()
+{
+    return sizeof(uv_poll_t);
+}
+
 DLLEXPORT size_t jl_sizeof_uv_pipe_t()
 {
     return sizeof(uv_pipe_t);
@@ -512,6 +607,16 @@ DLLEXPORT size_t jl_sizeof_uv_pipe_t()
 DLLEXPORT size_t jl_sizeof_uv_process_t()
 {
     return sizeof(uv_process_t);
+}
+
+DLLEXPORT size_t jl_sizeof_uv_fs_poll_t()
+{
+    return sizeof(uv_fs_poll_t);
+}
+
+DLLEXPORT size_t jl_sizeof_uv_fs_events_t()
+{
+    return sizeof(uv_fs_event_t);
 }
 
 DLLEXPORT void uv_atexit_hook();
@@ -532,7 +637,7 @@ DLLEXPORT int jl_cwd(char *buffer, size_t size)
 
 DLLEXPORT int jl_getpid()
 {
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
     return GetCurrentProcessId();
 #else
     return getpid();
@@ -568,7 +673,7 @@ DLLEXPORT void getlocalip(char *buf, size_t len)
         ifa = (ifAddrStruct+i)->address.address4;
         if (ifa.sin_family==AF_INET) { // check it is IP4
             // is a valid IP4 Address
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
             tmpAddrPtr=&(ifa.sin_addr);
             inet_ntop(AF_INET, tmpAddrPtr, buf, len); //Not available on WinXP
 #else

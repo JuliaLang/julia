@@ -43,20 +43,33 @@ convert(::Type{FloatingPoint}, x::Uint128) = convert(Float64, x) # LOSSY
 
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
-float(x)   = convert(FloatingPoint,   x)
+float(x)   = convert(FloatingPoint, x)
 
 ## conversions from floating-point ##
+
+# fallbacks using only convert, trunc, ceil, floor, round
+itrunc(x::FloatingPoint) = convert(Integer,trunc(x))
+iceil (x::FloatingPoint) = convert(Integer,ceil(x))  # TODO: fast primitive for iceil
+ifloor(x::FloatingPoint) = convert(Integer,floor(x)) # TOOD: fast primitive for ifloor
+iround(x::FloatingPoint) = convert(Integer,round(x))
+
+itrunc{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,trunc(x))
+iceil {T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,ceil(x))
+ifloor{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,floor(x))
+iround{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,round(x))
+
+## fast specific type converions ##
 
 if WORD_SIZE == 64
     iround(x::Float32) = iround(float64(x))
     itrunc(x::Float32) = itrunc(float64(x))
     iround(x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
-    itrunc(x::Float64) = box(Int64,fptosi64(unbox(Float64,x)))
+    itrunc(x::Float64) = box(Int64,fptosi(unbox(Float64,x)))
 else
     iround(x::Float32) = box(Int32,fpsiround(unbox(Float32,x)))
-    itrunc(x::Float32) = box(Int32,fptosi32(unbox(Float32,x)))
+    itrunc(x::Float32) = box(Int32,fptosi(unbox(Float32,x)))
     iround(x::Float64) = int32(box(Int64,fpsiround(unbox(Float64,x))))
-    itrunc(x::Float64) = int32(box(Int64,fptosi64(unbox(Float64,x))))
+    itrunc(x::Float64) = int32(box(Int64,fptosi(unbox(Float64,x))))
 end
 
 for to in (Int8, Uint8, Int16, Uint16)
@@ -83,9 +96,6 @@ iround(::Type{Uint128}, x::Float64) = convert(Uint128,round(x))
 # this is needed very early because it is used by Range and colon
 round(x::Float64) = ccall((:round, Base.libm_name), Float64, (Float64,), x)
 floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
-
-iceil(x::FloatingPoint)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
-ifloor(x::FloatingPoint) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
 
 ## floating point promotions ##
 
@@ -147,10 +157,13 @@ rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float
 <=(x::Float32, y::Float32) = le_float(unbox(Float32,x),unbox(Float32,y))
 <=(x::Float64, y::Float64) = le_float(unbox(Float64,x),unbox(Float64,y))
 
-isequal(x::Float32, y::Float32) = fpiseq32(unbox(Float32,x),unbox(Float32,y))
-isequal(x::Float64, y::Float64) = fpiseq64(unbox(Float64,x),unbox(Float64,y))
-isless (x::Float32, y::Float32) = fpislt32(unbox(Float32,x),unbox(Float32,y))
-isless (x::Float64, y::Float64) = fpislt64(unbox(Float64,x),unbox(Float64,y))
+isequal(x::FloatingPoint, y::FloatingPoint) =
+    ((x==y) & (signbit(x)==signbit(y))) | (isnan(x)&isnan(y))
+
+isequal(x::Float32, y::Float32) = fpiseq(unbox(Float32,x),unbox(Float32,y))
+isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
+isless (x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
+isless (x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
 
 isequal(a::Integer, b::FloatingPoint) = (a==b) & isequal(float(a),b)
 isequal(a::FloatingPoint, b::Integer) = isequal(b, a)
@@ -187,14 +200,14 @@ isless (a::FloatingPoint, b::Integer) = (a<b) | isless(a,float(b))
 <=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Float64,float64(y)))
 <=(x::Uint64 , y::Float32) = leuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
 
-==(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)==float64(y)
-==(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)==float64(y)
+==(x::Float32, y::Union(Int32,Uint32)) = float64(x)==float64(y)
+==(x::Union(Int32,Uint32), y::Float32) = float64(x)==float64(y)
 
-<(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)<float64(y)
-<(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)<float64(y)
+<(x::Float32, y::Union(Int32,Uint32)) = float64(x)<float64(y)
+<(x::Union(Int32,Uint32), y::Float32) = float64(x)<float64(y)
 
-<=(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)<=float64(y)
-<=(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)<=float64(y)
+<=(x::Float32, y::Union(Int32,Uint32)) = float64(x)<=float64(y)
+<=(x::Union(Int32,Uint32), y::Float32) = float64(x)<=float64(y)
 
 ## floating point traits ##
 

@@ -39,17 +39,12 @@ complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
 complex64(z) = complex64(real(z), imag(z))
 
-for fn in (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,
-           :uint,:unsigned,:uint8,:uint16,:uint32,:uint64,:uint128,
-           :float,:float32,:float64)
+for fn in _numeric_conversion_func_names
     @eval $fn(z::Complex) = complex($fn(real(z)),$fn(imag(z)))
 end
 
-iscomplex(x::Complex) = true
-iscomplex(x::Number) = false
-
-real_valued{T<:Real}(z::Complex{T}) = imag(z) == 0
-integer_valued(z::Complex) = real_valued(z) && integer_valued(real(z))
+isreal{T<:Real}(z::Complex{T}) = imag(z) == 0
+isinteger(z::Complex) = isreal(z) && isinteger(real(z))
 
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
@@ -93,8 +88,6 @@ end
 type ImaginaryUnit <: Number end
 const im = ImaginaryUnit()
 
-iscomplex(::ImaginaryUnit) = true
-
 convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex{T}(zero(T),one(T))
 convert(::Type{Complex}, ::ImaginaryUnit) = Complex(real(im),imag(im))
 
@@ -110,15 +103,15 @@ promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = Complex{T}
 convert(::Type{Complex}, z::Complex) = z
 convert(::Type{Complex}, x::Real) = complex(x)
 
-==(z::Complex, w::Complex) = real(z) == real(w) && imag(z) == imag(w)
-==(z::Complex, x::Real) = real_valued(z) && real(z) == x
-==(x::Real, z::Complex) = real_valued(z) && real(z) == x
+==(z::Complex, w::Complex) = (real(z) == real(w)) & (imag(z) == imag(w))
+==(z::Complex, x::Real) = isreal(z) && real(z) == x
+==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
-isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) && isequal(imag(z),imag(w))
-isequal(z::Complex, x::Real) = real_valued(z) && isequal(real(z),x)
-isequal(x::Real, z::Complex) = real_valued(z) && isequal(real(z),x)
+isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+isequal(z::Complex, x::Real) = isreal(z) && isequal(real(z),x)
+isequal(x::Real, z::Complex) = isreal(z) && isequal(real(z),x)
 
-hash(z::Complex) = (r = hash(real(z)); real_valued(z) ? r : bitmix(r,hash(imag(z))))
+hash(z::Complex) = (r = hash(real(z)); isreal(z) ? r : bitmix(r,hash(imag(z))))
 
 conj(z::Complex) = complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
@@ -338,6 +331,18 @@ function ^{T<:FloatingPoint}(z::Complex{T}, p::Complex{T})
     end
 end
 
+function exp2{T}(z::Complex{T})
+    er = exp2(real(z))
+    theta = imag(z) * log(convert(T, 2))
+    complex(er*cos(theta), er*sin(theta))
+end
+
+function exp10{T}(z::Complex{T})
+    er = exp10(real(z))
+    theta = imag(z) * log(convert(T, 10))
+    complex(er*cos(theta), er*sin(theta))
+end
+
 function ^{T<:Complex}(z::T, p::T)
     pr, pim = reim(p)
     zr, zi = reim(z)
@@ -390,6 +395,8 @@ function ^{T<:Complex}(z::T, p::T)
     complex(re, im)
 end
 
+^(z::Complex, n::Bool) = n ? z : one(z)
+^(z::Complex, n::Integer) = z^complex(n)
 
 function tan(z::Complex)
     zr, zi = reim(z)
