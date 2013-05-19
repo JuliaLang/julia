@@ -4227,6 +4227,27 @@
 
 "),
 
+("Numerical Integration","Base","quadgk","quadgk(f, a,b,c...; options)
+
+   Numerically integrate the function \"f(x)\" from \"a\" to \"b\",
+   and optionally over additional intervals \"b\" to \"c\" and so on.
+   Keyword options include a relative error tolerance \"reltol\" (defaults
+   to \"100*eps\"), an absolute error tolerance \"abstol\" (defaults
+   to 0), a maximum number of function evaluations \"maxevals\" (defaults
+   to \"10^7\"), and the \"order\" of the integration rule (defaults to 7).
+
+   Returns a pair \"(I,E)\" of the estimated integral \"I\" and an
+   estimated upper bound on the absolute error \"E\".
+
+   Complex-valued functions are supported, and the endpoints \"a\" etcetera
+   can also be complex (in which case the integral is performed over
+   straight-line segments in the complex plane).  If the endpoints
+   are \"BigFloat\", then the integration will be performed in that
+   precision as well (note: it is advisable to increase the integration
+   \"order\" in rough proportion to the precision, for smooth integrands).
+
+"),
+
 ("Parallel Computing","Base","addprocs","addprocs(n)
 
    Add processes on the local machine. Can be used to take advantage
