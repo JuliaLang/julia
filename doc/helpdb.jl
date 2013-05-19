@@ -4232,7 +4232,7 @@
    Numerically integrate the function \"f(x)\" from \"a\" to \"b\",
    and optionally over additional intervals \"b\" to \"c\" and so on.
    Keyword options include a relative error tolerance \"reltol\" (defaults
-   to \"100*eps\"), an absolute error tolerance \"abstol\" (defaults
+   to \"sqrt(eps)\"), an absolute error tolerance \"abstol\" (defaults
    to 0), a maximum number of function evaluations \"maxevals\" (defaults
    to \"10^7\"), and the \"order\" of the integration rule (defaults to 7).
 
