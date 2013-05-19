@@ -80,16 +80,15 @@ log(b,x) = log(x)/log(b)
 function hypot(x::Real, y::Real)
     x = abs(x)
     y = abs(y)
-    if x > y
+    if x < y
+        x, y = y, x
+    end
+    if x == 0
+        r = y/one(x)
+    else
         r = y/x
-        return x*sqrt(one(r)+r*r)
     end
-    r = x/y
-    s = y*sqrt(one(r)+r*r)
-    if y == 0
-        return zero(s)
-    end
-    return s
+    x * sqrt(one(r)+r*r)
 end
 
 square(x::Number) = x*x

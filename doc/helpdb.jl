@@ -229,6 +229,12 @@
 
 "),
 
+("Types","Base","super","super(T::DataType)
+
+   Return the supertype of DataType T
+
+"),
+
 ("Types","Base","subtype","subtype(type1, type2)
 
    True if and only if all values of \"type1\" are also of \"type2\".
@@ -240,6 +246,22 @@
 ("Types","Base","<:","<:(T1, T2)
 
    Subtype operator, equivalent to \"subtype(T1,T2)\".
+
+"),
+
+("Types","Base","subtypes","subtypes(T::DataType)
+
+   Return a list of immediate subtypes of DataType T.  Note that all
+   currently loaded subtypes are included, including those not visible
+   in the current module.
+
+"),
+
+("Types","Base","subtypetree","subtypetree(T::DataType)
+
+   Return a nested list of all subtypes of DataType T.  Note that all
+   currently loaded subtypes are included, including those not visible
+   in the current module.
 
 "),
 
@@ -330,6 +352,22 @@
 
    Determine the declared type of a named field in a value of
    composite type.
+
+"),
+
+("Types","Base","isimmutable","isimmutable(v)
+
+   True if value \"v\" is immutable.  See *Immutable Composite Types*
+   for a discussion of immutability.
+
+"),
+
+("Types","Base","isbits","isbits(T)
+
+   True if \"T\" is a \"plain data\" type, meaning it is immutable and
+   contains no references to other values. Typical examples are
+   numeric types such as \"Uint8\", \"Float64\", and
+   \"Complex{Float64}\".
 
 "),
 
@@ -734,8 +772,8 @@
 
 ("Set-Like Collections","Base","intersect","intersect(s1, s2...)
 
-   Construct the intersection of two or more sets. Maintains order
-   with arrays.
+   Construct the intersection of two or more sets. Maintains order and
+   multiplicity of the first argument for arrays and ranges.
 
 "),
 
@@ -1277,7 +1315,7 @@
 
 "),
 
-("I/O","Base","memio","memio([size[, finalize::Bool]]) -> IOStream
+("I/O","Base","IOBuffer","IOBuffer([size]) -> IOBuffer
 
    Create an in-memory I/O stream, optionally specifying how much
    initial space is needed.
@@ -1709,6 +1747,15 @@
 ("Mathematical Functions","Base",">>>",">>>(x, n)
 
    Unsigned right shift operator.
+
+"),
+
+("Mathematical Functions","Base",":",":(start[, step], stop)
+
+   Range operator. \"a:b\" constructs a range from \"a\" to \"b\" with
+   a step size of 1, and \"a:s:b\" is similar but uses a step size of
+   \"s\". These syntaxes call the function \"colon\". The colon is
+   also used in indexing to select whole dimensions.
 
 "),
 
@@ -4180,6 +4227,27 @@
 
 "),
 
+("Numerical Integration","Base","quadgk","quadgk(f, a,b,c...; options)
+
+   Numerically integrate the function \"f(x)\" from \"a\" to \"b\",
+   and optionally over additional intervals \"b\" to \"c\" and so on.
+   Keyword options include a relative error tolerance \"reltol\" (defaults
+   to \"100*eps\"), an absolute error tolerance \"abstol\" (defaults
+   to 0), a maximum number of function evaluations \"maxevals\" (defaults
+   to \"10^7\"), and the \"order\" of the integration rule (defaults to 7).
+
+   Returns a pair \"(I,E)\" of the estimated integral \"I\" and an
+   estimated upper bound on the absolute error \"E\".
+
+   Complex-valued functions are supported, and the endpoints \"a\" etcetera
+   can also be complex (in which case the integral is performed over
+   straight-line segments in the complex plane).  If the endpoints
+   are \"BigFloat\", then the integration will be performed in that
+   precision as well (note: it is advisable to increase the integration
+   \"order\" in rough proportion to the precision, for smooth integrands).
+
+"),
+
 ("Parallel Computing","Base","addprocs","addprocs(n)
 
    Add processes on the local machine. Can be used to take advantage
@@ -4219,7 +4287,9 @@
 ("Parallel Computing","Base","pmap","pmap(f, c)
 
    Transform collection \"c\" by applying \"f\" to each element in
-   parallel.
+   parallel. If \"nprocs() > 1\", the calling process will be
+   dedicated to assigning tasks. All other available processes will be
+   used as parallel workers.
 
 "),
 
@@ -4583,7 +4653,10 @@
 ("C Interface","Base","cglobal","cglobal((symbol, library) or ptr[, Type=Void])
 
    Obtain a pointer to a global variable in a C-exported shared
-   library,
+   library, specified exactly as in \"ccall\".  Returns a
+   \"Ptr{Type}\", defaulting to \"Ptr{Void}\" if no Type argument is
+   supplied.  The values can be read or written by \"unsafe_load\" or
+   \"unsafe_store!\", respectively.
 
 "),
 
@@ -4756,13 +4829,6 @@
 
    Send the given value to the last \"consume\" call, switching to the
    consumer task.
-
-"),
-
-("Tasks","Base","make_scheduled","make_scheduled(task)
-
-   Register a task with the main event loop, so it will automatically
-   run when possible.
 
 "),
 
@@ -5839,7 +5905,7 @@
    Sort a vector in ascending order.  Specify \"alg\" to choose a
    particular sorting algorithm (\"Sort.InsertionSort\",
    \"Sort.QuickSort\", \"Sort.MergeSort\", or \"Sort.TimSort\"), and
-   \"ord\" to sort with a custom ordering (e.g., Sort.Reverse or a
+   \"ord\" to sort with a custom ordering (e.g., \"Sort.Reverse\" or a
    comparison function).
 
 "),
@@ -5870,7 +5936,8 @@
    \"v\" will sort it.  Specify \"alg\" to choose a particular sorting
    algorithm (\"Sort.InsertionSort\", \"Sort.QuickSort\",
    \"Sort.MergeSort\", or \"Sort.TimSort\"), and \"ord\" to sort with
-   a custom ordering (e.g., Sort.Reverse or a comparison function).
+   a custom ordering (e.g., \"Sort.Reverse\" or a comparison
+   function).
 
 "),
 

@@ -329,9 +329,9 @@ function getindex{T<:Real}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
     X = similar(A, index_shape(I, J))
     storeind = 1
     for j = J
-        offset = (j-1)*size(A,1)
+        offset = (convert(Int,j)-1)*size(A,1)
         for i = I
-            X[storeind] = A[i+offset]
+            X[storeind] = A[convert(Int,i)+offset]
             storeind += 1
         end
     end
