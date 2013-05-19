@@ -148,6 +148,8 @@ end
 matchall(re::Regex, str::Union(ByteString,SubString), overlap::Bool=false) =
     matchall(re, utf8(str), overlap)
 
+match(fn::Function, r::Regex, args...) = (m = match(r, args...); if m != nothing; fn(m.captures...); else nothing end)
+
 function search(str::Union(ByteString,SubString), re::Regex, idx::Integer)
     if idx > nextind(str,endof(str))
         throw(BoundsError())
