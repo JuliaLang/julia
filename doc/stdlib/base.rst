@@ -2804,12 +2804,12 @@ Although several external packages are available for numeric integration
 and solution of ordinary differential equations, we also provide
 some built-in integration support in Julia.
 
-.. function:: quadgk(f, a,b,c...; reltol=eps*100, abstol=0, maxevals=10^7, order=7)
+.. function:: quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7)
 
    Numerically integrate the function ``f(x)`` from ``a`` to ``b``,
    and optionally over additional intervals ``b`` to ``c`` and so on.
    Keyword options include a relative error tolerance ``reltol`` (defaults
-   to ``100*eps`` in the precision of the endpoints), an absolute error
+   to ``sqrt(eps)`` in the precision of the endpoints), an absolute error
    tolerance ``abstol`` (defaults to 0), a maximum number of function
    evaluations ``maxevals`` (defaults to ``10^7``), and the ``order``
    of the integration rule (defaults to 7).     
