@@ -82,14 +82,14 @@ z = BigFloat(30)
 # rounding modes
 with_bigfloat_precision(4) do
     # default mode is round to nearest
-    down, up =  with_bigfloat_rounding(MPFR.RoundToNearest) do
+    down, up =  with_bigfloat_rounding(RoundToNearest) do
         BigFloat("0.0938"), BigFloat("0.102")
     end
-    with_bigfloat_rounding(MPFR.RoundDown) do
+    with_bigfloat_rounding(RoundDown) do
         @test BigFloat(0.1) == down
         @test BigFloat(0.1) != up
     end
-    with_bigfloat_rounding(MPFR.RoundUp) do
+    with_bigfloat_rounding(RoundUp) do
         @test BigFloat(0.1) != down
         @test BigFloat(0.1) == up
     end
