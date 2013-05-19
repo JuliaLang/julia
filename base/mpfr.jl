@@ -2,6 +2,7 @@ module MPFR
 
 export
     BigFloat,
+    RoundAwayZero,
     get_bigfloat_precision,
     set_bigfloat_precision,
     with_bigfloat_precision,
