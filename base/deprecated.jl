@@ -5,7 +5,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old)),
             :(function $(esc(old))(args...)
-                  warn_once(string($oldname," is deprecated, use ",$newname," instead."))
+                  warn_once(string($oldname," is deprecated, use ",$newname," instead."); depth=1)
                   $(esc(new))(args...)
               end))
     elseif isa(old,Expr) && old.head == :call
@@ -14,7 +14,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old.args[1])),
             :($(esc(old)) = begin
-                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."))
+                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."); depth=1)
                   $(esc(new))
               end))
     else
@@ -50,7 +50,6 @@ end
 @deprecate  nCr             binomial
 @deprecate  julia_pkgdir    Pkg.dir
 @deprecate  tintersect      typeintersect
-@deprecate  searchsorted    searchsortedfirst
 @deprecate  choose          first
 @deprecate  system          run
 @deprecate  order           sortperm
@@ -120,12 +119,12 @@ end
 @deprecate  unsetenv(var)           delete!(ENV,var)
 
 function svd(a::StridedMatrix, vecs::Bool, thin::Bool)
-    warn_once("The second argument ``vecs`` is no longer supported. Use svd(a, thin) instead.")
+    warn_once("The second argument ``vecs`` is no longer supported. Use svd(a, thin) instead."; depth=1)
     svd(a, thin)
 end
 
 function svdt(a::StridedMatrix, vecs::Bool, thin::Bool)
-    warn_once("The second argument ``vecs`` is no longer supported. Use svdt(a, thin) instead.")
+    warn_once("The second argument ``vecs`` is no longer supported. Use svdt(a, thin) instead."; depth=1)
     svdt(a, thin)
 end
 
@@ -194,10 +193,16 @@ export PipeString
 @deprecate  unsafe_assign       unsafe_store!
 @deprecate  add_each!           union!
 @deprecate  del_each!           setdiff!
+@deprecate  real_valued         isreal
+@deprecate  integer_valued      isinteger
+@deprecate  float64_valued      isfloat64
 
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)
 @deprecate  readdir(cmd::Cmd)           readdir(string(cmd)[2:end-1])
+@deprecate  isbool(x)                   iseltype(x,Bool)
+@deprecate  iscomplex(x)                iseltype(x,Complex)
+
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 

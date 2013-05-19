@@ -21,7 +21,7 @@ ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
 endif
 
-#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp patchelf
+#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf
 #custom configure-driven script: zlib
 #custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv
 
@@ -102,6 +102,13 @@ endif
 #STAGE1_DEPS += zlib
 #endif
 
+ifeq ($(USE_SYSTEM_MPFR), 0)
+STAGE2_DEPS += mpfr
+ifeq ($(USE_SYSTEM_GMP), 0)
+MPFR_OPTS = -with-gmp=$(abspath $(BUILD))
+endif
+endif
+
 ifeq ($(USE_SYSTEM_ARPACK), 0)
 STAGE2_DEPS += arpack
 endif
@@ -134,7 +141,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-unwind get-gmp get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-unwind get-gmp get-mpfr get-zlib get-patchelf
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -276,7 +283,6 @@ endif
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build install
-	$(AUTOTOOLS_PATH_CORRECT) 
 	touch -c $@
 
 clean-llvm:
@@ -658,9 +664,16 @@ ifneq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += NUM_THREADS=30
 else
 # assume we may want lots of threads on some future machine
-OPENBLAS_BUILD_OPTS += NUM_THREADS=512
+ifeq ($(OS),WINNT) #windows seems unable to handle very many
+OPENBLAS_BUILD_OPTS += NUM_THREADS=80
+else #linux can handle up to 256 according to the FAQ
+OPENBLAS_BUILD_OPTS += NUM_THREADS=256
 endif
 endif
+endif
+
+# don't touch scheduler affinity since we manage this ourselves
+OPENBLAS_BUILD_OPTS += NO_AFFINITY=1
 
 ifeq ($(USE_LIB64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1
@@ -1181,6 +1194,52 @@ configure-gmp: gmp-$(GMP_VER)/config.status
 compile-gmp: $(GMP_SRC_TARGET)
 check-gmp: gmp-$(GMP_VER)/checked
 install-gmp: $(GMP_OBJ_TARGET)
+
+ifeq ($(USE_SYSTEM_GMP), 0)
+MPFR_DEPS = $(GMP_OBJ_TARGET)
+endif
+
+## MPFR ##
+
+MPFR_SRC_TARGET = mpfr-$(MPFR_VER)/src/.libs/libmpfr.$(SHLIB_EXT)
+MPFR_OBJ_TARGET = $(BUILD)/lib/libmpfr.$(SHLIB_EXT)
+ifeq ($(OS),Darwin)
+MPFR_CHECK_MFLAGS = LDFLAGS="-Wl,-rpath,'$(BUILD)/$(JL_LIBDIR)'"
+endif
+
+mpfr-$(MPFR_VER).tar.bz2:
+	$(WGET_DASH_O) $@ http://www.mpfr.org/mpfr-current/$@
+mpfr-$(MPFR_VER)/configure: mpfr-$(MPFR_VER).tar.bz2
+	tar jxf $<
+	touch -c $@
+mpfr-$(MPFR_VER)/config.status: mpfr-$(MPFR_VER)/configure $(MPFR_DEPS)
+	cd mpfr-$(MPFR_VER) && \
+	./configure $(CONFIGURE_COMMON) $(MPFR_OPTS) F77= --enable-shared --disable-static
+	touch -c $@
+$(MPFR_SRC_TARGET): mpfr-$(MPFR_VER)/config.status
+	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD)
+mpfr-$(MPFR_VER)/checked: $(MPFR_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
+	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD) check $(MPFR_CHECK_MFLAGS)
+endif
+	echo 1 > $@
+$(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET) mpfr-$(MPFR_VER)/checked
+	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD) install
+	$(INSTALL_NAME_CMD)libmpfr.dylib $@
+	$(AUTOTOOLS_PATH_CORRECT) 
+	touch -c $@
+
+clean-mpfr:
+	-$(MAKE) -C mpfr-$(MPFR_VER) clean
+	-rm -f $(MPFR_OBJ_TARGET)
+distclean-mpfr:
+	-rm -rf mpfr-$(MPFR_VER).tar.bz2 mpfr-$(MPFR_VER)
+
+get-mpfr: mpfr-$(MPFR_VER).tar.bz2
+configure-mpfr: mpfr-$(MPFR_VER)/config.status
+compile-mpfr: $(MPFR_SRC_TARGET)
+check-mpfr: mpfr-$(MPFR_VER)/checked
+install-mpfr: $(MPFR_OBJ_TARGET)
 
 ## ZLIB ##
 

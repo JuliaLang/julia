@@ -156,23 +156,25 @@ function takebuf_array(io::IOBuffer)
 end
 takebuf_string(io::IOBuffer) = bytestring(takebuf_array(io))
 
+function write(to::IOBuffer, p::Ptr, nb::Integer)
+    !to.writable && error("write failed")
+    ensureroom(to, nb)
+    ptr = (to.append ? to.size+1 : to.ptr)
+    nb = min(nb, length(to.data) - ptr + 1)
+    ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Int), pointer(to.data,ptr), p, nb)
+    to.size = max(to.size, ptr - 1 + nb)
+    if !to.append; to.ptr += nb; end
+    nb
+end
+
 function write_sub{T}(to::IOBuffer, a::Array{T}, offs, nel)
-    if !to.writable; error("write failed") end
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isbits(T)
-        nb = nel*sizeof(T)
-        ensureroom(to, nb)
-        ptr = (to.append ? to.size+1 : to.ptr)
-        nb = min(nb, length(to.data) - ptr + 1)
-        ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Int), pointer(to.data,ptr), pointer(a,offs), nb)
-        to.size = max(to.size, ptr - 1 + nb)
-        if !to.append; to.ptr += nb; end
-    else
+    if !isbits(T)
         error("Write to IOBuffer only supports bits types or arrays of bits types; got "*string(T)*".")
     end
-    nb
+    write(to, pointer(a,offs), nel*sizeof(T))
 end
 
 write(to::IOBuffer, a::Array) = write_sub(to, a, 1, length(a))

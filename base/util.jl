@@ -101,7 +101,7 @@ macro which(ex)
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
-            if isa(a11, TopNode) && a11.name == :setindex!
+            if a11 == :setindex!
                 exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
             end
         end
@@ -155,14 +155,16 @@ function edit(file::String, line::Integer)
         end
     elseif editor == "vim"
         run(`vim $file +$line`)
-    elseif editor == "textmate"
-        run(`mate $file -l $line`)
+    elseif editor == "textmate" || editor == "mate"
+        spawn(`mate $file -l $line`)
     elseif editor == "subl"
-        run(`subl $file:$line`)
+        spawn(`subl $file:$line`)
     elseif OS_NAME == :Windows && (editor == "start" || editor == "open")
-        run(`start /b $file`)
+        spawn(`start /b $file`)
     elseif OS_NAME == :Darwin && (editor == "start" || editor == "open")
-        run(`open -t $file`)
+        spawn(`open -t $file`)
+    elseif editor == "kate"
+        spawn(`kate $file -l $line`)
     else
         run(`$editor $file`)
     end
@@ -184,11 +186,11 @@ less(f::Function, t) = less(functionloc(f,t)...)
 # print a warning only once
 
 const have_warned = (ByteString=>Bool)[]
-function warn_once(msg::String...)
+function warn_once(msg::String...; depth=0)
     msg = bytestring(msg...)
     haskey(have_warned,msg) && return
     have_warned[msg] = true
-    warn(msg)
+    warn(msg; depth=depth+1)
 end
 
 # openblas utility routines
@@ -394,7 +396,7 @@ methodswith(t::Type, showparents::Bool) = methodswith(OUTPUT_STREAM, t, showpare
 methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m, false)
 methodswith(t::Type) = methodswith(OUTPUT_STREAM, t, false)
 function methodswith(io::IO, t::Type, showparents::Bool)
-    mainmod = ccall(:jl_get_current_module, Any, ())::Module
+    mainmod = current_module()
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)

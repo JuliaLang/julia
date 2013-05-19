@@ -10,6 +10,14 @@ eltype(x) = Any
 eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
 eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
+iseltype(x,T) = eltype(x) <: T
+isinteger(x::AbstractArray) = all(isinteger,x)
+isinteger{T<:Integer,n}(x::AbstractArray{T,n}) = true
+isreal(x::AbstractArray) = all(isreal,x)
+isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
+isfloat64(x::AbstractArray) = all(isfloat64,x)
+isfloat64{T<:Float64,n}(x::AbstractArray{T,n}) = true
+isfloat64{T<:Float32,n}(x::AbstractArray{T,n}) = true
 ndims{T,n}(::AbstractArray{T,n}) = n
 ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
@@ -19,15 +27,6 @@ first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
 
 strides(a::AbstractArray) = ntuple(ndims(a), i->stride(a,i))::Dims
-
-isinteger{T<:Integer}(::AbstractArray{T}) = true
-isinteger(::AbstractArray) = false
-isreal{T<:Real}(::AbstractArray{T}) = true
-isreal(::AbstractArray) = false
-iscomplex{T<:Complex}(::AbstractArray{T}) = true
-iscomplex(::AbstractArray) = false
-isbool(::AbstractArray{Bool}) = true
-isbool(::AbstractArray) = false
 
 function isassigned(a::AbstractArray, i::Int...)
     # TODO
@@ -68,7 +67,7 @@ function checkbounds{T<:Integer}(sz::Int, I::Ranges{T})
     end
 end
 
-function checkbounds{T <: Real}(sz::Int, I::AbstractVector{T})
+function checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
     for i in I
         i = to_index(i)
         if i < 1 || i > sz
@@ -167,8 +166,8 @@ function fill!(A::AbstractArray, x)
     return A
 end
 
-function copy!(dest::AbstractArray, src)
-    i = 1
+function copy!(dest::AbstractArray, src, dsto::Integer=1)
+    i = dsto
     for x in src
         dest[i] = x
         i += 1
@@ -239,6 +238,15 @@ complex (x::AbstractArray) = copy!(similar(x,typeof(complex(one(eltype(x))))), x
 
 dense(x::AbstractArray) = x
 full(x::AbstractArray) = x
+
+## range conversions ##
+
+for fn in _numeric_conversion_func_names
+    @eval begin
+        $fn(r::Range ) = Range($fn(r.start), $fn(r.step), r.len)
+        $fn(r::Range1) = Range1($fn(r.start), r.len)
+    end
+end
 
 ## Unary operators ##
 
@@ -1077,6 +1085,8 @@ function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
 end
 
 indices(I) = I
+indices(I::Int) = I
+indices(I::Real) = convert(Int, I)
 indices(I::AbstractArray{Bool,1}) = find(I)
 indices(I::Tuple) = map(indices, I)
 

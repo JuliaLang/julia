@@ -400,7 +400,17 @@ let
     for i = 1:length(a2)
         @test a2[i] == a[I[i]]
     end
+    a = [1,3,5]
+    b = [1 3]
+    a[b] = 8
+    @test a == [8,3,8]
 end
+
+# assigning an array into itself
+a = [1,3,5]
+b = [3,1,2]
+a[b] = a
+@test a == [3,5,1]
 
 # sort on arrays
 begin
@@ -414,11 +424,11 @@ begin
     @test isless(asc[:,1],asc[:,2])
     @test isless(asc[:,2],asc[:,3])
 
-    asr = sortrows(a, Sort.Reverse())
+    asr = sortrows(a, Sort.Reverse)
     @test isless(asr[2,:],asr[1,:])
     @test isless(asr[3,:],asr[2,:])
 
-    asc = sortcols(a, Sort.Reverse())
+    asc = sortcols(a, Sort.Reverse)
     @test isless(asc[:,2],asc[:,1])
     @test isless(asc[:,3],asc[:,2])
 
@@ -432,3 +442,6 @@ begin
     @test issorted(as[2,:])
     @test issorted(as[3,:])
 end
+
+# fill
+@test fill!(Array(Float64,1),-0.0)[1] === -0.0

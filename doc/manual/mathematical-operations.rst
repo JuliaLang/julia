@@ -197,7 +197,7 @@ The last point is potentially surprising and thus worth noting::
     julia> NaN > NaN
     false
 
-and can cause especial headaches with :ref:`Arrays`::
+and can cause especial headaches with :ref:`Arrays <man-arrays>`::
 
     julia> [1 NaN] == [1 NaN]
     false
@@ -208,13 +208,13 @@ which can be useful in situations like hash key comparisons:
 ================= ==================================
 Function          Tests if
 ================= ==================================
-``isequal(x, y)`` ``x`` and ``y`` are equal in value
+``isequal(x, y)`` ``x`` and ``y`` are identical
 ``isfinite(x)``   ``x`` is a finite number
 ``isinf(x)``      ``x`` is infinite
 ``isnan(x)``      ``x`` is not a number
 ================= ==================================
 
-``isequal`` considers ``NaN``\ s of the same type to be equal to each other::
+``isequal`` considers ``NaN``\ s equal to each other::
 
     julia> isequal(NaN,NaN)
     true
@@ -223,6 +223,14 @@ Function          Tests if
     true
     
     julia> isequal(NaN,NaN32)
+    false
+
+``isequal`` can also be used to distinguish signed zeros::
+
+    julia> -0.0 == 0.0
+    true
+
+    julia> isequal(-0.0, 0.0)
     false
 
 Mixed-type comparisons between signed integers, unsigned integers, and
@@ -363,7 +371,7 @@ All the standard trigonometric and hyperbolic functions are also defined::
     sin    cos    tan    cot    sec    csc
     sinh   cosh   tanh   coth   sech   csch
     asin   acos   atan   acot   asec   acsc
-    acoth  asech  acsch  sinc   cosc   atan2
+    sinc   cosc   atan2  acoth  asech  acsch
 
 These are all single-argument functions, with the exception of
 `atan2 <http://en.wikipedia.org/wiki/Atan2>`_, which gives the angle

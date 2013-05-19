@@ -165,11 +165,17 @@ end
 
 # T[a:b] and T[a:s:b] also contruct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Ranges)
-    a = Array(T,length(r))
-    i = 1
-    for x in r
-        a[i] = x
-        i += 1
+    copy!(Array(T,length(r)), r)
+end
+
+function getindex{T<:Number}(::Type{T}, r1::Ranges, rs::Ranges...)
+    a = Array(T,length(r1)+sum(length,rs))
+    o = 1
+    copy!(a, r1, o)
+    o += length(r1)
+    for r in rs
+        copy!(a, r, o)
+        o += length(r)
     end
     return a
 end
@@ -179,7 +185,8 @@ function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     return a
 end
 function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
-    if isbits(T) && convert(T,x) == 0
+    # note: preserve -0.0 for floats
+    if isbits(T) && T<:Integer && convert(T,x) == 0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a,0,length(a)*sizeof(T))
     else
         for i = 1:length(a)
@@ -322,9 +329,9 @@ function getindex{T<:Real}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
     X = similar(A, index_shape(I, J))
     storeind = 1
     for j = J
-        offset = (j-1)*size(A,1)
+        offset = (convert(Int,j)-1)*size(A,1)
         for i = I
-            X[storeind] = A[i+offset]
+            X[storeind] = A[convert(Int,i)+offset]
             storeind += 1
         end
     end
@@ -414,6 +421,9 @@ end
 function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
+    if is(X,A)
+        X = copy(X)
+    end
     for i in I
         A[i] = X[count]
         count += 1
@@ -880,10 +890,18 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
 .^(x::StridedArray, y::StridedArray) =
     reshape([ x[i] ^ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-.^(x::Number,       y::StridedArray) =
+.^{T<:Integer}(x::StridedArray{Bool}, y::StridedArray{T}) =
+    reshape([ bool(x[i] ^ y[i]) for i=1:length(x) ], promote_shape(size(x),size(y)))
+
+.^(x::Number, y::StridedArray) =
     reshape([ x    ^ y[i] for i=1:length(y) ], size(y))
+.^(x::Bool  , y::StridedArray) =
+    reshape([ bool(x ^ y[i]) for i=1:length(y) ], size(y))
+
 .^(x::StridedArray, y::Number      ) =
     reshape([ x[i] ^ y    for i=1:length(x) ], size(x))
+.^(x::StridedArray{Bool}, y::Integer) =
+    reshape([ bool(x[i] ^ y) for i=1:length(x) ], size(x))
 
 for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
     @eval begin
@@ -949,6 +967,7 @@ end
 ## promotion to complex ##
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
+    if size(A) != size(B); error("argument dimensions must match"); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for i=1:length(A)
         F[i] = complex(A[i], B[i])

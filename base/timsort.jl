@@ -8,7 +8,7 @@
 module _TimSort
 using ..Sort
 
-import ..Sort.sort!
+import ..Sort: sort!, TimSortAlg
 
 typealias Run Range1{Int}
 
@@ -406,7 +406,7 @@ function merge_hi(o::Ordering, v::AbstractVector, a::Run, b::Run, state::MergeSt
 end
 
 # TimSort main method
-function sort!(v::AbstractVector, lo::Int, hi::Int, ::TimSort, o::Ordering)
+function sort!(v::AbstractVector, lo::Int, hi::Int, ::TimSortAlg, o::Ordering)
     minrun = merge_compute_minrun(hi-lo+1)
     state = MergeState()
     i = lo

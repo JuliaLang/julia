@@ -128,6 +128,10 @@ All Objects
 Types
 -----
 
+.. function:: super(T::DataType)
+
+   Return the supertype of DataType T
+
 .. function:: subtype(type1, type2)
 
    True if and only if all values of ``type1`` are also of ``type2``. Can also be written using the ``<:`` infix operator as ``type1 <: type2``.
@@ -135,6 +139,14 @@ Types
 .. function:: <:(T1, T2)
 
    Subtype operator, equivalent to ``subtype(T1,T2)``.
+
+.. function:: subtypes(T::DataType)
+
+   Return a list of immediate subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
+
+.. function:: subtypetree(T::DataType)
+
+   Return a nested list of all subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
 
 .. function:: typemin(type)
 
@@ -186,6 +198,14 @@ Types
 .. function:: fieldtype(value, name::Symbol)
 
    Determine the declared type of a named field in a value of composite type.
+
+.. function:: isimmutable(v)
+
+   True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
+
+.. function:: isbits(T)
+
+   True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``Uint8``, ``Float64``, and ``Complex{Float64}``.
 
 Generic Functions
 -----------------
@@ -475,33 +495,33 @@ Set-Like Collections
 
    Add an element to a set-like collection.
 
-.. function:: add_each!(collection, iterable)
-
-   Adds each element in iterable to the collection.
-
 .. function:: Set(x...)
 
-   Construct a ``Set`` with the given elements. Should be used instead of ``IntSet`` for sparse integer sets.
+   Construct a ``Set`` with the given elements. Should be used instead of ``IntSet`` for sparse integer sets, or for sets of arbitrary objects.
 
 .. function:: IntSet(i...)
 
-   Construct an ``IntSet`` of the given integers. Implemented as a bit string, and therefore designed for dense integer sets. If the set will be sparse (for example holding a single very large integer), use ``Set`` instead.
+   Construct a sorted set of the given integers. Implemented as a bit string, and therefore designed for dense integer sets. If the set will be sparse (for example holding a single very large integer), use ``Set`` instead.
 
 .. function:: union(s1,s2...)
 
    Construct the union of two or more sets. Maintains order with arrays.
 
-.. function:: union!(s1,s2)
+.. function:: union!(s, iterable)
 
-   Constructs the union of IntSets s1 and s2, stores the result in ``s1``.
+   Union each element of ``iterable`` into set ``s`` in-place.
 
 .. function:: intersect(s1,s2...)
 
-   Construct the intersection of two or more sets. Maintains order with arrays.
+   Construct the intersection of two or more sets. Maintains order and multiplicity of the first argument for arrays and ranges.
 
 .. function:: setdiff(s1,s2)
 
    Construct the set of elements in ``s1`` but not ``s2``. Maintains order with arrays.
+
+.. function:: setdiff!(s, iterable)
+
+   Remove each element of ``iterable`` from set ``s`` in-place.
 
 .. function:: symdiff(s1,s2...)
 
@@ -526,10 +546,6 @@ Set-Like Collections
 .. function:: complement!(s)
 
    Mutates IntSet s into its set-complement.
-
-.. function:: del_each!(s, itr)
-
-   Deletes each element of itr in set s in-place.
 
 .. function:: intersect!(s1, s2)
 
@@ -840,7 +856,7 @@ I/O
 
    **Example**: ``open(readall, "file.txt")``
 
-.. function:: memio([size[, finalize::Bool]]) -> IOStream
+.. function:: IOBuffer([size]) -> IOBuffer
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
@@ -1121,7 +1137,7 @@ Mathematical Functions
 
    Unsigned right shift operator.
 
-.. function:: :(start, [step], stop)
+.. function:: \:(start, [step], stop)
 
    Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1,
    and ``a:s:b`` is similar but uses a step size of ``s``. These syntaxes call the
@@ -1402,6 +1418,10 @@ Mathematical Functions
 
    Compute :math:`2^x`
 
+.. function:: exp10(x)
+
+   Compute :math:`10^x`
+
 .. function:: ldexp(x, n)
 
    Compute :math:`x \times 2^n`
@@ -1419,21 +1439,21 @@ Mathematical Functions
 
    Compute :math:`x^2`
 
-.. function:: round(x, [digits, [base]]) -> FloatingPoint
+.. function:: round(x, [digits, [base]])
 
-   ``round(x)`` returns the nearest integer to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
+   ``round(x)`` returns the nearest integral value of the same type as ``x`` to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
 
-.. function:: ceil(x, [digits, [base]]) -> FloatingPoint
+.. function:: ceil(x, [digits, [base]])
 
-   Returns the nearest integer not less than ``x``. ``digits`` and ``base`` work as above.
+   Returns the nearest integral value of the same type as ``x`` not less than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: floor(x, [digits, [base]]) -> FloatingPoint
+.. function:: floor(x, [digits, [base]])
 
-   Returns the nearest integer not greater than ``x``. ``digits`` and ``base`` work as above.
+   Returns the nearest integral value of the same type as ``x`` not greater than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: trunc(x, [digits, [base]]) -> FloatingPoint
+.. function:: trunc(x, [digits, [base]])
 
-   Returns the nearest integer not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
+   Returns the nearest integral value of the same type as ``x`` not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
 
 .. function:: iround(x) -> Integer
 
@@ -1451,7 +1471,7 @@ Mathematical Functions
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
-.. function:: signif(x, digits, [base]) -> FloatingPoint
+.. function:: signif(x, digits, [base])
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``. 
 
@@ -1526,6 +1546,16 @@ Mathematical Functions
 
    Compute the Dawson function (scaled imaginary error function) of ``x``,
    defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
+
+.. function:: erfinv(x)
+
+   Compute the inverse error function of a real ``x``,
+   defined by :math:`\operatorname{erf}(\operatorname{erfinv}(x)) = x`.
+
+.. function:: erfcinv(x)
+
+   Compute the inverse error complementary function of a real ``x``,
+   defined by :math:`\operatorname{erfc}(\operatorname{erfcinv}(x)) = x`.
 
 .. function:: real(z)
 
@@ -1761,10 +1791,6 @@ Data Formats
 
    Convert a number or numeric array to boolean
 
-.. function:: isbool(x)
-
-   Test whether number or array is boolean
-
 .. function:: int(x)
 
    Convert a number or array to the default integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an integer.
@@ -1776,10 +1802,6 @@ Data Formats
 .. function:: integer(x)
 
    Convert a number or array to integer type. If ``x`` is already of integer type it is unchanged, otherwise it converts it to the default integer type on your platform.
-
-.. function:: isinteger(x)
-
-   Test whether a number or array is of integer type
 
 .. function:: signed(x)
 
@@ -1851,9 +1873,9 @@ Data Formats
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: float64_valued(x::Rational)
+.. function:: isfloat64(x::Rational)
 
-   True if ``x`` can be losslessly represented as a ``Float64`` data type
+   Tests whether ``x`` or all its elements can be losslessly represented as a ``Float64`` data type
 
 .. function:: complex64(r,i)
 
@@ -1870,14 +1892,6 @@ Data Formats
 .. function:: complex(r,i)
 
    Convert real numbers or arrays to complex
-
-.. function:: iscomplex(x) -> Bool
-
-   Test whether a number or array is of a complex type
-
-.. function:: isreal(x) -> Bool
-
-   Test whether a number or array is of a real type
 
 .. function:: bswap(n)
 
@@ -1971,13 +1985,13 @@ Numbers
 
    Get the previous floating point number in lexicographic order
 
-.. function:: integer_valued(x)
+.. function:: isinteger(x)
 
-   Test whether ``x`` is numerically equal to some integer
+   Test whether ``x`` or all its elements are numerically equal to some integer
 
-.. function:: real_valued(x)
+.. function:: isreal(x)
 
-   Test whether ``x`` is numerically equal to some real number
+   Test whether ``x`` or all its elements are numerically equal to some real number
 
 .. function:: BigInt(x)
 
@@ -2113,6 +2127,10 @@ Basic functions
 .. function:: eltype(A)
 
    Returns the type of the elements contained in A
+
+.. function:: iseltype(A,T)
+
+   Tests whether A or its elements are of type T
 
 .. function:: length(A) -> Integer
 
@@ -2779,6 +2797,64 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Compute the cross-correlation of two vectors.
 
+Numerical Integration
+-----------------
+
+Although several external packages are available for numeric integration
+and solution of ordinary differential equations, we also provide
+some built-in integration support in Julia.
+
+.. function:: quadgk(f, a,b,c...; reltol=eps*100, abstol=0, maxevals=10^7, order=7)
+
+   Numerically integrate the function ``f(x)`` from ``a`` to ``b``,
+   and optionally over additional intervals ``b`` to ``c`` and so on.
+   Keyword options include a relative error tolerance ``reltol`` (defaults
+   to ``100*eps`` in the precision of the endpoints), an absolute error
+   tolerance ``abstol`` (defaults to 0), a maximum number of function
+   evaluations ``maxevals`` (defaults to ``10^7``), and the ``order``
+   of the integration rule (defaults to 7).     
+
+   Returns a pair ``(I,E)`` of the estimated integral ``I`` and an
+   estimated upper bound on the absolute error ``E``.  If ``maxevals``
+   is not exceeded then either ``E <= abstol`` or ``E <=
+   reltol*norm(I)`` will hold.  (Note that it is useful to specify a
+   positive ``abstol`` in cases where ``norm(I)`` may be zero.)
+
+   The endpoints ``a`` etcetera can also be complex (in which case the
+   integral is performed over straight-line segments in the complex
+   plane).  If the endpoints are ``BigFloat``, then the integration
+   will be performed in ``BigFloat`` precision as well (note: it is
+   advisable to increase the integration ``order`` in rough proportion
+   to the precision, for smooth integrands).  More generally, the
+   precision is set by the precision of the integration endpoints
+   (promoted to floating-point types).
+
+   The integrand ``f(x)`` can return any numeric scalar, vector, or matrix
+   type, or in fact any type supporting ``+``, ``-``, multiplication
+   by real values, and a ``norm`` (i.e., any normed vector space).
+
+   The algorithm is an adaptive Gauss-Kronrod integration technique:
+   the integral in each interval is estimated using a Kronrod rule
+   (``2*order+1`` points) and the error is estimated using an embedded
+   Gauss rule (``order`` points).   The interval with the largest
+   error is then subdivided into two intervals and the process is repeated
+   until the desired error tolerance is achieved.
+
+   These quadrature rules work best for smooth functions within each
+   interval, so if your function has a known discontinuity or other
+   singularity, it is best to subdivide your interval to put the
+   singularity at an endpoint.  For example, if ``f`` has a discontinuity
+   at ``x=0.7`` and you want to integrate from 0 to 1, you should use
+   ``quadgk(f, 0,0.7,1)`` to subdivide the interval at the point of
+   discontinuity.  The integrand is never evaluated exactly at the endpoints
+   of the intervals, so it is possible to integrate functions that diverge
+   at the endpoints as long as the singularity is integrable (for example,
+   a ``log(x)`` or ``1/sqrt(x)`` singularity).
+
+   For real-valued endpoints, the starting and/or ending points may be
+   infinite.  (A coordinate transformation is performed internally to
+   map the infinite interval to a finite one.)
+
 Parallel Computing
 ------------------
 
@@ -2786,10 +2862,11 @@ Parallel Computing
 
    Add processes on the local machine. Can be used to take advantage of multiple cores.
 
-.. function:: addprocs({"host1","host2",...}; tunnel=false)
+.. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME)
 
    Add processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
-   If ``tunnel`` is ``true`` then SSH tunneling will be used.
+   If ``tunnel`` is ``true`` then SSH tunneling will be used. Named argument ``dir``
+   optionally specifies the location of the julia binaries on the worker nodes.
 
 .. function:: addprocs_sge(n)
 
@@ -2805,7 +2882,7 @@ Parallel Computing
 
 .. function:: pmap(f, c)
 
-   Transform collection ``c`` by applying ``f`` to each element in parallel.
+   Transform collection ``c`` by applying ``f`` to each element in parallel. If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks. All other available processes will be used as parallel workers.
 
 .. function:: remotecall(id, func, args...)
 
@@ -2973,13 +3050,25 @@ System
 
    Get julia's process ID.
 
-.. function:: time()
+.. function:: time([t::TmStruct])
 
-   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution. When passed a ``TmStruct``, converts it to a number of seconds since the epoch.
 
 .. function:: time_ns()
 
    Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+
+.. function:: strftime([format], time)
+
+   Convert time, given as a number of seconds since the epoch or a ``TmStruct``, to a formatted string using the given format. Supported formats are the same as those in the standard C library.
+
+.. function:: strptime([format], timestr)
+
+   Parse a formatted time string into a ``TmStruct`` giving the seconds, minute, hour, date, etc. Supported formats are the same as those in the standard C library. On some platforms, timezones will not be parsed correctly. If the result of this function will be passed to ``time`` to convert it to seconds since the epoch, the ``isdst`` field should be filled in manually. Setting it to ``-1`` will tell the C library to use the current system settings to determine the timezone.
+
+.. function:: TmStruct([seconds])
+
+   Convert a number of seconds since the epoch to broken-down format, with fields ``sec``, ``min``, ``hour``, ``mday``, ``month``, ``year``, ``wday``, ``yday``, and ``isdst``.
 
 .. function:: tic()
 
@@ -3007,6 +3096,10 @@ C Interface
 .. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
    Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively, ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
+
+.. function:: cglobal((symbol, library) or ptr [, Type=Void])
+
+   Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting to ``Ptr{Void}`` if no Type argument is supplied.  The values can be read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
 
 .. function:: cfunction(fun::Function, RetType::Type, (ArgTypes...))
    
@@ -3056,11 +3149,11 @@ C Interface
   
    Call free() from C standard library.
 
-.. function:: unsafe_ref(p::Ptr{T},i::Integer)
+.. function:: unsafe_load(p::Ptr{T},i::Integer)
 
    Dereference the pointer ``p[i]`` or ``*p``, returning a copy of type T.
 
-.. function:: unsafe_assign(p::Ptr{T},x,i::Integer)
+.. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
    Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
 
@@ -3130,18 +3223,14 @@ Tasks
 
    Send the given value to the last ``consume`` call, switching to the consumer task.
 
-.. function:: make_scheduled(task)
-
-   Register a task with the main event loop, so it will automatically run when possible.
-
 .. function:: yield()
 
    For scheduled tasks, switch back to the scheduler to allow another scheduled task to run.
 
-.. function:: tls(symbol)
+.. function:: task_local_storage(symbol)
 
    Look up the value of a symbol in the current task's task-local storage.
 
-.. function:: tls(symbol, value)
+.. function:: task_local_storage(symbol, value)
 
    Assign a value to a symbol in the current task's task-local storage.

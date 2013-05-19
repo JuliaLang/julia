@@ -1,9 +1,72 @@
-# formerly built-in methods. can be replaced any time.
-
 show(x) = show(OUTPUT_STREAM::IO, x)
 
-print(io::IO, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
-show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io, x)
+function print(io::IO, s::Symbol)
+    pname = convert(Ptr{Uint8}, s)
+    write(io, pname, int(ccall(:strlen, Csize_t, (Ptr{Uint8},), pname)))
+end
+
+function show(io::IO, x::ANY)
+    t = typeof(x)::DataType
+    show(io, t)
+    print(io, '(')
+    if t.names !== () || t.size==0
+        n = length(t.names)
+        for i=1:n
+            f = t.names[i]
+            if !isdefined(x, f)
+                print(io, "#undef")
+            else
+                show(io, x.(f))
+            end
+            if i < n
+                print(io, ',')
+            end
+        end
+    else
+        nb = t.size
+        print(io, "0x")
+        p = pointer_from_objref(x) + sizeof(Ptr{Void})
+        for i=nb-1:-1:0
+            print(io, hex(unsafe_load(convert(Ptr{Uint8}, p+i)), 2))
+        end
+    end
+    print(io,')')
+end
+
+function show(io::IO, f::Function)
+    if isgeneric(f)
+        print(io, f.env.name)
+    else
+        print(io, "# function")
+    end
+end
+
+function show(io::IO, x::IntrinsicFunction)
+    print(io, "# intrinsic function ", box(Int32,unbox(IntrinsicFunction,x)))
+end
+
+function show(io::IO, x::UnionType)
+    if is(x,None)
+        print(io, "None")
+    elseif is(x,Top)
+        print(io, "Top")
+    else
+        print(io, "Union", x.types)
+    end
+end
+
+show(io::IO, x::TypeConstructor) = show(io, x.body)
+
+function show(io::IO, x::DataType)
+    if isvarargtype(x)
+        print(io, x.parameters[1], "...")
+    else
+        print(io, x.name.name)
+        if length(x.parameters) > 0
+            show_comma_array(io, x.parameters, '{', '}')
+        end
+    end
+end
 
 showcompact(io::IO, x) = show(io, x)
 showcompact(x) = showcompact(OUTPUT_STREAM::IO, x)
@@ -12,7 +75,7 @@ macro show(exs...)
     blk = Expr(:block)
     for ex in exs
         push!(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),
-                                 repr(begin value=$(esc(ex)) end))))
+                                  repr(begin value=$(esc(ex)) end))))
     end
     if !isempty(exs); push!(blk.args, :value); end
     return blk
@@ -762,7 +825,7 @@ function whos(m::Module, pattern::Regex)
 end
 whos() = whos(r"")
 whos(m::Module) = whos(m, r"")
-whos(pat::Regex) = whos(ccall(:jl_get_current_module, Any, ())::Module, pat)
+whos(pat::Regex) = whos(current_module(), pat)
 
 function show{T}(io::IO, x::AbstractArray{T,0})
     println(io, summary(x),":")

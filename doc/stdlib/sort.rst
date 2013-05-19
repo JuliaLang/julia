@@ -108,7 +108,7 @@ Sort Functions
    Sort a vector in ascending order.  Specify ``alg`` to choose a
    particular sorting algorithm (``Sort.InsertionSort``,
    ``Sort.QuickSort``, ``Sort.MergeSort``, or ``Sort.TimSort``), and
-   ``ord`` to sort with a custom ordering (e.g., Sort.Reverse or a
+   ``ord`` to sort with a custom ordering (e.g., ``Sort.Reverse`` or a
    comparison function).
 
 .. function:: sort!(...)
@@ -131,7 +131,7 @@ Sort Functions
    ``v`` will sort it.  Specify ``alg`` to choose a particular sorting
    algorithm (``Sort.InsertionSort``, ``Sort.QuickSort``,
    ``Sort.MergeSort``, or ``Sort.TimSort``), and ``ord`` to sort with
-   a custom ordering (e.g., Sort.Reverse or a comparison function).
+   a custom ordering (e.g., ``Sort.Reverse`` or a comparison function).
 
 .. function:: sort(A, dim, [alg[, ord]])
 
@@ -156,11 +156,10 @@ Sorting-related Functions
 
 .. function:: searchsorted(a, x[, ord])
 
-   Returns the index of the first value of ``a`` equal to or
-   succeeding ``x``, according to ordering ``ord`` (default:
-   ``Sort.Forward``).
-
-   Alias for ``searchsortedfirst()``
+   Returns the range of indices of ``a`` equal to ``x``, assuming ``a``
+   is sorted according to ordering ``ord`` (default:
+   ``Sort.Forward``).  Returns an empty range located at the insertion
+   point if ``a`` does not contain ``x``.
 
 .. function:: searchsortedfirst(a, x[, ord])
 

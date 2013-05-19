@@ -965,12 +965,6 @@ function ssh_tunnel(user, host, port)
     localp
 end
 
-function worker_ssh_cmd(host)
-    c = `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
-    c.detach = true
-    c
-end
-
 #function worker_ssh_cmd(host, key)
 #    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
 #end
@@ -979,9 +973,13 @@ end
 # optionally through an SSH tunnel.
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
-function addprocs(machines::AbstractVector; tunnel=false)
-    add_workers(PGRP, start_remote_workers(machines,
-                                           map(worker_ssh_cmd, machines), tunnel))
+function addprocs(machines::AbstractVector;
+                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic")
+    add_workers(PGRP,
+        start_remote_workers(machines,
+            map(m->detach(`ssh -n $m "bash -l -c \"cd $dir && $exename --worker\""`),
+                machines),
+            tunnel))
 end
 
 #function addprocs_ssh(machines, keys)
@@ -1203,13 +1201,13 @@ function pmap(f, lsts...)
     i = 1
     # function to produce the next work item from the queue.
     # in this case it's just an index.
-    next_idx() = (idx=i; i+=1; idx)
+    nextidx() = (idx=i; i+=1; idx)
     @sync begin
         for p=1:np
             if p != myid() || np == 1
-                @spawnat myid() begin
+                @async begin
                     while true
-                        idx = next_idx()
+                        idx = nextidx()
                         if idx > n
                             break
                         end
@@ -1223,17 +1221,16 @@ function pmap(f, lsts...)
     results
 end
 
-function preduce(reducer, f, r::Range1{Int})
+function preduce(reducer, f, N::Int)
     np = nprocs()
-    N = length(r)
     each = div(N,np)
     rest = rem(N,np)
     if each < 1
-        return fetch(@spawn f(first(r), first(r)+N-1))
+        return fetch(@spawn f(1, N))
     end
     results = cell(np)
     for i=1:np
-        lo = first(r) + (i-1)*each
+        lo = 1 + (i-1)*each
         hi = lo + each-1
         if i==np
             hi += rest
@@ -1243,17 +1240,16 @@ function preduce(reducer, f, r::Range1{Int})
     mapreduce(fetch, reducer, results)
 end
 
-function pfor(f, r::Range1{Int})
+function pfor(f, N::Int)
     np = nprocs()
-    N = length(r)
     each = div(N,np)
     rest = rem(N,np)
     if each < 1
-        @spawn f(first(r), first(r)+N-1)
+        @spawn f(1, N)
         return
     end
     for i=1:np
-        lo = first(r) + (i-1)*each
+        lo = 1 + (i-1)*each
         hi = lo + each-1
         if i==np
             hi += rest
@@ -1263,13 +1259,14 @@ function pfor(f, r::Range1{Int})
     nothing
 end
 
-function make_preduce_body(reducer, var, body)
+function make_preduce_body(reducer, var, body, ran)
     localize_vars(
     quote
         function (lo::Int, hi::Int)
-            $(esc(var)) = lo
+            R = $(esc(ran))
+            $(esc(var)) = R[lo]
             ac = $(esc(body))
-            for $(esc(var)) = (lo+1):hi
+            for $(esc(var)) in R[(lo+1):hi]
                 ac = ($(esc(reducer)))(ac, $(esc(body)))
             end
             ac
@@ -1278,11 +1275,11 @@ function make_preduce_body(reducer, var, body)
                   )
 end
 
-function make_pfor_body(var, body)
+function make_pfor_body(var, body, ran)
     localize_vars(
     quote
         function (lo::Int, hi::Int)
-            for $(esc(var)) = lo:hi
+            for $(esc(var)) in ($(esc(ran)))[lo:hi]
                 $(esc(body))
             end
         end
@@ -1320,12 +1317,12 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         quote
-            pfor($(make_pfor_body(var, body)), $(esc(r)))
+            pfor($(make_pfor_body(var, body, r)), length($(esc(r))))
         end
     else
         quote
             preduce($(esc(reducer)),
-                    $(make_preduce_body(reducer, var, body)), $(esc(r)))
+                    $(make_preduce_body(reducer, var, body, r)), length($(esc(r))))
         end
     end
 end

@@ -60,9 +60,9 @@ end
 tril(B::BitMatrix, k::Integer) = tril(B, int(k))
 
 # TODO: improve this!
-(*)(A::BitArray, B::BitArray) = bitpack(bitunpack(A) * bitunpack(B))
-(*)(A::BitArray, B::Array{Bool}) = bitpack(bitunpack(A) * B)
-(*)(A::Array{Bool}, B::BitArray) = bitpack(A * bitunpack(B))
+(*)(A::BitArray, B::BitArray) = bitunpack(A) * bitunpack(B)
+(*)(A::BitArray, B::Array{Bool}) = bitunpack(A) * B
+(*)(A::Array{Bool}, B::BitArray) = A * bitunpack(B)
 (*)(A::BitArray, B::AbstractArray) = bitunpack(A) * B
 (*)(A::AbstractArray, B::BitArray) = A * bitunpack(B)
 

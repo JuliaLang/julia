@@ -3,11 +3,18 @@
   miscellaneous functions for users of libjulia.so, to handle initialization
   and the style of use where julia is not in control most of the time.
 */
+#include "platform.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+char * __cdecl dirname(char *);
+char * __cdecl basename(char *);
+#else
 #include <libgen.h>
+#endif
 #include "julia.h"
 extern char *julia_home;
 
@@ -65,7 +72,7 @@ DLLEXPORT void *jl_eval_string(char *str)
     jl_value_t *r;
     JL_TRY {
         jl_value_t *ast = jl_parse_input_line(str);
-        JL_GC_PUSH(&ast);
+        JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval(ast);
         JL_GC_POP();
     }
@@ -127,7 +134,7 @@ DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
 {
     jl_value_t *v;
     JL_TRY {
-        JL_GC_PUSH(&f,&a);
+        JL_GC_PUSH2(&f,&a);
         v = jl_apply(f, &a, 1);
         JL_GC_POP();
     }
@@ -141,7 +148,7 @@ DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b)
 {
     jl_value_t *v;
     JL_TRY {
-        JL_GC_PUSH(&f,&a,&b);
+        JL_GC_PUSH3(&f,&a,&b);
         jl_value_t *args[2] = {a,b};
         v = jl_apply(f, args, 2);
         JL_GC_POP();

@@ -1,4 +1,4 @@
-# prelimnary definitions: constants, macros
+# preliminary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
 macro _mskr(l) :(_msk64 >>> (64-$(esc(l)))) end
