@@ -122,6 +122,7 @@ end
 @test_approx_eq zeta(2) pi^2/6
 @test_approx_eq zeta(4) pi^4/90
 
+# quadgk
 @test_approx_eq quadgk(cos, 0,0.7,1)[1] sin(1)
 @test_approx_eq quadgk(x -> exp(im*x), 0,0.7,1)[1] (exp(1im)-1)/im
 @test_approx_eq quadgk(x -> exp(im*x), 0,1im)[1] -1im*expm1(-1)
@@ -129,3 +130,4 @@ end
 @test_approx_eq quadgk(x -> exp(-x), 0,0.7,Inf)[1] 1.0
 @test_approx_eq quadgk(x -> exp(x), -Inf,0)[1] 1.0
 @test_approx_eq quadgk(x -> exp(-x^2), -Inf,Inf)[1] sqrt(pi)
+@test_approx_eq quadgk(x -> [exp(-x), exp(-2x)], 0, Inf)[1] [1,0.5]

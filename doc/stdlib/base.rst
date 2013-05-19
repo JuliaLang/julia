@@ -2817,17 +2817,21 @@ some built-in integration support in Julia.
    Returns a pair ``(I,E)`` of the estimated integral ``I`` and an
    estimated upper bound on the absolute error ``E``.  If ``maxevals``
    is not exceeded then either ``E <= abstol`` or ``E <=
-   reltol*abs(I)`` will hold.  (Note that it is useful to specify a
-   positive ``abstol`` in cases where ``abs(I)`` may be zero.)
+   reltol*norm(I)`` will hold.  (Note that it is useful to specify a
+   positive ``abstol`` in cases where ``norm(I)`` may be zero.)
 
-   Complex-valued functions are supported, and the endpoints ``a`` etcetera 
-   can also be complex (in which case the integral is performed over
-   straight-line segments in the complex plane).  If the endpoints
-   are ``BigFloat``, then the integration will be performed in ``BigFloat``
-   precision as well (note: it is advisable to increase the integration
-   ``order`` in rough proportion to the precision, for smooth integrands). 
-   More generally, the precision is set by the precision of the integration
-   endpoints (promoted to floating-point types).
+   The endpoints ``a`` etcetera can also be complex (in which case the
+   integral is performed over straight-line segments in the complex
+   plane).  If the endpoints are ``BigFloat``, then the integration
+   will be performed in ``BigFloat`` precision as well (note: it is
+   advisable to increase the integration ``order`` in rough proportion
+   to the precision, for smooth integrands).  More generally, the
+   precision is set by the precision of the integration endpoints
+   (promoted to floating-point types).
+
+   The integrand ``f(x)`` can return any numeric scalar, vector, or matrix
+   type, or in fact any type supporting ``+``, ``-``, multiplication
+   by real values, and a ``norm`` (i.e., any normed vector space).
 
    The algorithm is an adaptive Gauss-Kronrod integration technique:
    the integral in each interval is estimated using a Kronrod rule

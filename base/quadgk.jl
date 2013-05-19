@@ -37,19 +37,28 @@ const rulecache = (Any=>Any)[ (Float64,7) => # precomputed in 100-bit arith.
 immutable Segment
     a::Number
     b::Number
-    I::Number
-    E::Number
+    I
+    E::Real
 end
 isless(i::Segment, j::Segment) = isless(i.E, j.E)
+
+# use norm(A,1) for matrices since it is cheaper than norm(A) = norm(A,2),
+# but only assume that norm(x) exists for more general vector spaces
+cheapnorm(A::AbstractMatrix) = norm(A,1)
+cheapnorm(x) = norm(x)
 
 # Internal routine: integrate f(x) over a sequence of line segments
 # evaluate the integration rule and return a Segment.
 function evalrule(f, a,b, x,w,gw)
     # Ik and Ig are integrals via Kronrod and Gauss rules, respectively
-    Ik = Ig = zero(promote_type(typeof(a),eltype(w)))
     s = convert(eltype(x), 0.5) * (b-a)
     n1 = 1 - (length(x) & 1) # 0 if even order, 1 if odd order
-    for i = 1:length(gw)-n1
+    # unroll first iterationof loop to get correct type of Ik and Ig
+    fg = f(a + (1+x[2])*s) + f(a + (1-x[2])*s)
+    fk = f(a + (1+x[1])*s) + f(a + (1-x[1])*s)
+    Ig = fg * gw[1]
+    Ik = fg * w[2] + fk * w[1]
+    for i = 2:length(gw)-n1
         fg = f(a + (1+x[2i])*s) + f(a + (1-x[2i])*s)
         fk = f(a + (1+x[2i-1])*s) + f(a + (1-x[2i-1])*s)
         Ig += fg * gw[i]
@@ -65,7 +74,7 @@ function evalrule(f, a,b, x,w,gw)
     end
     Ik *= s
     Ig *= s
-    E = abs(Ik - Ig)
+    E = cheapnorm(Ik - Ig)
     if isnan(E) || isinf(E)
         throw(DomainError())
     end
@@ -122,7 +131,7 @@ function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals)
     end
     # Pop the biggest-error segment and subdivide (h-adaptation)
     # until convergence is achieved or maxevals is exceeded.
-    while E > abstol && E > reltol * abs(I) && numevals < maxevals
+    while E > abstol && E > reltol * cheapnorm(I) && numevals < maxevals
         s = heappop!(segs, Reverse)
         mid = (s.a + s.b) * 0.5
         s1 = evalrule(f, s.a, mid, x,w,gw)
