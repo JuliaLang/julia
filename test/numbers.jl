@@ -1456,3 +1456,7 @@ end
 @test  isprime(0xffffffffffffffc5)
 @test !isprime(0xffffffffffffffc7)
 @test !isprime(0xffffffffffffffc9)
+
+# rational-exponent promotion rules (issue #3155):
+@test 2.0f0^(1//3) == 2.0f0^(1.0f0/3)
+@test 2^(1//3) == 2^(1/3)
