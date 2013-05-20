@@ -878,6 +878,8 @@ export
     deepcopy,
     deepcopy_internal,
     isequal,
+    isapprox,
+    isapproxn,
     isless,
     hash,
     identity,

@@ -1220,6 +1220,14 @@ Mathematical Functions
 
    Bitwise exclusive or
 
+.. function:: isapprox(x::Number, y::Number; rtol::Real=cbrt(max(eps(x), eps(y))), atol::Real=sqrt(max(eps(x), eps(y))))
+
+   Inexact equality comparison. For ``FloatingPoint`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.
+
+   For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol``. If no tolerance argument is provided, ``isapprox`` behaves just like ``isequal``. The `rtol` argument is ignored. If one of ``x`` and ``y`` is ``FloatingPoint``, the other is promoted, and the method above is called instead.
+
+   For ``Complex`` numbers, the distance in the complex plane is compared, using the same criterion as above.
+
 .. function:: sin(x)
 
    Compute sine of ``x``, where ``x`` is in radians
