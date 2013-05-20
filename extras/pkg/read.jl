@@ -1,4 +1,5 @@
 module Read
+
 using ..Types, Base.Git
 
 function parse_requires(readable)
@@ -28,7 +29,7 @@ function parse_requires(readable)
     end
     return reqs
 end
-parse_requires(file::String) = isfile(file) ? open(parse_requires,file) : Requires()
+parse_requires(file::String="REQUIRE") = isfile(file) ? open(parse_requires,file) : Requires()
 
 function available(names=readdir("METADATA"))
     pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
