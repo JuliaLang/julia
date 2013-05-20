@@ -155,14 +155,14 @@ end
 # Gauss-Kronrod quadrature of f from a to b to c...
 
 function quadgk{T<:FloatingPoint}(f, a::T,b::T,c::T...; 
-                                  abstol=zero(T), reltol=eps(T)*100,
+                                  abstol=zero(T), reltol=sqrt(eps(T)),
                                   maxevals=10^7, order=7)
     do_quadgk(f, [a, b, c...], order, T, abstol, reltol, maxevals)
 end
 
 function quadgk{T<:FloatingPoint}(f, a::Complex{T},
                                   b::Complex{T},c::Complex{T}...; 
-                                  abstol=zero(T), reltol=eps(T)*100,
+                                  abstol=zero(T), reltol=sqrt(eps(T)),
                                   maxevals=10^7, order=7)
     do_quadgk(f, [a, b, c...], order, T, abstol, reltol, maxevals)
 end

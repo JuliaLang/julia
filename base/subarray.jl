@@ -158,6 +158,16 @@ getindex{T}(s::SubArray{T,1}, i::Integer) = s.parent[s.first_index + (i-1)*s.str
 getindex{T}(s::SubArray{T,2}, i::Integer, j::Integer) =
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
 
+getindex(s::SubArray, i::Real) = getindex(s, to_index(i))
+getindex(s::SubArray, i0::Real, i1::Real) =
+    getindex(s, to_index(i0), to_index(i1))
+getindex(s::SubArray, i0::Real, i1::Real, i2::Real) =
+    getindex(s, to_index(i0), to_index(i1), to_index(i2))
+getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real) =
+    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3))
+getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, is::Int...) =
+    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), is...)
+
 getindex(s::SubArray, i::Integer) = s[ind2sub(size(s), i)...]
 
 function getindex{T}(s::SubArray{T,2}, ind::Integer)

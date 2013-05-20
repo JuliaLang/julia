@@ -5,12 +5,12 @@
     <databaseInfo>
         <version>134481920</version>
         <UUID>ED35BFF7-291A-4951-A7A5-40FB31286B28</UUID>
-        <nextObjectID>118</nextObjectID>
+        <nextObjectID>119</nextObjectID>
         <metadata>
             <plist version="1.0">
                 <dict>
                     <key>NSPersistenceFrameworkVersion</key>
-                    <integer>358</integer>
+                    <integer>407</integer>
                     <key>NSStoreModelVersionHashes</key>
                     <dict>
                         <key>EULA</key>
@@ -92,10 +92,6 @@
         <attribute name="language" type="string">Brasilian Portuguese</attribute>
         <relationship name="eula" type="1/1" destination="EULA"></relationship>
     </object>
-    <object type="RELEASEFILE" id="z111">
-        <attribute name="path" type="string">/Users/viral/julia/contrib/mac-app/Julia.app</attribute>
-        <relationship name="setting" type="1/1" destination="SETTING" idrefs="z113"></relationship>
-    </object>
     <object type="EULALOCALIZATION" id="z112">
         <attribute name="twobytes" type="bool">0</attribute>
         <attribute name="syslangid" type="int16">11</attribute>
@@ -113,13 +109,13 @@ AAAAAAAAAAAAAAAAAAACAAAAAAAAAAUAAAABAAAQAG9iAAAArmJwbGlzdAAAAAAAAAAAAAAAAAAAAAAA
         <attribute name="internetenabled" type="int16">1</attribute>
         <attribute name="iconsize" type="int32">48</attribute>
         <attribute name="diskname" type="string">Julia</attribute>
-        <attribute name="diskimagename" type="string">Julia-0.1</attribute>
-        <attribute name="destination" type="string">/Users/viral/julia/contrib/mac-app</attribute>
-        <attribute name="compression" type="int16">1</attribute>
-        <attribute name="buildfolder" type="string">/Users/viral/julia/contrib/mac-app/julia.dmgCreator_build</attribute>
+        <attribute name="diskimagename" type="string">Julia-0.2</attribute>
+        <attribute name="destination" type="string">/Users/viral/julia/contrib/mac/app</attribute>
+        <attribute name="compression" type="int16">2</attribute>
+        <attribute name="buildfolder" type="string">/Users/viral/julia/contrib/mac/app/julia.dmgCreator_build</attribute>
         <attribute name="applicationslink" type="int16">1</attribute>
         <relationship name="eulas" type="0/0" destination="EULA"></relationship>
-        <relationship name="releasefiles" type="1/0" destination="RELEASEFILE" idrefs="z111"></relationship>
+        <relationship name="releasefiles" type="1/0" destination="RELEASEFILE" idrefs="z119"></relationship>
     </object>
     <object type="EULALOCALIZATION" id="z114">
         <attribute name="twobytes" type="bool">0</attribute>
@@ -150,5 +146,9 @@ AAAAAAAAAAAAAAAAAAACAAAAAAAAAAUAAAABAAAQAG9iAAAArmJwbGlzdAAAAAAAAAAAAAAAAAAAAAAA
         <attribute name="syslangid" type="int16">0</attribute>
         <attribute name="language" type="string">English</attribute>
         <relationship name="eula" type="1/1" destination="EULA"></relationship>
+    </object>
+    <object type="RELEASEFILE" id="z119">
+        <attribute name="path" type="string">/Users/viral/julia/contrib/mac/app/Julia.app</attribute>
+        <relationship name="setting" type="1/1" destination="SETTING" idrefs="z113"></relationship>
     </object>
 </database>

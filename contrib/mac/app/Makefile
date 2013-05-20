@@ -5,12 +5,12 @@
 all: clean copyfiles rewritepaths
 
 copyfiles:
-	make -C ../../deps install-git
+	make -C ../../../deps install-git
 	-mkdir -p $(PREFIX)/libexec $(PREFIX)/share
 	-cp -r $(BUILD)/libexec/git* $(PREFIX)/libexec
 	-cp -r $(BUILD)/share/git* $(PREFIX)/share
-	make -C ../.. dist
-	tar zxf ../../julia-*.tar.gz 
+	make -C ../../.. dist
+	tar zxf ../../../julia-*.tar.gz
 	mv julia-* julia
 	cp -a ~/.julia/Cairo/deps/usr/* ./julia/
 	cp -a ~/.julia/Tk/deps/usr/* ./julia/

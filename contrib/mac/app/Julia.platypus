@@ -12,7 +12,7 @@
 	<string>The Julia Project</string>
 	<key>BundledFiles</key>
 	<array>
-		<string>/Users/viral/julia/contrib/mac-app/julia</string>
+		<string>/Users/viral/julia/contrib/mac/app/julia</string>
 	</array>
 	<key>Creator</key>
 	<string>Platypus-4.7</string>
@@ -36,7 +36,7 @@
 		<string>fold</string>
 	</array>
 	<key>IconPath</key>
-	<string>/Users/viral/julia/contrib/mac-app/julia.icns</string>
+	<string>/Users/viral/julia/contrib/mac/app/julia.icns</string>
 	<key>Identifier</key>
 	<string>org.julialang.Julia</string>
 	<key>Interpreter</key>
@@ -58,7 +58,7 @@
 	<key>ScriptArgs</key>
 	<array/>
 	<key>ScriptPath</key>
-	<string>/Users/viral/julia/contrib/mac-app/script</string>
+	<string>/Users/viral/julia/contrib/mac/app/script</string>
 	<key>Secure</key>
 	<false/>
 	<key>ShowInDock</key>
@@ -87,6 +87,6 @@
 	<key>UseXMLPlistFormat</key>
 	<true/>
 	<key>Version</key>
-	<string>0.1</string>
+	<string>0.2</string>
 </dict>
 </plist>
