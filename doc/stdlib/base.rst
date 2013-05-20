@@ -2225,28 +2225,48 @@ Mathematical operators and functions
 
 All mathematical operations and functions are supported for arrays
 
-.. function:: bsxfun(fn, A, B[, C...])
+.. function:: broadcast(f, As...)
 
-   Apply binary function ``fn`` to two or more arrays, with singleton dimensions expanded.
+   Broadcasts the arrays ``As`` to a common size by expanding singleton dimensions, and returns an array of the results ``f(as...)`` for each position.
+
+.. function:: broadcast!(f, dest, As...)
+
+   Like ``broadcast``, but store the result in the ``dest`` array.
+
+.. function:: broadcast_function(f)
+
+   Returns a function ``broadcast_f`` such that ``broadcast_function(f)(As...) === broadcast(f, As...)``. Most useful in the form ``const broadcast_f = broadcast_function(f)``.
+
+.. function:: broadcast!_function(f)
+   
+   Like ``broadcast_function``, but for ``broadcast!``.
 
 Indexing, Assignment, and Concatenation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. function:: getindex(A, ind)
+.. function:: getindex(A, inds...)
 
-   Returns a subset of array ``A`` as specified by ``ind``, which may be an ``Int``, a ``Range``, or a ``Vector``.
+   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``.
 
-.. function:: sub(A, ind)
+.. function:: sub(A, inds...)
 
-   Returns a SubArray, which stores the input ``A`` and ``ind`` rather than computing the result immediately. Calling ``getindex`` on a SubArray computes the indices on the fly.
+   Returns a SubArray, which stores the input ``A`` and ``inds`` rather than computing the result immediately. Calling ``getindex`` on a SubArray computes the indices on the fly.
 
 .. function:: slicedim(A, d, i)
 
    Return all the data of ``A`` where the index for dimension ``d`` equals ``i``. Equivalent to ``A[:,:,...,i,:,:,...]`` where ``i`` is in position ``d``.
 
-.. function:: setindex!(A, X, ind)
+.. function:: setindex!(A, X, inds...)
 
-   Store values from array ``X`` within some subset of ``A`` as specified by ``ind``.
+   Store values from array ``X`` within some subset of ``A`` as specified by ``inds``.
+
+.. function:: broadcast_getindex(A, inds...)
+
+   Broadcasts the ``inds`` arrays to a common size like ``broadcast``, and returns an array of the results ``A[ks...]``, where ``ks`` goes over the positions in the broadcast.
+
+.. function:: broadcast_setindex!(A, X, inds...)
+
+   Broadcasts the ``X`` and ``inds`` arrays to a common size and stores the value from each position in ``X`` at the indices given by the same positions in ``inds``.
 
 .. function:: cat(dim, A...)
 
