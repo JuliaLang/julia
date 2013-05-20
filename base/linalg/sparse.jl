@@ -575,3 +575,52 @@ scale{Tv,Ti,T}(A::SparseMatrixCSC{Tv,Ti}, b::Vector{T}) =
 
 scale{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
     scale!(SparseMatrixCSC(size(A,1),size(A,2),Ti[],Ti[],promote_type(Tv,T)[]), b, A)
+
+# Compute the elimination tree of A using triu(A) returning the parent vector.
+# A root node is indicated by 0. This tree may actually be a forest in that
+# there may be more than one root, indicating complete separability.
+# A trivial example is speye(n, n) in which every node is a root.
+function etree(A::SparseMatrixCSC, postorder::Bool)
+    m,n = size(A); Ap = A.colptr; Ai = A.rowval; T = eltype(Ai)
+    parent = zeros(T, n); ancestor = zeros(T, n)
+    for k in 1:n, p in Ap[k]:(Ap[k+1] - 1)
+        i = Ai[p]
+        while i != 0 && i < k
+            inext = ancestor[i] # inext = ancestor of i
+            ancestor[i] = k     # path compression
+            if (inext == 0) parent[i] = k end # no anc., parent is k
+            i = inext
+        end
+    end
+    if !postorder return parent end
+    head = zeros(T,n)                   # empty linked lists
+    next = zeros(T,n)
+    for j in n:-1:1                      # traverse in reverse order
+        if (parent[j] == 0) continue end # j is a root
+        next[j] = head[parent[j]]        # add j to list of its parent
+        head[parent[j]] = j
+    end
+    stack = T[]
+    sizehint(stack, n)
+    post = zeros(T,n)
+    k = 1
+    for j in 1:n
+        if (parent[j] != 0) continue end # skip j if it is not a root
+        push!(stack, j)                  # place j on the stack
+        while (length(stack) > 0)        # while (stack is not empty)
+            p = stack[end]               # p = top of stack
+            i = head[p]                  # i = youngest child of p
+            if (i == 0)
+                pop!(stack)
+                post[k] = p       # node p is the kth postordered node
+                k += 1
+            else
+            head[p] = next[i]           # remove i from children of p
+            push!(stack, i)
+            end
+        end
+    end
+    parent, post
+end
+
+etree(A::SparseMatrixCSC) = etree(A, false)

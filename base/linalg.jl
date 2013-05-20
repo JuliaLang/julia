@@ -53,6 +53,7 @@ export
     eigs,
     eigvals,
     eigvecs,
+    etree,
     expm,
     sqrtm,
     eye,
