@@ -161,3 +161,5 @@ function ^(x::Rational, y::Integer)
 end
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
+^{T<:FloatingPoint}(x::T, y::Rational) = x^(convert(T,y.num)/y.den)
+^{T<:FloatingPoint}(x::Complex{T}, y::Rational) = x^(convert(T,y.num)/y.den)
