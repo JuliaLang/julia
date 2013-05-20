@@ -36,7 +36,7 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
 
 function show(io::IO, S::SparseMatrixCSC)
-    println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
+    println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " nonzeros:")
 
     half_screen_rows = div(tty_rows() - 8, 2)
     pad = ndigits(max(S.m,S.n))
