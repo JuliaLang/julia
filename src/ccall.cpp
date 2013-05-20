@@ -469,6 +469,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ": ccall: missing return type";
         jl_error(msg.c_str());
     }
+    if (rt == (jl_value_t*)jl_pointer_type)
+        jl_error("ccall: return type Ptr should have an element type, Ptr{T}");
     at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
                                         &jl_tupleref(ctx->sp,0),
                                         jl_tuple_len(ctx->sp)/2);
@@ -492,6 +494,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     for(i=0; i < nargt; i++) {
         jl_value_t *tti = jl_tupleref(tt,i);
+        if (tti == (jl_value_t*)jl_pointer_type)
+            jl_error("ccall: argument type Ptr should have an element type, Ptr{T}");
         if (jl_is_vararg_type(tti)) {
             isVa = true;
             tti = jl_tparam0(tti);
