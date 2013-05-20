@@ -63,6 +63,7 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
         Git.attached() && return true
         head = Git.head()
         for (ver,info) in avail
+            Git.iscommit(info.sha1) &&
             Git.is_ancestor_of(head, info.sha1) && return false
         end
         return true
@@ -75,11 +76,14 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
     hi = typemin(VersionNumber)
     for (ver,info) in avail
         head == info.sha1 && return ver
-        base = cd(()->readchomp(`git merge-base $head $(info.sha1)`), pkg)
-        if base == head # Git.is_ancestor_of(head, info.sha1)
-            lo = max(lo,ver)
-        elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
-            hi = max(hi,ver)
+        cd(pkg) do
+            Git.iscommit(info.sha1) || return # continue
+            base = readchomp(`git merge-base $head $(info.sha1)`)
+            if base == head # Git.is_ancestor_of(head, info.sha1)
+                lo = max(lo,ver)
+            elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
+                hi = max(hi,ver)
+            end
         end
     end
     typemin(VersionNumber) < lo ?
