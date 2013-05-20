@@ -541,7 +541,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     for(size_t i=0; i < jl_tuple_len(st->types); i++) {
         jl_value_t *ty = jl_tupleref(st->types, i);
         size_t fsz, al;
-        if (jl_isbits(ty) && (al=((jl_datatype_t*)ty)->alignment)!=0) {
+        if (jl_isbits(ty) && (al=((jl_datatype_t*)ty)->alignment)!=0 &&
+            jl_is_leaf_type(ty)) {
             fsz = jl_datatype_size(ty);
             st->fields[i].isptr = 0;
         }
