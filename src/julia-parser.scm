@@ -520,7 +520,7 @@
 	   (spc (ts:space? s)))
       (cond ((and first? (eq? t '|..|))
 	     (take-token s)
-	     `(call ,t ,ex ,(parse-expr s)))
+	     `(call ,t ,ex ,(parse-cons s)))
 	    ((and range-colon-enabled (eq? t ':))
 	     (take-token s)
 	     (if (and space-sensitive spc
@@ -568,6 +568,7 @@
 (define (parse-and s)   (parse-LtoR s parse-arrow (prec-ops 3)))
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 4)))
 (define (parse-ineq s)  (parse-comparison s (prec-ops 5)))
+(define (parse-cons s)  (parse-RtoL s parse-cond  (prec-ops 6)))
 
 ; parse left to right, combining chains of certain operators into 1 call
 ; e.g. a+b+c => (call + a b c)
