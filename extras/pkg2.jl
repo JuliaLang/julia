@@ -7,7 +7,7 @@ include("pkg/write.jl")
 
 function requirements()
     avail = Read.available()
-    reqs  = Read.parse_requires("REQUIRE")
+    reqs  = Read.parse_requires()
     fix   = Read.fixed(avail)
     Query.requirements(reqs,fix)
 end
