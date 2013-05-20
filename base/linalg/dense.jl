@@ -108,16 +108,22 @@ function gradient(F::Vector, h::Vector)
     end
     return g
 end
+        
+        function calc_diag_length{T}(A::Matrix{T}, k::Integer)
+            m, n = size(A)
+            if k >= 0 && k < n
+                nV = min(m, n-k)
+            elseif k < 0 && -k < m
+                nV = min(m+k, n)
+            else
+                throw(BoundsError())
+            end
+            nV
+        end
+        
 
 function diag{T}(A::Matrix{T}, k::Integer)
-    m, n = size(A)
-    if k >= 0 && k < n
-        nV = min(m, n-k)
-    elseif k < 0 && -k < m
-        nV = min(m+k, n)
-    else
-        throw(BoundsError())
-    end
+    nV = calc_diag_length(A, k)
 
     V = zeros(T, nV)
 
@@ -135,6 +141,36 @@ function diag{T}(A::Matrix{T}, k::Integer)
 end
 
 diag(A) = diag(A, 0)
+        
+function diag!{T, Q}(A::Matrix{T}, v::Vector{Q}, k::Integer)
+    nV = calc_diag_length(A, k)
+
+    if length(v)!=nV
+	throw(BoundsError())
+    end
+
+    if k > 0
+	for i=1:nV
+	    A[i, i+k] = v[i]
+	end
+    else
+	for i=1:nV
+	    A[i-k, i] = v[i]
+	end
+    end
+
+    return A
+end
+
+function diag!{T, Q<:Number}(A::Matrix{T}, v::Q, k::Integer)
+    nV = calc_diag_length(A, k)
+
+    diag!(A, fill(v, nV), k)
+end
+
+
+diag!(A, v) = diag!(A, v, 0)
+            
 
 function diagm{T}(v::VecOrMat{T}, k::Integer)
     if isa(v, Matrix)
