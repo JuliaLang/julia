@@ -1,4 +1,5 @@
 module Rounding
+include("fenv_constants.jl")
 
 export
     RoundingMode, RoundToNearest, RoundToZero, RoundUp, RoundDown,
@@ -11,27 +12,27 @@ type RoundToZero <: RoundingMode end
 type RoundUp <: RoundingMode end
 type RoundDown <: RoundingMode end
 
-@unix_only set_rounding(::Type{RoundToNearest}) = ccall(:fesetround, Cint, (Cint, ), 0)
-@unix_only set_rounding(::Type{RoundToZero}) = ccall(:fesetround, Cint, (Cint, ), 3072)
-@unix_only set_rounding(::Type{RoundUp}) = ccall(:fesetround, Cint, (Cint, ), 2048)
-@unix_only set_rounding(::Type{RoundDown}) = ccall(:fesetround, Cint, (Cint, ), 1024)
+set_rounding(::Type{RoundToNearest}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_TONEAREST)
+set_rounding(::Type{RoundToZero}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_TOWARDZERO)
+set_rounding(::Type{RoundUp}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_UPWARD)
+set_rounding(::Type{RoundDown}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_DOWNWARD)
 
-@unix_only function get_rounding()
+function get_rounding()
     r = ccall(:fegetround, Cint, ())
-    if r == 0
+    if r == JL_FE_TONEAREST
         return RoundToNearest
-    elseif r == 1024
+    elseif r == JL_FE_DOWNWARD
         return RoundDown
-    elseif r == 2048
+    elseif r == JL_FE_UPWARD
         return RoundUp
-    elseif r == 3072
+    elseif r == JL_FE_TOWARDZERO
         return RoundToZero
     else
         error()
     end
 end
 
-@unix_only function with_rounding{T<:RoundingMode}(f::Function, rounding::Type{T})
+function with_rounding{T<:RoundingMode}(f::Function, rounding::Type{T})
     old_rounding = get_rounding()
     set_rounding(rounding)
     try
