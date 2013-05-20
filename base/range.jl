@@ -105,6 +105,8 @@ max(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  l
 # Ranges are intended to be immutable
 copy(r::Ranges) = r
 
+getindex(r::Ranges, i::Real) = getindex(r, to_index(i))
+
 function getindex{T}(r::Ranges{T}, i::Integer)
     if !(1 <= i <= r.len); error(BoundsError); end
     oftype(T, r.start + (i-1)*step(r))
