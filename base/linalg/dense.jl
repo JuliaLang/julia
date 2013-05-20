@@ -109,17 +109,17 @@ function gradient(F::Vector, h::Vector)
     return g
 end
         
-        function calc_diag_length{T}(A::Matrix{T}, k::Integer)
-            m, n = size(A)
-            if k >= 0 && k < n
-                nV = min(m, n-k)
-            elseif k < 0 && -k < m
-                nV = min(m+k, n)
-            else
-                throw(BoundsError())
-            end
-            nV
-        end
+function calc_diag_length{T}(A::Matrix{T}, k::Integer)
+    m, n = size(A)
+    if k >= 0 && k < n
+	nV = min(m, n-k)
+    elseif k < 0 && -k < m
+	nV = min(m+k, n)
+    else
+	throw(BoundsError())
+    end
+    nV
+end
         
 
 function diag{T}(A::Matrix{T}, k::Integer)
