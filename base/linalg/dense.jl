@@ -112,11 +112,11 @@ end
 function calc_diag_length{T}(A::Matrix{T}, k::Integer)
     m, n = size(A)
     if k >= 0 && k < n
-	nV = min(m, n-k)
+        nV = min(m, n-k)
     elseif k < 0 && -k < m
-	nV = min(m+k, n)
+        nV = min(m+k, n)
     else
-	throw(BoundsError())
+        throw(BoundsError())
     end
     nV
 end
@@ -146,17 +146,17 @@ function diag!{T, Q}(A::Matrix{T}, v::Vector{Q}, k::Integer)
     nV = calc_diag_length(A, k)
 
     if length(v)!=nV
-	throw(BoundsError())
+        throw(BoundsError())
     end
 
     if k > 0
-	for i=1:nV
-	    A[i, i+k] = v[i]
-	end
+        for i=1:nV
+            A[i, i+k] = v[i]
+        end
     else
-	for i=1:nV
-	    A[i-k, i] = v[i]
-	end
+        for i=1:nV
+            A[i-k, i] = v[i]
+        end
     end
 
     return A
