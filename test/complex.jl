@@ -495,7 +495,7 @@
 
 # atanh
 #  atanh(conj(z)) = conj(atanh(z))
-#  atang(-z) = -atanh(z)
+#  atanh(-z) = -atanh(z)
 
 @test isequal(atanh(complex( 0.0, 0.0)),complex( 0.0, 0.0))
 @test isequal(atanh(complex( 0.0,-0.0)),complex( 0.0,-0.0))
@@ -510,6 +510,7 @@
 @test isequal(atanh(complex(-0.0,-Inf)),complex(-0.0,-pi/2))
 
 @test isequal(atanh(complex( 1.0, 0.0)),complex( Inf, 0.0))
+@test isequal(atanh(complex(-1.0, 0.0)),complex(-Inf, 0.0))
 @test isequal(atanh(complex( 5.0, Inf)),complex( 0.0, pi/2))
 @test isequal(atanh(complex( 5.0,-Inf)),complex( 0.0,-pi/2))
 @test isequal(atanh(complex( 5.0, NaN)),complex( NaN, NaN))
@@ -543,7 +544,7 @@
 
 
 # atan
-#  atan(z) = -i*tanh(iz)
+#  atan(z) = -i*atanh(iz)
 
 @test isequal(atan(complex( 0.0, 0.0)),complex( 0.0, 0.0))
 @test isequal(atan(complex( 0.0,-0.0)),complex( 0.0,-0.0))
