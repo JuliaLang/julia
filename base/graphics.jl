@@ -26,6 +26,7 @@ export
     # coordinate systems
     reset_transform, set_coords, rotate, scale, translate, user_to_device!,
     device_to_user!, user_to_device_distance!, device_to_user_distance!,
+    user_to_device, device_to_user,
     
     # clipping
     clip, clip_preserve, reset_clip,
@@ -234,6 +235,20 @@ user_to_device!(gc::GraphicsContext, c::Vector{Float64}) = c
 device_to_user!(gc::GraphicsContext, c::Vector{Float64}) = c
 user_to_device_distance!(gc::GraphicsContext, c::Vector{Float64}) = c
 device_to_user_distance!(gc::GraphicsContext, c::Vector{Float64}) = c
+
+const d2ubuf = zeros(2)
+function device_to_user(gc::GraphicsContext, x::Real, y::Real)
+    d2ubuf[1] = x
+    d2ubuf[2] = y
+    device_to_user!(gc, d2ubuf)
+    d2ubuf[1], d2ubuf[2]
+end
+function user_to_device(gc::GraphicsContext, x::Real, y::Real)
+    d2ubuf[1] = x
+    d2ubuf[2] = y
+    user_to_device!(gc, d2ubuf)
+    d2ubuf[1], d2ubuf[2]
+end
 
 # drawing and properties
 
