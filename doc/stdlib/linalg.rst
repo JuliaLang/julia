@@ -183,11 +183,15 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Lower triangle of a matrix
 
-.. function:: diag(M, [k])
+.. function:: diagind(M[, k])
+
+   A ``Range`` giving the indices of the ``k``-th diagonal of the matrix ``M``.
+
+.. function:: diag(M[, k])
 
    The ``k``-th diagonal of a matrix, as a vector
 
-.. function:: diagm(v, [k])
+.. function:: diagm(v[, k])
 
    Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
 
