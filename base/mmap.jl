@@ -37,7 +37,7 @@ function mmap_grow(len::Integer, prot::Integer, flags::Integer, fd::Integer, off
         error(strerror())
     end
     if (filelen < offset + len)
-        n = ccall(:pwrite, Int, (Int32, Ptr{Void}, Int, FileOffset), fd, int8([0]), 1, offset + len - 1)
+        n = ccall(:pwrite, Int, (Int32, Ptr{Void}, Uint, FileOffset), fd, int8([0]), 1, offset + len - 1)
         if (n < 1)
             error(strerror())
         end
