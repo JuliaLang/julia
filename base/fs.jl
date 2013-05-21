@@ -102,12 +102,12 @@ function unlink(f::File)
     f
 end
 
-function write(f::File,buf::Ptr{Uint8},len::Int32,offset::Int64)
+function write(f::File,buf::Ptr{Uint8},len::Integer,offset::Integer)
     if !f.open
         error("File is not open")
     end
     req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
-    err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Int32,Int64,Ptr{Void}),
+    err = ccall(:uv_fs_write,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Csize_t,Int64,Ptr{Void}),
                 eventloop(),req,f.handle,buf,len,offset,C_NULL)
     uv_error(err)
     f
