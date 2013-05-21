@@ -6,7 +6,169 @@
 
 # Because these functions are based on code covered by LGPL-2.1+ the same license
 # must apply to the code in this file which is
-# Copyright (c) 2013 Douglas M. Bates, Viral Shah and other contributors
+# Copyright (c) 2013 Viral Shah, Douglas Bates and other contributors
+
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.4: Triplet form
+# http://www.cise.ufl.edu/research/sparse/CSparse/
+function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
+                                V::AbstractVector{Tv},
+                                nrow::Integer, ncol::Integer, combine::Function)
+
+    if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
+
+    # Work array
+    Wj = Array(Ti, max(nrow,ncol)+1)
+
+    # Allocate sparse matrix data structure
+    # Count entries in each row
+    nz = length(I)
+    Rnz = zeros(Ti, nrow+1)
+    Rnz[1] = 1
+    for k=1:nz
+        Rnz[I[k]+1] += 1
+    end
+    Rp = cumsum(Rnz)
+    Ri = Array(Ti, nz)
+    Rx = Array(Tv, nz)
+
+    # Construct row form
+    # place triplet (i,j,x) in column i of R
+    # Use work array for temporary row pointers
+    for i=1:nrow; Wj[i] = Rp[i]; end
+
+    for k=1:nz
+        ind = I[k]
+        p = Wj[ind]
+        Wj[ind] += 1
+        Rx[p] = V[k]
+        Ri[p] = J[k]
+    end
+
+    # Reset work array for use in counting duplicates
+    for j=1:ncol; Wj[j] = 0; end
+
+    # Sum up duplicates and squeeze
+    anz = 0
+    for i=1:nrow
+        p1 = Rp[i]
+        p2 = Rp[i+1] - 1
+        pdest = p1
+
+        for p = p1:p2
+            j = Ri[p]
+            pj = Wj[j]
+            if pj >= p1
+                Rx[pj] = combine (Rx[pj], Rx[p])
+            else
+                Wj[j] = pdest
+                if pdest != p
+                    Ri[pdest] = j
+                    Rx[pdest] = Rx[p]
+                end
+                pdest += 1
+            end
+        end
+
+        Rnz[i] = pdest - p1
+        anz += (pdest - p1)
+    end
+
+    # Transpose from row format to get the CSC format
+    RiT = Array(Ti, anz)
+    RxT = Array(Tv, anz)
+
+    # Reset work array to build the final colptr
+    Wj[1] = 1
+    for i=2:(ncol+1); Wj[i] = 0; end
+    for j = 1:nrow
+        p1 = Rp[j]
+        p2 = p1 + Rnz[j] - 1        
+        for p = p1:p2
+            Wj[Ri[p]+1] += 1
+        end
+    end
+    RpT = cumsum(Wj[1:(ncol+1)])
+
+    # Transpose 
+    for i=1:length(RpT); Wj[i] = RpT[i]; end
+    for j = 1:nrow
+        p1 = Rp[j]
+        p2 = p1 + Rnz[j] - 1
+        for p = p1:p2
+            ind = Ri[p]
+            q = Wj[ind]
+            Wj[ind] += 1
+            RiT[q] = j
+            RxT[q] = Rx[p]
+        end
+    end
+
+    return SparseMatrixCSC(nrow, ncol, RpT, RiT, RxT)
+end
+
+## Transpose
+
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.5: Transpose
+# http://www.cise.ufl.edu/research/sparse/CSparse/
+function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+    (nT, mT) = size(S)
+    nnzS = nnz(S)
+    colptr_S = S.colptr
+    rowval_S = S.rowval
+    nzval_S = S.nzval
+
+    rowval_T = Array(Ti, nnzS)
+    nzval_T = Array(Tv, nnzS)
+
+    w = zeros(Ti, nT+1)
+    w[1] = 1
+    for i=1:nnzS
+        w[rowval_S[i]+1] += 1
+    end
+    colptr_T = cumsum(w)
+    w = copy(colptr_T)
+
+    for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
+        ind = rowval_S[p]
+        q = w[ind]
+        w[ind] += 1
+        rowval_T[q] = j
+        nzval_T[q] = nzval_S[p]
+    end
+
+    SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+end
+
+function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+    (nT, mT) = size(S)
+    nnzS = nnz(S)
+    colptr_S = S.colptr
+    rowval_S = S.rowval
+    nzval_S = S.nzval
+
+    rowval_T = Array(Ti, nnzS)
+    nzval_T = Array(Tv, nnzS)
+
+    w = zeros(Ti, nT+1)
+    w[1] = 1
+    for i=1:nnzS
+        w[rowval_S[i]+1] += 1
+    end
+    colptr_T = cumsum(w)
+    w = copy(colptr_T)
+
+    for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
+        ind = rowval_S[p]
+        q = w[ind]
+        w[ind] += 1
+        rowval_T[q] = j
+        nzval_T[q] = conj(nzval_S[p])
+    end
+
+    SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+end
 
 # Compute the elimination tree of A using triu(A) returning the parent vector.
 # A root node is indicated by 0. This tree may actually be a forest in that
@@ -117,7 +279,7 @@ function csc_symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
         end
     end
     Cp[:] = cumsum(vcat(one(Ti),w))
-    for j in 1:n                   # count entries in each column of C
+    for j in 1:n
         j2 = pinv[j]
         for p = Ap[j]:(Ap[j+1]-1)
             i = Ai[p]
@@ -130,3 +292,37 @@ function csc_symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
     end
     (C.').'                    # double transpose to order the columns
 end
+
+# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
+# Section 2.7: Removing entries from a matrix
+# http://www.cise.ufl.edu/research/sparse/CSparse/
+function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
+    nzorig = nnz(A)
+    nz = 1
+    for j = 1:A.n
+        p = A.colptr[j]                 # record current position
+        A.colptr[j] = nz                # set new position
+        while p < A.colptr[j+1]
+            if f(A.rowval[p], j, A.nzval[p], other)
+                A.nzval[nz] = A.nzval[p]
+                A.rowval[nz] = A.rowval[p]
+                nz += 1
+            end
+            p += 1
+        end
+    end
+    A.colptr[A.n + 1] = nz
+    nz -= 1
+    if nz < nzorig
+        resize!(A.nzval, nz)
+        resize!(A.rowval, nz)
+    end
+    A
+end
+
+droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
+dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=zero(Tv), None)
+triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), None)
+triu(A::SparseMatrixCSC) = triu!(copy(A))
+tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), None)
+tril(A::SparseMatrixCSC) = tril!(copy(A))
