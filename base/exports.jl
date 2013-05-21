@@ -134,6 +134,7 @@ export
     Cssize_t,
     Clonglong,
     Culonglong,
+    Coff_t,
     Cfloat,
     Cdouble,
     Cwchar_t,

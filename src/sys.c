@@ -43,7 +43,11 @@ DLLEXPORT size_t jl_ios_size(ios_t *s)
     return s->size;
 }
 
-DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
+#ifdef _P64
+DLLEXPORT int64_t jl_sizeof_off_t(void) { return sizeof(off_t); }
+#else
+DLLEXPORT int32_t jl_sizeof_off_t(void) { return sizeof(off_t); }
+#endif
 
 DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
 
