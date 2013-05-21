@@ -1,34 +1,6 @@
 module Read
-using ..Types, Base.Git
 
-function parse_requires(readable)
-    reqs = Requires()
-    for line in eachline(readable)
-        ismatch(r"^\s*(?:#|$)", line) && continue
-        fields = split(replace(line, r"#.*$", ""))
-        pkg = shift!(fields)
-        if !all(_->ismatch(Base.VERSION_REGEX,_), fields)
-            error("invalid requires entry for $pkg: $fields")
-        end
-        vers = [convert(VersionNumber,_) for _ in fields]
-        if !issorted(vers)
-            error("invalid requires entry for $pkg: $vers")
-        end
-        ivals = VersionInterval[]
-        if isempty(vers)
-            push!(ivals, VersionInterval(typemin(VersionNumber),typemax(VersionNumber)))
-        else
-            isodd(length(vers)) && push!(vers, typemax(VersionNumber))
-            while !isempty(vers)
-                push!(ivals, VersionInterval(shift!(vers), shift!(vers)))
-            end
-        end
-        vset = VersionSet(ivals)
-        reqs[pkg] = haskey(reqs,pkg) ? intersect(reqs[pkg],vset) : vset
-    end
-    return reqs
-end
-parse_requires(file::String) = isfile(file) ? open(parse_requires,file) : Requires()
+using ..Types, ..Reqs, Base.Git
 
 function available(names=readdir("METADATA"))
     pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
@@ -42,7 +14,7 @@ function available(names=readdir("METADATA"))
             haskey(pkgs,pkg) || (pkgs[pkg] = eltype(pkgs)[2]())
             pkgs[pkg][convert(VersionNumber,ver)] = Available(
                 readchomp(joinpath(versdir, ver, "sha1")),
-                parse_requires(joinpath(versdir, ver, "requires"))
+                Reqs.parse(joinpath(versdir, ver, "requires"))
             )
         end
     end
@@ -62,7 +34,11 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
         Git.attached() && return true
         head = Git.head()
         for (ver,info) in avail
-            Git.is_ancestor_of(head, info.sha1) && return false
+            if Git.iscommit(info.sha1)
+                Git.is_ancestor_of(head, info.sha1) && return false
+            else
+                Base.warn_once("unknown $pkg commit $(info.sha1[1:10]) (METADATA may be ahead of package repo).")
+            end
         end
         return true
     end
@@ -74,11 +50,17 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
     hi = typemin(VersionNumber)
     for (ver,info) in avail
         head == info.sha1 && return ver
-        base = cd(()->readchomp(`git merge-base $head $(info.sha1)`), pkg)
-        if base == head # Git.is_ancestor_of(head, info.sha1)
-            lo = max(lo,ver)
-        elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
-            hi = max(hi,ver)
+        cd(pkg) do
+            if Git.iscommit(info.sha1)
+                base = readchomp(`git merge-base $head $(info.sha1)`)
+                if base == head # Git.is_ancestor_of(head, info.sha1)
+                    lo = max(lo,ver)
+                elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
+                    hi = max(hi,ver)
+                end
+            else
+                Base.warn_once("unknown $pkg commit $(info.sha1[1:10]) (METADATA may be ahead of package repo).")
+            end
         end
     end
     typemin(VersionNumber) < lo ?
@@ -98,8 +80,7 @@ function requires_path(pkg::String, avail::Dict=available(pkg))
         return joinpath(pkg, "REQUIRE")
     end
 end
-requires_dict(pkg::String, avail::Dict=available(pkg)) =
-    parse_requires(requires_path(pkg,avail))
+requires_dict(pkg::String, avail::Dict=available(pkg)) = Reqs.parse(requires_path(pkg,avail))
 
 function fixed(avail::Dict=available())
     pkgs = Dict{ByteString,Fixed}()

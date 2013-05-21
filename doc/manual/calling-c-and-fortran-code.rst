@@ -44,7 +44,7 @@ library function. Arguments to ``ccall`` are as follows:
 1. (:function, "library") pair (must be a constant, but see below).
 2. Return type, which may be any bits type, including ``Int32``,
    ``Int64``, ``Float64``, or ``Ptr{T}`` for any type parameter ``T``,
-   indicating a pointer to values of type ``T``, or just ``Ptr`` for
+   indicating a pointer to values of type ``T``, or ``Ptr{Void}`` for
    ``void*`` "untyped pointer" values.
 3. A tuple of input types, like those allowed for the return type.
 4. The following arguments, if any, are the actual argument values

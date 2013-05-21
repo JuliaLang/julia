@@ -58,7 +58,7 @@ macro timed(ex)
     end
 end
 
-function peakflops(n)
+function peakflops(n=2000)
     a = rand(n,n)
     t = @elapsed a*a
     t = @elapsed a*a
@@ -66,8 +66,6 @@ function peakflops(n)
     println("The peak flop rate is ", floprate*1e-9, " gigaflops")
     floprate
 end
-
-peakflops() = peakflops(2000)
 
 # searching definitions
 
