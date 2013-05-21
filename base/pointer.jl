@@ -57,6 +57,6 @@ eltype{T}(::Ptr{T}) = T
 isequal(x::Ptr, y::Ptr) = uint(x) == uint(y)
 -(x::Ptr, y::Ptr) = uint(x) - uint(y)
 
-+{T}(x::Ptr{T}, y::Integer) = pointer(T, uint(uint(x) + y))
--{T}(x::Ptr{T}, y::Integer) = pointer(T, uint(uint(x) - y))
++(x::Ptr, y::Integer) = oftype(x, uint(uint(x) + y))
+-(x::Ptr, y::Integer) = oftype(x, uint(uint(x) - y))
 +(x::Integer, y::Ptr) = y + x

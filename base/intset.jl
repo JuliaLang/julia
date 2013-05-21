@@ -124,7 +124,7 @@ function next(s::IntSet, i)
     if i >= s.limit
         n = int64(i)
     else
-        n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit)
+        n = int64(ccall(:bitvector_next, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit))
     end
     (n, n+1)
 end
