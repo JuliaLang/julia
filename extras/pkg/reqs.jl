@@ -14,25 +14,17 @@ end
 
 process(io::IO) = @task begin
     for line in eachline(io)
+        line = chomp(line)
         if ismatch(r"^\s*(?:#|$)", line)
             produce(Comment(line))
         else
             fields = split(replace(line, r"#.*$", ""))
             pkg = shift!(fields)
-            all(_->ismatch(Base.VERSION_REGEX,_), fields) ||
+            all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
                 error("invalid requires entry for $pkg: $fields")
-            vers = [ convert(VersionNumber, field) for field in fields ]
-            issorted(vers) || error("invalid requires entry for $pkg: $vers")
-            intervals = VersionInterval[]
-            if isempty(vers)
-                push!(intervals, VersionInterval(typemin(VersionNumber),typemax(VersionNumber)))
-            else
-                isodd(length(vers)) && push!(vers, typemax(VersionNumber))
-                while !isempty(vers)
-                    push!(intervals, VersionInterval(shift!(vers), shift!(vers)))
-                end
-            end
-            produce(Requirement(line,pkg,VersionSet(intervals)))
+            versions = [ convert(VersionNumber, field) for field in fields ]
+            issorted(versions) || error("invalid requires entry for $pkg: $versions")
+            produce(Requirement(line, pkg, VersionSet(versions)))
         end
     end
 end
@@ -48,5 +40,41 @@ function parse(io::IO)
     return reqs
 end
 parse(file::String="REQUIRE") = isfile(file) ? open(parse,file) : Requires()
+
+function add(input::IO, output::IO, pkg::String, versions::VersionSet)
+    existed = false
+    for r in process(input)
+        if isa(r,Requirement) && r.package == pkg
+            versions = intersect(versions, r.versions)
+            existed = true
+        else
+            println(output, r.content)
+        end
+    end
+    if versions == VersionSet()
+        println(output, pkg)
+    else
+        print(output, pkg)
+        for ival in versions.intervals
+            print(output, "\t", ival.lower)
+            ival.upper < typemax(VersionNumber) &&
+            print(output, "\t", ival.upper)
+        end
+        println(output)
+    end
+    return existed
+end
+
+function rm(input::IO, output::IO, pkg::String)
+    existed = false
+    for r in process(input)
+        if isa(r,Requirement) && r.package == pkg
+            existed = true
+        else
+            println(output, r.content)
+        end
+    end
+    return existed
+end
 
 end # module
