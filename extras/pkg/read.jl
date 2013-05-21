@@ -63,8 +63,11 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
         Git.attached() && return true
         head = Git.head()
         for (ver,info) in avail
-            Git.iscommit(info.sha1) &&
-            Git.is_ancestor_of(head, info.sha1) && return false
+            if Git.iscommit(info.sha1)
+                Git.is_ancestor_of(head, info.sha1) && return false
+            else
+                warn("unknown $pkg commit $(info.sha1[1:10]) (METADATA may be ahead of package repo).")
+            end
         end
         return true
     end
@@ -77,12 +80,15 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
     for (ver,info) in avail
         head == info.sha1 && return ver
         cd(pkg) do
-            Git.iscommit(info.sha1) || return # continue
-            base = readchomp(`git merge-base $head $(info.sha1)`)
-            if base == head # Git.is_ancestor_of(head, info.sha1)
-                lo = max(lo,ver)
-            elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
-                hi = max(hi,ver)
+            if Git.iscommit(info.sha1)
+                base = readchomp(`git merge-base $head $(info.sha1)`)
+                if base == head # Git.is_ancestor_of(head, info.sha1)
+                    lo = max(lo,ver)
+                elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
+                    hi = max(hi,ver)
+                end
+            else
+                warn("unknown $pkg commit $(info.sha1[1:10]) (METADATA may be ahead of package repo).")
             end
         end
     end
