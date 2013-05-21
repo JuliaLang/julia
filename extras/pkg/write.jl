@@ -1,5 +1,5 @@
 module Write
 
-# TODO: functionality to write new state to .julia repos.
+# TODO
 
 end # module
