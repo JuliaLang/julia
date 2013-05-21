@@ -206,14 +206,7 @@ end
 
 ## IOStream
 
-const sizeof_off_t = int(ccall(:jl_sizeof_off_t, Int32, ()))
 const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
-
-if sizeof_off_t == 4
-    typealias FileOffset Int32
-else
-    typealias FileOffset Int64
-end
 
 type IOStream <: IO
     handle::Ptr{Void}
