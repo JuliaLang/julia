@@ -1,7 +1,7 @@
 module Broadcast
 
 using ..Meta.quot
-import Base.(.+), Base.(.-), Base.(.*), Base.(./) 
+import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\)
 export broadcast, broadcast!, broadcast_function, broadcast!_function
 export broadcast_getindex, broadcast_setindex!
 
@@ -218,7 +218,7 @@ end
 
 ## actual functions for broadcast and broadcast! ##
 
-for (fname, op) in {(:.+, +), (:.-, -), (:.*, *), (:./, /)}
+for (fname, op) in {(:.+, +), (:.-, -), (:.*, *), (:./, /), (:.\, \)}
     eval(code_broadcast(fname, quot(op)))
 end
 
