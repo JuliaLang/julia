@@ -452,7 +452,12 @@ export
 # arrays
     mapslices,
     reducedim,
-    bsxfun,
+    broadcast,
+    broadcast!,
+    broadcast_function,
+    broadcast!_function,
+    broadcast_getindex,
+    broadcast_setindex!,
     cartesianmap,
     cat,
     cell,
