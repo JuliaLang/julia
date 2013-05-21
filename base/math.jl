@@ -103,7 +103,7 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        ($f)(x::Integer) = ($f)(float(x))
+        ($f)(x::Real) = ($f)(float(x))
         @vectorize_1arg Number $f
     end
 end
@@ -120,7 +120,7 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     @eval begin
         ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
         ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
-        ($f)(x::Integer) = ($f)(float(x))
+        ($f)(x::Real) = ($f)(float(x))
         @vectorize_1arg Number $f
     end
 end
@@ -154,7 +154,7 @@ end
 
 gamma(x::Float64) = nan_dom_err(ccall((:tgamma,libm),  Float64, (Float64,), x), x)
 gamma(x::Float32) = float32(gamma(float64(x)))
-gamma(x::Integer) = gamma(float(x))
+gamma(x::Real) = gamma(float(x))
 @vectorize_1arg Number gamma
 
 lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
@@ -285,7 +285,7 @@ airybiprime(z) = airy(3,z)
 @vectorize_1arg Number airybiprime
 
 airy(k::Number, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
-airy(k::Number, x::Integer) = airy(k, float(x))
+airy(k::Number, x::Real) = airy(k, float(x))
 airy(k::Number, z::Complex64) = complex64(airy(k, complex128(z)))
 airy(k::Number, z::Complex) = airy(convert(Int,k), complex128(z))
 @vectorize_2arg Number airy
