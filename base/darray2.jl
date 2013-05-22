@@ -140,7 +140,7 @@ drandn(d::Int...) = drandn(d)
 
 ## conversions ##
 
-function distribute(a::Array)
+function distribute(a::AbstractArray)
     owner = myid()
     rr = RemoteRef()
     put(rr, a)
