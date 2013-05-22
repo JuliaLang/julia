@@ -94,7 +94,17 @@ function <=(l::Set, r::Set)
     return true
 end
 
-unique(C) = collect(union!(Set{eltype(C)}(), C))
+function unique(C)
+    out = Array(eltype(C),0)
+    seen = Set{eltype(C)}()
+    for x in C
+        if !contains(seen, x)
+            add!(seen, x)
+            push!(out, x)
+        end
+    end
+    out
+end
 
 function filter!(f::Function, s::Set)
     for x in s
