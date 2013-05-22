@@ -164,7 +164,7 @@ function edit(file::String, line::Integer)
     elseif editor == "kate"
         spawn(`kate $file -l $line`)
     else
-        run(`$editor $file`)
+        run(`$(shell_split(editor)) $file`)
     end
     nothing
 end
