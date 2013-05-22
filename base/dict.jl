@@ -314,32 +314,39 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     oldv = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
-    nel = h.count
-    h.ndel = h.count = 0
-    if nel == 0
+    if h.count == 0
         resize!(h.slots, newsz)
         fill!(h.slots, 0)
         resize!(h.keys, newsz)
         resize!(h.vals, newsz)
+        h.ndel = 0
         return h
     end
-    h.slots = zeros(Uint8,newsz)
-    h.keys = Array(K, newsz)
-    h.vals = Array(V, newsz)
+
+    slots = zeros(Uint8,newsz)
+    keys = Array(K, newsz)
+    vals = Array(V, newsz)
+    count = 0
 
     for i = 1:sz
         if olds[i] == 0x1
             k = oldk[i]
             index = hashindex(k, newsz)
-            while h.slots[index] != 0
+            while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
-            h.slots[index] = 0x1
-            h.keys[index] = k
-            h.vals[index] = oldv[i]
-            h.count += 1
+            slots[index] = 0x1
+            keys[index] = k
+            vals[index] = oldv[i]
+            count += 1
         end
     end
+
+    h.slots = slots
+    h.keys = keys
+    h.vals = vals
+    h.count = count
+    h.ndel = 0
 
     return h
 end
