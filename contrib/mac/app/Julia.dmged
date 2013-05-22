@@ -109,7 +109,7 @@ AAAAAAAAAAAAAAAAAAACAAAAAAAAAAUAAAABAAAQAG9iAAAArmJwbGlzdAAAAAAAAAAAAAAAAAAAAAAA
         <attribute name="internetenabled" type="int16">1</attribute>
         <attribute name="iconsize" type="int32">48</attribute>
         <attribute name="diskname" type="string">Julia</attribute>
-        <attribute name="diskimagename" type="string">Julia-0.2</attribute>
+        <attribute name="diskimagename" type="string">Julia-0.2-pre</attribute>
         <attribute name="destination" type="string">/Users/viral/julia/contrib/mac/app</attribute>
         <attribute name="compression" type="int16">2</attribute>
         <attribute name="buildfolder" type="string">/Users/viral/julia/contrib/mac/app/julia.dmgCreator_build</attribute>
