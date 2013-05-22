@@ -39,9 +39,9 @@ function parse(io::IO)
     end
     return reqs
 end
-parse(file::String="REQUIRE") = isfile(file) ? open(parse,file) : Requires()
+parse(file::String) = isfile(file) ? open(parse,file) : Requires()
 
-function add(input::IO, output::IO, pkg::String, versions::VersionSet)
+function add(input::IO, output::IO, pkg::String, versions::VersionSet=VersionSet())
     existed = false
     for r in process(input)
         if isa(r,Requirement) && r.package == pkg
