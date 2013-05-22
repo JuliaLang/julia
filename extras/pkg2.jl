@@ -8,7 +8,7 @@ include("pkg/query.jl")
 include("pkg/write.jl")
 
 requirements() = Dir.cd() do
-    reqs  = Reqs.parse()
+    reqs  = Reqs.parse("REQUIRE")
     avail = Read.available()
     fix   = Read.fixed(avail)
     Query.requirements(reqs,fix)
