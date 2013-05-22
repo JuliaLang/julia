@@ -3438,25 +3438,46 @@
 
 "),
 
-("Arrays","Base","bsxfun","bsxfun(fn, A, B[, C...])
+("Arrays","Base","broadcast","broadcast(f, As...)
 
-   Apply binary function \"fn\" to two or more arrays, with singleton
-   dimensions expanded.
-
-"),
-
-("Arrays","Base","getindex","getindex(A, ind)
-
-   Returns a subset of array \"A\" as specified by \"ind\", which may
-   be an \"Int\", a \"Range\", or a \"Vector\".
+   Broadcasts the arrays \"As\" to a common size by expanding
+   singleton dimensions, and returns an array of the results
+   \"f(as...)\" for each position.
 
 "),
 
-("Arrays","Base","sub","sub(A, ind)
+("Arrays","Base","broadcast!","broadcast!(f, dest, As...)
 
-   Returns a SubArray, which stores the input \"A\" and \"ind\" rather
-   than computing the result immediately. Calling \"getindex\" on a
-   SubArray computes the indices on the fly.
+   Like \"broadcast\", but store the result in the \"dest\" array.
+
+"),
+
+("Arrays","Base","broadcast_function","broadcast_function(f)
+
+   Returns a function \"broadcast_f\" such that
+   \"broadcast_function(f)(As...) === broadcast(f, As...)\". Most
+   useful in the form \"const broadcast_f = broadcast_function(f)\".
+
+"),
+
+("Arrays","Base","broadcast!_function","broadcast!_function(f)
+
+   Like \"broadcast_function\", but for \"broadcast!\".
+
+"),
+
+("Arrays","Base","getindex","getindex(A, inds...)
+
+   Returns a subset of array \"A\" as specified by \"inds\", where
+   each \"ind\" may be an \"Int\", a \"Range\", or a \"Vector\".
+
+"),
+
+("Arrays","Base","sub","sub(A, inds...)
+
+   Returns a SubArray, which stores the input \"A\" and \"inds\"
+   rather than computing the result immediately. Calling \"getindex\"
+   on a SubArray computes the indices on the fly.
 
 "),
 
@@ -3468,10 +3489,26 @@
 
 "),
 
-("Arrays","Base","setindex!","setindex!(A, X, ind)
+("Arrays","Base","setindex!","setindex!(A, X, inds...)
 
    Store values from array \"X\" within some subset of \"A\" as
-   specified by \"ind\".
+   specified by \"inds\".
+
+"),
+
+("Arrays","Base","broadcast_getindex","broadcast_getindex(A, inds...)
+
+   Broadcasts the \"inds\" arrays to a common size like \"broadcast\",
+   and returns an array of the results \"A[ks...]\", where \"ks\" goes
+   over the positions in the broadcast.
+
+"),
+
+("Arrays","Base","broadcast_setindex!","broadcast_setindex!(A, X, inds...)
+
+   Broadcasts the \"X\" and \"inds\" arrays to a common size and
+   stores the value from each position in \"X\" at the indices given
+   by the same positions in \"inds\".
 
 "),
 
@@ -4227,24 +4264,58 @@
 
 "),
 
-("Numerical Integration","Base","quadgk","quadgk(f, a,b,c...; options)
+("Numerical Integration","Base","quadgk","quadgk(f, a, b, c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7)
 
    Numerically integrate the function \"f(x)\" from \"a\" to \"b\",
    and optionally over additional intervals \"b\" to \"c\" and so on.
-   Keyword options include a relative error tolerance \"reltol\" (defaults
-   to \"sqrt(eps)\"), an absolute error tolerance \"abstol\" (defaults
-   to 0), a maximum number of function evaluations \"maxevals\" (defaults
-   to \"10^7\"), and the \"order\" of the integration rule (defaults to 7).
+   Keyword options include a relative error tolerance \"reltol\"
+   (defaults to \"sqrt(eps)\" in the precision of the endpoints), an
+   absolute error tolerance \"abstol\" (defaults to 0), a maximum
+   number of function evaluations \"maxevals\" (defaults to \"10^7\"),
+   and the \"order\" of the integration rule (defaults to 7).
 
    Returns a pair \"(I,E)\" of the estimated integral \"I\" and an
-   estimated upper bound on the absolute error \"E\".
+   estimated upper bound on the absolute error \"E\".  If \"maxevals\"
+   is not exceeded then either \"E <= abstol\" or \"E <=
+   reltol*norm(I)\" will hold.  (Note that it is useful to specify a
+   positive \"abstol\" in cases where \"norm(I)\" may be zero.)
 
-   Complex-valued functions are supported, and the endpoints \"a\" etcetera
-   can also be complex (in which case the integral is performed over
-   straight-line segments in the complex plane).  If the endpoints
-   are \"BigFloat\", then the integration will be performed in that
-   precision as well (note: it is advisable to increase the integration
-   \"order\" in rough proportion to the precision, for smooth integrands).
+   The endpoints \"a\" etcetera can also be complex (in which case the
+   integral is performed over straight-line segments in the complex
+   plane).  If the endpoints are \"BigFloat\", then the integration
+   will be performed in \"BigFloat\" precision as well (note: it is
+   advisable to increase the integration \"order\" in rough proportion
+   to the precision, for smooth integrands).  More generally, the
+   precision is set by the precision of the integration endpoints
+   (promoted to floating-point types).
+
+   The integrand \"f(x)\" can return any numeric scalar, vector, or
+   matrix type, or in fact any type supporting \"+\", \"-\",
+   multiplication by real values, and a \"norm\" (i.e., any normed
+   vector space).
+
+   The algorithm is an adaptive Gauss-Kronrod integration technique:
+   the integral in each interval is estimated using a Kronrod rule
+   (\"2*order+1\" points) and the error is estimated using an embedded
+   Gauss rule (\"order\" points).   The interval with the largest
+   error is then subdivided into two intervals and the process is
+   repeated until the desired error tolerance is achieved.
+
+   These quadrature rules work best for smooth functions within each
+   interval, so if your function has a known discontinuity or other
+   singularity, it is best to subdivide your interval to put the
+   singularity at an endpoint.  For example, if \"f\" has a
+   discontinuity at \"x=0.7\" and you want to integrate from 0 to 1,
+   you should use \"quadgk(f, 0,0.7,1)\" to subdivide the interval at
+   the point of discontinuity.  The integrand is never evaluated
+   exactly at the endpoints of the intervals, so it is possible to
+   integrate functions that diverge at the endpoints as long as the
+   singularity is integrable (for example, a \"log(x)\" or
+   \"1/sqrt(x)\" singularity).
+
+   For real-valued endpoints, the starting and/or ending points may be
+   infinite.  (A coordinate transformation is performed internally to
+   map the infinite interval to a finite one.)
 
 "),
 
@@ -5494,6 +5565,13 @@
 ("Linear Algebra","","tril","tril(M)
 
    Lower triangle of a matrix
+
+"),
+
+("Linear Algebra","","diagind","diagind(M[, k])
+
+   A \"Range\" giving the indices of the \"k\"-th diagonal of the
+   matrix \"M\".
 
 "),
 

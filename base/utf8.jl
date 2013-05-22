@@ -29,7 +29,7 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 ## required core functionality ##
 
 endof(s::UTF8String) = thisind(s,length(s.data))
-length(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
+length(s::UTF8String) = int(ccall(:u8_strlen, Csize_t, (Ptr{Uint8},), s.data))
 
 function getindex(s::UTF8String, i::Int)
     d = s.data
