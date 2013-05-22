@@ -1123,8 +1123,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             int ldepth = ctx->argDepth;
             if (arg1->getType() != jl_pvalue_llvmt) {
                 arg1 = boxed(arg1);
-                make_gcroot(arg1, ctx);
             }
+            make_gcroot(arg1, ctx);
             builder.CreateCall2(typeassert, arg1, boxed(emit_expr(args[2], ctx)));
             ctx->argDepth = ldepth;
             JL_GC_POP();
