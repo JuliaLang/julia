@@ -10,7 +10,7 @@ default:
 	mkdir -p $(JULIAHOME)/deps/SuiteSparse-SYSTEM/lib
 	cd $(JULIAHOME)/deps/SuiteSparse-SYSTEM/lib && \
 	rm -f *.a && \
-	cp -f $(shell find $(shell eval $(JULIAHOME)/contrib/filterArgs.sh $(LDFLAGS)) /lib /usr/lib /usr/local/lib -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libspqr.a -o -name libsuitesparseconfig.a 2>/dev/null) . && \
+	cp -f $(shell eval $(JULIAHOME)/contrib/filterDupLibs.sh $(shell find $(shell eval $(JULIAHOME)/contrib/filterArgs.sh $(LDFLAGS)) /lib /usr/lib /usr/local/lib -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libspqr.a -o -name libsuitesparseconfig.a 2>/dev/null)) . && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(BUILD)/$(JL_LIBDIR)/libamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libamd.$(SHLIB_EXT) $(BUILD)/$(JL_LIBDIR)/libamd.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(BUILD)/$(JL_LIBDIR)/libcolamd.$(SHLIB_EXT) && \
