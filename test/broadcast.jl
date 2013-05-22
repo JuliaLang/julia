@@ -35,6 +35,9 @@ for arr in (identity, as_sub)
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
     A = arr([1  0]); @test_fails broadcast!(+, A, A, arr([1, 4]))
     A = arr([1  0]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4])
+
+    @test arr([ 1    2])   .* arr([3,   4])   == [ 3 6; 4 8]
+    @test arr([24.0 12.0]) ./ arr([2.0, 3.0]) == [12 6; 8 4]
     
     M = arr([11 12; 21 22])
     @test broadcast_getindex(M, eye(Int, 2)+1,arr([1, 2])) == [21 11; 12 22]
@@ -43,3 +46,4 @@ for arr in (identity, as_sub)
     broadcast_setindex!(A, arr([21 11; 12 22]), eye(Int, 2)+1,arr([1, 2]))
     @test A == M
 end
+
