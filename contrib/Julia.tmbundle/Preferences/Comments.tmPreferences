@@ -9,9 +9,9 @@
 	<key>settings</key>
 	<dict>
 		<key>decreaseIndentPattern</key>
-		<string>^\s*((end|else|elsif)\b)</string>
+		<string>^\s*((end|else|elseif)\b)</string>
 		<key>increaseIndentPattern</key>
-		<string>^\s*(if|while|for|begin|function|macro|module|type|let)\b.*\s*$</string>
+		<string>^\s*(if|while|for|begin|function|macro|module|type|let|else|elseif)\b.*\s*$</string>
 		<key>shellVariables</key>
 		<array>
 			<dict>
