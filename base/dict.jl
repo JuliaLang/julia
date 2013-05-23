@@ -332,13 +332,14 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     for i = 1:sz
         if olds[i] == 0x1
             k = oldk[i]
+            v = oldv[i]
             index = hashindex(k, newsz)
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
             slots[index] = 0x1
             keys[index] = k
-            vals[index] = oldv[i]
+            vals[index] = v
             count += 1
 
             if h.count != count0
