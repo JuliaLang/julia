@@ -109,57 +109,24 @@ function gradient(F::Vector, h::Vector)
     return g
 end
 
-function diag{T}(A::Matrix{T}, k::Integer)
-    m, n = size(A)
-    if k >= 0 && k < n
-        nV = min(m, n-k)
-    elseif k < 0 && -k < m
-        nV = min(m+k, n)
-    else
-        throw(BoundsError())
+function diagind(A::Matrix,k::Integer=0)
+    m,n = size(A)
+    if 0 < k < n
+        return Range(k*m+1,m+1,min(m,n-k))
+    elseif 0 <= -k < m
+        return Range(1-k,m+1,min(m+k,n))
     end
-
-    V = zeros(T, nV)
-
-    if k > 0
-        for i=1:nV
-            V[i] = A[i, i+k]
-        end
-    else
-        for i=1:nV
-            V[i] = A[i-k, i]
-        end
-    end
-
-    return V
+    throw(BoundsError())
 end
 
-diag(A) = diag(A, 0)
+diag(A::Matrix, k::Integer=0) = A[diagind(A,k)]
 
-function diagm{T}(v::VecOrMat{T}, k::Integer)
-    if isa(v, Matrix)
-        if (size(v,1) != 1 && size(v,2) != 1)
-            error("Input should be nx1 or 1xn")
-        end
-    end
-
-    n = length(v)
-    if k >= 0 
-        a = zeros(T, n+k, n+k)
-        for i=1:n
-            a[i,i+k] = v[i]
-        end
-    else
-        a = zeros(T, n-k, n-k)
-        for i=1:n
-            a[i-k,i] = v[i]
-        end
-    end
-
-    return a
+function diagm{T}(v::AbstractVector{T}, k::Integer=0)
+    n = length(v) + abs(k)
+    A = zeros(T,n,n)
+    A[diagind(A,k)] = v
+    A
 end  
-
-diagm(v) = diagm(v, 0)
 
 diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
 
@@ -435,7 +402,7 @@ function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         if istril(A) return Triangular(A, 'L')\B end
         if ishermitian(A) return Hermitian(A)\B end
         ans, _, _, info = LAPACK.gesv!(copy(A), copy(B))
-        if info > 0; throw(LinAlg.LAPACK.SingularException(info)); end
+        if info > 0; throw(SingularException(info)); end
         return ans
     end
     LAPACK.gelsd!(copy(A), copy(B))[1]

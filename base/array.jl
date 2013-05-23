@@ -329,9 +329,9 @@ function getindex{T<:Real}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
     X = similar(A, index_shape(I, J))
     storeind = 1
     for j = J
-        offset = (j-1)*size(A,1)
+        offset = (convert(Int,j)-1)*size(A,1)
         for i = I
-            X[storeind] = A[i+offset]
+            X[storeind] = A[convert(Int,i)+offset]
             storeind += 1
         end
     end
@@ -903,7 +903,7 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 .^(x::StridedArray{Bool}, y::Integer) =
     reshape([ bool(x[i] ^ y) for i=1:length(x) ], size(x))
 
-for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
+for f in (:+, :-, :div, :mod, :&, :|, :$)
     @eval begin
         function ($f){S,T}(A::StridedArray{S}, B::StridedArray{T})
             F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
@@ -912,6 +912,10 @@ for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
             end
             return F
         end
+    end
+end
+for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
+    @eval begin
         function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
             for i=1:length(B)

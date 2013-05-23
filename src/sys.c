@@ -8,15 +8,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
 #include <sys/sysctl.h>
 #include <sys/wait.h>
+#include <unistd.h>
 #endif
 #include <errno.h>
 #include <signal.h>
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+char * basename(char *);
+char * dirname(char *);
+#else
 #include <libgen.h>
+#endif
 #include <fcntl.h>
-#include <unistd.h>
 
 #define __STDC_CONSTANT_MACROS
 #define __STDC_LIMIT_MACROS
@@ -38,7 +43,11 @@ DLLEXPORT size_t jl_ios_size(ios_t *s)
     return s->size;
 }
 
-DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
+#ifdef _P64
+DLLEXPORT int64_t jl_sizeof_off_t(void) { return sizeof(off_t); }
+#else
+DLLEXPORT int32_t jl_sizeof_off_t(void) { return sizeof(off_t); }
+#endif
 
 DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
 
@@ -78,7 +87,7 @@ DLLEXPORT int jl_readdir(const char* path, uv_fs_t* readdir_req)
 }
 
 DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) {return req->ptr; }
-DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) {return req->ptr + offset; }
+DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) {return (char *)req->ptr + offset; }
 DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
 // --- stat ---
@@ -164,7 +173,7 @@ DLLEXPORT off_t jl_stat_size(char *statbuf)
 
 DLLEXPORT unsigned int jl_stat_blksize(char *statbuf)
 {
-#if defined(__WIN32__)
+#if defined(_OS_WINDOWS_)
     return 0;
 #else
     return ((uv_statbuf_t*) statbuf)->st_blksize;
@@ -173,7 +182,7 @@ DLLEXPORT unsigned int jl_stat_blksize(char *statbuf)
 
 DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
 {
-#if defined(__WIN32__)
+#if defined(_OS_WINDOWS_)
     return 0;
 #else
     return ((uv_statbuf_t*) statbuf)->st_blocks;
@@ -196,7 +205,7 @@ DLLEXPORT double jl_stat_atime(char *statbuf)
 {
   uv_statbuf_t *s;
   s = (uv_statbuf_t*) statbuf;
-#if defined(__WIN32__)
+#if defined(_OS_WINDOWS_)
   return (double)s->st_atime;
 #else
   return (double)s->st_ATIM.tv_sec + (double)s->st_ATIM.tv_nsec * 1e-9;
@@ -208,7 +217,7 @@ DLLEXPORT double jl_stat_mtime(char *statbuf)
 {
     uv_statbuf_t *s;
     s = (uv_statbuf_t*) statbuf;
-#if defined(__WIN32__)
+#if defined(_OS_WINDOWS_)
     return (double)s->st_mtime;
 #else
     return (double)s->st_MTIM.tv_sec + (double)s->st_MTIM.tv_nsec * 1e-9;
@@ -219,7 +228,7 @@ DLLEXPORT double jl_stat_ctime(char *statbuf)
 {
     uv_statbuf_t *s;
     s = (uv_statbuf_t*) statbuf;
-#if defined(__WIN32__)
+#if defined(_OS_WINDOWS_)
     return (double)s->st_ctime;
 #else
     return (double)s->st_CTIM.tv_sec + (double)s->st_CTIM.tv_nsec * 1e-9;
@@ -248,7 +257,7 @@ jl_array_t *jl_takebuf_array(ios_t *s)
 jl_value_t *jl_takebuf_string(ios_t *s)
 {
     jl_array_t *a = jl_takebuf_array(s);
-    JL_GC_PUSH(&a);
+    JL_GC_PUSH1(&a);
     jl_value_t *str = jl_array_to_string(a);
     JL_GC_POP();
     return str;
@@ -305,7 +314,7 @@ int jl_errno(void) { return errno; }
 
 // -- get the number of CPU cores --
 
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 typedef DWORD (WINAPI *GAPC)(WORD);
 #ifndef ALL_PROCESSOR_GROUPS
 #define ALL_PROCESSOR_GROUPS 0xffff
@@ -327,7 +336,7 @@ DLLEXPORT int jl_cpu_cores(void)
     return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     return sysconf(_SC_NPROCESSORS_ONLN);
-#elif defined(__WIN32__)
+#elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
     GAPC gapc = (GAPC) jl_dlsym_e(
         jl_kernel32_handle,
@@ -359,7 +368,9 @@ DLLEXPORT uint64_t jl_hrtime(void)
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
 extern char **environ;
+#endif
 #endif
 
 jl_value_t *jl_environ(int i)
@@ -370,7 +381,7 @@ jl_value_t *jl_environ(int i)
     char *env = environ[i];
     return env ? jl_pchar_to_string(env, strlen(env)) : jl_nothing;
 }
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 jl_value_t *jl_env_done(char *pos)
 {
     return (*pos==0)?jl_true:jl_false;
@@ -379,7 +390,7 @@ jl_value_t *jl_env_done(char *pos)
 
 // -- child process status --
 
-#if defined _MSC_VER || defined __WIN32__
+#if defined _MSC_VER || defined _OS_WINDOWS_
 /* Native Woe32 API.  */
 #include <process.h>
 #define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
@@ -415,7 +426,7 @@ JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*)JL_STDERR; }
 
 #ifdef __SSE__
 
-#ifdef _WIN32
+#ifdef _OS_WINDOWS_
 #define cpuid    __cpuid
 #else
 
@@ -500,7 +511,7 @@ DLLEXPORT jl_value_t *jl_is_char_signed()
 
 // -- misc sysconf info --
 
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 static long chachedPagesize = 0;
 long jl_getpagesize(void)
 {
@@ -520,7 +531,7 @@ long jl_getpagesize(void)
 
 DLLEXPORT long jl_SC_CLK_TCK(void)
 {
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
     return sysconf(_SC_CLK_TCK);
 #else
     return 0;

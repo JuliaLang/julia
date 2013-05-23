@@ -88,7 +88,7 @@ Unfortunately, the version of gcc installed by Ubuntu is currently 4.6, which do
 5. `bash update_source.sh`
 4. `bash rebuild_cross.sh`
 5. `mv cross ~/cross-w64`
-6. `export PATH=$HOME/cross-w64:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!
+6. `export PATH=$HOME/cross-w64/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!
 Then we can essentially just repeat these steps for the 32-bit compiler:
 7. `cd ..`
 8. `cp -a mingw-w64-dgn mingw-w32-dgn`
@@ -96,7 +96,7 @@ Then we can essentially just repeat these steps for the 32-bit compiler:
 10. `rm -r cross build`
 11. `bash rebuild_cross.sh 32r`
 12. `mv cross ~/cross-w32`
-13. `export PATH=$HOME/cross-w32:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!
+13. `export PATH=$HOME/cross-w32/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!
 
 Note: for systems that support rpm-based package managers, the OpenSUSE build service appears to contain a fully up-to-date versions of the necessary environment.
 
@@ -116,3 +116,6 @@ Important Build Errata
 ----------------------
 
 - Do not use GCC 4.6 or earlier
+
+- LLVM doesn't build with the newly released 4.8 SEH gcc for 64-bit Windows because of an incorrect preprocessor definition. In deps/llvm-3.2/lib/ExecutionEngine/JIT/JIT.cpp, find the section that defines HAVE_EHTABLE_SUPPORT and replace it with an unconditional 0
+

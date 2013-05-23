@@ -337,6 +337,10 @@ const apply_type_tfunc = function (A, args...)
         elseif isa(A[i],Int)
             tparams = tuple(tparams..., A[i])
         else
+            if i-1 > length(headtype.parameters)
+                # too many parameters for type
+                return None
+            end
             uncertain = true
             tparams = tuple(tparams..., headtype.parameters[i-1])
         end
@@ -586,6 +590,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,apply) && length(fargs)>0
         if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
             af = argtypes[1].parameters[1]
+            _methods(af,(),0)
         else
             af = isconstantfunc(fargs[1], sv)
         end

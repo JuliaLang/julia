@@ -197,7 +197,7 @@ The last point is potentially surprising and thus worth noting::
     julia> NaN > NaN
     false
 
-and can cause especial headaches with :ref:`Arrays`::
+and can cause especial headaches with :ref:`Arrays <man-arrays>`::
 
     julia> [1 NaN] == [1 NaN]
     false
@@ -371,7 +371,7 @@ All the standard trigonometric and hyperbolic functions are also defined::
     sin    cos    tan    cot    sec    csc
     sinh   cosh   tanh   coth   sech   csch
     asin   acos   atan   acot   asec   acsc
-    acoth  asech  acsch  sinc   cosc   atan2
+    sinc   cosc   atan2  acoth  asech  acsch
 
 These are all single-argument functions, with the exception of
 `atan2 <http://en.wikipedia.org/wiki/Atan2>`_, which gives the angle

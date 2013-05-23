@@ -280,7 +280,7 @@ isless(a::Symbol, b::Symbol) = cmp(a,b)<0
 
 charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Uint32,), c)))
 strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
-strwidth(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
+strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{Uint8},), s.data))
 # TODO: implement and use u8_strnwidth that takes a length argument
 
 ## libc character class predicates ##
@@ -1030,7 +1030,7 @@ function chomp!(s::ByteString)
 end
 chomp!(s::String) = chomp(s) # copying fallback for other string types
 
-function lstrip(s::String, chars::String)
+function lstrip(s::String, chars::Chars=_default_delims)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
@@ -1042,7 +1042,7 @@ function lstrip(s::String, chars::String)
     ""
 end
 
-function rstrip(s::String, chars::String)
+function rstrip(s::String, chars::Chars=_default_delims)
     r = reverse(s)
     i = start(r)
     while !done(r,i)
@@ -1055,12 +1055,8 @@ function rstrip(s::String, chars::String)
     ""
 end
 
-for stripfn in {:lstrip, :rstrip}
-    @eval ($stripfn)(s::String) = ($stripfn)(s, " \f\n\r\t\v")
-end
-
 strip(s::String) = lstrip(rstrip(s))
-strip(s::String, chars::String) = lstrip(rstrip(s, chars), chars)
+strip(s::String, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 

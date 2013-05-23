@@ -2,16 +2,19 @@
 # You may have to wipe your openblas build to ensure that it is built
 # with support for all architectures, or else performance may suffer.
 
+JULIAHOME = $(abspath ../../..)
+include ../../../Make.inc
+
 all: clean copyfiles rewritepaths
 
 copyfiles:
-	make -C ../../deps install-git
-	-mkdir -p $(PREFIX)/libexec $(PREFIX)/share
-	-cp -r $(BUILD)/libexec/git* $(PREFIX)/libexec
-	-cp -r $(BUILD)/share/git* $(PREFIX)/share
-	make -C ../.. dist
-	tar zxf ../../julia-*.tar.gz 
+	make -C ../../../deps install-git
+	make -C ../../.. dist
+	tar zxf ../../../julia-*.tar.gz
 	mv julia-* julia
+	-mkdir -p ./julia/libexec ./julia/share
+	-cp -a $(BUILD)/libexec/git* ./julia/libexec
+	-cp -a $(BUILD)/share/git* ./julia/share
 	cp -a ~/.julia/Cairo/deps/usr/* ./julia/
 	cp -a ~/.julia/Tk/deps/usr/* ./julia/
 	rm -f julia/lib/*.{a,la}

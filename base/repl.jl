@@ -39,8 +39,11 @@ function error_show(io::IO, e::TypeError)
 end
 
 function error_show(io::IO, e, bt)
-    error_show(io, e)
-    show_backtrace(io, bt)
+    try
+        error_show(io, e)
+    finally 
+        show_backtrace(io, bt)
+    end
 end
 
 error_show(io::IO, e::LoadError) = error_show(io, e, {})

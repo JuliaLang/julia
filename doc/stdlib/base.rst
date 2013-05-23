@@ -128,6 +128,10 @@ All Objects
 Types
 -----
 
+.. function:: super(T::DataType)
+
+   Return the supertype of DataType T
+
 .. function:: subtype(type1, type2)
 
    True if and only if all values of ``type1`` are also of ``type2``. Can also be written using the ``<:`` infix operator as ``type1 <: type2``.
@@ -135,6 +139,14 @@ Types
 .. function:: <:(T1, T2)
 
    Subtype operator, equivalent to ``subtype(T1,T2)``.
+
+.. function:: subtypes(T::DataType)
+
+   Return a list of immediate subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
+
+.. function:: subtypetree(T::DataType)
+
+   Return a nested list of all subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
 
 .. function:: typemin(type)
 
@@ -186,6 +198,14 @@ Types
 .. function:: fieldtype(value, name::Symbol)
 
    Determine the declared type of a named field in a value of composite type.
+
+.. function:: isimmutable(v)
+
+   True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
+
+.. function:: isbits(T)
+
+   True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``Uint8``, ``Float64``, and ``Complex{Float64}``.
 
 Generic Functions
 -----------------
@@ -291,7 +311,8 @@ Iterable Collections
 
 .. function:: unique(itr)
 
-   Returns an array containing only the unique elements of the iterable ``itr``.
+   Returns an array containing only the unique elements of the iterable ``itr``, in
+the order that the first of each set of equivalent elements originally appears.
 
 .. function:: reduce(op, v0, itr)
 
@@ -325,6 +346,10 @@ Iterable Collections
 
    Returns the sum of all elements in a collection
 
+.. function:: sum(f, itr)
+
+   Sum the results of calling function ``f`` on each element of ``itr``.
+
 .. function:: prod(itr)
 
    Returns the product of all elements of a collection
@@ -337,11 +362,7 @@ Iterable Collections
 
    Test whether all elements of a boolean collection are true
 
-.. function:: count(itr) -> Integer
-
-   Count the number of boolean elements in ``itr`` which are true.
-
-.. function:: countp(p, itr) -> Integer
+.. function:: count(p, itr) -> Integer
 
    Count the number of elements in ``itr`` for which predicate ``p`` is true.
 
@@ -493,7 +514,7 @@ Set-Like Collections
 
 .. function:: intersect(s1,s2...)
 
-   Construct the intersection of two or more sets. Maintains order with arrays.
+   Construct the intersection of two or more sets. Maintains order and multiplicity of the first argument for arrays and ranges.
 
 .. function:: setdiff(s1,s2)
 
@@ -836,7 +857,7 @@ I/O
 
    **Example**: ``open(readall, "file.txt")``
 
-.. function:: memio([size[, finalize::Bool]]) -> IOStream
+.. function:: IOBuffer([size]) -> IOBuffer
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
 
@@ -1117,7 +1138,7 @@ Mathematical Functions
 
    Unsigned right shift operator.
 
-.. function:: :(start, [step], stop)
+.. function:: \:(start, [step], stop)
 
    Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1,
    and ``a:s:b`` is similar but uses a step size of ``s``. These syntaxes call the
@@ -2213,28 +2234,48 @@ Mathematical operators and functions
 
 All mathematical operations and functions are supported for arrays
 
-.. function:: bsxfun(fn, A, B[, C...])
+.. function:: broadcast(f, As...)
 
-   Apply binary function ``fn`` to two or more arrays, with singleton dimensions expanded.
+   Broadcasts the arrays ``As`` to a common size by expanding singleton dimensions, and returns an array of the results ``f(as...)`` for each position.
+
+.. function:: broadcast!(f, dest, As...)
+
+   Like ``broadcast``, but store the result in the ``dest`` array.
+
+.. function:: broadcast_function(f)
+
+   Returns a function ``broadcast_f`` such that ``broadcast_function(f)(As...) === broadcast(f, As...)``. Most useful in the form ``const broadcast_f = broadcast_function(f)``.
+
+.. function:: broadcast!_function(f)
+   
+   Like ``broadcast_function``, but for ``broadcast!``.
 
 Indexing, Assignment, and Concatenation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. function:: getindex(A, ind)
+.. function:: getindex(A, inds...)
 
-   Returns a subset of array ``A`` as specified by ``ind``, which may be an ``Int``, a ``Range``, or a ``Vector``.
+   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``.
 
-.. function:: sub(A, ind)
+.. function:: sub(A, inds...)
 
-   Returns a SubArray, which stores the input ``A`` and ``ind`` rather than computing the result immediately. Calling ``getindex`` on a SubArray computes the indices on the fly.
+   Returns a SubArray, which stores the input ``A`` and ``inds`` rather than computing the result immediately. Calling ``getindex`` on a SubArray computes the indices on the fly.
 
 .. function:: slicedim(A, d, i)
 
    Return all the data of ``A`` where the index for dimension ``d`` equals ``i``. Equivalent to ``A[:,:,...,i,:,:,...]`` where ``i`` is in position ``d``.
 
-.. function:: setindex!(A, X, ind)
+.. function:: setindex!(A, X, inds...)
 
-   Store values from array ``X`` within some subset of ``A`` as specified by ``ind``.
+   Store values from array ``X`` within some subset of ``A`` as specified by ``inds``.
+
+.. function:: broadcast_getindex(A, inds...)
+
+   Broadcasts the ``inds`` arrays to a common size like ``broadcast``, and returns an array of the results ``A[ks...]``, where ``ks`` goes over the positions in the broadcast.
+
+.. function:: broadcast_setindex!(A, X, inds...)
+
+   Broadcasts the ``X`` and ``inds`` arrays to a common size and stores the value from each position in ``X`` at the indices given by the same positions in ``inds``.
 
 .. function:: cat(dim, A...)
 
@@ -2777,6 +2818,64 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Compute the cross-correlation of two vectors.
 
+Numerical Integration
+-----------------
+
+Although several external packages are available for numeric integration
+and solution of ordinary differential equations, we also provide
+some built-in integration support in Julia.
+
+.. function:: quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7)
+
+   Numerically integrate the function ``f(x)`` from ``a`` to ``b``,
+   and optionally over additional intervals ``b`` to ``c`` and so on.
+   Keyword options include a relative error tolerance ``reltol`` (defaults
+   to ``sqrt(eps)`` in the precision of the endpoints), an absolute error
+   tolerance ``abstol`` (defaults to 0), a maximum number of function
+   evaluations ``maxevals`` (defaults to ``10^7``), and the ``order``
+   of the integration rule (defaults to 7).     
+
+   Returns a pair ``(I,E)`` of the estimated integral ``I`` and an
+   estimated upper bound on the absolute error ``E``.  If ``maxevals``
+   is not exceeded then either ``E <= abstol`` or ``E <=
+   reltol*norm(I)`` will hold.  (Note that it is useful to specify a
+   positive ``abstol`` in cases where ``norm(I)`` may be zero.)
+
+   The endpoints ``a`` etcetera can also be complex (in which case the
+   integral is performed over straight-line segments in the complex
+   plane).  If the endpoints are ``BigFloat``, then the integration
+   will be performed in ``BigFloat`` precision as well (note: it is
+   advisable to increase the integration ``order`` in rough proportion
+   to the precision, for smooth integrands).  More generally, the
+   precision is set by the precision of the integration endpoints
+   (promoted to floating-point types).
+
+   The integrand ``f(x)`` can return any numeric scalar, vector, or matrix
+   type, or in fact any type supporting ``+``, ``-``, multiplication
+   by real values, and a ``norm`` (i.e., any normed vector space).
+
+   The algorithm is an adaptive Gauss-Kronrod integration technique:
+   the integral in each interval is estimated using a Kronrod rule
+   (``2*order+1`` points) and the error is estimated using an embedded
+   Gauss rule (``order`` points).   The interval with the largest
+   error is then subdivided into two intervals and the process is repeated
+   until the desired error tolerance is achieved.
+
+   These quadrature rules work best for smooth functions within each
+   interval, so if your function has a known discontinuity or other
+   singularity, it is best to subdivide your interval to put the
+   singularity at an endpoint.  For example, if ``f`` has a discontinuity
+   at ``x=0.7`` and you want to integrate from 0 to 1, you should use
+   ``quadgk(f, 0,0.7,1)`` to subdivide the interval at the point of
+   discontinuity.  The integrand is never evaluated exactly at the endpoints
+   of the intervals, so it is possible to integrate functions that diverge
+   at the endpoints as long as the singularity is integrable (for example,
+   a ``log(x)`` or ``1/sqrt(x)`` singularity).
+
+   For real-valued endpoints, the starting and/or ending points may be
+   infinite.  (A coordinate transformation is performed internally to
+   map the infinite interval to a finite one.)
+
 Parallel Computing
 ------------------
 
@@ -2804,7 +2903,7 @@ Parallel Computing
 
 .. function:: pmap(f, c)
 
-   Transform collection ``c`` by applying ``f`` to each element in parallel.
+   Transform collection ``c`` by applying ``f`` to each element in parallel. If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks. All other available processes will be used as parallel workers.
 
 .. function:: remotecall(id, func, args...)
 
@@ -3021,10 +3120,7 @@ C Interface
 
 .. function:: cglobal((symbol, library) or ptr [, Type=Void])
 
-   Obtain a pointer to a global variable in a C-exported shared library,
-specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting
-to ``Ptr{Void}`` if no Type argument is supplied.  The values can be
-read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
+   Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting to ``Ptr{Void}`` if no Type argument is supplied.  The values can be read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
 
 .. function:: cfunction(fun::Function, RetType::Type, (ArgTypes...))
    
@@ -3147,10 +3243,6 @@ Tasks
 .. function:: produce(value)
 
    Send the given value to the last ``consume`` call, switching to the consumer task.
-
-.. function:: make_scheduled(task)
-
-   Register a task with the main event loop, so it will automatically run when possible.
 
 .. function:: yield()
 

@@ -185,7 +185,7 @@ dynamically generate arbitrary code which can then be run using
 
     julia> a = 1;
 
-    julia> ex = Expr(:call, {:+,a,:b}, Any)
+    julia> ex = Expr(:call, :+,a,:b)
     :(+(1,b))
 
     julia> a = 0; b = 2;

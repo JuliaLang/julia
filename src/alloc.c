@@ -499,7 +499,7 @@ void jl_add_constructors(jl_datatype_t *t)
             size_t np = jl_tuple_len(t->parameters);
             jl_tuple_t *sparams = jl_alloc_tuple_uninit(np*2);
             jl_function_t *cfactory = NULL;
-            JL_GC_PUSH(&sparams, &cfactory);
+            JL_GC_PUSH2(&sparams, &cfactory);
             for(size_t i=0; i < np; i++) {
                 jl_tupleset(sparams, i*2+0,
                             jl_tupleref(((jl_datatype_t*)t->name->primary)->parameters, i));
@@ -541,7 +541,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     for(size_t i=0; i < jl_tuple_len(st->types); i++) {
         jl_value_t *ty = jl_tupleref(st->types, i);
         size_t fsz, al;
-        if (jl_isbits(ty) && (al=((jl_datatype_t*)ty)->alignment)!=0) {
+        if (jl_isbits(ty) && (al=((jl_datatype_t*)ty)->alignment)!=0 &&
+            jl_is_leaf_type(ty)) {
             fsz = jl_datatype_size(ty);
             st->fields[i].isptr = 0;
         }
@@ -572,7 +573,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
 {
     jl_datatype_t *t=NULL;
     jl_typename_t *tn=NULL;
-    JL_GC_PUSH(&t, &tn);
+    JL_GC_PUSH2(&t, &tn);
 
     if (!jl_boot_file_loaded && jl_is_symbol(name)) {
         // hack to avoid making two versions of basic types needed
@@ -815,7 +816,7 @@ jl_value_t *jl_box_bool(int8_t x)
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
     jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_cell : jl_alloc_cell_1d(n);
-    JL_GC_PUSH(&ar);
+    JL_GC_PUSH1(&ar);
     jl_expr_t *ex = (jl_expr_t*)alloc_4w();
     ex->type = (jl_value_t*)jl_expr_type;
     ex->head = head;
@@ -832,7 +833,7 @@ JL_CALLABLE(jl_f_new_expr)
     JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);
     jl_array_t *ar = jl_alloc_cell_1d(nargs-1);
-    JL_GC_PUSH(&ar);
+    JL_GC_PUSH1(&ar);
     for(size_t i=1; i < nargs; i++)
         jl_cellset(ar, i-1, args[i]);
     jl_expr_t *ex = (jl_expr_t*)alloc_4w();

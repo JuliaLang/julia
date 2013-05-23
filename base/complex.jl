@@ -287,6 +287,9 @@ function ^{T<:Complex}(z::T, p::T)
     complex(re, im)
 end
 
+^(z::Complex, n::Bool) = n ? z : one(z)
+^(z::Complex, n::Integer) = z^complex(n)
+
 function tan(z::Complex)
     rz, iz = reim(z)
     sinhi = sinh(iz)

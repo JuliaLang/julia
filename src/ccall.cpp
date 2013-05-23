@@ -203,7 +203,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
         it = argNumberStrings.find(argn);
     }
     jl_value_t *targ=NULL, *pty=NULL;
-    JL_GC_PUSH(&targ, &pty);
+    JL_GC_PUSH2(&targ, &pty);
     targ = (jl_value_t*)jl_tuple1(jt);
     pty = (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
                                      (jl_tuple_t*)targ);
@@ -343,7 +343,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
             f_name = jl_string_data(ptr);
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
             //TODO: store the f_lib name instead of fptr
             fptr = jl_dlsym_win32(f_name);
 #else
@@ -388,7 +388,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_NARGS(cglobal, 1, 2);
     jl_value_t *rt=NULL;
     Value *res;
-    JL_GC_PUSH(&rt);
+    JL_GC_PUSH1(&rt);
 
     if (nargs == 2) {
         rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
@@ -445,7 +445,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
     JL_NARGSV(ccall, 3);
     jl_value_t *rt=NULL, *at=NULL;
-    JL_GC_PUSH(&rt, &at);
+    JL_GC_PUSH2(&rt, &at);
 
     native_sym_arg_t symarg = interpret_symbol_arg(args[1], ctx, "ccall");
     Value *jl_ptr=NULL;
@@ -469,6 +469,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ": ccall: missing return type";
         jl_error(msg.c_str());
     }
+    if (rt == (jl_value_t*)jl_pointer_type)
+        jl_error("ccall: return type Ptr should have an element type, Ptr{T}");
     at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
                                         &jl_tupleref(ctx->sp,0),
                                         jl_tuple_len(ctx->sp)/2);
@@ -492,6 +494,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     for(i=0; i < nargt; i++) {
         jl_value_t *tti = jl_tupleref(tt,i);
+        if (tti == (jl_value_t*)jl_pointer_type)
+            jl_error("ccall: argument type Ptr should have an element type, Ptr{T}");
         if (jl_is_vararg_type(tti)) {
             isVa = true;
             tti = jl_tparam0(tti);

@@ -164,6 +164,8 @@ push!(I18n.CALLBACKS, Help.clear_cache)
 include("sparse.jl")
 include("linalg.jl")
 importall .LinAlg
+include("broadcast.jl")
+importall .Broadcast
 
 # signal processing
 include("fftw.jl")
@@ -175,6 +177,10 @@ include("gmp.jl")
 importall .GMP
 include("mpfr.jl")
 importall .MPFR
+
+# Numerical integration
+include("quadgk.jl")
+importall .QuadGK
 
 # deprecated functions
 include("deprecated.jl")

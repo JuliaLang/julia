@@ -7,6 +7,8 @@
 
 ;; allow (:: T) => (:: #gensym T) in formal argument lists
 (define (fix-arglist l)
+  (if (any vararg? (butlast l))
+      (error "invalid ... on non-final argument"))
   (map (lambda (a)
 	 (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
 	     `(|::| ,(gensy) ,(cadr a))
@@ -21,13 +23,15 @@
 	(else
 	 (case (car v)
 	   ((...)         (decl-var (cadr v)))
-	   ((= keyword)   (decl-var (caddr v)))
 	   ((|::|)        (decl-var v))
 	   (else (error (string "malformed function argument " v)))))))
 
 ; convert a lambda list into a list of just symbols
 (define (llist-vars lst)
-  (map arg-name lst))
+  (map arg-name (filter (lambda (a)
+			  (not (and (pair? a)
+				    (memq (car a) '(keywords parameters)))))
+			lst)))
 
 (define (arg-type v)
   (cond ((symbol? v)  'Any)
@@ -36,7 +40,6 @@
 	(else
 	 (case (car v)
 	   ((...)         `(... ,(decl-type (cadr v))))
-	   ((= keyword)   (decl-type (caddr v)))
 	   ((|::|)        (decl-type v))
 	   (else (error
 		  (string "malformed function arguments " v)))))))

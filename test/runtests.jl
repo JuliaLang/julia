@@ -4,12 +4,12 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
              "random", "math", "functional", "bigint", "sorting",
              "statistics", "spawn", "parallel", "priorityqueue",
              "arpack", "file", "perf", "suitesparse", "version",
-             "pollfd", "mpfr"]
+             "pollfd", "mpfr", "broadcast"]
 
 # Disabled: "complex"
 
 tests = ARGS==["all"] ? testnames : ARGS
-n = min(CPU_CORES,length(tests),8)
+n = min(8, CPU_CORES, length(tests))
 @unix_only n > 1 && addprocs(n)
 
 ENV["OPENBLAS_NUM_THREADS"] = 1

@@ -62,6 +62,16 @@ typealias Cdouble Float64
 #typealias Ccomplex_float Complex64
 #typealias Ccomplex_double Complex128
 
+const sizeof_off_t = ccall(:jl_sizeof_off_t, Int, ())
+
+if sizeof_off_t === 4
+    typealias FileOffset Int32
+else
+    typealias FileOffset Int64
+end
+
+typealias Coff_t FileOffset
+
 # deferring (or un-deferring) ctrl-c handler for external C code that
 # is not interrupt safe (see also issue #2622).  The sigatomic_begin/end
 # functions should always be called in matched pairs, ideally via:

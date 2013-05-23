@@ -18,10 +18,10 @@ abstract AsyncStream <: IO
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
 
-const _sizeof_uv_pipe = ccall(:jl_sizeof_uv_pipe_t,Int32,())
-const _sizeof_uv_poll = ccall(:jl_sizeof_uv_poll_t,Int32,())
-const _sizeof_uv_fs_poll = ccall(:jl_sizeof_uv_fs_poll_t,Csize_t,())
-const _sizeof_uv_fs_events = ccall(:jl_sizeof_uv_fs_events_t,Csize_t,())
+const _sizeof_uv_pipe = int(ccall(:jl_sizeof_uv_pipe_t,Csize_t,()))
+const _sizeof_uv_poll = int(ccall(:jl_sizeof_uv_poll_t,Csize_t,()))
+const _sizeof_uv_fs_poll = int(ccall(:jl_sizeof_uv_fs_poll_t,Csize_t,()))
+const _sizeof_uv_fs_events = int(ccall(:jl_sizeof_uv_fs_events_t,Csize_t,()))
 
 
 function eof(s::AsyncStream)
@@ -573,7 +573,7 @@ end
 
 ##stream functions
 
-start_reading(stream::AsyncStream) = (stream.handle != 0 ? ccall(:jl_start_reading,Int32,(Ptr{Void},),handle(stream)) : int32(0))
+start_reading(stream::AsyncStream) = (stream.handle != C_NULL ? ccall(:jl_start_reading,Int32,(Ptr{Void},),handle(stream)) : int32(0))
 function start_reading(stream::AsyncStream,cb::Function)
     start_reading(stream)
     stream.readcb = cb
@@ -659,7 +659,7 @@ write(s::AsyncStream, c::Char) =
     int(ccall(:jl_pututf8, Int32, (Ptr{Void},Uint32), handle(s), c))
 function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
-        ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint32), handle(s), a, uint(length(a)*sizeof(T)))
+        int(ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), handle(s), a, uint(length(a)*sizeof(T))))
     else
         invoke(write,(IO,Array),s,a)
     end

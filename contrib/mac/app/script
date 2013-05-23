@@ -24,13 +24,12 @@ ROOT="${0%/script}"
 # 20071007 removed: open -a /Applications/Utilities/Terminal.app
 osascript 2>&1>/dev/null <<EOF
   tell application "System Events" to set ProcessList to get name of every process
-  tell application "Terminal" 
+  tell application "Terminal"
     activate
-    if ProcessList contains "Terminal" then
-      do script ("exec bash -c \"PATH=${ROOT}/julia/bin:${PATH} GIT_EXEC_PATH=${ROOT}/julia/libexec/git-core GIT_TEMPLATE_DIR=${ROOT}/julia/share/git-core exec '${ROOT}/julia/bin/julia'\"")
-    else
-      do script ("exec bash -c \"PATH=${ROOT}/julia/bin:${PATH} GIT_EXEC_PATH=${ROOT}/julia/libexec/git-core GIT_TEMPLATE_DIR=${ROOT}/julia/share/git-core exec '${ROOT}/julia/bin/julia'\"") in front window
+    if (ProcessList contains "Terminal") or ((count of every window) is less than 1) then
+      tell application "System Events" to tell process "Terminal" to keystroke "n" using command down
     end if
+    do script ("exec bash -c \"PATH=${ROOT}/julia/bin:${PATH} OPENBLAS_NUM_THREADS=1 FONTCONFIG_PATH=${ROOT}/julia/etc/fonts GIT_EXEC_PATH=${ROOT}/julia/libexec/git-core GIT_TEMPLATE_DIR=${ROOT}/julia/share/git-core exec '${ROOT}/julia/bin/julia'\"") in front window
   end tell
 EOF
 

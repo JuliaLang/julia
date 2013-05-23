@@ -1085,6 +1085,8 @@ function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
 end
 
 indices(I) = I
+indices(I::Int) = I
+indices(I::Real) = convert(Int, I)
 indices(I::AbstractArray{Bool,1}) = find(I)
 indices(I::Tuple) = map(indices, I)
 

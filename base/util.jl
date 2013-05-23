@@ -58,7 +58,7 @@ macro timed(ex)
     end
 end
 
-function peakflops(n)
+function peakflops(n=2000)
     a = rand(n,n)
     t = @elapsed a*a
     t = @elapsed a*a
@@ -66,8 +66,6 @@ function peakflops(n)
     println("The peak flop rate is ", floprate*1e-9, " gigaflops")
     floprate
 end
-
-peakflops() = peakflops(2000)
 
 # searching definitions
 
@@ -166,7 +164,7 @@ function edit(file::String, line::Integer)
     elseif editor == "kate"
         spawn(`kate $file -l $line`)
     else
-        run(`$editor $file`)
+        run(`$(shell_split(editor)) $file`)
     end
     nothing
 end
@@ -396,7 +394,7 @@ methodswith(t::Type, showparents::Bool) = methodswith(OUTPUT_STREAM, t, showpare
 methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m, false)
 methodswith(t::Type) = methodswith(OUTPUT_STREAM, t, false)
 function methodswith(io::IO, t::Type, showparents::Bool)
-    mainmod = ccall(:jl_get_current_module, Any, ())::Module
+    mainmod = current_module()
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)
