@@ -151,6 +151,16 @@ min(f::Function, itr)   = mapreduce(f, min, itr)
 sum(f::Function, itr)   = mapreduce(f, +  , itr)
 prod(f::Function, itr)  = mapreduce(f, *  , itr)
 
+function count(pred::Function, itr)
+    s = 0
+    for x in itr
+        if pred(x)
+            s+=1
+        end
+    end
+    s
+end
+
 function any(pred::Function, itr)
     for x in itr
         if pred(x)

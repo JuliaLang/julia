@@ -157,9 +157,7 @@ construct a complex value directly from its real and imaginary parts.::
     julia> complex(a,b)
     1 + 2im
 
-This construction avoids the multiplication and addition operations, and also
-sidesteps unexpected results that can arise with the former for certain values
-of ``b``.
+This construction avoids the multiplication and addition operations.
 
 ``Inf`` and ``NaN`` propagate through complex numbers in the real
 and imaginary parts of a complex number as described in the 
