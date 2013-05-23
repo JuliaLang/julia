@@ -326,6 +326,7 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     slots = zeros(Uint8,newsz)
     keys = Array(K, newsz)
     vals = Array(V, newsz)
+    count0 = h.count
     count = 0
 
     for i = 1:sz
@@ -339,6 +340,11 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
             keys[index] = k
             vals[index] = oldv[i]
             count += 1
+
+            if h.count != count0
+                # if items are removed by finalizers, retry
+                return rehash(h, newsz)
+            end
         end
     end
 
