@@ -10,32 +10,29 @@ export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
        fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
-function filt(b,a,x)
-    if a[1]==0
-        error("filt: a[1] must be nonzero")
-    end
+function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{T}, T),x::AbstractVector{T})
+    if isempty(b); error("filt: b is empty"); end
+    if isempty(a); error("filt: a is empty"); end
+    if a[1]==0; error("filt: a[1] must be nonzero"); end
 
-    sz = max(size(a,1),size(b,1))
+    as = length(a)
+    bs = length(b)
+    sz = max(as, bs)
 
     if sz == 1
         return (b[1]/a[1]).*x
     end
 
-    if size(a,1)<sz
-        newa = zeros(eltype(a),sz)
-        newa[1:size(a,1)] = a
-        a = newa
-    end
-    if size(b,1)<sz
-        newb = zeros(eltype(b),sz)
-        newb[1:size(b,1)] = b
+    if bs<sz
+        newb = zeros(T,sz)
+        newb[1:bs] = b
         b = newb
     end
 
     xs = size(x,1)
-    y = Array(eltype(a), xs)
+    y = Array(T, xs)
     silen = sz-1
-    si = zeros(eltype(a), silen)
+    si = zeros(T, silen)
 
     if a[1] != 1
         norml = a[1]
@@ -43,7 +40,13 @@ function filt(b,a,x)
         b ./= norml
     end
 
-    if sz > 1
+    if as > 1
+        if as<sz
+            newa = zeros(T,sz)
+            newa[1:as] = a
+            a = newa
+        end
+
         for i=1:xs
             y[i] = si[1] + b[1]*x[i]
             for j=1:(silen-1)
