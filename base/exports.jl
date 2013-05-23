@@ -669,6 +669,7 @@ export
     complement,
     complement!,
     contains,
+    count,
     delete!,
     empty!,
     endof,
