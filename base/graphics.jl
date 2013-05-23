@@ -257,7 +257,7 @@ end
 @mustimplement set_dash(gc::GraphicsContext, ::Vector{Float64}, ::Real)
 @mustimplement set_source_rgb(gc::GraphicsContext, ::Real, ::Real, ::Real)
 @mustimplement set_source_rgba(gc::GraphicsContext, ::Real, ::Real, ::Real, ::Real)
-@mustimplement set_source(gc:GraphicsContext, src)
+@mustimplement set_source(gc::GraphicsContext, src)
 
 @mustimplement clip(gc::GraphicsContext)
 @mustimplement clip_preserve(gc::GraphicsContext)
