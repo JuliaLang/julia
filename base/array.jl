@@ -880,11 +880,6 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
 # ^ is difficult, since negative exponents give a different type
 
-.^(x::StridedArray, y::StridedArray) =
-    reshape([ x[i] ^ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-.^{T<:Integer}(x::StridedArray{Bool}, y::StridedArray{T}) =
-    reshape([ bool(x[i] ^ y[i]) for i=1:length(x) ], promote_shape(size(x),size(y)))
-
 .^(x::Number, y::StridedArray) =
     reshape([ x    ^ y[i] for i=1:length(y) ], size(y))
 .^(x::Bool  , y::StridedArray) =

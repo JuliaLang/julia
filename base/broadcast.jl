@@ -251,6 +251,7 @@ const broadcast_sub = broadcast_function(-)
 const broadcast_mul = broadcast_function(*)
 const broadcast_div_T  = broadcast_T_function(/)
 const broadcast_rdiv_T = broadcast_T_function(\)
+const broadcast_pow_T  = broadcast_T_function(^)
 
 .+(As::StridedArray...) = broadcast_add(As...)
 .*(As::StridedArray...) = broadcast_mul(As...)
@@ -268,6 +269,14 @@ end
 
 function .\(A::StridedArray, B::StridedArray) 
     broadcast_rdiv_T(type_div(eltype(B), eltype(A)), A, B)
+end
+
+type_pow(T,S) = promote_type(T,S)
+type_pow{S<:Integer}(::Type{Bool},::Type{S}) = Bool
+type_pow{S}(T,::Type{Rational{S}}) = type_pow(T, type_div(S, S))
+
+function .^(A::StridedArray, B::StridedArray) 
+    broadcast_pow_T(type_pow(eltype(A), eltype(B)), A, B)
 end
 
 
