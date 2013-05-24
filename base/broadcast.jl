@@ -218,10 +218,6 @@ end
 
 ## actual functions for broadcast and broadcast! ##
 
-for (fname, op) in {(:.+, +), (:.-, -), (:.*, *), (:./, /), (:.\, \)}
-    eval(code_broadcast(fname, quot(op)))
-end
-
 broadcastfuns = (Function=>Function)[]
 function broadcast_function(op::Function)
     (haskey(broadcastfuns, op) ? broadcastfuns[op] :
@@ -240,6 +236,21 @@ end
 function broadcast!(op::Function, dest::StridedArray, As::StridedArray...)
     broadcast!_function(op)(dest, As...)
 end
+
+
+## elementwise operators ##
+
+const broadcast_add = broadcast_function(+)
+const broadcast_sub = broadcast_function(-)
+const broadcast_mul = broadcast_function(*)
+const broadcast_div = broadcast_function(/)
+const broadcast_rdiv = broadcast_function(\)
+
+.+(As::StridedArray...) = broadcast_add(As...)
+.*(As::StridedArray...) = broadcast_mul(As...)
+.-(A::StridedArray, B::StridedArray) = broadcast_sub(A, B)
+./(A::StridedArray, B::StridedArray) = broadcast_div(A, B)
+.\(A::StridedArray, B::StridedArray) = broadcast_rdiv(A, B)
 
 
 end # module
