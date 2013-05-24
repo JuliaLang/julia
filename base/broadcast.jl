@@ -160,34 +160,38 @@ end
 
 ## (Generation of) complete broadcast functions ##
 
-function code_broadcast(fname::Symbol, op)
-    inner! = gensym("$(fname)_inner!")
+function code_broadcasts(name::String, op)
+    fname, fname_T, fname! = [gensym("broadcast$(infix)_$name")
+                              for infix in ("", "_T", "!")]
+
+    inner!, inner!! = gensym("$(name)_inner!"), gensym("$(name)!_inner!")
     innerdef = code_map!_inner(inner!, :(result::Array), [],
                                (dest, els...) -> :( $op($(els...)) ))
+    innerdef! = code_foreach_inner(inner!!, [],
+                                   (dest, els...) -> :( $dest=$op($(els...)) ))
     quote
         $innerdef
-        $fname() = $op()
-        function $fname(As::StridedArray...)
+        $fname_T{T}(::Type{T}) = $op()
+        function $fname_T{T}(::Type{T}, As::StridedArray...)
             shape = broadcast_shape(As...)
-            result = Array(promote_type([eltype(A) for A in As]...), shape)
+            result = Array(T, shape)
             $inner!(broadcast_args(shape, As)..., result)
             result
         end        
-    end
-end
 
-function code_broadcast!(fname::Symbol, op)
-    inner! = gensym("$(fname)!_inner!")
-    innerdef = code_foreach_inner(inner!, [],
-                                  (dest, els...) -> :( $dest=$op($(els...)) ))
-    quote
-        $innerdef
-        function $fname(dest::StridedArray, As::StridedArray...)
+        function $fname(As::StridedArray...)
+            $fname_T(promote_type([eltype(A) for A in As]...), As...)
+        end        
+
+        $innerdef!
+        function $fname!(dest::StridedArray, As::StridedArray...)
             shape = size(dest)
             check_broadcast_shape(shape, As...)
-            $inner!(broadcast_args(shape, tuple(dest, As...))...)
+            $inner!!(broadcast_args(shape, tuple(dest, As...))...)
             dest
         end        
+
+        ($fname, $fname_T, $fname!)
     end
 end
 
@@ -218,21 +222,23 @@ end
 
 ## actual functions for broadcast and broadcast! ##
 
-broadcastfuns = (Function=>Function)[]
-function broadcast_function(op::Function)
+broadcastfuns = (Function=>NTuple{3,Function})[]
+function broadcast_functions(op::Function)
     (haskey(broadcastfuns, op) ? broadcastfuns[op] :
-        (broadcastfuns[op] = eval(code_broadcast(gensym("broadcast_$(op)"), 
-                                                 quot(op)))))
+        (broadcastfuns[op] = eval(code_broadcasts(string(op), quot(op)))))
 end
+
+broadcast_function(op::Function)   = broadcast_functions(op)[1]
+broadcast_T_function(op::Function) = broadcast_functions(op)[2]
+broadcast!_function(op::Function)  = broadcast_functions(op)[3]
+
 broadcast(op::Function) = op()
 broadcast(op::Function, As::StridedArray...) = broadcast_function(op)(As...)
 
-broadcast!funs = (Function=>Function)[]
-function broadcast!_function(op::Function)
-    (haskey(broadcast!funs, op) ? broadcast!funs[op] :
-        (broadcast!funs[op] = eval(code_broadcast!(gensym("broadcast!_$(op)"), 
-                                                   quot(op)))))
+function broadcast_T{T}(op::Function, ::Type{T}, As::StridedArray...)
+    broadcast_T_function(op)(T, As...)
 end
+
 function broadcast!(op::Function, dest::StridedArray, As::StridedArray...)
     broadcast!_function(op)(dest, As...)
 end
