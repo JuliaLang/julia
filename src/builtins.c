@@ -697,7 +697,7 @@ static void show_function(JL_STREAM *s, jl_value_t *v)
 
 static void show_type(jl_value_t *st, jl_value_t *t)
 {
-    uv_stream_t *s =((uv_stream_t**)st)[1];
+    JL_STREAM *s =((JL_STREAM**)st)[1];
     if (jl_is_uniontype(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
             JL_WRITE(s, "None", 4);
@@ -729,7 +729,7 @@ static void show_type(jl_value_t *st, jl_value_t *t)
 
 DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
 {
-    uv_stream_t *s = ((uv_stream_t**)str)[1];
+    JL_STREAM *s = ((JL_STREAM**)str)[1];
     // fallback for printing some other builtin types
     if (jl_is_tuple(v)) {
         jl_show_tuple(str, (jl_tuple_t*)v, '(', ')', 1);
@@ -767,7 +767,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
             char *data = (char*)jl_data_ptr(v);
             JL_PUTS("0x", s);
             for(int i=nb-1; i >= 0; --i)
-                jl_printf(s, "%02hhx", data[i]);
+                JL_PRINTF(s, "%02hhx", data[i]);
         }
         JL_PUTC(')', s);
     }
@@ -826,7 +826,7 @@ JL_CALLABLE(jl_f_typevar)
     JL_TYPECHK(typevar, symbol, args[0]);
     if (jl_boundp(jl_current_module, (jl_sym_t*)args[0]) &&
         jl_is_type(jl_get_global(jl_current_module, (jl_sym_t*)args[0]))) {
-        jl_printf(JL_STDERR, "Warning: type parameter name %s shadows an identifier.\n", ((jl_sym_t*)args[0])->name);
+        JL_PRINTF(JL_STDERR, "Warning: type parameter name %s shadows an identifier.\n", ((jl_sym_t*)args[0])->name);
     }
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;

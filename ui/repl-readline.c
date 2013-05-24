@@ -99,7 +99,7 @@ static void init_history(void)
         write_history(history_file);
     }
     else {
-        jl_printf(jl_uv_stderr, "history file error: %s\n", strerror(errno));
+        JL_PRINTF(JL_STDERR, "history file error: %s\n", strerror(errno));
         exit(1);
     }
 }
@@ -392,7 +392,7 @@ void jl_input_line_callback(char *input)
     if (rl_ast != NULL) {
         doprint = !ends_with_semicolon(input);
         add_history_permanent(input);
-        jl_putc('\n', jl_uv_stdout);
+        JL_PUTC('\n', JL_STDOUT);
         free(input);
     }
 
@@ -625,7 +625,7 @@ struct sigaction jl_sigint_act = {{0}};
 void repl_sigint_handler(int sig, siginfo_t *info, void *context)
 {
     if (callback_en) {
-        JL_WRITE(jl_uv_stdout, "^C", 2);
+        JL_WRITE(JL_STDOUT, "^C", 2);
         jl_clear_input();
     }
     else {
@@ -787,11 +787,11 @@ DLLEXPORT void jl_clear_input(void)
     int i;
     for (i = 0; *p != '\0'; p++, i++) {
         if (i >= rl_point && *p == '\n') {
-            jl_putc('\n', jl_uv_stdout);
+            JL_PUTC('\n', JL_STDOUT);
         }
     }
-    jl_putc('\n', jl_uv_stdout);
-    jl_putc('\n', jl_uv_stdout);
+    JL_PUTC('\n', JL_STDOUT);
+    JL_PUTC('\n', JL_STDOUT);
     //reset state:
     rl_reset_line_state();
     reset_indent();
@@ -800,6 +800,6 @@ DLLEXPORT void jl_clear_input(void)
     rl_forced_update_display();
     rl_on_new_line_with_prompt();
 #ifdef __WIN32__
-    jl_write(jl_uv_stdout, "\e[4C", 4); //hack: try to fix cursor location
+    JL_WRITE(JL_STDOUT, "\e[4C", 4); //hack: try to fix cursor location
 #endif
 }

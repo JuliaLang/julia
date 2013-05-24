@@ -64,15 +64,21 @@ codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp
 builtins.o builtins.do: table.c
 
 support/libsupport.a: support/*.h support/*.c
-	$(MAKE) -C support $(TARGET)
+	$(MAKE) -C support release
+
+support/libsupport-debug.a: support/*.h support/*.c
+	$(MAKE) -C support debug
 
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
-$(BUILD)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a $(LIBUV)
+flisp/libflisp-debug.a: flisp/*.h flisp/*.c support/libsupport-debug.a
+	$(MAKE) -C flisp debug
+
+$(BUILD)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp-debug.a support/libsupport-debug.a $(LIBUV)
 	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(LIBS)
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
-libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
+libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp-debug.a support/libsupport-debug.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
 libjulia-debug: $(BUILD)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT)

@@ -17,14 +17,14 @@
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
 #endif
-#define JL_STREAM uv_stream_t
-#define JL_STDOUT jl_uv_stdout
-#define JL_STDERR jl_uv_stderr
-#define JL_STDIN  jl_uv_stdin
-#define JL_PRINTF jl_printf
-#define JL_PUTC	  jl_putc
-#define JL_PUTS	  jl_puts
-#define JL_WRITE  jl_write
+#define JL_STREAM ios_t
+#define JL_STDOUT ios_stdout
+#define JL_STDERR ios_stderr
+#define JL_STDIN  ios_stdin
+#define JL_PRINTF ios_printf
+#define JL_PUTC	  ios_putc
+#define JL_PUTS	  ios_puts
+#define JL_WRITE  ios_write
 
 #if __GNUC__
 #define NORETURN __attribute__ ((noreturn))
@@ -1203,9 +1203,9 @@ DLLEXPORT void jl_free2(void *p, void *hint);
 DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT long jl_getpagesize(void);
 
-DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
-DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
-DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
+//DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
+//DLLEXPORT int jl_printf(JL_STREAM *s, const char *format, ...);
+//DLLEXPORT int jl_vprintf(JL_STREAM *s, const char *format, va_list args);
 
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
 
@@ -1214,9 +1214,9 @@ extern DLLEXPORT uv_stream_t *jl_uv_stdin; //these are actually uv_tty_t's and c
 extern DLLEXPORT uv_stream_t * jl_uv_stdout;
 extern DLLEXPORT uv_stream_t * jl_uv_stderr;
 
-DLLEXPORT JL_STREAM *jl_stdout_stream();
-DLLEXPORT JL_STREAM *jl_stdin_stream();
-DLLEXPORT JL_STREAM *jl_stderr_stream();
+DLLEXPORT uv_stream_t *jl_stdout_stream();
+DLLEXPORT uv_stream_t *jl_stdin_stream();
+DLLEXPORT uv_stream_t *jl_stderr_stream();
 
 static inline void jl_eh_restore_state(jl_handler_t *eh)
 {

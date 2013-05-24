@@ -18,6 +18,7 @@ abstract AsyncStream <: IO
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
 
+const _sizeof_uv_write = ccall(:jl_sizeof_uv_write_t,Int32,())
 const _sizeof_uv_pipe = ccall(:jl_sizeof_uv_pipe_t,Int32,())
 const _sizeof_uv_poll = ccall(:jl_sizeof_uv_poll_t,Int32,())
 const _sizeof_uv_fs_poll = ccall(:jl_sizeof_uv_fs_poll_t,Csize_t,())
@@ -648,26 +649,75 @@ function finish_read(state::(NamedPipe,ByteString))
     finish_read(state...)
 end
 
+const char_cache = Array(Uint8,256)
+for i=1:256
+    char_cache[i] = uint8(i-1)
+end
+
+write_length(x) = length(x)
+write_pointer(x) = pointer(x)
+write_length(::Uint8) = 1
+write_pointer(c::Uint8) = pointer(char_cache)+c
 
 ## low-level calls
 
-write(s::AsyncStream, b::ASCIIString) =
-    int(ccall(:jl_puts, Int32, (Ptr{Uint8},Ptr{Void}),b.data,handle(s)))
-write(s::AsyncStream, b::Uint8) =
-    int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s)))
-write(s::AsyncStream, c::Char) =
-    int(ccall(:jl_pututf8, Int32, (Ptr{Void},Uint32), handle(s), c))
+# String are considered immutable
+write(s::AsyncStream, b::ASCIIString) = _write!(s,b.data)
+write(s::AsyncStream, b::Uint8) = _write!(s,b)
+function write(s::AsyncStream, c::Char)
+    if c < 0x80
+        write(s,uint8(c))
+    else
+        a = Array(Uint32,1)
+        a[1] = uint32(c)
+        _write!(s,reinterpret(Uint8,a))
+    end
+end
 function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
-        ccall(:jl_write, Int, (Ptr{Void}, Ptr{Void}, Uint32), handle(s), a, uint(length(a)*sizeof(T)))
+        _write!(s,reinterpret(Uint8,copy(a)))
     else
         invoke(write,(IO,Array),s,a)
     end
 end
-write(s::AsyncStream, p::Ptr, nb::Integer) = 
-    int(ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb)))
-_write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = 
-    int(ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb)))
+function write(s::AsyncStream, p::Ptr, nb::Integer)
+    b = Array(Uint8,nb)
+    unsafe_copy!(pointer(b),p,nb)
+    _write!(s,b)
+end
+
+# 
+# Low-level write. b may not be modified after this call (until the callback is called).
+# The callback function is responsible for freeing the request.
+# This function is not intended to be exported as some care is required
+# to use it properly 
+#
+
+immutable UvBuffer
+    base::Ptr{Uint8}
+    len::Csize_t
+end
+
+function _write!(s::AsyncStream, b, cb::Function)
+    Base.sigatomic_begin()
+    req = Base.c_malloc(_sizeof_uv_write)
+    n = write_length(b)
+    buf = UvBuffer(write_pointer(b),convert(Csize_t,n))
+    # uvw->data
+    ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Ptr{Void}),req,pointer_from_objref(b))
+    #unsafe_store!(convert(Ptr{Ptr{Void}},req),pointer_from_objref(b),0)
+    err = ccall(:uv_write,Int32,(Ptr{Void},Ptr{Void},Ptr{UvBuffer},Int32,Ptr{Void}),
+        req,handle(s),&buf,1,cfunction(cb,Void,(Ptr{Void},Int32)))
+    Base.sigatomic_end()
+    uv_error("_write!",err==-1)
+    n 
+end
+
+function default_write_cb(req::Ptr{Void},status::Int32)
+    c_free(req)
+end
+
+_write!(s,b) = _write!(s,b,default_write_cb)
 
 ## Libuv error handling
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)

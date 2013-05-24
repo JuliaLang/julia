@@ -410,13 +410,13 @@ int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 
 // -- access to std filehandles --
 
-JL_STREAM *JL_STDIN=0;
-JL_STREAM *JL_STDOUT=0;
-JL_STREAM *JL_STDERR=0;
+uv_stream_t *jl_uv_stdin    =   NULL;
+uv_stream_t *jl_uv_stdout   =   NULL;
+uv_stream_t *jl_uv_stderr   =   NULL;
 
-JL_STREAM *jl_stdin_stream(void)  { return (JL_STREAM*)JL_STDIN; }
-JL_STREAM *jl_stdout_stream(void) { return (JL_STREAM*)JL_STDOUT; }
-JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*)JL_STDERR; }
+uv_stream_t *jl_stdin_stream(void)  { return (uv_stream_t*)jl_uv_stdin; }
+uv_stream_t *jl_stdout_stream(void) { return (uv_stream_t*)jl_uv_stdout; }
+uv_stream_t *jl_stderr_stream(void) { return (uv_stream_t*)jl_uv_stderr; }
 
 // -- set/clear the FZ/DAZ flags on x86 & x86-64 --
 

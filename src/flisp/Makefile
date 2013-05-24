@@ -58,7 +58,7 @@ $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
 	$(QUIET_LINK) $(AR) -rcs $@ $(OBJS)
 
-$(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
+$(EXENAME)-debug: $(DOBJS) $(LLTDIR)/libsupport-debug.a $(LIBUV) $(LIBTARGET)-debug.a flmain.do
 	$(QUIET_CC) $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS)
 	./$(EXENAME)-debug unittest.lsp
 

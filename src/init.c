@@ -426,9 +426,9 @@ void *init_stdio_handle(uv_file fd,int readable)
 
 void init_stdio()
 {   //order must be 2,1,0
-    JL_STDERR = init_stdio_handle(2,0);
-    JL_STDOUT = init_stdio_handle(1,0);
-    JL_STDIN = init_stdio_handle(0,1);
+    jl_uv_stderr = init_stdio_handle(2,0);
+    jl_uv_stdout = init_stdio_handle(1,0);
+    jl_uv_stdin = init_stdio_handle(0,1);
 }
 
 void julia_init(char *imageFile)

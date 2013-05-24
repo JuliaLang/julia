@@ -46,9 +46,14 @@ HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
 %.do: %.S
 	$(QUIET_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
-release debug: libsupport.a
+release: libsupport.a
+debug: libsupport-debug.a
 
-libsupport.a: $(XOBJS)
+libsupport.a: $(OBJS)
+	rm -rf $@
+	$(QUIET_LINK) $(AR) -rcs $@ $^
+
+libsupport-debug.a: $(DOBJS)
 	rm -rf $@
 	$(QUIET_LINK) $(AR) -rcs $@ $^
 
@@ -59,3 +64,4 @@ clean:
 	rm -f *~ *#
 	rm -f core*
 	rm -f libsupport.a
+	rm -f libsupport-debug.a

@@ -444,7 +444,7 @@ void jl_load(const char *fname)
 {
     if (jl_current_module == jl_base_module) {
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
-        jl_printf(JL_STDOUT, "%s\n", fname);
+        ios_printf(ios_stdout, "%s\n", fname);
     }
     char *fpath = (char*)fname;
     uv_statbuf_t stbuf;
@@ -455,7 +455,7 @@ void jl_load(const char *fname)
     jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
     if (jl_current_module == jl_base_module) {
-        jl_printf(JL_STDOUT, "\x1B[1F\x1B[2K");
+        JL_PRINTF(JL_STDOUT, "\x1B[1F\x1B[2K");
     }
 }
 

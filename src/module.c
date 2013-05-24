@@ -69,7 +69,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
         }
         else if ((*bp)->owner != m) {
             // TODO: change this to an error soon
-            jl_printf(JL_STDERR,
+            JL_PRINTF(JL_STDERR,
                        "Warning: imported binding for %s overwritten in module %s\n", var->name, m->name->name);
         }
         else {
@@ -173,7 +173,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
         return;
     jl_binding_t *b = jl_get_binding(from, s);
     if (b == NULL) {
-        jl_printf(JL_STDERR,
+        JL_PRINTF(JL_STDERR,
                   "Warning: could not import %s.%s into %s\n",
                   from->name->name, s->name, to->name->name);
     }
@@ -196,7 +196,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                     bto->imported = (explicit!=0);
                     return;
                 }
-                jl_printf(JL_STDERR,
+                JL_PRINTF(JL_STDERR,
                           "Warning: ignoring conflicting import of %s.%s into %s\n",
                           from->name->name, s->name, to->name->name);
             }
@@ -207,7 +207,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                     // equivalent binding
                     return;
                 }
-                jl_printf(JL_STDERR,
+                JL_PRINTF(JL_STDERR,
                           "Warning: import of %s.%s into %s conflicts with an existing identifier; ignored.\n",
                           from->name->name, s->name, to->name->name);
             }
@@ -268,7 +268,7 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
                 jl_binding_t **tobp = (jl_binding_t**)ptrhash_bp(&to->bindings, var);
                 if (*tobp != HT_NOTFOUND && (*tobp)->owner != NULL &&
                     !eq_bindings(jl_get_binding(to,var), b)) {
-                    jl_printf(JL_STDERR,
+                    JL_PRINTF(JL_STDERR,
                               "Warning: using %s.%s in module %s conflicts with an existing identifier.\n",
                               from->name->name, var->name, to->name->name);
                 }

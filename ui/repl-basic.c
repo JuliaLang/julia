@@ -54,7 +54,7 @@ void repl_callback_enable(char *prompt)
         }
         prompt_to_use[o] = '\0';
     }
-    jl_write(jl_uv_stdout, prompt_to_use, strlen(prompt_to_use));
+    JL_WRITE(JL_STDOUT, prompt_to_use, strlen(prompt_to_use));
     jl_prep_terminal(1);
 }
 
@@ -95,7 +95,7 @@ void jl_readBuffer(char* base, ssize_t nread)
                 newline = 1;
                 break;
             case '\x03':
-                JL_WRITE(jl_uv_stdout, "^C\n", 3);
+                JL_WRITE(JL_STDOUT, "^C\n", 3);
                 jl_clear_input();
                 break;
             case '\x04':
@@ -113,7 +113,7 @@ void jl_readBuffer(char* base, ssize_t nread)
             case '\b':
                 if (stdin_buf_len > 0 && stdin_buf[stdin_buf_len-1] != '\n') {
                     stdin_buf_len--;
-                    JL_WRITE(jl_uv_stdout,"\b \b",3);
+                    JL_WRITE(JL_STDOUT,"\b \b",3);
                 }
             }
         }
@@ -143,6 +143,6 @@ void jl_clear_input(void)
 {
     stdin_buf_len = 0;
     stdin_buf[0] = 0;
-    JL_WRITE(jl_uv_stdout,"\n",1);
+    JL_WRITE(JL_STDOUT,"\n",1);
     repl_callback_enable(prompt_to_use);
 }

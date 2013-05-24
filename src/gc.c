@@ -660,7 +660,14 @@ static void gc_mark_uv_handle(uv_handle_t *handle, void *arg)
 
 static void gc_mark_uv_state(uv_loop_t *loop)
 {
+    ngx_queue_t *q;
     uv_walk(loop,gc_mark_uv_handle,0);
+    ngx_queue_foreach(q,&loop->active_reqs)
+    {
+        uv_req_t *req = ngx_queue_data(q,uv_req_t,active_queue);
+        if(req->data)
+            gc_push_root((jl_value_t*)(req->data));
+    }
 }
 
 static void gc_mark(void)
