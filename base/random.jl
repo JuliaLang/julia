@@ -142,25 +142,36 @@ end
 
 # random integer from lo to hi inclusive
 function rand{T<:Integer}(r::Range1{T})
+    if !applicable(rand, T)
+        # Fallback for integer types where rand(T) is not defined.
+        return convert(T, rand(int(r)))
+    end
+
     lo = r[1]
     hi = r[end]
-
     m = typemax(T)
+
+    if hi - lo > m || hi - lo < 0
+        # Fallback for signed integer types when the length of the range
+        # is larger than typemax(T), e.g. rand(int32(-1):typemax(Int32)).
+        return convert(T, rand(unsigned(zero(T)):unsigned(hi - lo)) + lo)
+    end
+
     s = rand(T) & m
     if (hi-lo == m)
-        return s + lo
+        return convert(T, s + lo)
     end
     r = hi-lo+1
     if (r&(r-1))==0
         # power of 2 range
-        return s&(r-1) + lo
+        return convert(T, s&(r-1) + lo)
     end
     # note: m>=0 && r>=0
     lim = m - rem(rem(m,r)+1, r)
     while s > lim
         s = rand(T) & m
     end
-    return rem(s,r) + lo
+    return convert(T, rem(s,r) + lo)
 end
 
 function rand!{T<:Integer}(r::Range1{T}, A::Array{T})

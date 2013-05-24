@@ -789,3 +789,15 @@ end
 
 @M2982.bad(T2982)
 @test T2982.super === M2982.U
+
+# issue #3182
+f3182{T}(::Type{T}) = 0
+f3182(x) = 1
+function g3182(t::DataType)
+    # tricky thing here is that DataType is a concrete type, and a
+    # subtype of Type, but we cannot infer the T in Type{T} just
+    # by knowing (at compile time) that the argument is a DataType.
+    # however the ::Type{T} method should still match at run time.
+    f3182(t)
+end
+@test g3182(Complex) == 0

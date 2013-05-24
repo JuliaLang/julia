@@ -42,6 +42,7 @@ export
     ctranspose,
     det,
     diag,
+    diagind,
     diagm,
     diff,
     dot,

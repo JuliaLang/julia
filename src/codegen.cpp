@@ -302,7 +302,7 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types)
         return jl_cstr_to_string((char*)"");
     jl_function_t *sf = jl_get_specialization(f, types);
     if (sf == NULL || sf->linfo == NULL) {
-        sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0);
+        sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
         if (sf == jl_bottom_func)
             return jl_cstr_to_string((char*)"");
         JL_PRINTF(JL_STDERR,
@@ -1123,8 +1123,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             int ldepth = ctx->argDepth;
             if (arg1->getType() != jl_pvalue_llvmt) {
                 arg1 = boxed(arg1);
-                make_gcroot(arg1, ctx);
             }
+            make_gcroot(arg1, ctx);
             builder.CreateCall2(typeassert, arg1, boxed(emit_expr(args[2], ctx)));
             ctx->argDepth = ldepth;
             JL_GC_POP();

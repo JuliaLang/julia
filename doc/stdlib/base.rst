@@ -311,7 +311,8 @@ Iterable Collections
 
 .. function:: unique(itr)
 
-   Returns an array containing only the unique elements of the iterable ``itr``.
+   Returns an array containing only the unique elements of the iterable ``itr``, in
+the order that the first of each set of equivalent elements originally appears.
 
 .. function:: reduce(op, v0, itr)
 
@@ -345,6 +346,10 @@ Iterable Collections
 
    Returns the sum of all elements in a collection
 
+.. function:: sum(f, itr)
+
+   Sum the results of calling function ``f`` on each element of ``itr``.
+
 .. function:: prod(itr)
 
    Returns the product of all elements of a collection
@@ -357,11 +362,7 @@ Iterable Collections
 
    Test whether all elements of a boolean collection are true
 
-.. function:: count(itr) -> Integer
-
-   Count the number of boolean elements in ``itr`` which are true.
-
-.. function:: countp(p, itr) -> Integer
+.. function:: count(p, itr) -> Integer
 
    Count the number of elements in ``itr`` for which predicate ``p`` is true.
 

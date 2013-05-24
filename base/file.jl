@@ -2,8 +2,8 @@
 
 function pwd()
     b = Array(Uint8,1024)
-    @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
-    @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
+    @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Csize_t), b, length(b))
+    @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Cint), b, length(b))
     systemerror(:getcwd, p == C_NULL)
     bytestring(p)
 end
