@@ -883,7 +883,7 @@ JL_CALLABLE(jl_f_methodexists)
     jl_check_type_tuple((jl_tuple_t*)args[1], jl_gf_name(args[0]),
                         "method_exists");
     return jl_method_lookup_by_type(jl_gf_mtable(args[0]),
-                                    (jl_tuple_t*)args[1], 0) != jl_bottom_func ?
+                                    (jl_tuple_t*)args[1],0,0)!=jl_bottom_func ?
         jl_true : jl_false;
 }
 
