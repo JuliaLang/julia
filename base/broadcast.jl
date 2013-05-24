@@ -249,14 +249,26 @@ end
 const broadcast_add = broadcast_function(+)
 const broadcast_sub = broadcast_function(-)
 const broadcast_mul = broadcast_function(*)
-const broadcast_div = broadcast_function(/)
-const broadcast_rdiv = broadcast_function(\)
+const broadcast_div_T  = broadcast_T_function(/)
+const broadcast_rdiv_T = broadcast_T_function(\)
 
 .+(As::StridedArray...) = broadcast_add(As...)
 .*(As::StridedArray...) = broadcast_mul(As...)
 .-(A::StridedArray, B::StridedArray) = broadcast_sub(A, B)
-./(A::StridedArray, B::StridedArray) = broadcast_div(A, B)
-.\(A::StridedArray, B::StridedArray) = broadcast_rdiv(A, B)
+
+type_div(T,S) = promote_type(T,S)
+type_div{T<:Integer,S<:Integer}(::Type{T},::Type{S}) = Float64
+type_div{T,S}(::Type{Complex{T}},::Type{Complex{S}})  = Complex{type_div(T,S)}
+type_div{T,S}(::Type{Complex{T}},::Type{S})           = Complex{type_div(T,S)}
+type_div{T,S}(::Type{T},::Type{Complex{S}})           = Complex{type_div(T,S)}
+
+function ./(A::StridedArray, B::StridedArray) 
+    broadcast_div_T(type_div(eltype(A), eltype(B)), A, B)
+end
+
+function .\(A::StridedArray, B::StridedArray) 
+    broadcast_rdiv_T(type_div(eltype(B), eltype(A)), A, B)
+end
 
 
 end # module
