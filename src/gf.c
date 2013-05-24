@@ -907,7 +907,7 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
     return ti;
 }
 
-static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, int cache)
+static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, int cache, int inexact)
 {
     jl_methlist_t *m = mt->defs;
     size_t nargs = jl_tuple_len(tt);
@@ -924,8 +924,16 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
                 // parametric methods only match if all typevars are matched by
                 // non-typevars.
                 for(i=1; i < jl_tuple_len(env); i+=2) {
-                    if (jl_is_typevar(jl_tupleref(env,i)))
+                    if (jl_is_typevar(jl_tupleref(env,i))) {
+                        if (inexact) {
+                            // "inexact" means the given type is compile-time,
+                            // where a failure to determine the value of a
+                            // static parameter is inconclusive.
+                            // this is issue #3182, see test/core.jl
+                            return jl_bottom_func;
+                        }
                         break;
+                    }
                 }
                 if (i >= jl_tuple_len(env))
                     break;
@@ -1270,11 +1278,11 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 }
 
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
-                                        int cache)
+                                        int cache, int inexact)
 {
     jl_function_t *sf = jl_method_table_assoc_exact_by_type(mt, types);
     if (sf == jl_bottom_func) {
-        sf = jl_mt_assoc_by_type(mt, types, cache);
+        sf = jl_mt_assoc_by_type(mt, types, cache, inexact);
     }
     return sf;
 }
@@ -1285,7 +1293,7 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
     if (sf == jl_bottom_func) {
         jl_tuple_t *tt = arg_type_tuple(args, nargs);
         JL_GC_PUSH1(&tt);
-        sf = jl_mt_assoc_by_type(mt, tt, cache);
+        sf = jl_mt_assoc_by_type(mt, tt, cache, 0);
         JL_GC_POP();
     }
     return sf;
@@ -1298,7 +1306,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
     if (!jl_is_leaf_type((jl_value_t*)types))
         return NULL;
     jl_methtable_t *mt = jl_gf_mtable(f);
-    jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1);
+    jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1, 1);
     if (sf == jl_bottom_func) {
         return NULL;
     }
@@ -1370,7 +1378,7 @@ JL_CALLABLE(jl_apply_generic)
     else {
         jl_tuple_t *tt = arg_type_tuple(args, nargs);
         JL_GC_PUSH1(&tt);
-        mfunc = jl_mt_assoc_by_type(mt, tt, 1);
+        mfunc = jl_mt_assoc_by_type(mt, tt, 1, 0);
         JL_GC_POP();
     }
 
