@@ -302,7 +302,7 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types)
         return jl_cstr_to_string((char*)"");
     jl_function_t *sf = jl_get_specialization(f, types);
     if (sf == NULL || sf->linfo == NULL) {
-        sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0);
+        sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
         if (sf == jl_bottom_func)
             return jl_cstr_to_string((char*)"");
         JL_PRINTF(JL_STDERR,
