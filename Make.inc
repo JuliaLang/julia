@@ -73,11 +73,11 @@ USE_ATLAS = 0
 ATLAS_LIBDIR = $(BUILD)/lib
 #or ATLAS_LIBDIR = /path/to/system/atlas/lib
 
-ifeq ($(OS), MINGW32_NT-6.1)
-OS=WINNT
+ifneq (,$(findstring MINGW,$(OS)))
+override OS=WINNT
 endif
-ifeq ($(BUILD_OS), MINGW32_NT-6.1)
-BUILD_OS=WINNT
+ifneq (,$(findstring MINGW,$(BUILD_OS)))
+override BUILD_OS=WINNT
 endif
 
 ifeq ($(OS), WINNT)
