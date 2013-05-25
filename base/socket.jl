@@ -84,11 +84,13 @@ type TcpSocket <: Socket
                                WaitTask[],false,WaitTask[],false,WaitTask[])
     function TcpSocket()
         this = TcpSocket(C_NULL,false)
-        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
-                            eventloop(),this)
-        if (this.handle == C_NULL)
-            error("Failed to start reading: ",_uv_lasterror())
+        this.handle = c_malloc(_sizeof_uv_tcp)
+        err = ccall(:uv_tcp_init,Int32,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
+        if err == -1
+            c_free(this.handle)
+            throw(UVError("Failed to initialize TcpSocket"))
         end
+        associate_julia_struct(this.handle,this)
         this
     end
 end
@@ -108,8 +110,13 @@ type UdpSocket <: Socket
                                false,WaitTask[],false,WaitTask[])
     function UdpSocket()
         this = UdpSocket(C_NULL,false)
-        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
-                            eventloop(),this)
+        this.handle = c_malloc(_sizeof_uv_udp)
+        err = ccall(:uv_udp_init,Int32,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
+        if err == -1
+            c_free(this.handle)
+            throw(UVError("Failed to initialize UdpSocket"))
+        end
+        associate_julia_struct(this.handle,this)
         this
     end
 end
@@ -121,8 +128,6 @@ show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",sock.open?"connected,":
 show(io::IO,sock::UdpSocket) = print(io,"UdpSocket(",sock.open?"connected,":
 				     "disconnected,",nb_available(sock.buffer),
 				     " bytes waiting)")
-_jl_tcp_init(loop::Ptr{Void}) = ccall(:jl_tcp_init,Ptr{Void},(Ptr{Void},),loop)
-_jl_udp_init(loop::Ptr{Void}) = ccall(:jl_udp_init,Ptr{Void},(Ptr{Void},),loop)
 
 ## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
 
