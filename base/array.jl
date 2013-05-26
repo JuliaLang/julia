@@ -1482,12 +1482,48 @@ end
 
 ## Transpose ##
 
-function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
-    if length(A) > 50000
-        return FFTW.transpose(reshape(A, size(A, 2), size(A, 1)))
-    else
-        return [ A[j,i] for i=1:size(A,2), j=1:size(A,1) ]
+const szcacheline = 16
+const szcache = 1 << 14
+const szblock = Int[32,22,18,16,14,13,12,11,10,10,9,9,8,8,8,8]
+function transpose!{T<:Number}(B::Matrix{T}, A::Matrix{T})
+    m, n = size(A)
+    if size(B) != (n,m)
+        error("Size of output is incorrect")
     end
+    s = sizeof(T)
+    blocksize = (s <= length(szblock)) ? szblock[s] : ifloor(sqrt(szcache/szcacheline/sizeof(T)))
+    if m*n <= 30*blocksize*blocksize
+        # For small sizes, use a simple linear-indexing algorithm
+        for i2 = 1:n
+            j = i2
+            offset = (j-1)*m
+            for i = offset+1:offset+m
+                B[j] = A[i]
+                j += n
+            end
+        end
+        return B
+    end
+    # For larger sizes, use a cache-friendly algorithm
+    for outer2 = 1:blocksize:size(A, 2)
+        for outer1 = 1:blocksize:size(A, 1)
+            for inner2 = outer2:min(n,outer2+blocksize)
+                i = (inner2-1)*m + outer1
+                j = inner2 + (outer1-1)*n
+                for inner1 = outer1:min(m,outer1+blocksize)
+                    B[j] = A[i]
+                    i += 1
+                    j += n
+                end
+            end
+        end
+    end
+    B
+end
+
+function transpose{T<:Number}(A::Matrix{T})
+    B = similar(A, size(A, 2), size(A, 1))
+    transpose!(B, A)
 end
 
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
