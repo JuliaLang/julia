@@ -444,7 +444,7 @@ end
 function xdump(fn::Function, io::IO, x, n::Int, indent)
     T = typeof(x)
     print(io, T, " ")
-    if isa(T, DataType)
+    if isa(T, DataType) && length(T.names) > 0
         println(io)
         if n > 0
             for field in T.names
