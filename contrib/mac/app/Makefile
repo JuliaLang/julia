@@ -20,8 +20,6 @@ copyfiles:
 	rm -f julia/lib/*.{a,la}
 	chmod a+w julia/lib/*.dylib
 	mkdir julia.dmgCreator_build
-	rm -fr julia/share/julia/ui/
-
 
 rewritepaths:
 	(for lib in julia/lib/*.dylib; do ./run-install-name-tool-change.sh $$lib $$HOME/.julia/Cairo/deps/usr/lib/ lib/ change; done)
