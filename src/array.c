@@ -389,6 +389,9 @@ JL_CALLABLE(jl_f_arraylen)
 
 JL_CALLABLE(jl_f_arraysize)
 {
+    if (nargs != 2) {
+        JL_NARGS(arraysize, 1, 1);
+    }
     JL_TYPECHK(arraysize, array, args[0]);
     jl_array_t *a = (jl_array_t*)args[0];
     size_t nd = jl_array_ndims(a);
@@ -400,9 +403,6 @@ JL_CALLABLE(jl_f_arraysize)
         if (dno > nd)
             return jl_box_long(1);
         return jl_box_long((&a->nrows)[dno-1]);
-    }
-    else {
-        JL_NARGS(arraysize, 1, 1);
     }
     jl_tuple_t *d = jl_alloc_tuple(nd);
     JL_GC_PUSH1(&d);

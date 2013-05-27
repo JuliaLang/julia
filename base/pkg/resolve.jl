@@ -60,12 +60,14 @@ end
 
 function ReqsStruct(reqs::Vector{VersionSet}, vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
     pkgs = Set{String}()
-    for r in reqs add!(pkgs, r.package) end
     for v in vers add!(pkgs, v.package) end
-    for d in deps
-        add!(pkgs, d[1].package)
-        add!(pkgs, d[2].package)
+
+    for r in reqs
+        if !contains(pkgs, r.package)
+            throw(MetadataError("required package $r has no version compatible with fixed requirements"))
+        end
     end
+
     ReqsStruct(reqs, sort!(collect(pkgs)), vers, deps)
 end
 
@@ -998,14 +1000,13 @@ function compute_output_dict(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::
     pvers = pkgstruct.pvers
     spp = pkgstruct.spp
 
-    want = (String=>ASCIIString)[]
+    want = (String=>VersionNumber)[]
     for p0 = 1:np
         p = pkgs[p0]
         s = sol[p0]
         if s != spp[p0]
             v = pvers[p0][s]
-            want[p] = readchomp("METADATA/$p/versions/$v/sha1")
-            #want[p] = "$v"
+            want[p] = v
         end
     end
 
@@ -1196,7 +1197,7 @@ function resolve(reqs::Vector{VersionSet}, vers::Vector{Version}, deps::Vector{(
 end
 
 # Build a subgraph incuding only the (direct and indirect) dependencies
-# of a given package (used in check_sanity)
+# of a given package (used in sanity_check)
 function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vector, v::Version)
 
     pkgs = reqsstruct0.pkgs
@@ -1210,8 +1211,8 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
 
     p = v.package
     vn = v.version
-    nvn = deepcopy(vn)
-    nvn.patch += 1
+    nvn = VersionNumber(vn.major, vn.minor, vn.patch + 1, vn.prerelease, vn.build)
+
     reqs = [VersionSet(p, [vn, nvn])]
 
     p0 = pdict[p]
@@ -1256,8 +1257,8 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
 end
 
 # Scan dependencies for (explicit or implicit) contradictions
-function sanity_check()
-    reqsstruct0 = ReqsStruct(VersionSet[])
+function sanity_check(vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
+    reqsstruct0 = ReqsStruct(VersionSet[], vers, deps)
     pkgstruct0 = PkgStruct(reqsstruct0)
 
     eq_classes_map = prune_versions!(reqsstruct0, pkgstruct0, false)
