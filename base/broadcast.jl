@@ -160,34 +160,38 @@ end
 
 ## (Generation of) complete broadcast functions ##
 
-function code_broadcast(fname::Symbol, op)
-    inner! = gensym("$(fname)_inner!")
+function code_broadcasts(name::String, op)
+    fname, fname_T, fname! = [gensym("broadcast$(infix)_$name")
+                              for infix in ("", "_T", "!")]
+
+    inner!, inner!! = gensym("$(name)_inner!"), gensym("$(name)!_inner!")
     innerdef = code_map!_inner(inner!, :(result::Array), [],
                                (dest, els...) -> :( $op($(els...)) ))
+    innerdef! = code_foreach_inner(inner!!, [],
+                                   (dest, els...) -> :( $dest=$op($(els...)) ))
     quote
         $innerdef
-        $fname() = $op()
-        function $fname(As::StridedArray...)
+        $fname_T{T}(::Type{T}) = $op()
+        function $fname_T{T}(::Type{T}, As::StridedArray...)
             shape = broadcast_shape(As...)
-            result = Array(promote_type([eltype(A) for A in As]...), shape)
+            result = Array(T, shape)
             $inner!(broadcast_args(shape, As)..., result)
             result
         end        
-    end
-end
 
-function code_broadcast!(fname::Symbol, op)
-    inner! = gensym("$(fname)!_inner!")
-    innerdef = code_foreach_inner(inner!, [],
-                                  (dest, els...) -> :( $dest=$op($(els...)) ))
-    quote
-        $innerdef
-        function $fname(dest::StridedArray, As::StridedArray...)
+        function $fname(As::StridedArray...)
+            $fname_T(promote_type([eltype(A) for A in As]...), As...)
+        end        
+
+        $innerdef!
+        function $fname!(dest::StridedArray, As::StridedArray...)
             shape = size(dest)
             check_broadcast_shape(shape, As...)
-            $inner!(broadcast_args(shape, tuple(dest, As...))...)
+            $inner!!(broadcast_args(shape, tuple(dest, As...))...)
             dest
         end        
+
+        ($fname, $fname_T, $fname!)
     end
 end
 
@@ -218,27 +222,61 @@ end
 
 ## actual functions for broadcast and broadcast! ##
 
-for (fname, op) in {(:.+, +), (:.-, -), (:.*, *), (:./, /), (:.\, \)}
-    eval(code_broadcast(fname, quot(op)))
+broadcastfuns = (Function=>NTuple{3,Function})[]
+function broadcast_functions(op::Function)
+    (haskey(broadcastfuns, op) ? broadcastfuns[op] :
+        (broadcastfuns[op] = eval(code_broadcasts(string(op), quot(op)))))
 end
 
-broadcastfuns = (Function=>Function)[]
-function broadcast_function(op::Function)
-    (haskey(broadcastfuns, op) ? broadcastfuns[op] :
-        (broadcastfuns[op] = eval(code_broadcast(gensym("broadcast_$(op)"), 
-                                                 quot(op)))))
-end
+broadcast_function(op::Function)   = broadcast_functions(op)[1]
+broadcast_T_function(op::Function) = broadcast_functions(op)[2]
+broadcast!_function(op::Function)  = broadcast_functions(op)[3]
+
 broadcast(op::Function) = op()
 broadcast(op::Function, As::StridedArray...) = broadcast_function(op)(As...)
 
-broadcast!funs = (Function=>Function)[]
-function broadcast!_function(op::Function)
-    (haskey(broadcast!funs, op) ? broadcast!funs[op] :
-        (broadcast!funs[op] = eval(code_broadcast!(gensym("broadcast!_$(op)"), 
-                                                   quot(op)))))
+function broadcast_T{T}(op::Function, ::Type{T}, As::StridedArray...)
+    broadcast_T_function(op)(T, As...)
 end
+
 function broadcast!(op::Function, dest::StridedArray, As::StridedArray...)
     broadcast!_function(op)(dest, As...)
+end
+
+
+## elementwise operators ##
+
+const broadcast_add = broadcast_function(+)
+const broadcast_sub = broadcast_function(-)
+const broadcast_mul = broadcast_function(*)
+const broadcast_div_T  = broadcast_T_function(/)
+const broadcast_rdiv_T = broadcast_T_function(\)
+const broadcast_pow_T  = broadcast_T_function(^)
+
+.+(As::StridedArray...) = broadcast_add(As...)
+.*(As::StridedArray...) = broadcast_mul(As...)
+.-(A::StridedArray, B::StridedArray) = broadcast_sub(A, B)
+
+type_div(T,S) = promote_type(T,S)
+type_div{T<:Integer,S<:Integer}(::Type{T},::Type{S}) = Float64
+type_div{T,S}(::Type{Complex{T}},::Type{Complex{S}})  = Complex{type_div(T,S)}
+type_div{T,S}(::Type{Complex{T}},::Type{S})           = Complex{type_div(T,S)}
+type_div{T,S}(::Type{T},::Type{Complex{S}})           = Complex{type_div(T,S)}
+
+function ./(A::StridedArray, B::StridedArray) 
+    broadcast_div_T(type_div(eltype(A), eltype(B)), A, B)
+end
+
+function .\(A::StridedArray, B::StridedArray) 
+    broadcast_rdiv_T(type_div(eltype(B), eltype(A)), A, B)
+end
+
+type_pow(T,S) = promote_type(T,S)
+type_pow{S<:Integer}(::Type{Bool},::Type{S}) = Bool
+type_pow{S}(T,::Type{Rational{S}}) = type_pow(T, type_div(S, S))
+
+function .^(A::StridedArray, B::StridedArray) 
+    broadcast_pow_T(type_pow(eltype(A), eltype(B)), A, B)
 end
 
 
