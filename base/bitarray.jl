@@ -201,8 +201,9 @@ end
 convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N},B)
 function convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     A = Array(T, size(B))
+    Bc = B.chunks
     for i = 1:length(A)
-        A[i] = B[i]
+        A[i] = getindex_unchecked(Bc, i)
     end
     return A
 end
@@ -935,8 +936,9 @@ end
 
 function (-)(B::BitArray)
     A = zeros(Int, size(B))
+    Bc = B.chunks
     for i = 1:length(B)
-        if B[i]
+        if getindex_unchecked(Bc, i)
             A[i] = -1
         end
     end
