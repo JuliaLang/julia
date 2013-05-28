@@ -12,6 +12,7 @@ end
 Hermitian{T<:BlasFloat}(S::Matrix{T}, uplo::Char) = Hermitian{T}(S, uplo)
 Hermitian(A::StridedMatrix) = Hermitian(A, 'U')
 
+copy(A::Hermitian) = Hermitian(copy(A.S), A.uplo)
 size(A::Hermitian, args...) = size(A.S, args...)
 print_matrix(io::IO, A::Hermitian) = print_matrix(io, full(A))
 full(A::Hermitian) = A.S
@@ -32,12 +33,19 @@ end
 inv(A::Hermitian) = inv(BunchKaufman(copy(A.S), A.uplo))
 
 eigfact!(A::Hermitian) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
-eigfact(A::Hermitian) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, copy(A.S), 0.0, 0.0, 0, 0, -1.0)...)
+eigfact(A::Hermitian) = eigfact!(copy(A))
 eigvals(A::Hermitian, il::Int, ih::Int) = LAPACK.syevr!('N', 'I', A.uplo, copy(A.S), 0.0, 0.0, il, ih, -1.0)[1]
 eigvals(A::Hermitian, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, copy(A.S), vl, vh, 0, 0, -1.0)[1]
 eigvals(A::Hermitian) = eigvals(A, 1, size(A, 1))
 eigmax(A::Hermitian) = eigvals(A, size(A, 1), size(A, 1))[1]
 eigmin(A::Hermitian) = eigvals(A, 1, 1)[1]
+
+function eigfact!(A::Hermitian, B::Hermitian)
+    vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')
+    return GeneralizedEigen(vals, vecs)
+end
+eigfact(A::Hermitian, B::Hermitian) = eigfact!(copy(A), copy(B))
+eigvals!(A::Hermitian, B::Hermitian) = LAPACK.sygvd!(1, 'N', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')[1]
 
 function expm(A::Hermitian)
     F = eigfact(A)
