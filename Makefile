@@ -160,7 +160,7 @@ cleanall: clean
 
 distclean: cleanall
 	@$(MAKE) -C deps distclean
-	@$(MAKE) -C doc distclean
+	@$(MAKE) -C doc cleanall
 	rm -fr usr
 
 .PHONY: default debug release julia-debug julia-release \
