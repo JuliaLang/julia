@@ -747,12 +747,29 @@ write_pointer(c::Uint8) = pointer(char_cache)+c
 write(s::AsyncStream, b::ASCIIString) = _write!(s,b.data)
 write(s::AsyncStream, b::Uint8) = _write!(s,b)
 function write(s::AsyncStream, c::Char)
+    c = int32(c)
     if c < 0x80
         write(s,uint8(c))
+    elseif c < 0x800
+        dest = Array(Uint8,2)
+        dest[1] = (c >> 6) | 0xC0
+        dest[2] = (c & 0x3F) | 0x80
+        _write!(s,dest)
+    elseif c < 0x10000
+        dest = Array(Uint8,3)
+        dest[1] = (c >> 12) | 0xE0;
+        dest[2] = ((c >> 6) & 0x3F) | 0x80;
+        dest[3] = (c & 0x3F) | 0x80;
+        _write!(s,dest)
+    elseif c < 0x110000
+        dest = Array(Uint8,4)
+        dest[1] = (c >> 18) | 0xF0;
+        dest[2] = ((c >> 12) & 0x3F) | 0x80;
+        dest[3] = ((c >> 6) & 0x3F) | 0x80;
+        dest[4] = (c & 0x3F) | 0x80;
+        _write!(s,dest)
     else
-        a = Array(Uint32,1)
-        a[1] = uint32(c)
-        _write!(s,reinterpret(Uint8,a))
+        error("Unrecognized Unicode character")
     end
 end
 function write{T}(s::AsyncStream, a::Array{T})
