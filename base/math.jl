@@ -569,11 +569,6 @@ digamma(x::Real) = digamma(float64(x))
 #
 # Implementation of algorithm described in
 # "Algorithm AS 121: Trigamma Function" by B. E. Schneider, 1978
-const trigamma_B2 = 0.1666666667
-const trigamma_B4 = -0.03333333333
-const trigamma_B6 = 0.02380952381
-const trigamma_B8 = -0.03333333333
-
 function trigamma(x::Float64)
     trigam = 0.0
     z = x
@@ -594,10 +589,10 @@ function trigamma(x::Float64)
     return trigam +
            0.5 * y +
            (1.0 +
-            y * (trigamma_B2 +
-            y * (trigamma_B4 +
-            y * (trigamma_B6 +
-            y * trigamma_B8)))) / z
+            y * (1.0 / 6.0 +
+            y * (-1.0 / 30.0 +
+            y * (1.0 / 42.0 +
+            y * -1.0 / 30.0)))) / z
 end
 trigamma(x::Float32) = float32(trigamma(float64(x)))
 trigamma(x::Real) = trigamma(float64(x))
