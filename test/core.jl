@@ -801,3 +801,15 @@ function g3182(t::DataType)
     f3182(t)
 end
 @test g3182(Complex) == 0
+
+# issue #3221
+let x = fill(nothing, 1)
+    @test_fails x[1] = 1
+end
+
+# issue #3220
+function x3220()
+    a = [1]
+    a::Vector{Int} += [1]
+end
+@test x3220() == [2]
