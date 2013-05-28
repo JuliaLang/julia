@@ -93,6 +93,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute eigenvalues and eigenvectors of A
 
+.. function:: eig(A, B) -> D, V
+
+   Compute generalized eigenvalues and vectors of A and B
+
 .. function:: eigvals(A)
 
    Returns the eigenvalues of ``A``.
@@ -115,9 +119,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the eigenvalue decomposition of ``A`` and return an ``Eigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``Eigen`` objects: ``inv``, ``det``.
 
-.. function:: eigfact!(A)
+.. function:: eigfact(A, B)
+   
+   Compute the generalized eigenvalue decomposition of ``A`` and ``B`` and return an ``GeneralizedEigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``.
 
-   ``eigfact!`` is the same as ``eigfact`` but saves space by overwriting the input A, instead of creating a copy.
+.. function:: eigfact!(A, [B])
+
+   ``eigfact!`` is the same as ``eigfact`` but saves space by overwriting the input A (and B), instead of creating a copy.
 
 .. function:: hessfact(A)
 
