@@ -115,6 +115,22 @@ for elty in (Float32, Float64)
     @test_approx_eq digamma(convert(elty, 10.0)) convert(elty, 2.251752589066721)
 end
 
+# trigamma
+for elty in (Float32, Float64)
+    @assert abs(trigamma(convert(elty, 0.1)) - convert(elty, 101.4332991507927)) < 1e-8
+    @assert abs(trigamma(convert(elty, 1.0)) - convert(elty, 1.644934066848226)) < 1e-8
+    @assert abs(trigamma(convert(elty, 2.0)) - convert(elty, 0.6449340668482264)) < 1e-8
+    @assert abs(trigamma(convert(elty, 3.0)) - convert(elty, 0.3949340668482264)) < 1e-8
+    @assert abs(trigamma(convert(elty, 4.0)) - convert(elty, 0.2838229557371152)) < 1e-8
+    @assert abs(trigamma(convert(elty, 5.0)) - convert(elty, 0.2213229557371153)) < 1e-8
+    @assert abs(trigamma(convert(elty, 10.0)) - convert(elty, 0.1051663356816857)) < 1e-8
+end
+
+# invdigamma
+for x in [0.1, 1.0, 10.0, 100.0, 1000.0]
+    @assert abs(invdigamma(digamma(x)) - x) < 1e-8
+end
+
 # eta, zeta
 @test_approx_eq eta(1) log(2)
 @test_approx_eq eta(2) pi^2/12
