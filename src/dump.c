@@ -985,7 +985,7 @@ void jl_init_serializer(void)
                      jl_typename_type, jl_task_type, jl_uniontype_type,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
                      jl_array_any_type, jl_intrinsic_type, jl_method_type,
-                     jl_methtable_type, jl_voidpointer_type,
+                     jl_methtable_type, jl_voidpointer_type, jl_array_module_type,
                      jl_array_symbol_type, jl_tupleref(jl_tuple_type,0),
 
                      jl_symbol_type->name, jl_pointer_type->name,
