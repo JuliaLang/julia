@@ -114,6 +114,19 @@ sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 
+# SubVector
+A = reshape(1:48, 8, 6)
+s = SubVector(A, 1:3:8, 2)
+@assert s[2] == A[4,2]
+@assert s == A[1:3:8, 2]
+s = SubVector(A, 2:3:8, 2)
+@assert s == A[2:3:8, 2]
+s = SubVector(A, 4, 3:6)
+@assert s == vec(A[4, 3:6])
+s[1] = 0
+@assert A[4,3] == 0
+ss = SubVector(s, 4:-2:2)
+@assert ss == [44,28]
 
 # get
 let

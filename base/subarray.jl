@@ -339,3 +339,93 @@ end
 
 summary(s::SubArray) =
     string(dims2string(size(s)), " SubArray of ", summary(s.parent))
+
+
+
+# SubVectors are fast 1d slices
+immutable SubVector{T} <: AbstractArray{T,1}
+    ptr::Ptr{T}
+    stride::Int
+    len::Int
+end
+
+SubVector{T}(A::Array{T}, firstindex::Integer, strd::Integer, len::Integer) = SubVector{T}(convert(Ptr{T}, A) + (firstindex - 1)*sizeof(T), int(strd), int(len))
+
+function SubVector{T}(A::Array{T}, indexes::RangeIndex...)
+    n = 0
+    for i in indexes
+        n += !isa(i, Int)
+    end
+    if n > 1
+        error("Must be 1-dimensional")
+    end
+    firstindex = 1
+    strd = 0
+    len = 1
+    pstride = 1
+    for j = 1:length(indexes)
+        i = indexes[j]
+        if min(i) < 1 || max(i) > size(A, j)
+            error(BoundsError)
+        end
+        if isa(i, Int)
+            firstindex += (i-1)*pstride
+        else
+            strd = pstride * step(i)
+            len = length(i)
+            firstindex += (first(i)-1)*pstride
+        end
+        pstride *= size(A,j)
+    end
+    SubVector(A, firstindex, strd, len)
+end
+
+function SubVector{T}(s::SubVector{T}, index::RangeIndex)
+    if min(index) < 1 || max(index) > length(s)
+        error(BoundsError)
+    end
+    ptr = s.ptr + (first(index)-1)*s.stride*sizeof(T)
+    strd = s.stride * step(index)
+    len = length(index)
+    SubVector{T}(ptr, strd, len)
+end
+
+ndims(s::SubVector) = 1
+length(s::SubVector) = s.len
+size(s::SubVector) = (s.len,)
+size(s::SubVector, d::Integer) = (d == 1) ? s.len : 1
+eltype{T}(s::SubVector{T}) = T
+
+similar{T}(s::SubVector, ::Type{T}, sz::NTuple{1, Int}) = Array(T, sz)
+function similar{T}(s::SubVector, ::Type{T}, sz::Dims)
+    n = 0
+    for len in sz
+        n += (len > 1)
+    end
+    if n > 1
+        error("Requested type is not a vector")
+    end
+    Array(T, sz)
+end
+
+unsafe_load(s::SubVector, i::Integer) = unsafe_load(s.ptr, (i-1)*s.stride + 1)
+
+function getindex(s::SubVector, i::Integer)
+    if 1 <= i <= length(s)
+        return unsafe_load(s, i)
+    else
+        error(BoundsError)
+    end
+end
+
+unsafe_store!{T}(s::SubVector{T}, x, i::Integer) = unsafe_store!(s.ptr, x, (i-1)*s.stride + 1)
+
+function setindex!{T}(s::SubVector{T}, x, i::Integer)
+    xT = convert(T, x)
+    if 1 <= i <= length(s)
+        unsafe_store!(s, xT, i)
+    else
+        error(BoundsError)
+    end
+    xT
+end
