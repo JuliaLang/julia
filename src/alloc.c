@@ -28,6 +28,7 @@ jl_typename_t *jl_array_typename;
 jl_value_t *jl_array_uint8_type;
 jl_value_t *jl_array_any_type=NULL;
 jl_value_t *jl_array_symbol_type;
+jl_value_t *jl_array_module_type;
 jl_function_t *jl_bottom_func;
 jl_datatype_t *jl_weakref_type;
 jl_datatype_t *jl_ascii_string_type;

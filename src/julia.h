@@ -402,6 +402,7 @@ extern jl_datatype_t *jl_pointer_type;
 extern jl_value_t *jl_array_uint8_type;
 extern jl_value_t *jl_array_any_type;
 extern jl_value_t *jl_array_symbol_type;
+extern jl_value_t *jl_array_module_type;
 extern DLLEXPORT jl_datatype_t *jl_expr_type;
 extern jl_datatype_t *jl_symbolnode_type;
 extern jl_datatype_t *jl_getfieldnode_type;

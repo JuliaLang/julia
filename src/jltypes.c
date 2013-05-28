@@ -2645,6 +2645,11 @@ void jl_init_types(void)
 
     jl_tupleset(jl_typename_type->types, 1, jl_module_type);
 
+    jl_array_module_type =
+        (jl_value_t*)jl_apply_type((jl_value_t*)jl_array_type,
+                                   jl_tuple(2, jl_module_type,
+                                            jl_box_long(1)));
+
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaStaticData"),
                         jl_any_type, jl_null,
