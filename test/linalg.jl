@@ -62,6 +62,19 @@ for elty in (Float32, Float64, Complex64, Complex128)
         d,v   = eig(a)                 # non-symmetric eigen decomposition
         for i in 1:size(a,2) @test_approx_eq a*v[:,i] d[i]*v[:,i] end
 
+        # symmetric generalized eigenproblem
+        a610 = a[:,6:10]
+        f = eigfact(asym[1:5,1:5], a610'a610)
+        @test_approx_eq asym[1:5,1:5]*f[:vectors] scale(a610'a610*f[:vectors], f[:values])
+        @test_approx_eq f[:values] eigvals(asym[1:5,1:5], a610'a610)
+        @test_approx_eq prod(f[:values]) prod(eigvals(asym[1:5,1:5]/(a610'a610)))
+
+        # Non-symmetric generalized eigenproblem
+        f = eigfact(a[1:5,1:5], a[6:10,6:10])
+        @test_approx_eq a[1:5,1:5]*f[:vectors] scale(a[6:10,6:10]*f[:vectors], f[:values])
+        @test_approx_eq f[:values] eigvals(a[1:5,1:5], a[6:10,6:10])
+        @test_approx_eq prod(f[:values]) prod(eigvals(a[1:5,1:5]/a[6:10,6:10]))
+
         f = schurfact(a)             # Schur
         @test_approx_eq f[:vectors]*f[:Schur]*f[:vectors]' a
         @test_approx_eq sort(real(f[:values])) sort(real(d))

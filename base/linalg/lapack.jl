@@ -845,6 +845,125 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         end
     end
 end
+for (ggev, elty) in 
+    ((:dggev_,:Float64),
+     (:sggev_,:Float32))
+    @eval begin
+    #       SUBROUTINE DGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
+#      $                  BETA, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
+# *
+# *  -- LAPACK driver routine (version 3.2) --
+# *  -- LAPACK is a software package provided by Univ. of Tennessee,    --
+# *  -- Univ. of California Berkeley, Univ. of Colorado Denver and NAG Ltd..--
+# *     November 2006
+# *
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBVL, JOBVR
+#       INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
+#      $                   B( LDB, * ), BETA( * ), VL( LDVL, * ),
+#      $                   VR( LDVR, * ), WORK( * )
+        function ggev!(jobvl::BlasChar, jobvr::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+            chkstride1(A,B)
+            n = size(A, 1)
+            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
+            lda = max(1, n)
+            ldb = max(1, n)
+            alphar = Array($elty, n)
+            alphai = Array($elty, n)
+            beta = Array($elty, n)
+            ldvl = jobvl == 'V' ? n : 1
+            vl = Array($elty, ldvl, n)
+            ldvr = jobvr == 'V' ? n : 1
+            vr = Array($elty, ldvr, n)
+            work = Array($elty, 1)
+            lwork = -one(BlasInt)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(ggev)), liblapack), Void,
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{BlasInt}),
+                    &jobvl, &jobvr, &n, A, 
+                    &lda, B, &ldb, alphar, 
+                    alphai, beta, vl, &ldvl, 
+                    vr, &ldvr, work, &lwork, 
+                    info)
+                if i == 1
+                    lwork = blas_int(work[1])
+                    work = Array($elty, lwork)
+                end
+            end
+            if info[1] != 0; throw(LAPACKException(info[1])); end
+            return alphar, alphai, beta, vl, vr
+        end
+    end
+end
+for (ggev, elty, relty) in 
+    ((:zggev_,:Complex128,:Float64),
+     (:cggev_,:Complex64,:Float32))
+    @eval begin
+      # SUBROUTINE ZGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHA, BETA,
+     # $                  VL, LDVL, VR, LDVR, WORK, LWORK, RWORK, INFO )
+# *
+# *  -- LAPACK driver routine (version 3.2) --
+# *  -- LAPACK is a software package provided by Univ. of Tennessee,    --
+# *  -- Univ. of California Berkeley, Univ. of Colorado Denver and NAG Ltd..--
+# *     November 2006
+# *
+# *     .. Scalar Arguments ..
+      # CHARACTER          JOBVL, JOBVR
+      # INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+      # DOUBLE PRECISION   RWORK( * )
+      # COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
+     # $                   BETA( * ), VL( LDVL, * ), VR( LDVR, * ),
+     # $                   WORK( * )
+        function ggev!(jobvl::BlasChar, jobvr::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+            chkstride1(A,B)
+            n = size(A, 1)
+            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
+            lda = max(1, n)
+            ldb = max(1, n)
+            alpha = Array($elty, n)
+            beta = Array($elty, n)
+            ldvl = jobvl == 'V' ? n : 1
+            vl = Array($elty, ldvl, n)
+            ldvr = jobvr == 'V' ? n : 1
+            vr = Array($elty, ldvr, n)
+            work = Array($elty, 1)
+            lwork = -one(BlasInt)
+            rwork = Array($relty, 8n)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(ggev)), liblapack), Void,
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
+                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
+                     Ptr{BlasInt}),
+                    &jobvl, &jobvr, &n, A, 
+                    &lda, B, &ldb, alpha, 
+                    beta, vl, &ldvl, vr, 
+                    &ldvr, work, &lwork, rwork,
+                    info)
+                if i == 1
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            if info[1] != 0; throw(LAPACKException(info[1])); end
+            return alpha, beta, vl, vr
+        end
+    end
+end
 
 # (GT) General tridiagonal, decomposition, solver and direct solver
 for (gtsv, gttrf, gttrs, elty) in
@@ -1684,8 +1803,121 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
         end
     end
 end
-
-
+for (sygvd, elty) in
+    ((:dsygvd_,:Float64),
+     (:ssygvd_,:Float32))
+    @eval begin
+#           SUBROUTINE DSYGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
+#      $                   LWORK, IWORK, LIWORK, INFO )
+# *
+# *  -- LAPACK driver routine (version 3.3.1) --
+# *  -- LAPACK is a software package provided by Univ. of Tennessee,    --
+# *  -- Univ. of California Berkeley, Univ. of Colorado Denver and NAG Ltd..--
+# *  -- April 2011                                                      --
+# *
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBZ, UPLO
+#       INTEGER            INFO, ITYPE, LDA, LDB, LIWORK, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IWORK( * )
+#       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), W( * ), WORK( * )
+        function sygvd!(itype::Integer, jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+            chkstride1(A,B)
+            n = size(A, 1)
+            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
+            lda = max(1, n)
+            ldb = max(1, n)
+            w = Array($elty, n)
+            work = Array($elty, 1)
+            lwork = -one(BlasInt)
+            iwork = Array(BlasInt, 1)
+            liwork = -one(BlasInt)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(sygvd)),liblapack), Void,
+                    (Ptr{BlasInt}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                     Ptr{BlasInt}, Ptr{BlasInt}),
+                    &itype, &jobz, &uplo, &n, 
+                    A, &lda, B, &ldb, 
+                    w, work, &lwork, iwork, 
+                    &liwork, info)
+                if i == 1
+                    lwork = blas_int(work[1])
+                    work = Array($elty, lwork)
+                    liwork = iwork[1]
+                    iwork = Array(BlasInt, liwork)
+                end
+            end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
+            if info[1] > 0 throw(SingularException(info[1])) end
+            return w, A, B
+        end
+    end
+end
+for (sygvd, elty, relty) in 
+    ((:zhegvd_,:Complex128,:Float64),
+     (:chegvd_,:Complex64,:Float32))
+    @eval begin
+#       SUBROUTINE ZHEGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
+#      $                   LWORK, RWORK, LRWORK, IWORK, LIWORK, INFO )
+# *
+# *  -- LAPACK driver routine (version 3.3.1) --
+# *  -- LAPACK is a software package provided by Univ. of Tennessee,    --
+# *  -- Univ. of California Berkeley, Univ. of Colorado Denver and NAG Ltd..--
+# *  -- April 2011                                                      --
+# *
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBZ, UPLO
+#       INTEGER            INFO, ITYPE, LDA, LDB, LIWORK, LRWORK, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IWORK( * )
+#       DOUBLE PRECISION   RWORK( * ), W( * )
+#       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        function sygvd!(itype::Integer, jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+            chkstride1(A,B)
+            n = size(A, 1)
+            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
+            lda = max(1, n)
+            ldb = max(1, n)
+            w = Array($relty, n)
+            work = Array($elty, 1)
+            lwork = -one(BlasInt)
+            iwork = Array(BlasInt, 1)
+            liwork = -one(BlasInt)
+            rwork = Array($relty)
+            lrwork = -one(BlasInt)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(sygvd)),liblapack), Void,
+                    (Ptr{BlasInt}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
+                     Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    &itype, &jobz, &uplo, &n, 
+                    A, &lda, B, &ldb, 
+                    w, work, &lwork, rwork, 
+                    &lrwork, iwork, &liwork, info)
+                if i == 1
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                    liwork = iwork[1]
+                    iwork = Array(BlasInt, liwork)
+                    lrwork = blas_int(rwork[1])
+                    rwork = Array($relty, lrwork)
+                end
+            end
+            if info[1] < 0 throw(LAPACKException(info[1])) end
+            if info[1] > 0 throw(SingularException(info[1])) end
+            return w, A, B
+        end
+    end
+end
 
 #Find the leading dimension
 ld = x->max(1,stride(x,2))
