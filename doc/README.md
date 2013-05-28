@@ -28,8 +28,10 @@ File layout
 
     conf.py             Sphinx configuration
     helpdb.jl           REPL help database
-    sphinx/             Sphinx extensions and plugins
-    sphinx/jlhelp.py    Sphinx plugin to build helpdb.jl
     stdlib/             Julia standard library documentation
-    _themes/            Sphinx html themes
 
+Sphinx extensions and theme
+---------------------------
+The extensions to Sphinx and the theme are in the
+https://github.com/JuliaLang/JuliaDoc repository, and can also be used to style
+package documentation.
