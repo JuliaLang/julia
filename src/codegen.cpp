@@ -1407,7 +1407,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     Value *idx = emit_array_nd_index(ary, args[1], nd, &args[3], nargs-2, ctx);
                     if (jl_array_store_unboxed(ety) &&
                         ((jl_datatype_t*)ety)->size == 0) {
-                        // no-op
+                        // no-op, but emit expr for possible effects
+                        emit_expr(args[2],ctx,false);
                     }
                     else {
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx,
