@@ -28,7 +28,7 @@ import juliadoc
 extensions = ['sphinx.ext.mathjax', 'juliadoc.julia', 'juliadoc.jlhelp']
 
 # Add any paths that contain templates here, relative to this directory.
-#templates_path = []
+templates_path = ['_templates']
 
 # The suffix of source filenames.
 source_suffix = '.rst'
@@ -136,6 +136,7 @@ html_static_path = ['_static']
 
 # Custom sidebar templates, maps document names to template names.
 html_sidebars = juliadoc.default_sidebars()
+html_sidebars['index'].insert(0, 'sidebarintro.html')
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.
