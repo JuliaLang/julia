@@ -299,7 +299,7 @@ jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz, int isaligned)
         mp = malloc_ptrs_freelist;
         malloc_ptrs_freelist = malloc_ptrs_freelist->next;
     }
-#if defined(_OS_WINDOWS) && !defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     mp->isaligned = isaligned;
 #else
     (void)isaligned;
@@ -338,7 +338,7 @@ static void sweep_malloc_ptrs(void)
             *pmp = nxt;
             if (mp->ptr) {
                 freed_bytes += mp->sz;
-#if defined(_OS_WINDOWS) && !defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
                 if (mp->isaligned) {
                     free_a16(mp->ptr);
                 } else {
