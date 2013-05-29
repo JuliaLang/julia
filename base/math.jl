@@ -573,7 +573,7 @@ function trigamma(x::Float64)
     trigam = 0.0
     z = x
     if x <= 0.0
-        return NaN
+        throw(DomainError())
     end
 
     if x <= 1e-4
