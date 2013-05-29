@@ -453,6 +453,7 @@ export
 # arrays
     mapslices,
     reducedim,
+    bsxfun,
     broadcast,
     broadcast!,
     broadcast_function,
