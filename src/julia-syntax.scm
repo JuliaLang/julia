@@ -378,7 +378,8 @@
 	 ;; just the keyword names
 	 (keynames (map decl-var vars))
 	 ;; 1-element list of function's line number node, or empty if none
-	 (lno  (if (and (pair? (cadr body)) (eq? (caadr body) 'line))
+	 (lno  (if (and (pair? (cdr body))
+			(pair? (cadr body)) (eq? (caadr body) 'line))
 		   (list (cadr body))
 		   '()))
 	 ;; body statements, minus line number node
