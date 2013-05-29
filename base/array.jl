@@ -672,7 +672,7 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::Array{T,1})
+function append!{T}(a::Array{T,1}, items::Vector)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
