@@ -416,7 +416,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T})
 
     WR, WI, VL, VR = LAPACK.geev!('N', 'V', A)
     if all(WI .== 0.) return Eigen(WR, VR) end
-    evec = complex(zeros(T, n, n))
+    evec = zeros(Complex{T}, n, n)
     j = 1
     while j <= n
         if WI[j] == 0.0
@@ -475,6 +475,72 @@ end
 
 inv(A::Eigen) = scale(A.vectors, 1.0/A.values)*A.vectors'
 det(A::Eigen) = prod(A.values)
+
+# Generalized eigenvalue problem.
+type GeneralizedEigen{T,V}
+    values::Vector{V}
+    vectors::Matrix{T}
+end
+
+function getindex(A::GeneralizedEigen, d::Symbol)
+    if d == :values return A.values end
+    if d == :vectors return A.vectors end
+    error("No such type field")
+end
+
+function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
+    if ishermitian(A) & ishermitian(B) return eigfact!(Hermitian(A), Hermitian(B)) end
+    n = size(A, 1)
+    alphar, alphai, beta, ~, vr = LAPACK.ggev!('N', 'V', A, B)
+    if all(alphai .== 0) 
+        return GeneralizedEigen(alphar ./ beta, vr)
+    else
+        vecs = zeros(Complex{T}, n, n)
+        j = 1
+        while j <= n
+            if alphai[j] == 0.0
+                vecs[:,j] = vr[:,j]
+            else
+                vecs[:,j] = vr[:,j] + im*vr[:,j+1]
+                vecs[:,j+1] = vr[:,j] - im*vr[:,j+1]
+                j += 1
+            end
+            j += 1
+        end
+        return GeneralizedEigen(complex(alphar, alphai)./beta, vecs)
+    end
+end
+function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
+    if ishermitian(A) & ishermitian(B) return eigfact!(Hermitian(A), Hermitian(B)) end
+    alpha, beta, ~, vr = LAPACK.ggev!('N', 'V', A, B)
+    return GeneralizedEigen(alpha./beta, vr)
+end
+eigfact!(A::StridedMatrix, B::StridedMatrix) = eigfact!(float(A), float(B))
+eigfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = eigfact!(copy(A), copy(B))
+eigfact(A::StridedMatrix, B::StridedMatrix) = eigfact!(float(A), float(B))
+
+function eig(A::StridedMatrix, B::StridedMatrix)
+    F = eigfact(A, B)
+    return F[:values], F[:vectors]
+end
+
+function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
+    if ishermitian(A) & ishermitian(B) return eigvals!(Hermitian(A), Hermitian(B)) end
+    alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    if all(alphai .== 0)
+        return alphar./beta
+    else
+        return complex(alphar, alphai)./beta
+    end
+end
+function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
+    if ishermitian(A) & ishermitian(B) return eigvals!(Hermitian(A), Hermitian(B)) end
+    alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    return alpha./beta
+end
+eigvals!(A::AbstractMatrix, B::AbstractMatrix) = eigvals!(float(A), float(B))
+eigvals{T<:BlasFloat}(A::AbstractMatrix{T}, B::AbstractMatrix{T}) = eigvals!(copy(A), copy(B))
+eigvals(A::AbstractMatrix, B::AbstractMatrix) = eigvals!(float(A), float(B))
 
 # SVD
 type SVD{T<:BlasFloat,Tr} <: Factorization{T}

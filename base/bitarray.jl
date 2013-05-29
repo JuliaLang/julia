@@ -6,6 +6,8 @@ macro _div64(l) :($(esc(l)) >>> 6) end
 macro _mod64(l) :($(esc(l)) & 63) end
 macro _msk_end(l) :(@_mskr @_mod64 $(esc(l))) end
 num_bit_chunks(n::Int) = @_div64 (n+63)
+const bitcache_chunks = 64 # this can be changed
+const bitcache_size = 64 * bitcache_chunks # do not change this
 
 ## BitArray
 
@@ -199,8 +201,9 @@ end
 convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N},B)
 function convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     A = Array(T, size(B))
+    Bc = B.chunks
     for i = 1:length(A)
-        A[i] = B[i]
+        A[i] = getindex_unchecked(Bc, i)
     end
     return A
 end
@@ -208,9 +211,34 @@ end
 convert{T,N}(::Type{BitArray}, A::AbstractArray{T,N}) = convert(BitArray{N},A)
 function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
     B = BitArray(size(A))
-    for i = 1:length(B)
-        B[i] = A[i]
+    Bc = B.chunks
+    l = length(B)
+    if l == 0
+        return B
     end
+    ind = 1
+    for i = 1:length(Bc)-1
+        u = uint64(1)
+        c = uint64(0)
+        for j = 0:63
+            if bool(A[ind])
+                c |= u
+            end
+            ind += 1
+            u <<= 1
+        end
+        Bc[i] = c
+    end
+    u = uint64(1)
+    c = uint64(0)
+    for j = 0:@_mod64(l-1)
+        if bool(A[ind])
+            c |= u
+        end
+        ind += 1
+        u <<= 1
+    end
+    Bc[end] = c
     return B
 end
 
@@ -364,7 +392,7 @@ function getindex{T<:Real}(B::BitArray, I::AbstractVector{T})
         if i < 1 || i > lB
             throw(BoundsError())
         end
-        assign_unchecked(Xc, getindex_unchecked(Bc, i), ind)
+        setindex_unchecked(Xc, getindex_unchecked(Bc, i), ind)
         ind += 1
     end
     return X
@@ -382,7 +410,7 @@ let getindex_cache = nothing
         end
         gen_cartesian_map(getindex_cache, ivars -> quote
                 #faster X[storeind] = B[$(ivars...)]
-                assign_unchecked(Xc, B[$(ivars...)], ind)
+                setindex_unchecked(Xc, B[$(ivars...)], ind)
                 ind += 1
             end, I, (:B, :Xc, :ind), B, Xc, 1)
         return X
@@ -404,7 +432,7 @@ function getindex_bool_1d(B::BitArray, I::AbstractArray{Bool})
     for i = 1:length(I)
         if I[i]
             # faster X[ind] = B[i]
-            assign_unchecked(Xc, getindex_unchecked(Bc, i), ind)
+            setindex_unchecked(Xc, getindex_unchecked(Bc, i), ind)
             ind += 1
         end
     end
@@ -418,7 +446,7 @@ getindex(B::BitArray, I::AbstractArray{Bool}) = getindex_bool_1d(B, I)
 
 ## Indexing: setindex! ##
 
-function assign_unchecked(Bc::Array{Uint64}, x, i::Integer)
+function setindex_unchecked(Bc::Array{Uint64}, x, i::Integer)
     x = convert(Bool, x)
     i1, i2 = get_chunks_id(i)
     u = uint64(1) << i2
@@ -434,7 +462,7 @@ function setindex!(B::BitArray, x, i::Real)
     if i < 1 || i > length(B)
         throw(BoundsError())
     end
-    assign_unchecked(B.chunks, x, i)
+    setindex_unchecked(B.chunks, x, i)
     return B
 end
 
@@ -458,9 +486,9 @@ function setindex!(B::BitArray, x, I0::Real, I::Real...)
     return B
 end
 
-let assign_cache = nothing
-    global assign_array2bitarray_ranges
-    function assign_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
+let setindex_cache = nothing
+    global setindex_array2bitarray_ranges
+    function setindex_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
         nI = 1 + length(I)
         if ndims(B) != nI
             error("wrong number of dimensions in assigment")
@@ -481,8 +509,8 @@ let assign_cache = nothing
             copy_chunks(B.chunks, f0, X.chunks, 1, l0)
             return B
         end
-        if is(assign_cache,nothing)
-            assign_cache = Dict()
+        if is(setindex_cache,nothing)
+            setindex_cache = Dict()
         end
         gap_lst = [last(r)-first(r)+1 for r in I]
         stride_lst = Array(Int, nI)
@@ -498,7 +526,7 @@ let assign_cache = nothing
         # is dummy (used in bodies[k,2] below)
         stride_lst[nI] = 0
 
-        gen_cartesian_map(assign_cache,
+        gen_cartesian_map(setindex_cache,
             ivars->begin
                 bodies = cell(nI, 2)
                 bodies[1] = quote
@@ -529,7 +557,7 @@ end
 # TODO: extend to I:Indices... (i.e. not necessarily contiguous)
 function setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::Union(Integer, Range1{Int})...)
     I = map(x->(isa(x,Integer) ? (x:x) : x), I)
-    assign_array2bitarray_ranges(B, X, I0, I...)
+    setindex_array2bitarray_ranges(B, X, I0, I...)
 end
 
 function setindex!{T<:Real}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
@@ -563,7 +591,7 @@ function setindex!(B::BitArray, X::AbstractArray, I0::Real, I::Real...)
     return setindex!(B, X[1], i0, I...)
 end
 
-let assign_cache = nothing
+let setindex_cache = nothing
     global setindex!
     function setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
         I = indices(I)
@@ -581,10 +609,10 @@ let assign_cache = nothing
                 end
             end
         end
-        if is(assign_cache,nothing)
-            assign_cache = Dict()
+        if is(setindex_cache,nothing)
+            setindex_cache = Dict()
         end
-        gen_cartesian_map(assign_cache,
+        gen_cartesian_map(setindex_cache,
             ivars->:(B[$(ivars...)] = X[refind]; refind += 1),
             I,
             (:B, :X, :refind),
@@ -600,14 +628,14 @@ function setindex!{T<:Real}(B::BitArray, x, I::AbstractVector{T})
     return B
 end
 
-let assign_cache = nothing
+let setindex_cache = nothing
     global setindex!
     function setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
         I = indices(I)
-        if is(assign_cache,nothing)
-            assign_cache = Dict()
+        if is(setindex_cache,nothing)
+            setindex_cache = Dict()
         end
-        gen_cartesian_map(assign_cache, ivars->:(B[$(ivars...)] = x),
+        gen_cartesian_map(setindex_cache, ivars->:(B[$(ivars...)] = x),
             I,
             (:B, :x),
             B, x)
@@ -617,7 +645,7 @@ end
 
 # logical indexing
 
-function assign_bool_scalar_1d(A::BitArray, x, I::AbstractArray{Bool})
+function setindex_bool_scalar_1d(A::BitArray, x, I::AbstractArray{Bool})
     if length(I) > length(A)
         throw(BoundsError())
     end
@@ -625,13 +653,13 @@ function assign_bool_scalar_1d(A::BitArray, x, I::AbstractArray{Bool})
     for i = 1:length(I)
         if I[i]
             # faster A[i] = x
-            assign_unchecked(Ac, x, i)
+            setindex_unchecked(Ac, x, i)
         end
     end
     A
 end
 
-function assign_bool_vector_1d(A::BitArray, X::AbstractArray, I::AbstractArray{Bool})
+function setindex_bool_vector_1d(A::BitArray, X::AbstractArray, I::AbstractArray{Bool})
     if length(I) > length(A)
         throw(BoundsError())
     end
@@ -640,17 +668,17 @@ function assign_bool_vector_1d(A::BitArray, X::AbstractArray, I::AbstractArray{B
     for i = 1:length(I)
         if I[i]
             # faster A[i] = X[c]
-            assign_unchecked(Ac, X[c], i)
+            setindex_unchecked(Ac, X[c], i)
             c += 1
         end
     end
     A
 end
 
-setindex!(A::BitArray, X::AbstractArray, I::AbstractVector{Bool}) = assign_bool_vector_1d(A, X, I)
-setindex!(A::BitArray, X::AbstractArray, I::AbstractArray{Bool}) = assign_bool_vector_1d(A, X, I)
-setindex!(A::BitArray, x, I::AbstractVector{Bool}) = assign_bool_scalar_1d(A, x, I)
-setindex!(A::BitArray, x, I::AbstractArray{Bool}) = assign_bool_scalar_1d(A, x, I)
+setindex!(A::BitArray, X::AbstractArray, I::AbstractVector{Bool}) = setindex_bool_vector_1d(A, X, I)
+setindex!(A::BitArray, X::AbstractArray, I::AbstractArray{Bool}) = setindex_bool_vector_1d(A, X, I)
+setindex!(A::BitArray, x, I::AbstractVector{Bool}) = setindex_bool_scalar_1d(A, x, I)
+setindex!(A::BitArray, x, I::AbstractArray{Bool}) = setindex_bool_scalar_1d(A, x, I)
 
 setindex!(A::BitMatrix, x::AbstractArray, I::Real, J::AbstractVector{Bool}) =
     (A[I,find(J)] = x)
@@ -908,8 +936,9 @@ end
 
 function (-)(B::BitArray)
     A = zeros(Int, size(B))
+    Bc = B.chunks
     for i = 1:length(B)
-        if B[i]
+        if getindex_unchecked(Bc, i)
             A[i] = -1
         end
     end
@@ -1163,10 +1192,31 @@ function (.^){T<:Number}(B::BitArray, x::T)
         return F
     end
 end
+
+function bitcache_pow{T}(A::BitArray, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
+    left = l - ind + 1
+    for j = 1:min(bitcache_size, left)
+        C[j] = bool(A[ind] .^ B[ind])
+        ind += 1
+    end
+    C[left+1:bitcache_size] = false
+    return ind
+end
 function (.^){T<:Integer}(A::BitArray, B::Array{T})
-    F = BitArray(promote_shape(size(A),size(B))...)
-    for i = 1:length(A)
-        F[i] = A[i] .^ B[i]
+    F = BitArray(promote_shape(size(A),size(B)))
+    Fc = F.chunks
+    l = length(F)
+    if l == 0
+        return F
+    end
+    C = Array(Bool, bitcache_size)
+    ind = 1
+    cind = 1
+    nFc = num_bit_chunks(l)
+    for i = 1:div(l + bitcache_size - 1, bitcache_size)
+        ind = bitcache_pow(A, B, l, ind, C)
+        dumpbitcache(Fc, cind, C)
+        cind += bitcache_chunks
     end
     return F
 end
@@ -1192,33 +1242,66 @@ end
 
 ## element-wise comparison operators returning BitArray{Bool} ##
 
-for (f,scalarf) in ((:(.==),:(==)),
-                      (:.<, :<),
-                      (:.!=,:!=),
-                      (:.<=,:<=))
-    @eval begin
-        function ($f)(A::AbstractArray, B::AbstractArray)
-            F = BitArray(promote_shape(size(A),size(B)))
-            for i = 1:length(B)
-                F[i] = ($scalarf)(A[i], B[i])
+function dumpbitcache(Bc::Vector{Uint64}, bind::Int, C::Vector{Bool})
+    ind = 1
+    nc = min(@_div64(length(C)), length(Bc)-bind+1)
+    for i = 1:nc
+        u = uint64(1)
+        c = uint64(0)
+        for j = 1:64
+            if C[ind]
+                c |= u
             end
-            return F
+            ind += 1
+            u <<= 1
         end
-        function ($f)(A, B::AbstractArray)
-            F = BitArray(size(B))
-            for i = 1:length(F)
-                F[i] = ($scalarf)(A, B[i])
-            end
-            return F
-        end
-        function ($f)(A::AbstractArray, B)
-            F = BitArray(size(A))
-            for i = 1:length(F)
-                F[i] = ($scalarf)(A[i], B)
-            end
-            return F
-        end
+        Bc[bind] = c
+        bind += 1
+    end
+end
 
+for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
+                             (:.< , :bitcache_lt , :<   ),
+                             (:.!=, :bitcache_neq, :!=  ),
+                             (:.<=, :bitcache_le , :<=  ))
+    for (sigA, sigB, expA, expB, shape) in ((:AbstractArray, :AbstractArray,
+                                             :(A[ind]), :(B[ind]),
+                                             :(promote_shape(size(A), size(B)))),
+                                            (:Any, :AbstractArray,
+                                             :A, :(B[ind]),
+                                             :(size(B))),
+                                            (:AbstractArray, :Any,
+                                             :(A[ind]), :B,
+                                             :(size(A))))
+        @eval begin
+            function ($cachef)(A::$sigA, B::$sigB, l::Int, ind::Int, C::Vector{Bool})
+                left = l - ind + 1
+                for j = 1:min(bitcache_size, left)
+                    C[j] = ($scalarf)($expA, $expB)
+                    ind += 1
+                end
+                C[left+1:bitcache_size] = false
+                return ind
+            end
+            function ($f)(A::$sigA, B::$sigB)
+                F = BitArray($shape)
+                Fc = F.chunks
+                l = length(F)
+                if l == 0
+                    return F
+                end
+                C = Array(Bool, bitcache_size)
+                ind = 1
+                cind = 1
+                nFc = num_bit_chunks(l)
+                for i = 1:div(l + bitcache_size - 1, bitcache_size)
+                    ind = ($cachef)(A, B, l, ind, C)
+                    dumpbitcache(Fc, cind, C)
+                    cind += bitcache_chunks
+                end
+                return F
+            end
+        end
     end
 end
 
@@ -1248,6 +1331,7 @@ function (!=)(A::BitArray, B::BitArray)
     return false
 end
 
+# TODO: avoid bitpack/bitunpack
 for f in (:(==), :!=)
     @eval begin
         ($f)(A::BitArray, B::AbstractArray{Bool}) = ($f)(A, bitpack(B))
