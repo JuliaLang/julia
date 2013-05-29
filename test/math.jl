@@ -104,15 +104,27 @@ y33 = bessely(3,3.)
 @test_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
 
 # digamma
-euler_mascheroni = 0.5772156649015329
 for elty in (Float32, Float64)
     @test_approx_eq digamma(convert(elty, 0.1)) convert(elty, -10.42375494041108)
-    @test_approx_eq -digamma(convert(elty, 1.0)) convert(elty, euler_mascheroni)
-    @test_approx_eq digamma(convert(elty, 2.0)) convert(elty, 0.4227843350984675)
-    @test_approx_eq digamma(convert(elty, 3.0)) convert(elty, 0.9227843350984675)
-    @test_approx_eq digamma(convert(elty, 4.0)) convert(elty, 1.256117668431801)
-    @test_approx_eq digamma(convert(elty, 5.0)) convert(elty, 1.506117668431801)
-    @test_approx_eq digamma(convert(elty, 10.0)) convert(elty, 2.251752589066721)
+    @test_approx_eq digamma(convert(elty, 1/2)) convert(elty, -γ - log(4))
+    @test_approx_eq digamma(convert(elty, 1)) convert(elty, -γ)
+    @test_approx_eq digamma(convert(elty, 2)) convert(elty, 1 - γ)
+    @test_approx_eq digamma(convert(elty, 3)) convert(elty, 3/2 - γ)
+    @test_approx_eq digamma(convert(elty, 4)) convert(elty, 11/6 - γ)
+    @test_approx_eq digamma(convert(elty, 5)) convert(elty, 25/12 - γ)
+    @test_approx_eq digamma(convert(elty, 10)) convert(elty, 7129/2520 - γ)
+end
+
+# trigamma
+for elty in (Float32, Float64)
+    @test_approx_eq trigamma(convert(elty, 0.1)) convert(elty, 101.433299150792758817)
+    @test_approx_eq trigamma(convert(elty, 1/2)) convert(elty, π^2/2)
+    @test_approx_eq trigamma(convert(elty, 1)) convert(elty, π^2/6)
+    @test_approx_eq trigamma(convert(elty, 2)) convert(elty, π^2/6 - 1)
+    @test_approx_eq trigamma(convert(elty, 3)) convert(elty, π^2/6 - 5/4)
+    @test_approx_eq trigamma(convert(elty, 4)) convert(elty, π^2/6 - 49/36)
+    @test_approx_eq trigamma(convert(elty, 5)) convert(elty, π^2/6 - 205/144)
+    @test_approx_eq trigamma(convert(elty, 10)) convert(elty, π^2/6 - 9778141/6350400)
 end
 
 # eta, zeta
