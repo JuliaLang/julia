@@ -1482,17 +1482,14 @@ end
 
 ## Transpose ##
 
-const szcacheline = 16
-const szcache = 1 << 14
-const szblock = Int[32,22,18,16,14,13,12,11,10,10,9,9,8,8,8,8]
+const sqrthalfcache = 1<<7
 function transpose!{T<:Number}(B::Matrix{T}, A::Matrix{T})
     m, n = size(A)
     if size(B) != (n,m)
         error("Size of output is incorrect")
     end
-    s = sizeof(T)
-    blocksize = (s <= length(szblock)) ? szblock[s] : ifloor(sqrt(szcache/szcacheline/sizeof(T)))
-    if m*n <= 30*blocksize*blocksize
+    blocksize = ifloor(sqrthalfcache/sizeof(T)/1.4) # /1.4 to avoid complete fill of cache
+    if m*n <= 4*blocksize*blocksize
         # For small sizes, use a simple linear-indexing algorithm
         for i2 = 1:n
             j = i2
