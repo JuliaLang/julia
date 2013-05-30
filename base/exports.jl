@@ -633,6 +633,7 @@ export
 # sparse
     dense,
     full,
+    etree,
     issparse,
     sparse,
     sparsevec,
