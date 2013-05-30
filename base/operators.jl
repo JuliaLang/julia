@@ -72,11 +72,13 @@ end
 >>>(x,y::Integer) = x >>> convert(Int32,y)
 >>>(x,y::Int32)   = no_op_err(">>>", typeof(x))
 
-# fallback div, fld, rem & mod implementations
-div{T<:Real}(x::T, y::T) = convert(T,trunc(x/y))
-fld{T<:Real}(x::T, y::T) = convert(T,floor(x/y))
-rem{T<:Real}(x::T, y::T) = convert(T,x-y*div(x,y))
-mod{T<:Real}(x::T, y::T) = convert(T,x-y*fld(x,y))
+# fallback div and fld implementations
+# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
+# so it is used here as the basis of float div().
+div{T<:Real}(x::T, y::T) = convert(T,(x-rem(x,y))/y)
+fld{T<:Real}(x::T, y::T) = convert(T,(x-mod(x,y))/y)
+#rem{T<:Real}(x::T, y::T) = convert(T,x-y*trunc(x/y))
+#mod{T<:Real}(x::T, y::T) = convert(T,x-y*floor(x/y))
 
 # operator alias
 const % = rem
