@@ -346,7 +346,6 @@ export
     inv,
     invmod,
     iround,
-    isdenormal,
     iseltype,
     iseven,
     isfinite,
@@ -359,6 +358,7 @@ export
     isprime,
     isqrt,
     isreal,
+    issubnormal,
     itrunc,
     lcm,
     ldexp,
@@ -453,6 +453,7 @@ export
 # arrays
     mapslices,
     reducedim,
+    bsxfun,
     broadcast,
     broadcast!,
     broadcast_function,
@@ -632,6 +633,7 @@ export
 # sparse
     dense,
     full,
+    etree,
     issparse,
     sparse,
     sparsevec,

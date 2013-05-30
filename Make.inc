@@ -30,38 +30,22 @@ endif
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
 else
-ifeq ($(XC_HOST),i686-w64-mingw32)
-override OS = WINNT
-override ARCH = i686
 override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
+ifneq (,$(findstring mingw,$(XC_HOST)))
+override OS := WINNT
 export WINE_PATH := $(shell winepath -w $(BUILD)/lib/julia);$(shell winepath -w $(BUILD)/lib)
 export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
 export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
 export WINE_PATH := $(WINE_PATH);C:\MinGW\\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
-else ifeq ($(XC_HOST),x86_64-w64-mingw32)
-override OS = WINNT
-override ARCH = x86_64
-override OPENBLAS_DYNAMIC_ARCH = 1
-override CROSS_COMPILE=$(XC_HOST)-
-export WINE_PATH := $(shell winepath -w $(BUILD)/lib/julia);$(shell winepath -w $(BUILD)/lib)
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);C:\MinGW\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
 else
 $(error "unknown XC_HOST variable set")
 endif
 endif
 
 # Figure out OS and architecture
-BUILD_OS = $(shell uname)
-OS = $(BUILD_OS)
-ARCH = $(shell uname -m)
-
-# Use 64-bit libraries by default on 64-bit architectures
-ifeq ($(ARCH), x86_64)
-USE_LIB64 = 1
-endif
+BUILD_OS := $(shell uname)
+OS := $(BUILD_OS)
 
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
@@ -74,10 +58,10 @@ ATLAS_LIBDIR = $(BUILD)/lib
 #or ATLAS_LIBDIR = /path/to/system/atlas/lib
 
 ifneq (,$(findstring MINGW,$(OS)))
-override OS=WINNT
+override OS := WINNT
 endif
 ifneq (,$(findstring MINGW,$(BUILD_OS)))
-override BUILD_OS=WINNT
+override BUILD_OS := WINNT
 endif
 
 ifeq ($(OS), WINNT)
@@ -122,9 +106,6 @@ JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3 -DNDEBUG -falign-functions
-ifneq ($(ARCH), ppc64)
-  SHIPFLAGS += -momit-leaf-frame-pointer
-endif
 endif
 
 ifeq ($(USECLANG),1)
@@ -138,6 +119,16 @@ ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=10.6
 CXX += -mmacosx-version-min=10.6
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
+endif
+endif
+
+ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+ifeq ($(ARCH),mingw32)
+$(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+endif
+ifeq ($(USEGCC),1)
+ifneq ($(ARCH), ppc64)
+  SHIPFLAGS += -momit-leaf-frame-pointer
 endif
 endif
 
@@ -156,6 +147,11 @@ JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
 OPENBLAS_DYNAMIC_ARCH=0
 OPENBLAS_USE_THREAD=1
 OPENBLAS_TARGET_ARCH=
+
+# Use 64-bit libraries by default on 64-bit architectures
+ifeq ($(ARCH), x86_64)
+USE_LIB64 = 1
+endif
 
 # Use libraries available on the system instead of building them
 

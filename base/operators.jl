@@ -45,13 +45,7 @@ for op = (:+, :*, :&, :|, :$, :min, :max)
         ($op)(a,b,c) = ($op)(($op)(a,b),c)
         ($op)(a,b,c,d) = ($op)(($op)(($op)(a,b),c),d)
         ($op)(a,b,c,d,e) = ($op)(($op)(($op)(($op)(a,b),c),d),e)
-        function ($op)(a, b, c, xs...)
-            accum = ($op)(($op)(a,b),c)
-            for x in xs
-                accum = ($op)(accum,x)
-            end
-            accum
-        end
+        ($op)(a, b, c, xs...) = ($op)(($op)(($op)(a,b),c), xs...)
     end
 end
 

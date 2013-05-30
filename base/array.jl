@@ -672,7 +672,7 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::Array{T,1})
+function append!{T}(a::Array{T,1}, items::Vector)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
@@ -864,19 +864,11 @@ promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Real, A<:Integer}(::Type{S}, ::Type{A}) = promote_type(S, A)
 promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
-./{T<:Integer,S<:Integer}(x::StridedArray{T}, y::StridedArray{S}) =
-    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
 ./{T<:Integer}(x::Integer, y::StridedArray{T}) =
     reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
 ./{T<:Integer}(x::StridedArray{T}, y::Integer) =
     reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
 
-./{T<:Integer,S<:Integer}(x::StridedArray{Complex{T}}, y::StridedArray{S}) =
-    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-./{T<:Integer,S<:Integer}(x::StridedArray{T}, y::StridedArray{Complex{S}}) =
-    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-./{T<:Integer,S<:Integer}(x::StridedArray{Complex{T}}, y::StridedArray{Complex{S}}) =
-    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
 ./{T<:Integer}(x::Integer, y::StridedArray{Complex{T}}) =
     reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
 ./{T<:Integer}(x::StridedArray{Complex{T}}, y::Integer) =
@@ -887,11 +879,6 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
     reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
 
 # ^ is difficult, since negative exponents give a different type
-
-.^(x::StridedArray, y::StridedArray) =
-    reshape([ x[i] ^ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-.^{T<:Integer}(x::StridedArray{Bool}, y::StridedArray{T}) =
-    reshape([ bool(x[i] ^ y[i]) for i=1:length(x) ], promote_shape(size(x),size(y)))
 
 .^(x::Number, y::StridedArray) =
     reshape([ x    ^ y[i] for i=1:length(y) ], size(y))
@@ -1495,12 +1482,45 @@ end
 
 ## Transpose ##
 
-function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
-    if length(A) > 50000
-        return FFTW.transpose(reshape(A, size(A, 2), size(A, 1)))
-    else
-        return [ A[j,i] for i=1:size(A,2), j=1:size(A,1) ]
+const sqrthalfcache = 1<<7
+function transpose!{T<:Number}(B::Matrix{T}, A::Matrix{T})
+    m, n = size(A)
+    if size(B) != (n,m)
+        error("Size of output is incorrect")
     end
+    blocksize = ifloor(sqrthalfcache/sizeof(T)/1.4) # /1.4 to avoid complete fill of cache
+    if m*n <= 4*blocksize*blocksize
+        # For small sizes, use a simple linear-indexing algorithm
+        for i2 = 1:n
+            j = i2
+            offset = (j-1)*m
+            for i = offset+1:offset+m
+                B[j] = A[i]
+                j += n
+            end
+        end
+        return B
+    end
+    # For larger sizes, use a cache-friendly algorithm
+    for outer2 = 1:blocksize:size(A, 2)
+        for outer1 = 1:blocksize:size(A, 1)
+            for inner2 = outer2:min(n,outer2+blocksize)
+                i = (inner2-1)*m + outer1
+                j = inner2 + (outer1-1)*n
+                for inner1 = outer1:min(m,outer1+blocksize)
+                    B[j] = A[i]
+                    i += 1
+                    j += n
+                end
+            end
+        end
+    end
+    B
+end
+
+function transpose{T<:Number}(A::Matrix{T})
+    B = similar(A, size(A, 2), size(A, 1))
+    transpose!(B, A)
 end
 
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
