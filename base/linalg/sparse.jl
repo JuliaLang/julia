@@ -327,113 +327,10 @@ function diff(a::SparseMatrixCSC, dim::Integer)
     end
 end
 
-## diag and related
-
-diag(A::SparseMatrixCSC) = [ A[i,i] for i=1:min(size(A)) ]
-
-function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
-    if (size(v,1) != 1 && size(v,2) != 1)
-        error("Input should be nx1 or 1xn")
-    end
-
-    n = length(v)
-    numnz = nnz(v)
-    colptr = Array(Ti, n+1)
-    rowval = Array(Ti, numnz)
-    nzval = Array(Tv, numnz)
-
-    if size(v,1) == 1
-        copy!(colptr, 1, v.colptr, 1, n+1)
-        ptr = 1
-        for col = 1:n
-            if colptr[col] != colptr[col+1]
-                rowval[ptr] = col
-                nzval[ptr] = v.nzval[ptr]
-                ptr += 1
-            end
-        end
-    else
-        copy!(rowval, 1, v.rowval, 1, numnz)
-        copy!(nzval, 1, v.nzval, 1, numnz)
-        colptr[1] = 1
-        ptr = 1
-        col = 1
-        while col <= n && ptr <= numnz
-            while rowval[ptr] > col
-                colptr[col+1] = colptr[col]
-                col += 1
-            end
-            colptr[col+1] = colptr[col] + 1
-            ptr += 1
-            col += 1
-        end
-        if col <= n
-            colptr[(col+1):(n+1)] = colptr[col]
-        end
-    end
-
-    return SparseMatrixCSC{Tv,Ti}(n, n, colptr, rowval, nzval)
-end
-
-function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
-    if isa(v, AbstractMatrix)
-        if (size(v,1) != 1 && size(v,2) != 1)
-            error("Input should be nx1 or 1xn")
-        end
-    end
-
-    n = length(v)
-    numnz = nnz(v)
-    colptr = Array(Int, n+1)
-    rowval = Array(Int, numnz)
-    nzval = Array(T, numnz)
-
-    colptr[1] = 1
-
-    z = zero(T)
-
-    ptr = 1
-    for col=1:n
-        x = v[col]
-        if x != z
-            colptr[col+1] = colptr[col] + 1
-            rowval[ptr] = col
-            nzval[ptr] = x
-            ptr += 1
-        else
-            colptr[col+1] = colptr[col]
-        end
-    end
-
-    return SparseMatrixCSC(n, n, colptr, rowval, nzval)
-end
 
 ## norm and rank
 
 # TODO
-
-## trace
-
-function trace{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
-    t = zero(Tv)
-    for col=1:min(size(A))
-        first = A.colptr[col]
-        last = A.colptr[col+1]-1
-        while first <= last
-            mid = (first + last) >> 1
-            row = A.rowval[mid]
-            if row == col
-                t += A.nzval[mid]
-                break
-            elseif row > col
-                last = mid - 1
-            else
-                first = mid + 1
-            end
-        end
-    end
-    return t
-end
 
 # kron
 
@@ -493,49 +390,6 @@ end
 ## det, inv, cond
 
 # TODO
-
-## Structure query functions
-
-function issym(A::SparseMatrixCSC)
-    m, n = size(A)
-    if m != n; return false; end
-    return nnz(A - A.') == 0
-end
-
-function ishermitian(A::SparseMatrixCSC)
-    m, n = size(A)
-    if m != n; return false; end
-    return nnz(A - A') == 0
-end
-
-function istriu(A::SparseMatrixCSC)
-    for col = 1:min(A.n,A.m-1)
-        l1 = A.colptr[col+1]-1
-        for i = 0 : (l1 - A.colptr[col])
-            if A.rowval[l1-i] <= col
-                break
-            end
-            if A.nzval[l1-i] != 0
-                return false
-            end
-        end
-    end
-    return true
-end
-
-function istril(A::SparseMatrixCSC)
-    for col = 2:A.n
-        for i = A.colptr[col] : (A.colptr[col+1]-1)
-            if A.rowval[i] >= col
-                break
-            end
-            if A.nzval[i] != 0
-                return false
-            end
-        end
-    end
-    return true
-end
 
 ## scale methods
 
