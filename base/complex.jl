@@ -320,6 +320,9 @@ function ^{T<:FloatingPoint}(z::Complex{T}, p::Complex{T})
         end
         complex(x,y)
     elseif z!=0
+        if p!=0 && isinteger(p)
+            return power_by_squaring(z, convert(Integer, real(p)))
+        end
         exp(p*log(z))
     elseif p!=0 #0^p
         zero(z) #CHECK SIGNS
@@ -342,6 +345,9 @@ function exp10{T}(z::Complex{T})
 end
 
 function ^{T<:Complex}(z::T, p::T)
+    if isinteger(p)
+        return power_by_squaring(float(z), convert(Integer, real(p)))
+    end
     pr, pim = reim(p)
     zr, zi = reim(z)
     r = abs(z)
