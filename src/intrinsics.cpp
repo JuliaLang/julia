@@ -528,8 +528,10 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
             return builder.CreateLoad(builder.CreateGEP(
                         builder.CreateBitCast(thePtr, jl_ppvalue_llvmt),
                         im1));
-        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety))
-            jl_error("pointerref: invalid pointer type");
+        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
+            emit_error("pointerref: invalid pointer type", ctx);
+            return builder.CreateUnreachable();
+        }
         uint64_t size = ((jl_datatype_t*)ety)->size;
         Value *strct =
             builder.CreateCall(jlallocobj_func,
@@ -556,10 +558,13 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     if(jl_is_typevar(ety))
         jl_error("pointerset: invalid pointer");
     jl_value_t *xty = expr_type(x, ctx);    
-    if (!jl_subtype(xty, ety, 0))
-        jl_error("pointerset: type mismatch in assign");
+    if (!jl_subtype(xty, ety, 0)) {
+        emit_error("pointerset: type mismatch in assign", ctx);
+        return builder.CreateUnreachable();
+    }
     if (!jl_isbits(ety)) {
-        jl_error("pointerset: invalid pointer type"); //ety = (jl_value_t*)jl_any_type;
+        emit_error("pointerset: invalid pointer type", ctx); //ety = (jl_value_t*)jl_any_type;
+        return builder.CreateUnreachable();
     }
     if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type) {
         jl_error("pointerset: invalid index type");
