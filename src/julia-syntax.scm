@@ -378,7 +378,8 @@
 	 ;; just the keyword names
 	 (keynames (map decl-var vars))
 	 ;; 1-element list of function's line number node, or empty if none
-	 (lno  (if (and (pair? (cadr body)) (eq? (caadr body) 'line))
+	 (lno  (if (and (pair? (cdr body))
+			(pair? (cadr body)) (eq? (caadr body) 'line))
 		   (list (cadr body))
 		   '()))
 	 ;; body statements, minus line number node
@@ -601,7 +602,8 @@
 	   (pattern-lambda (function (call name . sig) body)
 			   `(function ,(cadr __) ,(ctor-body body)))
 	   (pattern-lambda (= (call name . sig) body)
-			   `(= ,(cadr __) ,(ctor-body body)))
+			   (let ((b (ctor-body body)))
+			     `(= ,(cadr __) ,b)))
 	   (pattern-lambda (function (call (curly name . p) . sig) body)
 			   `(function ,(cadr __) ,(ctor-body body)))
 	   (pattern-lambda (= (call (curly name . p) . sig) body)

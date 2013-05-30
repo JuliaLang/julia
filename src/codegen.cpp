@@ -2695,10 +2695,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                                     jlpgcstack_var);
             }
 #endif
-            if (retty == T_void)
-                builder.CreateRetVoid();
-            else
-                builder.CreateRet(retval);
+            if (builder.GetInsertBlock()->getTerminator() == NULL) {
+                if (retty == T_void)
+                    builder.CreateRetVoid();
+                else
+                    builder.CreateRet(retval);
+            }
             if (i != stmtslen-1) {
                 BasicBlock *bb =
                     BasicBlock::Create(getGlobalContext(), "ret", ctx.f);

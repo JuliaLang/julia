@@ -267,7 +267,7 @@ function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector
     return SparseMatrixCSC(m, n, colptr, I, V)
 end
 
-## sparse() can take its inputs in unsorted order
+## sparse() can take its inputs in unsorted order (the parent method is now in jlsparse.jl)
 
 sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), int(max(I)), int(max(J)), +)
 
@@ -280,105 +280,6 @@ sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, int(m), int(n), +)
 sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, int(m), int(n), |)
 
 sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), int(m), int(n), combine)
-
-# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
-# Section 2.4: Triplet form
-# http://www.cise.ufl.edu/research/sparse/CSparse/
-function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
-                                V::AbstractVector{Tv},
-                                nrow::Integer, ncol::Integer, combine::Function)
-
-    if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
-
-    # Work array
-    Wj = Array(Ti, max(nrow,ncol)+1)
-
-    # Allocate sparse matrix data structure
-    # Count entries in each row
-    nz = length(I)
-    Rnz = zeros(Ti, nrow+1)
-    Rnz[1] = 1
-    for k=1:nz
-        Rnz[I[k]+1] += 1
-    end
-    Rp = cumsum(Rnz)
-    Ri = Array(Ti, nz)
-    Rx = Array(Tv, nz)
-
-    # Construct row form
-    # place triplet (i,j,x) in column i of R
-    # Use work array for temporary row pointers
-    for i=1:nrow; Wj[i] = Rp[i]; end
-
-    for k=1:nz
-        ind = I[k]
-        p = Wj[ind]
-        Wj[ind] += 1
-        Rx[p] = V[k]
-        Ri[p] = J[k]
-    end
-
-    # Reset work array for use in counting duplicates
-    for j=1:ncol; Wj[j] = 0; end
-
-    # Sum up duplicates and squeeze
-    anz = 0
-    for i=1:nrow
-        p1 = Rp[i]
-        p2 = Rp[i+1] - 1
-        pdest = p1
-
-        for p = p1:p2
-            j = Ri[p]
-            pj = Wj[j]
-            if pj >= p1
-                Rx[pj] = combine (Rx[pj], Rx[p])
-            else
-                Wj[j] = pdest
-                if pdest != p
-                    Ri[pdest] = j
-                    Rx[pdest] = Rx[p]
-                end
-                pdest += 1
-            end
-        end
-
-        Rnz[i] = pdest - p1
-        anz += (pdest - p1)
-    end
-
-    # Transpose from row format to get the CSC format
-    RiT = Array(Ti, anz)
-    RxT = Array(Tv, anz)
-
-    # Reset work array to build the final colptr
-    Wj[1] = 1
-    for i=2:(ncol+1); Wj[i] = 0; end
-    for j = 1:nrow
-        p1 = Rp[j]
-        p2 = p1 + Rnz[j] - 1        
-        for p = p1:p2
-            Wj[Ri[p]+1] += 1
-        end
-    end
-    RpT = cumsum(Wj[1:(ncol+1)])
-
-    # Transpose 
-    for i=1:length(RpT); Wj[i] = RpT[i]; end
-    for j = 1:nrow
-        p1 = Rp[j]
-        p2 = p1 + Rnz[j] - 1
-        for p = p1:p2
-            ind = Ri[p]
-            q = Wj[ind]
-            Wj[ind] += 1
-            RiT[q] = j
-            RxT[q] = Rx[p]
-        end
-    end
-
-    return SparseMatrixCSC(nrow, ncol, RpT, RiT, RxT)
-end
 
 function find(S::SparseMatrixCSC)
     sz = size(S)
@@ -480,69 +381,6 @@ function one{T}(S::SparseMatrixCSC{T})
     m,n = size(S)
     if m != n; error("Multiplicative identity only defined for square matrices!"); end;
     speye(T, m)
-end
-
-## Transpose
-
-# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
-# Section 2.5: Transpose
-# http://www.cise.ufl.edu/research/sparse/CSparse/
-function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    (nT, mT) = size(S)
-    nnzS = nnz(S)
-    colptr_S = S.colptr
-    rowval_S = S.rowval
-    nzval_S = S.nzval
-
-    rowval_T = Array(Ti, nnzS)
-    nzval_T = Array(Tv, nnzS)
-
-    w = zeros(Ti, nT+1)
-    w[1] = 1
-    for i=1:nnzS
-        w[rowval_S[i]+1] += 1
-    end
-    colptr_T = cumsum(w)
-    w = copy(colptr_T)
-
-    for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
-        ind = rowval_S[p]
-        q = w[ind]
-        w[ind] += 1
-        rowval_T[q] = j
-        nzval_T[q] = nzval_S[p]
-    end
-
-    SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
-end
-
-function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    (nT, mT) = size(S)
-    nnzS = nnz(S)
-    colptr_S = S.colptr
-    rowval_S = S.rowval
-    nzval_S = S.nzval
-
-    rowval_T = Array(Ti, nnzS)
-    nzval_T = Array(Tv, nnzS)
-
-    w = zeros(Ti, nT+1)
-    w[1] = 1
-    for i=1:nnzS
-        w[rowval_S[i]+1] += 1
-    end
-    colptr_T = cumsum(w)
-    w = copy(colptr_T)
-
-    for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
-        ind = rowval_S[p]
-        q = w[ind]
-        w[ind] += 1
-        rowval_T[q] = j
-        nzval_T[q] = conj(nzval_S[p])
-    end
-
-    SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
 
 ## Unary arithmetic and boolean operators
@@ -1410,6 +1248,82 @@ function hvcat(rows::(Int...), X::SparseMatrixCSC...)
     vcat(tmp_rows...)
 end
 
+## Structure query functions
+
+function issym(A::SparseMatrixCSC)
+    m, n = size(A)
+    if m != n; return false; end
+    return nnz(A - A.') == 0
+end
+
+function ishermitian(A::SparseMatrixCSC)
+    m, n = size(A)
+    if m != n; return false; end
+    return nnz(A - A') == 0
+end
+
+function istriu(A::SparseMatrixCSC)
+    for col = 1:min(A.n,A.m-1)
+        l1 = A.colptr[col+1]-1
+        for i = 0 : (l1 - A.colptr[col])
+            if A.rowval[l1-i] <= col
+                break
+            end
+            if A.nzval[l1-i] != 0
+                return false
+            end
+        end
+    end
+    return true
+end
+
+function istril(A::SparseMatrixCSC)
+    for col = 2:A.n
+        for i = A.colptr[col] : (A.colptr[col+1]-1)
+            if A.rowval[i] >= col
+                break
+            end
+            if A.nzval[i] != 0
+                return false
+            end
+        end
+    end
+    return true
+end
+
+function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
+    if isa(v, AbstractMatrix)
+        if (size(v,1) != 1 && size(v,2) != 1)
+            error("Input should be nx1 or 1xn")
+        end
+    end
+
+    n = length(v)
+    numnz = nnz(v)
+    colptr = Array(Int, n+1)
+    rowval = Array(Int, numnz)
+    nzval = Array(T, numnz)
+
+    colptr[1] = 1
+
+    z = zero(T)
+
+    ptr = 1
+    for col=1:n
+        x = v[col]
+        if x != z
+            colptr[col+1] = colptr[col] + 1
+            rowval[ptr] = col
+            nzval[ptr] = x
+            ptr += 1
+        else
+            colptr[col+1] = colptr[col]
+        end
+    end
+
+    return SparseMatrixCSC(n, n, colptr, rowval, nzval)
+end
+
 function mmread(filename::ASCIIString, infoonly::Bool)
 #      Reads the contents of the Matrix Market file 'filename'
 #      into a matrix, which will be either sparse or dense,
@@ -1463,36 +1377,86 @@ function expandptr{T<:Integer}(V::Vector{T})
     res
 end
 
-# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
-# Section 2.7: Removing entries from a matrix
-# http://www.cise.ufl.edu/research/sparse/CSparse/
-function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
-    nzorig = nnz(A)
-    nz = 1
-    for j = 1:A.n
-        p = A.colptr[j]                 # record current position
-        A.colptr[j] = nz                # set new position
-        while p < A.colptr[j+1]
-            if f(A.rowval[p], j, A.nzval[p], other)
-                A.nzval[nz] = A.nzval[p]
-                A.rowval[nz] = A.rowval[p]
-                nz += 1
-            end
-            p += 1
+## diag and related using an iterator
+
+type cscdiagit{Tv,Ti}
+    A::SparseMatrixCSC{Tv,Ti}
+    n::Int
+end
+cscdiagit(A::SparseMatrixCSC) = cscdiagit(A,min(size(A)))
+
+length(d::cscdiagit) = d.n
+start(d::cscdiagit) = 1
+done(d::cscdiagit, j) = j > d.n
+function next{Tv,Ti}(d::cscdiagit{Tv,Ti}, j)
+    p = d.A.colptr; i = d.A.rowval;
+    first = p[j]
+    last = p[j+1]-1
+    while first <= last
+        mid = (first + last) >> 1
+        r = i[mid]
+        if r == j
+            return (d.A.nzval[mid], j+1)
+        elseif r > j
+            last = mid - 1
+        else
+            first = mid + 1
         end
     end
-    A.colptr[A.n + 1] = nz
-    nz -= 1
-    if nz < nzorig
-        resize!(A.nzval, nz)
-        resize!(A.rowval, nz)
-    end
-    A
+    zero(eltype(A)), j+1
 end
 
-droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
-dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=zero(Tv), None)
-triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), None)
-triu(A::SparseMatrixCSC) = triu!(copy(A))
-tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), None)
-tril(A::SparseMatrixCSC) = tril!(copy(A))
+function trace(A::SparseMatrixCSC)
+    s = zero(eltype(A))
+    for d in cscdiagit(A)
+        s += d
+    end
+    s
+end
+
+diag(A::SparseMatrixCSC) = [d for d in cscdiagit(A)]
+
+function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
+    if (size(v,1) != 1 && size(v,2) != 1)
+        error("Input should be nx1 or 1xn")
+    end
+
+    n = length(v)
+    numnz = nnz(v)
+    colptr = Array(Ti, n+1)
+    rowval = Array(Ti, numnz)
+    nzval = Array(Tv, numnz)
+
+    if size(v,1) == 1
+        copy!(colptr, 1, v.colptr, 1, n+1)
+        ptr = 1
+        for col = 1:n
+            if colptr[col] != colptr[col+1]
+                rowval[ptr] = col
+                nzval[ptr] = v.nzval[ptr]
+                ptr += 1
+            end
+        end
+    else
+        copy!(rowval, 1, v.rowval, 1, numnz)
+        copy!(nzval, 1, v.nzval, 1, numnz)
+        colptr[1] = 1
+        ptr = 1
+        col = 1
+        while col <= n && ptr <= numnz
+            while rowval[ptr] > col
+                colptr[col+1] = colptr[col]
+                col += 1
+            end
+            colptr[col+1] = colptr[col] + 1
+            ptr += 1
+            col += 1
+        end
+        if col <= n
+            colptr[(col+1):(n+1)] = colptr[col]
+        end
+    end
+
+    return SparseMatrixCSC{Tv,Ti}(n, n, colptr, rowval, nzval)
+end
+

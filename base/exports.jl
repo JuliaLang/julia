@@ -453,6 +453,7 @@ export
 # arrays
     mapslices,
     reducedim,
+    bsxfun,
     broadcast,
     broadcast!,
     broadcast_function,
@@ -632,6 +633,7 @@ export
 # sparse
     dense,
     full,
+    etree,
     issparse,
     sparse,
     sparsevec,
