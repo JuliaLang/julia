@@ -158,7 +158,7 @@ Types
 
 .. function:: realmin(type)
 
-   The smallest in absolute value non-denormal value representable by the given floating-point type
+   The smallest in absolute value non-subnormal value representable by the given floating-point type
 
 .. function:: realmax(type)
 
@@ -1954,9 +1954,9 @@ Numbers
 
    A not-a-number value of type Float32
 
-.. function:: isdenormal(f) -> Bool
+.. function:: issubnormal(f) -> Bool
 
-   Test whether a floating point number is denormal
+   Test whether a floating point number is subnormal
 
 .. function:: isfinite(f) -> Bool
 

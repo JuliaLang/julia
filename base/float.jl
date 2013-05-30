@@ -224,8 +224,8 @@ const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
     inf{T<:FloatingPoint}(x::T) = inf(T)
     nan{T<:FloatingPoint}(x::T) = nan(T)
 
-    isdenormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000))))
-    isdenormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000))))
+    issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000)))) & (x!=0)
+    issubnormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000)))) & (x!=0)
 
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
