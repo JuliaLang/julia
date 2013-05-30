@@ -123,6 +123,9 @@ endif
 endif
 
 ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+ifeq ($(ARCH),mingw32)
+$(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+endif
 ifeq ($(USEGCC),1)
 ifneq ($(ARCH), ppc64)
   SHIPFLAGS += -momit-leaf-frame-pointer
