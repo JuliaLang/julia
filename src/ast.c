@@ -404,8 +404,8 @@ static value_t julia_to_scm(jl_value_t *v)
 // this is used to parse a line of repl input
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
 {
-    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")),
-                          cvalue_static_cstring(str));
+    value_t s = cvalue_static_cstring(str);
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")), s);
     if (e == FL_EOF)
         return jl_nothing;
     
@@ -438,8 +438,8 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
 
 void jl_start_parsing_file(const char *fname)
 {
-    fl_applyn(1, symbol_value(symbol("jl-parse-file")),
-              cvalue_static_cstring(fname));
+    value_t s = cvalue_static_cstring(fname);
+    fl_applyn(1, symbol_value(symbol("jl-parse-file")), s);
 }
 
 void jl_stop_parsing()
@@ -467,9 +467,13 @@ jl_value_t *jl_parse_next()
 
 void jl_load_file_string(const char *text, char *filename)
 {
+    value_t t, f;
+    t = cvalue_static_cstring(text);
+    fl_gc_handle(&t);
+    f = cvalue_static_cstring(filename);
     fl_applyn(2, symbol_value(symbol("jl-parse-string-stream")),
-              cvalue_static_cstring(text),
-              cvalue_static_cstring(filename));
+              t, f);
+    fl_free_gc_handles(1);
     jl_parse_eval_all(filename);
 }
 
