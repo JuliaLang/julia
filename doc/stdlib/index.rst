@@ -5,9 +5,6 @@
  The Julia Standard Library
 ############################
 
-:Release: |version|
-:Date: |today|
-
 *********
 Built-ins
 *********
@@ -32,5 +29,3 @@ Built-in Modules
    collections
    sort
    test
-
-
