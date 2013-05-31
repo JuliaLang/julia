@@ -128,6 +128,12 @@ hash(x::Rational) = isinteger(x) ? hash(x.num) :
 <=(x::Rational, y::Real    ) = x.num <= x.den*y
 <=(x::Real    , y::Rational) = x*y.den <= y.num
 
+rem(x::Rational, y::Rational) = Rational(rem(x.num*y.den, x.den*y.num),
+                                         x.den*y.den)
+
+mod(x::Rational, y::Rational) = Rational(mod(x.num*y.den, x.den*y.num),
+                                         x.den*y.den)
+
 div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
 div(x::Rational, y::Real    ) = div(x.num, x.den*y)
 div(x::Real    , y::Rational) = div(x*y.den, y.num)

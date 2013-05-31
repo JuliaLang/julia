@@ -490,7 +490,8 @@
 ("Iterable Collections","Base","unique","unique(itr)
 
    Returns an array containing only the unique elements of the
-   iterable \"itr\".
+   iterable \"itr\", in the order that the first of each set of
+   equivalent elements originally appears.
 
 "),
 
@@ -547,6 +548,13 @@
 
 "),
 
+("Iterable Collections","Base","sum","sum(f, itr)
+
+   Sum the results of calling function \"f\" on each element of
+   \"itr\".
+
+"),
+
 ("Iterable Collections","Base","prod","prod(itr)
 
    Returns the product of all elements of a collection
@@ -565,13 +573,7 @@
 
 "),
 
-("Iterable Collections","Base","count","count(itr) -> Integer
-
-   Count the number of boolean elements in \"itr\" which are true.
-
-"),
-
-("Iterable Collections","Base","countp","countp(p, itr) -> Integer
+("Iterable Collections","Base","count","count(p, itr) -> Integer
 
    Count the number of elements in \"itr\" for which predicate \"p\"
    is true.

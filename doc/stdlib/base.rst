@@ -158,7 +158,7 @@ Types
 
 .. function:: realmin(type)
 
-   The smallest in absolute value non-denormal value representable by the given floating-point type
+   The smallest in absolute value non-subnormal value representable by the given floating-point type
 
 .. function:: realmax(type)
 
@@ -312,7 +312,7 @@ Iterable Collections
 .. function:: unique(itr)
 
    Returns an array containing only the unique elements of the iterable ``itr``, in
-the order that the first of each set of equivalent elements originally appears.
+   the order that the first of each set of equivalent elements originally appears.
 
 .. function:: reduce(op, v0, itr)
 
@@ -1954,9 +1954,9 @@ Numbers
 
    A not-a-number value of type Float32
 
-.. function:: isdenormal(f) -> Bool
+.. function:: issubnormal(f) -> Bool
 
-   Test whether a floating point number is denormal
+   Test whether a floating point number is subnormal
 
 .. function:: isfinite(f) -> Bool
 
@@ -2819,7 +2819,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    Compute the cross-correlation of two vectors.
 
 Numerical Integration
------------------
+---------------------
 
 Although several external packages are available for numeric integration
 and solution of ordinary differential equations, we also provide

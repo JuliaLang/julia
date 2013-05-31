@@ -146,6 +146,8 @@ morebits(::Type{Float32}) = Float64
 rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
 rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
 
+mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
+
 ## floating point comparisons ##
 
 ==(x::Float32, y::Float32) = eq_float(unbox(Float32,x),unbox(Float32,y))
@@ -224,8 +226,8 @@ const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
     inf{T<:FloatingPoint}(x::T) = inf(T)
     nan{T<:FloatingPoint}(x::T) = nan(T)
 
-    isdenormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000))))
-    isdenormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000))))
+    issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000)))) & (x!=0)
+    issubnormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000)))) & (x!=0)
 
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
