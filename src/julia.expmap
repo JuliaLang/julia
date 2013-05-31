@@ -313,7 +313,7 @@
     jl_wrap_raw_dl_handle;
     jl_write;
     jl_value_ptr;
-    jl_zero_denormals;
+    jl_zero_subnormals;
     julia_free;
     julia_home;
     julia_init;
