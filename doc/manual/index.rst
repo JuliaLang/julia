@@ -5,9 +5,6 @@
  The Julia Manual
 ##################
 
-:Release: |version|
-:Date: |today|
-
 .. toctree::
    :maxdepth: 1
 
