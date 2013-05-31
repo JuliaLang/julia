@@ -451,7 +451,7 @@ void cpuid(int32_t CPUInfo[4], int32_t InfoType)
 
 #endif
 
-DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
+DLLEXPORT uint8_t jl_zero_subnormals(uint8_t isZero)
 {
     uint32_t flags = 0x00000000;
     int32_t info[4];
@@ -483,7 +483,7 @@ DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
 
 #else
 
-DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
+DLLEXPORT uint8_t jl_zero_subnormals(uint8_t isZero)
 {
     return 0;
 }

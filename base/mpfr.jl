@@ -519,7 +519,7 @@ end
 
 function rem(x::BigFloat, y::BigFloat)
     z = BigFloat()
-    ccall((:mpfr_remainder, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+    ccall((:mpfr_fmod, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
 

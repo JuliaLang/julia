@@ -487,9 +487,9 @@ s = IntSet(0,1,10,20,200,300,1000,10000,10002)
 @test_fails first(IntSet())
 @test_fails last(IntSet())
 
-# Ensure denormal flags functions don't segfault
-@test any(ccall("jl_zero_denormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
-@test any(ccall("jl_zero_denormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
+# Ensure subnormal flags functions don't segfault
+@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
+@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
 
 # VersionNumber
 @test VersionNumber(2,3,1) == VersionNumber(int8(2),uint32(3),int32(1)) == v"2.3.1"
