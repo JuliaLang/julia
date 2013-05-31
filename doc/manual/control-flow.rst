@@ -444,27 +444,43 @@ Built-in ``Exception``\ s
 ``Exception``\ s are thrown when an unexpected condition has occurred. The
 built-in ``Exception``\ s listed below all interrupt the normal flow of control.
 
-======================
-``Exception``         
-----------------------  
-``ArgumentError``
-``BoundsError``
-``DivideError``
-``DomainError``
-``EOFError``
-``ErrorException``
-``InexactError``
-``InterruptException``
-``KeyError``
-``LoadError``
-``MemoryError``
-``MethodError``
-``OverflowError``
-``ParseError``
-``SystemError``
-``TypeError``
-``UndefRefError``
-======================
++------------------------+
+| ``Exception``          |
++========================+
+| ``ArgumentError``      |
++------------------------+
+| ``BoundsError``        |
++------------------------+
+| ``DivideError``        |
++------------------------+
+| ``DomainError``        |
++------------------------+
+| ``EOFError``           |
++------------------------+
+| ``ErrorException``     |
++------------------------+
+| ``InexactError``       |
++------------------------+
+| ``InterruptException`` |
++------------------------+
+| ``KeyError``           |
++------------------------+
+| ``LoadError``          |
++------------------------+
+| ``MemoryError``        |
++------------------------+
+| ``MethodError``        |
++------------------------+
+| ``OverflowError``      |
++------------------------+
+| ``ParseError``         |
++------------------------+
+| ``SystemError``        |
++------------------------+
+| ``TypeError``          |
++------------------------+
+| ``UndefRefError``      |
++------------------------+
 
 For example, the ``sqrt`` function throws a ``DomainError()`` if applied to a
 negative real value::
