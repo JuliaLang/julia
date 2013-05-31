@@ -321,7 +321,12 @@ function ^{T<:FloatingPoint}(z::Complex{T}, p::Complex{T})
         complex(x,y)
     elseif z!=0
         if p!=0 && isinteger(p)
-            return power_by_squaring(z, convert(Integer, real(p)))
+            rp = real(p)
+            if rp < 0
+                return power_by_squaring(inv(z), convert(Integer, -rp))
+            else
+                return power_by_squaring(z, convert(Integer, rp))
+            end
         end
         exp(p*log(z))
     elseif p!=0 #0^p
@@ -346,7 +351,12 @@ end
 
 function ^{T<:Complex}(z::T, p::T)
     if isinteger(p)
-        return power_by_squaring(float(z), convert(Integer, real(p)))
+        rp = real(p)
+        if rp < 0
+            return power_by_squaring(inv(float(z)), convert(Integer, -rp))
+        else
+            return power_by_squaring(float(z), convert(Integer, rp))
+        end
     end
     pr, pim = reim(p)
     zr, zi = reim(z)
@@ -401,6 +411,13 @@ end
 
 ^(z::Complex, n::Bool) = n ? z : one(z)
 ^(z::Complex, n::Integer) = z^complex(n)
+
+^{T<:FloatingPoint}(z::Complex{T}, n::Bool) = n ? z : one(z)  # to resolve ambiguity
+^{T<:Integer}(z::Complex{T}, n::Bool) = n ? z : one(z)        # to resolve ambiguity
+
+^{T<:FloatingPoint}(z::Complex{T}, n::Integer) =
+    n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
+^{T<:Integer}(z::Complex{T}, n::Integer) = power_by_squaring(z,n) # DomainError for n<0
 
 function sin(z::Complex)
     zr, zi = reim(z)
