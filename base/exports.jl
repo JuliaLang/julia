@@ -696,6 +696,7 @@ export
     similar,
     setdiff,
     setdiff!,
+    splice!,
     symdiff,
     symdiff!,
     union,
