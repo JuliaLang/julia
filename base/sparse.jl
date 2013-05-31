@@ -501,8 +501,8 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing), (:.^, Nothi
                 colptrS[col+1] = ptrS
             end
 
-            delete!(rowvalS, colptrS[end]:length(rowvalS))
-            delete!(nzvalS, colptrS[end]:length(nzvalS))
+            splice!(rowvalS, colptrS[end]:length(rowvalS))
+            splice!(nzvalS, colptrS[end]:length(nzvalS))
             return SparseMatrixCSC(m, n, colptrS, rowvalS, nzvalS)
         end
 
@@ -946,8 +946,8 @@ function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
             end
         end
         if loc != -1
-            delete!(A.rowval, loc)
-            delete!(A.nzval, loc)
+            splice!(A.rowval, loc)
+            splice!(A.nzval, loc)
             for j = (i1+1):(A.n+1)
                 A.colptr[j] = A.colptr[j] - 1
             end
@@ -1147,8 +1147,8 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, 
         colB += 1
     end
 
-    delete!(rowvalS, colptrS[end]:length(rowvalS))
-    delete!(nzvalS, colptrS[end]:length(nzvalS))
+    splice!(rowvalS, colptrS[end]:length(rowvalS))
+    splice!(nzvalS, colptrS[end]:length(nzvalS))
 
     A.colptr = colptrS
     A.rowval = rowvalS
