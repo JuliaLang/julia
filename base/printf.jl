@@ -60,7 +60,7 @@ function _parse(s::String)
                 end
                 list[i] *= list[j]
             end
-            delete!(list,i+1:j)
+            splice!(list,i+1:j)
         end
         i += 1
     end

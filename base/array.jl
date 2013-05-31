@@ -760,48 +760,87 @@ function insert!{T}(a::Array{T,1}, i::Integer, item)
     a[i] = item
 end
 
-function delete!(a::Vector, i::Integer)
+const _default_splice = []
+
+function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
     n = length(a)
     if !(1 <= i <= n)
         throw(BoundsError())
     end
     v = a[i]
-    if i < div(n,2)
-        for k = i:-1:2
-            a[k] = a[k-1]
+    m = length(ins)
+    if m == 0
+        if i < div(n,2)
+            for k = i:-1:2
+                a[k] = a[k-1]
+            end
+            ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
+        else
+            for k = i:n-1
+                a[k] = a[k+1]
+            end
+            ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
         end
-        ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
+    elseif m == 1
+        a[i] = ins[1]
     else
-        for k = i:n-1
-            a[k] = a[k+1]
+        if i < div(n,2)
+            ccall(:jl_array_grow_beg, Void, (Any, Uint), a, m-1)
+            for k = 1:i-1
+                a[k] = a[k+m-1]
+            end
+        else
+            ccall(:jl_array_grow_end, Void, (Any, Uint), a, m-1)
+            for k = n+m-1:-1:(i+1+(m-1))
+                a[k] = a[k-(m-1)]
+            end
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
+        for k = 1:m
+            a[i+k-1] = ins[k]
+        end
     end
     return v
 end
 
-function delete!{T<:Integer}(a::Vector, r::Range1{T})
+function splice!{T<:Integer}(a::Vector, r::Range1{T}, ins::AbstractArray=_default_splice)
     n = length(a)
     f = first(r)
     l = last(r)
     if !(1 <= f && l <= n)
         throw(BoundsError())
     end
-    if l < f
-        return T[]
-    end
-    v = a[r]
     d = l-f+1
-    if f-1 < n-l
-        for k = l:-1:1+d
-            a[k] = a[k-d]
+    v = a[r]
+    m = length(ins)
+    if m < d
+        delta = d - m
+        if f-1 < n-l
+            for k = l:-1:1+delta
+                a[k] = a[k-delta]
+            end
+            ccall(:jl_array_del_beg, Void, (Any, Uint), a, delta)
+        else
+            for k = f:n-delta
+                a[k] = a[k+delta]
+            end
+            ccall(:jl_array_del_end, Void, (Any, Uint), a, delta)
         end
-        ccall(:jl_array_del_beg, Void, (Any, Uint), a, d)
-    else
-        for k = f:n-d
-            a[k] = a[k+d]
+    elseif m > d
+        delta = m - d
+        if f-1 < n-l
+            ccall(:jl_array_grow_beg, Void, (Any, Uint), a, delta)
+            for k = 1:f-1
+                a[k] = a[k+delta]
+            end
+        else
+            ccall(:jl_array_grow_end, Void, (Any, Uint), a, delta)
+            for k = n+delta:-1:(l+1+delta)
+                a[k] = a[k-delta]
+            end
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, d)
+    end
+    for k = 1:m
+        a[f+k-1] = ins[k]
     end
     return v
 end
@@ -1466,7 +1505,7 @@ function filter!(f::Function, a::Vector)
             insrt += 1
         end
     end
-    delete!(a, insrt:length(a))
+    splice!(a, insrt:length(a))
     return a
 end
 

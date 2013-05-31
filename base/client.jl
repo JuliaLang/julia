@@ -224,7 +224,7 @@ function process_options(args::Array{Any,1})
             startup = false
         elseif args[i] == "-F"
             # load juliarc now before processing any more options
-            try_include(string(ENV["HOME"],"/.juliarc.jl"))
+            try_include(abspath(ENV["HOME"],".juliarc.jl"))
             startup = false
         elseif beginswith(args[i], "--color")
             if args[i] == "--color"
@@ -265,10 +265,8 @@ is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
 function init_load_path()
-    vers="v$(VERSION.major).$(VERSION.minor)"
+    vers = "v$(VERSION.major).$(VERSION.minor)"
     global const LOAD_PATH = ByteString[
-        ".", # TODO: should we really look here?
-        abspath(Pkg.dir()),
         abspath(JULIA_HOME,"..","share","julia","extras"),
         abspath(JULIA_HOME,"..","local","share","julia","site",vers),
         abspath(JULIA_HOME,"..","share","julia","site",vers)
@@ -327,17 +325,12 @@ function _start()
     #atexit(()->flush(STDOUT))
     try
         init_sched()
-        if !any(a->(a=="--worker"), ARGS)
-            init_head_sched()
-        end
-
+        any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
-
         (quiet,repl,startup,color_set) = process_options(ARGS)
+        repl && startup && try_include(abspath(ENV["HOME"],".juliarc.jl"))
 
         if repl
-            startup && try_include(joinpath(ENV["HOME"],".juliarc.jl"))
-
             if !color_set
                 @unix_only global have_color = (beginswith(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
                 @windows_only global have_color = true

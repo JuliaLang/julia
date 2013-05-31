@@ -236,7 +236,7 @@ we can use a *parallel for loop*, which can be written in Julia like
 this::
 
     nheads = @parallel (+) for i=1:200000000
-      randbool()
+      int(randbool())
     end
 
 This construct implements the pattern of assigning iterations to

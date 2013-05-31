@@ -590,3 +590,11 @@
 @test isequal(atan(complex( NaN, Inf)),complex( NaN, 0.0))
 @test isequal(atan(complex( NaN,-Inf)),complex( NaN,-0.0))
 @test isequal(atan(complex( NaN, NaN)),complex( NaN, NaN))
+
+
+# misc.
+
+@test complex(1//2,1//3)^2 === complex(5//36, 1//3)
+@test complex(2,2)^2 === complex(0,8)
+@test_fails complex(2,2)^(-2)
+@test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
