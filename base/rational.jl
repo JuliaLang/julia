@@ -70,6 +70,8 @@ convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
 convert(::Type{Bool}, x::Rational) = (x!=0)  # to resolve ambiguity
 
 convert{T<:Rational}(::Type{T}, x::Rational) = x
+convert{T<:Integer}(::Type{T}, x::Rational) =
+    (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
 convert{T<:Real}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
 
 promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
@@ -171,3 +173,8 @@ end
 ^(x::Number, y::Rational) = x^(y.num/y.den)
 ^{T<:FloatingPoint}(x::T, y::Rational) = x^(convert(T,y.num)/y.den)
 ^{T<:FloatingPoint}(x::Complex{T}, y::Rational) = x^(convert(T,y.num)/y.den)
+
+^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z)  # to resolve ambiguity
+
+^{T<:Rational}(z::Complex{T}, n::Integer) =
+    n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)

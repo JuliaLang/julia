@@ -1990,7 +1990,7 @@ function tuple_elim_pass(ast::Expr)
                 continue
             end
 
-            delete!(body, i)  # remove tuple allocation
+            splice!(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
             vals = cell(nv)
             n_ins = 0

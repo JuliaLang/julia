@@ -6,15 +6,15 @@ function is_file_readable(path)
 end
 
 function find_in_path(name::String)
-    name[1] == '/' && return abspath(name)
-    isfile(name) && return abspath(name)
+    isabspath(name) && return name
+    ispath(name) && return abspath(name)
     base = name
     if endswith(name,".jl")
         base = name[1:end-3]
     else
         name = string(base,".jl")
     end
-    for prefix in LOAD_PATH
+    for prefix in [Pkg.dir(), LOAD_PATH]
         path = joinpath(prefix, name)
         is_file_readable(path) && return abspath(path)
         path = joinpath(prefix, base, "src", name)
