@@ -107,7 +107,7 @@ timesofar("indexing")
 
 ## Dequeue functionality ##
 
-b1 = BitArray()
+b1 = BitArray(0)
 i1 = Bool[]
 for m = 1 : v1
     x = randbool()
@@ -137,7 +137,7 @@ end
 @test length(b1) == 0
 
 
-b1 = BitArray()
+b1 = BitArray(0)
 i1 = Bool[]
 for m = 1 : v1
     x = randbool()
@@ -157,7 +157,7 @@ for m = 1 : v1
 end
 @test length(b1) == 0
 
-b1 = BitArray()
+b1 = BitArray(0)
 i1 = bitunpack(b1)
 for m = 1 : v1
     j = rand(1:m)
