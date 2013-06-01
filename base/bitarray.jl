@@ -6,7 +6,7 @@ macro _div64(l) :($(esc(l)) >>> 6) end
 macro _mod64(l) :($(esc(l)) & 63) end
 macro _msk_end(l) :(@_mskr @_mod64 $(esc(l))) end
 num_bit_chunks(n::Int) = @_div64 (n+63)
-const bitcache_chunks = 64 # this can be changed
+const bitcache_chunks = 1024 # this can be changed
 const bitcache_size = 64 * bitcache_chunks # do not change this
 
 ## BitArray
@@ -49,6 +49,28 @@ size(B::BitArray) = tuple(B.dims...)
 
 size(B::BitVector, d) = (d==1 ? B.len : d>1 ? 1 : error("size: dimension out of range"))
 size{N}(B::BitArray{N}, d) = (d>N ? 1 : B.dims[d])
+
+## UnsafeBitArray ##
+# This type is unsafe in 2 ways:
+#  1) no boundary checking
+#  2) calling functions must keep a reference to the
+#     original BitArray to avoid garbage collection
+#     (e.g. B=UnsafeBitArray(B) is dangerous)
+# It must be used with care!
+immutable UnsafeBitArray <: AbstractVector{Bool}
+    p::Ptr{Uint64}
+    l::Int
+    function UnsafeBitArray(B::BitArray)
+        new(pointer(B.chunks), length(B))
+    end
+end
+
+getindex(uB::UnsafeBitArray, i::Int) = getindex_unchecked(uB.p, i)
+setindex!(uB::UnsafeBitArray, x, i::Int) = setindex_unchecked(uB.p, x, i)
+length(uB::UnsafeBitArray) = uB.l
+
+unsafe(B::BitArray) = UnsafeBitArray(B)
+unsafechunks(B::BitArray) = unsafe(B.chunks)
 
 ## Aux functions ##
 
@@ -133,16 +155,18 @@ similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
 
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
-    Bc = B.chunks
+    Bc = unsafechunks(B)
     if !y
-        for i = 1 : length(B.chunks)
-            Bc[i] = uint64(0)
+        for i = 1:length(Bc)
+            Bc[i] = 0
         end
     else
-        if length(B) == 0
+        lB = length(B)
+        if lB == 0
             return B
         end
-        for i = 1 : length(B.chunks) - 1
+        lBc = length(Bc)
+        for i = 1:lBc-1
             Bc[i] = _msk64
         end
         Bc[end] = @_msk_end length(B)
@@ -163,14 +187,15 @@ function one(x::BitMatrix)
 end
 
 function copy!(dest::BitArray, src::BitArray)
-    destc = dest.chunks; srcc = src.chunks
+    destc = unsafechunks(dest)
+    srcc = unsafechunks(src)
     nc_d = length(destc)
     nc_s = length(srcc)
     nc = min(nc_s, nc_d)
     if nc == 0
         return dest
     end
-    for i = 1 : nc - 1
+    for i = 1:nc-1
         destc[i] = srcc[i]
     end
     if length(src) >= length(dest)
@@ -209,44 +234,71 @@ end
 convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N},B)
 function convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     A = Array(T, size(B))
-    Bc = B.chunks
-    for i = 1:length(A)
-        A[i] = getindex_unchecked(Bc, i)
+    uB = unsafe(B)
+    if isbits(T)
+        uA = UnsafeArray(A)
+        for i = 1:length(A)
+            uA[i] = uB[i]
+        end
+    else
+        for i = 1:length(A)
+            A[i] = uB[i]
+        end
     end
     return A
 end
 
 convert{T,N}(::Type{BitArray}, A::AbstractArray{T,N}) = convert(BitArray{N},A)
-function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
-    B = BitArray(size(A))
-    Bc = B.chunks
-    l = length(B)
-    if l == 0
-        return B
-    end
-    ind = 1
-    for i = 1:length(Bc)-1
+
+macro convert_to_bitarray(Bc, A, l)
+    quote
+        ind = 1
+        for i = 1:length($(esc(Bc)))-1
+            u = uint64(1)
+            c = uint64(0)
+            for j = 1:64
+                if bool($(esc(A))[ind])
+                    c |= u
+                end
+                ind += 1
+                u <<= 1
+            end
+            $(esc(Bc))[i] = c
+        end
         u = uint64(1)
         c = uint64(0)
-        for j = 0:63
-            if bool(A[ind])
+        for j = 0:@_mod64($(esc(l))-1)
+            if bool($(esc(A))[ind])
                 c |= u
             end
             ind += 1
             u <<= 1
         end
-        Bc[i] = c
+        $(esc(Bc))[end] = c
     end
-    u = uint64(1)
-    c = uint64(0)
-    for j = 0:@_mod64(l-1)
-        if bool(A[ind])
-            c |= u
-        end
-        ind += 1
-        u <<= 1
+end
+
+function convert_to_bitarray_frombits(Bc::UnsafeArray{Uint64}, A::Array, l::Int)
+    uA = unsafe(A)
+    @convert_to_bitarray(Bc, uA, l)
+end
+
+function convert_to_bitarray_fromnonbits(Bc::UnsafeArray{Uint64}, A::Array, l::Int)
+    @convert_to_bitarray(Bc, A, l)
+end
+
+function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
+    B = BitArray(size(A))
+    l = length(B)
+    if l == 0
+        return B
     end
-    Bc[end] = c
+    Bc = unsafechunks(B)
+    if isa(A, Array) && isbits(T)
+        convert_to_bitarray_frombits(Bc, A, l)
+    else
+        convert_to_bitarray_fromnonbits(Bc, A, l)
+    end
     return B
 end
 
@@ -276,8 +328,8 @@ function bitarray_rand_fill!(B::BitArray)
     if length(B) == 0
         return B
     end
-    Bc = B.chunks
-    for i = 1 : length(Bc) - 1
+    Bc = unsafechunks(B)
+    for i = 1:length(Bc)-1
         Bc[i] = rand(Uint64)
     end
     msk = @_msk_end length(B)
@@ -287,9 +339,11 @@ end
 
 ## Indexing: getindex ##
 
-function getindex_unchecked(Bc::Vector{Uint64}, i::Int)
+function getindex_unchecked(pBc::Ptr{Uint64}, i::Int)
     i1, i2 = get_chunks_id(i)
-    return (Bc[i1] & (uint64(1)<<i2)) != 0
+    u = uint64(1)
+    # faster (Bc[i1] & (uint64(1) << i2) != 0
+    return (unsafe_load(pBc, i1) & (uint64(1) << i2)) != 0
 end
 
 function getindex(B::BitArray, i::Int)
@@ -297,13 +351,13 @@ function getindex(B::BitArray, i::Int)
         throw(BoundsError())
     end
     i1, i2 = get_chunks_id(i)
-    return (B.chunks[i1] & (uint64(1)<<i2)) != 0
+    return (unsafe_load(pointer(B.chunks), i1) & (uint64(1)<<i2)) != 0
 end
 
 getindex(B::BitArray, i::Real) = getindex(B, to_index(i))
 
 # 0d bitarray
-getindex(B::BitArray{0}) = getindex_unchecked(B.chunks, 1)
+getindex(B::BitArray{0}) = getindex_unchecked(pointer(B.chunks), 1)
 
 getindex(B::BitArray, i0::Real, i1::Real) = B[to_index(i0) + size(B,1)*(to_index(i1)-1)]
 getindex(B::BitArray, i0::Real, i1::Real, i2::Real) =
@@ -395,8 +449,8 @@ end
 function getindex{T<:Real}(B::BitArray, I::AbstractVector{T})
     X = BitArray(length(I))
     lB = length(B)
-    Xc = X.chunks
-    Bc = B.chunks
+    uX = UnsafeBitArray(X) # this is faster than unsafe(X)
+    uB = unsafe(B)
     ind = 1
     for i in I
         # faster X[ind] = B[i]
@@ -404,7 +458,7 @@ function getindex{T<:Real}(B::BitArray, I::AbstractVector{T})
         if i < 1 || i > lB
             throw(BoundsError())
         end
-        setindex_unchecked(Xc, getindex_unchecked(Bc, i), ind)
+        uX[ind] = uB[i]
         ind += 1
     end
     return X
@@ -415,16 +469,15 @@ let getindex_cache = nothing
     function getindex(B::BitArray, I::Union(Real,AbstractVector)...)
         I = indices(I)
         X = BitArray(index_shape(I...))
-        Xc = X.chunks
+        uX = unsafe(X)
 
         if is(getindex_cache,nothing)
             getindex_cache = Dict()
         end
         gen_cartesian_map(getindex_cache, ivars -> quote
-                #faster X[storeind] = B[$(ivars...)]
-                setindex_unchecked(Xc, B[$(ivars...)], ind)
+                uX[ind] = B[$(ivars...)]
                 ind += 1
-            end, I, (:B, :Xc, :ind), B, Xc, 1)
+            end, I, (:B, :uX, :ind), B, uX, 1)
         return X
     end
 end
@@ -438,13 +491,12 @@ function getindex_bool_1d(B::BitArray, I::AbstractArray{Bool})
     if lI != length(B)
         throw(BoundsError())
     end
-    Xc = X.chunks
-    Bc = B.chunks
+    uX = UnsafeBitArray(X) # this is faster than unsafe(X)
+    uB = unsafe(B)
     ind = 1
     for i = 1:length(I)
         if I[i]
-            # faster X[ind] = B[i]
-            setindex_unchecked(Xc, getindex_unchecked(Bc, i), ind)
+            uX[ind] = uB[i]
             ind += 1
         end
     end
@@ -458,21 +510,23 @@ getindex(B::BitArray, I::AbstractArray{Bool}) = getindex_bool_1d(B, I)
 
 ## Indexing: setindex! ##
 
-function setindex_unchecked(Bc::Array{Uint64}, x::Bool, i::Int)
+function setindex_unchecked(pBc::Ptr{Uint64}, x::Bool, i::Int)
     i1, i2 = get_chunks_id(i)
     u = uint64(1) << i2
+    c = unsafe_load(pBc, i1)
     if x
-        Bc[i1] |= u
+        c |= u
     else
-        Bc[i1] &= ~u
+        c &= ~u
     end
+    unsafe_store!(pBc, c, i1)
 end
 
 function setindex!(B::BitArray, x::Bool, i::Int)
     if i < 1 || i > length(B)
         throw(BoundsError())
     end
-    setindex_unchecked(B.chunks, x, i)
+    setindex_unchecked(pointer(B.chunks), x, i)
     return B
 end
 
@@ -661,11 +715,11 @@ function setindex_bool_scalar_1d(A::BitArray, x, I::AbstractArray{Bool})
     if length(I) > length(A)
         throw(BoundsError())
     end
-    Ac = A.chunks
+    x = bool(x)
+    uA = unsafe(A)
     for i = 1:length(I)
         if I[i]
-            # faster A[i] = x
-            setindex_unchecked(Ac, convert(Bool, x), i)
+            uA[i] = x
         end
     end
     A
@@ -675,12 +729,11 @@ function setindex_bool_vector_1d(A::BitArray, X::AbstractArray, I::AbstractArray
     if length(I) > length(A)
         throw(BoundsError())
     end
-    Ac = A.chunks
+    uA = unsafe(A)
     c = 1
     for i = 1:length(I)
         if I[i]
-            # faster A[i] = X[c]
-            setindex_unchecked(Ac, convert(Bool, X[c]), i)
+            uA[i] = bool(X[c])
             c += 1
         end
     end
@@ -948,11 +1001,32 @@ end
 
 function (-)(B::BitArray)
     A = zeros(Int, size(B))
-    Bc = B.chunks
-    for i = 1:length(B)
-        if getindex_unchecked(Bc, i)
-            A[i] = -1
+    l = length(B)
+    if l == 0
+        return A
+    end
+    Bc = unsafechunks(B)
+    uA = unsafe(A)
+    ind = 1
+    for i = 1:length(Bc)-1
+        u = uint64(1)
+        c = Bc[i]
+        for j = 1:64
+            if c & u != 0
+                uA[ind] = -1
+            end
+            ind += 1
+            u <<= 1
         end
+    end
+    u = uint64(1)
+    c = Bc[end]
+    for j = 0:@_mod64(l-1)
+        if c & u != 0
+            uA[ind] = -1
+        end
+        ind += 1
+        u <<= 1
     end
     return A
 end
@@ -960,26 +1034,27 @@ sign(B::BitArray) = copy(B)
 
 function (~)(B::BitArray)
     C = similar(B)
-    Bc = B.chunks
-    if !isempty(Bc)
-        Cc = C.chunks
-        for i = 1:length(Bc)-1
-            Cc[i] = ~Bc[i]
-        end
-        msk = @_msk_end length(B)
-        Cc[end] = msk & (~Bc[end])
+    if isempty(B)
+        return C
     end
+    Bc = unsafechunks(B)
+    Cc = unsafechunks(C)
+    for i = 1:length(Bc)-1
+        Cc[i] = ~Bc[i]
+    end
+    msk = @_msk_end length(B)
+    Cc[end] = msk & ~Bc[end]
     return C
 end
 
 function flipbits!(B::BitArray)
-    Bc = B.chunks
+    Bc = unsafechunks(B)
     if !isempty(Bc)
-        for i = 1:length(B.chunks) - 1
+        for i = 1:length(Bc)-1
             Bc[i] = ~Bc[i]
         end
         msk = @_msk_end length(B)
-        Bc[end] = msk & (~Bc[end])
+        Bc[end] = msk & ~Bc[end]
     end
     return B
 end
@@ -1072,13 +1147,25 @@ function mod(x::Number, B::BitArray)
     reshape(pt[ y for i = 1:length(B) ], size(B))
 end
 
-for f in (:div, :mod)
+for (f,uf) in ((:div,:unsafe_div),
+               (:mod,:unsafe_mod))
     @eval begin
-        function ($f)(B::BitArray, x::Number)
-            F = Array(promote_array_type(typeof(x), Bool), size(B))
-            for i = 1:length(F)
-                F[i] = ($f)(B[i], x)
+        function ($uf)(uF::UnsafeArray, uB::UnsafeBitArray, x::Number)
+            for i = 1:length(uF)
+                uF[i] = ($f)(uB[i], x)
             end
+        end
+        function ($uf)(F::Array, uB::UnsafeBitArray, x::Number)
+            for i = 1:length(F)
+                F[i] = ($f)(uB[i], x)
+            end
+        end
+        function ($f)(B::BitArray, x::Number)
+            T = promote_array_type(typeof(x), Bool)
+            F = Array(T, size(B))
+            uB = unsafe(B)
+            uF = isbits(T) ? unsafe(F) : F
+            ($uf)(uF, uB, x)
             return F
         end
     end
@@ -1103,10 +1190,10 @@ for f in (:&, :|, :$)
     @eval begin
         function ($f)(A::BitArray, B::BitArray)
             F = BitArray(promote_shape(size(A),size(B))...)
-            Fc = F.chunks
-            Ac = A.chunks
-            Bc = B.chunks
+            Ac = unsafechunks(A)
+            Bc = unsafechunks(B)
             if !isempty(Ac) && !isempty(Bc)
+                Fc = unsafechunks(F)
                 for i = 1:length(Fc) - 1
                     Fc[i] = ($f)(Ac[i], Bc[i])
                 end
@@ -1124,10 +1211,10 @@ end
 
 function (.^)(A::BitArray, B::BitArray)
     F = BitArray(promote_shape(size(A),size(B))...)
-    Fc = F.chunks
-    Ac = A.chunks
-    Bc = B.chunks
+    Ac = unsafechunks(A)
+    Bc = unsafechunks(B)
     if !isempty(Ac) && !isempty(Bc)
+        Fc = unsafechunks(F)
         for i = 1:length(Fc) - 1
             Fc[i] = Ac[i] | ~Bc[i]
         end
@@ -1158,6 +1245,29 @@ function (.^){T<:Integer}(B::BitArray, x::T)
         return copy(B)
     end
 end
+
+macro unsafe_pow(F, uB, u, z, uerr, zerr)
+    quote
+        for i = 1:length($(esc(uB)))
+            if $(esc(uB))[i]
+                if uerr == nothing
+                    $(esc(F))[i] = $(esc(u))
+                else
+                    throw(uerr)
+                end
+            else
+                if zerr == nothing
+                    $(esc(F))[i] = $(esc(z))
+                else
+                    throw(zerr)
+                end
+            end
+        end
+    end
+end
+unsafe_pow(uF::UnsafeArray, uB::UnsafeBitArray, u, z, uerr, zerr) = @unsafe_pow(uF, uB, u, z, uerr, zerr)
+unsafe_pow(F::Array, uB::UnsafeBitArray, u, z, uerr, zerr) = @unsafe_pow(F, uB, u, z, uerr, zerr)
+
 function (.^){T<:Number}(B::BitArray, x::T)
     if x == 0
         return ones(typeof(true ^ x), size(B))
@@ -1179,56 +1289,73 @@ function (.^){T<:Number}(B::BitArray, x::T)
             uerr = err
         end
         if zerr == nothing && uerr == nothing
-            t = promote_type(typeof(z), typeof(u))
+            S = promote_type(typeof(z), typeof(u))
         elseif zerr == nothing
-            t = typeof(z)
+            S = typeof(z)
         else
-            t = typeof(u)
+            S = typeof(u)
         end
-        F = Array(t, size(B))
-        for i = 1:length(B)
-            if B[i]
-                if uerr == nothing
-                    F[i] = u
-                else
-                    throw(uerr)
-                end
-            else
-                if zerr == nothing
-                    F[i] = z
-                else
-                    throw(zerr)
-                end
-            end
-        end
+        F = Array(S, size(B))
+        uB = unsafe(B)
+        uF = isbits(F) ? unsafe(F) : F
+        unsafe_pow(uF, uB, u, z, uerr, zerr)
         return F
     end
 end
 
-function bitcache_pow{T}(A::BitArray, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
-    left = l - ind + 1
-    for j = 1:min(bitcache_size, left)
-        C[j] = bool(A[ind] .^ B[ind])
+function dumpbitcache(Bc::UnsafeArray{Uint64}, C::UnsafeArray{Bool}, ind::Int, nc::Int)
+    cind = 1
+    for i = 1:nc
+        u = uint64(1)
+        c = uint64(0)
+        for j = 1:64
+            if C[cind]
+                c |= u
+            end
+            cind += 1
+            u <<= 1
+        end
+        Bc[ind] = c
         ind += 1
     end
-    C[left+1:bitcache_size] = false
     return ind
 end
+
+# note: purposedly unhygenic macro: exp is an expression which
+#       depends on "ind" and yields a Bool
+macro bitcache_body(exp, l, ind, C)
+    quote
+        left = $(esc(l)) - $(esc(ind)) + 1
+        for j = 1:min(bitcache_size, left)
+            $(esc(C))[j] = $exp
+            ind += 1
+        end
+        C[left+1:bitcache_size] = false
+        return ind
+    end
+end
+
+function bitcache_pow{T}(A::UnsafeBitArray, B::Array{T}, l::Int, ind::Int, C::UnsafeArray{Bool})
+    @bitcache_body(bool(A[ind] .^ B[ind]), l, ind, C)
+end
+
 function (.^){T<:Integer}(A::BitArray, B::Array{T})
     F = BitArray(promote_shape(size(A),size(B)))
-    Fc = F.chunks
     l = length(F)
     if l == 0
         return F
     end
     C = Array(Bool, bitcache_size)
-    ind = 1
-    cind = 1
-    nFc = num_bit_chunks(l)
+    uC = unsafe(C)
+    uA = unsafe(A)
+    Fc = unsafechunks(F)
+    lFc = length(Fc)
+    indr = 1
+    indw = 1
     for i = 1:div(l + bitcache_size - 1, bitcache_size)
-        ind = bitcache_pow(A, B, l, ind, C)
-        dumpbitcache(Fc, cind, C)
-        cind += bitcache_chunks
+        indr = bitcache_pow(uA, B, l, indr, uC)
+        nc = min(bitcache_chunks, lFc - indw + 1)
+        indw = dumpbitcache(Fc, uC, indw, nc)
     end
     return F
 end
@@ -1254,62 +1381,50 @@ end
 
 ## element-wise comparison operators returning BitArray{Bool} ##
 
-function dumpbitcache(Bc::Vector{Uint64}, bind::Int, C::Vector{Bool})
-    ind = 1
-    nc = min(@_div64(length(C)), length(Bc)-bind+1)
-    for i = 1:nc
-        u = uint64(1)
-        c = uint64(0)
-        for j = 1:64
-            if C[ind]
-                c |= u
-            end
-            ind += 1
-            u <<= 1
+for (cachef, scalarf) in ((:bitcache_eq , :(==)),
+                          (:bitcache_lt , :<   ),
+                          (:bitcache_neq, :!=  ),
+                          (:bitcache_le , :<=  ))
+    for (sigA, sigB, expA, expB) in ((:(UnsafeArray{T})  , :(UnsafeArray{S})  , :(A[ind]), :(B[ind])),
+                                     (:(UnsafeArray{T})  , :(AbstractArray{S}), :(A[ind]), :(B[ind])),
+                                     (:(AbstractArray{T}), :(UnsafeArray{S})  , :(A[ind]), :(B[ind])),
+                                     (:(AbstractArray{T}), :(AbstractArray{S}), :(A[ind]), :(B[ind])),
+                                     (:(UnsafeArray{T})  , :S                 , :(A[ind]), :B       ),
+                                     (:T                 , :(UnsafeArray{S})  , :A       , :(B[ind])),
+                                     (:(AbstractArray{T}), :S                 , :(A[ind]), :B       ),
+                                     (:T                 , :(AbstractArray{S}), :A       , :(B[ind])))
+        @eval function ($cachef){T,S}(A::$sigA, B::$sigB, l::Int, ind::Int, C::UnsafeArray{Bool})
+            @bitcache_body(($scalarf)($expA, $expB), l, ind, C)
         end
-        Bc[bind] = c
-        bind += 1
     end
 end
 
-for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
-                             (:.< , :bitcache_lt , :<   ),
-                             (:.!=, :bitcache_neq, :!=  ),
-                             (:.<=, :bitcache_le , :<=  ))
-    for (sigA, sigB, expA, expB, shape) in ((:AbstractArray, :AbstractArray,
-                                             :(A[ind]), :(B[ind]),
-                                             :(promote_shape(size(A), size(B)))),
-                                            (:Any, :AbstractArray,
-                                             :A, :(B[ind]),
-                                             :(size(B))),
-                                            (:AbstractArray, :Any,
-                                             :(A[ind]), :B,
-                                             :(size(A))))
+for (f, cachef) in ((:.==, :bitcache_eq ),
+                    (:.<,  :bitcache_lt ),
+                    (:.!=, :bitcache_neq),
+                    (:.<=, :bitcache_le ))
+    for (sigA, sigB, shape) in ((:(AbstractArray{T}), :(AbstractArray{S}), :(promote_shape(size(A), size(B)))),
+                                (:T,                  :(AbstractArray{S}), :(size(B))),
+                                (:(AbstractArray{T}), :S,                  :(size(A))))
         @eval begin
-            function ($cachef)(A::$sigA, B::$sigB, l::Int, ind::Int, C::Vector{Bool})
-                left = l - ind + 1
-                for j = 1:min(bitcache_size, left)
-                    C[j] = ($scalarf)($expA, $expB)
-                    ind += 1
-                end
-                C[left+1:bitcache_size] = false
-                return ind
-            end
-            function ($f)(A::$sigA, B::$sigB)
+            function ($f){T,S}(A::$sigA, B::$sigB)
                 F = BitArray($shape)
-                Fc = F.chunks
                 l = length(F)
                 if l == 0
                     return F
                 end
                 C = Array(Bool, bitcache_size)
-                ind = 1
-                cind = 1
-                nFc = num_bit_chunks(l)
+                uC = unsafe(C)
+                Fc = unsafechunks(F)
+                lFc = length(Fc)
+                uA = isa(A, Array) && isbits(T) ? unsafe(A) : A
+                uB = isa(B, Array) && isbits(S) ? unsafe(B) : B
+                indr = 1
+                indw = 1
                 for i = 1:div(l + bitcache_size - 1, bitcache_size)
-                    ind = ($cachef)(A, B, l, ind, C)
-                    dumpbitcache(Fc, cind, C)
-                    cind += bitcache_chunks
+                    indr = ($cachef)(uA, uB, l, indr, uC)
+                    nc = min(bitcache_chunks, lFc - indw + 1)
+                    indw = dumpbitcache(Fc, uC, indw, nc)
                 end
                 return F
             end
@@ -1321,26 +1436,14 @@ function (==)(A::BitArray, B::BitArray)
     if size(A) != size(B)
         return false
     end
-    Ac = A.chunks; Bc = B.chunks
-    for i = 1:length(A.chunks)
-        if Ac[i] != Bc[i]
-            return false
-        end
-    end
-    return true
+    return A.chunks == B.chunks
 end
 
 function (!=)(A::BitArray, B::BitArray)
     if size(A) != size(B)
         return true
     end
-    Ac = A.chunks; Bc = B.chunks
-    for i = 1:length(A.chunks)
-        if Ac[i] != Bc[i]
-            return true
-        end
-    end
-    return false
+    return A.chunks != B.chunks
 end
 
 # TODO: avoid bitpack/bitunpack
@@ -1542,49 +1645,61 @@ end
 
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
-    Bc = B.chunks
+    Bc = unsafechunks(B)
+    if start <= 0
+        throw(BoundsError())
+    end
+    if start > length(B)
+        return 0
+    end
 
     chunk_start = @_div64(start-1)+1
-    within_chunk_start = @_mod64(start-1)
-    mask = _msk64 << within_chunk_start
+    mask = _msk64 << @_mod64(start-1)
 
-    if Bc[chunk_start] & mask != 0
-        return (chunk_start-1) << 6 + trailing_zeros(Bc[chunk_start] & mask) + 1
+    c = Bc[chunk_start]
+    if c & mask != 0
+        return (chunk_start-1) << 6 + trailing_zeros(c & mask) + 1
     end
 
     for i = chunk_start+1:length(Bc)
-        if Bc[i] != 0
-            return (i-1) << 6 + trailing_zeros(Bc[i]) + 1
+        c = Bc[i]
+        if c != 0
+            return (i-1) << 6 + trailing_zeros(c) + 1
         end
     end
     return 0
 end
 #findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
-# aux function: same as findfirst(~B), but performed without temporaries
+# aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
-    Bc = B.chunks
+    Bc = unsafechunks(B)
     l = length(Bc)
-    if l == 0
+    if start <= 0
+        throw(BoundsError())
+    end
+    if start > length(B)
         return 0
     end
 
     chunk_start = @_div64(start-1)+1
-    within_chunk_start = @_mod64(start-1)
-    mask = ~(_msk64 << within_chunk_start)
+    mask = ~(_msk64 << @_mod64(start-1))
 
-    if Bc[chunk_start] | mask != _msk64
-        return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
+    c = Bc[chunk_start] | mask
+    if c != _msk64
+        return (chunk_start-1) << 6 + trailing_ones(c) + 1
     end
 
     for i = chunk_start+1:l-1
-        if Bc[i] != _msk64
-            return (i-1) << 6 + trailing_ones(Bc[i]) + 1
+        c = Bc[i]
+        if c != _msk64
+            return (i-1) << 6 + trailing_ones(c) + 1
         end
     end
-    ce = Bc[end]
-    if ce != @_msk_end length(B)
-        return (l-1) << 6 + trailing_ones(ce) + 1
+
+    c = Bc[l]
+    if c != @_msk_end length(B)
+        return (l-1) << 6 + trailing_ones(c) + 1
     end
     return 0
 end
@@ -1619,14 +1734,40 @@ end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
 function find(B::BitArray)
+    l = length(B)
     nnzB = nnz(B)
     I = Array(Int, nnzB)
-    count = 1
-    for i = 1:length(B)
-        if B[i]
-            I[count] = i
-            count += 1
+    if nnzB == 0
+        return I
+    end
+    uI = unsafe(I)
+    # note: using unsafechunks(B) degrades performance by ~10x
+    #       here (for mysterious reasons)
+    #Bc = unsafechunks(B)
+    Bc = UnsafeArray(B.chunks)
+    Bcount = 1
+    Icount = 1
+    for i = 1:length(Bc)-1
+        u = uint64(1)
+        c = Bc[i]
+        for j = 1:64
+            if c & u != 0
+                uI[Icount] = Bcount
+                Icount += 1
+            end
+            Bcount += 1
+            u <<= 1
         end
+    end
+    u = uint64(1)
+    c = Bc[end]
+    for j = 0:@_mod64(l-1)
+        if c & u != 0
+            uI[Icount] = Bcount
+            Icount += 1
+        end
+        Bcount += 1
+        u <<= 1
     end
     return I
 end
@@ -1696,13 +1837,18 @@ function all(B::BitArray)
     if length(B) == 0
         return true
     end
+    # note: using unsafechunks or even
+    #       unsafe_load(pBc, i) degrades
+    #       performance a bit
     Bc = B.chunks
+    pBc = pointer(Bc)
     for i = 1:length(Bc)-1
-        if Bc[i] != _msk64
+        if unsafe_load(pBc) != _msk64
             return false
         end
+        pBc += sizeof(Uint64)
     end
-    if Bc[end] != @_msk_end length(B)
+    if unsafe_load(pBc) != @_msk_end length(B)
         return false
     end
     return true
@@ -1712,7 +1858,7 @@ function any(B::BitArray)
     if length(B) == 0
         return false
     end
-    Bc = B.chunks
+    Bc = unsafechunks(B)
     for i = 1:length(Bc)
         if Bc[i] != 0
             return true

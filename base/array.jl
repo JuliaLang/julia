@@ -33,6 +33,39 @@ strides{T}(a::Array{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
 
 isassigned(a::Array, i::Int...) = isdefined(a, i...)
 
+## UnsafeArrays ##
+
+# This type is unsafe in 3 ways:
+#  1) it can only be used on bitstype Arrays
+#     (i.e. Array{T} such that isbits(T)=true),
+#     but no check is performed
+#  2) no boundary checking
+#  3) calling functions must keep a reference to the
+#     original Array to avoid garbage collection
+#     (e.g. A=UnsafeArray(A) is dangerous)
+# It must be used with care!
+immutable UnsafeArray{T} <: AbstractVector{T}
+    p::Ptr{T}
+    l::Int
+    function UnsafeArray(A::Array{T})
+        new(pointer(A), length(A))
+    end
+end
+
+UnsafeArray{T}(A::Array{T}) = UnsafeArray{T}(A)
+
+getindex(uA::UnsafeArray, i::Int) = unsafe_load(uA.p, i)
+setindex!{T}(uA::UnsafeArray{T}, x, i::Int) = unsafe_store!(uA.p, x, i)
+setindex!{T}(uA::UnsafeArray{T}, x, r::Range1) = for i in r unsafe_store!(uA.p, x, i); end
+length(uA::UnsafeArray) = uA.l
+endof(uA::UnsafeArray) = uA.l
+
+start(uA::UnsafeArray) = 1
+next(uA::UnsafeArray, ind::Int) = (uA[ind], ind+1)
+done(uA::UnsafeArray, ind::Int) = ind > length(uA)
+
+unsafe{T}(A::Array{T}) = UnsafeArray(A)
+
 ## copy ##
 
 function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, N)
