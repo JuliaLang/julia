@@ -180,8 +180,8 @@ b1 = randbool(v1)
 i1 = bitunpack(b1)
 for m = v1 : -1 : 1
     j = rand(1:m)
-    delete!(b1, j)
-    delete!(i1, j)
+    splice!(b1, j)
+    splice!(i1, j)
     @test isequal(bitunpack(b1), i1)
 end
 @test length(b1) == 0
@@ -189,8 +189,8 @@ end
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
-    delete!(b1, j)
-    delete!(i1, j)
+    splice!(b1, j)
+    splice!(i1, j)
     @test isequal(bitunpack(b1), i1)
 end
 
@@ -200,8 +200,8 @@ for m1 = 1 : v1
     for m2 = m1 : v1
         b2 = copy(b1)
         i2 = copy(i1)
-        delete!(b2, m1:m2)
-        delete!(i2, m1:m2)
+        splice!(b2, m1:m2)
+        splice!(i2, m1:m2)
         @test isequal(bitunpack(b2), i2)
     end
 end

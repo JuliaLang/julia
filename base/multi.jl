@@ -726,7 +726,7 @@ function deliver_result(sock::(), msg, oid, value)
             job = j[2]
             job.argument = value
             enq_work(job)
-            delete!(jobs, i)
+            splice!(jobs, i)
             break
         end
     end

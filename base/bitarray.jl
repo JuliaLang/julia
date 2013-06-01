@@ -754,7 +754,7 @@ function resize!(B::BitVector, n::Integer)
     end
     n0 = length(B)
     if n <= n0
-        delete!(B, n+1:n0)
+        splice!(B, n+1:n0)
         return B
     end
     k0 = length(B.chunks)
@@ -855,7 +855,7 @@ function insert!(B::BitVector, i::Integer, item)
     B[i] = item
 end
 
-function delete!(B::BitVector, i::Integer)
+function splice!(B::BitVector, i::Integer)
     n = length(B)
     if !(1 <= i <= n)
         throw(BoundsError())
@@ -890,7 +890,7 @@ function delete!(B::BitVector, i::Integer)
     return v
 end
 
-function delete!(B::BitVector, r::Range1{Int})
+function splice!(B::BitVector, r::Range1{Int})
     n = length(B)
     i_f = first(r)
     i_l = last(r)
