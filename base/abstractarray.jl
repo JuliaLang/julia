@@ -317,6 +317,9 @@ end
 ## specifies what it wants to do before and after each loop.
 ## If genbodies creates an array it must of length N.
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
+    if ranges === ()
+        ranges = (1,)
+    end
     N = length(ranges)
     if !haskey(cache,N)
         if isdefined(genbodies,:code)
