@@ -36,7 +36,9 @@ julia-debug julia-release:
 	@$(MAKE) $(QUIET_MAKE) -C base
 	@$(MAKE) $(QUIET_MAKE) -C ui $@
 ifneq ($(OS),WINNT)
+ifndef JULIA_VAGRANT_BUILD
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
+endif
 endif
 
 $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
