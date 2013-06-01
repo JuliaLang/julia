@@ -732,10 +732,12 @@ function push!(B::BitVector, item)
     # convert first so we don't grow the bitarray if the assignment won't work
     item = convert(Bool, item)
 
+    Bc = B.chunks
+
     l = @_mod64 length(B)
     if l == 0
-        ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, 1)
-        B.chunks[end] = uint64(0)
+        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
+        Bc[end] = uint64(0)
     end
     B.len += 1
     if item
@@ -750,14 +752,15 @@ function append!(B::BitVector, items::BitVector)
     if n1 == 0
         return B
     end
-    k0 = length(B.chunks)
+    Bc = B.chunks
+    k0 = length(Bc)
     k1 = num_bit_chunks(n0 + n1)
     if k1 > k0
-        ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, k1 - k0)
-        B.chunks[end] = uint64(0)
+        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, k1 - k0)
+        Bc[end] = uint64(0)
     end
     B.len += n1
-    copy_chunks(B.chunks, n0+1, items.chunks, 1, n1)
+    copy_chunks(Bc, n0+1, items.chunks, 1, n1)
     return B
 end
 
@@ -773,11 +776,12 @@ function resize!(B::BitVector, n::Integer)
         splice!(B, n+1:n0)
         return B
     end
-    k0 = length(B.chunks)
+    Bc = B.chunks
+    k0 = length(Bc)
     k1 = num_bit_chunks(int(n))
     if k1 > k0
-        ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, k1 - k0)
-        B.chunks[end] = uint64(0)
+        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, k1 - k0)
+        Bc[end] = uint64(0)
     end
     B.len = n
     return B
@@ -802,20 +806,22 @@ end
 function unshift!(B::BitVector, item)
     item = convert(Bool, item)
 
+    Bc = B.chunks
+
     l = @_mod64 length(B)
     if l == 0
-        ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, 1)
-        B.chunks[end] = uint64(0)
+        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
+        Bc[end] = uint64(0)
     end
     B.len += 1
     if B.len == 1
-        B.chunks[1] = item
+        Bc[1] = item
         return B
     end
-    for i = length(B.chunks) : -1 : 2
-        B.chunks[i] = (B.chunks[i] << 1) | (B.chunks[i-1] >>> 63) 
+    for i = length(Bc) : -1 : 2
+        Bc[i] = (Bc[i] << 1) | (Bc[i-1] >>> 63)
     end
-    B.chunks[1] = uint64(item) | (B.chunks[1] << 1)
+    Bc[1] = uint64(item) | (Bc[1] << 1)
     return B
 end
 
@@ -825,15 +831,17 @@ function shift!(B::BitVector)
     end
     item = B[1]
 
-    for i = 1 : length(B.chunks) - 1
-        B.chunks[i] = (B.chunks[i] >>> 1) | (B.chunks[i+1] << 63) 
+    Bc = B.chunks
+
+    for i = 1 : length(Bc) - 1
+        Bc[i] = (Bc[i] >>> 1) | (Bc[i+1] << 63)
     end
 
     l = @_mod64 length(B)
     if l == 1
-        ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, 1)
+        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, 1)
     else
-        B.chunks[end] >>>= 1
+        Bc[end] >>>= 1
     end
     B.len -= 1
 
@@ -851,22 +859,24 @@ function insert!(B::BitVector, i::Integer, item)
         x = falses(i - n)
         append!(B, x)
     else
+        Bc = B.chunks
+
         k, j = get_chunks_id(i)
 
         l = @_mod64 length(B)
         if l == 0
-            ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, 1)
-            B.chunks[end] = uint64(0)
+            ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
+            Bc[end] = uint64(0)
         end
         B.len += 1
 
-        for t = length(B.chunks) : -1 : k + 1
-            B.chunks[t] = (B.chunks[t] << 1) | (B.chunks[t - 1] >>> 63) 
+        for t = length(Bc) : -1 : k + 1
+            Bc[t] = (Bc[t] << 1) | (Bc[t - 1] >>> 63)
         end
 
         msk_aft = (_msk64 << j)
         msk_bef = ~msk_aft
-        B.chunks[k] = (msk_bef & B.chunks[k]) | ((msk_aft & B.chunks[k]) << 1)
+        Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) << 1)
     end
     B[i] = item
 end
@@ -884,21 +894,23 @@ function splice!(B::BitVector, i::Integer)
     msk_aft = ~msk_bef
     msk_bef >>>= 1
 
-    B.chunks[k] = (msk_bef & B.chunks[k]) | ((msk_aft & B.chunks[k]) >> 1)
-    if length(B.chunks) > k
-        B.chunks[k] |= (B.chunks[k + 1] << 63)
+    Bc = B.chunks
+
+    Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) >> 1)
+    if length(Bc) > k
+        Bc[k] |= (Bc[k + 1] << 63)
     end
 
-    for t = k + 1 : length(B.chunks) - 1
-        B.chunks[t] = (B.chunks[t] >>> 1) | (B.chunks[t + 1] << 63) 
+    for t = k + 1 : length(Bc) - 1
+        Bc[t] = (Bc[t] >>> 1) | (Bc[t + 1] << 63)
     end
 
     l = @_mod64 length(B)
 
     if l == 1
-        ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, 1)
-    elseif length(B.chunks) > k
-        B.chunks[end] >>>= 1
+        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, 1)
+    elseif length(Bc) > k
+        Bc[end] >>>= 1
     end
 
     B.len -= 1
