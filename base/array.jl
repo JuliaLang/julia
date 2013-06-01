@@ -387,7 +387,7 @@ getindex{T<:Real}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = A[
 getindex{T<:Real}(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T,0}, x) = arrayset(A, convert(T,x), 1)
+setindex!{T}(A::Array{T}, x) = arrayset(A, convert(T,x), 1)
 
 setindex!(A::Array{Any}, x::ANY, i::Real) = arrayset(A, x, to_index(i))
 

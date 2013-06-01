@@ -302,6 +302,8 @@ end
 
 getindex(B::BitArray, i::Real) = getindex(B, to_index(i))
 
+getindex(B::BitArray) = getindex(B, 1)
+
 # 0d bitarray
 getindex(B::BitArray{0}) = getindex_unchecked(B.chunks, 1)
 
@@ -475,6 +477,8 @@ function setindex!(B::BitArray, x::Bool, i::Int)
     setindex_unchecked(B.chunks, x, i)
     return B
 end
+
+setindex!(B::BitArray, x) = setindex!(B, x, 1)
 
 setindex!(B::BitArray, x, i::Real) = setindex!(B, convert(Bool,x), to_index(i))
 
