@@ -15,6 +15,7 @@
 #if defined(_OS_WINDOWS_)
 #include <winbase.h>
 #include <malloc.h>
+#include <dbghelp.h>
 #else
 #include <unistd.h>
 // This gives unwind only local unwinding options ==> faster code
@@ -464,34 +465,49 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
 }
 
 #if defined(_OS_WINDOWS_)
-DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
-{
-    /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
-#if defined(__MINGW_H)
-    HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
-
-    if (kernel32 != NULL) {
-        typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
-        CaptureStackBackTraceType func = (CaptureStackBackTraceType)GetProcAddress(kernel32, "RtlCaptureStackBackTrace");
-
-        if (func == NULL) {
-            FreeLibrary(kernel32);
-            kernel32 = NULL;
-            func = NULL;
-            return (size_t) 0;
-        }
-        else {
-            return func(0, maxsize, data, NULL);
-        }
-    }
-    else {
-        JL_PUTS("Failed to load kernel32.dll", JL_STDERR);
-        jl_exit(1);
-    }
-    FreeLibrary(kernel32);
-#else
-    return RtlCaptureStackBackTrace(0, maxsize, (void**)data, NULL);
+#if defined(_CPU_X86_64_)
+extern int needsSymRefreshModuleList;
 #endif
+DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
+//    return RtlCaptureStackBackTrace(0, maxsize, (void**)data, NULL);
+    CONTEXT Context;
+    memset(&Context, 0, sizeof(Context));
+    RtlCaptureContext(&Context);
+    STACKFRAME64 stk;
+    memset(&stk, 0, sizeof(stk));
+
+#if defined(_CPU_X86_64_) 
+    if (needsSymRefreshModuleList) {
+        SymRefreshModuleList(GetCurrentProcess());
+        needsSymRefreshModuleList = 0;
+    }
+    DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
+    stk.AddrPC.Offset       = Context.Rip;
+    stk.AddrStack.Offset    = Context.Rsp;
+    stk.AddrFrame.Offset    = Context.Rbp;
+#elif defined(_CPU_X86_)
+    DWORD MachineType = IMAGE_FILE_MACHINE_I386;
+    stk.AddrPC.Offset       = Context.Eip;
+    stk.AddrStack.Offset    = Context.Esp;
+    stk.AddrFrame.Offset    = Context.Ebp;
+#else
+#error WIN16 not supported :P
+#endif
+    stk.AddrPC.Mode         = AddrModeFlat;
+    stk.AddrStack.Mode      = AddrModeFlat;
+    stk.AddrFrame.Mode      = AddrModeFlat;
+    
+    size_t n = 0;
+    while (n < maxsize) {
+        BOOL result = StackWalk64(MachineType, GetCurrentProcess(), GetCurrentThread(),
+                                &stk, &Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
+        data[n++] = (ptrint_t)stk.AddrPC.Offset;
+        if (stk.AddrReturn.Offset == 0)
+            break;
+        if (!result)
+            break;
+    }
+    return n;
 }
 #else
 // stacktrace using libunwind
@@ -506,14 +522,6 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
     while (unw_step(&cursor) && n < maxsize) {
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
         data[n++] = ip;
-        /*
-        char *func_name;
-        int line_num;
-        const char *file_name;
-        getFunctionInfo(&func_name, &line_num, &file_name, ip);
-        if (func_name != NULL)
-            ios_printf(ios_stdout, "in %s at %s:%d\n", func_name, file_name, line_num);
-        */
     }
     return n;
 }
