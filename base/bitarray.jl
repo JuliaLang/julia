@@ -67,6 +67,9 @@ function copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64}, 
     if numbits == 0
         return
     end
+    if dest === src && pos_d > pos_s
+        return copy_chunks_rtol(dest, pos_d, pos_s, numbits)
+    end
 
     kd0, ld0 = get_chunks_id(pos_d)
     kd1, ld1 = get_chunks_id(pos_d + numbits - 1)
@@ -118,6 +121,57 @@ function copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64}, 
     dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
 
     return
+end
+
+function copy_chunks_rtol(chunks::Vector{Uint64}, pos_d::Integer, pos_s::Integer, numbits::Integer)
+    if pos_d == pos_s
+        return
+    elseif pos_d < pos_s
+        return copy_chunks(chunks, pos_d, chunks, pos_s, numbits)
+    end
+
+    left = numbits
+    s = min(left, 64)
+    b = left - s
+    ps = pos_s + b
+    pd = pos_d + b
+    u = _msk64
+    while left > 0
+        kd0, ld0 = get_chunks_id(pd)
+        kd1, ld1 = get_chunks_id(pd + s - 1)
+        ks0, ls0 = get_chunks_id(ps)
+        ks1, ls1 = get_chunks_id(ps + s - 1)
+
+        delta_kd = kd1 - kd0
+        delta_ks = ks1 - ks0
+
+        if delta_kd == 0
+            msk_d0 = ~(u << ld0) | (u << ld1 << 1)
+        else
+            msk_d0 = ~(u << ld0)
+            msk_d1 = (u << ld1 << 1)
+        end
+        if delta_ks == 0
+            msk_s0 = (u << ls0) & ~(u << ls1 << 1)
+        else
+            msk_s0 = (u << ls0)
+        end
+
+        chunk_s0 = glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0) & ~(u << (s-1) << 1)
+        chunks[kd0] = (chunks[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
+
+        if delta_kd != 0
+            chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1)
+
+            chunks[kd1] = (chunks[kd1] & msk_d1) | (chunk_s & ~msk_d1)
+        end
+
+        left -= s
+        s = min(left, 64)
+        b = left - s
+        ps = pos_s + b
+        pd = pos_d + b
+    end
 end
 
 ## similar, fill!, copy! etc ##
@@ -917,36 +971,51 @@ function splice!(B::BitVector, i::Integer)
 
     return v
 end
+splice!(B::BitVector, i::Integer, ins::BitVector) = splice!(B, int(i):int(i), ins)
+splice!(B::BitVector, i::Integer, ins::AbstractVector{Bool}) = splice!(B, i, bitpack(ins))
 
-function splice!(B::BitVector, r::Range1{Int})
+const _default_bit_splice = BitVector(0)
+
+function splice!(B::BitVector, r::Range1{Int}, ins::BitVector = _default_bit_splice)
     n = length(B)
     i_f = first(r)
     i_l = last(r)
-    if !(1 <= i_f && i_l <= n)
+    if !(1 <= i_f <= n+1)
         throw(BoundsError())
     end
-    if i_l < i_f
-        return B
+    if !(i_l <= n)
+        throw(BoundsError())
+    end
+    if (i_f > n)
+        return append!(B, ins)
     end
 
-    copy_chunks(B.chunks, i_f, B.chunks, i_l+1, n-i_l)
+    Bc = B.chunks
 
-    delta_l = i_l - i_f + 1
-    new_l = length(B) - delta_l
-    delta_k = length(B.chunks) - num_bit_chunks(new_l)
+    lins = length(ins)
+    ldel = length(r)
+
+    new_l = length(B) + lins - ldel
+    delta_k = num_bit_chunks(new_l) - length(Bc)
 
     if delta_k > 0
-        ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, delta_k)
+        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, delta_k)
     end
-
-    if new_l > 0
-        B.chunks[end] &= @_msk_end new_l
+    copy_chunks(Bc, i_f+lins, Bc, i_l+1, n-i_l)
+    copy_chunks(Bc, i_f, ins.chunks, 1, lins)
+    if delta_k < 0
+        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
     end
 
     B.len = new_l
 
+    if new_l > 0
+        Bc[end] &= @_msk_end new_l
+    end
+
     return B
 end
+splice!(B::BitVector, r::Range1{Int}, ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
 
 function empty!(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))
