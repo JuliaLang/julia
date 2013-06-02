@@ -491,6 +491,7 @@ export
     hcat,
     hvcat,
     ind2sub,
+    indexin,
     indmax,
     indmin,
     invperm,

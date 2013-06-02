@@ -304,6 +304,12 @@ Iterable Collections
 .. function:: contains(itr, x) -> Bool
 
    Determine whether a collection contains the given value, ``x``.
+   
+.. function:: indexin(a, b)
+
+   Returns a vector containing the highest index in ``b``
+   for each value in ``a`` that is a member of ``b`` .
+   The output vector contains 0 wherever ``a`` is not a member of ``b``.
 
 .. function:: findin(a, b)
 
