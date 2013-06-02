@@ -76,7 +76,7 @@ function normpath(path::String)
         clean = true
         for j = 1:length(parts)-1
             if parts[j] != ".." && parts[j+1] == ".."
-                delete!(parts, j:j+1)
+                splice!(parts, j:j+1)
                 clean = false
                 break
             end

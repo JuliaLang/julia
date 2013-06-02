@@ -579,13 +579,18 @@ Dequeues
 
    Insert an item at the given index.
 
-.. function:: delete!(collection, index) -> item
+.. function:: splice!(collection, index, [replacement]) -> item
 
-   Remove the item at the given index, and return the deleted item.
+   Remove the item at the given index, and return the removed item. Subsequent items
+   are shifted down to fill the resulting gap. If specified, replacement values from
+   an ordered collection will be spliced in place of the removed item.
 
-.. function:: delete!(collection, range) -> items
-   
-   Remove items at specified range, and return a collection containing the deleted items.
+.. function:: splice!(collection, range, [replacement]) -> items
+
+   Remove items in the specified index range, and return a collection containing the
+   removed items. Subsequent items are shifted down to fill the resulting gap.
+   If specified, replacement values from an ordered collection will be spliced in place
+   of the removed items.
 
 .. function:: resize!(collection, n) -> collection
 

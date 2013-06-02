@@ -204,6 +204,8 @@ export PipeString
 @deprecate  iscomplex(x)                iseltype(x,Complex)
 @deprecate  lstrip(a::String, b::String) lstrip(a, collect(b))
 @deprecate  rstrip(a::String, b::String) rstrip(a, collect(b))
+@deprecate  delete!(a::Vector, x)     splice!(a, x)
+@deprecate  delete!(a::BitVector, x)  splice!(a, x)
 
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr

@@ -28,7 +28,7 @@ dlopen(s::String, flags::Integer) = ccall(:jl_load_dynamic_library, Ptr{Void}, (
 dlopen_e(s::String, flags::Integer) = ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
 dlopen(s::String) = dlopen(s, RTLD_LAZY | RTLD_DEEPBIND)
 dlopen_e(s::String) = dlopen_e(s, RTLD_LAZY | RTLD_DEEPBIND)
-dlclose(p::Ptr) = ccall(:uv_dlclose,Void,(Ptr{Void},),p)
+dlclose(p::Ptr) = if p!=C_NULL; ccall(:uv_dlclose,Void,(Ptr{Void},),p); end
 
 cfunction(f::Function, r, a) =
     ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
