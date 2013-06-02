@@ -934,7 +934,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
         function ($f){S,T}(A::StridedArray{S}, B::StridedArray{T})
             F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
             for i=1:length(A)
-                F[i] = ($f)(A[i], B[i])
+                @inbounds F[i] = ($f)(A[i], B[i])
             end
             return F
         end
@@ -945,14 +945,14 @@ for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
         function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
             for i=1:length(B)
-                F[i] = ($f)(A, B[i])
+                @inbounds F[i] = ($f)(A, B[i])
             end
             return F
         end
         function ($f){T}(A::StridedArray{T}, B::Number)
             F = similar(A, promote_array_type(typeof(B),T))
             for i=1:length(A)
-                F[i] = ($f)(A[i], B)
+                @inbounds F[i] = ($f)(A[i], B)
             end
             return F
         end
@@ -961,7 +961,7 @@ for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
             F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for b in B
-                F[i] = ($f)(A[i], b)
+                @inbounds F[i] = ($f)(A[i], b)
                 i += 1
             end
             return F
@@ -970,7 +970,7 @@ for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
             F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for a in A
-                F[i] = ($f)(a, B[i])
+                @inbounds F[i] = ($f)(a, B[i])
                 i += 1
             end
             return F
@@ -1000,7 +1000,7 @@ function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
     if size(A) != size(B); error("argument dimensions must match"); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for i=1:length(A)
-        F[i] = complex(A[i], B[i])
+        @inbounds F[i] = complex(A[i], B[i])
     end
     return F
 end
@@ -1008,7 +1008,7 @@ end
 function complex{T<:Real}(A::Real, B::Array{T})
     F = similar(B, typeof(complex(A,zero(T))))
     for i=1:length(B)
-        F[i] = complex(A, B[i])
+        @inbounds F[i] = complex(A, B[i])
     end
     return F
 end
@@ -1016,7 +1016,7 @@ end
 function complex{T<:Real}(A::Array{T}, B::Real)
     F = similar(A, typeof(complex(zero(T),B)))
     for i=1:length(A)
-        F[i] = complex(A[i], B)
+        @inbounds F[i] = complex(A[i], B)
     end
     return F
 end

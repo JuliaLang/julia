@@ -407,6 +407,7 @@ function generic_matmatmul{T,S,R}(C::StridedVecOrMat{R}, tA, tB, A::StridedVecOr
     if mA == nA == nB == 2; return matmul2x2(C, tA, tB, A, B); end
     if mA == nA == nB == 3; return matmul3x3(C, tA, tB, A, B); end
 
+    @inbounds begin
     if isbits(R)
         tile_size = int(ifloor(sqrt(tilebufsize/sizeof(R))))
         sz = (tile_size, tile_size)
@@ -558,6 +559,7 @@ function generic_matmatmul{T,S,R}(C::StridedVecOrMat{R}, tA, tB, A::StridedVecOr
                 end
             end
         end
+    end
     end
     return C
 end
