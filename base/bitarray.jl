@@ -189,17 +189,10 @@ function fill!(B::BitArray, x)
     y = convert(Bool, x)
     Bc = B.chunks
     if !y
-        for i = 1 : length(B.chunks)
-            Bc[i] = uint64(0)
-        end
+        fill!(Bc, 0)
     else
-        if length(B) == 0
-            return B
-        end
-        for i = 1 : length(B.chunks) - 1
-            Bc[i] = _msk64
-        end
-        Bc[end] = @_msk_end length(B)
+        fill!(Bc, _msk64)
+        Bc[end] &= @_msk_end length(B)
     end
     return B
 end
