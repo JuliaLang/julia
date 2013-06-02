@@ -82,6 +82,7 @@ export
     SubDArray,
     SubOrDArray,
     SubString,
+    SubVector,
     SymTridiagonal,
     TcpSocket,
     TmStruct,
