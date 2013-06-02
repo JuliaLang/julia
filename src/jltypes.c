@@ -2791,4 +2791,5 @@ void jl_init_types(void)
     tuple_sym = jl_symbol("tuple");
     kw_sym = jl_symbol("kw");
     dot_sym = jl_symbol(".");
+    boundscheck_sym = jl_symbol("boundscheck");
 }

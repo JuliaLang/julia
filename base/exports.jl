@@ -1215,4 +1215,6 @@ export
     @show,
     @printf,
     @sprintf,
-    @deprecate
+    @deprecate,
+    @boundscheck,
+    @inbounds
