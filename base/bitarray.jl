@@ -1628,6 +1628,11 @@ end
 
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
+    if start < 0
+        throw(BoundsError())
+    elseif start > length(B)
+        return 0
+    end
     Bc = B.chunks
 
     chunk_start = @_div64(start-1)+1
@@ -1647,8 +1652,14 @@ function findnext(B::BitArray, start::Integer)
 end
 #findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
-# aux function: same as findfirst(~B), but performed without temporaries
+# aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
+    if start < 0
+        throw(BoundsError())
+    elseif start > length(B)
+        return 0
+    end
+
     Bc = B.chunks
     l = length(Bc)
     if l == 0
@@ -1705,14 +1716,36 @@ end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
 function find(B::BitArray)
+    l = length(B)
     nnzB = nnz(B)
     I = Array(Int, nnzB)
-    count = 1
-    for i = 1:length(B)
-        if B[i]
-            I[count] = i
-            count += 1
+    if nnzB == 0
+        return I
+    end
+    Bc = B.chunks
+    Bcount = 1
+    Icount = 1
+    for i = 1:length(Bc)-1
+        u = uint64(1)
+        c = Bc[i]
+        for j = 1:64
+            if c & u != 0
+                I[Icount] = Bcount
+                Icount += 1
+            end
+            Bcount += 1
+            u <<= 1
         end
+    end
+    u = uint64(1)
+    c = Bc[end]
+    for j = 0:@_mod64(l-1)
+        if c & u != 0
+            I[Icount] = Bcount
+            Icount += 1
+        end
+        Bcount += 1
+        u <<= 1
     end
     return I
 end
