@@ -1026,11 +1026,31 @@ end
 
 function (-)(B::BitArray)
     A = zeros(Int, size(B))
+    l = length(B)
+    if l == 0
+        return A
+    end
     Bc = B.chunks
-    for i = 1:length(B)
-        if getindex_unchecked(Bc, i)
-            A[i] = -1
+    ind = 1
+    for i = 1:length(Bc)-1
+        u = uint64(1)
+        c = Bc[i]
+        for j = 1:64
+            if c & u != 0
+                A[ind] = -1
+            end
+            ind += 1
+            u <<= 1
         end
+    end
+    u = uint64(1)
+    c = Bc[end]
+    for j = 0:@_mod64(l-1)
+        if c & u != 0
+            A[ind] = -1
+        end
+        ind += 1
+        u <<= 1
     end
     return A
 end
