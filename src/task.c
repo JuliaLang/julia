@@ -469,7 +469,6 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
 extern int needsSymRefreshModuleList;
 #endif
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
-//    return RtlCaptureStackBackTrace(0, maxsize, (void**)data, NULL);
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
     RtlCaptureContext(&Context);
@@ -482,25 +481,25 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
         needsSymRefreshModuleList = 0;
     }
     DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
-    stk.AddrPC.Offset       = Context.Rip;
-    stk.AddrStack.Offset    = Context.Rsp;
-    stk.AddrFrame.Offset    = Context.Rbp;
+    stk.AddrPC.Offset = Context.Rip;
+    stk.AddrStack.Offset = Context.Rsp;
+    stk.AddrFrame.Offset = Context.Rbp;
 #elif defined(_CPU_X86_)
     DWORD MachineType = IMAGE_FILE_MACHINE_I386;
-    stk.AddrPC.Offset       = Context.Eip;
-    stk.AddrStack.Offset    = Context.Esp;
-    stk.AddrFrame.Offset    = Context.Ebp;
+    stk.AddrPC.Offset = Context.Eip;
+    stk.AddrStack.Offset = Context.Esp;
+    stk.AddrFrame.Offset = Context.Ebp;
 #else
 #error WIN16 not supported :P
 #endif
-    stk.AddrPC.Mode         = AddrModeFlat;
-    stk.AddrStack.Mode      = AddrModeFlat;
-    stk.AddrFrame.Mode      = AddrModeFlat;
+    stk.AddrPC.Mode = AddrModeFlat;
+    stk.AddrStack.Mode = AddrModeFlat;
+    stk.AddrFrame.Mode = AddrModeFlat;
     
     size_t n = 0;
     while (n < maxsize) {
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), GetCurrentThread(),
-                                &stk, &Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
+            &stk, &Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
         data[n++] = (ptrint_t)stk.AddrPC.Offset;
         if (stk.AddrReturn.Offset == 0)
             break;
