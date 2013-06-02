@@ -1419,26 +1419,14 @@ function (==)(A::BitArray, B::BitArray)
     if size(A) != size(B)
         return false
     end
-    Ac = A.chunks; Bc = B.chunks
-    for i = 1:length(A.chunks)
-        if Ac[i] != Bc[i]
-            return false
-        end
-    end
-    return true
+    return A.chunks == B.chunks
 end
 
 function (!=)(A::BitArray, B::BitArray)
     if size(A) != size(B)
         return true
     end
-    Ac = A.chunks; Bc = B.chunks
-    for i = 1:length(A.chunks)
-        if Ac[i] != Bc[i]
-            return true
-        end
-    end
-    return false
+    return A.chunks != B.chunks
 end
 
 # TODO: avoid bitpack/bitunpack
