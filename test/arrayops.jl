@@ -445,3 +445,13 @@ end
 
 # fill
 @test fill!(Array(Float64,1),-0.0)[1] === -0.0
+
+# splice!
+for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
+            8:9, 9:10, 6:9, 7:10}
+    for repl in {[], [11], [11,22], [11,22,33,44,55]}
+        a = [1:10]; acopy = copy(a)
+        @test splice!(a, idx, repl) == acopy[idx]
+        @test a == [acopy[1:(first(idx)-1)], repl, acopy[(last(idx)+1):end]]
+    end
+end

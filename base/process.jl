@@ -10,7 +10,8 @@ end
 function eachline(cmd::AbstractCmd,stdin)
     out = NamedPipe()
     processes = spawn(false, cmd, (stdin,out,STDERR))
-    EachLine(out)
+    # implicitly close after reading lines, since we opened
+    EachLine(out, ()->close(out))
 end
 eachline(cmd::AbstractCmd) = eachline(cmd,SpawnNullStream())
 
