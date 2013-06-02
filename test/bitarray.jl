@@ -208,6 +208,22 @@ end
 
 b1 = randbool(v1)
 i1 = bitunpack(b1)
+for m1 = 1 : v1 + 1
+    for m2 = m1 - 1 : v1
+        for v2 = [0, 1, 63, 64, 65, 127, 128, 129, 191, 192, 193, rand(1:v1)]
+            b2 = copy(b1)
+            i2 = copy(i1)
+            b3 = randbool(v2)
+            i3 = bitunpack(b3)
+            splice!(b2, m1:m2, b3)
+            splice!(i2, m1:m2, i3)
+            @test isequal(bitunpack(b2), i2)
+        end
+    end
+end
+
+b1 = randbool(v1)
+i1 = bitunpack(b1)
 empty!(b1)
 empty!(i1)
 @test isequal(bitunpack(b1), i1)
