@@ -174,6 +174,11 @@ function copy_chunks_rtol(chunks::Vector{Uint64}, pos_d::Integer, pos_s::Integer
     end
 end
 
+## custom iterator ##
+start(B::BitArray) = 0
+next(B::BitArray, i::Int) = (B.chunks[@_div64(i)+1] & (uint64(1)<<@_mod64(i)) != 0, i+1)
+done(B::BitArray, i::Int) = i >= length(B)
+
 ## similar, fill!, copy! etc ##
 
 similar(B::BitArray) = BitArray(size(B))
