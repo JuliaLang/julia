@@ -771,6 +771,8 @@ export
     ndigits,
     ndigits0z,
     digits,
+    packbcd,
+    unpackbcd,
     oct,
     parsefloat,
     parseint,

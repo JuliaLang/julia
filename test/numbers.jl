@@ -1460,3 +1460,9 @@ end
 # rational-exponent promotion rules (issue #3155):
 @test 2.0f0^(1//3) == 2.0f0^(1.0f0/3)
 @test 2^(1//3) == 2^(1/3)
+
+n = [1,4,7,9,11,17,243,5247]
+for i in n
+    @test unpackbcd(packbcd(i)) == i
+    @test unpackbcd(packbcd(i, true), true) == i
+end
