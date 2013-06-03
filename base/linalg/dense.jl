@@ -382,24 +382,25 @@ sqrtm(a::Complex) = sqrt(a)
 function det(A::Matrix)
     m, n = size(A)
     if m != n; throw(DimensionMismatch("det only defined for square matrices")); end
-    if istriu(A) | istril(A); return det(Triangular(A, 'U', false)); end
+    if istriu(A) | istril(A); return det(Triangular(A, :U, false)); end
     return det(lufact(A))
 end
 det(x::Number) = x
 
 logdet(A::Matrix) = logdet(cholfact(A))
 
-function inv(A::StridedMatrix)
-    if istriu(A) return inv(Triangular(A, 'U')) end
-    if istril(A) return inv(Triangular(A, 'L')) end
+function inv{T<:BlasFloat}(A::AbstractMatrix{T})
+    if istriu(A) return inv(Triangular(A, :U)) end
+    if istril(A) return inv(Triangular(A, :L)) end
     if ishermitian(A) return inv(Hermitian(A)) end
     return inv(lufact(A))
 end
+inv(A::AbstractMatrix) = inv(float(A))
 
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     if size(A, 1) == size(A, 2) # Square
-        if istriu(A) return Triangular(A, 'U')\B end
-        if istril(A) return Triangular(A, 'L')\B end
+        if istriu(A) return Triangular(A, :U)\B end
+        if istril(A) return Triangular(A, :L)\B end
         if ishermitian(A) return Hermitian(A)\B end
         ans, _, _, info = LAPACK.gesv!(copy(A), copy(B))
         if info > 0; throw(SingularException(info)); end
