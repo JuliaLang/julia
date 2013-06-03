@@ -80,7 +80,8 @@ function setdiff!(s::IntSet, ns)
 end
 
 setdiff(a::IntSet, b::IntSet) = setdiff!(copy(a),b)
-symdiff(a::IntSet, b::IntSet) = a $ b
+symdiff(a::IntSet, b::IntSet) =
+    (s1.limit >= s2.limit ? symdiff!(copy(s1), s2) : symdiff!(copy(s2), s1))
 
 function empty!(s::IntSet)
     s.bits[:] = 0
@@ -220,7 +221,8 @@ function intersect!(s::IntSet, s2::IntSet)
 end
 
 intersect(s1::IntSet) = copy(s1)
-intersect(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
+intersect(s1::IntSet, s2::IntSet) =
+    (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
 intersect(s1::IntSet, ss::IntSet...) = intersect(s1, intersect(ss...))
 
 function complement!(s::IntSet)
@@ -250,14 +252,6 @@ function symdiff!(s::IntSet, s2::IntSet)
     s
 end
 
-($)(s1::IntSet, s2::IntSet) =
-    (s1.limit >= s2.limit ? symdiff!(copy(s1), s2) : symdiff!!(copy(s2), s1))
-
-|(s::IntSet, s2::IntSet) = union(s, s2)
-(&)(s::IntSet, s2::IntSet) = intersect(s, s2)
--(a::IntSet, b::IntSet) = setdiff(a,b)
-~(s::IntSet) = complement(s)
-
 function isequal(s1::IntSet, s2::IntSet)
     if s1.fill1s != s2.fill1s
         return false
@@ -285,3 +279,5 @@ function isequal(s1::IntSet, s2::IntSet)
     end
     return true
 end
+
+issubset(a::IntSet, b::IntSet) = isequal(a, intersect(a,b))
