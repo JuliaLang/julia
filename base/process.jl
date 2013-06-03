@@ -477,6 +477,7 @@ end
 
 ## implementation of `cmd` syntax ##
 
+arg_gen()          = ByteString[]
 arg_gen(x::String) = ByteString[x]
 arg_gen(cmd::Cmd)  = cmd.exec
 
