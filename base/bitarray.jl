@@ -192,6 +192,9 @@ similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
 
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
+    if length(B) == 0
+        return B
+    end
     Bc = B.chunks
     if !y
         fill!(Bc, 0)
