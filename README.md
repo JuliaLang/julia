@@ -120,6 +120,10 @@ You must use the `gmake` command on FreeBSD instead of `make`.
 
 In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
 
+### Vagrant
+
+Julia can be developed in an isolated Vagrant environment. See [the Vagrant README](https://github.com/JuliaLang/julia/blob/master/contrib/vagrant/README.md) for details.
+
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools and External Libraries
 
