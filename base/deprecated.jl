@@ -206,6 +206,14 @@ export PipeString
 @deprecate  rstrip(a::String, b::String) rstrip(a, collect(b))
 @deprecate  delete!(a::Vector, x)     splice!(a, x)
 @deprecate  delete!(a::BitVector, x)  splice!(a, x)
+@deprecate  |(s::Set...)              union(s...)
+@deprecate  (&)(s::Set...)            intersect(s...)
+@deprecate  -(a::Set, b::Set)         setdiff(a,b)
+@deprecate  ($)(s1::IntSet, s2::IntSet)  symdiff(s1,s2)
+@deprecate  |(s::IntSet, s2::IntSet)     union(s, s2)
+@deprecate  (&)(s::IntSet, s2::IntSet)   intersect(s, s2)
+@deprecate  -(a::IntSet, b::IntSet)      setdiff(a,b)
+@deprecate  ~(s::IntSet)                 complement(s)
 
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
