@@ -7,7 +7,7 @@ end
 
 function find_in_path(name::String)
     isabspath(name) && return name
-    ispath(name) && return abspath(name)
+    isfile(name) && return abspath(name)
     base = name
     if endswith(name,".jl")
         base = name[1:end-3]
