@@ -17,10 +17,10 @@ cholfact!(A::StridedMatrix, args...) = cholfact!(float(A), args...)
 cholfact!{T<:BlasFloat}(A::StridedMatrix{T}) = cholfact!(A, :U)
 cholfact{T<:BlasFloat}(A::StridedMatrix{T}, args...) = cholfact!(copy(A), args...)
 cholfact(A::StridedMatrix, args...) = cholfact!(float(A), args...)
-cholfact(x::Number) = imag(x) == 0 && real(x) > 0 ? Cholesky(fill(sqrt(x), 1, 1), 'U') : throw(PosDefException(1))
+cholfact(x::Number) = imag(x) == 0 && real(x) > 0 ? Cholesky(fill(sqrt(x), 1, 1), :U) : throw(PosDefException(1))
 
-chol(A::Union(Number, StridedMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
-chol(A::Union(Number, StridedMatrix)) = cholfact(A, :U)[:U]
+chol(A::Union(Number, AbstractMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
+chol(A::Union(Number, AbstractMatrix)) = cholfact(A, :U)[:U]
 
 size(C::Cholesky) = size(C.UL)
 size(C::Cholesky,d::Integer) = size(C.UL,d)
@@ -139,7 +139,7 @@ lufact{T<:BlasFloat}(A::StridedMatrix{T}) = lufact!(copy(A))
 lufact(A::StridedMatrix) = lufact!(float(A))
 lufact(x::Number) = LU(fill(x, 1, 1), [1], x == 0 ? 1 : 0)
 
-function lu(A::Union(Number, StridedMatrix))
+function lu(A::Union(Number, AbstractMatrix))
     F = lufact(A)
     return (F[:L], F[:U], F[:P])
 end
@@ -204,11 +204,11 @@ qrfact(A::StridedMatrix) = qrfact!(float(A))
 qrfact(x::Integer) = qrfact(float(x))
 qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
 
-function qr(A::Union(Number, StridedMatrix), thin::Bool)
+function qr(A::Union(Number, AbstractMatrix), thin::Bool)
     F = qrfact(A)
     return (full(F[:Q], thin), F[:R])
 end
-qr(A::Union(Number, StridedMatrix)) = qr(A, true)
+qr(A::Union(Number, AbstractMatrix)) = qr(A, true)
 
 size(A::QR, args::Integer...) = size(A.vs, args...)
 
@@ -263,8 +263,8 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
 end
 ## Least squares solution.  Should be more careful about cases with m < n
-(\)(A::QR, B::StridedVector) = Triangular(A[:R], 'U')\(A[:Q]'B)[1:size(A, 2)]
-(\)(A::QR, B::StridedMatrix) = Triangular(A[:R], 'U')\(A[:Q]'B)[1:size(A, 2),:]
+(\)(A::QR, B::StridedVector) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2)]
+(\)(A::QR, B::StridedMatrix) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2),:]
 
 type QRPivoted{T} <: Factorization{T}
     hh::Matrix{T}
@@ -284,11 +284,11 @@ qrpfact!(A::StridedMatrix) = qrpfact!(float(A))
 qrpfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrpfact!(copy(A))
 qrpfact(A::StridedMatrix) = qrpfact!(float(A))
 
-function qrp(A::StridedMatrix, thin::Bool)
+function qrp(A::AbstractMatrix, thin::Bool)
     F = qrpfact(A)
     return full(F[:Q], thin), F[:R], F[:P]
 end
-qrp(A::StridedMatrix) = qrp(A, false)
+qrp(A::AbstractMatrix) = qrp(A, false)
 
 size(A::QRPivoted, args::Integer...) = size(A.hh, args...)
 
@@ -442,13 +442,13 @@ eigfact{T<:BlasFloat}(x::StridedMatrix{T}) = eigfact!(copy(x))
 eigfact(A::StridedMatrix) = eigfact!(float(A))
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
-function eig(A::Union(Number, StridedMatrix))
+function eig(A::Union(Number, AbstractMatrix))
     F = eigfact(A)
     return F[:values], F[:vectors]
 end
 
 #Calculates eigenvectors
-eigvecs(A::Union(Number, StridedMatrix)) = eigfact(A)[:vectors]
+eigvecs(A::Union(Number, AbstractMatrix)) = eigfact(A)[:vectors]
 
 function eigvals{T<:BlasReal}(A::StridedMatrix{T})
     if ishermitian(A) return eigvals(Hermitian(A)) end
@@ -464,11 +464,11 @@ end
 eigvals(x::Number) = [one(x)]
 
 #Computes maximum and minimum eigenvalue
-function eigmax(A::Union(Number, StridedMatrix))
+function eigmax(A::Union(Number, AbstractMatrix))
     v = eigvals(A)
     iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : max(v)
 end
-function eigmin(A::Union(Number, StridedMatrix))
+function eigmin(A::Union(Number, AbstractMatrix))
     v = eigvals(A)
     iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : min(v)
 end
@@ -519,7 +519,7 @@ eigfact!(A::StridedMatrix, B::StridedMatrix) = eigfact!(float(A), float(B))
 eigfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = eigfact!(copy(A), copy(B))
 eigfact(A::StridedMatrix, B::StridedMatrix) = eigfact!(float(A), float(B))
 
-function eig(A::StridedMatrix, B::StridedMatrix)
+function eig(A::AbstractMatrix, B::AbstractMatrix)
     F = eigfact(A, B)
     return F[:values], F[:vectors]
 end
@@ -566,11 +566,11 @@ svdfact(x::Number, thin::Bool) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x)
 svdfact(x::Integer, thin::Bool) = svdfact(float(x), thin)
 svdfact(x::Number) = svdfact(x, true)
 
-function svd(A::Union(Number, StridedVecOrMat), thin::Bool)
+function svd(A::Union(Number, AbstractArray), thin::Bool)
     F = svdfact(A, thin)
     return F.U, F.S, F.Vt'
 end
-svd(A::Union(Number, StridedVecOrMat)) = svd(A, true)
+svd(A::Union(Number, AbstractArray)) = svd(A, true)
 
 function getindex(F::SVD, d::Symbol)
     if d == :U return F.U end
@@ -617,7 +617,7 @@ svdfact!(A::StridedMatrix, B::StridedMatrix) = svdfact!(float(A), float(B))
 svdfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdfact!(copy(A), copy(B))
 svdfact(A::StridedMatrix, B::StridedMatrix) = svdfact!(float(A), float(B))
 
-function svd(A::StridedMatrix, B::StridedMatrix)
+function svd(A::AbstractMatrix, B::AbstractMatrix)
     F = svdfact(A, B)
     return F[:U], F[:V], F[:Q]*F[:R0]', F[:D1], F[:D2]
 end
@@ -682,7 +682,7 @@ function getindex(F::Schur, d::Symbol)
     error("No such type field")
 end
 
-function schur(A::StridedMatrix)
+function schur(A::AbstractMatrix)
     SchurF = schurfact(A)
     return SchurF[:T], SchurF[:Z], SchurF[:values]
 end
@@ -712,7 +712,7 @@ function getindex(F::GeneralizedSchur, d::Symbol)
     error("No such type field")
 end
 
-function schur(A::StridedMatrix, B::StridedMatrix)
+function schur(A::AbstractMatrix, B::AbstractMatrix)
     SchurF = schurfact(A, B)
     return SchurF[:S], SchurF[:T], SchurF[:Q], SchurF[:Z]
 end
