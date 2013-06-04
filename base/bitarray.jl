@@ -343,16 +343,14 @@ end
 ## Indexing: getindex ##
 
 function getindex_unchecked(Bc::Vector{Uint64}, i::Int)
-    i1, i2 = get_chunks_id(i)
-    return (Bc[i1] & (uint64(1)<<i2)) != 0
+    return (Bc[@_div64(int(i)-1)+1] & (uint64(1)<<@_mod64(int(i)-1))) != 0
 end
 
 function getindex(B::BitArray, i::Int)
     if i < 1 || i > length(B)
         throw(BoundsError())
     end
-    i1, i2 = get_chunks_id(i)
-    return (B.chunks[i1] & (uint64(1)<<i2)) != 0
+    return getindex_unchecked(B.chunks, i)
 end
 
 getindex(B::BitArray, i::Real) = getindex(B, to_index(i))
@@ -1973,7 +1971,6 @@ function transpose(B::BitMatrix)
     cgap2 = @_div64 l2
     cinc2 = @_mod64 l2
     nc = length(B.chunks)
-
 
     for i = 1 : 8 : l1
 
