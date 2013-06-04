@@ -27,7 +27,7 @@ primes(n::Integer) = find(primesmask(n))
 
 function isprime(n::Integer)
     n == 2 && return true
-    n <= 2 | iseven(n) && return false
+    (n < 2) | iseven(n) && return false
     s = trailing_zeros(n-1)
     d = (n-1) >>> s
     for a in witnesses(n)
