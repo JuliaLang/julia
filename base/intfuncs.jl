@@ -297,4 +297,36 @@ function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
     return a
 end
 
+# Binary-coded decimal
+function packbcd(i::Integer, bigendian::Bool = false)
+    if i < 0
+        error("Integer must not be negative")
+    end
+    ndig = ndigits(i)
+    ndig += isodd(ndig)
+    v = digits(i, 10, ndig)
+    nbytes = itrunc(ndig/2)
+    out = Array(Uint8, nbytes)
+    dj = 1-2*bigendian
+    for i = 1:nbytes
+        j = bigendian*length(v) + dj*2*(i-1) + 1-bigendian
+        out[i] = (v[j]<<4) | v[j+dj]
+    end
+    return out
+end
+
+function unpackbcd(v::Vector{Uint8}, bigendian::Bool = false)
+    ret = 0
+    if bigendian
+        for i = 1:length(v)
+            ret = 100*ret + 10*int(v[i]>>>4) + int(v[i]&0x0f)
+        end
+    else
+        for i = length(v):-1:1
+            ret = 100*ret + int(v[i]>>>4) + 10*int(v[i]&0x0f)
+        end
+    end
+    return ret
+end
+
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
