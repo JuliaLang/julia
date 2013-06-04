@@ -1000,7 +1000,7 @@ function compute_output_dict(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::
     pvers = pkgstruct.pvers
     spp = pkgstruct.spp
 
-    want = (String=>VersionNumber)[]
+    want = (ByteString=>VersionNumber)[]
     for p0 = 1:np
         p = pkgs[p0]
         s = sol[p0]
@@ -1300,7 +1300,7 @@ function sanity_check(vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
         p0, v0 = vdict[v]
         return -pndeps[p0][v0]
     end
-    svers = sort(vers, Sort.By(vrank))
+    svers = sortby(vers, vrank)
 
     nv = length(svers)
 
@@ -1373,7 +1373,7 @@ function sanity_check(vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
             end
             i += 1
         end
-        sort!(insane, Sort.By(x->x[1]))
+        sortby!(insane, x->x[1])
         throw(MetadataError(insane))
     end
 
