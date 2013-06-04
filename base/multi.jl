@@ -907,18 +907,22 @@ function start_remote_workers(machines, cmds, tunnel=false)
         stream.line_buffered = true
         while true
             conninfo = readline(stream)
-            hostname, port = parse_connection_info(conninfo)
-            if hostname != ""
+            private_hostname, port = parse_connection_info(conninfo)
+            if private_hostname != ""
                 break
             end
         end
+        
+        s = split(machines[i],'@')
+        if length(s) > 1
+            user = s[1]
+            hostname = s[2]
+        else
+            user = ENV["USER"]
+            hostname = s[1]
+        end
+        
         if tunnel
-            s = split(machines[i],'@')
-            if length(s) > 1
-                user = s[1]
-            else
-                user = ENV["USER"]
-            end
             w[i] = Worker(hostname, port, user)
         else
             w[i] = Worker(hostname, port)
@@ -974,10 +978,10 @@ end
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
 function addprocs(machines::AbstractVector;
-                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic")
+                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``)
     add_workers(PGRP,
         start_remote_workers(machines,
-            map(m->detach(`ssh -n $m "bash -l -c \"cd $dir && $exename --worker\""`),
+            map(m->detach(`ssh -n $sshflags $m "bash -l -c \"cd $dir && $exename --worker\""`),
                 machines),
             tunnel))
 end
