@@ -1035,7 +1035,7 @@
 	   (cons 'toplevel imports))))
     ((ccall)
      (if (not (eqv? (peek-token s) #\())
-	 'ccall
+	 (error "invalid ccall syntax")
 	 (begin
 	   (take-token s)
 	   (let ((al (parse-arglist s #\))))

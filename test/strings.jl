@@ -492,6 +492,15 @@ for i1 = 1:length(u8str2)
     end
 end
 
+str = "aa\u2200\u2222bb"
+u = SubString(str, 3, 6)
+@test length(u)==2
+b = IOBuffer()
+write(b, u)
+@test takebuf_string(b) == "\u2200\u2222"
+
+@test replace("\u2202", '*', '\0') == "\u2202"
+
 # quotes + interpolation (issue #455)
 @test "$("string")" == "string"
 arr = ["a","b","c"]

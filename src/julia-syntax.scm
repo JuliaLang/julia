@@ -2014,7 +2014,7 @@
 		 (cons (if tail `(return ,l) l) '()))))
 
 	  ((local global)
-	   (if (symbol? dest)
+	   (if dest
 	       (error (string "misplaced " (car e) " declaration")))
 	   (cons (to-blk (to-lff '(null) dest tail))
 		 (list e)))
