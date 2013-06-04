@@ -47,4 +47,13 @@ resolve() = Dir.cd() do
     Resolve.resolve(sort!(rx), sort!(vx), sort!(dx))
 end
 
+add(pkg::ByteString, vers::VersionSet) = Dir.cd() do
+    Write.update_file(Reqs.add, "REQUIRE", pkg, vers)
+end
+add(pkg::ByteString, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
+
+rm(pkg::ByteString) = Dir.cd() do
+    Write.update_file(Reqs.rm, "REQUIRE", pkg)
+end
+
 end # module
