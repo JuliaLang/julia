@@ -73,8 +73,8 @@ end
 methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
                         t.env)
 
-disassemble(f::Function, types::Tuple) =
-    print(ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString)
+disassemble(f::Function, types::Tuple, asm::Bool = false) =
+    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, asm)::ByteString)
 
 function functionlocs(f::Function, types)
     locs = Array(Tuple, 0)
