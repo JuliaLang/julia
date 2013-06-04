@@ -978,8 +978,7 @@ end
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
 function addprocs(machines::AbstractVector;
-                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags=[])
-    if !(isa(sshflags, Cmd)) sshflags = [] end
+                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``)
     add_workers(PGRP,
         start_remote_workers(machines,
             map(m->detach(`ssh -n $sshflags $m "bash -l -c \"cd $dir && $exename --worker\""`),

@@ -2888,7 +2888,7 @@ Parallel Computing
 
    Add processes on the local machine. Can be used to take advantage of multiple cores.
 
-.. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME, sshflags=[])
+.. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``)
 
    Add processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
    If ``tunnel`` is ``true`` then SSH tunneling will be used. Named argument ``dir``
