@@ -127,6 +127,13 @@ for elty in (Float32, Float64)
     @test_approx_eq trigamma(convert(elty, 10)) convert(elty, π^2/6 - 9778141/6350400)
 end
 
+# invdigamma
+for elty in (Float32, Float64)
+    for val in [0.001, 0.01, 0.1, 1.0, 10.0]
+        @assert abs(invdigamma(digamma(convert(elty, val))) - convert(elty, val)) < 1e-8
+    end
+end
+
 # eta, zeta
 @test_approx_eq eta(1) log(2)
 @test_approx_eq eta(2) pi^2/12

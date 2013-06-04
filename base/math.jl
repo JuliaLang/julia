@@ -14,7 +14,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
-       beta, lbeta, eta, zeta, polygamma, digamma, trigamma,
+       beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
        erfinv, erfcinv
 
 import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
@@ -754,6 +754,36 @@ digamma(x::Real) = polygamma(0, x)
 
 trigamma(x::Real) = polygamma(1, x)
 @vectorize_1arg Real trigamma
+
+# Inverse digamma function
+#
+# Implementation of fixed point algorithm described in
+#  "Estimating a Dirichlet distribution" by Thomas P. Minka, 2000
+function invdigamma(y::Float64)
+    # Closed form initial estimates
+    if y >= -2.22
+        x_old = exp(y) + 0.5
+        x_new = x_old
+    else
+        x_old = -1.0 / (y - digamma(1.0))
+        x_new = x_old
+    end
+
+    # Fixed point algorithm
+    delta = Inf
+    iteration = 0
+    while delta > 1e-12 && iteration < 25
+        iteration += 1
+        x_new = x_old - (digamma(x_old) - y) / trigamma(x_old)
+        delta = abs(x_new - x_old)
+        x_old = x_new
+    end
+
+    return x_new
+end
+invdigamma(x::Float32) = float32(invdigamma(float64(x)))
+invdigamma(x::Real) = invdigamma(float64(x))
+@vectorize_1arg Real invdigamma
 
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)

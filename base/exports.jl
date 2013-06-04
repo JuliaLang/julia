@@ -347,6 +347,7 @@ export
     integer,
     integer_partitions,
     inv,
+    invdigamma,
     invmod,
     iround,
     iseltype,
