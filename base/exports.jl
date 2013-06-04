@@ -995,6 +995,7 @@ export
     peakflops,
     tty_cols,
     tty_rows,
+    @delegate,
 
 # I/O and events
     accept,
