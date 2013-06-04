@@ -49,6 +49,7 @@
 #endif
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
 #include <setjmp.h>
@@ -252,6 +253,8 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     return f;
 }
 
+extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
+
 extern "C" void jl_generate_fptr(jl_function_t *f)
 {
     // objective: assign li->fptr
@@ -291,40 +294,6 @@ void jl_cstyle_compile(jl_function_t *f)
         (void)to_function(li, true);
         li->inCompile = 0;
     }
-}
-
-extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
-
-extern "C" DLLEXPORT
-const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types)
-{
-    if (!jl_is_function(f) || !jl_is_gf(f))
-        return jl_cstr_to_string((char*)"");
-    jl_function_t *sf = jl_get_specialization(f, types);
-    if (sf == NULL || sf->linfo == NULL) {
-        sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
-        if (sf == jl_bottom_func)
-            return jl_cstr_to_string((char*)"");
-        JL_PRINTF(JL_STDERR,
-                  "Warning: Returned code may not match what actually runs.\n");
-    }
-    std::string code;
-    llvm::raw_string_ostream stream(code);
-    Function *llvmf;
-    if (sf->linfo->functionObject == NULL) {
-        jl_compile(sf);
-    }
-    if (sf->fptr == &jl_trampoline) {
-        if (sf->linfo->cFunctionObject != NULL)
-            llvmf = (Function*)sf->linfo->cFunctionObject;
-        else
-            llvmf = (Function*)sf->linfo->functionObject;
-    }
-    else {
-        llvmf = to_function(sf->linfo, false);
-    }
-    llvmf->print(stream);
-    return jl_cstr_to_string((char*)stream.str().c_str());
 }
 
 extern "C" DLLEXPORT
@@ -417,6 +386,58 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx);
 
 #include "cgutils.cpp"
 #include "debuginfo.cpp"
+#include "debugasm.cpp"
+
+// --- dump function to IR and ASM ---
+
+//extern "C" void jl_dump_function_asm(void*, size_t, formatted_raw_ostream&);
+
+extern "C" DLLEXPORT
+const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm)
+{
+    if (!jl_is_function(f) || !jl_is_gf(f))
+        return jl_cstr_to_string((char*)"");
+    jl_function_t *sf = jl_get_specialization(f, types);
+    if (sf == NULL || sf->linfo == NULL) {
+        sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
+        if (sf == jl_bottom_func)
+            return jl_cstr_to_string((char*)"");
+        JL_PRINTF(JL_STDERR,
+                  "Warning: Returned code may not match what actually runs.\n");
+    }
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+    llvm::formatted_raw_ostream fstream(stream);
+    Function *llvmf;
+    if (sf->linfo->functionObject == NULL) {
+        jl_compile(sf);
+    }
+    if (sf->fptr == &jl_trampoline) {
+        if (sf->linfo->cFunctionObject != NULL)
+            llvmf = (Function*)sf->linfo->cFunctionObject;
+        else
+            llvmf = (Function*)sf->linfo->functionObject;
+    }
+    else {
+        llvmf = to_function(sf->linfo, false);
+    }
+    if(dumpasm == false) {
+        llvmf->print(stream);
+    }
+    else {
+        size_t fptr = (size_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
+        std::map<size_t, FuncInfo> &fmap = jl_jit_events->getMap();
+        std::map<size_t, FuncInfo>::iterator fit = fmap.find(fptr);
+
+        if (fit == fmap.end()) {
+            JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
+            return jl_cstr_to_string((char*)"");
+        }
+        jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fstream);
+        fstream.flush();
+    }
+    return jl_cstr_to_string((char*)stream.str().c_str());
+}
 
 // --- code gen for intrinsic functions ---
 
