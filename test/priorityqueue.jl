@@ -52,6 +52,13 @@ end
 
 test_issorted!(pq, priorities)
 
+# dequeuing
+pq = PriorityQueue(priorities)
+@test nothing == dequeue!(pq, 0)
+@test 10 == dequeue!(pq, 10)
+while !isempty(pq)
+    @test 10 != dequeue!(pq)
+end
 
 # low level heap operations
 xs = heapify!([v for v in values(priorities)])
