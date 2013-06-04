@@ -326,14 +326,15 @@ immutable SubString{T<:String} <: String
     endof::Int
 
     SubString(s::T, i::Int, j::Int) =
-        (o=nextind(s,i-1)-1; new(s,o,nextind(s,j)-o-1))
+        (o=thisind(s,i)-1; new(s,o,thisind(s,j)-o))
 end
 SubString{T<:String}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
 SubString(s::String, i::Integer) = SubString(s, i, endof(s))
 
-write{T<:ByteString}(to::IOBuffer, s::SubString{T}) = write_sub(to, s.string.data, s.offset+1, s.endof)
+write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
+    s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset+1, next(s,s.endof)[2]-1)
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
