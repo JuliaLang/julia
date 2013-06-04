@@ -1512,10 +1512,11 @@ for (stev, stebz, stegr, stein, elty) in
         #*  The spectrum may be computed either completely or partially by specifying
         #*  either an interval (VL,VU] or a range of indices IL:IU for the desired
         #*  eigenvalues.
-        function stegr!(jobz::BlasChar, range::BlasChar, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer, abstol::Real)
+        function stegr!(jobz::BlasChar, range::BlasChar, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
             n = length(dv)
             if length(ev) != (n-1) throw(DimensionMismatch("stebz!")) end
             eev = [ev, zero($elty)]
+            abstol = Array($elty, 1)
             m = Array(BlasInt, 1)
             w = Array($elty, n)
             ldz = jobz == 'N' ? 1 : n
@@ -1535,11 +1536,11 @@ for (stev, stebz, stegr, stein, elty) in
                     Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                     &jobz, &range, &n, dv,
                     eev, &vl, &vu, &il,
-                    &iu, &abstol, m, w,
+                    &iu, abstol, m, w,
                     Z, &ldz, isuppz, work,
                     &lwork, iwork, &liwork, info)
                 if i == 1
-                    lwork = int(work[1])
+                    lwork = blas_int(work[1])
                     work = Array($elty, lwork)
                     liwork = iwork[1]
                     iwork = Array(BlasInt, liwork)
@@ -1598,8 +1599,7 @@ for (stev, stebz, stegr, stein, elty) in
         end
     end
 end
-stegr!(jobz::BlasChar, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
-stegr!(dv::Vector, ev::Vector) = stegr!('N', 'A', dv, ev, 0.0, 0.0, 0, 0, -1.0)
+stegr!(jobz::BlasChar, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
         
 # Allow user to skip specification of iblock and isplit
 stein!(dv::Vector, ev::Vector, w_in::Vector)=stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
