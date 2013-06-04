@@ -131,7 +131,7 @@ macro boundscheck(yesno,blk)
     quote
         $(Expr(:boundscheck,yesno))
         $(esc(blk))
-        $(Expr(:boundscheck,0))
+        $(Expr(:boundscheck,:pop))
     end
 end
 

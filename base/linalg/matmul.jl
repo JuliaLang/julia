@@ -560,7 +560,7 @@ function generic_matmatmul{T,S,R}(C::StridedVecOrMat{R}, tA, tB, A::StridedVecOr
             end
         end
     end
-    end
+    end # @inbounds
     return C
 end
 
