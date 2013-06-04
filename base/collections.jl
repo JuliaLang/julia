@@ -272,7 +272,7 @@ function dequeue!(pq::PriorityQueue)
 end
 
 function dequeue!(pq::PriorityQueue, key)
-     !haskey(pq.index, key) && return
+     !haskey(pq.index, key) && throw(KeyError(key))
      idx = delete!(pq.index, key)
      splice!(pq.xs, idx)
      for (k,v) in pq.index
