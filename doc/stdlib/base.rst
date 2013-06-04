@@ -1659,7 +1659,7 @@ Mathematical Functions
 
 .. function:: lgamma(x)
 
-   Compute the logarithm of ``gamma(x)``
+   Compute the logarithm of absolute value of ``gamma(x)``
 
 .. function:: lfact(x)
 
@@ -1739,7 +1739,7 @@ Mathematical Functions
 
 .. function:: lbeta(x, y)
 
-   Natural logarithm of the beta function :math:`\log(\operatorname{B}(x,y))`.
+   Natural logarithm of the absolute value of the beta function :math:`\log(|\operatorname{B}(x,y)|)`.
 
 .. function:: eta(x)
 

@@ -153,9 +153,21 @@ for f in (:atan2, :hypot)
 end
 
 gamma(x::Float64) = nan_dom_err(ccall((:tgamma,libm),  Float64, (Float64,), x), x)
-gamma(x::Float32) = float32(gamma(float64(x)))
+gamma(x::Float32) = nan_dom_err(ccall((:tgammaf,libm),  Float32, (Float32,), x), x)
 gamma(x::Real) = gamma(float(x))
 @vectorize_1arg Number gamma
+
+function lgamma_r(x::Float64)
+    signp = Array(Int32, 1)
+    y = ccall((:lgamma_r,libm),  Float64, (Float64, Ptr{Int32}), x, signp)
+    return y, signp[1]
+end
+function lgamma_r(x::Float32)
+    signp = Array(Int32, 1)
+    y = ccall((:lgamma_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
+    return y, signp[1]
+end
+lgamma_r(x::Real) = lgamma_r(float(x))
 
 lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
 @vectorize_1arg Number lfact
@@ -785,7 +797,12 @@ invdigamma(x::Float32) = float32(invdigamma(float64(x)))
 invdigamma(x::Real) = invdigamma(float64(x))
 @vectorize_1arg Real invdigamma
 
-beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
+function beta(x::Number, w::Number)
+    yx, sx = lgamma_r(x)
+    yw, sw = lgamma_r(w)
+    yxw, sxw = lgamma_r(x+w)
+    return copysign(exp(yx + yw - yxw), sx*sw*sxw)
+end
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
 @vectorize_2arg Number beta
 @vectorize_2arg Number lbeta
