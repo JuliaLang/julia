@@ -2,6 +2,8 @@ module Reqs
 
 using ..Types
 
+# representing lines of REQUIRE files
+
 abstract Line
 immutable Comment <: Line
     content::String
@@ -11,6 +13,8 @@ immutable Requirement <: Line
     package::String
     versions::VersionSet
 end
+
+# general machinery for parsing REQUIRE files
 
 process(io::IO) = @task begin
     for line in eachline(io)
@@ -41,16 +45,19 @@ function parse(io::IO)
 end
 parse(file::String) = isfile(file) ? open(parse,file) : Requires()
 
+# add & rm: intended to be used with Write.update_file
+
 function add(input::IO, output::IO, pkg::String, versions::VersionSet=VersionSet())
-    existed = false
+    v = VersionSet[]
     for r in process(input)
         if isa(r,Requirement) && r.package == pkg
-            versions = intersect(versions, r.versions)
-            existed = true
+            push!(v, r.versions)
         else
             println(output, r.content)
         end
     end
+    length(v) == 1 && v[1] == intersect(v[1],versions) && return false
+    versions = reduce(intersect, versions, v)
     if versions == VersionSet()
         println(output, pkg)
     else
@@ -62,7 +69,7 @@ function add(input::IO, output::IO, pkg::String, versions::VersionSet=VersionSet
         end
         println(output)
     end
-    return existed
+    return true
 end
 
 function rm(input::IO, output::IO, pkg::String)

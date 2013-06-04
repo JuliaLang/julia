@@ -79,13 +79,11 @@ function setdiff(a::Set, b::Set)
     d
 end
 
-|(s::Set...) = union(s...)
-(&)(s::Set...) = intersect(s...)
--(a::Set, b::Set) = setdiff(a,b)
-
 isequal(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
 isless(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
-function <=(l::Set, r::Set)
+<=(l::Set, r::Set) = issubset(l, r)
+
+function issubset(l, r)
     for elt in l
         if !contains(r, elt)
             return false
