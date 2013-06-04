@@ -186,7 +186,6 @@ function done(itr::EachLine, nada)
     if !eof(itr.stream)
         return false
     end
-    close(itr.stream)
     itr.ondone()
     true
 end

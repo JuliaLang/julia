@@ -382,30 +382,37 @@ ifeq ($(BUILD_OS), WINNT)
 define mingw_to_dos
 $(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1))))
 endef
+endif
+
 define symlink_target
 CLEAN_TARGETS += clean-$(2)/$(1)
 clean-$$(abspath $(2)/$(1)): 
+ifeq ($(BUILD_OS), WINNT)
 	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&)
+else
+	@-rm $$(abspath $(2)/$(1))
+endif
 $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
 $$(abspath $(2)/$(1)): | $$(abspath $(2))
-	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),) 
+ifeq ($(BUILD_OS), WINNT)
+	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+else ifdef JULIA_VAGRANT_BUILD
+	@cp -R $$(abspath $(1)) $$@
+else
+	@ln -sf $$(abspath $(1)) $$@
+endif
 endef
+
+ifeq ($(BUILD_OS), WINNT)
 spawn = $(1)
 else
-define symlink_target
-CLEAN_TARGETS += clean-$(2)/$(1)
-clean-$$(abspath $(2)/$(1)): 
-	@-rm $$(abspath $(2)/$(1))
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
-$$(abspath $(2)/$(1)): | $$(abspath $(2))
-	@ln -sf $$(abspath $(1)) $$@ 
-endef
-ifeq ($(OS),WINNT)
+ifeq ($(OS), WINNT)
 spawn = wine cmd /c "set PATH=$(WINE_PATH) && $$(exec winepath -w '$(1)')"
 else
 spawn = $(1)
 endif
 endif
+
 exec = $(shell $(call spawn,$(1)))
 
 wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '$(2)' | xargs -d";" winepath -u | tr '\n' ' '))))

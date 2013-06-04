@@ -1760,7 +1760,7 @@ function inlining_pass(e::Expr, sv, ast)
         return (e,())
     end
     arg1 = eargs[1]
-    if is_known_call(e, ccall, sv)
+    if is_known_call(e, Core.Intrinsics.ccall, sv)
         i0 = 3
         isccall = true
     else
