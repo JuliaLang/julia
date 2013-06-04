@@ -271,6 +271,16 @@ function dequeue!(pq::PriorityQueue)
     x[1]
 end
 
+function dequeue!(pq::PriorityQueue, key)
+     !haskey(pq.index, key) && return
+     idx = delete!(pq.index, key)
+     splice!(pq.xs, idx)
+     for (k,v) in pq.index
+       (v >= idx) && (pq.index[k] = (v-1))
+     end
+     key
+end
+
 
 # Unordered iteration through key value pairs in a PriorityQueue
 start(pq::PriorityQueue) = start(pq.index)
