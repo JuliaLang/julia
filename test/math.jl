@@ -93,13 +93,17 @@ y33 = bessely(3,3.)
 @test_approx_eq bessely(3,-3) 0.53854161610503161800 - 0.61812544451050328724im
 
 # beta, lbeta
-@test_approx_eq beta(3/2,7/2) 5pi/128
+@test_approx_eq beta(3/2,7/2) 5π/128
 @test_approx_eq beta(3,5) 1/105
 @test_approx_eq lbeta(5,4) log(beta(5,4))
 @test_approx_eq beta(5,4) beta(4,5)
+@test_approx_eq beta(-1/2, 3) -16/3
+@test_approx_eq lbeta(-1/2, 3) log(16/3)
 
 # gamma, lgamma (complex argument)
-@test_approx_eq gamma(0.5) sqrt(pi)
+@test_approx_eq gamma(1/2) sqrt(π)
+@test_approx_eq gamma(-1/2) -2sqrt(π)
+@test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))
 @test_approx_eq lgamma(1.4+3.7im) -3.7094025330996841898 + 2.4568090502768651184im
 @test_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
 
