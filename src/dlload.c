@@ -21,6 +21,9 @@ static char *extensions[] = { "", ".dylib" };
 #elif defined(_OS_WINDOWS_)
 static char *extensions[] = { "", ".dll" };
 #define N_EXTENSIONS 2
+#if defined(_CPU_X86_64_)
+int needsSymRefreshModuleList = 0;
+#endif
 #else
 static char *extensions[] = { ".so", "" };
 #define N_EXTENSIONS 2
@@ -39,6 +42,9 @@ char *jl_lookup_soname(char *pfx, size_t n);
 
 int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
 {
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+    needsSymRefreshModuleList = 1;
+#endif
 #if defined(RTLD_GLOBAL) && defined(RTLD_LAZY) /* POSIX flags available */
     dlerror(); /* Reset error status. */
     lib->handle = dlopen(filename, 

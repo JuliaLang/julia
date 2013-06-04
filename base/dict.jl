@@ -195,7 +195,22 @@ else
         ccall(:int64to32hash, Uint32, (Uint64,), x)
 end
 
-hash(x::Integer) = hash64(uint64(x))
+hash(x::Union(Bool,Char,Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64)) =
+    hash64(uint64(x))
+
+function hash(x::Integer)
+    h::Uint = hash(uint64(x&0xffffffffffffffff))
+    if typemin(Int64) <= x <= typemax(Uint64)
+        return h
+    end
+    x >>>= 64
+    while x != 0 && x != -1
+        h = bitmix(h, hash(uint64(x&0xffffffffffffffff)))
+        x >>>= 64
+    end
+    return h
+end
+
 @eval function hash(x::FloatingPoint)
     if trunc(x) == x
         # hash as integer if equal to some integer. note the result of

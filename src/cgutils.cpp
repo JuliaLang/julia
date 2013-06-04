@@ -276,11 +276,10 @@ static Value *emit_typeof(Value *p)
 
 static void emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
-    std::string txt2 = "in " + ctx->funcName + ": " + txt;
     Value *zeros[2] = { ConstantInt::get(T_int32, 0),
                         ConstantInt::get(T_int32, 0) };
     builder.CreateCall(jlerror_func,
-                       builder.CreateGEP(stringConst(txt2),
+                       builder.CreateGEP(stringConst(txt),
                                          ArrayRef<Value*>(zeros)));
 }
 

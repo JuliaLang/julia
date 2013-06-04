@@ -682,6 +682,7 @@ export
     intersect,
     intersect!,
     isempty,
+    issubset,
     getkey,
     keys,
     length,

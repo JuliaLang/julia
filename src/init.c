@@ -50,6 +50,10 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 #include <windows.h>
+#if defined(_CPU_X86_64_)
+#include <dbghelp.h>
+extern int needsSymRefreshModuleList;
+#endif
 #endif
 #if defined(__linux__)
 //#define _GNU_SOURCE
@@ -442,6 +446,11 @@ void julia_init(char *imageFile)
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
     uv_dlopen("Ws2_32.dll",jl_winsock_handle);
     _jl_exe_handle.handle = GetModuleHandleA(NULL);
+#if defined(_CPU_X86_64_)
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
+    SymInitialize(GetCurrentProcess(), NULL, 1);
+    needsSymRefreshModuleList = 0;
+#endif
 #endif
     jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
     init_stdio();

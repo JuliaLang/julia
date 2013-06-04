@@ -121,4 +121,5 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
     if n > 1 || lastline != -11
         show_trace_entry(io, lastname, lastfile, lastline, n)
     end
+    @windows_only if WORD_SIZE == 64 warn_once("\nbacktraces on your platform are often misleading or partially incorrect") end
 end

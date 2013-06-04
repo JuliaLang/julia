@@ -722,6 +722,8 @@ macro mstr(s...); triplequoted(s...); end
 function shell_parse(raw::String, interp::Bool)
 
     s = strip(raw)
+    isempty(s) && return interp ? Expr(:tuple,:()) : {}
+
     in_single_quotes = false
     in_double_quotes = false
 
@@ -821,7 +823,7 @@ function shell_split(s::String)
     args
 end
 
-function print_shell_word(io, word::String)
+function print_shell_word(io::IO, word::String)
     if isempty(word)
         print(io, "''")
     end
@@ -851,16 +853,16 @@ function print_shell_word(io, word::String)
     end
 end
 
-function print_shell_escaped(io, cmd::String, args::String...)
+function print_shell_escaped(io::IO, cmd::String, args::String...)
     print_shell_word(io, cmd)
     for arg in args
         print(io, ' ')
         print_shell_word(io, arg)
     end
 end
+print_shell_escaped(io::IO) = nothing
 
-shell_escape(cmd::String, args::String...) =
-    sprint(print_shell_escaped, cmd, args...)
+shell_escape(args::String...) = sprint(print_shell_escaped, args...)
 
 ## interface to parser ##
 
