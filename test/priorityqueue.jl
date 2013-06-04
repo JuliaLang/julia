@@ -52,6 +52,18 @@ end
 
 test_issorted!(pq, priorities)
 
+# dequeuing
+pq = PriorityQueue(priorities)
+try
+    dequeue!(pq, 0)
+    error("should have resulted in KeyError")
+catch ex
+    @test isa(ex, KeyError)
+end
+@test 10 == dequeue!(pq, 10)
+while !isempty(pq)
+    @test 10 != dequeue!(pq)
+end
 
 # low level heap operations
 xs = heapify!([v for v in values(priorities)])
