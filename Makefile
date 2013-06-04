@@ -36,7 +36,9 @@ julia-debug julia-release:
 	@$(MAKE) $(QUIET_MAKE) -C base
 	@$(MAKE) $(QUIET_MAKE) -C ui $@
 ifneq ($(OS),WINNT)
+ifndef JULIA_VAGRANT_BUILD
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
+endif
 endif
 
 $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
@@ -134,7 +136,7 @@ endif
 	cp $(call wine_pathsearch,libstdc++-6.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 	cp $(call wine_pathsearch,libssp-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 endif
-	zip -r -9 julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).zip julia-$(JULIA_COMMIT)
+	7z a -mx9 julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).zip julia-$(JULIA_COMMIT)
 else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 endif

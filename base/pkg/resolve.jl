@@ -204,7 +204,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
     # the same pattern are equivalent.
-    vmask = [ [ BitVector() for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
+    vmask = [ [ BitVector(0) for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
 
     # From the point of view of resolve(), VectorSet(pkg,[]) and
     # VectorSet(pkg, [v0]) are equivelent if v0 is the first

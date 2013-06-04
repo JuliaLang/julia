@@ -651,7 +651,7 @@ static void init_rl(void)
         // make sure keywords are in symbol table
         (void)jl_symbol(lang_keywords[i]);
     }
-    rl_completer_word_break_characters = " \t\n\"\\'`@$><=;|&{}()[],+-*/?%^~!";
+    rl_completer_word_break_characters = " \t\n\"\\'`@$><=;|&{}()[],+-*/?%^~!:";
     Keymap keymaps[] = {emacs_standard_keymap, vi_insertion_keymap};
     int i;
     for (i = 0; i < sizeof(keymaps)/sizeof(keymaps[0]); i++) {

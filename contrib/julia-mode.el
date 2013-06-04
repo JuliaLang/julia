@@ -6,7 +6,7 @@
 ; =====
 
 ; Put the following code in your .emacs, site-load.el, or other relevant file
-; (load "path-to-julia-mode/julia-mode.el")
+; (add-to-list 'load-path "path-to-julia-mode")
 ; (require 'julia-mode)
 
 
@@ -65,7 +65,8 @@
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
 
 (defconst julia-forloop-in-regex
-  "for +.*[^ 	].* \\(in\\)\\(\\s-\\|$\\)+")
+  "for +.*[^ 	
+].* \\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-font-lock-keywords
   (list '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|Integer\\|FloatingPoint\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|Range\\|Range1\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Ranges\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
