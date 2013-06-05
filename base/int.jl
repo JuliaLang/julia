@@ -1,15 +1,28 @@
+## type aliases ##
+
+typealias SmallSigned Union(Int8,Int16,Int32,Int)
+typealias SmallUnsigned Union(Uint8,Uint16,Uint32,Uint)
+
 ## integer arithmetic ##
 
--(x::Signed) = -int(x)
--(x::Unsigned) = -uint(x)
+-(x::SmallSigned) = -int(x)
+-(x::SmallUnsigned) = -uint(x)
 
-+{T<:Signed}(x::T, y::T) = int(x) + int(y)
--{T<:Signed}(x::T, y::T) = int(x) - int(y)
-*{T<:Signed}(x::T, y::T) = int(x) * int(y)
++{T<:SmallSigned}(x::T, y::T) = int(x) + int(y)
+-{T<:SmallSigned}(x::T, y::T) = int(x) - int(y)
+*{T<:SmallSigned}(x::T, y::T) = int(x) * int(y)
 
-+{T<:Unsigned}(x::T, y::T) = uint(x) + uint(y)
--{T<:Unsigned}(x::T, y::T) = uint(x) - uint(y)
-*{T<:Unsigned}(x::T, y::T) = uint(x) * uint(y)
++{T<:SmallUnsigned}(x::T, y::T) = uint(x) + uint(y)
+-{T<:SmallUnsigned}(x::T, y::T) = uint(x) - uint(y)
+*{T<:SmallUnsigned}(x::T, y::T) = uint(x) * uint(y)
+
+div{T<:SmallSigned}(x::T, y::T) = div(int(x),int(y))
+rem{T<:SmallSigned}(x::T, y::T) = rem(int(x),int(y))
+mod{T<:SmallSigned}(x::T, y::T) = mod(int(x),int(y))
+
+div{T<:SmallUnsigned}(x::T, y::T) = div(uint(x),uint(y))
+rem{T<:SmallUnsigned}(x::T, y::T) = rem(uint(x),uint(y))
+mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 -(x::Int)     = box(Int,neg_int(unbox(Int,x)))
 -(x::Uint)    = box(Uint,neg_int(unbox(Uint,x)))
@@ -39,14 +52,6 @@
 
 /(x::Integer, y::Integer) = float(x)/float(y)
 inv(x::Integer) = float(one(x))/float(x)
-
-div{T<:Signed}(x::T, y::T) = div(int(x),int(y))
-rem{T<:Signed}(x::T, y::T) = rem(int(x),int(y))
-mod{T<:Signed}(x::T, y::T) = mod(int(x),int(y))
-
-div{T<:Unsigned}(x::T, y::T) = div(uint(x),uint(y))
-rem{T<:Unsigned}(x::T, y::T) = rem(uint(x),uint(y))
-mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)),y)),x)
 div(x::Unsigned, y::Signed) = unsigned(flipsign(signed(div(x,unsigned(abs(y)))),y))
