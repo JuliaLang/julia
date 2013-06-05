@@ -1035,7 +1035,7 @@
 	   (cons 'toplevel imports))))
     ((ccall)
      (if (not (eqv? (peek-token s) #\())
-	 'ccall
+	 (error "invalid ccall syntax")
 	 (begin
 	   (take-token s)
 	   (let ((al (parse-arglist s #\))))
@@ -1054,8 +1054,9 @@
 		    '()
 		    (parse-comma-separated-assignments s))))
     `(-> (tuple ,@doargs)
-	 ,(begin0 (parse-block s)
-		  (expect-end- s 'do)))))
+	 ,(without-whitespace-newline
+	   (begin0 (parse-block s)
+		   (expect-end- s 'do))))))
 
 (define (macrocall-to-atsym e)
   (if (and (pair? e) (eq? (car e) 'macrocall))

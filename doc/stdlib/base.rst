@@ -117,6 +117,12 @@ All Objects
 
    While it isn't normally necessary, user-defined types can override the default ``deepcopy`` behavior by defining a specialized version of the function ``deepcopy_internal(x::T, dict::ObjectIdDict)`` (which shouldn't otherwise be used), where ``T`` is the type to be specialized for, and ``dict`` keeps track of objects copied so far within the recursion. Within the definition, ``deepcopy_internal`` should be used in place of ``deepcopy``, and the ``dict`` variable should be updated as appropriate before returning.
 
+.. function:: isdefined(object, index | symbol)
+
+   Tests whether an assignable location is defined. The arguments can be an
+   array and index, a composite object and field name (as a symbol), or a
+   module and a symbol.
+
 .. function:: convert(type, x)
 
    Try to convert ``x`` to the given type.
@@ -1659,7 +1665,7 @@ Mathematical Functions
 
 .. function:: lgamma(x)
 
-   Compute the logarithm of ``gamma(x)``
+   Compute the logarithm of absolute value of ``gamma(x)``
 
 .. function:: lfact(x)
 
@@ -1739,7 +1745,7 @@ Mathematical Functions
 
 .. function:: lbeta(x, y)
 
-   Natural logarithm of the beta function :math:`\log(\operatorname{B}(x,y))`.
+   Natural logarithm of the absolute value of the beta function :math:`\log(|\operatorname{B}(x,y)|)`.
 
 .. function:: eta(x)
 
@@ -2888,11 +2894,12 @@ Parallel Computing
 
    Add processes on the local machine. Can be used to take advantage of multiple cores.
 
-.. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME)
+.. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``)
 
    Add processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
    If ``tunnel`` is ``true`` then SSH tunneling will be used. Named argument ``dir``
-   optionally specifies the location of the julia binaries on the worker nodes.
+   optionally specifies the location of the julia binaries on the worker nodes. Additional ssh options may be specified 
+   by passing a Cmd object with named argument ``sshflags``, e.g., sshflags=`-i /home/foo/bar.pem`
 
 .. function:: addprocs_sge(n)
 

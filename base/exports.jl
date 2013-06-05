@@ -182,8 +182,11 @@ export
     VERSION,
     WORD_SIZE,
     e,
+    eulergamma,
+    γ,
     im,
     pi,
+    π,
 
 # Operators
     !,
@@ -344,6 +347,7 @@ export
     integer,
     integer_partitions,
     inv,
+    invdigamma,
     invmod,
     iround,
     iseltype,
@@ -413,6 +417,7 @@ export
     tanh,
     trailing_ones,
     trailing_zeros,
+    trigamma,
     trunc,
     uint,
     uint128,
@@ -448,6 +453,7 @@ export
     beta,
     lbeta,
     eta,
+    polygamma,
     zeta,
 
 # arrays
