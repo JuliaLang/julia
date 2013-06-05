@@ -122,28 +122,19 @@ If you are building for 64-bit windows. The steps are essentially the same. Just
 First the required dependencies will be installed:
 
 1. Install the following packages from the official Arch repository:
-
 `sudo pacman -S cloog gcc-ada libmpc p7zip ppl subversion zlib`
-
 2. The rest of the prerequisites consist of the mingw-w64 packages, which are available in the AUR Arch repository. They must be installed exactly in the order they are given or else their installation will fail. The `yaourt` package manager is used for illustration purposes; you may instead follow the [Arch instructions for installing packages from AUR](https://wiki.archlinux.org/index.php/Arch_User_Repository#Installing_packages) or may use your preferred package manager. To start with, install `mingw-w64-binutils`:
-
 `yaourt -S mingw-w64-binutils`
-
 3. `yaourt -S mingw-w64-headers-svn`
 4. `yaourt -S mingw-w64-headers-bootstrap`
 5. `yaourt -S mingw-w64-gcc-base`
 6. `yaourt -S mingw-w64-crt-svn`
 7. Remove `mingw-w64-headers-bootstrap` without removing its dependent mingw-w64 installed packages by using the command
-
 `yaourt -Rdd mingw-w64-headers-bootstrap`
-
 8. yaourt -S mingw-w64-winpthreads
 9. Remove `mingw-w64-gcc-base` without removing its installed mingw-w64 dependencies:
-
 `yaourt -Rdd mingw-w64-gcc-base`
-
 10. Complete the installation of `mingw-w64`:
-
 `yaourt -S mingw-w64-gcc`
 
 Important Build Errata
