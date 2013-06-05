@@ -234,7 +234,7 @@ macro vectorize_2arg(S,f)
 end
 
 # some operators not defined yet
-global //, .>>, .<<, &>, &>>, &<, &<<
+global //, .>>, .<<, >:, <|, |>
 
 module Operators
 
@@ -264,6 +264,7 @@ export
     //,
     <,
     <:,
+    >:,
     <<,
     <=,
     ==,
@@ -273,13 +274,11 @@ export
     .>>,
     .<<,
     >>>,
-    &>,
-    &>>,
-    &<,
-    &<<,
     \,
     ^,
     |,
+    |>,
+    <|,
     ~
 
 import
@@ -287,7 +286,6 @@ import
     Base..+, Base..-, Base..*, Base../, Base..<, Base..<=, Base..==, Base..>,
     Base..>=, Base..\, Base..^, Base./, Base.//, Base.<, Base.<:, Base.<<,
     Base.<=, Base.==, Base.>, Base.>=, Base.>>, Base..>>, Base..<<, Base.>>>,
-    Base.&>, Base.&>>, Base.&<, Base.&<<, Base.\, Base.^, Base.|, Base.~,
-    Base.!==
+    Base.<|, Base.|>, Base.\, Base.^, Base.|, Base.~, Base.!==, Base.>:
 
 end
