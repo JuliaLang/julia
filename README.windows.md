@@ -138,6 +138,7 @@ First the required dependencies will be installed:
 `yaourt -S mingw-w64-gcc`
 
 The build and install process of Julia is the same as in steps 1-7 of Ubuntu except that the following changes need to be made before executing the 7 steps:
+
 1. Add `OPENBLAS_BUILD_OPTS += HOSTCC=gcc` in `deps/Makefile` after the definition of the `OPENBLAS_BUILD_OPTS` environment variable.
 2. In `src/Mafefile` replace `./flisp/flisp` with `$(call spawn,./flisp/flisp)`. More specifically replace the lines
 
