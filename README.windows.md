@@ -129,12 +129,12 @@ First the required dependencies will be installed:
 4. `yaourt -S mingw-w64-headers-bootstrap`
 5. `yaourt -S mingw-w64-gcc-base`
 6. `yaourt -S mingw-w64-crt-svn`
-7. Remove `mingw-w64-headers-bootstrap` without removing its dependent mingw-w64 installed packages by using the command:
+7. Remove `mingw-w64-headers-bootstrap` without removing its dependent mingw-w64 installed packages by using the command
 `yaourt -Rdd mingw-w64-headers-bootstrap`
 8. `yaourt -S mingw-w64-winpthreads`
 9. Remove `mingw-w64-gcc-base` without removing its installed mingw-w64 dependencies:
 `yaourt -Rdd mingw-w64-gcc-base`
-10. Complete the installation of `mingw-w64`:
+10. Complete the installation of the required `mingw-w64` packages:
 `yaourt -S mingw-w64-gcc`
 
 Important Build Errata
