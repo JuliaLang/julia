@@ -455,8 +455,9 @@ for (gels, gesv, getrs, getri, elty) in
         end
     end
 end
-for (gelsd, elty) in ((:dgelsd_, :Float64),
-                      (:sgelsd_, :Float32))
+for (gelsd, gelsy, elty) in 
+    ((:dgelsd_,:dgelsy_,:Float64),
+     (:sgelsd_,:sgelsy_,:Float32))
     @eval begin
         # SUBROUTINE DGELSD( M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK,
         #      $                   WORK, LWORK, IWORK, INFO )
@@ -467,17 +468,13 @@ for (gelsd, elty) in ((:dgelsd_, :Float64),
         # *     .. Array Arguments ..
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), S( * ), WORK( * )
-        function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
+        function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond::Real)
             chkstride1(A, B)
             m, n  = size(A)
             if size(B, 1) != m; throw(DimensionMismatch("gelsd!")); end
-            if size(B, 1) < n
-                newB = Array($elty, n, size(B, 2))
-                newB[1:size(B, 1), :] = B
-            else
-                newB = B
-            end
+            newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             s     = Array($elty, min(m, n))
+            rcond = convert($elty, rcond)
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
@@ -500,11 +497,56 @@ for (gelsd, elty) in ((:dgelsd_, :Float64),
             end
             isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
         end
-        gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
+        gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -one($elty))
+
+#       SUBROUTINE DGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
+#      $                   WORK, LWORK, INFO )
+# *     .. Scalar Arguments ..
+#       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS, RANK
+#       DOUBLE PRECISION   RCOND
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            JPVT( * )
+#       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), WORK( * )
+        function gelsy!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond::Real)
+            chkstride1(A, B)
+            m = size(A, 1)
+            n = size(A, 2)
+            nrhs = size(B, 2)
+            if m != size(B, 1) throw(DimensionMismatch("Left and right hands side must have same number of rows")) end
+            newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
+            lda = max(1, m)
+            ldb = max(1, m, n)
+            jpvt = Array(BlasInt, n)
+            rcond = convert($elty, rcond)
+            rnk = Array(BlasInt, 1)
+            work = Array($elty, 1)
+            lwork = -1
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(gelsy)), liblapack), Void, 
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{BlasInt}),
+                    &m, &n, &nrhs, A, 
+                    &lda, newB, &ldb, jpvt, 
+                    &rcond, rnk, work, &lwork, 
+                    info)
+                if i == 1
+                    lwork = blas_int(work[1])
+                    work = Array($elty, lwork)
+                end
+            end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            return isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+        end
+        gelsy!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsy!(A, B, eps($elty))
     end
 end
-for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
-                             (:cgelsd_, :Complex64, :Float32))
+for (gelsd, gelsy, elty, relty) in 
+    ((:zgelsd_,:zgelsy_,:Complex128,:Float64),
+     (:cgelsd_,:cgelsy_,:Complex64,:Float32))
     @eval begin
         # SUBROUTINE ZGELSD( M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK,
         #      $                   WORK, LWORK, RWORK, IWORK, INFO )
@@ -516,17 +558,13 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   RWORK( * ), S( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
-        function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
+        function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond::Real)
             chkstride1(A, B)
             m, n  = size(A)
             if size(B,1) != m; throw(DimensionMismatch("gelsd!")); end
-            if size(B, 1) < n
-                newB = Array($elty, n, size(B, 2))
-                newB[1:size(B, 1), :] = B
-            else
-                newB = B
-            end
+            newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             s     = Array($elty, min(m, n))
+            rcond = convert($relty, rcond)
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
@@ -551,9 +589,56 @@ for (gelsd, elty, relty) in ((:zgelsd_, :Complex128, :Float64),
             end
             isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
         end
-        gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
+        gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -one($relty))
+
+#       SUBROUTINE ZGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
+#      $                   WORK, LWORK, RWORK, INFO )
+# *     .. Scalar Arguments ..
+#       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS, RANK
+#       DOUBLE PRECISION   RCOND
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            JPVT( * )
+#       DOUBLE PRECISION   RWORK( * )
+#       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        function gelsy!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond::Real)
+            chkstride1(A, B)
+            m = size(A, 1)
+            n = size(A, 2)
+            nrhs = size(B, 2)
+            if m != size(B, 1) throw(DimensionMismatch("Left and right hands side must have same number of rows")) end
+            newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
+            lda = max(1, m)
+            ldb = max(1, m, n)
+            jpvt = Array(BlasInt, n)
+            rcond = convert($relty, rcond)
+            rnk = Array(BlasInt, 1)
+            work = Array($elty, 1)
+            lwork = -1
+            rwork = Array($relty, 2n)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(gelsy)), liblapack), Void, 
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$relty}, Ptr{BlasInt}),
+                    &m, &n, &nrhs, A, 
+                    &lda, newB, &ldb, jpvt, 
+                    &rcond, rnk, work, &lwork, 
+                    rwork, info)
+                if i == 1
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            return isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+        end
+        gelsy!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsy!(A, B, eps($relty))
     end
 end
+
 for (gglse, elty) in ((:dgglse_, :Float64),
                       (:sgglse_, :Float32),
                       (:zgglse_, :Complex128),
