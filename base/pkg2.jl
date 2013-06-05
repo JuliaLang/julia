@@ -1,11 +1,11 @@
 module Pkg2
 
-include("pkg/dir.jl")
-include("pkg/types.jl")
-include("pkg/reqs.jl")
-include("pkg/read.jl")
-include("pkg/query.jl")
-include("pkg/write.jl")
+include("pkg2/dir.jl")
+include("pkg2/types.jl")
+include("pkg2/reqs.jl")
+include("pkg2/read.jl")
+include("pkg2/query.jl")
+include("pkg2/write.jl")
 
 using .Types
 import Base.Pkg.Resolve
