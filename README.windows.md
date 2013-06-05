@@ -64,9 +64,11 @@ Running julia can be done in two ways:
 Cross-Compile
 -------------
 
-If you prefer to cross-compile, the following steps should get you started:
+If you prefer to cross-compile, the following steps should get you started.
 
-First, you will need to ensure your system has the required dependencies. Note that I build on an Ubuntu system, so the `make dist` may not be fully functional on other systems. On Ubuntu 12.04, the following command will install the required build dependencies.
+### Building on Ubuntu
+
+First, you will need to ensure your system has the required dependencies. On Ubuntu 12.04, the following command will install the required build dependencies.
 
 ```
 apt-get install \
@@ -114,6 +116,14 @@ Finally, the build and install process:
 6. move the julia-* directory/zipfile to the target machine
 
 If you are building for 64-bit windows. The steps are essentially the same. Just replace i686 in XC_HOST with x86_64.
+
+### Building on Arch Linux
+
+First the required dependencies will be installed:
+
+1. Install the following packages from the official Arch repository:
+`sudo pacman -S cloog gcc-ada libmpc p7zip ppl subversion zlib`
+2. 
 
 Important Build Errata
 ----------------------
