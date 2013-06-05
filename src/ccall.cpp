@@ -664,7 +664,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         Value *arg;
         if (largty == jl_pvalue_llvmt ||
-                largty->isStructTy()) {
+            largty->isStructTy()) {
             arg = emit_expr(argi, ctx, true);
         }
         else {
@@ -676,16 +676,15 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     arg = emit_unbox(largty, PointerType::get(largty,0), arg);
             }
         }
-        /*
+
 #ifdef JL_GC_MARKSWEEP
         // make sure args are rooted
-        if (largty->isPointerTy() &&
-            (largty == jl_pvalue_llvmt ||
-             !jl_is_bits_type(expr_type(args[i], ctx)))) {
-            make_gcroot(boxed(arg), ctx);
+        if (largty == jl_pvalue_llvmt &&
+            !(jl_is_symbol(argi) || jl_is_symbolnode(argi))) {
+            make_gcroot(arg, ctx);
         }
 #endif
-        */
+
         bool mightNeed=false;
         argvals[ai] = julia_to_native(largty, jargty, arg, argi, addressOf,
                                       ai+1, ctx, &mightNeed);
