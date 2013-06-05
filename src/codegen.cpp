@@ -697,9 +697,12 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                             esc = true;
                             // 2nd and 3d arguments are static
                             max_arg_depth(jl_exprarg(e,1), max, sp, esc, ctx);
-                            for(i=4; i < (size_t)alen; i++) {
+                            for(i=4; i < (size_t)alen; i+=2) {
                                 max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
+                                (*sp)++;
+                                if (*sp > *max) *max = *sp;
                             }
+                            (*sp) = lastsp;
                             return;
                         }
                     }
