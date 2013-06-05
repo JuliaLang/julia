@@ -161,7 +161,7 @@ julia_flisp.boot: julia-parser.scm julia-syntax.scm \
     $(QUIET_FLISP) $(call spawn,./flisp/flisp) ./mk_julia_flisp_boot.scm
 ```
 
-Finally, after completing the Julia cross-compilation by executing the 7 above steps and after moving the julia-* directory/zipfile to the target machine, add the `julia-*/lib` and `julia-*/lib/lib` directories to your Windows `PATH` environment variable.
+Finally, after completing the Julia cross-compilation by executing the 7 Julia build and installation steps described in the Ubuntu section and after moving the julia-* directory/zipfile to the target machine, add the `julia-*/lib` and `julia-*/lib/lib` directories to your Windows `PATH` environment variable.
 
 Important Build Errata
 ----------------------
