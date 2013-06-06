@@ -39,8 +39,12 @@ const γ = MathConst{:γ}()
 const pi = π
 const euler_mascheroni = γ
 
-promote_rule{sym}(::Type{MathConst{sym}}, ::Type) = Float64
-promote_rule{sym}(::Type{MathConst{sym}}, ::Type{Float32})  = Float32
+promote_rule{s}(::Type{MathConst{s}}, ::Type) = Float64
+promote_rule{s}(::Type{MathConst{s}}, ::Type{Float32}) = Float32
+promote_rule{s}(::Type{MathConst{s}}, ::Type{ImaginaryUnit}) = Complex{Float64}
+promote_rule{s}(::Type{ImaginaryUnit}, ::Type{MathConst{s}}) = Complex{Float64}
+promote_rule{s,T<:Real}(::Type{MathConst{s}}, ::Type{Complex{T}}) =
+    Complex{promote_type(MathConst{s},T)}
 
 convert(::Type{Float64}, ::MathConst{:e}) = 2.71828182845904523536
 convert(::Type{Float64}, ::MathConst{:π}) = 3.14159265358979323846
@@ -51,6 +55,7 @@ convert(::Type{Float32}, ::MathConst{:π}) = 3.1415927f0
 convert(::Type{Float32}, ::MathConst{:γ}) = 0.5772157f0
 
 convert(::Type{FloatingPoint}, x::MathConst) = float64(x)
+convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, float64(x))
 convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, float64(x))
 
 -(x::MathConst) = -float64(x)
@@ -59,6 +64,9 @@ convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, fl
 *(x::MathConst, y::MathConst) = float64(x) * float64(y)
 /(x::MathConst, y::MathConst) = float64(x) / float64(y)
 ^(x::MathConst, y::MathConst) = float64(x) ^ float64(y)
+
+*(x::MathConst, i::ImaginaryUnit) = float64(x)*i
+*(i::ImaginaryUnit, x::MathConst) = i*float64(x)
 
 # non-type specific math functions
 
