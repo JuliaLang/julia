@@ -11,7 +11,7 @@ function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol)
     uplochar = string(uplo)[1]
     C, info = LAPACK.potrf!(uplochar, A)
     if info > 0 throw(PosDefException(info)) end
-    Cholesky(uplochar == 'L' ? tril(C) : triu(C), uplochar)
+    Cholesky(C, uplochar)
 end
 cholfact!(A::StridedMatrix, args...) = cholfact!(float(A), args...)
 cholfact!{T<:BlasFloat}(A::StridedMatrix{T}) = cholfact!(A, :U)
@@ -26,6 +26,7 @@ size(C::Cholesky) = size(C.UL)
 size(C::Cholesky,d::Integer) = size(C.UL,d)
 
 function getindex(C::Cholesky, d::Symbol)
+    C.uplo == 'U' ? triu!(C.UL) : tril!(C.UL)
     if d == :U || d == :L
         return symbol(C.uplo) == d ? C.UL : C.UL'
     elseif d == :UL
@@ -148,12 +149,12 @@ size(A::LU) = size(A.factors)
 size(A::LU,n) = size(A.factors,n)
 
 function getindex{T}(A::LU{T}, d::Symbol)
-    if d == :L; return tril(A.factors, -1) + eye(T, size(A, 1)); end;
-    if d == :U; return triu(A.factors); end;
+    m, n = size(A)
+    if d == :L; return tril(A.factors[1:m, 1:min(m,n)], -1) + eye(T, m, min(m,n)); end;
+    if d == :U; return triu(A.factors[1:min(m,n),1:n]); end;
     if d == :p
-        n = size(A, 1)
-        p = [1:n]
-        for i in 1:n
+        p = [1:m]
+        for i in 1:length(A.ipiv)
             tmp = p[i]
             p[i] = p[A.ipiv[i]]
             p[A.ipiv[i]] = tmp
@@ -162,9 +163,8 @@ function getindex{T}(A::LU{T}, d::Symbol)
     end
     if d == :P
         p = A[:p]
-        n = length(p)
-        P = zeros(T, n, n)
-        for i in 1:n
+        P = zeros(T, m, m)
+        for i in 1:m
             P[i,p[i]] = one(T)
         end
         return P
@@ -174,14 +174,58 @@ end
 
 function det{T}(A::LU{T})
     m, n = size(A)
+    if m != n throw(DimensionMismatch("Matrix must be square")) end
     if A.info > 0; return zero(typeof(A.factors[1])); end
     prod(diag(A.factors)) * (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
+
+function logdet2{T<:Real}(A::LU{T})  # return log(abs(det)) and sign(det)
+    m, n = size(A); if m!=n error("matrix must be square") end
+    dg = diag(A.factors)
+    s = (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T)) * prod(sign(dg))
+    return sum(log(abs(dg))) , s 
+end
+
+function logdet{T<:Real}(A::LU{T})
+    d,s = logdet2(A)
+    if s<0 error("DomainError: determinant is negative") end
+    return d
+end
+
+function logdet{T<:Complex}(A::LU{T})
+    m, n = size(A); if m!=n error("matrix must be square") end
+    s = sum(log(diag(A.factors))) + (bool(sum(A.ipiv .!= 1:n) % 2) ? complex(0,pi) : 0) 
+    r,a = reim(s); a = a % 2pi; if a>pi a -=2pi elseif a<=-pi a+=2pi end
+    return complex(r,a)    
+end
+
 
 function (\){T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
     if A.info > 0; throw(SingularException(A.info)); end
     LAPACK.getrs!('N', A.factors, A.ipiv, copy(B))
 end
+
+function At_ldiv_B{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
+    if A.info > 0; throw(SingularException(A.info)); end
+    LAPACK.getrs!('T', A.factors, A.ipiv, copy(B))
+end
+
+function Ac_ldiv_B{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T})
+    if A.info > 0; throw(SingularException(A.info)); end
+    LAPACK.getrs!('C', A.factors, A.ipiv, copy(B))
+end
+
+function At_ldiv_Bt{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
+    if A.info > 0; throw(SingularException(A.info)); end
+    LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B))
+end
+
+function Ac_ldiv_Bc{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T})
+    if A.info > 0; throw(SingularException(A.info)); end
+    LAPACK.getrs!('C', A.factors, A.ipiv, ctranspose(B))
+end
+
+(/){T}(B::Matrix{T},A::LU{T}) = At_ldiv_Bt(A,B).'
 
 function inv(A::LU)
     if A.info > 0; return throw(SingularException(A.info)); end
@@ -270,13 +314,6 @@ type QRPivoted{T} <: Factorization{T}
     hh::Matrix{T}
     tau::Vector{T}
     jpvt::Vector{BlasInt}
-    function QRPivoted(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{BlasInt})
-        m, n = size(hh)
-        if length(tau) != min(m,n) || length(jpvt) != n
-            throw(DimensionMismatch(""))
-        end
-        new(hh,tau,jpvt)
-    end
 end
 
 qrpfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPivoted{T}(LAPACK.geqp3!(A)...)
@@ -308,10 +345,34 @@ function getindex{T<:BlasFloat}(A::QRPivoted{T}, d::Symbol)
     error("No such type field")
 end
 
-(\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedVector{T}) = (Triangular(A[:R])\(A[:Q]'B)[1:size(A, 2)])[invperm(A.jpvt)]
-(\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}) = (Triangular(A[:R])\(A[:Q]'B)[1:size(A, 2),:])[invperm(A.jpvt),:]
+# Julia implementation similarly to xgelsy
+function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
+    ar = abs(A.hh[1])
+    nr = min(size(A.hh))
+    if ar != 0 || error("Left hand side is zero") end
+    rnk = 1
+    xmin = ones(T, nr)
+    xmax = ones(T, nr)
+    tmin = ar
+    tmax = ar
+    while rnk < nr
+        tmin, smin, cmin = LAPACK.laic1!(2, sub(xmin, 1:rnk), tmin, sub(A.hh, 1:rnk, rnk + 1), A.hh[rnk + 1, rnk + 1])
+        tmax, smax, cmax = LAPACK.laic1!(1, sub(xmax, 1:rnk), tmax, sub(A.hh, 1:rnk, rnk + 1), A.hh[rnk + 1, rnk + 1])
+        if tmax*rcond > tmin break end
+        xmin[1:rnk + 1] = [smin*sub(xmin, 1:rnk), cmin]
+        xmax[1:rnk + 1] = [smax*sub(xmin, 1:rnk), cmax]
+        rnk += 1
+        # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
+    end
+    C, tau = LAPACK.tzrzf!(A.hh[1:rnk,:])
+    X = [Triangular(C[1:rnk,1:rnk],:U)\(A[:Q]'B)[1:rnk,:]; zeros(T, size(A.hh, 2) - rnk, size(B, 2))]
+    LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, tau, X)
+    return X[invperm(A[:p]),:], rnk
+end
+(\)(A::QRPivoted, B::StridedMatrix) = (\)(A, B, sqrt(eps(typeof(real(B[1])))))[1]
+(\)(A::QRPivoted, B::StridedVector) = (\)(A, reshape(B, length(B), 1))[:]
 
-type QRPivotedQ{T}  <: AbstractMatrix{T}
+type QRPivotedQ{T} <: AbstractMatrix{T}
     hh::Matrix{T}                       # Householder transformations and R
     tau::Vector{T}                      # Scalar factors of transformations
 end
@@ -320,14 +381,14 @@ QRPivotedQ(A::QRPivoted) = QRPivotedQ(A.hh, A.tau)
 size(A::QRPivotedQ, args...) = size(A.hh, args...)
 
 function full{T<:BlasFloat}(A::QRPivotedQ{T}, thin::Bool)
+    m, n = size(A.hh)
     if !thin
-        Q = Array(T, size(A, 1), size(A, 1))
-        Q[:,1:size(A, 2)] = copy(A.hh)
-        return LAPACK.orgqr!(Q, A.tau)
-    else
-        return LAPACK.orgqr!(copy(A.hh), A.tau)
+        B = [A.hh zeros(T, m, max(0, m - n))]
+        return LAPACK.orgqr!(B, A.tau)
     end
+    return LAPACK.orgqr!(copy(A.hh), A.tau)
 end
+
 full(A::QRPivotedQ) = full(A, true)
 print_matrix(io::IO, A::QRPivotedQ) = print_matrix(io, full(A))
 
@@ -412,7 +473,7 @@ end
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T})
     n = size(A, 2)
     if n == 0; return Eigen(zeros(T, 0), zeros(T, 0, 0)) end
-    if ishermitian(A) return eigfact!(Hermitian(A)) end
+    if issym(A) return eigfact!(Symmetric(A)) end
 
     WR, WI, VL, VR = LAPACK.geev!('N', 'V', A)
     if all(WI .== 0.) return Eigen(WR, VR) end
@@ -451,7 +512,7 @@ end
 eigvecs(A::Union(Number, AbstractMatrix)) = eigfact(A)[:vectors]
 
 function eigvals{T<:BlasReal}(A::StridedMatrix{T})
-    if ishermitian(A) return eigvals(Hermitian(A)) end
+    if issym(A) return eigvals(Symmetric(A)) end
     valsre, valsim, _, _ = LAPACK.geev!('N', 'N', copy(A))
     if all(valsim .== 0) return valsre end
     return complex(valsre, valsim)
@@ -489,7 +550,7 @@ function getindex(A::GeneralizedEigen, d::Symbol)
 end
 
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    if ishermitian(A) & ishermitian(B) return eigfact!(Hermitian(A), Hermitian(B)) end
+    if issym(A) & issym(B) return eigfact!(Symmetric(A), Symmetric(B)) end
     n = size(A, 1)
     alphar, alphai, beta, ~, vr = LAPACK.ggev!('N', 'V', A, B)
     if all(alphai .== 0) 
@@ -525,7 +586,7 @@ function eig(A::AbstractMatrix, B::AbstractMatrix)
 end
 
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    if ishermitian(A) & ishermitian(B) return eigvals!(Hermitian(A), Hermitian(B)) end
+    if issym(A) & issym(B) return eigvals!(Symmetric(A), Symmetric(B)) end
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
     if all(alphai .== 0)
         return alphar./beta
@@ -587,7 +648,7 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T})
 end
 svdvals{T<:BlasFloat}(A::StridedMatrix{T}) = svdvals!(copy(A))
 svdvals(A::StridedMatrix) = svdvals!(float(A))
-svdvals(x::Number) = [x]
+svdvals(x::Number) = [abs(x)]
 
 # SVD least squares
 function \{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})

@@ -26,10 +26,13 @@ export
     Schur,
     SVD,
     Hermitian,
+    Symmetric,
     Triangular,
     Diagonal,
 
 # Functions
+    bkfact,
+    bkfact!,
     check_openblas,
     chol,
     cholfact,
@@ -57,6 +60,8 @@ export
     expm,
     sqrtm,
     eye,
+    factorize,
+    factorize!,
     gradient,
     hessfact,
     hessfact!,
@@ -158,6 +163,7 @@ include("linalg/factorization.jl")
 include("linalg/bunchkaufman.jl")
 include("linalg/triangular.jl")
 include("linalg/hermitian.jl")
+include("linalg/symmetric.jl")
 include("linalg/woodbury.jl")
 include("linalg/tridiag.jl")
 include("linalg/bidiag.jl")
