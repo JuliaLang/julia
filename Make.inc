@@ -150,7 +150,7 @@ OPENBLAS_TARGET_ARCH=
 
 # Use 64-bit libraries by default on 64-bit architectures
 ifeq ($(ARCH), x86_64)
-USE_LIB64 = 1
+USE_BLAS64 = 1
 endif
 
 # Use libraries available on the system instead of building them
@@ -261,7 +261,7 @@ else
 endif
 
 ifeq ($(USE_MKL), 1)
-  USE_LIB64 = 0
+  USE_BLAS64 = 0
 endif
 
 # OS specific stuff

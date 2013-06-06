@@ -495,9 +495,9 @@ if WORD_SIZE==32
         t = u1*v0 + (w0>>>32)
         w2 = t>>32
         w1 = u0*v1 + (t&0xffffffff)
-        high = u1*v1 + w2 + (w1 >> 32)
+        hi = u1*v1 + w2 + (w1 >> 32)
         lo = w0&0xffffffff + (w1 << 32)
-        int128(high)<<64 + int128(uint128(lo))
+        int128(hi)<<64 + int128(uint128(lo))
     end
 
     function widemul(u::Uint64, v::Uint64)
@@ -510,9 +510,9 @@ if WORD_SIZE==32
         t = u1*v0 + (w0>>>32)
         w2 = t>>>32
         w1 = u0*v1 + (t&0xffffffff)
-        high = u1*v1 + w2 + (w1 >>> 32)
+        hi = u1*v1 + w2 + (w1 >>> 32)
         lo = w0&0xffffffff + (w1 << 32)
-        int128(high)<<64 + int128(uint128(lo))
+        uint128(hi)<<64 + uint128(lo)
     end
 
     function *(u::Int128, v::Int128)
@@ -538,6 +538,14 @@ if WORD_SIZE==32
         w1 = lohi + (t&0xffffffffffffffff)
         (lolo&0xffffffffffffffff) + uint128(w1)<<64
     end
+
+    div(x::Int128, y::Int128) = int128(div(BigInt(x),BigInt(y)))
+    div(x::Uint128, y::Uint128) = uint128(div(BigInt(x),BigInt(y)))
+
+    rem(x::Int128, y::Int128) = int128(rem(BigInt(x),BigInt(y)))
+    rem(x::Uint128, y::Uint128) = uint128(rem(BigInt(x),BigInt(y)))
+
+    mod(x::Int128, y::Int128) = int128(mod(BigInt(x),BigInt(y)))
 else
     widemul(u::Int64, v::Int64) = int128(u)*int128(v)
     widemul(u::Uint64, v::Uint64) = uint128(u)*uint128(v)

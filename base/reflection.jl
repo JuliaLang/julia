@@ -4,7 +4,8 @@ module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
 current_module() = ccall(:jl_get_current_module, Any, ())::Module
 
 names(m::Module, all::Bool, imported::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported)
-names(m::Module) = names(m,false,false)
+names(m::Module, all::Bool) = names(m, all, false)
+names(m::Module) = names(m, false, false)
 names(t::DataType) = t.names
 
 function names(v)

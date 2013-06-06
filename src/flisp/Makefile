@@ -60,11 +60,11 @@ $(LIBTARGET).a: $(OBJS)
 
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	$(QUIET_CC) $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS)
-	./$(EXENAME)-debug unittest.lsp
+	$(call spawn,./$(EXENAME)-debug) unittest.lsp
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
 	$(QUIET_CC) $(CC) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS)
-	./$(EXENAME) unittest.lsp
+	$(call spawn,./$(EXENAME)) unittest.lsp
 
 clean:
 	rm -f *.o

@@ -51,6 +51,7 @@ convert(::Type{Int64}, n::BigInt) = int64(convert(Clong, n))
 convert(::Type{Int32}, n::BigInt) = int32(convert(Clong, n))
 convert(::Type{Int16}, n::BigInt) = int16(convert(Clong, n))
 convert(::Type{Int8}, n::BigInt) = int8(convert(Clong, n))
+
 function convert(::Type{Clong}, n::BigInt)
     fits = ccall((:__gmpz_fits_slong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
     if fits
@@ -64,6 +65,7 @@ convert(::Type{Uint64}, x::BigInt) = uint64(convert(Culong, x))
 convert(::Type{Uint32}, x::BigInt) = uint32(convert(Culong, x))
 convert(::Type{Uint16}, x::BigInt) = uint16(convert(Culong, x))
 convert(::Type{Uint8}, x::BigInt) = uint8(convert(Culong, x))
+
 function convert(::Type{Culong}, n::BigInt)
     fits = ccall((:__gmpz_fits_ulong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
     if fits
@@ -73,16 +75,21 @@ function convert(::Type{Culong}, n::BigInt)
     end
 end
 
-if sizeof(Int64) == sizeof(Clong)
-    function convert(::Type{Int128}, x::BigInt)
-        ax = abs(x)
-        top = ax>>64
-        bot = ax - (top<<64)
-        n = int128(convert(Uint,top))<<64 + int128(convert(Uint,bot))
-        return x<0 ? -n : n
+if sizeof(Int32) == sizeof(Clong)
+    function convert(::Type{Uint128}, x::BigInt)
+        uint128(uint(x>>>96))<<96 +
+        uint128(uint((x>>>64) & typemax(Uint32)))<<64 +
+        uint128(uint((x>>>32) & typemax(Uint32)))<<32 +
+        uint128(uint(x & typemax(Uint32)))
     end
-    convert(::Type{Uint128}, x::BigInt) = uint128(convert(Int128,x))
 end
+if sizeof(Int64) == sizeof(Clong)
+    function convert(::Type{Uint128}, x::BigInt)
+        uint128(uint(ax>>>64))<<64 +
+        uint128(uint(ax & typemax(Uint64)))
+    end
+end
+convert(::Type{Int128}, x::BigInt) = copysign(int128(uint128(abs(x))),x)
 
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
