@@ -177,11 +177,19 @@ function code_broadcasts(name::String, op)
             result = Array(T, shape)
             $inner!(broadcast_args(shape, As)..., result)
             result
-        end        
+        end
 
         function $fname(As::StridedArray...)
             $fname_T(promote_type([eltype(A) for A in As]...), As...)
-        end        
+        end
+
+        function $fname{T}(As::StridedArray{T}...)
+            $fname_T(T, As...)
+        end
+
+        function $fname(As::StridedArray{Bool}...)
+            $fname_T(typeof($op(true,true)), As...)
+        end
 
         $innerdef!
         function $fname!(dest::StridedArray, As::StridedArray...)
@@ -189,7 +197,7 @@ function code_broadcasts(name::String, op)
             check_broadcast_shape(shape, As...)
             $inner!!(broadcast_args(shape, tuple(dest, As...))...)
             dest
-        end        
+        end
 
         ($fname, $fname_T, $fname!)
     end
@@ -258,10 +266,10 @@ const broadcast_pow_T  = broadcast_T_function(^)
 .-(A::StridedArray, B::StridedArray) = broadcast_sub(A, B)
 
 type_div(T,S) = promote_type(T,S)
-type_div{T<:Integer,S<:Integer}(::Type{T},::Type{S}) = Float64
-type_div{T,S}(::Type{Complex{T}},::Type{Complex{S}})  = Complex{type_div(T,S)}
-type_div{T,S}(::Type{Complex{T}},::Type{S})           = Complex{type_div(T,S)}
-type_div{T,S}(::Type{T},::Type{Complex{S}})           = Complex{type_div(T,S)}
+type_div{T<:Integer,S<:Integer}(::Type{T},::Type{S}) = typeof(one(T)/one(S))
+type_div{T,S}(::Type{Complex{T}},::Type{Complex{S}}) = Complex{type_div(T,S)}
+type_div{T,S}(::Type{Complex{T}},::Type{S})          = Complex{type_div(T,S)}
+type_div{T,S}(::Type{T},::Type{Complex{S}})          = Complex{type_div(T,S)}
 
 function ./(A::StridedArray, B::StridedArray) 
     broadcast_div_T(type_div(eltype(A), eltype(B)), A, B)
