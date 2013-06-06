@@ -15,14 +15,50 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
-       erfinv, erfcinv
+       erfinv, erfcinv,
+       MathConst, e, π, γ, pi, euler_mascheroni
 
-import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
-       Base.tanh, Base.asin, Base.acos, Base.atan, Base.asinh, Base.acosh,
-       Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.max, Base.min,
-       Base.ceil, Base.floor, Base.trunc, Base.round, Base.^, Base.exp2, Base.exp10
+import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
+             acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
+             max, min, ceil, floor, trunc, round, ^, exp2, exp10
 
 import Core.Intrinsics.nan_dom_err
+
+## mathematical constants ##
+
+import Base: show, promote_rule, convert
+
+immutable MathConst{sym} <: Real end
+
+show{sym}(io::IO, ::MathConst{sym}) = print(io, sym)
+
+const e = MathConst{:e}()
+const π = MathConst{:π}()
+const γ = MathConst{:γ}()
+
+const pi = π
+const euler_mascheroni = γ
+
+promote_rule{sym}(::Type{MathConst{sym}}, ::Type) = Float64
+promote_rule{sym}(::Type{MathConst{sym}}, ::Type{Float32})  = Float32
+
+convert(::Type{Float64}, ::MathConst{:e}) = 2.71828182845904523536
+convert(::Type{Float64}, ::MathConst{:π}) = 3.14159265358979323846
+convert(::Type{Float64}, ::MathConst{:γ}) = 0.57721566490153286061
+
+convert(::Type{Float32}, ::MathConst{:e}) = 2.7182817f0
+convert(::Type{Float32}, ::MathConst{:π}) = 3.1415927f0
+convert(::Type{Float32}, ::MathConst{:γ}) = 0.5772157f0
+
+convert(::Type{FloatingPoint}, x::MathConst) = float64(x)
+convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, float64(x))
+
+-(x::MathConst) = -float64(x)
++(x::MathConst, y::MathConst) = float64(x) + float64(y)
+-(x::MathConst, y::MathConst) = float64(x) - float64(y)
+*(x::MathConst, y::MathConst) = float64(x) * float64(y)
+/(x::MathConst, y::MathConst) = float64(x) / float64(y)
+^(x::MathConst, y::MathConst) = float64(x) ^ float64(y)
 
 # non-type specific math functions
 

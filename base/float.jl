@@ -259,14 +259,6 @@ end
 sizeof(::Type{Float32}) = 4
 sizeof(::Type{Float64}) = 8
 
-## mathematical constants ##
-
-const e  = 2.71828182845904523536
-const pi = 3.14159265358979323846
-const π = pi
-const euler_mascheroni = 0.57721566490153286061
-const γ = euler_mascheroni
-
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::Float32) = box(Float32,bswap_int(unbox(Float32,x)))
 bswap(x::Float64) = box(Float64,bswap_int(unbox(Float64,x)))
