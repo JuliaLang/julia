@@ -390,8 +390,6 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx);
 
 // --- dump function to IR and ASM ---
 
-//extern "C" void jl_dump_function_asm(void*, size_t, formatted_raw_ostream&);
-
 extern "C" DLLEXPORT
 const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm)
 {
@@ -433,7 +431,7 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
             JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
             return jl_cstr_to_string((char*)"");
         }
-        jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fstream);
+        jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fit->second.lines, fstream);
         fstream.flush();
     }
     return jl_cstr_to_string((char*)stream.str().c_str());
