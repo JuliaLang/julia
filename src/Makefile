@@ -54,11 +54,11 @@ HEADERS = julia.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h
 ast.o ast.do: julia_flisp.boot.inc flisp/*.h
 
 julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp.a
-	$(QUIET_FLISP) ./flisp/flisp ./bin2hex.scm < $< > $@
+	$(QUIET_FLISP) $(call spawn,./flisp/flisp) ./bin2hex.scm < $< > $@
 
 julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp.a
-	$(QUIET_FLISP) ./flisp/flisp ./mk_julia_flisp_boot.scm
+	$(QUIET_FLISP) $(call spawn,./flisp/flisp) ./mk_julia_flisp_boot.scm
 
 codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp
 builtins.o builtins.do: table.c
