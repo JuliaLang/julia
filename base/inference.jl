@@ -1658,6 +1658,9 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         if isa(spvals[i],TypeVar)
             return NF
         end
+        if isa(spvals[i],Symbol)
+            spvals[i] = qn(spvals[i])
+        end
     end
     (ast, ty) = typeinf(meth[3], meth[1], meth[2], meth[3])
     if is(ast,())
@@ -1733,6 +1736,7 @@ end
 
 tn(sym::Symbol) =
     ccall(:jl_new_struct, Any, (Any,Any...), TopNode, sym, Any)
+qn(v) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, v)
 
 const top_tupleref = tn(:tupleref)
 const top_tuple = tn(:tuple)
