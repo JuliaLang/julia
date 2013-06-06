@@ -1,7 +1,7 @@
 module LinAlg
 
 importall Base
-import Base.USE_LIB64, Base.size, Base.copy, Base.copy_transpose!, Base.power_by_squaring
+import Base.USE_BLAS64, Base.size, Base.copy, Base.copy_transpose!, Base.power_by_squaring
 
 export 
 # Types
@@ -137,7 +137,7 @@ typealias BlasReal Union(Float64,Float32)
 typealias BlasComplex Union(Complex128,Complex64)
 typealias BlasChar Char
 
-if USE_LIB64
+if USE_BLAS64
     typealias BlasInt Int64
     blas_int(x) = int64(x)
 else

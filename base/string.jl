@@ -472,7 +472,11 @@ lcfirst(s::String) = islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):e
 function map(f::Function, s::String)
     out = memio(endof(s))
     for c in s
-        write(out, f(c)::Char)
+        c2 = f(c)
+        if !isa(c2,Char)
+            error("map(f,s::String) requires f to return Char. Try map(f,collect(s)) or a comprehension instead.")
+        end
+        write(out, c2::Char)
     end
     takebuf_string(out)
 end

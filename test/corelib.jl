@@ -90,7 +90,7 @@ end
 
 r = 0.0:0.01:1.0
 @test contains(r,r[30])
-r = (-4*int64(maxintfloat())):5
+r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test contains(r,3)
 @test contains(r,3.0)
 
