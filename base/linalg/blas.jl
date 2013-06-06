@@ -107,7 +107,7 @@ end
 function dot{T<:BlasFloat}(DX::Array{T}, DY::Array{T})
     n = length(DX)
     if n != length(DY)
-        throw(DimensionMismatch("Arrays for dot product have lengths $(length(x)) and $(length(y))"))
+        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     dot(n, DX, 1, DY, 1)
 end
@@ -474,7 +474,7 @@ for (mmname, mvname, smname, svname, elty) in
                        A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             m,n = size(B)
             mA,nA = size(A)
-            if mA != nA throw(DimensionMismatch("Matrix must be square")) end
+            if mA != nA throw(DimensionMismatch("matrix must be square")) end
             if nA != (side == 'L' ? m : n) throw(DimensionMismatch("")) end
             ccall(($(string(mmname)), libblas), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -498,7 +498,7 @@ for (mmname, mvname, smname, svname, elty) in
             n,m = size(A)
             if m != n throw(DimensionMismatch("size(A)=$(size(A)) should be square")) end
             if n != length(x)
-                throw(DimensionMismatch("length(x) = $(length(x))does not match size(A)=$(size(A))"))
+                throw(DimensionMismatch("length(x)=$(length(x))does not match size(A)=$(size(A))"))
             end
             ccall(($(string(mvname)), libblas), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},

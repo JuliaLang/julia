@@ -38,13 +38,16 @@ scale(b::Vector, A::Matrix) =
 
 dot{T<:Union(Float32, Float64)}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
 function dot{T<:BLAS.BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
-    length(rx) != length(ry) ? error("Ranges should be of same length") : true
+    length(rx) != length(ry) ? error("ranges should be of same length") : true
     if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
         throw(BoundsError())
     end
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 function dot(x::Vector, y::Vector)
+    if length(x) != length(y)
+        error("argument dimensions do not match")
+    end
     s = zero(eltype(x))
     for i=1:length(x)
         s += conj(x[i])*y[i]
@@ -179,7 +182,7 @@ function symmetrize!(A::StridedMatrix, UL::BlasChar)
             end
         end
     else
-        error("Second argument UL should be 'U' or 'L'")
+        error("second argument UL should be 'U' or 'L'")
     end
     return A
 end
@@ -202,7 +205,7 @@ function symmetrize_conj!(A::StridedMatrix, UL::BlasChar)
             end
         end
     else
-        error("Second argument UL should be 'U' or 'L'")
+        error("second argument UL should be 'U' or 'L'")
     end
     return A
 end
