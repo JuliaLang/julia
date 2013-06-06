@@ -346,13 +346,13 @@ expm{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}) = expm
 expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float(A))
 expm(x::Number) = exp(x)
 
-function sqrtm(A::StridedMatrix, cond::Bool)
+function sqrtm{T<:Real}(A::StridedMatrix{T}, cond::Bool)
     m, n = size(A)
     if m != n error("DimentionMismatch") end
-    if ishermitian(A) 
-        return sqrtm(Hermitian(A), cond)
+    if issym(A) 
+        return sqrtm(Symmetric(A), cond)
     else
-        SchurF = schurfact!(iseltype(A,Complex) ? copy(A) : complex(A))
+        SchurF = schurfact!(complex(A))
         R = zeros(eltype(SchurF[:T]), n, n)
         for j = 1:n
             R[j,j] = sqrt(SchurF[:T][j,j])
@@ -375,6 +375,35 @@ function sqrtm(A::StridedMatrix, cond::Bool)
         return (all(imag(retmat) .== 0) ? real(retmat) : retmat)
     end
 end
+function sqrtm{T<:Complex}(A::StridedMatrix{T}, cond::Bool)
+    m, n = size(A)
+    if m != n error("DimentionMismatch") end
+    if ishermitian(A) 
+        return sqrtm(Hermitian(A), cond)
+    else
+        SchurF = schurfact(A)
+        R = zeros(eltype(SchurF[:T]), n, n)
+        for j = 1:n
+            R[j,j] = sqrt(SchurF[:T][j,j])
+            for i = j - 1:-1:1
+                r = SchurF[:T][i,j]
+                for k = i + 1:j - 1
+                    r -= R[i,k]*R[k,j]
+                end
+                if r != 0
+                    R[i,j] = r / (R[i,i] + R[j,j])
+                end
+            end
+        end
+    end
+    retmat = SchurF[:vectors]*R*SchurF[:vectors]'
+    if cond
+        alpha = norm(R)^2/norm(SchurF[:T])
+        return retmat, alpha
+    else
+        return retmat
+    end
+end
 
 sqrtm{T<:Integer}(A::StridedMatrix{T}, cond::Bool) = sqrtm(float(A), cond)
 sqrtm{T<:Integer}(A::StridedMatrix{Complex{T}}, cond::Bool) = sqrtm(complex128(A), cond)
@@ -383,35 +412,92 @@ sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
 function det(A::Matrix)
-    m, n = size(A)
-    if m != n; throw(DimensionMismatch("det only defined for square matrices")); end
     if istriu(A) | istril(A); return det(Triangular(A, :U, false)); end
     return det(lufact(A))
 end
 det(x::Number) = x
 
-logdet(A::Matrix) = logdet(cholfact(A))
+logdet(A::Matrix) = logdet(lufact(A))
 
-function inv{T<:BlasFloat}(A::AbstractMatrix{T})
-    if istriu(A) return inv(Triangular(A, :U)) end
-    if istril(A) return inv(Triangular(A, :L)) end
-    if ishermitian(A) return inv(Hermitian(A)) end
+function inv(A::AbstractMatrix)
+    if istriu(A) | istril(A); return inv(Triangular(A, :U, false)); end
     return inv(lufact(A))
 end
-inv(A::AbstractMatrix) = inv(float(A))
 
-function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
-    if size(A, 1) == size(A, 2) # Square
-        if istriu(A) return Triangular(A, :U)\B end
-        if istril(A) return Triangular(A, :L)\B end
-        if ishermitian(A) return Hermitian(A)\B end
-        ans, _, _, info = LAPACK.gesv!(copy(A), copy(B))
-        if info > 0; throw(SingularException(info)); end
-        return ans
-    else
-        LAPACK.gelsy!(copy(A), copy(B))[1]
+function factorize!{T}(A::Matrix{T})
+    m, n = size(A)
+    if m == n
+        if m == 1 return A[1] end
+        utri    = true
+        utri1   = true
+        herm    = T <: Complex
+        sym     = true
+        for j = 1:n-1, i = j+1:m
+            if utri1
+                if A[i,j] != 0
+                    utri1 = i == j + 1
+                    utri = false
+                end
+            end
+            if sym
+                sym &= A[i,j] == A[j,i]
+            end
+            if (T <: Complex) & herm
+                herm &= A[i,j] == conj(A[j,i])
+            end
+            if !(utri1|herm|sym) break end
+        end
+        ltri = true
+        ltri1 = true
+        for j = 3:n, i = 1:j-2
+            ltri1 &= A[i,j] == 0
+            if !ltri1 break end
+        end
+        if ltri1
+            for i = 1:n-1
+                if A[i,i+1] != 0
+                    ltri &= false
+                    break
+                end
+            end
+            if ltri
+                if utri
+                    return Diagonal(A)
+                end
+                if utri1
+                    return lufact!(Bidiagonal(diag(A), diag(A, -1), false))
+                end
+                return Triangular(A, :L)
+            end
+            if utri
+                return lufact!(Bidiagonal(diag(A), diag(A, 1), true))
+            end
+            if utri1
+                if (herm & (T <: Complex)) | sym
+                    return ldltd!(SymTridiagonal(diag(A), diag(A, -1)))
+                end
+                return lufact!(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
+            end
+        end
+        if utri
+            return Triangular(A, :U)
+        end
+        if herm
+            C, info = LAPACK.potrf!('U', copy(A))
+            if info == 0 return Cholesky(C, 'U') end
+            return factorize!(Hermitian(A))
+        end
+        if sym
+            C, info = LAPACK.potrf!('U', copy(A))
+            if info == 0 return Cholesky(C, 'U') end
+            return factorize!(Symmetric(A))
+        end
+        return lufact!(A)
     end
+    return qrpfact!(A)
 end
+
+factorize(A::AbstractMatrix) = factorize!(copy(A))
 
 (\){T1<:BlasFloat, T2<:BlasFloat}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) =
     (\)(convert(Array{promote_type(T1,T2)},A), convert(Array{promote_type(T1,T2)},B))
@@ -420,6 +506,18 @@ end
 (\){T1<:Real, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
 (\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(complex128(A), complex128(B))
 (\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
+function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
+    m, n = size(A)
+    if m == n
+        if istril(A)
+            if istriu(A) return \(Diagonal(A),B) end
+            return \(Triangular(A, :L),B) 
+        end
+        if istriu(A) return \(Triangular(A, :U),B) end
+        return \(lufact(A),B)
+    end
+    return qrpfact(A)\B
+end
 
 ## Moore-Penrose inverse
 function pinv{T<:BlasFloat}(A::StridedMatrix{T})

@@ -115,6 +115,7 @@ export
     SVD,
     GeneralizedSVD,
     Hermitian,
+    Symmetric,
     Triangular,
     Diagonal,
     InsertionSort,
@@ -566,6 +567,8 @@ export
     checkbounds,
 
 # linear algebra
+    bkfact,
+    bkfact!,
     chol,
     cholfact,
     cholfact!,
@@ -591,6 +594,8 @@ export
     expm,
     sqrtm,
     eye,
+    factorize,
+    factorize!,
     hessfact,
     hessfact!,
     ishermitian,
