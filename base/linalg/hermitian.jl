@@ -5,7 +5,7 @@ type Hermitian{T<:Number} <: AbstractMatrix{T}
     uplo::Char
 end
 function Hermitian{T<:Number}(S::Matrix{T}, uplo::Symbol)
-    if size(S, 1) != size(S, 2) throw(DimensionMismatch("Matrix must be square")); end
+    if size(S, 1) != size(S, 2) throw(DimensionMismatch("matrix must be square")); end
     return Hermitian(S, string(uplo)[1])
 end
 Hermitian(A::StridedMatrix) = Hermitian(A, :U)
