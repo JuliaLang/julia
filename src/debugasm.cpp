@@ -52,11 +52,11 @@ private:
 public:
     FuncMCView(const void* fptr, size_t size) : Fptr((char*)fptr), Fsize(size) {}
 
-    const char* operator[] (const int idx) { return (Fptr+idx); }
+    const char* operator[] (const size_t idx) { return (Fptr+idx); }
 
     uint64_t getBase() const { return 0; }
     uint64_t getExtent() const { return Fsize; }
-
+    
     int readByte(uint64_t Addr, uint8_t *Byte) const {
         if (Addr >= getExtent())
             return -1;
@@ -68,6 +68,7 @@ public:
 
 extern "C"
 void jl_dump_function_asm(void* Fptr, size_t Fsize,
+                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
                           formatted_raw_ostream &stream) {
 
     // Initialize targets and assembly printers/parsers.
@@ -137,9 +138,29 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
   
     uint64_t Size;
     uint64_t Index;
+    uint64_t absAddr;
 
+    // Set up the line info
+    typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
+    LInfoVec::iterator lineIter = lineinfo.begin();
+    lineIter = lineinfo.begin();
+    uint64_t nextLineAddr = (*lineIter).Address;
+    
+    DISubprogram debugscope =
+        DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
+
+    stream << "Filename: " << debugscope.getFilename().data() << "\n";
+    stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+    
     // Do the disassembly
-    for (Index = 0; Index < memoryObject.getExtent(); Index += Size) {
+    for (Index = 0, absAddr = (uint64_t)Fptr;
+         Index < memoryObject.getExtent(); Index += Size, absAddr += Size) {
+        
+        if (absAddr == nextLineAddr) {
+            stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+            nextLineAddr = (*++lineIter).Address;
+        }
+
         MCInst Inst;
 
         MCDisassembler::DecodeStatus S;
