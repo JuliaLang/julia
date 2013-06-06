@@ -73,10 +73,8 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
 
     // Initialize targets and assembly printers/parsers.
     // Avoids hard-coded targets - will generally be only host CPU anyway.
-    llvm::InitializeAllTargetInfos();
-    llvm::InitializeAllTargetMCs();
-    llvm::InitializeAllAsmParsers();
-    llvm::InitializeAllDisassemblers();
+    llvm::InitializeNativeTargetAsmParser();
+    llvm::InitializeNativeTargetDisassembler();
   
     // Get the host information
     std::string TripleName;
