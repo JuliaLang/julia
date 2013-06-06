@@ -1,6 +1,9 @@
-// Modified from llvm/tools/llvm-mc/Disassembler.cpp
-
-//===- Disassembler.cpp - Disassembler for hex strings --------------------===//
+//===------------- Disassembler for in-memory function --------------------===//
+//
+// Modified for use in The Julia Language from code in the  llvm-mc project:
+//      llvm-mc.cpp and Disassembler.cpp
+//
+// Original copyright:
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -9,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This class implements the disassembler of strings of bytes written in
-// hexadecimal, from standard input or from a file.
+// This class implements a disassembler of a memory block, given a function
+// pointer and size.
 //
 //===----------------------------------------------------------------------===//
 
@@ -36,155 +39,149 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/system_error.h"
 
-using namespace llvm;
-
-
-#ifndef DISASSEMBLER_H
-#define DISASSEMBLER_H
-
 #include <string>
 #include <iostream>
 
-namespace llvm {
-
-class MemoryBuffer;
-class Target;
-class raw_ostream;
-class SourceMgr;
-class MCSubtargetInfo;
-class MCStreamer;
-
-class Disassembler {
-public:
-  static int disassemble(const Target &T,
-                         const std::string &Triple,
-                         MCSubtargetInfo &STI,
-                         MCStreamer &Streamer,
-                         MemoryBuffer &Buffer,
-                         SourceMgr &SM,
-                         raw_ostream &Out);
-};
-
-} // namespace llvm
-
-#endif
+using namespace llvm;
 
 namespace {
 class FuncMCView : public MemoryObject {
 private:
-  const char* Fptr;
-  size_t Fsize;
+    const char* Fptr;
+    size_t Fsize;
 public:
-  FuncMCView(const void* fptr, size_t size) : Fptr((char*)fptr), Fsize(size) {}
+    FuncMCView(const void* fptr, size_t size) : Fptr((char*)fptr), Fsize(size) {}
 
-  const char* operator[] (const int idx) { const char* f = (Fptr+idx);
-    return f;
+    const char* operator[] (const size_t idx) { return (Fptr+idx); }
+
+    uint64_t getBase() const { return 0; }
+    uint64_t getExtent() const { return Fsize; }
+    
+    int readByte(uint64_t Addr, uint8_t *Byte) const {
+        if (Addr >= getExtent())
+            return -1;
+        *Byte = Fptr[Addr];
+        return 0;
     }
-
-  uint64_t getBase() const { return 0; }
-  uint64_t getExtent() const { return Fsize; }
-
-  int readByte(uint64_t Addr, uint8_t *Byte) const {
-    if (Addr >= getExtent())
-      return -1;
-    *Byte = Fptr[Addr];
-    return 0;
-  }
 };
 }
 
 extern "C"
 void jl_dump_function_asm(void* Fptr, size_t Fsize,
+                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
                           formatted_raw_ostream &stream) {
-  // Aaaaaaah.
-  LLVMInitializeX86Disassembler();
 
-  // Get the host information
-  std::string TripleName;
-  if (TripleName.empty())
-    TripleName = sys::getDefaultTargetTriple();
-  Triple TheTriple(Triple::normalize(TripleName));
+    // Initialize targets and assembly printers/parsers.
+    // Avoids hard-coded targets - will generally be only host CPU anyway.
+    llvm::InitializeNativeTargetAsmParser();
+    llvm::InitializeNativeTargetDisassembler();
+  
+    // Get the host information
+    std::string TripleName;
+    if (TripleName.empty())
+        TripleName = sys::getDefaultTargetTriple();
+    Triple TheTriple(Triple::normalize(TripleName));
 
-  std::string MCPU = sys::getHostCPUName();
-  SubtargetFeatures Features;
-  Features.getDefaultSubtargetFeatures(TheTriple);
+    std::string MCPU = sys::getHostCPUName();
+    SubtargetFeatures Features;
+    Features.getDefaultSubtargetFeatures(TheTriple);
 
-  std::string err;
-  const Target* TheTarget = TargetRegistry::lookupTarget(TripleName, err);
+    std::string err;
+    const Target* TheTarget = TargetRegistry::lookupTarget(TripleName, err);
 
-  // Set up Subtarget and Disassembler
-  OwningPtr<MCSubtargetInfo>
-    STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
+    // Set up Subtarget and Disassembler
+    OwningPtr<MCSubtargetInfo>
+        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
 
-  OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
-  if (!DisAsm) {
-    llvm::errs() << "error: no disassembler for target " << TripleName << "\n";
-    return;
-  }
+    OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
+    if (!DisAsm) {
+        JL_PRINTF(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
+        return;
+    }
  
-  // Set up required helpers and streamer 
-  OwningPtr<MCStreamer> Streamer;
-  SourceMgr SrcMgr;
+    // Set up required helpers and streamer 
+    OwningPtr<MCStreamer> Streamer;
+    SourceMgr SrcMgr;
 
-  llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(TripleName));
-  assert(MAI && "Unable to create target asm info!");
+    llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(TripleName));
+    assert(MAI && "Unable to create target asm info!");
 
-  llvm::OwningPtr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
-  assert(MRI && "Unable to create target register info!");
+    llvm::OwningPtr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
+    assert(MRI && "Unable to create target register info!");
 
-  OwningPtr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
-  MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
+    OwningPtr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
+    MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
 
-  unsigned OutputAsmVariant = 1;
-  bool ShowEncoding = false;
-  bool ShowInst = false;
+    unsigned OutputAsmVariant = 1;
+    bool ShowEncoding = false;
+    bool ShowInst = false;
 
-  OwningPtr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
-  MCInstPrinter* IP =
-    TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
-  MCCodeEmitter *CE = 0;
-  MCAsmBackend *MAB = 0;
-  if (ShowEncoding) {
-    CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
-    MAB = TheTarget->createMCAsmBackend(TripleName, MCPU);
-  }
+    OwningPtr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
+    MCInstPrinter* IP =
+        TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
+    MCCodeEmitter *CE = 0;
+    MCAsmBackend *MAB = 0;
+    if (ShowEncoding) {
+        CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
+        MAB = TheTarget->createMCAsmBackend(TripleName, MCPU);
+    }
 
-  Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
+    Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
                                            /*useLoc*/ true,
                                            /*useCFI*/ true,
                                            /*useDwarfDirectory*/ true,
                                            IP, CE, MAB, ShowInst));
-  // Make the MemoryObject wrapper
-  FuncMCView memoryObject(Fptr, Fsize);
+    // Make the MemoryObject wrapper
+    FuncMCView memoryObject(Fptr, Fsize);
   
-  uint64_t Size;
-  uint64_t Index;
+    uint64_t Size;
+    uint64_t Index;
+    uint64_t absAddr;
 
-  // Do the disassembly
-  for (Index = 0; Index < memoryObject.getExtent(); Index += Size) {
-    MCInst Inst;
+    // Set up the line info
+    typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
+    LInfoVec::iterator lineIter = lineinfo.begin();
+    lineIter = lineinfo.begin();
+    uint64_t nextLineAddr = (*lineIter).Address;
+    
+    DISubprogram debugscope =
+        DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
 
-    MCDisassembler::DecodeStatus S;
-    S = DisAsm->getInstruction(Inst, Size, memoryObject, Index,
-                              /*REMOVE*/ nulls(), nulls());
-    switch (S) {
-    case MCDisassembler::Fail:
-      SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
-                      SourceMgr::DK_Warning,
-                      "invalid instruction encoding");
-      if (Size == 0)
-        Size = 1; // skip illegible bytes
-      break;
+    stream << "Filename: " << debugscope.getFilename().data() << "\n";
+    stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+    
+    // Do the disassembly
+    for (Index = 0, absAddr = (uint64_t)Fptr;
+         Index < memoryObject.getExtent(); Index += Size, absAddr += Size) {
+        
+        if (absAddr == nextLineAddr) {
+            stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+            nextLineAddr = (*++lineIter).Address;
+        }
 
-    case MCDisassembler::SoftFail:
-      SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
-                      SourceMgr::DK_Warning,
-                      "potentially undefined instruction encoding");
-      // Fall through
+        MCInst Inst;
 
-    case MCDisassembler::Success:
-      Streamer->EmitInstruction(Inst);
-      break;
+        MCDisassembler::DecodeStatus S;
+        S = DisAsm->getInstruction(Inst, Size, memoryObject, Index,
+                                  /*REMOVE*/ nulls(), nulls());
+        switch (S) {
+        case MCDisassembler::Fail:
+        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+                            SourceMgr::DK_Warning,
+                            "invalid instruction encoding");
+        if (Size == 0)
+            Size = 1; // skip illegible bytes
+        break;
+
+        case MCDisassembler::SoftFail:
+        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+                            SourceMgr::DK_Warning,
+                            "potentially undefined instruction encoding");
+        // Fall through
+
+        case MCDisassembler::Success:
+            Streamer->EmitInstruction(Inst);
+        break;
+        }
     }
-  }
 }
