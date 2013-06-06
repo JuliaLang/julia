@@ -22,10 +22,10 @@ build_h.jl: ../Make.inc ../src/os_detect.h
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
 	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
 	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
-ifeq ($(USE_LIB64), 1)
-	@echo "const USE_LIB64 = true" >> $@
+ifeq ($(USE_BLAS64), 1)
+	@echo "const USE_BLAS64 = true" >> $@
 else
-	@echo "const USE_LIB64 = false" >> $@
+	@echo "const USE_BLAS64 = false" >> $@
 endif
 
 

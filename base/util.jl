@@ -202,15 +202,15 @@ if Base.libblas_name == "libopenblas"
     function check_openblas()
         openblas_config = openblas_get_config()
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
-        if Base.USE_LIB64 != openblas64
+        if Base.USE_BLAS64 != openblas64
             if !openblas64
                 println("ERROR: OpenBLAS was not built with 64bit integer support.")
-                println("You're seeing this error because Julia was built with USE_LIB64=1")
-                println("Please rebuild Julia with USE_LIB64=0")
+                println("You're seeing this error because Julia was built with USE_BLAS64=1")
+                println("Please rebuild Julia with USE_BLAS64=0")
             else
                 println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
-                println("You're seeing this error because Julia was built with USE_LIB64=0")
-                println("Please rebuild Julia with USE_LIB64=1")
+                println("You're seeing this error because Julia was built with USE_BLAS64=0")
+                println("Please rebuild Julia with USE_BLAS64=1")
             end
             println("Quitting.")
             quit()
