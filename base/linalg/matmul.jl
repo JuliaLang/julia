@@ -44,7 +44,7 @@ function dot{T<:BLAS.BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},
     end
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
-function dot(x::Vector, y::Vector)
+function dot(x::AbstractVector, y::AbstractVector)
     s = zero(eltype(x))
     for i=1:length(x)
         s += conj(x[i])*y[i]
