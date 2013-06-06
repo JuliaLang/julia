@@ -137,29 +137,7 @@ First the required dependencies will be installed:
 10. Complete the installation of the required `mingw-w64` packages:
 `yaourt -S mingw-w64-gcc`
 
-The build and install process of Julia is the same as in steps 1-7 of Ubuntu except that the following changes need to be made before executing the 7 steps:
-
-1. Add `OPENBLAS_BUILD_OPTS += HOSTCC=gcc` in `deps/Makefile` after the definition of the `OPENBLAS_BUILD_OPTS` environment variable.
-2. In `src/Mafefile` replace `./flisp/flisp` with `$(call spawn,./flisp/flisp)`. More specifically replace the lines
-
-```
-julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp.a
-    $(QUIET_FLISP) ./flisp/flisp ./bin2hex.scm < $< > $@
-
-julia_flisp.boot: julia-parser.scm julia-syntax.scm \
-    match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp.a
-    $(QUIET_FLISP) ./flisp/flisp ./mk_julia_flisp_boot.scm
-```
-with
-
-```
-julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp.a
-    $(QUIET_FLISP) $(call spawn,./flisp/flisp) ./bin2hex.scm < $< > $@
-
-julia_flisp.boot: julia-parser.scm julia-syntax.scm \
-    match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp.a
-    $(QUIET_FLISP) $(call spawn,./flisp/flisp) ./mk_julia_flisp_boot.scm
-```
+The build and install process of Julia is the same as in steps 1-7 of Ubuntu.
 
 Finally, after completing the Julia cross-compilation by executing the 7 Julia build and installation steps described in the Ubuntu section and after moving the julia-* directory/zipfile to the target machine, add the `julia-*/lib` and `julia-*/lib/julia` directories to your Windows `PATH` environment variable.
 
