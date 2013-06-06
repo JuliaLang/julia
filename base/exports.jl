@@ -54,6 +54,7 @@ export
     ImaginaryUnit,
     IntSet,
     LocalProcess,
+    MathConst,
     Matrix,
     ObjectIdDict,
     PollingFileWatcher,

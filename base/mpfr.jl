@@ -566,7 +566,7 @@ function atan2(y::BigFloat, x::BigFloat)
 end
 
 # Mathematical constants:
-for (c, cmpfr) in ((:pi,:pi), (:eulergamma, :euler), (:catalan, :catalan))
+for (c, cmpfr) in ((:pi, :pi), (:eulergamma, :euler), (:catalan, :catalan))
     @eval function $(symbol(string("bigfloat_", c)))()
         c = BigFloat()
         ccall(($(string("mpfr_const_", cmpfr)), :libmpfr), 
@@ -575,6 +575,12 @@ for (c, cmpfr) in ((:pi,:pi), (:eulergamma, :euler), (:catalan, :catalan))
         return c
     end
 end
+
+promote_rule{sym}(::Type{MathConst{sym}}, ::Type{BigFloat}) = BigFloat
+promote_rule{sym}(::Type{MathConst{sym}}, ::Type{BigInt})   = BigFloat
+
+convert(::Type{BigFloat}, ::MathConst{:γ}) = bigfloat_eulergamma()
+convert(::Type{BigFloat}, ::MathConst{:π}) = bigfloat_pi()
 
 # Utility functions
 ==(x::BigFloat, y::BigFloat) = ccall((:mpfr_equal_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
