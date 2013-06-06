@@ -675,12 +675,12 @@ endif
 # don't touch scheduler affinity since we manage this ourselves
 OPENBLAS_BUILD_OPTS += NO_AFFINITY=1
 
-ifeq ($(USE_LIB64), 1)
+ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1
 endif
 
 ifneq ($(BUILD_OS),$(OS))
-OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 
+OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=gcc
 ifeq ($(ARCH),i686)
 OPENBLAS_BUILD_OPTS += BINARY=32
 else ifeq ($(ARCH),x86_64)
@@ -815,7 +815,7 @@ install-lapack: $(LAPACK_OBJ_TARGET)
 
 ## ARPACK ##
 
-ifeq ($(USE_LIB64), 1)
+ifeq ($(USE_BLAS64), 1)
 ARPACK_FFLAGS = -fdefault-integer-8
 endif
 
@@ -1023,7 +1023,7 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(BUILD)/lib/libumfpack.$(SHLIB_EXT)
 
-ifeq ($(USE_LIB64), 1)
+ifeq ($(USE_BLAS64), 1)
 UMFPACK_CONFIG = -DLONGBLAS='long long' 
 CHOLMOD_CONFIG = -DLONGBLAS='long long' 
 endif

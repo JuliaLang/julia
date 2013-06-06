@@ -64,9 +64,11 @@ Running julia can be done in two ways:
 Cross-Compile
 -------------
 
-If you prefer to cross-compile, the following steps should get you started:
+If you prefer to cross-compile, the following steps should get you started.
 
-First, you will need to ensure your system has the required dependencies. Note that I build on an Ubuntu system, so the `make dist` may not be fully functional on other systems. On Ubuntu 12.04, the following command will install the required build dependencies.
+### Building on Ubuntu
+
+First, you will need to ensure your system has the required dependencies. On Ubuntu 12.04, the following command will install the required build dependencies.
 
 ```
 apt-get install \
@@ -114,6 +116,30 @@ Finally, the build and install process:
 6. move the julia-* directory/zipfile to the target machine
 
 If you are building for 64-bit windows. The steps are essentially the same. Just replace i686 in XC_HOST with x86_64.
+
+### Building on Arch Linux
+
+First the required dependencies will be installed:
+
+1. Install the following packages from the official Arch repository:
+`sudo pacman -S cloog gcc-ada libmpc p7zip ppl subversion zlib`
+2. The rest of the prerequisites consist of the mingw-w64 packages, which are available in the AUR Arch repository. They must be installed exactly in the order they are given or else their installation will fail. The `yaourt` package manager is used for illustration purposes; you may instead follow the [Arch instructions for installing packages from AUR](https://wiki.archlinux.org/index.php/Arch_User_Repository#Installing_packages) or may use your preferred package manager. To start with, install `mingw-w64-binutils` via the command
+`yaourt -S mingw-w64-binutils`
+3. `yaourt -S mingw-w64-headers-svn`
+4. `yaourt -S mingw-w64-headers-bootstrap`
+5. `yaourt -S mingw-w64-gcc-base`
+6. `yaourt -S mingw-w64-crt-svn`
+7. Remove `mingw-w64-headers-bootstrap` without removing its dependent mingw-w64 installed packages by using the command
+`yaourt -Rdd mingw-w64-headers-bootstrap`
+8. `yaourt -S mingw-w64-winpthreads`
+9. Remove `mingw-w64-gcc-base` without removing its installed mingw-w64 dependencies:
+`yaourt -Rdd mingw-w64-gcc-base`
+10. Complete the installation of the required `mingw-w64` packages:
+`yaourt -S mingw-w64-gcc`
+
+The build and install process of Julia is the same as in steps 1-7 of Ubuntu.
+
+Finally, after completing the Julia cross-compilation by executing the 7 Julia build and installation steps described in the Ubuntu section and after moving the julia-* directory/zipfile to the target machine, add the `julia-*/lib` and `julia-*/lib/julia` directories to your Windows `PATH` environment variable.
 
 Important Build Errata
 ----------------------
