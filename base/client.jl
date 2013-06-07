@@ -46,9 +46,10 @@ end
 
 display_error(er) = display_error(er, {})
 function display_error(er, bt)
-    with_output_color(:red, OUTPUT_STREAM) do io
+    with_output_color(:red, STDERR) do io
         print(io, "ERROR: ")
         error_show(io, er, bt)
+        println(io)
     end
 end
 
@@ -61,7 +62,6 @@ function eval_user_input(ast::ANY, show_value)
             end
             if errcount > 0
                 display_error(lasterr,bt)
-                println()
                 errcount, lasterr = 0, ()
             else
                 ast = expand(ast)
@@ -73,7 +73,7 @@ function eval_user_input(ast::ANY, show_value)
                     end
                     try repl_show(value)
                     catch err
-                        println("Error showing value of type ", typeof(value), ":")
+                        println(STDERR, "Error showing value of type ", typeof(value), ":")
                         rethrow(err)
                     end
                     println()
@@ -82,11 +82,11 @@ function eval_user_input(ast::ANY, show_value)
             break
         catch err
             if errcount > 0
-                println("SYSTEM: show(lasterr) caused an error")
+                println(STDERR, "SYSTEM: show(lasterr) caused an error")
             end
             errcount, lasterr = errcount+1, err
             if errcount > 2
-                println("WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
+                println(STDERR, "WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
                 break
             end
             bt = catch_backtrace()
@@ -369,8 +369,8 @@ function _atexit()
         try
             f()
         catch err
-            show(err)
-            println()
+            show(STDERR, err)
+            println(STDERR)
         end
     end
 end
