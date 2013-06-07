@@ -23,7 +23,7 @@ dmg:
 	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang -x -f julia script ./dmg/Julia-$(JULIA_VERSION)-pre-$(JULIA_COMMIT).app
 	-cp -f Julia.icns dmg/.VolumeIcon.icns
 	-ln -fs /Applications ./dmg/Applications
-	hdiutil create Julia-$(JULIA_VERSION)-pre-$(JULIA_COMMIT).dmg -ov -volname "Julia" -srcfolder dmg
+	hdiutil create Julia-$(JULIA_VERSION)-pre-$(JULIA_COMMIT).dmg -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
 
 rewritepaths:
 	(for lib in julia/lib/*.dylib; do ./run-install-name-tool-change.sh $$lib $$HOME/.julia/Cairo/deps/usr/lib/ lib/ change; done)
