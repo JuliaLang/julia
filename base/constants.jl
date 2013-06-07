@@ -27,35 +27,35 @@ convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, fl
 *(x::MathConst, i::ImaginaryUnit) = float64(x)*i
 *(i::ImaginaryUnit, x::MathConst) = i*float64(x)
 
-## specific mathematical constants
-
-const π = MathConst{:π}()
-const e = MathConst{:e}()
-const γ = MathConst{:γ}()
-
-for (sym, name) in ((:π, :pi), (:γ, :euler))
-    qsym = Expr(:quote, sym)
-    @eval begin
-        function convert(::Type{BigFloat}, ::MathConst{$qsym})
+macro math_const(sym, val, def)
+    esym = esc(sym)
+    qsym = esc(Expr(:quote, sym))
+    bigconvert = isa(def,Symbol) ? quote
+        function Base.convert(::Type{BigFloat}, ::MathConst{$qsym})
             c = BigFloat()
-            ccall(($(string("mpfr_const_", name)), :libmpfr),
+            ccall(($(string("mpfr_const_", def)), :libmpfr),
                   Cint, (Ptr{BigFloat}, Int32),
                   &c, MPFR.ROUNDING_MODE[end])
             return c
         end
+    end : quote
+        Base.convert(::Type{BigFloat}, ::MathConst{$qsym}) = $(esc(def))
+    end
+    quote
+        const $esym = MathConst{$qsym}()
+        $bigconvert
+        Base.convert(::Type{Float64}, ::MathConst{$qsym}) = $val
+        Base.convert(::Type{Float32}, ::MathConst{$qsym}) = $(float32(val))
+        @assert float64($esym) == float64(convert(BigFloat,$esym))
+        @assert float32($esym) == float32(convert(BigFloat,$esym))
     end
 end
 
-convert(::Type{BigFloat}, ::MathConst{:e}) = exp(big(1))
+## specific mathematical constants
 
-for sym in (:π, :e, :γ)
-    x = eval(sym)
-    qsym = Expr(:quote, sym)
-    @eval begin
-        convert(::Type{Float64}, ::MathConst{$qsym}) = $(float64(convert(BigFloat,x)))
-        convert(::Type{Float32}, ::MathConst{$qsym}) = $(float32(convert(BigFloat,x)))
-    end
-end
+@math_const π 3.14159265358979323846 pi
+@math_const e 2.71828182845904523536 exp(big(1))
+@math_const γ 0.57721566490153286061 euler
 
 # aliases
 const pi = π
