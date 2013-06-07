@@ -1407,6 +1407,9 @@ function next{Tv,Ti}(d::cscdiagit{Tv,Ti}, j)
 end
 
 function trace(A::SparseMatrixCSC)
+    if size(A,1) != size(A,2)
+        error("expected square matrix")
+    end
     s = zero(eltype(A))
     for d in cscdiagit(A)
         s += d

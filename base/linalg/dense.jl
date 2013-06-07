@@ -131,6 +131,9 @@ end
 diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
 
 function trace{T}(A::Matrix{T})
+    if size(A,1) != size(A,2)
+        error("expected square matrix")
+    end
     t = zero(T)
     for i=1:min(size(A))
         t += A[i,i]
