@@ -15,58 +15,13 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
-       erfinv, erfcinv,
-       MathConst, e, π, γ, pi, euler_mascheroni
+       erfinv, erfcinv
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, ceil, floor, trunc, round, ^, exp2, exp10
 
 import Core.Intrinsics.nan_dom_err
-
-## mathematical constants ##
-
-import Base: show, promote_rule, convert
-
-immutable MathConst{sym} <: Real end
-
-show{sym}(io::IO, ::MathConst{sym}) = print(io, sym)
-
-const e = MathConst{:e}()
-const π = MathConst{:π}()
-const γ = MathConst{:γ}()
-
-const pi = π
-const euler_mascheroni = γ
-
-promote_rule{s}(::Type{MathConst{s}}, ::Type) = Float64
-promote_rule{s}(::Type{MathConst{s}}, ::Type{Float32}) = Float32
-promote_rule{s}(::Type{MathConst{s}}, ::Type{ImaginaryUnit}) = Complex{Float64}
-promote_rule{s}(::Type{ImaginaryUnit}, ::Type{MathConst{s}}) = Complex{Float64}
-promote_rule{s,T<:Real}(::Type{MathConst{s}}, ::Type{Complex{T}}) =
-    Complex{promote_type(MathConst{s},T)}
-
-convert(::Type{Float64}, ::MathConst{:e}) = 2.71828182845904523536
-convert(::Type{Float64}, ::MathConst{:π}) = 3.14159265358979323846
-convert(::Type{Float64}, ::MathConst{:γ}) = 0.57721566490153286061
-
-convert(::Type{Float32}, ::MathConst{:e}) = 2.7182817f0
-convert(::Type{Float32}, ::MathConst{:π}) = 3.1415927f0
-convert(::Type{Float32}, ::MathConst{:γ}) = 0.5772157f0
-
-convert(::Type{FloatingPoint}, x::MathConst) = float64(x)
-convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, float64(x))
-convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, float64(x))
-
--(x::MathConst) = -float64(x)
-+(x::MathConst, y::MathConst) = float64(x) + float64(y)
--(x::MathConst, y::MathConst) = float64(x) - float64(y)
-*(x::MathConst, y::MathConst) = float64(x) * float64(y)
-/(x::MathConst, y::MathConst) = float64(x) / float64(y)
-^(x::MathConst, y::MathConst) = float64(x) ^ float64(y)
-
-*(x::MathConst, i::ImaginaryUnit) = float64(x)*i
-*(i::ImaginaryUnit, x::MathConst) = i*float64(x)
 
 # non-type specific math functions
 
