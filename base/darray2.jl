@@ -275,3 +275,21 @@ setindex!(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
 
 setindex!(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
     setindex!(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
+
+
+#Attempt to write some darray setting functions
+function setindex!(d::DArray,x,I::Int...)
+  #Now the hard part, have to localise the indexes
+  K=locate(d,I...)
+  I = [I[i]-d.cuts[i][K[i]]+1 for i in 1:ndims(d)]
+  #Do the actual setting
+  setindex!(d.chunks[K...],x,I...)
+end
+
+function setindex!(ref::RemoteRef,x::Real,I::Int...)
+  if ref.where==myid()
+    fetch(ref)[I...]=x
+  else
+    remotecall_wait(ref.where,setindex!,ref,x,I...)
+  end
+end
