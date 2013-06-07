@@ -273,6 +273,7 @@ export
     atan2,
     atand,
     atanh,
+    big,
     bitmix,
     bool,
     binomial,
