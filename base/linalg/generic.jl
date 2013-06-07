@@ -89,7 +89,12 @@ function rank(A::AbstractMatrix)
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
-trace(A::AbstractMatrix) = sum(diag(A))
+function trace(A::AbstractMatrix)
+    if size(A,1) != size(A,2)
+        error("expected square matrix")
+    end
+    sum(diag(A))
+end
 trace(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
