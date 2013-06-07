@@ -178,12 +178,14 @@ include("gmp.jl")
 importall .GMP
 include("mpfr.jl")
 importall .MPFR
-
 big(n::Integer) = convert(BigInt,n)
-big(x::MathConst) = convert(BigFloat,x)
 big(x::FloatingPoint) = convert(BigFloat,x)
 big(q::Rational) = big(num(q))//big(den(q))
 big(z::Complex) = complex(big(real(z)),big(imag(z)))
+
+# mathematical constants
+include("constants.jl")
+big(x::MathConst) = convert(BigFloat,x)
 
 # Numerical integration
 include("quadgk.jl")
