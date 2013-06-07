@@ -161,7 +161,10 @@ function /(a::Complex, b::Complex)
     end
 end
 
-function /(a::Real, b::Complex)
+/(a::Real, b::Complex) =
+    real(convert(promote_type(typeof(a),typeof(b)),a)) /
+    convert(promote_type(typeof(a),typeof(b)),b)
+function /{T<:Real}(a::T, b::Complex{T})
     bre = real(b); bim = imag(b)
     if abs(bre) <= abs(bim)
         if isinf(bre) && isinf(bim)
