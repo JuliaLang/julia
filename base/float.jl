@@ -101,25 +101,29 @@ floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
 
 promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
-promote_rule(::Type{Float32}, ::Type{Int8} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Int16}) = Float32
-promote_rule(::Type{Float32}, ::Type{Int32}) = Float32
-promote_rule(::Type{Float32}, ::Type{Int64}) = Float32
+promote_rule(::Type{Float32}, ::Type{Int8}  ) = Float32
+promote_rule(::Type{Float32}, ::Type{Int16} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Int32} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Int64} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
 
-promote_rule(::Type{Float64}, ::Type{Int8} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Int16}) = Float64
-promote_rule(::Type{Float64}, ::Type{Int32}) = Float64
-promote_rule(::Type{Float64}, ::Type{Int64}) = Float64
+promote_rule(::Type{Float64}, ::Type{Int8}  ) = Float64
+promote_rule(::Type{Float64}, ::Type{Int16} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Int32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Int64} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
 
-promote_rule(::Type{Float32}, ::Type{Uint8} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint16}) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint32}) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint64}) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint8}  ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint16} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint32} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint64} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint128}) = Float32
 
-promote_rule(::Type{Float64}, ::Type{Uint8} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint16}) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint32}) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint64}) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint8}  ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint16} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint64} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint128}) = Float64
 
 promote_rule(::Type{Float32}, ::Type{Char}) = Float32
 promote_rule(::Type{Float64}, ::Type{Char}) = Float64
