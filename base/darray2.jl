@@ -301,9 +301,9 @@ function setindex!(d::DArray,x::Array,I::Range1{Int}...)
         localids=[K[j]-offs[j] for j in 1:n]
         #Now store it, this will break if dims K don't match
         if ref.where==myid()
-          fetch(ref)[localids...]=x[[I[j]-first(I[j])+1 for j in 1:n]...]
+          fetch(ref)[localids...]=x[[K[j]-first(I[j])+1 for j in 1:n]...]
         else
-          @async remotecall_wait(ref.where,(ref,x,I)->fetch(ref)[I...]=x,ref,x[[I[j]-first(I[j])+1 for j in 1:n]...],localids)
+          @async remotecall_wait(ref.where,(ref,x,I)->fetch(ref)[I...]=x,ref,x[[K[j]-first(I[j])+1 for j in 1:n]...],localids)
         end
       end
     end
