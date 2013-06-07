@@ -7,7 +7,8 @@
      ; the way the lexer works, every prefix of an operator must also
      ; be an operator.
      (-- -->)
-     (> < >= <= == === != !== |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:| |\|>| |<\||)
+     (> < >= <= == === != !== |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
+     (|\|>| |<\||)
      (: |..|)
      (+ - |.+| |.-| |\|| $)
      (<< >> >>> |.<<| |.>>|)
@@ -572,7 +573,7 @@
 ; parse left to right, combining chains of certain operators into 1 call
 ; e.g. a+b+c => (call + a b c)
 (define (parse-expr s)
-  (let ((ops (prec-ops 7)))
+  (let ((ops (prec-ops 8)))
     (let loop ((ex       (parse-shift s))
 	       (chain-op #f))
       (let* ((t   (peek-token s))
@@ -593,10 +594,10 @@
 		     (loop (list 'call t ex (parse-shift s))
 			   (and (eq? t '+) t))))))))))
 
-(define (parse-shift s) (parse-LtoR s parse-term (prec-ops 8)))
+(define (parse-shift s) (parse-LtoR s parse-term (prec-ops 9)))
 
 (define (parse-term s)
-  (let ((ops (prec-ops 9)))
+  (let ((ops (prec-ops 10)))
     (let loop ((ex       (parse-rational s))
 	       (chain-op #f))
       (let ((t   (peek-token s))
@@ -617,10 +618,12 @@
 			  (loop (list 'call t ex (parse-rational s))
 				(and (eq? t '*) t))))))))))
 
-(define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 10)))
+(define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 11)))
+
+(define (parse-pipes s)    (parse-LtoR s parse-range (prec-ops 6)))
 
 (define (parse-comparison s ops)
-  (let loop ((ex (parse-range s))
+  (let loop ((ex (parse-pipes s))
 	     (first #t))
     (let ((t (peek-token s)))
       (if (not (memq t ops))
@@ -715,7 +718,7 @@
 ; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-h s parse-decl (prec-ops 11)))
+  (parse-factor-h s parse-decl (prec-ops 12)))
 
 (define (parse-decl s)
   (let loop ((ex (if (eq? (peek-token s) '|::|)
@@ -827,7 +830,7 @@
 		       ex))
 		  (else ex))))))))
 
-;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 13)))
+;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 14)))
 
 (define expect-end-current-line 0)
 
