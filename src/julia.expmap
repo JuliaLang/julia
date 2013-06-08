@@ -44,6 +44,7 @@
     ios_write;
     ios_write_direct;
     iswprint;
+    jl_print_type;
     jl_alloc_array_1d;
     jl_alloc_array_2d;
     jl_alloc_array_3d;
