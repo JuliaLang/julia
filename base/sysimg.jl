@@ -185,7 +185,6 @@ big(z::Complex) = complex(big(real(z)),big(imag(z)))
 
 # mathematical constants
 include("constants.jl")
-big(x::MathConst) = convert(BigFloat,x)
 
 # Numerical integration
 include("quadgk.jl")
