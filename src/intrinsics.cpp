@@ -876,9 +876,31 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(or_int,2)  return builder.CreateOr(JL_INT(x), JL_INT(y));
     HANDLE(xor_int,2) return builder.CreateXor(JL_INT(x), JL_INT(y));
     HANDLE(not_int,1) return builder.CreateXor(JL_INT(x), ConstantInt::get(t, -1, true));
-    HANDLE(shl_int,2) return builder.CreateShl(JL_INT(x), uint_cnvt(t,JL_INT(y)));
-    HANDLE(lshr_int,2) return builder.CreateLShr(JL_INT(x), uint_cnvt(t,JL_INT(y)));
-    HANDLE(ashr_int,2) return builder.CreateAShr(JL_INT(x), uint_cnvt(t,JL_INT(y)));
+    HANDLE(shl_int,2)
+        x = JL_INT(x); y = JL_INT(y);
+        return builder.
+            CreateSelect(builder.
+                         CreateICmpUGE(y, ConstantInt::get(y->getType(),
+                                                           x->getType()->getPrimitiveSizeInBits())),
+                         ConstantInt::get(x->getType(),0),
+                         builder.CreateShl(x, uint_cnvt(t,y)));
+    HANDLE(lshr_int,2)
+        x = JL_INT(x); y = JL_INT(y);
+        return builder.
+            CreateSelect(builder.
+                         CreateICmpUGE(y, ConstantInt::get(y->getType(),
+                                                           x->getType()->getPrimitiveSizeInBits())),
+                         ConstantInt::get(x->getType(),0),
+                         builder.CreateLShr(x, uint_cnvt(t,y)));
+    HANDLE(ashr_int,2)
+        x = JL_INT(x); y = JL_INT(y);
+        return builder.
+            CreateSelect(builder.
+                         CreateICmpUGE(y, ConstantInt::get(y->getType(),
+                                                           x->getType()->getPrimitiveSizeInBits())),
+                         builder.CreateAShr(x, ConstantInt::get(x->getType(),
+                                                                x->getType()->getPrimitiveSizeInBits()-1)),
+                         builder.CreateAShr(x, uint_cnvt(t,y)));
     HANDLE(bswap_int,1)
         x = JL_INT(x);
         return builder.CreateCall(

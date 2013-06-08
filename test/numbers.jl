@@ -1460,3 +1460,11 @@ end
 # rational-exponent promotion rules (issue #3155):
 @test 2.0f0^(1//3) == 2.0f0^(1.0f0/3)
 @test 2^(1//3) == 2^(1/3)
+
+# large shift amounts
+@test int32(-1)>>31 == -1
+@test int32(-1)>>32 == -1
+@test int32(-1)>>33 == -1
+@test 10>>64 == 0
+@test 10>>>64 == 0
+@test 10<<64 == 0
