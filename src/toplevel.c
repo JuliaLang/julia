@@ -355,6 +355,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         for(i=0; i < jl_array_len(ex->args); i++) {
             res = jl_toplevel_eval_flex(jl_cellref(ex->args, i), fast);
         }
+        JL_GC_POP();
         return res;
     }
 
