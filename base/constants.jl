@@ -2,6 +2,7 @@
 
 immutable MathConst{sym} <: Real end
 
+big(x::MathConst) = convert(BigFloat,x)
 show{sym}(io::IO, ::MathConst{sym}) = print(io, sym)
 
 promote_rule{s}(::Type{MathConst{s}}, ::Type) = Float64
@@ -46,8 +47,9 @@ macro math_const(sym, val, def)
         $bigconvert
         Base.convert(::Type{Float64}, ::MathConst{$qsym}) = $val
         Base.convert(::Type{Float32}, ::MathConst{$qsym}) = $(float32(val))
-        @assert float64($esym) == float64(convert(BigFloat,$esym))
-        @assert float32($esym) == float32(convert(BigFloat,$esym))
+        @assert isa(big($esym), BigFloat)
+        @assert float64($esym) == float64(big($esym))
+        @assert float32($esym) == float32(big($esym))
     end
 end
 
@@ -56,7 +58,10 @@ end
 @math_const π 3.14159265358979323846 pi
 @math_const e 2.71828182845904523536 exp(big(1))
 @math_const γ 0.57721566490153286061 euler
+@math_const G 0.91596559417721901505 catalan
 
 # aliases
 const pi = π
+const eu = e
 const eulergamma = γ
+const catalan = G
