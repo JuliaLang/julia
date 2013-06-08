@@ -409,6 +409,11 @@ void jl_debug_print_type(JL_STREAM *s, jl_value_t *v)
     }
 }
 
+DLLEXPORT void jl_print_type(jl_value_t *v)
+{
+    jl_debug_print_type(JL_STDERR, v);
+}
+
 extern jl_function_t *jl_typeinf_func;
 
 /*
