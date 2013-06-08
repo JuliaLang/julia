@@ -270,8 +270,58 @@ function setindex!(a::Array, s::SubDArray, I::Range1{Int}...)
     a
 end
 
+#If it's just a single index, use the fast method to set it
+function setsingleindex!(d::DArray,x,I::Int...) 
+  #Now the hard part, have to localise the indexes
+  K=locate(d,I...)
+  ref=d.chunks[K...]
+  I = [I[i]-d.cuts[i][K[i]]+1 for i in 1:ndims(d)]
+  if ref.where==myid()
+    fetch(ref)[I...]=x
+  else
+    remotecall_wait(ref.where,(ref,x,I)->fetch(ref)[I...]=x,ref,x,I)
+  end
+  d
+end
+
+#The more complicated case where we're setting by range
+function setindex!(d::DArray,x::Array,I::Range1{Int}...)
+  #Now the hard part, have to localise the indexes
+  n::Int=ndims(d)
+  @sync begin
+    for i in 1:length(d.chunks)
+      idx=d.indexes[i]
+      ref=d.chunks[i]
+      #Which points are common?
+      K = [ intersect(idx[j],I[j]) for j in 1:n ]
+      #Do they overlap at all?
+      if !any(isempty,K)
+        #What offset is needed for this chunk?
+        offs = [isa(idx[j],Int) ? idx[j]-1 : first(idx[j])-1 for j in 1:n ]
+        localids=[K[j]-offs[j] for j in 1:n]
+        #Now store it, this will break if dims K don't match
+        if ref.where==myid()
+          fetch(ref)[localids...]=x[[K[j]-first(I[j])+1 for j in 1:n]...]
+        else
+          @async remotecall_wait(ref.where,(ref,x,I)->fetch(ref)[I...]=x,ref,x[[K[j]-first(I[j])+1 for j in 1:n]...],localids)
+        end
+      end
+    end
+  end
+  d
+end
+
 # to disambiguate
 setindex!(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
 
 setindex!(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
     setindex!(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
+
+#Ensure we always get a range if it's a mixture
+function setindex!(d::DArray,x,I::Union(Int,Range1{Int})...)
+  if any((i)->!isa(i,Int),I)
+    return setindex!(d,x,[isa(i,Int) ? (i:i) : i for i in I]...)
+  else
+    return setsingleindex!(d,x,I...)
+  end
+end
