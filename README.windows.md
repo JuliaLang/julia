@@ -139,8 +139,6 @@ First the required dependencies will be installed:
 
 The build and install process of Julia is the same as in steps 1-7 of Ubuntu.
 
-Finally, after completing the Julia cross-compilation by executing the 7 Julia build and installation steps described in the Ubuntu section and after moving the julia-* directory/zipfile to the target machine, add the `julia-*/lib` and `julia-*/lib/julia` directories to your Windows `PATH` environment variable.
-
 Important Build Errata
 ----------------------
 
