@@ -122,13 +122,21 @@ JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
-ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+BUILD_MACHINE := $(shell $(CC) -dumpmachine)
+ARCH := $(shell echo $(BUILD_MACHINE) | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 endif
 ifeq ($(USEGCC),1)
 ifneq ($(ARCH), ppc64)
   SHIPFLAGS += -momit-leaf-frame-pointer
+endif
+ifeq ($(OS),Darwin)
+ifeq ($(OS),$(BUILD_OS))
+## GCC lies on Mac about it's target machine
+ARCH := $(shell uname -m)
+BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
+endif
 endif
 endif
 
