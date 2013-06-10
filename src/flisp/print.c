@@ -196,7 +196,7 @@ static int specialindent(value_t head)
 {
     // indent these forms 2 spaces, not lined up with the first argument
     if (head == LAMBDA || head == TRYCATCH || head == definesym ||
-        head == defmacrosym || head == forsym || head == labelsym)
+        head == defmacrosym || head == forsym)
         return 2;
     return -1;
 }
@@ -241,7 +241,7 @@ static int indentevery(value_t v)
     // indent before every subform of a special form, unless every
     // subform is "small"
     value_t c = car_(v);
-    if (c == LAMBDA || c == labelsym || c == setqsym)
+    if (c == LAMBDA || c == setqsym)
         return 0;
     if (c == IF) // TODO: others
         return !allsmallp(cdr_(v));
@@ -303,7 +303,7 @@ static void print_pair(ios_t *f, value_t v)
         }
 
         if (!print_pretty ||
-            ((head == LAMBDA || head == labelsym) && n == 0)) {
+            ((head == LAMBDA) && n == 0)) {
             // never break line before lambda-list
             ind = 0;
         }
@@ -318,7 +318,7 @@ static void print_pair(ios_t *f, value_t v)
                    
                    (est!=-1 && (HPOS+est > SCR_WIDTH-2)) ||
                    
-                   ((head == LAMBDA || head == labelsym) && !nextsmall) ||
+                   ((head == LAMBDA) && !nextsmall) ||
                    
                    (n > 0 && always) ||
                    

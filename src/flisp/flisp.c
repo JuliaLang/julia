@@ -114,7 +114,7 @@ static value_t NIL, LAMBDA, IF, TRYCATCH;
 static value_t BACKQUOTE, COMMA, COMMAAT, COMMADOT, FUNCTION;
 
 static value_t pairsym, symbolsym, fixnumsym, vectorsym, builtinsym, vu8sym;
-static value_t definesym, defmacrosym, forsym, labelsym, setqsym;
+static value_t definesym, defmacrosym, forsym, setqsym;
 static value_t tsym, Tsym, fsym, Fsym, booleansym, nullsym, evalsym, fnsym;
 // for reading characters
 static value_t nulsym, alarmsym, backspacesym, tabsym, linefeedsym, newlinesym;
@@ -2283,7 +2283,7 @@ static void lisp_init(size_t initial_heapsize)
     vectorsym = symbol("vector");     builtinsym = symbol("builtin");
     booleansym = symbol("boolean");   nullsym = symbol("null");
     definesym = symbol("define");     defmacrosym = symbol("define-macro");
-    forsym = symbol("for");           labelsym = symbol("label");
+    forsym = symbol("for");
     setqsym = symbol("set!");         evalsym = symbol("eval");
     vu8sym = symbol("vu8");           fnsym = symbol("fn");
     nulsym = symbol("nul");           alarmsym = symbol("alarm");
