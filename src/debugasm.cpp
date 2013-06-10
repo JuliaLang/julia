@@ -131,6 +131,7 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
                                            /*useCFI*/ true,
                                            /*useDwarfDirectory*/ true,
                                            IP, CE, MAB, ShowInst));
+    Streamer->InitSections();
     // Make the MemoryObject wrapper
     FuncMCView memoryObject(Fptr, Fsize);
   
