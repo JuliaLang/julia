@@ -221,9 +221,7 @@ end
 
 # system information
 
-versioninfo() = versioninfo(false)
-versioninfo(verbose::Bool) = versioninfo(OUTPUT_STREAM, verbose)
-function versioninfo(io::IO, verbose::Bool)
+function versioninfo(io::IO=OUTPUT_STREAM, verbose::Bool=false)
     println(io,             "Julia $version_string")
     println(io,             commit_string)
     println(io,             "Platform Info:")
