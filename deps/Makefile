@@ -12,10 +12,9 @@ BUILD_LLDB = 0
 
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
-CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
+CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)" --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
-CONFIG_GUESS := $(shell ./config.guess)
-CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
+CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
@@ -681,13 +680,13 @@ endif
 
 ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=gcc
+endif
 ifeq ($(ARCH),i686)
 OPENBLAS_BUILD_OPTS += BINARY=32
 else ifeq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += BINARY=64
 else
 $(error "unknown arch for openblas cross-compile")
-endif
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
