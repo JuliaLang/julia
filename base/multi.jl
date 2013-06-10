@@ -1225,40 +1225,37 @@ function pmap(f, lsts...)
     results
 end
 
-function preduce(reducer, f, N::Int)
-    np = nprocs()
+# Statically split range [1,N] into equal sized chunks for np processors
+function splitrange(N::Int, np::Int)
     each = div(N,np)
-    rest = rem(N,np)
-    if each < 1
-        return fetch(@spawn f(1, N))
-    end
-    results = cell(np)
-    for i=1:np
-        lo = 1 + (i-1)*each
-        hi = lo + each-1
-        if i==np
-            hi += rest
+    extras = rem(N,np)
+    nchunks = each > 0 ? np : extras
+    chunks = Array(Range1{Int}, nchunks)
+    lo = 1
+    for i in 1:nchunks
+        hi = lo + each - 1
+        if extras > 0
+            hi += 1
+            extras -= 1
         end
-        results[i] = @spawn f(lo, hi)
+        chunks[i] = lo:hi
+        lo = hi+1
+    end
+    return chunks
+end
+
+function preduce(reducer, f, N::Int)
+    chunks = splitrange(N, nprocs())
+    results = cell(length(chunks))
+    for i in 1:length(chunks)
+        results[i] = @spawn f(first(chunks[i]), last(chunks[i]))
     end
     mapreduce(fetch, reducer, results)
 end
 
 function pfor(f, N::Int)
-    np = nprocs()
-    each = div(N,np)
-    rest = rem(N,np)
-    if each < 1
-        @spawn f(1, N)
-        return
-    end
-    for i=1:np
-        lo = 1 + (i-1)*each
-        hi = lo + each-1
-        if i==np
-            hi += rest
-        end
-        @spawn f(lo,hi)
+    for c in splitrange(N, nprocs())
+        @spawn f(first(c), last(c))
     end
     nothing
 end
@@ -1270,8 +1267,10 @@ function make_preduce_body(reducer, var, body, ran)
             R = $(esc(ran))
             $(esc(var)) = R[lo]
             ac = $(esc(body))
-            for $(esc(var)) in R[(lo+1):hi]
-                ac = ($(esc(reducer)))(ac, $(esc(body)))
+            if lo != hi
+                for $(esc(var)) in R[(lo+1):hi]
+                    ac = ($(esc(reducer)))(ac, $(esc(body)))
+                end
             end
             ac
         end
