@@ -17,10 +17,9 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
        erfinv, erfcinv
 
-import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
-       Base.tanh, Base.asin, Base.acos, Base.atan, Base.asinh, Base.acosh,
-       Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.max, Base.min,
-       Base.ceil, Base.floor, Base.trunc, Base.round, Base.^, Base.exp2, Base.exp10
+import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
+             acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
+             max, min, ceil, floor, trunc, round, ^, exp2, exp10
 
 import Core.Intrinsics.nan_dom_err
 

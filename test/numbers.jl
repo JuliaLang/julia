@@ -225,7 +225,7 @@ end
 @test repr(-Inf) == "-Inf"
 @test repr(NaN) == "NaN"
 @test repr(-NaN) == "NaN"
-@test repr(pi) == "3.141592653589793"
+@test repr(float64(pi)) == "3.141592653589793"
 
 @test repr(1.0f0) == "1.0f0"
 @test repr(-1.0f0) == "-1.0f0"
