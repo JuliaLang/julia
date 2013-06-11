@@ -2198,6 +2198,7 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
             Stack[argSP+i] = cdr_(Stack[argSP+i]);
         }
         v = _applyn(nargs-1);
+        POPN(nargs);
         PUSH(v);
         v = mk_cons();
         car_(v) = POP(); cdr_(v) = NIL;
@@ -2205,19 +2206,19 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
         fl_gc_handle(&first);
         fl_gc_handle(&last);
         while (iscons(Stack[argSP+1])) {
-            Stack[SP-nargs] = Stack[argSP];
+            PUSH(Stack[argSP]);
             for(i=1; i < nargs; i++) {
-                Stack[SP-nargs+i] = car(Stack[argSP+i]);
+                PUSH(car(Stack[argSP+i]));
                 Stack[argSP+i] = cdr_(Stack[argSP+i]);
             }
             v = _applyn(nargs-1);
+            POPN(nargs);
             PUSH(v);
             v = mk_cons();
             car_(v) = POP(); cdr_(v) = NIL;
             cdr_(last) = v;
             last = v;
         }
-        POPN(nargs);
         fl_free_gc_handles(2);
     }
     return first;
