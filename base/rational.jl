@@ -37,7 +37,42 @@ end
 
 convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
 convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
-function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
+
+convert(::Type{Rational}, x::Rational) = x
+convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
+
+convert(::Type{Bool}, x::Rational) = (x!=0) # to resolve ambiguity
+convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
+convert{T<:FloatingPoint}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
+
+function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
+    x == 0 && return zero(T)//one(T)
+    if !isfinite(x)
+        x < 0 && return -one(T)//zero(T)
+        x > 0 && return +one(T)//zero(T)
+        error(InexactError())
+    end
+    # TODO: handle values that can't be converted exactly
+    p = get_precision(x)-1
+    n = convert(T, significand(x)*2.0^p)
+    p -= exponent(x)
+    z = trailing_zeros(n)
+    p - z > 0 ? (n>>z)//(one(T)<<(p-z)) :
+        p > 0 ? (n>>p)//one(T) :
+                (n<<-p)//one(T)
+end
+convert(::Type{Rational}, x::Union(Float64,Float32)) = convert(Rational{Int}, x)
+
+promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
+promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
+promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
+
+promote_rule{T<:SmallSigned,S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{Int}
+promote_rule{T<:SmallUnsigned,S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{Uint}
+promote_rule{T<:Union(Int64,Int128),S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{T}
+promote_rule{T<:Union(Uint64,Uint128),S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{T}
+
+function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
     if isnan(x);       return zero(T)//zero(T); end
     if x < typemin(T); return -one(T)//zero(T); end
     if typemax(T) < x; return  one(T)//zero(T); end
@@ -51,33 +86,17 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
     while true
         f = itrunc(y); y -= f
         p, q = f*a+c, f*b+d
-        if p < typemin(T) || p > typemax(T) ||
-           q < typemin(T) || q > typemax(T)
-           break
-        end
+        typemin(T) <= p <= typemax(T) &&
+        typemin(T) <= q <= typemax(T) || break
         a, b, c, d = p, q, a, b
         if y == 0 || abs(a/b-x) <= tol
             break
         end
-        y = 1/y
+        y = inv(y)
     end
     return convert(T,a)//convert(T,b)
 end
-convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(one(x)))
-convert(::Type{Rational}, x::FloatingPoint, tol::Real) = convert(Rational{Int},x,tol)
-convert(::Type{Rational}, x::FloatingPoint) = convert(Rational{Int},x,eps(one(x)))
-convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
-convert(::Type{Bool}, x::Rational) = (x!=0)  # to resolve ambiguity
-
-convert{T<:Rational}(::Type{T}, x::Rational) = x
-convert{T<:Integer}(::Type{T}, x::Rational) =
-    (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
-convert{T<:Real}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-
-promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+rationalize(x::Union(Float64,Float32); tol::Real=eps(x)) = rationalize(Int, x, tol=tol)
 
 num(x::Integer) = x
 den(x::Integer) = one(x)

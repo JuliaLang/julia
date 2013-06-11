@@ -333,10 +333,10 @@ end
 @test !isequal(+1.0,-1.0)
 @test !isequal(+Inf,-Inf)
 
-@test isequal(-0.0f0, -0.0)
-@test isequal(0.0f0, 0.0)
+@test  isequal(-0.0f0,-0.0)
+@test  isequal( 0.0f0, 0.0)
 @test !isequal(-0.0f0, 0.0)
-@test !isequal(0.0f0, -0.0)
+@test !isequal(0.0f0 ,-0.0)
 
 @test !isless(-Inf,-Inf)
 @test  isless(-Inf,-1.0)
@@ -414,8 +414,8 @@ end
 @test  isequal( 0.0,   0)
 @test !isequal(   0,-0.0)
 @test !isequal(-0.0,   0)
-@test  isless(-0.0,   0)
-@test !isless(   0,-0.0)
+@test   isless(-0.0,   0)
+@test  !isless(   0,-0.0)
 
 for x=-5:5, y=-5:5
     @test (x==y)==(float64(x)==int64(y))
@@ -681,9 +681,12 @@ end
 
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
-    @test !ispow2(b) || a//b == a/b
+    if ispow2(b)
+        @test a//b == a/b
+        @test convert(Rational,a/b) == a//b
+    end
+    @test rationalize(a/b) == a//b
     @test a//b == a//b
-    @test a//b == convert(Rational,a/b)
     if b == 0
         @test_fails integer(a//b) == integer(a/b)
     else
@@ -1302,18 +1305,18 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test int128(~0) == ~int128(0)
 
 # issue 1552
-@test isa(convert(Rational{Int8},pi),Rational{Int8})
-@test convert(Rational{Int8},pi) == 22//7
-@test convert(Rational{Int64},0.957762604052997) == 42499549//44373782
-@test convert(Rational{Int16},0.929261477046077) == 11639//12525
-@test convert(Rational{Int16},0.2264705884044309) == 77//340
-@test convert(Rational{Int16},0.39999899264235683) == 2//5
-@test convert(Rational{Int16},1.1264233500618559e-5) == 0//1
-@test convert(Rational{Uint16},1.1264233500618559e-5) == 1//65535
-@test convert(Rational{Uint16},0.6666652791223875) == 2//3
-@test convert(Rational{Int8},0.9374813124660655) == 15//16
-@test convert(Rational{Int8},0.003803032342443835) == 0//1
-@test convert(Rational{Uint8},0.003803032342443835) == 1//255
+@test isa(rationalize(Int8, pi), Rational{Int8})
+@test rationalize(Int8, pi) == 22//7
+@test rationalize(Int64, 0.957762604052997) == 42499549//44373782
+@test rationalize(Int16, 0.929261477046077) == 11639//12525
+@test rationalize(Int16, 0.2264705884044309) == 77//340
+@test rationalize(Int16, 0.39999899264235683) == 2//5
+@test rationalize(Int16, 1.1264233500618559e-5) == 0//1
+@test rationalize(Uint16, 1.1264233500618559e-5) == 1//65535
+@test rationalize(Uint16, 0.6666652791223875) == 2//3
+@test rationalize(Int8, 0.9374813124660655) == 15//16
+@test rationalize(Int8, 0.003803032342443835) == 0//1
+@test rationalize(Uint8, 0.003803032342443835) == 1//255
 
 # primes
 
