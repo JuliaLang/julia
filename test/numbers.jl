@@ -1305,8 +1305,8 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test int128(~0) == ~int128(0)
 
 # issue 1552
-@test isa(rationalize(Int8, pi), Rational{Int8})
-@test rationalize(Int8, pi) == 22//7
+@test isa(rationalize(Int8, float(pi)), Rational{Int8})
+@test rationalize(Int8, float(pi)) == 22//7
 @test rationalize(Int64, 0.957762604052997) == 42499549//44373782
 @test rationalize(Int16, 0.929261477046077) == 11639//12525
 @test rationalize(Int16, 0.2264705884044309) == 77//340
