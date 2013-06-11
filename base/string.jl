@@ -459,6 +459,7 @@ function next(s::RopeString, i::Int)
 end
 
 endof(s::RopeString) = s.endof
+length(s::RopeString) = length(s.head) + length(s.tail)
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 sizeof(s::RopeString) = sizeof(s.head) + sizeof(s.tail)
