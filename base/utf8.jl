@@ -92,6 +92,15 @@ function search(s::UTF8String, c::Char, i::Integer)
     end
 end
 
+function rsearch(s::UTF8String, c::Char, i::Integer)
+    if c < 0x80 return rsearch(s.data, c, i) end
+    while true
+        i = rsearch(s.data, first_utf8_byte(c), i)
+        if i==0 || s[i]==c return i end
+        i = next(s,i)[2]
+    end
+end
+
 string(a::ByteString, b::ByteString, c::ByteString...) =
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
     UTF8String([a.data,b.data,map(s->s.data,c)...])
