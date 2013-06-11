@@ -1118,7 +1118,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 JL_GC_POP();
                 Value *v = emit_expr(args[1], ctx);
                 if (tp0 == jl_bottom_type) {
-                    return builder.CreateUnreachable();
+                    v = builder.CreateUnreachable();
+                    BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_assert",ctx->f);
+                    builder.SetInsertPoint(cont);
                 }
                 return v;
             }
@@ -1126,7 +1128,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 emit_expr(args[1], ctx);
                 emit_error("reached code declared unreachable", ctx);
                 JL_GC_POP();
-                return builder.CreateUnreachable();
+                Value *v = builder.CreateUnreachable();
+                BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_assert",ctx->f);
+                builder.SetInsertPoint(cont);
+                return v;
             }
             if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
                 Value *arg1 = emit_expr(args[1], ctx);
