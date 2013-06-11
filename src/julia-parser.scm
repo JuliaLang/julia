@@ -11,7 +11,7 @@
      (|\|>| |<\||)
      (: |..|)
      (+ - |.+| |.-| |\|| $)
-     (<< >> >>> |.<<| |.>>|)
+     (<< >> >>> |.<<| |.>>| |.>>>|)
      (* / |./| % & |.*| |\\| |.\\|)
      (// .//)
      (^ |.^|)
@@ -142,7 +142,6 @@
 			      (skip-to-eol port)))))
 
 (define (read-operator port c)
-  (read-char port)
   (if (and (eqv? c #\*) (eqv? (peek-char port) #\*))
       (error "use ^ instead of **"))
   (if (or (eof-object? (peek-char port)) (not (opchar? (peek-char port))))
@@ -329,13 +328,13 @@
 			((char-numeric? nextc)
 			 (read-number port #t #f))
 			((opchar? nextc)
-			 (string->symbol
-			  (string-append (string c)
-					 (symbol->string
-					  (read-operator port nextc)))))
+			 (let ((op (read-operator port c)))
+			   (if (and (eq? op '..) (opchar? (peek-char port)))
+			       (error (string "invalid operator " op (peek-char port))))
+			   op))
 			(else '|.|)))))
 
-	  ((opchar? c)  (read-operator port c))
+	  ((opchar? c)  (read-operator port (read-char port)))
 
 	  ((identifier-char? c) (accum-julia-symbol c port))
 
