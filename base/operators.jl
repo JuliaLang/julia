@@ -281,11 +281,8 @@ export
     <|,
     ~
 
-import
-    Base.!, Base.!=, Base.$, Base.%, Base.&, Base.*, Base.+, Base.-, Base..!=,
-    Base..+, Base..-, Base..*, Base../, Base..<, Base..<=, Base..==, Base..>,
-    Base..>=, Base..\, Base..^, Base./, Base.//, Base.<, Base.<:, Base.<<,
-    Base.<=, Base.==, Base.>, Base.>=, Base.>>, Base..>>, Base..<<, Base.>>>,
-    Base.<|, Base.|>, Base.\, Base.^, Base.|, Base.~, Base.!==, Base.>:
+import Base: !, !=, $, %, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
+    .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
+    <|, |>, \, ^, |, ~, !==, >:
 
 end
