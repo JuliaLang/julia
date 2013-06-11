@@ -586,3 +586,8 @@ bin_val = hex2bytes("07bf")
 #non-hex characters
 @test_fails hex2bytes("0123456789abcdefABCDEFGH")
 
+# sizeof
+@test sizeof("abc") == 3
+@test sizeof("\u2222") == 3
+@test sizeof(SubString("abc\u2222def",4,6)) == 3
+@test sizeof(RopeString("abc","def")) == 6
