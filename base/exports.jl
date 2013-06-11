@@ -388,6 +388,7 @@ export
     prevpow2,
     primes,
     radians2degrees,
+    rationalize,
     real,
     realmax,
     realmin,

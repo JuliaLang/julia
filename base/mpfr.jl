@@ -94,10 +94,10 @@ end
 BigFloat(x::Float32) = BigFloat(float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
+convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
 convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
-
 
 for to in (Int8, Int16, Int32, Int64)
     @eval begin
@@ -137,6 +137,12 @@ promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
 
 promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigFloat},::Type{T}) = BigFloat
+
+promote_rule(::Type{Rational{BigInt}}, ::Type{BigFloat}) = Rational{BigInt}
+promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{BigFloat}) = Rational{BigInt}
+promote_rule{T<:FloatingPoint}(::Type{Rational{BigInt}}, ::Type{T}) = Rational{BigInt}
+
+rationalize(x::BigFloat; tol::Real=eps(x)) = rationalize(BigInt, x, tol=tol)
 
 # Basic arithmetic without promotion
 # Unsigned addition
