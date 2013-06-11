@@ -568,7 +568,7 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
 #-----------------------------------------------------------------------
 #     compute xmin and the number of terms of the series, fln+1
 #-----------------------------------------------------------------------
-    rln = r1m5 * (8 * sizeof(Float64) - 1 - int(log2(exponent(realmax(Float64)) + 1)))
+    rln = r1m5 * get_precision(x)
     rln = min(rln, 18.06)
     fln = max(rln, 3.0) - 3.0
     yint = 3.50 + 0.40*fln
