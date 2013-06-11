@@ -88,6 +88,8 @@ immutable OS_FD
     fd::Int32
 end
 
+convert(::Type{Int32},fd::OS_FD) = fd.fd 
+
 #Wrapper for an OS file descriptor (for Windows)
 @windows_only immutable OS_SOCKET
     handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows...
