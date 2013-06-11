@@ -92,7 +92,7 @@ ifeq ($(USE_SYSTEM_LIBUV),0)
 	cp -a $(BUILD)/lib/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	cp -a $(BUILD)/include/uv* $(PREFIX)/include/julia
 endif
-	cp -a src/julia.h $(PREFIX)/include/julia
+	cp -a src/julia.h src/support/*.h $(PREFIX)/include/julia
 	# Copy system image
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well

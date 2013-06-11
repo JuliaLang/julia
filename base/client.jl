@@ -206,7 +206,7 @@ function process_options(args::Array{Any,1})
         elseif args[i]=="-p"
             i+=1
             if i > length(args) || !isdigit(args[i][1])
-                np = CPU_CORES
+                np = Sys.CPU_CORES
             else
                 np = int(args[i])
             end
@@ -301,6 +301,8 @@ function _start()
     if Base.libblas_name == "libopenblas"
         check_openblas()
     end
+    Sys.init()
+    global const CPU_CORES = Sys.CPU_CORES
 
     # set default local address
     global bind_addr = getipaddr()
@@ -314,13 +316,6 @@ function _start()
             ENV["HOME"] = user_data_dir
         end
     end
-
-    # set CPU core count
-    global const CPU_CORES = int(
-        haskey(ENV,"JULIA_CPU_CORES") ?
-        ENV["JULIA_CPU_CORES"] :
-        ccall(:jl_cpu_cores, Int32, ())
-    )
 
     #atexit(()->flush(STDOUT))
     try
