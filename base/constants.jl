@@ -74,9 +74,11 @@ const golden = φ
 #    .^(::MathConst{:e}, x) = exp(x)
 # but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
 for T in (MathConst, Rational, Integer, Number)
-    ^(::MathConst{:e}, x::T) = exp(x) 
+    ^(::MathConst{:e}, x::T) = exp(x)
 end
 for T in (Ranges, BitArray, SparseMatrixCSC, StridedArray, AbstractArray)
-    .^(::MathConst{:e}, x::T) = exp(x) 
+    .^(::MathConst{:e}, x::T) = exp(x)
 end
+^(::MathConst{:e}, x::AbstractMatrix) = expm(x)
+
 log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
