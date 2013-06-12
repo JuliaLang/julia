@@ -3,7 +3,7 @@
 immutable MathConst{sym} <: Real end
 
 big(x::MathConst) = convert(BigFloat,x)
-show{sym}(io::IO, ::MathConst{sym}) = print(io, sym)
+show{sym}(io::IO, x::MathConst{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
 
 promote_rule{s}(::Type{MathConst{s}}, ::Type) = Float64
 promote_rule{s}(::Type{MathConst{s}}, ::Type{Float32}) = Float32
