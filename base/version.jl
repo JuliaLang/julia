@@ -247,7 +247,7 @@ const banner_plain =
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  $version_string
  _/ |\\__'_|_|_|\\__'_|  |  $commit_string
-|__/                   |
+|__/                   |  $(Sys.MACHINE)
 
 """
 local tx = "\033[0m\033[1m" # text
@@ -264,7 +264,7 @@ const banner_color =
   $(jl)| | | | | | |/ _` |$(tx)  |
   $(jl)| | |_| | | | (_| |$(tx)  |  $version_string
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $commit_string
-$(jl)|__/$(tx)                   |
+$(jl)|__/$(tx)                   |  $(Sys.MACHINE)
 
 \033[0m"
 end # begin

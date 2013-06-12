@@ -148,6 +148,7 @@ include("darray.jl")
 include("mmap.jl")
 
 # utilities - version, timing, help, edit, metaprogramming
+include("sysinfo.jl")
 include("version.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
