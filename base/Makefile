@@ -17,8 +17,8 @@ file_constants.jl: ../src/file_constants.h
 uv_constants.jl: ../src/uv_constants.h
 	$(QUIET_PERL) ${CC} -E -P "-I$(LIBUV_INC)" -DJULIA ../src/uv_constants.h | tail -n 5 > $@
 
-build_h.jl: ../Make.inc ../src/os_detect.h
-	$(QUIET_PERL) $(CC) -E -P -DJULIA ../src/os_detect.h | grep OS_NAME > $@
+build_h.jl: ../Make.inc build.h
+	$(QUIET_PERL) $(CC) -E -P -D_ARCH=$(ARCH) -D_MACHINE=$(shell $(CC) -dumpmachine) build.h -I../src/support | grep . > $@
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
 	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
 	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
