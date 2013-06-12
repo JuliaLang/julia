@@ -181,19 +181,13 @@ for f in (:int8, :int16, :int32, :int64, :int128,
     @eval ($f)(x::Rational) = ($f)(iround(x))
 end
 
-function ^(x::Rational, y::Integer)
-    if y < 0
-        Rational(x.den^-y, x.num^-y)
-    else
-        Rational(x.num^y, x.den^y)
-    end
-end
+^(x::Rational, y::Integer) = y < 0 ?
+    Rational(x.den^-y, x.num^-y) : Rational(x.num^y, x.den^y)
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
 ^{T<:FloatingPoint}(x::T, y::Rational) = x^(convert(T,y.num)/y.den)
 ^{T<:FloatingPoint}(x::Complex{T}, y::Rational) = x^(convert(T,y.num)/y.den)
 
-^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z)  # to resolve ambiguity
-
+^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z) # to resolve ambiguity
 ^{T<:Rational}(z::Complex{T}, n::Integer) =
     n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
