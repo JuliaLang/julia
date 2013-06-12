@@ -2,7 +2,6 @@
 
 immutable MathConst{sym} <: Real end
 
-big(x::MathConst) = convert(BigFloat,x)
 show{sym}(io::IO, x::MathConst{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
 
 promote_rule{s}(::Type{MathConst{s}}, ::Type) = Float64
@@ -19,11 +18,9 @@ convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, float64
 convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, float64(x))
 
 -(x::MathConst) = -float64(x)
-+(x::MathConst, y::MathConst) = float64(x) + float64(y)
--(x::MathConst, y::MathConst) = float64(x) - float64(y)
-*(x::MathConst, y::MathConst) = float64(x) * float64(y)
-/(x::MathConst, y::MathConst) = float64(x) / float64(y)
-^(x::MathConst, y::MathConst) = float64(x) ^ float64(y)
+for op in {:+, :-, :*, :/, :^}
+    @eval $op(x::MathConst, y::MathConst) = $op(float64(x),float64(y))
+end
 
 *(x::MathConst, i::ImaginaryUnit) = float64(x)*i
 *(i::ImaginaryUnit, x::MathConst) = i*float64(x)
@@ -52,6 +49,8 @@ macro math_const(sym, val, def)
         @assert float32($esym) == float32(big($esym))
     end
 end
+
+big(x::MathConst) = convert(BigFloat,x)
 
 ## specific mathematical constants
 
