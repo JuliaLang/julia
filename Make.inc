@@ -100,6 +100,7 @@ endif
 endif
 
 ifeq ($(USEGCC),1)
+HOSTCC = gcc
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -109,6 +110,7 @@ SHIPFLAGS = -O3 -DNDEBUG -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
+HOSTCC = clang
 CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -122,7 +124,7 @@ JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
-BUILD_MACHINE := $(shell gcc -dumpmachine)
+BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
