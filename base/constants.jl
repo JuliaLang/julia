@@ -69,7 +69,14 @@ const golden = φ
 
 # special behaviors
 
-for T in {MathConst, Rational, Integer, Number,
-          Ranges, BitArray, SparseMatrixCSC, AbstractArray}
-    ^(::MathConst{:e}, x::T) = exp(x)
+# use exp for e^x or e.^x, as in
+#    ^(::MathConst{:e}, x::Number) = exp(x)
+#    .^(::MathConst{:e}, x) = exp(x)
+# but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
+for T in (MathConst, Rational, Integer, Number)
+    ^(::MathConst{:e}, x::T) = exp(x) 
 end
+for T in (Ranges, BitArray, SparseMatrixCSC, StridedArray, AbstractArray)
+    .^(::MathConst{:e}, x::T) = exp(x) 
+end
+log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
