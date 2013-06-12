@@ -104,7 +104,7 @@ endif
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
 ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS = -with-gmp=$(abspath $(BUILD))
+MPFR_OPTS = --with-gmp=$(abspath $(BUILD))
 endif
 endif
 
