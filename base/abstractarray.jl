@@ -546,8 +546,8 @@ vcat() = Array(None, 0)
 hcat() = Array(None, 0)
 
 ## cat: special cases
-hcat{T}(X::T...) = [ X[j] for i=1, j=1:length(X) ]
-vcat{T}(X::T...) = [ X[i] for i=1:length(X) ]
+hcat{T}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
+vcat{T}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 function hcat{T}(V::AbstractVector{T}...)
     height = length(V[1])

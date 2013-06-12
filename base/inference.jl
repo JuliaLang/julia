@@ -799,7 +799,7 @@ end
 const Type_Array = Type{Array}
 
 function abstract_eval_constant(x::ANY)
-    if isa(x,DataType) || isa(x,UnionType) || isa(x,TypeConstructor)
+    if isa(x,Type)
         if is(x,Array)
             return Type_Array
         end
