@@ -643,6 +643,7 @@ export
     issparse,
     sparse,
     sparsevec,
+    spdiagm,
     speye,
     spones,
     sprand,
