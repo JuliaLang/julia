@@ -14,13 +14,13 @@ function mean(iterable)
 end
 mean(v::AbstractArray, region) = sum(v, region) / prod(size(v)[region])
 
-function median!{T<:Real}(v::AbstractVector{T})
+function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     isempty(v) && error("median of an empty array is undefined")
-    any(isnan,v) && error("median of an array with NaNs is undefined")
+    checknan && any(isnan,v) && error("median of an array with NaNs is undefined")
     n = length(v)
     isodd(n) ? select!(v,div(n+1,2)) : (select!(v,div(n,2))+select!(v,div(n,2)+1))/2
 end
-median{T<:Real}(v::AbstractArray{T}) = median!(copy(vec(v)))
+median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) = median!(copy(vec(v)), checknan=checknan)
 
 ## variance with known mean
 function varm(v::AbstractVector, m::Number)
