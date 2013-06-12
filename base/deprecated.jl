@@ -224,5 +224,7 @@ export ref
 const assign = setindex!
 export assign
 
+# will be removed from exports (moved into Base.Sys): OS_NAME, WORD_SIZE, CPU_CORES
+
 typealias ComplexPair Complex
 export ComplexPair
