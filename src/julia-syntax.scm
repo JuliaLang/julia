@@ -401,7 +401,9 @@
 	,(method-def-expr-
 	  name sparams (append pargl vararg)
 	  `(block
-	    (line 0 || ||)
+	    ,(if (null? lno)
+		 `(line 0 || ||)
+		 (append (car lno) '(||)))
 	    ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
 	    (return (call ,mangled
 			  ,@vals
