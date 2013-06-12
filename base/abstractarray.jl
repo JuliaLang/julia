@@ -1477,7 +1477,7 @@ function map_to2(f, first, dest::AbstractArray, A::AbstractArray)
 end
 
 function map(f, A::AbstractArray)
-    if isempty(A); return A; end
+    if isempty(A); return {}; end
     first = f(A[1])
     dest = similar(A, typeof(first))
     return map_to2(f, first, dest, A)
@@ -1495,7 +1495,7 @@ end
 function map(f, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if isempty(A)
-        return similar(A, eltype(A), shp)
+        return similar(A, Any, shp)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
@@ -1517,10 +1517,9 @@ end
 function map(f, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
-        return similar(As[1], eltype(As[1]), shape)
+        return similar(As[1], Any, shape)
     end
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first), shape)
     return map_to2(f, first, dest, As...)
 end
-
