@@ -67,3 +67,10 @@ const eu = e
 const eulergamma = γ
 const catalan = G
 const golden = φ
+
+# special behaviors
+
+for T in {MathConst, Rational, Integer, Number,
+          Ranges, BitArray, SparseMatrixCSC, AbstractArray}
+    ^(::MathConst{:e}, x::T) = exp(x)
+end
