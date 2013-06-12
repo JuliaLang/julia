@@ -193,7 +193,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     for i=1:n
         push!(PGRP.workers, w[i])
         w[i].id = PGRP.np+i
-        send_msg_now(w[i], w[i].id, newlocs)
+        send_msg_now(w[i], :join_pgrp, w[i].id, newlocs)
         create_message_handler_loop(w[i].socket)
     end
     PGRP.locs = newlocs
@@ -229,18 +229,14 @@ function worker_id_from_socket(s)
     return -1
 end
 
-# establish a Worker connection for processes that connected to us
-function identify_socket(otherid, sock)
-    i = otherid
-    #locs = PGRP.locs
-    @assert i > PGRP.myid
+function register_worker(i, wrkr)
     d = i-length(PGRP.workers)
     if d > 0
         resize!(PGRP.workers, i)
         PGRP.workers[(end-d+1):end] = nothing
         PGRP.np += d
     end
-    PGRP.workers[i] = Worker("", 0, sock, i)
+    PGRP.workers[i] = wrkr
     #write(STDOUT, "$(PGRP.myid) heard from $i\n")
     nothing
 end
@@ -780,27 +776,6 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
         #println("message_handler_loop")
         start_reading(sock)
         wait_connected(sock)
-        if PGRP.np == 0
-            # first connection; get process group info from client
-            PGRP.myid = deserialize(sock)
-            PGRP.locs = locs = deserialize(sock)
-            #print("\nLocation: ",locs,"\nId:",PGRP.myid,"\n")
-            # joining existing process group
-            PGRP.np = length(PGRP.locs)
-            PGRP.workers = w = cell(PGRP.np)
-            fill!(w, nothing)
-            w[1] = Worker("", 0, sock, 1)
-            for i = 2:(PGRP.myid-1)
-                w[i] = Worker(locs[i][1], locs[i][2])
-                w[i].id = i
-                create_message_handler_loop(w[i].socket)
-                send_msg_now(w[i], :identify_socket, PGRP.myid)
-            end
-            w[PGRP.myid] = LocalProcess()
-            for i = (PGRP.myid+1):PGRP.np
-                w[i] = nothing
-            end
-        end
         #println("loop")
         while true
             #try
@@ -833,7 +808,22 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 deliver_result((), mkind, oid, val)
             elseif is(msg, :identify_socket)
                 otherid = deserialize(sock)
-                identify_socket(otherid, sock)
+                # establish a Worker connection for processes that connected to us
+                register_worker(otherid, Worker("", 0, sock, otherid))
+            elseif is(msg, :join_pgrp)
+                PGRP.myid = deserialize(sock)
+                PGRP.locs = locs = deserialize(sock)
+
+                register_worker(PGRP.myid, LocalProcess())
+                register_worker(1, Worker("", 0, sock, 1))
+
+                w = PGRP.workers
+                for i = 2:(PGRP.myid-1)
+                    w[i] = Worker(locs[i][1], locs[i][2])
+                    w[i].id = i
+                    create_message_handler_loop(w[i].socket)
+                    send_msg_now(w[i], :identify_socket, PGRP.myid)
+                end
             else
                 # the synchronization messages
                 oid = deserialize(sock)::(Int,Int)
