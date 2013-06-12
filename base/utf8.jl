@@ -71,6 +71,8 @@ end
 
 ## overload methods for efficiency ##
 
+sizeof(s::UTF8String) = sizeof(s.data)
+
 isvalid(s::UTF8String, i::Integer) =
     (1 <= i <= endof(s.data)) && is_utf8_start(s.data[i])
 
