@@ -190,7 +190,7 @@ export
     π, pi,
     e, eu,
     γ, eulergamma,
-    G, catalan,
+    catalan,
     φ, golden,
 
 # Operators
