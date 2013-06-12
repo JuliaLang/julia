@@ -296,7 +296,7 @@ function _start()
     # set up standard streams
     reinit_stdio()
     # Initialize RNG
-    librandom_init()
+    Random.librandom_init()
     # Check that OpenBLAS is correctly built
     if Base.libblas_name == "libopenblas"
         check_openblas()

@@ -2,7 +2,7 @@ module Random
 
 using Base.LibRandom
 
-export librandom_init, srand,
+export srand,
        rand, rand!,
        randn, randn!,
        randbool, randbool!,
@@ -13,28 +13,27 @@ abstract AbstractRNG
 type MersenneTwister <: AbstractRNG
     state::DSFMT_state
     seed::Union(Uint32,Vector{Uint32})
-    len::Int   # Use for iteration. Set to -1 otherwise.
 
     function MersenneTwister()
         seed = uint32(0)
         state = DSFMT_state()
         dsfmt_init_gen_rand(state, seed)
-        return new(state, seed, -1)
+        return new(state, seed)
     end
 
-    MersenneTwister(seed) = MersenneTwister(seed, -1)
-
-    function MersenneTwister(seed::Uint32, len::Int)
+    function MersenneTwister(seed::Uint32)
         state = DSFMT_state()
         dsfmt_init_gen_rand(state, seed)
-        return new(state, seed, len)
+        return new(state, seed)
     end
 
-    function MersenneTwister(seed::Vector{Uint32}, len::Int)
+    function MersenneTwister(seed::Vector{Uint32})
         state = DSFMT_state()
         dsfmt_init_by_array(state, seed)
-        return new(state, seed, len)
+        return new(state, seed)
     end
+
+    MersenneTwister(seed) = MersenneTwister(reinterpret(Uint32, [seed]))
 end
 
 function srand(r::MersenneTwister, seed) 
