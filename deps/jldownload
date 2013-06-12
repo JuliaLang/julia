@@ -9,8 +9,8 @@ WGET=/usr/bin/wget
 CURL=/usr/bin/curl
 FETCH=/usr/bin/fetch
 
-WGET_OPTS=--no-check-certificate
-CURL_OPTS=-fkL
+WGET_OPTS="--no-check-certificate --tries=1 --timeout=15"
+CURL_OPTS="-fkL --connect-timeout 15"
 FETCH_OPTS=
 
 if [ $# -eq 1 ]; then
@@ -25,12 +25,12 @@ else
     exit 1
 fi
 
-URL_BASENAME=`basename $URL`
-MIRROR_URL="$MIRROR_HOST/$URL_BASENAME"
+MIRROR_BASENAME=`basename $1`
+MIRROR_URL="$MIRROR_HOST/$MIRROR_BASENAME"
 
-if [ -x $CURL ]; then
+if [ -x $CURL ] && $CURL -V >/dev/null; then
     GETURL="$CURL $CURL_OPTS"
-elif [ -x $WGET ]; then
+elif [ -x $WGET ] && $WGET -V >/dev/null; then
     GETURL="$WGET $WGET_OPTS"
 elif [ -x $FETCH ]; then
     GETURL="$FETCH $FETCH_OPTS"

@@ -11,7 +11,7 @@
      (|\|>| |<\||)
      (: |..|)
      (+ - |.+| |.-| |\|| $)
-     (<< >> >>> |.<<| |.>>|)
+     (<< >> >>> |.<<| |.>>| |.>>>|)
      (* / |./| % & |.*| |\\| |.\\|)
      (// .//)
      (^ |.^|)
@@ -78,6 +78,9 @@
 (define (typedecl? e)
   (and (length= e 3) (eq? (car e) |::|) (symbol? (cadr e))))
 
+(define (kwarg? e)
+  (and (pair? e) (eq? (car e) 'kw)))
+
 (define unary-ops '(+ - ! ~ |<:| |>:|))
 
 ; operators that are both unary and binary
@@ -142,7 +145,6 @@
 			      (skip-to-eol port)))))
 
 (define (read-operator port c)
-  (read-char port)
   (if (and (eqv? c #\*) (eqv? (peek-char port) #\*))
       (error "use ^ instead of **"))
   (if (or (eof-object? (peek-char port)) (not (opchar? (peek-char port))))
@@ -329,13 +331,13 @@
 			((char-numeric? nextc)
 			 (read-number port #t #f))
 			((opchar? nextc)
-			 (string->symbol
-			  (string-append (string c)
-					 (symbol->string
-					  (read-operator port nextc)))))
+			 (let ((op (read-operator port c)))
+			   (if (and (eq? op '..) (opchar? (peek-char port)))
+			       (error (string "invalid operator " op (peek-char port))))
+			   op))
 			(else '|.|)))))
 
-	  ((opchar? c)  (read-operator port c))
+	  ((opchar? c)  (read-operator port (read-char port)))
 
 	  ((identifier-char? c) (accum-julia-symbol c port))
 
@@ -1166,22 +1168,14 @@
 	     ((#\newline)   (reverse! (cons e exprs)))
 	     (else          (loop (cons e exprs)))))))))
 
-(define (separate-keywords argl)
-  (receive
-   (kws args) (separate (lambda (x)
-			  (and (assignment? x)
-			       (or (symbol? (cadr x))
-                                   (typedecl? (cadr x)))))
-			argl)
-   (if (null? kws)
-       args
-       `((keywords ,@kws) ,@args))))
-
-(define (has-keywords? lst)
-  (and (pair? lst) (pair? (car lst)) (eq? (caar lst) 'keywords)))
-
 (define (has-parameters? lst)
   (and (pair? lst) (pair? (car lst)) (eq? (caar lst) 'parameters)))
+
+(define (to-kws lst)
+  (map (lambda (x) (if (assignment? x)
+		       `(kw ,@(cdr x))
+		       x))
+       lst))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
@@ -1196,25 +1190,21 @@
     (let ((t (require-token s)))
       (if (equal? t closer)
 	  (begin (take-token s)
-		 (let ((lst (reverse lst)))
-		   (if (eqv? closer #\) )
-		       (separate-keywords lst)
-		       lst)))
+		 (if (eqv? closer #\) )
+		     ;; (= x y) inside function call is keyword argument
+		     (to-kws (reverse lst))
+		     (reverse lst)))
 	  (if (equal? t #\;)
 	      (begin (take-token s)
 		     (if (equal? (peek-token s) closer)
 			 ;; allow f(a, b; )
-			 (begin (take-token s)
-				(reverse lst))
+			 (loop lst)
 			 (let ((params (loop '()))
-			       (lst    (separate-keywords (reverse lst))))
-			   (let ((params (cons 'parameters
-					       (if (has-keywords? params)
-						   (append (cdar params) (cdr params))
-						   params))))
-			     (if (has-keywords? lst)
-				 (list* (car lst) params (cdr lst))
-				 (list* params lst))))))
+			       (lst    (if (eqv? closer #\) )
+					   (to-kws (reverse lst))
+					   (reverse lst))))
+			   (cons (cons 'parameters params)
+				 lst))))
 	      (let* ((nxt (parse-eq* s))
 		     (c (require-token s)))
 		(cond ((eqv? c #\,)

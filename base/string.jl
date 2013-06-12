@@ -66,6 +66,8 @@ print(io::IO, s::String) = for c in s write(io, c) end
 write(io::IO, s::String) = print(io, s)
 show(io::IO, s::String) = print_quoted(io, s)
 
+sizeof(s::String) = error("type $(typeof(s)) has no canonical binary representation")
+
 (*)(s::String...) = string(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
 
@@ -336,6 +338,8 @@ SubString(s::String, i::Integer) = SubString(s, i, endof(s))
 write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
     s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset+1, next(s,s.endof)[2]-1)
 
+sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
+
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
         error(BoundsError)
@@ -366,6 +370,7 @@ end
 
 endof(s::RepString)  = endof(s.string)*s.repeat
 length(s::RepString) = length(s.string)*s.repeat
+sizeof(s::RepString) = sizeof(s.string)*s.repeat
 
 function next(s::RepString, i::Int)
     if i < 1 || i > endof(s)
@@ -402,6 +407,7 @@ end
 
 endof(s::RevString) = endof(s.string)
 length(s::RevString) = length(s.string)
+sizeof(s::RevString) = sizeof(s.string)
 
 function next(s::RevString, i::Int)
     n = endof(s); j = n-i+1
@@ -453,8 +459,10 @@ function next(s::RopeString, i::Int)
 end
 
 endof(s::RopeString) = s.endof
+length(s::RopeString) = length(s.head) + length(s.tail)
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
+sizeof(s::RopeString) = sizeof(s.head) + sizeof(s.tail)
 
 ## uppercase and lowercase transformations ##
 
