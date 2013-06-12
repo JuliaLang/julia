@@ -791,7 +791,7 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
 #if defined(_OS_WINDOWS_)
-    fd = open(fname, flags, _S_IREAD | _S_IWRITE);
+    fd = open(fname, flags | O_BINARY, _S_IREAD | _S_IWRITE);
 #else
     fd = open(fname, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
 #endif
