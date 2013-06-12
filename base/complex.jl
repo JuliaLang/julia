@@ -100,6 +100,8 @@ imag(::ImaginaryUnit) = int32(1)
 promote_rule{T<:Complex}(::Type{ImaginaryUnit}, ::Type{T}) = T
 promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = Complex{T}
 
+show(io::IO, ::ImaginaryUnit) = print(io, "im")
+
 
 ## generic functions of complex numbers ##
 
