@@ -183,12 +183,13 @@ export
     STDOUT,
     VERSION,
     WORD_SIZE,
-    e,
-    eulergamma,
-    γ,
-    im,
-    pi,
-    π,
+
+# Mathematical constants
+    π, pi,
+    e, eu,
+    γ, eulergamma,
+    G, catalan,
+    φ, golden,
 
 # Operators
     !,
@@ -821,9 +822,6 @@ export
     srand,
 
 # bigfloat & precision
-    bigfloat_pi,
-    bigfloat_eulergamma,
-    bigfloat_catalan,
     get_precision,
     get_bigfloat_precision,
     set_bigfloat_precision,
