@@ -185,6 +185,7 @@ export
     WORD_SIZE,
 
 # Mathematical constants
+    im,
     π, pi,
     e, eu,
     γ, eulergamma,
