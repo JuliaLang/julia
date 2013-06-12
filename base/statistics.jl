@@ -16,9 +16,9 @@ mean(v::AbstractArray, region) = sum(v, region) / prod(size(v)[region])
 
 function median!{T<:Real}(v::AbstractVector{T})
     isempty(v) && error("median of an empty array is undefined")
-    sort!(v) # TODO: do something more efficient, e.g. select but detect NaNs
-    isnan(v[end]) && error("median is undefined in presence of NaNs")
-    isodd(length(v)) ? float(v[div(end+1,2)]) : (v[div(end,2)]+v[div(end,2)+1])/2
+    any(isnan,v) && error("median of an array with NaNs is undefined")
+    n = length(v)
+    isodd(n) ? select!(v,div(n+1,2)) : (select!(v,div(n,2))+select!(v,div(n,2)+1))/2
 end
 median{T<:Real}(v::AbstractArray{T}) = median!(copy(vec(v)))
 
@@ -108,7 +108,6 @@ end
 ## midpoints of intervals
 midpoints(r::Ranges) = r[1:length(r)-1] + 0.5*step(r)
 midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
-
 
 ## hist ##
 function sturges(n)  # Sturges' formula
