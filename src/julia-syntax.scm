@@ -829,52 +829,61 @@
 
    ;; let
    (pattern-lambda (let ex . binds)
-		   (let loop ((binds binds)
-			      (args  ())
-			      (inits ())
-			      (locls ())
-			      (stmts ()))
-		     (if (null? binds)
-			 (begin
-			   (if (has-dups args)
-			       (error "let variables not unique"))
-			   `(call (-> (tuple ,@args)
-				      (block ,@(if (null? locls)
-						   '()
-						   `((local ,@locls)))
-					     ,@stmts
-					     ,ex))
-				  ,@inits))
-			 (cond
-			  ((or (symbol? (car binds)) (decl? (car binds)))
-			   ;; just symbol -> add local
-			   (loop (cdr binds) args inits
-				 (cons (car binds) locls)
-				 stmts))
-			  ((and (length= (car binds) 3)
-				(eq? (caar binds) '=))
-			   ;; some kind of assignment
-			   (cond
-			    ((or (symbol? (cadar binds))
-				 (decl?   (cadar binds)))
-			     ;; a=b -> add argument
-			     (loop (cdr binds)
-				   (cons (cadar binds) args)
-				   (cons (caddar binds) inits)
-				   locls stmts))
-				   #;(cons (cadar binds) locls)
-				   #;(cons `(= ,(decl-var (cadar binds))
-					     ,(caddar binds))
-					 stmts);))
-			    ((and (pair? (cadar binds))
-				  (eq? (caadar binds) 'call))
-			     ;; f()=c
-			     (let ((asgn (cadr (julia-expand0 (car binds)))))
-			       (loop (cdr binds) args inits
-				     (cons (cadr asgn) locls)
-				     (cons asgn stmts))))
-			    (else (error "invalid let syntax"))))
-			  (else (error "invalid let syntax"))))))
+		   (if
+		    (null? binds)
+		    `(scope-block (block ,ex))
+		    (let loop ((binds (reverse binds))
+			       (blk   ex))
+		      (if (null? binds)
+			  blk
+			  (cond
+			   ((or (symbol? (car binds)) (decl? (car binds)))
+			    ;; just symbol -> add local
+			    (loop (cdr binds)
+				  `(scope-block
+				    (block
+				     (local ,(car binds))
+				     (newvar ,(decl-var (car binds)))
+				     ,blk))))
+			   ((and (length= (car binds) 3)
+				 (eq? (caar binds) '=))
+			    ;; some kind of assignment
+			    (cond
+			     ((or (symbol? (cadar binds))
+				  (decl?   (cadar binds)))
+			      (let ((vname (decl-var (cadar binds))))
+				(loop (cdr binds)
+				      (if (contains (lambda (x) (eq? x vname))
+						    (caddar binds))
+					  (let ((tmp (gensy)))
+					    `(scope-block
+					      (block
+					       (local (= ,tmp ,(caddar binds)))
+					       (scope-block
+						(block
+						 (local ,(cadar binds))
+						 (newvar ,vname)
+						 (= ,vname ,tmp)
+						 ,blk)))))
+					  `(scope-block
+					    (block
+					     (local ,(cadar binds))
+					     (newvar ,vname)
+					     (= ,vname ,(caddar binds))
+					     ,blk))))))
+			     ((and (pair? (cadar binds))
+				   (eq? (caadar binds) 'call))
+			      ;; f()=c
+			      (let ((asgn (cadr (julia-expand0 (car binds)))))
+				(loop (cdr binds)
+				      `(scope-block
+					(block
+					 (local ,(cadr asgn))
+					 (newvar ,(cadr asgn))
+					 ,asgn
+					 ,blk)))))
+			     (else (error "invalid let syntax"))))
+			   (else (error "invalid let syntax")))))))
 
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
@@ -967,20 +976,14 @@
    ;; let
    (pattern-lambda (let ex . binds)
 		   (let loop ((binds binds)
-			      (args  ())
-			      (inits ())
-			      (locls ())
-			      (stmts ()))
+			      (vars  '()))
 		     (if (null? binds)
-			 (cons 'varlist
-			       (append! (llist-vars (fix-arglist args))
-					locls))
+			 (cons 'varlist vars)
 			 (cond
 			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
-			   (loop (cdr binds) args inits
-				 (cons (car binds) locls)
-				 stmts))
+			   (loop (cdr binds)
+				 (cons (decl-var (car binds)) vars)))
 			  ((and (length= (car binds) 3)
 				(eq? (caar binds) '=))
 			   ;; some kind of assignment
@@ -989,16 +992,13 @@
 				 (decl?   (cadar binds)))
 			     ;; a=b -> add argument
 			     (loop (cdr binds)
-				   (cons (cadar binds) args)
-				   (cons (caddar binds) inits)
-				   locls stmts))
+				   (cons (decl-var (cadar binds)) vars)))
 			    ((and (pair? (cadar binds))
 				  (eq? (caadar binds) 'call))
 			     ;; f()=c
 			     (let ((asgn (cadr (julia-expand0 (car binds)))))
-			       (loop (cdr binds) args inits
-				     (cons (cadr asgn) locls)
-				     (cons asgn stmts))))
+			       (loop (cdr binds)
+				     (cons (cadr asgn) vars))))
 			    (else '())))
 			  (else '())))))
 
