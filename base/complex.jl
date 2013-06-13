@@ -129,8 +129,14 @@ sign(z::Complex) = z/abs(z)
 -(z::Complex, w::Complex) = complex(real(z) - real(w), imag(z) - imag(w))
 *(z::Complex, w::Complex) = complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
+
+# adding or multiplying real & complex is common
 *(x::Real, z::Complex) = complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = complex(x * real(z), x * imag(z))
++(x::Real, z::Complex) = complex(x + real(z), imag(z))
++(z::Complex, x::Real) = complex(x + real(z), imag(z))
+-(x::Real, z::Complex) = complex(x - real(z), -imag(z))
+-(z::Complex, x::Real) = complex(real(z) - x, imag(z))
 
 # multiplying by im is common
 *(z::ImaginaryUnit, w::ImaginaryUnit) = complex(-imag(z), real(z))
