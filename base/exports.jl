@@ -1000,6 +1000,13 @@ export
     tty_cols,
     tty_rows,
 
+# IP address stuff
+    IPv4, 
+    IPv6, 
+    parse_ipv4,
+    parse_ipv6,
+    @ip_str,
+
 # I/O and events
     accept,
     listen,

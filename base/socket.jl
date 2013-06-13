@@ -16,42 +16,207 @@ type IPv4 <: IpAddr
     end
 end
 
+function IPv4(host::Integer)
+    if host < 0
+        error("IP address may not be negative")
+    elseif typemax(typeof(host)) > typemax(Uint32) && host > typemax(Uint32) 
+        error("Number to large for IP Address")
+    else
+        return IPv4(uint32(host))
+    end
+end
+
 show(io::IO,ip::IPv4) = print(io,"IPv4(",dec((ip.host&(0xFF000000))>>24),".",
                                          dec((ip.host&(0xFF0000))>>16),".",
                                          dec((ip.host&(0xFF00))>>8),".",
                                          dec(ip.host&0xFF),")")
 
+isequal(a::IPv4,b::IPv4) = a.host == b.host
+hash(ip::IPv4) = hash(ip.host)
+
 type IPv6 <: IpAddr
     host::Uint128
     IPv6(host::Uint128) = new(host)
     IPv6(a::Uint16,b::Uint16,c::Uint16,d::Uint16,
-	 e::Uint16,f::Uint16,g::Uint16,h::Uint16) = new(uint128(a)<<(7*16)|
-							uint128(b)<<(6*16)|
-							uint128(c)<<(5*16)|
-							uint128(d)<<(4*16)|
-							uint128(e)<<(3*16)|
-							uint128(f)<<(2*16)|
-							uint128(g)<<(1*16)|
-							h)
+     e::Uint16,f::Uint16,g::Uint16,h::Uint16) = new(uint128(a)<<(7*16)|
+                            uint128(b)<<(6*16)|
+                            uint128(c)<<(5*16)|
+                            uint128(d)<<(4*16)|
+                            uint128(e)<<(3*16)|
+                            uint128(f)<<(2*16)|
+                            uint128(g)<<(1*16)|
+                            h)
     function IPv6(a::Integer,b::Integer,c::Integer,d::Integer,
-		  e::Integer,f::Integer,g::Integer,h::Integer)
-	if !(0<=a<=0xFFFF && 0<=b<=0xFFFF && 0<=c<=0xFFFF && 0<=d<=0xFFFF &&
-	     0<=e<=0xFFFF && 0<=f<=0xFFFF && 0<=g<=0xFFFF && 0<=h<=0xFFFF)
-	    throw(DomainError())
-	end
-	IPv6(uint16(a),uint16(b),uint16(c),uint16(d),
-	     uint16(e),uint16(f),uint16(g),uint16(h))
+          e::Integer,f::Integer,g::Integer,h::Integer)
+    if !(0<=a<=0xFFFF && 0<=b<=0xFFFF && 0<=c<=0xFFFF && 0<=d<=0xFFFF &&
+         0<=e<=0xFFFF && 0<=f<=0xFFFF && 0<=g<=0xFFFF && 0<=h<=0xFFFF)
+        throw(DomainError())
+    end
+    IPv6(uint16(a),uint16(b),uint16(c),uint16(d),
+         uint16(e),uint16(f),uint16(g),uint16(h))
     end
 end
 
-show(io::IO,ip::IPv6) = print(io,"IPv6(",
-                        hex((ip.host&(uint128(0xFFFF)<<(7*16)))>>(7*16)),":",
-                        hex((ip.host&(uint128(0xFFFF)<<(6*16)))>>(7*16)),":",
-                        hex((ip.host&(uint128(0xFFFF)<<(5*16)))>>(7*16)),":",
-                        hex((ip.host&(uint128(0xFFFF)<<(4*16)))>>(7*16)),":",
-                        hex((ip.host&(uint128(0xFFFF)<<(3*16)))>>(7*16)),":",
-                        hex((ip.host&(uint128(0xFFFF)<<(2*16)))>>(7*16)),":",
-                        hex((ip.host&0xFFFF), ")"))
+function IPv6(host::Integer)
+    if host < 0
+        error("IP address may not be negative")
+    # We allow passing bigger integer types, but need to be careful to avoid overflow
+    # Let's hope promotion rules are sensible
+    elseif typemax(typeof(host)) > typemax(Uint128) && host > typemax(Uint128) 
+        error("Number to large for IP Address")
+    else
+        return IPv6(uint128(host))
+    end
+end
+
+# Suppress leading '0's and "0x"
+print_ipv6_field(io,field::Uint16) = print(io,hex(field))
+
+print_ipv6_field(io,ip,i) = print_ipv6_field(io,ipv6_field(ip,i))
+function ipv6_field(ip::IPv6,i) 
+    if i < 0 || i > 7
+        throw(BoundsError())
+    end
+    uint16(ip.host&(uint128(0xFFFF)<<(i*16))>>(i*16))
+end
+
+# RFC 5952 compliant show function
+# http://tools.ietf.org/html/rfc5952
+function show(io::IO,ip::IPv6)
+    print(io,"IPv6(")
+    i = 8
+    m = 0
+    longest_sub_i = -1
+    while i!=0
+        i-=1
+        field = ipv6_field(ip,i)
+        if field == 0 && longest_sub_i == -1
+            # Find longest subsequence of 0
+            longest_sub_i,j,m,c = i,i,1,1
+            while j != 0
+                j-=1
+                if ipv6_field(ip,j) == 0
+                    c += 1
+                else
+                    c = 0
+                end
+                if c > m
+                    if j+c != longest_sub_i+1
+                        longest_sub_i = j+c-1
+                    end
+                    m = c
+                end
+            end
+            # Prevent single 0 from contracting to :: as required
+            if m == 1
+                longest_sub_i = 9
+            end
+        end
+        if i == longest_sub_i
+            print(io,":")
+            i -= m-1
+            if i == 0
+                print(io,":")
+                break
+            end
+        else
+            if i != 7
+                print(io,":")
+            end
+            print_ipv6_field(io,field)
+        end
+    end
+    print(io,")")
+end
+
+isequal(a::IPv6,b::IPv6) = a.host == b.host
+hash(ip::IPv6) = hash(ip.host)
+
+# Parsing
+
+function parse_ipv4(str)
+    fields = split(str,'.')
+    i = 1
+    ret = 0
+    for f in fields 
+        if length(f) == 0
+            error("Empty field in IPv4")
+        end
+        if f[1] == '0'
+            if length(f) >= 2 && f[2] == 'x'
+                r = parseint(f[3:end],16)
+            else 
+                r = parseint(f,8)
+            end
+        else
+            r = parseint(f,10)
+        end
+        if i != length(fields)
+            if r < 0 || r > 255
+                error("Invalid IPv4 field")
+            end
+            ret |= uint32(r) << ((4-i)*8)
+        else
+            if r > ((uint64(1)<<((5-length(f))*8))-1)
+                error("IPv4 field too large")
+            end
+            ret |= r
+        end
+        i+=1
+    end
+    IPv4(ret)
+end
+
+function parse_ipv6fields(fields,num_fields)
+    if length(fields) > num_fields
+        error("Too many fields in IPv6 address")
+    end
+    cf = 7
+    ret = uint128(0)
+    for f in fields 
+        if f == ""
+            # ::abc:... and ..:abc::
+            if cf != 7 && cf != 0
+                cf -= num_fields-length(fields)               
+            end
+            cf -= 1
+            continue
+        end
+        ret |= uint128(parseint(f,16))<<(cf*16)
+        cf -= 1
+    end
+    ret
+end
+parse_ipv6fields(fields) = parse_ipv6fields(fields,8)
+
+function parse_ipv6(str)
+    fields = split(str,':')
+    if length(fields) > 8
+        error("Too many fields in IPv6 address")
+    elseif length(fields) == 8
+        return IPv6(parse_ipv6fields(fields))
+    elseif contains(fields[end],'.')
+        return IPv6((parse_ipv6fields(fields[1:(end-1)],6))
+            | parse_ipv4(fields[end]).host )
+    else
+        return IPv6(parse_ipv6fields(fields))
+    end
+end
+
+# 
+# This support IPv4 addresses in the common dot (IPv4) or colon (IPv6)
+# separated formats. Most other common formats use a standard integer encoding
+# of the appropriate size and should use the appropriate constructor
+#
+macro ip_str(str)
+    if contains(str,':')
+        # IPv6 Address
+        return parse_ipv6(str)
+    else
+        # IPv4 Address
+        return parse_ipv4(str)
+    end
+end
 
 type InetAddr
     host::IpAddr
@@ -138,6 +303,9 @@ _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) =
 
 accept(server::TcpSocket) = accept(server, TcpSocket())
 function accept(server::TcpSocket, client::TcpSocket)
+    if !server.open
+        error("accept: Server not connected. Did you `listen`?")
+    end
     err = accept_nonblock(server,client)
     if err == 0
         return client
@@ -241,9 +409,14 @@ function connect(sock::TcpSocket, host::IPv4, port::Uint16)
     wait_connected(sock)
 end
 
-function connect(sock::TcpSocket, host::ASCIIString, port)
+function connect(sock::TcpSocket, host::ASCIIString, port::Integer)
     ipaddr = getaddrinfo(host)
     connect(sock,ipaddr,port)
+end
+
+# Default Host to localhost
+function connect(sock::TcpSocket, port::Integer)
+    conenct(sock,IPv4(127,0,0,1),port)
 end
 
 function default_connectcb(sock,status)
