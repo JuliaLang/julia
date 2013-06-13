@@ -4,7 +4,8 @@ immutable MathConst{sym} <: Real end
 
 show{sym}(io::IO, x::MathConst{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
 
-promote_rule{s}(::Type{MathConst{s}}, ::Type) = Float64
+promote_rule{s,T<:Real}(::Type{MathConst{s}}, ::Type{T}) = Float64
+promote_rule{s,T<:Rational}(::Type{MathConst{s}}, ::Type{T}) = T
 promote_rule{s}(::Type{MathConst{s}}, ::Type{Float32}) = Float32
 promote_rule{s}(::Type{MathConst{s}}, ::Type{BigInt}) = BigFloat
 promote_rule{s}(::Type{MathConst{s}}, ::Type{BigFloat}) = BigFloat
