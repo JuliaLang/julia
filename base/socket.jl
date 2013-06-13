@@ -247,45 +247,63 @@ type TcpSocket <: Socket
     closenotify::Condition
     TcpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,
                                Condition(),false,Condition(),false,Condition())
+
     function TcpSocket()
         this = TcpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
-                            eventloop(),this)
+                           eventloop(),this)
         if (this.handle == C_NULL)
-            error("Failed to start reading: ",_uv_lasterror())
+            throw(UVError("Failed to create socket"))
         end
         this
     end
 end
 
-type UdpSocket <: Socket
+type TcpServer <: UVServer
     handle::Ptr{Void}
     open::Bool
-    line_buffered::Bool
-    buffer::IOBuffer
-    readcb::Callback
-    readnotify::Condition
     ccb::Callback
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
-    UdpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,Condition(),
-                               false,Condition(),false,Condition())
-    function UdpSocket()
-        this = UdpSocket(C_NULL,false)
+    TcpServer(handle,open) = new(handle,open,false,Condition(),false,Condition())
+
+    function TcpServer()
+        this = TcpServer(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
-                            eventloop(),this)
+                           eventloop(),this)
+        if (this.handle == C_NULL)
+            throw(UVError("Failed to create socket server"))
+        end
         this
     end
 end
+
+#type UdpSocket <: Socket
+#    handle::Ptr{Void}
+#    open::Bool
+#    line_buffered::Bool
+#    buffer::IOBuffer
+#    readcb::Callback
+#    readnotify::Condition
+#    ccb::Callback
+#    connectnotify::Condition
+#    closecb::Callback
+#    closenotify::Condition
+#end
+
 
 show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",sock.open?"connected,":
 				     "disconnected,",nb_available(sock.buffer),
 				     " bytes waiting)")
 
-show(io::IO,sock::UdpSocket) = print(io,"UdpSocket(",sock.open?"connected,":
-				     "disconnected,",nb_available(sock.buffer),
-				     " bytes waiting)")
+show(io::IO,sock::TcpServer) = print(io,"TcpServer(",sock.open?"listening,":
+                     "not listening)")
+
+#show(io::IO,sock::UdpSocket) = print(io,"UdpSocket(",sock.open?"connected,":
+#				     "disconnected,",nb_available(sock.buffer),
+#				     " bytes waiting)")
+
 _jl_tcp_init(loop::Ptr{Void}) = ccall(:jl_tcp_init,Ptr{Void},(Ptr{Void},),loop)
 _jl_udp_init(loop::Ptr{Void}) = ccall(:jl_udp_init,Ptr{Void},(Ptr{Void},),loop)
 
@@ -298,46 +316,8 @@ _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) =
 _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = 
     ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},Uint16),ptr,port)
 
+accept(server::TcpServer) = accept(server, TcpSocket())
 
-## WAITING ##
-
-accept(server::TcpSocket) = accept(server, TcpSocket())
-function accept(server::TcpSocket, client::TcpSocket)
-    if !server.open
-        error("accept: Server not connected. Did you `listen`?")
-    end
-    err = accept_nonblock(server,client)
-    if err == 0
-        return client
-    else
-        err = _uv_lasterror()
-        if err != 4 #EAGAIN
-            error("accept: ", err, "\n")
-        end
-    end
-    wt = Condition()
-    while true
-        assert(current_task() != Scheduler, "Cannot execute blocking function from Scheduler")
-        push!(server.connectnotify,wt)
-        args = yield(wt)
-        if isa(args,InterruptException)
-            error(args)
-        end
-        status = args[2]::Int32
-        if status == -1
-            error("listen: ", _uv_lasterror(), "\n")
-        end
-        err = accept_nonblock(server,client)
-        if err == 0
-            return client
-        else
-            err = _uv_lasterror()
-            if err != 4 #EAGAIN
-                error("accept: ", err, "\n")
-            end
-        end
-    end
-end
 
 ##
 
@@ -387,11 +367,11 @@ getaddrinfo(cb::Function,host::ASCIIString) = begin
 end
 
 function getaddrinfo(host::ASCIIString)
-    wt = WaitTask()
+    c = Condition()
     getaddrinfo(host) do IP
-	tasknotify([wt],IP)
+	   notify(c,IP)
     end
-    (ip,) = yield(wt)
+    ip = wait(wt)
     return ip
 end
 
@@ -457,31 +437,31 @@ end
 
 ##
 
-function listen(host::IPv4, port::Uint16)
-    sock = TcpSocket()
+function listen(host::IPv4, port::Uint16; backlog::Integer=511)
+    sock = TcpServer()
     uv_error("listen",!bind(sock,host,port))
-    listen(sock)
+    uv_error("listen",!listen!(sock;backlog=backlog))
     sock
 end
-listen(port::Integer) = listen(IPv4(uint32(0)),uint16(port))
-listen(addr::InetAddr) = listen(addr.host,addr.port)
-listen(host::IpAddr, port::Uint16) = listen(InetAddr(host,port))
+listen(port::Integer; backlog::Integer=511) = listen(IPv4(uint32(0)),uint16(port);backlog=backlog)
+listen(addr::InetAddr; backlog::Integer=511) = listen(addr.host,addr.port;backlog=backlog)
+listen(host::IpAddr, port::Uint16; backlog::Integer=511) = listen(InetAddr(host,port);backlog=backlog)
 
-listen(cb::Callback,args...) = (sock=listen(args...);sock.ccb=cb;sock)
-listen(cb::Callback,sock::Socket) = (sock.ccb=cb;listen(sock))
+listen(cb::Callback,args...; backlog::Integer=511) = (sock=listen(args...;backlog=backlog);sock.ccb=cb;sock)
+listen(cb::Callback,sock::Socket; backlog::Integer=511) = (sock.ccb=cb;listen(sock;backlog=backlog))
 
 ##
 
 _jl_tcp_accept(server::Ptr{Void},client::Ptr{Void}) =
     ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
-function accept_nonblock(server::TcpSocket,client::TcpSocket)
+function accept_nonblock(server::TcpServer,client::TcpSocket)
     err = _jl_tcp_accept(server.handle,client.handle)
     if err == 0
         client.open = true
     end
     err
 end
-function accept_nonblock(server::TcpSocket)
+function accept_nonblock(server::TcpServer)
     client = TcpSocket()
     uv_error("accept",_jl_tcp_accept(server.handle,client.handle) == -1)
     client.open = true
@@ -494,8 +474,8 @@ function open_any_tcp_port(cb::Callback,default_port)
     addr = InetAddr(IPv4(uint32(0)),default_port)
     while true
         sock = TcpSocket()
-
-        if (bind(sock,addr) && listen(cb,sock))
+        sock.ccb = cb
+        if (bind(sock,addr) && listen!(sock))
             return (addr.port,sock)
         end
         err = _uv_lasterror()
@@ -505,7 +485,7 @@ function open_any_tcp_port(cb::Callback,default_port)
         if (err != UV_SUCCESS && err != UV_EADDRINUSE)
             throw(UVError("open_any_tcp_port",err,system))
         end
-	addr.port += 1
+	    addr.port += 1
         if (addr.port==default_port)
             error("Not a single port is available.")
         end
