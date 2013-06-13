@@ -67,36 +67,37 @@ type Condition
     Condition() = new({})
 end
 
-function wait(c::Condition, filter=(source,result)->true)
-    assert(current_task() != Scheduler, "cannot execute blocking function from scheduler")
+function wait(c::Condition)
     ct = current_task()
+    if ct === Scheduler
+        error("cannot execute blocking function from scheduler")
+    end
 
-    push!(c.waitq, (ct,filter))
+    push!(c.waitq, ct)
 
     ct.runnable = false
     args = yield(c)
 
     if isa(args,InterruptException)
-        filter!(x->x[1]!==ct, c.waitq)
+        filter!(x->x!==ct, c.waitq)
         error(args)
     end
     args
 end
 
-function notify(c::Condition, source, arg; all=false)
-    i = 1
-    while i <= length(c.waitq)
-        t, filt = c.waitq[i]
-        if filt(source,arg)
-            splice!(c.waitq,i)
+function notify(c::Condition, arg=nothing; all=true)
+    if all
+        for t in c.waitq
             t.result = arg
             enq_work(t)
-            if !all
-                return
-            end
-        else
-            i += 1
         end
+        empty!(c.waitq)
+    elseif !isempty(c.waitq)
+        t = shift!(c.waitq)
+        t.result = arg
+        enq_work(t)
     end
     nothing
 end
+
+notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)

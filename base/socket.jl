@@ -75,13 +75,13 @@ type TcpSocket <: Socket
     line_buffered::Bool
     buffer::IOBuffer
     readcb::Callback
-    readnotify::Vector{WaitTask}
+    readnotify::Condition
     ccb::Callback
-    connectnotify::Vector{WaitTask}
+    connectnotify::Condition
     closecb::Callback
-    closenotify::Vector{WaitTask}
+    closenotify::Condition
     TcpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,
-                               WaitTask[],false,WaitTask[],false,WaitTask[])
+                               Condition(),false,Condition(),false,Condition())
     function TcpSocket()
         this = TcpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
@@ -99,13 +99,13 @@ type UdpSocket <: Socket
     line_buffered::Bool
     buffer::IOBuffer
     readcb::Callback
-    readnotify::Vector{WaitTask}
+    readnotify::Condition
     ccb::Callback
-    connectnotify::Vector{WaitTask}
+    connectnotify::Condition
     closecb::Callback
-    closenotify::Vector{WaitTask}
-    UdpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,WaitTask[],
-                               false,WaitTask[],false,WaitTask[])
+    closenotify::Condition
+    UdpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,Condition(),
+                               false,Condition(),false,Condition())
     function UdpSocket()
         this = UdpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
@@ -147,7 +147,7 @@ function accept(server::TcpSocket, client::TcpSocket)
             error("accept: ", err, "\n")
         end
     end
-    wt = WaitTask()
+    wt = Condition()
     while true
         assert(current_task() != Scheduler, "Cannot execute blocking function from Scheduler")
         push!(server.connectnotify,wt)

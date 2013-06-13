@@ -4,14 +4,6 @@ include("uv_constants.jl")
 ## types ##
 typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
-type WaitTask 
-    filter::Callback #runs task only if false
-    localdata::Any
-    job
-
-    WaitTask(forwhat, test::Callback) = new(test, forwhat)
-    WaitTask() = new(false, nothing)
-end
 
 abstract AsyncStream <: IO
 
@@ -36,11 +28,11 @@ type NamedPipe <: AsyncStream
     open::Bool
     line_buffered::Bool
     readcb::Callback
-    readnotify::Vector{WaitTask}
+    readnotify::Condition
     closecb::Callback
-    closenotify::Vector{WaitTask}
-    NamedPipe() = new(C_NULL,PipeBuffer(),false,true,false,WaitTask[],false,
-                      WaitTask[])
+    closenotify::Condition
+    NamedPipe() = new(C_NULL,PipeBuffer(),false,true,false,Condition(),false,
+                      Condition())
 end
 
 show(io::IO,stream::NamedPipe) = print(io,"NamedPipe(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
@@ -51,10 +43,10 @@ type TTY <: AsyncStream
     line_buffered::Bool
     buffer::IOBuffer
     readcb::Callback
-    readnotify::Vector{WaitTask}
+    readnotify::Condition
     closecb::Callback
-    closenotify::Vector{WaitTask}
-    TTY(handle,open)=new(handle,open,true,PipeBuffer(),false,WaitTask[],false,WaitTask[])
+    closenotify::Condition
+    TTY(handle,open)=new(handle,open,true,PipeBuffer(),false,Condition(),false,Condition())
 end
 
 show(io::IO,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
@@ -155,7 +147,7 @@ function start_watching(t::FDWatcher, events)
 end
 start_watching(f::Function, t::FDWatcher, events) = (t.cb = f; start_watching(t,events))
 
-function start_watching(t::PollingFileWatcher, interval) 
+function start_watching(t::PollingFileWatcher, interval)
     associate_julia_struct(t.handle, t)
     uv_error("start_watching (File)",
         ccall(:jl_fs_poll_start,Int32,(Ptr{Void},Ptr{Uint8},Uint32),t.handle,t.file,interval)==-1)
@@ -237,56 +229,26 @@ end
 
 flush(::TTY) = nothing
 
-function tasknotify(waittasks::Vector{WaitTask}, args...)
-    newwts = WaitTask[]
-    ct = current_task()
-    for wt in waittasks
-        f = wt.filter
-        if (isa(f, Function) ? f(wt.localdata, args...) : f) === false
-            work = wt.job
-            work.argument = args
-            enq_work(work)
-        else
-            push!(newwts,wt)
-        end
+function wait_connected(x)
+    while !x.open
+        wait(x.connectnotify)
     end
-    resize!(waittasks,length(newwts))
-    waittasks[:] = newwts
 end
 
-wait_connect_filter(w::AsyncStream, args...) = !w.open
-wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
-wait_readbyte_filter(w::(AsyncStream,Uint8), args...) = w[1].open && (search(w[1].buffer,w[2]) <= 0)
-wait_readline_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
-
-function wait(forwhat::Vector, notify_list_name, filter_fcn)
-    args = ()
-    for x in forwhat
-        args = wait(x, notify_list_name, filter_fcn)
+function wait_readbyte(x::AsyncStream, c::Uint8)
+    while !(!x.open || (search(x.buffer,c) > 0))
+        wait(x.readnotify)
     end
-    args
 end
 
-function wait(forwhat, notify_list_name, filter_fcn)
-    args = ()
-    while filter_fcn(forwhat)
-        assert(current_task() != Scheduler, "Cannot execute blocking function from Scheduler")
-        thing = isa(forwhat,Tuple) ? forwhat[1] : forwhat
-        wt = WaitTask(forwhat, filter_fcn)
-        push!(thing.(notify_list_name), wt)
-        args = yield(wt)
-        if isa(args,InterruptException)
-            error(args)
-        end
+wait_readline(x) = wait_readbyte(x, uint8('\n'))
+
+function wait_readnb(x::AsyncStream, nb::Int)
+    while !(!x.open || (nb_available(x.buffer) >= nb))
+        wait(x.readnotify)
     end
-    args
 end
 
-wait_connected(x) = wait(x, :connectnotify, wait_connect_filter)
-wait_readline(x) = wait(x, :readnotify, wait_readline_filter)
-wait_readnb(x::(AsyncStream,Int)) = wait(x, :readnotify, wait_readnb_filter)
-wait_readnb(x::AsyncStream,b::Int) = wait_readnb((x,b))
-wait_readbyte(x::AsyncStream,c::Uint8) = wait((x,c), :readnotify, wait_readbyte_filter)
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     if status != -1
@@ -295,14 +257,14 @@ function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     if isa(sock.ccb,Function)
         sock.ccb(sock, status)
     end
-    tasknotify(sock.connectnotify, sock, status)
+    notify(sock.connectnotify, status)
 end
 #from `listen`
 function _uv_hook_connectioncb(sock::AsyncStream, status::Int32)
     if(isa(sock.ccb,Function))
         sock.ccb(sock,status)
     end
-    tasknotify(sock.connectnotify, sock, status)
+    notify(sock.connectnotify, status)
 end
 
 ## BUFFER ##
@@ -349,12 +311,12 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
            throw(error)
         end
         close(stream)
-        tasknotify(stream.readnotify, stream)
+        notify(stream.readnotify)
         #EOF
     else
         notify_filled(stream.buffer, nread, base, len)
         notify_filled(stream, nread)
-        tasknotify(stream.readnotify, stream)
+        notify(stream.readnotify)
     end
 end
 ##########################################
@@ -405,57 +367,57 @@ TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 function poll_fd(s, events::Integer, timeout_ms::Integer)
-    wt = WaitTask()
+    wt = Condition()
 
     fdw = FDWatcher(s)
-    start_watching((status, events) -> tasknotify([wt], :poll, status, events), fdw, events)
+    start_watching((status, events) -> notify(wt, (:poll, status, events)), fdw, events)
     
     if (timeout_ms > 0)
-        timer = TimeoutAsyncWork(status -> tasknotify([wt], :timeout, status))
+        timer = TimeoutAsyncWork(status -> notify(wt, (:timeout, status)))
         start_timer(timer, int64(timeout_ms), int64(0))
     end
 
-    args = yield(wt)
-
-    if (timeout_ms > 0) stop_timer(timer) end
-
-    stop_watching(fdw)
-    if isa(args,InterruptException)
-        rethrow(args)
+    local args
+    try
+        args = wait(wt)
+    finally
+        if (timeout_ms > 0) stop_timer(timer) end
+        stop_watching(fdw)
     end
 
-    if (args[2] != 0) error ("fd in error") end 
-    if (args[1] == :poll) return args[3] end
-    if (args[1] == :timeout) return 0 end
+    if (args[2] == 0)
+        if (args[1] == :poll) return args[3] end
+        if (args[1] == :timeout) return 0 end
+    end
 
     error("Error while polling") 
 end
 
 function poll_file(s, interval::Integer, timeout_ms::Integer)
-    wt = WaitTask()
+    wt = Condition()
 
     pfw = PollingFileWatcher(s)
-    start_watching((status,prev,cur) -> tasknotify([wt], :poll, status), pfw, interval)
+    start_watching((status,prev,cur) -> notify(wt, (:poll, status)), pfw, interval)
     
     if (timeout_ms > 0)
-        timer = TimeoutAsyncWork(status -> tasknotify([wt], :timeout, status))
+        timer = TimeoutAsyncWork(status -> notify(wt, (:timeout, status)))
         start_timer(timer, int64(timeout_ms), int64(0))
     end
 
-    args = yield(wt)
-
-    if (timeout_ms > 0) stop_timer(timer) end
-
-    stop_watching(pfw)
-    if isa(args,InterruptException)
-        rethrow(args)
+    local args
+    try
+        args = wait(wt)
+    finally
+        if (timeout_ms > 0) stop_timer(timer) end
+        stop_watching(pfw)
     end
 
-    if (args[2] != 0) error ("fd in error") end 
-    if (args[1] == :poll) return 1 end
-    if (args[1] == :timeout) return 0 end
+    if (args[2] == 0)
+        if (args[1] == :poll) return 1 end
+        if (args[1] == :timeout) return 0 end
+    end
 
-    error("Error while polling")
+    error("error while polling")
 end
 
 function watch_file(cb, s; poll=false)
@@ -472,7 +434,7 @@ function _uv_hook_close(uv::AsyncStream)
     uv.handle = 0
     uv.open = false
     if isa(uv.closecb, Function) uv.closecb(uv) end
-    tasknotify(uv.closenotify, uv)
+    notify(uv.closenotify)
 end
 _uv_hook_close(uv::AsyncWork) = (uv.handle = 0; nothing)
 
@@ -492,13 +454,17 @@ function stop_timer(timer::TimeoutAsyncWork)
 end
 
 function sleep(sec::Real)
-    timer = TimeoutAsyncWork(status->tasknotify([wt], status))
-    wt = WaitTask(timer, false)
+    w = Condition()
+    timer = TimeoutAsyncWork(status->notify(w, status))
     start_timer(timer, int64(iround(sec*1000)), int64(0))
-    args = yield(wt)
-    stop_timer(timer)
-    if isa(args,InterruptException)
-        error(args)
+    local st
+    try
+        st = wait(w)
+    finally
+        stop_timer(timer)
+    end
+    if st != 0
+        error("timer error")
     end
     nothing
 end
