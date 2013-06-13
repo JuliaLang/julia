@@ -18,7 +18,7 @@ function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     isempty(v) && error("median of an empty array is undefined")
     checknan && any(isnan,v) && error("median of an array with NaNs is undefined")
     n = length(v)
-    isodd(n) ? select!(v,div(n+1,2)) : (select!(v,div(n,2))+select!(v,div(n,2)+1))/2
+    isodd(n) ? select!(v,div(n+1,2)) : (mm = select!(v, div(n,2):div(n,2)+1); (mm[1]+mm[2])/2)
 end
 median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) = median!(copy(vec(v)), checknan=checknan)
 
