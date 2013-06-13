@@ -6,6 +6,7 @@ typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
 
 abstract AsyncStream <: IO
+abstract UVServer
 
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
@@ -29,13 +30,34 @@ type NamedPipe <: AsyncStream
     line_buffered::Bool
     readcb::Callback
     readnotify::Condition
+    ccb::Callback
+    connectnotify::Condition
     closecb::Callback
     closenotify::Condition
     NamedPipe() = new(C_NULL,PipeBuffer(),false,true,false,Condition(),false,
-                      Condition())
+                      Condition(),false,Condition())
+end
+
+type PipeServer <: UVServer
+    handle::Ptr{Void}
+    open::Bool
+    ccb::Callback
+    connectnotify::Condition
+    closecb::Callback
+    closenotify::Condition
+    PipeServer(handle,open) = new(handle,open,false,Condition(),false,Condition())
+    function PipeServer()
+        this = PipeServer(malloc_pipe(),false)
+        ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Int32,Int32,Any), this.handle, 0, 1, this)
+        if this.handle == C_NULL
+            throw(UVError("Failed to create pipe server"))
+        end
+        this
+    end
 end
 
 show(io::IO,stream::NamedPipe) = print(io,"NamedPipe(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
+show(io::IO,stream::PipeServer) = print(io,"PipeServer(",stream.open?"listening)":"not listening)")
 
 type TTY <: AsyncStream
     handle::Ptr{Void}
@@ -253,18 +275,29 @@ end
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     if status != -1
         sock.open = true
+        err = UV_error_t(0,0)
+    else
+        err = UV_error_t(_uv_lasterror(),_uv_lastsystemerror())
     end
     if isa(sock.ccb,Function)
         sock.ccb(sock, status)
     end
-    notify(sock.connectnotify, status)
+    notify(sock.connectnotify, err)
 end
+
 #from `listen`
-function _uv_hook_connectioncb(sock::AsyncStream, status::Int32)
+function _uv_hook_connectioncb(sock::UVServer, status::Int32)
+    local err
+    if status != -1
+        sock.open = true
+        err = UV_error_t(0,0)
+    else
+        err = UV_error_t(_uv_lasterror(),_uv_lastsystemerror())
+    end
     if(isa(sock.ccb,Function))
         sock.ccb(sock,status)
     end
-    notify(sock.connectnotify, status)
+    notify(sock.connectnotify, err)
 end
 
 ## BUFFER ##
@@ -670,8 +703,60 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-function listen(sock::AsyncStream, backlog::Integer)
+_jl_pipe_accept(server::Ptr{Void},client::Ptr{Void}) =
+    ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
+function accept_nonblock(server::PipeServer,client::NamedPipe)
+    err = _jl_pipe_accept(server.handle,client.handle)
+    if err == 0
+        client.open = true
+    end
+    err
+end
+function accept_nonblock(server::PipeServer)
+    client = NamedPipe()
+    uv_error("accept",_jl_pipe_accept(server.handle,client.handle) == -1)
+    client.open = true
+    client
+end
+
+const EAGAIN = 4
+function accept(server::UVServer, client::AsyncStream)
+    if !server.open
+        error("accept: Server not connected. Did you `listen`?")
+    end
+    if accept_nonblock(server,client) == 0
+        return client
+    else
+        uv_error("accept:",_uv_lasterror()!=EAGAIN)
+    end
+    c = Condition()
+    while true
+        err = wait(c)
+        if err.uv_code != -1
+            throw(UVError("accept",err))
+        end
+        err = accept_nonblock()
+        if accept_nonblock(server,client) == 0
+            return client
+        else
+            uv_error("accept:",_uv_lasterror()!=EAGAIN)
+        end
+    end
+end
+
+function listen!(sock::UVServer; backlog::Integer=511)
     err = ccall(:jl_listen, Int32, (Ptr{Void}, Int32), sock.handle, backlog)
     err != -1 ? (sock.open = true): false
 end
-listen(sock::AsyncStream) = listen(sock, 511) # same default as node.js
+
+function listen(sock::PipeServer,path::ASCIIString)
+    uv_error("listen",bind(sock, path))
+    uv_error("listen",listen!(sock))
+    sock
+end
+listen(path::ASCIIString) = listen(PipeServer(),paths)
+
+function connect(cb::Function,sock::NamedPipe,path::ASCIIString)
+    sock.ccb = cb
+    error("Unimplemented on this branch")
+end
