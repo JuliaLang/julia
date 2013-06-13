@@ -999,6 +999,7 @@ export
     peakflops,
     tty_cols,
     tty_rows,
+    @delegate,
 
 # IP address stuff
     IPv4, 
