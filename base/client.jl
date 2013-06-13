@@ -259,7 +259,6 @@ function process_options(args::Array{Any,1})
 end
 
 const roottask = current_task()
-const roottask_wi = WorkItem(roottask)
 
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
@@ -274,7 +273,7 @@ function init_load_path()
 end
 
 function init_sched()
-    global const Workqueue = WorkItem[]
+    global const Workqueue = Any[]
     global const Waiting = Dict()
 end
 
@@ -288,7 +287,7 @@ function init_head_sched()
     push!(PGRP.locs,("",0))
     PGRP.np = 1
     # make scheduler aware of current (root) task
-    unshift!(Workqueue, roottask_wi)
+    unshift!(Workqueue, roottask)
     yield()
 end
 
