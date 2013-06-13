@@ -190,7 +190,7 @@ export
     π, pi,
     e, eu,
     γ, eulergamma,
-    G, catalan,
+    catalan,
     φ, golden,
 
 # Operators
@@ -839,8 +839,10 @@ export
     hist2d,
     histrange,
     mean,
+    median!,
     median,
     midpoints,
+    quantile!,
     quantile,
     std,
     stdm,
