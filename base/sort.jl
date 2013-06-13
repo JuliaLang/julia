@@ -99,7 +99,8 @@ function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
 end
 
 function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
-    lo <= first(r) <= last(r) <= hi || error("select index $k is out of range $lo:$hi")
+    a, b = first(r), last(r)
+    lo <= a <= b <= hi || error("select index $k is out of range $lo:$hi")
     while true
         if hi-lo <= length(r)
             sort!(v, lo, hi, DEFAULT_UNSTABLE, o)
@@ -114,14 +115,14 @@ function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
             v[i], v[j] = v[j], v[i]
             i += 1; j -= 1
         end
-        if last(r) <= j
+        if b <= j
             hi = j
-        elseif i <= first(r)
+        elseif i <= a
             lo = i
         else
-            if first(r) <= j; select!(v, first(r), lo,  j, o); end
-            if  last(r) >= i; select!(v, last(r),   i, hi, o); end
-            sort!(v, first(r), last(r), DEFAULT_UNSTABLE, o)
+            a <= j && select!(v, a, lo,  j, o)
+            b >= i && select!(v, b,  i, hi, o)
+            sort!(v, a, b, DEFAULT_UNSTABLE, o)
             return v[r]
         end
     end
