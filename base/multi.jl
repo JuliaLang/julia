@@ -406,7 +406,7 @@ function deserialize(s, t::Type{RemoteRef})
 end
 
 # wait on a local proxy condition for a remote ref
-function wait(rr:RemoteRef, msg)
+function wait_full(rr:RemoteRef)
     oid = rr2id(rr)
     cv = get(Waiting, oid, false)
     if cv === false
@@ -420,10 +420,11 @@ end
 type RemoteValue
     done::Bool
     result
-    cv::Condition
+    full::Condition   # waiting for a value
+    empty::Condition  # waiting for value to be removed
     clientset::IntSet
 
-    RemoteValue() = new(false, nothing, Condition(), IntSet())
+    RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet())
 end
 
 function work_result(rv::RemoteValue)
@@ -434,18 +435,18 @@ function work_result(rv::RemoteValue)
     v
 end
 
-function wait(rv::RemoteValue, msg)
-    if msg === :call_fetch || msg === :fetch || msg === :call_wait || msg === :wait
-        if rv.done
-            return work_result(rv)
-        end
-        wait(rv.cv, (source,result)->source.done)
-    else  # msg === :put
-        if !rv.done
-            return
-        end
-        wait(rv.cv, (source,result)->!source.done)
+function wait_full(rv::RemoteValue)
+    while !rv.done
+        wait(rv.full)
     end
+    return work_result(rv)
+end
+
+function wait_empty(rv::RemoteValue)
+    while rv.done
+        wait(rv.empty)
+    end
+    return nothing
 end
 
 ## core messages: do, call, fetch, wait, ref, put ##
@@ -526,7 +527,7 @@ function remotecall_fetch(w::LocalProcess, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
     rv = schedule_call(oid, local_remotecall_thunk(f,args))
-    wait(rv, :call_fetch)
+    wait_full(rv)
 end
 
 function remotecall_fetch(w::Worker, f, args...)
@@ -535,7 +536,7 @@ function remotecall_fetch(w::Worker, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_fetch, oid, f, args)
-    wait(rr, :fetch)
+    wait_full(rr)
 end
 
 remotecall_fetch(id::Integer, f, args...) =
@@ -548,7 +549,7 @@ function remotecall_wait(w::Worker, f, args...)
     rr = RemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_wait, oid, f, args)
-    wait(rr, :wait)
+    wait_full(rr)
     rr
 end
 
@@ -576,14 +577,12 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     oid = rr2id(r)
     if r.where==myid() || isa(pg.workers[r.where], LocalProcess)
         rv = lookup_ref(oid)
-        if !rv.done
-            wait(rv, verb)
-        end
+        wait_full(rv)
         return is(verb,:fetch) ? work_result(rv) : r
     end
     send_msg(worker_from_id(r.where), verb, oid)
     # yield to event loop, return here when answer arrives
-    v = wait(r, verb)
+    v = wait_full(r)
     return is(verb,:fetch) ? v : r
 end
 
@@ -594,12 +593,10 @@ fetch(x::ANY) = x
 # storing a value to a Ref
 put_ref(rid, v) = put(lookup_ref(rid), v)
 function put(rv::RemoteValue, val::ANY)
-    while rv.done
-        wait(rv, :put)
-    end
+    wait_empty(rv)
     rv.result = val
     rv.done = true
-    notify_done(rv)
+    notify_full(rv)
 end
 
 function put(rr::RemoteRef, val::ANY)
@@ -614,9 +611,7 @@ end
 
 take_ref(rid) = take(lookup_ref(rid))
 function take(rv::RemoteValue)
-    while !rv.done
-        wait(rv, :fetch)
-    end
+    wait_full(rv)
     val = rv.result
     rv.done = false
     notify_empty(rv)
@@ -645,6 +640,7 @@ end
 
 function perform_work(t::Task)
     if !isdefined(t, :result)
+        # starting new task
         yieldto(t)
     else
         # continuing interrupted work item
@@ -654,7 +650,7 @@ function perform_work(t::Task)
         yieldto(t, arg)
     end
     if !istaskdone(t) && t.runnable
-        # return to queue
+        # still runnable; return to queue
         enq_work(t)
     end
 end
@@ -676,14 +672,9 @@ function deliver_result(sock::IO, msg, oid, value)
     end
 end
 
-notify_done (rv::RemoteValue) = notify_done(rv, false)
-notify_empty(rv::RemoteValue) = notify_done(rv, true)
-
 # notify waiters that a certain job has finished or Ref has been emptied
-function notify_done(rv::RemoteValue, take)
-    notify(rv.cv, rv, work_result(rv))
-    nothing
-end
+notify_full (rv::RemoteValue) = notify(rv.full, work_result(rv))
+notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 ## message event handlers ##
 
@@ -741,7 +732,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 #deliver_result((), mkind, oid, val)
                 cv = get(Waiting, oid, false)
                 if cv !== false
-                    notify(cv, cv, val)
+                    notify(cv, val)
                     if isempty(cv.waitq)
                         delete!(Waiting, oid)
                     end
@@ -774,7 +765,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     # TODO: should store the worker here, not the socket,
                     # so we don't need to look up the worker later
                     @async begin
-                        val = wait(rv, msg)
+                        val = wait_full(rv)
                         deliver_result(sock, msg, oid, val)
                     end
                 end

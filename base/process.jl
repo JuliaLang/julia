@@ -117,9 +117,9 @@ type Process
     exit_code::Int32
     term_signal::Int32
     exitcb::Callback
-    exitnotify::Vector{WaitTask}
+    exitnotify::Condition
     closecb::Callback
-    closenotify::Vector{WaitTask}
+    closenotify::Condition
     function Process(cmd::Cmd,handle::Ptr{Void},in::RawOrBoxedHandle,out::RawOrBoxedHandle,err::RawOrBoxedHandle)
         if(!isa(in,AsyncStream))
             in=null_handle
@@ -130,7 +130,7 @@ type Process
         if(!isa(err,AsyncStream))
             err=null_handle
         end
-        new(cmd,handle,in,out,err,-2,-2,false,WaitTask[],false,WaitTask[])
+        new(cmd,handle,in,out,err,-2,-2,false,Condition(),false,Condition())
     end
 end
 
@@ -175,13 +175,13 @@ function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::I
     proc.term_signal = term_signal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, term_signal) end
     ccall(:jl_close_uv,Void,(Ptr{Void},),proc.handle)
-    tasknotify(proc.exitnotify, proc)
+    notify(proc.exitnotify)
 end
 
 function _uv_hook_close(proc::Process)
     proc.handle = 0
     if isa(proc.closecb, Function) proc.closecb(proc) end
-    tasknotify(proc.closenotify, proc)
+    notify(proc.closenotify)
 end
 
 function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
@@ -515,22 +515,16 @@ macro cmd(str)
     :(cmd_gen($(shell_parse(str))))
 end
 
-# Filters
-wait_exit_filter(p::Process, args...) = !process_exited(p)
-wait_close_filter(w::Union(AsyncStream,Process), args...) = w.open
+wait_close(x) = if x.open; wait(x.closenotify); end
 
-wait_exit(x::Union(Process,Vector)) = wait(x, :closenotify, wait_exit_filter)
-wait_close(x) = wait(x, :closenotify, wait_close_filter)
+wait_exit(x::Process)      = if !process_exited(x); wait(x.exitnotify); end
+wait_exit(x::ProcessChain) = for p in x.processes; wait_exit(p); end
 
-wait_exit(x::ProcessChain) = wait_exit(x.processes)
-function wait_read(x::AsyncStream)
-    wait(x, :readnotify, false)
-end
-wait_success(x::ProcessChain) = wait_success(x.processes)
-function wait_success(x::Union(Process,Vector{Process}))
+function wait_success(x::Process)
     wait_exit(x)
     kill(x)
     success(x)
 end
+wait_success(x::ProcessChain) = for p in x.processes; wait_success(p); end
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
