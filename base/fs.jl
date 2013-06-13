@@ -36,7 +36,7 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 #import Base.show, Base.open, Base.close, Base.write
-import Base.uvtype, Base.uvhandle, Base.eventloop
+import Base: uvtype, uvhandle, eventloop, fd, position, stat
 
 include("file_constants.jl")
 
@@ -112,5 +112,16 @@ function write(f::File,buf::Ptr{Uint8},len::Integer,offset::Integer)
     uv_error(err)
     f
 end
+
+function truncate(f::File, n::Integer)
+    req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    err = ccall(:uv_fs_ftruncate,Int32,(Ptr{Void},Ptr{Void},Int32,Int64,Ptr{Void}),
+                eventloop(),req,f.handle,n,C_NULL)
+    uv_error(err)
+    f    
+end
+
+fd(f::File) = OS_FD(f.handle)
+stat(f::File) = stat(fd(f))
 
 end

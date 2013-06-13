@@ -32,7 +32,7 @@
 /* OS-level primitive wrappers */
 
 #if defined(__APPLE__) || defined(_OS_WINDOWS_)
-void *memrchr(const void *s, int c, size_t n)
+DLLEXPORT void *memrchr(const void *s, int c, size_t n)
 {
     const unsigned char *src = (unsigned char *)s + n;
     unsigned char uc = c;
