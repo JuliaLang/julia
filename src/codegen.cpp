@@ -2084,6 +2084,15 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
 #endif
         builder.SetInsertPoint(tryblk);
     }
+    else if (head == newvar_sym) {
+        jl_sym_t *var = (jl_sym_t*)args[0];
+        if (jl_is_symbolnode(var))
+            var = jl_symbolnode_sym(var);
+        if (isBoxed(var, ctx)) {
+            Value *lv = (*ctx->vars)[var];
+            builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
+        }
+    }
     else {
         if (!strcmp(head->name, "$"))
             jl_error("syntax: prefix $ in non-quoted expression");
