@@ -4,7 +4,8 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
              "random", "math", "functional", "bigint", "sorting",
              "statistics", "spawn", "parallel", "priorityqueue",
              "arpack", "file", "perf", "suitesparse", "version",
-             "resolve", "pollfd", "mpfr", "broadcast", "complex"]
+             "resolve", "pollfd", "mpfr", "broadcast", "complex",
+             "socket"]
 
 tests = ARGS==["all"] ? testnames : ARGS
 n = min(8, CPU_CORES, length(tests))
