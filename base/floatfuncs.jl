@@ -124,11 +124,6 @@ rtoldefault(x::FloatingPoint, y::FloatingPoint) = cbrt(max(eps(x), eps(y)))
 atoldefault(x::FloatingPoint, y::FloatingPoint) = sqrt(max(eps(x), eps(y)))
 
 # promotion of non-floats
-rtoldefault(x::Real, y::FloatingPoint) = rtoldefault(promote(x,y)...)
-rtoldefault(x::FloatingPoint, y::Real) = rtoldefault(promote(x,y)...)
-atoldefault(x::Real, y::FloatingPoint) = atoldefault(promote(x,y)...)
-atoldefault(x::FloatingPoint, y::Real) = atoldefault(promote(x,y)...)
-
 for fun in (:rtoldefault, :atoldefault)
     @eval begin
         ($fun)(x::Real, y::FloatingPoint) = ($fun)(promote(x,y)...)
