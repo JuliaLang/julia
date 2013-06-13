@@ -724,22 +724,15 @@ function accept(server::UVServer, client::AsyncStream)
     if !server.open
         error("accept: Server not connected. Did you `listen`?")
     end
-    if accept_nonblock(server,client) == 0
-        return client
-    else
-        uv_error("accept:",_uv_lasterror()!=EAGAIN)
-    end
-    c = Condition()
     while true
-        err = wait(c)
-        if err.uv_code != -1
-            throw(UVError("accept",err))
-        end
-        err = accept_nonblock()
         if accept_nonblock(server,client) == 0
             return client
         else
             uv_error("accept:",_uv_lasterror()!=EAGAIN)
+        end
+        err = wait(server.connectnotify)
+        if err.uv_code != -1
+            throw(UVError("accept",err))
         end
     end
 end
@@ -749,12 +742,12 @@ function listen!(sock::UVServer; backlog::Integer=511)
     err != -1 ? (sock.open = true): false
 end
 
-function listen(sock::PipeServer,path::ASCIIString)
+function listen(path::ASCIIString)
+    sock = PipeServer()
     uv_error("listen",bind(sock, path))
-    uv_error("listen",listen!(sock))
+    uv_error("listen",!listen!(sock))
     sock
 end
-listen(path::ASCIIString) = listen(PipeServer(),paths)
 
 function connect(cb::Function,sock::NamedPipe,path::ASCIIString)
     sock.ccb = cb
