@@ -227,6 +227,11 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
     size_t got, avail;
     //int result;
 
+    if (s->state == bst_wr) {
+        ios_seek(s, ios_pos(s));
+    }
+    s->state = bst_rd;
+
     while (n > 0) {
         avail = s->size - s->bpos;
         
@@ -235,13 +240,11 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
             memcpy(dest, s->buf + s->bpos, ncopy);
             s->bpos += ncopy;
             if (ncopy >= n) {
-                s->state = bst_rd;
                 return tot+ncopy;
             }
         }
         if (s->bm == bm_mem || s->fd == -1) {
             // can't get any more data
-            s->state = bst_rd;
             if (avail == 0)
                 s->_eof = 1;
             return avail;
@@ -253,7 +256,6 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
         
         ios_flush(s);
         s->bpos = s->size = 0;
-        s->state = bst_rd;
         
         s->fpos = -1;
         if (n > MOST_OF(s->maxsize)) {
@@ -353,17 +355,11 @@ size_t ios_write(ios_t *s, const char *data, size_t n)
     size_t space;
     size_t wrote = 0;
 
-    if (s->state == bst_none) s->state = bst_wr;
     if (s->state == bst_rd) {
-        if (!s->rereadable) {
-            s->size = 0;
-            s->bpos = 0;
-        }
-        space = s->size - s->bpos;
+        ios_seek(s, ios_pos(s));
     }
-    else {
-        space = s->maxsize - s->bpos;
-    }
+    s->state = bst_wr;
+    space = s->maxsize - s->bpos;
 
     if (s->bm == bm_mem) {
         wrote = _write_grow(s, data, n);
@@ -391,7 +387,6 @@ size_t ios_write(ios_t *s, const char *data, size_t n)
         wrote += n;
     }
     else {
-        s->state = bst_wr;
         ios_flush(s);
         if (n > MOST_OF(s->maxsize)) {
             _os_write_all(s->fd, data, n, &wrote);
