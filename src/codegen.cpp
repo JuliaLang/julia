@@ -1815,7 +1815,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         if (jl_is_bitstype(jl_typeof(jv))) {
             return emit_expr(jv, ctx, isboxed, valuepos);
         }
-        assert(jl_is_symbol(jv));
         return literal_pointer_val(jv);
     }
     else if (jl_is_gotonode(expr)) {
