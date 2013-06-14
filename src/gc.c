@@ -260,6 +260,9 @@ static void *alloc_big(size_t sz)
     allocd_bytes += allocsz;
     if (v == NULL)
         jl_throw(jl_memory_exception);
+#ifdef MEMDEBUG
+    //memset(v, 0xee, allocsz);
+#endif
     v->sz = sz;
     v->flags = 0;
     v->next = big_objects;
@@ -404,8 +407,13 @@ static void sweep_pool(pool_t *p)
     gcval_t **pfl = &p->freelist;
     size_t osize = p->osize;
     size_t nfreed = 0;
-    size_t nfree = 0;
-    gcval_t *old_fl = p->freelist;
+
+    size_t old_nfree = 0;
+    gcval_t *ofl = p->freelist;
+    while (ofl != NULL) {
+        old_nfree++;
+        ofl = ofl->next;
+    }
 
     while (pg != NULL) {
         v = (gcval_t*)&pg->data[0];
@@ -414,12 +422,6 @@ static void sweep_pool(pool_t *p)
         freedall = 1;
         prev_pfl = pfl;
         while ((char*)v <= lim) {
-            if (old_fl != NULL) {
-                // keep track of difference between new and old freelist
-                // in order to count newly-freed objects
-                nfree++;
-                old_fl = old_fl->next;
-            }
             if (!v->marked) {
                 *pfl = v;
                 pfl = &v->next;
@@ -450,7 +452,7 @@ static void sweep_pool(pool_t *p)
         pg = nextpg;
     }
     *pfl = NULL;
-    freed_bytes += (nfreed-nfree)*osize;
+    freed_bytes += (nfreed - old_nfree)*osize;
 }
 
 extern void jl_unmark_symbols(void);

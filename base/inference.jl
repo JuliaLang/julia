@@ -23,11 +23,12 @@ type CallStack
     mod::Module
     types::Tuple
     recurred::Bool
+    cycleid
     result
     prev::Union(EmptyCallStack,CallStack)
     sv::StaticVarInfo
 
-    CallStack(ast, mod, types, prev) = new(ast, mod, types, false, None, prev)
+    CallStack(ast, mod, types, prev) = new(ast, mod, types, false, 0, None, prev)
 end
 
 inference_stack = EmptyCallStack()
@@ -798,7 +799,7 @@ end
 const Type_Array = Type{Array}
 
 function abstract_eval_constant(x::ANY)
-    if isa(x,DataType) || isa(x,UnionType) || isa(x,TypeConstructor)
+    if isa(x,Type)
         if is(x,Array)
             return Type_Array
         end
@@ -1024,6 +1025,8 @@ typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,t
 
 ast_rettype(ast) = ast.args[3].typ
 
+CYCLE_ID = 1
+
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
 function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
@@ -1064,19 +1067,22 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     # end
     #print("typeinf ", ast0, " ", sparams, " ", atypes, "\n")
 
-    global inference_stack
+    global inference_stack, CYCLE_ID
     # check for recursion
     f = inference_stack
     while !isa(f,EmptyCallStack)
         if is(f.ast,ast0) && typeseq(f.types, atypes)
             # return best guess so far
             (f::CallStack).recurred = true
+            (f::CallStack).cycleid = CYCLE_ID
             r = inference_stack
             while !is(r, f)
                 # mark all frames that are part of the cycle
                 r.recurred = true
+                r.cycleid = CYCLE_ID
                 r = r.prev
             end
+            CYCLE_ID += 1
             #print("*==> ", f.result,"\n")
             return ((),f.result)
         end
@@ -1180,7 +1186,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             changes = abstract_interpret(stmt, s[pc], sv)
             if frame.recurred
                 rec = true
-                if !(isa(frame.prev,CallStack) && frame.prev.recurred)
+                if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
                     toprec = true
                 end
                 add!(recpts, pc)
@@ -1228,7 +1234,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     rt = abstract_eval_arg(stmt.args[1], s[pc], sv)
                     if frame.recurred
                         rec = true
-                        if !(isa(frame.prev,CallStack) && frame.prev.recurred)
+                        if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
                             toprec = true
                         end
                         add!(recpts, pc)
@@ -1658,6 +1664,9 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         if isa(spvals[i],TypeVar)
             return NF
         end
+        if isa(spvals[i],Symbol)
+            spvals[i] = qn(spvals[i])
+        end
     end
     (ast, ty) = typeinf(meth[3], meth[1], meth[2], meth[3])
     if is(ast,())
@@ -1733,6 +1742,7 @@ end
 
 tn(sym::Symbol) =
     ccall(:jl_new_struct, Any, (Any,Any...), TopNode, sym, Any)
+qn(v) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, v)
 
 const top_tupleref = tn(:tupleref)
 const top_tuple = tn(:tuple)

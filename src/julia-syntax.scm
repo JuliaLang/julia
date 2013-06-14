@@ -30,7 +30,7 @@
 (define (llist-vars lst)
   (map arg-name (filter (lambda (a)
 			  (not (and (pair? a)
-				    (memq (car a) '(keywords parameters)))))
+				    (eq? (car a) 'parameters))))
 			lst)))
 
 (define (arg-type v)
@@ -401,7 +401,9 @@
 	,(method-def-expr-
 	  name sparams (append pargl vararg)
 	  `(block
-	    (line 0 || ||)
+	    ,(if (null? lno)
+		 `(line 0 || ||)
+		 (append (car lno) '(||)))
 	    ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
 	    (return (call ,mangled
 			  ,@vals
@@ -507,28 +509,38 @@
     ,(method-def-expr name sparams overall-argl body)))
 
 (define (method-def-expr name sparams argl body)
-  (if (has-keywords? argl)
-      ;; here (keywords ...) is optional positional args
-      (let ((opt  (map cadr  (cdar argl)))
-	    (dfl  (map caddr (cdar argl)))
-	    (argl (cdr argl)))
-	(if (has-parameters? argl)
-	    ;; both!
-	    ;; separate into keyword version with all positional args,
-	    ;; and a series of optional-positional-defs that delegate keywords
-	    (let ((kw   (car argl))
-		  (argl (cdr argl)))
-	      (check-kw-args (cdr kw))
-	      (receive
-	       (vararg req) (separate vararg? argl)
-	       (optional-positional-defs name sparams req opt dfl body
-					 (cons kw (append req opt vararg))
-					 `(parameters (... ,(gensy))))))
-	    ;; optional positional only
-	    (receive
-	     (vararg req) (separate vararg? argl)
-	     (optional-positional-defs name sparams req opt dfl body
-				       (append req opt vararg)))))
+  (if (any kwarg? argl)
+      ;; has optional positional args
+      (begin
+	(let check ((l     argl)
+		    (seen? #f))
+	  (if (pair? l)
+	      (if (kwarg? (car l))
+		  (check (cdr l) #t)
+		  (if (and seen? (not (vararg? (car l))))
+		      (error "optional positional arguments must occur at end")
+		      (check (cdr l) #f)))))
+	(receive
+	 (kws argl) (separate kwarg? argl)
+	 (let ((opt  (map cadr  kws))
+	       (dfl  (map caddr kws)))
+	   (if (has-parameters? argl)
+	       ;; both!
+	       ;; separate into keyword version with all positional args,
+	       ;; and a series of optional-positional-defs that delegate keywords
+	       (let ((kw   (car argl))
+		     (argl (cdr argl)))
+		 (check-kw-args (cdr kw))
+		 (receive
+		  (vararg req) (separate vararg? argl)
+		  (optional-positional-defs name sparams req opt dfl body
+					    (cons kw (append req opt vararg))
+					    `(parameters (... ,(gensy))))))
+	       ;; optional positional only
+	       (receive
+		(vararg req) (separate vararg? argl)
+		(optional-positional-defs name sparams req opt dfl body
+					  (append req opt vararg)))))))
       (if (has-parameters? argl)
 	  ;; keywords only
 	  (begin (check-kw-args (cdar argl))
@@ -1108,7 +1120,7 @@
       ,t)))
 
 (define (check-kw-args kw)
-  (let ((invalid (filter (lambda (x) (not (or (assignment? x)
+  (let ((invalid (filter (lambda (x) (not (or (kwarg? x)
 					      (vararg? x))))
 			 kw)))
     (if (pair? invalid)
@@ -1117,7 +1129,7 @@
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
   (receive
-   (keys restkeys) (separate assignment? kw)
+   (keys restkeys) (separate kwarg? kw)
    `(call (top kwcall) ,f ,(length keys)
 	  ,@(apply append
 		   (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
@@ -1240,17 +1252,14 @@
 		   `(call (top apply_type) ,type ,@elts))
 
    ;; call with keywords
-   (pattern-lambda (call f (keywords . kwargs) ...)
-		   (let ((kw (if (and (length> __ 3)
-				      (pair? (cadddr __))
-				      (eq? (car (cadddr __)) 'parameters))
-				 (append kwargs (cdr (cadddr __)))
-				 kwargs)))
-		     (lower-kw-call f kw (if (eq? kw kwargs)
-					     (cdddr __)
-					     (cddddr __)))))
    (pattern-lambda (call f (parameters . kwargs) ...)
-		   (lower-kw-call f kwargs (cdddr __)))
+		   (receive
+		    (kws args) (separate kwarg? (cdddr __))
+		    (lower-kw-call f (append kws kwargs) args)))
+   (pattern-lambda (call f ... (kw a b) ...)
+		   (receive
+		    (kws args) (separate kwarg? (cddr __))
+		    (lower-kw-call f kws args)))
 
    ;; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -2641,23 +2650,17 @@ So far only the second case can actually occur.
 				 (else
 				  (resolve-expansion-vars-with-new-env x env m))))
 			 (cadddr e))))
-	   ((keywords parameters)
+	   ((kw)
 	    ;; in keyword arg A=B, don't transform "A"
-	    `(,(car e) ,@(map (lambda (x)
-				(if (and (length= x 3) (assignment? x))
-				    (if (and (pair? (cadr x))
-					     (eq? (caadr x) '|::|))
-					`(= (|::|
-					     ,(cadr (cadr x))
-					     ,(resolve-expansion-vars-
-					       (caddr (cadr x)) env m))
-					    ,(resolve-expansion-vars-
-					      (caddr x) env m))
-					`(= ,(cadr x)
-					    ,(resolve-expansion-vars-
-					      (caddr x) env m)))
-				    (resolve-expansion-vars- x env m)))
-			      (cdr e))))
+	    (if (and (pair? (cadr e))
+		     (eq? (caadr e) '|::|))
+		`(kw (|::|
+		      ,(cadr (cadr e))
+		      ,(resolve-expansion-vars- (caddr (cadr e)) env m))
+		     ,(resolve-expansion-vars- (caddr e) env m))
+		`(kw ,(cadr e)
+		     ,(resolve-expansion-vars- (caddr e) env m))))
+
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)
@@ -2689,12 +2692,6 @@ So far only the second case can actually occur.
       '()
       (case (car e)
 	((escape)  '())
-	((keywords parameters)
-	 (find-assigned-vars-in-expansion
-	  (map (lambda (x) (if (and (length= x 3) (assignment? x))
-			       (caddr x)
-			       '()))
-	       (cdr e))))
 	((= function)
 	 (append! (filter
 		   symbol?

@@ -13,9 +13,8 @@ function update_file(f::Function, file::String, args...)
         end
         replace && run(`mv -f $tmp $file`)
         return replace
-    catch
+    finally
         ispath(tmp) && rm(tmp)
-        rethrow()
     end
 end
 

@@ -75,8 +75,8 @@ end
 # fallback div and fld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
 # so it is used here as the basis of float div().
-div{T<:Real}(x::T, y::T) = convert(T,(x-rem(x,y))/y)
-fld{T<:Real}(x::T, y::T) = convert(T,(x-mod(x,y))/y)
+div{T<:Real}(x::T, y::T) = convert(T,trunc((x-rem(x,y))/y))
+fld{T<:Real}(x::T, y::T) = convert(T,floor((x-mod(x,y))/y))
 #rem{T<:Real}(x::T, y::T) = convert(T,x-y*trunc(x/y))
 #mod{T<:Real}(x::T, y::T) = convert(T,x-y*floor(x/y))
 
@@ -234,7 +234,7 @@ macro vectorize_2arg(S,f)
 end
 
 # some operators not defined yet
-global //, .>>, .<<, &>, &>>, &<, &<<
+global //, .>>, .<<, >:, <|, |>
 
 module Operators
 
@@ -264,6 +264,7 @@ export
     //,
     <,
     <:,
+    >:,
     <<,
     <=,
     ==,
@@ -273,21 +274,15 @@ export
     .>>,
     .<<,
     >>>,
-    &>,
-    &>>,
-    &<,
-    &<<,
     \,
     ^,
     |,
+    |>,
+    <|,
     ~
 
-import
-    Base.!, Base.!=, Base.$, Base.%, Base.&, Base.*, Base.+, Base.-, Base..!=,
-    Base..+, Base..-, Base..*, Base../, Base..<, Base..<=, Base..==, Base..>,
-    Base..>=, Base..\, Base..^, Base./, Base.//, Base.<, Base.<:, Base.<<,
-    Base.<=, Base.==, Base.>, Base.>=, Base.>>, Base..>>, Base..<<, Base.>>>,
-    Base.&>, Base.&>>, Base.&<, Base.&<<, Base.\, Base.^, Base.|, Base.~,
-    Base.!==
+import Base: !, !=, $, %, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
+    .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
+    <|, |>, \, ^, |, ~, !==, >:
 
 end

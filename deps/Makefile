@@ -12,10 +12,9 @@ BUILD_LLDB = 0
 
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
-CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
+CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)" --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
-CONFIG_GUESS := $(shell ./config.guess)
-CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
+CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
@@ -105,7 +104,7 @@ endif
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
 ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS = -with-gmp=$(abspath $(BUILD))
+MPFR_OPTS = --with-gmp=$(abspath $(BUILD))
 endif
 endif
 
@@ -675,19 +674,19 @@ endif
 # don't touch scheduler affinity since we manage this ourselves
 OPENBLAS_BUILD_OPTS += NO_AFFINITY=1
 
-ifeq ($(USE_LIB64), 1)
+ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1
 endif
 
 ifneq ($(BUILD_OS),$(OS))
-OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 
+OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC)
+endif
 ifeq ($(ARCH),i686)
 OPENBLAS_BUILD_OPTS += BINARY=32
 else ifeq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += BINARY=64
 else
 $(error "unknown arch for openblas cross-compile")
-endif
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
@@ -815,7 +814,7 @@ install-lapack: $(LAPACK_OBJ_TARGET)
 
 ## ARPACK ##
 
-ifeq ($(USE_LIB64), 1)
+ifeq ($(USE_BLAS64), 1)
 ARPACK_FFLAGS = -fdefault-integer-8
 endif
 
@@ -1023,7 +1022,7 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(BUILD)/lib/libumfpack.$(SHLIB_EXT)
 
-ifeq ($(USE_LIB64), 1)
+ifeq ($(USE_BLAS64), 1)
 UMFPACK_CONFIG = -DLONGBLAS='long long' 
 CHOLMOD_CONFIG = -DLONGBLAS='long long' 
 endif

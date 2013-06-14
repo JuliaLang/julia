@@ -72,8 +72,10 @@ end
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     lo <= k <= hi || error("select index $k is out of range $lo:$hi")
     while lo < hi
-        if hi-lo == 1 
-            lt(o, v[hi], v[lo]) && ((v[lo],v[hi]) = (v[hi], v[lo]))
+        if hi-lo <= 1
+            if lt(o, v[hi], v[lo])
+                v[lo], v[hi] = v[hi], v[lo]
+            end
             return v[k]
         end
         pivot = v[(lo+hi)>>>1]
@@ -95,8 +97,39 @@ function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     end
     return v[lo]
 end
-select!(v::AbstractVector, k::Int, o::Ordering=Forward) = select!(v, k, 1, length(v), o)
-select (v::AbstractVector, k::Int, o::Ordering=Forward) = select!(copy(v), k, o)
+
+function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
+    a, b = first(r), last(r)
+    lo <= a <= b <= hi || error("select index $k is out of range $lo:$hi")
+    while true
+        if hi-lo <= length(r)
+            sort!(v, lo, hi, DEFAULT_UNSTABLE, o)
+            return v[r]
+        end
+        pivot = v[(lo+hi)>>>1]
+        i, j = lo, hi
+        while true
+            while lt(o, v[i], pivot); i += 1; end
+            while lt(o, pivot, v[j]); j -= 1; end
+            i <= j || break
+            v[i], v[j] = v[j], v[i]
+            i += 1; j -= 1
+        end
+        if b <= j
+            hi = j
+        elseif i <= a
+            lo = i
+        else
+            a <= j && select!(v, a, lo,  j, o)
+            b >= i && select!(v, b,  i, hi, o)
+            sort!(v, a, b, DEFAULT_UNSTABLE, o)
+            return v[r]
+        end
+    end
+end
+
+select!(v::AbstractVector, k, o::Ordering=Forward) = select!(v, k, 1, length(v), o)
+select (v::AbstractVector, k, o::Ordering=Forward) = select!(copy(v), k, o)
 
 for s in {:select!, :select}
     @eval begin

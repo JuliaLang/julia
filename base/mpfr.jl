@@ -1,12 +1,7 @@
 module MPFR
 
 export
-    # Types
     BigFloat,
-    # Functions
-    bigfloat_pi,
-    bigfloat_eulergamma,
-    bigfloat_catalan,
     get_bigfloat_precision,
     set_bigfloat_precision,
     with_bigfloat_precision,
@@ -22,7 +17,6 @@ import
         prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
         string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
         erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc, eps, signbit,
-    # import trigonometric functions
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
         sech, csch, coth, acosh, asinh, atanh, atan2
 
@@ -94,10 +88,10 @@ end
 BigFloat(x::Float32) = BigFloat(float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
+convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
 convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
-
 
 for to in (Int8, Int16, Int32, Int64)
     @eval begin
@@ -137,6 +131,12 @@ promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
 
 promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigFloat},::Type{T}) = BigFloat
+
+promote_rule(::Type{Rational{BigInt}}, ::Type{BigFloat}) = Rational{BigInt}
+promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{BigFloat}) = Rational{BigInt}
+promote_rule{T<:FloatingPoint}(::Type{Rational{BigInt}}, ::Type{T}) = Rational{BigInt}
+
+rationalize(x::BigFloat; tol::Real=eps(x)) = rationalize(BigInt, x, tol=tol)
 
 # Basic arithmetic without promotion
 # Unsigned addition
@@ -563,17 +563,6 @@ function atan2(y::BigFloat, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_atan2, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &y, &x, ROUNDING_MODE[end])
     return z
-end
-
-# Mathematical constants:
-for (c, cmpfr) in ((:pi,:pi), (:eulergamma, :euler), (:catalan, :catalan))
-    @eval function $(symbol(string("bigfloat_", c)))()
-        c = BigFloat()
-        ccall(($(string("mpfr_const_", cmpfr)), :libmpfr), 
-              Cint, (Ptr{BigFloat}, Int32),
-              &c, ROUNDING_MODE[end])
-        return c
-    end
 end
 
 # Utility functions

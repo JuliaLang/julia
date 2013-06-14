@@ -93,7 +93,7 @@ status(pkg::String) = status(OUTPUT_STREAM, pkg)
 
 function init(meta::String)
     d = dir()
-    isdir(d) && error("Package directory $d already exists.")
+    isdir(joinpath(d,"METADATA")) && error("Package directory $d is already initialized.")
     try
         run(`mkdir -p $d`)
         cd(d) do

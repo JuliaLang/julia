@@ -46,9 +46,10 @@ end
 
 display_error(er) = display_error(er, {})
 function display_error(er, bt)
-    with_output_color(:red, OUTPUT_STREAM) do io
+    with_output_color(:red, STDERR) do io
         print(io, "ERROR: ")
         error_show(io, er, bt)
+        println(io)
     end
 end
 
@@ -61,7 +62,6 @@ function eval_user_input(ast::ANY, show_value)
             end
             if errcount > 0
                 display_error(lasterr,bt)
-                println()
                 errcount, lasterr = 0, ()
             else
                 ast = expand(ast)
@@ -73,7 +73,7 @@ function eval_user_input(ast::ANY, show_value)
                     end
                     try repl_show(value)
                     catch err
-                        println("Error showing value of type ", typeof(value), ":")
+                        println(STDERR, "Error showing value of type ", typeof(value), ":")
                         rethrow(err)
                     end
                     println()
@@ -82,11 +82,11 @@ function eval_user_input(ast::ANY, show_value)
             break
         catch err
             if errcount > 0
-                println("SYSTEM: show(lasterr) caused an error")
+                println(STDERR, "SYSTEM: show(lasterr) caused an error")
             end
             errcount, lasterr = errcount+1, err
             if errcount > 2
-                println("WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
+                println(STDERR, "WARNING: it is likely that something important is broken, and Julia will not be able to continue normally")
                 break
             end
             bt = catch_backtrace()
@@ -206,7 +206,7 @@ function process_options(args::Array{Any,1})
         elseif args[i]=="-p"
             i+=1
             if i > length(args) || !isdigit(args[i][1])
-                np = CPU_CORES
+                np = Sys.CPU_CORES
             else
                 np = int(args[i])
             end
@@ -259,7 +259,6 @@ function process_options(args::Array{Any,1})
 end
 
 const roottask = current_task()
-const roottask_wi = WorkItem(roottask)
 
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
@@ -274,7 +273,7 @@ function init_load_path()
 end
 
 function init_sched()
-    global const Workqueue = WorkItem[]
+    global const Workqueue = Any[]
     global const Waiting = Dict()
 end
 
@@ -288,7 +287,7 @@ function init_head_sched()
     push!(PGRP.locs,("",0))
     PGRP.np = 1
     # make scheduler aware of current (root) task
-    unshift!(Workqueue, roottask_wi)
+    unshift!(Workqueue, roottask)
     yield()
 end
 
@@ -296,11 +295,13 @@ function _start()
     # set up standard streams
     reinit_stdio()
     # Initialize RNG
-    librandom_init()
+    Random.librandom_init()
     # Check that OpenBLAS is correctly built
     if Base.libblas_name == "libopenblas"
         check_openblas()
     end
+    Sys.init()
+    global const CPU_CORES = Sys.CPU_CORES
 
     # set default local address
     global bind_addr = getipaddr()
@@ -314,13 +315,6 @@ function _start()
             ENV["HOME"] = user_data_dir
         end
     end
-
-    # set CPU core count
-    global const CPU_CORES = int(
-        haskey(ENV,"JULIA_CPU_CORES") ?
-        ENV["JULIA_CPU_CORES"] :
-        ccall(:jl_cpu_cores, Int32, ())
-    )
 
     #atexit(()->flush(STDOUT))
     try
@@ -369,8 +363,8 @@ function _atexit()
         try
             f()
         catch err
-            show(err)
-            println()
+            show(STDERR, err)
+            println(STDERR)
         end
     end
 end

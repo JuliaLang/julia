@@ -37,7 +37,42 @@ end
 
 convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
 convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
-function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
+
+convert(::Type{Rational}, x::Rational) = x
+convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
+
+convert(::Type{Bool}, x::Rational) = (x!=0) # to resolve ambiguity
+convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
+convert{T<:FloatingPoint}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
+
+function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
+    x == 0 && return zero(T)//one(T)
+    if !isfinite(x)
+        x < 0 && return -one(T)//zero(T)
+        x > 0 && return +one(T)//zero(T)
+        error(InexactError())
+    end
+    # TODO: handle values that can't be converted exactly
+    p = get_precision(x)-1
+    n = convert(T, significand(x)*2.0^p)
+    p -= exponent(x)
+    z = trailing_zeros(n)
+    p - z > 0 ? (n>>z)//(one(T)<<(p-z)) :
+        p > 0 ? (n>>p)//one(T) :
+                (n<<-p)//one(T)
+end
+convert(::Type{Rational}, x::Union(Float64,Float32)) = convert(Rational{Int}, x)
+
+promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
+promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
+promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
+
+promote_rule{T<:SmallSigned,S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{Int}
+promote_rule{T<:SmallUnsigned,S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{Uint}
+promote_rule{T<:Union(Int64,Int128),S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{T}
+promote_rule{T<:Union(Uint64,Uint128),S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{T}
+
+function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
     if isnan(x);       return zero(T)//zero(T); end
     if x < typemin(T); return -one(T)//zero(T); end
     if typemax(T) < x; return  one(T)//zero(T); end
@@ -51,33 +86,17 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
     while true
         f = itrunc(y); y -= f
         p, q = f*a+c, f*b+d
-        if p < typemin(T) || p > typemax(T) ||
-           q < typemin(T) || q > typemax(T)
-           break
-        end
+        typemin(T) <= p <= typemax(T) &&
+        typemin(T) <= q <= typemax(T) || break
         a, b, c, d = p, q, a, b
         if y == 0 || abs(a/b-x) <= tol
             break
         end
-        y = 1/y
+        y = inv(y)
     end
     return convert(T,a)//convert(T,b)
 end
-convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(one(x)))
-convert(::Type{Rational}, x::FloatingPoint, tol::Real) = convert(Rational{Int},x,tol)
-convert(::Type{Rational}, x::FloatingPoint) = convert(Rational{Int},x,eps(one(x)))
-convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
-convert(::Type{Bool}, x::Rational) = (x!=0)  # to resolve ambiguity
-
-convert{T<:Rational}(::Type{T}, x::Rational) = x
-convert{T<:Integer}(::Type{T}, x::Rational) =
-    (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
-convert{T<:Real}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-
-promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+rationalize(x::Union(Float64,Float32); tol::Real=eps(x)) = rationalize(Int, x, tol=tol)
 
 num(x::Integer) = x
 den(x::Integer) = one(x)
@@ -104,8 +123,14 @@ hash(x::Rational) = isinteger(x) ? hash(x.num) :
                     bitmix(hash(x.num), hash(x.den))
 
 -(x::Rational) = (-x.num) // x.den
-+(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)
--(x::Rational, y::Rational) = (x.num*y.den - x.den*y.num) // (x.den*y.den)
+for op in (:+, :-, :rem, :mod)
+    @eval begin
+        function ($op)(x::Rational, y::Rational)
+            g = gcd(x.den, y.den)
+            Rational(($op)(x.num * div(y.den, g), y.num * div(x.den, g)), x.den * div(y.den, g))
+        end
+    end
+end
 *(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
 /(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 /(x::Rational, z::Complex ) = inv(z/x)
@@ -129,12 +154,6 @@ hash(x::Rational) = isinteger(x) ? hash(x.num) :
 <=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num : x.num*y.den <= x.den*y.num
 <=(x::Rational, y::Real    ) = x.num <= x.den*y
 <=(x::Real    , y::Rational) = x*y.den <= y.num
-
-rem(x::Rational, y::Rational) = Rational(rem(x.num*y.den, x.den*y.num),
-                                         x.den*y.den)
-
-mod(x::Rational, y::Rational) = Rational(mod(x.num*y.den, x.den*y.num),
-                                         x.den*y.den)
 
 div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
 div(x::Rational, y::Real    ) = div(x.num, x.den*y)
@@ -162,19 +181,13 @@ for f in (:int8, :int16, :int32, :int64, :int128,
     @eval ($f)(x::Rational) = ($f)(iround(x))
 end
 
-function ^(x::Rational, y::Integer)
-    if y < 0
-        Rational(x.den^-y, x.num^-y)
-    else
-        Rational(x.num^y, x.den^y)
-    end
-end
+^(x::Rational, y::Integer) = y < 0 ?
+    Rational(x.den^-y, x.num^-y) : Rational(x.num^y, x.den^y)
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
 ^{T<:FloatingPoint}(x::T, y::Rational) = x^(convert(T,y.num)/y.den)
 ^{T<:FloatingPoint}(x::Complex{T}, y::Rational) = x^(convert(T,y.num)/y.den)
 
-^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z)  # to resolve ambiguity
-
+^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z) # to resolve ambiguity
 ^{T<:Rational}(z::Complex{T}, n::Integer) =
     n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
