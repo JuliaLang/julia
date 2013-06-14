@@ -1061,7 +1061,7 @@ static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
 static void add_intrinsic(jl_module_t *m, const std::string &name, intrinsic f)
 {
     jl_value_t *i = jl_box32(jl_intrinsic_type, (int32_t)f);
-    jl_sym_t *sym = jl_symbol((char*)name.c_str());
+    jl_sym_t *sym = jl_symbol(const_cast<char*>(name.c_str()));
     jl_set_const(m, sym, i);
     jl_module_export(m, sym);
 }

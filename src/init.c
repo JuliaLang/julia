@@ -560,12 +560,18 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
+
+    if (signal(SIGPIPE,SIG_IGN) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "Couldn't set SIGPIPE\n");
+        jl_exit(1);
+    }
 #else
     if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n");
         jl_exit(1);
     }
 #endif
+
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();

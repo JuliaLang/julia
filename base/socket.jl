@@ -297,7 +297,7 @@ show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",sock.open?"connected,":
 				     "disconnected,",nb_available(sock.buffer),
 				     " bytes waiting)")
 
-show(io::IO,sock::TcpServer) = print(io,"TcpServer(",sock.open?"listening,":
+show(io::IO,sock::TcpServer) = print(io,"TcpServer(",sock.open?"listening)":
                      "not listening)")
 
 #show(io::IO,sock::UdpSocket) = print(io,"UdpSocket(",sock.open?"connected,":
@@ -395,9 +395,8 @@ function connect(sock::TcpSocket, host::ASCIIString, port::Integer)
 end
 
 # Default Host to localhost
-function connect(sock::TcpSocket, port::Integer)
-    conenct(sock,IPv4(127,0,0,1),port)
-end
+connect(sock::TcpSocket, port::Integer) = conenct(sock,IPv4(127,0,0,1),port)
+connect(port::Integer) = connect(IPv4(127,0,0,1),port)
 
 function default_connectcb(sock,status)
     if status == -1
