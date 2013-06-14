@@ -72,7 +72,7 @@ end
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     lo <= k <= hi || error("select index $k is out of range $lo:$hi")
     while lo < hi
-        if hi-lo <= 1
+        if hi-lo == 1
             if lt(o, v[hi], v[lo])
                 v[lo], v[hi] = v[hi], v[lo]
             end
@@ -102,7 +102,7 @@ function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
     a, b = first(r), last(r)
     lo <= a <= b <= hi || error("select index $k is out of range $lo:$hi")
     while true
-        if hi-lo <= length(r)
+        if lo == a && hi == b
             sort!(v, lo, hi, DEFAULT_UNSTABLE, o)
             return v[r]
         end
