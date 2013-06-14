@@ -32,9 +32,6 @@
 extern "C" {
 #endif
 
-// To be removed once we upgrade libuv
-#define uv_stat_t uv_statbuf_t
-
 /** libuv callbacks */
 
 /*
