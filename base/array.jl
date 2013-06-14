@@ -758,6 +758,7 @@ function insert!{T}(a::Array{T,1}, i::Integer, item)
         end
     end
     a[i] = item
+    return a
 end
 
 const _default_splice = []
