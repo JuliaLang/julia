@@ -174,9 +174,10 @@ Sorting-related Functions
 
 .. function:: select(v, k[, ord])
 
-   Find the element in position ``k`` in the sorted vector ``v``
-   without sorting, according to ordering ``ord`` (default:
-   ``Sort.Forward``).
+   Partially sort vector ``v`` according to ordering ``ord``, and return 
+   the element at position ``k``.  ``k`` can also be a range, in which 
+   case a vector of elements corresponding to the range positions is 
+   returned.
 
 .. function:: select!(v, k[, ord])
 

@@ -16,12 +16,9 @@ task_local_storage(key, val) = (task_local_storage()[key] = val)
 function produce(v)
     ct = current_task()
     q = ct.consumers
-    if !is(q,nothing)
-        Q = q::Array{Any,1}
-        if !isempty(Q)
-            # make a task waiting for us runnable again
-            enq_work(pop!(Q))
-        end
+    if isa(q,Condition)
+        # make a task waiting for us runnable again
+        notify1(q)
     end
     yieldto(ct.last, v)
     ct.parent = ct.last  # always exit to last consumer
@@ -31,7 +28,10 @@ produce(v...) = produce(v)
 
 function consume(P::Task)
     while !(P.runnable || P.done)
-        yield(WaitFor(:consume, P))
+        if P.consumers === nothing
+            P.consumers = Condition()
+        end
+        wait(P.consumers)
     end
     ct = current_task()
     prev = ct.last
@@ -42,10 +42,7 @@ function consume(P::Task)
     if P.done
         q = P.consumers
         if !is(q, nothing)
-            Q = q::Array{Any,1}
-            while !isempty(Q)
-                enq_work(pop!(Q))
-            end
+            notify(q, P.result)
         end
     end
     v
@@ -61,3 +58,46 @@ next(t::Task, val) = (t.result, nothing)
 macro task(ex)
     :(Task(()->$(esc(ex))))
 end
+
+## condition variables
+
+type Condition
+    waitq::Vector{Any}
+
+    Condition() = new({})
+end
+
+function wait(c::Condition)
+    ct = current_task()
+    if ct === Scheduler
+        error("cannot execute blocking function from scheduler")
+    end
+
+    push!(c.waitq, ct)
+
+    ct.runnable = false
+    args = yield(c)
+
+    if isa(args,InterruptException)
+        filter!(x->x!==ct, c.waitq)
+        error(args)
+    end
+    args
+end
+
+function notify(c::Condition, arg=nothing; all=true)
+    if all
+        for t in c.waitq
+            t.result = arg
+            enq_work(t)
+        end
+        empty!(c.waitq)
+    elseif !isempty(c.waitq)
+        t = shift!(c.waitq)
+        t.result = arg
+        enq_work(t)
+    end
+    nothing
+end
+
+notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)

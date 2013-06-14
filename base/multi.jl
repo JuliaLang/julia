@@ -241,7 +241,7 @@ function register_worker(i, wrkr)
     nothing
 end
 
-## remote refs and core messages: do, call, fetch, wait, ref, put ##
+## remote refs ##
 
 const client_refs = WeakKeyDict()
 
@@ -303,19 +303,16 @@ isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
 
-bottom_func() = assert(false)
-
 function lookup_ref(id)
     GRP = PGRP::ProcessGroup
-    wi = get(GRP.refs, id, ())
-    if is(wi, ())
+    rv = get(GRP.refs, id, false)
+    if rv === false
         # first we've heard of this ref
-        wi = WorkItem(bottom_func)
-        # this WorkItem is just for storing the result value
-        GRP.refs[id] = wi
-        add!(wi.clientset, id[1])
+        rv = RemoteValue()
+        GRP.refs[id] = rv
+        add!(rv.clientset, id[1])
     end
-    wi
+    rv
 end
 
 # is a ref uninitialized? (for locally-owned refs only)
@@ -336,9 +333,9 @@ function isready(rr::RemoteRef)
 end
 
 function del_client(id, client)
-    wi = lookup_ref(id)
-    delete!(wi.clientset, client)
-    if isempty(wi.clientset)
+    rv = lookup_ref(id)
+    delete!(rv.clientset, client)
+    if isempty(rv.clientset)
         delete!((PGRP::ProcessGroup).refs, id)
         #print("$(myid()) collected $id\n")
     end
@@ -365,8 +362,8 @@ function send_del_client(rr::RemoteRef)
 end
 
 function add_client(id, client)
-    wi = lookup_ref(id)
-    add!(wi.clientset, client)
+    rv = lookup_ref(id)
+    add!(rv.clientset, client)
     nothing
 end
 
@@ -408,15 +405,71 @@ function deserialize(s, t::Type{RemoteRef})
     RemoteRef(where, rr.whence, rr.id)
 end
 
-schedule_call(rid, f_thk, args_thk) =
-    schedule_call(rid, ()->apply(f_thk, args_thk))
+# wait on a local proxy condition for a remote ref
+function wait_full(rr::RemoteRef)
+    oid = rr2id(rr)
+    cv = get(Waiting, oid, false)
+    if cv === false
+        cv = Condition()
+        Waiting[oid] = cv
+    end
+    wait(cv)
+end
+
+# data stored by the owner of a RemoteRef
+type RemoteValue
+    done::Bool
+    result
+    full::Condition   # waiting for a value
+    empty::Condition  # waiting for value to be removed
+    clientset::IntSet
+
+    RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet())
+end
+
+function work_result(rv::RemoteValue)
+    v = rv.result
+    if isa(v,WeakRef)
+        v = v.value
+    end
+    v
+end
+
+function wait_full(rv::RemoteValue)
+    while !rv.done
+        wait(rv.full)
+    end
+    return work_result(rv)
+end
+
+function wait_empty(rv::RemoteValue)
+    while rv.done
+        wait(rv.empty)
+    end
+    return nothing
+end
+
+## core messages: do, call, fetch, wait, ref, put ##
+
+function run_work_thunk(rv::RemoteValue, thunk)
+    local result
+    try
+        result = thunk()
+    catch err
+        print(STDERR, "exception on ", myid(), ": ")
+        display_error(err,catch_backtrace())
+        println(STDERR)
+        result = err
+    end
+    put(rv, result)
+end
 
 function schedule_call(rid, thunk)
-    wi = WorkItem(thunk)
-    (PGRP::ProcessGroup).refs[rid] = wi
-    add!(wi.clientset, rid[1])
-    enq_work(wi)
-    wi
+    rv = RemoteValue()
+    (PGRP::ProcessGroup).refs[rid] = rv
+    add!(rv.clientset, rid[1])
+    enq_work(@task(run_work_thunk(rv,thunk)))
+    rv
 end
 
 #localize_ref(b::Box) = Box(localize_ref(b.contents))
@@ -473,9 +526,8 @@ remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
 function remotecall_fetch(w::LocalProcess, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
-    wi = schedule_call(oid, local_remotecall_thunk(f,args))
-    wi.notify = ((), :call_fetch, oid, wi.notify)
-    yield(WaitFor(:call_fetch, rr))
+    rv = schedule_call(oid, local_remotecall_thunk(f,args))
+    wait_full(rv)
 end
 
 function remotecall_fetch(w::Worker, f, args...)
@@ -484,7 +536,7 @@ function remotecall_fetch(w::Worker, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_fetch, oid, f, args)
-    yield(WaitFor(:call_fetch, rr))
+    wait_full(rr)
 end
 
 remotecall_fetch(id::Integer, f, args...) =
@@ -497,7 +549,8 @@ function remotecall_wait(w::Worker, f, args...)
     rr = RemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_wait, oid, f, args)
-    yield(WaitFor(:wait, rr))
+    wait_full(rr)
+    rr
 end
 
 remotecall_wait(id::Integer, f, args...) =
@@ -507,7 +560,8 @@ function remote_do(w::LocalProcess, f, args...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
-    enq_work(WorkItem(local_remotecall_thunk(f, args)))
+    thk = local_remotecall_thunk(f, args)
+    enq_work(Task(thk))
     nothing
 end
 
@@ -522,22 +576,13 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     pg = (PGRP::ProcessGroup)
     oid = rr2id(r)
     if r.where==myid() || isa(pg.workers[r.where], LocalProcess)
-        wi = lookup_ref(oid)
-        if wi.done
-            if is(verb,:fetch)
-                return work_result(wi)
-            else
-                return r
-            end
-        else
-            # add to WorkItem's notify list
-            wi.notify = ((), verb, oid, wi.notify)
-        end
-    else
-        send_msg(worker_from_id(r.where), verb, oid)
+        rv = lookup_ref(oid)
+        wait_full(rv)
+        return is(verb,:fetch) ? work_result(rv) : r
     end
+    send_msg(worker_from_id(r.where), verb, oid)
     # yield to event loop, return here when answer arrives
-    v = yield(WaitFor(verb, r))
+    v = wait_full(r)
     return is(verb,:fetch) ? v : r
 end
 
@@ -545,16 +590,13 @@ wait(r::RemoteRef) = sync_msg(:wait, r)
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
 fetch(x::ANY) = x
 
-# writing to an uninitialized ref
-function put_ref(rid, val::ANY)
-    wi = lookup_ref(rid)
-    while wi.done
-        wi.notify = ((), :take, rid, wi.notify)
-        yield(WaitFor(:take, RemoteRef(myid(), rid[1], rid[2])))
-    end
-    wi.result = val
-    wi.done = true
-    notify_done(wi)
+# storing a value to a Ref
+put_ref(rid, v) = put(lookup_ref(rid), v)
+function put(rv::RemoteValue, val::ANY)
+    wait_empty(rv)
+    rv.result = val
+    rv.done = true
+    notify_full(rv)
 end
 
 function put(rr::RemoteRef, val::ANY)
@@ -567,14 +609,12 @@ function put(rr::RemoteRef, val::ANY)
     val
 end
 
-function take_ref(rid)
-    wi = lookup_ref(rid)
-    while !wi.done
-        wait(RemoteRef(myid(), rid[1], rid[2]))
-    end
-    val = wi.result
-    wi.done = false
-    notify_empty(wi)
+take_ref(rid) = take(lookup_ref(rid))
+function take(rv::RemoteValue)
+    wait_full(rv)
+    val = rv.result
+    rv.done = false
+    notify_empty(rv)
     val
 end
 
@@ -589,109 +629,29 @@ end
 
 ## work queue ##
 
-type WorkItem
-    thunk::Function
-    task   # the Task working on this item, or ()
-    done::Bool
-    result
-    notify::Tuple
-    argument  # value to pass task next time it is restarted
-    clientset::IntSet
-
-    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet())
-    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet())
-end
-
-function work_result(w::WorkItem)
-    v = w.result
-    if isa(v,WeakRef)
-        v = v.value
-    end
-    v
-end
-
-type WaitFor
-    msg::Symbol
-    rr
-end
-
-function enq_work(wi::WorkItem)
+function enq_work(t::Task)
     ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
-    unshift!(Workqueue, wi)
+    unshift!(Workqueue, t)
 end
-
-enq_work(f::Function) = enq_work(WorkItem(f))
-enq_work(t::Task) = enq_work(WorkItem(t))
 
 function perform_work()
-    job = pop!(Workqueue)
-    perform_work(job)
+    perform_work(pop!(Workqueue))
 end
 
-function perform_work(job::WorkItem)
-    local result
-    try
-        if isa(job.task,Task)
-            # continuing interrupted work item
-            arg = job.argument
-            job.argument = ()
-            job.task.runnable = true
-            result = is(arg,()) ? yieldto(job.task) : yieldto(job.task, arg)
-        else
-            job.task = Task(job.thunk)
-            result = yieldto(job.task)
-        end
-    catch err
-        print("exception on ", myid(), ": ")
-        display_error(err,catch_backtrace())
-        println()
-        result = err
+function perform_work(t::Task)
+    if !isdefined(t, :result)
+        # starting new task
+        yieldto(t)
+    else
+        # continuing interrupted work item
+        arg = t.result
+        t.result = nothing
+        t.runnable = true
+        yieldto(t, arg)
     end
-    # restart job by yielding back to whatever task just switched to us
-    job.task = current_task().last
-    if istaskdone(job.task)
-        # job done
-        job.done = true
-        job.result = result
-    end
-    if job.done
-        job.task = ()
-        # do notifications
-        notify_done(job)
-        job.thunk = bottom_func  # avoid reference retention
-    elseif isa(result,WaitFor)
-        job.task.runnable = false
-        wf::WaitFor = result
-        if wf.msg === :consume
-            P = wf.rr::Task
-            # queue consumers waiting for producer P. note that in order
-            # to avoid scheduling overhead for a typical produce/consume,
-            # there is no fairness unless consumers explicitly yield().
-            if P.consumers === nothing
-                P.consumers = {job}
-            else
-                unshift!(P.consumers, job)
-            end
-        else
-            # add to waiting set to wait on a sync event
-            rr = wf.rr
-            #println("$(myid()) waiting for $rr")
-            oid = rr2id(rr)
-            waitinfo = (wf.msg, job, rr)
-            waiters = get(Waiting, oid, false)
-            if isequal(waiters,false)
-                Waiting[oid] = {waitinfo}
-            else
-                push!(waiters, waitinfo)
-            end
-        end
-    elseif isa(result,WaitTask)
-        job.task.runnable = false
-        wt::WaitTask = result
-        wt.job = job
-    elseif job.task.runnable
-        # otherwise return to queue
-        enq_work(job)
+    if !istaskdone(t) && t.runnable
+        # still runnable; return to queue
+        enq_work(t)
     end
 end
 
@@ -700,7 +660,6 @@ function deliver_result(sock::IO, msg, oid, value)
     if is(msg,:fetch) || is(msg,:call_fetch)
         val = value
     else
-        @assert is(msg, :wait)
         val = oid
     end
     try
@@ -712,55 +671,14 @@ function deliver_result(sock::IO, msg, oid, value)
     end
 end
 
-const empty_cell_ = {}
-function deliver_result(sock::(), msg, oid, value)
-    # restart task that's waiting on oid
-    jobs = get(Waiting, oid, empty_cell_)
-    for i = 1:length(jobs)
-        j = jobs[i]
-        if j[1]==msg
-            job = j[2]
-            job.argument = value
-            enq_work(job)
-            splice!(jobs, i)
-            break
-        end
-    end
-    if isempty(jobs) && !is(jobs,empty_cell_)
-        delete!(Waiting, oid)
-    end
-    nothing
-end
-
-notify_done (job::WorkItem) = notify_done(job, false)
-notify_empty(job::WorkItem) = notify_done(job, true)
-
 # notify waiters that a certain job has finished or Ref has been emptied
-function notify_done(job::WorkItem, take)
-    newnot = ()
-    while !is(job.notify,())
-        (sock, msg, oid, job.notify) = job.notify
-        if take == is(msg,:take)
-            let wr = work_result(job)
-                deliver_result(sock, msg, oid, wr)
-                if is(msg,:call_fetch)
-                    # can delete the ref right away since we know it is
-                    # unreferenced by the client
-                    delete!((PGRP::ProcessGroup).refs, oid)
-                end
-            end
-        else
-            newnot = (sock, msg, oid, newnot)
-        end
-    end
-    job.notify = newnot
-    nothing
-end
+notify_full (rv::RemoteValue) = notify(rv.full, work_result(rv))
+notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 ## message event handlers ##
 
 # activity on accept fd
-function accept_handler(server::TcpSocket, status::Int32)
+function accept_handler(server::TcpServer, status::Int32)
     if(status == -1)
         error("An error occured during the creation of the server")
     end
@@ -770,6 +688,12 @@ end
 
 type DisconnectException <: Exception end
 
+# schedule an expression to run asynchronously, with minimal ceremony
+macro schedule(expr)
+    expr = localize_vars(:(()->($expr)), false)
+    :(enq_work(Task($(esc(expr)))))
+end
+
 function create_message_handler_loop(sock::AsyncStream) #returns immediately
     enq_work(@task begin
         global PGRP
@@ -778,78 +702,92 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
         wait_connected(sock)
         #println("loop")
         while true
-            #try
+            try
                 msg = deserialize(sock)
                 #println("got msg: ",msg)
-            # handle message
-            if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
-                id = deserialize(sock)
-                f = deserialize(sock)
-                args = deserialize(sock)
-                #print("$(myid()) got call $id\n")
-                wi = schedule_call(id, f, args)
-                if is(msg, :call_fetch)
-                    wi.notify = (sock, :call_fetch, id, wi.notify)
-                elseif is(msg, :call_wait)
-                    wi.notify = (sock, :wait, id, wi.notify)
-                end
-            elseif is(msg, :do)
-                f = deserialize(sock)
-                args = deserialize(sock)
-                #print("got args: $args\n")
-                let func=f, ar=args
-                    enq_work(WorkItem(()->apply(func, ar)))
-                end
-            elseif is(msg, :result)
-                # used to deliver result of wait or fetch
-                mkind = deserialize(sock)
-                oid = deserialize(sock)
-                val = deserialize(sock)
-                deliver_result((), mkind, oid, val)
-            elseif is(msg, :identify_socket)
-                otherid = deserialize(sock)
-                # establish a Worker connection for processes that connected to us
-                register_worker(otherid, Worker("", 0, sock, otherid))
-            elseif is(msg, :join_pgrp)
-                PGRP.myid = deserialize(sock)
-                PGRP.locs = locs = deserialize(sock)
+                # handle message
+                if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
+                    id = deserialize(sock)
+                    f0 = deserialize(sock)
+                    args0 = deserialize(sock)
+                    #print("$(myid()) got call $id\n")
+                    let f=f0, args=args0, m=msg, rid=id
+                        if m === :call_fetch || m === :call_wait
+                            schedule_call(id, ()->(v = f(args...);
+                                                   deliver_result(sock,m,rid,v);
+                                                   v))
+                        else
+                            schedule_call(id, ()->f(args...))
+                        end
+                    end
+                elseif is(msg, :do)
+                    f = deserialize(sock)
+                    args = deserialize(sock)
+                    #print("got args: $args\n")
+                    let func=f, ar=args
+                        enq_work(@task(run_work_thunk(RemoteValue(),
+                                                      ()->apply(func, ar))))
+                    end
+                elseif is(msg, :result)
+                    # used to deliver result of wait or fetch
+                    mkind = deserialize(sock)
+                    oid = deserialize(sock)
+                    #print("$(myid()) got $msg $oid\n")
+                    val = deserialize(sock)
+                    cv = get(Waiting, oid, false)
+                    if cv !== false
+                        notify(cv, val)
+                        if isempty(cv.waitq)
+                            delete!(Waiting, oid)
+                        end
+                    end
+                elseif is(msg, :identify_socket)
+                    otherid = deserialize(sock)
+                    # establish a Worker connection for processes that connected to us
+                    register_worker(otherid, Worker("", 0, sock, otherid))
+                elseif is(msg, :join_pgrp)
+                    PGRP.myid = deserialize(sock)
+                    PGRP.locs = locs = deserialize(sock)
 
-                register_worker(PGRP.myid, LocalProcess())
-                register_worker(1, Worker("", 0, sock, 1))
+                    register_worker(PGRP.myid, LocalProcess())
+                    register_worker(1, Worker("", 0, sock, 1))
 
-                w = PGRP.workers
-                for i = 2:(PGRP.myid-1)
-                    w[i] = Worker(locs[i][1], locs[i][2])
-                    w[i].id = i
-                    create_message_handler_loop(w[i].socket)
-                    send_msg_now(w[i], :identify_socket, PGRP.myid)
-                end
-            else
-                # the synchronization messages
-                oid = deserialize(sock)::(Int,Int)
-                wi = lookup_ref(oid)
-                if wi.done
-                    deliver_result(sock, msg, oid, work_result(wi))
+                    w = PGRP.workers
+                    for i = 2:(PGRP.myid-1)
+                        w[i] = Worker(locs[i][1], locs[i][2])
+                        w[i].id = i
+                        create_message_handler_loop(w[i].socket)
+                        send_msg_now(w[i], :identify_socket, PGRP.myid)
+                    end
                 else
-                    # add to WorkItem's notify list
-                    # TODO: should store the worker here, not the socket,
-                    # so we don't need to look up the worker later
-                    wi.notify = (sock, msg, oid, wi.notify)
+                    # the synchronization messages
+                    oid = deserialize(sock)::(Int,Int)
+                    #print("$(myid()) got $msg $oid\n")
+                    rv = lookup_ref(oid)
+                    if rv.done
+                        deliver_result(sock, msg, oid, work_result(rv))
+                    else
+                        # TODO: should store the worker here, not the socket,
+                        # so we don't need to look up the worker later
+                        @schedule begin
+                            deliver_result(sock, msg, oid, wait_full(rv))
+                        end
+                    end
+                end
+            catch e
+                if isa(e,EOFError)
+                    #print("eof. $(myid()) exiting\n")
+                    stop_reading(sock)
+                    # TODO: remove machine from group
+                    throw(DisconnectException())
+                else
+                    print(STDERR, "deserialization: ", e, "\n")
+                    rethrow(e)
+                    #        #while nb_available(sock) > 0 #|| select(sock)
+                    #        #    read(sock, Uint8)
+                    #        #end
                 end
             end
-            #catch e
-            #    if isa(e,EOFError)
-                #print("eof. $(myid()) exiting\n")
-            #        stop_reading(sock)
-            #        # TODO: remove machine from group
-            #        throw(DisconnectException())
-            #    else
-            #        print("deserialization: ", e, "\n")
-            #        #while nb_available(sock) > 0 #|| select(sock)
-            #        #    read(sock, Uint8)
-            #        #end
-                #end
-            #end
         end
     end)
 end
@@ -876,7 +814,7 @@ function start_worker(out::IO)
     try
         event_loop(false)
     catch err
-        print("unhandled exception on $(myid()): $(err)\nexiting.\n")
+        print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
     end
 
     close(sock)
@@ -925,7 +863,7 @@ function start_remote_workers(machines, cmds, tunnel=false)
                         line = readbytes(stream.buffer, nread)
                         print("\tFrom worker $(wrker.id):\t",line)
                     catch err
-                        println("\tError parsing reply from worker $(wrker.id):\t",err)
+                        println(STDERR,"\tError parsing reply from worker $(wrker.id):\t",err)
                         return false
                     end
                 end
@@ -1099,35 +1037,6 @@ end
 
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
-find_vars(e) = find_vars(e, {})
-function find_vars(e, lst)
-    if isa(e,Symbol)
-        if !isdefined(e) || isconst(e)
-            # exclude global constants
-        else
-            push!(lst, e)
-        end
-    elseif isa(e,Expr)
-        for x in e.args
-            find_vars(x,lst)
-        end
-    end
-    lst
-end
-
-# wrap an expression in "let a=a,b=b,..." for each var it references
-localize_vars(expr) = localize_vars(expr, true)
-function localize_vars(expr, esca)
-    v = find_vars(expr)
-    # requires a special feature of the front end that knows how to insert
-    # the correct variables. the list of free variables cannot be computed
-    # from a macro.
-    if esca
-        v = map(esc,v)
-    end
-    Expr(:localize, :(()->($expr)), v...)
-end
-
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)), false)
     :(spawn_somewhere($(esc(expr))))
@@ -1137,10 +1046,11 @@ function spawnlocal(thunk)
     rr = RemoteRef(myid())
     sync_add(rr)
     rid = rr2id(rr)
-    wi = WorkItem(thunk)
-    (PGRP::ProcessGroup).refs[rid] = wi
-    add!(wi.clientset, rid[1])
-    push!(Workqueue, wi)   # add to the *front* of the queue, work first
+    rv = RemoteValue()
+    (PGRP::ProcessGroup).refs[rid] = rv
+    add!(rv.clientset, rid[1])
+    # add to the *front* of the queue, work first
+    push!(Workqueue, @task(run_work_thunk(rv,thunk)))
     yield()
     rr
 end
@@ -1356,7 +1266,7 @@ function event_loop(isclient)
         try
             if iserr
                 display_error(lasterr, bt)
-                println()
+                println(STDERR)
                 iserr, lasterr, bt = false, nothing, {}
             else
                 while true
@@ -1381,7 +1291,7 @@ function event_loop(isclient)
             elseif isclient && isa(err,InterruptException)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
-                interrupt_waiting_task(roottask_wi,err)
+                interrupt_waiting_task(roottask,err)
             end
             iserr, lasterr = true, err
         end
@@ -1390,15 +1300,9 @@ end
 
 # force a task to stop waiting, providing with_value as the value of
 # whatever it's waiting for.
-function interrupt_waiting_task(wi::WorkItem, with_value)
-    for (oid, jobs) in Waiting
-        for j in jobs
-            if is(j[2], wi)
-                deliver_result((), j[1], oid, with_value)
-                return
-            end
-        end
+function interrupt_waiting_task(t::Task, with_value)
+    if !t.runnable
+        t.result = with_value
+        enq_work(t)
     end
-    wi.argument = with_value
-    enq_work(wi)
 end

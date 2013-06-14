@@ -378,6 +378,20 @@ end
 @test search("foo,bar,baz", "az") == 10:11
 @test search("foo,bar,baz", "az", 12) == 0:-1
 
+# string rsearch with a two-char string literal
+@test rsearch("foo,bar,baz", "xx") == 0:-1
+@test rsearch("foo,bar,baz", "fo") == 1:2
+@test rsearch("foo,bar,baz", "fo", 1) == 0:-1
+@test rsearch("foo,bar,baz", "oo") == 2:3
+@test rsearch("foo,bar,baz", "oo", 2) == 0:-1
+@test rsearch("foo,bar,baz", "o,") == 3:4
+@test rsearch("foo,bar,baz", "o,", 1) == 0:-1
+@test rsearch("foo,bar,baz", ",b") == 8:9
+@test rsearch("foo,bar,baz", ",b", 6) == 4:5
+@test rsearch("foo,bar,baz", ",b", 3) == 0:-1
+@test rsearch("foo,bar,baz", "az") == 10:11
+@test rsearch("foo,bar,baz", "az", 10) == 0:-1
+
 # string search with a two-char regex
 @test search("foo,bar,baz", r"xx") == 0:-1
 @test search("foo,bar,baz", r"fo") == 1:2

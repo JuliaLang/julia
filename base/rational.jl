@@ -123,8 +123,14 @@ hash(x::Rational) = isinteger(x) ? hash(x.num) :
                     bitmix(hash(x.num), hash(x.den))
 
 -(x::Rational) = (-x.num) // x.den
-+(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)
--(x::Rational, y::Rational) = (x.num*y.den - x.den*y.num) // (x.den*y.den)
+for op in (:+, :-, :rem, :mod)
+    @eval begin
+        function ($op)(x::Rational, y::Rational)
+            g = gcd(x.den, y.den)
+            Rational(($op)(x.num * div(y.den, g), y.num * div(x.den, g)), x.den * div(y.den, g))
+        end
+    end
+end
 *(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
 /(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 /(x::Rational, z::Complex ) = inv(z/x)
@@ -148,12 +154,6 @@ hash(x::Rational) = isinteger(x) ? hash(x.num) :
 <=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num : x.num*y.den <= x.den*y.num
 <=(x::Rational, y::Real    ) = x.num <= x.den*y
 <=(x::Real    , y::Rational) = x*y.den <= y.num
-
-rem(x::Rational, y::Rational) = Rational(rem(x.num*y.den, x.den*y.num),
-                                         x.den*y.den)
-
-mod(x::Rational, y::Rational) = Rational(mod(x.num*y.den, x.den*y.num),
-                                         x.den*y.den)
 
 div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
 div(x::Rational, y::Real    ) = div(x.num, x.den*y)

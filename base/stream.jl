@@ -4,16 +4,9 @@ include("uv_constants.jl")
 ## types ##
 typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
-type WaitTask 
-    filter::Callback #runs task only if false
-    localdata::Any
-    job
-
-    WaitTask(forwhat, test::Callback) = new(test, forwhat)
-    WaitTask() = new(false, nothing)
-end
 
 abstract AsyncStream <: IO
+abstract UVServer
 
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
@@ -36,14 +29,35 @@ type NamedPipe <: AsyncStream
     open::Bool
     line_buffered::Bool
     readcb::Callback
-    readnotify::Vector{WaitTask}
+    readnotify::Condition
+    ccb::Callback
+    connectnotify::Condition
     closecb::Callback
-    closenotify::Vector{WaitTask}
-    NamedPipe() = new(C_NULL,PipeBuffer(),false,true,false,WaitTask[],false,
-                      WaitTask[])
+    closenotify::Condition
+    NamedPipe() = new(C_NULL,PipeBuffer(),false,true,false,Condition(),false,
+                      Condition(),false,Condition())
+end
+
+type PipeServer <: UVServer
+    handle::Ptr{Void}
+    open::Bool
+    ccb::Callback
+    connectnotify::Condition
+    closecb::Callback
+    closenotify::Condition
+    PipeServer(handle,open) = new(handle,open,false,Condition(),false,Condition())
+    function PipeServer()
+        this = PipeServer(malloc_pipe(),false)
+        ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Int32,Int32,Any), this.handle, 0, 1, this)
+        if this.handle == C_NULL
+            throw(UVError("Failed to create pipe server"))
+        end
+        this
+    end
 end
 
 show(io::IO,stream::NamedPipe) = print(io,"NamedPipe(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
+show(io::IO,stream::PipeServer) = print(io,"PipeServer(",stream.open?"listening)":"not listening)")
 
 type TTY <: AsyncStream
     handle::Ptr{Void}
@@ -51,10 +65,10 @@ type TTY <: AsyncStream
     line_buffered::Bool
     buffer::IOBuffer
     readcb::Callback
-    readnotify::Vector{WaitTask}
+    readnotify::Condition
     closecb::Callback
-    closenotify::Vector{WaitTask}
-    TTY(handle,open)=new(handle,open,true,PipeBuffer(),false,WaitTask[],false,WaitTask[])
+    closenotify::Condition
+    TTY(handle,open)=new(handle,open,true,PipeBuffer(),false,Condition(),false,Condition())
 end
 
 show(io::IO,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
@@ -87,6 +101,8 @@ const UV_WRITEABLE = 2
 immutable OS_FD
     fd::Int32
 end
+
+convert(::Type{Int32},fd::OS_FD) = fd.fd 
 
 #Wrapper for an OS file descriptor (for Windows)
 @windows_only immutable OS_SOCKET
@@ -153,7 +169,7 @@ function start_watching(t::FDWatcher, events)
 end
 start_watching(f::Function, t::FDWatcher, events) = (t.cb = f; start_watching(t,events))
 
-function start_watching(t::PollingFileWatcher, interval) 
+function start_watching(t::PollingFileWatcher, interval)
     associate_julia_struct(t.handle, t)
     uv_error("start_watching (File)",
         ccall(:jl_fs_poll_start,Int32,(Ptr{Void},Ptr{Uint8},Uint32),t.handle,t.file,interval)==-1)
@@ -235,72 +251,53 @@ end
 
 flush(::TTY) = nothing
 
-function tasknotify(waittasks::Vector{WaitTask}, args...)
-    newwts = WaitTask[]
-    ct = current_task()
-    for wt in waittasks
-        f = wt.filter
-        if (isa(f, Function) ? f(wt.localdata, args...) : f) === false
-            work = wt.job
-            work.argument = args
-            enq_work(work)
-        else
-            push!(newwts,wt)
-        end
+function wait_connected(x)
+    while !x.open
+        wait(x.connectnotify)
     end
-    resize!(waittasks,length(newwts))
-    waittasks[:] = newwts
 end
 
-wait_connect_filter(w::AsyncStream, args...) = !w.open
-wait_readnb_filter(w::(AsyncStream,Int), args...) = w[1].open && (nb_available(w[1].buffer) < w[2])
-wait_readbyte_filter(w::(AsyncStream,Uint8), args...) = w[1].open && (search(w[1].buffer,w[2]) <= 0)
-wait_readline_filter(w::AsyncStream, args...) = w.open && (search(w.buffer,'\n') <= 0)
-
-function wait(forwhat::Vector, notify_list_name, filter_fcn)
-    args = ()
-    for x in forwhat
-        args = wait(x, notify_list_name, filter_fcn)
+function wait_readbyte(x::AsyncStream, c::Uint8)
+    while !(!x.open || (search(x.buffer,c) > 0))
+        wait(x.readnotify)
     end
-    args
 end
 
-function wait(forwhat, notify_list_name, filter_fcn)
-    args = ()
-    while filter_fcn(forwhat)
-        assert(current_task() != Scheduler, "Cannot execute blocking function from Scheduler")
-        thing = isa(forwhat,Tuple) ? forwhat[1] : forwhat
-        wt = WaitTask(forwhat, filter_fcn)
-        push!(thing.(notify_list_name), wt)
-        args = yield(wt)
-        if isa(args,InterruptException)
-            error(args)
-        end
+wait_readline(x) = wait_readbyte(x, uint8('\n'))
+
+function wait_readnb(x::AsyncStream, nb::Int)
+    while !(!x.open || (nb_available(x.buffer) >= nb))
+        wait(x.readnotify)
     end
-    args
 end
 
-wait_connected(x) = wait(x, :connectnotify, wait_connect_filter)
-wait_readline(x) = wait(x, :readnotify, wait_readline_filter)
-wait_readnb(x::(AsyncStream,Int)) = wait(x, :readnotify, wait_readnb_filter)
-wait_readnb(x::AsyncStream,b::Int) = wait_readnb((x,b))
-wait_readbyte(x::AsyncStream,c::Uint8) = wait((x,c), :readnotify, wait_readbyte_filter)
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     if status != -1
         sock.open = true
+        err = UV_error_t(int32(0),int32(0))
+    else
+        err = UV_error_t(_uv_lasterror(),_uv_lastsystemerror())
     end
     if isa(sock.ccb,Function)
         sock.ccb(sock, status)
     end
-    tasknotify(sock.connectnotify, sock, status)
+    notify(sock.connectnotify, err)
 end
+
 #from `listen`
-function _uv_hook_connectioncb(sock::AsyncStream, status::Int32)
+function _uv_hook_connectioncb(sock::UVServer, status::Int32)
+    local err
+    if status != -1
+        sock.open = true
+        err = UV_error_t(int32(0),int32(0))
+    else
+        err = UV_error_t(_uv_lasterror(),_uv_lastsystemerror())
+    end
     if(isa(sock.ccb,Function))
         sock.ccb(sock,status)
     end
-    tasknotify(sock.connectnotify, sock, status)
+    notify(sock.connectnotify, err)
 end
 
 ## BUFFER ##
@@ -347,12 +344,12 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
            throw(error)
         end
         close(stream)
-        tasknotify(stream.readnotify, stream)
+        notify(stream.readnotify)
         #EOF
     else
         notify_filled(stream.buffer, nread, base, len)
         notify_filled(stream, nread)
-        tasknotify(stream.readnotify, stream)
+        notify(stream.readnotify)
     end
 end
 ##########################################
@@ -403,57 +400,57 @@ TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 function poll_fd(s, events::Integer, timeout_ms::Integer)
-    wt = WaitTask()
+    wt = Condition()
 
     fdw = FDWatcher(s)
-    start_watching((status, events) -> tasknotify([wt], :poll, status, events), fdw, events)
+    start_watching((status, events) -> notify(wt, (:poll, status, events)), fdw, events)
     
     if (timeout_ms > 0)
-        timer = TimeoutAsyncWork(status -> tasknotify([wt], :timeout, status))
+        timer = TimeoutAsyncWork(status -> notify(wt, (:timeout, status)))
         start_timer(timer, int64(timeout_ms), int64(0))
     end
 
-    args = yield(wt)
-
-    if (timeout_ms > 0) stop_timer(timer) end
-
-    stop_watching(fdw)
-    if isa(args,InterruptException)
-        rethrow(args)
+    local args
+    try
+        args = wait(wt)
+    finally
+        if (timeout_ms > 0) stop_timer(timer) end
+        stop_watching(fdw)
     end
 
-    if (args[2] != 0) error ("fd in error") end 
-    if (args[1] == :poll) return args[3] end
-    if (args[1] == :timeout) return 0 end
+    if (args[2] == 0)
+        if (args[1] == :poll) return args[3] end
+        if (args[1] == :timeout) return 0 end
+    end
 
     error("Error while polling") 
 end
 
 function poll_file(s, interval::Integer, timeout_ms::Integer)
-    wt = WaitTask()
+    wt = Condition()
 
     pfw = PollingFileWatcher(s)
-    start_watching((status,prev,cur) -> tasknotify([wt], :poll, status), pfw, interval)
+    start_watching((status,prev,cur) -> notify(wt, (:poll, status)), pfw, interval)
     
     if (timeout_ms > 0)
-        timer = TimeoutAsyncWork(status -> tasknotify([wt], :timeout, status))
+        timer = TimeoutAsyncWork(status -> notify(wt, (:timeout, status)))
         start_timer(timer, int64(timeout_ms), int64(0))
     end
 
-    args = yield(wt)
-
-    if (timeout_ms > 0) stop_timer(timer) end
-
-    stop_watching(pfw)
-    if isa(args,InterruptException)
-        rethrow(args)
+    local args
+    try
+        args = wait(wt)
+    finally
+        if (timeout_ms > 0) stop_timer(timer) end
+        stop_watching(pfw)
     end
 
-    if (args[2] != 0) error ("fd in error") end 
-    if (args[1] == :poll) return 1 end
-    if (args[1] == :timeout) return 0 end
+    if (args[2] == 0)
+        if (args[1] == :poll) return 1 end
+        if (args[1] == :timeout) return 0 end
+    end
 
-    error("Error while polling")
+    error("error while polling")
 end
 
 function watch_file(cb, s; poll=false)
@@ -466,11 +463,11 @@ function watch_file(cb, s; poll=false)
     end
 end
 
-function _uv_hook_close(uv::AsyncStream)
+function _uv_hook_close(uv::Union(AsyncStream,UVServer))
     uv.handle = 0
     uv.open = false
     if isa(uv.closecb, Function) uv.closecb(uv) end
-    tasknotify(uv.closenotify, uv)
+    notify(uv.closenotify)
 end
 _uv_hook_close(uv::AsyncWork) = (uv.handle = 0; nothing)
 
@@ -490,13 +487,17 @@ function stop_timer(timer::TimeoutAsyncWork)
 end
 
 function sleep(sec::Real)
-    timer = TimeoutAsyncWork(status->tasknotify([wt], status))
-    wt = WaitTask(timer, false)
+    w = Condition()
+    timer = TimeoutAsyncWork(status->notify(w, status))
     start_timer(timer, int64(iround(sec*1000)), int64(0))
-    args = yield(wt)
-    stop_timer(timer)
-    if isa(args,InterruptException)
-        error(args)
+    local st
+    try
+        st = wait(w)
+    finally
+        stop_timer(timer)
+    end
+    if st != 0
+        error("timer error")
     end
     nothing
 end
@@ -558,13 +559,13 @@ function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Name
 end
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
-function isopen(stream::AsyncStream)
+function isopen(stream::Union(AsyncStream,UVServer))
     stream.open
 end
 
-_uv_hook_isopen(stream::AsyncStream) = int32(isopen(stream))
+_uv_hook_isopen(stream::Union(AsyncStream,UVServer)) = int32(isopen(stream))
 
-function close(stream::AsyncStream)
+function close(stream::Union(AsyncStream,UVServer))
     if stream.open
         ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
         stream.open = false
@@ -702,8 +703,53 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-function listen(sock::AsyncStream, backlog::Integer)
+_jl_pipe_accept(server::Ptr{Void},client::Ptr{Void}) =
+    ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
+function accept_nonblock(server::PipeServer,client::NamedPipe)
+    err = _jl_pipe_accept(server.handle,client.handle)
+    if err == 0
+        client.open = true
+    end
+    err
+end
+function accept_nonblock(server::PipeServer)
+    client = NamedPipe()
+    uv_error("accept",_jl_pipe_accept(server.handle,client.handle) == -1)
+    client.open = true
+    client
+end
+
+const UV_EAGAIN = 4
+function accept(server::UVServer, client::AsyncStream)
+    if !server.open
+        error("accept: Server not connected. Did you `listen`?")
+    end
+    while true
+        if accept_nonblock(server,client) == 0
+            return client
+        else
+            uv_error("accept:",_uv_lasterror()!=UV_EAGAIN)
+        end
+        err = wait(server.connectnotify)
+        if err.uv_code != -1
+            throw(UVError("accept",err))
+        end
+    end
+end
+
+function listen!(sock::UVServer; backlog::Integer=511)
     err = ccall(:jl_listen, Int32, (Ptr{Void}, Int32), sock.handle, backlog)
     err != -1 ? (sock.open = true): false
 end
-listen(sock::AsyncStream) = listen(sock, 511) # same default as node.js
+
+function listen(path::ASCIIString)
+    sock = PipeServer()
+    uv_error("listen",bind(sock, path))
+    uv_error("listen",!listen!(sock))
+    sock
+end
+
+function connect(cb::Function,sock::NamedPipe,path::ASCIIString)
+    sock.ccb = cb
+    error("Unimplemented on this branch")
+end
