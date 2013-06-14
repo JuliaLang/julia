@@ -60,9 +60,6 @@
 #include <vector>
 #include <set>
 #include <cstdio>
-#ifdef DEBUG
-#undef NDEBUG
-#endif
 #include <cassert>
 using namespace llvm;
 
@@ -394,12 +391,12 @@ extern "C" DLLEXPORT
 const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm)
 {
     if (!jl_is_function(f) || !jl_is_gf(f))
-        return jl_cstr_to_string((char*)"");
+        return jl_cstr_to_string(const_cast<char*>(""));
     jl_function_t *sf = jl_get_specialization(f, types);
     if (sf == NULL || sf->linfo == NULL) {
         sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
         if (sf == jl_bottom_func)
-            return jl_cstr_to_string((char*)"");
+            return jl_cstr_to_string(const_cast<char*>(""));
         JL_PRINTF(JL_STDERR,
                   "Warning: Returned code may not match what actually runs.\n");
     }
@@ -429,12 +426,12 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
 
         if (fit == fmap.end()) {
             JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
-            return jl_cstr_to_string((char*)"");
+            return jl_cstr_to_string(const_cast<char*>(""));
         }
         jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fit->second.lines, fstream);
         fstream.flush();
     }
-    return jl_cstr_to_string((char*)stream.str().c_str());
+    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
 
 // --- code gen for intrinsic functions ---
