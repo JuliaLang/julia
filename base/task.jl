@@ -18,7 +18,7 @@ function produce(v)
     q = ct.consumers
     if isa(q,Condition)
         # make a task waiting for us runnable again
-        notify(q, P, nothing)
+        notify1(q)
     end
     yieldto(ct.last, v)
     ct.parent = ct.last  # always exit to last consumer
@@ -42,7 +42,7 @@ function consume(P::Task)
     if P.done
         q = P.consumers
         if !is(q, nothing)
-            notify(q, P, P.result, all=true)
+            notify(q, P.result)
         end
     end
     v
