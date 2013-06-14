@@ -448,7 +448,7 @@ void jl_load(const char *fname)
         jl_printf(JL_STDOUT, "%s\n", fname);
     }
     char *fpath = (char*)fname;
-    uv_statbuf_t stbuf;
+    uv_stat_t stbuf;
     if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fpath);
     }
