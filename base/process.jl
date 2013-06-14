@@ -390,8 +390,14 @@ function run(cmds::AbstractCmd,args...)
     wait_success(ps) ? nothing : pipeline_error(ps)
 end
 
-success(proc::Process) = (assert(process_exited(proc)); proc.exit_code==0)
-success(procs::Vector{Process}) = all(map(success, procs))
+function success(proc::Process)
+    assert(process_exited(proc))
+    if proc.exit_code == -1
+        error("could not start process ", proc)
+    end
+    proc.exit_code==0
+end
+success(procs::Vector{Process}) = all(success, procs)
 success(procs::ProcessChain) = success(procs.processes)
 success(cmd::AbstractCmd) = wait_success(spawn(cmd))
 
@@ -436,12 +442,12 @@ end
 
 ## process status ##
 process_running(s::Process) = s.exit_code == -2
-process_running(s::Vector{Process}) = all(map(process_running,s))
+process_running(s::Vector{Process}) = all(process_running,s)
 process_running(s::ProcessChain) = process_running(s.processes)
 
 process_exit_status(s::Process) = s.exit_code
 process_exited(s::Process) = !process_running(s)
-process_exited(s::Vector{Process}) = all(map(process_exited,s))
+process_exited(s::Vector{Process}) = all(process_exited,s)
 process_exited(s::ProcessChain) = process_running(s.processes)
 
 process_term_signal(s::Process) = s.term_signal
