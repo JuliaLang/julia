@@ -37,7 +37,7 @@ require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
 function require(name::ByteString)
     if myid() == 1
-        @sync for p = 2:nprocs()
+        @sync for p in list_workers()
             @spawnat p require(name)
         end
     end
@@ -52,7 +52,7 @@ end
 
 function reload(name::String)
     if myid() == 1
-        @sync for p = 2:nprocs()
+        @sync for p in list_workers()
             @spawnat p reload(name)
         end
     end
