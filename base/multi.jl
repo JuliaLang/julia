@@ -406,7 +406,7 @@ function deserialize(s, t::Type{RemoteRef})
 end
 
 # wait on a local proxy condition for a remote ref
-function wait_full(rr:RemoteRef)
+function wait_full(rr::RemoteRef)
     oid = rr2id(rr)
     cv = get(Waiting, oid, false)
     if cv === false
@@ -456,9 +456,9 @@ function run_work_thunk(rv::RemoteValue, thunk)
     try
         result = thunk()
     catch err
-        print("exception on ", myid(), ": ")
+        print(STDERR, "exception on ", myid(), ": ")
         display_error(err,catch_backtrace())
-        println()
+        println(STDERR)
         result = err
     end
     put(rv, result)
@@ -679,7 +679,7 @@ notify_empty(rv::RemoteValue) = notify(rv.empty)
 ## message event handlers ##
 
 # activity on accept fd
-function accept_handler(server::TcpSocket, status::Int32)
+function accept_handler(server::TcpServer, status::Int32)
     if(status == -1)
         error("An error occured during the creation of the server")
     end
@@ -689,6 +689,12 @@ end
 
 type DisconnectException <: Exception end
 
+# schedule an expression to run asynchronously, with minimal ceremony
+macro schedule(expr)
+    expr = localize_vars(:(()->($expr)), false)
+    :(enq_work(@task($(esc(expr)))))
+end
+
 function create_message_handler_loop(sock::AsyncStream) #returns immediately
     enq_work(@task begin
         global PGRP
@@ -697,92 +703,92 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
         wait_connected(sock)
         #println("loop")
         while true
-            #try
+            try
                 msg = deserialize(sock)
                 #println("got msg: ",msg)
-            # handle message
-            if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
-                id = deserialize(sock)
-                f0 = deserialize(sock)
-                args0 = deserialize(sock)
-                #print("$(myid()) got call $id\n")
-                let f=f0, args=args0, m=msg, rid=id
-                    if m === :call_fetch || m === :call_wait
-                        if m === :call_wait; m = :wait; end
-                        schedule_call(id, ()->(v = f(args...);
-                                               deliver_result(sock,m,rid,v)
-                                               v))
-                    else
-                        schedule_call(id, ()->f(args...))
+                # handle message
+                if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
+                    id = deserialize(sock)
+                    f0 = deserialize(sock)
+                    args0 = deserialize(sock)
+                    #print("$(myid()) got call $id\n")
+                    let f=f0, args=args0, m=msg, rid=id
+                        if m === :call_fetch || m === :call_wait
+                            if m === :call_wait; m = :wait; end
+                            schedule_call(id, ()->(v = f(args...);
+                                                   deliver_result(sock,m,rid,v);
+                                                   v))
+                        else
+                            schedule_call(id, ()->f(args...))
+                        end
                     end
-                end
-            elseif is(msg, :do)
-                f = deserialize(sock)
-                args = deserialize(sock)
-                #print("got args: $args\n")
-                let func=f, ar=args
-                    enq_work(@task(run_work_thunk(RemoteValue(),
-                                                  ()->apply(func, ar))))
-                end
-            elseif is(msg, :result)
-                # used to deliver result of wait or fetch
-                mkind = deserialize(sock)
-                oid = deserialize(sock)
-                val = deserialize(sock)
-                #deliver_result((), mkind, oid, val)
-                cv = get(Waiting, oid, false)
-                if cv !== false
-                    notify(cv, val)
-                    if isempty(cv.waitq)
-                        delete!(Waiting, oid)
+                elseif is(msg, :do)
+                    f = deserialize(sock)
+                    args = deserialize(sock)
+                    #print("got args: $args\n")
+                    let func=f, ar=args
+                        enq_work(@task(run_work_thunk(RemoteValue(),
+                                                      ()->apply(func, ar))))
                     end
-                end
-            elseif is(msg, :identify_socket)
-                otherid = deserialize(sock)
-                # establish a Worker connection for processes that connected to us
-                register_worker(otherid, Worker("", 0, sock, otherid))
-            elseif is(msg, :join_pgrp)
-                PGRP.myid = deserialize(sock)
-                PGRP.locs = locs = deserialize(sock)
+                elseif is(msg, :result)
+                    # used to deliver result of wait or fetch
+                    mkind = deserialize(sock)
+                    oid = deserialize(sock)
+                    val = deserialize(sock)
+                    #deliver_result((), mkind, oid, val)
+                    cv = get(Waiting, oid, false)
+                    if cv !== false
+                        notify(cv, val)
+                        if isempty(cv.waitq)
+                            delete!(Waiting, oid)
+                        end
+                    end
+                elseif is(msg, :identify_socket)
+                    otherid = deserialize(sock)
+                    # establish a Worker connection for processes that connected to us
+                    register_worker(otherid, Worker("", 0, sock, otherid))
+                elseif is(msg, :join_pgrp)
+                    PGRP.myid = deserialize(sock)
+                    PGRP.locs = locs = deserialize(sock)
 
-                register_worker(PGRP.myid, LocalProcess())
-                register_worker(1, Worker("", 0, sock, 1))
+                    register_worker(PGRP.myid, LocalProcess())
+                    register_worker(1, Worker("", 0, sock, 1))
 
-                w = PGRP.workers
-                for i = 2:(PGRP.myid-1)
-                    w[i] = Worker(locs[i][1], locs[i][2])
-                    w[i].id = i
-                    create_message_handler_loop(w[i].socket)
-                    send_msg_now(w[i], :identify_socket, PGRP.myid)
-                end
-            else
-                # the synchronization messages
-                oid = deserialize(sock)::(Int,Int)
-                rv = lookup_ref(oid)
-                if rv.done
-                    deliver_result(sock, msg, oid, work_result(rv))
+                    w = PGRP.workers
+                    for i = 2:(PGRP.myid-1)
+                        w[i] = Worker(locs[i][1], locs[i][2])
+                        w[i].id = i
+                        create_message_handler_loop(w[i].socket)
+                        send_msg_now(w[i], :identify_socket, PGRP.myid)
+                    end
                 else
-                    # TODO: should store the worker here, not the socket,
-                    # so we don't need to look up the worker later
-                    @async begin
-                        val = wait_full(rv)
-                        deliver_result(sock, msg, oid, val)
+                    # the synchronization messages
+                    oid = deserialize(sock)::(Int,Int)
+                    rv = lookup_ref(oid)
+                    if rv.done
+                        deliver_result(sock, msg, oid, work_result(rv))
+                    else
+                        # TODO: should store the worker here, not the socket,
+                        # so we don't need to look up the worker later
+                        @schedule begin
+                            deliver_result(sock, msg, oid, wait_full(rv))
+                        end
                     end
+                end
+            catch e
+                if isa(e,EOFError)
+                    #print("eof. $(myid()) exiting\n")
+                    stop_reading(sock)
+                    # TODO: remove machine from group
+                    throw(DisconnectException())
+                else
+                    print(STDERR, "deserialization: ", e, "\n")
+                    rethrow(e)
+                    #        #while nb_available(sock) > 0 #|| select(sock)
+                    #        #    read(sock, Uint8)
+                    #        #end
                 end
             end
-            #catch e
-            #    if isa(e,EOFError)
-                #print("eof. $(myid()) exiting\n")
-            #        stop_reading(sock)
-            #        # TODO: remove machine from group
-            #        throw(DisconnectException())
-            #    else
-            #        print("deserialization: ", e, "\n")
-            #        #while nb_available(sock) > 0 #|| select(sock)
-            #        #    read(sock, Uint8)
-            #        #end
-                #end
-            #end
         end
     end)
 end
@@ -809,7 +815,7 @@ function start_worker(out::IO)
     try
         event_loop(false)
     catch err
-        print("unhandled exception on $(myid()): $(err)\nexiting.\n")
+        print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
     end
 
     close(sock)
@@ -858,7 +864,7 @@ function start_remote_workers(machines, cmds, tunnel=false)
                         line = readbytes(stream.buffer, nread)
                         print("\tFrom worker $(wrker.id):\t",line)
                     catch err
-                        println("\tError parsing reply from worker $(wrker.id):\t",err)
+                        println(STDERR,"\tError parsing reply from worker $(wrker.id):\t",err)
                         return false
                     end
                 end
@@ -1031,35 +1037,6 @@ let lastp = 1
 end
 
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
-
-find_vars(e) = find_vars(e, {})
-function find_vars(e, lst)
-    if isa(e,Symbol)
-        if !isdefined(e) || isconst(e)
-            # exclude global constants
-        else
-            push!(lst, e)
-        end
-    elseif isa(e,Expr)
-        for x in e.args
-            find_vars(x,lst)
-        end
-    end
-    lst
-end
-
-# wrap an expression in "let a=a,b=b,..." for each var it references
-localize_vars(expr) = localize_vars(expr, true)
-function localize_vars(expr, esca)
-    v = find_vars(expr)
-    # requires a special feature of the front end that knows how to insert
-    # the correct variables. the list of free variables cannot be computed
-    # from a macro.
-    if esca
-        v = map(esc,v)
-    end
-    Expr(:localize, :(()->($expr)), v...)
-end
 
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)), false)
@@ -1290,7 +1267,7 @@ function event_loop(isclient)
         try
             if iserr
                 display_error(lasterr, bt)
-                println()
+                println(STDERR)
                 iserr, lasterr, bt = false, nothing, {}
             else
                 while true
