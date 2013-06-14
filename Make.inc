@@ -105,8 +105,8 @@ CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -ggdb3 -DDEBUG -fstack-protector-all
-SHIPFLAGS = -O3 -DNDEBUG -falign-functions
+DEBUGFLAGS = -O0 -ggdb3 -DDEBUG -fstack-protector-all
+SHIPFLAGS = -O3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
@@ -115,8 +115,8 @@ CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -g -DDEBUG -fstack-protector-all
-SHIPFLAGS = -O3 -DNDEBUG
+DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
+SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=10.6
 CXX += -mmacosx-version-min=10.6
